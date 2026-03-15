@@ -14,6 +14,7 @@ vi.mock("@milady/app-core/api", () => ({
 }));
 
 vi.mock("@milady/app-core/events", () => ({
+  APP_EMOTE_EVENT: "milady:app-emote",
   CHAT_AVATAR_VOICE_EVENT: "milady:chat-avatar-voice",
   STOP_EMOTE_EVENT: "stop-emote",
 }));
@@ -49,7 +50,7 @@ describe("VrmStage", () => {
     await act(async () => {
       tree = TestRenderer.create(
         React.createElement(VrmStage, {
-          vrmPath: "/vrms/milady-1.vrm",
+          vrmPath: "/vrms/milady-1.vrm.gz",
           worldUrl: "/worlds/companion-day.spz",
           fallbackPreviewUrl: "/vrms/previews/milady-1.png",
           t: (key: string) => key,
@@ -72,7 +73,7 @@ describe("VrmStage", () => {
     await act(async () => {
       tree = TestRenderer.create(
         React.createElement(VrmStage, {
-          vrmPath: "/vrms/milady-1.vrm",
+          vrmPath: "/vrms/milady-1.vrm.gz",
           fallbackPreviewUrl: "/vrms/previews/milady-1.png",
           t: (key: string) => key,
         }),
@@ -108,7 +109,7 @@ describe("VrmStage", () => {
     await act(async () => {
       TestRenderer.create(
         React.createElement(VrmStage, {
-          vrmPath: "/vrms/milady-1.vrm",
+          vrmPath: "/vrms/milady-1.vrm.gz",
           fallbackPreviewUrl: "/vrms/previews/milady-1.png",
           onEngineReady: handleEngineReady,
           t: (key: string) => key,
@@ -130,5 +131,55 @@ describe("VrmStage", () => {
     expect(setCameraAnimation).toHaveBeenCalledTimes(1);
     expect(setPointerParallaxEnabled).toHaveBeenCalledWith(false);
     expect(handleEngineReady).toHaveBeenCalledWith(engine);
+  });
+
+  it("plays emotes from the shared app emote event", async () => {
+    const playEmote = vi.fn();
+    const engine = {
+      playEmote,
+      setPaused: vi.fn(),
+      setCameraAnimation: vi.fn(),
+      setPointerParallaxEnabled: vi.fn(),
+    };
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(VrmStage, {
+          vrmPath: "/vrms/milady-1.vrm.gz",
+          fallbackPreviewUrl: "/vrms/previews/milady-1.png",
+          t: (key: string) => key,
+        }),
+      );
+    });
+
+    await act(async () => {
+      const ready = viewerPropsRef.current?.onEngineReady as
+        | ((value: unknown) => void)
+        | undefined;
+      const state = viewerPropsRef.current?.onEngineState as
+        | ((value: unknown) => void)
+        | undefined;
+      ready?.(engine);
+      state?.({ vrmLoaded: true });
+    });
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent("milady:app-emote", {
+          detail: {
+            emoteId: "wave",
+            path: "/animations/emotes/waving-both-hands.glb",
+            duration: 2.5,
+            loop: false,
+          },
+        }),
+      );
+    });
+
+    expect(playEmote).toHaveBeenCalledWith(
+      "/animations/emotes/waving-both-hands.glb",
+      2.5,
+      false,
+    );
   });
 });

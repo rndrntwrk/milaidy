@@ -84,7 +84,7 @@ export async function handleCloudRoute(
 ): Promise<boolean> {
   // POST /api/cloud/login
   if (method === "POST" && pathname === "/api/cloud/login") {
-    const baseUrl = state.config.cloud?.baseUrl ?? "https://www.elizacloud.ai";
+    const baseUrl = state.config.cloud?.baseUrl ?? "https://cloud.milady.ai";
     const urlError = await validateCloudBaseUrl(baseUrl);
     if (urlError) {
       sendJsonError(res, urlError);
@@ -111,11 +111,11 @@ export async function handleCloudRoute(
     } catch (fetchErr) {
       if (isTimeoutError(fetchErr)) {
         loginCreateSpan.failure({ error: fetchErr, statusCode: 504 });
-        sendJsonError(res, "Eliza Cloud login request timed out", 504);
+        sendJsonError(res, "Milady Cloud login request timed out", 504);
         return true;
       }
       loginCreateSpan.failure({ error: fetchErr, statusCode: 502 });
-      sendJsonError(res, "Failed to reach Eliza Cloud", 502);
+      sendJsonError(res, "Failed to reach Milady Cloud", 502);
       return true;
     }
 
@@ -126,7 +126,7 @@ export async function handleCloudRoute(
       });
       sendJsonError(
         res,
-        "Eliza Cloud login request was redirected; redirects are not allowed",
+        "Milady Cloud login request was redirected; redirects are not allowed",
         502,
       );
       return true;
@@ -137,7 +137,11 @@ export async function handleCloudRoute(
         statusCode: createRes.status,
         errorKind: "http_error",
       });
-      sendJsonError(res, "Failed to create auth session with Eliza Cloud", 502);
+      sendJsonError(
+        res,
+        "Failed to create auth session with Milady Cloud",
+        502,
+      );
       return true;
     }
 
@@ -162,7 +166,7 @@ export async function handleCloudRoute(
       return true;
     }
 
-    const baseUrl = state.config.cloud?.baseUrl ?? "https://www.elizacloud.ai";
+    const baseUrl = state.config.cloud?.baseUrl ?? "https://cloud.milady.ai";
     const urlError = await validateCloudBaseUrl(baseUrl);
     if (urlError) {
       sendJsonError(res, urlError);
@@ -187,7 +191,7 @@ export async function handleCloudRoute(
           res,
           {
             status: "error",
-            error: "Eliza Cloud status request timed out",
+            error: "Milady Cloud status request timed out",
           },
           504,
         );
@@ -198,7 +202,7 @@ export async function handleCloudRoute(
         res,
         {
           status: "error",
-          error: "Failed to reach Eliza Cloud",
+          error: "Failed to reach Milady Cloud",
         },
         502,
       );
@@ -215,7 +219,7 @@ export async function handleCloudRoute(
         {
           status: "error",
           error:
-            "Eliza Cloud status request was redirected; redirects are not allowed",
+            "Milady Cloud status request was redirected; redirects are not allowed",
         },
         502,
       );
@@ -233,7 +237,7 @@ export async function handleCloudRoute(
           ? { status: "expired", error: "Session not found or expired" }
           : {
               status: "error",
-              error: `Eliza Cloud returned HTTP ${pollRes.status}`,
+              error: `Milady Cloud returned HTTP ${pollRes.status}`,
             },
       );
       return true;
@@ -319,7 +323,7 @@ export async function handleCloudRoute(
   if (method === "GET" && pathname === "/api/cloud/agents") {
     const client = state.cloudManager?.getClient();
     if (!client) {
-      sendJsonError(res, "Not connected to Eliza Cloud", 401);
+      sendJsonError(res, "Not connected to Milady Cloud", 401);
       return true;
     }
     sendJson(res, { ok: true, agents: await client.listAgents() });
@@ -330,7 +334,7 @@ export async function handleCloudRoute(
   if (method === "POST" && pathname === "/api/cloud/agents") {
     const client = state.cloudManager?.getClient();
     if (!client) {
-      sendJsonError(res, "Not connected to Eliza Cloud", 401);
+      sendJsonError(res, "Not connected to Milady Cloud", 401);
       return true;
     }
 
@@ -389,7 +393,7 @@ export async function handleCloudRoute(
     }
     const client = state.cloudManager.getClient();
     if (!client) {
-      sendJsonError(res, "Not connected to Eliza Cloud", 401);
+      sendJsonError(res, "Not connected to Milady Cloud", 401);
       return true;
     }
     if (state.cloudManager.getActiveAgentId() === agentId)

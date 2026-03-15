@@ -20,6 +20,7 @@ import {
 import {
   useTimeout,
   useVoiceChat,
+  type VoiceCaptureMode,
   type VoicePlaybackStartEvent,
 } from "@milady/app-core/hooks";
 import { getVrmPreviewUrl, useApp } from "@milady/app-core/state";
@@ -169,6 +170,8 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
     voiceStartedAtMs?: number;
     firstSegmentCached?: boolean;
   } | null>(null);
+  const voiceDraftBaseInputRef = useRef("");
+  const suppressedAssistantSpeechIdRef = useRef<string | null>(null);
 
   const [voiceLatency, setVoiceLatency] = useState<{
     speechEndToFirstTokenMs: number | null;
@@ -176,19 +179,39 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
     firstSegmentCached: boolean | null;
   } | null>(null);
 
+  const composeVoiceDraft = useCallback((transcript: string) => {
+    const base = voiceDraftBaseInputRef.current.trim();
+    const spoken = transcript.trim();
+    if (base && spoken) {
+      return `${base} ${spoken}`;
+    }
+    return base || spoken;
+  }, []);
+
   const handleVoiceTranscript = useCallback(
     (text: string) => {
       if (isComposerLocked) return;
+      const composedText = composeVoiceDraft(text);
+      if (!composedText) return;
       const speechEndedAtMs = nowMs();
       pendingVoiceTurnRef.current = {
         speechEndedAtMs,
         expiresAtMs: speechEndedAtMs + 15000,
       };
       setVoiceLatency(null);
-      setState("chatInput", text);
+      setState("chatInput", composedText);
       setTimeout(() => void handleChatSend("VOICE_DM"), 50);
     },
-    [isComposerLocked, setState, handleChatSend, setTimeout],
+    [composeVoiceDraft, isComposerLocked, setState, handleChatSend, setTimeout],
+  );
+
+  const handleVoiceTranscriptPreview = useCallback(
+    (text: string) => {
+      if (isComposerLocked) return;
+      const composedText = composeVoiceDraft(text);
+      setState("chatInput", composedText);
+    },
+    [composeVoiceDraft, isComposerLocked, setState],
   );
 
   const handleVoicePlaybackStart = useCallback(
@@ -219,13 +242,43 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
 
   const voice = useVoiceChat({
     onTranscript: handleVoiceTranscript,
+    onTranscriptPreview: handleVoiceTranscriptPreview,
     onPlaybackStart: handleVoicePlaybackStart,
     cloudConnected: miladyCloudConnected,
     interruptOnSpeech: isGameModal,
     lang: uiLanguage === "zh-CN" ? "zh-CN" : "en-US",
     voiceConfig,
   });
-  const { queueAssistantSpeech, stopSpeaking } = voice;
+  const { queueAssistantSpeech, startListening, stopListening, stopSpeaking } =
+    voice;
+
+  const beginVoiceCapture = useCallback(
+    (mode: Exclude<VoiceCaptureMode, "idle"> = "compose") => {
+      if (isComposerLocked || voice.isListening) return;
+      const latestAssistant = [...conversationMessages]
+        .reverse()
+        .find((message) => message.role === "assistant" && message.text.trim());
+      suppressedAssistantSpeechIdRef.current = latestAssistant?.id ?? null;
+      voiceDraftBaseInputRef.current = chatInput;
+      stopSpeaking();
+      void startListening(mode);
+    },
+    [
+      chatInput,
+      conversationMessages,
+      isComposerLocked,
+      startListening,
+      stopSpeaking,
+    ],
+  );
+
+  const endVoiceCapture = useCallback(
+    (options?: { submit?: boolean }) => {
+      if (!voice.isListening) return;
+      void stopListening(options);
+    },
+    [stopListening, voice.isListening],
+  );
 
   const agentName = agentStatus?.agentName ?? "Agent";
   const msgs = conversationMessages;
@@ -321,19 +374,21 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
   }, [companionCarryover, companionNowMs]);
 
   useEffect(() => {
-    if (agentVoiceMuted) return;
+    if (agentVoiceMuted || voice.isListening) return;
 
     const latestAssistant = [...msgs]
       .reverse()
       .find((message) => message.role === "assistant");
     if (!latestAssistant || !latestAssistant.text.trim()) return;
+    if (suppressedAssistantSpeechIdRef.current === latestAssistant.id) return;
 
     queueAssistantSpeech(
       latestAssistant.id,
       latestAssistant.text,
       !chatSending,
     );
-  }, [msgs, chatSending, agentVoiceMuted, queueAssistantSpeech]);
+    suppressedAssistantSpeechIdRef.current = null;
+  }, [msgs, chatSending, agentVoiceMuted, queueAssistantSpeech, voice.isListening]);
 
   useEffect(() => {
     if (!agentVoiceMuted) return;
@@ -748,10 +803,14 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
             voice={{
               supported: voice.supported,
               isListening: voice.isListening,
+              captureMode: voice.captureMode,
               interimTranscript: voice.interimTranscript,
               isSpeaking: voice.isSpeaking,
               toggleListening: voice.toggleListening,
+              startListening: beginVoiceCapture,
+              stopListening: endVoiceCapture,
             }}
+            agentVoiceEnabled={!agentVoiceMuted}
             t={t}
             onAttachImage={() => fileInputRef.current?.click()}
             onChatInputChange={(value) => setState("chatInput", value)}
@@ -759,6 +818,9 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
             onSend={() => void handleChatSend()}
             onStop={handleChatStop}
             onStopSpeaking={stopSpeaking}
+            onToggleAgentVoice={() =>
+              setState("chatAgentVoiceMuted", !agentVoiceMuted)
+            }
           />
         </div>
       ) : (
@@ -778,10 +840,14 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
             voice={{
               supported: voice.supported,
               isListening: voice.isListening,
+              captureMode: voice.captureMode,
               interimTranscript: voice.interimTranscript,
               isSpeaking: voice.isSpeaking,
               toggleListening: voice.toggleListening,
+              startListening: beginVoiceCapture,
+              stopListening: endVoiceCapture,
             }}
+            agentVoiceEnabled={!agentVoiceMuted}
             t={t}
             onAttachImage={() => fileInputRef.current?.click()}
             onChatInputChange={(value) => setState("chatInput", value)}
@@ -789,6 +855,9 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
             onSend={() => void handleChatSend()}
             onStop={handleChatStop}
             onStopSpeaking={stopSpeaking}
+            onToggleAgentVoice={() =>
+              setState("chatAgentVoiceMuted", !agentVoiceMuted)
+            }
           />
         </div>
       )}

@@ -76,6 +76,11 @@ function baseContext(overrides?: Record<string, unknown>) {
     onboardingLargeModel: "",
     onboardingProvider: "",
     onboardingApiKey: "",
+    onboardingRemoteApiBase: "",
+    onboardingRemoteToken: "",
+    onboardingRemoteConnecting: false,
+    onboardingRemoteError: "",
+    onboardingRemoteConnected: false,
     onboardingOpenRouterModel: "",
     onboardingPrimaryModel: "",
     onboardingSubscriptionTab: "token" as const,
@@ -92,6 +97,8 @@ function baseContext(overrides?: Record<string, unknown>) {
     miladyCloudLoginError: "",
     handleOnboardingNext: vi.fn(async () => {}),
     handleOnboardingBack: vi.fn(),
+    handleOnboardingRemoteConnect: vi.fn(async () => {}),
+    handleOnboardingUseLocalBackend: vi.fn(),
     handleCloudLogin: vi.fn(async () => {}),
     setState: vi.fn(),
     ...overrides,
@@ -190,7 +197,7 @@ describe("WakeUpStep", () => {
 describe("ConnectionStep", () => {
   beforeEach(() => mockUseApp.mockReset());
 
-  it("renders provider selection grid when no provider selected", async () => {
+  it("renders hosting selection before provider setup", async () => {
     mockUseApp.mockReturnValue(baseContext({ onboardingProvider: "" }));
     let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
@@ -198,12 +205,14 @@ describe("ConnectionStep", () => {
     });
 
     const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
-    expect(text).toContain("onboarding.neuralLinkTitle");
-    expect(text).toContain("onboarding.chooseProvider");
+    expect(text).toContain("onboarding.hostingTitle");
+    expect(text).toContain("onboarding.hostingQuestion");
+    expect(text).toContain("onboarding.hostingLocal");
+    expect(text).toContain("onboarding.hostingCloud");
     expect(text).toContain("onboarding.back");
   });
 
-  it("calls handleOnboardingBack from provider grid", async () => {
+  it("calls handleOnboardingBack from hosting selection", async () => {
     const back = vi.fn();
     mockUseApp.mockReturnValue(
       baseContext({ onboardingProvider: "", handleOnboardingBack: back }),
@@ -224,8 +233,27 @@ describe("ConnectionStep", () => {
     expect(back).toHaveBeenCalled();
   });
 
+  it("renders provider selection grid once local hosting is chosen", async () => {
+    mockUseApp.mockReturnValue(
+      baseContext({ onboardingRunMode: "local", onboardingProvider: "" }),
+    );
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(ConnectionStep));
+    });
+
+    const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
+    expect(text).toContain("onboarding.neuralLinkTitle");
+    expect(text).toContain("onboarding.chooseProvider");
+  });
+
   it("renders provider config when a provider is selected", async () => {
-    mockUseApp.mockReturnValue(baseContext({ onboardingProvider: "openai" }));
+    mockUseApp.mockReturnValue(
+      baseContext({
+        onboardingRunMode: "local",
+        onboardingProvider: "openai",
+      }),
+    );
     let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ConnectionStep));
@@ -237,7 +265,26 @@ describe("ConnectionStep", () => {
     expect(text).toContain("onboarding.change");
   });
 
-  it("shows only Eliza Cloud on mobile (isNative = true)", async () => {
+  it("renders remote backend fields for self-hosted cloud connections", async () => {
+    mockUseApp.mockReturnValue(
+      baseContext({
+        onboardingRunMode: "cloud",
+        onboardingCloudProvider: "remote",
+      }),
+    );
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(ConnectionStep));
+    });
+
+    const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
+    expect(text).toContain("onboarding.remoteTitle");
+    expect(text).toContain("onboarding.remoteAddress");
+    expect(text).toContain("onboarding.remoteAccessKey");
+    expect(text).toContain("onboarding.remoteConnect");
+  });
+
+  it("shows only cloud hosting on mobile (isNative = true)", async () => {
     mockIsNativeFn.value = true;
     mockUseApp.mockReturnValue(
       baseContext({
@@ -265,10 +312,8 @@ describe("ConnectionStep", () => {
     });
 
     const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
-    // Should show Eliza Cloud but NOT OpenAI or Anthropic
-    expect(text).toContain("Eliza Cloud");
-    expect(text).not.toContain("OpenAI");
-    expect(text).not.toContain("Anthropic");
+    expect(text).toContain("onboarding.hostingCloud");
+    expect(text).not.toContain("onboarding.hostingLocal");
     mockIsNativeFn.value = false;
   });
 });

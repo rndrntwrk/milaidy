@@ -144,11 +144,12 @@ const DEFAULT_CAMERA_ANIMATION: CameraAnimationConfig = {
   rotationAmplitude: 0.01,
   speed: 0.8,
 };
-const COMPANION_WORLD_SCALE = 3;
+const COMPANION_WORLD_SCALE = 2.5;
 const COMPANION_DARK_WORLD_FLOOR_OFFSET_Y = -0.95;
 const COMPANION_LIGHT_WORLD_FLOOR_OFFSET_Y = -0.35;
-const COMPANION_WORLD_REVEAL_DURATION = 6.4;
+const COMPANION_WORLD_REVEAL_DURATION = 5.4;
 const COMPANION_WORLD_REVEAL_EDGE = 0.28;
+const COMPANION_WORLD_REVEAL_EASE_EXPONENT = 2;
 const COMPANION_WORLD_REVEAL_START_OFFSET = 0.7;
 const TELEPORT_DISSOLVE_START_Y = -1.2;
 const TELEPORT_DISSOLVE_END_Y = 1.0;
@@ -481,7 +482,7 @@ export class VrmEngine {
   private mouthSmoothed = 0;
   private vrmName: string | null = null;
   private lookAtTarget = new THREE.Vector3(0, 0.5, 0);
-  private readonly idleGlbUrl = resolveAppAssetUrl("animations/idle.glb");
+  private readonly idleGlbUrl = resolveAppAssetUrl("animations/idle.glb.gz");
   private cameraAnimation: CameraAnimationConfig = {
     ...DEFAULT_CAMERA_ANIMATION,
   };
@@ -517,6 +518,28 @@ export class VrmEngine {
   private avatarLookTarget: THREE.Group | null = null;
   private headLookTarget = new THREE.Vector2();
   private headLookCurrent = new THREE.Vector2();
+
+  private clearEmoteTimeout(): void {
+    if (this.emoteTimeout !== null) {
+      clearTimeout(this.emoteTimeout);
+      this.emoteTimeout = null;
+    }
+  }
+
+  private playActionWithBlend(
+    action: THREE.AnimationAction,
+    fromAction: THREE.AnimationAction | null,
+    fadeDuration: number,
+  ): void {
+    action.reset();
+    action.play();
+    if (fromAction && fromAction !== action) {
+      fromAction.play();
+      action.crossFadeFrom(fromAction, fadeDuration, false);
+      return;
+    }
+    action.fadeIn(fadeDuration);
+  }
   private avatarLookRig: {
     headBone: THREE.Object3D | null;
     neckBone: THREE.Object3D | null;
@@ -920,11 +943,15 @@ export class VrmEngine {
       reveal.syncToTeleport && avatarRevealActive
         ? this.teleportProgress
         : Math.min(1, reveal.progress + stableDelta / reveal.duration);
+    const appliedProgress =
+      reveal.syncToTeleport && avatarRevealActive
+        ? nextProgress
+        : nextProgress ** COMPANION_WORLD_REVEAL_EASE_EXPONENT;
 
     reveal.progress = nextProgress;
-    this.setWorldRevealProgress(reveal.incoming, nextProgress);
+    this.setWorldRevealProgress(reveal.incoming, appliedProgress);
     if (reveal.outgoing) {
-      this.setWorldRevealProgress(reveal.outgoing, nextProgress);
+      this.setWorldRevealProgress(reveal.outgoing, appliedProgress);
     }
 
     if (nextProgress >= 1) {
@@ -1418,10 +1445,7 @@ export class VrmEngine {
     this.lastLoadError = null;
     this.mixer = null;
     this.idleAction = null;
-    if (this.emoteTimeout !== null) {
-      clearTimeout(this.emoteTimeout);
-      this.emoteTimeout = null;
-    }
+    this.clearEmoteTimeout();
     this.emoteAction = null;
     this.emoteClipCache.clear();
     this.teleportProgress = 1.0;
@@ -1703,25 +1727,22 @@ export class VrmEngine {
     const vrm = this.vrm;
     const mixer = this.mixer;
     if (!vrm || !mixer) return;
-    this.stopEmote();
+    this.clearEmoteTimeout();
     this.emoteRequestId++;
     const requestId = this.emoteRequestId;
+    const currentAction = this.emoteAction;
+    const blendSource = currentAction ?? this.idleAction;
     const clip = await this.loadEmoteClipCached(path, vrm);
     if (!clip || this.vrm !== vrm || this.mixer !== mixer) return;
     if (this.emoteRequestId !== requestId) return;
     const action = mixer.clipAction(clip);
-    action.reset();
     action.setLoop(
       loop ? THREE.LoopRepeat : THREE.LoopOnce,
       loop ? Infinity : 1,
     );
     action.clampWhenFinished = !loop;
-    const fadeDuration = 0.3;
-    if (this.idleAction) {
-      this.idleAction.fadeOut(fadeDuration);
-    }
-    action.fadeIn(fadeDuration);
-    action.play();
+    const fadeDuration = 0.4;
+    this.playActionWithBlend(action, blendSource, fadeDuration);
     this.emoteAction = action;
     if (!loop) {
       const safeDuration =
@@ -1735,20 +1756,20 @@ export class VrmEngine {
     }
   }
   stopEmote(): void {
-    if (this.emoteTimeout !== null) {
-      clearTimeout(this.emoteTimeout);
-      this.emoteTimeout = null;
-    }
-    const fadeDuration = 0.3;
-    if (this.emoteAction) {
-      this.emoteAction.fadeOut(fadeDuration);
-      this.emoteAction = null;
-    }
+    this.clearEmoteTimeout();
+    const fadeDuration = 0.4;
+    const activeEmote = this.emoteAction;
+    this.emoteAction = null;
     if (this.idleAction) {
-      this.idleAction.reset();
-      this.idleAction.fadeIn(fadeDuration);
       this.idleAction.play();
+      if (activeEmote && activeEmote !== this.idleAction) {
+        this.idleAction.crossFadeFrom(activeEmote, fadeDuration, false);
+      } else {
+        this.idleAction.fadeIn(fadeDuration);
+      }
+      return;
     }
+    activeEmote?.fadeOut(fadeDuration);
   }
   async loadVrmFromUrl(url: string, name?: string): Promise<void> {
     await this.whenReady();

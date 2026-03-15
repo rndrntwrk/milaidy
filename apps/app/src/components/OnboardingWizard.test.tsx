@@ -13,7 +13,7 @@ const { mockApplyUiTheme, mockUseApp, mockVrmStage } = vi.hoisted(() => ({
 vi.mock("@milady/app-core/state", () => ({
   applyUiTheme: (theme: "light" | "dark") => mockApplyUiTheme(theme),
   getVrmPreviewUrl: () => "/vrms/previews/milady-1.png",
-  getVrmUrl: () => "/vrms/milady-1.vrm",
+  getVrmUrl: () => "/vrms/milady-1.vrm.gz",
   useApp: () => mockUseApp(),
 }));
 

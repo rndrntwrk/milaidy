@@ -135,7 +135,7 @@ export function resolveProviderFromModel(model: string): string | null {
   if (!lower) return null;
 
   const providers: Array<{ match: string; label: string }> = [
-    { match: "elizacloud", label: "Eliza Cloud" },
+    { match: "elizacloud", label: "Milady Cloud" },
     { match: "openrouter", label: "OpenRouter" },
     { match: "openai", label: "OpenAI" },
     { match: "anthropic", label: "Anthropic" },

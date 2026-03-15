@@ -3,7 +3,7 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-type OnboardingStep = "wakeUp" | "connection" | "senses" | "activate";
+type OnboardingStep = "wakeUp" | "connection" | "rpc" | "senses" | "activate";
 
 type AppHarnessState = {
   onboardingLoading: boolean;
@@ -67,12 +67,17 @@ type AppHarnessState = {
   onboardingName: string;
   onboardingStyle: string;
   onboardingTheme: string;
-  onboardingRunMode: "local-rawdog" | "local-sandbox" | "cloud" | "";
+  onboardingRunMode: "local" | "cloud" | "";
   onboardingCloudProvider: string;
   onboardingSmallModel: string;
   onboardingLargeModel: string;
   onboardingProvider: string;
   onboardingApiKey: string;
+  onboardingRemoteApiBase: string;
+  onboardingRemoteToken: string;
+  onboardingRemoteConnecting: boolean;
+  onboardingRemoteError: string;
+  onboardingRemoteConnected: boolean;
   onboardingOpenRouterModel: string;
   onboardingPrimaryModel: string;
   onboardingTelegramToken: string;
@@ -316,7 +321,7 @@ function onboardingOptions() {
         rpcProviders: [
           {
             id: "elizacloud",
-            name: "Eliza Cloud",
+            name: "Milady Cloud",
             description: "Managed RPC",
             envKey: null,
             requiresKey: false,
@@ -346,6 +351,11 @@ function createHarnessState(): AppHarnessState {
     onboardingLargeModel: "large-model",
     onboardingProvider: "",
     onboardingApiKey: "",
+    onboardingRemoteApiBase: "",
+    onboardingRemoteToken: "",
+    onboardingRemoteConnecting: false,
+    onboardingRemoteError: "",
+    onboardingRemoteConnected: false,
     onboardingOpenRouterModel: "",
     onboardingPrimaryModel: "",
     onboardingTelegramToken: "",
@@ -412,6 +422,7 @@ describe("app startup onboarding flow (e2e)", () => {
     const STEP_ORDER: OnboardingStep[] = [
       "wakeUp",
       "connection",
+      "rpc",
       "senses",
       "activate",
     ];
@@ -451,6 +462,8 @@ describe("app startup onboarding flow (e2e)", () => {
         state.miladyCloudConnected = true;
         state.miladyCloudUserId = "test-user";
       },
+      handleOnboardingRemoteConnect: async () => {},
+      handleOnboardingUseLocalBackend: () => {},
     }));
   });
 
@@ -464,7 +477,11 @@ describe("app startup onboarding flow (e2e)", () => {
     const renderedTree = tree;
 
     for (let i = 0; i < 20 && !state.onboardingComplete; i += 1) {
-      if (state.onboardingStep === "connection" && !state.onboardingProvider) {
+      if (
+        state.onboardingStep === "connection" &&
+        state.onboardingRunMode === "local" &&
+        !state.onboardingProvider
+      ) {
         state.onboardingProvider = "ollama";
         await rerender(renderedTree);
       }
@@ -474,7 +491,13 @@ describe("app startup onboarding flow (e2e)", () => {
       } else if (state.onboardingStep === "wakeUp") {
         clickButton(renderedTree, "onboarding.createNewAgent");
       } else if (state.onboardingStep === "connection") {
-        clickButton(renderedTree, "onboarding.confirm");
+        if (!state.onboardingRunMode) {
+          clickButton(renderedTree, "onboarding.hostingLocal");
+        } else {
+          clickButton(renderedTree, "onboarding.confirm");
+        }
+      } else if (state.onboardingStep === "rpc") {
+        clickButton(renderedTree, "onboarding.rpcSkip");
       } else if (state.onboardingStep === "activate") {
         clickButton(renderedTree, "onboarding.enter");
       }

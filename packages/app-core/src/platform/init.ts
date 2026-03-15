@@ -203,10 +203,23 @@ export function injectPopoutApiBase(): void {
     try {
       const parsed = new URL(apiBase);
       const host = parsed.hostname;
+      const allowPrivateHttp =
+        /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+        /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+        /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host) ||
+        /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(
+          host,
+        ) ||
+        host.endsWith(".local") ||
+        host.endsWith(".internal") ||
+        host.endsWith(".ts.net");
       if (
         host === "localhost" ||
         host === "127.0.0.1" ||
-        host === window.location.hostname
+        host === "::1" ||
+        host === window.location.hostname ||
+        parsed.protocol === "https:" ||
+        (parsed.protocol === "http:" && allowPrivateHttp)
       ) {
         window.__MILADY_API_BASE__ = apiBase;
       } else {

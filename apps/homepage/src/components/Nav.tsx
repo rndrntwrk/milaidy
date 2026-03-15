@@ -18,6 +18,14 @@ export function Nav() {
           Install
         </a>
         <a
+          href="https://cloud.milady.ai"
+          target="_blank"
+          rel="noreferrer"
+          className="text-text-muted hover:text-brand transition-colors duration-300"
+        >
+          Cloud
+        </a>
+        <a
           href="#privacy"
           className="text-text-muted hover:text-brand transition-colors duration-300"
         >

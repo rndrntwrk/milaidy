@@ -57,22 +57,33 @@ RUN set -e; \
         # LFS budget/quota can block fetch; continue so media.githubusercontent fallback can run.
         git lfs fetch origin "$REF" --include='apps/app/public/vrms' || true; \
         git lfs fetch origin "$REF" --include='apps/app/public/animations/mixamo' || true; \
+        git lfs fetch origin "$REF" --include='apps/app/public/animations/emotes' || true; \
         git lfs fetch origin "$REF" --include='apps/app/public/animations/idle.glb' || true; \
-        git lfs fetch origin "$REF" --include='apps/app/public/animations/Idle.fbx' || true; \
-        git lfs fetch origin "$REF" --include='apps/app/public/animations/BreathingIdle.fbx' || true; \
         git lfs checkout apps/app/public/vrms || true; \
         git lfs checkout apps/app/public/animations/mixamo || true; \
+        git lfs checkout apps/app/public/animations/emotes || true; \
         git lfs checkout apps/app/public/animations/idle.glb || true; \
-        git lfs checkout apps/app/public/animations/Idle.fbx || true; \
-        git lfs checkout apps/app/public/animations/BreathingIdle.fbx || true; \
         cd /app; \
         rm -rf apps/app/public/vrms apps/app/public/animations; \
-        mkdir -p apps/app/public/animations; \
-        cp -a /tmp/milady-lfs-src/apps/app/public/vrms apps/app/public/; \
+        mkdir -p apps/app/public/vrms/previews apps/app/public/vrms/backgrounds apps/app/public/animations; \
+        for vrm_id in 1 4 5 9; do \
+          if [ -f "/tmp/milady-lfs-src/apps/app/public/vrms/milady-${vrm_id}.vrm" ]; then \
+            gzip -c "/tmp/milady-lfs-src/apps/app/public/vrms/milady-${vrm_id}.vrm" > "apps/app/public/vrms/milady-${vrm_id}.vrm.gz"; \
+          fi; \
+          if [ -f "/tmp/milady-lfs-src/apps/app/public/vrms/previews/milady-${vrm_id}.png" ]; then \
+            cp -a "/tmp/milady-lfs-src/apps/app/public/vrms/previews/milady-${vrm_id}.png" apps/app/public/vrms/previews/; \
+          fi; \
+        done; \
+        for bg_id in 1 4 5 9; do \
+          if [ -f "/tmp/milady-lfs-src/apps/app/public/vrms/backgrounds/milady-${bg_id}.png" ]; then \
+            cp -a "/tmp/milady-lfs-src/apps/app/public/vrms/backgrounds/milady-${bg_id}.png" apps/app/public/vrms/backgrounds/; \
+          fi; \
+        done; \
         cp -a /tmp/milady-lfs-src/apps/app/public/animations/mixamo apps/app/public/animations/ || true; \
+        cp -a /tmp/milady-lfs-src/apps/app/public/animations/emotes apps/app/public/animations/ || true; \
         cp -a /tmp/milady-lfs-src/apps/app/public/animations/idle.glb apps/app/public/animations/ || true; \
-        cp -a /tmp/milady-lfs-src/apps/app/public/animations/Idle.fbx apps/app/public/animations/ || true; \
-        cp -a /tmp/milady-lfs-src/apps/app/public/animations/BreathingIdle.fbx apps/app/public/animations/ || true; \
+        rm -f apps/app/public/animations/emotes/idle.glb apps/app/public/animations/emotes/punch.glb apps/app/public/animations/mixamo/Crying.fbx; \
+        find apps/app/public/animations -type f \( -name '*.glb' -o -name '*.fbx' \) -exec sh -c 'gzip -c "$1" > "$1.gz" && rm -f "$1"' _ {} \; ; \
         rm -rf /tmp/milady-lfs-src; \
       else \
         echo '[build] WARNING: fallback clone failed; continuing with existing assets.'; \

@@ -27,8 +27,9 @@ export function Downloads() {
           </h2>
           <p className="mt-6 max-w-xl text-base leading-8 text-dark/70">
             Desktop buttons are generated from GitHub release assets instead of
-            hardcoded placeholders. This page rebuilds when the homepage changes
-            and when a new release is published.
+            hardcoded placeholders. Milady Cloud and remote self-hosting now sit
+            alongside the download flow so users can either run local or attach
+            to a hosted backend from the same frontend.
           </p>
           <div className="mt-8 border border-dark/10 bg-black px-5 py-4 font-mono text-sm text-white">
             <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">
@@ -88,6 +89,23 @@ export function Downloads() {
 
           <div className="grid gap-6 md:grid-cols-2">
             <InfoCard
+              eyebrow="Managed hosting"
+              title="Milady Cloud"
+              body="Create managed Milady instances at cloud.milady.ai and connect the frontend to provisioned backend containers."
+              href="https://cloud.milady.ai"
+              action="Open cloud"
+            />
+            <InfoCard
+              eyebrow="Self-hosted"
+              title="Remote backend"
+              body="Run Milady on your own box, expose it securely, then connect from onboarding with the backend address and MILADY_API_TOKEN."
+              href="https://github.com/milady-ai/milady#remote-backend-deployment"
+              action="Read setup"
+            />
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <InfoCard
               eyebrow="GitHub Releases"
               title="Release page"
               body="Open the full asset list, release notes, and changelog for the currently selected release."
@@ -95,11 +113,11 @@ export function Downloads() {
               action="Open release"
             />
             <InfoCard
-              eyebrow="Mobile"
-              title="iOS + Android"
-              body="Desktop downloads are live from GitHub Releases. Mobile stays an explicit coming-soon path until those artifacts exist."
-              href="#download"
-              action="Coming soon"
+              eyebrow="Network path"
+              title="Tailscale attach"
+              body="Keep a remote Milady backend private with Tailscale serve or funnel, then connect from the Milady frontend with the same access key."
+              href="https://github.com/milady-ai/milady#tailscale"
+              action="View flow"
             />
           </div>
 

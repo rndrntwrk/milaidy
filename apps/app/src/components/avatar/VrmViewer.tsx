@@ -15,7 +15,7 @@ import {
   type VrmEngineState,
 } from "./VrmEngine";
 
-const DEFAULT_VRM_PATH = resolveAppAssetUrl("vrms/milady-1.vrm");
+const DEFAULT_VRM_PATH = resolveAppAssetUrl("vrms/milady-1.vrm.gz");
 
 export type VrmViewerProps = {
   /** When false the loaded scene stays resident but the render loop is paused */

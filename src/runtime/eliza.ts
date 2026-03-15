@@ -108,7 +108,10 @@ import { diagnoseNoAIProvider } from "../services/version-compat";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins";
 import { detectEmbeddingPreset } from "./embedding-presets";
 import { createMiladyPlugin } from "./milady-plugin";
-import { installDatabaseTrajectoryLogger } from "./trajectory-persistence";
+import {
+  installDatabaseTrajectoryLogger,
+  shouldEnableTrajectoryLoggingByDefault,
+} from "./trajectory-persistence";
 
 /**
  * Map of baseline bundled @elizaos plugin names to their statically imported
@@ -544,10 +547,16 @@ function ensureTrajectoryLoggerEnabled(
   const isEnabled =
     typeof trajectoryLogger.isEnabled === "function"
       ? trajectoryLogger.isEnabled()
-      : true;
-  if (!isEnabled && typeof trajectoryLogger.setEnabled === "function") {
-    trajectoryLogger.setEnabled(true);
-    logger.info("[milady] trajectory_logger enabled by default");
+      : shouldEnableTrajectoryLoggingByDefault();
+  const shouldEnable = shouldEnableTrajectoryLoggingByDefault();
+  if (
+    isEnabled !== shouldEnable &&
+    typeof trajectoryLogger.setEnabled === "function"
+  ) {
+    trajectoryLogger.setEnabled(shouldEnable);
+    logger.info(
+      `[milady] trajectory_logger defaulted ${shouldEnable ? "on" : "off"} (${context})`,
+    );
   }
 }
 

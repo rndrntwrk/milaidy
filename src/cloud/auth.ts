@@ -1,5 +1,5 @@
 /**
- * Eliza Cloud login flow — reuses the CLI auth session pattern:
+ * Milady Cloud login flow — reuses the CLI auth session pattern:
  * create session, open browser, poll until authenticated, return API key.
  */
 
@@ -50,7 +50,7 @@ async function fetchWithTimeout(
 export async function cloudLogin(
   options: CloudLoginOptions = {},
 ): Promise<CloudLoginResult> {
-  const baseUrl = (options.baseUrl ?? "https://www.elizacloud.ai").replace(
+  const baseUrl = (options.baseUrl ?? "https://cloud.milady.ai").replace(
     /\/+$/,
     "",
   );

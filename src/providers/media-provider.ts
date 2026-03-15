@@ -153,7 +153,7 @@ class ElizaCloudImageProvider implements ImageGenerationProvider {
 
     if (!response.ok) {
       const text = await response.text();
-      return { success: false, error: `Eliza Cloud error: ${text}` };
+      return { success: false, error: `Milady Cloud error: ${text}` };
     }
 
     const data = (await response.json()) as {
@@ -201,7 +201,7 @@ class ElizaCloudVideoProvider implements VideoGenerationProvider {
 
     if (!response.ok) {
       const text = await response.text();
-      return { success: false, error: `Eliza Cloud error: ${text}` };
+      return { success: false, error: `Milady Cloud error: ${text}` };
     }
 
     const data = (await response.json()) as {
@@ -249,7 +249,7 @@ class ElizaCloudAudioProvider implements AudioGenerationProvider {
 
     if (!response.ok) {
       const text = await response.text();
-      return { success: false, error: `Eliza Cloud error: ${text}` };
+      return { success: false, error: `Milady Cloud error: ${text}` };
     }
 
     const data = (await response.json()) as {
@@ -297,7 +297,7 @@ class ElizaCloudVisionProvider implements VisionAnalysisProvider {
 
     if (!response.ok) {
       const text = await response.text();
-      return { success: false, error: `Eliza Cloud error: ${text}` };
+      return { success: false, error: `Milady Cloud error: ${text}` };
     }
 
     const data = (await response.json()) as {
@@ -1260,7 +1260,7 @@ export function createImageProvider(
     );
   }
   return new ElizaCloudImageProvider(
-    options.elizaCloudBaseUrl ?? "https://www.elizacloud.ai/api/v1",
+    options.elizaCloudBaseUrl ?? "https://cloud.milady.ai/api/v1",
     options.elizaCloudApiKey,
   );
 }
@@ -1297,7 +1297,7 @@ export function createVideoProvider(
     );
   }
   return new ElizaCloudVideoProvider(
-    options.elizaCloudBaseUrl ?? "https://www.elizacloud.ai/api/v1",
+    options.elizaCloudBaseUrl ?? "https://cloud.milady.ai/api/v1",
     options.elizaCloudApiKey,
   );
 }
@@ -1320,7 +1320,7 @@ export function createAudioProvider(
     );
   }
   return new ElizaCloudAudioProvider(
-    options.elizaCloudBaseUrl ?? "https://www.elizacloud.ai/api/v1",
+    options.elizaCloudBaseUrl ?? "https://cloud.milady.ai/api/v1",
     options.elizaCloudApiKey,
   );
 }
@@ -1365,7 +1365,7 @@ export function createVisionProvider(
     );
   }
   return new ElizaCloudVisionProvider(
-    options.elizaCloudBaseUrl ?? "https://www.elizacloud.ai/api/v1",
+    options.elizaCloudBaseUrl ?? "https://cloud.milady.ai/api/v1",
     options.elizaCloudApiKey,
   );
 }

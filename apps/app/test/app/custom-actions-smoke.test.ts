@@ -192,8 +192,11 @@ describe("custom actions smoke flow", () => {
     mockUseVoiceChat.mockReturnValue({
       supported: false,
       isListening: false,
+      captureMode: "idle",
       interimTranscript: "",
       toggleListening: vi.fn(),
+      startListening: vi.fn(),
+      stopListening: vi.fn(),
       mouthOpen: 0,
       isSpeaking: false,
       usingAudioAnalysis: false,

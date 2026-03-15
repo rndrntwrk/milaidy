@@ -1,5 +1,5 @@
 /**
- * Cloud Compat proxy routes — forwards /api/cloud/compat/* to Eliza Cloud v2's
+ * Cloud Compat proxy routes — forwards /api/cloud/compat/* to Milady Cloud's
  * /api/compat/* endpoints, injecting stored credentials for authentication.
  *
  * Auth strategy:
@@ -28,10 +28,10 @@ const MAX_BODY_BYTES = 1_048_576;
 const RETRY_BACKOFF_MS = 2_000;
 
 /**
- * Resolve the Eliza Cloud base URL from config (without trailing slashes).
+ * Resolve the Milady Cloud base URL from config (without trailing slashes).
  */
 export function resolveCloudBaseUrl(config: MiladyConfig): string {
-  return (config.cloud?.baseUrl ?? "https://www.elizacloud.ai")
+  return (config.cloud?.baseUrl ?? "https://cloud.milady.ai")
     .trim()
     .replace(/\/+$/, "");
 }

@@ -279,11 +279,6 @@ export function RuntimeView() {
 
   return (
     <div className="flex flex-col gap-4 h-full">
-      <div className="border-b border-border bg-card p-2">
-        <div className="text-[13px] font-semibold mr-2">
-          {t("runtime.debug")}
-        </div>
-      </div>
       <div className="flex flex-wrap items-end gap-3 border border-[var(--border)] bg-[var(--card)] rounded-md p-3">
         <label className="text-[11px] text-[var(--muted)] flex items-center gap-1">
           {t("runtimeview.depth")}

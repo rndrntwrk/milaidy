@@ -36,7 +36,7 @@ export class CloudManager {
   ) {}
 
   async init(): Promise<void> {
-    const rawUrl = this.cloudConfig.baseUrl ?? "https://www.elizacloud.ai";
+    const rawUrl = this.cloudConfig.baseUrl ?? "https://cloud.milady.ai";
     const apiKey = this.cloudConfig.apiKey;
     if (!apiKey)
       throw new Error(

@@ -3,9 +3,9 @@ import { validateCloudBaseUrl } from "../cloud/validate-url";
 import type { MiladyConfig } from "../config/config";
 import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
 
-const DEFAULT_CLOUD_API_BASE_URL = "https://www.elizacloud.ai/api/v1";
+const DEFAULT_CLOUD_API_BASE_URL = "https://cloud.milady.ai/api/v1";
 const CLOUD_BILLING_URL =
-  "https://www.elizacloud.ai/dashboard/settings?tab=billing";
+  "https://cloud.milady.ai/dashboard/settings?tab=billing";
 
 interface CloudAuthIdentityService {
   isAuthenticated: () => boolean;

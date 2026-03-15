@@ -325,8 +325,8 @@ export class TalkModeElectron implements TalkModePlugin {
   async stop(): Promise<void> {
     this.enabled = false;
     this.stopAudioCapture();
-    this.removeNativeListeners();
     await this.invokeBridge("talkmodeStop", "talkmode:stop");
+    this.removeNativeListeners();
 
     this.recognition?.stop();
     this.recognition = null;

@@ -9,6 +9,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const miladyRoot = path.resolve(here, "../..");
 // The dev script sets MILADY_API_PORT; default to 31337 for standalone vite dev.
 const apiPort = Number(process.env.MILADY_API_PORT) || 31337;
+const enableAppSourceMaps = process.env.MILADY_APP_SOURCEMAP === "1";
 
 /**
  * Dev-only middleware that handles CORS for Electron's custom-scheme origin
@@ -101,7 +102,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(here, "dist"),
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: enableAppSourceMaps,
     target: "es2022",
     rollupOptions: {
       input: {

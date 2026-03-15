@@ -2568,6 +2568,7 @@ function error(res: http.ServerResponse, message: string, status = 400): void {
 const STATIC_MIME: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".gif": "image/gif",
+  ".gz": "application/octet-stream",
   ".glb": "model/gltf-binary",
   ".gltf": "model/gltf+json",
   ".html": "text/html; charset=utf-8",
@@ -4018,11 +4019,12 @@ function getProviderOptions(): Array<{
   return [
     {
       id: "miladycloud",
-      name: "Eliza Cloud",
+      name: "Milady Cloud",
       envKey: null,
       pluginName: "@elizaos/plugin-elizacloud",
       keyPrefix: null,
-      description: "Free credits, best option to try the app.",
+      description:
+        "Managed hosting for Milady agents and bundled infrastructure.",
     },
     {
       id: "anthropic-subscription",
@@ -4149,7 +4151,7 @@ function getCloudProviderOptions(): Array<{
   return [
     {
       id: "miladycloud",
-      name: "Eliza Cloud",
+      name: "Milady Cloud",
       description:
         "Managed cloud infrastructure. Wallets, LLMs, and RPCs included.",
     },
@@ -4734,7 +4736,7 @@ function getInventoryProviderOptions(): Array<{
       rpcProviders: [
         {
           id: "miladycloud",
-          name: "Eliza Cloud",
+          name: "Milady Cloud",
           description: "Managed RPC. No setup needed.",
           envKey: null,
           requiresKey: false,
@@ -4769,7 +4771,7 @@ function getInventoryProviderOptions(): Array<{
       rpcProviders: [
         {
           id: "miladycloud",
-          name: "Eliza Cloud",
+          name: "Milady Cloud",
           description: "Managed RPC. No setup needed.",
           envKey: null,
           requiresKey: false,
@@ -7877,6 +7879,14 @@ async function handleRequest(
     if (runMode === "cloud") {
       if (body.cloudProvider) {
         config.cloud.provider = body.cloudProvider as string;
+      }
+      if (
+        typeof body.providerApiKey === "string" &&
+        body.providerApiKey.trim().length > 0
+      ) {
+        const cloudApiKey = body.providerApiKey.trim();
+        config.cloud.apiKey = cloudApiKey;
+        process.env.ELIZAOS_CLOUD_API_KEY = cloudApiKey;
       }
       // Always ensure model defaults when cloud is selected so the cloud
       // plugin has valid models to call even if the user didn't pick unknown.
@@ -13382,6 +13392,7 @@ async function handleRequest(
           text: string;
           agentName: string;
           generated: boolean;
+          persisted: boolean;
         }
       | undefined;
 
@@ -13402,6 +13413,7 @@ async function handleRequest(
               text: storedGreeting.text,
               agentName: storedGreeting.agentName,
               generated: storedGreeting.generated,
+              persisted: storedGreeting.persisted,
             };
           }
         }
@@ -13779,6 +13791,7 @@ async function handleRequest(
         text: greeting.text,
         agentName: greeting.agentName,
         generated: greeting.generated,
+        persisted: greeting.persisted,
       });
     } catch (err) {
       error(res, getErrorMessage(err), 500);
@@ -15112,7 +15125,9 @@ async function handleRequest(
       emoteId: emote.id,
       path: emote.path,
       duration: emote.duration,
-      loop: emote.loop,
+      // Emotes are always treated as one-shot performances in the app and
+      // blend back to idle automatically after their catalog duration.
+      loop: false,
     });
     json(res, { ok: true });
     return;

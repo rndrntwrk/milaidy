@@ -29,7 +29,7 @@ function normalizeAvatarIndex(index: number): number {
 /** Resolve a bundled VRM index (1–N) to its public asset URL. */
 export function getVrmUrl(index: number): string {
   const sourceIndex = resolveSourceIndex(index);
-  return resolveAppAssetUrl(`vrms/milady-${sourceIndex}.vrm`);
+  return resolveAppAssetUrl(`vrms/milady-${sourceIndex}.vrm.gz`);
 }
 
 /** Resolve a bundled VRM index (1–N) to its preview thumbnail URL. */
@@ -46,8 +46,8 @@ export function getVrmBackgroundUrl(index: number): string {
 }
 
 const COMPANION_THEME_BACKGROUND_INDEX: Record<UiTheme, number> = {
-  light: 5,
-  dark: 20,
+  light: 3,
+  dark: 4,
 };
 
 /** Resolve the fixed companion-mode background for the current UI theme. */

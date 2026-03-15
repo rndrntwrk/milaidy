@@ -20,9 +20,16 @@ function formatRequestError(err: unknown): string {
 export function ConnectionStep() {
   const {
     onboardingOptions,
+    onboardingRunMode,
+    onboardingCloudProvider,
     onboardingProvider,
     onboardingSubscriptionTab,
     onboardingApiKey,
+    onboardingRemoteApiBase,
+    onboardingRemoteToken,
+    onboardingRemoteConnecting,
+    onboardingRemoteError,
+    onboardingRemoteConnected,
     onboardingPrimaryModel,
     onboardingMiladyCloudTab,
     onboardingOpenRouterModel,
@@ -30,6 +37,8 @@ export function ConnectionStep() {
     miladyCloudLoginBusy,
     miladyCloudLoginError,
     handleCloudLogin,
+    handleOnboardingRemoteConnect,
+    handleOnboardingUseLocalBackend,
     handleOnboardingNext,
     handleOnboardingBack,
     setState,
@@ -138,10 +147,18 @@ export function ConnectionStep() {
     setState("onboardingOpenRouterModel", modelId);
   };
 
-  const providers = onboardingOptions?.providers ?? [];
+  const providers = (onboardingOptions?.providers ?? []).filter(
+    (provider: ProviderOption) => provider.id !== "miladycloud",
+  );
+  const miladyCloudReady =
+    miladyCloudConnected ||
+    (onboardingRunMode === "cloud" &&
+      onboardingCloudProvider === "miladycloud" &&
+      onboardingApiKey.trim().length > 0);
+  const showProviderSelection =
+    onboardingRemoteConnected || onboardingRunMode === "local";
 
   const recommendedIds = new Set([
-    "miladycloud",
     "anthropic-subscription",
     "openai-subscription",
   ]);
@@ -150,7 +167,7 @@ export function ConnectionStep() {
     string,
     { name: string; description?: string }
   > = {
-    miladycloud: { name: "Eliza Cloud", description: "Free to start" },
+    miladycloud: { name: "Milady Cloud", description: "Managed hosting" },
     "anthropic-subscription": {
       name: "Claude Sub",
       description: "Pro/Max subscription",
@@ -177,11 +194,41 @@ export function ConnectionStep() {
     };
   };
 
-  // Sort providers: recommended first, then the rest
-  // On mobile (Capacitor), only Eliza Cloud is available (required for sandboxing)
-  const availableProviders = isNative
-    ? providers.filter((p: ProviderOption) => p.id === "miladycloud")
-    : providers;
+  const handleSelectLocalHosting = () => {
+    setState("onboardingRunMode", "local");
+    setState("onboardingCloudProvider", "");
+    setState("onboardingRemoteError", null);
+    setState("onboardingRemoteConnecting", false);
+  };
+
+  const handleSelectCloudHosting = () => {
+    setState("onboardingRunMode", "cloud");
+    setState("onboardingProvider", "");
+    setState("onboardingApiKey", "");
+    setState("onboardingPrimaryModel", "");
+  };
+
+  const resetCloudSelection = () => {
+    setState("onboardingCloudProvider", "");
+    setState("onboardingApiKey", "");
+    setState("onboardingRemoteError", null);
+    setState("onboardingRemoteConnecting", false);
+  };
+
+  const resetHostingSelection = () => {
+    resetCloudSelection();
+    setState("onboardingRunMode", "");
+  };
+
+  const handleRemoteBack = () => {
+    if (onboardingRemoteConnected) {
+      handleOnboardingUseLocalBackend();
+      return;
+    }
+    resetCloudSelection();
+  };
+
+  const availableProviders = providers;
   const recommendedProviders = availableProviders.filter((p: ProviderOption) =>
     recommendedIds.has(p.id),
   );
@@ -212,7 +259,431 @@ export function ConnectionStep() {
     }
   };
 
-  // Screen A: no provider selected — show provider grid
+  if (!showProviderSelection) {
+    if (!onboardingRunMode) {
+      return (
+        <>
+          <div className="onboarding-section-title">
+            {t("onboarding.hostingTitle")}
+          </div>
+          <div className="onboarding-divider">
+            <div className="onboarding-divider-diamond" />
+          </div>
+          <div className="onboarding-question">
+            {t("onboarding.hostingQuestion")}
+          </div>
+          <div className="onboarding-provider-grid">
+            {!isNative && (
+              <button
+                type="button"
+                className="onboarding-provider-card onboarding-provider-card--recommended"
+                onClick={handleSelectLocalHosting}
+              >
+                <div>
+                  <div className="onboarding-provider-name">
+                    {t("onboarding.hostingLocal")}
+                  </div>
+                  <div className="onboarding-provider-desc">
+                    {t("onboarding.hostingLocalDesc")}
+                  </div>
+                </div>
+                <span className="onboarding-provider-badge">
+                  {t("onboarding.recommended") ?? "Recommended"}
+                </span>
+              </button>
+            )}
+            <button
+              type="button"
+              className="onboarding-provider-card"
+              onClick={handleSelectCloudHosting}
+            >
+              <div>
+                <div className="onboarding-provider-name">
+                  {t("onboarding.hostingCloud")}
+                </div>
+                <div className="onboarding-provider-desc">
+                  {t("onboarding.hostingCloudDesc")}
+                </div>
+              </div>
+            </button>
+          </div>
+          <div className="onboarding-panel-footer">
+            <button
+              className="onboarding-back-link"
+              onClick={handleOnboardingBack}
+              type="button"
+            >
+              {t("onboarding.back")}
+            </button>
+            <span />
+          </div>
+        </>
+      );
+    }
+
+    if (!onboardingCloudProvider) {
+      return (
+        <>
+          <div className="onboarding-section-title">
+            {t("onboarding.hostingCloud")}
+          </div>
+          <div className="onboarding-divider">
+            <div className="onboarding-divider-diamond" />
+          </div>
+          <div className="onboarding-question">
+            {t("onboarding.cloudQuestion")}
+          </div>
+          <div className="onboarding-provider-grid">
+            <button
+              type="button"
+              className="onboarding-provider-card onboarding-provider-card--recommended"
+              onClick={() => setState("onboardingCloudProvider", "miladycloud")}
+            >
+              <div>
+                <div className="onboarding-provider-name">
+                  {t("onboarding.cloudManaged")}
+                </div>
+                <div className="onboarding-provider-desc">
+                  {t("onboarding.cloudManagedDesc")}
+                </div>
+              </div>
+              <span className="onboarding-provider-badge">
+                {t("onboarding.recommended") ?? "Recommended"}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="onboarding-provider-card"
+              onClick={() => setState("onboardingCloudProvider", "remote")}
+            >
+              <div>
+                <div className="onboarding-provider-name">
+                  {t("onboarding.cloudRemote")}
+                </div>
+                <div className="onboarding-provider-desc">
+                  {t("onboarding.cloudRemoteDesc")}
+                </div>
+              </div>
+            </button>
+          </div>
+          <div className="onboarding-panel-footer">
+            <button
+              className="onboarding-back-link"
+              onClick={resetHostingSelection}
+              type="button"
+            >
+              {t("onboarding.back")}
+            </button>
+            <span />
+          </div>
+        </>
+      );
+    }
+
+    if (onboardingCloudProvider === "remote") {
+      return (
+        <>
+          <div className="onboarding-section-title">
+            {t("onboarding.remoteTitle")}
+          </div>
+          <div className="onboarding-divider">
+            <div className="onboarding-divider-diamond" />
+          </div>
+          <div
+            style={{
+              width: "100%",
+              textAlign: "left",
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.875rem",
+            }}
+          >
+            <div>
+              <label
+                htmlFor="remote-api-base"
+                style={{
+                  display: "block",
+                  fontSize: "0.875rem",
+                  marginBottom: "0.375rem",
+                  color: "var(--muted)",
+                }}
+              >
+                {t("onboarding.remoteAddress")}
+              </label>
+              <input
+                id="remote-api-base"
+                type="text"
+                className="onboarding-input"
+                placeholder={t("onboarding.remoteAddressPlaceholder")}
+                value={onboardingRemoteApiBase}
+                onChange={(e) =>
+                  setState("onboardingRemoteApiBase", e.target.value)
+                }
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="remote-api-token"
+                style={{
+                  display: "block",
+                  fontSize: "0.875rem",
+                  marginBottom: "0.375rem",
+                  color: "var(--muted)",
+                }}
+              >
+                {t("onboarding.remoteAccessKey")}
+              </label>
+              <input
+                id="remote-api-token"
+                type="password"
+                className="onboarding-input"
+                placeholder={t("onboarding.remoteAccessKeyPlaceholder")}
+                value={onboardingRemoteToken}
+                onChange={(e) =>
+                  setState("onboardingRemoteToken", e.target.value)
+                }
+              />
+            </div>
+
+            {onboardingRemoteError && (
+              <p
+                style={{
+                  color: "var(--danger)",
+                  fontSize: "0.8125rem",
+                }}
+              >
+                {onboardingRemoteError}
+              </p>
+            )}
+          </div>
+          <div className="onboarding-panel-footer">
+            <button
+              className="onboarding-back-link"
+              onClick={handleRemoteBack}
+              type="button"
+            >
+              {t("onboarding.back")}
+            </button>
+            <button
+              className="onboarding-confirm-btn"
+              onClick={() => void handleOnboardingRemoteConnect()}
+              disabled={onboardingRemoteConnecting}
+              type="button"
+            >
+              {onboardingRemoteConnecting
+                ? t("onboarding.connecting")
+                : t("onboarding.remoteConnect")}
+            </button>
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <div className="onboarding-section-title">Milady Cloud</div>
+        <div className="onboarding-divider">
+          <div className="onboarding-divider-diamond" />
+        </div>
+
+        <div style={{ width: "100%", textAlign: "left" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "1rem",
+              borderBottom: "1px solid var(--border)",
+              marginBottom: "1rem",
+            }}
+          >
+            <button
+              type="button"
+              style={{
+                fontSize: "0.875rem",
+                paddingBottom: "0.5rem",
+                color:
+                  onboardingMiladyCloudTab === "login"
+                    ? "#f0b90b"
+                    : "var(--muted)",
+                background: "none",
+                border: "none",
+                borderBottom:
+                  onboardingMiladyCloudTab === "login"
+                    ? "2px solid #f0b90b"
+                    : "2px solid transparent",
+                cursor: "pointer",
+              }}
+              onClick={() => setState("onboardingMiladyCloudTab", "login")}
+            >
+              {t("onboarding.login")}
+            </button>
+            <button
+              type="button"
+              style={{
+                fontSize: "0.875rem",
+                paddingBottom: "0.5rem",
+                borderBottom:
+                  onboardingMiladyCloudTab === "apikey"
+                    ? "2px solid #f0b90b"
+                    : "2px solid transparent",
+                color:
+                  onboardingMiladyCloudTab === "apikey"
+                    ? "#f0b90b"
+                    : "var(--muted)",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+              }}
+              onClick={() => setState("onboardingMiladyCloudTab", "apikey")}
+            >
+              {t("onboarding.apiKey")}
+            </button>
+          </div>
+
+          {onboardingMiladyCloudTab === "login" ? (
+            <div style={{ textAlign: "center" }}>
+              {miladyCloudConnected ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    padding: "0.625rem 1rem",
+                    border: "1px solid var(--ok-muted)",
+                    background: "var(--ok-subtle)",
+                    color: "var(--ok)",
+                    fontSize: "0.875rem",
+                    borderRadius: "0.5rem",
+                    justifyContent: "center",
+                  }}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <title>{t("onboarding.connected")}</title>
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  {t("onboarding.connected")}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="onboarding-confirm-btn"
+                  onClick={handleCloudLogin}
+                  disabled={miladyCloudLoginBusy}
+                >
+                  {miladyCloudLoginBusy
+                    ? t("onboarding.connecting")
+                    : t("onboarding.connectAccount")}
+                </button>
+              )}
+              {miladyCloudLoginError &&
+                (() => {
+                  const urlMatch = miladyCloudLoginError.match(
+                    /^Open this link to log in: (.+)$/,
+                  );
+                  if (urlMatch) {
+                    return (
+                      <p
+                        style={{
+                          fontSize: "0.8125rem",
+                          marginTop: "0.5rem",
+                          color: "var(--text)",
+                        }}
+                      >
+                        Open this link to log in:{" "}
+                        <a
+                          href={urlMatch[1]}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: "var(--text)",
+                            textDecoration: "underline",
+                          }}
+                        >
+                          Click here
+                        </a>
+                      </p>
+                    );
+                  }
+                  return (
+                    <p
+                      style={{
+                        color: "var(--danger)",
+                        fontSize: "0.8125rem",
+                        marginTop: "0.5rem",
+                      }}
+                    >
+                      {miladyCloudLoginError}
+                    </p>
+                  );
+                })()}
+              <p className="onboarding-desc">{t("onboarding.freeCredits")}</p>
+            </div>
+          ) : (
+            <div>
+              <label
+                htmlFor="miladycloud-apikey"
+                style={{
+                  display: "block",
+                  fontSize: "0.875rem",
+                  marginBottom: "0.375rem",
+                  color: "var(--muted)",
+                }}
+              >
+                {t("onboarding.apiKey")}
+              </label>
+              <input
+                id="miladycloud-apikey"
+                type="password"
+                className="onboarding-input"
+                placeholder="ck-..."
+                value={onboardingApiKey}
+                onChange={handleApiKeyChange}
+              />
+              <p className="onboarding-desc">
+                {t("onboarding.useExistingKey")}{" "}
+                <a
+                  href="https://cloud.milady.ai/dashboard/settings"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "var(--text)" }}
+                >
+                  {t("onboarding.getOneHere")}
+                </a>
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="onboarding-panel-footer">
+          <button
+            className="onboarding-back-link"
+            onClick={resetCloudSelection}
+            type="button"
+          >
+            {t("onboarding.back")}
+          </button>
+          <button
+            className="onboarding-confirm-btn"
+            onClick={() => void handleOnboardingNext()}
+            disabled={!miladyCloudReady}
+            type="button"
+          >
+            {t("onboarding.confirm")}
+          </button>
+        </div>
+      </>
+    );
+  }
+
   if (!onboardingProvider) {
     return (
       <>
@@ -222,6 +693,11 @@ export function ConnectionStep() {
         <div className="onboarding-divider">
           <div className="onboarding-divider-diamond" />
         </div>
+        {onboardingRemoteConnected && (
+          <p className="onboarding-desc" style={{ marginBottom: "1rem" }}>
+            {t("onboarding.remoteConnectedDesc")}
+          </p>
+        )}
         <div className="onboarding-question">
           {t("onboarding.chooseProvider")}
         </div>
@@ -261,7 +737,11 @@ export function ConnectionStep() {
         <div className="onboarding-panel-footer">
           <button
             className="onboarding-back-link"
-            onClick={handleOnboardingBack}
+            onClick={
+              onboardingRemoteConnected
+                ? handleOnboardingUseLocalBackend
+                : resetHostingSelection
+            }
             type="button"
           >
             {t("onboarding.back")}

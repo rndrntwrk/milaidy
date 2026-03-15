@@ -107,9 +107,9 @@ export function HeroForeground() {
             GitHub release downloads, deployed into the real homepage.
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-white/70 md:text-base">
-            Run Milady locally, swap model providers, keep the runtime on your
-            own machine, and pull signed desktop artifacts straight from GitHub
-            Releases.
+            Run Milady locally, or point the same frontend at Milady Cloud or a
+            remote self-hosted backend. Signed desktop artifacts still ship
+            straight from GitHub Releases.
           </p>
           <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.2em] text-brand">
             {releaseChannelLabel} • {releaseData.release.tagName} •{" "}
@@ -170,6 +170,25 @@ export function HeroForeground() {
           </a>
 
           <a
+            href="https://cloud.milady.ai"
+            target="_blank"
+            rel="noreferrer"
+            className="group relative flex items-center justify-between gap-3 border border-white/20 bg-black/80 px-4 py-4 font-mono text-white backdrop-blur-md transition-colors duration-300 hover:border-white hover:bg-white hover:text-dark"
+          >
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.2em] opacity-60">
+                Managed
+              </div>
+              <div className="mt-1 text-sm font-bold uppercase tracking-[0.08em]">
+                Milady Cloud
+              </div>
+            </div>
+            <span className="text-[10px] uppercase tracking-[0.2em] opacity-60">
+              cloud.milady.ai
+            </span>
+          </a>
+
+          <a
             href={releaseData.release.url}
             target="_blank"
             rel="noreferrer"
@@ -191,14 +210,14 @@ export function HeroForeground() {
           <div className="group relative flex items-center justify-between gap-3 border border-white/10 bg-white/5 px-4 py-4 font-mono text-white/75 backdrop-blur-md">
             <div>
               <div className="text-[10px] uppercase tracking-[0.2em] opacity-60">
-                Mobile
+                Self-host
               </div>
               <div className="mt-1 text-sm font-bold uppercase tracking-[0.08em]">
-                iOS + Android
+                Remote Backend
               </div>
             </div>
             <span className="text-[10px] uppercase tracking-[0.2em] opacity-60">
-              Coming soon
+              URL + access key
             </span>
           </div>
         </motion.div>

@@ -75,6 +75,7 @@ export function TrajectoriesView({
   // Actions
   const [exporting, setExporting] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [updatingLogging, setUpdatingLogging] = useState(false);
 
   const loadTrajectories = useCallback(async () => {
     setLoading(true);
@@ -96,23 +97,35 @@ export function TrajectoriesView({
       setConfig(configResult);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load trajectories",
+        err instanceof Error
+          ? err.message
+          : t("trajectoriesview.FailedToLoad"),
       );
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, sourceFilter, searchQuery]);
+  }, [page, statusFilter, sourceFilter, searchQuery, t]);
 
   useEffect(() => {
     void loadTrajectories();
   }, [loadTrajectories]);
 
-  const handleEnableLogging = async () => {
+  const handleToggleLogging = async () => {
+    if (!config) return;
+    setUpdatingLogging(true);
     try {
-      const updated = await client.updateTrajectoryConfig({ enabled: true });
+      const updated = await client.updateTrajectoryConfig({
+        enabled: !config.enabled,
+      });
       setConfig(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update config");
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("trajectoriesview.FailedToUpdateConfig"),
+      );
+    } finally {
+      setUpdatingLogging(false);
     }
   };
 
@@ -130,7 +143,9 @@ export function TrajectoriesView({
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to export");
+      setError(
+        err instanceof Error ? err.message : t("trajectoriesview.FailedToExport"),
+      );
     } finally {
       setExporting(false);
     }
@@ -138,11 +153,11 @@ export function TrajectoriesView({
 
   const handleClearAll = async () => {
     const confirmed = await confirmDesktopAction({
-      title: "Delete All Trajectories",
-      message: "Are you sure you want to delete ALL trajectories?",
-      detail: "This cannot be undone.",
-      confirmLabel: "Delete All",
-      cancelLabel: "Cancel",
+      title: t("trajectoriesview.DeleteAllTitle"),
+      message: t("trajectoriesview.DeleteAllMessage"),
+      detail: t("trajectoriesview.DeleteAllDetail"),
+      confirmLabel: t("common.deleteAll"),
+      cancelLabel: t("common.cancel"),
       type: "warning",
     });
     if (!confirmed) {
@@ -154,7 +169,9 @@ export function TrajectoriesView({
       void loadTrajectories();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to clear trajectories",
+        err instanceof Error
+          ? err.message
+          : t("trajectoriesview.FailedToClear"),
       );
     } finally {
       setClearing(false);
@@ -222,8 +239,7 @@ export function TrajectoriesView({
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            {/* biome-ignore lint/a11y/noLabelWithoutControl: Custom <Button> component inside <label> */}
-            <label className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5">
               <span className="text-muted">
                 {t("trajectoriesview.Logging")}
               </span>
@@ -235,12 +251,13 @@ export function TrajectoriesView({
                     ? "bg-success/20 border-success text-success hover:bg-success/30"
                     : "bg-warn/20 border-warn text-warn hover:bg-warn/30"
                 }`}
-                onClick={handleEnableLogging}
-                disabled={config?.enabled}
+                onClick={handleToggleLogging}
+                disabled={!config || updatingLogging}
+                aria-pressed={config?.enabled ?? false}
               >
-                {config?.enabled ? "ON" : "ENABLE"}
+                {config?.enabled ? t("common.on") : t("common.off")}
               </Button>
-            </label>
+            </div>
           </div>
         </div>
       )}
@@ -339,8 +356,8 @@ export function TrajectoriesView({
                 disabled={exporting || trajectories.length === 0}
               >
                 {exporting
-                  ? t("common.exporting", { defaultValue: "Exporting..." })
-                  : t("common.export", { defaultValue: "Export" })}
+                  ? t("common.exporting")
+                  : t("common.export")}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
@@ -366,9 +383,7 @@ export function TrajectoriesView({
             onClick={handleClearAll}
             disabled={clearing || stats?.totalTrajectories === 0}
           >
-            {clearing
-              ? t("common.clearing", { defaultValue: "Clearing..." })
-              : t("common.clearAll", { defaultValue: "Clear All" })}
+            {clearing ? t("common.clearing") : t("common.clearAll")}
           </Button>
         </div>
       </div>
@@ -388,11 +403,12 @@ export function TrajectoriesView({
           </div>
         ) : trajectories.length === 0 ? (
           <div className="text-center py-8 text-muted">
-            {t("trajectoriesview.NoTrajectories")}{" "}
-            {hasActiveFilters ? "matching filters" : "yet"}.
+            {hasActiveFilters
+              ? t("trajectoriesview.NoTrajectoriesMatchingFilters")
+              : t("trajectoriesview.NoTrajectoriesYet")}
             {!config?.enabled && (
               <div className="mt-2 text-warn text-[11px]">
-                {t("trajectoriesview.TrajectoryLoggingS")}
+                {t("trajectoriesview.LoggingHelp")}
               </div>
             )}
           </div>
@@ -483,8 +499,11 @@ export function TrajectoriesView({
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted">
-            {t("trajectoriesview.Showing")} {page * pageSize + 1}–
-            {Math.min((page + 1) * pageSize, total)} of {total}
+            {t("trajectoriesview.ShowingRange", {
+              start: page * pageSize + 1,
+              end: Math.min((page + 1) * pageSize, total),
+              total,
+            })}
           </span>
           <div className="flex gap-1">
             <Button

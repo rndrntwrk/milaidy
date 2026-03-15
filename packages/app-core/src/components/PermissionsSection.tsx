@@ -463,7 +463,7 @@ function MobilePermissionsView() {
         </div>
         <div className="text-[11px] text-[var(--muted)] mb-3">
           {t("permissionssection.MobileStreamingDesc") ||
-            "Your device streams camera, microphone, and screen to your Eliza Cloud agent for processing."}
+            "Your device streams camera, microphone, and screen to your Milady Cloud agent for processing."}
         </div>
         <div className="border border-[var(--border)] bg-[var(--card)]">
           {MEDIA_PERMISSIONS.map((def) => {

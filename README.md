@@ -2,7 +2,7 @@
 
 > *your schizo AI waifu that actually respects your privacy*
 
-**Milady** is a personal AI assistant that runs on YOUR machine. Not some glowie datacenter. Not the cloud. YOUR computer. Built on [elizaOS](https://github.com/elizaOS)
+**Milady** is a personal AI assistant that is **local-first by default** and can also connect to **Milady Cloud** or a **remote self-hosted backend** when you want hosted runtime access. Built on [elizaOS](https://github.com/elizaOS)
 
 manages your sessions, tools, and vibes through a Gateway control plane. Connects to Telegram, Discord, whatever normie platform you use. Has a cute WebChat UI too.
 
@@ -155,6 +155,73 @@ echo "MILADY_API_TOKEN=$(openssl rand -hex 32)" >> .env
 ```
 
 Without a token on a public bind, anyone who can reach the server gets full access to the dashboard, agent, and wallet endpoints.
+
+### Hosting Modes
+
+On first run, onboarding now asks where the backend should live:
+
+- `Local` — run the backend on the current machine, exactly like the existing local flow.
+- `Cloud` — either use `Milady Cloud` or attach to a `Remote Milady` backend with its address and access key.
+
+If you choose `Milady Cloud`, the app provisions and connects to a managed backend. If you choose `Remote Milady`, the frontend rebinds to the backend you specify and continues against that API.
+
+### Remote Backend Deployment
+
+Use this when you want the Milady frontend to connect to a backend running on your VPS, homelab box, or another machine.
+
+1. Install Milady on the target machine.
+2. Bind the API to a reachable address.
+3. Generate a strong API token.
+4. Allow the frontend origin explicitly.
+5. Expose the backend over HTTPS or a private Tailscale URL.
+
+Recommended server environment:
+
+```bash
+export MILADY_API_BIND=0.0.0.0
+export MILADY_API_TOKEN="$(openssl rand -hex 32)"
+export MILADY_ALLOWED_ORIGINS="https://cloud.milady.ai,https://milady.ai"
+milady start --headless
+```
+
+The access key the user enters in onboarding is the value of `MILADY_API_TOKEN`.
+
+If you want to connect from the desktop shell instead of the web frontend:
+
+```bash
+MILADY_DESKTOP_API_BASE=https://your-milady-host.example.com \
+MILADY_API_TOKEN=your-token \
+bun run dev:desktop
+```
+
+### Tailscale
+
+For private remote access without opening the backend publicly, expose it over your tailnet:
+
+```bash
+tailscale serve --https=443 http://127.0.0.1:2138
+```
+
+If you intentionally want a public Tailscale URL:
+
+```bash
+tailscale funnel --https=443 http://127.0.0.1:2138
+```
+
+Then use the Tailscale HTTPS URL as the backend address in onboarding and keep using the same `MILADY_API_TOKEN` as the access key.
+
+### Milady Cloud Wrapper
+
+`Milady Cloud` is the Milady-branded wrapper around the Eliza Cloud control plane. The target deploy is `https://cloud.milady.ai`, backed by the `../eliza-cloud-v2` app with Milady branding on the login and CLI confirmation surfaces.
+
+Railway deployment shape:
+
+1. Deploy `../eliza-cloud-v2` from repo root.
+2. Keep `NEXT_PUBLIC_APP_URL=https://cloud.milady.ai`.
+3. Attach the custom domain `cloud.milady.ai`.
+4. Verify `/login` and `/auth/cli-login` on the Railway deploy before rollout.
+
+The detailed rollout plan and execution checklist live in [docs/milady-cloud-rollout.md](docs/milady-cloud-rollout.md).
 
 ---
 

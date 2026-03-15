@@ -20,14 +20,18 @@ export interface EmoteDef {
   id: string;
   name: string;
   description: string;
-  /** Path to animation file (.glb or .fbx) served from the static renderer */
+  /** Path to animation file served from the static renderer bundle. */
   path: string;
   duration: number;
   loop: boolean;
   category: EmoteCategory;
 }
 
-export const EMOTE_CATALOG: EmoteDef[] = [
+function gzipAnimationPath(path: string): string {
+  return path.endsWith(".gz") ? path : `${path}.gz`;
+}
+
+const RAW_EMOTE_CATALOG: readonly EmoteDef[] = [
   // ── GLB emotes ─────────────────────────────────────────────────────────────
 
   // Greeting
@@ -205,7 +209,7 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     id: "idle",
     name: "Idle",
     description: "Stands idle",
-    path: "/animations/emotes/idle.glb",
+    path: "/animations/idle.glb",
     duration: 5,
     loop: true,
     category: "idle",
@@ -642,11 +646,30 @@ export const EMOTE_CATALOG: EmoteDef[] = [
   },
 ];
 
+export const EMOTE_CATALOG: EmoteDef[] = RAW_EMOTE_CATALOG.map((emote) => ({
+  ...emote,
+  path: gzipAnimationPath(emote.path),
+}));
+
+/**
+ * Emotes the agent is allowed to trigger through PLAY_EMOTE.
+ * Locomotion/idle loops stay manual so the agent focuses on expressive beats.
+ */
+export const AGENT_EMOTE_EXCLUDED_IDS = new Set(["idle", "run", "walk"]);
+
+export const AGENT_EMOTE_CATALOG = EMOTE_CATALOG.filter(
+  (emote) => !AGENT_EMOTE_EXCLUDED_IDS.has(emote.id),
+);
+
 /**
  * Map for O(1) emote lookup by ID
  */
 export const EMOTE_BY_ID = new Map<string, EmoteDef>(
   EMOTE_CATALOG.map((emote) => [emote.id, emote]),
+);
+
+export const AGENT_EMOTE_BY_ID = new Map<string, EmoteDef>(
+  AGENT_EMOTE_CATALOG.map((emote) => [emote.id, emote]),
 );
 
 /**

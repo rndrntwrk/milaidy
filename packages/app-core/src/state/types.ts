@@ -428,12 +428,17 @@ export interface AppState {
   onboardingName: string;
   onboardingOwnerName: string;
   onboardingStyle: string;
-  onboardingRunMode: "local-rawdog" | "local-sandbox" | "cloud" | "";
+  onboardingRunMode: "local" | "cloud" | "";
   onboardingCloudProvider: string;
   onboardingSmallModel: string;
   onboardingLargeModel: string;
   onboardingProvider: string;
   onboardingApiKey: string;
+  onboardingRemoteApiBase: string;
+  onboardingRemoteToken: string;
+  onboardingRemoteConnecting: boolean;
+  onboardingRemoteError: string | null;
+  onboardingRemoteConnected: boolean;
   onboardingOpenRouterModel: string;
   onboardingPrimaryModel: string;
   onboardingTelegramToken: string;
@@ -535,6 +540,7 @@ export interface AppActions {
   handleChatSend: (channelType?: ConversationChannelType) => Promise<void>;
   handleChatStop: () => void;
   handleChatRetry: (assistantMsgId: string) => void;
+  handleChatEdit: (messageId: string, text: string) => Promise<boolean>;
   handleChatClear: () => Promise<void>;
   handleNewConversation: (title?: string) => Promise<void>;
   setChatPendingImages: Dispatch<SetStateAction<ImageAttachment[]>>;
@@ -638,6 +644,8 @@ export interface AppActions {
   // Onboarding
   handleOnboardingNext: (options?: OnboardingNextOptions) => Promise<void>;
   handleOnboardingBack: () => void;
+  handleOnboardingRemoteConnect: () => Promise<void>;
+  handleOnboardingUseLocalBackend: () => void;
 
   // Cloud
   handleCloudLogin: () => Promise<void>;

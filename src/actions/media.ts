@@ -7,7 +7,7 @@
  * - GENERATE_AUDIO: Text-to-audio/music generation
  * - ANALYZE_IMAGE: Vision/image analysis
  *
- * Uses the media-provider abstraction with Eliza Cloud as default,
+ * Uses the media-provider abstraction with Milady Cloud as default,
  * or user-configured providers (FAL, OpenAI, Google, Anthropic, etc.)
  *
  * @module actions/media
@@ -27,7 +27,7 @@ function getMediaProviderOptions(): MediaProviderFactoryOptions {
   const config = loadMiladyConfig();
   return {
     elizaCloudBaseUrl:
-      config.cloud?.baseUrl ?? "https://www.elizacloud.ai/api/v1",
+      config.cloud?.baseUrl ?? "https://cloud.milady.ai/api/v1",
     elizaCloudApiKey: config.cloud?.apiKey,
     cloudMediaDisabled: config.cloud?.services?.media === false,
   };

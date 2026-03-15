@@ -14,7 +14,7 @@ vi.mock("../../src/components/avatar/VrmEngine", () => {
     loadVrmFromUrl = vi.fn(async () => {});
     getState = vi.fn(() => ({
       vrmLoaded: true,
-      vrmName: "milady-1.vrm",
+      vrmName: "milady-1.vrm.gz",
       loadError: null,
       idlePlaying: false,
       idleTime: 0,
@@ -114,7 +114,7 @@ describe("VrmViewer", () => {
     await act(async () => {
       renderer = TestRenderer.create(
         <StrictMode>
-          <VrmViewer vrmPath="/vrms/milady-1.vrm" mouthOpen={0} />
+          <VrmViewer vrmPath="/vrms/milady-1.vrm.gz" mouthOpen={0} />
         </StrictMode>,
         {
           createNodeMock: (element) => {
@@ -157,8 +157,8 @@ describe("VrmViewer", () => {
     );
     expect(totalLoadCalls).toBe(1);
     expect(instances.at(-1)?.loadVrmFromUrl).toHaveBeenCalledWith(
-      "/vrms/milady-1.vrm",
-      "milady-1.vrm",
+      "/vrms/milady-1.vrm.gz",
+      "milady-1.vrm.gz",
     );
 
     await act(async () => {
@@ -172,7 +172,7 @@ describe("VrmViewer", () => {
     await act(async () => {
       renderer = TestRenderer.create(
         <VrmViewer
-          vrmPath="/vrms/milady-1.vrm"
+          vrmPath="/vrms/milady-1.vrm.gz"
           worldUrl="/worlds/companion-day.spz"
           mouthOpen={0}
         />,
@@ -212,8 +212,8 @@ describe("VrmViewer", () => {
       "/worlds/companion-day.spz",
     );
     expect(instance?.loadVrmFromUrl).toHaveBeenCalledWith(
-      "/vrms/milady-1.vrm",
-      "milady-1.vrm",
+      "/vrms/milady-1.vrm.gz",
+      "milady-1.vrm.gz",
     );
 
     const worldCallOrder =
@@ -233,7 +233,7 @@ describe("VrmViewer", () => {
     await act(async () => {
       renderer = TestRenderer.create(
         <VrmViewer
-          vrmPath="/vrms/milady-1.vrm"
+          vrmPath="/vrms/milady-1.vrm.gz"
           worldUrl="/worlds/companion-day.spz"
           mouthOpen={0}
         />,
@@ -277,7 +277,7 @@ describe("VrmViewer", () => {
     await act(async () => {
       renderer?.update(
         <VrmViewer
-          vrmPath="/vrms/milady-1.vrm"
+          vrmPath="/vrms/milady-1.vrm.gz"
           worldUrl="/worlds/companion-night.spz"
           mouthOpen={0}
         />,

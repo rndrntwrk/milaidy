@@ -88,7 +88,7 @@ export function ConversationListItem({
       data-active={isActive || undefined}
       className={`w-full ${
         isGameModal
-          ? "group relative flex items-center gap-3 w-full p-2.5 rounded-xl cursor-pointer transition-all border border-transparent"
+          ? "group relative flex items-start gap-3 w-full p-2.5 rounded-xl cursor-pointer transition-all border border-transparent"
           : "flex items-center pl-3 pr-2 py-2 gap-1 cursor-pointer transition-colors border-l-[3px]"
       } ${
         isActive
@@ -118,7 +118,7 @@ export function ConversationListItem({
             data-testid="conv-select"
             className={
               isGameModal
-                ? "flex flex-col flex-1 min-w-0 items-start justify-start text-left cursor-pointer h-auto p-0 rounded-none bg-transparent border-none"
+                ? "flex w-full flex-col flex-1 min-w-0 !items-start !justify-start !text-left cursor-pointer h-auto p-0 rounded-none bg-transparent border-none"
                 : "flex items-center gap-2 flex-1 min-w-0 bg-transparent border-0 p-0 m-0 text-left h-auto cursor-pointer rounded-none"
             }
             onClick={() => {
@@ -150,8 +150,8 @@ export function ConversationListItem({
             <span
               className={
                 isGameModal
-                  ? `text-[13px] font-medium truncate leading-tight transition-colors min-w-0 ${isActive ? "text-txt text-shadow-glow" : "text-white/90 group-hover:text-white"}`
-                  : "font-medium truncate text-txt min-w-0"
+                  ? `block w-full text-[13px] font-medium truncate leading-tight text-left transition-colors min-w-0 ${isActive ? "text-txt text-shadow-glow" : "text-white/90 group-hover:text-white"}`
+                  : "block w-full font-medium truncate text-left text-txt min-w-0"
               }
             >
               {getLocalizedConversationTitle(conv.title, t)}

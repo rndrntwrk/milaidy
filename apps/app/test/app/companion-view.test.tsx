@@ -11,7 +11,7 @@ const viewerPropsRef: { current: null | Record<string, unknown> } = {
 vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
   getVrmPreviewUrl: () => "/vrms/previews/milady-1.png",
-  getVrmUrl: () => "/vrms/milady-1.vrm",
+  getVrmUrl: () => "/vrms/milady-1.vrm.gz",
   getVrmBackgroundUrl: (index: number) =>
     `/vrms/backgrounds/milady-${index}.png`,
   getVrmTitle: (index: number) => `MILADY-${index}`,

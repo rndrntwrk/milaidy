@@ -3,6 +3,7 @@
  */
 
 import {
+  getCompanionBackgroundUrl,
   getVrmPreviewUrl,
   getVrmTitle,
   getVrmUrl,
@@ -21,16 +22,16 @@ describe("Avatar VRM Utilities", () => {
     it("returns correct path for base milady VRMs (1-4)", () => {
       const expectedSourceIds = [1, 4, 5, 9];
       expectedSourceIds.forEach((sourceId, index) => {
-        expect(getVrmUrl(index + 1)).toBe(`/vrms/milady-${sourceId}.vrm`);
+        expect(getVrmUrl(index + 1)).toBe(`/vrms/milady-${sourceId}.vrm.gz`);
       });
     });
 
     it("clamps out-of-range indices to avatar 1", () => {
-      expect(getVrmUrl(5)).toBe("/vrms/milady-1.vrm");
-      expect(getVrmUrl(34)).toBe("/vrms/milady-1.vrm");
-      expect(getVrmUrl(-3)).toBe("/vrms/milady-1.vrm");
-      expect(getVrmUrl(Number.NaN)).toBe("/vrms/milady-1.vrm");
-      expect(getVrmUrl(0)).toBe("/vrms/milady-1.vrm");
+      expect(getVrmUrl(5)).toBe("/vrms/milady-1.vrm.gz");
+      expect(getVrmUrl(34)).toBe("/vrms/milady-1.vrm.gz");
+      expect(getVrmUrl(-3)).toBe("/vrms/milady-1.vrm.gz");
+      expect(getVrmUrl(Number.NaN)).toBe("/vrms/milady-1.vrm.gz");
+      expect(getVrmUrl(0)).toBe("/vrms/milady-1.vrm.gz");
     });
   });
 
@@ -62,6 +63,17 @@ describe("Avatar VRM Utilities", () => {
 
     it("clamps out-of-range index to avatar 1", () => {
       expect(getVrmTitle(5)).toBe("MILADY-01");
+    });
+  });
+
+  describe("getCompanionBackgroundUrl", () => {
+    it("stays within the bundled 4-avatar background set", () => {
+      expect(getCompanionBackgroundUrl("light")).toBe(
+        "/vrms/backgrounds/milady-5.png",
+      );
+      expect(getCompanionBackgroundUrl("dark")).toBe(
+        "/vrms/backgrounds/milady-9.png",
+      );
     });
   });
 });

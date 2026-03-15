@@ -97,7 +97,7 @@ describe("cloud status routes", () => {
       hasApiKey: true,
       userId: undefined,
       organizationId: undefined,
-      topUpUrl: "https://www.elizacloud.ai/dashboard/settings?tab=billing",
+      topUpUrl: "https://cloud.milady.ai/dashboard/settings?tab=billing",
       reason: "api_key_present_runtime_not_started",
     });
   });
@@ -117,7 +117,7 @@ describe("cloud status routes", () => {
       hasApiKey: true,
       userId: undefined,
       organizationId: undefined,
-      topUpUrl: "https://www.elizacloud.ai/dashboard/settings?tab=billing",
+      topUpUrl: "https://cloud.milady.ai/dashboard/settings?tab=billing",
       reason: "api_key_present_runtime_not_started",
     });
   });
@@ -137,7 +137,7 @@ describe("cloud status routes", () => {
       hasApiKey: true,
       userId: undefined,
       organizationId: undefined,
-      topUpUrl: "https://www.elizacloud.ai/dashboard/settings?tab=billing",
+      topUpUrl: "https://cloud.milady.ai/dashboard/settings?tab=billing",
       reason: "api_key_present_runtime_not_started",
     });
   });
@@ -163,7 +163,7 @@ describe("cloud status routes", () => {
       hasApiKey: false,
       userId: "user-1",
       organizationId: "org-1",
-      topUpUrl: "https://www.elizacloud.ai/dashboard/settings?tab=billing",
+      topUpUrl: "https://cloud.milady.ai/dashboard/settings?tab=billing",
       reason: undefined,
     });
   });
@@ -203,7 +203,7 @@ describe("cloud status routes", () => {
       balance: 1.5,
       low: true,
       critical: false,
-      topUpUrl: "https://www.elizacloud.ai/dashboard/settings?tab=billing",
+      topUpUrl: "https://cloud.milady.ai/dashboard/settings?tab=billing",
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "https://cloud.example/api/v1/credits/balance",
@@ -316,7 +316,7 @@ describe("cloud status routes", () => {
       balance: 0.4,
       low: true,
       critical: true,
-      topUpUrl: "https://www.elizacloud.ai/dashboard/settings?tab=billing",
+      topUpUrl: "https://cloud.milady.ai/dashboard/settings?tab=billing",
     });
   });
 
@@ -341,7 +341,7 @@ describe("cloud status routes", () => {
       balance: 3.2,
       low: false,
       critical: false,
-      topUpUrl: "https://www.elizacloud.ai/dashboard/settings?tab=billing",
+      topUpUrl: "https://cloud.milady.ai/dashboard/settings?tab=billing",
     });
   });
 

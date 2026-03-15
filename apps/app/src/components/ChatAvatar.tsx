@@ -4,9 +4,11 @@
  * Renders a 3D VRM avatar within the parent container (used in the
  * Autonomous Loop sidebar). Voice controls are managed externally.
  */
-
-import { client } from "@milady/app-core/api";
-import { STOP_EMOTE_EVENT } from "@milady/app-core/events";
+import {
+  APP_EMOTE_EVENT,
+  type AppEmoteEventDetail,
+  STOP_EMOTE_EVENT,
+} from "@milady/app-core/events";
 import { getVrmPreviewUrl, getVrmUrl, useApp } from "@milady/app-core/state";
 import { resolveAppAssetUrl } from "@milady/app-core/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -75,21 +77,23 @@ export function ChatAvatar({
     return () => window.clearTimeout(timer);
   }, [vrmPath]);
 
-  // Subscribe to WebSocket emote events and trigger avatar animations.
   useEffect(() => {
     if (!engineReady) return;
-    return client.onWsEvent("emote", (data) => {
+    const handler = (event: Event) => {
       const engine = vrmEngineRef.current;
       if (!engine) return;
-      const rawPath = (data.path ?? data.glbPath) as string;
-      const resolvedPath = resolveAppAssetUrl(rawPath);
+      const detail = (event as CustomEvent<AppEmoteEventDetail>).detail;
+      if (!detail?.path) return;
+      const resolvedPath = resolveAppAssetUrl(detail.path);
       const duration =
-        typeof data.duration === "number" && Number.isFinite(data.duration)
-          ? data.duration
+        typeof detail.duration === "number" && Number.isFinite(detail.duration)
+          ? detail.duration
           : 3;
-      const isLoop = data.loop === true;
+      const isLoop = detail.loop === true;
       void engine.playEmote(resolvedPath, duration, isLoop);
-    });
+    };
+    window.addEventListener(APP_EMOTE_EVENT, handler);
+    return () => window.removeEventListener(APP_EMOTE_EVENT, handler);
   }, [engineReady]);
 
   // Listen for stop-emote events from the EmotePicker control panel.

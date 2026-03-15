@@ -18,6 +18,7 @@ function createMockAction() {
     reset: vi.fn().mockReturnThis(),
     play: vi.fn().mockReturnThis(),
     stop: vi.fn().mockReturnThis(),
+    crossFadeFrom: vi.fn().mockReturnThis(),
     fadeIn: vi.fn().mockReturnThis(),
     fadeOut: vi.fn().mockReturnThis(),
     setLoop: vi.fn().mockReturnThis(),
@@ -989,7 +990,9 @@ describe("VrmEngine", () => {
           waitingForVrm: boolean;
           syncToTeleport: boolean;
           progress: number;
+          duration: number;
           controller: {
+            progressUniform: { value: number };
             mesh: {
               opacity: number;
               objectModifier: unknown;
@@ -998,6 +1001,7 @@ describe("VrmEngine", () => {
             radius: number;
           };
           incoming: {
+            progressUniform: { value: number };
             mesh: {
               opacity: number;
               objectModifier: unknown;
@@ -1006,6 +1010,7 @@ describe("VrmEngine", () => {
             radius: number;
           };
           outgoing: {
+            progressUniform: { value: number };
             mesh: {
               opacity: number;
               objectModifier: unknown;
@@ -1038,9 +1043,16 @@ describe("VrmEngine", () => {
       expect(engineAny.worldReveal?.incoming.mesh.objectModifier).toBeTruthy();
       expect(engineAny.worldReveal?.outgoing?.mesh.objectModifier).toBeTruthy();
 
-      engineAny.updateWorldReveal(0.4);
-      expect(engineAny.worldReveal?.progress ?? 0).toBeGreaterThan(0);
-      expect(engineAny.worldReveal?.progress ?? 1).toBeLessThan(1);
+      const halfDuration = (engineAny.worldReveal?.duration ?? 0) / 2;
+      engineAny.updateWorldReveal(halfDuration);
+      expect(engineAny.worldReveal?.progress).toBeCloseTo(0.5, 5);
+      expect(engineAny.worldReveal?.incoming.progressUniform.value).toBeCloseTo(
+        0.25,
+        5,
+      );
+      expect(
+        engineAny.worldReveal?.outgoing?.progressUniform.value,
+      ).toBeCloseTo(0.25, 5);
       expect(firstWorld?.dispose).not.toHaveBeenCalled();
       for (let i = 0; i < 32 && engineAny.worldReveal; i++) {
         engineAny.updateWorldReveal(0.4);
@@ -1067,11 +1079,48 @@ describe("VrmEngine", () => {
 
       engine.stopEmote();
 
-      expect(fakeEmoteAction.fadeOut).toHaveBeenCalledWith(0.3);
-      expect(fakeIdleAction.reset).toHaveBeenCalled();
-      expect(fakeIdleAction.fadeIn).toHaveBeenCalledWith(0.3);
+      expect(fakeIdleAction.crossFadeFrom).toHaveBeenCalledWith(
+        fakeEmoteAction,
+        0.4,
+        false,
+      );
       expect(fakeIdleAction.play).toHaveBeenCalled();
       expect(engineAny.emoteAction).toBeNull();
+    });
+
+    it("playEmote crossfades from the current emote instead of bouncing through idle", async () => {
+      const engineAny = engine as unknown as {
+        vrm: object | null;
+        mixer: { clipAction: ReturnType<typeof vi.fn> } | null;
+        idleAction: ReturnType<typeof createMockAction> | null;
+        emoteAction: ReturnType<typeof createMockAction> | null;
+        loadEmoteClipCached: ReturnType<typeof vi.fn>;
+      };
+      const nextEmoteAction = createMockAction();
+      const currentEmoteAction = createMockAction();
+      const idleAction = createMockAction();
+
+      engineAny.vrm = {
+        scene: {
+          parent: null,
+        },
+      };
+      engineAny.mixer = {
+        clipAction: vi.fn(() => nextEmoteAction),
+      };
+      engineAny.idleAction = idleAction;
+      engineAny.emoteAction = currentEmoteAction;
+      engineAny.loadEmoteClipCached = vi.fn().mockResolvedValue({});
+
+      await engine.playEmote("/mock/emote.glb", 2, false);
+
+      expect(nextEmoteAction.crossFadeFrom).toHaveBeenCalledWith(
+        currentEmoteAction,
+        0.4,
+        false,
+      );
+      expect(idleAction.fadeIn).not.toHaveBeenCalled();
+      expect(engineAny.emoteAction).toBe(nextEmoteAction);
     });
 
     it("stopEmote clears pending emote timeout", () => {

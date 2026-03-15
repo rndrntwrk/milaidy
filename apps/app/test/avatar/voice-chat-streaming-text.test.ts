@@ -1,8 +1,12 @@
 import { __voiceChatInternals } from "@milady/app-core/hooks";
 import { describe, expect, it } from "vitest";
 
-const { remainderAfter, queueableSpeechPrefix, resolveEffectiveVoiceConfig } =
-  __voiceChatInternals;
+const {
+  remainderAfter,
+  queueableSpeechPrefix,
+  resolveEffectiveVoiceConfig,
+  toSpeakableText,
+} = __voiceChatInternals;
 
 describe("useVoiceChat streaming text helpers", () => {
   it("returns only unseen suffix text when remainder grows", () => {
@@ -76,5 +80,13 @@ describe("useVoiceChat streaming text helpers", () => {
       provider: "edge",
       edge: { voice: "en-US-AriaNeural" },
     });
+  });
+
+  it("rewrites parenthetical asides and strips stage directions for speech", () => {
+    expect(
+      toSpeakableText(
+        'Hello there (with extra context). *curtsies* Visit https://example.com now.',
+      ),
+    ).toBe("Hello there, i.e. with extra context,. Visit now.");
   });
 });

@@ -266,6 +266,7 @@ async function startRendererServer(): Promise<string> {
     ".svg": "image/svg+xml",
     ".ico": "image/x-icon",
     ".json": "application/json",
+    ".gz": "application/octet-stream",
     ".wasm": "application/wasm",
     ".glb": "model/gltf-binary",
     ".gltf": "model/gltf+json",

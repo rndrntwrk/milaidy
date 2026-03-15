@@ -135,7 +135,7 @@ function ViewRouter() {
       case "triggers":
         return (
           <TabScrollView>
-            <section className="mx-auto w-full max-w-5xl">
+            <section className="w-full px-4 py-4 lg:px-6">
               <HeartbeatsView />
             </section>
           </TabScrollView>

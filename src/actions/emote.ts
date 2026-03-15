@@ -11,13 +11,13 @@
  */
 
 import type { Action, HandlerOptions, Memory } from "@elizaos/core";
-import { EMOTE_BY_ID } from "../emotes/catalog";
+import { AGENT_EMOTE_BY_ID } from "../emotes/catalog";
 
 /** API port for posting emote requests. */
 const API_PORT = process.env.API_PORT || process.env.SERVER_PORT || "2138";
 
 /** All known emote IDs for text-matching fallback. */
-const ALL_EMOTE_IDS = Array.from(EMOTE_BY_ID.keys());
+const ALL_EMOTE_IDS = Array.from(AGENT_EMOTE_BY_ID.keys());
 
 /**
  * Attempt to resolve an emote ID from the message text when structured
@@ -62,8 +62,10 @@ export const emoteAction: Action = {
   ],
 
   description:
-    "Play an emote animation on the avatar. Emotes are visual gestures or " +
-    "animations that express emotion or action (e.g., wave, dance, cheer).",
+    "Play a one-shot emote animation on the avatar, then return to idle. " +
+    "Use this as a non-blocking visual side action that can be chained " +
+    "before, after, or alongside other actions in the same turn " +
+    "(for example with REPLY, SEND_MESSAGE, or stream actions).",
 
   validate: async (_runtime, _message, _state) => {
     // Always valid — the handler will check if the emote exists.
@@ -89,7 +91,7 @@ export const emoteAction: Action = {
       }
 
       // Look up the emote in the catalog.
-      const emote = EMOTE_BY_ID.get(emoteId);
+      const emote = AGENT_EMOTE_BY_ID.get(emoteId);
       if (!emote) {
         return {
           text: "",
@@ -128,7 +130,7 @@ export const emoteAction: Action = {
   parameters: [
     {
       name: "emote",
-      description: "The emote ID to play",
+      description: "The emote ID to play once before returning to idle",
       required: true,
       schema: { type: "string" as const },
     },

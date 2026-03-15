@@ -50,4 +50,38 @@ describe("createMiladyPlugin", () => {
 
     expect(plugin.services).toContain(AgentEventService);
   });
+
+  it("omits idle and locomotion emotes from the agent provider prompt", async () => {
+    const plugin = createMiladyPlugin();
+    const emoteProvider = plugin.providers?.find(
+      (provider) => provider.name === "emotes",
+    );
+
+    expect(emoteProvider).toBeDefined();
+
+    const result = await emoteProvider?.get(
+      { character: { settings: {} } } as never,
+      {} as never,
+      {} as never,
+    );
+    const availableIdsLine = result?.text
+      .split("\n")
+      .find((line) => line.startsWith("Available emote IDs: "));
+    const availableIds =
+      availableIdsLine
+        ?.replace("Available emote IDs: ", "")
+        .split(", ")
+        .filter(Boolean) ?? [];
+
+    expect(result?.text).toContain("wave");
+    expect(result?.text).toContain("dance-happy");
+    expect(result?.text).toContain("Do not use idle, run, or walk");
+    expect(result?.text).toContain("one-shot visual side action");
+    expect(result?.text).toContain(
+      'actions: ["REPLY", "PLAY_EMOTE"] or ["PLAY_EMOTE", "REPLY"]',
+    );
+    expect(availableIds).not.toContain("idle");
+    expect(availableIds).not.toContain("run");
+    expect(availableIds).not.toContain("walk");
+  });
 });

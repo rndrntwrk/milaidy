@@ -1,5 +1,6 @@
-import { client } from "@milady/app-core/api";
 import {
+  APP_EMOTE_EVENT,
+  type AppEmoteEventDetail,
   CHAT_AVATAR_VOICE_EVENT,
   STOP_EMOTE_EVENT,
 } from "@milady/app-core/events";
@@ -101,26 +102,27 @@ export const VrmStage = memo(function VrmStage({
     return () => window.removeEventListener(CHAT_AVATAR_VOICE_EVENT, handler);
   }, []);
 
-  // Subscribe to WebSocket emote events so the companion avatar plays emotes
-  // triggered from the EmotePicker or agent actions.
   useEffect(() => {
     vrmEngineRef.current?.setPaused(!active);
   }, [active]);
 
   useEffect(() => {
     if (!vrmLoaded) return;
-    return client.onWsEvent("emote", (data) => {
+    const handler = (event: Event) => {
       const engine = vrmEngineRef.current;
       if (!engine) return;
-      const rawPath = (data.path ?? data.glbPath) as string;
-      const resolvedPath = resolveAppAssetUrl(rawPath);
+      const detail = (event as CustomEvent<AppEmoteEventDetail>).detail;
+      if (!detail?.path) return;
+      const resolvedPath = resolveAppAssetUrl(detail.path);
       const duration =
-        typeof data.duration === "number" && Number.isFinite(data.duration)
-          ? data.duration
+        typeof detail.duration === "number" && Number.isFinite(detail.duration)
+          ? detail.duration
           : 3;
-      const isLoop = data.loop === true;
+      const isLoop = detail.loop === true;
       void engine.playEmote(resolvedPath, duration, isLoop);
-    });
+    };
+    window.addEventListener(APP_EMOTE_EVENT, handler);
+    return () => window.removeEventListener(APP_EMOTE_EVENT, handler);
   }, [vrmLoaded]);
 
   // Listen for stop-emote events from the EmotePicker "Stop" button.

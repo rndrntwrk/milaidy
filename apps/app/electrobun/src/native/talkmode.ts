@@ -15,8 +15,19 @@ import {
   writeWavFile,
 } from "./whisper";
 
-// 3 seconds of audio at 16kHz = 48000 Float32 samples = 192000 bytes
-const TALKMODE_AUDIO_BUFFER_THRESHOLD = 16000 * 3 * 4;
+const TALKMODE_SAMPLE_RATE = 16000;
+const FLOAT32_BYTES_PER_SAMPLE = 4;
+const TALKMODE_CHUNK_WINDOW_SECONDS = 1.25;
+const TALKMODE_MIN_FLUSH_SECONDS = 0.2;
+const TALKMODE_OVERLAP_RATIO = 0.5;
+const TALKMODE_AUDIO_BUFFER_THRESHOLD =
+  TALKMODE_SAMPLE_RATE *
+  TALKMODE_CHUNK_WINDOW_SECONDS *
+  FLOAT32_BYTES_PER_SAMPLE;
+const TALKMODE_MIN_FLUSH_BYTES =
+  TALKMODE_SAMPLE_RATE *
+  TALKMODE_MIN_FLUSH_SECONDS *
+  FLOAT32_BYTES_PER_SAMPLE;
 
 type SendToWebview = (message: string, payload?: unknown) => void;
 
@@ -46,6 +57,12 @@ export class TalkModeManager {
     this.sendToWebview?.("talkmodeStateChanged", { state: newState });
   }
 
+  private async _waitForProcessing(): Promise<void> {
+    while (this._processing) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
   async start() {
     const whisperOk = isWhisperAvailable();
     if (!whisperOk && this.config.engine === "whisper") {
@@ -62,6 +79,10 @@ export class TalkModeManager {
   }
 
   async stop(): Promise<void> {
+    await this._waitForProcessing();
+    if (this._audioBufferSize >= TALKMODE_MIN_FLUSH_BYTES) {
+      await this._processBuffer({ flush: true });
+    }
     this.setState("idle");
     this.speaking = false;
     this._audioBuffer = [];
@@ -260,7 +281,7 @@ export class TalkModeManager {
     this._audioBuffer.push(chunkBuffer);
     this._audioBufferSize += chunkBuffer.length;
 
-    // Process when we have enough audio (~3 seconds)
+    // Process in smaller rolling windows so text lands in the composer quickly.
     if (
       this._audioBufferSize >= TALKMODE_AUDIO_BUFFER_THRESHOLD &&
       !this._processing
@@ -269,15 +290,33 @@ export class TalkModeManager {
     }
   }
 
-  private async _processBuffer(): Promise<void> {
+  private async _processBuffer(options?: { flush?: boolean }): Promise<void> {
     if (this._processing || this._audioBuffer.length === 0) return;
     this._processing = true;
+    const flush = options?.flush === true;
 
-    // Grab current buffer and clear for next window
+    // Keep trailing overlap while streaming so we do not clip phrase boundaries.
     const allBuffers = [...this._audioBuffer];
     const combined = Buffer.concat(allBuffers);
-    this._audioBuffer = [];
-    this._audioBufferSize = 0;
+    if (!flush) {
+      const overlapBytes = Math.min(
+        Math.floor(combined.byteLength * TALKMODE_OVERLAP_RATIO),
+        combined.byteLength,
+      );
+      if (overlapBytes > 0) {
+        const overlapBuffer = combined.subarray(
+          combined.byteLength - overlapBytes,
+        );
+        this._audioBuffer = [Buffer.from(overlapBuffer)];
+        this._audioBufferSize = overlapBytes;
+      } else {
+        this._audioBuffer = [];
+        this._audioBufferSize = 0;
+      }
+    } else {
+      this._audioBuffer = [];
+      this._audioBufferSize = 0;
+    }
 
     try {
       // Safe Float32 conversion — avoids alignment issues from Buffer pool offsets.
@@ -317,6 +356,7 @@ export class TalkModeManager {
           start: s.start,
           end: s.end,
         })),
+        isFinal: flush,
       });
     } catch (err) {
       this.sendToWebview?.("talkmode:error", {

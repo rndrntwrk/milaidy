@@ -722,6 +722,7 @@ export interface ConversationGreeting {
   text: string;
   agentName: string;
   generated: boolean;
+  persisted?: boolean;
 }
 
 export interface CreateConversationOptions {
@@ -1937,6 +1938,8 @@ const GENERIC_NO_RESPONSE_TEXT =
   "Sorry, I couldn't generate a response right now. Please try again.";
 const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
+const SESSION_STORAGE_API_BASE_KEY = "milady_api_base";
+const SESSION_STORAGE_API_TOKEN_KEY = "milady_api_token";
 
 export class MiladyClient {
   private _baseUrl: string;
@@ -1992,18 +1995,23 @@ export class MiladyClient {
   }
 
   constructor(baseUrl?: string, token?: string) {
-    this._explicitBase = baseUrl != null;
     this.clientId = MiladyClient.generateClientId();
     const stored =
       typeof window !== "undefined"
-        ? window.sessionStorage.getItem("milady_api_token")
+        ? window.sessionStorage.getItem(SESSION_STORAGE_API_TOKEN_KEY)
         : null;
+    const storedBase =
+      typeof window !== "undefined"
+        ? window.sessionStorage.getItem(SESSION_STORAGE_API_BASE_KEY)
+        : null;
+    this._explicitBase = baseUrl != null || Boolean(storedBase?.trim());
     this._token = token?.trim() || stored || null;
     // Priority: explicit arg > Capacitor/Electron injected global > same origin (Vite proxy)
     const injectedBase =
       typeof window !== "undefined" ? window.__MILADY_API_BASE__ : undefined;
     this._baseUrl =
       baseUrl ??
+      storedBase ??
       injectedBase ??
       MiladyClient.resolveElectronLocalFallbackBase();
   }
@@ -2046,9 +2054,28 @@ export class MiladyClient {
     this._token = token?.trim() || null;
     if (typeof window !== "undefined") {
       if (this._token) {
-        window.sessionStorage.setItem("milady_api_token", this._token);
+        window.sessionStorage.setItem(
+          SESSION_STORAGE_API_TOKEN_KEY,
+          this._token,
+        );
       } else {
-        window.sessionStorage.removeItem("milady_api_token");
+        window.sessionStorage.removeItem(SESSION_STORAGE_API_TOKEN_KEY);
+      }
+    }
+  }
+
+  setBaseUrl(baseUrl: string | null): void {
+    const normalized = baseUrl?.trim().replace(/\/+$/, "") || "";
+    this._explicitBase = normalized.length > 0;
+    this._baseUrl = normalized;
+    this.disconnectWs();
+    if (typeof window !== "undefined") {
+      if (normalized) {
+        window.__MILADY_API_BASE__ = normalized;
+        window.sessionStorage.setItem(SESSION_STORAGE_API_BASE_KEY, normalized);
+      } else {
+        delete window.__MILADY_API_BASE__;
+        window.sessionStorage.removeItem(SESSION_STORAGE_API_BASE_KEY);
       }
     }
   }
@@ -4382,6 +4409,23 @@ export class MiladyClient {
     return this.fetch(`/api/conversations/${encodeURIComponent(id)}/messages`);
   }
 
+  async truncateConversationMessages(
+    id: string,
+    messageId: string,
+    options?: { inclusive?: boolean },
+  ): Promise<{ ok: boolean; deletedCount: number }> {
+    return this.fetch(
+      `/api/conversations/${encodeURIComponent(id)}/messages/truncate`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          messageId,
+          inclusive: options?.inclusive === true,
+        }),
+      },
+    );
+  }
+
   async sendConversationMessage(
     id: string,
     text: string,
@@ -4436,7 +4480,12 @@ export class MiladyClient {
   async requestGreeting(
     id: string,
     lang?: string,
-  ): Promise<{ text: string; agentName: string; generated: boolean }> {
+  ): Promise<{
+    text: string;
+    agentName: string;
+    generated: boolean;
+    persisted?: boolean;
+  }> {
     const qs = lang ? `?lang=${encodeURIComponent(lang)}` : "";
     return this.fetch(
       `/api/conversations/${encodeURIComponent(id)}/greeting${qs}`,

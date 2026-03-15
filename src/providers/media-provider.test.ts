@@ -2,10 +2,10 @@
  * Comprehensive tests for providers/media-provider.ts
  *
  * Tests all media providers:
- * - Vision Analysis: OpenAI, Google, Anthropic, xAI, Eliza Cloud
- * - Image Generation: FAL, OpenAI, Google, xAI, Eliza Cloud
- * - Video Generation: FAL, OpenAI, Google, Eliza Cloud
- * - Audio Generation: Suno, Eliza Cloud
+ * - Vision Analysis: OpenAI, Google, Anthropic, xAI, Milady Cloud
+ * - Image Generation: FAL, OpenAI, Google, xAI, Milady Cloud
+ * - Video Generation: FAL, OpenAI, Google, Milady Cloud
+ * - Audio Generation: Suno, Milady Cloud
  *
  * Also tests:
  * - Factory functions for provider creation
@@ -103,8 +103,8 @@ describe("Vision Providers", () => {
     maxTokens: 512,
   };
 
-  describe("Eliza Cloud Vision Provider (default)", () => {
-    it("uses Eliza Cloud when no provider configured", async () => {
+  describe("Milady Cloud Vision Provider (default)", () => {
+    it("uses Milady Cloud when no provider configured", async () => {
       fetchMock.mockResolvedValue(
         jsonResponse({
           description: "A beautiful sunset over mountains",
@@ -137,7 +137,7 @@ describe("Vision Providers", () => {
       );
     });
 
-    it("uses Eliza Cloud when mode is 'cloud'", async () => {
+    it("uses Milady Cloud when mode is 'cloud'", async () => {
       fetchMock.mockResolvedValue(
         jsonResponse({ description: "Test description" }),
       );
@@ -147,14 +147,14 @@ describe("Vision Providers", () => {
       expect(provider.name).toBe("eliza-cloud");
     });
 
-    it("handles Eliza Cloud API errors", async () => {
+    it("handles Milady Cloud API errors", async () => {
       fetchMock.mockResolvedValue(errorResponse("Internal Server Error", 500));
 
       const provider = createVisionProvider(undefined, factoryOptions);
       const result = await provider.analyze(defaultVisionOptions);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Eliza Cloud error");
+      expect(result.error).toContain("Milady Cloud error");
     });
   });
 
@@ -374,8 +374,8 @@ describe("Vision Providers", () => {
     });
   });
 
-  describe("Provider fallback to Eliza Cloud", () => {
-    it("falls back to Eliza Cloud when OpenAI key is missing", async () => {
+  describe("Provider fallback to Milady Cloud", () => {
+    it("falls back to Milady Cloud when OpenAI key is missing", async () => {
       fetchMock.mockResolvedValue(
         jsonResponse({ description: "Fallback description" }),
       );
@@ -390,7 +390,7 @@ describe("Vision Providers", () => {
       expect(provider.name).toBe("eliza-cloud");
     });
 
-    it("falls back to Eliza Cloud when config is incomplete", async () => {
+    it("falls back to Milady Cloud when config is incomplete", async () => {
       fetchMock.mockResolvedValue(
         jsonResponse({ description: "Fallback description" }),
       );
@@ -423,8 +423,8 @@ describe("Image Generation Providers", () => {
     quality: "hd",
   };
 
-  describe("Eliza Cloud Image Provider (default)", () => {
-    it("generates images via Eliza Cloud", async () => {
+  describe("Milady Cloud Image Provider (default)", () => {
+    it("generates images via Milady Cloud", async () => {
       fetchMock.mockResolvedValue(
         jsonResponse({
           imageUrl: "https://example.com/generated-image.png",
@@ -609,8 +609,8 @@ describe("Video Generation Providers", () => {
     aspectRatio: "16:9",
   };
 
-  describe("Eliza Cloud Video Provider (default)", () => {
-    it("generates videos via Eliza Cloud", async () => {
+  describe("Milady Cloud Video Provider (default)", () => {
+    it("generates videos via Milady Cloud", async () => {
       fetchMock.mockResolvedValue(
         jsonResponse({
           videoUrl: "https://example.com/generated-video.mp4",
@@ -751,8 +751,8 @@ describe("Audio Generation Providers", () => {
     instrumental: true,
   };
 
-  describe("Eliza Cloud Audio Provider (default)", () => {
-    it("generates audio via Eliza Cloud", async () => {
+  describe("Milady Cloud Audio Provider (default)", () => {
+    it("generates audio via Milady Cloud", async () => {
       fetchMock.mockResolvedValue(
         jsonResponse({
           audioUrl: "https://example.com/generated-audio.mp3",
@@ -940,14 +940,14 @@ describe("Configuration defaults", () => {
     elizaCloudBaseUrl: "https://test.elizacloud.ai/api/v1",
   };
 
-  it("uses default Eliza Cloud URL when not specified", async () => {
+  it("uses default Milady Cloud URL when not specified", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ description: "test" }));
 
     const provider = createVisionProvider(undefined, {});
     await provider.analyze({ imageUrl: "https://example.com/image.jpg" });
 
     const [url] = fetchMock.mock.calls[0];
-    expect(url).toBe("https://www.elizacloud.ai/api/v1/media/vision/analyze");
+    expect(url).toBe("https://cloud.milady.ai/api/v1/media/vision/analyze");
   });
 
   it("uses default OpenAI model when not specified", async () => {
@@ -1153,22 +1153,22 @@ describe("cloudMediaDisabled flag", () => {
       cloudMediaDisabled: false,
     };
 
-    it("createImageProvider falls back to Eliza Cloud", () => {
+    it("createImageProvider falls back to Milady Cloud", () => {
       const provider = createImageProvider(undefined, enabledOptions);
       expect(provider.name).toBe("eliza-cloud");
     });
 
-    it("createVideoProvider falls back to Eliza Cloud", () => {
+    it("createVideoProvider falls back to Milady Cloud", () => {
       const provider = createVideoProvider(undefined, enabledOptions);
       expect(provider.name).toBe("eliza-cloud");
     });
 
-    it("createAudioProvider falls back to Eliza Cloud", () => {
+    it("createAudioProvider falls back to Milady Cloud", () => {
       const provider = createAudioProvider(undefined, enabledOptions);
       expect(provider.name).toBe("eliza-cloud");
     });
 
-    it("createVisionProvider falls back to Eliza Cloud", () => {
+    it("createVisionProvider falls back to Milady Cloud", () => {
       const provider = createVisionProvider(undefined, enabledOptions);
       expect(provider.name).toBe("eliza-cloud");
     });

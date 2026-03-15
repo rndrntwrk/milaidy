@@ -162,6 +162,13 @@ describe("ConversationsSidebar game-modal variant", () => {
         node.type === "button" &&
         String(node.props.className).includes("flex-1"),
     );
+    expect(String(selectBtn.props.className)).toContain("w-full");
+    expect(String(selectBtn.props.className)).toContain("!text-left");
+    const title = selectBtn.find(
+      (node) => node.type === "span" && textOf(node).trim() === "First room",
+    );
+    expect(String(title.props.className)).toContain("block");
+    expect(String(title.props.className)).toContain("text-left");
     await act(async () => {
       selectBtn.props.onClick();
     });

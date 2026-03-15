@@ -135,7 +135,7 @@ function SettingsSidebar({
     <aside className="hidden w-80 shrink-0 self-start border-r border-border/50 bg-bg/35 backdrop-blur-xl xl:sticky xl:top-0 xl:flex">
       <div className="flex flex-1 flex-col p-5">
         <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted/80">
-          {t("settingsview.JumpToSection", { defaultValue: "Jump to section" })}
+          {t("settingsview.JumpToSection")}
         </div>
 
         <nav className="flex flex-col gap-2 pr-1">
@@ -724,8 +724,8 @@ export function SettingsView({
       {visibleSectionIds.has("coding-agents") && (
         <SectionCard
           id="coding-agents"
-          title={t("settingsview.CodingAgents")}
-          description="Configure AI coding agents for multi-agent task execution."
+          title={t("settings.codingAgents")}
+          description={t("settings.codingAgentsDescription")}
           className="p-4 sm:p-5 lg:p-6"
         >
           <CodingAgentSettingsSection />
@@ -744,8 +744,8 @@ export function SettingsView({
       {visibleSectionIds.has("wallet-rpc") && (
         <SectionCard
           id="wallet-rpc"
-          title={t("settingsview.WalletRPC")}
-          description="Configure chain RPC providers for trading and market data."
+          title={t("settings.walletRpc")}
+          description={t("settings.walletRpcDescription")}
           className="p-4 sm:p-5 lg:p-6"
         >
           <ConfigPageView embedded />
@@ -811,7 +811,7 @@ export function SettingsView({
         <SectionCard
           id="settings-empty"
           title={t("settingsview.NoMatchingSettings")}
-          description="Try a broader search or clear the current filter."
+          description={t("settings.noMatchingSettingsDescription")}
           className="p-4 sm:p-5 lg:p-6"
         >
           <button

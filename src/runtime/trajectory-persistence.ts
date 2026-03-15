@@ -1467,9 +1467,17 @@ export function installDatabaseTrajectoryLogger(runtime: IAgentRuntime): void {
   const loggerObject = logger as unknown as object;
   if (patchedLoggers.has(loggerObject)) return;
 
-  if (typeof logger.isEnabled === "function" && !logger.isEnabled()) {
+  const shouldEnableByDefault = shouldEnableTrajectoryLoggingByDefault();
+  const isEnabled =
+    typeof logger.isEnabled === "function"
+      ? logger.isEnabled()
+      : shouldEnableByDefault;
+  if (
+    typeof logger.setEnabled === "function" &&
+    isEnabled !== shouldEnableByDefault
+  ) {
     try {
-      logger.setEnabled?.(true);
+      logger.setEnabled(shouldEnableByDefault);
     } catch {
       // Ignore logger enable failures and continue.
     }
@@ -2158,7 +2166,7 @@ export class DatabaseTrajectoryLogger extends Service {
   capabilityDescription =
     "Database-backed trajectory logging service for LLM call persistence";
 
-  private enabled = true;
+  private enabled = shouldEnableTrajectoryLoggingByDefault();
 
   /**
    * Static start method required by @elizaos/core runtime.
@@ -2569,4 +2577,8 @@ export function createDatabaseTrajectoryLogger(
 ): DatabaseTrajectoryLogger {
   const logger = new DatabaseTrajectoryLogger(runtime);
   return logger;
+}
+
+export function shouldEnableTrajectoryLoggingByDefault(): boolean {
+  return process.env.NODE_ENV !== "production";
 }

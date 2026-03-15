@@ -94,7 +94,7 @@ describe("handleCloudRoute", () => {
 
     expect(handled).toBe(true);
     expect(getStatus()).toBe(401);
-    expect(getJson()).toEqual({ error: "Not connected to Eliza Cloud" });
+    expect(getJson()).toEqual({ error: "Not connected to Milady Cloud" });
   });
 
   it("returns 400 for POST /api/cloud/agents when agentName is missing", async () => {
@@ -147,7 +147,7 @@ describe("handleCloudRoute", () => {
 
     expect(handled).toBe(true);
     expect(getStatus()).toBe(401);
-    expect(getJson()).toEqual({ error: "Not connected to Eliza Cloud" });
+    expect(getJson()).toEqual({ error: "Not connected to Milady Cloud" });
   });
 
   it("lists cloud agents when the cloud client is connected", async () => {
@@ -233,7 +233,7 @@ describe("handleCloudRoute", () => {
     expect(handled).toBe(true);
     expect(getStatus()).toBe(200);
     expect(getJson().browserUrl).toMatch(
-      /^https:\/\/www\.elizacloud\.ai\/auth\/cli-login\?session=/,
+      /^https:\/\/cloud\.milady\.ai\/auth\/cli-login\?session=/,
     );
   });
 
@@ -387,7 +387,7 @@ describe("handleCloudRoute", () => {
 
     expect(handled).toBe(true);
     expect(getStatus()).toBe(401);
-    expect(getJson()).toEqual({ error: "Not connected to Eliza Cloud" });
+    expect(getJson()).toEqual({ error: "Not connected to Milady Cloud" });
   });
 
   it("disconnects active cloud agent on shutdown and deletes target agent", async () => {
@@ -1075,7 +1075,7 @@ describe("handleCloudRoute timeout behavior", () => {
 
     expect(handled).toBe(true);
     expect(res.statusCode).toBe(504);
-    expect(getJson().error).toBe("Eliza Cloud login request timed out");
+    expect(getJson().error).toBe("Milady Cloud login request timed out");
     expect(capturedSignal).toBeInstanceOf(AbortSignal);
   });
 
@@ -1095,7 +1095,7 @@ describe("handleCloudRoute timeout behavior", () => {
 
     expect(handled).toBe(true);
     expect(res.statusCode).toBe(502);
-    expect(getJson()).toEqual({ error: "Failed to reach Eliza Cloud" });
+    expect(getJson()).toEqual({ error: "Failed to reach Milady Cloud" });
   });
 
   it("returns 502 when cloud login session creation is rejected by service", async () => {
@@ -1120,7 +1120,7 @@ describe("handleCloudRoute timeout behavior", () => {
     expect(handled).toBe(true);
     expect(res.statusCode).toBe(502);
     expect(getJson()).toEqual({
-      error: "Failed to create auth session with Eliza Cloud",
+      error: "Failed to create auth session with Milady Cloud",
     });
   });
 
@@ -1247,7 +1247,7 @@ describe("handleCloudRoute timeout behavior", () => {
     expect(handled).toBe(true);
     expect(res.statusCode).toBe(502);
     expect(getJson().error).toBe(
-      "Eliza Cloud login request was redirected; redirects are not allowed",
+      "Milady Cloud login request was redirected; redirects are not allowed",
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "https://test.elizacloud.ai/api/auth/cli-session",
@@ -1273,7 +1273,7 @@ describe("handleCloudRoute timeout behavior", () => {
     expect(res.statusCode).toBe(504);
     expect(getJson()).toEqual({
       status: "error",
-      error: "Eliza Cloud status request timed out",
+      error: "Milady Cloud status request timed out",
     });
   });
 
@@ -1345,7 +1345,7 @@ describe("handleCloudRoute timeout behavior", () => {
     expect(res.statusCode).toBe(200);
     expect(getJson()).toEqual({
       status: "error",
-      error: "Eliza Cloud returned HTTP 500",
+      error: "Milady Cloud returned HTTP 500",
     });
   });
 
@@ -1671,7 +1671,7 @@ describe("handleCloudRoute timeout behavior", () => {
     expect(getJson()).toEqual({
       status: "error",
       error:
-        "Eliza Cloud status request was redirected; redirects are not allowed",
+        "Milady Cloud status request was redirected; redirects are not allowed",
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "https://test.elizacloud.ai/api/auth/cli-session/test-session",
@@ -1697,7 +1697,7 @@ describe("handleCloudRoute timeout behavior", () => {
     expect(res.statusCode).toBe(502);
     expect(getJson()).toEqual({
       status: "error",
-      error: "Failed to reach Eliza Cloud",
+      error: "Failed to reach Milady Cloud",
     });
   });
 
@@ -1719,7 +1719,7 @@ describe("handleCloudRoute timeout behavior", () => {
     expect(res.statusCode).toBe(502);
     expect(getJson()).toEqual({
       status: "error",
-      error: "Failed to reach Eliza Cloud",
+      error: "Failed to reach Milady Cloud",
     });
   });
 });

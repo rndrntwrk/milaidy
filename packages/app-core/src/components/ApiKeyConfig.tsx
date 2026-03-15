@@ -51,9 +51,10 @@ export function ApiKeyConfig({
     Record<string, Record<string, string>>
   >({});
   const [modelsFetching, setModelsFetching] = useState(false);
-  const [modelsFetchResult, setModelsFetchResult] = useState<string | null>(
-    null,
-  );
+  const [modelsFetchResult, setModelsFetchResult] = useState<{
+    tone: "error" | "success";
+    message: string;
+  } | null>(null);
 
   const handlePluginFieldChange = useCallback(
     (pluginId: string, key: string, value: string) => {
@@ -80,18 +81,24 @@ export function ApiKeyConfig({
       try {
         const result = await client.fetchModels(providerId, true);
         const count = Array.isArray(result?.models) ? result.models.length : 0;
-        setModelsFetchResult(`Loaded ${count} models`);
+        setModelsFetchResult({
+          tone: "success",
+          message: t("apikeyconfig.loadedModels", { count }),
+        });
         await loadPlugins();
         setTimeout(() => setModelsFetchResult(null), 3000);
       } catch (err) {
-        setModelsFetchResult(
-          `Error: ${err instanceof Error ? err.message : "failed"}`,
-        );
+        setModelsFetchResult({
+          tone: "error",
+          message: t("apikeyconfig.error", {
+            message: err instanceof Error ? err.message : t("apikeyconfig.failed"),
+          }),
+        });
         setTimeout(() => setModelsFetchResult(null), 5000);
       }
       setModelsFetching(false);
     },
-    [loadPlugins, setTimeout],
+    [loadPlugins, setTimeout, t],
   );
 
   if (!selectedProvider || selectedProvider.parameters.length === 0)
@@ -159,7 +166,9 @@ export function ApiKeyConfig({
                 : "var(--warning,#f39c12)",
             }}
           >
-            {selectedProvider.configured ? "Configured" : "Needs Setup"}
+            {selectedProvider.configured
+              ? t("mediasettingssection.Configured")
+              : t("mediasettingssection.NeedsSetup")}
           </span>
         </div>
       </div>
@@ -184,13 +193,15 @@ export function ApiKeyConfig({
             onClick={() => void handleFetchModels(selectedProvider.id)}
             disabled={modelsFetching}
           >
-            {modelsFetching ? "Fetching..." : "Fetch Models"}
+            {modelsFetching
+              ? t("apikeyconfig.fetching")
+              : t("apikeyconfig.fetchModels")}
           </button>
           {modelsFetchResult && (
             <span
-              className={`text-[11px] ${modelsFetchResult.startsWith("Error") ? "text-[var(--danger,#e74c3c)]" : "text-[var(--ok,#16a34a)]"}`}
+              className={`text-[11px] ${modelsFetchResult.tone === "error" ? "text-[var(--danger,#e74c3c)]" : "text-[var(--ok,#16a34a)]"}`}
             >
-              {modelsFetchResult}
+              {modelsFetchResult.message}
             </span>
           )}
         </div>
@@ -200,7 +211,11 @@ export function ApiKeyConfig({
           onClick={() => handlePluginSave(selectedProvider.id)}
           disabled={isSaving}
         >
-          {isSaving ? "Saving..." : saveSuccess ? "Saved" : "Save"}
+          {isSaving
+            ? t("apikeyconfig.saving")
+            : saveSuccess
+              ? t("apikeyconfig.saved")
+              : t("apikeyconfig.save")}
         </button>
       </div>
     </div>

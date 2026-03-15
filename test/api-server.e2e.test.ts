@@ -2277,16 +2277,26 @@ describe("API Server E2E (no runtime)", () => {
         expect(before.status).toBe(200);
         expect(before.data.enabled).toBe(false);
 
-        const updated = await req(
+        const enabledUpdate = await req(
+          streamServer.port,
+          "PUT",
+          "/api/trajectories/config",
+          { enabled: true },
+        );
+        expect(enabledUpdate.status).toBe(200);
+        expect(enabledUpdate.data.enabled).toBe(true);
+        expect(enabled).toBe(true);
+
+        const disabledUpdate = await req(
           streamServer.port,
           "PUT",
           "/api/trajectories/config",
           { enabled: false },
         );
-        expect(updated.status).toBe(200);
-        expect(updated.data.enabled).toBe(false);
+        expect(disabledUpdate.status).toBe(200);
+        expect(disabledUpdate.data.enabled).toBe(false);
         expect(enabled).toBe(false);
-        expect(setEnabledCalls).toEqual([false]);
+        expect(setEnabledCalls).toEqual([true, false]);
       } finally {
         await streamServer.close();
       }

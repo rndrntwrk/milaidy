@@ -8,9 +8,19 @@
  * STT: Web Speech API (SpeechRecognition) for user voice input.
  */
 
+import { Capacitor } from "@capacitor/core";
+import type { PluginListenerHandle } from "@capacitor/core";
+import { TalkMode } from "@milady/capacitor-talkmode";
+import type {
+  TalkModeErrorEvent,
+  TalkModeStateEvent,
+  TalkModeTranscriptEvent,
+} from "@milady/capacitor-talkmode";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VoiceConfig } from "../api/client";
+import { getElectrobunRendererRpc } from "../bridge/electrobun-rpc";
 import { resolveApiUrl } from "../utils";
+import { mergeStreamingText } from "../utils/streaming-text";
 
 // ── Speech Recognition types ──────────────────────────────────────────
 
@@ -53,6 +63,7 @@ declare global {
 
 type SpeechSegmentKind = "full" | "first-sentence" | "remainder";
 type SpeechProviderKind = "elevenlabs" | "browser";
+export type VoiceCaptureMode = "idle" | "compose" | "push-to-talk";
 
 export interface VoicePlaybackStartEvent {
   text: string;
@@ -62,9 +73,19 @@ export interface VoicePlaybackStartEvent {
   startedAtMs: number;
 }
 
+export interface VoiceTranscriptPreviewEvent {
+  mode: Exclude<VoiceCaptureMode, "idle">;
+  isFinal: boolean;
+}
+
 export interface VoiceChatOptions {
   /** Called when a final transcript is ready to send */
   onTranscript: (text: string) => void;
+  /** Called whenever the live transcript buffer changes */
+  onTranscriptPreview?: (
+    text: string,
+    event: VoiceTranscriptPreviewEvent,
+  ) => void;
   /** Called when playback of a speech segment starts */
   onPlaybackStart?: (event: VoicePlaybackStartEvent) => void;
   /** True when the user is authenticated to Milady/Eliza Cloud */
@@ -80,6 +101,8 @@ export interface VoiceChatOptions {
 export interface VoiceChatState {
   /** Whether voice input is currently active */
   isListening: boolean;
+  /** Current mic capture mode */
+  captureMode: VoiceCaptureMode;
   /** Whether the agent is currently speaking */
   isSpeaking: boolean;
   /** Current mouth openness (0-1) for lip sync */
@@ -92,6 +115,12 @@ export interface VoiceChatState {
   usingAudioAnalysis: boolean;
   /** Toggle voice listening on/off */
   toggleListening: () => void;
+  /** Begin voice capture in compose or push-to-talk mode */
+  startListening: (
+    mode?: Exclude<VoiceCaptureMode, "idle">,
+  ) => Promise<void>;
+  /** End voice capture and optionally submit the transcript */
+  stopListening: (options?: { submit?: boolean }) => Promise<void>;
   /** Speak text aloud with mouth animation */
   speak: (text: string, options?: { append?: boolean }) => void;
   /** Progressively speak an assistant message while it streams */
@@ -124,6 +153,7 @@ const DEFAULT_ELEVEN_MODEL = "eleven_flash_v2_5";
 const DEFAULT_ELEVEN_VOICE = "EXAVITQu4vr4xnSDxMaL";
 const MAX_SPOKEN_CHARS = 360;
 const MAX_CACHED_SEGMENTS = 128;
+const TALKMODE_STOP_SETTLE_MS = 120;
 const REDACTED_SECRET = "[REDACTED]";
 function resolveElevenProxyEndpoint(): string {
   return resolveApiUrl("/api/tts/elevenlabs");
@@ -137,6 +167,10 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 
 function collapseWhitespace(input: string): string {
   return input.replace(/\s+/g, " ").trim();
+}
+
+function stripUrls(input: string): string {
+  return input.replace(/\bhttps?:\/\/\S+/gi, " ");
 }
 
 function normalizeCacheText(input: string): string {
@@ -161,6 +195,39 @@ function stripThinkingAndMarkup(input: string): string {
   text = text.replace(/`([^`]+)`/g, "$1");
   text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
   text = text.replace(/<[^>\n]+>/g, " ");
+  text = stripUrls(text);
+  return text;
+}
+
+function stripRoleplayMarkers(input: string): string {
+  let text = input;
+  text = text.replace(/(^|\s)[*_~]+([^*_~]+)[*_~]+(?=\s|$)/g, " ");
+  text = text.replace(/[_~]/g, " ");
+  return text;
+}
+
+function rewriteParentheticalAside(input: string): string {
+  return input.replace(/\(([^()]+)\)/g, (_match, inner: string) => {
+    const content = collapseWhitespace(inner);
+    return content ? `, i.e. ${content}, ` : " ";
+  });
+}
+
+function sanitizeSpeechPunctuation(input: string): string {
+  const iePlaceholder = "MILADYIEPLACEHOLDER";
+  let text = input;
+  text = text.replace(/\bi\.e\./gi, iePlaceholder);
+  text = text.replace(/[•·■▪◦]/g, " ");
+  text = text.replace(/[“”]/g, '"');
+  text = text.replace(/[‘’]/g, "'");
+  text = text.replace(/[…]/g, "...");
+  text = text.replace(/[–—]/g, ", ");
+  text = text.replace(/\s*([,;:])\s*/g, "$1 ");
+  text = text.replace(/\s*([.!?])\s*/g, "$1 ");
+  text = text.replace(/[()[\]{}]/g, " ");
+  text = text.replace(/[^\p{L}\p{N}\s.,!?'"%/$:+-]/gu, " ");
+  text = text.replace(/([,.!?])\1+/g, "$1");
+  text = text.replace(new RegExp(iePlaceholder, "g"), "i.e.");
   return text;
 }
 
@@ -174,7 +241,8 @@ function capSpeechLength(input: string): string {
 
 function toSpeakableText(input: string): string {
   const stripped = stripThinkingAndMarkup(input);
-  const normalized = collapseWhitespace(stripped);
+  const conversational = rewriteParentheticalAside(stripRoleplayMarkers(stripped));
+  const normalized = collapseWhitespace(sanitizeSpeechPunctuation(conversational));
   if (!normalized) return "";
   return capSpeechLength(normalized);
 }
@@ -332,6 +400,7 @@ export const __voiceChatInternals = {
   remainderAfter,
   queueableSpeechPrefix,
   resolveEffectiveVoiceConfig,
+  toSpeakableText,
 };
 
 function isAbortError(error: unknown): boolean {
@@ -340,10 +409,17 @@ function isAbortError(error: unknown): boolean {
   return false;
 }
 
+function shouldPreferNativeTalkMode(): boolean {
+  if (typeof window === "undefined") return false;
+  if (getElectrobunRendererRpc()) return true;
+  return Capacitor.isNativePlatform();
+}
+
 // ── Hook ──────────────────────────────────────────────────────────────
 
 export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
   const [isListening, setIsListening] = useState(false);
+  const [captureMode, setCaptureMode] = useState<VoiceCaptureMode>("idle");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [mouthOpen, setMouthOpen] = useState(0);
   const [interimTranscript, setInterimTranscript] = useState("");
@@ -352,15 +428,21 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
 
   // Refs — stable across renders, read from animation loop & callbacks
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const sttBackendRef = useRef<"browser" | "talkmode" | null>(null);
+  const talkModeHandlesRef = useRef<PluginListenerHandle[]>([]);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const animFrameRef = useRef<number>(0);
   const speakingStartRef = useRef<number>(0);
   const speechTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enabledRef = useRef(false);
+  const listeningModeRef = useRef<VoiceCaptureMode>("idle");
+  const transcriptBufferRef = useRef("");
   const onTranscriptRef = useRef(options.onTranscript);
+  const onTranscriptPreviewRef = useRef(options.onTranscriptPreview);
   const onPlaybackStartRef = useRef(options.onPlaybackStart);
   onTranscriptRef.current = options.onTranscript;
+  onTranscriptPreviewRef.current = options.onTranscriptPreview;
   onPlaybackStartRef.current = options.onPlaybackStart;
 
   const effectiveVoiceConfig = useMemo(
@@ -444,7 +526,14 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
   useEffect(() => {
     const SpeechRecognitionAPI: SpeechRecognitionCtor | undefined =
       window.SpeechRecognition ?? window.webkitSpeechRecognition;
-    setSupported(!!SpeechRecognitionAPI && !!window.speechSynthesis);
+    const canUseMicrophone =
+      typeof navigator !== "undefined" &&
+      typeof navigator.mediaDevices?.getUserMedia === "function";
+    setSupported(
+      shouldPreferNativeTalkMode()
+        ? canUseMicrophone || !!SpeechRecognitionAPI
+        : !!SpeechRecognitionAPI,
+    );
     synthRef.current = window.speechSynthesis ?? null;
   }, []);
 
@@ -510,76 +599,271 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
 
   // ── STT (Speech Recognition) ──────────────────────────────────────
 
-  const startRecognition = useCallback(() => {
-    const SpeechRecognitionAPI: SpeechRecognitionCtor | undefined =
-      window.SpeechRecognition ?? window.webkitSpeechRecognition;
-    if (!SpeechRecognitionAPI) return;
+  const applyTranscriptUpdate = useCallback(
+    (transcript: string, isFinal: boolean) => {
+      const mode = listeningModeRef.current;
+      if (mode === "idle") return;
 
-    const recognition = new SpeechRecognitionAPI();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = options.lang ?? "en-US";
+      const normalized = collapseWhitespace(transcript);
+      if (!normalized) return;
 
-    recognition.onresult = (event: SpeechRecognitionResultEvent) => {
-      const result = event.results[event.results.length - 1];
-      if (!result) return;
-      const transcript = result[0].transcript;
-      if (transcript.trim() && interruptOnSpeechRef.current) {
-        interruptSpeechRef.current();
-      }
-      if (result.isFinal && transcript.trim()) {
-        setInterimTranscript("");
-        onTranscriptRef.current(transcript.trim());
-      } else {
-        setInterimTranscript(transcript);
-      }
-    };
+      const nextText =
+        sttBackendRef.current === "talkmode"
+          ? mergeStreamingText(transcriptBufferRef.current, normalized)
+          : mergeStreamingText(transcriptBufferRef.current, normalized);
+      if (nextText === transcriptBufferRef.current) return;
 
-    recognition.onerror = (event: { error: string }) => {
-      if (
-        event.error === "not-allowed" ||
-        event.error === "service-not-allowed"
-      ) {
-        enabledRef.current = false;
-        setIsListening(false);
-      }
-    };
+      transcriptBufferRef.current = nextText;
+      setInterimTranscript(nextText);
+      onTranscriptPreviewRef.current?.(nextText, {
+        mode,
+        isFinal,
+      });
 
-    recognition.onend = () => {
-      if (enabledRef.current) {
-        try {
-          recognition.start();
-        } catch {
-          /* already started */
-        }
-      }
-    };
-
-    recognitionRef.current = recognition;
-    try {
       if (interruptOnSpeechRef.current) {
         interruptSpeechRef.current();
       }
-      recognition.start();
-      enabledRef.current = true;
-      setIsListening(true);
-    } catch {
-      /* failed to start */
-    }
-  }, [options.lang]);
+    },
+    [],
+  );
 
-  const stopRecognition = useCallback(() => {
-    enabledRef.current = false;
-    recognitionRef.current?.stop();
-    recognitionRef.current = null;
-    setIsListening(false);
-    setInterimTranscript("");
+  const removeTalkModeListeners = useCallback(async () => {
+    const handles = talkModeHandlesRef.current;
+    talkModeHandlesRef.current = [];
+    await Promise.all(
+      handles.map((handle) =>
+        handle.remove().catch(() => {
+          /* ignore */
+        }),
+      ),
+    );
   }, []);
 
+  const ensureTalkModeListeners = useCallback(async () => {
+    if (talkModeHandlesRef.current.length > 0) return;
+
+    const transcriptHandle = await TalkMode.addListener(
+      "transcript",
+      (event: TalkModeTranscriptEvent) => {
+        applyTranscriptUpdate(event.transcript, event.isFinal);
+      },
+    );
+    const errorHandle = await TalkMode.addListener(
+      "error",
+      (event: TalkModeErrorEvent) => {
+        if (
+          event.code === "not-allowed" ||
+          event.code === "service-not-allowed"
+        ) {
+          enabledRef.current = false;
+        listeningModeRef.current = "idle";
+        sttBackendRef.current = null;
+          setCaptureMode("idle");
+          setIsListening(false);
+        }
+      }
+    );
+    const stateHandle = await TalkMode.addListener(
+      "stateChange",
+      (event: TalkModeStateEvent) => {
+        if (event.state === "error" || event.state === "idle") {
+          if (!enabledRef.current) {
+            setIsListening(false);
+            setCaptureMode("idle");
+          }
+        }
+      },
+    );
+    talkModeHandlesRef.current = [transcriptHandle, errorHandle, stateHandle];
+  }, [applyTranscriptUpdate]);
+
+  const startBrowserRecognition = useCallback(
+    (mode: Exclude<VoiceCaptureMode, "idle">) => {
+      const SpeechRecognitionAPI: SpeechRecognitionCtor | undefined =
+        window.SpeechRecognition ?? window.webkitSpeechRecognition;
+      if (!SpeechRecognitionAPI) return false;
+
+      const recognition = new SpeechRecognitionAPI();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = options.lang ?? "en-US";
+
+      recognition.onresult = (event: SpeechRecognitionResultEvent) => {
+        let transcript = "";
+        let isFinal = false;
+
+        for (let index = 0; index < event.results.length; index += 1) {
+          const result = event.results[index];
+          const chunk = result?.[0]?.transcript ?? "";
+          if (chunk) {
+            transcript = transcript ? `${transcript} ${chunk}` : chunk;
+          }
+          if (result?.isFinal) {
+            isFinal = true;
+          }
+        }
+
+        applyTranscriptUpdate(transcript, isFinal);
+      };
+
+      recognition.onerror = (event: { error: string }) => {
+        if (
+          event.error === "not-allowed" ||
+          event.error === "service-not-allowed"
+        ) {
+          enabledRef.current = false;
+          listeningModeRef.current = "idle";
+          sttBackendRef.current = null;
+          setCaptureMode("idle");
+          setIsListening(false);
+        }
+      };
+
+      recognition.onend = () => {
+        if (enabledRef.current && listeningModeRef.current === mode) {
+          try {
+            recognition.start();
+          } catch {
+            /* already started */
+          }
+        }
+      };
+
+      recognitionRef.current = recognition;
+      try {
+        recognition.start();
+        sttBackendRef.current = "browser";
+        enabledRef.current = true;
+        listeningModeRef.current = mode;
+        setCaptureMode(mode);
+        setIsListening(true);
+        return true;
+      } catch {
+        recognitionRef.current = null;
+        return false;
+      }
+    },
+    [applyTranscriptUpdate, options.lang],
+  );
+
+  const startTalkModeRecognition = useCallback(
+    async (mode: Exclude<VoiceCaptureMode, "idle">) => {
+      await ensureTalkModeListeners();
+
+      try {
+        const permissions = await TalkMode.checkPermissions().catch(() => null);
+        if (permissions?.microphone === "prompt") {
+          await TalkMode.requestPermissions().catch(() => {
+            /* ignore */
+          });
+        }
+
+        const directRpc = getElectrobunRendererRpc();
+        const result = await TalkMode.start({
+          config: {
+            stt: {
+              ...(directRpc ? { engine: "whisper" as const } : {}),
+              language: options.lang ?? "en-US",
+              modelSize: "base",
+              sampleRate: 16000,
+            },
+            silenceWindowMs: 350,
+            interruptOnSpeech: true,
+          },
+        });
+        if (!result.started) {
+          return false;
+        }
+
+        enabledRef.current = true;
+        listeningModeRef.current = mode;
+        sttBackendRef.current = "talkmode";
+        setCaptureMode(mode);
+        setIsListening(true);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [ensureTalkModeListeners, options.lang],
+  );
+
+  const finalizeRecognition = useCallback(
+    (submit: boolean) => {
+      const transcript = collapseWhitespace(transcriptBufferRef.current);
+      if (submit && transcript) {
+        onTranscriptRef.current(transcript);
+      }
+
+      transcriptBufferRef.current = "";
+      recognitionRef.current = null;
+      sttBackendRef.current = null;
+      enabledRef.current = false;
+      listeningModeRef.current = "idle";
+      setIsListening(false);
+      setCaptureMode("idle");
+      setInterimTranscript("");
+    },
+    [],
+  );
+
+  const startListening = useCallback(
+    async (mode: Exclude<VoiceCaptureMode, "idle"> = "compose") => {
+      if (enabledRef.current) return;
+
+      transcriptBufferRef.current = "";
+      setInterimTranscript("");
+      if (interruptOnSpeechRef.current) {
+        interruptSpeechRef.current();
+      }
+
+      if (shouldPreferNativeTalkMode()) {
+        const started = await startTalkModeRecognition(mode);
+        if (started) {
+          return;
+        }
+      }
+
+      startBrowserRecognition(mode);
+    },
+    [startBrowserRecognition, startTalkModeRecognition],
+  );
+
+  const stopListening = useCallback(
+    async (options?: { submit?: boolean }) => {
+      const mode = listeningModeRef.current;
+      if (mode === "idle") return;
+
+      const submit = options?.submit === true;
+      enabledRef.current = false;
+
+      if (sttBackendRef.current === "talkmode") {
+        await TalkMode.stop().catch(() => {
+          /* ignore */
+        });
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, TALKMODE_STOP_SETTLE_MS),
+        );
+      } else {
+        recognitionRef.current?.stop();
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, TALKMODE_STOP_SETTLE_MS),
+        );
+      }
+
+      finalizeRecognition(submit);
+    },
+    [finalizeRecognition],
+  );
+
   const toggleListening = useCallback(() => {
-    if (enabledRef.current) stopRecognition();
-    else startRecognition();
-  }, [startRecognition, stopRecognition]);
+    if (enabledRef.current && listeningModeRef.current === "compose") {
+      void stopListening();
+      return;
+    }
+    if (enabledRef.current) return;
+    void startListening("compose");
+  }, [startListening, stopListening]);
 
   // ── Cancel helpers ────────────────────────────────────────────────
 
@@ -1096,7 +1380,8 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
 
   useEffect(() => {
     return () => {
-      stopRecognition();
+      void stopListening();
+      void removeTalkModeListeners();
       stopSpeaking();
       if (audioCtxRef.current) {
         void audioCtxRef.current.close().catch(() => {
@@ -1105,16 +1390,19 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
         audioCtxRef.current = null;
       }
     };
-  }, [stopRecognition, stopSpeaking]);
+  }, [removeTalkModeListeners, stopListening, stopSpeaking]);
 
   return {
     isListening,
+    captureMode,
     isSpeaking,
     mouthOpen,
     interimTranscript,
     supported,
     usingAudioAnalysis,
     toggleListening,
+    startListening,
+    stopListening,
     speak,
     queueAssistantSpeech,
     stopSpeaking,

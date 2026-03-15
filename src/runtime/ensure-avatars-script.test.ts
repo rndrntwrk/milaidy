@@ -51,6 +51,11 @@ describe("hasValidVrm", () => {
     expect(hasValidVrm(dir)).toBe(true);
   });
 
+  it("returns true when gzipped VRM is a real binary (> 1 KB)", () => {
+    writeFakeFile(join(dir, "milady-1.vrm.gz"), 2048);
+    expect(hasValidVrm(dir)).toBe(true);
+  });
+
   it("ignores non-VRM files", () => {
     writeFakeFile(join(dir, "readme.txt"), 5000);
     expect(hasValidVrm(dir)).toBe(false);
@@ -77,7 +82,7 @@ describe("hasValidAnimations", () => {
     expect(hasValidAnimations(dir)).toBe(false);
   });
 
-  it("returns false when emotes has no .glb files", () => {
+  it("returns false when emotes has no bundled animation files", () => {
     mkdirSync(join(dir, "emotes"), { recursive: true });
     expect(hasValidAnimations(dir)).toBe(false);
   });
@@ -89,6 +94,11 @@ describe("hasValidAnimations", () => {
 
   it("returns true when .glb is a real binary (> 1 KB)", () => {
     writeFakeFile(join(dir, "emotes", "idle.glb"), 4096);
+    expect(hasValidAnimations(dir)).toBe(true);
+  });
+
+  it("returns true when .glb.gz is a real binary (> 1 KB)", () => {
+    writeFakeFile(join(dir, "emotes", "idle.glb.gz"), 4096);
     expect(hasValidAnimations(dir)).toBe(true);
   });
 });

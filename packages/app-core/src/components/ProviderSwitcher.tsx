@@ -225,8 +225,14 @@ export function ProviderSwitcher({
   const allAiProviders = plugins.filter((p) => p.category === "ai-provider");
   const enabledAiProviders = allAiProviders.filter((p) => p.enabled);
   const subscriptionProviders = [
-    { id: "anthropic-subscription", label: "Claude Subscription" },
-    { id: "openai-subscription", label: "ChatGPT Subscription" },
+    {
+      id: "anthropic-subscription",
+      label: t("providerswitcher.claudeSubscription"),
+    },
+    {
+      id: "openai-subscription",
+      label: t("providerswitcher.chatgptSubscription"),
+    },
   ];
   const isSubscriptionId = (id: string | null) =>
     id === "anthropic-subscription" || id === "openai-subscription";
@@ -454,8 +460,12 @@ export function ProviderSwitcher({
     resolvedSelectedId === "anthropic-subscription" ||
     resolvedSelectedId === "openai-subscription";
   const providerChoices = [
-    { id: "__cloud__", label: "Milady Cloud", disabled: false },
-    { id: "pi-ai", label: "Pi (pi-ai)", disabled: false },
+    {
+      id: "__cloud__",
+      label: t("providerswitcher.miladyCloud"),
+      disabled: false,
+    },
+    { id: "pi-ai", label: t("providerswitcher.piAi"), disabled: false },
     ...subscriptionProviders.map((provider) => ({
       id: provider.id,
       label: provider.label,
@@ -472,7 +482,7 @@ export function ProviderSwitcher({
     return (
       <div className="p-4 border border-[var(--warning,#f39c12)] bg-[var(--card)]">
         <div className="text-xs text-[var(--warning,#f39c12)]">
-          {t("providerswitcher.NoAIProvidersAvai")}{" "}
+          {t("providerswitcher.noAiProvidersAvailable")}{" "}
           <Button
             variant="link"
             size="sm"
@@ -481,7 +491,7 @@ export function ProviderSwitcher({
               setTab("plugins");
             }}
           >
-            {t("providerswitcher.Plugins")}
+            {t("providerswitcher.plugins")}
           </Button>{" "}
           {t("providerswitcher.page")}
         </div>
@@ -497,7 +507,7 @@ export function ProviderSwitcher({
           htmlFor="provider-switcher-select"
           className="block text-xs font-semibold mb-1.5 text-[var(--muted)]"
         >
-          {t("providerswitcher.SelectAIProvider")}
+          {t("providerswitcher.selectAIProvider")}
         </label>
         <select
           id="provider-switcher-select"
@@ -534,7 +544,7 @@ export function ProviderSwitcher({
           ))}
         </select>
         <p className="text-[11px] text-[var(--muted)] mt-1.5">
-          {t("providerswitcher.ChooseYourPreferre")}
+          {t("providerswitcher.chooseYourPreferredProvider")}
         </p>
       </div>
 
@@ -547,7 +557,7 @@ export function ProviderSwitcher({
                 <div className="flex items-center gap-2">
                   <span className="inline-block w-2 h-2 rounded-full bg-[var(--ok,#16a34a)]" />
                   <span className="text-xs font-semibold">
-                    {t("providerswitcher.LoggedIntoMiladyC")}
+                    {t("providerswitcher.loggedIntoMiladyCloud")}
                   </span>
                 </div>
                 <Button
@@ -557,7 +567,9 @@ export function ProviderSwitcher({
                   onClick={() => void handleCloudDisconnect()}
                   disabled={cloudDisconnecting}
                 >
-                  {cloudDisconnecting ? "Disconnecting..." : "Disconnect"}
+                  {cloudDisconnecting
+                    ? t("providerswitcher.disconnecting")
+                    : t("providerswitcher.disconnect")}
                 </Button>
               </div>
 
@@ -572,7 +584,7 @@ export function ProviderSwitcher({
                 {miladyCloudCredits !== null && (
                   <span>
                     <span className="text-[var(--muted)]">
-                      {t("providerswitcher.Credits")}
+                      {t("providerswitcher.credits")}
                     </span>{" "}
                     <span
                       className={
@@ -591,7 +603,7 @@ export function ProviderSwitcher({
                       rel="noopener noreferrer"
                       className="ml-2 text-[11px] text-[var(--text)] underline decoration-[var(--accent)] underline-offset-2 hover:opacity-80"
                     >
-                      {t("providerswitcher.TopUp")}
+                      {t("providerswitcher.topUp")}
                     </a>
                   </span>
                 )}
@@ -605,19 +617,25 @@ export function ProviderSwitcher({
                       small: {
                         type: "string",
                         enum: modelOptions.small.map((m) => m.id),
-                        description: "Fast model for simple tasks",
+                        description: t("providerswitcher.smallModelDescription"),
                       },
                       large: {
                         type: "string",
                         enum: modelOptions.large.map((m) => m.id),
-                        description: "Powerful model for complex reasoning",
+                        description: t("providerswitcher.largeModelDescription"),
                       },
                     },
                     required: [] as string[],
                   };
                   const modelHints: Record<string, ConfigUiHint> = {
-                    small: { label: "Small Model", width: "half" },
-                    large: { label: "Large Model", width: "half" },
+                    small: {
+                      label: t("providerswitcher.smallModelLabel"),
+                      width: "half",
+                    },
+                    large: {
+                      label: t("providerswitcher.largeModelLabel"),
+                      width: "half",
+                    },
                   };
                   const modelValues: Record<string, unknown> = {};
                   const modelSetKeys = new Set<string>();
@@ -668,12 +686,12 @@ export function ProviderSwitcher({
               <div className="flex items-center justify-end gap-2 mt-3">
                 {modelSaving && (
                   <span className="text-[11px] text-[var(--muted)]">
-                    {t("providerswitcher.SavingAmpRestart")}
+                    {t("providerswitcher.savingRestarting")}
                   </span>
                 )}
                 {modelSaveSuccess && (
                   <span className="text-[11px] text-[var(--ok,#16a34a)]">
-                    {t("providerswitcher.SavedRestartingA")}
+                    {t("providerswitcher.savedRestartingAgent")}
                   </span>
                 )}
               </div>
@@ -682,7 +700,7 @@ export function ProviderSwitcher({
             <div>
               {miladyCloudLoginBusy ? (
                 <div className="text-xs text-[var(--muted)]">
-                  {t("providerswitcher.WaitingForBrowser")}
+                  {t("providerswitcher.waitingForBrowser")}
                 </div>
               ) : (
                 <>
@@ -697,10 +715,10 @@ export function ProviderSwitcher({
                     className="!mt-0 font-bold"
                     onClick={() => void handleCloudLogin()}
                   >
-                    {t("providerswitcher.LogInToMiladyClo")}
+                    {t("providerswitcher.logInToMiladyCloud")}
                   </Button>
                   <div className="text-[11px] text-[var(--muted)] mt-1.5">
-                    {t("providerswitcher.OpensABrowserWind")}
+                    {t("providerswitcher.opensABrowserWindow")}
                   </div>
                 </>
               )}
@@ -727,16 +745,16 @@ export function ProviderSwitcher({
       {!isCloudSelected && isPiAiSelected && (
         <div className="mt-4 pt-4 border-t border-[var(--border)]">
           <div className="text-xs font-semibold mb-2">
-            {t("providerswitcher.PiPiAiSettings")}
+            {t("providerswitcher.piSettings")}
           </div>
           <div className="text-[11px] text-[var(--muted)] mb-2">
-            {t("providerswitcher.UsesLocalCredentia")}
+            {t("providerswitcher.usesLocalCredentials")}
           </div>
           <label
             htmlFor="pi-ai-model-override"
             className="block text-[11px] text-[var(--muted)] mb-1"
           >
-            {t("providerswitcher.PrimaryModelOverri")}
+            {t("providerswitcher.primaryModelOverride")}
           </label>
 
           {piAiModelOptions && piAiModelOptions.length > 0 ? (
@@ -757,7 +775,7 @@ export function ProviderSwitcher({
                 className="w-full px-2.5 py-[8px] border border-[var(--border)] bg-[var(--card)] text-[13px] transition-colors focus:border-[var(--accent)] focus:outline-none"
               >
                 <option value="">
-                  {t("providerswitcher.UsePiDefaultModel")}
+                  {t("providerswitcher.usePiDefaultModel")}
                   {piAiDefaultModelSpec ? ` (${piAiDefaultModelSpec})` : ""}
                 </option>
                 {piAiModelOptions.map((model) => (
@@ -766,7 +784,7 @@ export function ProviderSwitcher({
                   </option>
                 ))}
                 <option value="__custom__">
-                  {t("providerswitcher.CustomModelSpec")}
+                  {t("providerswitcher.customModelSpec")}
                 </option>
               </select>
 
@@ -775,7 +793,7 @@ export function ProviderSwitcher({
                   type="text"
                   value={piAiModelSpec}
                   onChange={(e) => setPiAiModelSpec(e.target.value)}
-                  placeholder={t("providerswitcher.providerModelEG")}
+                  placeholder={t("providerswitcher.providerModelPlaceholder")}
                   className="mt-2 bg-card text-[13px]"
                 />
               )}
@@ -786,19 +804,19 @@ export function ProviderSwitcher({
               type="text"
               value={piAiModelSpec}
               onChange={(e) => setPiAiModelSpec(e.target.value)}
-              placeholder={t("providerswitcher.providerModelEG")}
+              placeholder={t("providerswitcher.providerModelPlaceholder")}
               className="bg-card text-[13px]"
             />
           )}
           <div className="flex items-center justify-end gap-2 mt-3">
             {piAiSaving && (
               <span className="text-[11px] text-[var(--muted)]">
-                {t("providerswitcher.SavingAmpRestart")}
+                {t("providerswitcher.savingRestarting")}
               </span>
             )}
             {piAiSaveSuccess && (
               <span className="text-[11px] text-[var(--ok,#16a34a)]">
-                {t("providerswitcher.SavedRestartingA")}
+                {t("providerswitcher.savedRestartingAgent")}
               </span>
             )}
             <Button
@@ -808,7 +826,9 @@ export function ProviderSwitcher({
               onClick={() => void handlePiAiSave()}
               disabled={piAiSaving}
             >
-              {piAiSaving ? "Saving..." : "Save"}
+              {piAiSaving
+                ? t("providerswitcher.saveInProgress")
+                : t("providerswitcher.save")}
             </Button>
           </div>
         </div>

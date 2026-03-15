@@ -28,7 +28,7 @@ import {
 } from "../actions/stream-control";
 import { switchStreamSourceAction } from "../actions/switch-stream-source";
 import { terminalAction } from "../actions/terminal";
-import { EMOTE_CATALOG } from "../emotes/catalog";
+import { AGENT_EMOTE_CATALOG } from "../emotes/catalog";
 import { adminTrustProvider } from "../providers/admin-trust";
 
 import { createSessionKeyProvider } from "../providers/session-bridge";
@@ -87,17 +87,20 @@ export function createMiladyPlugin(config?: MiladyPluginConfig): Plugin {
       if (settings?.DISABLE_EMOTES) {
         return { text: "" };
       }
-      const ids = EMOTE_CATALOG.map((e) => e.id).join(", ");
+      const ids = AGENT_EMOTE_CATALOG.map((e) => e.id).join(", ");
       return {
         text: [
           "## Available Emotes",
           "",
           "You have a 3D VRM avatar that can perform emote animations via the PLAY_EMOTE action.",
           "When viewers ask you to dance, wave, do tricks, or express emotions — ALWAYS use PLAY_EMOTE alongside REPLY.",
-          'Include both actions: actions: ["REPLY", "PLAY_EMOTE"] with the emote parameter set to the emote ID.',
+          "PLAY_EMOTE is a one-shot visual side action. It returns to idle automatically.",
+          'You can chain PLAY_EMOTE before or after other actions in the same turn — for example actions: ["REPLY", "PLAY_EMOTE"] or ["PLAY_EMOTE", "REPLY"].',
+          "Set the emote parameter to the emote ID you want.",
           "",
           `Available emote IDs: ${ids}`,
           "",
+          "Do not use idle, run, or walk with PLAY_EMOTE.",
           "Common mappings: dance/vibe → dance-happy, wave/greet → wave, flip/backflip → flip, cry/sad → crying, fight/punch → punching, fish → fishing",
         ].join("\n"),
       };

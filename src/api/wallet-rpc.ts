@@ -1,6 +1,6 @@
 import type { MiladyConfig } from "../config/config";
 
-export const DEFAULT_CLOUD_API_BASE_URL = "https://www.elizacloud.ai/api/v1";
+export const DEFAULT_CLOUD_API_BASE_URL = "https://cloud.milady.ai/api/v1";
 export const DEFAULT_PUBLIC_BSC_RPC_URLS = [
   "https://bsc-dataseed1.binance.org/",
 ] as const;

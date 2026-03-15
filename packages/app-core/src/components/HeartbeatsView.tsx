@@ -14,7 +14,7 @@ import type {
 import { useApp } from "../state";
 import { confirmDesktopAction } from "../utils";
 import { formatDateTime, formatDurationMs } from "./format";
-import { StatCard, StatusBadge, StatusDot } from "./ui-badges";
+import { StatusBadge, StatusDot } from "./ui-badges";
 
 type TriggerType = "interval" | "once" | "cron";
 type TriggerWakeMode = "inject_now" | "next_autonomy_cycle";
@@ -151,7 +151,6 @@ export function HeartbeatsView() {
     triggersLoading = false,
     triggersSaving = false,
     triggerRunsById = {},
-    triggerHealth = null,
     triggerError = null,
     loadTriggers = async () => {},
     createTrigger = async () => null,
@@ -232,9 +231,9 @@ export function HeartbeatsView() {
   return (
     <div
       ref={rootRef}
-      className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] xl:items-start"
+      className="grid w-full gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] md:items-start"
     >
-      <section className="rounded-xl border border-border bg-card p-4 px-5">
+      <section className="min-w-0 rounded-xl border border-border bg-card p-4 px-5 md:order-2">
         <h2 className="mb-3 text-sm font-bold">
           {editingId ? "Edit Heartbeat" : "New Heartbeat"}
         </h2>
@@ -263,7 +262,7 @@ export function HeartbeatsView() {
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
             <div>
               <span className="mb-1 block text-[11px] text-muted">
                 {t("triggersview.ScheduleType")}
@@ -412,7 +411,7 @@ export function HeartbeatsView() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-4">
+      <section className="min-w-0 rounded-xl border border-border bg-card p-4 md:order-1">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-bold">{t("nav.heartbeats")}</h2>
           <span className="text-[11px] text-muted">

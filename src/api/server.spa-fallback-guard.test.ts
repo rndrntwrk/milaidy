@@ -17,11 +17,15 @@ describe("shouldServeSpaFallback", () => {
   it("rejects .vrm asset requests", () => {
     expect(shouldServeSpaFallback("/milady-1.vrm")).toBe(false);
     expect(shouldServeSpaFallback("/vrms/milady-1.vrm")).toBe(false);
+    expect(shouldServeSpaFallback("/vrms/milady-1.vrm.gz")).toBe(false);
   });
 
   it("rejects .glb asset requests", () => {
     expect(shouldServeSpaFallback("/idle.glb")).toBe(false);
     expect(shouldServeSpaFallback("/animations/emotes/dance.glb")).toBe(false);
+    expect(shouldServeSpaFallback("/animations/emotes/dance.glb.gz")).toBe(
+      false,
+    );
   });
 
   it("rejects other binary/static asset extensions", () => {
@@ -32,6 +36,7 @@ describe("shouldServeSpaFallback", () => {
     expect(shouldServeSpaFallback("/font.woff2")).toBe(false);
     expect(shouldServeSpaFallback("/data.json")).toBe(false);
     expect(shouldServeSpaFallback("/model.fbx")).toBe(false);
+    expect(shouldServeSpaFallback("/model.fbx.gz")).toBe(false);
   });
 
   it("is case-insensitive for extensions", () => {

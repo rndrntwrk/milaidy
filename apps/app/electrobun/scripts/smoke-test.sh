@@ -363,9 +363,9 @@ verify_packaged_renderer_assets() {
 
   if [[ -d "$renderer_dir" ]]; then
     assert_packaged_asset "$renderer_dir/index.html" "renderer entrypoint" 256
-    assert_packaged_asset "$renderer_dir/vrms/milady-1.vrm" "default avatar VRM" 1024
+    assert_packaged_asset "$renderer_dir/vrms/milady-1.vrm.gz" "default avatar VRM" 1024
     assert_packaged_asset "$renderer_dir/vrms/backgrounds/milady-1.png" "default avatar background" 1024
-    assert_packaged_asset "$renderer_dir/animations/idle.glb" "default idle animation" 1024
+    assert_packaged_asset "$renderer_dir/animations/idle.glb.gz" "default idle animation" 1024
 
     echo "Packaged renderer asset check PASSED (direct app bundle)."
     return 0
@@ -374,9 +374,9 @@ verify_packaged_renderer_assets() {
   if [[ -n "${RUNTIME_ARCHIVE:-}" && -f "$RUNTIME_ARCHIVE" ]]; then
     archive_bundle_root="$(basename "$LAUNCH_APP_BUNDLE")/Contents/Resources/app/renderer"
     assert_packaged_archive_asset "$RUNTIME_ARCHIVE" "$archive_bundle_root/index.html" "renderer entrypoint" 256
-    assert_packaged_archive_asset "$RUNTIME_ARCHIVE" "$archive_bundle_root/vrms/milady-1.vrm" "default avatar VRM" 1024
+    assert_packaged_archive_asset "$RUNTIME_ARCHIVE" "$archive_bundle_root/vrms/milady-1.vrm.gz" "default avatar VRM" 1024
     assert_packaged_archive_asset "$RUNTIME_ARCHIVE" "$archive_bundle_root/vrms/backgrounds/milady-1.png" "default avatar background" 1024
-    assert_packaged_archive_asset "$RUNTIME_ARCHIVE" "$archive_bundle_root/animations/idle.glb" "default idle animation" 1024
+    assert_packaged_archive_asset "$RUNTIME_ARCHIVE" "$archive_bundle_root/animations/idle.glb.gz" "default idle animation" 1024
 
     echo "Packaged renderer asset check PASSED (wrapper archive)."
     return 0
@@ -417,9 +417,9 @@ verify_packaged_renderer_assets() {
   fi
 
   assert_packaged_asset "$renderer_dir/index.html" "renderer entrypoint" 256
-  assert_packaged_asset "$renderer_dir/vrms/milady-1.vrm" "default avatar VRM" 1024
+  assert_packaged_asset "$renderer_dir/vrms/milady-1.vrm.gz" "default avatar VRM" 1024
   assert_packaged_asset "$renderer_dir/vrms/backgrounds/milady-1.png" "default avatar background" 1024
-  assert_packaged_asset "$renderer_dir/animations/idle.glb" "default idle animation" 1024
+  assert_packaged_asset "$renderer_dir/animations/idle.glb.gz" "default idle animation" 1024
 
   echo "Packaged renderer asset check PASSED."
 }

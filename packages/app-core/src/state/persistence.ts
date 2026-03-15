@@ -133,9 +133,9 @@ export function loadChatAvatarVisible(): boolean {
 export function loadChatVoiceMuted(): boolean {
   try {
     const stored = localStorage.getItem(CHAT_VOICE_MUTED_KEY);
-    return stored === null ? true : stored === "true";
+    return stored === null ? false : stored === "true";
   } catch {
-    return true;
+    return false;
   }
 }
 

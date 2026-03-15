@@ -91,7 +91,8 @@ function makeErrorResponse(status = 500) {
 describe("TalkModeManager", () => {
   let manager: TalkModeManager;
   let webviewMessages: Array<{ message: string; payload: unknown }>;
-  const TALKMODE_AUDIO_BUFFER_THRESHOLD = 16000 * 3 * 4;
+  const TALKMODE_AUDIO_BUFFER_THRESHOLD = 16000 * 1.25 * 4;
+  const TALKMODE_MIN_FLUSH_BYTES = 16000 * 0.2 * 4;
 
   beforeEach(() => {
     manager = new TalkModeManager();
@@ -397,6 +398,7 @@ describe("TalkModeManager", () => {
         payload: {
           text: "hello world",
           segments: [{ text: "hello world", start: 0, end: 1 }],
+          isFinal: false,
         },
       });
     });
@@ -420,6 +422,29 @@ describe("TalkModeManager", () => {
           code: "transcription_failed",
           message: "whisper crashed",
           recoverable: true,
+        },
+      });
+    });
+
+    it("flushes a short final transcript when stop() is called", async () => {
+      mockIsWhisperAvailable.mockReturnValue(true);
+      mockTranscribeBunSpawn.mockResolvedValue({
+        text: "final short phrase",
+        segments: [{ text: "final short phrase", start: 0, end: 0.6 }],
+      });
+      await manager.start();
+
+      await manager.audioChunk({
+        data: Buffer.alloc(TALKMODE_MIN_FLUSH_BYTES).toString("base64"),
+      });
+      await manager.stop();
+
+      expect(webviewMessages).toContainEqual({
+        message: "talkmode:transcript",
+        payload: {
+          text: "final short phrase",
+          segments: [{ text: "final short phrase", start: 0, end: 0.6 }],
+          isFinal: true,
         },
       });
     });

@@ -131,7 +131,7 @@ const onboardingOptions = {
   cloudProviders: [
     {
       id: "elizacloud",
-      name: "Eliza Cloud",
+      name: "Milady Cloud",
       description: "Managed cloud runtime",
     },
   ],
@@ -161,7 +161,7 @@ const onboardingOptions = {
       rpcProviders: [
         {
           id: "elizacloud",
-          name: "Eliza Cloud",
+          name: "Milady Cloud",
           description: "Managed RPC",
           envKey: null,
           requiresKey: false,
@@ -175,7 +175,7 @@ const onboardingOptions = {
       rpcProviders: [
         {
           id: "elizacloud",
-          name: "Eliza Cloud",
+          name: "Milady Cloud",
           description: "Managed RPC",
           envKey: null,
           requiresKey: false,
@@ -739,7 +739,7 @@ export async function startMockApiServer(
         hasApiKey: false,
         userId: null,
         organizationId: null,
-        topUpUrl: "https://www.elizacloud.ai",
+        topUpUrl: "https://cloud.milady.ai",
       });
       return;
     }
@@ -749,7 +749,7 @@ export async function startMockApiServer(
         balance: null,
         low: false,
         critical: false,
-        topUpUrl: "https://www.elizacloud.ai",
+        topUpUrl: "https://cloud.milady.ai",
       });
       return;
     }

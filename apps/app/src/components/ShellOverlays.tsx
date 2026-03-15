@@ -12,6 +12,7 @@ import {
   RestartBanner,
   ShortcutsOverlay,
 } from "@milady/app-core/components";
+import { GlobalEmoteOverlay } from "./GlobalEmoteOverlay";
 
 export interface ActionNotice {
   text: string;
@@ -29,6 +30,7 @@ export function ShellOverlays({
       <RestartBanner />
       <BugReportModal />
       <ShortcutsOverlay />
+      <GlobalEmoteOverlay />
       {actionNotice && (
         <div
           className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-2 rounded-lg text-[13px] font-medium z-[10000] text-white ${

@@ -7,39 +7,40 @@ import { DatabaseView } from "./DatabaseView";
 import { MediaGalleryView } from "./MediaGalleryView";
 import { VectorBrowserView } from "./VectorBrowserView";
 
-const DB_TABS = [
-  { id: "tables" as const, label: "Tables" },
-  { id: "media" as const, label: "Media" },
-  { id: "vectors" as const, label: "Vectors" },
-];
-
 export function DatabasePageView() {
-  const { t } = useApp();
-  const { databaseSubTab, setState } = useApp();
+  const { t, databaseSubTab, setState } = useApp();
+  const dbTabs = [
+    {
+      id: "tables" as const,
+      label: t("databasepageview.Tables"),
+    },
+    {
+      id: "media" as const,
+      label: t("databasepageview.Media"),
+    },
+    {
+      id: "vectors" as const,
+      label: t("databasepageview.Vectors"),
+    },
+  ];
 
   return (
     <div className="flex flex-col h-full">
-      <h2 className="text-lg font-bold mb-1">
-        {t("databasepageview.Databases")}
-      </h2>
-      <p className="text-[13px] text-[var(--muted)] mb-4">
-        {t("databasepageview.BrowseAndQueryAge")}
-      </p>
 
       {/* Sub-tab bar */}
       <div className="flex gap-1 border-b border-[var(--border)] mb-5">
-        {DB_TABS.map((t) => (
+        {dbTabs.map((tab) => (
           <button
             type="button"
-            key={t.id}
+            key={tab.id}
             className={`px-4 py-2 text-[13px] bg-transparent border-0 border-b-2 cursor-pointer transition-colors ${
-              databaseSubTab === t.id
+              databaseSubTab === tab.id
                 ? "text-[var(--accent)] font-medium border-b-[var(--accent)]"
                 : "text-[var(--muted)] border-b-transparent hover:text-[var(--txt)]"
             }`}
-            onClick={() => setState("databaseSubTab", t.id)}
+            onClick={() => setState("databaseSubTab", tab.id)}
           >
-            {t.label}
+            {tab.label}
           </button>
         ))}
       </div>

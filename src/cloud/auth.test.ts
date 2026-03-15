@@ -1,5 +1,5 @@
 /**
- * Tests for cloud/auth.ts — the Eliza Cloud login flow.
+ * Tests for cloud/auth.ts — the Milady Cloud login flow.
  *
  * Exercises:
  *   - Session creation (success, HTTP errors)

@@ -1,6 +1,7 @@
 import type { IAgentRuntime } from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
 import {
+  DatabaseTrajectoryLogger,
   computeBySource,
   extractInsightsFromResponse,
   extractRows,
@@ -9,6 +10,7 @@ import {
   pruneOldTrajectories,
   pushChatExchange,
   readOrchestratorTrajectoryContext,
+  shouldEnableTrajectoryLoggingByDefault,
   shouldRunObservationExtraction,
   truncateField,
   truncateRecord,
@@ -51,6 +53,61 @@ function createRuntimeWithTrajectoryLogger(logger: Record<string, unknown>): {
   } as unknown as IAgentRuntime;
   return { runtime, dbExecute };
 }
+
+function withNodeEnv<T>(value: string | undefined, run: () => T): T {
+  const previous = process.env.NODE_ENV;
+  if (value === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = value;
+  try {
+    return run();
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previous;
+  }
+}
+
+describe("shouldEnableTrajectoryLoggingByDefault", () => {
+  it("defaults to enabled outside production", () => {
+    expect(withNodeEnv(undefined, () => shouldEnableTrajectoryLoggingByDefault()))
+      .toBe(true);
+    expect(
+      withNodeEnv("development", () => shouldEnableTrajectoryLoggingByDefault()),
+    ).toBe(true);
+    expect(withNodeEnv("test", () => shouldEnableTrajectoryLoggingByDefault())).toBe(
+      true,
+    );
+  });
+
+  it("defaults to disabled in production", () => {
+    expect(
+      withNodeEnv("production", () => shouldEnableTrajectoryLoggingByDefault()),
+    ).toBe(false);
+  });
+});
+
+describe("DatabaseTrajectoryLogger defaults", () => {
+  it("starts enabled outside production", () => {
+    const runtime = {
+      adapter: {},
+    } as unknown as IAgentRuntime;
+    const enabled = withNodeEnv("development", () => {
+      const logger = new DatabaseTrajectoryLogger(runtime);
+      return logger.isEnabled();
+    });
+    expect(enabled).toBe(true);
+  });
+
+  it("starts disabled in production", () => {
+    const runtime = {
+      adapter: {},
+    } as unknown as IAgentRuntime;
+    const enabled = withNodeEnv("production", () => {
+      const logger = new DatabaseTrajectoryLogger(runtime);
+      return logger.isEnabled();
+    });
+    expect(enabled).toBe(false);
+  });
+});
 
 describe("installDatabaseTrajectoryLogger", () => {
   it("patches legacy logger while preserving original handlers", async () => {
@@ -235,6 +292,23 @@ describe("installDatabaseTrajectoryLogger", () => {
     // Verify metadata contains orchestrator session/task info
     expect(insertSql).toContain("sess-42");
     expect(insertSql).toContain("implement feature X");
+  });
+
+  it("applies the production default when patching an enabled logger", () => {
+    const setEnabled = vi.fn();
+    const logger = {
+      listTrajectories: vi.fn(),
+      getTrajectoryDetail: vi.fn(),
+      logLlmCall: vi.fn(),
+      logProviderAccess: vi.fn(),
+      isEnabled: () => true,
+      setEnabled,
+    } as Record<string, unknown>;
+
+    const { runtime } = createRuntimeWithTrajectoryLogger(logger);
+    withNodeEnv("production", () => installDatabaseTrajectoryLogger(runtime));
+
+    expect(setEnabled).toHaveBeenCalledWith(false);
   });
 });
 

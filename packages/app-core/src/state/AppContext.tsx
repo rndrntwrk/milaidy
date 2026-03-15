@@ -42,6 +42,7 @@ import {
   type McpRegistryServerDetail,
   type McpServerConfig,
   type McpServerStatus,
+  MiladyClient,
   type MintResult,
   type OnboardingOptions,
   type PluginInfo,
@@ -87,6 +88,7 @@ import {
   normalizeSlashCommandName,
 } from "../chat";
 import { mapServerTasksToSessions } from "../coding";
+import { type AppEmoteEventDetail, dispatchAppEmoteEvent } from "../events";
 import {
   createTranslator,
   normalizeLanguage,
@@ -228,6 +230,100 @@ import {
   useConfirm,
   usePrompt,
 } from "../components/ConfirmModal";
+
+const GREETING_EMOTE_DELAY_MS = 1400;
+const GREETING_WAVE_EMOTE: AppEmoteEventDetail = {
+  emoteId: "wave",
+  path: "/animations/emotes/waving-both-hands.glb",
+  duration: 2.5,
+  loop: false,
+};
+
+function normalizeAppEmoteEvent(
+  data: Record<string, unknown>,
+): AppEmoteEventDetail | null {
+  const emoteId = typeof data.emoteId === "string" ? data.emoteId : null;
+  const path =
+    typeof data.path === "string"
+      ? data.path
+      : typeof data.glbPath === "string"
+        ? data.glbPath
+        : null;
+  if (!emoteId || !path) return null;
+  return {
+    emoteId,
+    path,
+    duration:
+      typeof data.duration === "number" && Number.isFinite(data.duration)
+        ? data.duration
+        : 3,
+    loop: data.loop === true,
+  };
+}
+
+function isPrivateNetworkHost(host: string): boolean {
+  if (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal")
+  ) {
+    return true;
+  }
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(host)) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeRemoteApiBaseInput(rawValue: string): string {
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    throw new Error("Enter a backend address.");
+  }
+  const hasScheme = /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(trimmed);
+  const hostGuess = trimmed.replace(/^[a-zA-Z][a-zA-Z\d+.-]*:\/\//, "");
+  const guessedHost = hostGuess.split("/")[0]?.replace(/:\d+$/, "") ?? "";
+  const defaultProtocol = isPrivateNetworkHost(guessedHost) ? "http" : "https";
+  const candidate = hasScheme ? trimmed : `${defaultProtocol}://${trimmed}`;
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw new Error("Enter a valid backend address.");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Remote backends must use http:// or https://.");
+  }
+  parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+  parsed.search = "";
+  parsed.hash = "";
+  return parsed.toString().replace(/\/+$/, "");
+}
+
+function loadSessionApiBase(): string {
+  if (typeof window === "undefined") return "";
+  return window.sessionStorage.getItem("milady_api_base")?.trim() ?? "";
+}
+
+function isRemoteApiBase(baseUrl: string): boolean {
+  if (!baseUrl || typeof window === "undefined") return false;
+  try {
+    const parsed = new URL(baseUrl);
+    return (
+      parsed.hostname !== window.location.hostname &&
+      parsed.hostname !== "localhost" &&
+      parsed.hostname !== "127.0.0.1" &&
+      parsed.hostname !== "::1"
+    );
+  } catch {
+    return false;
+  }
+}
 
 // ── Provider ───────────────────────────────────────────────────────────
 
@@ -612,7 +708,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const [onboardingStyle, setOnboardingStyle] = useState("");
   const [onboardingRunMode, setOnboardingRunMode] = useState<
-    "local-rawdog" | "local-sandbox" | "cloud" | ""
+    "local" | "cloud" | ""
   >("");
   const [onboardingCloudProvider, setOnboardingCloudProvider] = useState("");
   const [onboardingSmallModel, setOnboardingSmallModel] = useState(
@@ -623,6 +719,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   const [onboardingProvider, setOnboardingProvider] = useState("");
   const [onboardingApiKey, setOnboardingApiKey] = useState("");
+  const [onboardingRemoteApiBase, setOnboardingRemoteApiBase] =
+    useState(loadSessionApiBase);
+  const [onboardingRemoteToken, setOnboardingRemoteToken] = useState("");
+  const [onboardingRemoteConnecting, setOnboardingRemoteConnecting] =
+    useState(false);
+  const [onboardingRemoteError, setOnboardingRemoteError] = useState<
+    string | null
+  >(null);
+  const [onboardingRemoteConnected, setOnboardingRemoteConnected] = useState(
+    () => isRemoteApiBase(loadSessionApiBase()),
+  );
   const [onboardingOpenRouterModel, setOnboardingOpenRouterModel] =
     useState("");
   const [onboardingPrimaryModel, setOnboardingPrimaryModel] = useState("");
@@ -757,9 +864,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Guards against double-greeting when both init and state-transition paths fire. */
   const greetingFiredRef = useRef(false);
   const greetingInFlightConversationRef = useRef<string | null>(null);
+  const greetingEmoteTimerRef = useRef<number | null>(null);
   const chatAbortRef = useRef<AbortController | null>(null);
   /** Synchronous lock so same-tick chat submits cannot double-send. */
   const chatSendBusyRef = useRef(false);
+  const chatSendNonceRef = useRef(0);
   /** Synchronous lock for export action to prevent duplicate clicks in the same tick. */
   const exportBusyRef = useRef(false);
   /** Synchronous lock for import action to prevent duplicate clicks in the same tick. */
@@ -796,6 +905,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  const scheduleGreetingWave = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (greetingEmoteTimerRef.current != null) {
+      window.clearTimeout(greetingEmoteTimerRef.current);
+    }
+    greetingEmoteTimerRef.current = window.setTimeout(() => {
+      dispatchAppEmoteEvent(GREETING_WAVE_EMOTE);
+      greetingEmoteTimerRef.current = null;
+    }, GREETING_EMOTE_DELAY_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (greetingEmoteTimerRef.current != null) {
+        window.clearTimeout(greetingEmoteTimerRef.current);
+        greetingEmoteTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // ── Clipboard ──────────────────────────────────────────────────────
 
@@ -1485,6 +1614,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const data = await client.requestGreeting(convId, uiLanguage);
         if (data.text) {
           greetingFiredRef.current = true;
+          if (data.persisted === true) {
+            scheduleGreetingWave();
+          }
           if (activeConversationIdRef.current === convId) {
             setConversationMessages((prev: ConversationMessage[]) => {
               if (
@@ -1523,7 +1655,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return false;
     },
-    [uiLanguage],
+    [scheduleGreetingWave, uiLanguage],
   );
 
   const requestGreetingWhenRunning = useCallback(
@@ -1601,6 +1733,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const greetingText = greeting?.text?.trim() ?? "";
       if (greetingText) {
         greetingFiredRef.current = true;
+        if (greeting?.persisted === true) {
+          scheduleGreetingWave();
+        }
         setConversationMessages([
           {
             id: `greeting-${Date.now()}`,
@@ -1620,7 +1755,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.warn("[milady][chat:init] failed to hydrate conversations", err);
       return null;
     }
-  }, [uiLanguage]);
+  }, [scheduleGreetingWave, uiLanguage]);
 
   const handleStart = useCallback(async () => {
     if (!beginLifecycleAction("start")) return;
@@ -1847,6 +1982,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const greetingText = greeting?.text?.trim() ?? "";
         if (greetingText) {
           greetingFiredRef.current = true;
+          if (greeting?.persisted === true) {
+            scheduleGreetingWave();
+          }
           setConversationMessages([
             {
               id: `greeting-${Date.now()}`,
@@ -1869,7 +2007,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         /* ignore */
       }
     },
-    [requestGreetingWhenRunning, uiLanguage],
+    [requestGreetingWhenRunning, scheduleGreetingWave, uiLanguage],
   );
 
   const appendLocalCommandTurn = useCallback(
@@ -3382,9 +3520,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const systemPrompt = style?.system
       ? style.system.replace(/\{\{name\}\}/g, onboardingName)
       : `You are ${onboardingName}, an autonomous AI agent powered by elizaOS. ${onboardingOptions.sharedStyleRules}`;
-
-    // Default to local mode
-    const apiRunMode = "local";
+    const miladyCloudProvisioned =
+      onboardingRunMode === "cloud" &&
+      onboardingCloudProvider === "miladycloud" &&
+      !onboardingRemoteConnected;
+    const apiRunMode = miladyCloudProvisioned ? "cloud" : "local";
 
     onboardingFinishBusyRef.current = true;
     setOnboardingRestarting(true);
@@ -3400,9 +3540,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const rpcSel = onboardingRpcSelections as Record<string, string>;
       const rpcK = onboardingRpcKeys as Record<string, string>;
 
-      const defaultRpcProvider = miladyCloudConnected
-        ? "eliza-cloud"
-        : undefined;
+      const defaultRpcProvider =
+        miladyCloudProvisioned || miladyCloudConnected
+          ? "eliza-cloud"
+          : undefined;
       const evmProvider = rpcSel.evm || defaultRpcProvider;
       const bscProvider = rpcSel.bsc || defaultRpcProvider;
       const solanaProvider = rpcSel.solana || defaultRpcProvider;
@@ -3431,13 +3572,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       await client.submitOnboarding({
         name: onboardingName,
-        runMode: apiRunMode as "local" | "cloud",
-        // Sandbox mode is unconditionally disabled: the simplified 6-step
-        // linear onboarding no longer offers run-mode choices (local-rawdog,
-        // local-sandbox, cloud). The Docker-based "local-sandbox" execution
-        // path was the only consumer of sandbox isolation; with that path
-        // removed, sandbox provides no additional protection and "off" is
-        // the correct default.
+        runMode: apiRunMode,
         sandboxMode: "off" as const,
         bio: style?.bio ?? ["An autonomous AI agent."],
         systemPrompt,
@@ -3446,9 +3581,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         topics: style?.topics,
         postExamples: style?.postExamples,
         messageExamples: style?.messageExamples,
-        provider: onboardingProvider || undefined,
+        cloudProvider: miladyCloudProvisioned
+          ? onboardingCloudProvider
+          : undefined,
+        smallModel: miladyCloudProvisioned
+          ? onboardingSmallModel.trim() || undefined
+          : undefined,
+        largeModel: miladyCloudProvisioned
+          ? onboardingLargeModel.trim() || undefined
+          : undefined,
+        provider:
+          apiRunMode === "local" ? onboardingProvider || undefined : undefined,
         providerApiKey: onboardingApiKey || undefined,
-        primaryModel: onboardingPrimaryModel.trim() || undefined,
+        primaryModel:
+          apiRunMode === "local"
+            ? onboardingPrimaryModel.trim() || undefined
+            : undefined,
         inventoryProviders:
           inventoryProviders.length > 0 ? inventoryProviders : undefined,
       });
@@ -3479,8 +3627,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingOptions,
     onboardingStyle,
     onboardingName,
+    onboardingRunMode,
+    onboardingCloudProvider,
+    onboardingSmallModel,
+    onboardingLargeModel,
     onboardingProvider,
     onboardingApiKey,
+    onboardingRemoteConnected,
     onboardingPrimaryModel,
     onboardingRpcSelections,
     onboardingRpcKeys,
@@ -3581,6 +3734,69 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setOnboardingStep(STEP_ORDER[currentIndex - 1]);
     }
   }, [onboardingStep]);
+
+  const handleOnboardingUseLocalBackend = useCallback(() => {
+    client.setBaseUrl(null);
+    client.setToken(null);
+    setOnboardingRemoteConnecting(false);
+    setOnboardingRemoteError(null);
+    setOnboardingRemoteConnected(false);
+    setOnboardingRemoteApiBase("");
+    setOnboardingRemoteToken("");
+    setOnboardingCloudProvider("");
+    setOnboardingRunMode("");
+    retryStartup();
+  }, [retryStartup]);
+
+  const handleOnboardingRemoteConnect = useCallback(async () => {
+    if (onboardingRemoteConnecting) return;
+    let normalizedBase = "";
+    try {
+      normalizedBase = normalizeRemoteApiBaseInput(onboardingRemoteApiBase);
+    } catch (err) {
+      setOnboardingRemoteError(
+        err instanceof Error ? err.message : "Enter a valid backend address.",
+      );
+      return;
+    }
+
+    const accessKey = onboardingRemoteToken.trim();
+    const probe = new MiladyClient(normalizedBase, accessKey || undefined);
+    setOnboardingRemoteConnecting(true);
+    setOnboardingRemoteError(null);
+    try {
+      const auth = await probe.getAuthStatus();
+      if (auth.required && !accessKey) {
+        throw new Error("This backend requires an access key.");
+      }
+      await probe.getOnboardingStatus();
+      client.setBaseUrl(normalizedBase);
+      client.setToken(accessKey || null);
+      setOnboardingRunMode("cloud");
+      setOnboardingCloudProvider("remote");
+      setOnboardingRemoteApiBase(normalizedBase);
+      setOnboardingRemoteToken(accessKey);
+      setOnboardingRemoteConnected(true);
+      setActionNotice("Connected to remote Milady backend.", "success", 4200);
+      retryStartup();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to reach remote backend.";
+      const normalizedMessage =
+        /401|unauthorized|forbidden/i.test(message) && accessKey
+          ? "Access key rejected. Check the address and try again."
+          : message;
+      setOnboardingRemoteError(normalizedMessage);
+    } finally {
+      setOnboardingRemoteConnecting(false);
+    }
+  }, [
+    onboardingRemoteApiBase,
+    onboardingRemoteConnecting,
+    onboardingRemoteToken,
+    retryStartup,
+    setActionNotice,
+  ]);
 
   // ── Cloud ──────────────────────────────────────────────────────────
 
@@ -3880,6 +4096,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         onboardingLargeModel: setOnboardingLargeModel,
         onboardingProvider: setOnboardingProvider,
         onboardingApiKey: setOnboardingApiKey,
+        onboardingRemoteApiBase: setOnboardingRemoteApiBase,
+        onboardingRemoteToken: setOnboardingRemoteToken,
+        onboardingRemoteConnecting: setOnboardingRemoteConnecting,
+        onboardingRemoteError: setOnboardingRemoteError,
+        onboardingRemoteConnected: setOnboardingRemoteConnected,
         onboardingSelectedChains: setOnboardingSelectedChains,
         onboardingRpcSelections: setOnboardingRpcSelections,
         onboardingOpenRouterModel: setOnboardingOpenRouterModel,
@@ -3967,6 +4188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let unbindStatus: (() => void) | null = null;
     let unbindAgentEvents: (() => void) | null = null;
     let unbindHeartbeatEvents: (() => void) | null = null;
+    let unbindEmotes: (() => void) | null = null;
     let unbindProactiveMessages: (() => void) | null = null;
     let handleVisibilityRef: (() => void) | null = null;
     let unbindWsReconnect: (() => void) | null = null;
@@ -4272,6 +4494,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       // Connect WebSocket
       client.connectWs();
+
+      unbindEmotes = client.onWsEvent(
+        "emote",
+        (data: Record<string, unknown>) => {
+          const emote = normalizeAppEmoteEvent(data);
+          if (emote) {
+            dispatchAppEmoteEvent(emote);
+          }
+        },
+      );
 
       // Re-hydrate PTY sessions on WS reconnect — events sent during
       // the disconnect gap are lost, so we reconcile from the server.
@@ -4710,6 +4942,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unbindStatus?.();
       unbindAgentEvents?.();
       unbindHeartbeatEvents?.();
+      unbindEmotes?.();
       unbindProactiveMessages?.();
       unbindWsReconnect?.();
       unbindSystemWarnings?.();
@@ -4952,6 +5185,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingLargeModel,
     onboardingProvider,
     onboardingApiKey,
+    onboardingRemoteApiBase,
+    onboardingRemoteToken,
+    onboardingRemoteConnecting,
+    onboardingRemoteError,
+    onboardingRemoteConnected,
     onboardingOpenRouterModel,
     onboardingPrimaryModel,
     onboardingTelegramToken,
@@ -5079,6 +5317,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     handleCharacterMessageExamplesInput,
     handleOnboardingNext,
     handleOnboardingBack,
+    handleOnboardingRemoteConnect,
+    handleOnboardingUseLocalBackend,
     handleCloudLogin,
     handleCloudDisconnect,
     loadUpdateStatus,

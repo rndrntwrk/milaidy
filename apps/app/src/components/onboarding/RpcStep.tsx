@@ -8,6 +8,9 @@ export function RpcStep() {
     miladyCloudConnected,
     miladyCloudLoginBusy,
     miladyCloudLoginError,
+    onboardingRunMode,
+    onboardingCloudProvider,
+    onboardingApiKey,
     handleCloudLogin,
     handleOnboardingNext,
     handleOnboardingBack,
@@ -16,9 +19,12 @@ export function RpcStep() {
     t,
   } = useApp();
 
-  const [mode, setMode] = useState<RpcMode>(
-    miladyCloudConnected ? "cloud" : "",
-  );
+  const miladyCloudReady =
+    miladyCloudConnected ||
+    (onboardingRunMode === "cloud" &&
+      onboardingCloudProvider === "miladycloud" &&
+      onboardingApiKey.trim().length > 0);
+  const [mode, setMode] = useState<RpcMode>(miladyCloudReady ? "cloud" : "");
 
   const rpcKeys = onboardingRpcKeys as Record<string, string>;
 
@@ -169,11 +175,13 @@ export function RpcStep() {
                 type="button"
                 className="onboarding-confirm-btn"
                 onClick={handleCloudLogin}
-                disabled={miladyCloudLoginBusy}
+                disabled={miladyCloudLoginBusy || miladyCloudReady}
               >
                 {miladyCloudLoginBusy
                   ? t("onboarding.connecting")
-                  : t("onboarding.connectAccount")}
+                  : miladyCloudReady
+                    ? t("onboarding.connected")
+                    : t("onboarding.connectAccount")}
               </button>
               {miladyCloudLoginError &&
                 (() => {
@@ -239,7 +247,7 @@ export function RpcStep() {
               });
               void handleOnboardingNext();
             }}
-            disabled={!miladyCloudConnected}
+            disabled={!miladyCloudReady}
             type="button"
           >
             {t("onboarding.next") ?? "Next"}

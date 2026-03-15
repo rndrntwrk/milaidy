@@ -29,7 +29,7 @@ function normalizeOpenAICallbackInput(input: string):
   if (!trimmed) {
     return {
       ok: false,
-      error: "Paste the callback URL from the localhost:1455 page.",
+      error: "subscriptionstatus.PasteCallbackUrlFromLocalhost",
     };
   }
 
@@ -41,7 +41,7 @@ function normalizeOpenAICallbackInput(input: string):
   // Allow raw codes in addition to full callback URLs.
   if (!normalized.includes("://")) {
     if (normalized.length > 4096) {
-      return { ok: false, error: "Callback code is too long." };
+      return { ok: false, error: "subscriptionstatus.CallbackCodeTooLong" };
     }
     return { ok: true, code: normalized };
   }
@@ -50,7 +50,7 @@ function normalizeOpenAICallbackInput(input: string):
   try {
     parsed = new URL(normalized);
   } catch {
-    return { ok: false, error: "Invalid callback URL." };
+    return { ok: false, error: "subscriptionstatus.InvalidCallbackUrl" };
   }
 
   const hostOk =
@@ -60,12 +60,15 @@ function normalizeOpenAICallbackInput(input: string):
     parsed.port !== "1455" ||
     parsed.pathname !== "/auth/callback"
   ) {
-    return { ok: false, error: "Expected a localhost:1455/auth/callback URL." };
+    return {
+      ok: false,
+      error: "subscriptionstatus.ExpectedCallbackUrl",
+    };
   }
   if (!parsed.searchParams.get("code")) {
     return {
       ok: false,
-      error: "Callback URL is missing the ?code= parameter.",
+      error: "subscriptionstatus.CallbackUrlMissingCode",
     };
   }
   return { ok: true, code: normalized };
@@ -148,7 +151,7 @@ export function SubscriptionStatus({
         setupTokenRef.current.trim(),
       );
       if (!result.success) {
-        setAnthropicError("Failed to save setup token.");
+        setAnthropicError(t("subscriptionstatus.FailedToSaveSetupToken"));
         return;
       }
       setSetupTokenSuccess(true);
@@ -158,11 +161,15 @@ export function SubscriptionStatus({
       await client.restartAgent();
       setTimeout(() => setSetupTokenSuccess(false), 2000);
     } catch (err) {
-      setAnthropicError(`Failed to save token: ${formatRequestError(err)}`);
+      setAnthropicError(
+        t("subscriptionstatus.FailedToSaveTokenError", {
+          message: formatRequestError(err),
+        }),
+      );
     } finally {
       setSetupTokenSaving(false);
     }
-  }, [handleSelectSubscription, loadSubscriptionStatus, setTimeout]);
+  }, [handleSelectSubscription, loadSubscriptionStatus, setTimeout, t]);
 
   const handleDisconnectSubscription = useCallback(
     async (providerId: string) => {
@@ -187,14 +194,16 @@ export function SubscriptionStatus({
         }
         await client.restartAgent();
       } catch (err) {
-        const msg = `Disconnect failed: ${formatRequestError(err)}`;
+        const msg = t("subscriptionstatus.DisconnectFailedError", {
+          message: formatRequestError(err),
+        });
         if (providerId === "anthropic-subscription") setAnthropicError(msg);
         if (providerId === "openai-subscription") setOpenaiError(msg);
       } finally {
         setSubscriptionDisconnecting(null);
       }
     },
-    [loadSubscriptionStatus, setAnthropicConnected, setOpenaiConnected],
+    [loadSubscriptionStatus, setAnthropicConnected, setOpenaiConnected, t],
   );
 
   const handleAnthropicStart = useCallback(async () => {
@@ -206,11 +215,15 @@ export function SubscriptionStatus({
         setAnthropicOAuthStarted(true);
         return;
       }
-      setAnthropicError("Failed to get auth URL");
+      setAnthropicError(t("subscriptionstatus.FailedToGetAuthUrl"));
     } catch (err) {
-      setAnthropicError(`Failed to start login: ${formatRequestError(err)}`);
+      setAnthropicError(
+        t("subscriptionstatus.FailedToStartLogin", {
+          message: formatRequestError(err),
+        }),
+      );
     }
-  }, []);
+  }, [t]);
 
   const handleAnthropicExchange = useCallback(async () => {
     const code = anthropicCodeRef.current.trim();
@@ -229,14 +242,18 @@ export function SubscriptionStatus({
         await client.restartAgent();
         return;
       }
-      setAnthropicError(result.error ?? "Exchange failed");
+      setAnthropicError(result.error ?? t("subscriptionstatus.ExchangeFailed"));
     } catch (err) {
-      setAnthropicError(`Exchange failed: ${formatRequestError(err)}`);
+      setAnthropicError(
+        t("subscriptionstatus.ExchangeFailedError", {
+          message: formatRequestError(err),
+        }),
+      );
     } finally {
       anthropicExchangeBusyRef.current = false;
       setAnthropicExchangeBusy(false);
     }
-  }, [handleSelectSubscription, loadSubscriptionStatus, setAnthropicConnected]);
+  }, [handleSelectSubscription, loadSubscriptionStatus, setAnthropicConnected, t]);
 
   const handleOpenAIStart = useCallback(async () => {
     setOpenaiError("");
@@ -247,17 +264,21 @@ export function SubscriptionStatus({
         setOpenaiOAuthStarted(true);
         return;
       }
-      setOpenaiError("No auth URL returned from login");
+      setOpenaiError(t("subscriptionstatus.NoAuthUrlReturned"));
     } catch (err) {
-      setOpenaiError(`Failed to start login: ${formatRequestError(err)}`);
+      setOpenaiError(
+        t("subscriptionstatus.FailedToStartLogin", {
+          message: formatRequestError(err),
+        }),
+      );
     }
-  }, []);
+  }, [t]);
 
   const handleOpenAIExchange = useCallback(async () => {
     if (openaiExchangeBusyRef.current) return;
     const normalized = normalizeOpenAICallbackInput(openaiCallbackRef.current);
     if (!normalized.ok) {
-      setOpenaiError(normalized.error);
+      setOpenaiError(t(normalized.error));
       return;
     }
 
@@ -275,20 +296,20 @@ export function SubscriptionStatus({
         await client.restartAgent();
         return;
       }
-      const msg = data.error ?? "Exchange failed";
+      const msg = data.error ?? t("subscriptionstatus.ExchangeFailed");
       setOpenaiError(
         msg.includes("No active flow")
-          ? "Login session expired. Click 'Start Over' and try again."
+          ? t("onboarding.loginSessionExpired")
           : msg,
       );
     } catch (err) {
       console.warn("[milady] OpenAI exchange failed", err);
-      setOpenaiError("Network error — check your connection and try again.");
+      setOpenaiError(t("onboarding.networkError"));
     } finally {
       openaiExchangeBusyRef.current = false;
       setOpenaiExchangeBusy(false);
     }
-  }, [handleSelectSubscription, loadSubscriptionStatus, setOpenaiConnected]);
+  }, [handleSelectSubscription, loadSubscriptionStatus, setOpenaiConnected, t]);
 
   return (
     <div className="mt-4 pt-4 border-t border-[var(--border)]">
@@ -306,8 +327,8 @@ export function SubscriptionStatus({
               />
               <span className="text-xs font-semibold">
                 {anthropicConnected
-                  ? "Connected to Claude Subscription"
-                  : "Claude Subscription"}
+                  ? t("subscriptionstatus.ConnectedToClaudeSubscription")
+                  : t("subscriptionstatus.ClaudeSubscriptionTitle")}
               </span>
             </div>
             {anthropicConnected && (
@@ -323,8 +344,8 @@ export function SubscriptionStatus({
                 }
               >
                 {subscriptionDisconnecting === "anthropic-subscription"
-                  ? "Disconnecting..."
-                  : "Disconnect"}
+                  ? t("subscriptionstatus.Disconnecting")
+                  : t("subscriptionstatus.Disconnect")}
               </Button>
             )}
           </div>
@@ -381,9 +402,7 @@ export function SubscriptionStatus({
                 className="bg-card text-xs font-mono"
               />
               <div className="text-[11px] text-[var(--muted)] mt-2 whitespace-pre-line">
-                {
-                  'How to get your setup token:\n\n• Option A: Run  claude setup-token  in your terminal (if you have Claude Code CLI installed)\n\n• Option B: Go to claude.ai/settings/api → "Claude Code" → "Use setup token"'
-                }
+                {t("onboarding.setupTokenInstructions")}
               </div>
               {anthropicError && (
                 <div className="text-[11px] text-[var(--danger,#e74c3c)] mt-2">
@@ -398,7 +417,9 @@ export function SubscriptionStatus({
                   disabled={setupTokenSaving || !setupTokenValue.trim()}
                   onClick={() => void handleSaveSetupToken()}
                 >
-                  {setupTokenSaving ? "Saving..." : "Save Token"}
+                  {setupTokenSaving
+                    ? t("subscriptionstatus.Saving")
+                    : t("subscriptionstatus.SaveToken")}
                 </Button>
                 <div className="flex items-center gap-2">
                   {setupTokenSaving && (
@@ -465,7 +486,9 @@ export function SubscriptionStatus({
                   disabled={anthropicExchangeBusy || !anthropicCode.trim()}
                   onClick={() => void handleAnthropicExchange()}
                 >
-                  {anthropicExchangeBusy ? "Connecting..." : "Connect"}
+                  {anthropicExchangeBusy
+                    ? t("onboarding.connecting")
+                    : t("onboarding.connect")}
                 </Button>
                 <Button
                   variant="outline"
@@ -498,8 +521,8 @@ export function SubscriptionStatus({
               />
               <span className="text-xs font-semibold">
                 {openaiConnected
-                  ? "Connected to ChatGPT Subscription"
-                  : "ChatGPT Subscription"}
+                  ? t("subscriptionstatus.ConnectedToChatGPTSubscription")
+                  : t("subscriptionstatus.ChatGPTSubscriptionTitle")}
               </span>
             </div>
             {openaiConnected && (
@@ -513,8 +536,8 @@ export function SubscriptionStatus({
                 disabled={subscriptionDisconnecting === "openai-subscription"}
               >
                 {subscriptionDisconnecting === "openai-subscription"
-                  ? "Disconnecting..."
-                  : "Disconnect"}
+                  ? t("subscriptionstatus.Disconnecting")
+                  : t("subscriptionstatus.Disconnect")}
               </Button>
             )}
           </div>
@@ -575,7 +598,9 @@ export function SubscriptionStatus({
                   disabled={openaiExchangeBusy || !openaiCallbackUrl.trim()}
                   onClick={() => void handleOpenAIExchange()}
                 >
-                  {openaiExchangeBusy ? "Completing..." : "Complete Login"}
+                  {openaiExchangeBusy
+                    ? t("subscriptionstatus.Completing")
+                    : t("onboarding.completeLogin")}
                 </Button>
                 <Button
                   variant="outline"

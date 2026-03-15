@@ -115,8 +115,11 @@ describe("ChatView game-modal variant", () => {
     mockUseVoiceChat.mockReturnValue({
       supported: true,
       isListening: false,
+      captureMode: "idle",
       interimTranscript: "",
       toggleListening: vi.fn(),
+      startListening: vi.fn(),
+      stopListening: vi.fn(),
       mouthOpen: 0,
       isSpeaking: false,
       usingAudioAnalysis: false,
