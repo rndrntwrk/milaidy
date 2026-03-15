@@ -1,8 +1,14 @@
 import { LanguageDropdown } from "@milady/app-core/components";
 import type { UiLanguage } from "@milady/app-core/i18n";
 import { normalizeLanguage } from "@milady/app-core/i18n";
-import { getVrmPreviewUrl, getVrmUrl, useApp } from "@milady/app-core/state";
+import {
+  applyUiTheme,
+  getVrmPreviewUrl,
+  getVrmUrl,
+  useApp,
+} from "@milady/app-core/state";
 import { resolveAppAssetUrl } from "@milady/app-core/utils";
+import { useEffect } from "react";
 import { VrmStage } from "./companion/VrmStage";
 import { ActivateStep } from "./onboarding/ActivateStep";
 import { ConnectionStep } from "./onboarding/ConnectionStep";
@@ -19,6 +25,7 @@ export function OnboardingWizard() {
     selectedVrmIndex,
     customVrmUrl,
     uiLanguage,
+    uiTheme,
     setState,
     t,
   } = useApp();
@@ -37,6 +44,14 @@ export function OnboardingWizard() {
       ? getVrmPreviewUrl(safeSelectedVrmIndex)
       : getVrmPreviewUrl(1);
   const worldUrl = resolveAppAssetUrl("worlds/companion-day.spz");
+
+  useEffect(() => {
+    // Onboarding keeps a fixed "light" chrome; companion mode owns day/night scenes.
+    applyUiTheme("light");
+    return () => {
+      applyUiTheme(uiTheme);
+    };
+  }, [uiTheme]);
 
   function renderStep() {
     switch (onboardingStep) {

@@ -1,50 +1,67 @@
 /**
- * Portfolio header block: total USD value, native gas-token sub-balance,
- * receive button, address, status dots, and inline chain error.
+ * Portfolio header block: total USD value, selected chain badge,
+ * optional native balance, wallet addresses, status dots, and scoped alerts.
  */
 
 import { useApp } from "@milady/app-core/state";
 import { Button } from "@milady/ui";
-import type { ChainConfig } from "../chainConfig";
 import { CopyableAddress } from "./CopyableAddress";
-import { BSC_GAS_READY_THRESHOLD, formatBalance } from "./constants";
+import { formatBalance } from "./constants";
 import { StatusDot } from "./StatusDot";
+
+export interface PortfolioAddressItem {
+  label: string;
+  address: string;
+}
+
+export interface PortfolioStatusItem {
+  ready: boolean;
+  label: string;
+  title?: string;
+}
+
+export interface PortfolioInlineError {
+  message: string;
+  retryTitle?: string;
+}
+
+export interface PortfolioWarning {
+  title: string;
+  body: string;
+  actionLabel: string;
+}
 
 export interface PortfolioHeaderProps {
   totalUsd: number;
-  bscNativeBalance: string | null;
-  evmAddr: string | null;
-  walletReady: boolean;
-  rpcReady: boolean;
-  gasReady: boolean;
-  bscChainError: string | null;
-  hasManagedBscRpc: boolean;
+  networkLabel: string;
+  nativeBalance: string | null;
+  nativeSymbol: string | null;
+  receiveAddress: string | null;
+  receiveTitle?: string;
+  addresses: PortfolioAddressItem[];
+  statuses: PortfolioStatusItem[];
+  inlineError?: PortfolioInlineError | null;
+  warning?: PortfolioWarning | null;
   loadBalances: () => Promise<void> | void;
   goToRpcSettings: () => void;
-  /** Optional chain config — when provided, displays that chain's name/symbol instead of BSC defaults. */
-  chainConfig?: ChainConfig;
 }
 
 export function PortfolioHeader({
   totalUsd,
-  bscNativeBalance,
-  evmAddr,
-  walletReady,
-  rpcReady,
-  gasReady,
-  bscChainError,
-  hasManagedBscRpc,
+  networkLabel,
+  nativeBalance,
+  nativeSymbol,
+  receiveAddress,
+  receiveTitle,
+  addresses,
+  statuses,
+  inlineError,
+  warning,
   loadBalances,
   goToRpcSettings,
-  chainConfig,
 }: PortfolioHeaderProps) {
   const { t, copyToClipboard, setActionNotice } = useApp();
-  const networkLabel = chainConfig
-    ? `${chainConfig.name} Mainnet`
-    : t("wallet.bscMainnet");
-  const nativeSymbol = chainConfig?.nativeSymbol ?? "BNB";
-  const gasThreshold =
-    chainConfig?.gasReadyThreshold ?? BSC_GAS_READY_THRESHOLD;
+
   return (
     <div className="wt__portfolio">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -53,112 +70,89 @@ export function PortfolioHeader({
             <div className="wt__portfolio-label">{t("wallet.portfolio")}</div>
             <span className="wt__network-badge">{networkLabel}</span>
           </div>
-          <div className="wt__portfolio-value" data-testid="bsc-balance-value">
+          <div
+            className="wt__portfolio-value"
+            data-testid="wallet-balance-value"
+          >
             {totalUsd > 0
               ? `$${totalUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               : "$0.00"}
           </div>
-          {bscNativeBalance !== null && (
+          {nativeBalance !== null && nativeSymbol && (
             <div className="wt__bnb-sub">
-              {formatBalance(bscNativeBalance)} {nativeSymbol}
+              {formatBalance(nativeBalance)} {nativeSymbol}
             </div>
           )}
         </div>
+
         <div className="flex flex-col items-end gap-2">
-          {evmAddr && (
+          {receiveAddress && (
             <Button
               variant="outline"
               size="sm"
               className="wt__receive-btn h-8 px-3 shadow-sm"
               onClick={() => {
-                void copyToClipboard(evmAddr);
+                void copyToClipboard(receiveAddress);
                 setActionNotice(t("wallet.addressCopied"), "success", 2400);
               }}
-              title={evmAddr}
+              title={receiveTitle ?? receiveAddress}
             >
               {t("wallet.receive")}
             </Button>
           )}
-          {evmAddr && (
-            <CopyableAddress address={evmAddr} onCopy={copyToClipboard} />
+
+          {addresses.length > 0 && (
+            <div className="flex flex-col items-end gap-1.5">
+              {addresses.map((item) => (
+                <div
+                  key={`${item.label}-${item.address}`}
+                  className="flex items-center gap-2"
+                >
+                  <span className="text-[10px] uppercase tracking-wide text-muted">
+                    {item.label}
+                  </span>
+                  <CopyableAddress
+                    address={item.address}
+                    onCopy={copyToClipboard}
+                  />
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
+
       <div className="wt__status-row mt-2">
-        <StatusDot
-          ready={walletReady}
-          label={
-            walletReady
-              ? t("wallet.status.connected")
-              : t("wallet.status.noWallet")
-          }
-          title={
-            walletReady
-              ? t("wallet.status.connectedTitle")
-              : t("wallet.status.noWalletTitle")
-          }
-        />
-        <StatusDot
-          ready={rpcReady}
-          label={
-            rpcReady
-              ? t("wallet.status.feedLive")
-              : t("wallet.status.feedOffline")
-          }
-          title={
-            rpcReady
-              ? t("wallet.status.feedLiveTitle")
-              : bscChainError
-                ? t("wallet.status.feedErrorTitle", {
-                    error: bscChainError,
-                  })
-                : t("wallet.status.feedOfflineTitle")
-          }
-        />
-        <StatusDot
-          ready={gasReady}
-          label={
-            gasReady
-              ? t("wallet.status.tradeReady")
-              : t("wallet.status.tradeNotReady")
-          }
-          title={
-            gasReady
-              ? t("wallet.status.tradeReadyTitle")
-              : rpcReady
-                ? t("wallet.status.tradeNeedGasTitle", {
-                    threshold: gasThreshold,
-                  })
-                : t("wallet.status.tradeFeedRequired")
-          }
-        />
+        {statuses.map((status) => (
+          <StatusDot
+            key={status.label}
+            ready={status.ready}
+            label={status.label}
+            title={status.title}
+          />
+        ))}
       </div>
-      {/* Inline BSC error with retry */}
-      {bscChainError && (
+
+      {inlineError?.message && (
         <div className="wt__error-inline mt-2">
-          <span className="wt__error-inline-text">
-            {t("portfolioheader.BSC")} {bscChainError}
-          </span>
+          <span className="wt__error-inline-text">{inlineError.message}</span>
           <Button
             variant="ghost"
             size="sm"
             className="wt__error-retry h-7 px-2 shadow-sm"
             onClick={() => void loadBalances()}
-            title={t("wallet.retryFetchingBsc")}
+            title={inlineError.retryTitle ?? t("common.retry")}
           >
             {t("common.retry")}
           </Button>
         </div>
       )}
 
-      {/* BSC trade requires a dedicated RPC endpoint */}
-      {evmAddr && !hasManagedBscRpc && (
+      {warning && (
         <div className="mt-2 px-3 py-2 border border-[rgba(184,134,11,0.55)] bg-[rgba(184,134,11,0.08)] text-[11px]">
-          <div className="font-bold mb-1">
-            {t("wallet.setup.rpcNotConfigured")}
-          </div>
+          <div className="font-bold mb-1">{warning.title}</div>
           <div className="text-[var(--muted)] leading-relaxed">
-            {t("portfolioheader.ConnectViaElizaCl")}
+            {warning.body}
           </div>
           <div className="mt-2">
             <Button
@@ -167,7 +161,7 @@ export function PortfolioHeader({
               className="h-8 px-3 text-[11px] font-mono shadow-sm"
               onClick={goToRpcSettings}
             >
-              {t("portfolioheader.ConfigureRPC")}
+              {warning.actionLabel}
             </Button>
           </div>
         </div>

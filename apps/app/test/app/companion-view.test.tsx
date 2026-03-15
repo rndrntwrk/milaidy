@@ -3,9 +3,10 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockUseApp } = vi.hoisted(() => ({
-  mockUseApp: vi.fn(),
-}));
+const mockUseApp = vi.fn();
+const viewerPropsRef: { current: null | Record<string, unknown> } = {
+  current: null,
+};
 
 vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
@@ -18,7 +19,10 @@ vi.mock("@milady/app-core/state", () => ({
 }));
 
 vi.mock("../../src/components/avatar/VrmViewer", () => ({
-  VrmViewer: () => React.createElement("div", null, "VrmViewer"),
+  VrmViewer: (props: Record<string, unknown>) => {
+    viewerPropsRef.current = props;
+    return React.createElement("div", null, "VrmViewer");
+  },
 }));
 
 vi.mock("../../src/components/ChatModalView.js", () => ({
@@ -52,6 +56,7 @@ import { CompanionView } from "../../src/components/CompanionView";
 function createContext() {
   return {
     t: (k: string) => k,
+    chatMode: "simple",
     setState: vi.fn(),
     selectedVrmIndex: 1,
     customVrmUrl: "",
@@ -168,6 +173,7 @@ describe("CompanionView", () => {
   const originalLocalStorage = globalThis.localStorage;
 
   beforeEach(() => {
+    viewerPropsRef.current = null;
     const storage = new Map<string, string>();
     Object.defineProperty(globalThis, "localStorage", {
       value: {
@@ -211,6 +217,7 @@ describe("CompanionView", () => {
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(document, "activeElement");
     Object.defineProperty(globalThis, "window", {
       value: originalWindow,
       configurable: true,
@@ -235,5 +242,277 @@ describe("CompanionView", () => {
     expect(content).toContain("VrmViewer");
     // Should render the mock ChatModalView text
     expect(content).toContain("ChatModalView");
+  });
+
+  it("renders the companion fast/pro toggle and updates chatMode", async () => {
+    const context = createContext();
+    mockUseApp.mockReturnValue(context);
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+    });
+
+    expect(
+      tree?.root.findByProps({ "data-testid": "chat-mode-toggle-companion" }),
+    ).toBeDefined();
+
+    const proButton = tree?.root.findByProps({
+      "data-testid": "chat-mode-pro-companion",
+    });
+
+    await act(async () => {
+      proButton?.props.onClick?.();
+    });
+
+    expect(context.setState).toHaveBeenCalledWith("chatMode", "power");
+  });
+
+  it("orbits the companion camera from shell drag and resets on release", async () => {
+    mockUseApp.mockReturnValue(createContext());
+
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+    });
+
+    const setDragOrbitTarget = vi.fn();
+    const resetDragOrbit = vi.fn();
+    const setCompanionZoomNormalized = vi.fn();
+    await act(async () => {
+      const ready = viewerPropsRef.current?.onEngineReady as
+        | ((value: unknown) => void)
+        | undefined;
+      ready?.({
+        setCameraAnimation: vi.fn(),
+        setPointerParallaxEnabled: vi.fn(),
+        setDragOrbitTarget,
+        resetDragOrbit,
+        setCompanionZoomNormalized,
+      });
+    });
+
+    expect(tree).not.toBeNull();
+    const dragLayer = tree?.root.findByProps({
+      "data-testid": "companion-camera-drag-surface",
+    });
+    const currentTarget = {
+      setPointerCapture: vi.fn(),
+      releasePointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => true),
+      clientWidth: 1440,
+      clientHeight: 900,
+    };
+    const preventDefault = vi.fn();
+
+    await act(async () => {
+      dragLayer.props.onPointerDownCapture({
+        target: document.createElement("div"),
+        currentTarget,
+        pointerId: 7,
+        clientX: 200,
+        clientY: 300,
+      });
+      dragLayer.props.onPointerMoveCapture({
+        target: document.createElement("div"),
+        currentTarget,
+        pointerId: 7,
+        clientX: 560,
+        clientY: 120,
+        preventDefault,
+      });
+      dragLayer.props.onPointerUpCapture({
+        target: document.createElement("div"),
+        currentTarget,
+        pointerId: 7,
+      });
+    });
+
+    expect(currentTarget.setPointerCapture).toHaveBeenCalledWith(7);
+    expect(setDragOrbitTarget).toHaveBeenCalledTimes(1);
+    const [yaw, pitch] = setDragOrbitTarget.mock.calls[0];
+    expect(yaw).toBeCloseTo(0.3375);
+    expect(pitch).toBeCloseTo(0.17);
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(resetDragOrbit).toHaveBeenCalledTimes(1);
+    expect(currentTarget.releasePointerCapture).toHaveBeenCalledWith(7);
+  });
+
+  it("zooms the companion camera from root wheel input, including over overlay UI", async () => {
+    mockUseApp.mockReturnValue(createContext());
+
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+    });
+
+    const setCompanionZoomNormalized = vi.fn();
+    await act(async () => {
+      const ready = viewerPropsRef.current?.onEngineReady as
+        | ((value: unknown) => void)
+        | undefined;
+      ready?.({
+        setCameraAnimation: vi.fn(),
+        setPointerParallaxEnabled: vi.fn(),
+        setDragOrbitTarget: vi.fn(),
+        resetDragOrbit: vi.fn(),
+        setCompanionZoomNormalized,
+      });
+    });
+
+    expect(tree).not.toBeNull();
+    const root = tree?.root.findByProps({
+      "data-testid": "companion-root",
+    });
+    const preventDefault = vi.fn();
+
+    await act(async () => {
+      root?.props.onWheelCapture({
+        deltaY: -120,
+        deltaMode: 0,
+        preventDefault,
+      });
+    });
+
+    expect(setCompanionZoomNormalized).toHaveBeenCalledWith(0);
+    const lastZoom =
+      setCompanionZoomNormalized.mock.calls.at(-1)?.[0] ?? Number.NaN;
+    expect(lastZoom).toBeCloseTo(1 / 6, 5);
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not zoom the companion camera while a text entry is focused", async () => {
+    mockUseApp.mockReturnValue(createContext());
+
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+    });
+
+    const setCompanionZoomNormalized = vi.fn();
+    await act(async () => {
+      const ready = viewerPropsRef.current?.onEngineReady as
+        | ((value: unknown) => void)
+        | undefined;
+      ready?.({
+        setCameraAnimation: vi.fn(),
+        setPointerParallaxEnabled: vi.fn(),
+        setDragOrbitTarget: vi.fn(),
+        resetDragOrbit: vi.fn(),
+        setCompanionZoomNormalized,
+      });
+    });
+
+    const root = tree?.root.findByProps({
+      "data-testid": "companion-root",
+    });
+    const focusedTextEntry = document.createElement("textarea");
+    Object.defineProperty(document, "activeElement", {
+      configurable: true,
+      value: focusedTextEntry,
+    });
+    const preventDefault = vi.fn();
+
+    await act(async () => {
+      root?.props.onWheelCapture({
+        ctrlKey: true,
+        deltaY: -90,
+        deltaMode: 0,
+        preventDefault,
+      });
+    });
+
+    expect(setCompanionZoomNormalized).toHaveBeenCalledWith(0);
+    expect(setCompanionZoomNormalized).toHaveBeenCalledTimes(1);
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  it("zooms the companion camera from pinch input", async () => {
+    mockUseApp.mockReturnValue(createContext());
+
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+    });
+
+    const setCompanionZoomNormalized = vi.fn();
+    const resetDragOrbit = vi.fn();
+    const currentTarget = {
+      setPointerCapture: vi.fn(),
+      releasePointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => true),
+      clientWidth: 1440,
+      clientHeight: 900,
+    };
+
+    await act(async () => {
+      const ready = viewerPropsRef.current?.onEngineReady as
+        | ((value: unknown) => void)
+        | undefined;
+      ready?.({
+        setCameraAnimation: vi.fn(),
+        setPointerParallaxEnabled: vi.fn(),
+        setDragOrbitTarget: vi.fn(),
+        resetDragOrbit,
+        setCompanionZoomNormalized,
+      });
+    });
+
+    const dragLayer = tree?.root.findByProps({
+      "data-testid": "companion-camera-drag-surface",
+    });
+
+    await act(async () => {
+      dragLayer.props.onPointerDownCapture({
+        currentTarget,
+        pointerType: "touch",
+        pointerId: 11,
+        clientX: 200,
+        clientY: 300,
+        preventDefault: vi.fn(),
+      });
+      dragLayer.props.onPointerDownCapture({
+        currentTarget,
+        pointerType: "touch",
+        pointerId: 12,
+        clientX: 320,
+        clientY: 300,
+        preventDefault: vi.fn(),
+      });
+      dragLayer.props.onPointerMoveCapture({
+        currentTarget,
+        pointerType: "touch",
+        pointerId: 12,
+        clientX: 540,
+        clientY: 300,
+        preventDefault: vi.fn(),
+      });
+    });
+
+    const zoomCalls = setCompanionZoomNormalized.mock.calls
+      .map(([value]: [number]) => value)
+      .filter((value) => value > 0);
+    expect(resetDragOrbit).toHaveBeenCalledTimes(1);
+    expect(zoomCalls.at(-1)).toBeGreaterThan(0.3);
+  });
+
+  it("uses a dedicated non-selectable drag surface for camera orbit", async () => {
+    mockUseApp.mockReturnValue(createContext());
+
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+    });
+
+    const dragLayer = tree?.root.findByProps({
+      "data-testid": "companion-camera-drag-surface",
+    });
+
+    expect(dragLayer?.props.className).toContain("select-none");
+    expect(dragLayer?.props.style).toMatchObject({
+      touchAction: "none",
+      userSelect: "none",
+      WebkitUserSelect: "none",
+    });
   });
 });

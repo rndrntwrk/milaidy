@@ -300,6 +300,7 @@ export const MiladySchema = z
   .object({
     meta: z
       .object({
+        onboardingComplete: z.boolean().optional(),
         lastTouchedVersion: z.string().optional(),
         lastTouchedAt: z.string().optional(),
       })

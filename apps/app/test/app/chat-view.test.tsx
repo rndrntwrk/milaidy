@@ -35,6 +35,7 @@ interface ChatViewContextStub {
   uiLanguage: "en" | "zh-CN";
   chatMode: "simple" | "power";
   chatAgentVoiceMuted: boolean;
+  miladyCloudConnected: boolean;
   t: (k: string) => string;
   handleStart: () => Promise<void>;
 
@@ -68,7 +69,7 @@ vi.mock("@milady/app-core/hooks", async () => {
   );
   return {
     ...actual,
-    useVoiceChat: () => mockUseVoiceChat(),
+    useVoiceChat: (...args: unknown[]) => mockUseVoiceChat(...args),
   };
 });
 
@@ -107,6 +108,7 @@ function createContext(
     setChatPendingImages: vi.fn(),
     chatMode: "simple",
     chatAgentVoiceMuted: false,
+    miladyCloudConnected: false,
     handleStart: vi.fn(async () => {}),
 
     handleRestart: vi.fn(async () => {}),
@@ -141,6 +143,11 @@ describe("ChatView", () => {
     mockUseApp.mockReset();
     mockUseVoiceChat.mockReset();
     mockClient.getConfig.mockReset();
+    Object.defineProperty(window, "dispatchEvent", {
+      value: vi.fn(),
+      configurable: true,
+      writable: true,
+    });
 
     const queueAssistantSpeech = vi.fn();
     mockUseVoiceChat.mockReturnValue({
@@ -548,6 +555,38 @@ describe("ChatView", () => {
     );
     expect(micButton).toBeDefined();
     expect(micButton?.props["aria-pressed"]).toBe(false);
+  });
+
+  it("renders the native fast/pro toggle and updates chatMode", async () => {
+    const setState = vi.fn();
+    mockUseApp.mockReturnValue(
+      createContext({
+        chatMode: "power",
+        setState,
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(ChatView));
+    });
+    await flush();
+
+    const proButton = tree?.root.findByProps({
+      "data-testid": "chat-mode-pro-native",
+    });
+    const fastButton = tree?.root.findByProps({
+      "data-testid": "chat-mode-fast-native",
+    });
+
+    expect(proButton?.props["aria-pressed"]).toBe(true);
+    expect(fastButton?.props["aria-pressed"]).toBe(false);
+
+    await act(async () => {
+      fastButton?.props.onClick?.();
+    });
+
+    expect(setState).toHaveBeenCalledWith("chatMode", "simple");
   });
 
   it("disables send when chat input is empty or whitespace", async () => {

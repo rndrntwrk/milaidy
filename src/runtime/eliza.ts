@@ -3829,6 +3829,7 @@ export async function startEliza(
 
   // Workspace skills directory (highest precedence for overrides)
   const workspaceSkillsDir = workspaceDir ? `${workspaceDir}/skills` : null;
+  const managedSkillsDir = path.join(resolveStateDir(), "skills");
 
   // ── Sandbox mode setup ──────────────────────────────────────────────────
   const sandboxConfig = config.agents?.defaults?.sandbox;
@@ -3976,6 +3977,8 @@ export async function startEliza(
       ...(config.skills?.denyBundled
         ? { SKILLS_DENYLIST: config.skills.denyBundled.join(",") }
         : {}),
+      // Managed skills are stored in the Milady state dir (~/.milady/skills).
+      SKILLS_DIR: managedSkillsDir,
       // Tell plugin-agent-skills where to find bundled + workspace skills
       ...(bundledSkillsDir ? { BUNDLED_SKILLS_DIRS: bundledSkillsDir } : {}),
       ...(workspaceSkillsDir

@@ -16,7 +16,7 @@ import type {
   BscUnsignedApprovalTx,
   BscUnsignedTradeTx,
 } from "../contracts/wallet.js";
-import { DEFAULT_PUBLIC_BSC_RPC_URLS } from "./wallet-rpc";
+import { buildCloudEvmRpcUrl, DEFAULT_PUBLIC_BSC_RPC_URLS } from "./wallet-rpc";
 
 const FETCH_TIMEOUT_MS = 15_000;
 const BSC_CHAIN_ID = 56;
@@ -46,6 +46,7 @@ const ERC20_IFACE = new ethers.Interface([
 ]);
 
 export interface BscTradeRpcConfig {
+  rpcUrls?: string[] | null;
   nodeRealBscRpcUrl?: string | null;
   quickNodeBscRpcUrl?: string | null;
   bscRpcUrl?: string | null;
@@ -91,6 +92,7 @@ function normalizeRpcUrl(url: string | null | undefined): string | null {
 
 export function resolveBscRpcUrls(input: BscTradeRpcConfig): string[] {
   const candidates = [
+    ...(input.rpcUrls ?? []).map((url) => normalizeRpcUrl(url)),
     normalizeRpcUrl(
       input.nodeRealBscRpcUrl !== undefined
         ? input.nodeRealBscRpcUrl
@@ -105,6 +107,9 @@ export function resolveBscRpcUrls(input: BscTradeRpcConfig): string[] {
     normalizeRpcUrl(
       input.bscRpcUrl !== undefined ? input.bscRpcUrl : process.env.BSC_RPC_URL,
     ),
+    buildCloudEvmRpcUrl("bsc", {
+      cloudManagedAccess: input.cloudManagedAccess,
+    }),
     ...(input.cloudManagedAccess
       ? DEFAULT_PUBLIC_BSC_RPC_URLS.map((url) => normalizeRpcUrl(url))
       : []),

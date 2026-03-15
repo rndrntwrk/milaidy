@@ -370,7 +370,7 @@ export function MediaSettingsSection() {
   return (
     <div className="flex flex-col gap-4">
       {/* Category tabs */}
-      <div className="flex border border-border rounded-lg overflow-hidden shrink-0">
+      <div className="flex gap-1 rounded-xl border border-border bg-card/50 p-1 shrink-0">
         {(["image", "video", "audio", "vision"] as MediaCategory[]).map(
           (cat) => {
             const active = activeTab === cat;
@@ -380,17 +380,17 @@ export function MediaSettingsSection() {
                 key={cat}
                 variant={active ? "default" : "ghost"}
                 size="sm"
-                className={`flex-1 h-9 px-3 py-2 text-xs font-semibold rounded-none border-r last:border-r-0 border-border ${
+                className={`flex-1 h-9 rounded-lg border border-transparent px-3 py-2 text-xs font-semibold ${
                   active
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted hover:text-txt"
+                    ? "bg-accent text-accent-foreground shadow-sm"
+                    : "text-muted hover:bg-bg-hover hover:text-txt"
                 }`}
                 onClick={() => setActiveTab(cat)}
               >
                 <span>{t(CATEGORY_LABELS[cat])}</span>
                 <span
                   className={`ml-1.5 inline-block w-1.5 h-1.5 rounded-full ${
-                    catConfigured ? "bg-green-500" : "bg-yellow-500"
+                    catConfigured ? "bg-green-500" : "bg-border-strong"
                   }`}
                 />
               </Button>
@@ -420,10 +420,10 @@ export function MediaSettingsSection() {
 
         {/* Status badge */}
         <span
-          className={`ml-auto text-[10px] px-2 py-0.5 border rounded-md ${
+          className={`ml-auto rounded-full border px-2 py-0.5 text-[10px] ${
             configured
-              ? "border-green-600 text-green-600"
-              : "border-yellow-600 text-yellow-600"
+              ? "border-green-600 bg-green-600/10 text-[var(--text)]"
+              : "border-[var(--warn)] bg-[var(--warn-subtle)] text-[var(--text)]"
           }`}
         >
           {configured

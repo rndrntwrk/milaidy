@@ -6,6 +6,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Bot,
   Brain,
+  Clock3,
   Gamepad2,
   MessageSquare,
   Radio,
@@ -109,6 +110,12 @@ export const ALL_TAB_GROUPS: TabGroup[] = [
     icon: Settings,
     description: "Configuration and preferences",
   },
+  {
+    label: "Heartbeats",
+    tabs: ["triggers"],
+    icon: Clock3,
+    description: "Scheduled autonomous automations",
+  },
 
   {
     label: "Advanced",
@@ -117,7 +124,6 @@ export const ALL_TAB_GROUPS: TabGroup[] = [
       "plugins",
       "skills",
       "actions",
-      "triggers",
       "fine-tuning",
       "trajectories",
       "runtime",
@@ -242,7 +248,7 @@ export function titleForTab(tab: Tab): string {
     case "character-select":
       return "Character Select";
     case "triggers":
-      return "Triggers";
+      return "Heartbeats";
     case "wallets":
       return "Wallets";
     case "knowledge":

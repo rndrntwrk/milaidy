@@ -22,7 +22,26 @@ const { mockClient } = vi.hoisted(() => ({
       sharedStyleRules: "",
     })),
     listConversations: vi.fn(async () => ({ conversations: [] })),
+    createConversation: vi.fn(async () => ({
+      conversation: {
+        id: "conv-created",
+        title: "New Chat",
+        roomId: "room-created",
+        createdAt: "2026-02-01T00:00:00.000Z",
+        updatedAt: "2026-02-01T00:00:00.000Z",
+      },
+      greeting: {
+        text: "Welcome to the conversation.",
+        agentName: "Milady",
+        generated: true,
+      },
+    })),
     getConversationMessages: vi.fn(async () => ({ messages: [] })),
+    requestGreeting: vi.fn(async () => ({
+      text: "Welcome to the conversation.",
+      agentName: "Milady",
+      generated: true,
+    })),
     sendWsMessage: vi.fn(),
     connectWs: vi.fn(),
     disconnectWs: vi.fn(),
@@ -109,6 +128,15 @@ type ProbeApi = {
   }) => Promise<void>;
   hasOnboardingOptions: () => boolean;
   getOnboardingStep: () => string;
+  snapshot: () => {
+    onboardingComplete: boolean;
+    activeConversationId: string | null;
+    conversationMessages: Array<{
+      role: "user" | "assistant";
+      text: string;
+      source?: string;
+    }>;
+  };
 };
 
 function Probe(props: { onReady: (api: ProbeApi) => void }) {
@@ -120,6 +148,15 @@ function Probe(props: { onReady: (api: ProbeApi) => void }) {
       handleOnboardingNext: app.handleOnboardingNext,
       hasOnboardingOptions: () => Boolean(app.onboardingOptions),
       getOnboardingStep: () => app.onboardingStep,
+      snapshot: () => ({
+        onboardingComplete: app.onboardingComplete,
+        activeConversationId: app.activeConversationId,
+        conversationMessages: app.conversationMessages.map((message) => ({
+          role: message.role,
+          text: message.text,
+          source: message.source,
+        })),
+      }),
     });
   }, [app, onReady]);
 
@@ -203,7 +240,26 @@ describe("onboarding finish locking", () => {
       sharedStyleRules: "",
     });
     mockClient.listConversations.mockResolvedValue({ conversations: [] });
+    mockClient.createConversation.mockResolvedValue({
+      conversation: {
+        id: "conv-created",
+        title: "New Chat",
+        roomId: "room-created",
+        createdAt: "2026-02-01T00:00:00.000Z",
+        updatedAt: "2026-02-01T00:00:00.000Z",
+      },
+      greeting: {
+        text: "Welcome to the conversation.",
+        agentName: "Milady",
+        generated: true,
+      },
+    });
     mockClient.getConversationMessages.mockResolvedValue({ messages: [] });
+    mockClient.requestGreeting.mockResolvedValue({
+      text: "Welcome to the conversation.",
+      agentName: "Milady",
+      generated: true,
+    });
     mockClient.sendWsMessage.mockImplementation(() => {});
     mockClient.connectWs.mockImplementation(() => {});
     mockClient.disconnectWs.mockImplementation(() => {});
@@ -386,6 +442,55 @@ describe("onboarding finish locking", () => {
       await api?.handleOnboardingNext({ allowPermissionBypass: true });
     });
     expect(mockClient.submitOnboarding).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      tree?.unmount();
+    });
+  });
+
+  it("hydrates the first conversation and intro message after onboarding completes", async () => {
+    let api: ProbeApi | null = null;
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          AppProvider,
+          null,
+          React.createElement(Probe, {
+            onReady: (nextApi) => {
+              api = nextApi;
+            },
+          }),
+        ),
+      );
+    });
+
+    expect(api).not.toBeNull();
+    const requireApi = () => {
+      if (!api) throw new Error("onboarding probe API was not initialized");
+      return api;
+    };
+
+    await waitForOnboardingOptions(requireApi);
+    await advanceToActivate(requireApi);
+
+    await act(async () => {
+      await api?.handleOnboardingNext();
+    });
+
+    const snapshot = requireApi().snapshot();
+    expect(snapshot.onboardingComplete).toBe(true);
+    expect(snapshot.activeConversationId).toBe("conv-created");
+    expect(snapshot.conversationMessages).toEqual([
+      {
+        role: "assistant",
+        text: "Welcome to the conversation.",
+        source: "agent_greeting",
+      },
+    ]);
+    expect(mockClient.restartAgent).toHaveBeenCalledTimes(1);
+    expect(mockClient.createConversation).toHaveBeenCalledTimes(1);
+    expect(mockClient.requestGreeting).not.toHaveBeenCalled();
 
     await act(async () => {
       tree?.unmount();

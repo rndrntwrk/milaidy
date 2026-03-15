@@ -141,7 +141,7 @@ describe("ChatModalView", () => {
     expect(overlays.length).toBe(0);
   });
 
-  it("boots a new conversation in companion dock when none is active", async () => {
+  it("does not boot a new conversation in companion dock when none is active", async () => {
     const handleNewConversation = vi.fn(async () => {});
     mockUseApp.mockReturnValue({
       ...createContext(),
@@ -157,7 +157,7 @@ describe("ChatModalView", () => {
       );
     });
 
-    expect(handleNewConversation).toHaveBeenCalledTimes(1);
+    expect(handleNewConversation).not.toHaveBeenCalled();
   });
 
   it("does not boot a new conversation before startup restore finishes", async () => {

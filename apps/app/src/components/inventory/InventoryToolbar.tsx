@@ -66,6 +66,15 @@ export function InventoryToolbar({
       {inventoryView === "tokens" && (
         <>
           <span className="wt__sep" />
+          <Button
+            variant={inventoryChainFocus === "all" ? "default" : "outline"}
+            size="sm"
+            data-testid="wallet-focus-all"
+            className={`wt__chip h-7 px-2.5 py-0.5 text-xs shadow-sm ${inventoryChainFocus === "all" ? "is-active" : ""}`}
+            onClick={() => setState("inventoryChainFocus", "all")}
+          >
+            {t("wallet.all")}
+          </Button>
           {PRIMARY_CHAIN_KEYS.map((key) => {
             const config = CHAIN_CONFIGS[key];
             return (
@@ -81,15 +90,6 @@ export function InventoryToolbar({
               </Button>
             );
           })}
-          <Button
-            variant={inventoryChainFocus === "all" ? "default" : "outline"}
-            size="sm"
-            data-testid="wallet-focus-all"
-            className={`wt__chip h-7 px-2.5 py-0.5 text-xs shadow-sm ${inventoryChainFocus === "all" ? "is-active" : ""}`}
-            onClick={() => setState("inventoryChainFocus", "all")}
-          >
-            {t("wallet.all")}
-          </Button>
 
           <span className="flex-1" />
 

@@ -506,6 +506,69 @@ describe("chat send locking", () => {
     });
   });
 
+  it("replaces streamed assistant text when a later chunk is a full snapshot", async () => {
+    const deferred = createDeferred<{ text: string; agentName: string }>();
+    mockClient.sendConversationMessageStream.mockImplementation(
+      async (
+        _conversationId: string,
+        _text: string,
+        onToken: (token: string) => void,
+      ) => {
+        onToken("world");
+        onToken("Hello world");
+        return deferred.promise;
+      },
+    );
+
+    let api: ProbeApi | null = null;
+    let tree: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          AppProvider,
+          null,
+          React.createElement(Probe, {
+            onReady: (nextApi) => {
+              api = nextApi;
+            },
+          }),
+        ),
+      );
+    });
+
+    expect(api).not.toBeNull();
+
+    await act(async () => {
+      await api?.handleSelectConversation("conv-1");
+      api?.setChatInput("stream me");
+    });
+
+    let sendPromise: Promise<void> | null = null;
+    await act(async () => {
+      sendPromise = api?.handleChatSend();
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      const snapshot = api?.snapshot();
+      const streamedAssistant = snapshot.conversationMessages.find(
+        (message) =>
+          message.role === "assistant" && message.id.startsWith("temp-resp-"),
+      );
+      expect(streamedAssistant?.text).toBe("Hello world");
+    });
+
+    await act(async () => {
+      deferred.resolve({ text: "Hello world", agentName: "Milady" });
+      await sendPromise;
+    });
+
+    await act(async () => {
+      tree?.unmount();
+    });
+  });
+
   it("preserves repeated characters in incremental token streams", async () => {
     const deferred = createDeferred<{ text: string; agentName: string }>();
     mockClient.sendConversationMessageStream.mockImplementation(

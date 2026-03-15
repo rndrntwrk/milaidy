@@ -9,11 +9,17 @@ import {
 
 export type ChannelExecutionProfile =
   | "voice_fast"
+  | "text_fast"
   | "group_compact"
   | "default_full";
 
 function resolveChannelProfile(message: Memory): ChannelExecutionProfile {
-  const channelType = message.content?.channelType;
+  const content = message.content as Record<string, unknown> | undefined;
+  const channelType = content?.channelType;
+  const conversationMode =
+    typeof content?.conversationMode === "string"
+      ? content.conversationMode.toLowerCase()
+      : null;
   if (
     channelType === ChannelType.VOICE_DM ||
     channelType === ChannelType.VOICE_GROUP
@@ -22,6 +28,9 @@ function resolveChannelProfile(message: Memory): ChannelExecutionProfile {
   }
   if (channelType === ChannelType.GROUP) {
     return "group_compact";
+  }
+  if (conversationMode === "simple") {
+    return "text_fast";
   }
   return "default_full";
 }
@@ -53,6 +62,23 @@ export function createChannelProfileProvider(): Provider {
           },
           data: {
             profile: "voice_fast",
+          },
+        };
+      }
+
+      if (profile === "text_fast") {
+        return {
+          text: [
+            "Execution profile: TEXT_FAST.",
+            "Prioritize low latency for the current chat turn.",
+            "Keep tool/provider usage minimal and avoid unnecessary context expansion.",
+          ].join(" "),
+          values: {
+            executionProfile: "text_fast",
+            compactContext: true,
+          },
+          data: {
+            profile: "text_fast",
           },
         };
       }

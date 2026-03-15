@@ -402,7 +402,7 @@ export function CodingAgentSettingsSection() {
         </div>
       </div>
 
-      <div className="flex border border-border rounded-lg overflow-hidden shrink-0">
+      <div className="flex gap-1 rounded-xl border border-border bg-card/50 p-1 shrink-0">
         {availableAgents.map((agent) => {
           const active = activeTab === agent;
           const installState = getInstallState(agent);
@@ -411,10 +411,10 @@ export function CodingAgentSettingsSection() {
               key={agent}
               variant={active ? "default" : "ghost"}
               size="sm"
-              className={`flex-1 h-9 px-3 py-2 text-xs font-semibold rounded-none border-r last:border-r-0 border-border ${
+              className={`flex-1 h-9 rounded-lg border border-transparent px-3 py-2 text-xs font-semibold ${
                 active
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted hover:text-txt"
+                  ? "bg-accent text-accent-foreground shadow-sm"
+                  : "text-muted hover:bg-bg-hover hover:text-txt"
               }`}
               onClick={() => setActiveTab(agent)}
             >

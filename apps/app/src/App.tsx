@@ -8,6 +8,7 @@ import {
   ConnectorsPageView,
   ErrorBoundary,
   GameViewOverlay,
+  HeartbeatsView,
   PairingView,
   SaveCommandModal,
   SettingsView,
@@ -82,11 +83,20 @@ function ViewRouter() {
         return <KnowledgeView />;
       case "connectors":
         return <ConnectorsPageView />;
+      case "triggers":
+        return (
+          <section className="mx-auto w-full max-w-5xl">
+            <HeartbeatsView />
+          </section>
+        );
+      case "voice":
+        return <SettingsView key="settings-voice" initialSection="voice" />;
+      case "settings":
+        return <SettingsView key="settings-root" />;
       case "advanced":
       case "plugins":
       case "skills":
       case "actions":
-      case "triggers":
       case "fine-tuning":
       case "trajectories":
       case "runtime":
@@ -95,9 +105,6 @@ function ViewRouter() {
       case "logs":
       case "security":
         return <AdvancedPageView />;
-      case "voice":
-      case "settings":
-        return <SettingsView />;
       default:
         return <ChatView />;
     }
@@ -154,7 +161,6 @@ export function App() {
     tab === "plugins" ||
     tab === "skills" ||
     tab === "actions" ||
-    tab === "triggers" ||
     tab === "fine-tuning" ||
     tab === "trajectories" ||
     tab === "runtime" ||

@@ -25,6 +25,7 @@ export const CONNECT_EVENT = "milady:connect" as const;
 // ── Voice / config ───────────────────────────────────────────────────────
 export const VOICE_CONFIG_UPDATED_EVENT =
   "milady:voice-config-updated" as const;
+export const CHAT_AVATAR_VOICE_EVENT = "milady:chat-avatar-voice" as const;
 
 // ── Sidebar sync ─────────────────────────────────────────────────────────
 export const SELF_STATUS_SYNC_EVENT = "milady:self-status-refresh" as const;
@@ -43,6 +44,7 @@ export type MiladyDocumentEventName =
 
 export type MiladyWindowEventName =
   | typeof VOICE_CONFIG_UPDATED_EVENT
+  | typeof CHAT_AVATAR_VOICE_EVENT
   | typeof SELF_STATUS_SYNC_EVENT;
 
 export type MiladyEventName = MiladyDocumentEventName | MiladyWindowEventName;
@@ -62,5 +64,6 @@ export function dispatchWindowEvent(
   name: MiladyWindowEventName,
   detail?: unknown,
 ): void {
+  if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(name, { detail }));
 }

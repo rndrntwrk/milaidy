@@ -27,6 +27,7 @@ interface ChatViewContextStub {
   shareIngestNotice: string;
   chatMode: "simple" | "power";
   chatAgentVoiceMuted: boolean;
+  miladyCloudConnected: boolean;
   selectedVrmIndex: number;
   uiLanguage: "en" | "zh-CN";
   t: (k: string) => string;
@@ -51,7 +52,7 @@ vi.mock("@milady/app-core/hooks", async () => {
   );
   return {
     ...actual,
-    useVoiceChat: () => mockUseVoiceChat(),
+    useVoiceChat: (...args: unknown[]) => mockUseVoiceChat(...args),
   };
 });
 
@@ -83,6 +84,7 @@ function createContext(
     shareIngestNotice: "",
     chatMode: "simple",
     chatAgentVoiceMuted: false,
+    miladyCloudConnected: false,
     selectedVrmIndex: 0,
     uiLanguage: "en",
     chatPendingImages: [],
@@ -103,14 +105,21 @@ describe("ChatView game-modal variant", () => {
     mockUseApp.mockReset();
     mockUseVoiceChat.mockReset();
     mockClient.getConfig.mockReset();
+    Object.defineProperty(window, "dispatchEvent", {
+      value: vi.fn(),
+      configurable: true,
+      writable: true,
+    });
 
     mockUseVoiceChat.mockReturnValue({
       supported: true,
       isListening: false,
       interimTranscript: "",
       toggleListening: vi.fn(),
+      mouthOpen: 0,
       isSpeaking: false,
       usingAudioAnalysis: false,
+      speak: vi.fn(),
       queueAssistantSpeech: vi.fn(),
       stopSpeaking: vi.fn(),
     });
@@ -262,6 +271,27 @@ describe("ChatView game-modal variant", () => {
     expect(handleChatSend).toHaveBeenCalled();
   });
 
+  it("passes cloud auth into the voice hook for companion defaults", async () => {
+    mockUseApp.mockReturnValue(
+      createContext({
+        miladyCloudConnected: true,
+      }),
+    );
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(ChatView, { variant: "game-modal" }),
+      );
+    });
+
+    expect(mockUseVoiceChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cloudConnected: true,
+        interruptOnSpeech: true,
+      }),
+    );
+  });
+
   it("disables composer controls while agent is starting", async () => {
     mockUseApp.mockReturnValue(
       createContext({
@@ -285,5 +315,42 @@ describe("ChatView game-modal variant", () => {
       "aria-label": "chat.agentStarting",
     });
     expect(micButton.props.disabled).toBe(true);
+  });
+
+  it("renders the game-modal composer unfocused with compact textarea sizing", async () => {
+    const focus = vi.fn();
+
+    mockUseApp.mockReturnValue(createContext({ chatInput: "" }));
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(ChatView, { variant: "game-modal" }),
+        {
+          createNodeMock: (element) => {
+            const node = element as {
+              type: unknown;
+              props: Record<string, unknown>;
+            };
+            if (node.type === "textarea") {
+              return {
+                style: { height: "", overflowY: "" },
+                scrollHeight: 38,
+                focus,
+              };
+            }
+            return {};
+          },
+        },
+      );
+    });
+
+    const textarea = tree?.root.findByType("textarea");
+    expect(focus).not.toHaveBeenCalled();
+    expect(String(textarea.props.className)).toContain("min-h-[52px]");
+    expect(String(textarea.props.className)).toContain("pt-2.5");
+    expect(String(textarea.props.className)).toContain(
+      "focus-visible:ring-offset-0",
+    );
   });
 });

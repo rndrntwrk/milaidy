@@ -17,7 +17,7 @@ export type CameraAnimationConfig = {
 
 /**
  * Handles VRM avatar framing, camera profile application, companion-mode
- * bounds-based camera fitting, camera sway animation, interaction modes,
+ * bounds-based camera fitting, subtle companion camera motion, interaction modes,
  * and VRM face-orientation correction.
  */
 export class VrmCameraManager {
@@ -26,6 +26,8 @@ export class VrmCameraManager {
   private readonly tempWorldPosition = new THREE.Vector3();
   private readonly tempSecondaryWorldPosition = new THREE.Vector3();
   private readonly tempTertiaryWorldPosition = new THREE.Vector3();
+  private readonly tempOrbitOffset = new THREE.Vector3();
+  private readonly tempOrbitSpherical = new THREE.Spherical();
 
   /**
    * Position and scale the VRM for the active camera profile, then place the
@@ -148,12 +150,12 @@ export class VrmCameraManager {
 
     if (cameraProfile === "companion_close") {
       lookAtY = neckY;
-      distance = Math.max(0.92, fitDistance * 0.42);
-      cameraY = neckY;
+      distance = Math.max(2.4, fitDistance * 0.92);
+      cameraY = neckY + Math.min(size.y * 0.04, 0.08);
     } else if (cameraProfile === "companion") {
       lookAtY = neckY;
-      distance = Math.max(2.2, fitDistance * 0.76);
-      cameraY = neckY + Math.min(size.y * 0.06, 0.14);
+      distance = Math.max(4.8, fitDistance * 1.35);
+      cameraY = neckY + Math.min(size.y * 0.1, 0.18);
     } else {
       lookAtY = THREE.MathUtils.clamp(
         neckY - size.y * 0.08,
@@ -231,13 +233,13 @@ export class VrmCameraManager {
     if (cameraProfile === "companion" || cameraProfile === "companion_close") {
       camera.position.set(
         0,
-        1.24,
-        cameraProfile === "companion_close" ? 1.1 : 3,
+        cameraProfile === "companion_close" ? 1.3 : 1.36,
+        cameraProfile === "companion_close" ? 2.5 : 5.2,
       );
-      camera.fov = cameraProfile === "companion_close" ? 22 : 28;
+      camera.fov = cameraProfile === "companion_close" ? 28 : 34;
       if (controls) {
-        controls.minDistance = cameraProfile === "companion_close" ? 0.7 : 1.4;
-        controls.maxDistance = 7.0;
+        controls.minDistance = cameraProfile === "companion_close" ? 1.8 : 3.4;
+        controls.maxDistance = 12.0;
         controls.minPolarAngle = Math.PI * 0.16;
         controls.maxPolarAngle = Math.PI * 0.86;
         controls.minAzimuthAngle = -Infinity;
@@ -259,42 +261,72 @@ export class VrmCameraManager {
   }
 
   /**
-   * Apply camera sway animation when not in manual interaction mode.
-   * Applies layered sine-wave offsets to position and rotation.
+   * Animate the camera in a shallow front-facing orbit around the avatar's
+   * look target so companion mode feels alive without breaking the framing.
    */
-  applyCameraSway(
+  applyCameraMotion(
     camera: THREE.PerspectiveCamera,
     baseCameraPosition: THREE.Vector3,
+    lookAtTarget: THREE.Vector3,
     cameraAnimation: CameraAnimationConfig,
     elapsedTime: number,
   ): void {
-    const t = elapsedTime * cameraAnimation.speed;
+    const baseOffset = this.tempOrbitOffset
+      .copy(baseCameraPosition)
+      .sub(lookAtTarget);
+    if (baseOffset.lengthSq() < 1e-6) {
+      camera.position.copy(baseCameraPosition);
+      return;
+    }
 
-    const swayX =
-      Math.sin(t * 0.5) * 0.6 +
-      Math.sin(t * 0.8 + 1.2) * 0.25 +
-      Math.sin(t * 1.3 + 2.5) * 0.15;
+    const spherical = this.tempOrbitSpherical.setFromVector3(baseOffset);
+    const t = elapsedTime * Math.max(cameraAnimation.speed, 1e-3);
 
-    const bobY =
-      Math.sin(t * 0.7 + 0.5) * 0.5 +
-      Math.sin(t * 1.1 + 1.8) * 0.3 +
-      Math.sin(t * 0.3) * 0.2;
+    // Layered low-frequency motion keeps the camera drifting without ever
+    // swinging wide enough to leave the avatar's front hemisphere.
+    const yawSeed =
+      Math.sin(t * 0.21 + 0.35) * 0.58 +
+      Math.sin(t * 0.11 + 1.8) * 0.29 +
+      Math.sin(t * 0.37 + 2.6) * 0.13;
+    const pitchSeed =
+      Math.sin(t * 0.17 + 0.9) * 0.55 +
+      Math.sin(t * 0.31 + 2.1) * 0.3 +
+      Math.sin(t * 0.07 + 0.2) * 0.15;
+    const radiusSeed =
+      Math.sin(t * 0.13 + 1.2) * 0.62 + Math.sin(t * 0.23 + 2.7) * 0.38;
 
-    const swayZ = Math.sin(t * 0.4 + 1.0) * 0.4 + Math.sin(t * 0.9 + 2.0) * 0.3;
+    const yawRange = THREE.MathUtils.clamp(
+      cameraAnimation.swayAmplitude * 4.2 +
+        cameraAnimation.rotationAmplitude * 3.8,
+      0.05,
+      0.22,
+    );
+    const pitchRange = THREE.MathUtils.clamp(
+      cameraAnimation.bobAmplitude * 1.8 +
+        cameraAnimation.rotationAmplitude * 1.4,
+      0.015,
+      0.085,
+    );
+    const radiusRange = THREE.MathUtils.clamp(
+      cameraAnimation.swayAmplitude * 2.4 + cameraAnimation.bobAmplitude * 1.1,
+      0.025,
+      0.18,
+    );
 
-    camera.position.x =
-      baseCameraPosition.x + swayX * cameraAnimation.swayAmplitude;
-    camera.position.y =
-      baseCameraPosition.y + bobY * cameraAnimation.bobAmplitude;
-    camera.position.z =
-      baseCameraPosition.z + swayZ * cameraAnimation.swayAmplitude * 0.5;
+    spherical.theta += yawSeed * yawRange;
+    spherical.phi = THREE.MathUtils.clamp(
+      spherical.phi + pitchSeed * pitchRange,
+      0.42,
+      Math.PI - 0.42,
+    );
+    spherical.radius = Math.max(
+      0.5,
+      spherical.radius + radiusSeed * radiusRange,
+    );
 
-    const rotX =
-      Math.sin(t * 0.6 + 0.3) * cameraAnimation.rotationAmplitude * 0.5;
-    const rotY = Math.sin(t * 0.4) * cameraAnimation.rotationAmplitude;
-
-    camera.rotation.x = rotX;
-    camera.rotation.y = rotY;
+    camera.position
+      .copy(lookAtTarget)
+      .add(baseOffset.setFromSpherical(spherical));
   }
 
   /** Configure OrbitControls for the given interaction mode. */

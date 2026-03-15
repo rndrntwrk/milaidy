@@ -55,6 +55,7 @@ import type {
   SystemPermissionId,
 } from "../../../../src/permissions/types";
 import type { ConfigUiHint } from "../types";
+import { mergeStreamingText } from "../utils/streaming-text";
 
 export type {
   AudioGenConfig,
@@ -715,6 +716,17 @@ export interface Conversation {
   roomId: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ConversationGreeting {
+  text: string;
+  agentName: string;
+  generated: boolean;
+}
+
+export interface CreateConversationOptions {
+  bootstrapGreeting?: boolean;
+  lang?: string;
 }
 
 // ── A2UI Content Blocks (Agent-to-UI) ────────────────────────────────
@@ -4144,6 +4156,7 @@ export class MiladyClient {
     channelType: ConversationChannelType = "DM",
     signal?: AbortSignal,
     images?: ImageAttachment[],
+    conversationMode?: ConversationMode,
   ): Promise<{
     text: string;
     agentName: string;
@@ -4160,6 +4173,7 @@ export class MiladyClient {
         text,
         channelType,
         ...(images?.length ? { images } : {}),
+        ...(conversationMode ? { conversationMode } : {}),
       }),
       signal,
     });
@@ -4217,7 +4231,7 @@ export class MiladyClient {
       if (parsed.type === "token") {
         const chunk = parsed.text ?? "";
         if (chunk) {
-          fullText += chunk;
+          fullText = mergeStreamingText(fullText, chunk);
           onToken(chunk);
         }
         return;
@@ -4246,7 +4260,7 @@ export class MiladyClient {
 
       // Backward compatibility with legacy stream payloads: { text: "..." }
       if (parsed.text) {
-        fullText += parsed.text;
+        fullText = mergeStreamingText(fullText, parsed.text);
         onToken(parsed.text);
       }
     };
@@ -4296,12 +4310,17 @@ export class MiladyClient {
   async sendChatRest(
     text: string,
     channelType: ConversationChannelType = "DM",
+    conversationMode?: ConversationMode,
   ): Promise<{ text: string; agentName: string }> {
     const response = await this.fetch<{ text: string; agentName: string }>(
       "/api/chat",
       {
         method: "POST",
-        body: JSON.stringify({ text, channelType }),
+        body: JSON.stringify({
+          text,
+          channelType,
+          ...(conversationMode ? { conversationMode } : {}),
+        }),
       },
     );
     return {
@@ -4315,6 +4334,7 @@ export class MiladyClient {
     onToken: (token: string) => void,
     channelType: ConversationChannelType = "DM",
     signal?: AbortSignal,
+    conversationMode?: ConversationMode,
   ): Promise<{
     text: string;
     agentName: string;
@@ -4327,6 +4347,8 @@ export class MiladyClient {
       onToken,
       channelType,
       signal,
+      undefined,
+      conversationMode,
     );
   }
 
@@ -4338,10 +4360,19 @@ export class MiladyClient {
 
   async createConversation(
     title?: string,
-  ): Promise<{ conversation: Conversation }> {
+    options?: CreateConversationOptions,
+  ): Promise<{ conversation: Conversation; greeting?: ConversationGreeting }> {
     return this.fetch("/api/conversations", {
       method: "POST",
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({
+        title,
+        ...(options?.bootstrapGreeting === true
+          ? { bootstrapGreeting: true }
+          : {}),
+        ...(typeof options?.lang === "string" && options.lang.trim()
+          ? { lang: options.lang.trim() }
+          : {}),
+      }),
     });
   }
 
@@ -4356,6 +4387,7 @@ export class MiladyClient {
     text: string,
     channelType: ConversationChannelType = "DM",
     images?: ImageAttachment[],
+    conversationMode?: ConversationMode,
   ): Promise<{ text: string; agentName: string; blocks?: ContentBlock[] }> {
     const response = await this.fetch<{
       text: string;
@@ -4367,6 +4399,7 @@ export class MiladyClient {
         text,
         channelType,
         ...(images?.length ? { images } : {}),
+        ...(conversationMode ? { conversationMode } : {}),
       }),
     });
     return {
@@ -4382,6 +4415,7 @@ export class MiladyClient {
     channelType: ConversationChannelType = "DM",
     signal?: AbortSignal,
     images?: ImageAttachment[],
+    conversationMode?: ConversationMode,
   ): Promise<{
     text: string;
     agentName: string;
@@ -4395,6 +4429,7 @@ export class MiladyClient {
       channelType,
       signal,
       images,
+      conversationMode,
     );
   }
 

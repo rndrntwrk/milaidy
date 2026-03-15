@@ -6,11 +6,12 @@
  */
 
 import { resolveAppAssetUrl } from "@milady/app-core/utils";
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import {
   type CameraProfile,
   type InteractionMode,
   VrmEngine,
+  type VrmEngineDebugInfo,
   type VrmEngineState,
 } from "./VrmEngine";
 
@@ -36,6 +37,21 @@ export type VrmViewerProps = {
   onEngineReady?: (engine: VrmEngine) => void;
   onRevealStart?: () => void;
 };
+
+type VrmEngineDebugRegistryEntry = {
+  id: string;
+  role: "world-stage" | "chat-avatar";
+  vrmPath: string;
+  worldUrl: string | null;
+  engine: VrmEngine;
+  getDebugInfo: () => VrmEngineDebugInfo;
+};
+
+declare global {
+  interface Window {
+    __MILADY_VRM_ENGINES__?: VrmEngineDebugRegistryEntry[];
+  }
+}
 
 export function VrmViewer(props: VrmViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -68,6 +84,9 @@ export function VrmViewer(props: VrmViewerProps) {
   const onEngineStateRef = useRef(props.onEngineState);
   const onRevealStartRef = useRef(props.onRevealStart);
   const revealStartedRef = useRef(false);
+  const debugRegistryIdRef = useRef(
+    `vrm-viewer-${Math.random().toString(36).slice(2, 10)}`,
+  );
 
   mouthOpenRef.current = props.mouthOpen;
   isSpeakingRef.current = props.isSpeaking ?? false;
@@ -79,6 +98,28 @@ export function VrmViewer(props: VrmViewerProps) {
   onEngineReadyRef.current = props.onEngineReady;
   onEngineStateRef.current = props.onEngineState;
   onRevealStartRef.current = props.onRevealStart;
+
+  const syncDebugRegistry = useEffectEvent(() => {
+    if (!import.meta.env.DEV) return;
+    if (typeof window === "undefined") return;
+    const engine = engineRef.current;
+    const registry = window.__MILADY_VRM_ENGINES__ ?? [];
+    const id = debugRegistryIdRef.current;
+    const nextEntry: VrmEngineDebugRegistryEntry | null = engine
+      ? {
+          id,
+          role: props.worldUrl ? "world-stage" : "chat-avatar",
+          vrmPath: props.vrmPath ?? DEFAULT_VRM_PATH,
+          worldUrl: props.worldUrl ?? null,
+          engine,
+          getDebugInfo: () => engine.getDebugInfo(),
+        }
+      : null;
+
+    window.__MILADY_VRM_ENGINES__ = nextEntry
+      ? [...registry.filter((entry) => entry.id !== id), nextEntry]
+      : registry.filter((entry) => entry.id !== id);
+  });
 
   // Setup engine once
   useEffect(() => {
@@ -115,6 +156,7 @@ export function VrmViewer(props: VrmViewerProps) {
       },
       {
         rendererPreference: prefersWorldRendererRef.current ? "webgl" : "auto",
+        sparkOptimized: prefersWorldRendererRef.current,
       },
     );
 
@@ -140,6 +182,7 @@ export function VrmViewer(props: VrmViewerProps) {
       () => {
         if (!mountedRef.current) return;
         resize();
+        syncDebugRegistry();
         onEngineReadyRef.current?.(engine);
       },
       (error) => {
@@ -156,8 +199,13 @@ export function VrmViewer(props: VrmViewerProps) {
       if (engineRef.current === engine) {
         engineRef.current = null;
       }
+      syncDebugRegistry();
     };
   }, []);
+
+  useEffect(() => {
+    syncDebugRegistry();
+  });
 
   useEffect(() => {
     const engine = engineRef.current;

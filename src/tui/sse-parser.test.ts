@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   drainSseEvents,
   extractSseDataPayloads,
+  mergeStreamingText,
   parseConversationStreamPayload,
 } from "./sse-parser";
 
@@ -44,5 +45,9 @@ describe("sse-parser", () => {
 
     expect(parsed?.type).toBeUndefined();
     expect(parsed?.text).toBe("legacy chunk");
+  });
+
+  it("replaces the accumulated text when a later chunk is a full snapshot", () => {
+    expect(mergeStreamingText("world", "Hello world")).toBe("Hello world");
   });
 });

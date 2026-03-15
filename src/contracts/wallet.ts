@@ -84,6 +84,13 @@ export interface WalletConfigStatus {
   nodeRealBscRpcSet?: boolean;
   quickNodeBscRpcSet?: boolean;
   managedBscRpcReady?: boolean;
+  cloudManagedAccess?: boolean;
+  evmBalanceReady?: boolean;
+  ethereumBalanceReady?: boolean;
+  baseBalanceReady?: boolean;
+  bscBalanceReady?: boolean;
+  avalancheBalanceReady?: boolean;
+  solanaBalanceReady?: boolean;
   tradePermissionMode?: TradePermissionMode;
   tradeUserCanLocalExecute?: boolean;
   tradeAgentCanLocalExecute?: boolean;

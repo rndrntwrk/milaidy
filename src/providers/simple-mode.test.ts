@@ -10,6 +10,10 @@ function makeMessage(channelType?: ChannelType): Memory {
   return { content: { channelType } } as Memory;
 }
 
+function makeModeMessage(mode: "simple" | "power"): Memory {
+  return { content: { channelType: CT.DM, conversationMode: mode } } as Memory;
+}
+
 describe("createChannelProfileProvider", () => {
   const provider = createChannelProfileProvider();
 
@@ -42,8 +46,25 @@ describe("createChannelProfileProvider", () => {
     expect(result.data?.profile).toBe("group_compact");
   });
 
+  it("DM in simple mode returns text_fast profile", async () => {
+    const result = await provider.get(
+      runtime,
+      makeModeMessage("simple"),
+      state,
+    );
+    expect(result.values?.executionProfile).toBe("text_fast");
+    expect(result.values?.compactContext).toBe(true);
+    expect(result.data?.profile).toBe("text_fast");
+  });
+
   it("DM returns default_full profile with compactContext=false", async () => {
     const result = await provider.get(runtime, makeMessage(CT.DM), state);
+    expect(result.values?.executionProfile).toBe("default_full");
+    expect(result.values?.compactContext).toBe(false);
+  });
+
+  it("DM in power mode keeps default_full profile", async () => {
+    const result = await provider.get(runtime, makeModeMessage("power"), state);
     expect(result.values?.executionProfile).toBe("default_full");
     expect(result.values?.compactContext).toBe(false);
   });

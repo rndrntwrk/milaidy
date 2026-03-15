@@ -537,7 +537,7 @@ describe("TriggersView UI E2E", () => {
     });
 
     await act(async () => {
-      await findButtonByText(root, "Create Trigger").props.onClick();
+      await findButtonByText(root, "Create Heartbeat").props.onClick();
     });
     await flush();
 

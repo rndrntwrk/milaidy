@@ -85,7 +85,7 @@ function CloudRpcStatus({
                 creditsCritical
                   ? "text-[var(--danger,#e74c3c)] font-bold"
                   : creditsLow
-                    ? "text-[#b8860b] font-bold"
+                    ? "rounded-md bg-[var(--warn-subtle)] px-1.5 py-0.5 text-[var(--text)] font-bold"
                     : ""
               }
             >
@@ -96,7 +96,7 @@ function CloudRpcStatus({
                 href={topUpUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[10px] ml-1.5 text-[var(--accent)]"
+                className="ml-1.5 text-[10px] text-[var(--text)] underline decoration-[var(--accent)] underline-offset-2 hover:opacity-80"
               >
                 {t("configpageview.TopUp")}
               </a>
@@ -267,16 +267,14 @@ function renderRpcProviderButtons<T extends string>(
           <button
             type="button"
             key={provider.id}
-            className={`flex items-center justify-center text-center px-2 py-2 border cursor-pointer transition-colors min-h-[44px] ${
+            className={`flex min-h-[44px] items-center justify-center rounded-lg border px-3 py-2 text-center text-xs font-semibold leading-tight shadow-sm transition-colors ${
               active
                 ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
-                : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
+                : "border-[var(--border)] bg-[var(--card)] text-[var(--text)] hover:border-[var(--accent)] hover:bg-[var(--bg-hover)]"
             }`}
             onClick={() => onSelect(provider.id)}
           >
-            <div
-              className={`text-[10px] font-bold leading-tight ${active ? "" : "text-[var(--text)]"}`}
-            >
+            <div className="leading-tight">
               {provider.id === "eliza-cloud" && tFallback
                 ? "Milady Cloud"
                 : provider.label}
@@ -401,7 +399,7 @@ function CloudServicesSection() {
           {t("configpageview.CloudServices")}
         </div>
         {needsRestart && (
-          <span className="text-[11px] text-[var(--warning,#f59e0b)] font-medium">
+          <span className="rounded-full border border-[var(--warn)] bg-[var(--warn-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--text)]">
             {t("configpageview.RestartRequiredFor")}
           </span>
         )}

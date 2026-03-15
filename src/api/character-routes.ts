@@ -184,6 +184,7 @@ export async function handleCharacterRoutes(
     if (runtime) {
       const character = runtime.character;
       if (character.name) merged.name = character.name;
+      if (character.username) merged.username = character.username;
       if (character.bio) merged.bio = character.bio;
       if (character.system) merged.system = character.system;
       if (character.adjectives) merged.adjectives = character.adjectives;
@@ -217,6 +218,7 @@ export async function handleCharacterRoutes(
     if (state.runtime) {
       const character = state.runtime.character;
       if (body.name != null) character.name = String(body.name);
+      if (body.username != null) character.username = String(body.username);
       if (body.bio != null) {
         character.bio = Array.isArray(body.bio)
           ? (body.bio as string[])

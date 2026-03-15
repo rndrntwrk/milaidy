@@ -237,6 +237,14 @@ function waitForWsMessage(
   });
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 type TestAgentEvent = {
   runId: string;
   seq: number;
@@ -853,10 +861,17 @@ describe("API Server E2E (no runtime)", () => {
         state: "starting",
       });
       const { data } = await req(port, "GET", "/api/status");
+      const startup = data.startup as
+        | {
+            phase?: string;
+            attempt?: number;
+            lastError?: string;
+          }
+        | undefined;
       expect(data.startup).toBeDefined();
-      expect((data as any).startup.phase).toBe("runtime-retry");
-      expect((data as any).startup.attempt).toBe(2);
-      expect((data as any).startup.lastError).toContain("bootstrap failed");
+      expect(startup?.phase).toBe("runtime-retry");
+      expect(startup?.attempt).toBe(2);
+      expect(startup?.lastError).toContain("bootstrap failed");
       expect(data.state).toBe("starting");
 
       updateStartup({
@@ -1464,6 +1479,105 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
+    it("GET /api/conversations waits for a pending restore before reporting the list", async () => {
+      const restoreGate =
+        createDeferred<Array<{ id: UUID; channelId: string; name: string }>>();
+      const restoredConversationId = "11111111-1111-4111-8111-111111111111";
+      const restoredRoomId = "00000000-0000-0000-0000-00000000c001" as UUID;
+      const restoredAt = Date.parse("2026-02-01T12:00:00.000Z");
+      const runtime = {
+        agentId: "restore-list-agent",
+        character: { name: "RestoreListAgent" } as AgentRuntime["character"],
+        getService: () => null,
+        getRoomsByWorld: async () => restoreGate.promise,
+        getMemories: async (query: { count?: number }) =>
+          query.count === 1 ? ([{ createdAt: restoredAt }] as never[]) : [],
+        getCache: async () => null,
+        setCache: async () => {},
+      } as unknown as AgentRuntime;
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const listPromise = req(streamServer.port, "GET", "/api/conversations");
+        const earlyState = await Promise.race([
+          listPromise.then(() => "resolved" as const),
+          new Promise<"pending">((resolve) =>
+            setTimeout(() => resolve("pending"), 25),
+          ),
+        ]);
+        expect(earlyState).toBe("pending");
+
+        restoreGate.resolve([
+          {
+            id: restoredRoomId,
+            channelId: `web-conv-${restoredConversationId}`,
+            name: "Restored Chat",
+          },
+        ]);
+
+        const response = await listPromise;
+        expect(response.status).toBe(200);
+        expect(response.data.conversations).toEqual([
+          expect.objectContaining({
+            id: restoredConversationId,
+            title: "Restored Chat",
+          }),
+        ]);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("GET /api/conversations/:id/messages waits for a pending restore before 404ing", async () => {
+      const restoreGate =
+        createDeferred<Array<{ id: UUID; channelId: string; name: string }>>();
+      const restoredConversationId = "22222222-2222-4222-8222-222222222222";
+      const restoredRoomId = "00000000-0000-0000-0000-00000000c002" as UUID;
+      const restoredAt = Date.parse("2026-02-02T12:00:00.000Z");
+      const runtime = {
+        agentId: "restore-messages-agent",
+        character: {
+          name: "RestoreMessagesAgent",
+        } as AgentRuntime["character"],
+        getService: () => null,
+        getRoomsByWorld: async () => restoreGate.promise,
+        getMemories: async (query: { count?: number }) =>
+          query.count === 1 ? ([{ createdAt: restoredAt }] as never[]) : [],
+        getCache: async () => null,
+        setCache: async () => {},
+      } as unknown as AgentRuntime;
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const messagesPromise = req(
+          streamServer.port,
+          "GET",
+          `/api/conversations/${restoredConversationId}/messages`,
+        );
+        const earlyState = await Promise.race([
+          messagesPromise.then(() => "resolved" as const),
+          new Promise<"pending">((resolve) =>
+            setTimeout(() => resolve("pending"), 25),
+          ),
+        ]);
+        expect(earlyState).toBe("pending");
+
+        restoreGate.resolve([
+          {
+            id: restoredRoomId,
+            channelId: `web-conv-${restoredConversationId}`,
+            name: "Restored Chat",
+          },
+        ]);
+
+        const response = await messagesPromise;
+        expect(response.status).toBe(200);
+        expect(response.data.messages).toEqual([]);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
     it("POST /api/conversations/:id/messages/stream emits token events from runtime onStreamChunk", async () => {
       const runtime = createRuntimeForChatSseTests({
         handleMessage: async (
@@ -1614,6 +1728,103 @@ describe("API Server E2E (no runtime)", () => {
         expect(greetingPersisted).toBe(true);
         expect(userPersisted).toBe(true);
         expect(assistantPersisted).toBe(true);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/conversations can bootstrap the intro greeting atomically", async () => {
+      const runtime = createRuntimeForChatSseTests();
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const create = await req(
+          streamServer.port,
+          "POST",
+          "/api/conversations",
+          {
+            title: "Bootstrap greeting test",
+            bootstrapGreeting: true,
+            lang: "en",
+          },
+        );
+        expect(create.status).toBe(200);
+        const conversation = create.data.conversation as { id?: string };
+        const conversationId = conversation.id ?? "";
+        expect(conversationId.length).toBeGreaterThan(0);
+        expect(create.data.greeting).toMatchObject({
+          text: "Welcome to the conversation.",
+          agentName: "ChatStreamAgent",
+          generated: true,
+        });
+
+        const messagesResponse = await req(
+          streamServer.port,
+          "GET",
+          `/api/conversations/${conversationId}/messages`,
+        );
+        expect(messagesResponse.status).toBe(200);
+        const messages = (messagesResponse.data.messages ?? []) as Array<
+          Record<string, unknown>
+        >;
+        expect(messages).toEqual([
+          expect.objectContaining({
+            role: "assistant",
+            text: "Welcome to the conversation.",
+            source: "agent_greeting",
+          }),
+        ]);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/conversations/:id/greeting is idempotent after the intro is stored", async () => {
+      const runtime = createRuntimeForChatSseTests();
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const create = await req(
+          streamServer.port,
+          "POST",
+          "/api/conversations",
+          {
+            title: "Idempotent greeting test",
+            bootstrapGreeting: true,
+            lang: "en",
+          },
+        );
+        expect(create.status).toBe(200);
+        const conversation = create.data.conversation as { id?: string };
+        const conversationId = conversation.id ?? "";
+        expect(conversationId.length).toBeGreaterThan(0);
+
+        const greeting = await req(
+          streamServer.port,
+          "POST",
+          `/api/conversations/${conversationId}/greeting?lang=en`,
+        );
+        expect(greeting.status).toBe(200);
+        expect(greeting.data).toMatchObject({
+          text: "Welcome to the conversation.",
+          agentName: "ChatStreamAgent",
+          generated: true,
+        });
+
+        const messagesResponse = await req(
+          streamServer.port,
+          "GET",
+          `/api/conversations/${conversationId}/messages`,
+        );
+        expect(messagesResponse.status).toBe(200);
+        const messages = (messagesResponse.data.messages ?? []) as Array<
+          Record<string, unknown>
+        >;
+        const greetings = messages.filter(
+          (message) =>
+            message.role === "assistant" &&
+            message.source === "agent_greeting" &&
+            message.text === "Welcome to the conversation.",
+        );
+        expect(greetings).toHaveLength(1);
       } finally {
         await streamServer.close();
       }
@@ -2717,6 +2928,36 @@ describe("API Server E2E (no runtime)", () => {
       } finally {
         await streamServer.close();
         await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("discovers managed skills from the state dir", async () => {
+      const managedSkillDir = path.join(_e2eTempDir, "skills", "managed-skill");
+      await fs.mkdir(managedSkillDir, { recursive: true });
+      await fs.writeFile(
+        path.join(managedSkillDir, "SKILL.md"),
+        [
+          "---",
+          "name: managed-skill",
+          "description: Seeded from the managed skills store",
+          "---",
+          "",
+          "# Managed skill",
+        ].join("\n"),
+        "utf-8",
+      );
+
+      try {
+        const refreshed = await req(port, "POST", "/api/skills/refresh", {});
+        expect(refreshed.status).toBe(200);
+        const skills = refreshed.data.skills as Array<{ id?: string }>;
+        expect(skills.some((skill) => skill.id === "managed-skill")).toBe(true);
+      } finally {
+        await fs.rm(path.join(_e2eTempDir, "skills"), {
+          recursive: true,
+          force: true,
+        });
+        await req(port, "POST", "/api/skills/refresh", {});
       }
     });
   });

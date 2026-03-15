@@ -79,6 +79,9 @@ describe("MiladyClient streaming chat endpoints", () => {
       (token) => {
         tokens.push(token);
       },
+      "DM",
+      undefined,
+      undefined,
       "power",
     );
 
@@ -101,7 +104,11 @@ describe("MiladyClient streaming chat endpoints", () => {
     expect(requestHeaders.Accept).toBe("text/event-stream");
     expect(requestHeaders.Authorization).toBe("Bearer token");
     expect(requestInit.body).toBe(
-      JSON.stringify({ text: "hi", channelType: "power" }),
+      JSON.stringify({
+        text: "hi",
+        channelType: "DM",
+        conversationMode: "power",
+      }),
     );
   });
 
@@ -117,12 +124,36 @@ describe("MiladyClient streaming chat endpoints", () => {
       (token) => {
         tokens.push(token);
       },
+      "DM",
+      undefined,
       "simple",
     );
 
     expect(tokens).toEqual(["A", "B"]);
     expect(result).toEqual({
       text: "AB",
+      agentName: "Milady",
+      completed: false,
+    });
+  });
+
+  test("keeps the latest full snapshot when the stream ends without done", async () => {
+    fetchMock.mockResolvedValue(
+      buildSseResponse([
+        'data: {"type":"token","text":"world"}\n\n',
+        'data: {"type":"token","text":"Hello world"}\n\n',
+      ]),
+    );
+
+    const client = new MiladyClient("http://localhost:2138");
+    const tokens: string[] = [];
+    const result = await client.sendChatStream("legacy", (token) => {
+      tokens.push(token);
+    });
+
+    expect(tokens).toEqual(["world", "Hello world"]);
+    expect(result).toEqual({
+      text: "Hello world",
       agentName: "Milady",
       completed: false,
     });
@@ -170,7 +201,7 @@ describe("MiladyClient streaming chat endpoints", () => {
 
     const client = new MiladyClient("http://localhost:2138");
     await expect(
-      client.sendChatStream("boom", () => {}, "simple"),
+      client.sendChatStream("boom", () => {}, "DM", undefined, "simple"),
     ).rejects.toThrow("stream failed");
   });
 
@@ -183,7 +214,13 @@ describe("MiladyClient streaming chat endpoints", () => {
     );
 
     const client = new MiladyClient("http://localhost:2138");
-    const request = client.sendChatStream("boom", () => {}, "simple");
+    const request = client.sendChatStream(
+      "boom",
+      () => {},
+      "DM",
+      undefined,
+      "simple",
+    );
     await expect(request).rejects.toBeInstanceOf(ApiError);
     await expect(request).rejects.toMatchObject({
       kind: "http",

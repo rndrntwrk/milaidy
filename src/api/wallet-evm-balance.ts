@@ -45,6 +45,10 @@ export interface EvmProviderKeys {
   alchemyKey?: string | null;
   ankrKey?: string | null;
   cloudManagedAccess?: boolean | null;
+  bscRpcUrls?: string[] | null;
+  ethereumRpcUrls?: string[] | null;
+  baseRpcUrls?: string[] | null;
+  avaxRpcUrls?: string[] | null;
   nodeRealBscRpcUrl?: string | null;
   quickNodeBscRpcUrl?: string | null;
   /** Standard elizaOS EVM plugin env key for BSC. */
@@ -61,6 +65,10 @@ interface EvmProviderKeyset {
   alchemyKey: string | null;
   ankrKey: string | null;
   cloudManagedAccess: boolean;
+  bscRpcUrls: string[];
+  ethereumRpcUrls: string[];
+  baseRpcUrls: string[];
+  avaxRpcUrls: string[];
   nodeRealBscRpcUrl: string | null;
   quickNodeBscRpcUrl: string | null;
   bscRpcUrl: string | null;
@@ -180,6 +188,18 @@ function normalizeApiKey(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function normalizeStringArray(
+  values: ReadonlyArray<string | null | undefined> | null | undefined,
+): string[] {
+  return [
+    ...new Set(
+      (values ?? [])
+        .map((value) => normalizeApiKey(value))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
+}
+
 export function resolveEvmProviderKeys(
   alchemyOrKeys: string | EvmProviderKeys | null | undefined,
   maybeAnkrKey?: string | null,
@@ -189,6 +209,10 @@ export function resolveEvmProviderKeys(
       alchemyKey: normalizeApiKey(alchemyOrKeys),
       ankrKey: normalizeApiKey(maybeAnkrKey),
       cloudManagedAccess: false,
+      bscRpcUrls: resolveBscRpcUrls({ cloudManagedAccess: false }),
+      ethereumRpcUrls: resolveEthereumRpcUrls({ cloudManagedAccess: false }),
+      baseRpcUrls: resolveBaseRpcUrls({ cloudManagedAccess: false }),
+      avaxRpcUrls: resolveAvalancheRpcUrls({ cloudManagedAccess: false }),
       nodeRealBscRpcUrl: normalizeApiKey(
         process.env.NODEREAL_BSC_RPC_URL ?? null,
       ),
@@ -201,10 +225,33 @@ export function resolveEvmProviderKeys(
       avaxRpcUrl: normalizeApiKey(process.env.AVALANCHE_RPC_URL ?? null),
     };
   }
+  const cloudManagedAccess = Boolean(alchemyOrKeys.cloudManagedAccess);
   return {
     alchemyKey: normalizeApiKey(alchemyOrKeys.alchemyKey),
     ankrKey: normalizeApiKey(alchemyOrKeys.ankrKey ?? maybeAnkrKey),
-    cloudManagedAccess: Boolean(alchemyOrKeys.cloudManagedAccess),
+    cloudManagedAccess,
+    bscRpcUrls: normalizeStringArray([
+      ...(alchemyOrKeys.bscRpcUrls ?? []),
+      alchemyOrKeys.nodeRealBscRpcUrl ?? process.env.NODEREAL_BSC_RPC_URL,
+      alchemyOrKeys.quickNodeBscRpcUrl ?? process.env.QUICKNODE_BSC_RPC_URL,
+      alchemyOrKeys.bscRpcUrl ?? process.env.BSC_RPC_URL,
+      ...resolveBscRpcUrls({ cloudManagedAccess }),
+    ]),
+    ethereumRpcUrls: normalizeStringArray([
+      ...(alchemyOrKeys.ethereumRpcUrls ?? []),
+      alchemyOrKeys.ethereumRpcUrl ?? process.env.ETHEREUM_RPC_URL,
+      ...resolveEthereumRpcUrls({ cloudManagedAccess }),
+    ]),
+    baseRpcUrls: normalizeStringArray([
+      ...(alchemyOrKeys.baseRpcUrls ?? []),
+      alchemyOrKeys.baseRpcUrl ?? process.env.BASE_RPC_URL,
+      ...resolveBaseRpcUrls({ cloudManagedAccess }),
+    ]),
+    avaxRpcUrls: normalizeStringArray([
+      ...(alchemyOrKeys.avaxRpcUrls ?? []),
+      alchemyOrKeys.avaxRpcUrl ?? process.env.AVALANCHE_RPC_URL,
+      ...resolveAvalancheRpcUrls({ cloudManagedAccess }),
+    ]),
     nodeRealBscRpcUrl: normalizeApiKey(
       alchemyOrKeys.nodeRealBscRpcUrl ?? process.env.NODEREAL_BSC_RPC_URL,
     ),
@@ -818,48 +865,10 @@ export async function fetchEvmBalances(
   knownTokenAddresses?: string[],
 ): Promise<EvmChainBalance[]> {
   const keys = resolveEvmProviderKeys(alchemyOrKeys, maybeAnkrKey);
-  const bscRpcUrls = [
-    ...new Set(
-      [
-        keys.nodeRealBscRpcUrl,
-        keys.quickNodeBscRpcUrl,
-        keys.bscRpcUrl,
-        ...resolveBscRpcUrls({
-          cloudManagedAccess: keys.cloudManagedAccess,
-        }),
-      ].filter((url): url is string => Boolean(url)),
-    ),
-  ];
-  const ethRpcUrls = [
-    ...new Set(
-      [
-        keys.ethereumRpcUrl,
-        ...resolveEthereumRpcUrls({
-          cloudManagedAccess: keys.cloudManagedAccess,
-        }),
-      ].filter((url): url is string => Boolean(url)),
-    ),
-  ];
-  const baseRpcUrls = [
-    ...new Set(
-      [
-        keys.baseRpcUrl,
-        ...resolveBaseRpcUrls({
-          cloudManagedAccess: keys.cloudManagedAccess,
-        }),
-      ].filter((url): url is string => Boolean(url)),
-    ),
-  ];
-  const avaxRpcUrls = [
-    ...new Set(
-      [
-        keys.avaxRpcUrl,
-        ...resolveAvalancheRpcUrls({
-          cloudManagedAccess: keys.cloudManagedAccess,
-        }),
-      ].filter((url): url is string => Boolean(url)),
-    ),
-  ];
+  const bscRpcUrls = keys.bscRpcUrls;
+  const ethRpcUrls = keys.ethereumRpcUrls;
+  const baseRpcUrls = keys.baseRpcUrls;
+  const avaxRpcUrls = keys.avaxRpcUrls;
 
   const hasManagedBscRpc = bscRpcUrls.length > 0;
   const activeChains = DEFAULT_EVM_CHAINS.filter((chain) => {
@@ -945,15 +954,7 @@ export async function fetchEvmNfts(
   maybeAnkrKey?: string | null,
 ): Promise<Array<{ chain: string; nfts: EvmNft[] }>> {
   const keys = resolveEvmProviderKeys(alchemyOrKeys, maybeAnkrKey);
-  const hasManagedBscRpc =
-    [
-      keys.nodeRealBscRpcUrl,
-      keys.quickNodeBscRpcUrl,
-      keys.bscRpcUrl,
-      ...resolveBscRpcUrls({
-        cloudManagedAccess: keys.cloudManagedAccess,
-      }),
-    ].filter((url): url is string => Boolean(url)).length > 0;
+  const hasManagedBscRpc = keys.bscRpcUrls.length > 0;
   const activeChains = DEFAULT_EVM_CHAINS.filter((chain) => {
     if (chain.provider === "ankr") {
       return (isBscChain(chain) && hasManagedBscRpc) || Boolean(keys.ankrKey);

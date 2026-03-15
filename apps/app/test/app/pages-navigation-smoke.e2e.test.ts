@@ -16,6 +16,7 @@ const { companionOverlayTabs, mockUseApp, noop } = vi.hoisted(() => ({
     "character",
     "character-select",
     "settings",
+    "voice",
     "plugins",
     "advanced",
     "actions",
@@ -58,6 +59,8 @@ vi.mock("@milady/app-core/components", async () => {
       React.createElement("section", null, "ConnectorsPageView Ready"),
     ErrorBoundary: ({ children }: { children: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
+    HeartbeatsView: () =>
+      React.createElement("section", null, "HeartbeatsView Ready"),
     SaveCommandModal: () =>
       React.createElement("div", null, "SaveCommandModal"),
     ConnectionFailedBanner: () =>
@@ -318,6 +321,7 @@ describe("pages navigation smoke (e2e)", () => {
           "nav.social": "Social",
           "nav.apps": "Apps",
           "nav.settings": "Settings",
+          "nav.heartbeats": "Heartbeats",
           "nav.advanced": "Advanced",
           "nav.cloud": "Cloud",
         };
@@ -329,7 +333,7 @@ describe("pages navigation smoke (e2e)", () => {
       tab: "chat",
       actionNotice: null,
       plugins: [],
-      uiShellMode: "native",
+      uiShellMode: "companion",
       setUiShellMode: vi.fn(),
       uiLanguage: "en",
       agentStatus: { state: "running", agentName: "Milady" },
@@ -506,6 +510,7 @@ describe("pages navigation smoke (e2e)", () => {
             "nav.social": "Social",
             "nav.apps": "Apps",
             "nav.settings": "Settings",
+            "nav.heartbeats": "Heartbeats",
             "nav.advanced": "Advanced",
             "nav.cloud": "Cloud",
           };
@@ -517,7 +522,7 @@ describe("pages navigation smoke (e2e)", () => {
         tab: "chat",
         actionNotice: null,
         plugins: [],
-        uiShellMode: "native",
+        uiShellMode: "companion",
         setUiShellMode: vi.fn(),
         uiLanguage: "en",
         agentStatus: { state: "running", agentName: "Milady" },

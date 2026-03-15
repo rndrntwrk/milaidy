@@ -4,7 +4,6 @@
  * Sub-tabs:
  *   - Plugins: Feature/connector plugin management
  *   - Skills: Custom agent skills
- *   - Triggers: Automation trigger management
  *   - Fine-Tuning: Dataset and model training workflows
  *   - Trajectories: LLM call viewer and analysis
  *   - Runtime: Runtime object inspection
@@ -28,12 +27,10 @@ import { FineTuningView } from "./FineTuningView";
 import { LifoSandboxView } from "./LifoSandboxView";
 import { TrajectoriesView } from "./TrajectoriesView";
 import { TrajectoryDetailView } from "./TrajectoryDetailView";
-import { TriggersView } from "./TriggersView";
 
 type SubTab =
   | "plugins"
   | "skills"
-  | "triggers"
   | "fine-tuning"
   | "trajectories"
   | "runtime"
@@ -45,11 +42,6 @@ type SubTab =
 const SUB_TABS: Array<{ id: SubTab; label: string; description: string }> = [
   { id: "plugins", label: "Plugins", description: "Features and connectors" },
   { id: "skills", label: "Skills", description: "Custom agent skills" },
-  {
-    id: "triggers",
-    label: "Triggers",
-    description: "Scheduled and event-based automations",
-  },
   // {
   //   id: "fine-tuning",
   //   label: "Fine-Tuning",
@@ -96,22 +88,6 @@ const SUBTAB_ICONS: Record<string, ReactNode> = {
       aria-hidden="true"
     >
       <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-    </svg>
-  ),
-  triggers: (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
     </svg>
   ),
   "fine-tuning": (
@@ -246,8 +222,6 @@ function mapTabToSubTab(tab: Tab): SubTab {
       return "plugins";
     case "skills":
       return "skills";
-    case "triggers":
-      return "triggers";
     case "fine-tuning":
       return "fine-tuning";
     case "trajectories":
@@ -285,8 +259,6 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
         return <PluginsPageView />;
       case "skills":
         return <SkillsView />;
-      case "triggers":
-        return <TriggersView />;
       case "fine-tuning":
         return <FineTuningView />;
       case "trajectories":

@@ -193,6 +193,7 @@ const GROUP_ORDER: Record<string, number> = {
 };
 
 const FIELD_LABELS: Record<string, string> = {
+  "meta.onboardingComplete": "Onboarding Complete",
   "meta.lastTouchedVersion": "Config Last Touched Version",
   "meta.lastTouchedAt": "Config Last Touched At",
   "update.channel": "Update Channel",
@@ -511,6 +512,8 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 const FIELD_HELP: Record<string, string> = {
+  "meta.onboardingComplete":
+    "Explicit onboarding completion marker used to keep the app out of onboarding until reset.",
   "meta.lastTouchedVersion": "Auto-set when Milady writes the config.",
   "meta.lastTouchedAt": "ISO timestamp of the last config write (auto-set).",
   "update.channel":

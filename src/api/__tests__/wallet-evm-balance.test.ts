@@ -43,6 +43,8 @@ beforeEach(() => {
   delete process.env.ETHEREUM_RPC_URL;
   delete process.env.BASE_RPC_URL;
   delete process.env.AVALANCHE_RPC_URL;
+  delete process.env.ELIZAOS_CLOUD_API_KEY;
+  delete process.env.ELIZAOS_CLOUD_BASE_URL;
 });
 
 afterEach(() => {
@@ -296,6 +298,8 @@ describe("fetchEvmBalances — Direct RPC fallback", () => {
   });
 
   it("uses cloud-managed fallback RPCs when explicit RPC URLs are absent", async () => {
+    process.env.ELIZAOS_CLOUD_API_KEY = "ck-test";
+    process.env.ELIZAOS_CLOUD_BASE_URL = "https://cloud.example";
     mockFetch.mockReturnValue(
       jsonResponse({
         jsonrpc: "2.0",
@@ -313,6 +317,20 @@ describe("fetchEvmBalances — Direct RPC fallback", () => {
     expect(results.map((r) => r.chain)).toEqual(
       expect.arrayContaining(["Ethereum", "Base", "BSC", "Avalanche"]),
     );
+    expect(
+      mockFetch.mock.calls.some((call) =>
+        String(call[0]).includes(
+          "https://cloud.example/api/v1/proxy/evm-rpc/mainnet?api_key=ck-test",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      mockFetch.mock.calls.some((call) =>
+        String(call[0]).includes(
+          "https://cloud.example/api/v1/proxy/evm-rpc/bsc?api_key=ck-test",
+        ),
+      ),
+    ).toBe(true);
   });
 });
 

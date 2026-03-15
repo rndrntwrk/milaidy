@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeStreamingDelta } from "./parsers";
+import { computeStreamingDelta, mergeStreamingText } from "./parsers";
 
 describe("computeStreamingDelta", () => {
   it.each([
@@ -46,12 +46,61 @@ describe("computeStreamingDelta", () => {
       expected: "!",
     },
     {
-      name: "keeps small chunks even if they duplicate the existing suffix",
-      existing: "Hello",
-      incoming: "llo",
-      expected: "llo",
+      name: "preserves repeated single-character deltas",
+      existing: "Hel",
+      incoming: "l",
+      expected: "l",
+    },
+    {
+      name: "surfaces full snapshot replacements for in-place consumers",
+      existing: "world",
+      incoming: "Hello world",
+      expected: "Hello world",
     },
   ])("$name", ({ existing, incoming, expected }) => {
     expect(computeStreamingDelta(existing, incoming)).toBe(expected);
+  });
+});
+
+describe("mergeStreamingText", () => {
+  it.each([
+    {
+      name: "appends plain deltas",
+      existing: "Hello",
+      incoming: " world",
+      expected: "Hello world",
+    },
+    {
+      name: "accepts cumulative snapshots",
+      existing: "Hello",
+      incoming: "Hello world",
+      expected: "Hello world",
+    },
+    {
+      name: "replaces with a revised full snapshot",
+      existing: "world",
+      incoming: "Hello world",
+      expected: "Hello world",
+    },
+    {
+      name: "drops large suffix fragments already present",
+      existing: "Hello world",
+      incoming: "world",
+      expected: "Hello world",
+    },
+    {
+      name: "preserves repeated single-character chunks",
+      existing: "Hel",
+      incoming: "l",
+      expected: "Hell",
+    },
+    {
+      name: "keeps short multi-character deltas without overlap",
+      existing: "He",
+      incoming: "llo",
+      expected: "Hello",
+    },
+  ])("$name", ({ existing, incoming, expected }) => {
+    expect(mergeStreamingText(existing, incoming)).toBe(expected);
   });
 });

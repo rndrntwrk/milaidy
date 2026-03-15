@@ -199,7 +199,7 @@ export function StatusBar({
                       variant="ghost"
                       size="sm"
                       disabled={disabled}
-                      className={`w-full justify-start px-3 py-1.5 h-auto text-xs transition-colors rounded-none ${
+                      className={`h-auto w-full justify-start rounded-lg px-3 py-1.5 text-xs transition-colors ${
                         streamSource.type === st
                           ? "bg-accent/20 text-txt hover:bg-accent/30"
                           : disabled

@@ -1,7 +1,8 @@
 import { __voiceChatInternals } from "@milady/app-core/hooks";
 import { describe, expect, it } from "vitest";
 
-const { remainderAfter, queueableSpeechPrefix } = __voiceChatInternals;
+const { remainderAfter, queueableSpeechPrefix, resolveEffectiveVoiceConfig } =
+  __voiceChatInternals;
 
 describe("useVoiceChat streaming text helpers", () => {
   it("returns only unseen suffix text when remainder grows", () => {
@@ -42,5 +43,38 @@ describe("useVoiceChat streaming text helpers", () => {
     const queued = queueableSpeechPrefix(longText, false);
     expect(queued.length).toBeGreaterThan(80);
     expect(queued.length).toBeLessThan(longText.length);
+  });
+
+  it("defaults to ElevenLabs cloud config when Cloud auth is present", () => {
+    expect(
+      resolveEffectiveVoiceConfig(null, {
+        cloudConnected: true,
+      }),
+    ).toEqual({
+      provider: "elevenlabs",
+      mode: "cloud",
+      elevenlabs: {
+        voiceId: "EXAVITQu4vr4xnSDxMaL",
+        modelId: "eleven_flash_v2_5",
+        stability: 0.5,
+        similarityBoost: 0.75,
+        speed: 1,
+      },
+    });
+  });
+
+  it("keeps explicit non-ElevenLabs providers intact", () => {
+    expect(
+      resolveEffectiveVoiceConfig(
+        {
+          provider: "edge",
+          edge: { voice: "en-US-AriaNeural" },
+        },
+        { cloudConnected: true },
+      ),
+    ).toEqual({
+      provider: "edge",
+      edge: { voice: "en-US-AriaNeural" },
+    });
   });
 });

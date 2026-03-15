@@ -78,8 +78,8 @@ describe("VrmCameraManager", () => {
     );
 
     expect(lookAtTall.y).toBeGreaterThan(lookAtShort.y);
-    expect(shortCameraY).toBeCloseTo(lookAtShort.y, 5);
-    expect(camera.position.y).toBeCloseTo(lookAtTall.y, 5);
+    expect(shortCameraY).toBeGreaterThan(lookAtShort.y);
+    expect(camera.position.y).toBeGreaterThan(lookAtTall.y);
   });
 
   it("falls back to head/chest midpoint when neck bone is missing", () => {
@@ -124,5 +124,45 @@ describe("VrmCameraManager", () => {
     expect(Math.abs(bounds.getCenter(new THREE.Vector3()).x)).toBeLessThan(
       1e-6,
     );
+  });
+
+  it("animates companion camera as a shallow front orbit around the focus point", () => {
+    const manager = new VrmCameraManager();
+    const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 20);
+    const lookAtTarget = new THREE.Vector3(0, 1.4, 0);
+    const baseCameraPosition = new THREE.Vector3(0, 1.48, 5.1);
+    const animation = {
+      enabled: true,
+      swayAmplitude: 0.04,
+      bobAmplitude: 0.022,
+      rotationAmplitude: 0.012,
+      speed: 0.42,
+    };
+
+    manager.applyCameraMotion(
+      camera,
+      baseCameraPosition,
+      lookAtTarget,
+      animation,
+      2,
+    );
+    const positionA = camera.position.clone();
+    const offsetA = positionA.clone().sub(lookAtTarget);
+
+    manager.applyCameraMotion(
+      camera,
+      baseCameraPosition,
+      lookAtTarget,
+      animation,
+      18,
+    );
+    const positionB = camera.position.clone();
+    const offsetB = positionB.clone().sub(lookAtTarget);
+
+    expect(positionA.distanceTo(positionB)).toBeGreaterThan(0.05);
+    expect(offsetA.z).toBeGreaterThan(4.7);
+    expect(offsetB.z).toBeGreaterThan(4.7);
+    expect(Math.abs(offsetA.x)).toBeLessThan(1.2);
+    expect(Math.abs(offsetB.x)).toBeLessThan(1.2);
   });
 });

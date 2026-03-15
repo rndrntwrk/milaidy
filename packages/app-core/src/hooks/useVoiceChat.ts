@@ -8,7 +8,7 @@
  * STT: Web Speech API (SpeechRecognition) for user voice input.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VoiceConfig } from "../api/client";
 import { resolveApiUrl } from "../utils";
 
@@ -67,6 +67,10 @@ export interface VoiceChatOptions {
   onTranscript: (text: string) => void;
   /** Called when playback of a speech segment starts */
   onPlaybackStart?: (event: VoicePlaybackStartEvent) => void;
+  /** True when the user is authenticated to Milady/Eliza Cloud */
+  cloudConnected?: boolean;
+  /** Whether user speech should immediately interrupt assistant playback */
+  interruptOnSpeech?: boolean;
   /** Language for speech recognition (default: "en-US") */
   lang?: string;
   /** Saved voice configuration — switches TTS provider when set */
@@ -258,10 +262,76 @@ function queueableSpeechPrefix(text: string, isFinal: boolean): string {
   return "";
 }
 
+function cloneVoiceConfig(
+  config: VoiceConfig | null | undefined,
+): VoiceConfig | null {
+  if (!config) return null;
+  return {
+    ...config,
+    elevenlabs: config.elevenlabs ? { ...config.elevenlabs } : undefined,
+    edge: config.edge ? { ...config.edge } : undefined,
+  };
+}
+
+function resolveEffectiveVoiceConfig(
+  config: VoiceConfig | null | undefined,
+  options?: { cloudConnected?: boolean },
+): VoiceConfig | null {
+  const cloudConnected = options?.cloudConnected === true;
+  const base = cloneVoiceConfig(config) ?? {};
+  const provider =
+    base.provider ??
+    (base.elevenlabs ? "elevenlabs" : base.edge ? "edge" : undefined) ??
+    (cloudConnected ? "elevenlabs" : undefined);
+
+  if (!provider) return null;
+  if (provider !== "elevenlabs") {
+    return { ...base, provider };
+  }
+
+  const mode = base.mode ?? (cloudConnected ? "cloud" : "own-key");
+  const currentElevenLabs = base.elevenlabs ?? {};
+  const elevenlabs: NonNullable<VoiceConfig["elevenlabs"]> = {
+    ...currentElevenLabs,
+    voiceId: currentElevenLabs.voiceId ?? DEFAULT_ELEVEN_VOICE,
+    modelId: currentElevenLabs.modelId ?? DEFAULT_ELEVEN_MODEL,
+    stability:
+      typeof currentElevenLabs.stability === "number"
+        ? currentElevenLabs.stability
+        : 0.5,
+    similarityBoost:
+      typeof currentElevenLabs.similarityBoost === "number"
+        ? currentElevenLabs.similarityBoost
+        : 0.75,
+    speed:
+      typeof currentElevenLabs.speed === "number"
+        ? currentElevenLabs.speed
+        : 1.0,
+  };
+  const apiKey =
+    typeof currentElevenLabs.apiKey === "string"
+      ? currentElevenLabs.apiKey.trim()
+      : "";
+
+  if (mode === "own-key" && apiKey && !isRedactedSecret(apiKey)) {
+    elevenlabs.apiKey = currentElevenLabs.apiKey;
+  } else {
+    delete elevenlabs.apiKey;
+  }
+
+  return {
+    ...base,
+    provider,
+    mode,
+    elevenlabs,
+  };
+}
+
 export const __voiceChatInternals = {
   splitFirstSentence,
   remainderAfter,
   queueableSpeechPrefix,
+  resolveEffectiveVoiceConfig,
 };
 
 function isAbortError(error: unknown): boolean {
@@ -293,9 +363,20 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
   onTranscriptRef.current = options.onTranscript;
   onPlaybackStartRef.current = options.onPlaybackStart;
 
+  const effectiveVoiceConfig = useMemo(
+    () =>
+      resolveEffectiveVoiceConfig(options.voiceConfig, {
+        cloudConnected: options.cloudConnected,
+      }),
+    [options.cloudConnected, options.voiceConfig],
+  );
+
   // Voice config ref (latest value always available to callbacks)
-  const voiceConfigRef = useRef(options.voiceConfig);
-  voiceConfigRef.current = options.voiceConfig;
+  const voiceConfigRef = useRef<VoiceConfig | null>(effectiveVoiceConfig);
+  voiceConfigRef.current = effectiveVoiceConfig;
+  const interruptOnSpeechRef = useRef(options.interruptOnSpeech ?? true);
+  interruptOnSpeechRef.current = options.interruptOnSpeech ?? true;
+  const interruptSpeechRef = useRef<() => void>(() => {});
 
   // ── ElevenLabs Web Audio refs ──────────────────────────────────────
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -443,6 +524,9 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
       const result = event.results[event.results.length - 1];
       if (!result) return;
       const transcript = result[0].transcript;
+      if (transcript.trim() && interruptOnSpeechRef.current) {
+        interruptSpeechRef.current();
+      }
       if (result.isFinal && transcript.trim()) {
         setInterimTranscript("");
         onTranscriptRef.current(transcript.trim());
@@ -473,6 +557,9 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
 
     recognitionRef.current = recognition;
     try {
+      if (interruptOnSpeechRef.current) {
+        interruptSpeechRef.current();
+      }
       recognition.start();
       enabledRef.current = true;
       setIsListening(true);
@@ -537,6 +624,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
     setIsSpeaking(false);
     setUsingAudioAnalysis(false);
   }, [cancelPlayback]);
+  interruptSpeechRef.current = stopSpeaking;
 
   // ── ElevenLabs TTS ────────────────────────────────────────────────
 
@@ -927,9 +1015,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
 
           const elConfig = voiceConfigRef.current?.elevenlabs;
           const cacheKey =
-            voiceConfigRef.current?.provider === "elevenlabs" &&
-            voiceConfigRef.current?.mode !== "cloud" &&
-            elConfig
+            voiceConfigRef.current?.provider === "elevenlabs" && elConfig
               ? makeElevenCacheKey(firstSentence, elConfig)
               : undefined;
 
@@ -992,8 +1078,8 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
   // ── Keep ElevenLabs runtime warm for lower startup latency ────────
 
   useEffect(() => {
-    const config = voiceConfigRef.current;
-    if (config?.provider !== "elevenlabs" || config.mode === "cloud") {
+    const config = effectiveVoiceConfig;
+    if (config?.provider !== "elevenlabs" || !config.elevenlabs) {
       return;
     }
 
@@ -1004,7 +1090,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
     void audioCtxRef.current.resume().catch(() => {
       // Can fail until a user gesture; next speak() call resumes again.
     });
-  }, []);
+  }, [effectiveVoiceConfig]);
 
   // ── Cleanup on unmount ────────────────────────────────────────────
 

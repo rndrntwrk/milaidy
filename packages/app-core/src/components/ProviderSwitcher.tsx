@@ -579,7 +579,7 @@ export function ProviderSwitcher({
                         miladyCloudCreditsCritical
                           ? "text-[var(--danger,#e74c3c)] font-bold"
                           : miladyCloudCreditsLow
-                            ? "text-[#b8860b] font-bold"
+                            ? "rounded-md bg-[var(--warn-subtle)] px-1.5 py-0.5 text-[var(--text)] font-bold"
                             : ""
                       }
                     >
@@ -589,7 +589,7 @@ export function ProviderSwitcher({
                       href={miladyCloudTopUpUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[11px] ml-2 text-[var(--accent)]"
+                      className="ml-2 text-[11px] text-[var(--text)] underline decoration-[var(--accent)] underline-offset-2 hover:opacity-80"
                     >
                       {t("providerswitcher.TopUp")}
                     </a>

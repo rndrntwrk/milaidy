@@ -14,6 +14,7 @@ vi.mock("@milady/app-core/api", () => ({
 }));
 
 vi.mock("@milady/app-core/events", () => ({
+  CHAT_AVATAR_VOICE_EVENT: "milady:chat-avatar-voice",
   STOP_EMOTE_EVENT: "stop-emote",
 }));
 
@@ -64,5 +65,67 @@ describe("VrmStage", () => {
         Object.hasOwn(node.props.style, "opacity"),
     );
     expect(stageLayer?.props.style.opacity).toBe(1);
+  });
+
+  it("passes the shared chat voice state through to the companion avatar", async () => {
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(VrmStage, {
+          vrmPath: "/vrms/milady-1.vrm",
+          fallbackPreviewUrl: "/vrms/previews/milady-1.png",
+          t: (key: string) => key,
+        }),
+      );
+    });
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent("milady:chat-avatar-voice", {
+          detail: { mouthOpen: 0.42, isSpeaking: false },
+        }),
+      );
+    });
+
+    expect(tree).not.toBeNull();
+    expect(viewerPropsRef.current).toMatchObject({
+      mouthOpen: 0.42,
+      isSpeaking: false,
+    });
+  });
+
+  it("disables canvas parallax and forwards the ready engine callback", async () => {
+    const handleEngineReady = vi.fn();
+    const setCameraAnimation = vi.fn();
+    const setPointerParallaxEnabled = vi.fn();
+    const engine = {
+      setCameraAnimation,
+      setPointerParallaxEnabled,
+    };
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(VrmStage, {
+          vrmPath: "/vrms/milady-1.vrm",
+          fallbackPreviewUrl: "/vrms/previews/milady-1.png",
+          onEngineReady: handleEngineReady,
+          t: (key: string) => key,
+        }),
+      );
+    });
+
+    expect(viewerPropsRef.current).not.toBeNull();
+    expect(viewerPropsRef.current?.pointerParallax).toBeUndefined();
+
+    await act(async () => {
+      const ready = viewerPropsRef.current?.onEngineReady as
+        | ((value: unknown) => void)
+        | undefined;
+      ready?.(engine);
+    });
+
+    expect(setCameraAnimation).toHaveBeenCalledTimes(1);
+    expect(setPointerParallaxEnabled).toHaveBeenCalledWith(false);
+    expect(handleEngineReady).toHaveBeenCalledWith(engine);
   });
 });

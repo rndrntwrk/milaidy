@@ -222,7 +222,7 @@ export function SecretsView() {
         <p className="text-[var(--danger)] text-[13px] mb-2">{error}</p>
         <button
           type="button"
-          className="text-[13px] text-[var(--accent)] bg-transparent border-0 cursor-pointer underline"
+          className="bg-transparent border-0 text-[13px] text-[var(--text)] underline decoration-[var(--accent)] underline-offset-2 cursor-pointer hover:opacity-80"
           onClick={load}
         >
           {t("secretsview.Retry")}

@@ -15,11 +15,6 @@ vi.mock("@milady/app-core/hooks", () => ({
   useBugReport: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
 }));
 
-vi.mock("./shared/AgentModeDropdown", () => ({
-  AgentModeDropdown: () =>
-    React.createElement("div", null, "AgentModeDropdown"),
-}));
-
 vi.mock("@milady/app-core/navigation", () => ({
   getTabGroups: () => [
     {

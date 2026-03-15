@@ -58,6 +58,8 @@ import type { UiLanguage } from "../i18n";
 import type { Tab } from "../navigation";
 import type { UiTheme } from "./persistence";
 
+export type UiShellMode = "companion" | "native";
+
 export type OnboardingStep =
   | "wakeUp"
   | "connection"
@@ -205,6 +207,7 @@ export interface ChatTurnUsage extends ChatTokenUsage {
 export interface AppState {
   // Core
   tab: Tab;
+  uiShellMode: UiShellMode;
   uiLanguage: UiLanguage;
   uiTheme: UiTheme;
   connected: boolean;
@@ -510,6 +513,7 @@ export const AGENT_READY_TIMEOUT_MS = 90_000;
 export interface AppActions {
   // Navigation
   setTab: (tab: Tab) => void;
+  setUiShellMode: (mode: UiShellMode) => void;
   setUiLanguage: (language: UiLanguage) => void;
   setUiTheme: (theme: UiTheme) => void;
 

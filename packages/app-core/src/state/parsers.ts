@@ -6,6 +6,10 @@ import type {
   StreamEventEnvelope,
 } from "../api/client";
 import {
+  computeStreamingDelta as computeStreamingDeltaInternal,
+  mergeStreamingText,
+} from "../utils/streaming-text";
+import {
   AGENT_STATES,
   type ApiLikeError,
   type SlashCommandInput,
@@ -133,39 +137,13 @@ export function parseProactiveMessageEvent(
   return { conversationId, message };
 }
 
+export { mergeStreamingText };
+
 export function computeStreamingDelta(
   existing: string,
   incoming: string,
 ): string {
-  if (!incoming) return "";
-  if (!existing) return incoming;
-  if (incoming === existing) return "";
-  if (incoming.startsWith(existing)) return incoming.slice(existing.length);
-  if (existing.startsWith(incoming)) return "";
-
-  // Small chunks are usually raw token deltas; keep them even if they
-  // duplicate suffix characters (e.g., "l" + "l" in "Hello").
-  if (incoming.length <= 3) return incoming;
-
-  const maxOverlap = Math.min(existing.length, incoming.length);
-  const eLen = existing.length;
-  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
-    // Compare existing's suffix against incoming's prefix without allocating
-    // a substring on every iteration (avoids O(n²) allocations in the worst case).
-    const eStart = eLen - overlap;
-    let match = true;
-    for (let i = 0; i < overlap; i++) {
-      if (existing.charCodeAt(eStart + i) !== incoming.charCodeAt(i)) {
-        match = false;
-        break;
-      }
-    }
-    if (match) {
-      if (overlap === incoming.length) return "";
-      return incoming.slice(overlap);
-    }
-  }
-  return incoming;
+  return computeStreamingDeltaInternal(existing, incoming);
 }
 
 export function normalizeStreamComparisonText(text: string): string {

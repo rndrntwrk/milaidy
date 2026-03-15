@@ -571,12 +571,16 @@ function AdvancedSection() {
 export function SettingsView({
   inModal,
   onClose,
+  initialSection,
 }: {
   inModal?: boolean;
   onClose?: () => void;
+  initialSection?: string;
 } = {}) {
   const { t } = useApp();
-  const [activeSection, setActiveSection] = useState("ai-model");
+  const [activeSection, setActiveSection] = useState(
+    initialSection ?? "ai-model",
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -626,14 +630,6 @@ export function SettingsView({
     void loadPlugins();
   }, [loadPlugins]);
 
-  useEffect(() => {
-    if (visibleSections.length === 0) return;
-    if (!visibleSectionIds.has(activeSection)) {
-      setActiveSection(visibleSections[0].id);
-    }
-  }, [activeSection, visibleSectionIds, visibleSections]);
-
-  // Scroll to section when changed
   const handleSectionChange = useCallback((sectionId: string) => {
     setActiveSection(sectionId);
     if (contentRef.current) {
@@ -643,6 +639,18 @@ export function SettingsView({
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (visibleSections.length === 0) return;
+    if (!visibleSectionIds.has(activeSection)) {
+      setActiveSection(visibleSections[0].id);
+    }
+  }, [activeSection, visibleSectionIds, visibleSections]);
+
+  useEffect(() => {
+    if (!initialSection) return;
+    handleSectionChange(initialSection);
+  }, [handleSectionChange, initialSection]);
 
   // Update active section based on scroll position
   useEffect(() => {

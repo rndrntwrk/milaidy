@@ -18,6 +18,7 @@ export * from "./ErrorBoundary";
 export * from "./format";
 export * from "./GameView";
 export * from "./GameViewOverlay";
+export * from "./HeartbeatsView";
 export * from "./LanguageDropdown";
 export * from "./LifoMonitorPanel";
 export * from "./LoadingScreen";

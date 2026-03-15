@@ -200,7 +200,7 @@ function WakeWordSection({
           {triggers.map((t) => (
             <span
               key={t}
-              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] border border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
+              className="flex items-center gap-1 rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-1.5 py-0.5 text-[10px] text-[var(--text)]"
             >
               {t}
               {triggers.length > 1 && (
@@ -509,10 +509,10 @@ export function VoiceConfigView() {
             : `${providerInfo?.label} — No API key needed`}
         </span>
         <span
-          className={`text-[10px] px-1.5 py-0.5 border ${
+          className={`rounded-full border px-1.5 py-0.5 text-[10px] ${
             isConfigured
-              ? "border-green-600 text-green-600"
-              : "border-yellow-600 text-yellow-600"
+              ? "border-green-600 bg-green-600/10 text-[var(--text)]"
+              : "border-[var(--warn)] bg-[var(--warn-subtle)] text-[var(--text)]"
           }`}
         >
           {isConfigured ? "Configured" : "Needs Setup"}
@@ -565,7 +565,7 @@ export function VoiceConfigView() {
                   href="https://elevenlabs.io"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[var(--accent)] hover:underline"
+                  className="text-[var(--text)] underline decoration-[var(--accent)] underline-offset-2 hover:opacity-80"
                 >
                   {t("voiceconfigview.elevenlabsIo")}
                 </a>

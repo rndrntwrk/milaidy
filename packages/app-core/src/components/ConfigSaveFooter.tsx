@@ -1,3 +1,4 @@
+import { Button } from "@milady/ui";
 import { useApp } from "../state";
 
 export function ConfigSaveFooter({
@@ -26,14 +27,15 @@ export function ConfigSaveFooter({
           {t("configsavefooter.Saved")}
         </span>
       )}
-      <button
+      <Button
         type="button"
-        className="px-4 py-1.5 text-xs font-semibold bg-[var(--accent)] text-[var(--accent-foreground)] cursor-pointer hover:opacity-90 disabled:opacity-50"
+        size="sm"
+        className="rounded-lg"
         disabled={saving}
         onClick={onSave}
       >
         {saving ? "Saving..." : "Save Changes"}
-      </button>
+      </Button>
     </div>
   );
 }

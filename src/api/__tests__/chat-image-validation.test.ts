@@ -396,6 +396,16 @@ describe("buildUserMessages", () => {
     expect(messageToStore.agentId).toBe(TEST_AGENT_ID);
   });
 
+  it("preserves conversationMode on both message variants", () => {
+    const { userMessage, messageToStore } = buildUserMessages({
+      ...baseParams,
+      images: [img],
+      conversationMode: "simple",
+    });
+    expect(userMessage.content.conversationMode).toBe("simple");
+    expect(messageToStore.content.conversationMode).toBe("simple");
+  });
+
   it("compactAttachments retain url and title but drop raw data", () => {
     const { messageToStore } = buildUserMessages({
       ...baseParams,

@@ -1,3 +1,4 @@
+import { Button } from "@milady/ui";
 import { useApp } from "../state";
 
 export type CloudSourceMode = "cloud" | "own-key";
@@ -14,29 +15,33 @@ export function CloudSourceModeToggle({
   ownKeyLabel?: string;
 }) {
   return (
-    <div className="flex border border-[var(--border)]">
-      <button
+    <div className="inline-flex overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--card)] shadow-sm">
+      <Button
         type="button"
-        className={`px-3 py-1.5 text-xs font-semibold cursor-pointer transition-colors ${
+        variant="ghost"
+        size="sm"
+        className={`first:rounded-l-lg first:rounded-r-none last:rounded-l-none last:rounded-r-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
           mode === "cloud"
-            ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
-            : "bg-[var(--card)] text-[var(--muted)] hover:text-[var(--text)]"
+            ? "bg-[var(--accent)] text-[var(--accent-foreground)] hover:bg-[var(--accent)]/90 hover:text-[var(--accent-foreground)]"
+            : "bg-transparent text-[var(--muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
         }`}
         onClick={() => onChange("cloud")}
       >
         {cloudLabel}
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
-        className={`px-3 py-1.5 text-xs font-semibold cursor-pointer transition-colors border-l border-[var(--border)] ${
+        variant="ghost"
+        size="sm"
+        className={`first:rounded-l-lg first:rounded-r-none last:rounded-l-none last:rounded-r-lg border-l border-[var(--border)] px-3 py-1.5 text-xs font-semibold transition-colors ${
           mode === "own-key"
-            ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
-            : "bg-[var(--card)] text-[var(--muted)] hover:text-[var(--text)]"
+            ? "bg-[var(--accent)] text-[var(--accent-foreground)] hover:bg-[var(--accent)]/90 hover:text-[var(--accent-foreground)]"
+            : "bg-transparent text-[var(--muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
         }`}
         onClick={() => onChange("own-key")}
       >
         {ownKeyLabel}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -56,7 +61,7 @@ export function CloudConnectionStatus({
       {connected ? (
         <>
           <span className="text-xs text-[var(--text)]">{connectedText}</span>
-          <span className="text-[10px] px-1.5 py-0.5 border border-green-600 text-green-600">
+          <span className="rounded-full border border-green-600 bg-green-600/10 px-1.5 py-0.5 text-[10px] text-[var(--text)]">
             {t("cloudsourcecontrols.Active")}
           </span>
         </>
@@ -65,7 +70,7 @@ export function CloudConnectionStatus({
           <span className="text-xs text-[var(--muted)]">
             {disconnectedText}
           </span>
-          <span className="text-[10px] px-1.5 py-0.5 border border-yellow-600 text-yellow-600">
+          <span className="rounded-full border border-[var(--warn)] bg-[var(--warn-subtle)] px-1.5 py-0.5 text-[10px] text-[var(--text)]">
             {t("cloudsourcecontrols.Offline")}
           </span>
         </>

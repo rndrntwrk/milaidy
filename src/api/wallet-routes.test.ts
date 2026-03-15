@@ -18,6 +18,7 @@ const ENV_KEYS = [
   "QUICKNODE_BSC_RPC_URL",
   "BSC_RPC_URL",
   "ELIZAOS_CLOUD_API_KEY",
+  "ELIZAOS_CLOUD_BASE_URL",
   "EVM_PRIVATE_KEY",
   "SOLANA_PRIVATE_KEY",
   "SOLANA_RPC_URL",
@@ -207,7 +208,11 @@ describe("wallet routes", () => {
       deps,
       config: {
         env: {},
-        cloud: { apiKey: "cloud-key", enabled: true },
+        cloud: {
+          apiKey: "cloud-key",
+          enabled: true,
+          baseUrl: "https://cloud.example",
+        },
       } as MiladyConfig,
     });
 
@@ -218,12 +223,27 @@ describe("wallet routes", () => {
         cloudManagedAccess: true,
         alchemyKey: null,
         ankrKey: null,
+        bscRpcUrls: expect.arrayContaining([
+          "https://cloud.example/api/v1/proxy/evm-rpc/bsc?api_key=cloud-key",
+        ]),
+        ethereumRpcUrls: expect.arrayContaining([
+          "https://cloud.example/api/v1/proxy/evm-rpc/mainnet?api_key=cloud-key",
+        ]),
+        baseRpcUrls: expect.arrayContaining([
+          "https://cloud.example/api/v1/proxy/evm-rpc/base?api_key=cloud-key",
+        ]),
+        avaxRpcUrls: expect.arrayContaining([
+          "https://cloud.example/api/v1/proxy/evm-rpc/avalanche?api_key=cloud-key",
+        ]),
       }),
     );
     expect(deps.fetchSolanaBalances).not.toHaveBeenCalled();
     expect(deps.fetchSolanaNativeBalanceViaRpc).toHaveBeenCalledWith(
       "So111",
-      expect.arrayContaining(["https://api.mainnet-beta.solana.com/"]),
+      expect.arrayContaining([
+        "https://cloud.example/api/v1/proxy/solana-rpc?api_key=cloud-key",
+        "https://api.mainnet-beta.solana.com/",
+      ]),
     );
     expect(result.payload).toEqual({
       evm: { address: "0xabc", chains: [] },
@@ -242,16 +262,26 @@ describe("wallet routes", () => {
       pathname: "/api/wallet/config",
       config: {
         env: {},
-        cloud: { apiKey: "cloud-key", enabled: true },
+        cloud: {
+          apiKey: "cloud-key",
+          enabled: true,
+          baseUrl: "https://cloud.example",
+        },
       } as MiladyConfig,
     });
 
     expect(result.handled).toBe(true);
     expect(result.payload).toEqual(
       expect.objectContaining({
+        cloudManagedAccess: true,
         nodeRealBscRpcSet: false,
         quickNodeBscRpcSet: false,
         managedBscRpcReady: true,
+        ethereumBalanceReady: true,
+        baseBalanceReady: true,
+        bscBalanceReady: true,
+        avalancheBalanceReady: true,
+        solanaBalanceReady: true,
       }),
     );
   });

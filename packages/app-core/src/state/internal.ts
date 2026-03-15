@@ -3,6 +3,7 @@ export {
   computeStreamingDelta,
   formatSearchBullet,
   formatStartupErrorDetail,
+  mergeStreamingText,
   normalizeCustomActionName,
   normalizeStreamComparisonText,
   parseAgentStartupDiagnostics,

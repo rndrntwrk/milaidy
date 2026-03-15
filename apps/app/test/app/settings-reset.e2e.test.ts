@@ -444,6 +444,12 @@ describe("Settings Reset UI", () => {
     mockUseApp.mockImplementation(() => ({
       t: (k: string) => k,
       ...state,
+      triggers: [],
+      triggersLoading: false,
+      triggersSaving: false,
+      triggerRunsById: {},
+      triggerHealth: null,
+      triggerError: null,
       setState: (key: string, value: unknown) => {
         state[key] = value;
       },
@@ -458,6 +464,13 @@ describe("Settings Reset UI", () => {
       handlePluginConfigSave: vi.fn(),
       handleCloudLogin: vi.fn(),
       handleCloudDisconnect: vi.fn(),
+      loadTriggers: vi.fn(async () => {}),
+      createTrigger: vi.fn(async () => null),
+      updateTrigger: vi.fn(async () => null),
+      deleteTrigger: vi.fn(async () => true),
+      runTriggerNow: vi.fn(async () => true),
+      loadTriggerRuns: vi.fn(async () => {}),
+      loadTriggerHealth: vi.fn(async () => {}),
       loadUpdateStatus: vi.fn(),
       handleReset,
     }));

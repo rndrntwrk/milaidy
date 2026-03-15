@@ -40,6 +40,55 @@ export type VrmEngineState = {
   revealStarted: boolean;
 };
 
+type DebugVector3 = {
+  x: number;
+  y: number;
+  z: number;
+};
+
+type DebugBounds = {
+  min: DebugVector3;
+  max: DebugVector3;
+  center: DebugVector3;
+  size: DebugVector3;
+};
+
+export type VrmEngineDebugInfo = {
+  initialized: boolean;
+  rendererBackend: RendererBackend;
+  cameraProfile: CameraProfile;
+  worldUrl: string | null;
+  sceneChildren: string[];
+  camera: {
+    parentName: string | null;
+    position: DebugVector3 | null;
+    rotation: DebugVector3 | null;
+    fov: number | null;
+    lookAtTarget: DebugVector3;
+  };
+  avatar: {
+    loaded: boolean;
+    ready: boolean;
+    parentName: string | null;
+    position: DebugVector3 | null;
+    scale: DebugVector3 | null;
+    bounds: DebugBounds | null;
+  };
+  world: {
+    loaded: boolean;
+    parentName: string | null;
+    position: DebugVector3 | null;
+    scale: DebugVector3 | null;
+    bounds: DebugBounds | null;
+    rawBounds: DebugBounds | null;
+  };
+  spark: {
+    attached: boolean;
+    parentName: string | null;
+    renderOrder: number | null;
+  };
+};
+
 type UpdateCallback = () => void;
 type RendererBackend = "webgl" | "webgpu";
 type RendererPreference = "auto" | "webgl";
@@ -79,6 +128,17 @@ const DEFAULT_CAMERA_ANIMATION: CameraAnimationConfig = {
   rotationAmplitude: 0.01,
   speed: 0.8,
 };
+const COMPANION_WORLD_SCALE = 3;
+const COMPANION_DARK_WORLD_FLOOR_OFFSET_Y = -0.95;
+const COMPANION_LIGHT_WORLD_FLOOR_OFFSET_Y = -0.35;
+const COMPANION_DOF_APERTURE_SIZE = 0.04;
+const COMPANION_WORLD_MAX_SPLATS = 1_000_000;
+const COMPANION_ZOOM_NEAR_FACTOR = 0.25;
+const COMPANION_ZOOM_MIN_RADIUS = 1.2;
+const SPARK_CLIP_XY = 1.08;
+const SPARK_MAX_STD_DEV = 2.35;
+const SPARK_MIN_ALPHA = 0.0016;
+const SPARK_SORT_DISTANCE = 0.035;
 const MAX_RENDERER_PIXEL_RATIO = 2;
 const AVATAR_RENDERER_OVERRIDE_KEY = "milady.avatarRenderer";
 const KNOWN_VRM_WEBGPU_WARNING =
@@ -89,8 +149,9 @@ let releaseKnownVrmWebGpuWarningFilterGlobal: (() => void) | null = null;
 let sharedDracoLoader: DRACOLoader | null = null;
 const DRACO_DECODER_PATH = resolveAppAssetUrl("vrm-decoders/draco/");
 
-function getRendererPixelRatio(): number {
+function getRendererPixelRatio(sparkOptimized = false): number {
   if (typeof window === "undefined") return 1;
+  if (sparkOptimized) return 1;
   return Math.min(
     Math.max(window.devicePixelRatio || 1, 1),
     MAX_RENDERER_PIXEL_RATIO,
@@ -168,6 +229,65 @@ function configureVrmGltfLoader(loader: GLTFLoader): void {
   loader.setDRACOLoader(getSharedDracoLoader());
 }
 
+function quantileSorted(values: number[], percentile: number): number {
+  if (values.length === 0) return 0;
+  const index = Math.min(
+    values.length - 1,
+    Math.max(0, Math.floor((values.length - 1) * percentile)),
+  );
+  return values[index] ?? 0;
+}
+
+function getRobustSplatAnchor(splat: SparkSplatMesh): THREE.Vector3 {
+  const maxSamples = 4096;
+  const xSamples: number[] = [];
+  const ySamples: number[] = [];
+  const zSamples: number[] = [];
+  const packedSplats = (
+    splat as unknown as {
+      packedSplats?: { count?: number; numSplats?: number };
+    }
+  ).packedSplats;
+  const splatCount =
+    packedSplats?.numSplats ?? packedSplats?.count ?? maxSamples;
+  const sampleStep =
+    splatCount > maxSamples
+      ? Math.max(1, Math.floor(splatCount / maxSamples))
+      : 1;
+
+  splat.forEachSplat((index, center) => {
+    if (sampleStep > 1 && index % sampleStep !== 0) return;
+    xSamples.push(center.x);
+    ySamples.push(center.y);
+    zSamples.push(center.z);
+  });
+
+  if (xSamples.length === 0) {
+    const bounds = splat.getBoundingBox(true);
+    const center = bounds.getCenter(new THREE.Vector3());
+    return new THREE.Vector3(center.x, bounds.min.y, center.z);
+  }
+
+  xSamples.sort((a, b) => a - b);
+  ySamples.sort((a, b) => a - b);
+  zSamples.sort((a, b) => a - b);
+
+  return new THREE.Vector3(
+    quantileSorted(xSamples, 0.5),
+    quantileSorted(ySamples, 0.05),
+    quantileSorted(zSamples, 0.5),
+  );
+}
+
+function getCompanionWorldFloorOffsetY(url: string): number {
+  const normalizedUrl = url.toLowerCase();
+  return normalizedUrl.includes("night") ||
+    normalizedUrl.includes("dark") ||
+    normalizedUrl.includes("lunarpunk")
+    ? COMPANION_DARK_WORLD_FLOOR_OFFSET_Y
+    : COMPANION_LIGHT_WORLD_FLOOR_OFFSET_Y;
+}
+
 function isGzipBuffer(buffer: ArrayBuffer): boolean {
   if (buffer.byteLength < 2) return false;
   const bytes = new Uint8Array(buffer, 0, 2);
@@ -219,6 +339,7 @@ async function loadGltfAsset(
 async function createRenderer(
   canvas: HTMLCanvasElement,
   preference: RendererPreference = "auto",
+  sparkOptimized = false,
 ): Promise<{ backend: RendererBackend; renderer: RendererLike }> {
   if (
     preference !== "webgl" &&
@@ -231,7 +352,7 @@ async function createRenderer(
       const renderer = new WebGPURenderer({
         canvas,
         alpha: true,
-        antialias: true,
+        antialias: !sparkOptimized,
       }) as unknown as RendererLike & { init?: () => Promise<unknown> };
       await renderer.init?.();
       console.info("[VrmEngine] Using WebGPURenderer");
@@ -246,7 +367,8 @@ async function createRenderer(
   const renderer = new THREE.WebGLRenderer({
     canvas,
     alpha: true,
-    antialias: true,
+    antialias: !sparkOptimized,
+    powerPreference: sparkOptimized ? "high-performance" : "default",
   }) as unknown as RendererLike;
   console.info("[VrmEngine] Using WebGLRenderer");
   return { backend: "webgl", renderer };
@@ -310,6 +432,34 @@ export class VrmEngine {
   private pointerParallaxCurrent = new THREE.Vector2();
   private pointerParallaxPosition = new THREE.Vector3();
   private pointerParallaxLookAt = new THREE.Vector3();
+  private dragOrbitTarget = new THREE.Vector2();
+  private dragOrbitCurrent = new THREE.Vector2();
+  private companionZoomTarget = 0;
+  private companionZoomCurrent = 0;
+  private avatarLookTarget: THREE.Group | null = null;
+  private headLookTarget = new THREE.Vector2();
+  private headLookCurrent = new THREE.Vector2();
+  private avatarLookRig: {
+    headBone: THREE.Object3D | null;
+    neckBone: THREE.Object3D | null;
+    spineBone: THREE.Object3D | null;
+    headRestQuaternion: THREE.Quaternion | null;
+    neckRestQuaternion: THREE.Quaternion | null;
+    spineRestQuaternion: THREE.Quaternion | null;
+  } = {
+    headBone: null,
+    neckBone: null,
+    spineBone: null,
+    headRestQuaternion: null,
+    neckRestQuaternion: null,
+    spineRestQuaternion: null,
+  };
+  private readonly tempCameraOrbitOffset = new THREE.Vector3();
+  private readonly tempCameraSpherical = new THREE.Spherical();
+  private readonly tempAvatarLookTarget = new THREE.Vector3();
+  private readonly tempAvatarLocalTarget = new THREE.Vector3();
+  private readonly tempAvatarLocalAnchor = new THREE.Vector3();
+  private readonly tempAvatarHeadWorld = new THREE.Vector3();
   private readyPromise: Promise<void> = Promise.resolve();
   private resolveReady: (() => void) | null = null;
   private rejectReady: ((error?: unknown) => void) | null = null;
@@ -353,12 +503,335 @@ export class VrmEngine {
     const { SparkRenderer } = await this.loadSparkModule();
     const sparkRenderer = new SparkRenderer({
       renderer: this.renderer as THREE.WebGLRenderer,
-      originDistance: 0.25,
-      view: { sortRadial: true },
+      apertureAngle: 0.0,
+      focalDistance: 5.0,
+      originDistance: 1,
+      clipXY: SPARK_CLIP_XY,
+      maxStdDev: SPARK_MAX_STD_DEV,
+      minAlpha: SPARK_MIN_ALPHA,
+      view: {
+        depthBias: 1,
+        sortDistance: SPARK_SORT_DISTANCE,
+        sortRadial: true,
+        sort360: false,
+      },
     });
-    sparkRenderer.renderOrder = -200;
+    sparkRenderer.renderOrder = 9998;
     this.scene.add(sparkRenderer);
     this.sparkRenderer = sparkRenderer;
+  }
+
+  private updateSparkDepthOfField(camera: THREE.PerspectiveCamera): void {
+    const sparkRenderer = this.sparkRenderer;
+    if (!sparkRenderer) return;
+    if (!this.worldMesh) {
+      sparkRenderer.apertureAngle = 0;
+      return;
+    }
+
+    const focalDistance = Math.max(
+      0.5,
+      camera.position.distanceTo(this.pointerParallaxLookAt),
+    );
+    sparkRenderer.focalDistance = focalDistance;
+    sparkRenderer.apertureAngle =
+      2 *
+      Math.atan(
+        (0.5 * COMPANION_DOF_APERTURE_SIZE) / sparkRenderer.focalDistance,
+      );
+  }
+
+  private applyCompanionZoom(
+    camera: THREE.PerspectiveCamera,
+    stableDelta: number,
+  ): void {
+    const isCompanionProfile =
+      this.cameraProfile === "companion" ||
+      this.cameraProfile === "companion_close";
+    const follow = Math.min(1, stableDelta * 10);
+    const targetZoom = isCompanionProfile ? this.companionZoomTarget : 0;
+    this.companionZoomCurrent = THREE.MathUtils.lerp(
+      this.companionZoomCurrent,
+      targetZoom,
+      follow,
+    );
+    if (this.companionZoomCurrent < 1e-4) return;
+
+    const baseRadius = this.baseCameraPosition.distanceTo(this.lookAtTarget);
+    if (!Number.isFinite(baseRadius) || baseRadius < 1e-4) return;
+
+    const orbitOffset = this.tempCameraOrbitOffset
+      .copy(camera.position)
+      .sub(this.lookAtTarget);
+    if (orbitOffset.lengthSq() < 1e-6) return;
+
+    const spherical = this.tempCameraSpherical.setFromVector3(orbitOffset);
+    const nearRadius = Math.max(
+      COMPANION_ZOOM_MIN_RADIUS,
+      baseRadius * COMPANION_ZOOM_NEAR_FACTOR,
+    );
+    spherical.radius = THREE.MathUtils.lerp(
+      baseRadius,
+      nearRadius,
+      this.companionZoomCurrent,
+    );
+    camera.position
+      .copy(this.lookAtTarget)
+      .add(orbitOffset.setFromSpherical(spherical));
+  }
+
+  private configureAvatarLookTracking(vrm: VRM): void {
+    const target = this.avatarLookTarget;
+    if (target) {
+      target.position.set(0, 1.5, 2);
+      target.updateMatrixWorld(true);
+    }
+    if (vrm.lookAt && target) {
+      vrm.lookAt.autoUpdate = true;
+      vrm.lookAt.target = target;
+    }
+
+    const headBone = vrm.humanoid?.getNormalizedBoneNode("head") ?? null;
+    const neckBone = vrm.humanoid?.getNormalizedBoneNode("neck") ?? null;
+    const spineBone =
+      vrm.humanoid?.getNormalizedBoneNode("upperChest") ??
+      vrm.humanoid?.getNormalizedBoneNode("chest") ??
+      vrm.humanoid?.getNormalizedBoneNode("spine") ??
+      null;
+
+    this.avatarLookRig = {
+      headBone,
+      neckBone,
+      spineBone,
+      headRestQuaternion:
+        headBone?.quaternion && typeof headBone.quaternion.clone === "function"
+          ? headBone.quaternion.clone()
+          : null,
+      neckRestQuaternion:
+        neckBone?.quaternion && typeof neckBone.quaternion.clone === "function"
+          ? neckBone.quaternion.clone()
+          : null,
+      spineRestQuaternion:
+        spineBone?.quaternion &&
+        typeof spineBone.quaternion.clone === "function"
+          ? spineBone.quaternion.clone()
+          : null,
+    };
+    this.headLookTarget.set(0, 0);
+    this.headLookCurrent.set(0, 0);
+  }
+
+  private updateAvatarLookTarget(camera: THREE.PerspectiveCamera): void {
+    const target = this.avatarLookTarget;
+    if (!target) return;
+    this.tempAvatarLookTarget.copy(camera.position);
+    this.tempAvatarLookTarget.y -= 0.06;
+    target.position.set(
+      this.tempAvatarLookTarget.x,
+      this.tempAvatarLookTarget.y,
+      this.tempAvatarLookTarget.z,
+    );
+    target.updateMatrixWorld(true);
+  }
+
+  private applyAvatarHeadTracking(
+    camera: THREE.PerspectiveCamera,
+    stableDelta: number,
+  ): void {
+    const vrm = this.vrm;
+    const { headBone, neckBone, spineBone } = this.avatarLookRig;
+    if (!vrm || !headBone) return;
+    if (typeof vrm.scene.worldToLocal !== "function") return;
+    if (
+      typeof THREE.Euler !== "function" ||
+      typeof THREE.Quaternion !== "function"
+    ) {
+      return;
+    }
+
+    headBone.getWorldPosition(this.tempAvatarHeadWorld);
+    this.tempAvatarLocalTarget.copy(camera.position);
+    this.tempAvatarLocalTarget.y -= 0.06;
+    vrm.scene.worldToLocal(this.tempAvatarLocalTarget);
+    vrm.scene.worldToLocal(
+      this.tempAvatarLocalAnchor.copy(this.tempAvatarHeadWorld),
+    );
+    this.tempAvatarLocalTarget.sub(this.tempAvatarLocalAnchor);
+
+    const planarDistance = Math.max(
+      1e-4,
+      Math.hypot(this.tempAvatarLocalTarget.x, this.tempAvatarLocalTarget.z),
+    );
+    this.headLookTarget.set(
+      THREE.MathUtils.clamp(
+        Math.atan2(
+          this.tempAvatarLocalTarget.x,
+          Math.max(this.tempAvatarLocalTarget.z, 1e-4),
+        ),
+        -0.55,
+        0.55,
+      ),
+      THREE.MathUtils.clamp(
+        Math.atan2(this.tempAvatarLocalTarget.y, planarDistance),
+        -0.3,
+        0.24,
+      ),
+    );
+    this.headLookCurrent.lerp(
+      this.headLookTarget,
+      Math.min(1, stableDelta * 4.5),
+    );
+
+    const applyTrackedBone = (
+      bone: THREE.Object3D | null,
+      restQuaternion: THREE.Quaternion | null,
+      yawWeight: number,
+      pitchWeight: number,
+    ) => {
+      if (!bone || !restQuaternion || !bone.quaternion) return;
+      const offsetEuler = new THREE.Euler(
+        -this.headLookCurrent.y * pitchWeight,
+        this.headLookCurrent.x * yawWeight,
+        0,
+        "YXZ",
+      );
+      const offsetQuaternion = new THREE.Quaternion().setFromEuler(offsetEuler);
+      bone.quaternion.copy(restQuaternion).multiply(offsetQuaternion);
+    };
+
+    applyTrackedBone(
+      spineBone,
+      this.avatarLookRig.spineRestQuaternion,
+      0.12,
+      0.06,
+    );
+    applyTrackedBone(
+      neckBone,
+      this.avatarLookRig.neckRestQuaternion,
+      0.26,
+      0.16,
+    );
+    applyTrackedBone(
+      headBone,
+      this.avatarLookRig.headRestQuaternion,
+      0.38,
+      0.24,
+    );
+  }
+
+  private toDebugVector3(vector: THREE.Vector3 | null): DebugVector3 | null {
+    if (!vector) return null;
+    return {
+      x: Number(vector.x.toFixed(4)),
+      y: Number(vector.y.toFixed(4)),
+      z: Number(vector.z.toFixed(4)),
+    };
+  }
+
+  private toDebugBounds(object: THREE.Object3D | null): DebugBounds | null {
+    if (!object) return null;
+    const bounds = new THREE.Box3().setFromObject(object);
+    if (bounds.isEmpty()) return null;
+    return this.toDebugBoundsFromBox(bounds);
+  }
+
+  private toDebugBoundsFromBox(bounds: THREE.Box3 | null): DebugBounds | null {
+    if (!bounds || bounds.isEmpty()) return null;
+    const center = bounds.getCenter(new THREE.Vector3());
+    const size = bounds.getSize(new THREE.Vector3());
+    const min = this.toDebugVector3(bounds.min.clone());
+    const max = this.toDebugVector3(bounds.max.clone());
+    const centerVector = this.toDebugVector3(center);
+    const sizeVector = this.toDebugVector3(size);
+    if (!min || !max || !centerVector || !sizeVector) return null;
+    return {
+      min,
+      max,
+      center: centerVector,
+      size: sizeVector,
+    };
+  }
+
+  getDebugInfo(): VrmEngineDebugInfo {
+    this.scene?.updateMatrixWorld(true);
+    this.vrm?.scene.updateMatrixWorld(true);
+    this.worldMesh?.updateMatrixWorld(true);
+
+    const cameraRotation = this.camera
+      ? new THREE.Vector3(
+          this.camera.rotation.x,
+          this.camera.rotation.y,
+          this.camera.rotation.z,
+        )
+      : null;
+    const lookAtTarget =
+      this.toDebugVector3(this.lookAtTarget) ??
+      ({ x: 0, y: 0, z: 0 } satisfies DebugVector3);
+
+    return {
+      initialized: this.initialized,
+      rendererBackend: this.rendererBackend,
+      cameraProfile: this.cameraProfile,
+      worldUrl: this.worldUrl,
+      sceneChildren:
+        this.scene?.children.map((child) => child.name || child.type) ?? [],
+      camera: {
+        parentName: this.camera?.parent?.name ?? null,
+        position: this.toDebugVector3(this.camera?.position ?? null),
+        rotation: this.toDebugVector3(cameraRotation),
+        fov: this.camera?.fov ?? null,
+        lookAtTarget,
+      },
+      avatar: {
+        loaded: this.vrm !== null,
+        ready: this.vrmReady,
+        parentName: this.vrm?.scene.parent?.name ?? null,
+        position: this.toDebugVector3(this.vrm?.scene.position ?? null),
+        scale: this.toDebugVector3(this.vrm?.scene.scale ?? null),
+        bounds: this.toDebugBounds(this.vrm?.scene ?? null),
+      },
+      world: {
+        loaded: this.worldMesh !== null,
+        parentName: this.worldMesh?.parent?.name ?? null,
+        position: this.toDebugVector3(this.worldMesh?.position ?? null),
+        scale: this.toDebugVector3(this.worldMesh?.scale ?? null),
+        bounds: this.toDebugBounds(this.worldMesh ?? null),
+        rawBounds: this.worldMesh
+          ? this.toDebugBoundsFromBox(this.worldMesh.getBoundingBox(true))
+          : null,
+      },
+      spark: {
+        attached: this.sparkRenderer !== null,
+        parentName: this.sparkRenderer?.parent?.name ?? null,
+        renderOrder: this.sparkRenderer?.renderOrder ?? null,
+      },
+    };
+  }
+
+  setDebugAvatarVisible(visible: boolean): void {
+    if (!this.vrm) return;
+    this.vrm.scene.visible = visible;
+  }
+
+  setDebugWorldPosition(x: number, y: number, z: number): void {
+    if (!this.worldMesh) return;
+    this.worldMesh.position.set(x, y, z);
+  }
+
+  setDebugWorldQuaternion(x: number, y: number, z: number, w: number): void {
+    if (!this.worldMesh) return;
+    this.worldMesh.quaternion.set(x, y, z, w);
+  }
+
+  setDebugCamera(position: THREE.Vector3, target: THREE.Vector3): void {
+    if (!this.camera) return;
+    this.isCameraTransitioning = false;
+    this.camera.position.copy(position);
+    this.baseCameraPosition.copy(position);
+    this.lookAtTarget.copy(target);
+    this.controls?.target.copy(target);
+    this.controls?.update();
+    this.camera.lookAt(target);
   }
 
   whenReady(): Promise<void> {
@@ -385,7 +858,10 @@ export class VrmEngine {
   setup(
     canvas: HTMLCanvasElement,
     onUpdate: UpdateCallback,
-    options?: { rendererPreference?: RendererPreference },
+    options?: {
+      rendererPreference?: RendererPreference;
+      sparkOptimized?: boolean;
+    },
   ): void {
     if (this.initialized && this.renderer?.domElement === canvas) {
       this.onUpdate = onUpdate;
@@ -403,6 +879,7 @@ export class VrmEngine {
         const { backend, renderer } = await createRenderer(
           canvas,
           this.rendererPreference,
+          options?.sparkOptimized ?? false,
         );
         const releaseKnownWebGpuWarningFilter =
           backend === "webgpu" ? installKnownVrmWebGpuWarningFilter() : null;
@@ -414,7 +891,9 @@ export class VrmEngine {
           return;
         }
         this.releaseKnownWebGpuWarningFilter = releaseKnownWebGpuWarningFilter;
-        renderer.setPixelRatio(getRendererPixelRatio());
+        renderer.setPixelRatio(
+          getRendererPixelRatio(options?.sparkOptimized ?? false),
+        );
         renderer.setClearColor(0x000000, 0);
         if (backend === "webgl") {
           const webglRenderer = renderer as THREE.WebGLRenderer;
@@ -432,6 +911,10 @@ export class VrmEngine {
         avatarRoot.name = "AvatarRoot";
         scene.add(avatarRoot);
         this.avatarRoot = avatarRoot;
+        const avatarLookTarget = new THREE.Group();
+        avatarLookTarget.name = "AvatarLookTarget";
+        scene.add(avatarLookTarget);
+        this.avatarLookTarget = avatarLookTarget;
         const cameraRig = new THREE.Group();
         cameraRig.name = "AvatarCameraRig";
         scene.add(cameraRig);
@@ -519,7 +1002,20 @@ export class VrmEngine {
     this.teleportProgress = 1.0;
     this.cleanupTeleportDissolve();
     this.disposeWorld();
+    this.avatarLookTarget?.parent?.remove(this.avatarLookTarget);
+    this.avatarLookTarget = null;
+    this.avatarLookRig = {
+      headBone: null,
+      neckBone: null,
+      spineBone: null,
+      headRestQuaternion: null,
+      neckRestQuaternion: null,
+      spineRestQuaternion: null,
+    };
+    this.headLookTarget.set(0, 0);
+    this.headLookCurrent.set(0, 0);
     if (this.sparkRenderer) {
+      this.sparkRenderer.apertureAngle = 0;
       this.sparkRenderer.removeFromParent();
       this.sparkRenderer = null;
     }
@@ -643,6 +1139,18 @@ export class VrmEngine {
   resetPointerParallax(): void {
     this.pointerParallaxTarget.set(0, 0);
   }
+  setDragOrbitTarget(yaw: number, pitch: number): void {
+    this.dragOrbitTarget.set(
+      THREE.MathUtils.clamp(yaw, -0.6, 0.6),
+      THREE.MathUtils.clamp(pitch, -0.35, 0.35),
+    );
+  }
+  resetDragOrbit(): void {
+    this.dragOrbitTarget.set(0, 0);
+  }
+  setCompanionZoomNormalized(value: number): void {
+    this.companionZoomTarget = THREE.MathUtils.clamp(value, 0, 1);
+  }
   async setWorldUrl(url: string | null): Promise<void> {
     await this.whenReady();
     if (!this.scene) return;
@@ -656,7 +1164,16 @@ export class VrmEngine {
 
     await this.ensureSparkRenderer();
     const { SplatMesh } = await this.loadSparkModule();
-    const splat = new SplatMesh({ url: normalizedUrl, maxSplats: 250_000 });
+    const splat = new SplatMesh({
+      url: normalizedUrl,
+      maxSplats: COMPANION_WORLD_MAX_SPLATS,
+    });
+    splat.frustumCulled = false;
+    splat.quaternion.identity();
+    splat.position.set(0, 0, 0);
+    splat.scale.setScalar(COMPANION_WORLD_SCALE);
+    this.scene.add(splat);
+
     await splat.initialized;
 
     if (
@@ -664,28 +1181,18 @@ export class VrmEngine {
       !this.scene ||
       requestId !== this.worldLoadRequestId
     ) {
+      splat.parent?.remove(splat);
       splat.dispose();
       return;
     }
 
-    splat.frustumCulled = false;
-    splat.renderOrder = -100;
-    const worldBounds = splat.getBoundingBox(true);
-    const worldCenter = worldBounds.getCenter(new THREE.Vector3());
-    const worldCenterBottom = new THREE.Vector3(
-      worldCenter.x,
-      worldBounds.min.y,
-      worldCenter.z,
-    );
-    const authoredScale = 1;
-    splat.quaternion.identity();
-    splat.scale.setScalar(authoredScale);
+    const worldCenterBottom = getRobustSplatAnchor(splat);
+    const worldFloorOffsetY = getCompanionWorldFloorOffsetY(normalizedUrl);
     splat.position.set(
-      -worldCenterBottom.x * authoredScale,
-      -worldCenterBottom.y * authoredScale,
-      -worldCenterBottom.z * authoredScale,
+      -worldCenterBottom.x * COMPANION_WORLD_SCALE,
+      -worldCenterBottom.y * COMPANION_WORLD_SCALE + worldFloorOffsetY,
+      -worldCenterBottom.z * COMPANION_WORLD_SCALE,
     );
-    this.scene.add(splat);
     this.worldMesh = splat;
   }
   async playEmote(
@@ -817,6 +1324,7 @@ export class VrmEngine {
       /* optional in some versions */
     }
     this.cameraManager.ensureFacingCamera(vrm, this.camera);
+    this.configureAvatarLookTracking(vrm);
     if (
       this.loadingAborted ||
       !this.scene ||
@@ -1095,8 +1603,6 @@ if (teleportNoise < teleportRatio) discard;
       this.applyMouthToVrm(this.vrm);
       const blinkValue = this.blinkController.update(rawDelta);
       this.vrm.expressionManager?.setValue("blink", blinkValue);
-      this.vrm.update(stableDelta);
-      this.footShadow.update(this.vrm);
     }
 
     // Process camera transition
@@ -1148,13 +1654,36 @@ if (teleportNoise < teleportRatio) discard;
       this.baseCameraPosition.length() > 0 &&
       !this.isCameraTransitioning
     ) {
-      this.cameraManager.applyCameraSway(
+      this.cameraManager.applyCameraMotion(
         camera,
         this.baseCameraPosition,
+        this.lookAtTarget,
         this.cameraAnimation,
         this.elapsedTime,
       );
     }
+    const dragOrbitFollow = Math.min(1, stableDelta * 9);
+    this.dragOrbitCurrent.lerp(this.dragOrbitTarget, dragOrbitFollow);
+    if (
+      this.dragOrbitCurrent.lengthSq() > 1e-6 &&
+      this.baseCameraPosition.lengthSq() > 1e-6
+    ) {
+      const orbitOffset = this.tempCameraOrbitOffset
+        .copy(camera.position)
+        .sub(this.lookAtTarget);
+      if (orbitOffset.lengthSq() > 1e-6) {
+        const spherical = this.tempCameraSpherical.setFromVector3(orbitOffset);
+        spherical.theta += this.dragOrbitCurrent.x;
+        spherical.phi = THREE.MathUtils.clamp(
+          spherical.phi + this.dragOrbitCurrent.y,
+          0.2,
+          Math.PI - 0.2,
+        );
+        orbitOffset.setFromSpherical(spherical);
+        camera.position.copy(this.lookAtTarget).add(orbitOffset);
+      }
+    }
+    this.applyCompanionZoom(camera, stableDelta);
     if (this.pointerParallaxEnabled) {
       const follow = Math.min(1, stableDelta * 7.5);
       this.pointerParallaxCurrent.lerp(this.pointerParallaxTarget, follow);
@@ -1188,10 +1717,20 @@ if (teleportNoise < teleportRatio) discard;
     if (!manualCameraActive || this.isCameraTransitioning) {
       camera.lookAt(this.pointerParallaxLookAt);
     }
+    if (this.vrm) {
+      this.updateAvatarLookTarget(camera);
+      this.vrm.update(stableDelta);
+      this.applyAvatarHeadTracking(camera, stableDelta);
+      this.footShadow.update(this.vrm);
+    }
+    this.updateSparkDepthOfField(camera);
     renderer.render(scene, camera);
     this.onUpdate?.();
   }
   private disposeWorld(): void {
+    if (this.sparkRenderer) {
+      this.sparkRenderer.apertureAngle = 0;
+    }
     if (!this.worldMesh) {
       this.worldMesh = null;
       return;

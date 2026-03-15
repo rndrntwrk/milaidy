@@ -81,6 +81,8 @@ const hoisted = (() => {
   const mockLoaderLoadAsync = vi.fn();
   const mockLoaderSetDRACOLoader = vi.fn();
   const mockLoaderSetMeshoptDecoder = vi.fn();
+  const mockSparkRendererOptions: unknown[] = [];
+  const mockSplatMeshOptions: unknown[] = [];
   const mockDracoLoaderSetDecoderConfig = vi.fn();
   const mockDracoLoaderSetDecoderPath = vi.fn();
   const mockDracoLoaderPreload = vi.fn();
@@ -98,6 +100,8 @@ const hoisted = (() => {
     mockLoaderRegister,
     mockLoaderSetDRACOLoader,
     mockLoaderSetMeshoptDecoder,
+    mockSparkRendererOptions,
+    mockSplatMeshOptions,
     mockMixerInstance,
     mockMToonMaterialLoaderPlugin,
     mockRendererInstance,
@@ -323,7 +327,14 @@ vi.mock("@sparkjsdev/spark", () => ({
   SparkRenderer: class MockSparkRenderer {
     renderOrder = 0;
     uniforms = { numSplats: { value: 0 } };
+    focalDistance = 0;
+    apertureAngle = 0;
     removeFromParent = vi.fn();
+    constructor(options?: { focalDistance?: number; apertureAngle?: number }) {
+      this.focalDistance = options?.focalDistance ?? 0;
+      this.apertureAngle = options?.apertureAngle ?? 0;
+      hoisted.mockSparkRendererOptions.push(options ?? {});
+    }
   },
   SplatGenerator: class MockSplatGenerator {},
   SplatMesh: class MockSplatMesh {
@@ -335,15 +346,19 @@ vi.mock("@sparkjsdev/spark", () => ({
     visible = true;
     children: unknown[] = [];
     position = { set: vi.fn() };
-    quaternion = { set: vi.fn() };
+    quaternion = { set: vi.fn(), identity: vi.fn() };
     scale = { setScalar: vi.fn() };
     getBoundingBox = vi.fn(() => ({
       min: { y: 0 },
       getCenter: vi.fn(() => ({ x: 0, y: 0, z: 0 })),
       getSize: vi.fn(() => ({ x: 1, y: 1, z: 1 })),
     }));
+    forEachSplat = vi.fn();
     update = vi.fn();
     dispose = vi.fn();
+    constructor(options?: unknown) {
+      hoisted.mockSplatMeshOptions.push(options ?? {});
+    }
   },
 }));
 
@@ -730,6 +745,16 @@ describe("VrmEngine", () => {
       ).not.toThrow();
     });
 
+    it("setCompanionZoomNormalized clamps to the supported range", () => {
+      const engineAny = engine as unknown as { companionZoomTarget: number };
+
+      engine.setCompanionZoomNormalized(-0.5);
+      expect(engineAny.companionZoomTarget).toBe(0);
+
+      engine.setCompanionZoomNormalized(1.4);
+      expect(engineAny.companionZoomTarget).toBe(1);
+    });
+
     it("resize() handles zero or negative dimensions gracefully", async () => {
       const canvas = createMockCanvas();
       engine.setup(canvas, vi.fn());
@@ -742,6 +767,75 @@ describe("VrmEngine", () => {
 
     it("resize() is a no-op before setup()", () => {
       expect(() => engine.resize(800, 600)).not.toThrow();
+    });
+
+    it("configures Spark native depth of field for world rendering", async () => {
+      const canvas = createMockCanvas();
+      engine.setup(canvas, vi.fn());
+      await waitForEngineReady(engine);
+
+      await engine.setWorldUrl("/worlds/companion-day.spz");
+
+      expect(hoisted.mockSplatMeshOptions.at(-1)).toMatchObject({
+        url: "/worlds/companion-day.spz",
+        maxSplats: 1_000_000,
+      });
+      expect(hoisted.mockSparkRendererOptions.at(-1)).toMatchObject({
+        apertureAngle: 0,
+        clipXY: 1.08,
+        focalDistance: 5,
+        maxStdDev: 2.35,
+        minAlpha: 0.0016,
+        view: expect.objectContaining({
+          depthBias: 1,
+          sortDistance: 0.035,
+          sortRadial: true,
+          sort360: false,
+        }),
+      });
+
+      const engineAny = engine as unknown as {
+        sparkRenderer: { focalDistance: number; apertureAngle: number };
+        updateSparkDepthOfField: (camera: {
+          position: { distanceTo: (target: unknown) => number };
+        }) => void;
+      };
+      engineAny.updateSparkDepthOfField({
+        position: { distanceTo: () => 4 },
+      });
+
+      expect(engineAny.sparkRenderer.focalDistance).toBe(4);
+      expect(engineAny.sparkRenderer.apertureAngle).toBeCloseTo(
+        2 * Math.atan(0.0125 / 4),
+      );
+    });
+
+    it("uses theme-specific floor offsets for companion worlds", async () => {
+      mockSceneInstance.add.mockClear();
+
+      const canvas = createMockCanvas();
+      engine.setup(canvas, vi.fn());
+      await waitForEngineReady(engine);
+
+      await engine.setWorldUrl("/worlds/companion-day.spz");
+      const daySplat = mockSceneInstance.add.mock.calls.at(-1)?.[0] as {
+        position: { set: ReturnType<typeof vi.fn> };
+      };
+
+      await engine.setWorldUrl("/worlds/companion-night.spz");
+      const nightSplat = mockSceneInstance.add.mock.calls.at(-1)?.[0] as {
+        position: { set: ReturnType<typeof vi.fn> };
+      };
+
+      const dayPosition = daySplat.position.set.mock.calls.at(-1) ?? [];
+      const nightPosition = nightSplat.position.set.mock.calls.at(-1) ?? [];
+
+      expect(dayPosition[0]).toBeCloseTo(0, 5);
+      expect(dayPosition[1]).toBeCloseTo(-0.35, 5);
+      expect(dayPosition[2]).toBeCloseTo(0, 5);
+      expect(nightPosition[0]).toBeCloseTo(0, 5);
+      expect(nightPosition[1]).toBeCloseTo(-0.95, 5);
+      expect(nightPosition[2]).toBeCloseTo(0, 5);
     });
   });
 

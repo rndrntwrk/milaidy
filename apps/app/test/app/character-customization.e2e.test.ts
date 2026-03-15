@@ -303,7 +303,11 @@ vi.mock("@milady/app-core/api", () => ({
     getOnboardingOptions: vi.fn().mockResolvedValue({
       styles: [],
     }),
-    updateCharacter: vi.fn().mockResolvedValue({ ok: true }),
+    updateCharacter: vi.fn().mockResolvedValue({
+      ok: true,
+      character: {},
+      agentName: "TestAgent",
+    }),
   },
 }));
 
@@ -331,11 +335,13 @@ vi.mock("@milady/app-core/config", () => ({
   defaultRegistry: {},
 }));
 
+import { client } from "@milady/app-core/api";
 import { CharacterView } from "../../src/components/CharacterView";
 
 type CharacterData = {
   name: string;
-  bio: string[];
+  username?: string;
+  bio: string | string[];
   system: string;
   adjectives: string[];
   topics: string[];
@@ -453,6 +459,52 @@ function createCharacterUIState(): CharacterState {
   };
 }
 
+function prepareCharacterDraftForSave(draft: CharacterData) {
+  const prepared: Record<string, unknown> = { ...draft };
+
+  if (typeof prepared.bio === "string") {
+    const lines = prepared.bio
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    prepared.bio = lines.length > 0 ? lines : undefined;
+  }
+
+  if (Array.isArray(prepared.adjectives) && prepared.adjectives.length === 0) {
+    delete prepared.adjectives;
+  }
+  if (Array.isArray(prepared.topics) && prepared.topics.length === 0) {
+    delete prepared.topics;
+  }
+  if (
+    Array.isArray(prepared.postExamples) &&
+    prepared.postExamples.length === 0
+  ) {
+    delete prepared.postExamples;
+  }
+  if (
+    Array.isArray(prepared.messageExamples) &&
+    prepared.messageExamples.length === 0
+  ) {
+    delete prepared.messageExamples;
+  }
+
+  if (prepared.style && typeof prepared.style === "object") {
+    const style = prepared.style as Record<string, string[] | undefined>;
+    if (style.all && style.all.length === 0) delete style.all;
+    if (style.chat && style.chat.length === 0) delete style.chat;
+    if (style.post && style.post.length === 0) delete style.post;
+    if (!style.all && !style.chat && !style.post) delete prepared.style;
+  }
+
+  if (prepared.name) prepared.username = prepared.name;
+  if (!prepared.name) delete prepared.name;
+  if (!prepared.username) delete prepared.username;
+  if (!prepared.system) delete prepared.system;
+
+  return prepared;
+}
+
 describe("CharacterView UI", () => {
   let state: CharacterState;
   let _saveCharacterCalled: boolean;
@@ -460,6 +512,8 @@ describe("CharacterView UI", () => {
   beforeEach(() => {
     state = createCharacterUIState();
     _saveCharacterCalled = false;
+    vi.mocked(client.updateCharacter).mockClear();
+    vi.mocked(client.updateConfig).mockClear();
 
     mockUseApp.mockReset();
     mockUseApp.mockImplementation(() => ({
@@ -482,7 +536,9 @@ describe("CharacterView UI", () => {
       },
       handleCharacterArrayInput: vi.fn(),
       handleCharacterStyleInput: vi.fn(),
-      setState: vi.fn(),
+      setState: vi.fn((key: string, value: unknown) => {
+        (state as Record<string, unknown>)[key] = value;
+      }),
     }));
   });
 
@@ -498,7 +554,7 @@ describe("CharacterView UI", () => {
     expect(json).not.toBeNull();
   });
 
-  it("renders the character roster and current character card", async () => {
+  it("renders the character roster as a single strip without a separate current character card", async () => {
     let tree: TestRenderer.ReactTestRenderer | null = null;
 
     await act(async () => {
@@ -509,32 +565,20 @@ describe("CharacterView UI", () => {
       (node) => node.props["data-testid"] === "character-roster-grid",
     );
     expect(roster).toBeDefined();
+    expect(roster?.props.className).toContain("overflow-x-auto");
 
-    const currentName = tree?.root.find(
-      (node) => node.props["data-testid"] === "character-current-name",
-    );
-    expect(currentName?.children).toContain("TestAgent");
+    expect(
+      tree?.root.findAll(
+        (node) => node.props["data-testid"] === "character-current-card",
+      ) ?? [],
+    ).toHaveLength(0);
   });
 
-  it("keeps customize sections hidden until customize is opened", async () => {
+  it("starts in custom mode when the saved draft differs from the selected preset", async () => {
     let tree: TestRenderer.ReactTestRenderer | null = null;
 
     await act(async () => {
       tree = TestRenderer.create(React.createElement(CharacterView));
-    });
-
-    expect(
-      tree?.root.findAll(
-        (node) => node.props["data-testid"] === "character-customize-grid",
-      ) ?? [],
-    ).toHaveLength(0);
-
-    const customizeButton = tree?.root.find(
-      (node) => node.props["data-testid"] === "character-customize-toggle",
-    );
-
-    await act(async () => {
-      customizeButton?.props.onClick();
     });
 
     expect(
@@ -544,7 +588,7 @@ describe("CharacterView UI", () => {
     ).toHaveLength(1);
   });
 
-  it("renders style and examples editors after customize is opened", async () => {
+  it("turning custom off applies the selected character defaults and hides the editors", async () => {
     let tree: TestRenderer.ReactTestRenderer | null = null;
 
     await act(async () => {
@@ -556,42 +600,71 @@ describe("CharacterView UI", () => {
     );
 
     await act(async () => {
-      customizeButton?.props.onClick();
+      customizeButton?.props.onCheckedChange(false);
     });
 
-    const styleGrid = tree?.root.find(
-      (node) => node.props["data-testid"] === "character-style-examples-grid",
-    );
-    expect(styleGrid?.props.className).toContain("lg:grid-cols-2");
-
-    const styleEditor = tree?.root.find(
-      (node) => node.props["data-testid"] === "character-style-editor",
-    );
-    expect(styleEditor?.props.className).toContain("overflow-hidden");
-
-    const styleEditorScroll = tree?.root.find(
-      (node) => node.props["data-testid"] === "character-style-editor-scroll",
-    );
-    expect(styleEditorScroll?.props.className).toContain("overflow-y-auto");
-
-    const styleEntries =
+    expect(state.characterDraft?.name).toBe("Reimu");
+    expect(state.characterDraft?.bio).toBe("Reimu is soft and friendly");
+    expect(state.characterDraft?.system).toBe("You are Reimu");
+    expect(state.selectedVrmIndex).toBe(1);
+    expect(
       tree?.root.findAll(
-        (node) =>
-          typeof node.props["data-testid"] === "string" &&
-          /^style-entry-(all|chat|post)-\d+$/.test(node.props["data-testid"]),
-      ) ?? [];
-    expect(styleEntries).toHaveLength(3);
+        (node) => node.props["data-testid"] === "character-customize-grid",
+      ) ?? [],
+    ).toHaveLength(0);
+  });
 
-    const styleEditors =
-      tree?.root.findAll(
-        (node) =>
-          node.type === "textarea" &&
-          typeof node.props["data-testid"] === "string" &&
-          /^style-entry-editor-(all|chat|post)-\d+$/.test(
-            node.props["data-testid"],
-          ),
-      ) ?? [];
-    expect(styleEditors).toHaveLength(3);
+  it("keeps custom overrides when switching characters with custom on", async () => {
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CharacterView));
+    });
+
+    const sakuyaCard = tree?.root.find(
+      (node) => node.props["data-testid"] === "character-preset-Noted.",
+    );
+
+    await act(async () => {
+      sakuyaCard?.props.onClick();
+    });
+
+    expect(state.characterDraft?.name).toBe("TestAgent");
+    expect(state.characterDraft?.bio).toEqual(["A helpful AI assistant"]);
+    expect(state.characterDraft?.system).toBe("You are helpful");
+    expect(state.selectedVrmIndex).toBe(4);
+  });
+
+  it("uses the selected character defaults when switching characters with custom off", async () => {
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CharacterView));
+    });
+
+    const customizeButton = tree?.root.find(
+      (node) => node.props["data-testid"] === "character-customize-toggle",
+    );
+
+    await act(async () => {
+      customizeButton?.props.onCheckedChange(false);
+    });
+
+    const sakuyaCard = tree?.root.find(
+      (node) => node.props["data-testid"] === "character-preset-Noted.",
+    );
+
+    await act(async () => {
+      sakuyaCard?.props.onClick();
+    });
+
+    expect(state.characterDraft?.name).toBe("Sakuya");
+    expect(state.characterDraft?.bio).toBe("Sakuya is precise");
+    expect(state.characterDraft?.system).toBe(
+      "You are Sakuya, exact and calm.",
+    );
+    expect(state.characterDraft?.topics).toEqual(["systems", "writing"]);
+    expect(state.selectedVrmIndex).toBe(4);
   });
 
   it("renders save button", async () => {
@@ -612,6 +685,134 @@ describe("CharacterView UI", () => {
         ),
     );
     expect(saveButtons.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it("saves the full character payload, voice config, and avatar selection", async () => {
+    state.characterDraft = {
+      name: "Custom Sakuya",
+      bio: "  First line  \n\n Second line ",
+      system: "Be exact.",
+      adjectives: ["precise", "calm"],
+      topics: ["systems", "writing"],
+      style: {
+        all: ["Be exact"],
+        chat: ["Stay calm"],
+        post: ["Be clear"],
+      },
+      messageExamples: [
+        {
+          examples: [
+            { name: "{{user1}}", content: { text: "status?" } },
+            { name: "Custom Sakuya", content: { text: "On track." } },
+          ],
+        },
+      ],
+      postExamples: ["Mission remains on schedule."],
+    };
+    state.selectedVrmIndex = 4;
+
+    mockUseApp.mockReset();
+    mockUseApp.mockImplementation(() => ({
+      uiLanguage: "en",
+      t: (k: string) => k,
+      ...state,
+      loadCharacter: vi.fn(),
+      loadRegistryStatus: vi.fn(),
+      loadDropStatus: vi.fn(),
+      handleSaveCharacter: async () => {
+        _saveCharacterCalled = true;
+        const prepared = prepareCharacterDraftForSave(state.characterDraft!);
+        const { agentName } = await client.updateCharacter(
+          prepared as unknown as CharacterData,
+        );
+        await client.updateConfig({
+          ui: { avatarIndex: state.selectedVrmIndex },
+        });
+        state.characterSaving = false;
+        state.characterDirty = false;
+        state.characterSaveSuccess = "Character saved successfully.";
+        if (agentName) {
+          state.characterData = {
+            ...(state.characterData ?? createCharacterUIState().characterData!),
+            ...(prepared as CharacterData),
+            name: agentName,
+          };
+        }
+      },
+      handleCharacterFieldInput: (field: string, value: unknown) => {
+        if (state.characterDraft) {
+          (state.characterDraft as Record<string, unknown>)[field] = value;
+          state.characterDirty = true;
+        }
+      },
+      handleCharacterArrayInput: vi.fn(),
+      handleCharacterStyleInput: vi.fn(),
+      setState: vi.fn((key: string, value: unknown) => {
+        (state as Record<string, unknown>)[key] = value;
+      }),
+    }));
+
+    vi.mocked(client.updateCharacter).mockResolvedValue({
+      ok: true,
+      character: {} as CharacterData,
+      agentName: "Custom Sakuya",
+    });
+
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CharacterView));
+    });
+
+    const saveButton = tree?.root.find(
+      (node) =>
+        node.type === "button" &&
+        node.children.some(
+          (child) => typeof child === "string" && child === "SAVE CHARACTER",
+        ),
+    );
+
+    await act(async () => {
+      saveButton?.props.onClick();
+    });
+
+    expect(_saveCharacterCalled).toBe(true);
+    expect(client.updateCharacter).toHaveBeenCalledWith({
+      name: "Custom Sakuya",
+      username: "Custom Sakuya",
+      bio: ["First line", "Second line"],
+      system: "Be exact.",
+      adjectives: ["precise", "calm"],
+      topics: ["systems", "writing"],
+      style: {
+        all: ["Be exact"],
+        chat: ["Stay calm"],
+        post: ["Be clear"],
+      },
+      messageExamples: [
+        {
+          examples: [
+            { name: "{{user1}}", content: { text: "status?" } },
+            { name: "Custom Sakuya", content: { text: "On track." } },
+          ],
+        },
+      ],
+      postExamples: ["Mission remains on schedule."],
+    });
+    expect(client.updateConfig).toHaveBeenNthCalledWith(1, {
+      messages: {
+        tts: {
+          provider: "elevenlabs",
+          elevenlabs: {
+            voiceId: "EXAVITQu4vr4xnSDxMaL",
+            modelId: "eleven_flash_v2_5",
+          },
+        },
+      },
+    });
+    expect(client.updateConfig).toHaveBeenNthCalledWith(2, {
+      ui: { avatarIndex: 4 },
+    });
   });
 
   it("shows loading state when characterLoading is true", async () => {

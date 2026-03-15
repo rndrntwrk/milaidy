@@ -652,6 +652,8 @@ export type ConnectorConfig = { [key: string]: ConnectorFieldValue };
 
 export type MiladyConfig = {
   meta?: {
+    /** Explicit onboarding completion marker. Reset clears the entire state dir. */
+    onboardingComplete?: boolean;
     /** Last Milady version that wrote this config. */
     lastTouchedVersion?: string;
     /** ISO timestamp when this config was last written. */

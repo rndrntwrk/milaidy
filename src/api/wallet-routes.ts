@@ -112,6 +112,10 @@ export async function handleWalletRoutes(
           alchemyKey,
           ankrKey,
           cloudManagedAccess: rpcReadiness.cloudManagedAccess,
+          bscRpcUrls: rpcReadiness.bscRpcUrls,
+          ethereumRpcUrls: rpcReadiness.ethereumRpcUrls,
+          baseRpcUrls: rpcReadiness.baseRpcUrls,
+          avaxRpcUrls: rpcReadiness.avalancheRpcUrls,
           nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
           quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
           bscRpcUrl: process.env.BSC_RPC_URL,
@@ -174,6 +178,10 @@ export async function handleWalletRoutes(
           alchemyKey,
           ankrKey,
           cloudManagedAccess: rpcReadiness.cloudManagedAccess,
+          bscRpcUrls: rpcReadiness.bscRpcUrls,
+          ethereumRpcUrls: rpcReadiness.ethereumRpcUrls,
+          baseRpcUrls: rpcReadiness.baseRpcUrls,
+          avaxRpcUrls: rpcReadiness.avalancheRpcUrls,
           nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
           quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
           bscRpcUrl: process.env.BSC_RPC_URL,
@@ -320,17 +328,28 @@ export async function handleWalletRoutes(
   if (method === "GET" && pathname === "/api/wallet/config") {
     const addresses = deps.getWalletAddresses();
     const rpcReadiness = resolveWalletRpcReadiness(config);
+    const alchemyKeySet = Boolean(process.env.ALCHEMY_API_KEY?.trim());
+    const ankrKeySet = Boolean(process.env.ANKR_API_KEY?.trim());
     const nodeRealSet = Boolean(process.env.NODEREAL_BSC_RPC_URL?.trim());
     const quickNodeSet = Boolean(process.env.QUICKNODE_BSC_RPC_URL?.trim());
     const configStatus: WalletConfigStatus = {
-      alchemyKeySet: Boolean(process.env.ALCHEMY_API_KEY),
-      infuraKeySet: Boolean(process.env.INFURA_API_KEY),
-      ankrKeySet: Boolean(process.env.ANKR_API_KEY),
+      alchemyKeySet,
+      infuraKeySet: Boolean(process.env.INFURA_API_KEY?.trim()),
+      ankrKeySet,
       nodeRealBscRpcSet: nodeRealSet,
       quickNodeBscRpcSet: quickNodeSet,
       managedBscRpcReady: rpcReadiness.managedBscRpcReady,
-      heliusKeySet: Boolean(process.env.HELIUS_API_KEY),
-      birdeyeKeySet: Boolean(process.env.BIRDEYE_API_KEY),
+      cloudManagedAccess: rpcReadiness.cloudManagedAccess,
+      evmBalanceReady: rpcReadiness.evmBalanceReady,
+      ethereumBalanceReady:
+        alchemyKeySet || rpcReadiness.ethereumRpcUrls.length > 0,
+      baseBalanceReady: alchemyKeySet || rpcReadiness.baseRpcUrls.length > 0,
+      bscBalanceReady: ankrKeySet || rpcReadiness.bscRpcUrls.length > 0,
+      avalancheBalanceReady:
+        alchemyKeySet || rpcReadiness.avalancheRpcUrls.length > 0,
+      solanaBalanceReady: rpcReadiness.solanaBalanceReady,
+      heliusKeySet: Boolean(process.env.HELIUS_API_KEY?.trim()),
+      birdeyeKeySet: Boolean(process.env.BIRDEYE_API_KEY?.trim()),
       evmChains: [
         "Ethereum",
         "Base",

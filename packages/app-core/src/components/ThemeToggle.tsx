@@ -91,8 +91,7 @@ export function ThemeToggle({
       <button
         type="button"
         onClick={handleToggle}
-        className={`flex items-center justify-center w-8 h-8 rounded-full bg-white/5 hover:bg-white/20 border border-transparent hover:border-white/30 transition-all cursor-pointer ${className ?? ""}`}
-        style={{ color: "var(--text)" }}
+        className={`flex items-center justify-center w-8 h-8 rounded-full bg-white/5 text-white/80 hover:text-white hover:bg-white/20 border border-transparent hover:border-white/30 transition-all cursor-pointer ${isDark ? "bg-white/14 text-white border-white/20 shadow-sm" : ""} ${className ?? ""}`}
         title={label}
         aria-label={label}
         data-testid="theme-toggle"

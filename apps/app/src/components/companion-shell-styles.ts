@@ -38,7 +38,7 @@ export const TOP_BAR_COLORS: Record<string, string> = {
 
 export function tabFlags(tab: Tab) {
   const isSkills = tab === "skills";
-  const isSettings = tab === "settings";
+  const isSettings = tab === "settings" || tab === "triggers";
   const isPlugins = tab === "plugins";
   const isLifo = tab === "lifo";
   const isStream = tab === "stream";
@@ -49,7 +49,6 @@ export function tabFlags(tab: Tab) {
   const isAdvancedOverlay =
     tab === "advanced" ||
     tab === "actions" ||
-    tab === "triggers" ||
     tab === "fine-tuning" ||
     tab === "trajectories" ||
     tab === "runtime" ||

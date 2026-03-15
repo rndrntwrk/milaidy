@@ -283,4 +283,34 @@ describe("MessageContent — XML action stripping", () => {
     const rendered = renderText(text);
     expect(rendered).toBe("Hello, how can I help you today?");
   });
+
+  it("shows only the <text> portion of structured response XML", () => {
+    const text =
+      "<response><thought>internal chain</thought><text>Hello world</text></response>";
+    const rendered = renderText(text);
+    expect(rendered).toBe("Hello world");
+    expect(rendered).not.toContain("internal chain");
+  });
+
+  it("shows partial streamed <text> content without leaking wrapper XML", () => {
+    const text = "<response><thought>internal chain</thought><text>Hello world";
+    const rendered = renderText(text);
+    expect(rendered).toBe("Hello world");
+    expect(rendered).not.toContain("<response>");
+    expect(rendered).not.toContain("internal chain");
+  });
+
+  it("renders nothing until structured response text starts", () => {
+    const text = "<response><thought>internal chain</thought>";
+    const rendered = renderText(text);
+    expect(rendered).toBe("");
+  });
+
+  it("strips analysis XML blocks from displayed text", () => {
+    const text =
+      "Visible text <analysis>do not show this planning output</analysis> after";
+    const rendered = renderText(text);
+    expect(rendered.replace(/\s+/g, " ").trim()).toBe("Visible text after");
+    expect(rendered).not.toContain("planning output");
+  });
 });

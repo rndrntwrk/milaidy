@@ -34,17 +34,27 @@ describe("navigation", () => {
 
     expect(pathForTab("triggers")).toBe("/triggers");
     expect(tabFromPath("/triggers")).toBe("triggers");
-    expect(titleForTab("triggers")).toBe("Triggers");
+    expect(titleForTab("triggers")).toBe("Heartbeats");
   });
 
-  test("includes advanced tabs in Advanced group", () => {
+  test("promotes heartbeats to a top-level group and keeps other tools in Advanced", () => {
+    const settings = ALL_TAB_GROUPS.find((group) => group.label === "Settings");
+    expect(settings).toBeDefined();
+    expect(settings?.tabs).toEqual(["settings"]);
+
+    const heartbeats = ALL_TAB_GROUPS.find(
+      (group) => group.label === "Heartbeats",
+    );
+    expect(heartbeats).toBeDefined();
+    expect(heartbeats?.tabs).toEqual(["triggers"]);
+
     const advanced = ALL_TAB_GROUPS.find((group) => group.label === "Advanced");
     expect(advanced).toBeDefined();
     expect(advanced?.tabs.includes("advanced")).toBe(true);
     expect(advanced?.tabs.includes("plugins")).toBe(true);
     expect(advanced?.tabs.includes("skills")).toBe(true);
     expect(advanced?.tabs.includes("actions")).toBe(true);
-    expect(advanced?.tabs.includes("triggers")).toBe(true);
+    expect(advanced?.tabs.includes("triggers")).toBe(false);
     expect(advanced?.tabs.includes("fine-tuning")).toBe(true);
     expect(advanced?.tabs.includes("trajectories")).toBe(true);
     expect(advanced?.tabs.includes("runtime")).toBe(true);
@@ -85,16 +95,23 @@ describe("navigation", () => {
     expect(apps?.tabs).toEqual(["apps"]);
   });
 
-  test("keeps character/wallets/knowledge/social as top-level groups and moves triggers to Advanced", () => {
+  test("keeps character/wallets/knowledge/social as top-level groups and adds heartbeats to the main nav", () => {
     const labels = ALL_TAB_GROUPS.map((group) => group.label);
     expect(labels).toContain("Character");
     expect(labels).toContain("Wallets");
     expect(labels).toContain("Knowledge");
     expect(labels).toContain("Social");
+    expect(labels).toContain("Heartbeats");
     expect(labels).not.toContain("Tasks");
     expect(labels).not.toContain("Triggers");
+    const settings = ALL_TAB_GROUPS.find((group) => group.label === "Settings");
+    expect(settings?.tabs).toEqual(["settings"]);
+    const heartbeats = ALL_TAB_GROUPS.find(
+      (group) => group.label === "Heartbeats",
+    );
+    expect(heartbeats?.tabs).toEqual(["triggers"]);
     const advanced = ALL_TAB_GROUPS.find((group) => group.label === "Advanced");
-    expect(advanced?.tabs.includes("triggers")).toBe(true);
+    expect(advanced?.tabs.includes("triggers")).toBe(false);
     expect(labels).not.toContain("Agent");
   });
 });

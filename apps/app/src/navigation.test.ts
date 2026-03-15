@@ -98,14 +98,21 @@ describe("pathForTab", () => {
 });
 
 describe("tab groups", () => {
-  it("keeps advanced tools grouped together", () => {
+  it("promotes heartbeats to a top-level group and keeps advanced tools grouped together", () => {
+    const settings = ALL_TAB_GROUPS.find((group) => group.label === "Settings");
+    expect(settings?.tabs).toEqual(["settings"]);
+
+    const heartbeats = ALL_TAB_GROUPS.find(
+      (group) => group.label === "Heartbeats",
+    );
+    expect(heartbeats?.tabs).toEqual(["triggers"]);
+
     const advanced = ALL_TAB_GROUPS.find((group) => group.label === "Advanced");
     expect(advanced?.tabs).toEqual([
       "advanced",
       "plugins",
       "skills",
       "actions",
-      "triggers",
       "fine-tuning",
       "trajectories",
       "runtime",
@@ -152,6 +159,12 @@ describe("tab groups", () => {
       "Stream",
     );
     expect(getTabGroups(true).map((group) => group.label)).toContain("Stream");
+  });
+
+  it("shows Heartbeats in the visible top-level groups", () => {
+    expect(getTabGroups(false).map((group) => group.label)).toContain(
+      "Heartbeats",
+    );
   });
 });
 

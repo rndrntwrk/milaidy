@@ -1,11 +1,9 @@
 import { LanguageDropdown, ThemeToggle } from "@milady/app-core/components";
-import { useBugReport } from "@milady/app-core/hooks";
 import { getTabGroups, type TabGroup } from "@milady/app-core/navigation";
 import { useApp } from "@milady/app-core/state";
 import { IconTooltip as IconButtonTooltip } from "@milady/ui";
 import {
   AlertTriangle,
-  Bug,
   CircleDollarSign,
   Menu,
   Monitor,
@@ -14,7 +12,6 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { AgentModeDropdown } from "./shared/AgentModeDropdown";
 
 const NAV_LABEL_I18N_KEY: Record<string, string> = {
   Chat: "nav.chat",
@@ -26,6 +23,7 @@ const NAV_LABEL_I18N_KEY: Record<string, string> = {
   Social: "nav.social",
   Apps: "nav.apps",
   Settings: "nav.settings",
+  Heartbeats: "nav.heartbeats",
   Advanced: "nav.advanced",
 };
 
@@ -101,8 +99,6 @@ export function Header(_props: HeaderProps) {
       ? "border-warn text-warn bg-warn/10"
       : "border-ok text-ok bg-ok/10";
 
-  const { open: openBugReport } = useBugReport();
-
   // Minimum 44px touch targets for mobile
   const iconBtnBase =
     "inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] border border-border/50 bg-bg/50 backdrop-blur-md cursor-pointer text-sm leading-none hover:border-accent hover:text-txt font-medium hover:-translate-y-0.5 transition-all duration-300 hover:shadow-[0_0_15px_rgba(var(--accent),0.5)] active:scale-95 rounded-xl text-txt shadow-sm";
@@ -154,78 +150,54 @@ export function Header(_props: HeaderProps) {
           {/* Right side controls */}
           <div className="flex shrink-0 items-center justify-end gap-2 lg:w-[260px]">
             {/* Scrollable controls */}
-            <div className="scrollbar-hide min-w-0 hidden sm:block">
-              <div className="flex items-center gap-2 w-max ml-auto pr-0.5">
-                {/* Cloud Credits */}
-                {(miladyCloudEnabled || miladyCloudConnected) &&
-                  (miladyCloudConnected ? (
-                    <a
-                      href={miladyCloudTopUpUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 h-11 border rounded-md font-mono text-[11px] sm:text-xs no-underline transition-all duration-200 hover:border-accent hover:text-txt hover:shadow-sm ${miladyCloudCredits === null ? "border-muted text-muted" : creditColor}`}
-                      title={t("header.CloudCreditsBalanc")}
-                    >
-                      <CircleDollarSign className="w-3.5 h-3.5" />
-                      {miladyCloudCredits === null
-                        ? t("header.miladyCloudConnected")
-                        : `$${miladyCloudCredits.toFixed(2)}`}
-                    </a>
-                  ) : (
-                    <span className="inline-flex shrink-0 items-center gap-1 px-2.5 py-1.5 h-11 border border-danger text-danger bg-danger/10 rounded-md font-mono text-[11px] sm:text-xs">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">
-                        {t("header.cloudDisconnected")}
-                      </span>
-                      <span className="sm:hidden">{t("header.Cloud")}</span>
-                    </span>
-                  ))}
-              </div>
-            </div>
-
-            <div className="hidden sm:flex items-center gap-2 shrink-0">
-              <IconButtonTooltip label={shellToggleActionLabel}>
-                <button
-                  type="button"
-                  onClick={handleShellToggle}
-                  className={iconBtnBase}
-                  aria-label={shellToggleActionLabel}
-                  data-testid="ui-shell-toggle"
+            {/* Cloud Credits */}
+            {(miladyCloudEnabled || miladyCloudConnected) &&
+              (miladyCloudConnected ? (
+                <a
+                  href={miladyCloudTopUpUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 h-11 border rounded-md font-mono text-[11px] sm:text-xs no-underline transition-all duration-200 hover:border-accent hover:text-txt hover:shadow-sm ${miladyCloudCredits === null ? "border-muted text-muted" : creditColor}`}
+                  title={t("header.CloudCreditsBalanc")}
                 >
-                  {isNativeShell ? (
-                    <Smartphone className="w-5 h-5" />
-                  ) : (
-                    <Monitor className="w-5 h-5" />
-                  )}
-                </button>
-              </IconButtonTooltip>
-              <IconButtonTooltip
-                label={t("header.reportBug")}
-                shortcut="Shift+?"
+                  <CircleDollarSign className="w-3.5 h-3.5" />
+                  {miladyCloudCredits === null
+                    ? t("header.miladyCloudConnected")
+                    : `$${miladyCloudCredits.toFixed(2)}`}
+                </a>
+              ) : (
+                <span className="inline-flex shrink-0 items-center gap-1 px-2.5 py-1.5 h-11 border border-danger text-danger bg-danger/10 rounded-md font-mono text-[11px] sm:text-xs">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">
+                    {t("header.cloudDisconnected")}
+                  </span>
+                  <span className="sm:hidden">{t("header.Cloud")}</span>
+                </span>
+              ))}
+
+            <IconButtonTooltip label={shellToggleActionLabel}>
+              <button
+                type="button"
+                onClick={handleShellToggle}
+                className={iconBtnBase}
+                aria-label={shellToggleActionLabel}
+                data-testid="ui-shell-toggle"
               >
-                <button
-                  type="button"
-                  onClick={openBugReport}
-                  aria-label={t("header.reportBug")}
-                  className={iconBtnBase}
-                >
-                  <Bug className="w-5 h-5" />
-                </button>
-              </IconButtonTooltip>
-            </div>
+                {isNativeShell ? (
+                  <Smartphone className="w-5 h-5" />
+                ) : (
+                  <Monitor className="w-5 h-5" />
+                )}
+              </button>
+            </IconButtonTooltip>
 
-            <div className="hidden md:flex items-center gap-2 shrink-0">
-              {/* Agent Mode */}
-              <AgentModeDropdown />
-
-              {/* Language Selector + Theme Toggle */}
-              <LanguageDropdown
-                uiLanguage={uiLanguage}
-                setUiLanguage={setUiLanguage}
-                t={t}
-              />
-              <ThemeToggle uiTheme={uiTheme} setUiTheme={setUiTheme} t={t} />
-            </div>
+            {/* Language Selector + Theme Toggle */}
+            <LanguageDropdown
+              uiLanguage={uiLanguage}
+              setUiLanguage={setUiLanguage}
+              t={t}
+            />
+            <ThemeToggle uiTheme={uiTheme} setUiTheme={setUiTheme} t={t} />
 
             {/* Mobile Hamburger */}
             <button
@@ -326,7 +298,6 @@ export function Header(_props: HeaderProps) {
               {/* Settings for Mobile */}
               <div className="mt-4 pt-4 border-t border-border flex flex-col gap-3">
                 <div className="flex flex-col gap-2 justify-between">
-                  <AgentModeDropdown />
                   <LanguageDropdown
                     uiLanguage={uiLanguage}
                     setUiLanguage={setUiLanguage}
@@ -351,20 +322,6 @@ export function Header(_props: HeaderProps) {
                         ) : (
                           <Monitor className="w-5 h-5" />
                         )}
-                      </button>
-                    </IconButtonTooltip>
-
-                    <IconButtonTooltip
-                      label={t("header.reportBug")}
-                      shortcut="Shift+?"
-                    >
-                      <button
-                        type="button"
-                        onClick={openBugReport}
-                        aria-label={t("header.reportBug")}
-                        className={iconBtnBase}
-                      >
-                        <Bug className="w-5 h-5" />
                       </button>
                     </IconButtonTooltip>
                   </div>

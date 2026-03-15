@@ -67,6 +67,13 @@ function createWalletConfig() {
     nodeRealBscRpcSet: true,
     quickNodeBscRpcSet: true,
     managedBscRpcReady: true,
+    cloudManagedAccess: true,
+    evmBalanceReady: true,
+    ethereumBalanceReady: true,
+    baseBalanceReady: true,
+    bscBalanceReady: true,
+    avalancheBalanceReady: true,
+    solanaBalanceReady: true,
     heliusKeySet: false,
     birdeyeKeySet: false,
     evmChains: ["Ethereum", "Base", "BSC"],
@@ -206,7 +213,7 @@ function createContext(
     walletNftsLoading: false,
     inventoryView: "tokens",
     inventorySort: "value",
-    inventoryChainFocus: "bsc",
+    inventoryChainFocus: "all",
     inventoryCollapseOtherEvm: true,
     inventoryCollapseSolana: true,
     walletError: null,
@@ -268,8 +275,8 @@ beforeEach(() => {
   }
 });
 
-describe("InventoryView BSC-first", () => {
-  it("defaults to BSC-focused token list", async () => {
+describe("InventoryView unified wallets", () => {
+  it("defaults to a unified all-chains wallet view", async () => {
     const ctx = createContext();
     mockUseApp.mockImplementation(() => ctx);
 
@@ -280,11 +287,21 @@ describe("InventoryView BSC-first", () => {
 
     const content = text(tree?.root);
     expect(content).toContain("wallet.portfolio");
-    expect(content).toContain("BSC");
-    expect(content).not.toContain("Ethereum native");
+    expect(content).toContain("All Chains");
+    expect(content).toContain("tokenstable.nativeGasEthereum");
+    expect(content).toContain("tokenstable.nativeGasSolana");
+    expect(content).toContain("EVM");
+    expect(content).toContain("Solana");
+    expect(
+      tree?.root.findAll(
+        (node) =>
+          node.type === "button" &&
+          node.props["data-testid"] === "wallet-token-preflight",
+      ),
+    ).toHaveLength(0);
   });
 
-  it("switches focus with BSC/All controls", async () => {
+  it("switches focus with chain controls", async () => {
     const ctx = createContext();
     mockUseApp.mockImplementation(() => ctx);
 
@@ -293,28 +310,37 @@ describe("InventoryView BSC-first", () => {
       tree = TestRenderer.create(React.createElement(InventoryView));
     });
 
-    const allButton = tree?.root.findAll(
+    const bscButton = tree?.root.findAll(
       (node) =>
         node.type === "button" &&
-        node.props["data-testid"] === "wallet-focus-all",
+        node.props["data-testid"] === "wallet-focus-bsc",
     )[0];
-    expect(allButton).toBeDefined();
+    expect(bscButton).toBeDefined();
 
     await act(async () => {
-      allButton.props.onClick();
+      bscButton.props.onClick();
     });
-    expect(ctx.setState).toHaveBeenCalledWith("inventoryChainFocus", "all");
+    expect(ctx.setState).toHaveBeenCalledWith("inventoryChainFocus", "bsc");
 
     await act(async () => {
       tree?.update(React.createElement(InventoryView));
     });
 
     const content = text(tree?.root);
-    expect(content).toContain("Ethereum");
+    expect(content).toContain("BSC Mainnet");
+    expect(content).not.toContain("Ethereum native");
+    expect(
+      tree?.root.findAll(
+        (node) =>
+          node.type === "button" &&
+          node.props["data-testid"] === "wallet-token-preflight",
+      ),
+    ).toHaveLength(1);
   });
 
   it("applies BNB gas readiness threshold at 0.005", async () => {
     const lowCtx = createContext({
+      inventoryChainFocus: "bsc",
       walletBalances: createWalletBalances("0.0049"),
     });
     mockUseApp.mockImplementation(() => lowCtx);
@@ -327,6 +353,7 @@ describe("InventoryView BSC-first", () => {
     expect(content).toContain("wallet.status.tradeNotReady");
 
     const readyCtx = createContext({
+      inventoryChainFocus: "bsc",
       walletBalances: createWalletBalances("0.005"),
     });
     mockUseApp.mockImplementation(() => readyCtx);
@@ -339,6 +366,7 @@ describe("InventoryView BSC-first", () => {
 
   it("renders BSC chain errors and token preflight/quote actions", async () => {
     const errorCtx = createContext({
+      inventoryChainFocus: "bsc",
       walletBalances: createWalletBalances("0.006", "BSC RPC timeout"),
     });
     mockUseApp.mockImplementation(() => errorCtx);
@@ -349,9 +377,11 @@ describe("InventoryView BSC-first", () => {
     });
 
     const content = text(tree?.root);
-    expect(content).toContain("wallet.status.feedOffline");
+    expect(content).toContain("BSC Offline");
+    expect(content).toContain("BSC: BSC RPC timeout");
 
     const normalCtx = createContext({
+      inventoryChainFocus: "bsc",
       walletBalances: createWalletBalances("0.006", null),
     });
     mockUseApp.mockImplementation(() => normalCtx);
@@ -394,9 +424,41 @@ describe("InventoryView BSC-first", () => {
     expect(normalCtx.getBscTradeQuote).toHaveBeenCalled();
   });
 
-  it("shows managed RPC setup guidance when no providers are available", async () => {
+  it("keeps the all-chains view free of BSC-only RPC warnings", async () => {
+    const balances = createWalletBalances("0.006", null);
+    balances.evm.chains = balances.evm.chains.filter(
+      (chain) => chain.chain !== "BSC",
+    );
     const ctx = createContext({
       miladyCloudConnected: false,
+      walletBalances: balances,
+      walletConfig: {
+        ...createWalletConfig(),
+        ankrKeySet: false,
+        managedBscRpcReady: false,
+        bscBalanceReady: false,
+      },
+    });
+    mockUseApp.mockImplementation(() => ctx);
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(InventoryView));
+    });
+
+    const content = text(tree?.root);
+    expect(content).not.toContain("portfolioheader.ConnectViaElizaCl");
+  });
+
+  it("shows managed RPC setup guidance when BSC is focused and unavailable", async () => {
+    const balances = createWalletBalances("0.006", null);
+    balances.evm.chains = balances.evm.chains.filter(
+      (chain) => chain.chain !== "BSC",
+    );
+    const ctx = createContext({
+      inventoryChainFocus: "bsc",
+      miladyCloudConnected: false,
+      walletBalances: balances,
       walletConfig: {
         ...createWalletConfig(),
         alchemyKeySet: false,
@@ -405,6 +467,8 @@ describe("InventoryView BSC-first", () => {
         nodeRealBscRpcSet: false,
         quickNodeBscRpcSet: false,
         managedBscRpcReady: false,
+        cloudManagedAccess: false,
+        bscBalanceReady: false,
       },
     });
     mockUseApp.mockImplementation(() => ctx);
@@ -420,6 +484,7 @@ describe("InventoryView BSC-first", () => {
 
   it("supports quick trade input and preset actions", async () => {
     const ctx = createContext({
+      inventoryChainFocus: "bsc",
       walletBalances: createWalletBalances("0.006", null),
     });
     mockUseApp.mockImplementation(() => ctx);
@@ -482,6 +547,7 @@ describe("InventoryView BSC-first", () => {
 
   it("supports manually adding a token contract to wallet rows", async () => {
     const ctx = createContext({
+      inventoryChainFocus: "bsc",
       walletBalances: createWalletBalances("0.006", null),
     });
     mockUseApp.mockImplementation(() => ctx);
@@ -545,6 +611,7 @@ describe("InventoryView BSC-first", () => {
 
   it("executes latest quote via inline confirmation", async () => {
     const ctx = createContext({
+      inventoryChainFocus: "bsc",
       walletBalances: createWalletBalances("0.02", null),
     });
     mockUseApp.mockImplementation(() => ctx);
@@ -607,6 +674,7 @@ describe("InventoryView BSC-first", () => {
 
   it("shows two-step notice for sell in user-sign mode", async () => {
     const ctx = createContext({
+      inventoryChainFocus: "bsc",
       walletBalances: createWalletBalances("0.02", null),
     });
     ctx.executeBscTrade = vi.fn(async () =>
@@ -695,6 +763,7 @@ describe("InventoryView BSC-first", () => {
 
   it("refreshes pending tx status after execute", async () => {
     const ctx = createContext({
+      inventoryChainFocus: "bsc",
       walletBalances: createWalletBalances("0.02", null),
     });
     ctx.executeBscTrade = vi.fn(async () =>

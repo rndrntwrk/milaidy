@@ -15,11 +15,6 @@ vi.mock("@milady/app-core/hooks", () => ({
   useBugReport: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
 }));
 
-vi.mock("../../src/components/shared/AgentModeDropdown", () => ({
-  AgentModeDropdown: () =>
-    React.createElement("div", null, "AgentModeDropdown"),
-}));
-
 vi.mock("@milady/app-core/navigation", () => ({
   getTabGroups: () => [
     {
@@ -114,17 +109,18 @@ describe("header status", () => {
     expect(shellToggle).toBeDefined();
   });
 
-  it("renders bug report button with aria-label", async () => {
+  it("renders language and theme controls", async () => {
     let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(Header));
     });
     expect(tree).toBeDefined();
-    const bugButton = tree?.root.findAll(
+    const controls = tree?.root.findAll(
       (node) =>
-        node.type === "button" &&
-        node.props["aria-label"] === "header.reportBug",
+        typeof node.children?.[0] === "string" &&
+        (node.children[0] === "LanguageDropdown" ||
+          node.children[0] === "ThemeToggle"),
     );
-    expect(bugButton?.length).toBeGreaterThan(0);
+    expect(controls?.length).toBeGreaterThan(0);
   });
 });

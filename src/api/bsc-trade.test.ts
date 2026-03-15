@@ -19,6 +19,7 @@ const ENV_KEYS = [
   "QUICKNODE_BSC_RPC_URL",
   "BSC_RPC_URL",
   "ELIZAOS_CLOUD_API_KEY",
+  "ELIZAOS_CLOUD_BASE_URL",
 ] as const;
 const ORIGINAL_ENV = Object.fromEntries(
   ENV_KEYS.map((key) => [key, process.env[key]]),
@@ -175,6 +176,58 @@ describe("bsc-trade preflight", () => {
     expect(result.ok).toBe(true);
     expect(result.checks.rpcReady).toBe(true);
     expect(result.rpcUrlHost).toBe("bsc-dataseed1.binance.org");
+  });
+
+  it("prefers the cloud BSC RPC proxy when cloud credentials are available", async () => {
+    process.env.ELIZAOS_CLOUD_API_KEY = "ck-test";
+    process.env.ELIZAOS_CLOUD_BASE_URL = "https://cloud.example";
+
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const { method } = decodeMethod(init);
+        if (method === "eth_chainId") {
+          return new Response(
+            JSON.stringify({ jsonrpc: "2.0", id: 1, result: "0x38" }),
+          );
+        }
+        if (method === "eth_getBalance") {
+          return new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              result: `0x${ethers.parseEther("0.02").toString(16)}`,
+            }),
+          );
+        }
+        if (method === "eth_getCode") {
+          return new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              result: "0x60006000",
+            }),
+          );
+        }
+        return new Response(
+          JSON.stringify({ jsonrpc: "2.0", id: 1, result: "0x1" }),
+        );
+      },
+    );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const result = await buildBscTradePreflight({
+      walletAddress: WALLET,
+      tokenAddress: TOKEN,
+      cloudManagedAccess: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.checks.rpcReady).toBe(true);
+    expect(result.rpcUrlHost).toBe("cloud.example");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://cloud.example/api/v1/proxy/evm-rpc/bsc?api_key=ck-test",
+      expect.any(Object),
+    );
   });
 });
 

@@ -4,6 +4,13 @@
  * Extracted from AppContext to be reusable across providers.
  */
 
+import {
+  computeStreamingDelta as computeStreamingDeltaInternal,
+  mergeStreamingText,
+} from "../utils/streaming-text";
+
+export { mergeStreamingText };
+
 /**
  * Compute the streaming delta between the accumulated text and the new token.
  * The SSE endpoint may emit the full text so far or just the delta — this
@@ -13,13 +20,7 @@ export function computeStreamingDelta(
   accumulated: string,
   token: string,
 ): string {
-  if (!token) return "";
-  // If the token starts with the accumulated text, it's a full replacement
-  if (token.startsWith(accumulated)) {
-    return token.slice(accumulated.length);
-  }
-  // Otherwise it's an incremental delta
-  return token;
+  return computeStreamingDeltaInternal(accumulated, token);
 }
 
 /**

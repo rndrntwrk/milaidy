@@ -3,14 +3,11 @@ import { LanguageDropdown, ThemeToggle } from "@milady/app-core/components";
 import type { UiLanguage } from "@milady/app-core/i18n";
 import type { UiTheme } from "@milady/app-core/state";
 import { memo } from "react";
-import { AgentModeDropdown } from "../shared/AgentModeDropdown";
+import { ChatModeToggle } from "../shared/ChatModeToggle";
 
 import type { TranslatorFn } from "./walletUtils";
 
 export interface CompanionHeaderProps {
-  // Camera toggle
-  cameraZoomed?: boolean;
-  setCameraZoomed?: React.Dispatch<React.SetStateAction<boolean>>;
   // Agent identity & state
   name: string;
   agentState: AgentState | string;
@@ -43,8 +40,6 @@ export const CompanionHeader = memo(function CompanionHeader(
   props: CompanionHeaderProps,
 ) {
   const {
-    cameraZoomed,
-    setCameraZoomed,
     handleSwitchToNativeShell,
     uiLanguage,
     setUiLanguage,
@@ -54,8 +49,8 @@ export const CompanionHeader = memo(function CompanionHeader(
   } = props;
 
   return (
-    <header className="relative flex justify-center items-center mb-6 w-full z-10">
-      <div className="absolute top-2 right-0 flex items-center gap-2.5">
+    <header className="relative z-10 mb-6 flex w-full items-center justify-center pointer-events-none">
+      <div className="pointer-events-auto absolute top-2 right-0 flex items-center gap-2.5">
         <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-full px-1.5 py-1.5 backdrop-blur-xl shadow-xl hover:border-white/20 transition-all">
           <button
             type="button"
@@ -81,54 +76,7 @@ export const CompanionHeader = memo(function CompanionHeader(
             </svg>
           </button>
 
-          {setCameraZoomed && (
-            <button
-              type="button"
-              onClick={() => setCameraZoomed((z) => !z)}
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-white/5 text-white/80 hover:text-white hover:bg-white/20 border border-transparent hover:border-white/30 transition-all"
-              title={
-                cameraZoomed ? t("companion.zoomOut") : t("companion.zoomIn")
-              }
-              data-testid="ui-zoom-toggle"
-            >
-              {cameraZoomed ? (
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  <line x1="8" y1="11" x2="14" y2="11" />
-                </svg>
-              ) : (
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  <line x1="11" y1="8" x2="11" y2="14" />
-                  <line x1="8" y1="11" x2="14" y2="11" />
-                </svg>
-              )}
-            </button>
-          )}
-
-          <AgentModeDropdown variant="companion" />
+          <ChatModeToggle variant="companion" />
 
           <ThemeToggle
             uiTheme={uiTheme}

@@ -1,5 +1,8 @@
 import { client } from "@milady/app-core/api";
-import { STOP_EMOTE_EVENT } from "@milady/app-core/events";
+import {
+  CHAT_AVATAR_VOICE_EVENT,
+  STOP_EMOTE_EVENT,
+} from "@milady/app-core/events";
 import { useRenderGuard } from "@milady/app-core/hooks";
 import { resolveAppAssetUrl } from "@milady/app-core/utils";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
@@ -18,17 +21,23 @@ export const VrmStage = memo(function VrmStage({
   worldUrl,
   fallbackPreviewUrl,
   cameraProfile = "companion",
+  onEngineReady,
   t,
 }: {
   vrmPath: string;
   worldUrl?: string;
   fallbackPreviewUrl: string;
   cameraProfile?: CameraProfile;
+  onEngineReady?: (engine: VrmEngine) => void;
   t: TranslatorFn;
 }) {
   useRenderGuard("VrmStage");
   const [vrmLoaded, setVrmLoaded] = useState(false);
   const [showVrmFallback, setShowVrmFallback] = useState(false);
+  const [chatAvatarVoice, setChatAvatarVoice] = useState({
+    mouthOpen: 0,
+    isSpeaking: false,
+  });
   const vrmEngineRef = useRef<VrmEngine | null>(null);
   const fallbackVrmPathRef = useRef(vrmPath);
 
@@ -42,9 +51,10 @@ export const VrmStage = memo(function VrmStage({
         rotationAmplitude: cameraProfile === "companion_close" ? 0.008 : 0.012,
         speed: cameraProfile === "companion_close" ? 0.48 : 0.42,
       });
-      engine.setPointerParallaxEnabled(true);
+      engine.setPointerParallaxEnabled(false);
+      onEngineReady?.(engine);
     },
-    [cameraProfile],
+    [cameraProfile, onEngineReady],
   );
 
   const handleVrmEngineState = useCallback((state: VrmEngineState) => {
@@ -70,6 +80,24 @@ export const VrmStage = memo(function VrmStage({
     }, 4000);
     return () => window.clearTimeout(timer);
   }, [vrmPath]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          mouthOpen?: number;
+          isSpeaking?: boolean;
+        }>
+      ).detail;
+      setChatAvatarVoice({
+        mouthOpen: typeof detail?.mouthOpen === "number" ? detail.mouthOpen : 0,
+        isSpeaking: detail?.isSpeaking === true,
+      });
+    };
+    window.addEventListener(CHAT_AVATAR_VOICE_EVENT, handler);
+    return () => window.removeEventListener(CHAT_AVATAR_VOICE_EVENT, handler);
+  }, []);
 
   // Subscribe to WebSocket emote events so the companion avatar plays emotes
   // triggered from the EmotePicker or agent actions.
@@ -111,9 +139,8 @@ export const VrmStage = memo(function VrmStage({
         <VrmViewer
           vrmPath={vrmPath}
           worldUrl={worldUrl}
-          mouthOpen={0}
-          isSpeaking={false}
-          pointerParallax
+          mouthOpen={chatAvatarVoice.mouthOpen}
+          isSpeaking={chatAvatarVoice.isSpeaking}
           cameraProfile={cameraProfile}
           onEngineReady={handleVrmEngineReady}
           onEngineState={handleVrmEngineState}

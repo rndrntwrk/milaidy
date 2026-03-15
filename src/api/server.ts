@@ -347,6 +347,43 @@ export interface ConversationMeta {
   updatedAt: string;
 }
 
+function hasPersistedOnboardingState(config: MiladyConfig): boolean {
+  if (config.meta?.onboardingComplete === true) {
+    return true;
+  }
+
+  const agents = config.agents;
+  if (!agents) {
+    return false;
+  }
+
+  if (Array.isArray(agents.list) && agents.list.length > 0) {
+    return true;
+  }
+
+  return Boolean(
+    agents.defaults?.workspace?.trim() ||
+      agents.defaults?.adminEntityId?.trim(),
+  );
+}
+
+function resolveConversationGreetingText(
+  runtime: AgentRuntime,
+  lang: string,
+): string {
+  const localizedExamples =
+    lang === "zh-CN"
+      ? ((runtime.character as Record<string, unknown>).postExamples_zhCN as
+          | string[]
+          | undefined)
+      : undefined;
+  const postExamples =
+    localizedExamples && localizedExamples.length > 0
+      ? localizedExamples
+      : (runtime.character.postExamples ?? []);
+  return postExamples[Math.floor(Math.random() * postExamples.length)] ?? "";
+}
+
 interface AgentStartupDiagnostics {
   phase: string;
   attempt: number;
@@ -382,6 +419,8 @@ interface ServerState {
   adminEntityId: UUID | null;
   /** Conversation metadata by conversation id. */
   conversations: Map<string, ConversationMeta>;
+  /** Pending restore of persisted conversations into the in-memory map. */
+  conversationRestorePromise: Promise<void> | null;
   /** Tombstones for conversation IDs explicitly deleted by the user. */
   deletedConversationIds: Set<string>;
   /** Cloud manager for Eliza Cloud integration (null when cloud is disabled). */
@@ -2158,6 +2197,12 @@ async function discoverSkills(
     }
   }
 
+  // Managed skills in the state dir (~/.milady/skills by default)
+  const managedSkills = path.join(resolveStateDir(), "skills");
+  if (fs.existsSync(managedSkills)) {
+    skillsDirs.add(managedSkills);
+  }
+
   // Workspace-local skills
   const workspaceSkills = path.join(workspaceDir, "skills");
   if (fs.existsSync(workspaceSkills)) {
@@ -3200,6 +3245,7 @@ async function persistAssistantConversationMemory(
 }
 
 const VALID_CHANNEL_TYPES = new Set<string>(Object.values(ChannelType));
+const VALID_CONVERSATION_MODES = new Set(["simple", "power"]);
 
 function parseRequestChannelType(
   value: unknown,
@@ -3216,6 +3262,22 @@ function parseRequestChannelType(
     return null;
   }
   return normalized as ChannelType;
+}
+
+function parseConversationMode(
+  value: unknown,
+): "simple" | "power" | undefined | null {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!VALID_CONVERSATION_MODES.has(normalized)) {
+    return null;
+  }
+  return normalized as "simple" | "power";
 }
 
 interface ChatImageAttachment {
@@ -3337,8 +3399,17 @@ export function buildUserMessages(params: {
   agentId: UUID;
   roomId: UUID;
   channelType: ChannelType;
+  conversationMode?: "simple" | "power";
 }): { userMessage: MessageMemory; messageToStore: MessageMemory } {
-  const { images, prompt, userId, agentId, roomId, channelType } = params;
+  const {
+    images,
+    prompt,
+    userId,
+    agentId,
+    roomId,
+    channelType,
+    conversationMode,
+  } = params;
   const { attachments, compactAttachments } = buildChatAttachments(images);
   const id = crypto.randomUUID() as UUID;
   // In-memory message carries _data/_mimeType so action handlers can upload.
@@ -3351,6 +3422,7 @@ export function buildUserMessages(params: {
       text: prompt,
       source: "client_chat",
       channelType,
+      ...(conversationMode ? { conversationMode } : {}),
       ...(attachments?.length ? { attachments } : {}),
     },
   });
@@ -3365,6 +3437,7 @@ export function buildUserMessages(params: {
           text: prompt,
           source: "client_chat",
           channelType,
+          ...(conversationMode ? { conversationMode } : {}),
           attachments: compactAttachments,
         },
       })
@@ -3390,11 +3463,13 @@ async function readChatRequestPayload(
   prompt: string;
   channelType: ChannelType;
   images?: ChatImageAttachment[];
+  conversationMode?: "simple" | "power";
 } | null> {
   const body = await helpers.readJsonBody<{
     text?: string;
     channelType?: string;
     images?: ChatImageAttachment[];
+    conversationMode?: string;
   }>(req, res, { maxBytes });
   if (!body) return null;
   if (!body.text?.trim()) {
@@ -3404,6 +3479,11 @@ async function readChatRequestPayload(
   const channelType = parseRequestChannelType(body.channelType, ChannelType.DM);
   if (!channelType) {
     helpers.error(res, "channelType is invalid", 400);
+    return null;
+  }
+  const conversationMode = parseConversationMode(body.conversationMode);
+  if (conversationMode === null) {
+    helpers.error(res, "conversationMode is invalid", 400);
     return null;
   }
   const imageValidationError = validateChatImages(body.images);
@@ -3424,6 +3504,7 @@ async function readChatRequestPayload(
     prompt: body.text.trim(),
     channelType,
     images,
+    ...(conversationMode ? { conversationMode } : {}),
   };
 }
 
@@ -7623,7 +7704,28 @@ async function handleRequest(
 
   // ── GET /api/onboarding/status ──────────────────────────────────────────
   if (method === "GET" && pathname === "/api/onboarding/status") {
-    const complete = configFileExists() && Boolean(state.config.agents);
+    let config = state.config;
+    let complete =
+      Boolean(state.runtime) ||
+      (configFileExists() && hasPersistedOnboardingState(config));
+
+    // Hot restarts and transient config-load failures can leave state.config
+    // stale even though the persisted config is valid. Re-read from disk once
+    // before telling the client to fall back into onboarding.
+    if (!complete && configFileExists()) {
+      try {
+        config = loadMiladyConfig();
+        complete =
+          Boolean(state.runtime) || hasPersistedOnboardingState(config);
+        if (complete) {
+          state.config = config;
+        }
+      } catch (err) {
+        logger.warn(
+          `[milady-api] Failed to refresh config for onboarding status: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
     json(res, { complete });
     return;
   }
@@ -7996,6 +8098,11 @@ async function handleRequest(
 
     // ── Ensure wallet keys exist so inventory can resolve addresses ───────
     ensureWalletKeysInEnvAndConfig(config);
+
+    if (!config.meta) {
+      config.meta = {};
+    }
+    config.meta.onboardingComplete = true;
 
     state.config = config;
     state.agentName = (body.name as string) ?? state.agentName;
@@ -11709,15 +11816,13 @@ async function handleRequest(
     if (!body) return;
 
     const addrs = getWalletAddresses();
+    const walletRpcReadiness = resolveWalletRpcReadiness(state.config);
     try {
       const result = await buildBscTradePreflight({
         walletAddress: addrs.evmAddress ?? null,
         tokenAddress: body.tokenAddress,
-        nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
-        quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
-        bscRpcUrl: process.env.BSC_RPC_URL,
-        cloudManagedAccess: resolveWalletRpcReadiness(state.config)
-          .cloudManagedAccess,
+        rpcUrls: walletRpcReadiness.bscRpcUrls,
+        cloudManagedAccess: walletRpcReadiness.cloudManagedAccess,
       });
       json(res, result);
     } catch (err) {
@@ -11750,14 +11855,12 @@ async function handleRequest(
     }
 
     const addrs = getWalletAddresses();
+    const walletRpcReadiness = resolveWalletRpcReadiness(state.config);
     try {
       const result = await buildBscTradeQuote({
         walletAddress: addrs.evmAddress ?? null,
-        nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
-        quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
-        bscRpcUrl: process.env.BSC_RPC_URL,
-        cloudManagedAccess: resolveWalletRpcReadiness(state.config)
-          .cloudManagedAccess,
+        rpcUrls: walletRpcReadiness.bscRpcUrls,
+        cloudManagedAccess: walletRpcReadiness.cloudManagedAccess,
         request: {
           side: body.side as "buy" | "sell",
           tokenAddress: body.tokenAddress,
@@ -11808,15 +11911,13 @@ async function handleRequest(
       isAgentRequest,
     );
     const addrs = getWalletAddresses();
+    const walletRpcReadiness = resolveWalletRpcReadiness(state.config);
 
     try {
       const quote = await buildBscTradeQuote({
         walletAddress: addrs.evmAddress ?? null,
-        nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
-        quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
-        bscRpcUrl: process.env.BSC_RPC_URL,
-        cloudManagedAccess: resolveWalletRpcReadiness(state.config)
-          .cloudManagedAccess,
+        rpcUrls: walletRpcReadiness.bscRpcUrls,
+        cloudManagedAccess: walletRpcReadiness.cloudManagedAccess,
         request: {
           side: body.side as "buy" | "sell",
           tokenAddress: body.tokenAddress,
@@ -11866,11 +11967,8 @@ async function handleRequest(
 
       // Execute locally with EVM private key
       const rpcUrl = resolvePrimaryBscRpcUrl({
-        nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
-        quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
-        bscRpcUrl: process.env.BSC_RPC_URL,
-        cloudManagedAccess: resolveWalletRpcReadiness(state.config)
-          .cloudManagedAccess,
+        rpcUrls: walletRpcReadiness.bscRpcUrls,
+        cloudManagedAccess: walletRpcReadiness.cloudManagedAccess,
       });
 
       if (!rpcUrl) {
@@ -11998,12 +12096,10 @@ async function handleRequest(
       return;
     }
 
+    const walletRpcReadiness = resolveWalletRpcReadiness(state.config);
     const rpcUrl = resolvePrimaryBscRpcUrl({
-      nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
-      quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
-      bscRpcUrl: process.env.BSC_RPC_URL,
-      cloudManagedAccess: resolveWalletRpcReadiness(state.config)
-        .cloudManagedAccess,
+      rpcUrls: walletRpcReadiness.bscRpcUrls,
+      cloudManagedAccess: walletRpcReadiness.cloudManagedAccess,
     });
 
     if (!rpcUrl) {
@@ -12147,6 +12243,7 @@ async function handleRequest(
       isAgentRequest,
     );
     const addrs = getWalletAddresses();
+    const walletRpcReadiness = resolveWalletRpcReadiness(state.config);
 
     let toAddress: string;
     try {
@@ -12167,11 +12264,8 @@ async function handleRequest(
           ["function decimals() view returns (uint8)"],
           new ethers.JsonRpcProvider(
             resolvePrimaryBscRpcUrl({
-              nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
-              quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
-              bscRpcUrl: process.env.BSC_RPC_URL,
-              cloudManagedAccess: resolveWalletRpcReadiness(state.config)
-                .cloudManagedAccess,
+              rpcUrls: walletRpcReadiness.bscRpcUrls,
+              cloudManagedAccess: walletRpcReadiness.cloudManagedAccess,
             }) ?? "https://bsc-dataseed1.binance.org/",
           ),
         );
@@ -12221,11 +12315,8 @@ async function handleRequest(
 
     // Execute locally
     const rpcUrl = resolvePrimaryBscRpcUrl({
-      nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
-      quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
-      bscRpcUrl: process.env.BSC_RPC_URL,
-      cloudManagedAccess: resolveWalletRpcReadiness(state.config)
-        .cloudManagedAccess,
+      rpcUrls: walletRpcReadiness.bscRpcUrls,
+      cloudManagedAccess: walletRpcReadiness.cloudManagedAccess,
     });
 
     if (!rpcUrl) {
@@ -12496,6 +12587,130 @@ async function handleRequest(
         `[conversations] Failed to persist room title for ${conv.id}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+  };
+
+  const waitForConversationRestore = async (): Promise<void> => {
+    const pending = state.conversationRestorePromise;
+    if (!pending) return;
+    try {
+      await pending;
+    } catch {
+      // Restore failures are logged at the source. Routes should continue with
+      // the best available in-memory state instead of surfacing the restore
+      // implementation detail as an API error.
+    }
+  };
+
+  const getConversationWithRestore = async (
+    convId: string,
+  ): Promise<ConversationMeta | undefined> => {
+    const existing = state.conversations.get(convId);
+    if (existing) return existing;
+    await waitForConversationRestore();
+    return state.conversations.get(convId);
+  };
+
+  const ensureConversationGreetingStored = async (
+    conv: ConversationMeta,
+    lang: string,
+  ): Promise<{
+    text: string;
+    agentName: string;
+    generated: boolean;
+    persisted: boolean;
+  }> => {
+    const runtime = state.runtime;
+    const agentName = runtime?.character.name ?? state.agentName ?? "Milady";
+    if (!runtime) {
+      return {
+        text: "",
+        agentName,
+        generated: false,
+        persisted: false,
+      };
+    }
+
+    let memories: Awaited<ReturnType<AgentRuntime["getMemories"]>>;
+    try {
+      memories = await runtime.getMemories({
+        roomId: conv.roomId,
+        tableName: "messages",
+        count: 12,
+      });
+    } catch (err) {
+      throw new Error(
+        `Failed to inspect existing conversation messages: ${getErrorMessage(err)}`,
+      );
+    }
+
+    memories.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+    const existingGreeting = memories.find((memory) => {
+      const content = memory.content as Record<string, unknown> | undefined;
+      return (
+        memory.entityId === runtime.agentId &&
+        content?.source === "agent_greeting" &&
+        typeof content.text === "string" &&
+        content.text.trim().length > 0
+      );
+    });
+    if (existingGreeting) {
+      return {
+        text: String(
+          (existingGreeting.content as Record<string, unknown> | undefined)
+            ?.text ?? "",
+        ),
+        agentName,
+        generated: true,
+        persisted: false,
+      };
+    }
+
+    if (memories.length > 0) {
+      return {
+        text: "",
+        agentName,
+        generated: false,
+        persisted: false,
+      };
+    }
+
+    const greeting = resolveConversationGreetingText(runtime, lang).trim();
+    if (!greeting) {
+      return {
+        text: "",
+        agentName,
+        generated: false,
+        persisted: false,
+      };
+    }
+
+    try {
+      await persistConversationMemory(
+        runtime,
+        createMessageMemory({
+          id: crypto.randomUUID() as UUID,
+          entityId: runtime.agentId,
+          roomId: conv.roomId,
+          content: {
+            text: greeting,
+            source: "agent_greeting",
+            channelType: ChannelType.DM,
+          },
+        }),
+      );
+    } catch (err) {
+      throw new Error(
+        `Failed to store greeting message: ${getErrorMessage(err)}`,
+      );
+    }
+
+    conv.updatedAt = new Date().toISOString();
+    return {
+      text: greeting,
+      agentName,
+      generated: true,
+      persisted: true,
+    };
   };
 
   const ensureLegacyChatConnection = async (
@@ -13133,6 +13348,7 @@ async function handleRequest(
 
   // ── GET /api/conversations ──────────────────────────────────────────
   if (method === "GET" && pathname === "/api/conversations") {
+    await waitForConversationRestore();
     const convos = Array.from(state.conversations.values())
       .filter((c) => !state.deletedConversationIds.has(c.id))
       .sort(
@@ -13145,8 +13361,13 @@ async function handleRequest(
 
   // ── POST /api/conversations ─────────────────────────────────────────
   if (method === "POST" && pathname === "/api/conversations") {
-    const body = await readJsonBody<{ title?: string }>(req, res);
+    const body = await readJsonBody<{
+      title?: string;
+      bootstrapGreeting?: boolean;
+      lang?: string;
+    }>(req, res);
     if (!body) return;
+    await waitForConversationRestore();
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const roomId = stringToUuid(`web-conv-${id}`);
@@ -13158,15 +13379,44 @@ async function handleRequest(
       updatedAt: now,
     };
     state.conversations.set(id, conv);
+    let greeting:
+      | {
+          text: string;
+          agentName: string;
+          generated: boolean;
+        }
+      | undefined;
 
     // Soft cap: evict the oldest conversation when the map exceeds 500
     evictOldestConversation(state.conversations, 500);
 
     if (state.runtime) {
-      await ensureConversationRoom(conv);
-      await syncConversationRoomTitle(conv);
+      try {
+        await ensureConversationRoom(conv);
+        await syncConversationRoomTitle(conv);
+        if (body.bootstrapGreeting === true) {
+          const storedGreeting = await ensureConversationGreetingStored(
+            conv,
+            typeof body.lang === "string" ? body.lang : "en",
+          );
+          if (storedGreeting.text.trim()) {
+            greeting = {
+              text: storedGreeting.text,
+              agentName: storedGreeting.agentName,
+              generated: storedGreeting.generated,
+            };
+          }
+        }
+      } catch (err) {
+        error(
+          res,
+          `Failed to initialize conversation: ${getErrorMessage(err)}`,
+          500,
+        );
+        return;
+      }
     }
-    json(res, { conversation: conv });
+    json(res, { conversation: conv, ...(greeting ? { greeting } : {}) });
     return;
   }
 
@@ -13176,7 +13426,7 @@ async function handleRequest(
     /^\/api\/conversations\/[^/]+\/messages$/.test(pathname)
   ) {
     const convId = decodeURIComponent(pathname.split("/")[3]);
-    const conv = state.conversations.get(convId);
+    const conv = await getConversationWithRestore(convId);
     if (!conv) {
       error(res, "Conversation not found", 404);
       return;
@@ -13230,7 +13480,7 @@ async function handleRequest(
     /^\/api\/conversations\/[^/]+\/messages\/stream$/.test(pathname)
   ) {
     const convId = decodeURIComponent(pathname.split("/")[3]);
-    const conv = state.conversations.get(convId);
+    const conv = await getConversationWithRestore(convId);
     if (!conv) {
       error(res, "Conversation not found", 404);
       return;
@@ -13241,7 +13491,7 @@ async function handleRequest(
       error,
     });
     if (!chatPayload) return;
-    const { prompt, channelType, images } = chatPayload;
+    const { prompt, channelType, images, conversationMode } = chatPayload;
 
     const runtime = state.runtime;
     if (!runtime) {
@@ -13270,6 +13520,7 @@ async function handleRequest(
       agentId: runtime.agentId,
       roomId: conv.roomId,
       channelType,
+      conversationMode,
     });
 
     try {
@@ -13389,7 +13640,7 @@ async function handleRequest(
     /^\/api\/conversations\/[^/]+\/messages$/.test(pathname)
   ) {
     const convId = decodeURIComponent(pathname.split("/")[3]);
-    const conv = state.conversations.get(convId);
+    const conv = await getConversationWithRestore(convId);
     if (!conv) {
       error(res, "Conversation not found", 404);
       return;
@@ -13399,7 +13650,7 @@ async function handleRequest(
       error,
     });
     if (!chatPayload) return;
-    const { prompt, channelType, images } = chatPayload;
+    const { prompt, channelType, images, conversationMode } = chatPayload;
     const runtime = state.runtime;
     if (!runtime) {
       error(res, "Agent is not running", 503);
@@ -13426,6 +13677,7 @@ async function handleRequest(
       agentId: runtime.agentId,
       roomId: conv.roomId,
       channelType,
+      conversationMode,
     });
 
     try {
@@ -13495,7 +13747,7 @@ async function handleRequest(
     /^\/api\/conversations\/[^/]+\/greeting$/.test(pathname)
   ) {
     const convId = decodeURIComponent(pathname.split("/")[3]);
-    const conv = state.conversations.get(convId);
+    const conv = await getConversationWithRestore(convId);
     if (!conv) {
       error(res, "Conversation not found", 404);
       return;
@@ -13506,32 +13758,8 @@ async function handleRequest(
       error(res, "Agent is not running", 503);
       return;
     }
-    const charName = runtime.character.name ?? state.agentName ?? "Milady";
-
-    // Collect post examples from the character, with language support
     const url = new URL(req.url ?? "", `http://${req.headers.host}`);
     const lang = url.searchParams.get("lang") ?? "en";
-    const localizedExamples =
-      lang === "zh-CN"
-        ? ((runtime.character as Record<string, unknown>).postExamples_zhCN as
-            | string[]
-            | undefined)
-        : undefined;
-    const postExamples =
-      localizedExamples && localizedExamples.length > 0
-        ? localizedExamples
-        : (runtime.character.postExamples ?? []);
-    const greeting =
-      postExamples[Math.floor(Math.random() * postExamples.length)];
-
-    if (!greeting?.trim()) {
-      json(res, {
-        text: "",
-        agentName: charName,
-        generated: false,
-      });
-      return;
-    }
 
     try {
       await ensureConversationRoom(conv);
@@ -13545,34 +13773,15 @@ async function handleRequest(
     }
 
     try {
-      await persistConversationMemory(
-        runtime,
-        createMessageMemory({
-          id: crypto.randomUUID() as UUID,
-          entityId: runtime.agentId,
-          roomId: conv.roomId,
-          content: {
-            text: greeting,
-            source: "agent_greeting",
-            channelType: ChannelType.DM,
-          },
-        }),
-      );
+      const greeting = await ensureConversationGreetingStored(conv, lang);
+      json(res, {
+        text: greeting.text,
+        agentName: greeting.agentName,
+        generated: greeting.generated,
+      });
     } catch (err) {
-      error(
-        res,
-        `Failed to store greeting message: ${getErrorMessage(err)}`,
-        500,
-      );
-      return;
+      error(res, getErrorMessage(err), 500);
     }
-
-    conv.updatedAt = new Date().toISOString();
-    json(res, {
-      text: greeting,
-      agentName: charName,
-      generated: postExamples.length > 0,
-    });
     return;
   }
 
@@ -13583,7 +13792,7 @@ async function handleRequest(
     !pathname.endsWith("/messages")
   ) {
     const convId = decodeURIComponent(pathname.split("/")[3]);
-    const conv = state.conversations.get(convId);
+    const conv = await getConversationWithRestore(convId);
     if (!conv) {
       error(res, "Conversation not found", 404);
       return;
@@ -13606,7 +13815,7 @@ async function handleRequest(
     !pathname.endsWith("/messages")
   ) {
     const convId = decodeURIComponent(pathname.split("/")[3]);
-    const conv = state.conversations.get(convId);
+    const conv = await getConversationWithRestore(convId);
     if (conv?.roomId && state.runtime) {
       try {
         await deleteConversationRoomData(state.runtime, conv.roomId);
@@ -13633,7 +13842,7 @@ async function handleRequest(
       MAX_BODY_BYTES,
     );
     if (!chatPayload) return;
-    const { prompt, channelType } = chatPayload;
+    const { prompt, channelType, conversationMode } = chatPayload;
 
     // Cloud proxy path
 
@@ -13676,6 +13885,7 @@ async function handleRequest(
           text: prompt,
           source: "client_chat",
           channelType,
+          ...(conversationMode ? { conversationMode } : {}),
         },
       });
 
@@ -13745,7 +13955,7 @@ async function handleRequest(
       MAX_BODY_BYTES,
     );
     if (!chatPayload) return;
-    const { prompt, channelType } = chatPayload;
+    const { prompt, channelType, conversationMode } = chatPayload;
 
     if (!state.runtime) {
       error(res, "Agent is not running", 503);
@@ -13780,6 +13990,7 @@ async function handleRequest(
           text: prompt,
           source: "client_chat",
           channelType,
+          ...(conversationMode ? { conversationMode } : {}),
         },
       });
 
@@ -15634,6 +15845,7 @@ export async function startApiServer(opts?: {
     chatConnectionPromise: null,
     adminEntityId: null,
     conversations: new Map(),
+    conversationRestorePromise: null,
     deletedConversationIds,
     cloudManager: null,
     sandboxManager: null,
@@ -16650,9 +16862,19 @@ export async function startApiServer(opts?: {
     }
   };
 
+  const beginConversationRestore = (rt: AgentRuntime): Promise<void> => {
+    const restorePromise = restoreConversationsFromDb(rt).finally(() => {
+      if (state.conversationRestorePromise === restorePromise) {
+        state.conversationRestorePromise = null;
+      }
+    });
+    state.conversationRestorePromise = restorePromise;
+    return restorePromise;
+  };
+
   // Restore conversations from DB at initial boot (if runtime was passed in)
   if (opts?.runtime) {
-    void restoreConversationsFromDb(opts.runtime);
+    void beginConversationRestore(opts.runtime);
   }
 
   /** Hot-swap the runtime reference (used after an in-process restart). */
@@ -16676,7 +16898,7 @@ export async function startApiServer(opts?: {
     ]);
 
     // Restore conversations from DB so they survive restarts
-    void restoreConversationsFromDb(rt);
+    void beginConversationRestore(rt);
 
     // Broadcast status update immediately after restart
     broadcastStatus();

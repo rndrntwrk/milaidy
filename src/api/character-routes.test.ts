@@ -137,6 +137,60 @@ describe("character routes", () => {
     ).toEqual(messageExamples);
   });
 
+  test("persists the full character payload including username across save and reload", async () => {
+    const fullCharacter = {
+      name: "Sakuya",
+      username: "Sakuya",
+      bio: ["new bio", "second line"],
+      system: "new system",
+      adjectives: ["precise", "calm"],
+      topics: ["systems", "writing"],
+      style: {
+        all: ["Be exact"],
+        chat: ["Stay calm"],
+        post: ["Be clear"],
+      },
+      messageExamples: [
+        {
+          examples: [
+            { name: "{{user1}}", content: { text: "status?" } },
+            { name: "Sakuya", content: { text: "On track." } },
+          ],
+        },
+      ],
+      postExamples: ["Mission remains on schedule."],
+    };
+
+    const putResult = await invoke({
+      method: "PUT",
+      pathname: "/api/character",
+      body: fullCharacter,
+    });
+
+    expect(putResult.status).toBe(200);
+    expect(putResult.payload).toMatchObject({
+      ok: true,
+      agentName: "Sakuya",
+      character: fullCharacter,
+    });
+    expect(state.agentName).toBe("Sakuya");
+    expect(
+      (state.runtime as unknown as { character: Record<string, unknown> })
+        .character,
+    ).toMatchObject(fullCharacter);
+
+    const getResult = await invoke({
+      method: "GET",
+      pathname: "/api/character",
+    });
+
+    expect(getResult.status).toBe(200);
+    expect(getResult.payload).toMatchObject({
+      agentName: "Sakuya",
+      character: fullCharacter,
+    });
+  });
+
   test("returns 422 for invalid character payload", async () => {
     const result = await invoke({
       method: "PUT",

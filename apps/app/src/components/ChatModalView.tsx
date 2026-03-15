@@ -56,14 +56,7 @@ export const ChatModalView = memo(function ChatModalView({
   onSidebarClose,
 }: ChatModalViewProps) {
   useRenderGuard("ChatModalView");
-  const {
-    activeConversationId,
-    conversationMessages,
-    chatSending,
-    handleNewConversation,
-    onboardingLoading,
-    startupPhase,
-  } = useApp();
+  const { activeConversationId } = useApp();
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const isNarrow = useIsNarrowViewport();
@@ -81,28 +74,6 @@ export const ChatModalView = memo(function ChatModalView({
       setMobileSidebarOpen(false);
     }
   }, [activeConversationId]);
-
-  useEffect(() => {
-    if (
-      !isCompanionDock ||
-      onboardingLoading ||
-      startupPhase !== "ready" ||
-      activeConversationId ||
-      chatSending ||
-      conversationMessages.length > 0
-    ) {
-      return;
-    }
-    void handleNewConversation();
-  }, [
-    activeConversationId,
-    chatSending,
-    conversationMessages.length,
-    handleNewConversation,
-    isCompanionDock,
-    onboardingLoading,
-    startupPhase,
-  ]);
 
   return (
     <div

@@ -46,6 +46,8 @@ vi.mock("@milady/app-core/components", async () => {
     EmotePicker: () => React.createElement("div", null, "EmotePicker"),
     ErrorBoundary: ({ children }: { children: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
+    HeartbeatsView: () =>
+      React.createElement("section", null, "HeartbeatsView Ready"),
     PairingView: () => React.createElement("div", null, "PairingView"),
     PluginsPageView: () =>
       React.createElement("section", null, "PluginsPageView Ready"),
@@ -234,6 +236,7 @@ function tFn(k: string): string {
     "nav.social": "Social",
     "nav.apps": "Apps",
     "nav.settings": "Settings",
+    "nav.heartbeats": "Heartbeats",
     "nav.advanced": "Advanced",
     "nav.cloud": "Cloud",
     "nav.plugins": "Plugins",
@@ -340,6 +343,7 @@ describe("shell mode switching (e2e)", () => {
       { tab: "wallets", token: "InventoryView Ready" },
       { tab: "knowledge", token: "KnowledgeView Ready" },
       { tab: "connectors", token: "ConnectorsPageView Ready" },
+      { tab: "triggers", token: "HeartbeatsView Ready" },
       // All advanced sub-tabs route through AdvancedPageView in ViewRouter
       { tab: "plugins", token: "AdvancedPageView Ready" },
       { tab: "skills", token: "AdvancedPageView Ready" },
@@ -404,6 +408,7 @@ describe("shell mode switching (e2e)", () => {
     // Settings/skills/etc. in companion mode fall back to native layout
     const nativeFallbackCases: Array<{ tab: Tab; token: string }> = [
       { tab: "settings", token: "SettingsView Ready" },
+      { tab: "triggers", token: "HeartbeatsView Ready" },
       { tab: "skills", token: "AdvancedPageView Ready" },
       { tab: "character", token: "CharacterView Ready" },
     ];

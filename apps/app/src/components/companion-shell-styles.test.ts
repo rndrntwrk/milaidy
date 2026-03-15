@@ -28,7 +28,6 @@ describe("tabFlags", () => {
   const advancedOverlayTabs: Tab[] = [
     "advanced",
     "actions",
-    "triggers",
     "fine-tuning",
     "trajectories",
     "runtime",
@@ -48,9 +47,15 @@ describe("tabFlags", () => {
   it("keeps non-advanced tabs out of the advanced overlay bucket", () => {
     expect(tabFlags("chat").isAdvancedOverlay).toBe(false);
     expect(tabFlags("stream").isAdvancedOverlay).toBe(false);
+    expect(tabFlags("triggers").isAdvancedOverlay).toBe(false);
     expect(tabFlags("wallets").isAdvancedOverlay).toBe(false);
     expect(tabFlags("settings").isAdvancedOverlay).toBe(false);
     expect(tabFlags("knowledge").isAdvancedOverlay).toBe(false);
+  });
+
+  it("treats triggers as a settings-style layout", () => {
+    expect(tabFlags("triggers").isSettings).toBe(true);
+    expect(tabFlags("triggers").isCentered).toBe(true);
   });
 
   it("reports individual flags consistently", () => {
@@ -109,7 +114,6 @@ describe("App.tsx advanced-tab parity", () => {
   const advancedParityTabs: Tab[] = [
     "advanced",
     "actions",
-    "triggers",
     "fine-tuning",
     "trajectories",
     "runtime",

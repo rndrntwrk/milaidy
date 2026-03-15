@@ -18,7 +18,6 @@ const meta = {
     restartBusy: false,
 
     handleRestart: fn(),
-    cameraZoomed: false,
     miladyCloudEnabled: true,
     miladyCloudConnected: false,
     miladyCloudCredits: 100,

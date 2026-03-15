@@ -101,6 +101,7 @@ import {
   openExternalUrl,
   resolveApiUrl,
 } from "../utils";
+import { prepareDraftForSave } from "../actions/character";
 import {
   type ActionNotice,
   AGENT_READY_TIMEOUT_MS,
@@ -111,7 +112,6 @@ import {
   applyUiTheme,
   asApiLikeError,
   type ChatTurnUsage,
-  computeStreamingDelta,
   formatSearchBullet,
   formatStartupErrorDetail,
   type GamePostMessageAuthPayload,
@@ -127,6 +127,7 @@ import {
   loadUiLanguage,
   loadUiShellMode,
   loadUiTheme,
+  mergeStreamingText,
   normalizeAvatarIndex,
   normalizeCustomActionName,
   normalizeUiShellMode,
@@ -187,6 +188,7 @@ export {
   loadUiLanguage,
   loadUiShellMode,
   loadUiTheme,
+  mergeStreamingText,
   normalizeAvatarIndex,
   normalizeCustomActionName,
   normalizeStreamComparisonText,
@@ -1469,6 +1471,157 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLifecycleAction(null);
   }, []);
 
+  // ── Chat ───────────────────────────────────────────────────────────
+
+  /** Request an agent greeting for a conversation and add it to messages. */
+  const fetchGreeting = useCallback(
+    async (convId: string): Promise<boolean> => {
+      if (greetingInFlightConversationRef.current === convId) {
+        return false;
+      }
+      greetingInFlightConversationRef.current = convId;
+      setChatSending(true);
+      try {
+        const data = await client.requestGreeting(convId, uiLanguage);
+        if (data.text) {
+          greetingFiredRef.current = true;
+          if (activeConversationIdRef.current === convId) {
+            setConversationMessages((prev: ConversationMessage[]) => {
+              if (
+                prev.some(
+                  (message) =>
+                    message.role === "assistant" &&
+                    message.source === "agent_greeting" &&
+                    message.text === data.text,
+                )
+              ) {
+                return prev;
+              }
+              return [
+                ...prev,
+                {
+                  id: `greeting-${Date.now()}`,
+                  role: "assistant",
+                  text: data.text,
+                  timestamp: Date.now(),
+                  source: "agent_greeting",
+                },
+              ];
+            });
+          }
+          return true;
+        }
+        greetingFiredRef.current = false;
+      } catch {
+        greetingFiredRef.current = false;
+        /* greeting failed silently — user can still chat */
+      } finally {
+        if (greetingInFlightConversationRef.current === convId) {
+          greetingInFlightConversationRef.current = null;
+        }
+        setChatSending(false);
+      }
+      return false;
+    },
+    [uiLanguage],
+  );
+
+  const requestGreetingWhenRunning = useCallback(
+    async (convId: string | null): Promise<void> => {
+      if (!convId || greetingFiredRef.current) {
+        return;
+      }
+      try {
+        const status = await client.getStatus();
+        if (status.state === "running" && !greetingFiredRef.current) {
+          await fetchGreeting(convId);
+        }
+      } catch (err) {
+        console.warn(
+          "[milady][chat:init] failed to confirm runtime state for greeting",
+          err,
+        );
+      }
+    },
+    [fetchGreeting],
+  );
+
+  const hydrateInitialConversationState = useCallback(async (): Promise<
+    string | null
+  > => {
+    try {
+      const { conversations: c } = await client.listConversations();
+      setConversations(c);
+      if (c.length > 0) {
+        const savedConversationId = loadActiveConversationId();
+        const restoredConversation =
+          c.find((conversation) => conversation.id === savedConversationId) ??
+          c[0];
+        setActiveConversationId(restoredConversation.id);
+        activeConversationIdRef.current = restoredConversation.id;
+        client.sendWsMessage({
+          type: "active-conversation",
+          conversationId: restoredConversation.id,
+        });
+        try {
+          const { messages } = await client.getConversationMessages(
+            restoredConversation.id,
+          );
+          greetingFiredRef.current = messages.length > 0;
+          setConversationMessages(messages);
+          return messages.length === 0 ? restoredConversation.id : null;
+        } catch (err) {
+          console.warn(
+            "[milady][chat:init] failed to load restored conversation messages",
+            err,
+          );
+          greetingFiredRef.current = false;
+          setConversationMessages([]);
+          return restoredConversation.id;
+        }
+      }
+
+      const { conversation, greeting } = await client.createConversation(
+        translateText(uiLanguage, "conversations.newChatTitle"),
+        {
+          bootstrapGreeting: true,
+          lang: uiLanguage,
+        },
+      );
+      const nextCutoffTs = Date.now();
+      setConversations([conversation]);
+      setActiveConversationId(conversation.id);
+      activeConversationIdRef.current = conversation.id;
+      setCompanionMessageCutoffTs(nextCutoffTs);
+      client.sendWsMessage({
+        type: "active-conversation",
+        conversationId: conversation.id,
+      });
+
+      const greetingText = greeting?.text?.trim() ?? "";
+      if (greetingText) {
+        greetingFiredRef.current = true;
+        setConversationMessages([
+          {
+            id: `greeting-${Date.now()}`,
+            role: "assistant",
+            text: greetingText,
+            timestamp: Date.now(),
+            source: "agent_greeting",
+          },
+        ]);
+        return null;
+      }
+
+      greetingFiredRef.current = false;
+      setConversationMessages([]);
+      return conversation.id;
+    } catch (err) {
+      console.warn("[milady][chat:init] failed to hydrate conversations", err);
+      return null;
+    }
+  }, [uiLanguage]);
+
   const handleStart = useCallback(async () => {
     if (!beginLifecycleAction("start")) return;
     setActionNotice(LIFECYCLE_MESSAGES.start.progress, "info", 3000);
@@ -1528,6 +1681,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setConversations([]);
       const s = await client.restartAgent();
       setAgentStatus(s);
+      const greetConvId = await hydrateInitialConversationState();
+      await requestGreetingWhenRunning(greetConvId);
       setPendingRestart(false);
       setPendingRestartReasons([]);
       void loadPlugins();
@@ -1555,7 +1710,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     beginLifecycleAction,
     finishLifecycleAction,
     setActionNotice,
+    hydrateInitialConversationState,
     loadPlugins,
+    requestGreetingWhenRunning,
   ]);
 
   const dismissRestartBanner = useCallback(() => {
@@ -1672,60 +1829,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActionNotice,
   ]);
 
-  // ── Chat ───────────────────────────────────────────────────────────
-
-  /** Request an agent greeting for a conversation and add it to messages. */
-  const fetchGreeting = useCallback(
-    async (convId: string): Promise<boolean> => {
-      if (greetingInFlightConversationRef.current === convId) {
-        return false;
-      }
-      greetingInFlightConversationRef.current = convId;
-      setChatSending(true);
-      try {
-        const data = await client.requestGreeting(convId, uiLanguage);
-        if (data.text) {
-          greetingFiredRef.current = true;
-          if (activeConversationIdRef.current === convId) {
-            setConversationMessages((prev: ConversationMessage[]) => [
-              ...prev,
-              {
-                id: `greeting-${Date.now()}`,
-                role: "assistant",
-                text: data.text,
-                timestamp: Date.now(),
-              },
-            ]);
-          }
-          return true;
-        }
-        greetingFiredRef.current = false;
-      } catch {
-        greetingFiredRef.current = false;
-        /* greeting failed silently — user can still chat */
-      } finally {
-        if (greetingInFlightConversationRef.current === convId) {
-          greetingInFlightConversationRef.current = null;
-        }
-        setChatSending(false);
-      }
-      return false;
-    },
-    [uiLanguage],
-  );
-
   const handleNewConversation = useCallback(
     async (title?: string) => {
       try {
-        const { conversation } = await client.createConversation(title);
+        const { conversation, greeting } = await client.createConversation(
+          title,
+          {
+            bootstrapGreeting: true,
+            lang: uiLanguage,
+          },
+        );
         const nextCutoffTs = Date.now();
         setConversations((prev) => [conversation, ...prev]);
         setActiveConversationId(conversation.id);
         activeConversationIdRef.current = conversation.id;
         setCompanionMessageCutoffTs(nextCutoffTs);
-        setConversationMessages([]);
-        // Agent sends the first message
-        void fetchGreeting(conversation.id);
+        const greetingText = greeting?.text?.trim() ?? "";
+        if (greetingText) {
+          greetingFiredRef.current = true;
+          setConversationMessages([
+            {
+              id: `greeting-${Date.now()}`,
+              role: "assistant",
+              text: greetingText,
+              timestamp: Date.now(),
+              source: "agent_greeting",
+            },
+          ]);
+        } else {
+          greetingFiredRef.current = false;
+          setConversationMessages([]);
+          void requestGreetingWhenRunning(conversation.id);
+        }
         client.sendWsMessage({
           type: "active-conversation",
           conversationId: conversation.id,
@@ -1734,7 +1869,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         /* ignore */
       }
     },
-    [fetchGreeting],
+    [requestGreetingWhenRunning, uiLanguage],
   );
 
   const appendLocalCommandTurn = useCallback(
@@ -1984,6 +2119,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!rawText) return;
       if (chatSendBusyRef.current || chatSending) return;
       chatSendBusyRef.current = true;
+      const conversationMode: ConversationMode =
+        channelType === "VOICE_DM" || channelType === "VOICE_GROUP"
+          ? "simple"
+          : chatMode;
 
       // Capture and clear pending images before async work
       const imagesToSend = chatPendingImages.length
@@ -2058,21 +2197,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
             convId,
             text,
             (token) => {
-              const delta = computeStreamingDelta(streamedAssistantText, token);
-              if (!delta) return;
-              streamedAssistantText += delta;
+              const nextText = mergeStreamingText(streamedAssistantText, token);
+              if (nextText === streamedAssistantText) return;
+              streamedAssistantText = nextText;
               setChatFirstTokenReceived(true);
               setConversationMessages((prev) =>
                 prev.map((message) =>
-                  message.id === assistantMsgId
-                    ? { ...message, text: `${message.text}${delta}` }
-                    : message,
+                  message.id !== assistantMsgId
+                    ? message
+                    : message.text === nextText
+                      ? message
+                      : { ...message, text: nextText },
                 ),
               );
             },
             channelType,
             controller.signal,
             imagesToSend,
+            conversationMode,
           );
 
           if (shouldApplyFinalStreamText(streamedAssistantText, data.text)) {
@@ -2141,6 +2283,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 text,
                 channelType,
                 imagesToSend,
+                conversationMode,
               );
               setConversationMessages([
                 {
@@ -2181,6 +2324,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [
       chatInput,
       chatSending,
+      chatMode,
       chatPendingImages,
       activeConversationId,
       loadConversationMessages,
@@ -2197,6 +2341,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!trimmed) return;
       if (chatSendBusyRef.current || chatSending) return;
       chatSendBusyRef.current = true;
+      const conversationMode: ConversationMode = chatMode;
 
       try {
         let convId: string = activeConversationId ?? "";
@@ -2242,20 +2387,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
             convId,
             trimmed,
             (token) => {
-              const delta = computeStreamingDelta(streamedAssistantText, token);
-              if (!delta) return;
-              streamedAssistantText += delta;
+              const nextText = mergeStreamingText(streamedAssistantText, token);
+              if (nextText === streamedAssistantText) return;
+              streamedAssistantText = nextText;
               setChatFirstTokenReceived(true);
               setConversationMessages((prev) =>
                 prev.map((message) =>
-                  message.id === assistantMsgId
-                    ? { ...message, text: `${message.text}${delta}` }
-                    : message,
+                  message.id !== assistantMsgId
+                    ? message
+                    : message.text === nextText
+                      ? message
+                      : { ...message, text: nextText },
                 ),
               );
             },
             "DM",
             controller.signal,
+            undefined,
+            conversationMode,
           );
 
           if (shouldApplyFinalStreamText(streamedAssistantText, data.text)) {
@@ -2296,6 +2445,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [
       chatSending,
+      chatMode,
       activeConversationId,
       loadConversationMessages,
       loadConversations,
@@ -3134,36 +3284,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCharacterSaveError(null);
     setCharacterSaveSuccess(null);
     try {
-      const draft = { ...characterDraft };
-      if (typeof draft.bio === "string") {
-        const lines = draft.bio
-          .split("\n")
-          .map((l: string) => l.trim())
-          .filter((l: string) => l.length > 0);
-        draft.bio = lines.length > 0 ? lines : undefined;
-      }
-      if (Array.isArray(draft.adjectives) && draft.adjectives.length === 0)
-        delete draft.adjectives;
-      if (Array.isArray(draft.topics) && draft.topics.length === 0)
-        delete draft.topics;
-      if (Array.isArray(draft.postExamples) && draft.postExamples.length === 0)
-        delete draft.postExamples;
-      if (
-        Array.isArray(draft.messageExamples) &&
-        draft.messageExamples.length === 0
-      )
-        delete draft.messageExamples;
-      if (draft.style) {
-        const s = draft.style;
-        if (s.all && s.all.length === 0) delete s.all;
-        if (s.chat && s.chat.length === 0) delete s.chat;
-        if (s.post && s.post.length === 0) delete s.post;
-        if (!s.all && !s.chat && !s.post) delete draft.style;
-      }
-      if (draft.name) draft.username = draft.name;
-      if (!draft.name) delete draft.name;
-      if (!draft.username) delete draft.username;
-      if (!draft.system) delete draft.system;
+      const draft = prepareDraftForSave(characterDraft);
       const { agentName } = await client.updateCharacter(draft);
       // Also persist avatar selection to config (under "ui" which is allowlisted)
       try {
@@ -3329,13 +3450,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         inventoryProviders:
           inventoryProviders.length > 0 ? inventoryProviders : undefined,
       });
-      setOnboardingComplete(true);
-      setTab("chat");
       try {
         setAgentStatus(await client.restartAgent());
       } catch {
         /* ignore */
       }
+      const greetConvId = await hydrateInitialConversationState();
+      await requestGreetingWhenRunning(greetConvId);
+      setOnboardingComplete(true);
+      setTab("chat");
     } catch (err) {
       await alertDesktopMessage({
         title: "Setup Failed",
@@ -3359,8 +3482,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingPrimaryModel,
     onboardingRpcSelections,
     onboardingRpcKeys,
+    hydrateInitialConversationState,
     setTab,
     miladyCloudConnected,
+    requestGreetingWhenRunning,
   ]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: t is stable but defined later
@@ -4107,82 +4232,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       setStartupError(null);
+      const greetConvId = await hydrateInitialConversationState();
       setStartupPhase("ready");
       setOnboardingLoading(false);
-
-      // Load conversations — restore the last active thread when possible.
-      let greetConvId: string | null = null;
-      try {
-        const { conversations: c } = await client.listConversations();
-        setConversations(c);
-        if (c.length > 0) {
-          const savedConversationId = loadActiveConversationId();
-          const restoredConversation =
-            c.find((conversation) => conversation.id === savedConversationId) ??
-            c[0];
-          setActiveConversationId(restoredConversation.id);
-          activeConversationIdRef.current = restoredConversation.id;
-          client.sendWsMessage({
-            type: "active-conversation",
-            conversationId: restoredConversation.id,
-          });
-          try {
-            const { messages } = await client.getConversationMessages(
-              restoredConversation.id,
-            );
-            greetingFiredRef.current = messages.length > 0;
-            setConversationMessages(messages);
-            // If the restored conversation has no messages, queue a greeting.
-            if (messages.length === 0) {
-              greetConvId = restoredConversation.id;
-            }
-          } catch (err) {
-            logStartupWarning(
-              "failed to load restored conversation messages",
-              err,
-            );
-          }
-        } else {
-          // First launch — create a conversation and greet
-          try {
-            const { conversation } = await client.createConversation(
-              t("conversations.newChatTitle"),
-            );
-            const nextCutoffTs = Date.now();
-            setConversations([conversation]);
-            setActiveConversationId(conversation.id);
-            activeConversationIdRef.current = conversation.id;
-            setCompanionMessageCutoffTs(nextCutoffTs);
-            client.sendWsMessage({
-              type: "active-conversation",
-              conversationId: conversation.id,
-            });
-            setConversationMessages([]);
-            greetingFiredRef.current = false;
-            greetConvId = conversation.id;
-          } catch (err) {
-            logStartupWarning("failed to create initial conversation", err);
-          }
-        }
-      } catch (err) {
-        logStartupWarning("failed to list conversations", err);
-      }
-
-      // If the agent is already running and we have a conversation needing a
-      // greeting, fire it now. Otherwise the agent-state-transition effect
-      // below will trigger it once the agent starts.
       if (greetConvId) {
-        try {
-          const s = await client.getStatus();
-          if (s.state === "running" && !greetingFiredRef.current) {
-            void fetchGreeting(greetConvId);
-          }
-        } catch (err) {
-          logStartupWarning(
-            "failed to confirm runtime state for greeting",
-            err,
-          );
-        }
+        void requestGreetingWhenRunning(greetConvId);
       }
 
       void loadWorkbench();
@@ -4655,6 +4709,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     appendAutonomousEvent,
     checkExtensionStatus,
     fetchAutonomyReplay,
+    hydrateInitialConversationState,
     loadCharacter,
     loadInventory,
     loadPlugins,
@@ -4663,6 +4718,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadWalletConfig,
     loadWorkbench, // Cloud polling
     pollCloudCredits,
+    requestGreetingWhenRunning,
     setSelectedVrmIndex,
     startupRetryNonce,
     uiLanguage,

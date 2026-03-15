@@ -16,6 +16,49 @@ export interface ConversationStreamPayload {
   message?: string;
 }
 
+export function mergeStreamingText(existing: string, incoming: string): string {
+  if (!incoming) return existing;
+  if (!existing) return incoming;
+  if (incoming === existing) return existing;
+
+  if (incoming.startsWith(existing)) {
+    return incoming;
+  }
+
+  if (incoming.includes(existing)) {
+    return incoming;
+  }
+
+  if (existing.startsWith(incoming)) {
+    return existing;
+  }
+
+  const maxOverlap = Math.min(existing.length, incoming.length);
+  const existingLength = existing.length;
+  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
+    const existingStart = existingLength - overlap;
+    let match = true;
+    for (let index = 0; index < overlap; index += 1) {
+      if (
+        existing.charCodeAt(existingStart + index) !==
+        incoming.charCodeAt(index)
+      ) {
+        match = false;
+        break;
+      }
+    }
+    if (!match) continue;
+
+    if (overlap === incoming.length) {
+      return incoming.length <= 2 ? `${existing}${incoming}` : existing;
+    }
+
+    return `${existing}${incoming.slice(overlap)}`;
+  }
+
+  return `${existing}${incoming}`;
+}
+
 /**
  * Find the next SSE event boundary in the buffer.
  * Supports both LF (\n\n) and CRLF (\r\n\r\n) framing.
