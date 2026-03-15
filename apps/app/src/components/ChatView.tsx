@@ -23,6 +23,7 @@ import {
   type VoiceCaptureMode,
   type VoicePlaybackStartEvent,
 } from "@milady/app-core/hooks";
+import { isElectronPlatform } from "@milady/app-core/platform";
 import { getVrmPreviewUrl, useApp } from "@milady/app-core/state";
 import {
   type ChangeEvent,
@@ -80,6 +81,9 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
   const { setTimeout } = useTimeout();
 
   const isGameModal = variant === "game-modal";
+  const isDesktopShell = isElectronPlatform();
+  const autoAssistantSpeechEnabled = isGameModal || !isDesktopShell;
+  const showComposerVoiceToggle = isGameModal || !isDesktopShell;
   const {
     agentStatus,
     chatInput,
@@ -90,6 +94,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
     handleChatSend,
     handleChatStop,
     handleChatRetry,
+    handleChatEdit,
     miladyCloudConnected,
     setState,
     droppedFiles,
@@ -249,8 +254,13 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
     lang: uiLanguage === "zh-CN" ? "zh-CN" : "en-US",
     voiceConfig,
   });
-  const { queueAssistantSpeech, startListening, stopListening, stopSpeaking } =
-    voice;
+  const {
+    queueAssistantSpeech,
+    speak,
+    startListening,
+    stopListening,
+    stopSpeaking,
+  } = voice;
 
   const beginVoiceCapture = useCallback(
     (mode: Exclude<VoiceCaptureMode, "idle"> = "compose") => {
@@ -278,6 +288,23 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
       void stopListening(options);
     },
     [stopListening, voice.isListening],
+  );
+
+  const handleSpeakMessage = useCallback(
+    (messageId: string, text: string) => {
+      if (!text.trim()) return;
+      suppressedAssistantSpeechIdRef.current = messageId;
+      speak(text);
+    },
+    [speak],
+  );
+
+  const handleEditMessage = useCallback(
+    async (messageId: string, text: string) => {
+      stopSpeaking();
+      return handleChatEdit(messageId, text);
+    },
+    [handleChatEdit, stopSpeaking],
   );
 
   const agentName = agentStatus?.agentName ?? "Agent";
@@ -374,7 +401,8 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
   }, [companionCarryover, companionNowMs]);
 
   useEffect(() => {
-    if (agentVoiceMuted || voice.isListening) return;
+    if (!autoAssistantSpeechEnabled || agentVoiceMuted || voice.isListening)
+      return;
 
     const latestAssistant = [...msgs]
       .reverse()
@@ -388,7 +416,14 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
       !chatSending,
     );
     suppressedAssistantSpeechIdRef.current = null;
-  }, [msgs, chatSending, agentVoiceMuted, queueAssistantSpeech, voice.isListening]);
+  }, [
+    autoAssistantSpeechEnabled,
+    msgs,
+    chatSending,
+    agentVoiceMuted,
+    queueAssistantSpeech,
+    voice.isListening,
+  ]);
 
   useEffect(() => {
     if (!agentVoiceMuted) return;
@@ -690,6 +725,8 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
                   isGrouped={isGrouped}
                   agentName={agentName}
                   agentAvatarSrc={agentAvatarSrc}
+                  onSpeak={handleSpeakMessage}
+                  onEdit={handleEditMessage}
                   onRetry={handleChatRetry}
                 />
               );
@@ -811,6 +848,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
               stopListening: endVoiceCapture,
             }}
             agentVoiceEnabled={!agentVoiceMuted}
+            showAgentVoiceToggle={showComposerVoiceToggle}
             t={t}
             onAttachImage={() => fileInputRef.current?.click()}
             onChatInputChange={(value) => setState("chatInput", value)}
@@ -848,6 +886,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
               stopListening: endVoiceCapture,
             }}
             agentVoiceEnabled={!agentVoiceMuted}
+            showAgentVoiceToggle={showComposerVoiceToggle}
             t={t}
             onAttachImage={() => fileInputRef.current?.click()}
             onChatInputChange={(value) => setState("chatInput", value)}

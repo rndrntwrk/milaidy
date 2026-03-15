@@ -31,6 +31,7 @@ interface ChatComposerProps {
   chatSending: boolean;
   voice: ChatComposerVoiceState;
   agentVoiceEnabled: boolean;
+  showAgentVoiceToggle?: boolean;
   t: (key: string) => string;
   onAttachImage: () => void;
   onChatInputChange: (value: string) => void;
@@ -56,6 +57,7 @@ export function ChatComposer({
   chatSending,
   voice,
   agentVoiceEnabled,
+  showAgentVoiceToggle = true,
   t,
   onAttachImage,
   onChatInputChange,
@@ -258,25 +260,27 @@ export function ChatComposer({
         />
       </div>
 
-      <Button
-        variant="ghost"
-        size="icon"
-        className={
-          isGameModal
-            ? `${COMPOSER_ICON_BUTTON_CLASSNAME} rounded-full bg-black/35 text-white/75 hover:bg-black/55 hover:text-white`
-            : `${COMPOSER_ICON_BUTTON_CLASSNAME} border border-border/50 bg-card/70 text-muted hover:text-txt hover:bg-bg`
-        }
-        onClick={onToggleAgentVoice}
-        aria-label={agentVoiceEnabled ? "Agent voice on" : "Agent voice off"}
-        aria-pressed={agentVoiceEnabled}
-        title={agentVoiceEnabled ? "Agent voice on" : "Agent voice off"}
-      >
-        {agentVoiceEnabled ? (
-          <Volume2 className="h-4 w-4" />
-        ) : (
-          <VolumeX className="h-4 w-4" />
-        )}
-      </Button>
+      {showAgentVoiceToggle && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={
+            isGameModal
+              ? `${COMPOSER_ICON_BUTTON_CLASSNAME} rounded-full bg-black/35 text-white/75 hover:bg-black/55 hover:text-white`
+              : `${COMPOSER_ICON_BUTTON_CLASSNAME} border border-border/50 bg-card/70 text-muted hover:text-txt hover:bg-bg`
+          }
+          onClick={onToggleAgentVoice}
+          aria-label={agentVoiceEnabled ? "Agent voice on" : "Agent voice off"}
+          aria-pressed={agentVoiceEnabled}
+          title={agentVoiceEnabled ? "Agent voice on" : "Agent voice off"}
+        >
+          {agentVoiceEnabled ? (
+            <Volume2 className="h-4 w-4" />
+          ) : (
+            <VolumeX className="h-4 w-4" />
+          )}
+        </Button>
+      )}
 
       {chatSending ? (
         <Button

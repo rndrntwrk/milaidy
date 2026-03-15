@@ -46,6 +46,10 @@ const { mockClient } = vi.hoisted(() => ({
       text: "ok",
       agentName: "Milady",
     })),
+    truncateConversationMessages: vi.fn(async () => ({
+      ok: true,
+      deletedCount: 0,
+    })),
     sendConversationMessageStream: vi.fn(async () => ({
       text: "ok",
       agentName: "Milady",
@@ -123,6 +127,7 @@ type ProbeApi = {
   setChatInput: (text: string) => void;
   handleSelectConversation: (id: string) => Promise<void>;
   handleChatSend: () => Promise<void>;
+  handleChatEdit: (messageId: string, text: string) => Promise<boolean>;
   snapshot: () => {
     chatSending: boolean;
     chatFirstTokenReceived: boolean;
@@ -145,6 +150,7 @@ function Probe(props: { onReady: (api: ProbeApi) => void }) {
       setChatInput: (text: string) => app.setState("chatInput", text),
       handleSelectConversation: app.handleSelectConversation,
       handleChatSend: () => app.handleChatSend("simple"),
+      handleChatEdit: app.handleChatEdit,
       snapshot: () => ({
         chatSending: app.chatSending,
         chatFirstTokenReceived: app.chatFirstTokenReceived,
@@ -219,6 +225,10 @@ describe("chat send locking", () => {
     mockClient.sendConversationMessage.mockResolvedValue({
       text: "ok",
       agentName: "Milady",
+    });
+    mockClient.truncateConversationMessages.mockResolvedValue({
+      ok: true,
+      deletedCount: 0,
     });
     mockClient.sendConversationMessageStream.mockResolvedValue({
       text: "ok",
@@ -563,6 +573,128 @@ describe("chat send locking", () => {
       deferred.resolve({ text: "Hello world", agentName: "Milady" });
       await sendPromise;
     });
+
+    await act(async () => {
+      tree?.unmount();
+    });
+  });
+
+  it("edits a user message by truncating later history and resending it", async () => {
+    mockClient.getConversationMessages.mockResolvedValue({
+      messages: [
+        {
+          id: "user-1",
+          role: "user",
+          text: "hello",
+          timestamp: 1,
+        },
+        {
+          id: "assistant-1",
+          role: "assistant",
+          text: "hi",
+          timestamp: 2,
+        },
+        {
+          id: "user-2",
+          role: "user",
+          text: "question",
+          timestamp: 3,
+        },
+        {
+          id: "assistant-2",
+          role: "assistant",
+          text: "answer",
+          timestamp: 4,
+        },
+      ],
+    });
+    mockClient.truncateConversationMessages.mockResolvedValue({
+      ok: true,
+      deletedCount: 2,
+    });
+    mockClient.sendConversationMessageStream.mockImplementation(
+      async (
+        _conversationId: string,
+        _text: string,
+        onToken: (token: string) => void,
+      ) => {
+        onToken("replacement");
+        return {
+          text: "replacement done",
+          agentName: "Milady",
+          completed: true,
+        };
+      },
+    );
+
+    let api: ProbeApi | null = null;
+    let tree: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          AppProvider,
+          null,
+          React.createElement(Probe, {
+            onReady: (nextApi) => {
+              api = nextApi;
+            },
+          }),
+        ),
+      );
+    });
+
+    expect(api).not.toBeNull();
+
+    await act(async () => {
+      await api?.handleSelectConversation("conv-1");
+    });
+
+    let edited = false;
+    await act(async () => {
+      edited = (await api?.handleChatEdit("user-2", "edited question")) ?? false;
+    });
+
+    expect(edited).toBe(true);
+    expect(mockClient.truncateConversationMessages).toHaveBeenCalledWith(
+      "conv-1",
+      "user-2",
+      { inclusive: true },
+    );
+    expect(mockClient.sendConversationMessageStream).toHaveBeenCalledWith(
+      "conv-1",
+      "edited question",
+      expect.any(Function),
+      "DM",
+      expect.any(AbortSignal),
+      undefined,
+      "simple",
+    );
+
+    expect(api?.snapshot().conversationMessages).toEqual([
+      {
+        id: "user-1",
+        role: "user",
+        text: "hello",
+        timestamp: 1,
+        source: undefined,
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        text: "hi",
+        timestamp: 2,
+        source: undefined,
+      },
+      expect.objectContaining({
+        role: "user",
+        text: "edited question",
+      }),
+      expect.objectContaining({
+        role: "assistant",
+        text: "replacement done",
+      }),
+    ]);
 
     await act(async () => {
       tree?.unmount();

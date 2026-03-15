@@ -23,6 +23,8 @@ interface ChatViewContextStub {
   conversationMessages: ChatMessage[];
   handleChatSend: (channelType?: string) => Promise<void>;
   handleChatStop: () => void;
+  handleChatRetry: (id: string) => void;
+  handleChatEdit: (id: string, text: string) => Promise<boolean>;
   setState: (key: string, value: unknown) => void;
   droppedFiles: string[];
   shareIngestNotice: string;
@@ -45,6 +47,10 @@ const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
 vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
   getVrmPreviewUrl: () => null,
+}));
+
+vi.mock("@milady/app-core/platform", () => ({
+  isElectronPlatform: () => false,
 }));
 
 vi.mock("@milady/app-core/hooks", async () => {
@@ -80,6 +86,8 @@ function createContext(
     conversationMessages: [],
     handleChatSend: vi.fn(async () => {}),
     handleChatStop: vi.fn(),
+    handleChatRetry: vi.fn(),
+    handleChatEdit: vi.fn(async () => true),
     setState: vi.fn(),
     droppedFiles: [],
     shareIngestNotice: "",

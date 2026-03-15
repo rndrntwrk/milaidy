@@ -1134,6 +1134,36 @@ describe("VrmEngine", () => {
       expect(engineAny.emoteTimeout).toBeNull();
     });
 
+    it("stopEmote restores idle lazily when the idle action is missing", () => {
+      const fakeEmoteAction = createMockAction();
+      const restoreIdleAfterEmote = vi.fn();
+      const vrm = { scene: { parent: null } };
+      const mixer = { clipAction: vi.fn() };
+      const engineAny = engine as unknown as {
+        emoteAction: ReturnType<typeof createMockAction> | null;
+        idleAction: ReturnType<typeof createMockAction> | null;
+        vrm: typeof vrm | null;
+        mixer: typeof mixer | null;
+        restoreIdleAfterEmote: ReturnType<typeof vi.fn>;
+      };
+
+      engineAny.emoteAction = fakeEmoteAction;
+      engineAny.idleAction = null;
+      engineAny.vrm = vrm;
+      engineAny.mixer = mixer;
+      engineAny.restoreIdleAfterEmote = restoreIdleAfterEmote;
+
+      engine.stopEmote();
+
+      expect(restoreIdleAfterEmote).toHaveBeenCalledWith(
+        fakeEmoteAction,
+        0.4,
+        vrm,
+        mixer,
+      );
+      expect(engineAny.emoteAction).toBeNull();
+    });
+
     it("emote clip cache starts empty and is cleared on dispose", () => {
       const engineAny = engine as unknown as {
         emoteClipCache: Map<string, unknown>;

@@ -550,7 +550,11 @@ export class VrmEngine {
     if (this.idleLoadPromise) return this.idleLoadPromise;
 
     this.idleLoadPromise = (async () => {
-      const clip = await loadIdleClip(vrm, this.idleGlbUrl, this.animationLoaderContext);
+      const clip = await loadIdleClip(
+        vrm,
+        this.idleGlbUrl,
+        this.animationLoaderContext,
+      );
       if (!clip || this.loadingAborted || this.vrm !== vrm) {
         return null;
       }
@@ -1822,7 +1826,12 @@ export class VrmEngine {
       return;
     }
     if (this.vrm && this.mixer) {
-      this.restoreIdleAfterEmote(activeEmote, fadeDuration, this.vrm, this.mixer);
+      this.restoreIdleAfterEmote(
+        activeEmote,
+        fadeDuration,
+        this.vrm,
+        this.mixer,
+      );
       return;
     }
     activeEmote?.fadeOut(fadeDuration);

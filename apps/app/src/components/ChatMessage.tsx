@@ -6,8 +6,14 @@ import type { ConversationMessage } from "@milady/app-core/api";
 import { useTimeout } from "@milady/app-core/hooks";
 import { useApp } from "@milady/app-core/state";
 import { Button } from "@milady/ui";
-import { Check, Copy, RefreshCw, Trash2 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { Check, Copy, Pencil, RefreshCw, Trash2, Volume2 } from "lucide-react";
+import {
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { MessageContent } from "./MessageContent";
 
 interface ChatMessageProps {
@@ -16,6 +22,8 @@ interface ChatMessageProps {
   agentName?: string;
   agentAvatarSrc?: string | null;
   onCopy?: (text: string) => void;
+  onSpeak?: (messageId: string, text: string) => void;
+  onEdit?: (messageId: string, text: string) => Promise<boolean> | boolean;
   onRetry?: (messageId: string) => void;
   onDelete?: (messageId: string) => void;
 }
@@ -25,6 +33,8 @@ export function ChatMessage({
   isGrouped = false,
   agentName = "Agent",
   onCopy,
+  onSpeak,
+  onEdit,
   onRetry,
   onDelete,
 }: ChatMessageProps) {
@@ -33,7 +43,17 @@ export function ChatMessage({
   const { copyToClipboard, t } = useApp();
   const [copied, setCopied] = useState(false);
   const [showActions, setShowActions] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftText, setDraftText] = useState(message.text);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const isUser = message.role === "user";
+  const canEdit =
+    isUser &&
+    typeof onEdit === "function" &&
+    message.source !== "local_command" &&
+    !message.id.startsWith("temp-");
+  const canPlay = !isUser && typeof onSpeak === "function" && message.text.trim();
 
   const handleCopy = useCallback(() => {
     if (onCopy) {
@@ -44,6 +64,62 @@ export function ChatMessage({
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [copyToClipboard, message.text, onCopy, setTimeout]);
+
+  const handleStartEditing = useCallback(() => {
+    if (!canEdit || savingEdit) return;
+    setDraftText(message.text);
+    setIsEditing(true);
+  }, [canEdit, message.text, savingEdit]);
+
+  const handleCancelEditing = useCallback(() => {
+    if (savingEdit) return;
+    setDraftText(message.text);
+    setIsEditing(false);
+  }, [message.text, savingEdit]);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!onEdit) return;
+    const nextText = draftText.trim();
+    if (!nextText) return;
+    if (nextText === message.text.trim()) {
+      setDraftText(message.text);
+      setIsEditing(false);
+      return;
+    }
+
+    setSavingEdit(true);
+    const saved = await onEdit(message.id, nextText);
+    setSavingEdit(false);
+    if (saved !== false) {
+      setIsEditing(false);
+    }
+  }, [draftText, message.id, message.text, onEdit]);
+
+  const handleEditKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        handleCancelEditing();
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        event.preventDefault();
+        void handleSaveEdit();
+      }
+    },
+    [handleCancelEditing, handleSaveEdit],
+  );
+
+  useEffect(() => {
+    if (!isEditing) {
+      setDraftText(message.text);
+      return;
+    }
+    const textarea = editTextareaRef.current;
+    if (!textarea) return;
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  }, [isEditing, message.text]);
 
   return (
     <article
@@ -67,7 +143,46 @@ export function ChatMessage({
           }`}
           style={{ fontFamily: "var(--font-chat)" }}
         >
-          <MessageContent message={message} />
+          {isEditing ? (
+            <div className="space-y-3">
+              <textarea
+                ref={editTextareaRef}
+                value={draftText}
+                onChange={(event) => setDraftText(event.target.value)}
+                onKeyDown={handleEditKeyDown}
+                className="w-full min-h-[110px] rounded-xl border border-white/20 bg-black/10 px-3 py-2 text-[15px] leading-[1.7] text-inherit outline-none focus:border-white/40"
+                style={{ fontFamily: "var(--font-chat)" }}
+                aria-label="Edit message"
+                disabled={savingEdit}
+              />
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCancelEditing}
+                  disabled={savingEdit}
+                  className="h-8 px-3 text-xs text-inherit/80 hover:bg-black/10"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleSaveEdit()}
+                  disabled={
+                    savingEdit ||
+                    !draftText.trim() ||
+                    draftText.trim() === message.text.trim()
+                  }
+                  className="h-8 px-3 text-xs border-white/25 bg-black/10 hover:bg-black/15"
+                >
+                  {savingEdit ? "Saving..." : "Save and resend"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <MessageContent message={message} />
+          )}
 
           {/* Stream interruption indicator */}
           {!isUser && message.interrupted && (
@@ -91,50 +206,78 @@ export function ChatMessage({
           )}
 
           {/* Message Actions (on hover) */}
-          <div
-            className={`absolute ${isUser ? "left-0 -translate-x-full" : "right-0 translate-x-full"} top-0 flex items-center gap-1 p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${showActions ? "opacity-100" : ""}`}
-          >
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleCopy}
-              className="w-7 h-7 rounded-md text-muted hover:text-txt hover:bg-bg-hover transition-colors"
-              title={copied ? "Copied!" : "Copy message"}
-              aria-label={copied ? "Copied to clipboard" : "Copy message"}
+          {!isEditing && (
+            <div
+              className={`absolute ${isUser ? "left-0 -translate-x-full" : "right-0 translate-x-full"} top-0 flex items-center gap-1 p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${showActions ? "opacity-100" : ""}`}
             >
-              {copied ? (
-                <Check className="w-3.5 h-3.5 text-ok" />
-              ) : (
-                <Copy className="w-3.5 h-3.5" />
-              )}
-            </Button>
-
-            {!isUser && onRetry && (
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => onRetry(message.id)}
+                onClick={handleCopy}
                 className="w-7 h-7 rounded-md text-muted hover:text-txt hover:bg-bg-hover transition-colors"
-                title={t("chatmessage.RetryMessage")}
-                aria-label="Retry message"
+                title={copied ? "Copied!" : "Copy message"}
+                aria-label={copied ? "Copied to clipboard" : "Copy message"}
               >
-                <RefreshCw className="w-3.5 h-3.5" />
+                {copied ? (
+                  <Check className="w-3.5 h-3.5 text-ok" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
               </Button>
-            )}
 
-            {onDelete && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onDelete(message.id)}
-                className="w-7 h-7 rounded-md text-muted hover:text-danger hover:bg-danger/10 transition-colors"
-                title={t("chatmessage.DeleteMessage")}
-                aria-label="Delete message"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
-            )}
-          </div>
+              {canPlay && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onSpeak?.(message.id, message.text)}
+                  className="w-7 h-7 rounded-md text-muted hover:text-txt hover:bg-bg-hover transition-colors"
+                  title="Play message"
+                  aria-label="Play message"
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                </Button>
+              )}
+
+              {canEdit && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleStartEditing}
+                  className="w-7 h-7 rounded-md text-muted hover:text-txt hover:bg-bg-hover transition-colors"
+                  title="Edit message"
+                  aria-label="Edit message"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </Button>
+              )}
+
+              {!isUser && onRetry && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onRetry(message.id)}
+                  className="w-7 h-7 rounded-md text-muted hover:text-txt hover:bg-bg-hover transition-colors"
+                  title={t("chatmessage.RetryMessage")}
+                  aria-label="Retry message"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </Button>
+              )}
+
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onDelete(message.id)}
+                  className="w-7 h-7 rounded-md text-muted hover:text-danger hover:bg-danger/10 transition-colors"
+                  title={t("chatmessage.DeleteMessage")}
+                  aria-label="Delete message"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </article>

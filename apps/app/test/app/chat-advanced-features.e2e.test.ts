@@ -420,6 +420,8 @@ describe("ChatView UI", () => {
       showAgentThinking: false,
       handleChatSend: vi.fn(),
       handleChatStop: vi.fn(),
+      handleChatRetry: vi.fn(),
+      handleChatEdit: vi.fn(async () => true),
       setState: vi.fn(),
       setChatPendingImages: vi.fn(),
     }));

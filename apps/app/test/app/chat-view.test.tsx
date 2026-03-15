@@ -42,6 +42,7 @@ interface ChatViewContextStub {
 
   handleRestart: () => Promise<void>;
   handleChatRetry: (id: string) => void;
+  handleChatEdit: (id: string, text: string) => Promise<boolean>;
   lifecycleBusy: boolean;
   lifecycleAction: string | null;
   autonomousEvents: unknown[];
@@ -50,18 +51,24 @@ interface ChatViewContextStub {
   ptySessions: unknown[];
 }
 
-const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
+const { mockClient, mockUseApp, mockUseVoiceChat, mockIsElectronPlatform } =
+  vi.hoisted(() => ({
   mockClient: {
     getCodingAgentStatus: vi.fn(async () => null),
     getConfig: vi.fn().mockResolvedValue({}),
   },
   mockUseApp: vi.fn(),
   mockUseVoiceChat: vi.fn(),
+  mockIsElectronPlatform: vi.fn(() => false),
 }));
 
 vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
   getVrmPreviewUrl: () => null,
+}));
+
+vi.mock("@milady/app-core/platform", () => ({
+  isElectronPlatform: () => mockIsElectronPlatform(),
 }));
 
 vi.mock("@milady/app-core/hooks", async () => {
@@ -114,6 +121,7 @@ function createContext(
 
     handleRestart: vi.fn(async () => {}),
     handleChatRetry: vi.fn(),
+    handleChatEdit: vi.fn(async () => true),
     lifecycleBusy: false,
     lifecycleAction: null,
     autonomousEvents: [],
@@ -143,6 +151,7 @@ describe("ChatView", () => {
   beforeEach(() => {
     mockUseApp.mockReset();
     mockUseVoiceChat.mockReset();
+    mockIsElectronPlatform.mockReset();
     mockClient.getConfig.mockReset();
     Object.defineProperty(window, "dispatchEvent", {
       value: vi.fn(),
@@ -167,6 +176,7 @@ describe("ChatView", () => {
       stopSpeaking: vi.fn(),
     });
     mockClient.getConfig.mockResolvedValue({});
+    mockIsElectronPlatform.mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -299,6 +309,42 @@ describe("ChatView", () => {
       "Hello world.",
       true,
     );
+  });
+
+  it("does not auto-play assistant speech in desktop chat view", async () => {
+    const queueAssistantSpeech = vi.fn();
+    mockIsElectronPlatform.mockReturnValue(true);
+    mockUseVoiceChat.mockReturnValue({
+      supported: false,
+      isListening: false,
+      captureMode: "idle",
+      interimTranscript: "",
+      toggleListening: vi.fn(),
+      startListening: vi.fn(),
+      stopListening: vi.fn(),
+      mouthOpen: 0,
+      isSpeaking: false,
+      usingAudioAnalysis: false,
+      speak: vi.fn(),
+      queueAssistantSpeech,
+      stopSpeaking: vi.fn(),
+    });
+
+    mockUseApp.mockReturnValue(
+      createContext({
+        chatSending: false,
+        conversationMessages: [
+          { id: "a1", role: "assistant", text: "Hello world.", timestamp: 1 },
+        ],
+      }),
+    );
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(ChatView));
+    });
+    await flush();
+
+    expect(queueAssistantSpeech).not.toHaveBeenCalled();
   });
 
   it("pins the native scrollbar to the edge while keeping message text inset", async () => {
