@@ -29,32 +29,84 @@ interface PluginInfo {
   configUiHints?: Record<string, ConfigUiHint>;
 }
 
-export function ProviderSwitcher() {
-  const { setTimeout } = useTimeout();
+interface ProviderSwitcherProps {
+  elizaCloudEnabled?: boolean;
+  elizaCloudConnected?: boolean;
+  elizaCloudCredits?: number | null;
+  elizaCloudCreditsLow?: boolean;
+  elizaCloudCreditsCritical?: boolean;
+  elizaCloudTopUpUrl?: string;
+  elizaCloudUserId?: string | null;
+  elizaCloudLoginBusy?: boolean;
+  elizaCloudLoginError?: string | null;
+  cloudDisconnecting?: boolean;
+  plugins?: PluginInfo[];
+  pluginSaving?: Set<string>;
+  pluginSaveSuccess?: Set<string>;
+  loadPlugins?: () => Promise<void>;
+  handlePluginToggle?: (pluginId: string, enabled: boolean) => Promise<void>;
+  handlePluginConfigSave?: (
+    pluginId: string,
+    values: Record<string, unknown>,
+  ) => void | Promise<void>;
+  handleCloudLogin?: () => Promise<void>;
+  handleCloudDisconnect?: () => Promise<void>;
+  setState?: (key: string, value: unknown) => void;
+  setTab?: (tab: string) => void;
+}
 
-  const {
-    t,
-    elizaCloudEnabled,
-    elizaCloudConnected,
-    elizaCloudCredits,
-    elizaCloudCreditsLow,
-    elizaCloudCreditsCritical,
-    elizaCloudTopUpUrl,
-    elizaCloudUserId,
-    elizaCloudLoginBusy,
-    elizaCloudLoginError,
-    elizaCloudDisconnecting: cloudDisconnecting,
-    plugins,
-    pluginSaving,
-    pluginSaveSuccess,
-    loadPlugins,
-    handlePluginToggle,
-    handlePluginConfigSave,
-    handleCloudLogin,
-    handleCloudDisconnect,
-    setState,
-    setTab,
-  } = useApp();
+export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
+  const { setTimeout } = useTimeout();
+  const app = useApp();
+  const t = app.t;
+  const elizaCloudEnabled =
+    props.elizaCloudEnabled ?? Boolean(app.elizaCloudEnabled);
+  const elizaCloudConnected =
+    props.elizaCloudConnected ?? Boolean(app.elizaCloudConnected);
+  const elizaCloudCredits = props.elizaCloudCredits ?? app.elizaCloudCredits;
+  const elizaCloudCreditsLow =
+    props.elizaCloudCreditsLow ?? Boolean(app.elizaCloudCreditsLow);
+  const elizaCloudCreditsCritical =
+    props.elizaCloudCreditsCritical ??
+    Boolean(app.elizaCloudCreditsCritical);
+  const elizaCloudTopUpUrl =
+    props.elizaCloudTopUpUrl ??
+    (typeof app.elizaCloudTopUpUrl === "string" ? app.elizaCloudTopUpUrl : "");
+  const elizaCloudUserId =
+    props.elizaCloudUserId ??
+    (typeof app.elizaCloudUserId === "string" ? app.elizaCloudUserId : null);
+  const elizaCloudLoginBusy =
+    props.elizaCloudLoginBusy ?? Boolean(app.elizaCloudLoginBusy);
+  const elizaCloudLoginError =
+    props.elizaCloudLoginError ??
+    (typeof app.elizaCloudLoginError === "string"
+      ? app.elizaCloudLoginError
+      : null);
+  const cloudDisconnecting =
+    props.cloudDisconnecting ?? Boolean(app.elizaCloudDisconnecting);
+  const plugins = Array.isArray(props.plugins)
+    ? props.plugins
+    : Array.isArray(app.plugins)
+      ? app.plugins
+      : [];
+  const pluginSaving =
+    props.pluginSaving ??
+    (app.pluginSaving instanceof Set ? app.pluginSaving : new Set<string>());
+  const pluginSaveSuccess =
+    props.pluginSaveSuccess ??
+    (app.pluginSaveSuccess instanceof Set
+      ? app.pluginSaveSuccess
+      : new Set<string>());
+  const loadPlugins = props.loadPlugins ?? app.loadPlugins;
+  const handlePluginToggle =
+    props.handlePluginToggle ?? app.handlePluginToggle;
+  const handlePluginConfigSave =
+    props.handlePluginConfigSave ?? app.handlePluginConfigSave;
+  const handleCloudLogin = props.handleCloudLogin ?? app.handleCloudLogin;
+  const handleCloudDisconnect =
+    props.handleCloudDisconnect ?? app.handleCloudDisconnect;
+  const setState = props.setState ?? app.setState;
+  const setTab = props.setTab ?? app.setTab;
   /* ── Model selection state ─────────────────────────────────────── */
   const [modelOptions, setModelOptions] = useState<
     OnboardingOptions["models"] | null
