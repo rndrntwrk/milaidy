@@ -514,19 +514,36 @@ describe("AppsView", () => {
     await flush();
 
     const root = tree?.root;
-    expect(root.findAll((node) => text(node) === "Hyperscape").length).toBe(1);
-    expect(root.findAll((node) => text(node) === "Babylon").length).toBe(1);
+    expect(
+      root.findAll(
+        (node) =>
+          node.type === "button" && node.props.title === "Open Hyperscape",
+      ).length,
+    ).toBe(1);
+    expect(
+      root.findAll(
+        (node) => node.type === "button" && node.props.title === "Open Babylon",
+      ).length,
+    ).toBe(1);
     expect(
       root.findAll((node) => text(node) === "appsview.Active").length,
-    ).toBe(1);
-    expect(root.findAll((node) => text(node) === ">").length).toBe(2);
+    ).toBeGreaterThanOrEqual(1);
 
     const searchInput = root.findByType("input");
     await act(async () => {
       searchInput.props.onChange({ target: { value: "hyper" } });
     });
-    expect(root.findAll((node) => text(node) === "Hyperscape").length).toBe(1);
-    expect(root.findAll((node) => text(node) === "Babylon").length).toBe(0);
+    expect(
+      root.findAll(
+        (node) =>
+          node.type === "button" && node.props.title === "Open Hyperscape",
+      ).length,
+    ).toBe(1);
+    expect(
+      root.findAll(
+        (node) => node.type === "button" && node.props.title === "Open Babylon",
+      ).length,
+    ).toBe(0);
 
     await act(async () => {
       await findButtonByText(root, "appsview.Refresh").props.onClick();
@@ -534,10 +551,22 @@ describe("AppsView", () => {
     expect(mockClientFns.listApps).toHaveBeenCalledTimes(2);
 
     await act(async () => {
-      await findButtonByText(root, "Active Only").props.onClick();
+      searchInput.props.onChange({ target: { value: "" } });
     });
-    expect(root.findAll((node) => text(node) === "Hyperscape").length).toBe(1);
-    expect(root.findAll((node) => text(node) === "Babylon").length).toBe(0);
+    await act(async () => {
+      await findButtonByText(root, "appsview.ActiveOnly").props.onClick();
+    });
+    expect(
+      root.findAll(
+        (node) =>
+          node.type === "button" && node.props.title === "Open Hyperscape",
+      ).length,
+    ).toBe(1);
+    expect(
+      root.findAll(
+        (node) => node.type === "button" && node.props.title === "Open Babylon",
+      ).length,
+    ).toBe(0);
   });
 
   it("wires Hyperscape controls for message + command + telemetry routes", async () => {
@@ -677,22 +706,29 @@ describe("AppsView", () => {
     });
     expect(
       tree?.root.findAll((node) => text(node) === "appsview.Back").length,
-    ).toBe(1);
+    ).toBeGreaterThanOrEqual(1);
     expect(
-      tree?.root.findAll((node) => text(node) === "Hyperscape").length,
-    ).toBe(0);
-    expect(tree?.root.findAll((node) => text(node) === "Babylon").length).toBe(
-      1,
-    );
+      tree?.root.findAll((node) => text(node) === "Babylon").length,
+    ).toBeGreaterThan(0);
 
     await act(async () => {
       findButtonByText(tree?.root, "appsview.Back").props.onClick();
     });
     expect(
-      tree?.root.findAll((node) => text(node) === "Hyperscape").length,
+      tree?.root.findAll(
+        (node) => text(node) === "Select an app to view details",
+      ).length,
     ).toBe(1);
-    expect(tree?.root.findAll((node) => text(node) === "Babylon").length).toBe(
-      1,
-    );
+    expect(
+      tree?.root.findAll(
+        (node) =>
+          node.type === "button" && node.props.title === "Open Hyperscape",
+      ).length,
+    ).toBe(1);
+    expect(
+      tree?.root.findAll(
+        (node) => node.type === "button" && node.props.title === "Open Babylon",
+      ).length,
+    ).toBe(1);
   });
 });

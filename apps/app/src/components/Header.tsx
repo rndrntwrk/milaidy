@@ -239,7 +239,7 @@ export function Header({ mobileLeft, transparent = false }: HeaderProps) {
                       type="button"
                       className={`w-full flex items-center gap-3 px-3 py-3.5 border rounded-xl text-[14px] font-medium transition-all duration-300 cursor-pointer min-h-[48px] ${
                         isActive
-                          ? "border-accent/50 dark:border-accent/40 bg-accent dark:bg-accent/15 text-accent-fg dark:text-txt-strong shadow-[0_0_15px_rgba(var(--accent),0.24)] ring-1 ring-inset ring-white/18 dark:ring-accent/25"
+                          ? "border-accent/50 bg-accent text-accent-fg shadow-[0_0_15px_rgba(var(--accent),0.24)] ring-1 ring-inset ring-white/18"
                           : "border-transparent bg-transparent text-txt hover:border-border/50 hover:bg-bg-hover"
                       }`}
                       style={{ animationDelay: `${index * 50}ms` }}
