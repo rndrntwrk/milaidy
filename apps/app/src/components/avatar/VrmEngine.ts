@@ -127,6 +127,7 @@ type WorldRevealController = {
 };
 
 type WorldRevealState = {
+  controller: WorldRevealController;
   incoming: WorldRevealController;
   outgoing: WorldRevealController | null;
   progress: number;
@@ -842,6 +843,7 @@ export class VrmEngine {
     } = {},
   ): void {
     const reveal: WorldRevealState = {
+      controller: incoming,
       incoming,
       outgoing: options.outgoing ?? null,
       progress: THREE.MathUtils.clamp(options.initialProgress ?? 0, 0, 1),
@@ -1645,30 +1647,10 @@ export class VrmEngine {
       const syncToTeleport =
         this.revealStarted && this.teleportProgress < 0.999;
       const waitingForVrm = !outgoingWorld && !this.vrmReady;
-      const outgoingAnchor = outgoingWorld
-        ? getRobustSplatAnchor(outgoingWorld)
-        : null;
-      const outgoingReveal =
-        outgoingWorld && outgoingAnchor && !waitingForVrm
-          ? this.createWorldRevealController(
-              spark,
-              outgoingWorld,
-              {
-                origin: outgoingAnchor,
-                radius: Math.max(
-                  getRobustSplatRadialExtent(outgoingWorld, outgoingAnchor) *
-                    COMPANION_WORLD_SCALE,
-                  worldRevealRadius * COMPANION_WORLD_SCALE,
-                ),
-              },
-              "hide",
-            )
-          : null;
-      if (outgoingWorld && !waitingForVrm && !outgoingReveal) {
+      if (outgoingWorld && !waitingForVrm) {
         this.disposeSplatMesh(outgoingWorld);
       }
       this.queueWorldReveal(worldReveal, {
-        outgoing: outgoingReveal,
         duration: COMPANION_WORLD_REVEAL_DURATION,
         waitingForVrm,
         syncToTeleport,
