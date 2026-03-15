@@ -238,4 +238,28 @@ describe("app startup routing (e2e)", () => {
       .join("\n");
     expect(renderedText).toContain("ConversationsSidebar");
   });
+
+  it("keeps the desktop chat workspace height-bounded", async () => {
+    let tree = undefined as unknown as TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(App));
+    });
+
+    const main = tree.root.findByType("main");
+    expect(String(main.props.className)).toContain("min-h-0");
+    expect(String(main.props.className)).toContain("overflow-hidden");
+  });
+
+  it("keeps the mobile chat workspace height-bounded", async () => {
+    setViewportWidth(390);
+
+    let tree = undefined as unknown as TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(App));
+    });
+
+    const main = tree.root.findByType("main");
+    expect(String(main.props.className)).toContain("min-h-0");
+    expect(String(main.props.className)).toContain("overflow-hidden");
+  });
 });

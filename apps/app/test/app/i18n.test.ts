@@ -5,6 +5,7 @@ import {
   MESSAGES,
   normalizeLanguage,
   t,
+  UI_LANGUAGES,
 } from "@milady/app-core/i18n";
 import { describe, expect, it } from "vitest";
 
@@ -53,31 +54,32 @@ describe("i18n helpers", () => {
     );
   });
 
-  it("keeps locale keys in sync between en and zh-CN", () => {
+  it("keeps locale keys in sync across all supported locales", () => {
     const collectKeys = (obj: Record<string, string>): string[] => {
       return Object.keys(obj);
     };
 
     const enKeys = new Set(collectKeys(MESSAGES.en));
-    const zhKeys = new Set(collectKeys(MESSAGES["zh-CN"]));
+    for (const language of UI_LANGUAGES) {
+      const localeKeys = new Set(collectKeys(MESSAGES[language]));
+      const missingInLocale: string[] = [];
+      const missingInEnglish: string[] = [];
 
-    const missingInZh: string[] = [];
-    const missingInEn: string[] = [];
+      enKeys.forEach((key) => {
+        if (!localeKeys.has(key)) {
+          missingInLocale.push(key);
+        }
+      });
 
-    enKeys.forEach((key) => {
-      if (!zhKeys.has(key)) {
-        missingInZh.push(key);
-      }
-    });
+      localeKeys.forEach((key) => {
+        if (!enKeys.has(key)) {
+          missingInEnglish.push(key);
+        }
+      });
 
-    zhKeys.forEach((key) => {
-      if (!enKeys.has(key)) {
-        missingInEn.push(key);
-      }
-    });
-
-    expect(missingInZh).toEqual([]);
-    expect(missingInEn).toEqual([]);
+      expect(missingInLocale, `missing keys in ${language}`).toEqual([]);
+      expect(missingInEnglish, `unexpected keys in ${language}`).toEqual([]);
+    }
   });
 
   it("keeps production UI source files free of hardcoded Chinese text", () => {

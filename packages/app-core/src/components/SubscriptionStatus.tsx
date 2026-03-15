@@ -408,7 +408,7 @@ export function SubscriptionStatus({
                   )}
                   {setupTokenSuccess && (
                     <span className="text-[11px] text-[var(--ok,#16a34a)]">
-                      {t("subscriptionstatus.Saved")}
+                      {t("messagecontent.Saved")}
                     </span>
                   )}
                 </div>
@@ -426,7 +426,7 @@ export function SubscriptionStatus({
                 className="!mt-0"
                 onClick={() => void handleAnthropicStart()}
               >
-                {t("subscriptionstatus.LoginWithAnthropic")}
+                {t("onboarding.loginWithAnthropic")}
               </Button>
               <div className="text-[11px] text-[var(--muted)] mt-1.5">
                 {t("subscriptionstatus.RequiresClaudePro")}
@@ -476,7 +476,7 @@ export function SubscriptionStatus({
                     setAnthropicCode("");
                   }}
                 >
-                  {t("subscriptionstatus.StartOver")}
+                  {t("onboarding.startOver")}
                 </Button>
               </div>
             </div>
@@ -586,7 +586,7 @@ export function SubscriptionStatus({
                     setOpenaiCallbackUrl("");
                   }}
                 >
-                  {t("subscriptionstatus.StartOver")}
+                  {t("onboarding.startOver")}
                 </Button>
               </div>
             </div>

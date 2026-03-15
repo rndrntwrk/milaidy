@@ -273,12 +273,12 @@ export function TrajectoriesView({
               {t("trajectoriesview.AllStatuses")}
             </SelectItem>
             <SelectItem value="active">
-              {t("trajectoriesview.Active")}
+              {t("appsview.Active")}
             </SelectItem>
             <SelectItem value="completed">
               {t("trajectoriesview.Completed")}
             </SelectItem>
-            <SelectItem value="error">{t("trajectoriesview.Error")}</SelectItem>
+            <SelectItem value="error">{t("logsview.Error")}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -291,11 +291,11 @@ export function TrajectoriesView({
             }}
           >
             <SelectTrigger className="h-8 px-3 py-1.5 text-xs bg-card border-border shadow-sm w-36">
-              <SelectValue placeholder={t("trajectoriesview.AllSources")} />
+              <SelectValue placeholder={t("logsview.AllSources")} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">
-                {t("trajectoriesview.AllSources")}
+                {t("logsview.AllSources")}
               </SelectItem>
               {sources.map((s) => (
                 <SelectItem key={s} value={s}>
@@ -313,7 +313,7 @@ export function TrajectoriesView({
             className="h-auto min-h-[2rem] whitespace-normal break-words px-3 py-1.5 text-xs bg-card text-txt hover:text-txt shadow-sm text-left"
             onClick={handleClearFilters}
           >
-            {t("trajectoriesview.ClearFilters")}
+            {t("logsview.ClearFilters")}
           </Button>
         )}
 
@@ -407,7 +407,7 @@ export function TrajectoriesView({
                   {t("trajectoriesview.Source")}
                 </th>
                 <th className="text-left px-2 py-1.5 font-medium">
-                  {t("trajectoriesview.Status")}
+                  {t("finetuningview.Status")}
                 </th>
                 <th className="text-right px-2 py-1.5 font-medium">
                   {t("trajectoriesview.Calls")}
@@ -494,7 +494,7 @@ export function TrajectoriesView({
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
             >
-              {t("trajectoriesview.Prev")}
+              {t("databaseview.Prev")}
             </Button>
             <Button
               variant="outline"
@@ -503,7 +503,7 @@ export function TrajectoriesView({
               onClick={() => setPage((p) => p + 1)}
               disabled={page >= totalPages - 1}
             >
-              {t("trajectoriesview.Next")}
+              {t("databaseview.Next")}
             </Button>
           </div>
         </div>

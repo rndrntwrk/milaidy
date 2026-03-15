@@ -62,7 +62,7 @@ export function CloudConnectionStatus({
         <>
           <span className="text-xs text-[var(--text)]">{connectedText}</span>
           <span className="rounded-full border border-green-600 bg-green-600/10 px-1.5 py-0.5 text-[10px] text-[var(--text)]">
-            {t("cloudsourcecontrols.Active")}
+            {t("appsview.Active")}
           </span>
         </>
       ) : (

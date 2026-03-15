@@ -50,7 +50,7 @@ export function WhatsAppQrOverlay({
             style={{ background: "#22c55e" }}
           />
           <span className="text-xs font-medium" style={{ color: "#22c55e" }}>
-            {t("whatsappqroverlay.Connected")}
+            {t("onboarding.connected")}
             {phoneNumber ? ` (+${phoneNumber})` : ""}
           </span>
         </div>
@@ -193,7 +193,7 @@ export function WhatsAppQrOverlay({
             <li>
               {t("whatsappqroverlay.Tap")}{" "}
               <strong>{t("whatsappqroverlay.Menu")}</strong> or{" "}
-              <strong>{t("whatsappqroverlay.Settings")}</strong>{" "}
+              <strong>{t("nav.settings")}</strong>{" "}
               {t("whatsappqroverlay.andSelect")}{" "}
               <strong>{t("whatsappqroverlay.LinkedDevices")}</strong>
             </li>
@@ -221,7 +221,7 @@ export function WhatsAppQrOverlay({
             }}
             onClick={() => void stopPairing()}
           >
-            {t("whatsappqroverlay.Cancel")}
+            {t("onboarding.cancel")}
           </button>
         </div>
       </div>

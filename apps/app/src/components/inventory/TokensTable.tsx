@@ -55,7 +55,7 @@ export function TokensTable({
               {t("wallet.table.balance")}
             </th>
             <th className="px-3 py-2 text-right text-[10px] text-muted font-bold uppercase tracking-wide">
-              {t("wallet.table.value")}
+              {t("wallet.value")}
             </th>
             <th className="pl-3 pr-3 py-2 text-right w-24" />
           </tr>

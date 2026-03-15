@@ -84,7 +84,7 @@ export function ChatMessage({
                 >
                   <RefreshCw className="w-3 h-3" />
 
-                  {t("chatmessage.Retry")}
+                  {t("common.retry")}
                 </Button>
               )}
             </div>
@@ -212,7 +212,7 @@ export function ChatEmptyState({ agentName }: { agentName: string }) {
           className="text-txt"
           aria-label="Chat icon"
         >
-          <title>{t("chatmessage.Chat")}</title>
+          <title>{t("nav.chat")}</title>
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
       </div>

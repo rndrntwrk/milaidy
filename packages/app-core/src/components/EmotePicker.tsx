@@ -414,7 +414,7 @@ export function EmotePicker() {
             className="rounded px-2 py-1 text-xs font-medium transition-colors"
             style={{ background: "#ef4444", color: "#fff" }}
           >
-            {t("emotepicker.Stop")}
+            {t("game.stop")}
           </button>
 
           {/* Shortcut label */}
@@ -474,7 +474,7 @@ export function EmotePicker() {
             color: activeCategory === null ? "#000" : "rgba(255,255,255,0.6)",
           }}
         >
-          {t("emotepicker.All")}
+          {t("wallet.all")}
         </button>
         {CATEGORIES.map((cat) => (
           <button

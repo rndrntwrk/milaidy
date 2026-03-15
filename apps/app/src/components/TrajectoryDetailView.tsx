@@ -141,7 +141,7 @@ function LlmCallCard({
       {/* Metadata row */}
       <div className="flex flex-wrap gap-4 px-3 py-1.5 text-[10px] text-muted border-b border-border">
         <span>
-          {t("trajectorydetailview.Tokens")}{" "}
+          {t("trajectoriesview.Tokens")}{" "}
           <span className="text-txt font-mono">
             {formatTrajectoryTokenCount(totalTokens, { emptyLabel: "—" })}
           </span>
@@ -340,7 +340,7 @@ export function TrajectoryDetailView({
         </div>
         <div>
           <span className="text-muted">
-            {t("trajectorydetailview.Status")}{" "}
+            {t("finetuningview.Status1")}{" "}
           </span>
           <span
             className={
@@ -362,7 +362,7 @@ export function TrajectoryDetailView({
         </div>
         <div>
           <span className="text-muted">
-            {t("trajectorydetailview.LLMCalls")}{" "}
+            {t("trajectoriesview.LLMCalls")}{" "}
           </span>
           <span className="font-semibold">{llmCalls.length}</span>
         </div>

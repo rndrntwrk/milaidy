@@ -116,7 +116,7 @@ export function SaveCommandModal({
             onClick={onClose}
             aria-label="Close dialog"
           >
-            {t("savecommandmodal.Times")}
+            {t("bugreportmodal.Times")}
           </button>
         </div>
 
@@ -194,7 +194,7 @@ export function SaveCommandModal({
             }}
             onClick={onClose}
           >
-            {t("savecommandmodal.Cancel")}
+            {t("onboarding.cancel")}
           </button>
           <button
             type="button"

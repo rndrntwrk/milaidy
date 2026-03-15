@@ -117,7 +117,7 @@ export function GameViewOverlay() {
             onClick={handleClose}
             title={t("gameviewoverlay.CloseOverlay")}
           >
-            {t("gameviewoverlay.Close")}
+            {t("bugreportmodal.Close")}
           </button>
         </div>
         {/* Iframe */}

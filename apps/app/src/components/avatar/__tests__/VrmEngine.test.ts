@@ -971,7 +971,7 @@ describe("VrmEngine", () => {
       ).toHaveBeenCalled();
     });
 
-    it("replaces the previous world immediately on theme swaps", async () => {
+    it("keeps the previous world alive while the next world dissolves in", async () => {
       const canvas = createMockCanvas();
       engine.setup(canvas, vi.fn());
       await waitForEngineReady(engine);
@@ -995,7 +995,24 @@ describe("VrmEngine", () => {
               objectModifier: unknown;
               dispose: ReturnType<typeof vi.fn>;
             };
+            radius: number;
           };
+          incoming: {
+            mesh: {
+              opacity: number;
+              objectModifier: unknown;
+              dispose: ReturnType<typeof vi.fn>;
+            };
+            radius: number;
+          };
+          outgoing: {
+            mesh: {
+              opacity: number;
+              objectModifier: unknown;
+              dispose: ReturnType<typeof vi.fn>;
+            };
+            radius: number;
+          } | null;
         } | null;
         updateWorldReveal: (stableDelta: number) => void;
       };
@@ -1009,21 +1026,27 @@ describe("VrmEngine", () => {
 
       expect(secondWorld).toBeTruthy();
       expect(secondWorld).not.toBe(firstWorld);
-      expect(firstWorld?.dispose).toHaveBeenCalled();
+      expect(firstWorld?.dispose).not.toHaveBeenCalled();
       expect(engineAny.worldReveal?.waitingForVrm).toBe(false);
       expect(engineAny.worldReveal?.syncToTeleport).toBe(false);
+      expect(engineAny.worldReveal?.incoming.mesh).toBe(secondWorld);
+      expect(engineAny.worldReveal?.outgoing?.mesh).toBe(firstWorld);
       expect(engineAny.worldReveal?.controller.mesh).toBe(secondWorld);
-      expect(
-        engineAny.worldReveal?.controller.mesh.objectModifier,
-      ).toBeTruthy();
+      expect(engineAny.worldReveal?.incoming.radius).toBeCloseTo(
+        engineAny.worldReveal?.outgoing?.radius ?? 0,
+      );
+      expect(engineAny.worldReveal?.incoming.mesh.objectModifier).toBeTruthy();
+      expect(engineAny.worldReveal?.outgoing?.mesh.objectModifier).toBeTruthy();
 
       engineAny.updateWorldReveal(0.4);
       expect(engineAny.worldReveal?.progress ?? 0).toBeGreaterThan(0);
       expect(engineAny.worldReveal?.progress ?? 1).toBeLessThan(1);
+      expect(firstWorld?.dispose).not.toHaveBeenCalled();
       for (let i = 0; i < 32 && engineAny.worldReveal; i++) {
         engineAny.updateWorldReveal(0.4);
       }
       expect(engineAny.worldReveal).toBeNull();
+      expect(firstWorld?.dispose).toHaveBeenCalled();
       expect(secondWorld?.opacity).toBe(1);
     });
   });

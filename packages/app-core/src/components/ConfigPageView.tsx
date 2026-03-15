@@ -711,7 +711,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                 className="text-[var(--muted)] hover:text-[var(--txt)] text-lg leading-none px-1 bg-transparent border-0 cursor-pointer"
                 onClick={() => setSecretsOpen(false)}
               >
-                {t("configpageview.Times")}
+                {t("bugreportmodal.Times")}
               </button>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto">

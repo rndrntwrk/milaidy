@@ -55,7 +55,7 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
   },
   {
     id: "cloud",
-    label: "settings.sections.cloud.label",
+    label: "miladyclouddashboard.MiladyCloud",
     icon: Cloud,
     description: "settings.sections.cloud.desc",
   },
@@ -97,7 +97,7 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
   },
   {
     id: "advanced",
-    label: "settings.sections.advanced.label",
+    label: "nav.advanced",
     icon: Sliders,
     description: "settings.sections.advanced.desc",
   },
@@ -132,13 +132,13 @@ function SettingsSidebar({
   const { t } = useApp();
 
   return (
-    <aside className="hidden h-full min-h-0 w-80 shrink-0 border-r border-border/50 bg-bg/35 backdrop-blur-xl xl:flex">
-      <div className="flex min-h-0 flex-1 flex-col p-5">
+    <aside className="hidden w-80 shrink-0 self-start border-r border-border/50 bg-bg/35 backdrop-blur-xl xl:sticky xl:top-0 xl:flex">
+      <div className="flex flex-1 flex-col p-5">
         <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted/80">
           {t("settingsview.JumpToSection", { defaultValue: "Jump to section" })}
         </div>
 
-        <nav className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
+        <nav className="flex flex-col gap-2 pr-1">
           {sections.map((section) => {
             const Icon = section.icon;
             const isActive = activeSection === section.id;
@@ -216,7 +216,7 @@ function UpdatesSection() {
             {t("settings.updateAvailable")}
           </div>
           <p className="text-sm text-txt-strong">
-            {updateStatus.currentVersion} {t("settingsview.Rarr")}{" "}
+            {updateStatus.currentVersion} {t("ui-renderer.Rarr")}{" "}
             {updateStatus.latestVersion}
           </p>
         </div>
@@ -427,7 +427,7 @@ function AdvancedSection() {
                 className="settings-button rounded-lg"
                 onClick={closeExportModal}
               >
-                {t("common.cancel")}
+                {t("onboarding.cancel")}
               </Button>
               <Button
                 variant="default"
@@ -520,7 +520,7 @@ function AdvancedSection() {
                 className="settings-button rounded-lg"
                 onClick={closeImportModal}
               >
-                {t("common.cancel")}
+                {t("onboarding.cancel")}
               </Button>
               <Button
                 variant="default"
@@ -556,7 +556,8 @@ export function SettingsView({
     initialSection ?? "ai-model",
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const contentRef = useRef<HTMLDivElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLElement | null>(null);
 
   const {
     // Milady Cloud
@@ -604,11 +605,20 @@ export function SettingsView({
     void loadPlugins();
   }, [loadPlugins]);
 
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+
+    scrollContainerRef.current = inModal
+      ? shell
+      : (shell.closest('[data-shell-scroll-region="true"]') ?? shell);
+  }, [inModal]);
+
   const handleSectionChange = useCallback((sectionId: string) => {
     setActiveSection(sectionId);
-    if (contentRef.current) {
-      const element = contentRef.current.querySelector(`#${sectionId}`);
-      if (element) {
+    if (shellRef.current) {
+      const element = shellRef.current.querySelector(`#${sectionId}`);
+      if (element instanceof HTMLElement) {
         element.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     }
@@ -628,16 +638,20 @@ export function SettingsView({
 
   // Update active section based on scroll position
   useEffect(() => {
-    const root = contentRef.current;
-    if (!root) return;
+    const shell = shellRef.current;
+    const root = scrollContainerRef.current;
+    if (!shell || !root) return;
 
     const handleScroll = () => {
       const sections = visibleSections
         .map((s) => {
-          const el = root.querySelector(`#${s.id}`) as HTMLElement;
+          const el = shell.querySelector(`#${s.id}`);
           return { id: s.id, el };
         })
-        .filter((s) => s.el !== null);
+        .filter(
+          (s): s is { id: string; el: HTMLElement } =>
+            s.el instanceof HTMLElement,
+        );
 
       if (sections.length === 0) return;
 
@@ -813,7 +827,8 @@ export function SettingsView({
   );
   return (
     <div
-      className={`settings-shell flex h-full min-h-0 min-w-0 flex-row overflow-hidden ${inModal ? "bg-transparent" : "bg-bg"}`}
+      ref={shellRef}
+      className={`settings-shell flex min-h-full min-w-0 w-full flex-row items-start overflow-x-hidden ${inModal ? "h-full min-h-0 overflow-y-auto bg-transparent" : "bg-bg"}`}
     >
       <SettingsSidebar
         sections={visibleSections}
@@ -822,34 +837,34 @@ export function SettingsView({
       />
 
       <div
-        ref={contentRef}
-        className={`settings-page-content flex-1 min-w-0 overflow-y-auto scroll-smooth ${inModal ? "px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6" : "px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8"}`}
+        className={`settings-page-content flex-1 min-w-0 scroll-smooth ${inModal ? "px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6" : "px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8"}`}
       >
         <div className={`${inModal ? "max-w-5xl" : "max-w-5xl"} mx-auto`}>
-          <div className="flex justify-end">
-            <button
-              type="button"
-              className="settings-icon-button inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted transition-all hover:border-accent hover:text-txt hover:shadow-sm"
-              onClick={handleClose}
-              aria-label="Close settings"
-              title={t("settingsview.CloseSettings")}
-            >
-              <X className="w-4 h-4" />
-            </button>
+          <div className="sticky top-0 z-20 -mx-1 mb-5 rounded-[1.35rem] border border-border/50 bg-bg/80 px-3 py-3 shadow-[0_18px_40px_rgba(0,0,0,0.2)] backdrop-blur-xl">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative min-w-0 flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+                <Input
+                  type="text"
+                  placeholder={t("settings.searchPlaceholder")}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-11 w-full rounded-xl border-border/60 bg-card/70 pl-10 pr-3 text-sm shadow-sm"
+                />
+              </div>
+              <button
+                type="button"
+                className="settings-icon-button inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted transition-all hover:border-accent hover:text-txt hover:shadow-sm"
+                onClick={handleClose}
+                aria-label="Close settings"
+                title={t("settingsview.CloseSettings")}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
-          <div className="relative mt-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-            <Input
-              type="text"
-              placeholder={t("settings.searchPlaceholder")}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-11 w-full rounded-xl border-border/60 bg-card/70 pl-10 pr-3 text-sm shadow-sm"
-            />
-          </div>
-
-          <div className="space-y-6 pb-20 pt-5 sm:space-y-8 sm:pt-6">
+          <div className="space-y-6 pb-20 pt-1 sm:space-y-8 sm:pt-2">
             {sectionsContent}
           </div>
         </div>

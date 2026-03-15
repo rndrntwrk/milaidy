@@ -129,10 +129,12 @@ describe("settings control styles", () => {
   it("applies shared padding rules to settings page buttons and cards", () => {
     const css = readFileSync(stylesCssPath, "utf8");
 
+    expect(css).toContain(".settings-scroll-region");
+    expect(css).toContain("scroll-padding-top: 7rem;");
     expect(css).toContain(".settings-page-content");
-    expect(css).toContain(
-      ":is(button.inline-flex, a.inline-flex, .btn):not(.settings-compact-button):not(",
-    );
+    expect(css).toContain(":is(button.inline-flex, a.inline-flex, .btn):not(");
+    expect(css).toContain(".settings-compact-button");
+    expect(css).toContain(".settings-icon-button");
     expect(css).toContain("min-height: 2.625rem;");
     expect(css).toContain(".settings-card-button");
     expect(css).toContain("min-height: 5.5rem;");

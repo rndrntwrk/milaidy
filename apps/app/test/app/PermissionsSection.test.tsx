@@ -181,6 +181,6 @@ describe("PermissionsSection", () => {
     const text = collectText(root);
     // Should show system permissions section with permission rows
     expect(text).toContain("permissionssection.SystemPermissions");
-    expect(text).toContain("permissionssection.Capabilities");
+    expect(text).toContain("appsview.Capabilities");
   });
 });

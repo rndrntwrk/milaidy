@@ -303,7 +303,7 @@ export function CloudDashboard() {
   }
 
   return (
-    <div className="h-full overflow-y-auto custom-scrollbar p-6 lg:p-10 space-y-8 max-w-7xl mx-auto animate-in fade-in duration-500">
+    <div className="custom-scrollbar p-6 lg:p-10 space-y-8 max-w-7xl mx-auto animate-in fade-in duration-500">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
@@ -402,7 +402,7 @@ export function CloudDashboard() {
                             onClick={() => setShowDeployForm(false)}
                             disabled={deploying}
                           >
-                            {t("miladyclouddashboard.Cancel")}
+                            {t("onboarding.cancel")}
                           </Button>
                           <Button
                             variant="default"

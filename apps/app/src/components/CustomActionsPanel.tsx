@@ -161,7 +161,7 @@ export function CustomActionsPanel({
                 strokeWidth="2"
                 strokeLinecap="round"
               >
-                <title>{t("customactionspanel.ClosePanel")}</title>
+                <title>{t("conversations.closePanel")}</title>
                 <path d="M12 4L4 12M4 4l8 8" />
               </svg>
             </Button>
@@ -218,7 +218,7 @@ export function CustomActionsPanel({
                       </div>
                       <p className="text-[10px] text-muted mt-0.5">
                         {action.parameters?.length || 0}{" "}
-                        {t("customactionspanel.parameter")}
+                        {t("customactionsview.parameter")}
                         {(action.parameters?.length || 0) === 1 ? "" : "s"}
                         {action.similes?.length
                           ? ` • ${action.similes.length} alias`.concat(
@@ -253,7 +253,7 @@ export function CustomActionsPanel({
                         onChange={() => handleToggleEnabled(action)}
                         className="w-3 h-3 cursor-pointer accent-accent"
                       />
-                      <span>{t("customactionspanel.Enabled")}</span>
+                      <span>{t("customactionsview.Enabled")}</span>
                     </label>
 
                     <div className="ml-auto flex items-center gap-2">
@@ -264,7 +264,7 @@ export function CustomActionsPanel({
                         className="h-6 px-2 text-xs text-txt hover:text-txt/80 hover:bg-accent/10"
                         title={t("customactionspanel.EditAction")}
                       >
-                        {t("customactionspanel.Edit")}
+                        {t("triggersview.Edit")}
                       </Button>
                       <Button
                         variant="ghost"
@@ -273,7 +273,7 @@ export function CustomActionsPanel({
                         className="h-6 px-2 text-xs text-danger hover:text-danger/80 hover:bg-danger/10"
                         title={t("customactionspanel.DeleteAction")}
                       >
-                        {t("customactionspanel.Delete")}
+                        {t("triggersview.Delete")}
                       </Button>
                     </div>
                   </div>

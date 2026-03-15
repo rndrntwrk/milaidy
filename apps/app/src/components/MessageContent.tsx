@@ -582,7 +582,7 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
   if (loading) {
     return (
       <div className="my-2 px-3 py-2 border border-border bg-card text-xs text-muted italic">
-        {t("messagecontent.Loading")} {pluginId}{" "}
+        {t("common.loading")} {pluginId}{" "}
         {t("messagecontent.configuration")}
       </div>
     );

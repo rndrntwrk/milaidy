@@ -68,7 +68,7 @@ export function LifoMonitorPanel({
               }}
               className="h-7 px-2.5 py-1 text-[11px] shadow-sm hover:border-accent hover:text-txt"
             >
-              {t("lifomonitorpanel.Refresh")}
+              {t("appsview.Refresh")}
             </Button>
           </div>
         </div>

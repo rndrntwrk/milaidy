@@ -124,9 +124,11 @@ type WorldRevealController = {
   mesh: SparkSplatMesh;
   progressUniform: { value: number };
   mode: "reveal" | "hide";
+  radius: number;
 };
 
 type WorldRevealState = {
+  controller: WorldRevealController;
   incoming: WorldRevealController;
   outgoing: WorldRevealController | null;
   progress: number;
@@ -147,6 +149,7 @@ const COMPANION_DARK_WORLD_FLOOR_OFFSET_Y = -0.95;
 const COMPANION_LIGHT_WORLD_FLOOR_OFFSET_Y = -0.35;
 const COMPANION_WORLD_REVEAL_DURATION = 6.4;
 const COMPANION_WORLD_REVEAL_EDGE = 0.28;
+const COMPANION_WORLD_REVEAL_START_OFFSET = 0.7;
 const TELEPORT_DISSOLVE_START_Y = -1.2;
 const TELEPORT_DISSOLVE_END_Y = 1.0;
 const COMPANION_DOF_APERTURE_SIZE = 0.028;
@@ -732,10 +735,11 @@ export class VrmEngine {
     }
 
     const originUniform = dyno.dynoVec3(reveal.origin, "uWorldRevealOrigin");
-    const radiusUniform = dyno.dynoFloat(
-      Math.max(reveal.radius, COMPANION_WORLD_REVEAL_EDGE * 2),
-      "uWorldRevealRadius",
+    const resolvedRadius = Math.max(
+      reveal.radius,
+      COMPANION_WORLD_REVEAL_EDGE * 2,
     );
+    const radiusUniform = dyno.dynoFloat(resolvedRadius, "uWorldRevealRadius");
     const edgeUniform = dyno.dynoFloat(
       COMPANION_WORLD_REVEAL_EDGE,
       "uWorldRevealEdge",
@@ -750,6 +754,10 @@ export class VrmEngine {
     const zero = dyno.dynoConst("float", 0);
     const one = dyno.dynoConst("float", 1);
     const two = dyno.dynoConst("float", 2);
+    const startOffset = dyno.dynoConst(
+      "float",
+      -COMPANION_WORLD_REVEAL_START_OFFSET,
+    );
 
     const modifier = dyno.dynoBlock(
       { gsplat: dyno.Gsplat },
@@ -763,7 +771,10 @@ export class VrmEngine {
         const radialDistance = dyno.length(
           dyno.swizzle(dyno.sub(center, originUniform), "xz"),
         );
-        const currentRadius = dyno.mul(radiusUniform, progressUniform);
+        const currentRadius = dyno.add(
+          dyno.mul(radiusUniform, progressUniform),
+          startOffset,
+        );
         const bodyMask = dyno.sub(
           one,
           dyno.smoothstep(
@@ -809,6 +820,7 @@ export class VrmEngine {
       mesh,
       progressUniform,
       mode,
+      radius: resolvedRadius,
     };
   }
 
@@ -842,6 +854,7 @@ export class VrmEngine {
     } = {},
   ): void {
     const reveal: WorldRevealState = {
+      controller: incoming,
       incoming,
       outgoing: options.outgoing ?? null,
       progress: THREE.MathUtils.clamp(options.initialProgress ?? 0, 0, 1),
@@ -1627,45 +1640,49 @@ export class VrmEngine {
       -worldCenterBottom.y * COMPANION_WORLD_SCALE + worldFloorOffsetY,
       -worldCenterBottom.z * COMPANION_WORLD_SCALE,
     );
+    const syncToTeleport = this.revealStarted && this.teleportProgress < 0.999;
+    const waitingForVrm = !outgoingWorld && !this.vrmReady;
+    const incomingRevealRadius = Math.max(
+      worldRevealRadius * COMPANION_WORLD_SCALE,
+      getRobustSplatRadialExtent(splat, worldCenterBottom) *
+        COMPANION_WORLD_SCALE,
+    );
+    let outgoingAnchor: THREE.Vector3 | null = null;
+    let sharedRevealRadius = incomingRevealRadius;
+    if (outgoingWorld && !waitingForVrm) {
+      outgoingAnchor = getRobustSplatAnchor(outgoingWorld);
+      sharedRevealRadius = Math.max(
+        sharedRevealRadius,
+        getRobustSplatRadialExtent(outgoingWorld, outgoingAnchor) *
+          COMPANION_WORLD_SCALE,
+      );
+    }
+
     const worldReveal = this.createWorldRevealController(
       spark,
       splat,
       {
         origin: worldCenterBottom,
-        radius: Math.max(
-          worldRevealRadius * COMPANION_WORLD_SCALE,
-          getRobustSplatRadialExtent(splat, worldCenterBottom) *
-            COMPANION_WORLD_SCALE,
-        ),
+        radius: sharedRevealRadius,
       },
       "reveal",
     );
     this.worldMesh = splat;
     if (worldReveal) {
-      const syncToTeleport =
-        this.revealStarted && this.teleportProgress < 0.999;
-      const waitingForVrm = !outgoingWorld && !this.vrmReady;
-      const outgoingAnchor = outgoingWorld
-        ? getRobustSplatAnchor(outgoingWorld)
-        : null;
-      const outgoingReveal =
-        outgoingWorld && outgoingAnchor && !waitingForVrm
-          ? this.createWorldRevealController(
-              spark,
-              outgoingWorld,
-              {
-                origin: outgoingAnchor,
-                radius: Math.max(
-                  getRobustSplatRadialExtent(outgoingWorld, outgoingAnchor) *
-                    COMPANION_WORLD_SCALE,
-                  worldRevealRadius * COMPANION_WORLD_SCALE,
-                ),
-              },
-              "hide",
-            )
-          : null;
-      if (outgoingWorld && !waitingForVrm && !outgoingReveal) {
-        this.disposeSplatMesh(outgoingWorld);
+      let outgoingReveal: WorldRevealController | null = null;
+      if (outgoingWorld && outgoingAnchor && !waitingForVrm) {
+        outgoingReveal = this.createWorldRevealController(
+          spark,
+          outgoingWorld,
+          {
+            origin: outgoingAnchor,
+            radius: sharedRevealRadius,
+          },
+          "hide",
+        );
+        if (!outgoingReveal) {
+          this.disposeSplatMesh(outgoingWorld);
+        }
       }
       this.queueWorldReveal(worldReveal, {
         outgoing: outgoingReveal,

@@ -169,7 +169,7 @@ export function CustomActionsView() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <label className="px-3 py-1.5 text-sm border border-border bg-surface text-muted rounded cursor-pointer hover:bg-card transition-colors">
-            {t("customactionsview.Import")}
+            {t("knowledgeview.Import")}
             <input
               type="file"
               accept="application/json"
@@ -291,7 +291,7 @@ export function CustomActionsView() {
                     onClick={() => handleEdit(action)}
                     className="px-2 py-1 h-6 text-xs bg-surface text-muted hover:bg-card shadow-sm"
                   >
-                    {t("customactionsview.Edit")}
+                    {t("triggersview.Edit")}
                   </Button>
                   <Button
                     variant="outline"
@@ -299,7 +299,7 @@ export function CustomActionsView() {
                     onClick={() => handleDelete(action.id, action.name)}
                     className="px-2 py-1 h-6 text-xs bg-surface text-danger border-danger/20 hover:bg-danger/10 shadow-sm"
                   >
-                    {t("customactionsview.Delete")}
+                    {t("triggersview.Delete")}
                   </Button>
                 </div>
               </div>

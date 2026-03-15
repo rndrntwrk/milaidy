@@ -2,6 +2,7 @@
  * Root App component — routing shell.
  */
 
+import { Keyboard } from "@capacitor/keyboard";
 import {
   AppsPageView,
   ConnectionFailedBanner,
@@ -23,7 +24,7 @@ import {
 } from "@milady/app-core/hooks";
 import type { Tab } from "@milady/app-core/navigation";
 import { APPS_ENABLED, COMPANION_ENABLED } from "@milady/app-core/navigation";
-import { isLifoPopoutValue } from "@milady/app-core/platform";
+import { isIOS, isLifoPopoutValue, isNative } from "@milady/app-core/platform";
 import { useApp } from "@milady/app-core/state";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { AdvancedPageView } from "./components/AdvancedPageView";
@@ -62,11 +63,17 @@ function useIsPopout(): boolean {
   return popout;
 }
 
-function TabScrollView({ children }: { children: ReactNode }) {
+function TabScrollView({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <div
       data-shell-scroll-region="true"
-      className="flex-1 min-h-0 min-w-0 w-full overflow-y-auto"
+      className={`flex-1 min-h-0 min-w-0 w-full overflow-y-auto ${className}`}
     >
       {children}
     </div>
@@ -135,15 +142,15 @@ function ViewRouter() {
         );
       case "voice":
         return (
-          <TabContentView>
+          <TabScrollView className="settings-scroll-region">
             <SettingsView key="settings-voice" initialSection="voice" />
-          </TabContentView>
+          </TabScrollView>
         );
       case "settings":
         return (
-          <TabContentView>
+          <TabScrollView className="settings-scroll-region">
             <SettingsView key="settings-root" />
-          </TabContentView>
+          </TabScrollView>
         );
       case "advanced":
       case "plugins":
@@ -195,6 +202,8 @@ export function App() {
       : shellMode === "companion" && tab === "chat"
         ? "companion"
         : tab;
+  const companionShellVisible =
+    shellMode === "companion" && COMPANION_OVERLAY_TABS.has(effectiveTab);
   const companionSceneActive =
     COMPANION_ENABLED && (effectiveTab === "companion" || tab === "companion");
   const contextMenu = useContextMenu();
@@ -289,6 +298,29 @@ export function App() {
     }
   }, [isChat]);
 
+  useEffect(() => {
+    if (!isNative || !isIOS) {
+      return;
+    }
+
+    // Disable the iOS WebView scroll only while the companion shell is active.
+    void Keyboard.setScroll({ isDisabled: companionShellVisible }).catch(() => {
+      // Ignore bridge failures so web/electron shells keep working.
+    });
+  }, [companionShellVisible]);
+
+  useEffect(() => {
+    if (!isNative || !isIOS) {
+      return;
+    }
+
+    return () => {
+      void Keyboard.setScroll({ isDisabled: false }).catch(() => {
+        // Ignore cleanup failures when the native bridge is unavailable.
+      });
+    };
+  }, []);
+
   const bugReport = useBugReportState();
   const agentStarting = agentStatus?.state === "starting";
 
@@ -326,61 +358,60 @@ export function App() {
   if (authRequired) return <PairingView />;
   if (!onboardingComplete) return <OnboardingWizard />;
 
-  const shellContent =
-    shellMode === "companion" && COMPANION_OVERLAY_TABS.has(effectiveTab) ? (
-      <CompanionShell tab={effectiveTab} actionNotice={actionNotice} />
-    ) : tab === "stream" ? (
-      <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
-        <Header />
-        <main className="flex-1 min-h-0 overflow-hidden">
-          <StreamView />
-        </main>
-      </div>
-    ) : isChat ? (
-      <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
-        <Header mobileLeft={mobileChatControls} />
-        <div className="flex flex-1 min-h-0 relative">
-          {isChatMobileLayout ? (
-            <>
-              <main className="flex flex-col flex-1 min-w-0 overflow-visible pt-2 px-2">
-                <ChatView />
-              </main>
+  const shellContent = companionShellVisible ? (
+    <CompanionShell tab={effectiveTab} actionNotice={actionNotice} />
+  ) : tab === "stream" ? (
+    <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
+      <Header />
+      <main className="flex-1 min-h-0 overflow-hidden">
+        <StreamView />
+      </main>
+    </div>
+  ) : isChat ? (
+    <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
+      <Header mobileLeft={mobileChatControls} />
+      <div className="flex flex-1 min-h-0 relative">
+        {isChatMobileLayout ? (
+          <>
+            <main className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden pt-2 px-2">
+              <ChatView />
+            </main>
 
-              {mobileConversationsOpen && (
-                <div className="fixed inset-0 z-[120] bg-bg">
-                  <ConversationsSidebar
-                    mobile
-                    onClose={() => setMobileConversationsOpen(false)}
-                  />
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <ConversationsSidebar />
-              <main className="flex flex-col flex-1 min-w-0 overflow-visible pt-3 px-3 xl:px-5">
-                <ChatView />
-              </main>
-            </>
-          )}
-          <CustomActionsPanel
-            open={customActionsPanelOpen}
-            onClose={() => setCustomActionsPanelOpen(false)}
-            onOpenEditor={(action) => {
-              setEditingAction(action ?? null);
-              setCustomActionsEditorOpen(true);
-            }}
-          />
-        </div>
+            {mobileConversationsOpen && (
+              <div className="fixed inset-0 z-[120] bg-bg">
+                <ConversationsSidebar
+                  mobile
+                  onClose={() => setMobileConversationsOpen(false)}
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <ConversationsSidebar />
+            <main className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden pt-3 px-3 xl:px-5">
+              <ChatView />
+            </main>
+          </>
+        )}
+        <CustomActionsPanel
+          open={customActionsPanelOpen}
+          onClose={() => setCustomActionsPanelOpen(false)}
+          onOpenEditor={(action) => {
+            setEditingAction(action ?? null);
+            setCustomActionsEditorOpen(true);
+          }}
+        />
       </div>
-    ) : (
-      <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
-        <Header />
-        <main className="flex flex-1 min-h-0 min-w-0 overflow-hidden py-4 px-3 xl:py-6 xl:px-5">
-          <ViewRouter />
-        </main>
-      </div>
-    );
+    </div>
+  ) : (
+    <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
+      <Header />
+      <main className="flex flex-1 min-h-0 min-w-0 overflow-hidden py-4 px-3 xl:py-6 xl:px-5">
+        <ViewRouter />
+      </main>
+    </div>
+  );
 
   const appShell = COMPANION_ENABLED ? (
     <SharedCompanionScene active={companionSceneActive}>

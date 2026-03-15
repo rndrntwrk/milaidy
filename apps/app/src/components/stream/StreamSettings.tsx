@@ -341,7 +341,7 @@ export function StreamSettings({
                         </span>
                         {active && (
                           <span className="ml-auto text-[10px] text-txt font-semibold uppercase tracking-wide">
-                            {t("streamsettings.Active")}
+                            {t("appsview.Active")}
                           </span>
                         )}
                       </Button>

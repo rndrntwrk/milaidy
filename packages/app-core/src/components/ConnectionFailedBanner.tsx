@@ -73,14 +73,14 @@ export function ConnectionFailedBanner() {
             onClick={dismissBackendDisconnectedBanner}
             className="rounded px-3 py-1 text-[12px] text-red-100 hover:bg-red-700 transition-colors cursor-pointer"
           >
-            {t("connectionfailedbanner.Dismiss")}
+            {t("skillsview.Dismiss")}
           </button>
           <button
             type="button"
             onClick={retryBackendConnection}
             className="rounded bg-white px-3 py-1 text-[12px] font-semibold text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
           >
-            {t("connectionfailedbanner.RetryConnection")}
+            {t("vectorbrowserview.RetryConnection")}
           </button>
         </div>
       </div>

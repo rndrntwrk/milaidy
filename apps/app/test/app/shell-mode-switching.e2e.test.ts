@@ -15,15 +15,35 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockUseApp, noop, sceneHostState } = vi.hoisted(() => ({
-  mockUseApp: vi.fn(),
-  noop: vi.fn(),
-  sceneHostState: {
-    activeHistory: [] as boolean[],
-    mounts: 0,
-    unmounts: 0,
+const { mockKeyboardSetScroll, mockUseApp, noop, sceneHostState } = vi.hoisted(
+  () => ({
+    mockKeyboardSetScroll: vi.fn(async () => undefined),
+    mockUseApp: vi.fn(),
+    noop: vi.fn(),
+    sceneHostState: {
+      activeHistory: [] as boolean[],
+      mounts: 0,
+      unmounts: 0,
+    },
+  }),
+);
+
+vi.mock("@capacitor/keyboard", () => ({
+  Keyboard: {
+    setScroll: mockKeyboardSetScroll,
   },
 }));
+
+vi.mock("@milady/app-core/platform", async () => {
+  const actual = await vi.importActual<
+    typeof import("@milady/app-core/platform")
+  >("@milady/app-core/platform");
+  return {
+    ...actual,
+    isIOS: true,
+    isNative: true,
+  };
+});
 
 /* ── Mock every leaf component ────────────────────────────────────── */
 
@@ -354,6 +374,7 @@ describe("shell mode switching (e2e)", () => {
 
   beforeEach(() => {
     state = makeState();
+    mockKeyboardSetScroll.mockClear();
     mockUseApp.mockReset();
     mockUseApp.mockImplementation(() => state);
     sceneHostState.activeHistory = [];
@@ -682,5 +703,47 @@ describe("shell mode switching (e2e)", () => {
     expect(sceneHostState.mounts).toBe(1);
     expect(sceneHostState.unmounts).toBe(0);
     expect(sceneHostState.activeHistory).toEqual([false, true, false]);
+  });
+
+  it("disables iOS native scrolling only while the companion shell is visible", async () => {
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+
+    state.uiShellMode = "native";
+    state.tab = "chat";
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(App));
+    });
+    if (!tree) throw new Error("failed to render App");
+
+    expect(mockKeyboardSetScroll).toHaveBeenLastCalledWith({
+      isDisabled: false,
+    });
+
+    state.uiShellMode = "companion";
+    state.tab = "settings";
+    await act(async () => {
+      tree?.update(React.createElement(App));
+    });
+    expect(mockKeyboardSetScroll).toHaveBeenLastCalledWith({
+      isDisabled: false,
+    });
+
+    state.uiShellMode = "companion";
+    state.tab = "companion";
+    await act(async () => {
+      tree?.update(React.createElement(App));
+    });
+    expect(mockKeyboardSetScroll).toHaveBeenLastCalledWith({
+      isDisabled: true,
+    });
+
+    state.uiShellMode = "native";
+    state.tab = "chat";
+    await act(async () => {
+      tree?.update(React.createElement(App));
+    });
+    expect(mockKeyboardSetScroll).toHaveBeenLastCalledWith({
+      isDisabled: false,
+    });
   });
 });

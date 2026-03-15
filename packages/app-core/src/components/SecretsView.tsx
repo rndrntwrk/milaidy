@@ -225,7 +225,7 @@ export function SecretsView() {
           className="bg-transparent border-0 text-[13px] text-[var(--text)] underline decoration-[var(--accent)] underline-offset-2 cursor-pointer hover:opacity-80"
           onClick={load}
         >
-          {t("secretsview.Retry")}
+          {t("common.retry")}
         </button>
       </div>
     );

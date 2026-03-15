@@ -449,7 +449,7 @@ export function TradePanel({
             className="h-8 px-2 py-1 text-[10px] font-mono shadow-sm hover:border-accent"
             onClick={handleAddToken}
           >
-            {t("bsctradepanel.Add")}
+            {t("secretsview.Add")}
           </Button>
         </div>
 
@@ -510,7 +510,7 @@ export function TradePanel({
             {pendingTrade ? (
               <div className="mt-1 flex items-center gap-2">
                 <span className="text-yellow-500 font-bold">
-                  {t("bsctradepanel.Confirm")} {pendingTrade.side}{" "}
+                  {t("onboarding.confirm")} {pendingTrade.side}{" "}
                   {t("bsctradepanel.trade")}
                 </span>
                 <Button
@@ -520,7 +520,7 @@ export function TradePanel({
                   className="h-7 px-3 py-1 text-[10px] font-mono text-green-500 border-green-500 hover:bg-green-500 hover:text-white shadow-sm"
                   onClick={handleConfirmExecute}
                 >
-                  {t("bsctradepanel.Confirm")}
+                  {t("onboarding.confirm")}
                 </Button>
                 <Button
                   variant="outline"
@@ -529,7 +529,7 @@ export function TradePanel({
                   className="h-7 px-3 py-1 text-[10px] font-mono text-muted border-border hover:border-danger hover:text-danger shadow-sm"
                   onClick={handleCancelExecute}
                 >
-                  {t("bsctradepanel.Cancel")}
+                  {t("onboarding.cancel")}
                 </Button>
               </div>
             ) : (

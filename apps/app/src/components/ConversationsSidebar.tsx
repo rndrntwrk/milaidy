@@ -206,7 +206,7 @@ export function ConversationsSidebar({
             onClick={onClose}
             aria-label={t("conversations.closePanel")}
           >
-            {t("conversationssidebar.Times")}
+            {t("bugreportmodal.Times")}
           </button>
         </div>
       )}

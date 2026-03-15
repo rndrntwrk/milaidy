@@ -81,7 +81,7 @@ export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
   },
   {
     id: "connection",
-    name: "onboarding.stepName.connection",
+    name: "onboarding.connect",
     subtitle: "onboarding.stepSub.connection",
   },
   {
@@ -97,7 +97,7 @@ export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
   {
     id: "activate",
     name: "onboarding.stepName.activate",
-    subtitle: "onboarding.stepSub.activate",
+    subtitle: "onboarding.readyTitle",
   },
 ];
 

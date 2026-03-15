@@ -230,64 +230,10 @@ export function HeartbeatsView() {
   };
 
   return (
-    <div ref={rootRef} className="space-y-4">
-      <section className="rounded-xl border border-border bg-card p-4">
-        <p className="text-xs text-muted">
-          {t("triggersview.TriggersScheduleAu")}
-        </p>
-      </section>
-
-      <section className="rounded-xl border border-border bg-card p-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-bold">
-            {t("triggersview.TriggerHealth")}
-          </h2>
-          <Button
-            variant="default"
-            size="sm"
-            className="h-7 px-2.5 py-1 text-[11px] shadow-sm"
-            style={accentFg}
-            onClick={() => {
-              void loadTriggerHealth();
-              void loadTriggers();
-            }}
-          >
-            {t("triggersview.Refresh")}
-          </Button>
-        </div>
-        {triggerHealth ? (
-          <div className="flex flex-wrap gap-2">
-            <StatCard
-              label={t("triggersview.Active")}
-              value={triggerHealth.activeTriggers}
-              accent
-            />
-            <StatCard
-              label={t("triggersview.Disabled")}
-              value={triggerHealth.disabledTriggers}
-            />
-            <StatCard
-              label={t("triggersview.Executions")}
-              value={triggerHealth.totalExecutions}
-            />
-            <StatCard
-              label={t("triggersview.Failures")}
-              value={triggerHealth.totalFailures}
-            />
-            <StatCard
-              label={t("triggersview.LastExec")}
-              value={formatDateTime(triggerHealth.lastExecutionAt, {
-                fallback: "—",
-              })}
-            />
-          </div>
-        ) : (
-          <div className="py-2 text-xs text-muted">
-            {t("triggersview.NoHealthDataYet")}
-          </div>
-        )}
-      </section>
-
+    <div
+      ref={rootRef}
+      className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] xl:items-start"
+    >
       <section className="rounded-xl border border-border bg-card p-4 px-5">
         <h2 className="mb-3 text-sm font-bold">
           {editingId ? "Edit Heartbeat" : "New Heartbeat"}
@@ -459,7 +405,7 @@ export function HeartbeatsView() {
                 className="h-9 px-4 py-1.5 text-sm shadow-sm hover:border-accent"
                 onClick={clearForm}
               >
-                {t("triggersview.Cancel")}
+                {t("onboarding.cancel")}
               </Button>
             )}
           </div>
@@ -468,7 +414,7 @@ export function HeartbeatsView() {
 
       <section className="rounded-xl border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-bold">{t("triggersview.Triggers")}</h2>
+          <h2 className="text-sm font-bold">{t("nav.heartbeats")}</h2>
           <span className="text-[11px] text-muted">
             {triggersLoading ? "Loading…" : `${triggers.length} configured`}
           </span>

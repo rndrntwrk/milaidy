@@ -133,7 +133,7 @@ function SkillCard({
           className="h-7 px-3 text-[11px] font-bold text-muted hover:text-txt transition-colors"
           onClick={() => onEdit(skill)}
         >
-          {t("skillsview.Edit")}
+          {t("triggersview.Edit")}
         </Button>
         <ConfirmDeleteControl
           triggerClassName="h-7 px-3 text-[11px] font-bold text-danger hover:bg-danger/10 hover:text-danger-foreground transition-colors rounded-md"
@@ -651,7 +651,7 @@ function CreateSkillForm({
         </div>
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="ghost" size="sm" onClick={onCancel}>
-            {t("skillsview.Cancel")}
+            {t("onboarding.cancel")}
           </Button>
           <Button
             variant="default"
@@ -847,7 +847,7 @@ function EditSkillModal({
                 }}
                 onClick={() => loadSource()}
               >
-                {t("skillsview.Retry")}
+                {t("common.retry")}
               </button>
             </div>
           ) : (

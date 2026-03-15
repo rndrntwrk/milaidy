@@ -235,7 +235,7 @@ function PermissionRow({
               className="h-auto text-[11px] py-1 px-2.5 ml-2"
               onClick={onOpenSettings}
             >
-              {t("permissionssection.Settings")}
+              {t("nav.settings")}
             </Button>
           </>
         )}
@@ -862,7 +862,7 @@ export function PermissionsSection() {
       {/* Capability Toggles */}
       <div>
         <div className="font-bold text-sm mb-3">
-          {t("permissionssection.Capabilities")}
+          {t("appsview.Capabilities")}
         </div>
         <div className="space-y-2">
           {CAPABILITIES.map((cap) => {

@@ -52,6 +52,7 @@ vi.mock("@milady/app-core/utils", () => ({
 }));
 
 import { CompanionView } from "../../src/components/CompanionView";
+import { CompanionSceneHost } from "../../src/components/companion/CompanionSceneHost";
 
 const COMPANION_ZOOM_STORAGE_KEY = "milady.companion.zoom.v1";
 
@@ -244,6 +245,27 @@ describe("CompanionView", () => {
     expect(content).toContain("VrmViewer");
     // Should render the mock ChatModalView text
     expect(content).toContain("ChatModalView");
+  });
+
+  it("keeps the shared companion scene wrapper height-bounded", async () => {
+    mockUseApp.mockReturnValue(createContext());
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          CompanionSceneHost,
+          { active: false },
+          React.createElement("div", null, "Child"),
+        ),
+      );
+    });
+
+    const root = tree?.root.findByProps({ "data-testid": "companion-root" });
+    expect(String(root?.props.className)).toContain("h-full");
+    expect(String(root?.props.className)).toContain("min-h-0");
+    expect(String(root?.props.className)).toContain("flex");
+    expect(String(root?.props.className)).toContain("overflow-hidden");
   });
 
   it("pins companion mode to fast and hides the fast/pro toggle", async () => {

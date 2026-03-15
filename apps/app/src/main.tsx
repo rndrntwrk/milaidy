@@ -151,10 +151,7 @@ async function initializeStatusBar(): Promise<void> {
  */
 async function initializeKeyboard(): Promise<void> {
   if (isIOS) {
-    // Disable auto-scroll on iOS when keyboard appears
-    await Keyboard.setScroll({ isDisabled: true });
-
-    // Set keyboard accessory bar visibility
+    // Keep the accessory bar visible; shell mode now owns WebView scroll lock.
     await Keyboard.setAccessoryBarVisible({ isVisible: true });
   }
 

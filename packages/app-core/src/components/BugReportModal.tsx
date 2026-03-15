@@ -331,7 +331,7 @@ export function BugReportModal() {
           )}
 
           <label className={labelClass} style={labelStyle}>
-            {t("bugreportmodal.Description")}{" "}
+            {t("skillsview.Description")}{" "}
             <span style={{ color: "#ef4444" }}>*</span>
             <textarea
               ref={descRef}
@@ -466,7 +466,7 @@ export function BugReportModal() {
             }}
             onClick={close}
           >
-            {t("bugreportmodal.Cancel")}
+            {t("onboarding.cancel")}
           </button>
           <div className="flex items-center gap-2">
             <button

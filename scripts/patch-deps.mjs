@@ -16,6 +16,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  patchAgentSkillsCatalogFetch,
   patchBunExports,
   patchExtensionlessJsExports,
   patchMissingLifecycleScript,
@@ -37,6 +38,7 @@ patchMissingLifecycleScript(
   "postinstall",
   "./scripts/ensure-node-pty.mjs",
 );
+patchAgentSkillsCatalogFetch(root);
 
 // @noble/curves and @noble/hashes publish ".js" subpath exports, while ethers
 // imports extensionless paths like "@noble/curves/secp256k1" and

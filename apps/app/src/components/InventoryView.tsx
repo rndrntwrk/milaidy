@@ -223,7 +223,7 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
     {
       ready: walletReady,
       label: walletReady
-        ? t("wallet.status.connected")
+        ? t("onboarding.connected")
         : t("wallet.status.noWallet"),
       title: walletReady
         ? t("wallet.status.connectedTitle")
@@ -345,7 +345,7 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
       ? {
           title: t("wallet.setup.rpcNotConfigured"),
           body: t("portfolioheader.ConnectViaElizaCl"),
-          actionLabel: t("portfolioheader.ConfigureRPC"),
+          actionLabel: t("wallet.setup.configureRpc"),
         }
       : chainFocus === "solana" && solAddr && !solanaReady
         ? {
@@ -446,7 +446,7 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
             }`}
             onClick={() => setTab("settings")}
           >
-            {t("common.settings")}
+            {t("nav.settings")}
           </button>
         </div>
       );

@@ -142,7 +142,7 @@ export function ApiKeyConfig({
     <div className="mt-4 pt-4 border-t border-[var(--border)]">
       <div className="flex justify-between items-center mb-3">
         <div className="text-xs font-semibold">
-          {selectedProvider.name} {t("apikeyconfig.Settings")}
+          {selectedProvider.name} {t("nav.settings")}
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-[var(--muted)]">

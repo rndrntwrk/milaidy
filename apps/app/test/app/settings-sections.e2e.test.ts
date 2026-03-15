@@ -464,9 +464,20 @@ describe("SettingsView Sections", () => {
         tree = TestRenderer.create(React.createElement(SettingsView));
       });
 
+      const shell = tree?.root
+        .findAllByType("div")
+        .find((node) => node.props.className?.includes("settings-shell"));
+      expect(shell?.props.className).toContain("min-h-full");
+      expect(shell?.props.className).not.toContain("overflow-y-auto");
+
       const aside = tree?.root.findByType("aside");
       expect(aside?.props.className).toContain("hidden");
       expect(aside?.props.className).toContain("xl:flex");
+      expect(aside?.props.className).toContain("xl:sticky");
+      expect(aside?.props.className).toContain("xl:top-0");
+
+      const nav = tree?.root.findByType("nav");
+      expect(nav?.props.className).not.toContain("overflow-y-auto");
 
       const searchInputs = tree?.root.findAll(
         (node) =>
@@ -498,7 +509,7 @@ describe("SettingsView Sections", () => {
 
       const expectedSections = [
         "settings.sections.voice.label",
-        "settings.sections.advanced.label",
+        "nav.advanced",
       ];
       const allText = JSON.stringify(tree?.toJSON());
 

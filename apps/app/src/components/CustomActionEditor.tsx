@@ -721,7 +721,7 @@ export function CustomActionEditor({
             className="text-muted text-xl leading-none"
             onClick={onClose}
           >
-            {t("customactioneditor.Times")}
+            {t("bugreportmodal.Times")}
           </Button>
         </div>
 
@@ -774,7 +774,7 @@ export function CustomActionEditor({
           {/* Name */}
           <div className="flex flex-col gap-1">
             <span className="text-xs text-muted">
-              {t("customactioneditor.Name")}
+              {t("triggersview.Name")}
             </span>
             <input
               type="text"
@@ -788,7 +788,7 @@ export function CustomActionEditor({
           {/* Description */}
           <div className="flex flex-col gap-1">
             <span className="text-xs text-muted">
-              {t("customactioneditor.Description")}
+              {t("skillsview.Description")}
             </span>
             <textarea
               value={description}
@@ -913,7 +913,7 @@ export function CustomActionEditor({
                       onClick={() => removeHeader(i)}
                       className="px-2 text-muted hover:text-txt cursor-pointer"
                     >
-                      {t("customactioneditor.Times")}
+                      {t("bugreportmodal.Times")}
                     </button>
                   </div>
                 ))}
@@ -953,7 +953,7 @@ export function CustomActionEditor({
                 className="bg-surface border border-border px-2 py-1.5 text-sm text-txt placeholder:text-muted/50 outline-none focus:border-accent resize-none font-mono"
               />
               <span className="text-xs text-muted/70">
-                {t("customactioneditor.Use")} {`{{paramName}}`}{" "}
+                {t("streamsettings.Use")} {`{{paramName}}`}{" "}
                 {t("customactioneditor.forParameterSubsti")}
               </span>
             </div>
@@ -1009,7 +1009,7 @@ export function CustomActionEditor({
                   onChange={(e) =>
                     updateParameter(i, "description", e.target.value)
                   }
-                  placeholder={t("customactioneditor.Description")}
+                  placeholder={t("skillsview.Description")}
                   className="flex-1 bg-surface border border-border px-2 py-1.5 text-sm text-txt placeholder:text-muted/50 outline-none focus:border-accent"
                 />
                 <span className="flex items-center gap-1 text-xs text-muted cursor-pointer">
@@ -1029,7 +1029,7 @@ export function CustomActionEditor({
                   onClick={() => removeParameter(i)}
                   className="px-2 text-muted hover:text-txt cursor-pointer"
                 >
-                  {t("customactioneditor.Times")}
+                  {t("bugreportmodal.Times")}
                 </button>
               </div>
             ))}
@@ -1110,7 +1110,7 @@ export function CustomActionEditor({
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={onClose}>
-            {t("customactioneditor.Cancel")}
+            {t("onboarding.cancel")}
           </Button>
           <Button
             variant="default"

@@ -492,7 +492,7 @@ function DocumentDetailModal({
                   {doc.url && (
                     <div className="col-span-full mt-2 pt-4 border-t border-white/5 flex flex-col gap-1.5">
                       <span className="text-[10px] font-bold tracking-widest uppercase text-muted/70">
-                        {t("knowledgeview.URL1")}
+                        {t("appsview.URL")}
                       </span>{" "}
                       <a
                         href={doc.url}
@@ -1019,7 +1019,7 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
             onClick={() => loadData()}
             className="ml-3 px-2 py-1 text-xs border border-[var(--danger)] rounded hover:bg-[var(--danger)]/20 transition-colors"
           >
-            {t("knowledgeview.Retry")}
+            {t("common.retry")}
           </button>
         </div>
       )}

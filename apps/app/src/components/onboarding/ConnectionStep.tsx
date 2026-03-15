@@ -471,7 +471,7 @@ export function ConnectionStep() {
                   color: "var(--muted)",
                 }}
               >
-                {t("onboarding.apiKeyLabel")}
+                {t("onboarding.apiKey")}
               </label>
               <input
                 id="miladycloud-apikey"
@@ -872,7 +872,7 @@ export function ConnectionStep() {
                 color: "var(--text)",
               }}
             >
-              {t("onboarding.apiKeyLabel")}
+              {t("onboarding.apiKey")}
             </span>
             <input
               type="password"

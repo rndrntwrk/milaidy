@@ -318,7 +318,7 @@ describe("BugReportModal", () => {
       await vi.runAllTimersAsync();
     });
 
-    const cancelBtn = findButton(tree?.root, "bugreportmodal.Cancel");
+    const cancelBtn = findButton(tree?.root, "onboarding.cancel");
     act(() => {
       cancelBtn?.props.onClick();
     });
