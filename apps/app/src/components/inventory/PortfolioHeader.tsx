@@ -1,10 +1,11 @@
 /**
- * Portfolio header block: total USD value, selected chain badge,
- * optional native balance, wallet addresses, status dots, and scoped alerts.
+ * Portfolio left-panel: total USD value, chain selector, wallet addresses,
+ * optional native balance, status dots, and scoped alerts.
  */
 
 import { useApp } from "@milady/app-core/state";
 import { Button } from "@milady/ui";
+import { CHAIN_CONFIGS, PRIMARY_CHAIN_KEYS } from "../chainConfig";
 import { CopyableAddress } from "./CopyableAddress";
 import { formatBalance } from "./constants";
 import { StatusDot } from "./StatusDot";
@@ -33,13 +34,12 @@ export interface PortfolioWarning {
 
 export interface PortfolioHeaderProps {
   totalUsd: number;
-  networkLabel: string;
   nativeBalance: string | null;
   nativeSymbol: string | null;
-  receiveAddress: string | null;
-  receiveTitle?: string;
   addresses: PortfolioAddressItem[];
   statuses: PortfolioStatusItem[];
+  chainFocus: string;
+  onChainChange: (chain: string) => void;
   inlineError?: PortfolioInlineError | null;
   warning?: PortfolioWarning | null;
   loadBalances: () => Promise<void> | void;
@@ -48,98 +48,109 @@ export interface PortfolioHeaderProps {
 
 export function PortfolioHeader({
   totalUsd,
-  networkLabel,
   nativeBalance,
   nativeSymbol,
-  receiveAddress,
-  receiveTitle,
   addresses,
   statuses,
+  chainFocus,
+  onChainChange,
   inlineError,
   warning,
   loadBalances,
   goToRpcSettings,
 }: PortfolioHeaderProps) {
-  const { t, copyToClipboard, setActionNotice } = useApp();
+  const { t, copyToClipboard } = useApp();
 
   return (
-    <div className="wt__portfolio">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="wt__portfolio-label">{t("wallet.portfolio")}</div>
-            <span className="wt__network-badge">{networkLabel}</span>
-          </div>
-          <div
-            className="wt__portfolio-value"
-            data-testid="wallet-balance-value"
+    <div className="two-panel-left">
+      {/* Portfolio value */}
+      <div className="two-panel-label">PORTFOLIO</div>
+      <div
+        className="text-[22px] font-bold text-txt-strong"
+        data-testid="wallet-balance-value"
+      >
+        {totalUsd > 0
+          ? `$${totalUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : "$0.00"}
+      </div>
+      {nativeBalance !== null && nativeSymbol && (
+        <div className="text-xs text-muted">
+          {formatBalance(nativeBalance)} {nativeSymbol}
+        </div>
+      )}
+
+      {/* Chain selector */}
+      <div className="two-panel-label mt-4">CHAINS</div>
+      <button
+        type="button"
+        className={`two-panel-item ${chainFocus === "all" ? "is-selected" : ""}`}
+        onClick={() => onChainChange("all")}
+      >
+        <span className="text-sm">{t("wallet.all")}</span>
+      </button>
+      {PRIMARY_CHAIN_KEYS.map((key) => {
+        const config = CHAIN_CONFIGS[key];
+        const status = statuses.find(
+          (s) => s.label.toLowerCase() === config.name.toLowerCase(),
+        );
+        return (
+          <button
+            type="button"
+            key={key}
+            className={`two-panel-item flex items-center gap-2 ${chainFocus === key ? "is-selected" : ""}`}
+            onClick={() => onChainChange(key)}
           >
-            {totalUsd > 0
-              ? `$${totalUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-              : "$0.00"}
-          </div>
-          {nativeBalance !== null && nativeSymbol && (
-            <div className="wt__bnb-sub">
-              {formatBalance(nativeBalance)} {nativeSymbol}
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-col items-end gap-2">
-          {receiveAddress && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="wt__receive-btn h-8 px-3 shadow-sm"
-              onClick={() => {
-                void copyToClipboard(receiveAddress);
-                setActionNotice(t("wallet.addressCopied"), "success", 2400);
+            <span
+              className="inline-block rounded-full shrink-0"
+              style={{
+                width: 14,
+                height: 14,
+                backgroundColor: config.color,
               }}
-              title={receiveTitle ?? receiveAddress}
-            >
-              {t("wallet.receive")}
-            </Button>
-          )}
+            />
+            <span className="text-sm">{config.name}</span>
+            {status && (
+              <StatusDot
+                ready={status.ready}
+                label=""
+                title={status.title}
+              />
+            )}
+          </button>
+        );
+      })}
 
-          {addresses.length > 0 && (
-            <div className="flex flex-col items-end gap-1.5">
-              {addresses.map((item) => (
-                <div
-                  key={`${item.label}-${item.address}`}
-                  className="flex items-center gap-2"
-                >
-                  <span className="text-[10px] uppercase tracking-wide text-muted">
-                    {item.label}
-                  </span>
-                  <CopyableAddress
-                    address={item.address}
-                    onCopy={copyToClipboard}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Addresses */}
+      {addresses.length > 0 && (
+        <>
+          <div className="two-panel-label mt-4">ADDRESSES</div>
+          <div className="flex flex-col gap-1.5">
+            {addresses.map((item) => (
+              <div
+                key={`${item.label}-${item.address}`}
+                className="flex items-center gap-2"
+              >
+                <span className="text-[10px] uppercase tracking-wide text-muted">
+                  {item.label}
+                </span>
+                <CopyableAddress
+                  address={item.address}
+                  onCopy={copyToClipboard}
+                />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
-      <div className="wt__status-row mt-2">
-        {statuses.map((status) => (
-          <StatusDot
-            key={status.label}
-            ready={status.ready}
-            label={status.label}
-            title={status.title}
-          />
-        ))}
-      </div>
-
+      {/* Inline error */}
       {inlineError?.message && (
-        <div className="wt__error-inline mt-2">
-          <span className="wt__error-inline-text">{inlineError.message}</span>
+        <div className="mt-3 flex items-center gap-2 text-[11px] text-danger">
+          <span>{inlineError.message}</span>
           <Button
             variant="ghost"
             size="sm"
-            className="wt__error-retry h-7 px-2 shadow-sm"
+            className="h-7 px-2 shadow-sm"
             onClick={() => void loadBalances()}
             title={inlineError.retryTitle ?? t("common.retry")}
           >
@@ -148,8 +159,9 @@ export function PortfolioHeader({
         </div>
       )}
 
+      {/* Warning */}
       {warning && (
-        <div className="mt-2 px-3 py-2 border border-[rgba(184,134,11,0.55)] bg-[rgba(184,134,11,0.08)] text-[11px]">
+        <div className="mt-3 px-3 py-2 border border-[rgba(184,134,11,0.55)] bg-[rgba(184,134,11,0.08)] text-[11px]">
           <div className="font-bold mb-1">{warning.title}</div>
           <div className="text-[var(--muted)] leading-relaxed">
             {warning.body}

@@ -29,62 +29,32 @@ interface PluginInfo {
   configUiHints?: Record<string, ConfigUiHint>;
 }
 
-export interface ProviderSwitcherProps {
-  // Eliza Cloud state
-  elizaCloudEnabled: boolean;
-  elizaCloudConnected: boolean;
-  elizaCloudCredits: number | null;
-  elizaCloudCreditsLow: boolean;
-  elizaCloudCreditsCritical: boolean;
-  elizaCloudTopUpUrl: string;
-  elizaCloudUserId: string | null;
-  elizaCloudLoginBusy: boolean;
-  elizaCloudLoginError: string | null;
-  elizaCloudDisconnecting: boolean;
-  // Plugins
-  plugins: PluginInfo[];
-  pluginSaving: Set<string>;
-  pluginSaveSuccess: Set<string>;
-  // Actions
-  loadPlugins: () => Promise<void>;
-  handlePluginToggle: (id: string, enabled: boolean) => Promise<void>;
-  handlePluginConfigSave: (
-    pluginId: string,
-    values: Record<string, string>,
-  ) => void;
-  handleCloudLogin: () => Promise<void>;
-  handleCloudDisconnect: () => Promise<void>;
-  setState: (
-    key: "elizaCloudEnabled" | "cloudDashboardView",
-    value: boolean | "billing" | "agents",
-  ) => void;
-  setTab: (tab: "plugins" | "settings") => void;
-}
-
-export function ProviderSwitcher({
-  elizaCloudEnabled,
-  elizaCloudConnected,
-  elizaCloudCredits,
-  elizaCloudCreditsLow,
-  elizaCloudCreditsCritical,
-  elizaCloudUserId,
-  elizaCloudLoginBusy,
-  elizaCloudLoginError,
-  elizaCloudDisconnecting: cloudDisconnecting,
-  plugins,
-  pluginSaving,
-  pluginSaveSuccess,
-  loadPlugins,
-  handlePluginToggle,
-  handlePluginConfigSave,
-  handleCloudLogin,
-  handleCloudDisconnect,
-  setState,
-  setTab,
-}: ProviderSwitcherProps) {
+export function ProviderSwitcher() {
   const { setTimeout } = useTimeout();
 
-  const { t } = useApp();
+  const {
+    t,
+    elizaCloudEnabled,
+    elizaCloudConnected,
+    elizaCloudCredits,
+    elizaCloudCreditsLow,
+    elizaCloudCreditsCritical,
+    elizaCloudTopUpUrl,
+    elizaCloudUserId,
+    elizaCloudLoginBusy,
+    elizaCloudLoginError,
+    elizaCloudDisconnecting: cloudDisconnecting,
+    plugins,
+    pluginSaving,
+    pluginSaveSuccess,
+    loadPlugins,
+    handlePluginToggle,
+    handlePluginConfigSave,
+    handleCloudLogin,
+    handleCloudDisconnect,
+    setState,
+    setTab,
+  } = useApp();
   /* ── Model selection state ─────────────────────────────────────── */
   const [modelOptions, setModelOptions] = useState<
     OnboardingOptions["models"] | null
@@ -513,7 +483,7 @@ export function ProviderSwitcher({
         </label>
         <select
           id="provider-switcher-select"
-          className="w-full px-3 py-2.5 border border-[var(--border)] bg-[var(--card)] text-[13px] rounded-lg transition-all duration-200 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 focus:outline-none hover:border-[var(--border-hover)]"
+          className="w-full px-3 pr-8 py-2.5 border border-[var(--border)] bg-[var(--card)] text-[13px] rounded-lg transition-all duration-200 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 focus:outline-none hover:border-[var(--border-hover)]"
           value={resolvedSelectedId ?? "__cloud__"}
           onChange={(e) => {
             const nextId = e.target.value;

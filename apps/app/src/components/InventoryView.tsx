@@ -172,26 +172,6 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
       ? (CHAIN_CONFIGS[chainFocus as keyof typeof CHAIN_CONFIGS]?.name ??
         chainFocus)
       : null);
-  const networkLabel =
-    chainFocus === "all"
-      ? "All Chains"
-      : `${focusedChainLabel ?? "Wallet"} Mainnet`;
-  const receiveAddress =
-    chainFocus === "solana"
-      ? (solAddr ?? null)
-      : chainFocus === "all"
-        ? addresses.length === 1
-          ? addresses[0].address
-          : null
-        : (evmAddr ?? null);
-  const receiveTitle =
-    chainFocus === "solana"
-      ? (solAddr ?? undefined)
-      : chainFocus === "all"
-        ? addresses.length === 1
-          ? addresses[0].address
-          : undefined
-        : (evmAddr ?? undefined);
   const inlineError =
     chainFocus !== "all" && focusedChainError
       ? {
@@ -398,32 +378,20 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
   // Render
   // ════════════════════════════════════════════════════════════════════
 
-  return (
-    <div
-      className={`wallets-bsc ${inModal ? "p-6 h-full overflow-y-auto" : ""}`}
-    >
-      {walletError && (
-        <div className="mt-3 px-3.5 py-2.5 border border-danger bg-[rgba(231,76,60,0.06)] text-xs text-danger">
-          {walletError}
-        </div>
-      )}
-      {renderContent()}
-    </div>
-  );
-
-  /* ── Main content ────────────────────────────────────────────────── */
-
-  function renderContent() {
-    if (walletLoading && !walletBalances) {
-      return (
+  // ── Standalone states (no two-panel layout) ─────────────────────
+  if (walletLoading && !walletBalances) {
+    return (
+      <div className={inModal ? "p-6 h-full overflow-y-auto" : ""}>
         <div className="text-center py-10 text-muted italic mt-6">
           {t("wallet.loadingBalances")}
         </div>
-      );
-    }
+      </div>
+    );
+  }
 
-    if (!evmAddr && !solAddr) {
-      return (
+  if (!evmAddr && !solAddr) {
+    return (
+      <div className={inModal ? "p-6 h-full overflow-y-auto" : ""}>
         <div
           className={`mt-4 border px-4 py-6 text-center ${
             inModal
@@ -449,25 +417,35 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
             {t("nav.settings")}
           </button>
         </div>
-      );
-    }
+      </div>
+    );
+  }
 
-    return (
-      <div className="space-y-2 mt-3">
-        <PortfolioHeader
-          totalUsd={totalUsd}
-          networkLabel={networkLabel}
-          nativeBalance={chainFocus === "all" ? null : focusedNativeBalance}
-          nativeSymbol={chainFocus === "all" ? null : focusedNativeSymbol}
-          receiveAddress={receiveAddress}
-          receiveTitle={receiveTitle}
-          addresses={addresses}
-          statuses={statusItems}
-          inlineError={inlineError}
-          warning={headerWarning}
-          loadBalances={loadBalances}
-          goToRpcSettings={goToRpcSettings}
-        />
+  // ── Two-panel layout ───────────────────────────────────────────
+  return (
+    <div
+      className={`two-panel-layout w-full ${inModal ? "p-6 h-full overflow-y-auto" : ""}`}
+    >
+      <PortfolioHeader
+        totalUsd={totalUsd}
+        nativeBalance={chainFocus === "all" ? null : focusedNativeBalance}
+        nativeSymbol={chainFocus === "all" ? null : focusedNativeSymbol}
+        addresses={addresses}
+        statuses={statusItems}
+        chainFocus={chainFocus}
+        onChainChange={(chain) => setState("inventoryChainFocus", chain)}
+        inlineError={inlineError}
+        warning={headerWarning}
+        loadBalances={loadBalances}
+        goToRpcSettings={goToRpcSettings}
+      />
+
+      <div className="two-panel-right">
+        {walletError && (
+          <div className="mt-3 px-3.5 py-2.5 border border-danger bg-[rgba(231,76,60,0.06)] text-xs text-danger">
+            {walletError}
+          </div>
+        )}
 
         {chainFocus === "bsc" && evmAddr && !bscHasError && (
           <TradePanel
@@ -481,39 +459,36 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
           />
         )}
 
-        <div>
-          <InventoryToolbar
-            t={t}
-            inventoryView={inventoryView}
-            inventorySort={inventorySort}
-            inventoryChainFocus={inventoryChainFocus ?? "all"}
-            walletBalances={walletBalances}
-            walletNfts={walletNfts}
-            setState={setState}
-            loadBalances={loadBalances}
-            loadNfts={loadNfts}
-          />
+        <InventoryToolbar
+          t={t}
+          inventoryView={inventoryView}
+          inventorySort={inventorySort}
+          walletBalances={walletBalances}
+          walletNfts={walletNfts}
+          setState={setState}
+          loadBalances={loadBalances}
+          loadNfts={loadNfts}
+        />
 
-          {inventoryView === "tokens" ? (
-            <TokensTable
-              t={t}
-              walletLoading={walletLoading}
-              walletBalances={walletBalances}
-              visibleRows={visibleRows}
-              visibleChainErrors={visibleChainErrors}
-              inventoryChainFocus={inventoryChainFocus ?? "all"}
-              handleUntrackToken={handleUntrackToken}
-            />
-          ) : (
-            <NftGrid
-              t={t}
-              walletNftsLoading={walletNftsLoading}
-              walletNfts={walletNfts}
-              allNfts={allNfts}
-            />
-          )}
-        </div>
+        {inventoryView === "tokens" ? (
+          <TokensTable
+            t={t}
+            walletLoading={walletLoading}
+            walletBalances={walletBalances}
+            visibleRows={visibleRows}
+            visibleChainErrors={visibleChainErrors}
+            inventoryChainFocus={inventoryChainFocus ?? "all"}
+            handleUntrackToken={handleUntrackToken}
+          />
+        ) : (
+          <NftGrid
+            t={t}
+            walletNftsLoading={walletNftsLoading}
+            walletNfts={walletNfts}
+            allNfts={allNfts}
+          />
+        )}
       </div>
-    );
-  }
+    </div>
+  );
 }

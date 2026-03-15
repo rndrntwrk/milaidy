@@ -1,11 +1,6 @@
 import { Button, Input } from "@milady/ui";
-import {
-  type CSSProperties,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Clock3 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   CreateTriggerRequest,
   TriggerSummary,
@@ -19,6 +14,30 @@ import { StatusBadge, StatusDot } from "./ui-badges";
 type TriggerType = "interval" | "once" | "cron";
 type TriggerWakeMode = "inject_now" | "next_autonomy_cycle";
 
+const DURATION_UNITS = [
+  { label: "seconds", ms: 1000 },
+  { label: "minutes", ms: 60_000 },
+  { label: "hours", ms: 3_600_000 },
+  { label: "days", ms: 86_400_000 },
+] as const;
+
+type DurationUnit = (typeof DURATION_UNITS)[number]["label"];
+
+function bestFitUnit(ms: number): { value: number; unit: DurationUnit } {
+  for (let i = DURATION_UNITS.length - 1; i >= 0; i--) {
+    const u = DURATION_UNITS[i];
+    if (ms >= u.ms && ms % u.ms === 0) {
+      return { value: ms / u.ms, unit: u.label };
+    }
+  }
+  return { value: ms / 1000, unit: "seconds" };
+}
+
+function durationToMs(value: number, unit: DurationUnit): number {
+  const found = DURATION_UNITS.find((u) => u.label === unit);
+  return value * (found?.ms ?? 1000);
+}
+
 interface TriggerFormState {
   displayName: string;
   instructions: string;
@@ -29,6 +48,8 @@ interface TriggerFormState {
   cronExpression: string;
   maxRuns: string;
   enabled: boolean;
+  durationValue: string;
+  durationUnit: DurationUnit;
 }
 
 const emptyForm: TriggerFormState = {
@@ -41,9 +62,9 @@ const emptyForm: TriggerFormState = {
   cronExpression: "0 * * * *",
   maxRuns: "",
   enabled: true,
+  durationValue: "1",
+  durationUnit: "hours",
 };
-
-const accentFg: CSSProperties = { color: "var(--accent-foreground)" };
 
 function parsePositiveInteger(value: string): number | undefined {
   const trimmed = value.trim();
@@ -68,6 +89,8 @@ function scheduleLabel(trigger: TriggerSummary): string {
 }
 
 function formFromTrigger(trigger: TriggerSummary): TriggerFormState {
+  const intervalMs = trigger.intervalMs ?? 3600000;
+  const { value, unit } = bestFitUnit(intervalMs);
   return {
     displayName: trigger.displayName,
     instructions: trigger.instructions,
@@ -78,11 +101,12 @@ function formFromTrigger(trigger: TriggerSummary): TriggerFormState {
     cronExpression: trigger.cronExpression ?? "0 * * * *",
     maxRuns: trigger.maxRuns ? String(trigger.maxRuns) : "",
     enabled: trigger.enabled,
+    durationValue: String(value),
+    durationUnit: unit,
   };
 }
 
 function buildCreateRequest(form: TriggerFormState): CreateTriggerRequest {
-  const intervalMs = parsePositiveInteger(form.intervalMs);
   const maxRuns = parsePositiveInteger(form.maxRuns);
   return {
     displayName: form.displayName.trim(),
@@ -90,7 +114,10 @@ function buildCreateRequest(form: TriggerFormState): CreateTriggerRequest {
     triggerType: form.triggerType,
     wakeMode: form.wakeMode,
     enabled: form.enabled,
-    intervalMs: form.triggerType === "interval" ? intervalMs : undefined,
+    intervalMs:
+      form.triggerType === "interval"
+        ? durationToMs(Number(form.durationValue) || 1, form.durationUnit)
+        : undefined,
     scheduledAtIso:
       form.triggerType === "once" ? form.scheduledAtIso.trim() : undefined,
     cronExpression:
@@ -106,11 +133,11 @@ function buildUpdateRequest(form: TriggerFormState): UpdateTriggerRequest {
 function validateForm(form: TriggerFormState): string | null {
   if (!form.displayName.trim()) return "Display name is required.";
   if (!form.instructions.trim()) return "Instructions are required.";
-  if (
-    form.triggerType === "interval" &&
-    !parsePositiveInteger(form.intervalMs)
-  ) {
-    return "Interval must be a positive number in milliseconds.";
+  if (form.triggerType === "interval") {
+    const val = Number(form.durationValue);
+    if (!Number.isFinite(val) || val <= 0) {
+      return "Interval must be a positive number.";
+    }
   }
   if (form.triggerType === "once") {
     const raw = form.scheduledAtIso.trim();
@@ -166,10 +193,7 @@ export function HeartbeatsView() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedRunsId, setSelectedRunsId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [expandedInstructions, setExpandedInstructions] = useState<Set<string>>(
-    new Set(),
-  );
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [runsExpanded, setRunsExpanded] = useState(false);
 
   const selectedRuns = useMemo(() => {
     if (!selectedRunsId) return [];
@@ -185,6 +209,17 @@ export function HeartbeatsView() {
     setForm(emptyForm);
     setEditingId(null);
     setFormError(null);
+    setSelectedRunsId(null);
+    setRunsExpanded(false);
+  };
+
+  const selectTrigger = (trigger: TriggerSummary) => {
+    setEditingId(trigger.id);
+    setForm(formFromTrigger(trigger));
+    setFormError(null);
+    setSelectedRunsId(trigger.id);
+    void loadTriggerRuns(trigger.id);
+    setRunsExpanded(false);
   };
 
   const onSubmit = async () => {
@@ -208,67 +243,141 @@ export function HeartbeatsView() {
     value: TriggerFormState[K],
   ) => setForm((prev) => ({ ...prev, [key]: value }));
 
-  const toggleInstructions = (id: string) => {
-    setExpandedInstructions((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const scrollToTop = () => {
-    const scrollContainer = rootRef.current?.closest<HTMLElement>(
-      "[data-shell-scroll-region='true']",
-    );
-    if (scrollContainer) {
-      scrollContainer.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
   return (
-    <div
-      ref={rootRef}
-      className="grid w-full gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] md:items-start"
-    >
-      <section className="min-w-0 rounded-xl border border-border bg-card p-4 px-5 md:order-2">
-        <h2 className="mb-3 text-sm font-bold">
-          {editingId ? "Edit Heartbeat" : "New Heartbeat"}
-        </h2>
+    <div className="two-panel-layout w-full">
+      {/* ── Left panel: trigger list ── */}
+      <div className="two-panel-left">
+        <div className="mb-3 flex items-center justify-between px-1">
+          <h2 className="text-sm font-bold">{t("nav.heartbeats")}</h2>
+          <span className="text-xs text-muted">
+            {triggersLoading ? "Loading..." : `${triggers.length}`}
+          </span>
+        </div>
+
+        {triggers.length === 0 && !triggersLoading ? (
+          <div className="py-10 text-center">
+            <Clock3 className="mx-auto mb-2 h-8 w-8 text-muted opacity-40" />
+            <div className="text-xs text-muted">
+              {t("triggersview.NoTriggersConfigur")}
+            </div>
+            <div className="mt-1 text-[10px] text-muted">
+              {t("triggersview.CreateOneAboveTo")}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {triggers.map((trigger) => (
+              <button
+                key={trigger.id}
+                type="button"
+                onClick={() => selectTrigger(trigger)}
+                className={`two-panel-item flex w-full flex-col text-left ${editingId === trigger.id ? "is-selected" : ""}`}
+              >
+                <div className="flex items-center gap-2">
+                  <StatusDot status={trigger.enabled ? "active" : "paused"} />
+                  <span className="truncate text-xs font-medium">
+                    {trigger.displayName}
+                  </span>
+                </div>
+                <div className="mt-0.5 pl-5 text-[10px] text-muted">
+                  {scheduleLabel(trigger)}
+                  {trigger.runCount > 0 && (
+                    <> &middot; {trigger.runCount} run{trigger.runCount !== 1 ? "s" : ""}</>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          className="mt-2 flex w-full items-center justify-center rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted hover:border-accent hover:text-txt"
+          onClick={clearForm}
+        >
+          + New Heartbeat
+        </button>
+      </div>
+
+      {/* ── Right panel: form ── */}
+      <div className="two-panel-right">
+        {/* Header */}
+        <div className="mb-4 flex items-start justify-between">
+          <h2 className="text-base font-bold">
+            {editingId
+              ? `Edit: ${form.displayName || "Heartbeat"}`
+              : "New Heartbeat"}
+          </h2>
+          {editingId && (
+            <div className="flex gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => runTriggerNow(editingId)}
+              >
+                {t("triggersview.RunNow")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => {
+                  updateTrigger(editingId, {
+                    enabled: !form.enabled,
+                  });
+                  setField("enabled", !form.enabled);
+                }}
+              >
+                {form.enabled ? "Disable" : "Enable"}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Error banner */}
+        {triggerError && (
+          <div className="mb-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+            {triggerError}
+          </div>
+        )}
+
+        {/* Form */}
         <div className="grid gap-3">
+          {/* Name */}
           <div>
-            <span className="mb-1 block text-[11px] text-muted">
+            <span className="mb-1 block text-xs text-muted">
               {t("triggersview.Name")}
             </span>
             <Input
-              className="h-9 w-full border-border bg-bg px-3 py-1.5 text-sm shadow-sm focus-visible:ring-1 focus-visible:ring-accent"
+              className="h-9 w-full rounded-lg border-border bg-bg px-3 py-1.5 text-sm shadow-sm focus-visible:ring-1 focus-visible:ring-accent"
               value={form.displayName}
               onChange={(event) => setField("displayName", event.target.value)}
               placeholder={t("triggersview.eGDailyDigestH")}
             />
           </div>
 
+          {/* Instructions */}
           <div>
-            <span className="mb-1 block text-[11px] text-muted">
+            <span className="mb-1 block text-xs text-muted">
               {t("triggersview.Instructions")}
             </span>
             <textarea
-              className="min-h-[80px] w-full resize-y border border-border bg-bg px-3 py-1.5 text-sm outline-none focus:border-accent"
+              className="min-h-[80px] w-full resize-y rounded-lg border border-border bg-bg px-3 py-1.5 text-sm outline-none focus:border-accent"
               value={form.instructions}
               onChange={(event) => setField("instructions", event.target.value)}
               placeholder={t("triggersview.WhatShouldTheAgen")}
             />
           </div>
 
+          {/* Schedule Type + Wake Mode (2-col grid) */}
           <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
             <div>
-              <span className="mb-1 block text-[11px] text-muted">
+              <span className="mb-1 block text-xs text-muted">
                 {t("triggersview.ScheduleType")}
               </span>
               <select
-                className="w-full border border-border bg-bg px-3 py-1.5 text-sm outline-none focus:border-accent"
+                className="w-full rounded-lg border border-border bg-bg px-3 py-1.5 text-sm outline-none focus:border-accent"
                 value={form.triggerType}
                 onChange={(event) =>
                   setField("triggerType", event.target.value as TriggerType)
@@ -283,11 +392,11 @@ export function HeartbeatsView() {
             </div>
 
             <div>
-              <span className="mb-1 block text-[11px] text-muted">
+              <span className="mb-1 block text-xs text-muted">
                 {t("triggersview.WakeMode")}
               </span>
               <select
-                className="w-full border border-border bg-bg px-3 py-1.5 text-sm outline-none focus:border-accent"
+                className="w-full rounded-lg border border-border bg-bg px-3 py-1.5 text-sm outline-none focus:border-accent"
                 value={form.wakeMode}
                 onChange={(event) =>
                   setField("wakeMode", event.target.value as TriggerWakeMode)
@@ -301,58 +410,67 @@ export function HeartbeatsView() {
                 </option>
               </select>
             </div>
-
-            <div>
-              <span className="mb-1 block text-[11px] text-muted">
-                {t("triggersview.MaxRunsOptional")}
-              </span>
-              <Input
-                className="h-9 w-full border-border bg-bg px-3 py-1.5 text-sm shadow-sm focus-visible:ring-1 focus-visible:ring-accent"
-                value={form.maxRuns}
-                onChange={(event) => setField("maxRuns", event.target.value)}
-                placeholder="∞"
-              />
-            </div>
           </div>
 
+          {/* Duration picker for interval */}
           {form.triggerType === "interval" && (
             <div>
-              <span className="mb-1 block text-[11px] text-muted">
-                {t("triggersview.IntervalMs")}{" "}
-                {formatDurationMs(parsePositiveInteger(form.intervalMs))}
+              <span className="mb-1 block text-xs text-muted">
+                Interval
               </span>
-              <Input
-                className="h-9 w-full border-border bg-bg px-3 py-1.5 text-sm shadow-sm focus-visible:ring-1 focus-visible:ring-accent"
-                value={form.intervalMs}
-                onChange={(event) => setField("intervalMs", event.target.value)}
-                placeholder="3600000"
-              />
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min="1"
+                  className="h-9 w-24 rounded-lg border-border bg-bg px-3 py-1.5 text-sm shadow-sm focus-visible:ring-1 focus-visible:ring-accent"
+                  value={form.durationValue}
+                  onChange={(event) =>
+                    setField("durationValue", event.target.value)
+                  }
+                  placeholder="1"
+                />
+                <select
+                  className="h-9 flex-1 rounded-lg border border-border bg-bg px-3 py-1.5 text-sm outline-none focus:border-accent"
+                  value={form.durationUnit}
+                  onChange={(event) =>
+                    setField("durationUnit", event.target.value as DurationUnit)
+                  }
+                >
+                  {DURATION_UNITS.map((u) => (
+                    <option key={u.label} value={u.label}>
+                      {u.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 
+          {/* Datetime for once */}
           {form.triggerType === "once" && (
             <div>
-              <span className="mb-1 block text-[11px] text-muted">
+              <span className="mb-1 block text-xs text-muted">
                 {t("triggersview.ScheduledTimeISO")}
               </span>
               <Input
-                className="h-9 w-full border-border bg-bg px-3 py-1.5 text-sm shadow-sm focus-visible:ring-1 focus-visible:ring-accent"
+                type="datetime-local"
+                className="h-9 w-full rounded-lg border-border bg-bg px-3 py-1.5 text-sm shadow-sm focus-visible:ring-1 focus-visible:ring-accent"
                 value={form.scheduledAtIso}
                 onChange={(event) =>
                   setField("scheduledAtIso", event.target.value)
                 }
-                placeholder={t("triggersview.20260215T100000")}
               />
             </div>
           )}
 
+          {/* Cron input */}
           {form.triggerType === "cron" && (
             <div>
-              <span className="mb-1 block text-[11px] text-muted">
+              <span className="mb-1 block text-xs text-muted">
                 {t("triggersview.CronExpression5F")}
               </span>
               <Input
-                className="h-9 w-full border-border bg-bg px-3 py-1.5 font-mono text-sm shadow-sm focus-visible:ring-1 focus-visible:ring-accent"
+                className="h-9 w-full rounded-lg border-border bg-bg px-3 py-1.5 font-mono text-sm shadow-sm focus-visible:ring-1 focus-visible:ring-accent"
                 value={form.cronExpression}
                 onChange={(event) =>
                   setField("cronExpression", event.target.value)
@@ -365,267 +483,141 @@ export function HeartbeatsView() {
             </div>
           )}
 
-          <span className="inline-flex cursor-pointer select-none items-center gap-2 text-xs">
+          {/* Max Runs */}
+          <div>
+            <span className="mb-1 block text-xs text-muted">
+              {t("triggersview.MaxRunsOptional")}
+            </span>
+            <Input
+              className="h-9 w-full rounded-lg border-border bg-bg px-3 py-1.5 text-sm shadow-sm focus-visible:ring-1 focus-visible:ring-accent"
+              value={form.maxRuns}
+              onChange={(event) => setField("maxRuns", event.target.value)}
+              placeholder="∞"
+            />
+          </div>
+
+          {/* Start Enabled */}
+          <label className="inline-flex cursor-pointer select-none items-center gap-2 text-xs">
             <input
               type="checkbox"
               checked={form.enabled}
               onChange={(event) => setField("enabled", event.target.checked)}
             />
             {t("triggersview.StartEnabled")}
-          </span>
+          </label>
 
-          {(formError || triggerError) && (
-            <div className="border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
-              {formError ?? triggerError}
+          {/* Form error */}
+          {formError && (
+            <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+              {formError}
             </div>
           )}
 
+          {/* Action buttons */}
           <div className="flex gap-2 pt-1">
             <Button
               variant="default"
               size="sm"
               className="h-9 px-4 py-1.5 text-sm shadow-sm"
-              style={accentFg}
               disabled={triggersSaving}
               onClick={onSubmit}
             >
               {triggersSaving
-                ? "Saving…"
+                ? "Saving..."
                 : editingId
                   ? "Save Changes"
                   : "Create Heartbeat"}
             </Button>
             {editingId && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 px-4 py-1.5 text-sm shadow-sm hover:border-accent"
-                onClick={clearForm}
-              >
-                {t("onboarding.cancel")}
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 px-4 py-1.5 text-sm shadow-sm hover:border-accent"
+                  onClick={clearForm}
+                >
+                  {t("onboarding.cancel")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 px-4 py-1.5 text-sm text-danger shadow-sm hover:border-danger"
+                  onClick={async () => {
+                    const confirmed = await confirmDesktopAction({
+                      title: "Delete Heartbeat",
+                      message: `Delete "${form.displayName}"?`,
+                      confirmLabel: "Delete",
+                      cancelLabel: "Cancel",
+                      type: "warning",
+                    });
+                    if (confirmed) {
+                      await deleteTrigger(editingId);
+                      clearForm();
+                    }
+                  }}
+                >
+                  {t("triggersview.Delete")}
+                </Button>
+              </>
             )}
           </div>
         </div>
-      </section>
-
-      <section className="min-w-0 rounded-xl border border-border bg-card p-4 md:order-1">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-bold">{t("nav.heartbeats")}</h2>
-          <span className="text-[11px] text-muted">
-            {triggersLoading ? "Loading…" : `${triggers.length} configured`}
-          </span>
-        </div>
-
-        {triggers.length === 0 && !triggersLoading ? (
-          <div className="py-8 text-center">
-            <div className="mb-2 text-2xl">⏰</div>
-            <div className="text-sm text-muted">
-              {t("triggersview.NoTriggersConfigur")}
-            </div>
-            <div className="mt-1 text-xs text-muted">
-              {t("triggersview.CreateOneAboveTo")}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {triggers.map((trigger) => {
-              const isExpanded = expandedInstructions.has(trigger.id);
-              const instructionPreview =
-                trigger.instructions.length > 120 && !isExpanded
-                  ? `${trigger.instructions.slice(0, 120)}…`
-                  : trigger.instructions;
-
-              return (
-                <div
-                  key={trigger.id}
-                  className="space-y-2 rounded-xl border border-border bg-bg p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-sm font-bold">
-                          {trigger.displayName}
-                        </span>
-                        <StatusBadge
-                          label={trigger.enabled ? "active" : "paused"}
-                          tone={trigger.enabled ? "success" : "muted"}
-                        />
-                      </div>
-                      <div className="mt-1 text-xs text-muted">
-                        {scheduleLabel(trigger)}
-                        {trigger.runCount > 0 && (
-                          <>
-                            {" "}
-                            · {trigger.runCount} run
-                            {trigger.runCount !== 1 ? "s" : ""}
-                          </>
-                        )}
-                        {trigger.nextRunAtMs && trigger.enabled && (
-                          <>
-                            {" "}
-                            · next{" "}
-                            {formatDateTime(trigger.nextRunAtMs, {
-                              fallback: "—",
-                            })}
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-shrink-0 flex-wrap justify-end gap-1">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="h-7 px-2 py-1 text-[11px] shadow-sm"
-                        style={accentFg}
-                        onClick={() => {
-                          setEditingId(trigger.id);
-                          setForm(formFromTrigger(trigger));
-                          setFormError(null);
-                          scrollToTop();
-                        }}
-                      >
-                        {t("triggersview.Edit")}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 px-2 py-1 text-[11px] shadow-sm hover:border-accent"
-                        onClick={() =>
-                          updateTrigger(trigger.id, {
-                            enabled: !trigger.enabled,
-                          })
-                        }
-                      >
-                        {trigger.enabled ? "Disable" : "Enable"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 px-2 py-1 text-[11px] shadow-sm hover:border-accent"
-                        onClick={() => runTriggerNow(trigger.id)}
-                      >
-                        {t("triggersview.RunNow")}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 px-2 py-1 text-[11px] shadow-sm hover:border-accent"
-                        onClick={() => {
-                          if (selectedRunsId === trigger.id) {
-                            setSelectedRunsId(null);
-                          } else {
-                            setSelectedRunsId(trigger.id);
-                            void loadTriggerRuns(trigger.id);
-                          }
-                        }}
-                      >
-                        {selectedRunsId === trigger.id ? "Hide runs" : "Runs"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 px-2 py-1 text-[11px] text-danger shadow-sm hover:border-danger"
-                        onClick={async () => {
-                          const confirmed = await confirmDesktopAction({
-                            title: "Delete Heartbeat",
-                            message: `Delete "${trigger.displayName}"?`,
-                            confirmLabel: "Delete",
-                            cancelLabel: "Cancel",
-                            type: "warning",
-                          });
-                          if (confirmed) {
-                            await deleteTrigger(trigger.id);
-                          }
-                        }}
-                      >
-                        {t("triggersview.Delete")}
-                      </Button>
-                    </div>
+        {/* Run history collapsible */}
+        {editingId && selectedRunsId && (
+          <div className="mt-6">
+            <button
+              type="button"
+              className="mb-2 flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-muted hover:text-txt"
+              onClick={() => setRunsExpanded((prev) => !prev)}
+            >
+              <span className={`inline-block transition-transform ${runsExpanded ? "rotate-90" : ""}`}>
+                &#9654;
+              </span>
+              {t("triggersview.RunHistory")}
+            </button>
+            {runsExpanded && (
+              <div className="rounded-lg border border-border bg-bg p-3">
+                {selectedRuns.length === 0 ? (
+                  <div className="py-2 text-xs text-muted">
+                    {t("triggersview.NoRunsRecordedYet")}
                   </div>
-
-                  <div className="whitespace-pre-wrap text-xs text-muted">
-                    {instructionPreview}
-                    {trigger.instructions.length > 120 && (
-                      <button
-                        type="button"
-                        className="ml-1 cursor-pointer border-0 bg-transparent p-0 text-xs text-txt hover:underline"
-                        onClick={() => toggleInstructions(trigger.id)}
-                      >
-                        {isExpanded ? "show less" : "show more"}
-                      </button>
-                    )}
-                  </div>
-
-                  {trigger.lastStatus && (
-                    <div className="flex items-center gap-1.5 text-xs">
-                      <StatusDot status={trigger.lastStatus} />
-                      <span className="text-muted">
-                        {t("triggersview.LastRun")} {trigger.lastStatus}{" "}
-                        {trigger.lastRunAtIso &&
-                          `at ${formatDateTime(trigger.lastRunAtIso, { fallback: "—" })}`}
-                      </span>
-                      {trigger.lastError && (
-                        <span className="text-danger">
-                          {" "}
-                          - {trigger.lastError}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {selectedRunsId === trigger.id && (
-                    <div className="mt-1 rounded-xl border border-border bg-card p-3">
-                      <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted">
-                        {t("triggersview.RunHistory")}
-                      </div>
-                      {selectedRuns.length === 0 ? (
-                        <div className="py-2 text-xs text-muted">
-                          {t("triggersview.NoRunsRecordedYet")}
-                        </div>
-                      ) : (
-                        <div className="space-y-1">
-                          {selectedRuns
-                            .slice()
-                            .reverse()
-                            .map((run) => (
-                              <div
-                                key={run.triggerRunId}
-                                className="flex items-start gap-2 border border-border px-3 py-1.5 text-xs"
-                              >
-                                <StatusDot status={run.status} />
-                                <div className="min-w-0 flex-1">
-                                  <span className="font-medium">
-                                    {run.status}
-                                  </span>
-                                  <span className="text-muted">
-                                    {" "}
-                                    ·{" "}
-                                    {formatDateTime(run.finishedAt, {
-                                      fallback: "—",
-                                    })}{" "}
-                                    · {formatDurationMs(run.latencyMs)} ·{" "}
-                                    {run.source}
-                                  </span>
-                                  {run.error && (
-                                    <div className="mt-0.5 text-danger">
-                                      {run.error}
-                                    </div>
-                                  )}
-                                </div>
+                ) : (
+                  <div className="space-y-1">
+                    {selectedRuns
+                      .slice()
+                      .reverse()
+                      .map((run) => (
+                        <div
+                          key={run.triggerRunId}
+                          className="flex items-start gap-2 rounded border border-border px-3 py-1.5 text-xs"
+                        >
+                          <StatusDot status={run.status} />
+                          <div className="min-w-0 flex-1">
+                            <span className="font-medium">{run.status}</span>
+                            <span className="text-muted">
+                              {" "}
+                              &middot;{" "}
+                              {formatDateTime(run.finishedAt, {
+                                fallback: "---",
+                              })}{" "}
+                              &middot; {formatDurationMs(run.latencyMs)} &middot;{" "}
+                              {run.source}
+                            </span>
+                            {run.error && (
+                              <div className="mt-0.5 text-danger">
+                                {run.error}
                               </div>
-                            ))}
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
-      </section>
+      </div>
     </div>
   );
 }
