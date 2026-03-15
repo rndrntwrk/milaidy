@@ -464,6 +464,45 @@ describe("stream555-control plugin actions", () => {
     expect(parseEnvelope(result as { text: string }).code).toBe("OK");
   });
 
+  it("queries stream status with session status endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-4" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          active: true,
+          sessionId: "session-4",
+          jobId: "job-4",
+          cfSessionId: "cf-4",
+          publisher: "avatar",
+          publisherReason: null,
+          phase: "live",
+          cloudflare: { isConnected: true, state: "connected" },
+          platforms: { twitch: { enabled: true, status: "live" } },
+        }),
+      );
+
+    const action = await resolveAction("STREAM555_STREAM_STATUS");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {
+        parameters: {
+          sessionId: "session-4",
+        },
+      } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, statusCall] = fetchMock.mock.calls;
+    expect(String(statusCall[0])).toContain(
+      "/api/agent/v1/sessions/session-4/stream/status",
+    );
+    expect(result?.success).toBe(true);
+    expect(parseEnvelope(result as { text: string }).code).toBe("OK");
+  });
+
   it("routes l-bar ad creation through brand-intake template endpoint", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     fetchMock

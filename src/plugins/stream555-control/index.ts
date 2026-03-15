@@ -735,7 +735,7 @@ const stream555ControlProvider: Provider = {
       text: [
         "## 555stream Control Surface",
         "",
-        "Actions: STREAM555_GO_LIVE, STREAM555_DESTINATIONS_APPLY, STREAM555_GO_LIVE_APP, STREAM555_GO_LIVE_SEGMENTS, STREAM555_SEGMENT_STATE, STREAM555_SCREEN_SHARE, STREAM555_END_LIVE, STREAM555_AD_CREATE, STREAM555_AD_TRIGGER, STREAM555_AD_DISMISS, STREAM555_RADIO_CONTROL, STREAM555_GUEST_INVITE, STREAM555_SCENE_SET, STREAM555_PIP_ENABLE, STREAM555_SEGMENT_OVERRIDE, STREAM555_EARNINGS_ESTIMATE",
+        "Actions: STREAM555_GO_LIVE, STREAM555_DESTINATIONS_APPLY, STREAM555_GO_LIVE_APP, STREAM555_STREAM_STATUS, STREAM555_GO_LIVE_SEGMENTS, STREAM555_SEGMENT_STATE, STREAM555_SCREEN_SHARE, STREAM555_END_LIVE, STREAM555_AD_CREATE, STREAM555_AD_TRIGGER, STREAM555_AD_DISMISS, STREAM555_RADIO_CONTROL, STREAM555_GUEST_INVITE, STREAM555_SCENE_SET, STREAM555_PIP_ENABLE, STREAM555_SEGMENT_OVERRIDE, STREAM555_EARNINGS_ESTIMATE",
         "Wallet Auth Actions: STREAM555_AUTH_WALLET_LOGIN, STREAM555_AUTH_WALLET_CHALLENGE, STREAM555_AUTH_WALLET_VERIFY, STREAM555_AUTH_WALLET_PROVISION_LINKED",
         `Base URL configured: ${configured ? "yes" : "no"} (${STREAM555_BASE_ENV}|${STREAM_API_ENV}|${STREAM555_PUBLIC_BASE_ENV}|${STREAM555_INTERNAL_BASE_ENV})`,
         `Resolved base URL: ${resolveBaseUrl(runtime)}`,
@@ -1249,6 +1249,66 @@ const segmentStateAction: Action = {
   },
   parameters: [
     { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const streamStatusAction: Action = {
+  name: "STREAM555_STREAM_STATUS",
+  similes: [
+    "GET_STREAM_STATUS",
+    "STREAM_STATUS_STREAM555",
+    "CHECK_STREAM_STATUS_STREAM555",
+  ],
+  description:
+    "Returns current stream status, including publisher readiness and platform connection state.",
+  validate: async () => true,
+  handler: async (runtime, _message, _state, options) => {
+    try {
+      assertStreamReadAccess();
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const requestId = createControlRequestId("stream-status");
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+      const response = await fetchJson(
+        "GET",
+        base,
+        `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/status`,
+        {},
+        requestId,
+      );
+      if (!response.ok) {
+        return buildEnvelopeActionResult({
+          ok: false,
+          module: "stream555.control",
+          action: "STREAM555_STREAM_STATUS",
+          status: response.status || 502,
+          message: `stream status query failed (${response.status}): ${getErrorDetail(response)}`,
+          details: response.data ?? response.rawBody,
+        });
+      }
+
+      return buildEnvelopeActionResult({
+        ok: true,
+        module: "stream555.control",
+        action: "STREAM555_STREAM_STATUS",
+        status: response.status,
+        message: "stream status fetched",
+        data: response.data ?? response.rawBody,
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_STREAM_STATUS", err);
+    }
+  },
+  parameters: [
+    {
+      name: "sessionId",
+      description: "Optional session id",
+      required: false,
+      schema: { type: "string" as const },
+    },
   ],
 };
 
@@ -1903,6 +1963,7 @@ export function createStream555ControlPlugin(
     goLiveAction,
     destinationsApplyAction,
     goLiveAppAction,
+    streamStatusAction,
     goLiveSegmentsAction,
     segmentStateAction,
     screenShareAction,
