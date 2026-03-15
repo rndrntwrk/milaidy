@@ -554,8 +554,7 @@ function DocumentDetailModal({
 /* ── Main KnowledgeView Component ───────────────────────────────────── */
 
 export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
-  const { t } = useApp();
-  const { setActionNotice } = useApp();
+  const { t, setActionNotice } = useApp();
   const setActionNoticeRef = useRef(setActionNotice);
   setActionNoticeRef.current = setActionNotice;
   const [searchQuery, setSearchQuery] = useState("");
