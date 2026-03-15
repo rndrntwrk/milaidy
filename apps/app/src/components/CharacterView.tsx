@@ -986,7 +986,7 @@ export function CharacterView({
                       {t("characterview.OnChainName")}{" "}
                       <strong className="text-amber-400">{onChainName}</strong>{" "}
                       {t("characterview.DiffersFrom")}{" "}
-                      <strong className="text-amber-400">{currentName}"</strong>
+                      <strong className="text-amber-400">{currentName}</strong>
                     </span>
                     <Button
                       variant="outline"

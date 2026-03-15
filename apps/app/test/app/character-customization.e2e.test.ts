@@ -682,6 +682,34 @@ describe("CharacterView UI", () => {
     ).toHaveLength(1);
   });
 
+  it("shows style sections when navigating to the styleRules sidebar tab", async () => {
+    state.tab = "character";
+
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CharacterView));
+    });
+
+    // Click the Style Rules sidebar tab
+    const styleTab = tree?.root.find(
+      (node) => node.props["data-testid"] === "notebook-tab-styleRules",
+    );
+
+    await act(async () => {
+      styleTab?.props.onClick();
+    });
+
+    expect(
+      tree?.root.findAll(
+        (node) =>
+          node.props["data-testid"] === "style-section-all" ||
+          node.props["data-testid"] === "style-section-chat" ||
+          node.props["data-testid"] === "style-section-post",
+      ),
+    ).toHaveLength(3);
+  });
+
   it("turning custom off applies the selected character defaults and hides the editors", async () => {
     let tree: TestRenderer.ReactTestRenderer | null = null;
 
