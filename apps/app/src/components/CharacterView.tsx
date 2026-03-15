@@ -863,7 +863,9 @@ export function CharacterView({
     return (
       <div className={sectionCls}>
         <div className="text-center py-6 text-[var(--muted)] text-[13px]">
-          {t("characterview.loadingCharacterDa")}
+          {t("characterview.loadingCharacterDa", {
+            defaultValue: "Loading character data...",
+          })}
         </div>
       </div>
     );
@@ -882,14 +884,16 @@ export function CharacterView({
   const voiceSelectValue = selectedVoicePresetId ?? null;
   const combinedSaveError = voiceSaveError ?? characterSaveError;
   const customizationActionLabel = customOverridesEnabled
-    ? t("characterview.backToCharacterSelect")
-    : t("characterview.customize");
+    ? t("characterview.backToCharacterSelect", {
+        defaultValue: "Back to Character Select",
+      })
+    : t("characterview.customize", { defaultValue: "Customize" });
   const characterRosterGridCls =
     "flex flex-wrap items-start justify-center gap-y-1";
   const rosterSlantClipPath =
     "polygon(32px 0, 100% 0, calc(100% - 32px) 100%, 0 100%)";
   const insetShadowClipPath =
-  "polygon(0px 0, 100% 0, calc(100% - 4px) 100%, -8px 100%)";
+    "polygon(0px 0, 100% 0, calc(100% - 4px) 100%, -8px 100%)";
   const rootCls =
     sceneOverlay && !inModal
       ? "relative z-10 flex min-h-full flex-col justify-end pb-4"
@@ -897,10 +901,15 @@ export function CharacterView({
           sceneOverlay ? "relative z-10" : ""
         }`;
   const coreFieldsPanel = (
-    <div className={`${editorCardCls} min-h-[24rem]`} data-testid="character-core-editor">
+    <div
+      className={`${editorCardCls} min-h-[24rem]`}
+      data-testid="character-core-editor"
+    >
       <div className="flex min-h-0 flex-col gap-2">
         <div className="flex items-center justify-between">
-          <span className={labelCls}>{t("characterview.aboutMe")}</span>
+          <span className={labelCls}>
+            {t("characterview.aboutMe", { defaultValue: "About Me" })}
+          </span>
           <Button
             variant="ghost"
             size="sm"
@@ -914,7 +923,9 @@ export function CharacterView({
         <Textarea
           value={bioText}
           rows={6}
-          placeholder={t("characterview.describeWhoYourAg")}
+          placeholder={t("characterview.describeWhoYourAg", {
+            defaultValue: "Describe who your agent is...",
+          })}
           onChange={(e) => handleFieldEdit("bio", e.target.value)}
           className="min-h-[10rem] flex-1 resize-none overflow-y-auto rounded-lg border-border/50 bg-bg p-3 text-sm leading-relaxed focus-visible:border-accent focus-visible:ring-accent/50"
         />
@@ -922,7 +933,11 @@ export function CharacterView({
 
       <div className="flex min-h-0 flex-col gap-2">
         <div className="flex items-center justify-between">
-          <span className={labelCls}>{t("characterview.directionsAndThing")}</span>
+          <span className={labelCls}>
+            {t("characterview.directionsAndThing", {
+              defaultValue: "System Prompt",
+            })}
+          </span>
           <Button
             variant="ghost"
             size="sm"
@@ -937,7 +952,9 @@ export function CharacterView({
           value={d.system ?? ""}
           rows={7}
           maxLength={10000}
-          placeholder={t("characterview.writeInFirstPerso")}
+          placeholder={t("characterview.writeInFirstPerso", {
+            defaultValue: "Write in first person...",
+          })}
           onChange={(e) => handleFieldEdit("system", e.target.value)}
           className="min-h-[10rem] flex-1 resize-none overflow-y-auto rounded-lg border-border/50 bg-bg p-3 font-mono text-xs leading-relaxed focus-visible:border-accent focus-visible:ring-accent/50"
         />
@@ -955,7 +972,9 @@ export function CharacterView({
       >
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm font-bold tracking-wide text-txt">
-            {t("characterview.StyleRules")}
+            {t("characterview.StyleRules", {
+              defaultValue: "Style Rules",
+            })}
           </div>
           <Button
             variant="outline"
@@ -1022,7 +1041,9 @@ export function CharacterView({
                             size="icon"
                             className="h-7 w-7 shrink-0 text-muted hover:bg-danger/10 hover:text-danger"
                             onClick={() => handleRemoveStyleEntry(key, index)}
-                            title={t("characterview.remove")}
+                            title={t("characterview.remove", {
+                              defaultValue: "Remove",
+                            })}
                           >
                             ×
                           </Button>
@@ -1082,10 +1103,14 @@ export function CharacterView({
       <div className="mb-4 flex items-center justify-between gap-3 border-b border-border/40 pb-3">
         <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
           <div className="text-sm font-bold tracking-wide text-txt">
-            {t("characterview.chatExamples")}
+            {t("characterview.chatExamples", {
+              defaultValue: "Chat Examples",
+            })}
           </div>
           <span className="rounded-full border border-white/5 bg-black/10 px-2 py-0.5 text-[11px] font-medium text-muted">
-            {t("characterview.HowTheAgentResp")}
+            {t("characterview.HowTheAgentResp", {
+              defaultValue: "How the agent responds in chat",
+            })}
           </span>
         </div>
         <Button
@@ -1109,7 +1134,10 @@ export function CharacterView({
           >
             <div className="mb-3 flex items-center justify-between border-b border-border/30 pb-2">
               <span className="text-[11px] font-bold uppercase tracking-widest text-muted">
-                {t("characterview.conversation")} {ci + 1}
+                {t("characterview.conversation", {
+                  defaultValue: "Conversation",
+                })}{" "}
+                {ci + 1}
               </span>
               <Button
                 variant="ghost"
@@ -1121,7 +1149,9 @@ export function CharacterView({
                   handleFieldEdit("messageExamples", updated);
                 }}
               >
-                {t("characterview.remove")}
+                {t("characterview.remove", {
+                  defaultValue: "Remove",
+                })}
               </Button>
             </div>
             <div className="flex flex-col gap-2">
@@ -1161,7 +1191,9 @@ export function CharacterView({
           <div
             className={`${hintCls} rounded-xl border border-white/5 bg-black/5 py-3 text-center`}
           >
-            {t("characterview.noChatExamplesYet")}
+            {t("characterview.noChatExamplesYet", {
+              defaultValue: "No chat examples yet.",
+            })}
           </div>
         )}
       </div>
@@ -1175,10 +1207,14 @@ export function CharacterView({
       <div className="mb-4 flex items-center justify-between gap-3 border-b border-border/40 pb-3">
         <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
           <div className="text-sm font-bold tracking-wide text-txt">
-            {t("characterview.postExamples")}
+            {t("characterview.postExamples", {
+              defaultValue: "Post Examples",
+            })}
           </div>
           <span className="rounded-full border border-white/5 bg-black/10 px-2 py-0.5 text-[11px] font-medium text-muted">
-            {t("characterview.SocialMediaVoice")}
+            {t("characterview.SocialMediaVoice", {
+              defaultValue: "Social media voice and style",
+            })}
           </span>
         </div>
         <Button
@@ -1223,7 +1259,9 @@ export function CharacterView({
           <div
             className={`${hintCls} rounded-xl border border-white/5 bg-black/5 py-3 text-center`}
           >
-            {t("characterview.noPostExamplesYet")}
+            {t("characterview.noPostExamplesYet", {
+              defaultValue: "No post examples yet.",
+            })}
           </div>
         )}
       </div>
@@ -1238,7 +1276,7 @@ export function CharacterView({
             handleFieldEdit("postExamples", updated);
           }}
         >
-          {t("characterview.AddPost")}
+          {t("characterview.AddPost", { defaultValue: "Add Post" })}
         </Button>
       </div>
     </div>
@@ -1252,7 +1290,9 @@ export function CharacterView({
           {!isRegistered && !dropLive && (
             <div className="flex flex-col gap-3">
               <div className="text-[12px] text-[var(--muted)]">
-                {t("characterview.RegisterYourAgent")}
+                {t("characterview.RegisterYourAgent", {
+                  defaultValue: "Register your agent on-chain",
+                })}
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -1285,11 +1325,13 @@ export function CharacterView({
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2 text-[12px]">
                   <span className="text-green-400 font-bold tracking-wide">
-                    {t("characterview.Registered")}
+                    {t("characterview.Registered", {
+                      defaultValue: "Registered",
+                    })}
                   </span>
                   <span className="text-muted/50">|</span>
                   <span className="text-muted font-medium">
-                    {t("characterview.Token")}
+                    {t("characterview.Token", { defaultValue: "Token #" })}
                     {registryStatus.tokenId}
                   </span>
                   <span className="text-muted/50">|</span>
@@ -1298,10 +1340,14 @@ export function CharacterView({
                 {nameOutOfSync && (
                   <div className="flex items-center gap-3 bg-amber-400/10 border border-amber-400/20 px-3 py-2 rounded-lg">
                     <span className="text-[11px] text-amber-400/80 font-medium tracking-wide">
-                      {t("characterview.OnChainName")}{" "}
+                      {t("characterview.OnChainName", {
+                        defaultValue: "On-chain name",
+                      })}{" "}
                       <strong className="text-amber-400">{onChainName}</strong>{" "}
-                      {t("characterview.DiffersFrom")}{" "}
-                      <strong className="text-amber-400">{currentName}"</strong>
+                      {t("characterview.DiffersFrom", {
+                        defaultValue: "differs from",
+                      })}{" "}
+                      <strong className="text-amber-400">{currentName}</strong>
                     </span>
                     <Button
                       variant="outline"
@@ -1325,7 +1371,9 @@ export function CharacterView({
                   rel="noopener noreferrer"
                   className="text-[11px] underline text-[var(--accent)]"
                 >
-                  {t("characterview.viewOnEtherscan")}
+                  {t("characterview.viewOnEtherscan", {
+                    defaultValue: "View on Etherscan",
+                  })}
                 </a>
               </div>
             </div>
@@ -1335,7 +1383,9 @@ export function CharacterView({
       {hasWallet && userMinted && !isRegistered && (
         <div className={sectionCls}>
           <div className="text-[12px] text-[var(--ok,#16a34a)]">
-            {t("characterview.MintedFromCollecti")}
+            {t("characterview.MintedFromCollecti", {
+              defaultValue: "Minted from collection",
+            })}
           </div>
         </div>
       )}
@@ -1436,7 +1486,7 @@ export function CharacterView({
                 className="h-8 rounded-lg px-3 text-xs font-semibold"
                 onClick={() => setCustomizeStep("core")}
               >
-                {t("characterview.core")}
+                {t("characterview.core", { defaultValue: "Core" })}
               </Button>
               <Button
                 type="button"
@@ -1445,7 +1495,7 @@ export function CharacterView({
                 className="h-8 rounded-lg px-3 text-xs font-semibold xl:hidden"
                 onClick={() => setCustomizeStep("style")}
               >
-                {t("characterview.style")}
+                {t("characterview.style", { defaultValue: "Style" })}
               </Button>
               <Button
                 type="button"
@@ -1454,7 +1504,7 @@ export function CharacterView({
                 className="h-8 rounded-lg px-3 text-xs font-semibold"
                 onClick={() => setCustomizeStep("examples")}
               >
-                {t("characterview.examples")}
+                {t("characterview.examples", { defaultValue: "Examples" })}
               </Button>
             </div>
           </div>
@@ -1473,11 +1523,19 @@ export function CharacterView({
               className="grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,23rem)_minmax(0,1fr)_minmax(0,32rem)] xl:items-start xl:gap-6"
               data-testid="character-customize-grid"
             >
-              <div className={customizeStep === "style" ? "hidden xl:block" : "block"}>
+              <div
+                className={
+                  customizeStep === "style" ? "hidden xl:block" : "block"
+                }
+              >
                 {coreFieldsPanel}
               </div>
               <div aria-hidden className="hidden xl:block" />
-              <div className={customizeStep === "core" ? "hidden xl:block" : "block"}>
+              <div
+                className={
+                  customizeStep === "core" ? "hidden xl:block" : "block"
+                }
+              >
                 {styleEditorPanel}
               </div>
             </div>
@@ -1503,71 +1561,77 @@ export function CharacterView({
 
         <div className="relative flex flex-col gap-3 md:min-h-10 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center justify-center md:justify-start">
-            <div
-              className="flex min-w-0 items-center gap-2"
-              data-testid="character-voice-picker"
-            >
-              <Button
-                type="button"
-                variant={voiceSelectionLocked ? "default" : "outline"}
-                size="icon"
-                className="h-8 w-8 rounded-full border-border/50 bg-bg/65 p-0 shadow-inner backdrop-blur-sm"
-                onClick={() => setVoiceSelectionLocked((value) => !value)}
-                aria-label={
-                  voiceSelectionLocked
-                    ? "Unlock voice selection"
-                    : "Lock voice selection"
-                }
-                title={
-                  voiceSelectionLocked
-                    ? "Voice stays pinned when switching characters"
-                    : "Lock current voice"
-                }
+            {!customOverridesEnabled ? (
+              <div
+                className="flex min-w-0 items-center gap-2"
+                data-testid="character-voice-picker"
               >
-                {voiceSelectionLocked ? (
-                  <Lock className="h-3.5 w-3.5" />
-                ) : (
-                  <LockOpen className="h-3.5 w-3.5" />
-                )}
-              </Button>
-              <ThemedSelect
-                value={voiceSelectValue}
-                groups={VOICE_SELECT_GROUPS}
-                onChange={(id) => {
-                  const preset = PREMADE_VOICES.find(
-                    (voicePreset) => voicePreset.id === id,
-                  );
-                  if (preset) handleSelectPreset(preset);
-                }}
-                placeholder={t("characterview.selectAVoice")}
-                menuPlacement="top"
-                className="w-[11rem] max-w-[58vw]"
-                triggerClassName="h-8 rounded-full border-border/50 bg-bg/65 px-4 py-0 text-[11px] shadow-inner backdrop-blur-sm"
-                menuClassName="border-border/60 bg-bg/92 shadow-2xl backdrop-blur-md"
-              />
-              <Button
-                type="button"
-                variant={voiceTesting ? "destructive" : "outline"}
-                size="icon"
-                className="h-8 w-8 rounded-full border-border/50 bg-bg/65 p-0 shadow-inner backdrop-blur-sm"
-                onClick={() =>
-                  voiceTesting
-                    ? handleStopTest()
-                    : activeVoicePreset
-                      ? handleTestVoice(activeVoicePreset.previewUrl)
-                      : undefined
-                }
-                aria-label={voiceTesting ? "Stop voice preview" : "Preview voice"}
-                title={voiceTesting ? "Stop voice preview" : "Preview voice"}
-                disabled={!activeVoicePreset || voiceLoading}
-              >
-                {voiceTesting ? (
-                  <VolumeX className="h-3.5 w-3.5" />
-                ) : (
-                  <Volume2 className="h-3.5 w-3.5" />
-                )}
-              </Button>
-            </div>
+                <Button
+                  type="button"
+                  variant={voiceSelectionLocked ? "default" : "outline"}
+                  size="icon"
+                  className="h-8 w-8 rounded-full border-border/50 bg-bg/65 p-0 shadow-inner backdrop-blur-sm"
+                  onClick={() => setVoiceSelectionLocked((value) => !value)}
+                  aria-label={
+                    voiceSelectionLocked
+                      ? "Unlock voice selection"
+                      : "Lock voice selection"
+                  }
+                  title={
+                    voiceSelectionLocked
+                      ? "Voice stays pinned when switching characters"
+                      : "Lock current voice"
+                  }
+                >
+                  {voiceSelectionLocked ? (
+                    <Lock className="h-3.5 w-3.5" />
+                  ) : (
+                    <LockOpen className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+                <ThemedSelect
+                  value={voiceSelectValue}
+                  groups={VOICE_SELECT_GROUPS}
+                  onChange={(id) => {
+                    const preset = PREMADE_VOICES.find(
+                      (voicePreset) => voicePreset.id === id,
+                    );
+                    if (preset) handleSelectPreset(preset);
+                  }}
+                  placeholder={t("characterview.selectAVoice", {
+                    defaultValue: "Select a voice",
+                  })}
+                  menuPlacement="top"
+                  className="w-[11rem] max-w-[58vw]"
+                  triggerClassName="h-8 rounded-full border-border/50 bg-bg/65 px-4 py-0 text-[11px] shadow-inner backdrop-blur-sm"
+                  menuClassName="border-border/60 bg-bg/92 shadow-2xl backdrop-blur-md"
+                />
+                <Button
+                  type="button"
+                  variant={voiceTesting ? "destructive" : "outline"}
+                  size="icon"
+                  className="h-8 w-8 rounded-full border-border/50 bg-bg/65 p-0 shadow-inner backdrop-blur-sm"
+                  onClick={() =>
+                    voiceTesting
+                      ? handleStopTest()
+                      : activeVoicePreset
+                        ? handleTestVoice(activeVoicePreset.previewUrl)
+                        : undefined
+                  }
+                  aria-label={
+                    voiceTesting ? "Stop voice preview" : "Preview voice"
+                  }
+                  title={voiceTesting ? "Stop voice preview" : "Preview voice"}
+                  disabled={!activeVoicePreset || voiceLoading}
+                >
+                  {voiceTesting ? (
+                    <VolumeX className="h-3.5 w-3.5" />
+                  ) : (
+                    <Volume2 className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex items-center justify-center md:absolute md:left-1/2 md:top-1/2 md:z-10 md:-translate-x-1/2 md:-translate-y-1/2">
