@@ -92,6 +92,25 @@ const CHARACTER_PRESET_META: Record<
   "locked in": { name: "Reisen", avatarIndex: 3, voicePresetId: "josh" },
 };
 
+const SIDEBAR_TABS: {
+  key: ActiveSection;
+  icon: typeof FileText;
+  labelKey: string;
+}[] = [
+  { key: "aboutMe", icon: FileText, labelKey: "characterview.aboutMe" },
+  {
+    key: "directions",
+    icon: BookOpen,
+    labelKey: "characterview.directionsAndThing",
+  },
+  { key: "styleRules", icon: Palette, labelKey: "characterview.StyleRules" },
+];
+
+const NOTEBOOK_SHELL_CLS =
+  "relative isolate flex h-[34.75rem] w-full max-w-[29rem] overflow-visible";
+const BOOK_SIDEBAR_CLS =
+  "relative overflow-hidden bg-[linear-gradient(180deg,#333842_0%,#23272f_42%,#191c22_100%)] dark:bg-[linear-gradient(180deg,hsl(220,14%,15%)_0%,hsl(220,16%,10%)_42%,hsl(220,20%,7%)_100%)]";
+
 type CharacterRosterEntry = {
   id: string;
   name: string;
@@ -866,30 +885,12 @@ export function CharacterView({
   const scrollPaneCls =
     "min-h-0 overflow-y-auto pr-1 [scrollbar-gutter:stable] custom-scrollbar";
 
-  const SIDEBAR_TABS: {
-    key: ActiveSection;
-    icon: typeof FileText;
-    labelKey: string;
-  }[] = [
-    { key: "aboutMe", icon: FileText, labelKey: "characterview.aboutMe" },
-    {
-      key: "directions",
-      icon: BookOpen,
-      labelKey: "characterview.directionsAndThing",
-    },
-    { key: "styleRules", icon: Palette, labelKey: "characterview.StyleRules" },
-  ];
-
   const bookPageCls = sceneOverlay
     ? "relative overflow-hidden bg-[linear-gradient(180deg,rgba(255,251,242,0.98)_0%,rgba(243,233,214,0.96)_100%)] backdrop-blur-md dark:bg-[linear-gradient(180deg,rgba(46,43,38,0.98)_0%,rgba(31,28,25,0.96)_100%)]"
     : "relative overflow-hidden bg-[linear-gradient(180deg,#fffaf1_0%,#f4ead7_100%)] dark:bg-[linear-gradient(180deg,hsl(35,14%,18%)_0%,hsl(35,10%,13%)_100%)]";
-  const bookSidebarCls =
-    "relative overflow-hidden bg-[linear-gradient(180deg,#333842_0%,#23272f_42%,#191c22_100%)] dark:bg-[linear-gradient(180deg,hsl(220,14%,15%)_0%,hsl(220,16%,10%)_42%,hsl(220,20%,7%)_100%)]";
-  const notebookShellCls =
-    "relative isolate flex h-[34.75rem] w-full max-w-[29rem] overflow-visible";
   const notebookFrameCls = sceneOverlay
     ? "relative flex h-full w-full overflow-hidden rounded-[1.75rem] border border-[#2f261b]/20 bg-[#f8f0df]/70 shadow-[0_24px_60px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,255,255,0.5)]"
-    : "relative flex h-full w-full overflow-hidden rounded-[1.75rem] border border-[#2f261b]/14 bg-[#f8f0df] shadow-[0_26px_60px_rgba(36,28,18,0.2),inset_0_1px_0_rgba(255,255,255,0.58)]";
+    : "relative flex h-full w-full overflow-hidden rounded-[1.75rem] border border-[#2f261b]/[0.14] bg-[#f8f0df] shadow-[0_26px_60px_rgba(36,28,18,0.2),inset_0_1px_0_rgba(255,255,255,0.58)]";
 
   if (characterLoading && !characterData) {
     return (
@@ -1109,7 +1110,7 @@ export function CharacterView({
       {customOverridesEnabled && (
         <div className="mt-3 flex justify-end">
           {/* ── Book container ── */}
-          <div className={notebookShellCls} data-testid="character-notebook">
+          <div className={NOTEBOOK_SHELL_CLS} data-testid="character-notebook">
             <div className="pointer-events-none absolute inset-x-5 bottom-[-1.2rem] top-6 rounded-[1.9rem] bg-[linear-gradient(180deg,rgba(35,27,18,0.12)_0%,rgba(16,12,9,0.32)_100%)] blur-xl" />
             <div className="pointer-events-none absolute inset-[0.35rem] translate-x-2 translate-y-2 rounded-[1.9rem] border border-[#d7c5a4]/50 bg-[linear-gradient(180deg,rgba(251,246,235,0.86)_0%,rgba(236,224,198,0.7)_100%)] shadow-[0_12px_26px_rgba(62,44,21,0.12)]" />
             <div className="pointer-events-none absolute bottom-[-0.95rem] left-8 h-14 w-4 rounded-b-sm bg-[linear-gradient(180deg,#ddb45e_0%,#be8530_100%)] [clip-path:polygon(0_0,100%_0,100%_78%,50%_100%,0_78%)] shadow-[0_10px_20px_rgba(141,97,34,0.28)]" />
@@ -1583,7 +1584,7 @@ export function CharacterView({
 
               {/* ── Sidebar (right) ── */}
               <div
-                className={`${bookSidebarCls} flex w-20 flex-col items-center rounded-r-[1.75rem] border-l border-white/[0.08] py-3`}
+                className={`${BOOK_SIDEBAR_CLS} flex w-20 flex-col items-center rounded-r-[1.75rem] border-l border-white/[0.08] py-3`}
                 role="tablist"
                 aria-orientation="vertical"
               >
