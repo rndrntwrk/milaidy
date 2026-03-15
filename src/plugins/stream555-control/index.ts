@@ -39,6 +39,8 @@ const CAPABILITY_POLICY = createFive55CapabilityPolicy();
 const DEFAULT_STREAM555_PUBLIC_BASE_URL = "https://stream.rndrntwrk.com";
 const DEFAULT_STREAM555_INTERNAL_BASE_URL = "http://control-plane:3000";
 const DEFAULT_INTERNAL_AGENT_IDS = ["alice", "alice-internal"];
+const DEFAULT_CF_CONNECT_TIMEOUT_MS = 45_000;
+const DEFAULT_CF_CONNECT_POLL_MS = 5_000;
 
 type JsonObject = Record<string, unknown>;
 type LBarVideoAspect = "square" | "landscape";
@@ -61,6 +63,21 @@ interface DestinationApplyFailure {
   platformId: string;
   status: number;
   error: string;
+}
+
+interface StreamReadinessSnapshot {
+  sessionId: string;
+  active: boolean;
+  jobId?: string;
+  cfSessionId?: string;
+  cloudflareConnected: boolean;
+  cloudflareState?: string;
+  publisher?: string;
+  publisherReason?: string | null;
+  platforms: Record<string, unknown>;
+  phase?: string;
+  raw?: JsonObject;
+  outputs?: JsonObject[];
 }
 
 let cachedAgentSessionId: string | undefined;
@@ -209,6 +226,221 @@ function parseBooleanFlag(value: string | undefined, fallback: boolean): boolean
   if (["1", "true", "yes", "on", "enabled"].includes(normalized)) return true;
   if (["0", "false", "no", "off", "disabled"].includes(normalized)) return false;
   return fallback;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function asJsonRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function asJsonArray(value: unknown): JsonObject[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .map((entry) => (asJsonRecord(entry) ? (entry as JsonObject) : undefined))
+    .filter((entry): entry is JsonObject => entry !== undefined);
+}
+
+function asString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function asStringSet(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const normalized = new Set<string>();
+  for (const candidate of value) {
+    const text = asString(candidate);
+    if (!text) continue;
+    normalized.add(text.trim().toLowerCase());
+  }
+  return Array.from(normalized);
+}
+
+function getEnabledPlatformIds(
+  platforms: Record<string, unknown> | undefined,
+): string[] {
+  const snapshotPlatforms = asJsonRecord(platforms) ?? {};
+  const ids = new Set<string>();
+  for (const [platformId, detail] of Object.entries(snapshotPlatforms)) {
+    const platform = asJsonRecord(detail);
+    const enabled =
+      typeof platform?.enabled === "boolean"
+        ? platform.enabled
+        : false;
+    if (enabled) {
+      ids.add(platformId);
+    }
+  }
+  return Array.from(ids);
+}
+
+function getProvisionedPlatformIds(snapshot: StreamReadinessSnapshot): string[] {
+  const outputs = asJsonArray(snapshot.outputs);
+  if (!outputs) return [];
+  const ids = new Set<string>();
+  for (const output of outputs) {
+    const platform = asString(output.platform);
+    if (platform) {
+      ids.add(platform.toLowerCase());
+    }
+  }
+  return Array.from(ids);
+}
+
+function areRequiredOutputsProvisioned(
+  snapshot: StreamReadinessSnapshot,
+  enabledPlatformIds: string[],
+): boolean {
+  if (enabledPlatformIds.length === 0) return true;
+  const provisionedPlatforms = new Set(getProvisionedPlatformIds(snapshot));
+  return enabledPlatformIds.every((platformId) =>
+    provisionedPlatforms.has(platformId.toLowerCase()),
+  );
+}
+
+function getMissingOutputPlatforms(
+  snapshot: StreamReadinessSnapshot,
+  enabledPlatformIds: string[],
+): string[] {
+  if (enabledPlatformIds.length === 0) return [];
+  const provisioned = new Set(getProvisionedPlatformIds(snapshot));
+  return enabledPlatformIds.filter(
+    (platformId) => !provisioned.has(platformId.toLowerCase()),
+  );
+}
+
+function streamReadinessFailureReason(
+  snapshot: StreamReadinessSnapshot | undefined,
+  enabledPlatformIds: string[],
+  requirePublisher: boolean,
+): string {
+  if (!snapshot) {
+    return "stream status check returned no readable state";
+  }
+  if (!snapshot.active) {
+    return "stream has not become active";
+  }
+  if (!snapshot.cfSessionId) {
+    return "stream session has no active Cloudflare session id";
+  }
+  if (!snapshot.cloudflareConnected) {
+    return "Cloudflare did not connect";
+  }
+  if (requirePublisher && (snapshot.publisher || "none") === "none") {
+    return snapshot.publisherReason
+      ? `publisher did not attach: ${snapshot.publisherReason}`
+      : "publisher did not attach";
+  }
+  const missingOutputs = getMissingOutputPlatforms(snapshot, enabledPlatformIds);
+  if (missingOutputs.length > 0) {
+    return `simulcast outputs were not provisioned for ${missingOutputs.join(", ")}`;
+  }
+  return "stream start did not reach connected state";
+}
+
+function isStreamReady(
+  snapshot: StreamReadinessSnapshot,
+  enabledPlatformIds: string[],
+  requirePublisher: boolean,
+): boolean {
+  return Boolean(
+    snapshot.active &&
+    snapshot.cfSessionId &&
+    snapshot.cloudflareConnected &&
+    areRequiredOutputsProvisioned(snapshot, enabledPlatformIds) &&
+    (!requirePublisher || (snapshot.publisher || "none") !== "none"),
+  );
+}
+
+async function fetchStreamReadinessSnapshot(
+  base: string,
+  sessionId: string,
+  requestId?: string,
+): Promise<StreamReadinessSnapshot> {
+  const response = await fetchJson(
+    "GET",
+    base,
+    `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/status`,
+    {},
+    requestId,
+  );
+  if (!response.ok) {
+    throw new Error(
+      `stream status check failed (${response.status}): ${getErrorDetail(response)}`,
+    );
+  }
+
+  const data = asJsonRecord(response.data) ?? {};
+  const cloudflare = asJsonRecord(data.cloudflare);
+  return {
+    sessionId,
+    active: Boolean(data.active),
+    jobId: asString(data.jobId),
+    cfSessionId: asString(data.cfSessionId),
+    cloudflareConnected: Boolean(cloudflare?.isConnected),
+    cloudflareState: asString(cloudflare?.state),
+    publisher: asString(data.publisher) || "none",
+    publisherReason:
+      typeof data.publisherReason === "string"
+        ? data.publisherReason
+        : data.publisherReason === null
+          ? null
+          : undefined,
+    platforms: asJsonRecord(data.platforms) ?? {},
+    phase: asString(data.phase),
+    raw: data,
+    outputs: asJsonArray(data.outputs),
+  };
+}
+
+async function waitForStreamReadiness(
+  base: string,
+  sessionId: string,
+  requestId: string,
+  enabledPlatformIds: string[],
+  requirePublisher: boolean,
+  timeoutMs = DEFAULT_CF_CONNECT_TIMEOUT_MS,
+  pollMs = DEFAULT_CF_CONNECT_POLL_MS,
+): Promise<{
+  ready: boolean;
+  lastSnapshot?: StreamReadinessSnapshot;
+  failureReason?: string;
+}> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    const snapshot = await fetchStreamReadinessSnapshot(
+      base,
+      sessionId,
+      requestId,
+    );
+    if (isStreamReady(snapshot, enabledPlatformIds, requirePublisher)) {
+      return { ready: true, lastSnapshot: snapshot };
+    }
+    if (Date.now() >= deadline) {
+      break;
+    }
+    await sleep(pollMs);
+  }
+  const lastSnapshot = await fetchStreamReadinessSnapshot(base, sessionId, requestId).catch(
+    () => undefined,
+  );
+  return {
+    ready: false,
+    lastSnapshot,
+    failureReason: streamReadinessFailureReason(
+      lastSnapshot,
+      enabledPlatformIds,
+      requirePublisher,
+    ),
+  };
 }
 
 function selectDestinationMappings(
@@ -776,8 +1008,13 @@ const goLiveAction: Action = {
 
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+      const needsPublisherReadiness =
+        inputType.toLowerCase() === "avatar" || inputType.toLowerCase() === "camera";
+      let destinationSync:
+        | { attempted: number; applied: DestinationApplySuccess[]; failed: DestinationApplyFailure[] }
+        | undefined;
       if (applyDestinations) {
-        const destinationSync = await applyConfiguredDestinations({
+        destinationSync = await applyConfiguredDestinations({
           base,
           sessionId,
           requestedPlatforms: destinationPlatforms,
@@ -792,26 +1029,154 @@ const goLiveAction: Action = {
         }
       }
 
-      return executeApiAction({
+      const requestPayload = {
+        input: {
+          type: inputType,
+          ...(inputUrl ? { url: inputUrl } : {}),
+        },
+        options: { scene },
+      };
+      const startResponse = await fetchJson(
+        "POST",
+        base,
+        `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/start`,
+        requestPayload,
+        requestId,
+      );
+
+      let startSnapshot: StreamReadinessSnapshot | undefined;
+      let readyResult:
+        | {
+            ready: boolean;
+            lastSnapshot?: StreamReadinessSnapshot;
+            failureReason?: string;
+          }
+        | undefined;
+      if (!startResponse.ok) {
+        if (startResponse.status === 409) {
+          startSnapshot = await fetchStreamReadinessSnapshot(
+            base,
+            sessionId,
+            requestId,
+          ).catch(() => undefined);
+          if (!startSnapshot) {
+            throw new Error(
+              `stream start failed (${startResponse.status}): ${getErrorDetail(startResponse)}`,
+            );
+          }
+          if (!needsPublisherReadiness) {
+            if (!startSnapshot.active) {
+              throw new Error("stream start did not create an active session");
+            }
+            return buildEnvelopeActionResult({
+              ok: true,
+              module: "stream555.control",
+              action: "STREAM555_GO_LIVE",
+              status: startResponse.status,
+              message: "go-live already active",
+              data: {
+                ...startResponse.data,
+                sessionId,
+                inputType,
+                scene,
+                requestId,
+                cfSessionId: startSnapshot.cfSessionId ?? asString(startResponse.data?.cfSessionId),
+                cloudflareConnected: startSnapshot.cloudflareConnected,
+                publisher: startSnapshot.publisher,
+                publisherReason: startSnapshot.publisherReason ?? null,
+                phase: startSnapshot.phase,
+                platformStatuses: startSnapshot.platforms,
+                streamStatus: startSnapshot.raw,
+                destinationSync,
+              },
+            });
+          }
+        } else {
+          throw new Error(
+            `stream start failed (${startResponse.status}): ${getErrorDetail(startResponse)} [requestId: ${startResponse.requestId}]`,
+          );
+        }
+      }
+
+      if (needsPublisherReadiness) {
+        const startPayloadPlatforms = asStringSet(startResponse.data?.platforms);
+        let enabledPlatforms =
+          startPayloadPlatforms.length > 0 ? startPayloadPlatforms : [];
+        if (enabledPlatforms.length === 0) {
+          enabledPlatforms = getEnabledPlatformIds(startSnapshot?.platforms);
+        }
+        if (destinationSync?.applied.length) {
+          const merged = new Set(enabledPlatforms);
+          for (const applied of destinationSync.applied) {
+            if (applied.enabled) merged.add(applied.platformId);
+          }
+          enabledPlatforms = Array.from(merged);
+        }
+        readyResult = await waitForStreamReadiness(
+          base,
+          sessionId,
+          requestId,
+          enabledPlatforms,
+          needsPublisherReadiness,
+        );
+
+        if (!readyResult.ready) {
+          await fetchJson(
+            "POST",
+            base,
+            `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/stop`,
+            {},
+            requestId,
+          ).catch(() => undefined);
+          return buildEnvelopeActionResult({
+            ok: false,
+            module: "stream555.control",
+            action: "STREAM555_GO_LIVE",
+            status: 504,
+            message: `stream start did not reach connected state: ${readyResult.failureReason ?? "unknown"}`,
+            details: {
+              sessionId,
+              requestId,
+              scene,
+              inputType,
+              snapshot: readyResult.lastSnapshot ?? startSnapshot ?? startResponse.data,
+              destinationSync,
+            },
+          });
+        }
+      }
+
+      const finalSnapshot = readyResult?.lastSnapshot ?? startSnapshot;
+      return buildEnvelopeActionResult({
+        ok: true,
         module: "stream555.control",
         action: "STREAM555_GO_LIVE",
-        base,
-        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/start`,
-        payload: {
-          input: {
-            type: inputType,
-            ...(inputUrl ? { url: inputUrl } : {}),
-          },
-          options: { scene },
+        status: startResponse.status || 200,
+        message:
+          readyResult && needsPublisherReadiness
+            ? "go-live is ready"
+            : "go-live requested",
+        data: {
+          ...(startResponse.data ?? {}),
+          sessionId,
+          inputType,
+          scene,
+          requestId,
+          cfSessionId:
+            finalSnapshot?.cfSessionId ??
+            asString(startResponse.data?.cfSessionId),
+          cloudflareConnected: finalSnapshot?.cloudflareConnected ?? false,
+          phase: finalSnapshot?.phase ?? asString(startResponse.data?.phase),
+          publisher: finalSnapshot?.publisher ?? asString(startResponse.data?.publisher),
+          publisherReason:
+            finalSnapshot?.publisherReason ??
+            (typeof startResponse.data?.publisherReason === "string"
+              ? startResponse.data?.publisherReason
+              : null),
+          platformStatuses: finalSnapshot?.platforms ?? asJsonRecord(startResponse.data?.platforms),
+          streamStatus: finalSnapshot?.raw ?? asJsonRecord(startResponse.data),
+          destinationSync,
         },
-        requestContract: {
-          input: { required: true, type: "object" },
-          options: { required: false, type: "object" },
-        },
-        responseContract: {},
-        successMessage: "go-live requested",
-        transport: commandTransport(requestId),
-        context: { sessionId },
       });
     } catch (err) {
       return exceptionAction("stream555.control", "STREAM555_GO_LIVE", err);
