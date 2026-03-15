@@ -483,7 +483,7 @@ export function ProviderSwitcher() {
         </label>
         <select
           id="provider-switcher-select"
-          className="w-full px-3 py-2.5 border border-[var(--border)] bg-[var(--card)] text-[13px] rounded-lg transition-all duration-200 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 focus:outline-none hover:border-[var(--border-hover)]"
+          className="w-full px-3 pr-8 py-2.5 border border-[var(--border)] bg-[var(--card)] text-[13px] rounded-lg transition-all duration-200 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 focus:outline-none hover:border-[var(--border-hover)]"
           value={resolvedSelectedId ?? "__cloud__"}
           onChange={(e) => {
             const nextId = e.target.value;

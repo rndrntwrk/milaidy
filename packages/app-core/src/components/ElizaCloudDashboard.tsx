@@ -763,33 +763,30 @@ export function CloudDashboard() {
 
   if (!elizaCloudConnected) {
     return (
-      <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto px-6 py-10 sm:py-12 text-center animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <div className="w-20 h-20 rounded-3xl bg-accent/10 flex items-center justify-center mb-8 shadow-inner border border-accent/20">
-          <Zap className="w-10 h-10 text-txt animate-pulse" />
+      <div className="flex flex-col items-center justify-center max-w-md mx-auto px-4 py-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="w-12 h-12 rounded-2xl bg-accent/10 flex items-center justify-center mb-5 border border-accent/20">
+          <Zap className="w-6 h-6 text-txt" />
         </div>
-        <h1 className="text-4xl font-bold text-txt-strong mb-4 tracking-tight">
-          {t("elizaclouddashboard.ElizaCloud")}
-        </h1>
-        <p className="text-lg text-muted mb-10 leading-relaxed">
+        <p className="text-sm text-muted mb-6 leading-relaxed">
           {t("elizaclouddashboard.ScaleYourAgents")}
         </p>
         <Button
           variant="default"
-          size="lg"
-          className="rounded-2xl px-10 py-6 text-lg font-bold shadow-xl shadow-accent/20 hover:shadow-accent/40 hover:-translate-y-1 transition-all duration-300"
+          size="sm"
+          className="rounded-xl px-8 py-3 text-sm font-semibold shadow-md shadow-accent/15 hover:shadow-accent/30 hover:-translate-y-0.5 transition-all duration-300"
           onClick={handleCloudLogin}
           disabled={elizaCloudLoginBusy}
         >
           {elizaCloudLoginBusy ? (
-            <RefreshCw className="w-5 h-5 mr-3 animate-spin" />
+            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
           ) : (
-            <Zap className="w-5 h-5 mr-3" />
+            <Zap className="w-4 h-4 mr-2" />
           )}
           {elizaCloudLoginBusy
             ? t("elizaclouddashboard.Connecting")
             : t("elizaclouddashboard.ConnectElizaCloud")}
         </Button>
-        <p className="mt-6 text-sm text-muted/60">
+        <p className="mt-4 text-xs text-muted/60">
           {t("elizaclouddashboard.NewToElizaCloud")}{" "}
           <a
             href={ELIZA_CLOUD_LOGIN_URL}

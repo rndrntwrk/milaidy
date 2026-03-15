@@ -678,7 +678,8 @@ const SliderComponent: ComponentFn = (props, _children, ctx) => {
         step={Number(props.step ?? 1)}
         value={Number(value ?? props.min ?? 0)}
         onChange={(e) => setValue(Number(e.target.value))}
-        className="w-full accent-[var(--accent)]"
+        className="w-full"
+        style={{ accentColor: "var(--accent)" }}
       />
     </div>
   );

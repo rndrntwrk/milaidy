@@ -252,7 +252,8 @@ function WakeWordSection({
           max={2.0}
           step={0.05}
           value={sensitivity}
-          className="w-full accent-[var(--accent)]"
+          className="w-full"
+          style={{ accentColor: "var(--accent)" }}
           onChange={(e) =>
             void handleSensitivityChange(parseFloat(e.target.value))
           }

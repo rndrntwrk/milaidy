@@ -135,14 +135,14 @@ function SettingsSidebar({
   const { t } = useApp();
   return (
     <div className="two-panel-left">
-      <div className="relative mb-3">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted" />
-        <Input
+      <div className="flex items-center gap-2 mb-3 h-8 rounded-lg border border-border/60 bg-bg/50 px-2.5">
+        <Search className="w-3.5 h-3.5 text-muted shrink-0" />
+        <input
           type="text"
           placeholder={t("settings.searchPlaceholder")}
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="h-8 w-full rounded-lg border-border/60 bg-bg/50 pl-8 pr-3 text-xs"
+          className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted"
         />
       </div>
       <nav className="flex flex-col gap-1.5">
