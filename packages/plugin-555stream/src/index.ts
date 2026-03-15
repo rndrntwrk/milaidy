@@ -21,6 +21,7 @@ import {
   isAgentAuthConfigured,
   resolveAgentBearer,
 } from './lib/agentAuth.js';
+import { resolveStream555BaseUrl } from './lib/baseUrl.js';
 
 /**
  * 555stream Control Plugin
@@ -38,20 +39,11 @@ export const stream555Plugin: Plugin = {
   init: async (config, runtime) => {
     console.log('[555stream] Plugin initializing...');
 
-    // Validate required environment variables
-    const baseUrl = process.env.STREAM555_BASE_URL;
+    const baseUrl = resolveStream555BaseUrl(runtime.agentId?.toString());
     const agentToken =
       baseUrl && baseUrl.trim().length > 0
         ? await resolveAgentBearer(baseUrl)
         : undefined;
-
-    if (!baseUrl) {
-      throw new Error(
-        '[555stream] STREAM555_BASE_URL is required.\n' +
-        'Set this to your 555stream control-plane URL (e.g., https://control.555.tv).\n' +
-        'See README.md for setup instructions.'
-      );
-    }
 
     if (!isAgentAuthConfigured() || !agentToken) {
       throw new Error(

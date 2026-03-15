@@ -6,6 +6,9 @@ import { StreamControlService } from "./StreamControlService.js";
 
 const STREAM_ENV_KEYS = [
   "STREAM555_BASE_URL",
+  "STREAM555_PUBLIC_BASE_URL",
+  "STREAM555_INTERNAL_BASE_URL",
+  "STREAM555_INTERNAL_AGENT_IDS",
   "STREAM555_AGENT_API_KEY",
   "STREAM555_AGENT_TOKEN",
   "STREAM_API_BEARER_TOKEN",
@@ -74,6 +77,21 @@ describe("StreamControlService", () => {
 
     await service.stop();
     assert.equal(service.getRuntimeState().loaded, false);
+  });
+
+  it("prefers the internal base URL for alice-bot when split URLs are configured", async () => {
+    setEnv("STREAM555_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_INTERNAL_BASE_URL", "http://control-plane:3000");
+    setEnv("STREAM555_AGENT_TOKEN", "stream-static-token");
+
+    const service = await StreamControlService.start({
+      agentId: "alice-bot",
+    } as IAgentRuntime);
+
+    assert.equal(service.getConfig()?.baseUrl, "http://control-plane:3000");
+
+    await service.stop();
   });
 
   it("exposes plugin-owned approval state for host approval APIs", async () => {

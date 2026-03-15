@@ -20,6 +20,7 @@ import {
   isAgentAuthConfigured,
   resolveAgentBearer,
 } from '../lib/agentAuth.js';
+import { resolveStream555BaseUrl } from '../lib/baseUrl.js';
 import type {
   Stream555Config,
   Session,
@@ -147,17 +148,16 @@ export class StreamControlService implements Service {
   async initialize(runtime: IAgentRuntime): Promise<void> {
     this.runtime = runtime;
 
-    // Load configuration from environment
-    const baseUrl = process.env.STREAM555_BASE_URL;
+    const baseUrl = resolveStream555BaseUrl(runtime.agentId?.toString());
     const agentToken =
       baseUrl && baseUrl.trim().length > 0
         ? await resolveAgentBearer(baseUrl)
         : undefined;
 
-    if (!baseUrl || !agentToken) {
+    if (!agentToken) {
       throw new Error(
         '[555stream] Missing required configuration. ' +
-        'Set STREAM555_BASE_URL and one of STREAM555_AGENT_API_KEY / STREAM555_AGENT_TOKEN.'
+        'Set one of STREAM555_PUBLIC_BASE_URL / STREAM555_INTERNAL_BASE_URL (or legacy STREAM555_BASE_URL) and one of STREAM555_AGENT_API_KEY / STREAM555_AGENT_TOKEN.'
       );
     }
 
