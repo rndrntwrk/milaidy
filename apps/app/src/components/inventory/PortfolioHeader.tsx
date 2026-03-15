@@ -60,11 +60,15 @@ export function PortfolioHeader({
   goToRpcSettings,
 }: PortfolioHeaderProps) {
   const { t, copyToClipboard } = useApp();
+  const focusLabel =
+    chainFocus === "all"
+      ? "All Chains"
+      : `${CHAIN_CONFIGS[chainFocus as keyof typeof CHAIN_CONFIGS]?.name ?? chainFocus} Mainnet`;
 
   return (
     <div className="two-panel-left">
       {/* Portfolio value */}
-      <div className="two-panel-label">PORTFOLIO</div>
+      <div className="two-panel-label">{t("wallet.portfolio")}</div>
       <div
         className="text-[22px] font-bold text-txt-strong"
         data-testid="wallet-balance-value"
@@ -78,11 +82,13 @@ export function PortfolioHeader({
           {formatBalance(nativeBalance)} {nativeSymbol}
         </div>
       )}
+      <div className="mt-1 text-xs text-muted">{focusLabel}</div>
 
       {/* Chain selector */}
       <div className="two-panel-label mt-4">CHAINS</div>
       <button
         type="button"
+        data-testid="wallet-focus-all"
         className={`two-panel-item ${chainFocus === "all" ? "is-selected" : ""}`}
         onClick={() => onChainChange("all")}
       >
@@ -97,6 +103,7 @@ export function PortfolioHeader({
           <button
             type="button"
             key={key}
+            data-testid={`wallet-focus-${key}`}
             className={`two-panel-item flex items-center gap-2 ${chainFocus === key ? "is-selected" : ""}`}
             onClick={() => onChainChange(key)}
           >
@@ -110,11 +117,7 @@ export function PortfolioHeader({
             />
             <span className="text-sm">{config.name}</span>
             {status && (
-              <StatusDot
-                ready={status.ready}
-                label=""
-                title={status.title}
-              />
+              <StatusDot ready={status.ready} label="" title={status.title} />
             )}
           </button>
         );
@@ -141,6 +144,19 @@ export function PortfolioHeader({
             ))}
           </div>
         </>
+      )}
+
+      {statuses.length > 0 && (
+        <div className="mt-4 flex flex-col gap-1.5">
+          {statuses.map((status) => (
+            <StatusDot
+              key={`${status.label}-${status.ready ? "ready" : "off"}`}
+              ready={status.ready}
+              label={status.label}
+              title={status.title}
+            />
+          ))}
+        </div>
       )}
 
       {/* Inline error */}

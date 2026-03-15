@@ -280,7 +280,7 @@ function TriggerUiHarness(props: { client: MiladyClient }): ReactElement {
         setTriggersSaving(false);
       }
     },
-    [client, loadTriggerHealth],
+    [client, loadTriggerHealth, loadTriggers],
   );
 
   const updateTrigger = useCallback(
@@ -305,7 +305,7 @@ function TriggerUiHarness(props: { client: MiladyClient }): ReactElement {
         setTriggersSaving(false);
       }
     },
-    [client, loadTriggerHealth],
+    [client, loadTriggerHealth, loadTriggers],
   );
 
   const deleteTrigger = useCallback(
@@ -333,7 +333,7 @@ function TriggerUiHarness(props: { client: MiladyClient }): ReactElement {
         setTriggersSaving(false);
       }
     },
-    [client, loadTriggerHealth],
+    [client, loadTriggerHealth, loadTriggers],
   );
 
   const runTriggerNow = useCallback(
@@ -398,7 +398,10 @@ function TriggerUiHarness(props: { client: MiladyClient }): ReactElement {
 
 function nodeText(node: TestRenderer.ReactTestInstance): string {
   return node.children
-    .map((child) => (typeof child === "string" ? child : ""))
+    .map((child) => {
+      if (typeof child === "string") return child;
+      return nodeText(child);
+    })
     .join("")
     .trim();
 }
@@ -520,7 +523,11 @@ describe("TriggersView UI E2E", () => {
     await waitFor(
       () =>
         root.findAll(
-          (node) => node.type === "span" && nodeText(node) === "0 configured",
+          (node) => node.type === "span" && nodeText(node) === "Loading...",
+        ).length === 0 &&
+        root.findAll(
+          (node) =>
+            node.type === "button" && nodeText(node).includes("New Heartbeat"),
         ).length === 1,
       "Trigger list did not finish initial loading",
     );
@@ -548,16 +555,24 @@ describe("TriggersView UI E2E", () => {
     await waitFor(
       () =>
         root.findAll(
-          (node) => node.type === "span" && nodeText(node) === triggerDisplayName,
+          (node) =>
+            node.type === "span" && nodeText(node) === triggerDisplayName,
         ).length === 1,
       "Created trigger did not appear in the list",
     );
 
     const renamedTriggerDisplayName = "Trigger UI E2E Updated";
     await act(async () => {
-      await findButtonByText(root, "triggersview.Edit").props.onClick();
+      await findButtonByText(root, triggerDisplayName).props.onClick();
     });
-    await flush();
+    await waitFor(
+      () =>
+        root.findAll(
+          (node) =>
+            node.type === "button" && nodeText(node).includes("Save Changes"),
+        ).length === 1,
+      "Trigger editor did not enter edit mode",
+    );
     const editDisplayNameInput = findInputByPlaceholder(
       root,
       "triggersview.eGDailyDigestH",
@@ -576,7 +591,8 @@ describe("TriggersView UI E2E", () => {
       () =>
         root.findAll(
           (node) =>
-            node.type === "span" && nodeText(node) === renamedTriggerDisplayName,
+            node.type === "span" &&
+            nodeText(node) === renamedTriggerDisplayName,
         ).length === 1,
       "Updated trigger name did not appear in the list",
     );
@@ -592,7 +608,7 @@ describe("TriggersView UI E2E", () => {
     expect(runtimeHarness.injectAutonomousInstruction).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      await findButtonByText(root, "Runs").props.onClick();
+      await findButtonByText(root, "triggersview.RunHistory").props.onClick();
     });
     await waitFor(
       () =>
@@ -613,7 +629,8 @@ describe("TriggersView UI E2E", () => {
       () =>
         root.findAll(
           (node) =>
-            node.type === "span" && nodeText(node) === renamedTriggerDisplayName,
+            node.type === "span" &&
+            nodeText(node) === renamedTriggerDisplayName,
         ).length === 0,
       "Deleted trigger still appeared in the list",
     );

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { releaseData } from "../generated/release-data";
-import { AppleIcon, WindowsIcon, LinuxIcon } from "./Hero";
+import { AppleIcon, LinuxIcon, WindowsIcon } from "./Hero";
 
 const shellCommand = releaseData.scripts.shell.command;
 const powershellCommand = releaseData.scripts.powershell.command;
@@ -42,7 +42,7 @@ function CodeRainBackground() {
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
       const cols = Math.floor(canvas.offsetWidth / FONT_SIZE);
       columnsRef.current = Array.from({ length: cols }, () =>
-        Math.floor(Math.random() * canvas.offsetHeight / FONT_SIZE)
+        Math.floor((Math.random() * canvas.offsetHeight) / FONT_SIZE),
       );
     };
 
@@ -168,10 +168,7 @@ function RevealMask() {
 
 export function Downloads() {
   return (
-    <section
-      id="install"
-      className="relative overflow-hidden py-32 text-dark"
-    >
+    <section id="install" className="relative overflow-hidden py-32 text-dark">
       {/* Code rain background */}
       <CodeRainBackground />
 
@@ -189,8 +186,8 @@ export function Downloads() {
             Get Milady
           </h2>
           <p className="mx-auto mt-4 max-w-lg text-sm leading-7 text-dark/60">
-            Download the desktop app or bootstrap via terminal.
-            All artifacts pulled from GitHub Releases.
+            Download the desktop app or bootstrap via terminal. All artifacts
+            pulled from GitHub Releases.
           </p>
         </div>
 

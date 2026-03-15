@@ -103,77 +103,116 @@ export function HeroForeground() {
           className="pointer-events-auto flex flex-col items-center gap-3"
         >
           <div className="hero-dock">
-            <p className="hero-dock-title">Run locally. Swap providers. Own your runtime.</p>
+            <p className="hero-dock-title">
+              Run locally. Swap providers. Own your runtime.
+            </p>
             <div className="hero-dock-icons">
-            {heroDownloads.map((download) => (
+              {heroDownloads.map((download) => (
+                <a
+                  key={download.id}
+                  href={download.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hero-dock-item group"
+                  title={`${download.label} — ${download.sizeLabel}`}
+                >
+                  <div className="hero-dock-icon">
+                    <DownloadIcon platform={download.id} />
+                  </div>
+                  <span className="hero-dock-label">
+                    {download.id.includes("arm64")
+                      ? "Mac M1+"
+                      : download.id.includes("x64") &&
+                          download.id.includes("macos")
+                        ? "Mac Intel"
+                        : download.id.includes("windows")
+                          ? "Windows"
+                          : download.id.includes("linux")
+                            ? "Linux"
+                            : download.label.split("(")[0].trim()}
+                  </span>
+                  <span className="hero-dock-tooltip">
+                    {download.label}
+                    <br />
+                    {download.sizeLabel}
+                  </span>
+                </a>
+              ))}
+
+              {/* Divider */}
+              <div className="hero-dock-divider" />
+
               <a
-                key={download.id}
-                href={download.url}
+                href="#install"
+                className="hero-dock-item group"
+                title="Install Scripts — Shell + PowerShell"
+              >
+                <div className="hero-dock-icon">
+                  <svg
+                    aria-hidden="true"
+                    className="w-5 h-5"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M21 2H3a1 1 0 00-1 1v18a1 1 0 001 1h18a1 1 0 001-1V3a1 1 0 00-1-1zm-1 18H4V4h16v16zM7 15l4-4-4-4 1.5-1.5L14 11l-5.5 5.5L7 15zm5 2h5v-1.5h-5V17z" />
+                  </svg>
+                </div>
+                <span className="hero-dock-label">Scripts</span>
+                <span className="hero-dock-tooltip">
+                  Install Scripts
+                  <br />
+                  Shell + PowerShell
+                </span>
+              </a>
+
+              <a
+                href={releaseData.release.url}
                 target="_blank"
                 rel="noreferrer"
                 className="hero-dock-item group"
-                title={`${download.label} — ${download.sizeLabel}`}
+                title={`All Release Assets — ${releaseData.release.tagName}`}
               >
                 <div className="hero-dock-icon">
-                  <DownloadIcon platform={download.id} />
+                  <svg
+                    aria-hidden="true"
+                    className="w-5 h-5"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
+                  </svg>
                 </div>
-                <span className="hero-dock-label">
-                  {download.id.includes("arm64")
-                    ? "Mac M1+"
-                    : download.id.includes("x64") && download.id.includes("macos")
-                      ? "Mac Intel"
-                      : download.id.includes("windows")
-                        ? "Windows"
-                        : download.id.includes("linux")
-                          ? "Linux"
-                          : download.label.split("(")[0].trim()}
-                </span>
+                <span className="hero-dock-label">GitHub</span>
                 <span className="hero-dock-tooltip">
-                  {download.label}<br />{download.sizeLabel}
+                  All Releases
+                  <br />
+                  {releaseData.release.tagName}
                 </span>
               </a>
-            ))}
 
-            {/* Divider */}
-            <div className="hero-dock-divider" />
-
-            <a
-              href="#install"
-              className="hero-dock-item group"
-              title="Install Scripts — Shell + PowerShell"
-            >
-              <div className="hero-dock-icon">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M21 2H3a1 1 0 00-1 1v18a1 1 0 001 1h18a1 1 0 001-1V3a1 1 0 00-1-1zm-1 18H4V4h16v16zM7 15l4-4-4-4 1.5-1.5L14 11l-5.5 5.5L7 15zm5 2h5v-1.5h-5V17z" /></svg>
+              <div
+                className="hero-dock-item is-disabled"
+                title="iOS + Android — Coming Soon"
+              >
+                <div className="hero-dock-icon">
+                  <svg
+                    aria-hidden="true"
+                    className="w-5 h-5"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z" />
+                  </svg>
+                </div>
+                <span className="hero-dock-label">Mobile</span>
+                <span className="hero-dock-tooltip">
+                  iOS + Android
+                  <br />
+                  Coming Soon
+                </span>
               </div>
-              <span className="hero-dock-label">Scripts</span>
-              <span className="hero-dock-tooltip">Install Scripts<br />Shell + PowerShell</span>
-            </a>
-
-            <a
-              href={releaseData.release.url}
-              target="_blank"
-              rel="noreferrer"
-              className="hero-dock-item group"
-              title={`All Release Assets — ${releaseData.release.tagName}`}
-            >
-              <div className="hero-dock-icon">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z" /></svg>
-              </div>
-              <span className="hero-dock-label">GitHub</span>
-              <span className="hero-dock-tooltip">All Releases<br />{releaseData.release.tagName}</span>
-            </a>
-
-            <div
-              className="hero-dock-item is-disabled"
-              title="iOS + Android — Coming Soon"
-            >
-              <div className="hero-dock-icon">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z" /></svg>
-              </div>
-              <span className="hero-dock-label">Mobile</span>
-              <span className="hero-dock-tooltip">iOS + Android<br />Coming Soon</span>
             </div>
-            </div>{/* end hero-dock-icons */}
+            {/* end hero-dock-icons */}
           </div>
         </motion.div>
       </motion.div>

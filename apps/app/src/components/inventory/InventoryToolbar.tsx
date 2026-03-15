@@ -6,9 +6,7 @@ import type { createTranslator } from "@milady/app-core/i18n";
 import type { AppState } from "@milady/app-core/state";
 import { Button } from "@milady/ui";
 
-type InventoryToolbarStateKey =
-  | "inventoryView"
-  | "inventorySort";
+type InventoryToolbarStateKey = "inventoryView" | "inventorySort";
 
 export interface InventoryToolbarProps {
   t: ReturnType<typeof createTranslator>;
