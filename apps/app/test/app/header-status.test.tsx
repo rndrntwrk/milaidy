@@ -129,7 +129,7 @@ describe("header status", () => {
     expect(controls?.length).toBeGreaterThan(0);
   });
 
-  it("uses dark-mode readable classes for the active native tab", async () => {
+  it("uses accent classes for the active native tab", async () => {
     let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(Header));
@@ -143,11 +143,7 @@ describe("header status", () => {
         typeof node.props.className === "string",
     );
 
-    expect(String(activeTabButton?.props.className)).toContain(
-      "dark:text-txt-strong",
-    );
-    expect(String(activeTabButton?.props.className)).toContain(
-      "dark:bg-accent/15",
-    );
+    expect(String(activeTabButton?.props.className)).toContain("text-accent");
+    expect(String(activeTabButton?.props.className)).toContain("bg-accent/15");
   });
 });
