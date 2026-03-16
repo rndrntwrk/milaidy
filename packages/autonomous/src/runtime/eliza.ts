@@ -3140,6 +3140,8 @@ async function runFirstTimeSetup(config: MiladyConfig): Promise<MiladyConfig> {
 
   if (clack.isCancel(runtimeChoice)) cancelOnboarding();
 
+  // "later" falls through here without setting isCloudMode, so the flow
+  // continues with local setup (steps 4–7) — same as choosing "local".
   if (runtimeChoice === "cloud") {
     const { runCloudOnboarding } = await import("./cloud-onboarding");
     cloudOnboardingResult = await runCloudOnboarding(
@@ -3148,7 +3150,7 @@ async function runFirstTimeSetup(config: MiladyConfig): Promise<MiladyConfig> {
       chosenTemplate,
     );
 
-    if (cloudOnboardingResult && cloudOnboardingResult.agentId) {
+    if (cloudOnboardingResult?.agentId) {
       isCloudMode = true;
       clack.log.success(
         `${name} is now running in the cloud! ☁️`,
@@ -3170,6 +3172,12 @@ async function runFirstTimeSetup(config: MiladyConfig): Promise<MiladyConfig> {
   // GitHub access is not needed for the initial cloud agent.
   let providerEnvKey: string | undefined;
   let providerApiKey: string | undefined;
+
+  // Snapshot whether wallet keys already exist BEFORE onboarding touches
+  // process.env, so the persistence block later can guard against
+  // overwriting pre-existing values.
+  const hasEvmKey = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
+  const hasSolKey = Boolean(process.env.SOLANA_PRIVATE_KEY?.trim());
 
   if (!isCloudMode) {
 
@@ -3327,9 +3335,8 @@ async function runFirstTimeSetup(config: MiladyConfig): Promise<MiladyConfig> {
   // plugins at runtime.
   const { generateWalletKeys, importWallet } = await import("../api/wallet");
 
-  const hasEvmKey = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
-  const hasSolKey = Boolean(process.env.SOLANA_PRIVATE_KEY?.trim());
-
+  // hasEvmKey and hasSolKey are hoisted above the if (!isCloudMode) block
+  // so they're also available in the persistence section.
   if (!hasEvmKey || !hasSolKey) {
     const walletAction = await clack.select({
       message: `${name}: Do you want me to set up crypto wallets? (for trading, NFTs, DeFi)`,
@@ -3502,10 +3509,10 @@ async function runFirstTimeSetup(config: MiladyConfig): Promise<MiladyConfig> {
       // Also set immediately in process.env for the current run
       process.env[providerEnvKey] = providerApiKey;
     }
-    if (process.env.EVM_PRIVATE_KEY) {
+    if (process.env.EVM_PRIVATE_KEY && !hasEvmKey) {
       envBucket.EVM_PRIVATE_KEY = process.env.EVM_PRIVATE_KEY;
     }
-    if (process.env.SOLANA_PRIVATE_KEY) {
+    if (process.env.SOLANA_PRIVATE_KEY && !hasSolKey) {
       envBucket.SOLANA_PRIVATE_KEY = process.env.SOLANA_PRIVATE_KEY;
     }
     if (process.env.SKILLS_REGISTRY) {
@@ -4796,7 +4803,7 @@ export async function startEliza(
  * Start in cloud mode — connect to a remote cloud agent via the thin client.
  * Skips all local runtime construction (plugins, database, etc.).
  */
-async function startInCloudMode(
+export async function startInCloudMode(
   config: MiladyConfig,
   agentId: string,
   opts?: StartElizaOptions,
@@ -4885,13 +4892,10 @@ async function startInCloudMode(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(`[milady] Failed to connect to cloud agent: ${msg}`);
-    console.error(
-      `\nFailed to connect to cloud agent: ${msg}`,
+    throw new Error(
+      `Failed to connect to cloud agent: ${msg}\n` +
+      "You can retry with `milady start`, or switch to local mode with `milady config set cloud.runtime local`",
     );
-    console.error(
-      "You can retry with `milady start`, or switch to local mode with `milady config set cloud.runtime local`\n",
-    );
-    process.exit(1);
   }
 }
 

@@ -237,6 +237,7 @@ export default defineConfig({
     execArgv: ["--max-old-space-size=4096"],
     include: [
       "packages/app-core/src/**/*.test.ts",
+      "packages/autonomous/src/**/*.test.ts",
       "packages/plugin-retake/src/**/*.test.ts",
       "src/**/*.test.ts",
       "scripts/**/*.test.ts",

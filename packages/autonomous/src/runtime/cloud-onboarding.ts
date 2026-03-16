@@ -38,7 +38,7 @@ interface StylePreset {
 /** Result of a successful cloud onboarding flow. */
 export interface CloudOnboardingResult {
   apiKey: string;
-  agentId: string;
+  agentId: string | undefined;
   baseUrl: string;
   bridgeUrl?: string;
 }
@@ -355,7 +355,7 @@ async function finishProvisioning(
     // so config is saved (they can reconnect later)
     return {
       apiKey: authResult.apiKey,
-      agentId: "", // No agent provisioned yet
+      agentId: undefined, // No agent provisioned yet
       baseUrl,
     };
   }
@@ -379,24 +379,30 @@ function sleep(ms: number): Promise<void> {
 /**
  * Try to open a URL in the user's default browser.
  * Falls back silently — the URL is also printed to the terminal.
+ *
+ * Uses execFile with an args array (not exec with string interpolation)
+ * to avoid shell injection via crafted URLs.
  */
 async function openBrowser(url: string): Promise<void> {
-  const { exec } = await import("node:child_process");
+  const { execFile } = await import("node:child_process");
   const { platform } = await import("node:os");
 
-  const cmd =
-    platform() === "darwin"
-      ? `open "${url}"`
-      : platform() === "win32"
-        ? `start "" "${url}"`
-        : `xdg-open "${url}"`;
+  const p = platform();
 
   return new Promise((resolve) => {
-    exec(cmd, (err) => {
+    const onError = (err: Error | null) => {
       if (err) {
         logger.debug(`[cloud-onboarding] Failed to open browser: ${err.message}`);
       }
       resolve();
-    });
+    };
+
+    if (p === "darwin") {
+      execFile("open", [url], onError);
+    } else if (p === "win32") {
+      execFile("cmd.exe", ["/c", "start", "", url], onError);
+    } else {
+      execFile("xdg-open", [url], onError);
+    }
   });
 }
