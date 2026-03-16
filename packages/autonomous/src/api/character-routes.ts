@@ -6,6 +6,7 @@ interface CharacterGenerateContext {
   name?: string;
   system?: string;
   bio?: string;
+  topics?: string[];
   style?: { all?: string[]; chat?: string[]; post?: string[] };
   postExamples?: string[];
 }
@@ -25,6 +26,7 @@ interface AgentConfigLike {
   bio?: string[];
   system?: string;
   adjectives?: string[];
+  topics?: string[];
   style?: {
     all?: string[];
     chat?: string[];
@@ -93,6 +95,9 @@ function syncRuntimeCharacterToConfig(
     ...(Array.isArray(character.adjectives)
       ? { adjectives: [...character.adjectives] }
       : {}),
+    ...(Array.isArray((character as { topics?: string[] }).topics)
+      ? { topics: [...((character as { topics?: string[] }).topics ?? [])] }
+      : {}),
     ...(character.style
       ? {
           style: {
@@ -129,6 +134,7 @@ function buildCharacterSummary(ctx: CharacterGenerateContext): string {
     ctx.name ? `Name: ${ctx.name}` : "",
     ctx.system ? `System prompt: ${ctx.system}` : "",
     ctx.bio ? `Bio: ${ctx.bio}` : "",
+    ctx.topics?.length ? `Topics: ${ctx.topics.join(", ")}` : "",
     ctx.style?.all?.length ? `Style rules: ${ctx.style.all.join("; ")}` : "",
   ]
     .filter(Boolean)
@@ -204,6 +210,12 @@ const CHARACTER_SCHEMA_FIELDS = [
     description: "Personality adjectives (e.g. curious, witty)",
   },
   {
+    key: "topics",
+    type: "string[]",
+    label: "Topics",
+    description: "Conversation topics the agent is knowledgeable about",
+  },
+  {
     key: "style",
     type: "object",
     label: "Style",
@@ -270,6 +282,9 @@ export async function handleCharacterRoutes(
       if (character.bio) merged.bio = character.bio;
       if (character.system) merged.system = character.system;
       if (character.adjectives) merged.adjectives = character.adjectives;
+      if (Array.isArray((character as { topics?: string[] }).topics)) {
+        merged.topics = (character as { topics?: string[] }).topics;
+      }
       if (character.style) merged.style = character.style;
       if (character.messageExamples) {
         merged.messageExamples = character.messageExamples;
@@ -309,6 +324,9 @@ export async function handleCharacterRoutes(
       if (body.system != null) character.system = String(body.system);
       if (body.adjectives != null) {
         character.adjectives = body.adjectives as string[];
+      }
+      if (body.topics != null) {
+        (character as { topics?: string[] }).topics = body.topics as string[];
       }
       if (body.style != null) {
         character.style = body.style as NonNullable<typeof character.style>;

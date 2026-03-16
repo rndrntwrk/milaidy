@@ -13,6 +13,7 @@ function createRuntimeStub(): AgentRuntime {
     bio: ["Initial bio"],
     system: "System prompt",
     adjectives: ["curious"],
+    topics: ["fashion", "ai"],
     style: { all: ["be concise"], chat: [], post: [] },
     messageExamples: [
       {
@@ -92,6 +93,7 @@ describe("character routes", () => {
       character: {
         name: "Milady",
         bio: ["Initial bio"],
+        topics: ["fashion", "ai"],
         messageExamples: expect.any(Array),
       },
     });
@@ -152,6 +154,7 @@ describe("character routes", () => {
       bio: ["new bio", "second line"],
       system: "new system",
       adjectives: ["precise", "calm"],
+      topics: ["timekeeping", "discipline"],
       style: {
         all: ["Be exact"],
         chat: ["Stay calm"],
@@ -204,6 +207,7 @@ describe("character routes", () => {
       pathname: "/api/character",
       body: {
         name: "Reimu",
+        topics: ["shrines", "danmaku"],
         postExamples: ["default fallback post"],
         messageExamples: [
           {
@@ -222,6 +226,7 @@ describe("character routes", () => {
       id: "main",
       default: true,
       name: "Reimu",
+      topics: ["shrines", "danmaku"],
       postExamples: ["default fallback post"],
       messageExamples: [
         {

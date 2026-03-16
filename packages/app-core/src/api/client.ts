@@ -540,6 +540,7 @@ export interface OnboardingData {
     post: string[];
   };
   adjectives?: string[];
+  topics?: string[];
   postExamples?: string[];
   messageExamples?: MessageExample[][];
   // Cloud-specific
@@ -1550,6 +1551,7 @@ export interface CharacterData {
   bio?: string | string[];
   system?: string;
   adjectives?: string[];
+  topics?: string[];
   style?: {
     all?: string[];
     chat?: string[];
@@ -3323,6 +3325,7 @@ export class MiladyClient {
       name?: string;
       system?: string;
       bio?: string;
+      topics?: string[];
       style?: { all?: string[]; chat?: string[]; post?: string[] };
       postExamples?: string[];
     },
