@@ -154,7 +154,7 @@ jobs:
             artifact-name: macos-x64
           - name: Windows
             os: windows
-            runner: blacksmith-4vcpu-windows-2025
+            runner: windows-latest
             artifact-name: windows-x64
           - name: Linux
             os: linux
