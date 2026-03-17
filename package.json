@@ -116,7 +116,7 @@
     "dev:win": "node scripts/dev-win.mjs"
   },
   "dependencies": {
-    "@elizaos/autonomous": "file:../eliza/packages/autonomous",
+    "@elizaos/autonomous": "alpha",
     "@ai-sdk/anthropic": "^3.0.13",
     "@ai-sdk/gateway": "^3.0.12",
     "@ai-sdk/provider": "^3.0.2",
@@ -158,7 +158,7 @@
     "@elizaos/plugin-secrets-manager": "alpha",
     "@elizaos/plugin-shell": "alpha",
     "@elizaos/plugin-sql": "alpha",
-    "@elizaos/plugin-streaming-base": "file:../plugins/plugin-streaming-base",
+    "@elizaos/plugin-streaming-base": "2.0.0-alpha.1",
     "@elizaos/plugin-telegram": "alpha",
     "@elizaos/plugin-todo": "alpha",
     "@elizaos/plugin-trajectory-logger": "alpha",
