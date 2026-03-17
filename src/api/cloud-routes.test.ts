@@ -5,7 +5,11 @@ import {
   createMockIncomingMessage,
 } from "../test-support/test-helpers";
 import type { CloudRouteState } from "./cloud-routes";
-import { getCloudSecret, handleCloudRoute } from "./cloud-routes";
+import {
+  _resetCloudSecretsForTesting,
+  getCloudSecret,
+  handleCloudRoute,
+} from "./cloud-routes";
 
 const fetchMock =
   vi.fn<
@@ -1430,8 +1434,11 @@ describe("handleCloudRoute timeout behavior", () => {
     expect(getJson()).toEqual({ status: "authenticated", keyPrefix: "ak-pfx" });
     expect(saveMiladyConfigMock).toHaveBeenCalledWith(state.config);
     expect(initMock).toHaveBeenCalledTimes(1);
-    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("ak-test");
-    expect(process.env.ELIZAOS_CLOUD_ENABLED).toBe("true");
+    // Keys are scrubbed from process.env into the sealed store
+    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_ENABLED).toBeUndefined();
+    expect(getCloudSecret("ELIZAOS_CLOUD_API_KEY")).toBe("ak-test");
+    expect(getCloudSecret("ELIZAOS_CLOUD_ENABLED")).toBe("true");
   });
 
   it("persists authenticated login to runtime and logs non-Error DB failures", async () => {
@@ -1588,7 +1595,8 @@ describe("handleCloudRoute timeout behavior", () => {
       keyPrefix: undefined,
     });
     expect(initMock).toHaveBeenCalledTimes(1);
-    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("ak-test");
+    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBeUndefined();
+    expect(getCloudSecret("ELIZAOS_CLOUD_API_KEY")).toBe("ak-test");
   });
 
   it("persists authenticated login to runtime secrets and handles runtime failures", async () => {
@@ -1725,6 +1733,10 @@ describe("handleCloudRoute timeout behavior", () => {
 
   // ── Security: cloud secret scrubbing regression tests ───────────────────
   describe("cloud secret scrubbing (CVE mitigation)", () => {
+    beforeEach(() => {
+      _resetCloudSecretsForTesting();
+    });
+
     it("scrubs ELIZAOS_CLOUD_API_KEY from process.env after login", async () => {
       fetchMock.mockResolvedValueOnce(
         new Response(
