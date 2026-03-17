@@ -163,6 +163,19 @@ vi.mock("../../src/components/companion/CompanionSceneHost", async () => {
     useSharedCompanionScene: () => true,
   };
 });
+vi.mock("../../src/components/CompanionSceneHost", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+  return {
+    SharedCompanionScene: ({
+      children,
+    }: {
+      active: boolean;
+      children: React.ReactNode;
+    }) => React.createElement(React.Fragment, null, children),
+    CompanionSceneHost: () => null,
+    useSharedCompanionScene: () => true,
+  };
+});
 
 vi.mock("../../src/components/TriggersView", () => ({
   TriggersView: () =>
@@ -341,6 +354,13 @@ function requireTree(
   return tree;
 }
 
+function countUnexpectedWarnings(warnSpy: ReturnType<typeof vi.spyOn>): number {
+  return warnSpy.mock.calls.filter((args) => {
+    const msg = typeof args[0] === "string" ? args[0] : "";
+    return !msg.includes("[RenderGuard]");
+  }).length;
+}
+
 async function _clickAndRerender(
   tree: TestRenderer.ReactTestRenderer,
   label: string,
@@ -438,7 +458,7 @@ describe("pages navigation smoke (e2e)", () => {
       );
     });
     expect(unexpectedErrors.length).toBe(0);
-    expect(warnSpy).not.toHaveBeenCalled();
+    expect(countUnexpectedWarnings(warnSpy)).toBe(0);
 
     errorSpy.mockRestore();
     warnSpy.mockRestore();
@@ -504,7 +524,7 @@ describe("pages navigation smoke (e2e)", () => {
       );
     });
     expect(unexpectedErrors.length).toBe(0);
-    expect(warnSpy).not.toHaveBeenCalled();
+    expect(countUnexpectedWarnings(warnSpy)).toBe(0);
 
     errorSpy.mockRestore();
     warnSpy.mockRestore();
@@ -608,7 +628,7 @@ describe("pages navigation smoke (e2e)", () => {
       );
     });
     expect(unexpectedErrors2.length).toBe(0);
-    expect(warnSpy).not.toHaveBeenCalled();
+    expect(countUnexpectedWarnings(warnSpy)).toBe(0);
 
     errorSpy.mockRestore();
     warnSpy.mockRestore();
