@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -5,6 +6,9 @@ import { defineConfig } from "vitest/config";
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 const elizaRoot = path.join(repoRoot, "..", "eliza");
+const hasElizaWorkspace = fs.existsSync(
+  path.join(elizaRoot, "packages", "typescript", "src", "index.ts"),
+);
 const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const isWindows = process.platform === "win32";
 const localWorkers = 2;
@@ -17,48 +21,64 @@ export default defineConfig({
         find: "milady/plugin-sdk",
         replacement: path.join(repoRoot, "src", "plugin-sdk", "index.ts"),
       },
-      {
-        // Resolve @elizaos/core from the workspace source so that all elizaOS
-        // packages share the same version and transitive imports work.
-        find: "@elizaos/core",
-        replacement: path.join(
-          elizaRoot,
-          "packages",
-          "typescript",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        // Route @elizaos/autonomous sub-path imports to the workspace source so
-        // that transitive @elizaos/core imports resolve through our alias above.
-        find: /^@elizaos\/autonomous\/(.*)/,
-        replacement: path.join(elizaRoot, "packages", "autonomous", "src", "$1"),
-      },
-      {
-        find: "@elizaos/autonomous",
-        replacement: path.join(
-          elizaRoot,
-          "packages",
-          "autonomous",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        find: /^@elizaos\/app-core\/(.*)/,
-        replacement: path.join(elizaRoot, "packages", "app-core", "src", "$1"),
-      },
-      {
-        find: "@elizaos/app-core",
-        replacement: path.join(
-          elizaRoot,
-          "packages",
-          "app-core",
-          "src",
-          "index.ts",
-        ),
-      },
+      // When the eliza workspace exists locally, resolve @elizaos packages from
+      // source so that all transitive imports share a single version.  In CI
+      // (where the workspace submodule is absent) we fall through to the
+      // npm-installed packages instead.
+      ...(hasElizaWorkspace
+        ? [
+            {
+              find: "@elizaos/core",
+              replacement: path.join(
+                elizaRoot,
+                "packages",
+                "typescript",
+                "src",
+                "index.ts",
+              ),
+            },
+            {
+              find: /^@elizaos\/autonomous\/(.*)/,
+              replacement: path.join(
+                elizaRoot,
+                "packages",
+                "autonomous",
+                "src",
+                "$1",
+              ),
+            },
+            {
+              find: "@elizaos/autonomous",
+              replacement: path.join(
+                elizaRoot,
+                "packages",
+                "autonomous",
+                "src",
+                "index.ts",
+              ),
+            },
+            {
+              find: /^@elizaos\/app-core\/(.*)/,
+              replacement: path.join(
+                elizaRoot,
+                "packages",
+                "app-core",
+                "src",
+                "$1",
+              ),
+            },
+            {
+              find: "@elizaos/app-core",
+              replacement: path.join(
+                elizaRoot,
+                "packages",
+                "app-core",
+                "src",
+                "index.ts",
+              ),
+            },
+          ]
+        : []),
       {
         find: "@miladyai/capacitor-gateway",
         replacement: path.join(
