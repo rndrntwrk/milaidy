@@ -172,6 +172,29 @@ export function getVrmPreviewUrl(index: number): string {
     : resolveAppAssetUrl(`vrms/previews/milady-${safeIndex}.png`);
 }
 
+const VRM_CDN_BASE =
+  "https://555stream-image-service.gl4sspr1sm.workers.dev/vrm-stage";
+
+/**
+ * Build a JSON-serialised VRM avatar identity payload for STREAM555_GO_LIVE.
+ * Every code path that launches an avatar stream should use this so the
+ * capture pipeline deterministically resolves to vrm_stage mode.
+ */
+function buildVrmAvatarIdentityParam(vrmIndex: number): string {
+  const filename =
+    vrmIndex === 1 ? DEFAULT_PRO_STREAMER_VRM_FILENAME : `${vrmIndex}.vrm`;
+  return JSON.stringify({
+    sourceType: "upstream",
+    sourceSystem: "milaidy",
+    assetType: "vrm",
+    assetRef: `${VRM_CDN_BASE}/vrms/${filename}`,
+    rendererStrategy: "direct_vrm",
+    fallbackAllowed: true,
+    displayName: "Alice",
+    accentColor: "#10b981",
+  });
+}
+
 // ── Theme ──────────────────────────────────────────────────────────────
 
 const THEME_STORAGE_KEY = "milady:theme";
@@ -3718,6 +3741,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     params: {
                       ...avatarDestinationParams,
                       layoutMode: config.layoutMode,
+                      avatarIdentity:
+                        buildVrmAvatarIdentityParam(selectedVrmIndex),
                     },
                   },
                 ],
@@ -3878,6 +3903,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     params: {
                       ...avatarDestinationParams,
                       layoutMode: config.layoutMode,
+                      avatarIdentity:
+                        buildVrmAvatarIdentityParam(selectedVrmIndex),
                     },
                   },
                   {
@@ -4161,6 +4188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       let stream555StartParams: Record<string, unknown> = {
         inputType: "avatar",
         layoutMode: "camera-full",
+        avatarIdentity: buildVrmAvatarIdentityParam(selectedVrmIndex),
       };
       let streamAlreadyStarted = false;
 
