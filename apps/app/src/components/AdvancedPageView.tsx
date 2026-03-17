@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/AdvancedPageView";
+export * from "@elizaos/app-core/components/AdvancedPageView";

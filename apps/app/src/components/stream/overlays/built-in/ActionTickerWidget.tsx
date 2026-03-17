@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/stream/overlays/built-in/ActionTickerWidget";
+export * from "@elizaos/app-core/components/stream/overlays/built-in/ActionTickerWidget";

@@ -7,6 +7,7 @@ import { defineConfig } from "vite";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const miladyRoot = path.resolve(here, "../..");
+const elizaRoot = path.resolve(miladyRoot, "../eliza");
 // The dev script sets MILADY_API_PORT; default to 31337 for standalone vite dev.
 const apiPort = Number(process.env.MILADY_API_PORT) || 31337;
 const enableAppSourceMaps = process.env.MILADY_APP_SOURCEMAP === "1";
@@ -80,14 +81,44 @@ export default defineConfig({
     dedupe: ["react", "react-dom", "three", "@sparkjsdev/spark"],
     alias: [
       /**
-       * Map @miladyai/capacitor-* packages directly to their TS source.
-       * This bypasses resolution issues with local workspace symlinks and
-       * outdated bundle exports in the plugins' dist folders.
+       * Map @miladyai/capacitor-* and @elizaos/capacitor-* packages directly
+       * to their TS source. This bypasses resolution issues with local
+       * workspace symlinks and outdated bundle exports in the plugins' dist
+       * folders.
        */
       {
-        find: /^@miladyai\/capacitor-(.*)/,
+        find: /^@(?:miladyai|elizaos)\/capacitor-(.*)/,
         replacement: path.resolve(here, "plugins/$1/src/index.ts"),
       },
+      // @elizaos/* → eliza submodule packages
+      {
+        find: /^@elizaos\/autonomous$/,
+        replacement: path.resolve(
+          elizaRoot,
+          "packages/autonomous/src/index.ts",
+        ),
+      },
+      {
+        find: /^@elizaos\/autonomous\/(.*)$/,
+        replacement: path.resolve(elizaRoot, "packages/autonomous/src/$1"),
+      },
+      {
+        find: /^@elizaos\/app-core$/,
+        replacement: path.resolve(elizaRoot, "packages/app-core/src/index.ts"),
+      },
+      {
+        find: /^@elizaos\/app-core\/(.*)$/,
+        replacement: path.resolve(elizaRoot, "packages/app-core/src/$1"),
+      },
+      {
+        find: /^@elizaos\/ui$/,
+        replacement: path.resolve(elizaRoot, "packages/ui/src/index.ts"),
+      },
+      {
+        find: /^@elizaos\/ui\/(.*)$/,
+        replacement: path.resolve(elizaRoot, "packages/ui/src/$1"),
+      },
+      // @miladyai/* → milady local packages
       {
         find: /^@miladyai\/autonomous$/,
         replacement: path.resolve(
@@ -117,7 +148,7 @@ export default defineConfig({
       },
       // Allow importing from the milady src (but NOT workspace packages)
       {
-        find: /^@miladyai(?!\/(?:autonomous|capacitor-|app-core|ui))/,
+        find: /^@(?:miladyai|elizaos)(?!\/(?:autonomous|capacitor-|app-core|ui))/,
         replacement: path.resolve(miladyRoot, "src"),
       },
     ],
@@ -164,8 +195,8 @@ export default defineConfig({
       },
     },
     fs: {
-      // Allow serving files from the app directory and milady src
-      allow: [here, miladyRoot],
+      // Allow serving files from the app directory, milady src, and eliza src
+      allow: [here, miladyRoot, elizaRoot],
     },
     watch: {
       // Polling is only needed in Docker/WSL where native fs events are unreliable

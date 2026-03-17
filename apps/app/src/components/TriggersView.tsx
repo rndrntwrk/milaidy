@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/TriggersView";
+export * from "@elizaos/app-core/components/TriggersView";

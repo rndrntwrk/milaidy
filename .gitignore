@@ -39,7 +39,6 @@ apps/ui/test-results/
 
 # Vendored repos (clone separately if needed)
 vendor/
-plugins/plugin-blooio/
 
 # Local untracked files
 .local/
@@ -88,7 +87,6 @@ apps/app/test-results/
 /auth/
 :memory:/
 benchmarks/
-/plugins/
 !docs/plugins/
 
 # Electrobun compiled native binaries (built locally, not committed)

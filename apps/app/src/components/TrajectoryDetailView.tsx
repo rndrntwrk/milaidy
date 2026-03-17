@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/TrajectoryDetailView";
+export * from "@elizaos/app-core/components/TrajectoryDetailView";

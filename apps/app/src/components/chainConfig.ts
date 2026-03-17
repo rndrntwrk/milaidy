@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/chainConfig";
+export * from "@elizaos/app-core/components/chainConfig";

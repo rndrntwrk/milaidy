@@ -1,1 +1,1 @@
-export * from "@miladyai/autonomous/version-resolver";
+export * from "@elizaos/autonomous/version-resolver";

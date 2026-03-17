@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/onboarding/PermissionsStep";
+export * from "@elizaos/app-core/components/onboarding/PermissionsStep";

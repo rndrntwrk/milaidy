@@ -576,8 +576,8 @@ async function bootstrapOnchainDev() {
       "test",
       "contracts",
       "out",
-      "MockMilaidyAgentRegistry.sol",
-      "MockMilaidyAgentRegistry.json",
+      "MockMiladyAgentRegistry.sol",
+      "MockMiladyAgentRegistry.json",
     ),
   ]);
   const collectionArtifactPath = resolveArtifactPath([
@@ -594,8 +594,8 @@ async function bootstrapOnchainDev() {
       "test",
       "contracts",
       "out",
-      "MockMilaidyCollection.sol",
-      "MockMilaidyCollection.json",
+      "MockMiladyCollection.sol",
+      "MockMiladyCollection.json",
     ),
   ]);
 
@@ -893,7 +893,7 @@ function killOrphanedWorkspaceProcesses() {
 
   try {
     // Kill orphaned node-pty spawn-helpers and any processes running inside
-    // .milady/workspaces (or legacy .milaidy/workspaces) that survived a crash.
+    // .milady/workspaces (or legacy .miladyai/workspaces) that survived a crash.
     const out = execSync(
       `ps axo pid,command 2>/dev/null | grep -E '\\.mil(aidy|ady)/workspaces' | grep -v grep`,
       { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] },

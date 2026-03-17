@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/companion/CompanionHeader";
+export * from "@elizaos/app-core/components/companion/CompanionHeader";

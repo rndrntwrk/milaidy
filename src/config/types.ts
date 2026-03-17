@@ -1,1 +1,1 @@
-export * from "@miladyai/autonomous/config/types";
+export * from "@elizaos/autonomous/config/types";

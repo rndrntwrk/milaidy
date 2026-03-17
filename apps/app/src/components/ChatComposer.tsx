@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/ChatComposer";
+export * from "@elizaos/app-core/components/ChatComposer";

@@ -1,1 +1,1 @@
-export * from "@miladyai/autonomous/api/streaming-text";
+export * from "@elizaos/autonomous/api/streaming-text";

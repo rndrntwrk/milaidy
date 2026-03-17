@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/ShellOverlays";
+export * from "@elizaos/app-core/components/ShellOverlays";

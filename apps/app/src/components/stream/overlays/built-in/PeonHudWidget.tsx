@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/stream/overlays/built-in/PeonHudWidget";
+export * from "@elizaos/app-core/components/stream/overlays/built-in/PeonHudWidget";

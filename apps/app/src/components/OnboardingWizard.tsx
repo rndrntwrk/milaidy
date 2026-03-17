@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/OnboardingWizard";
+export * from "@elizaos/app-core/components/OnboardingWizard";

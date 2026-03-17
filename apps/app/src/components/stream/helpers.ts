@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/stream/helpers";
+export * from "@elizaos/app-core/components/stream/helpers";

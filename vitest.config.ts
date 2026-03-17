@@ -125,64 +125,6 @@ export default defineConfig({
         ),
       },
       {
-        find: "@miladyai/plugin-streaming-base",
-        replacement: path.join(
-          repoRoot,
-          "packages",
-          "plugin-streaming-base",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        // workspace plugin not built in CI (--ignore-scripts); resolve from
-        // source so dynamic imports don't fail on missing dist/.
-        find: "@miladyai/plugin-retake",
-        replacement: path.join(
-          repoRoot,
-          "packages",
-          "plugin-retake",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        // workspace plugin not built in CI (--ignore-scripts); resolve from
-        // source so dynamic imports don't fail on missing dist/.
-        find: "@miladyai/plugin-twitch-streaming",
-        replacement: path.join(
-          repoRoot,
-          "packages",
-          "plugin-twitch",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        // workspace plugin not built in CI (--ignore-scripts); resolve from
-        // source so dynamic imports don't fail on missing dist/.
-        find: "@miladyai/plugin-youtube-streaming",
-        replacement: path.join(
-          repoRoot,
-          "packages",
-          "plugin-youtube",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        // workspace plugin not built in CI (--ignore-scripts); resolve from
-        // source so vi.mock() and dynamic import() don't fail on missing dist/.
-        find: "@miladyai/plugin-bnb-identity",
-        replacement: path.join(
-          repoRoot,
-          "packages",
-          "plugin-bnb-identity",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
         // @elizaos/skills has a broken package.json entry; the code handles the
 
         // missing module gracefully (try/catch), so redirect to an empty stub.

@@ -1,1 +1,1 @@
-export * from "@miladyai/autonomous/runtime/eliza";
+export * from "@elizaos/autonomous/runtime/eliza";

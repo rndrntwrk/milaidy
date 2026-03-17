@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/InventoryView";
+export * from "@elizaos/app-core/components/InventoryView";

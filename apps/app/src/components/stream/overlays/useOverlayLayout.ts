@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/stream/overlays/useOverlayLayout";
+export * from "@elizaos/app-core/components/stream/overlays/useOverlayLayout";

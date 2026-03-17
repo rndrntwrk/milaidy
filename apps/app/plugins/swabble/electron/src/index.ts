@@ -4,7 +4,7 @@ import {
   getElectrobunRendererRpc,
   invokeDesktopBridgeRequest,
   subscribeDesktopBridgeEvent,
-} from "@miladyai/app-core/bridge/electrobun-rpc";
+} from "@elizaos/app-core/bridge/electrobun-rpc";
 import type {
   SwabbleAudioLevelEvent,
   SwabbleConfig,

@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/GlobalEmoteOverlay";
+export * from "@elizaos/app-core/components/GlobalEmoteOverlay";

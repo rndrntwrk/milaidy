@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/inventory/TokenLogo";
+export * from "@elizaos/app-core/components/inventory/TokenLogo";

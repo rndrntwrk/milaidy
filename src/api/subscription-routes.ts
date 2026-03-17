@@ -1,7 +1,7 @@
 import {
   type SubscriptionRouteState as AutonomousSubscriptionRouteState,
   handleSubscriptionRoutes as handleAutonomousSubscriptionRoutes,
-} from "@miladyai/autonomous/api/subscription-routes";
+} from "@elizaos/autonomous/api/subscription-routes";
 import type { MiladyConfig } from "../config/config";
 import type { RouteRequestContext } from "./route-helpers";
 

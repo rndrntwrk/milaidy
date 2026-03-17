@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/knowledge-upload-image";
+export * from "@elizaos/app-core/components/knowledge-upload-image";

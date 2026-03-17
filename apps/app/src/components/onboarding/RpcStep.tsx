@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/onboarding/RpcStep";
+export * from "@elizaos/app-core/components/onboarding/RpcStep";

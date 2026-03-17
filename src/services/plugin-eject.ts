@@ -17,10 +17,9 @@ import { getPluginInfo } from "./registry-client";
 
 const execFileAsync = promisify(execFile);
 const UPSTREAM_SCHEMA = "milady-upstream-v1";
-const LEGACY_UPSTREAM_SCHEMA = "milaidy-upstream-v1";
 
 function isSupportedUpstreamSchema(value: string): boolean {
-  return value === UPSTREAM_SCHEMA || value === LEGACY_UPSTREAM_SCHEMA;
+  return value === UPSTREAM_SCHEMA;
 }
 
 let ejectLock: Promise<void> = Promise.resolve();

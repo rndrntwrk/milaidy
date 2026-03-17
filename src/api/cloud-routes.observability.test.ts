@@ -25,7 +25,7 @@ vi.mock("../diagnostics/integration-observability", () => ({
   createIntegrationTelemetrySpan: createSpanMock,
 }));
 
-vi.mock("@miladyai/autonomous/cloud/validate-url", () => ({
+vi.mock("@elizaos/autonomous/cloud/validate-url", () => ({
   validateCloudBaseUrl: validateCloudBaseUrlMock,
 }));
 

@@ -1,26 +1,26 @@
 // @vitest-environment jsdom
-import * as AppState from "@miladyai/app-core/state";
+import * as AppState from "@elizaos/app-core/state";
 import React from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
 import { ChatView } from "./ChatView";
 
-vi.mock("@miladyai/app-core/api", () => ({
+vi.mock("@elizaos/app-core/api", () => ({
   client: {
     getConfig: vi.fn(async () => ({})),
   },
 }));
 
-vi.mock("@miladyai/app-core/chat", () => ({
+vi.mock("@elizaos/app-core/chat", () => ({
   isRoutineCodingAgentMessage: vi.fn(() => false),
 }));
 
-vi.mock("@miladyai/app-core/events", () => ({
+vi.mock("@elizaos/app-core/events", () => ({
   VOICE_CONFIG_UPDATED_EVENT: "voice-config-updated",
 }));
 
-vi.mock("@miladyai/app-core/hooks", () => ({
+vi.mock("@elizaos/app-core/hooks", () => ({
   useChatAvatarVoiceBridge: vi.fn(),
   useTimeout: () => ({
     setTimeout: (fn: () => void) => fn(),
@@ -39,7 +39,7 @@ vi.mock("@miladyai/app-core/hooks", () => ({
   }),
 }));
 
-vi.mock("@miladyai/app-core/state", () => ({
+vi.mock("@elizaos/app-core/state", () => ({
   getVrmPreviewUrl: vi.fn(() => "/avatar.png"),
   useApp: vi.fn(),
 }));

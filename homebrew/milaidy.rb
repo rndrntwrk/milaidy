@@ -4,7 +4,7 @@
 # Use this for the tap's Formula/milady.rb entry.
 #
 # Key fixes from the original:
-#   - npm package name is "miladyai" instead of the legacy "milaidy"
+#   - npm package name is "miladyai" instead of the legacy "miladyai"
 #   - URL points to correct npm registry path
 #   - Added livecheck block for auto-update detection
 #   - Added head for --HEAD installs from develop branch

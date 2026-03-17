@@ -46,7 +46,7 @@
     "milady.ai": "milady.mjs",
     "milady-ai": "milady.mjs",
     "miladyai": "milady.mjs",
-    "milaidy": "milady.mjs"
+    "miladyai": "milady.mjs"
   },
   "exports": {
     ".": "./dist/index.js",
@@ -116,7 +116,7 @@
     "dev:win": "node scripts/dev-win.mjs"
   },
   "dependencies": {
-    "@miladyai/autonomous": "workspace:*",
+    "@elizaos/autonomous": "alpha",
     "@ai-sdk/anthropic": "^3.0.13",
     "@ai-sdk/gateway": "^3.0.12",
     "@ai-sdk/provider": "^3.0.2",

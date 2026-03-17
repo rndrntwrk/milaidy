@@ -1,7 +1,7 @@
 import {
   type AgentAdminRouteState,
   handleAgentAdminRoutes as handleAutonomousAgentAdminRoutes,
-} from "@miladyai/autonomous/api/agent-admin-routes";
+} from "@elizaos/autonomous/api/agent-admin-routes";
 import type { MiladyConfig } from "../config/config";
 import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
 
@@ -9,7 +9,7 @@ export type { AgentAdminRouteState };
 
 export interface AgentAdminRouteContext
   extends Omit<
-      import("@miladyai/autonomous/api/agent-admin-routes").AgentAdminRouteContext,
+      import("@elizaos/autonomous/api/agent-admin-routes").AgentAdminRouteContext,
       "state"
     >,
     RouteRequestMeta,

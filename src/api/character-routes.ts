@@ -2,7 +2,7 @@ import {
   type CharacterRouteContext as AutonomousCharacterRouteContext,
   type CharacterRouteState as AutonomousCharacterRouteState,
   handleCharacterRoutes as handleAutonomousCharacterRoutes,
-} from "@miladyai/autonomous/api/character-routes";
+} from "@elizaos/autonomous/api/character-routes";
 import type { MiladyConfig } from "../config/types";
 import { CharacterSchema } from "../config/zod-schema";
 import type { RouteRequestContext } from "./route-helpers";

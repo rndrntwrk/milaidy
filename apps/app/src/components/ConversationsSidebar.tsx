@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/ConversationsSidebar";
+export * from "@elizaos/app-core/components/ConversationsSidebar";

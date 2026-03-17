@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/BscTradePanel";
+export * from "@elizaos/app-core/components/BscTradePanel";

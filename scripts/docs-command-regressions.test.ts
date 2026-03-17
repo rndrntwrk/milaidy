@@ -35,17 +35,17 @@ describe("docs command regressions", () => {
     const cliOverview = readDoc("docs/cli/overview.md");
 
     expect(installation).toContain("npm install -g miladyai");
-    expect(installation).not.toContain("npm install -g milaidy");
+    expect(installation).not.toContain("npm install -g miladyai");
 
     expect(configuration).toContain("npm package name is `miladyai`");
-    expect(configuration).not.toContain("npm package name is `milaidy`");
+    expect(configuration).not.toContain("npm package name is `miladyai`");
 
     expect(architecture).toContain("the `miladyai` npm package");
-    expect(architecture).not.toContain("the `milaidy` npm package");
+    expect(architecture).not.toContain("the `miladyai` npm package");
 
     expect(cliOverview).toContain("bun install -g miladyai");
     expect(cliOverview).toContain("bunx miladyai");
-    expect(cliOverview).not.toContain("bun install -g milaidy");
-    expect(cliOverview).not.toContain("bunx milaidy");
+    expect(cliOverview).not.toContain("bun install -g miladyai");
+    expect(cliOverview).not.toContain("bunx miladyai");
   });
 });

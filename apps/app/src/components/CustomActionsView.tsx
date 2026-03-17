@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/CustomActionsView";
+export * from "@elizaos/app-core/components/CustomActionsView";

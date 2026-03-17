@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/stream/StreamVoiceConfig";
+export * from "@elizaos/app-core/components/stream/StreamVoiceConfig";

@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/AgentActivityBox";
+export * from "@elizaos/app-core/components/AgentActivityBox";

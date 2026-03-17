@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/LifoSandboxView";
+export * from "@elizaos/app-core/components/LifoSandboxView";

@@ -5,7 +5,7 @@
  * features, and mounts the React application.
  */
 
-import "@miladyai/app-core/styles/styles.css";
+import "@elizaos/app-core/styles/styles.css";
 import "./native-plugin-entrypoints";
 
 import { App as CapacitorApp } from "@capacitor/app";
@@ -17,7 +17,7 @@ import {
   initializeCapacitorBridge,
   initializeStorageBridge,
   isElectrobunRuntime,
-} from "@miladyai/app-core/bridge";
+} from "@elizaos/app-core/bridge";
 import {
   AGENT_READY_EVENT,
   APP_PAUSE_EVENT,
@@ -27,9 +27,9 @@ import {
   dispatchMiladyEvent,
   SHARE_TARGET_EVENT,
   TRAY_ACTION_EVENT,
-} from "@miladyai/app-core/events";
-import { applyLaunchConnectionFromUrl } from "@miladyai/app-core/platform";
-import { AppProvider } from "@miladyai/app-core/state";
+} from "@elizaos/app-core/events";
+import { applyLaunchConnectionFromUrl } from "@elizaos/app-core/platform";
+import { AppProvider } from "@elizaos/app-core/state";
 // Import the agent plugin
 import { Agent } from "@miladyai/capacitor-agent";
 import { Desktop } from "@miladyai/capacitor-desktop";

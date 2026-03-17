@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/conversations/ConversationListItem";
+export * from "@elizaos/app-core/components/conversations/ConversationListItem";

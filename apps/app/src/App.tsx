@@ -1,1 +1,1 @@
-export { App } from "@miladyai/app-core";
+export { App } from "@elizaos/app-core";

@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/FineTuningView";
+export * from "@elizaos/app-core/components/FineTuningView";

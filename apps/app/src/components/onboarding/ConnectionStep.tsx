@@ -1,1 +1,1 @@
-export * from "@miladyai/app-core/components/onboarding/ConnectionStep";
+export * from "@elizaos/app-core/components/onboarding/ConnectionStep";
