@@ -172,6 +172,29 @@ export function getVrmPreviewUrl(index: number): string {
     : resolveAppAssetUrl(`vrms/previews/milady-${safeIndex}.png`);
 }
 
+const VRM_CDN_BASE =
+  "https://555stream-image-service.gl4sspr1sm.workers.dev/vrm-stage";
+
+/**
+ * Build a JSON-serialised VRM avatar identity payload for STREAM555_GO_LIVE.
+ * Every code path that launches an avatar stream should use this so the
+ * capture pipeline deterministically resolves to vrm_stage mode.
+ */
+function buildVrmAvatarIdentityParam(vrmIndex: number): string {
+  const filename =
+    vrmIndex === 1 ? DEFAULT_PRO_STREAMER_VRM_FILENAME : `${vrmIndex}.vrm`;
+  return JSON.stringify({
+    sourceType: "upstream",
+    sourceSystem: "milaidy",
+    assetType: "vrm",
+    assetRef: `${VRM_CDN_BASE}/vrms/${filename}`,
+    rendererStrategy: "direct_vrm",
+    fallbackAllowed: true,
+    displayName: "Alice",
+    accentColor: "#10b981",
+  });
+}
+
 // ── Theme ──────────────────────────────────────────────────────────────
 
 const THEME_STORAGE_KEY = "milady:theme";
@@ -3422,10 +3445,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (config: GoLiveConfig): Promise<GoLiveLaunchResult> => {
       const stream555ControlAvailable =
         hasPluginRegistration(plugins, "stream555-control") &&
-        resolveQuickLayerStatus(plugins, ["stream555-control"]) !== "disabled";
+        resolveQuickLayerStatus(plugins, ["stream555-control"]) === "active";
       const legacyStreamAvailable =
         hasPluginRegistration(plugins, "stream") &&
-        resolveQuickLayerStatus(plugins, ["stream"]) !== "disabled";
+        resolveQuickLayerStatus(plugins, ["stream"]) === "active";
       const selectedChannels = Array.from(
         new Set(
           config.channels
@@ -3578,6 +3601,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
           if (stream555ControlAvailable) {
             try {
+              const avatarIdentityParam =
+                buildVrmAvatarIdentityParam(selectedVrmIndex);
               const goLivePlan = await executePlanWithRetry(
                 {
                   plan: {
@@ -3587,7 +3612,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         id: "go-live",
                         toolName: "STREAM555_GO_LIVE",
                         params: {
+                          inputType: "avatar",
                           layoutMode: config.layoutMode,
+                          avatarIdentity: avatarIdentityParam,
                           ...destinationParams,
                         },
                       },
@@ -3845,7 +3872,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     id: "go-live",
                     toolName: "STREAM555_GO_LIVE",
                     params: {
+                      inputType: "avatar",
                       layoutMode: config.layoutMode,
+                      avatarIdentity:
+                        buildVrmAvatarIdentityParam(selectedVrmIndex),
                       ...destinationParams,
                     },
                   },
@@ -4165,10 +4195,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const stream555Available =
       hasPluginRegistration(plugins, "stream555-control") &&
-      resolveQuickLayerStatus(plugins, ["stream555-control"]) !== "disabled";
+      resolveQuickLayerStatus(plugins, ["stream555-control"]) === "active";
     const legacyStreamAvailable =
       hasPluginRegistration(plugins, "stream") &&
-      resolveQuickLayerStatus(plugins, ["stream"]) !== "disabled";
+      resolveQuickLayerStatus(plugins, ["stream"]) === "active";
 
     if (!stream555Available && !legacyStreamAvailable) {
       setActionNotice(
@@ -4201,6 +4231,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       let stream555StartParams: Record<string, unknown> = {
         inputType: "avatar",
         layoutMode: "camera-full",
+        avatarIdentity: buildVrmAvatarIdentityParam(selectedVrmIndex),
       };
 
       if (autoRunMode === "games") {
@@ -4424,10 +4455,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         : undefined;
     const stream555ControlAvailable =
       hasPluginRegistration(plugins, "stream555-control") &&
-      resolveQuickLayerStatus(plugins, ["stream555-control"]) !== "disabled";
+      resolveQuickLayerStatus(plugins, ["stream555-control"]) === "active";
     const legacyStreamAvailable =
       hasPluginRegistration(plugins, "stream") &&
-      resolveQuickLayerStatus(plugins, ["stream"]) !== "disabled";
+      resolveQuickLayerStatus(plugins, ["stream"]) === "active";
 
     if (layer.id === "go-live") {
       openGoLiveModal();
@@ -6313,6 +6344,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       try {
         await client.playEmote(emoteId);
+        document.dispatchEvent(
+          new CustomEvent("milady:play-emote", {
+            detail: {
+              emoteId,
+              glbPath: emote.glbPath,
+              duration: emote.duration,
+              loop: emote.loop,
+            },
+          }),
+        );
         void sendOperatorActionMessage({
           label: emote.name,
           kind: "avatar",
