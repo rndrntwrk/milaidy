@@ -584,6 +584,10 @@ jobs:
           # packaged smoke startup; disable local embeddings for this smoke path
           # so we only validate launcher/bootstrap behavior here.
           MILADY_DISABLE_LOCAL_EMBEDDINGS: "1"
+          # The backend requires at least one AI provider plugin to load cleanly.
+          # Pass the Anthropic key so the smoke test backend can start without
+          # the "No AI provider plugin was loaded" error.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MILADY_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\milady-windows-ui-launcher
           MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\milady-windows-ui-launcher.txt
         run: |
