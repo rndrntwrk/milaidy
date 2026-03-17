@@ -624,17 +624,20 @@ describe("CharacterView UI", () => {
     await act(async () => {
       tree = TestRenderer.create(React.createElement(CharacterView));
     });
+    await act(async () => {
+      tree?.update(React.createElement(CharacterView));
+    });
 
     expect(
       tree?.root.findAll(
-        (node) => node.props["data-testid"] === "character-customize-grid",
+        (node) => node.props["data-testid"] === "character-notebook",
       ) ?? [],
-    ).toHaveLength(0);
+    ).toHaveLength(1);
     expect(
       tree?.root.findAll(
         (node) => node.props["data-testid"] === "character-roster-grid",
       ) ?? [],
-    ).toHaveLength(1);
+    ).toHaveLength(0);
   });
 
   it("removes adjective editors from the character screen", async () => {
@@ -675,6 +678,9 @@ describe("CharacterView UI", () => {
     await act(async () => {
       customizeButton?.props.onClick();
     });
+    await act(async () => {
+      tree?.update(React.createElement(CharacterView));
+    });
 
     expect(
       tree?.root.findAll(
@@ -688,7 +694,7 @@ describe("CharacterView UI", () => {
     ).toHaveLength(1);
     expect(
       tree?.root.findAll(
-        (node) => node.props["data-testid"] === "character-customize-grid",
+        (node) => node.props["data-testid"] === "character-notebook",
       ) ?? [],
     ).toHaveLength(1);
   });
@@ -701,13 +707,8 @@ describe("CharacterView UI", () => {
     await act(async () => {
       tree = TestRenderer.create(React.createElement(CharacterView));
     });
-
-    const customizeButton = tree?.root.find(
-      (node) => node.props["data-testid"] === "character-customize-toggle",
-    );
-
     await act(async () => {
-      customizeButton?.props.onClick();
+      tree?.update(React.createElement(CharacterView));
     });
 
     const styleTab = tree?.root.find(
