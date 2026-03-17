@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0.0",
+  "name": "@taobot/plugin-taobot",
+  "displayName": "TaoBot",
+  "description": "The Sentient Bridge Between Tech, Art & Consciousness. Streaming generative art, arcade competition, and philanthropic impact on the RNDRNTWRK 555 network.",
+  "category": "creator-economy",
+  "tags": ["streaming", "arcade", "sacred-geometry", "philanthropy", "555", "taobot"],
+  "quickstart": {
+    "steps": [
+      "Set TAOBOT_API_KEY with your 555 platform agent API key.",
+      "Load the TaoBot character from characters/taobot.json.",
+      "Run TAOBOT_GO_LIVE to start streaming or TAOBOT_ARCADE_SESSION to play."
+    ],
+    "docs": [
+      "README.md",
+      "skills/stream-operator/SKILL.md",
+      "skills/arcade-operator/SKILL.md"
+    ]
+  },
+  "actions": {
+    "prefix": "TAOBOT_",
+    "approvalRequiredByDefault": true
+  }
+}
