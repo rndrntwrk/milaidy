@@ -182,6 +182,33 @@ vi.mock("../../src/components/companion/CompanionSceneHost", async () => {
     useSharedCompanionScene: () => true,
   };
 });
+vi.mock("../../src/components/CompanionSceneHost", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+  return {
+    SharedCompanionScene: ({
+      active,
+      interactive,
+      children,
+    }: {
+      active: boolean;
+      interactive?: boolean;
+      children: React.ReactNode;
+    }) => {
+      const { useEffect } = React;
+      useEffect(() => {
+        sceneHostState.mounts += 1;
+        return () => {
+          sceneHostState.unmounts += 1;
+        };
+      }, []);
+      sceneHostState.activeHistory.push(active);
+      sceneHostState.interactiveHistory.push(Boolean(interactive));
+      return React.createElement(React.Fragment, null, children);
+    },
+    CompanionSceneHost: () => null,
+    useSharedCompanionScene: () => true,
+  };
+});
 
 vi.mock("../../src/components/companion/VrmStage", () => ({
   VrmStage: () => React.createElement("div", null, "VrmStage Ready"),
