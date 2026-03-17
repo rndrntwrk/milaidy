@@ -16,3 +16,5 @@ This folder contains repo-specific skills derived from recently merged PRs.
 - `pre-review-no-diff-approve`
 - `electron-tutorial-examples`
 - `integration-dod-map`
+- `taobot-stream-operator`
+- `taobot-arcade-operator`

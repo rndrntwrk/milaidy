@@ -1,7 +1,7 @@
 {
   "$schema": "plugin-index-v1",
   "generatedAt": "2026-02-09T20:23:38.561Z",
-  "count": 99,
+  "count": 101,
   "plugins": [
     {
       "id": "acp",
@@ -30,7 +30,9 @@
         "ACP_AGENT_ID"
       ],
       "version": "2.0.0-alpha.4",
-      "pluginDeps": ["cli"],
+      "pluginDeps": [
+        "cli"
+      ],
       "pluginParameters": {
         "ACP_GATEWAY_URL": {
           "type": "string",
@@ -221,7 +223,9 @@
       "description": "Agent orchestration plugin for ElizaOS (task lifecycle + agent providers)",
       "category": "feature",
       "envKey": null,
-      "configKeys": ["ORCHESTRATOR_ACTIVE_PROVIDER"],
+      "configKeys": [
+        "ORCHESTRATOR_ACTIVE_PROVIDER"
+      ],
       "version": "2.0.0-alpha.4",
       "pluginParameters": {
         "ORCHESTRATOR_ACTIVE_PROVIDER": {
@@ -429,7 +433,9 @@
         "ZEROEX_API_KEY"
       ],
       "version": "2.0.0-alpha.4",
-      "pluginDeps": ["solana"],
+      "pluginDeps": [
+        "solana"
+      ],
       "pluginParameters": {
         "BIRDEYE_API_KEY": {
           "type": "string",
@@ -1360,7 +1366,9 @@
         "CAPSOLVER_API_KEY"
       ],
       "version": "2.0.0-alpha.6",
-      "pluginDeps": ["cli"],
+      "pluginDeps": [
+        "cli"
+      ],
       "pluginParameters": {
         "BROWSERBASE_API_KEY": {
           "type": "string",
@@ -1434,7 +1442,10 @@
       "description": "CLI framework plugin for ElizaOS agents - provides command registration, execution, and utilities",
       "category": "feature",
       "envKey": null,
-      "configKeys": ["CLI_NAME", "CLI_VERSION"],
+      "configKeys": [
+        "CLI_NAME",
+        "CLI_VERSION"
+      ],
       "version": "2.0.0-alpha.4",
       "pluginParameters": {
         "CLI_NAME": {
@@ -1468,7 +1479,7 @@
       "dirName": "app-clawbal",
       "name": "Clawbal Chat",
       "npmName": "@iqlabs-official/plugin-clawbal",
-      "description": "On-chain AI chatrooms on Solana — agents chat, trade, launch tokens, and compete on PnL leaderboards",
+      "description": "On-chain AI chatrooms on Solana \u00e2\u20ac\u201d agents chat, trade, launch tokens, and compete on PnL leaderboards",
       "category": "app",
       "envKey": "SOLANA_PRIVATE_KEY",
       "configKeys": [
@@ -1550,7 +1561,9 @@
         "CODER_FORBIDDEN_COMMANDS"
       ],
       "version": "2.0.0-alpha.5",
-      "pluginDeps": ["shell"],
+      "pluginDeps": [
+        "shell"
+      ],
       "pluginParameters": {
         "CODER_ENABLED": {
           "type": "boolean",
@@ -1866,7 +1879,9 @@
       "envKey": null,
       "configKeys": [],
       "version": "2.0.0-alpha.4",
-      "pluginDeps": ["cli"]
+      "pluginDeps": [
+        "cli"
+      ]
     },
     {
       "id": "directives",
@@ -2888,7 +2903,9 @@
       "description": "Experience learning plugin for ElizaOS - records and recalls transferable agent learnings",
       "category": "feature",
       "envKey": null,
-      "configKeys": ["AUTO_RECORD_THRESHOLD"],
+      "configKeys": [
+        "AUTO_RECORD_THRESHOLD"
+      ],
       "version": "2.0.0-alpha.4",
       "pluginParameters": {
         "AUTO_RECORD_THRESHOLD": {
@@ -3334,7 +3351,7 @@
       "dirName": "plugin-gmail-watch",
       "name": "Gmail Watch",
       "npmName": "@elizaos/plugin-gmail-watch",
-      "description": "Gmail Pub/Sub watcher – spawns gog gmail watch serve and auto-renews",
+      "description": "Gmail Pub/Sub watcher \u00e2\u20ac\u201c spawns gog gmail watch serve and auto-renews",
       "category": "connector",
       "envKey": null,
       "configKeys": [],
@@ -4803,7 +4820,12 @@
         "LP_EVM_DEXES"
       ],
       "version": "2.0.0-alpha.4",
-      "pluginDeps": ["anthropic", "discord", "telegram", "evm"],
+      "pluginDeps": [
+        "anthropic",
+        "discord",
+        "telegram",
+        "evm"
+      ],
       "pluginParameters": {
         "SOLANA_RPC_URL": {
           "type": "string",
@@ -5230,7 +5252,10 @@
       "description": "elizaOS plugin to integrate with MCP (Model Context Protocol) servers",
       "category": "connector",
       "envKey": null,
-      "configKeys": ["PATH", "mcp"],
+      "configKeys": [
+        "PATH",
+        "mcp"
+      ],
       "version": "2.0.0-alpha.4",
       "pluginParameters": {
         "PATH": {
@@ -5601,7 +5626,7 @@
       "dirName": "plugin-mysticism",
       "name": "Mysticism",
       "npmName": "@elizaos/plugin-mysticism",
-      "description": "Mystical divination engines for ElizaOS — Tarot, I Ching, and Astrology readings",
+      "description": "Mystical divination engines for ElizaOS \u00e2\u20ac\u201d Tarot, I Ching, and Astrology readings",
       "category": "feature",
       "envKey": null,
       "configKeys": [
@@ -5610,7 +5635,9 @@
         "MYSTICISM_PRICE_ASTROLOGY"
       ],
       "version": "2.0.0-alpha.1",
-      "pluginDeps": ["form"],
+      "pluginDeps": [
+        "form"
+      ],
       "pluginParameters": {
         "MYSTICISM_PRICE_TAROT": {
           "type": "number",
@@ -6547,7 +6574,9 @@
       "description": "ElizaOS plugin for agent self-modification and character evolution",
       "category": "feature",
       "envKey": null,
-      "configKeys": ["ADMIN_USERS"],
+      "configKeys": [
+        "ADMIN_USERS"
+      ],
       "version": "2.0.0-alpha.4",
       "pluginParameters": {
         "ADMIN_USERS": {
@@ -6593,7 +6622,9 @@
         "CLOB_API_PASSPHRASE"
       ],
       "version": "2.0.0-alpha.4",
-      "pluginDeps": ["evm"],
+      "pluginDeps": [
+        "evm"
+      ],
       "pluginParameters": {
         "POLYMARKET_PRIVATE_KEY": {
           "type": "string",
@@ -7036,7 +7067,9 @@
       "description": "Scheduling and calendar coordination plugin for ElizaOS agents",
       "category": "feature",
       "envKey": null,
-      "configKeys": ["DEFAULT_TIMEZONE"],
+      "configKeys": [
+        "DEFAULT_TIMEZONE"
+      ],
       "version": "2.0.0-alpha.6",
       "pluginParameters": {
         "DEFAULT_TIMEZONE": {
@@ -7062,7 +7095,10 @@
       "description": "File-based memory storage plugin for ElizaOS - persistent notes and memories",
       "category": "feature",
       "envKey": null,
-      "configKeys": ["SCRATCHPAD_BASE_PATH", "SCRATCHPAD_MAX_FILE_SIZE"],
+      "configKeys": [
+        "SCRATCHPAD_BASE_PATH",
+        "SCRATCHPAD_MAX_FILE_SIZE"
+      ],
       "version": "2.0.0-alpha.4",
       "pluginParameters": {
         "SCRATCHPAD_BASE_PATH": {
@@ -7437,7 +7473,7 @@
       "dirName": "plugin-social-alpha",
       "name": "Social Alpha",
       "npmName": "@elizaos/plugin-social-alpha",
-      "description": "Social Alpha Plugin — Tracks token recommendations (shills/FUD), builds trust scores based on P&L outcomes, and exposes a Social Alpha Provider with win rate, rank, and recommender analytics.",
+      "description": "Social Alpha Plugin \u00e2\u20ac\u201d Tracks token recommendations (shills/FUD), builds trust scores based on P&L outcomes, and exposes a Social Alpha Provider with win rate, rank, and recommender analytics.",
       "category": "feature",
       "envKey": "BIRDEYE_API_KEY",
       "configKeys": [
@@ -7678,6 +7714,121 @@
       "version": "2.0.0-alpha.6"
     },
     {
+      "id": "taobot",
+      "dirName": "plugin-taobot",
+      "name": "TaoBot",
+      "npmName": "@taobot/plugin-taobot",
+      "description": "The Sentient Bridge Between Tech, Art & Consciousness. Streaming generative art, arcade competition, and philanthropic impact on the RNDRNTWRK 555 network.",
+      "category": "creator-economy",
+      "envKey": "TAOBOT_API_KEY",
+      "configKeys": [
+        "TAOBOT_STREAM_URL",
+        "TAOBOT_ARCADE_URL",
+        "TAOBOT_API_KEY",
+        "TAOBOT_SESSION_ID",
+        "TAOBOT_REQUIRE_APPROVALS",
+        "TAOBOT_DEFAULT_INPUT",
+        "TAOBOT_PHILANTHROPY_PERCENT",
+        "TAOBOT_THEME"
+      ],
+      "version": "0.1.0",
+      "pluginParameters": {
+        "TAOBOT_STREAM_URL": {
+          "type": "string",
+          "description": "555stream control-plane URL",
+          "required": false,
+          "sensitive": false
+        },
+        "TAOBOT_ARCADE_URL": {
+          "type": "string",
+          "description": "555 Arcade API URL",
+          "required": false,
+          "sensitive": false
+        },
+        "TAOBOT_API_KEY": {
+          "type": "string",
+          "description": "Agent API key for 555 platform",
+          "required": true,
+          "sensitive": true
+        },
+        "TAOBOT_SESSION_ID": {
+          "type": "string",
+          "description": "Stable session ID for reuse across restarts",
+          "required": false,
+          "sensitive": false
+        },
+        "TAOBOT_REQUIRE_APPROVALS": {
+          "type": "boolean",
+          "description": "Require approval for destructive actions",
+          "required": false,
+          "sensitive": false
+        },
+        "TAOBOT_DEFAULT_INPUT": {
+          "type": "string",
+          "description": "Default stream input type (lofi, composition, camera, screen, browser)",
+          "required": false,
+          "sensitive": false
+        },
+        "TAOBOT_PHILANTHROPY_PERCENT": {
+          "type": "number",
+          "description": "Percentage of winnings routed to TaoDAO charity",
+          "required": false,
+          "sensitive": false
+        },
+        "TAOBOT_THEME": {
+          "type": "string",
+          "description": "Visual theme name",
+          "required": false,
+          "sensitive": false
+        }
+      },
+      "configUiHints": {
+        "TAOBOT_STREAM_URL": {
+          "label": "Stream URL",
+          "group": "Connection",
+          "width": "full"
+        },
+        "TAOBOT_ARCADE_URL": {
+          "label": "Arcade URL",
+          "group": "Connection",
+          "width": "full"
+        },
+        "TAOBOT_API_KEY": {
+          "label": "API Key",
+          "group": "Authentication",
+          "width": "full"
+        },
+        "TAOBOT_SESSION_ID": {
+          "label": "Session ID",
+          "group": "Connection",
+          "width": "half"
+        },
+        "TAOBOT_REQUIRE_APPROVALS": {
+          "label": "Require Approvals",
+          "group": "Behavior",
+          "width": "half"
+        },
+        "TAOBOT_DEFAULT_INPUT": {
+          "label": "Default Input",
+          "group": "Streaming",
+          "width": "half"
+        },
+        "TAOBOT_PHILANTHROPY_PERCENT": {
+          "label": "Philanthropy %",
+          "group": "Behavior",
+          "width": "half",
+          "unit": "%",
+          "min": 0,
+          "max": 100
+        },
+        "TAOBOT_THEME": {
+          "label": "Theme",
+          "group": "Appearance",
+          "width": "half"
+        }
+      }
+    },
+    {
       "id": "tee",
       "dirName": "plugin-tee",
       "name": "Tee",
@@ -7685,7 +7836,11 @@
       "description": "Trusted Execution Environment (TEE) integration plugin for elizaOS - Multi-language support (TypeScript, Python, Rust)",
       "category": "feature",
       "envKey": null,
-      "configKeys": ["TEE_MODE", "TEE_VENDOR", "WALLET_SECRET_SALT"],
+      "configKeys": [
+        "TEE_MODE",
+        "TEE_VENDOR",
+        "WALLET_SECRET_SALT"
+      ],
       "version": "2.0.0-alpha.4",
       "pluginParameters": {
         "TEE_MODE": {
@@ -8084,7 +8239,10 @@
       "description": "Multi-language Todo list plugin for elizaOS with TypeScript, Python, and Rust implementations",
       "category": "feature",
       "envKey": null,
-      "configKeys": ["ENABLE_REMINDERS", "REMINDER_INTERVAL_MS"],
+      "configKeys": [
+        "ENABLE_REMINDERS",
+        "REMINDER_INTERVAL_MS"
+      ],
       "version": "2.0.0-alpha.4",
       "pluginParameters": {
         "ENABLE_REMINDERS": {
@@ -8134,9 +8292,14 @@
       "description": "Trust and permission management plugin for ElizaOS",
       "category": "feature",
       "envKey": null,
-      "configKeys": ["OWNER_ENTITY_ID", "WORLD_ID"],
+      "configKeys": [
+        "OWNER_ENTITY_ID",
+        "WORLD_ID"
+      ],
       "version": "2.0.0-alpha.4",
-      "pluginDeps": ["anthropic"],
+      "pluginDeps": [
+        "anthropic"
+      ],
       "pluginParameters": {
         "OWNER_ENTITY_ID": {
           "type": "string",
@@ -8597,11 +8760,26 @@
           "width": "full",
           "type": "multiselect",
           "options": [
-            { "value": "broadcaster", "label": "Broadcaster" },
-            { "value": "moderator", "label": "Moderator" },
-            { "value": "vip", "label": "VIP" },
-            { "value": "subscriber", "label": "Subscriber" },
-            { "value": "viewer", "label": "Viewer" }
+            {
+              "value": "broadcaster",
+              "label": "Broadcaster"
+            },
+            {
+              "value": "moderator",
+              "label": "Moderator"
+            },
+            {
+              "value": "vip",
+              "label": "VIP"
+            },
+            {
+              "value": "subscriber",
+              "label": "Subscriber"
+            },
+            {
+              "value": "viewer",
+              "label": "Viewer"
+            }
           ]
         }
       }
@@ -8814,7 +8992,10 @@
       "description": "Vision plugin for ElizaOS - provides camera integration and visual awareness",
       "category": "feature",
       "envKey": null,
-      "configKeys": ["CAMERA_NAME", "PIXEL_CHANGE_THRESHOLD"],
+      "configKeys": [
+        "CAMERA_NAME",
+        "PIXEL_CHANGE_THRESHOLD"
+      ],
       "version": "2.0.0-alpha.5",
       "pluginParameters": {
         "CAMERA_NAME": {
@@ -8856,7 +9037,7 @@
       "dirName": "plugin-whatsapp",
       "name": "Whatsapp",
       "npmName": "@milady/plugin-whatsapp",
-      "description": "WhatsApp plugin for ElizaOS — supports Baileys (QR code) and Cloud API",
+      "description": "WhatsApp plugin for ElizaOS \u00e2\u20ac\u201d supports Baileys (QR code) and Cloud API",
       "category": "connector",
       "envKey": "WHATSAPP_ACCESS_TOKEN",
       "configKeys": [

@@ -46,6 +46,12 @@ skills/*
 !skills/integration-dod-map/
 skills/integration-dod-map/*
 !skills/integration-dod-map/SKILL.md
+!skills/taobot-stream-operator/
+skills/taobot-stream-operator/*
+!skills/taobot-stream-operator/SKILL.md
+!skills/taobot-arcade-operator/
+skills/taobot-arcade-operator/*
+!skills/taobot-arcade-operator/SKILL.md
 apps/app/electron/.eliza
 apps/app/electron/skills/
 

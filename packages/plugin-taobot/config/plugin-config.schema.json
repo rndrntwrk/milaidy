@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://taobot.rndrntwrk.com/schemas/plugin-config.schema.json",
+  "title": "TaoBot Plugin Configuration",
+  "description": "Configuration schema for @taobot/plugin-taobot",
+  "type": "object",
+  "properties": {
+    "TAOBOT_STREAM_URL": {
+      "type": "string",
+      "description": "555stream control-plane URL",
+      "default": "https://stream.rndrntwrk.com"
+    },
+    "TAOBOT_ARCADE_URL": {
+      "type": "string",
+      "description": "555 Arcade API URL",
+      "default": "https://555.rndrntwrk.com"
+    },
+    "TAOBOT_API_KEY": {
+      "type": "string",
+      "description": "Agent API key for 555 platform (sensitive)",
+      "minLength": 1
+    },
+    "TAOBOT_SESSION_ID": {
+      "type": "string",
+      "description": "Stable session ID for reuse across restarts"
+    },
+    "TAOBOT_REQUIRE_APPROVALS": {
+      "type": "boolean",
+      "description": "Require approval for destructive actions",
+      "default": true
+    },
+    "TAOBOT_DEFAULT_INPUT": {
+      "type": "string",
+      "description": "Default stream input type",
+      "enum": ["lofi", "composition", "camera", "screen", "browser"],
+      "default": "composition"
+    },
+    "TAOBOT_OVERLAY_TEMPLATE": {
+      "type": "string",
+      "description": "Default overlay template name to apply on go-live"
+    },
+    "TAOBOT_PREFERRED_GAMES": {
+      "type": "string",
+      "description": "Comma-separated list of preferred arcade game IDs",
+      "default": "godai-is-back,vedas-run,knighthood"
+    },
+    "TAOBOT_PHILANTHROPY_PERCENT": {
+      "type": "number",
+      "description": "Percentage of winnings routed to TaoDAO charity",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 30
+    },
+    "TAOBOT_THEME": {
+      "type": "string",
+      "description": "Visual theme name for the 555 platform",
+      "default": "taobot-psychedelic-futurism"
+    }
+  },
+  "required": ["TAOBOT_API_KEY"]
+}

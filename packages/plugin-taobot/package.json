@@ -1,0 +1,107 @@
+{
+  "name": "@taobot/plugin-taobot",
+  "version": "0.1.0",
+  "description": "TaoBot — The Sentient Bridge Between Tech, Art & Consciousness. ElizaOS plugin for streaming generative art, arcade competition, and philanthropic impact on the RNDRNTWRK 555 network.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "config",
+    "skills",
+    "characters",
+    "agents",
+    "elizaos.plugin.json"
+  ],
+  "scripts": {
+    "build": "bun run clean && tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "agentConfig": {
+    "pluginType": "elizaos:plugin:1.0.0",
+    "pluginParameters": {
+      "TAOBOT_STREAM_URL": {
+        "type": "string",
+        "description": "555stream control-plane URL",
+        "required": false
+      },
+      "TAOBOT_ARCADE_URL": {
+        "type": "string",
+        "description": "555 Arcade API URL",
+        "required": false
+      },
+      "TAOBOT_API_KEY": {
+        "type": "string",
+        "description": "Agent API key for 555 platform",
+        "required": true,
+        "sensitive": true
+      },
+      "TAOBOT_SESSION_ID": {
+        "type": "string",
+        "description": "Stable session ID for reuse across restarts",
+        "required": false
+      },
+      "TAOBOT_REQUIRE_APPROVALS": {
+        "type": "boolean",
+        "description": "Require approval for destructive actions",
+        "default": true
+      },
+      "TAOBOT_DEFAULT_INPUT": {
+        "type": "string",
+        "description": "Default stream input type (lofi, composition, camera, screen, browser)",
+        "default": "composition"
+      },
+      "TAOBOT_PHILANTHROPY_PERCENT": {
+        "type": "number",
+        "description": "Percentage of winnings routed to TaoDAO charity",
+        "default": 30
+      },
+      "TAOBOT_THEME": {
+        "type": "string",
+        "description": "Visual theme name",
+        "default": "taobot-psychedelic-futurism"
+      }
+    }
+  },
+  "elizaos": {
+    "displayName": "TaoBot",
+    "configSchemaFile": "./config/plugin-config.schema.json"
+  },
+  "keywords": [
+    "elizaos",
+    "elizaos-plugin",
+    "taobot",
+    "rndrntwrk",
+    "555",
+    "streaming",
+    "arcade",
+    "philanthropy",
+    "sacred-geometry",
+    "ai-agent"
+  ],
+  "author": "Moestradamus Productions",
+  "license": "MIT",
+  "peerDependencies": {
+    "@elizaos/core": "^1.7.0",
+    "@rndrntwrk/plugin-555stream": ">=0.1.0",
+    "@rndrntwrk/plugin-555arcade": ">=0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@rndrntwrk/plugin-555arcade": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@elizaos/core": "^1.7.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
