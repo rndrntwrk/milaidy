@@ -137,7 +137,8 @@ import {
 // ── VRM helpers ─────────────────────────────────────────────────────────
 
 /** Number of built-in milady VRM avatars shipped with the app. */
-export const VRM_COUNT = 8;
+export const VRM_COUNT = 9;
+export const TAOBOT_VRM_INDEX = 9;
 export const DEFAULT_PRO_STREAMER_VRM_FILENAME = "alice.vrm";
 export const DEFAULT_PRO_STREAMER_VRM_URL = resolveAppAssetUrl(
   `vrms/${DEFAULT_PRO_STREAMER_VRM_FILENAME}`,
@@ -154,22 +155,22 @@ function normalizeAvatarIndex(index: number): number {
   return n;
 }
 
-/** Resolve a built-in VRM index (1–8) to its public asset URL. */
+/** Resolve a built-in VRM index (1–9) to its public asset URL. */
 export function getVrmUrl(index: number): string {
   const normalized = normalizeAvatarIndex(index);
   const safeIndex = normalized > 0 ? normalized : 1;
-  return safeIndex === 1
-    ? DEFAULT_PRO_STREAMER_VRM_URL
-    : resolveAppAssetUrl(`vrms/${safeIndex}.vrm`);
+  if (safeIndex === 1) return DEFAULT_PRO_STREAMER_VRM_URL;
+  if (safeIndex === TAOBOT_VRM_INDEX) return resolveAppAssetUrl("vrms/taobot.vrm");
+  return resolveAppAssetUrl(`vrms/${safeIndex}.vrm`);
 }
 
-/** Resolve a built-in VRM index (1–8) to its preview thumbnail URL. */
+/** Resolve a built-in VRM index (1–9) to its preview thumbnail URL. */
 export function getVrmPreviewUrl(index: number): string {
   const normalized = normalizeAvatarIndex(index);
   const safeIndex = normalized > 0 ? normalized : 1;
-  return safeIndex === 1
-    ? DEFAULT_PRO_STREAMER_VRM_PREVIEW_URL
-    : resolveAppAssetUrl(`vrms/previews/milady-${safeIndex}.png`);
+  if (safeIndex === 1) return DEFAULT_PRO_STREAMER_VRM_PREVIEW_URL;
+  if (safeIndex === TAOBOT_VRM_INDEX) return resolveAppAssetUrl("vrms/previews/taobot.png");
+  return resolveAppAssetUrl(`vrms/previews/milady-${safeIndex}.png`);
 }
 
 // ── Theme ──────────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@
  */
 
 import { useRef } from "react";
-import { getVrmPreviewUrl, VRM_COUNT } from "../AppContext";
+import { getVrmPreviewUrl, VRM_COUNT, TAOBOT_VRM_INDEX } from "../AppContext";
 import { PlusIcon } from "./ui/Icons";
 
 export interface AvatarSelectorProps {
@@ -44,7 +44,7 @@ export function AvatarSelector({
 
   const avatarIndices = Array.from({ length: VRM_COUNT }, (_, i) => i + 1);
   const avatarLabel = (index: number) =>
-    index === 1 ? "Alice" : `Avatar ${index}`;
+    index === 1 ? "Alice" : index === TAOBOT_VRM_INDEX ? "TaoBot" : `Avatar ${index}`;
   const containerClass = fullWidth
     ? "grid gap-3 w-full"
     : "flex flex-wrap gap-3 justify-start";

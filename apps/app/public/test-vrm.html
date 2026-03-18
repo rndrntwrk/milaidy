@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>TaoBot VRM Test</title>
+  <style>body{margin:0;background:#111;color:#0f0;font-family:monospace;padding:20px}canvas{width:100%;height:80vh}#log{white-space:pre-wrap;max-height:300px;overflow:auto;font-size:12px}</style>
+</head>
+<body>
+  <h2>TaoBot VRM Loader Test</h2>
+  <div id="log">Loading modules...</div>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/",
+      "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.3.3/lib/three-vrm.module.min.js"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { VRMLoaderPlugin } from '@pixiv/three-vrm';
+
+    const log = document.getElementById('log');
+    function print(msg) { log.textContent += '\n' + msg; console.log(msg); }
+
+    print('Three.js loaded: ' + THREE.REVISION);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 1.2, 3);
+    camera.lookAt(0, 1, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight * 0.8);
+    renderer.setClearColor(0x222222);
+    document.body.appendChild(renderer.domElement);
+
+    const light = new THREE.DirectionalLight(0xffffff, 2);
+    light.position.set(1, 2, 1);
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0x666666));
+
+    const loader = new GLTFLoader();
+    loader.register((parser) => new VRMLoaderPlugin(parser));
+
+    print('Starting VRM load: /vrms/taobot.vrm');
+    const startTime = Date.now();
+
+    loader.load(
+      '/vrms/taobot.vrm',
+      (gltf) => {
+        print('GLTF loaded in ' + (Date.now() - startTime) + 'ms');
+        print('Scene children: ' + gltf.scene.children.length);
+
+        const vrm = gltf.userData.vrm;
+        if (vrm) {
+          print('VRM loaded successfully!');
+          print('  Meta: ' + JSON.stringify(vrm.meta));
+          print('  Humanoid bones: ' + Object.keys(vrm.humanoid.humanBones).length);
+          scene.add(vrm.scene);
+          vrm.scene.rotation.y = Math.PI;
+        } else {
+          print('WARNING: GLTF loaded but no VRM data found');
+          print('  userData keys: ' + Object.keys(gltf.userData));
+          scene.add(gltf.scene);
+        }
+
+        function animate() {
+          requestAnimationFrame(animate);
+          if (vrm) vrm.update(1/60);
+          renderer.render(scene, camera);
+        }
+        animate();
+        print('Rendering started');
+      },
+      (progress) => {
+        if (progress.total > 0) {
+          const pct = Math.round(progress.loaded / progress.total * 100);
+          print('Loading: ' + pct + '% (' + Math.round(progress.loaded/1024) + ' KB)');
+        }
+      },
+      (error) => {
+        print('ERROR loading VRM: ' + error.message);
+        print(error.stack || '');
+      }
+    );
+  </script>
+</body>
+</html>
