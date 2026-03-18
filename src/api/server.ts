@@ -8715,6 +8715,7 @@ function isWebSocketAuthorized(
   request: http.IncomingMessage,
   url: URL,
 ): boolean {
+  if (process.env.MILAIDY_AUTH_DISABLED === "1") return true;
   const expected = process.env.MILAIDY_API_TOKEN?.trim();
   if (!expected) return true;
 

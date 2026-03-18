@@ -16,6 +16,20 @@ import {
   useState,
 } from "react";
 import {
+  createTranslator,
+  normalizeLanguage,
+  type TranslationVars,
+  type UiLanguage,
+} from "@milady/app-core/i18n";
+import {
+  loadUiLanguage,
+  loadUiShellMode,
+  normalizeUiShellMode,
+  saveUiLanguage,
+  saveUiShellMode,
+  type UiShellMode,
+} from "@milady/app-core/state";
+import {
   type AgentStartupDiagnostics,
   type AgentStatus,
   type AppViewerAuthMessage,
@@ -797,6 +811,8 @@ function formatStartupErrorDetail(err: unknown): string | undefined {
 export interface AppState {
   // Core
   tab: Tab;
+  uiShellMode: UiShellMode;
+  uiLanguage: UiLanguage;
   currentTheme: ThemeName;
   dockSurface: DockSurface;
   streamViewMode: "broadcast" | "operator";
@@ -944,6 +960,7 @@ export interface AppState {
   characterDraft: CharacterData;
   selectedVrmIndex: number;
   customVrmUrl: string;
+  customBackgroundUrl: string;
 
   // Cloud
   cloudEnabled: boolean;
@@ -956,6 +973,16 @@ export interface AppState {
   cloudLoginBusy: boolean;
   cloudLoginError: string | null;
   cloudDisconnecting: boolean;
+  miladyCloudEnabled: boolean;
+  miladyCloudConnected: boolean;
+  miladyCloudCredits: number | null;
+  miladyCloudCreditsLow: boolean;
+  miladyCloudCreditsCritical: boolean;
+  miladyCloudTopUpUrl: string;
+  miladyCloudUserId: string | null;
+  miladyCloudLoginBusy: boolean;
+  miladyCloudLoginError: string | null;
+  miladyCloudDisconnecting: boolean;
 
   // Updates
   updateStatus: UpdateStatus | null;
@@ -1102,6 +1129,8 @@ export interface AppState {
 export interface AppActions {
   // Navigation
   setTab: (tab: Tab) => void;
+  setUiShellMode: (mode: UiShellMode) => void;
+  setUiLanguage: (language: UiLanguage) => void;
   setTheme: (theme: ThemeName) => void;
   openDockSurface: (surface: Exclude<DockSurface, "none">) => void;
   closeDockSurface: () => void;
@@ -1269,6 +1298,9 @@ export interface AppActions {
 
   // Clipboard
   copyToClipboard: (text: string) => Promise<void>;
+
+  // Translations
+  t: (key: string, values?: TranslationVars) => string;
 }
 
 type OnboardingNextOptions = {
@@ -1290,6 +1322,10 @@ export function useApp(): AppContextValue {
 export function AppProvider({ children }: { children: ReactNode }) {
   // --- Core state ---
   const [tab, setTabRaw] = useState<Tab>("chat");
+  const [uiShellMode, setUiShellModeRaw] =
+    useState<UiShellMode>(loadUiShellMode);
+  const [uiLanguage, setUiLanguageRaw] =
+    useState<UiLanguage>(loadUiLanguage);
   const [currentTheme, setCurrentTheme] = useState<ThemeName>(loadTheme);
   const [dockSurface, setDockSurface] = useState<DockSurface>("none");
   const [streamViewMode, setStreamViewMode] =
@@ -1532,6 +1568,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSelectedVrmIndexRaw(normalized);
     saveAvatarIndex(normalized);
   }, []);
+  const setUiShellMode = useCallback((mode: UiShellMode) => {
+    const normalized = normalizeUiShellMode(mode);
+    setUiShellModeRaw(normalized);
+    saveUiShellMode(normalized);
+  }, []);
+  const setUiLanguage = useCallback((language: UiLanguage) => {
+    const normalized = normalizeLanguage(language);
+    setUiLanguageRaw(normalized);
+    saveUiLanguage(normalized);
+  }, []);
+  const t = useMemo(() => createTranslator(uiLanguage), [uiLanguage]);
+  const customBackgroundUrl = "/api/avatar/background";
 
   // --- Cloud ---
   const [cloudEnabled, setCloudEnabled] = useState(false);
@@ -6449,6 +6497,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         [S in keyof AppState]: (v: AppState[S]) => void;
       }> = {
         tab: setTabRaw,
+        uiShellMode: setUiShellMode,
+        uiLanguage: setUiLanguage,
         chatInput: setChatInput,
         chatAvatarVisible: setChatAvatarVisible,
         chatAgentVoiceMuted: setChatAgentVoiceMuted,
@@ -7241,7 +7291,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextValue = {
     // State
-    tab, currentTheme, dockSurface, streamViewMode, leftRailState, rightRailState, activeBubble, hudSurface, hudControlSection, hudAssetSection, connected, agentStatus, onboardingComplete, onboardingLoading,
+    tab, uiShellMode, uiLanguage, currentTheme, dockSurface, streamViewMode, leftRailState, rightRailState, activeBubble, hudSurface, hudControlSection, hudAssetSection, connected, agentStatus, onboardingComplete, onboardingLoading,
     startupPhase, startupError, authRequired, actionNotice, toasts, lifecycleBusy, lifecycleAction,
     pendingRestart, pendingRestartReasons, restartBannerDismissed,
     pairingEnabled, pairingExpiresAt, pairingCodeInput, pairingError, pairingBusy,
@@ -7262,9 +7312,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dropStatus, dropLoading, mintInProgress, mintResult, mintError, mintShiny,
     whitelistStatus, whitelistLoading, twitterVerifyMessage, twitterVerifyUrl, twitterVerifying,
     characterData, characterLoading, characterSaving, characterSaveSuccess,
-    characterSaveError, characterDraft, selectedVrmIndex, customVrmUrl,
+    characterSaveError, characterDraft, selectedVrmIndex, customVrmUrl, customBackgroundUrl,
     cloudEnabled, cloudConnected, cloudCredits, cloudCreditsLow, cloudCreditsCritical,
     cloudTopUpUrl, cloudUserId, cloudLoginBusy, cloudLoginError, cloudDisconnecting,
+    miladyCloudEnabled: cloudEnabled,
+    miladyCloudConnected: cloudConnected,
+    miladyCloudCredits: cloudCredits,
+    miladyCloudCreditsLow: cloudCreditsLow,
+    miladyCloudCreditsCritical: cloudCreditsCritical,
+    miladyCloudTopUpUrl: cloudTopUpUrl,
+    miladyCloudUserId: cloudUserId,
+    miladyCloudLoginBusy: cloudLoginBusy,
+    miladyCloudLoginError: cloudLoginError,
+    miladyCloudDisconnecting: cloudDisconnecting,
     updateStatus, updateLoading, updateChannelSaving,
     extensionStatus, extensionChecking,
     storePlugins, storeSearch, storeFilter, storeLoading, storeInstalling,
@@ -7312,6 +7372,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Actions
     setTab,
+    setUiShellMode,
+    setUiLanguage,
     setTheme,
     openDockSurface,
     closeDockSurface,
@@ -7408,6 +7470,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dismissToast,
     setState,
     copyToClipboard,
+    t,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
