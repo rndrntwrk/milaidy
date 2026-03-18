@@ -988,6 +988,50 @@ async function resolveCanonicalStreamPlugin(
 async function resolveCanonicalArcadePlugin(
   _config: MilaidyConfig,
 ): Promise<Plugin | null> {
+  // Check in-repo vendor path first (built into Docker image at plugins/plugin-555arcade/)
+  const inRepoVendorRoot = path.resolve(
+    findMilaidyProjectRoot(path.dirname(fileURLToPath(import.meta.url))),
+    "plugins",
+    "plugin-555arcade",
+  );
+  for (const candidate of [
+    path.join(inRepoVendorRoot, "dist", "index.js"),
+    path.join(inRepoVendorRoot, "src", "index.ts"),
+  ]) {
+    if (!existsSync(candidate)) continue;
+    try {
+      const mod = (await import(pathToFileURL(candidate).href)) as PluginModuleShape & {
+        arcade555Plugin?: Plugin;
+        createArcade555Plugin?: (options?: {
+          stateDirResolver?: () => string;
+          logger?: typeof logger;
+          now?: () => number;
+          fetchImpl?: typeof fetch;
+        }) => Plugin;
+      };
+      const plugin =
+        mod.createArcade555Plugin?.({
+          stateDirResolver: () => resolveStateDir(process.env),
+          logger,
+          now: () => Date.now(),
+          fetchImpl: (...args: Parameters<typeof fetch>) => fetch(...args),
+        }) ??
+        mod.default ??
+        mod.plugin ??
+        mod.arcade555Plugin;
+      if (plugin) {
+        logger.info(
+          `[milaidy] Canonical arcade plugin resolved from in-repo vendor ${candidate}`,
+        );
+        return plugin;
+      }
+    } catch (err) {
+      logger.warn(
+        `[milaidy] Failed to load canonical arcade plugin from in-repo vendor ${candidate}: ${formatError(err)}`,
+      );
+    }
+  }
+
   const siblingRoot = resolveSiblingWorkspacePackageRoot(
     "@rndrntwrk/plugin-555arcade",
   );
