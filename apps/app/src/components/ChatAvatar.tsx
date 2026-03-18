@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getVrmPreviewUrl, getVrmUrl, useApp } from "../AppContext.js";
 import { client } from "../api-client.js";
-import { STOP_EMOTE_EVENT } from "../events.js";
+import { STOP_EMOTE_EVENT } from "@milady/app-core/events";
 import type { StageSceneMark, StageScenePreset } from "../proStreamerStageScene.js";
 import { AvatarLoader } from "./avatar/AvatarLoader.js";
 import type { VrmEngine, VrmEngineState } from "./avatar/VrmEngine";
