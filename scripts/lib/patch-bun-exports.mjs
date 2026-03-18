@@ -373,28 +373,18 @@ export function applyAppCoreMiladyVrmStatePatch(filePath) {
  * Maps logical avatar indices (1-4) to the original source file numbers.
  * Index 1 → eliza-1, Index 2 → eliza-4, Index 3 → eliza-5, Index 4 → eliza-9.
  */
-const VRM_INDEX_MAP = [1, 4, 5, 9];`,
+`,
     `/**
  * Maps logical avatar indices (1-8) directly to bundled Milady source files.
- */
-const VRM_INDEX_MAP = [1, 2, 3, 4, 5, 6, 7, 8];`,
+ */`,
   );
   updatedSource = updatedSource.replace(
-    "return resolveAppAssetUrl(`vrms/eliza-${sourceIndex}.vrm.gz`);",
-    "return resolveAppAssetUrl(`vrms/milady-${sourceIndex}.vrm.gz`);",
+    "const VRM_INDEX_MAP = [1, 4, 5, 9];",
+    "const VRM_INDEX_MAP = [1, 2, 3, 4, 5, 6, 7, 8];",
   );
-  updatedSource = updatedSource.replace(
-    "return resolveAppAssetUrl(`vrms/previews/eliza-${sourceIndex}.png`);",
-    "return resolveAppAssetUrl(`vrms/previews/milady-${sourceIndex}.png`);",
-  );
-  updatedSource = updatedSource.replace(
-    "return resolveAppAssetUrl(`vrms/backgrounds/eliza-${sourceIndex}.${EXT}`);",
-    "return resolveAppAssetUrl(`vrms/backgrounds/milady-${sourceIndex}.${EXT}`);",
-  );
-  updatedSource = updatedSource.replace(
-    'return `ELIZA-${String(sourceIndex).padStart(2, "0")}`;',
-    'return `MILADY-${String(sourceIndex).padStart(2, "0")}`;',
-  );
+  updatedSource = updatedSource
+    .replaceAll("eliza-", "milady-")
+    .replaceAll("ELIZA-", "MILADY-");
 
   if (updatedSource === compatSource) return false;
 
