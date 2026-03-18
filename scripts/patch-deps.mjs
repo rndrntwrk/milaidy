@@ -139,7 +139,7 @@ if (threeVrmNodeTargets.length === 0) {
     "node_modules/@elizaos/plugin-sql/dist/node/index.node.js",
     "node_modules/@elizaos/plugin-sql/dist/browser/index.browser.js",
   ]
-    .map((rel) => resolve(scriptDir, "..", rel))
+    .map((rel) => resolve(root, rel))
     .filter(existsSync);
 
   const fatalThrow = `throw new Error(\`\${failureCount} migration(s) failed:`;
