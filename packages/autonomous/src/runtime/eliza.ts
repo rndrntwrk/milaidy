@@ -4610,8 +4610,22 @@ export async function startEliza(
     console.log(`[milady] Control UI: ${dashboardUrl}`);
     logger.info(`[milady] API server listening on ${dashboardUrl}`);
   } catch (apiErr) {
-    logger.warn(`[milady] Could not start API server: ${formatError(apiErr)}`);
-    // Non-fatal — CLI chat loop still works without the API server.
+    // Log to both stderr (visible to Electrobun agent.ts) and the in-memory
+    // logger so the error is never silently swallowed in packaged builds.
+    const apiErrMsg = `[milady] Could not start API server: ${formatError(apiErr)}`;
+    console.error(apiErrMsg);
+    logger.warn(apiErrMsg);
+
+    // In server-only mode (Electrobun desktop), a missing API server is fatal
+    // — nothing else can serve requests. Exit so the parent process sees a
+    // non-zero exit code instead of the misleading "Server running" message.
+    if (opts?.serverOnly) {
+      console.error(
+        "[milady] Exiting: API server is required in server-only mode.",
+      );
+      process.exit(1);
+    }
+    // Non-fatal in CLI mode — the interactive chat loop still works.
   }
 
   // ── Server-only mode — keep running without chat loop ────────────────────
