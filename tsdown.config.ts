@@ -15,6 +15,7 @@ const nativeExternals = [
   "@reflink/reflink-linux-arm64-gnu",
   "@reflink/reflink-linux-x64-gnu",
   "fsevents",
+  "keytar",
 ];
 
 export default defineConfig([

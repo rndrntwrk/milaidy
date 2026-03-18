@@ -8,7 +8,7 @@
 /** Core plugins that should always be loaded. */
 export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-sql", // database adapter — required
-  "@elizaos/plugin-local-embedding", // local embeddings — required for memory
+  // "@elizaos/plugin-local-embedding", // local embeddings — disabled (model download blocked; using API embeddings)
   "@elizaos/plugin-secrets-manager", // secrets management — load early, other plugins depend on it
   "@elizaos/plugin-form", // packaging issue
   "@elizaos/plugin-knowledge", // RAG knowledge management — required for knowledge tab

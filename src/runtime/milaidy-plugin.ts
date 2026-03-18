@@ -23,10 +23,12 @@ import {
   attachmentsProvider,
   createUniqueUuid,
   entitiesProvider,
-  factsProvider,
+  knowledgeProvider,
   getSessionProviders,
   resolveDefaultSessionStorePath,
 } from "@elizaos/core";
+// factsProvider was removed in @elizaos/core 2.0.0-alpha.32; use knowledgeProvider as fallback
+const factsProvider = knowledgeProvider;
 import { emoteAction } from "../actions/emote.js";
 import { installPluginAction } from "../actions/install-plugin.js";
 import { mediaActions } from "../actions/media.js";
