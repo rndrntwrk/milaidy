@@ -5,7 +5,8 @@ import { afterAll, afterEach, vi } from "vitest";
 // bun hoists react-test-renderer's peer react into a separate .bun/ path,
 // creating two React instances that break hooks.  Intercept Node's CJS
 // resolution so every `require("react")` returns the root copy.
-{
+// Wrapped in try/catch so CI environments without react don't crash.
+try {
   const _require = Module.createRequire(import.meta.url);
   const rootReactDir = require("node:path").dirname(
     _require.resolve("react/package.json"),
@@ -44,6 +45,8 @@ import { afterAll, afterEach, vi } from "vitest";
       }
       return resolved;
     };
+} catch {
+  // React not available — skip deduplication patch (e.g. CI without react)
 }
 
 // Ensure Vitest environment is properly set

@@ -26,9 +26,7 @@ describe("isSafeResetStateDir", () => {
   });
 
   it("rejects paths outside home even if they contain eliza", () => {
-    expect(isSafeResetStateDir("/tmp/eliza-state", "/Users/alice")).toBe(
-      false,
-    );
+    expect(isSafeResetStateDir("/tmp/eliza-state", "/Users/alice")).toBe(false);
   });
 
   it("rejects substring-only matches without an eliza segment", () => {
