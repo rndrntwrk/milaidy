@@ -22,6 +22,7 @@ import {
   type UiLanguage,
 } from "@milady/app-core/i18n";
 import {
+  enableProStreamerShellMode,
   loadUiLanguage,
   loadUiShellMode,
   normalizeUiShellMode,
@@ -1322,11 +1323,11 @@ export function useApp(): AppContextValue {
 export function AppProvider({ children }: { children: ReactNode }) {
   // --- Core state ---
   const [tab, setTabRaw] = useState<Tab>("chat");
+  const [currentTheme, setCurrentTheme] = useState<ThemeName>(loadTheme);
   const [uiShellMode, setUiShellModeRaw] =
-    useState<UiShellMode>(loadUiShellMode);
+    useState<UiShellMode>(() => loadUiShellMode(currentTheme));
   const [uiLanguage, setUiLanguageRaw] =
     useState<UiLanguage>(loadUiLanguage);
-  const [currentTheme, setCurrentTheme] = useState<ThemeName>(loadTheme);
   const [dockSurface, setDockSurface] = useState<DockSurface>("none");
   const [streamViewMode, setStreamViewMode] =
     useState<"broadcast" | "operator">("broadcast");
@@ -2114,6 +2115,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     applyTheme(name);
 
     if (switchingToMilady) {
+      setUiShellModeRaw(enableProStreamerShellMode());
       collapseRails();
       applyMiladyTabIntent(tab);
       replaceMiladyLocationWithRoot();

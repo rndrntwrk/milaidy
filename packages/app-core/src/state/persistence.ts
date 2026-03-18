@@ -9,6 +9,10 @@ import { normalizeAvatarIndex } from "./vrm";
 
 const UI_LANGUAGE_STORAGE_KEY = "milady:ui-language";
 const UI_SHELL_MODE_STORAGE_KEY = "milady:ui-shell-mode";
+const PRO_STREAMER_SHELL_DEFAULT_STORAGE_KEY =
+  "milady:pro-streamer-shell-default";
+const PRO_STREAMER_SHELL_DEFAULT_VERSION = "2026-03-18";
+const PRO_STREAMER_THEME_ID = "milady-os";
 
 export function loadUiLanguage(): UiLanguage {
   try {
@@ -32,13 +36,40 @@ function normalizeUiShellMode(mode: unknown): UiShellMode {
 }
 export { normalizeUiShellMode };
 
-export function loadUiShellMode(): UiShellMode {
+function shouldBootstrapProStreamerShell(theme: unknown): boolean {
+  return theme === PRO_STREAMER_THEME_ID;
+}
+
+function markProStreamerShellDefaultApplied(): void {
+  localStorage.setItem(
+    PRO_STREAMER_SHELL_DEFAULT_STORAGE_KEY,
+    PRO_STREAMER_SHELL_DEFAULT_VERSION,
+  );
+}
+
+export function loadUiShellMode(theme?: string): UiShellMode {
   try {
-    return normalizeUiShellMode(
-      localStorage.getItem(UI_SHELL_MODE_STORAGE_KEY),
-    );
+    const storedShellMode = localStorage.getItem(UI_SHELL_MODE_STORAGE_KEY);
+    const normalized =
+      storedShellMode === null ? null : normalizeUiShellMode(storedShellMode);
+    if (shouldBootstrapProStreamerShell(theme)) {
+      const bootstrapped =
+        localStorage.getItem(PRO_STREAMER_SHELL_DEFAULT_STORAGE_KEY) ===
+        PRO_STREAMER_SHELL_DEFAULT_VERSION;
+      if (!bootstrapped) {
+        markProStreamerShellDefaultApplied();
+        if (normalized !== "native") {
+          localStorage.setItem(UI_SHELL_MODE_STORAGE_KEY, "native");
+          return "native";
+        }
+      }
+      if (normalized) return normalized;
+      localStorage.setItem(UI_SHELL_MODE_STORAGE_KEY, "native");
+      return "native";
+    }
+    return normalized ?? "companion";
   } catch {
-    return "companion";
+    return shouldBootstrapProStreamerShell(theme) ? "native" : "companion";
   }
 }
 
@@ -48,6 +79,16 @@ export function saveUiShellMode(mode: UiShellMode): void {
   } catch {
     // ignore
   }
+}
+
+export function enableProStreamerShellMode(): UiShellMode {
+  try {
+    localStorage.setItem(UI_SHELL_MODE_STORAGE_KEY, "native");
+    markProStreamerShellDefaultApplied();
+  } catch {
+    // ignore
+  }
+  return "native";
 }
 
 /* ── Avatar persistence ───────────────────────────────────────────────── */

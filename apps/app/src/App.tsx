@@ -124,7 +124,10 @@ export function App() {
   } = useApp();
 
   const isPopout = useIsPopout();
-  const shellMode = uiShellMode ?? "companion";
+  const shellMode =
+    currentTheme === "milady-os"
+      ? (uiShellMode ?? "native")
+      : (uiShellMode ?? "companion");
   const effectiveTab: Tab =
     shellMode === "native" && tab === "companion"
       ? "chat"
