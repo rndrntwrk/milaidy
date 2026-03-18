@@ -299,8 +299,6 @@ beforeEach(async () => {
 
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "eliza-reg-test-"));
   savedEnv = {
-    ELIZA_STATE_DIR: process.env.ELIZA_STATE_DIR,
-    ELIZA_WORKSPACE_ROOT: process.env.ELIZA_WORKSPACE_ROOT,
     // The upstream autonomous package uses ELIZA_* env vars
     ELIZA_STATE_DIR: process.env.ELIZA_STATE_DIR,
     ELIZA_WORKSPACE_ROOT: process.env.ELIZA_WORKSPACE_ROOT,

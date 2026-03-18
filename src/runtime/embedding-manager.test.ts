@@ -65,10 +65,10 @@ process.env.ELIZA_EMBEDDING_META_PATH = path.join(
 // ---------------------------------------------------------------------------
 
 import {
+  ElizaEmbeddingManager,
   EMBEDDING_META_PATH,
   type EmbeddingManagerConfig,
   ensureModel,
-  ElizaEmbeddingManager,
   readEmbeddingMeta,
 } from "./embedding-manager.js";
 import { detectEmbeddingPreset } from "./embedding-presets.js";
@@ -417,9 +417,7 @@ describe("ElizaEmbeddingManager", () => {
       );
 
       // Create manager with new dimensions (768)
-      const mgr = new ElizaEmbeddingManager(
-        defaultConfig({ dimensions: 768 }),
-      );
+      const mgr = new ElizaEmbeddingManager(defaultConfig({ dimensions: 768 }));
       await mgr.generateEmbedding("trigger init");
 
       // Metadata should be updated
@@ -445,9 +443,7 @@ describe("ElizaEmbeddingManager", () => {
         }),
       );
 
-      const mgr = new ElizaEmbeddingManager(
-        defaultConfig({ dimensions: 768 }),
-      );
+      const mgr = new ElizaEmbeddingManager(defaultConfig({ dimensions: 768 }));
       await mgr.generateEmbedding("trigger init");
 
       await mgr.dispose();

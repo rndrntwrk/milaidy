@@ -1224,11 +1224,7 @@ describe("applyX402ConfigToEnv", () => {
 // ---------------------------------------------------------------------------
 
 describe("applyDatabaseConfigToEnv", () => {
-  const envKeys = [
-    "POSTGRES_URL",
-    "PGLITE_DATA_DIR",
-    "ELIZA_PROFILE",
-  ];
+  const envKeys = ["POSTGRES_URL", "PGLITE_DATA_DIR", "ELIZA_PROFILE"];
   const snap = envSnapshot(envKeys);
 
   beforeEach(() => {
@@ -1314,11 +1310,7 @@ describe("applyDatabaseConfigToEnv", () => {
 // ---------------------------------------------------------------------------
 
 describe("applyDatabaseConfigToEnv — directory creation", () => {
-  const envKeys = [
-    "POSTGRES_URL",
-    "PGLITE_DATA_DIR",
-    "ELIZA_PROFILE",
-  ];
+  const envKeys = ["POSTGRES_URL", "PGLITE_DATA_DIR", "ELIZA_PROFILE"];
   const snap = envSnapshot(envKeys);
 
   beforeEach(() => {
@@ -1561,9 +1553,7 @@ describe("buildCharacterFromConfig", () => {
   it("does not throw when agents.list is empty", () => {
     const config = { agents: { list: [] } } as ElizaConfig;
     expect(() => buildCharacterFromConfig(config)).not.toThrow();
-    expect(["Eliza", "Eliza"]).toContain(
-      buildCharacterFromConfig(config).name,
-    );
+    expect(["Eliza", "Eliza"]).toContain(buildCharacterFromConfig(config).name);
   });
 
   it("builds a character with name from agents.list and default personality", () => {
