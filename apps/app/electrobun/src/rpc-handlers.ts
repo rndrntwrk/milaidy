@@ -3,7 +3,7 @@
  *
  * Maps each RPC request method from MiladyRPCSchema.bun.requests
  * to the corresponding native module method. This is the Bun-side
- * equivalent of Electron's ipcMain.handle() registration.
+ * equivalent of main-process request handler registration.
  *
  * Called once during app startup after the BrowserView is created.
  */
@@ -11,6 +11,7 @@
 import { Updater } from "electrobun/bun";
 import { getAgentManager } from "./native/agent";
 import { getCameraManager } from "./native/camera";
+import { scanProviderCredentials } from "./native/credentials";
 import { getCanvasManager } from "./native/canvas";
 import { getDesktopManager } from "./native/desktop";
 import { getGatewayDiscovery } from "./native/gateway";
@@ -396,6 +397,11 @@ export function registerRpcHandlers(
     contextMenuSaveAsCommand: async (params: { text: string }) => {
       sendToWebview("contextMenu:saveAsCommand", { text: params.text });
     },
+
+    // ---- Credentials Auto-Detection ----
+    credentialsScanProviders: async () => ({
+      providers: await scanProviderCredentials(),
+    }),
 
     // ---- GPU Window ----
     gpuWindowCreate: async (

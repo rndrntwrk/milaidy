@@ -35,7 +35,7 @@ interface SwabbleConfig {
 }
 
 // ============================================================================
-// WakeWordGate — ported from apps/app/electron/src/native/swabble.ts
+// WakeWordGate — ported from apps/app/electrobun/src/native/swabble.ts
 // ============================================================================
 
 class WakeWordGate {
