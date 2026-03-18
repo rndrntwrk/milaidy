@@ -1,182 +1,130 @@
 /**
- * REST API server for the Milady Control UI.
+ * REST API server for the Milaidy Control UI.
  *
  * Exposes HTTP endpoints that the UI frontend expects, backed by the
- * elizaOS AgentRuntime. Default port: 2138. In dev mode, the Vite UI
+ * ElizaOS AgentRuntime. Default port: 2138. In dev mode, the Vite UI
  * dev server proxies /api and /ws here (see scripts/dev-ui.mjs).
  */
 
 import crypto from "node:crypto";
-import { lookup as dnsLookup } from "node:dns/promises";
+import dns from "node:dns";
 import fs from "node:fs";
 import http from "node:http";
-import net from "node:net";
+import https from "node:https";
 import os from "node:os";
 import path from "node:path";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { fileURLToPath } from "node:url";
 import {
+  type Action,
   type AgentRuntime,
   ChannelType,
   type Content,
-  ContentType,
   createMessageMemory,
+  type HandlerCallback,
   logger,
-  type Media,
   ModelType,
+  type State,
   stringToUuid,
   type Task,
   type UUID,
 } from "@elizaos/core";
-
-/**
- * Local stubs for types removed from @elizaos/plugin-agent-orchestrator 2.x.
- * These are only used as structural types for the SwarmCoordinator callbacks;
- * no runtime import is needed.
- */
-// biome-ignore lint/suspicious/noExplicitAny: legacy coordinator event payload
-type SwarmEvent = Record<string, any>;
-// biome-ignore lint/suspicious/noExplicitAny: legacy coordinator task context
-type TaskContext = Record<string, any>;
-interface CoordinationLLMResponse {
-  action: string;
-  reasoning: string;
-  response?: string;
-  useKeys?: boolean;
-  keys?: string[];
-}
-interface TaskCompletionSummary {
-  sessionId: string;
-  label: string;
-  agentType: string;
-  originalTask: string;
-  status: string;
-  completionSummary: string;
-  // biome-ignore lint/suspicious/noExplicitAny: legacy coordinator summary
-  [key: string]: any;
-}
-
-import { listPiAiModelOptions } from "@elizaos/plugin-pi-ai";
-import { ethers } from "ethers";
-import { type WebSocket, WebSocketServer } from "ws";
-import { getGlobalAwarenessRegistry } from "../awareness/registry";
-import type { CloudManager } from "../cloud/cloud-manager";
+import * as piAi from "@mariozechner/pi-ai";
+import { WebSocket as WsClient, type WebSocket, WebSocketServer } from "ws";
+import { CloudManager } from "../cloud/cloud-manager.js";
 import {
   configFileExists,
-  loadMiladyConfig,
-  type MiladyConfig,
-  saveMiladyConfig,
-} from "../config/config";
-import { resolveModelsCacheDir, resolveStateDir } from "../config/paths";
+  loadMilaidyConfig,
+  type MilaidyConfig,
+  saveMilaidyConfig,
+} from "../config/config.js";
+import { resolveModelsCacheDir, resolveStateDir } from "../config/paths.js";
+import type {
+  ConnectorConfig,
+  CustomActionDef,
+} from "../config/types.milady.js";
+import { CharacterSchema } from "../config/zod-schema.js";
+import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
+import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import {
-  isConnectorConfigured,
-  isStreamingDestinationConfigured,
-} from "../config/plugin-auto-enable";
-import type { ConnectorConfig, CustomActionDef } from "../config/types.milady";
-import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog";
-import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace";
-import {
-  type AgentEventPayloadLike,
-  type AgentEventServiceLike,
-  getAgentEventService,
-} from "../runtime/agent-event-service";
-import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "../runtime/core-plugins";
+  CORE_PLUGINS,
+  OPTIONAL_CORE_PLUGINS,
+} from "../runtime/core-plugins.js";
 import {
   buildTestHandler,
   registerCustomActionLive,
-} from "../runtime/custom-actions";
+} from "../runtime/custom-actions.js";
 import {
-  isBlockedPrivateOrLinkLocalIp,
-  normalizeHostLike,
-} from "../security/network-policy";
-import { AppManager } from "../services/app-manager";
-import { FallbackTrainingService } from "../services/fallback-training-service";
+  assertFive55Capability,
+  createFive55CapabilityPolicy,
+} from "../runtime/five55-capability-policy.js";
+import { resolveFive55CapabilityForRequest } from "../runtime/five55-capability-routing.js";
+import {
+  createAgentRequestId,
+} from "../plugins/five55-shared/agent-auth.js";
+import {
+  ensureGamesAgentSessionId,
+  extractGamesUpstreamError,
+  requestGamesAgentJson,
+} from "./five55-games-agent.js";
+import { isPublicUiRequest } from "./publicUiAuth.js";
+import {
+  canonicalizeMasteryGameId,
+  getMasteryContract,
+  listMasteryContracts,
+  listMasteryRuns as listPersistedMasteryRuns,
+  readMasteryEpisodeConsistency,
+  readMasteryEpisodeFrames,
+  readMasteryEpisodes,
+  readMasteryGameSnapshot,
+  readMasteryLogs,
+  readMasteryRun,
+  readMasteryRunEvidence,
+} from "@rndrntwrk/plugin-555arcade/mastery";
+import { createPiCredentialProvider } from "../runtime/pi-credentials.js";
+import {
+  AgentExportError,
+  estimateExportSize,
+  exportAgent,
+  importAgent,
+} from "../services/agent-export.js";
+import { AppManager } from "../services/app-manager.js";
+import {
+  isManagedAppRemoteProxyHostAllowed,
+  resolveManagedAppFallbackUrl,
+  resolveManagedAppUpstreamUrl,
+} from "../services/app-catalog.js";
+import {
+  HyperscapeAutonomySessionManager,
+  logHyperscapeAutonomyEvent,
+  resolveDefaultHyperscapeAutonomyAgentId,
+  resolveHyperscapeAutonomyEnabled,
+} from "../services/hyperscape-autonomy-session-manager.js";
+import type {
+  InstallProgressLike,
+  PluginManagerLike,
+} from "../services/plugin-manager-types.js";
 import {
   getMcpServerDetails,
   searchMcpMarketplace,
-} from "../services/mcp-marketplace";
-import {
-  type CoreManagerLike,
-  type InstallProgressLike,
-  isCoreManagerLike,
-  isPluginManagerLike,
-  type PluginManagerLike,
-} from "../services/plugin-manager-types";
-import {
-  ensurePrivyWalletsForCustomUser,
-  isPrivyWalletProvisioningEnabled,
-} from "../services/privy-wallets";
-import type { SandboxManager } from "../services/sandbox-manager";
+} from "../services/mcp-marketplace.js";
+import type { SandboxManager } from "../services/sandbox-manager.js";
 import {
   installMarketplaceSkill,
   listInstalledMarketplaceSkills,
   searchSkillsMarketplace,
   uninstallMarketplaceSkill,
-} from "../services/skill-marketplace";
-import { streamManager } from "../services/stream-manager";
+} from "../services/skill-marketplace.js";
+import { TrainingService } from "../services/training-service.js";
 import {
   listTriggerTasks,
   readTriggerConfig,
   taskToTriggerSummary,
-} from "../triggers/runtime";
-import { parseClampedInteger } from "../utils/number-parsing";
-import { handleAgentAdminRoutes } from "./agent-admin-routes";
-import { handleAgentLifecycleRoutes } from "./agent-lifecycle-routes";
-import { detectRuntimeModel, resolveProviderFromModel } from "./agent-model";
-import { handleAgentTransferRoutes } from "./agent-transfer-routes";
-import { handleAppsHyperscapeRoutes } from "./apps-hyperscape-routes";
-import { handleAppsRoutes } from "./apps-routes";
-import { handleAuthRoutes } from "./auth-routes";
-import { getAutonomyState, handleAutonomyRoutes } from "./autonomy-routes";
-import {
-  buildBscApproveUnsignedTx,
-  buildBscBuyUnsignedTx,
-  buildBscSellUnsignedTx,
-  buildBscTradePreflight,
-  buildBscTradeQuote,
-  resolvePrimaryBscRpcUrl,
-} from "./bsc-trade";
-import { handleBugReportRoutes } from "./bug-report-routes";
-import { handleCharacterRoutes } from "./character-routes";
-import { handleCloudCompatRoute } from "./cloud-compat-routes";
-import { type CloudRouteState, handleCloudRoute } from "./cloud-routes";
-import { handleCloudStatusRoutes } from "./cloud-status-routes";
-import {
-  extractAnthropicSystemAndLastUser,
-  extractCompatTextContent,
-  extractOpenAiSystemAndLastUser,
-  resolveCompatRoomKey,
-} from "./compat-utils";
-import { ConnectorHealthMonitor } from "./connector-health";
-import { wireCoordinatorBridgesWhenReady } from "./coordinator-wiring";
-import {
-  isInsufficientCreditsError,
-  isInsufficientCreditsMessage,
-} from "./credit-detection";
-import { handleDatabaseRoute } from "./database";
-import { handleDiagnosticsRoutes } from "./diagnostics-routes";
-import { DropService } from "./drop-service";
-import {
-  readJsonBody as parseJsonBody,
-  type ReadJsonBodyOptions,
-  readRequestBody,
-  readRequestBodyBuffer,
-  sendJson,
-  sendJsonError,
-} from "./http-helpers";
-import { handleKnowledgeRoutes } from "./knowledge-routes";
-import {
-  evictOldestConversation,
-  getOrReadCachedFile,
-  pushWithBatchEvict,
-  sweepExpiredEntries,
-} from "./memory-bounds";
-import { handleMemoryRoutes } from "./memory-routes";
-import { buildWhitelistTree, generateProof } from "./merkle-tree";
-import { handleModelsRoutes } from "./models-routes";
-import { handleNfaRoutes } from "./nfa-routes";
-import { verifyAndWhitelistHolder } from "./nft-verify";
-import type { PTYService } from "./parse-action-block";
-import { handlePermissionRoutes } from "./permissions-routes";
+} from "../triggers/runtime.js";
+import { type CloudRouteState, handleCloudRoute } from "./cloud-routes.js";
+import { handleDatabaseRoute } from "./database.js";
+import { DropService } from "./drop-service.js";
+import { handleKnowledgeRoutes } from "./knowledge-routes.js";
 import {
   createRateLimitMiddleware,
   type RateLimitMiddleware,
@@ -184,72 +132,979 @@ import {
 import {
   type PluginParamInfo,
   validatePluginConfig,
-} from "./plugin-validation";
+} from "./plugin-validation.js";
+import { RegistryService } from "./registry-service.js";
+import { handleSandboxRoute } from "./sandbox-routes.js";
+import { handleTrainingRoutes } from "./training-routes.js";
+import { handleTrajectoryRoute } from "./trajectory-routes.js";
+import { handleTriggerRoutes } from "./trigger-routes.js";
 import {
-  applySubscriptionProviderConfig,
-  clearSubscriptionProviderConfig,
-} from "./provider-switch-config";
-import { handleRegistryRoutes } from "./registry-routes";
-import { RegistryService } from "./registry-service";
-import { handleSandboxRoute } from "./sandbox-routes";
-
-import { handleSubscriptionRoutes } from "./subscription-routes";
-import { resolveTerminalRunLimits } from "./terminal-run-limits";
-import { handleTrainingRoutes } from "./training-routes";
-import type { TrainingServiceWithRuntime } from "./training-service-like";
-import { handleTrajectoryRoute } from "./trajectory-routes";
-import { handleTriggerRoutes } from "./trigger-routes";
+  enforceSimpleModeReplyBoundaries,
+  resolveEffectiveChatMode,
+} from "./chat-mode-guard.js";
 import {
   generateVerificationMessage,
   isAddressWhitelisted,
   markAddressVerified,
   verifyTweet,
-} from "./twitter-verify";
-import { TxService } from "./tx-service";
-import { generateWalletKeys, getWalletAddresses } from "./wallet";
-import { handleWalletRoutes } from "./wallet-routes";
+} from "./twitter-verify.js";
+import { TxService } from "./tx-service.js";
 import {
-  loadWalletTradingProfile,
-  recordWalletTradeLedgerEntry,
-  updateWalletTradeLedgerEntryStatus,
-} from "./wallet-trading-profile";
+  fetchEvmBalances,
+  fetchEvmNfts,
+  fetchSolanaBalances,
+  fetchSolanaNfts,
+  generateWalletForChain,
+  generateWalletKeys,
+  getSolanaRpcConfig,
+  getWalletAddresses,
+  importWallet,
+  validatePrivateKey,
+  type SolanaRpcProvider,
+  type WalletBalancesResponse,
+  type WalletChain,
+  type WalletConfigStatus,
+  type WalletNftsResponse,
+} from "./wallet.js";
 import {
-  applyWhatsAppQrOverride,
-  handleWhatsAppRoute,
-} from "./whatsapp-routes";
+  createHealthChecks,
+  createHealthHandler,
+  type HealthCheck,
+} from "./health.js";
+import { initTelemetry, metrics } from "../telemetry/setup.js";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-/** A connector-registered route handler. Returns `true` if the request was handled. */
-type ConnectorRouteHandler = (
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
+/** Subset of the core AutonomyService interface we use for lifecycle control. */
+interface AutonomyServiceLike {
+  enableAutonomy(): Promise<void>;
+  disableAutonomy(): Promise<void>;
+  isLoopRunning(): boolean;
+  getGoalManager?(): import("../autonomy/goals/manager.js").GoalManager | null;
+  getMemoryGate?(): import("../autonomy/memory/gate.js").MemoryGate | null;
+  getIdentityConfig?(): import("../autonomy/identity/schema.js").AutonomyIdentityConfig | null;
+  updateIdentityConfig?(
+    update: Partial<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>,
+    context?: import("../autonomy/identity/update-policy.js").IdentityUpdateContext,
+  ): Promise<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>;
+  getApprovalGate?(): import("../autonomy/approval/types.js").ApprovalGateInterface | null;
+  getApprovalLog?(): import("../autonomy/persistence/pg-approval-log.js").ApprovalLogInterface | null;
+  getStateMachine?(): import("../autonomy/state-machine/types.js").KernelStateMachineInterface | null;
+  getExecutionPipeline?(): import("../autonomy/workflow/types.js").ToolExecutionPipelineInterface | null;
+  getWorkflowEngine?(): import("../autonomy/adapters/workflow/types.js").WorkflowEngine | null;
+  getAuditRetentionManager?(): import("../autonomy/domains/governance/retention-manager.js").AuditRetentionManagerInterface | null;
+  getRoleHealth?(): import("../autonomy/service.js").AutonomyRoleHealthSnapshot;
+}
+
+interface Stream555ApprovalServiceLike {
+  listPendingApprovals?(): Array<{
+    id: string;
+    actionName: string;
+    actionParams: Record<string, unknown>;
+    createdAt: number;
+    expiresAt: number;
+  }>;
+  resolveApproval?(
+    approvalId: string,
+    decision: "approved" | "denied",
+    decidedBy?: string,
+  ): boolean;
+}
+
+/** Helper to retrieve the AutonomyService from a runtime (may be null). */
+function getAutonomySvc(
+  runtime: AgentRuntime | null,
+): AutonomyServiceLike | null {
+  if (!runtime) return null;
+  return runtime.getService("AUTONOMY") as AutonomyServiceLike | null;
+}
+
+function getStream555ApprovalSvc(
+  runtime: AgentRuntime | null,
+): Stream555ApprovalServiceLike | null {
+  if (!runtime) return null;
+  return runtime.getService("stream555") as Stream555ApprovalServiceLike | null;
+}
+
+function toPendingStream555Approvals(
+  runtime: AgentRuntime | null,
+): import("../autonomy/approval/types.js").ApprovalRequest[] {
+  const streamSvc = getStream555ApprovalSvc(runtime);
+  const approvals = streamSvc?.listPendingApprovals?.() ?? [];
+
+  return approvals.map((approval) => ({
+    id: approval.id,
+    call: {
+      tool: approval.actionName,
+      params: approval.actionParams,
+      source: "plugin",
+      requestId: approval.id,
+    },
+    riskClass: "reversible",
+    createdAt: approval.createdAt,
+    expiresAt: approval.expiresAt,
+  }));
+}
+
+function describeProxyError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
+const HYPERSCAPE_ASSET_ORIGIN = "https://assets.hyperscape.club";
+const HYPERSCAPE_RUNTIME_API_ORIGIN =
+  "https://hyperscape-production.up.railway.app";
+const DEFAULT_HYPERSCAPE_API_BASE_URL = "http://localhost:5555";
+const HYPERSCAPE_WS_PROBE_TIMEOUT_MS = 6_000;
+const HYPERSCAPE_HTTP_PROBE_TIMEOUT_MS = 6_000;
+const HYPERSCAPE_SCRIPT_MIME_PROBE_TIMEOUT_MS = 8_000;
+
+export function resolveManagedAppUpstreamOrigin(
+  appName: string,
+  upstreamPath: string,
+  defaultOrigin: string,
+): string {
+  if (appName !== HYPERSCAPE_APP_NAME) return defaultOrigin;
+  if (
+    upstreamPath.startsWith("/manifests/") ||
+    upstreamPath.startsWith("/game-assets/") ||
+    upstreamPath.startsWith("/web/") ||
+    upstreamPath.startsWith("/audio/")
+  ) {
+    return HYPERSCAPE_ASSET_ORIGIN;
+  }
+  if (upstreamPath.startsWith("/api/errors/")) {
+    return HYPERSCAPE_RUNTIME_API_ORIGIN;
+  }
+  return defaultOrigin;
+}
+
+function normalizeHyperscapeApiBaseUrl(raw: string | undefined): string | null {
+  const trimmed = raw?.trim();
+  if (!trimmed) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol === "ws:") {
+    parsed.protocol = "http:";
+  } else if (parsed.protocol === "wss:") {
+    parsed.protocol = "https:";
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null;
+  }
+
+  parsed.hash = "";
+  parsed.pathname = parsed.pathname.replace(/\/+$/g, "");
+  if (parsed.pathname.toLowerCase().endsWith("/ws")) {
+    parsed.pathname = parsed.pathname.slice(0, -3);
+  }
+  if (!parsed.pathname) {
+    parsed.pathname = "/";
+  }
+
+  return parsed.toString().replace(/\/+$/g, "");
+}
+
+export function resolveHyperscapeApiBaseUrl(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const fromApiUrl = normalizeHyperscapeApiBaseUrl(env.HYPERSCAPE_API_URL);
+  if (fromApiUrl) return fromApiUrl;
+
+  const fromServerUrl = normalizeHyperscapeApiBaseUrl(
+    env.HYPERSCAPE_SERVER_URL,
+  );
+  if (fromServerUrl) return fromServerUrl;
+
+  return DEFAULT_HYPERSCAPE_API_BASE_URL;
+}
+
+function normalizeHyperscapeWsUrl(raw: string | undefined): string | null {
+  const trimmed = raw?.trim();
+  if (!trimmed) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol === "http:") {
+    parsed.protocol = "ws:";
+  } else if (parsed.protocol === "https:") {
+    parsed.protocol = "wss:";
+  }
+  if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
+    return null;
+  }
+  if (!parsed.pathname || parsed.pathname === "/") {
+    parsed.pathname = "/ws";
+  }
+  return parsed.toString();
+}
+
+export function resolveHyperscapeWsProbeUrl(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const explicit = normalizeHyperscapeWsUrl(env.HYPERSCAPE_WS_URL);
+  if (explicit) return explicit;
+
+  const derived = new URL(resolveHyperscapeApiBaseUrl(env));
+  derived.protocol = derived.protocol === "https:" ? "wss:" : "ws:";
+  derived.pathname = `${derived.pathname.replace(/\/+$/g, "")}/ws`;
+  derived.search = "";
+  derived.hash = "";
+  return derived.toString();
+}
+
+type HyperscapeProbeResult = {
+  healthy: boolean;
+  message?: string;
+  details?: Record<string, unknown>;
+};
+
+async function probeHyperscapeApiReachability(
+  baseUrl: string,
+  timeoutMs = HYPERSCAPE_HTTP_PROBE_TIMEOUT_MS,
+): Promise<HyperscapeProbeResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(new URL("/api/embedded-agents", baseUrl), {
+      method: "GET",
+      signal: controller.signal,
+    });
+    const status = response.status;
+    const healthy = status < 500;
+    return {
+      healthy,
+      message: healthy
+        ? undefined
+        : `Hyperscape API probe returned status ${status}`,
+      details: {
+        status,
+        baseUrl,
+      },
+    };
+  } catch (error) {
+    return {
+      healthy: false,
+      message: `Hyperscape API probe failed: ${describeProxyError(error)}`,
+      details: { baseUrl },
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function probeHyperscapeWsReachability(
+  wsUrl: string,
+  timeoutMs = HYPERSCAPE_WS_PROBE_TIMEOUT_MS,
+): Promise<HyperscapeProbeResult> {
+  return await new Promise((resolve) => {
+    const startedAt = Date.now();
+    let settled = false;
+    let opened = false;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    let ws: WsClient | null = null;
+
+    const finalize = (result: HyperscapeProbeResult): void => {
+      if (settled) return;
+      settled = true;
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      if (ws) {
+        try {
+          ws.close();
+          ws.terminate();
+        } catch {
+          // ignore close errors
+        }
+      }
+      resolve(result);
+    };
+
+    timeout = setTimeout(() => {
+      finalize({
+        healthy: false,
+        message: `Hyperscape WebSocket probe timed out after ${timeoutMs}ms`,
+        details: { wsUrl, timeoutMs },
+      });
+    }, timeoutMs);
+
+    try {
+      ws = new WsClient(wsUrl, {
+        handshakeTimeout: timeoutMs,
+      });
+    } catch (error) {
+      finalize({
+        healthy: false,
+        message: `Hyperscape WebSocket probe failed to initialize: ${describeProxyError(error)}`,
+        details: { wsUrl },
+      });
+      return;
+    }
+
+    ws.once("open", () => {
+      opened = true;
+      finalize({
+        healthy: true,
+        details: { wsUrl, latencyMs: Date.now() - startedAt },
+      });
+    });
+
+    ws.once("close", (code, reasonBuffer) => {
+      const reason = reasonBuffer.toString();
+      const reachableByClose = opened || code !== 1006;
+      finalize({
+        healthy: reachableByClose,
+        message: reachableByClose
+          ? undefined
+          : `Hyperscape WebSocket closed before handshake (code ${code}${reason ? `, reason: ${reason}` : ""})`,
+        details: { wsUrl, code, reason },
+      });
+    });
+
+    ws.once("error", (error) => {
+      finalize({
+        healthy: false,
+        message: `Hyperscape WebSocket probe error: ${describeProxyError(error)}`,
+        details: { wsUrl },
+      });
+    });
+  });
+}
+
+function extractFirstJavaScriptAssetUrl(html: string): string | null {
+  const scriptSrcPattern = /<script[^>]+src=["']([^"']+)["']/gi;
+  let match: RegExpExecArray | null;
+  while ((match = scriptSrcPattern.exec(html)) !== null) {
+    const candidate = match[1]?.trim();
+    if (!candidate) continue;
+    const normalized = candidate.toLowerCase();
+    if (
+      normalized.endsWith(".js") ||
+      normalized.includes(".js?") ||
+      normalized.endsWith(".mjs") ||
+      normalized.includes(".mjs?")
+    ) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+async function probeManagedAppScriptMime(
+  appName: string,
+  timeoutMs = HYPERSCAPE_SCRIPT_MIME_PROBE_TIMEOUT_MS,
+): Promise<HyperscapeProbeResult> {
+  const configuredUrl =
+    resolveManagedAppFallbackUrl(appName) ?? resolveManagedAppUpstreamUrl(appName);
+  if (!configuredUrl) {
+    return {
+      healthy: false,
+      message: `No managed app URL configured for ${appName}`,
+      details: { appName },
+    };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const htmlResponse = await fetch(configuredUrl, {
+      method: "GET",
+      headers: { Accept: "text/html" },
+      signal: controller.signal,
+    });
+    if (!htmlResponse.ok) {
+      return {
+        healthy: false,
+        message: `Managed app HTML probe failed with status ${htmlResponse.status}`,
+        details: { appName, url: configuredUrl, status: htmlResponse.status },
+      };
+    }
+
+    const html = await htmlResponse.text();
+    const scriptSrc = extractFirstJavaScriptAssetUrl(html);
+    if (!scriptSrc) {
+      return {
+        healthy: false,
+        message: "Managed app probe could not find a JavaScript asset URL",
+        details: { appName, url: configuredUrl },
+      };
+    }
+
+    const scriptUrl = new URL(scriptSrc, htmlResponse.url || configuredUrl).toString();
+    const scriptResponse = await fetch(scriptUrl, {
+      method: "GET",
+      headers: { Accept: "application/javascript,text/javascript,*/*;q=0.1" },
+      signal: controller.signal,
+    });
+    const contentType = scriptResponse.headers.get("content-type") ?? "";
+    const isHtmlContent = /text\/html/i.test(contentType);
+    const healthy = scriptResponse.ok && !isHtmlContent;
+    return {
+      healthy,
+      message: healthy
+        ? undefined
+        : `Managed app script probe returned invalid MIME (${contentType || "unknown"})`,
+      details: {
+        appName,
+        url: scriptUrl,
+        status: scriptResponse.status,
+        contentType,
+      },
+    };
+  } catch (error) {
+    return {
+      healthy: false,
+      message: `Managed app script MIME probe failed: ${describeProxyError(error)}`,
+      details: { appName, url: configuredUrl },
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function runHyperscapeOperationalHealthSnapshot(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{
+  status: "healthy" | "degraded" | "unhealthy";
+  checks: Record<string, HyperscapeProbeResult>;
+}> {
+  const baseUrl = resolveHyperscapeApiBaseUrl(env);
+  const wsUrl = resolveHyperscapeWsProbeUrl(env);
+  const [api, ws, scriptMime] = await Promise.all([
+    probeHyperscapeApiReachability(baseUrl),
+    probeHyperscapeWsReachability(wsUrl),
+    probeManagedAppScriptMime(HYPERSCAPE_APP_NAME),
+  ]);
+
+  const checks: Record<string, HyperscapeProbeResult> = { api, ws, scriptMime };
+  const unhealthyCount = Object.values(checks).filter((check) => !check.healthy).length;
+  const status =
+    unhealthyCount === 0
+      ? "healthy"
+      : unhealthyCount === Object.keys(checks).length
+        ? "unhealthy"
+        : "degraded";
+
+  metrics.gauge("milaidy.hyperscape.ops_probe_unhealthy_checks", unhealthyCount);
+  metrics.gauge(
+    "milaidy.hyperscape.ops_probe_status",
+    status === "healthy" ? 0 : status === "degraded" ? 1 : 2,
+  );
+  if (status !== "healthy") {
+    metrics.counter("milaidy.hyperscape.ops_probe_fail_total", 1, {
+      status,
+    });
+  }
+
+  return { status, checks };
+}
+
+export function resolveHyperscapeAuthorizationHeader(
+  _req: Pick<http.IncomingMessage, "headers">,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const envToken = env.HYPERSCAPE_AUTH_TOKEN?.trim();
+  if (!envToken) {
+    return null;
+  }
+  return /^Bearer\s+/i.test(envToken) ? envToken : `Bearer ${envToken}`;
+}
+
+function rewriteRootRelativeAssetPaths(
+  value: string,
+  localProxyRoot: string,
+): string {
+  return value
+    .replaceAll('"/_next/', `"${localProxyRoot}_next/`)
+    .replaceAll("'/_next/", `'${localProxyRoot}_next/`)
+    .replaceAll("`/_next/", `\`${localProxyRoot}_next/`)
+    .replaceAll('"/sw.js"', `"${localProxyRoot}sw.js"`)
+    .replaceAll("'/sw.js'", `'${localProxyRoot}sw.js'`)
+    .replaceAll("`/sw.js`", `\`${localProxyRoot}sw.js\``)
+    .replaceAll(
+      '"/manifest.webmanifest"',
+      `"${localProxyRoot}manifest.webmanifest"`,
+    )
+    .replaceAll(
+      "'/manifest.webmanifest'",
+      `'${localProxyRoot}manifest.webmanifest'`,
+    )
+    .replaceAll(
+      "`/manifest.webmanifest`",
+      `\`${localProxyRoot}manifest.webmanifest\``,
+    )
+    .replaceAll('\\"/_next/', `\\"${localProxyRoot}_next/`)
+    .replaceAll("\\'/_next/", `\\'${localProxyRoot}_next/`);
+}
+
+export function rewriteManagedAppProxyHtml(
+  appName: string,
+  html: string,
+  localProxyRoot: string,
+): string {
+  let rewritten = rewriteRootRelativeAssetPaths(html, localProxyRoot);
+  if (appName !== HYPERSCAPE_APP_NAME) return rewritten;
+  rewritten = rewritten
+    .replace(
+      /<script[^>]*id=["']vite-plugin-pwa:register-sw["'][^>]*><\/script>/gi,
+      "",
+    )
+    .replaceAll(`${HYPERSCAPE_ASSET_ORIGIN}/`, localProxyRoot);
+  return rewritten;
+}
+
+export function rewriteManagedAppProxyJavaScript(
+  appName: string,
+  script: string,
+  localProxyBase: string,
+  localProxyRoot: string,
+  upstreamPath: string,
+): string {
+  // Service workers should stay disabled for proxied embeds. Registering with
+  // root scope (`/`) on the parent origin breaks both the app and host shell.
+  if (upstreamPath.endsWith("/registerSW.js")) {
+    return "/* service worker registration disabled for proxied embeds */\n";
+  }
+
+  let rewritten = rewriteRootRelativeAssetPaths(script, localProxyRoot);
+  rewritten = rewritten.replace(
+    /\.p\s*=\s*(['"])\/_next\/\1/g,
+    `.p="${localProxyRoot}_next/"`,
+  );
+
+  if (appName !== HYPERSCAPE_APP_NAME) return rewritten;
+
+  const proxyBootstrap = [
+    "if (typeof window !== \"undefined\") {",
+    `  window.__CDN_URL = window.__CDN_URL || ${JSON.stringify(localProxyBase)};`,
+    `  window.__HYPERSCAPE_PROXY_BASE = ${JSON.stringify(localProxyBase)};`,
+    "}",
+    "",
+  ].join("\n");
+
+  if (upstreamPath.endsWith("/env.js")) {
+    return [
+      proxyBootstrap,
+      "window.env = {",
+      "  ...(window.env || {}),",
+      `  PUBLIC_CDN_URL: ${JSON.stringify(localProxyBase)},`,
+      `  PUBLIC_API_URL: ${JSON.stringify(localProxyBase)},`,
+      "};",
+      "",
+    ].join("\n");
+  }
+
+  const rootedSegments = [
+    "assets",
+    "audio",
+    "fonts",
+    "images",
+    "web",
+    "manifests",
+    "game-assets",
+    "api/errors",
+  ];
+  for (const segment of rootedSegments) {
+    rewritten = rewritten
+      .replaceAll(`"/${segment}/`, `"${localProxyRoot}${segment}/`)
+      .replaceAll(`'/${segment}/`, `'${localProxyRoot}${segment}/`)
+      .replaceAll(`\`/${segment}/`, `\`${localProxyRoot}${segment}/`)
+      .replaceAll(`"/${segment}"`, `"${localProxyRoot}${segment}"`)
+      .replaceAll(`'/${segment}'`, `'${localProxyRoot}${segment}'`)
+      .replaceAll(`\`/${segment}\``, `\`${localProxyRoot}${segment}\``);
+  }
+  rewritten = rewritten
+    .replaceAll('return"/"+', `return"${localProxyRoot}"+`)
+    .replaceAll("return'/'+", `return'${localProxyRoot}'+`);
+  rewritten = rewritten
+    .replaceAll('"/env.js"', `"${localProxyRoot}env.js"`)
+    .replaceAll("'/env.js'", `'${localProxyRoot}env.js'`)
+    .replaceAll("`/env.js`", `\`${localProxyRoot}env.js\``)
+    .replaceAll(HYPERSCAPE_ASSET_ORIGIN, localProxyBase)
+    .replaceAll(HYPERSCAPE_RUNTIME_API_ORIGIN, localProxyBase);
+
+  return `${proxyBootstrap}${rewritten}`;
+}
+
+const MANAGED_APP_LEAKY_ROOT_PATHS = new Set([
+  "/sw.js",
+  "/manifest.webmanifest",
+  "/script.js",
+]);
+
+function parseRefererUrl(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    try {
+      return new URL(value, "http://localhost");
+    } catch {
+      return null;
+    }
+  }
+}
+
+export function resolveManagedAppLeakedAssetRedirect(
   pathname: string,
+  search: string,
+  refererHeader: string | undefined,
+): string | null {
+  const isRootLeakedAssetPath =
+    pathname.startsWith("/_next/") || MANAGED_APP_LEAKY_ROOT_PATHS.has(pathname);
+  if (!isRootLeakedAssetPath) return null;
+  if (!refererHeader) return null;
+
+  const referer = parseRefererUrl(refererHeader);
+  if (!referer) return null;
+
+  const refererMatch = referer.pathname.match(
+    /^\/api\/apps\/local\/([^/]+)(?:\/|$)/,
+  );
+  if (!refererMatch) return null;
+
+  const localProxyBase = `/api/apps/local/${refererMatch[1]}`;
+  return `${localProxyBase}${pathname}${search}`;
+}
+
+function isJavaScriptAssetPath(upstreamPath: string): boolean {
+  const normalizedPath = upstreamPath.toLowerCase();
+  return (
+    normalizedPath.endsWith(".js") ||
+    normalizedPath.endsWith(".mjs") ||
+    normalizedPath.endsWith(".cjs")
+  );
+}
+
+export function isJavaScriptLikeResponse(
+  contentType: string,
+  upstreamPath: string,
+): boolean {
+  if (/text\/html|application\/xhtml\+xml/i.test(contentType)) {
+    return false;
+  }
+  const jsContentType =
+    /(?:application|text)\/(?:javascript|ecmascript|x-javascript|javascipt)/i.test(
+      contentType,
+    );
+  if (jsContentType) return true;
+  return isJavaScriptAssetPath(upstreamPath);
+}
+
+function lookupIpv4Only(
+  hostname: string,
+  options: number | dns.LookupAllOptions | dns.LookupOneOptions,
+  callback: (
+    err: NodeJS.ErrnoException | null,
+    address: string | dns.LookupAddress[],
+    family?: number,
+  ) => void,
+): void {
+  const shouldReturnAll =
+    typeof options === "object" && options !== null && options.all === true;
+  dns.lookup(hostname, { family: 4, all: shouldReturnAll }, (error, address, family) => {
+    if (error) {
+      callback(error, shouldReturnAll ? [] : "", family);
+      return;
+    }
+    if (shouldReturnAll) {
+      callback(null, address as dns.LookupAddress[]);
+      return;
+    }
+    callback(null, address as string, family);
+  });
+}
+
+async function fetchWithIpv4Lookup(
+  targetUrl: string,
   method: string,
-) => Promise<boolean>;
+  headers: Record<string, string>,
+  body?: Buffer,
+): Promise<Response> {
+  const target = new URL(targetUrl);
+  if (target.protocol !== "http:" && target.protocol !== "https:") {
+    throw new Error(`Unsupported protocol: ${target.protocol}`);
+  }
+
+  const client = target.protocol === "https:" ? https : http;
+  return await new Promise<Response>((resolve, reject) => {
+    const request = client.request(
+      target,
+      {
+        method,
+        headers,
+        lookup: lookupIpv4Only,
+        timeout: 15_000,
+      },
+      (upstreamResponse) => {
+        const chunks: Buffer[] = [];
+        upstreamResponse.on("data", (chunk) => {
+          if (Buffer.isBuffer(chunk)) {
+            chunks.push(chunk);
+          } else {
+            chunks.push(Buffer.from(chunk));
+          }
+        });
+        upstreamResponse.on("error", (error) => {
+          reject(error);
+        });
+        upstreamResponse.on("end", () => {
+          const responseHeaders = new Headers();
+          for (const [headerName, headerValue] of Object.entries(
+            upstreamResponse.headers,
+          )) {
+            if (headerValue === undefined) continue;
+            if (Array.isArray(headerValue)) {
+              responseHeaders.set(headerName, headerValue.join(", "));
+              continue;
+            }
+            responseHeaders.set(headerName, String(headerValue));
+          }
+          resolve(
+            new Response(Buffer.concat(chunks), {
+              status: upstreamResponse.statusCode ?? 502,
+              headers: responseHeaders,
+            }),
+          );
+        });
+      },
+    );
+    request.on("timeout", () => {
+      request.destroy(new Error("upstream request timed out"));
+    });
+    request.on("error", (error) => reject(error));
+    if (body && body.length > 0) {
+      request.write(body);
+    }
+    request.end();
+  });
+}
+
+function findRuntimeAction(
+  runtime: AgentRuntime,
+  toolName: string,
+): Action | null {
+  const normalized = toolName.trim().toUpperCase();
+  const actions = runtime.getAllActions?.() ?? runtime.actions ?? [];
+  for (const action of actions) {
+    const name = action.name?.toUpperCase?.() ?? "";
+    if (name === normalized) return action as Action;
+    const similes = Array.isArray(action.similes) ? action.similes : [];
+    if (similes.some((s) => String(s).toUpperCase() === normalized)) {
+      return action as Action;
+    }
+  }
+  return null;
+}
+
+type RuntimeActionCallbackPayload = {
+  text?: string;
+  content?: Record<string, unknown>;
+};
+
+function normalizeRuntimeActionResult(
+  rawResult: unknown,
+  callbackPayloads: RuntimeActionCallbackPayload[],
+): unknown {
+  if (rawResult && typeof rawResult === "object") {
+    return rawResult;
+  }
+
+  const latestCallback = callbackPayloads.at(-1);
+  if (latestCallback) {
+    const content = latestCallback.content ?? {};
+    return {
+      ...content,
+      success:
+        rawResult === false
+          ? false
+          : typeof content.success === "boolean"
+            ? content.success
+            : true,
+      ...(typeof latestCallback.text === "string"
+        ? { text: latestCallback.text }
+        : {}),
+      rawResult,
+    };
+  }
+
+  if (typeof rawResult === "boolean") {
+    return { success: rawResult };
+  }
+
+  return rawResult;
+}
+
+async function executeRuntimeAction(params: {
+  runtime: AgentRuntime;
+  toolName: string;
+  requestId: string;
+  parameters: Record<string, unknown>;
+}): Promise<{ result: unknown; durationMs: number }> {
+  const { runtime, toolName, requestId, parameters } = params;
+  if (typeof runtime.isActionAllowed === "function") {
+    const decision = runtime.isActionAllowed(toolName);
+    if (!decision.allowed) {
+      throw new Error(
+        `Action "${toolName}" not allowed: ${decision.reason ?? "unknown"}`,
+      );
+    }
+  }
+  const action = findRuntimeAction(runtime, toolName);
+  if (!action) {
+    throw new Error(`Action "${toolName}" not registered`);
+  }
+
+  const memory = createMessageMemory({
+    id: crypto.randomUUID(),
+    entityId: runtime.agentId,
+    agentId: runtime.agentId,
+    roomId: runtime.agentId,
+    content: {
+      text: `[autonomy] tool:${toolName} request:${requestId}`,
+      source: "system",
+      channelType: ChannelType.API,
+      ...parameters,
+    } as Content,
+  });
+
+  let state: State | undefined = undefined;
+  try {
+    state = (await runtime.composeState(memory)) as State | undefined;
+  } catch {
+    state = undefined;
+  }
+  const valid = await action.validate(runtime, memory, state);
+  if (!valid) {
+    throw new Error(`Action "${toolName}" failed validation`);
+  }
+
+  const callbackPayloads: RuntimeActionCallbackPayload[] = [];
+  const callback: HandlerCallback = (payload) => {
+    if (payload && typeof payload === "object") {
+      const record = payload as Record<string, unknown>;
+      const normalizedPayload: RuntimeActionCallbackPayload = {};
+      if (typeof record.text === "string") {
+        normalizedPayload.text = record.text;
+      }
+      if (record.content && typeof record.content === "object") {
+        normalizedPayload.content = record.content as Record<string, unknown>;
+      }
+      callbackPayloads.push(normalizedPayload);
+    }
+    return [] as never;
+  };
+
+  const start = Date.now();
+  const result = normalizeRuntimeActionResult(
+    await action.handler(runtime, memory, state, {
+      ...parameters,
+      parameters,
+    }, callback),
+    callbackPayloads,
+  );
+  return { result, durationMs: Date.now() - start };
+}
+
+async function executeRuntimeActionDirect(params: {
+  runtime: AgentRuntime;
+  toolName: string;
+  requestId: string;
+  parameters: Record<string, unknown>;
+}): Promise<{
+  requestId: string;
+  toolName: string;
+  success: boolean;
+  result?: unknown;
+  error?: string;
+  validation: { valid: boolean; errors: string[] };
+  durationMs: number;
+  executionMode: "direct-runtime";
+}> {
+  const startedAt = Date.now();
+  try {
+    const { result, durationMs } = await executeRuntimeAction(params);
+    let success = true;
+    let error: string | undefined;
+
+    // Some actions encode upstream/API failure as `{ success: false, ... }`
+    // without throwing. Surface this as step failure in direct-runtime mode.
+    if (result && typeof result === "object" && "success" in result) {
+      const actionSuccess = (result as { success?: unknown }).success;
+      if (actionSuccess === false) {
+        success = false;
+        const directError =
+          typeof (result as { error?: unknown }).error === "string"
+            ? (result as { error: string }).error
+            : undefined;
+        if (directError) {
+          error = directError;
+        } else {
+          const maybeText =
+            typeof (result as { text?: unknown }).text === "string"
+              ? (result as { text: string }).text
+              : undefined;
+          if (maybeText) {
+            try {
+              const parsed = JSON.parse(maybeText) as { message?: unknown };
+              if (typeof parsed.message === "string" && parsed.message.trim()) {
+                error = parsed.message.trim();
+              } else {
+                error = maybeText;
+              }
+            } catch {
+              error = maybeText;
+            }
+          } else {
+            error = `Action "${params.toolName}" returned success=false`;
+          }
+        }
+      }
+    }
+
+    return {
+      requestId: params.requestId,
+      toolName: params.toolName,
+      success,
+      result,
+      ...(error ? { error } : {}),
+      validation: { valid: true, errors: [] },
+      durationMs,
+      executionMode: "direct-runtime",
+    };
+  } catch (err) {
+    return {
+      requestId: params.requestId,
+      toolName: params.toolName,
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+      validation: { valid: false, errors: [] },
+      durationMs: Math.max(0, Date.now() - startedAt),
+      executionMode: "direct-runtime",
+    };
+  }
+}
 
 function getAgentEventSvc(
   runtime: AgentRuntime | null,
 ): AgentEventServiceLike | null {
-  return getAgentEventService(runtime);
-}
-
-function requirePluginManager(runtime: AgentRuntime | null): PluginManagerLike {
-  const service = runtime?.getService("plugin_manager");
-  if (!isPluginManagerLike(service)) {
-    throw new Error("Plugin manager service not found");
-  }
-  return service;
-}
-
-function requireCoreManager(runtime: AgentRuntime | null): CoreManagerLike {
-  const service = runtime?.getService("core_manager");
-  if (!isCoreManagerLike(service)) {
-    throw new Error("Core manager service not found");
-  }
-  return service;
+  if (!runtime) return null;
+  return runtime.getService("AGENT_EVENT") as AgentEventServiceLike | null;
 }
 
 function isUuidLike(value: string): value is UUID {
@@ -259,60 +1114,6 @@ function isUuidLike(value: string): value is UUID {
 }
 
 const OG_FILENAME = ".og";
-const DELETED_CONVERSATIONS_FILENAME = "deleted-conversations.v1.json";
-const MAX_DELETED_CONVERSATION_IDS = 5000;
-
-interface DeletedConversationsStateFile {
-  version: 1;
-  updatedAt: string;
-  ids: string[];
-}
-
-function readDeletedConversationIdsFromState(): Set<string> {
-  const filePath = path.join(resolveStateDir(), DELETED_CONVERSATIONS_FILENAME);
-  if (!fs.existsSync(filePath)) return new Set();
-  try {
-    const raw = fs.readFileSync(filePath, "utf-8");
-    const parsed = JSON.parse(raw) as Partial<DeletedConversationsStateFile>;
-    const ids = Array.isArray(parsed.ids) ? parsed.ids : [];
-    return new Set(
-      ids
-        .map((id) => (typeof id === "string" ? id.trim() : ""))
-        .filter((id) => id.length > 0),
-    );
-  } catch (err) {
-    logger.warn(
-      `[milady-api] Failed to read deleted conversations state: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return new Set();
-  }
-}
-
-function persistDeletedConversationIdsToState(ids: Set<string>): void {
-  const dir = resolveStateDir();
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  }
-
-  const normalized = Array.from(ids)
-    .map((id) => id.trim())
-    .filter((id) => id.length > 0)
-    .slice(-MAX_DELETED_CONVERSATION_IDS);
-
-  const filePath = path.join(dir, DELETED_CONVERSATIONS_FILENAME);
-  const tmpFilePath = `${filePath}.${process.pid}.tmp`;
-  const payload: DeletedConversationsStateFile = {
-    version: 1,
-    updatedAt: new Date().toISOString(),
-    ids: normalized,
-  };
-
-  fs.writeFileSync(tmpFilePath, `${JSON.stringify(payload, null, 2)}\n`, {
-    encoding: "utf-8",
-    mode: 0o600,
-  });
-  fs.renameSync(tmpFilePath, filePath);
-}
 
 function readOGCodeFromState(): string | null {
   const filePath = path.join(resolveStateDir(), OG_FILENAME);
@@ -335,7 +1136,7 @@ function initializeOGCodeInState(): void {
 }
 
 /** Metadata for a web-chat conversation. */
-export interface ConversationMeta {
+interface ConversationMeta {
   id: string;
   title: string;
   roomId: UUID;
@@ -343,17 +1144,77 @@ export interface ConversationMeta {
   updatedAt: string;
 }
 
-interface AgentStartupDiagnostics {
-  phase: string;
-  attempt: number;
-  lastError?: string;
-  lastErrorAt?: number;
-  nextRetryAt?: number;
+type ChatMode = "simple" | "power";
+
+type CachedPermissionState = {
+  id: string;
+  status: string;
+  lastChecked: number;
+  canRequest: boolean;
+};
+
+const SYSTEM_PERMISSION_IDS = [
+  "accessibility",
+  "screen-recording",
+  "microphone",
+  "camera",
+  "shell",
+] as const;
+
+type SystemPermissionId = (typeof SYSTEM_PERMISSION_IDS)[number];
+
+function getDefaultPermissionStatus(
+  permissionId: SystemPermissionId,
+  shellEnabled: boolean,
+): string {
+  if (permissionId === "shell") {
+    return shellEnabled ? "granted" : "denied";
+  }
+  return process.platform === "darwin" ? "not-determined" : "not-applicable";
+}
+
+function getDefaultCanRequest(permissionId: SystemPermissionId): boolean {
+  if (permissionId === "shell") return false;
+  return process.platform === "darwin";
+}
+
+function buildPermissionStateMap(
+  rawStates: Record<string, CachedPermissionState> | undefined,
+  shellEnabled: boolean,
+): Record<string, CachedPermissionState> {
+  const now = Date.now();
+  const next: Record<string, CachedPermissionState> = {};
+
+  for (const permissionId of SYSTEM_PERMISSION_IDS) {
+    const existing = rawStates?.[permissionId];
+    const status =
+      permissionId === "shell"
+        ? shellEnabled
+          ? "granted"
+          : "denied"
+        : typeof existing?.status === "string" && existing.status.trim().length
+          ? existing.status
+          : getDefaultPermissionStatus(permissionId, shellEnabled);
+
+    next[permissionId] = {
+      id: permissionId,
+      status,
+      lastChecked: existing?.lastChecked ?? now,
+      canRequest:
+        permissionId === "shell"
+          ? false
+          : typeof existing?.canRequest === "boolean"
+            ? existing.canRequest
+            : getDefaultCanRequest(permissionId),
+    };
+  }
+
+  return next;
 }
 
 interface ServerState {
   runtime: AgentRuntime | null;
-  config: MiladyConfig;
+  config: MilaidyConfig;
   agentState:
     | "not_started"
     | "starting"
@@ -365,7 +1226,6 @@ interface ServerState {
   agentName: string;
   model: string | undefined;
   startedAt: number | undefined;
-  startup: AgentStartupDiagnostics;
   plugins: PluginEntry[];
   skills: SkillEntry[];
   logBuffer: LogEntry[];
@@ -378,15 +1238,15 @@ interface ServerState {
   adminEntityId: UUID | null;
   /** Conversation metadata by conversation id. */
   conversations: Map<string, ConversationMeta>;
-  /** Tombstones for conversation IDs explicitly deleted by the user. */
-  deletedConversationIds: Set<string>;
   /** Cloud manager for Eliza Cloud integration (null when cloud is disabled). */
   cloudManager: CloudManager | null;
   sandboxManager: SandboxManager | null;
-  /** App manager for launching and managing elizaOS apps. */
+  /** App manager for launching and managing ElizaOS apps. */
   appManager: AppManager;
+  /** Hyperscape autonomy orchestration manager. */
+  hyperscapeAutonomy: HyperscapeAutonomySessionManager;
   /** Fine-tuning/training orchestration service. */
-  trainingService: TrainingServiceLike | null;
+  trainingService: TrainingService | null;
   /** ERC-8004 registry service (null when not configured). */
   registryService: RegistryService | null;
   /** Drop/mint service (null when not configured). */
@@ -397,44 +1257,19 @@ interface ServerState {
   broadcastStatus: (() => void) | null;
   /** Broadcast an arbitrary JSON message to all WebSocket clients. Set by startApiServer. */
   broadcastWs: ((data: Record<string, unknown>) => void) | null;
-  /** Broadcast a JSON payload to WebSocket clients bound to a specific client id. */
-  broadcastWsToClientId:
-    | ((clientId: string, data: Record<string, unknown>) => number)
-    | null;
   /** Currently active conversation ID from the frontend (sent via WS). */
   activeConversationId: string | null;
   /** Transient OAuth flow state for subscription auth. */
-  _anthropicFlow?: import("../auth/anthropic").AnthropicFlow;
-  _codexFlow?: import("../auth/openai-codex").CodexFlow;
+  _anthropicFlow?: import("../auth/anthropic.js").AnthropicFlow;
+  _codexFlow?: import("../auth/openai-codex.js").CodexFlow;
   _codexFlowTimer?: ReturnType<typeof setTimeout>;
   /** System permission states (cached from Electron IPC). */
-  permissionStates?: Record<
-    string,
-    {
-      id: string;
-      status: string;
-      lastChecked: number;
-      canRequest: boolean;
-    }
-  >;
+  permissionStates?: Record<string, CachedPermissionState>;
   /** Whether shell access is enabled (can be toggled in UI). */
   shellEnabled?: boolean;
-  /** Agent automation permission mode for self-directed config changes. */
-  agentAutomationMode?: AgentAutomationMode;
-  /** Wallet trade execution permission mode (user-sign/manual/agent-auto). */
-  tradePermissionMode?: TradePermissionMode;
-  /** Reasons a restart is pending. Empty array = no restart needed. */
-  pendingRestartReasons: string[];
-  /** Route handlers registered by connector plugins (loaded dynamically). */
-  connectorRouteHandlers: ConnectorRouteHandler[];
-  /** Connector health monitor for detecting dead connectors. */
-  connectorHealthMonitor: ConnectorHealthMonitor | null;
-  /** Active WhatsApp pairing sessions (QR code flow). */
-  whatsappPairingSessions?: Map<
-    string,
-    import("../services/whatsapp-pairing").WhatsAppPairingSession
-  >;
 }
+
+const FIVE55_HTTP_CAPABILITY_POLICY = createFive55CapabilityPolicy();
 
 interface ShareIngestItem {
   id: string;
@@ -466,10 +1301,11 @@ interface PluginEntry {
   name: string;
   description: string;
   enabled: boolean;
+  installed?: boolean;
   configured: boolean;
   envKey: string | null;
-  category: "ai-provider" | "connector" | "streaming" | "database" | "feature";
-  /** Where the plugin comes from: "bundled" (ships with Milady) or "store" (user-installed from registry). */
+  category: "ai-provider" | "connector" | "database" | "feature";
+  /** Where the plugin comes from: "bundled" (ships with Milaidy) or "store" (user-installed from registry). */
   source: "bundled" | "store";
   configKeys: string[];
   parameters: PluginParamDef[];
@@ -482,13 +1318,18 @@ interface PluginEntry {
   isActive?: boolean;
   /** Error message when plugin is enabled/installed but failed to load. */
   loadError?: string;
+  /** Whether the plugin is loaded and reporting valid auth/session state. */
+  authenticated?: boolean | null;
+  ready?: boolean | null;
+  degraded?: boolean;
+  statusSummary?: string[];
+  operationalWarnings?: string[];
+  operationalErrors?: string[];
+  operationalCounts?: Record<string, number>;
   /** Server-provided UI hints for plugin configuration fields. */
   configUiHints?: Record<string, Record<string, unknown>>;
-  /** Optional icon URL or emoji for the plugin card header. */
-  icon?: string | null;
-  homepage?: string;
-  repository?: string;
-  setupGuideUrl?: string;
+  /** Optional plugin-owned UI schema for generic rendering and diagnostics. */
+  pluginUiSchema?: Record<string, unknown>;
 }
 
 interface SkillEntry {
@@ -506,6 +1347,37 @@ interface LogEntry {
   message: string;
   source: string;
   tags: string[];
+}
+
+interface AgentEventPayloadLike {
+  runId: string;
+  seq: number;
+  stream: string;
+  ts: number;
+  data: object;
+  sessionKey?: string;
+  agentId?: string;
+  roomId?: UUID;
+}
+
+interface HeartbeatEventPayloadLike {
+  ts: number;
+  status: string;
+  to?: string;
+  preview?: string;
+  durationMs?: number;
+  hasMedia?: boolean;
+  reason?: string;
+  channel?: string;
+  silent?: boolean;
+  indicatorType?: string;
+}
+
+interface AgentEventServiceLike {
+  subscribe: (listener: (event: AgentEventPayloadLike) => void) => () => void;
+  subscribeHeartbeat: (
+    listener: (event: HeartbeatEventPayloadLike) => void,
+  ) => () => void;
 }
 
 type StreamEventType = "agent_event" | "heartbeat_event" | "training_event";
@@ -539,7 +1411,77 @@ type ResponseBlock =
       schema: Record<string, unknown>;
       hints?: Record<string, unknown>;
       values?: Record<string, unknown>;
+    }
+  | {
+      type: "action-pill";
+      label: string;
+      kind: "stream" | "avatar" | "launch";
+      detail?: string;
     };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function sanitizeResponseBlock(value: unknown): ResponseBlock | null {
+  if (!isRecord(value) || typeof value.type !== "string") return null;
+
+  if (value.type === "text" && typeof value.text === "string") {
+    return { type: "text", text: value.text };
+  }
+
+  if (
+    value.type === "ui-spec" &&
+    isRecord(value.spec) &&
+    typeof value.raw === "string"
+  ) {
+    return { type: "ui-spec", spec: value.spec, raw: value.raw };
+  }
+
+  if (
+    value.type === "config-form" &&
+    typeof value.pluginId === "string" &&
+    isRecord(value.schema)
+  ) {
+    const block: Extract<ResponseBlock, { type: "config-form" }> = {
+      type: "config-form",
+      pluginId: value.pluginId,
+      schema: value.schema,
+    };
+    if (typeof value.pluginName === "string") block.pluginName = value.pluginName;
+    if (isRecord(value.hints)) block.hints = value.hints;
+    if (isRecord(value.values)) block.values = value.values;
+    return block;
+  }
+
+  if (
+    value.type === "action-pill" &&
+    typeof value.label === "string" &&
+    (value.kind === "stream" ||
+      value.kind === "avatar" ||
+      value.kind === "launch")
+  ) {
+    const block: Extract<ResponseBlock, { type: "action-pill" }> = {
+      type: "action-pill",
+      label: value.label,
+      kind: value.kind,
+    };
+    if (typeof value.detail === "string" && value.detail.trim().length > 0) {
+      block.detail = value.detail;
+    }
+    return block;
+  }
+
+  return null;
+}
+
+function sanitizeResponseBlocks(value: unknown): ResponseBlock[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const blocks = value
+    .map((entry) => sanitizeResponseBlock(entry))
+    .filter((entry): entry is ResponseBlock => entry !== null);
+  return blocks.length > 0 ? blocks : undefined;
+}
 
 /** Regex matching fenced JSON code blocks: ```json ... ``` or ``` ... ``` */
 const FENCED_JSON_RE_SERVER = /```(?:json)?\s*\n([\s\S]*?)```/g;
@@ -677,8 +1619,9 @@ function _extractResponseBlocks(
 // Package root resolution (for reading bundled plugins.json)
 // ---------------------------------------------------------------------------
 
+const OWN_PACKAGE_NAME_CANDIDATES = new Set(["milaidy", "milady", "miladyai"]);
+
 export function findOwnPackageRoot(startDir: string): string {
-  const KNOWN_NAMES = new Set(["milady", "milaidy", "miladyai"]);
   let dir = startDir;
   for (let i = 0; i < 10; i++) {
     const pkgPath = path.join(dir, "package.json");
@@ -688,10 +1631,9 @@ export function findOwnPackageRoot(startDir: string): string {
           string,
           unknown
         >;
-        const pkgName =
-          typeof pkg.name === "string" ? pkg.name.toLowerCase() : "";
-        if (KNOWN_NAMES.has(pkgName)) return dir;
-        // Also match if plugins.json exists at this level (resilient to renames)
+        const packageName =
+          typeof pkg.name === "string" ? pkg.name.trim().toLowerCase() : "";
+        if (OWN_PACKAGE_NAME_CANDIDATES.has(packageName)) return dir;
         if (fs.existsSync(path.join(dir, "plugins.json"))) return dir;
       } catch {
         /* keep searching */
@@ -704,6 +1646,31 @@ export function findOwnPackageRoot(startDir: string): string {
   return startDir;
 }
 
+function resolveSiblingWorkspacePluginPackageRoot(
+  packageRoot: string,
+  packageName: string,
+): string | null {
+  const siblingByPackageName: Record<string, string> = {
+    "@rndrntwrk/plugin-555stream": "stream-plugin",
+    "@rndrntwrk/plugin-555arcade": "arcade-plugin",
+  };
+  const siblingDirName = siblingByPackageName[packageName];
+  if (!siblingDirName) return null;
+
+  const candidate = path.resolve(packageRoot, "..", siblingDirName);
+  const packageJsonPath = path.join(candidate, "package.json");
+  if (!fs.existsSync(packageJsonPath)) return null;
+
+  try {
+    const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8")) as {
+      name?: string;
+    };
+    return pkg.name === packageName ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Plugin discovery
 // ---------------------------------------------------------------------------
@@ -714,18 +1681,13 @@ interface PluginIndexEntry {
   name: string;
   npmName: string;
   description: string;
-  category: "ai-provider" | "connector" | "streaming" | "database" | "feature";
+  category: "ai-provider" | "connector" | "database" | "feature";
   envKey: string | null;
   configKeys: string[];
   pluginParameters?: Record<string, Record<string, unknown>>;
   version?: string;
   pluginDeps?: string[];
   configUiHints?: Record<string, Record<string, unknown>>;
-  logoUrl?: string;
-  icon?: string;
-  homepage?: string;
-  repository?: string;
-  setupGuideUrl?: string;
 }
 
 interface PluginIndex {
@@ -738,6 +1700,34 @@ interface PluginIndex {
 function maskValue(value: string): string {
   if (value.length <= 8) return "****";
   return `${value.slice(0, 4)}...${value.slice(-4)}`;
+}
+
+function shouldMaskPluginValue(key: string, sensitive: boolean): boolean {
+  if (sensitive) return true;
+  const upper = key.trim().toUpperCase();
+  return (
+    upper.includes("_API_KEY") ||
+    upper.includes("_SECRET") ||
+    upper.includes("_TOKEN") ||
+    upper.includes("_PASSWORD") ||
+    upper.includes("_PRIVATE_KEY") ||
+    upper.includes("_STREAM_KEY") ||
+    upper.includes("_COOKIE") ||
+    upper.includes("_SESSION") ||
+    upper.includes("_BEARER") ||
+    upper.includes("_2FA") ||
+    upper.includes("_SALT") ||
+    upper.includes("_MNEMONIC") ||
+    upper.includes("_SEED")
+  );
+}
+
+function redactPluginValue(
+  key: string,
+  value: string,
+  sensitive: boolean,
+): string {
+  return shouldMaskPluginValue(key, sensitive) ? maskValue(value) : value;
 }
 
 function buildParamDefs(
@@ -758,9 +1748,7 @@ function buildParamDefs(
         ? (def.options as string[])
         : undefined,
       currentValue: isSet
-        ? sensitive
-          ? maskValue(envValue ?? "")
-          : (envValue ?? "")
+        ? redactPluginValue(key, envValue ?? "", sensitive)
         : null,
       isSet,
     };
@@ -843,9 +1831,7 @@ function _inferParamDefs(configKeys: string[]): PluginParamDef[] {
       default: undefined,
       options: undefined,
       currentValue: isSet
-        ? sensitive
-          ? maskValue(envValue ?? "")
-          : (envValue ?? "")
+        ? redactPluginValue(key, envValue ?? "", sensitive)
         : null,
       isSet,
     };
@@ -920,7 +1906,6 @@ function prefixLabel(key: string, suffix: string): string {
 // ---------------------------------------------------------------------------
 
 const BLOCKED_ENV_KEYS = new Set([
-  // System-level injection vectors
   "LD_PRELOAD",
   "LD_LIBRARY_PATH",
   "DYLD_INSERT_LIBRARIES",
@@ -928,106 +1913,13 @@ const BLOCKED_ENV_KEYS = new Set([
   "NODE_OPTIONS",
   "NODE_EXTRA_CA_CERTS",
   "ELECTRON_RUN_AS_NODE",
-  // TLS bypass — setting to "0" disables ALL certificate verification,
-  // enabling MITM interception of every outbound HTTPS request (API keys
-  // for OpenAI, Anthropic, ElevenLabs etc. sent in plaintext headers).
-  "NODE_TLS_REJECT_UNAUTHORIZED",
-  // Proxy hijack — routes all HTTP/HTTPS traffic through attacker proxy,
-  // exposing Authorization headers and API keys in transit.
-  "HTTP_PROXY",
-  "HTTPS_PROXY",
-  "ALL_PROXY",
-  "NO_PROXY",
-  // Module resolution override
-  "NODE_PATH",
-  // CA certificate override — trust rogue CAs for MITM
-  "SSL_CERT_FILE",
-  "SSL_CERT_DIR",
-  "CURL_CA_BUNDLE",
   "PATH",
   "HOME",
   "SHELL",
-  // Auth / step-up tokens — writable via API would grant privilege escalation
-  "MILADY_API_TOKEN",
-  "MILADY_WALLET_EXPORT_TOKEN",
-  "MILADY_TERMINAL_RUN_TOKEN",
-  "HYPERSCAPE_AUTH_TOKEN",
-  // Wallet private keys — writable via API would enable key theft / replacement
-  "EVM_PRIVATE_KEY",
-  "SOLANA_PRIVATE_KEY",
-  // Opinion Trade plugin secrets
-  "OPINION_PRIVATE_KEY",
-  "OPINION_API_KEY",
-  // Third-party auth tokens
-  "GITHUB_TOKEN",
-  // Database connection strings
+  "MILAIDY_API_TOKEN",
+  "MILAIDY_WALLET_EXPORT_TOKEN",
   "DATABASE_URL",
   "POSTGRES_URL",
-]);
-
-/**
- * Top-level config keys accepted by `PUT /api/config`.
- * Keep this in sync with MiladyConfig root fields and include both modern and
- * legacy aliases (e.g. `connectors` + `channels`).
- */
-export const CONFIG_WRITE_ALLOWED_TOP_KEYS = new Set([
-  "meta",
-  "auth",
-  "env",
-  "wizard",
-  "diagnostics",
-  "logging",
-  "update",
-  "browser",
-  "ui",
-  "skills",
-  "plugins",
-  "models",
-  "nodeHost",
-  "agents",
-  "tools",
-  "bindings",
-  "broadcast",
-  "audio",
-  "messages",
-  "commands",
-  "approvals",
-  "session",
-  "web",
-  "connectors",
-  "channels",
-  "cron",
-  "hooks",
-  "discovery",
-  "talk",
-  "gateway",
-  "memory",
-  "database",
-  "cloud",
-  "x402",
-  "mcp",
-  "features",
-]);
-
-/**
- * Stream names accepted by `POST /api/agent/event`.
- * Plugins emit events to these streams for the StreamView UI.
- */
-export const AGENT_EVENT_ALLOWED_STREAMS = new Set([
-  "chat",
-  "terminal",
-  "game",
-  "autonomy",
-  "retake",
-  "stream",
-  "system",
-  // Retake plugin event streams (chat-poll.ts emits these)
-  "message",
-  "new_viewer",
-  "assistant",
-  "thought",
-  "action",
-  "viewer_stats",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -1158,8 +2050,214 @@ function aggregateSecrets(plugins: PluginEntry[]): SecretEntry[] {
  * Discover user-installed plugins from the Store (not bundled in the manifest).
  * Reads from config.plugins.installs and tries to enrich with package.json metadata.
  */
-export function discoverInstalledPlugins(
-  config: MiladyConfig,
+type ResolvedPluginPackageMetadata = {
+  name: string;
+  description: string;
+  configKeys: string[];
+  parameters: PluginParamDef[];
+  configUiHints?: Record<string, Record<string, unknown>>;
+  pluginUiSchema?: Record<string, unknown>;
+};
+
+function resolvePluginPackageMetadata(
+  pkgPath: string,
+  fallbackName: string,
+  fallbackDescription: string,
+): ResolvedPluginPackageMetadata {
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as {
+    name?: string;
+    description?: string;
+    elizaos?: {
+      displayName?: string;
+      configKeys?: string[];
+      configDefaults?: Record<string, string>;
+      pluginParameters?: Record<string, Record<string, unknown>>;
+      configUiHints?: Record<string, Record<string, unknown>>;
+      configSchemaFile?: string;
+      pluginUiSchemaFile?: string;
+    };
+    agentConfig?: {
+      pluginParameters?: Record<string, Record<string, unknown>>;
+    };
+  };
+
+  let name = pkg.name || fallbackName;
+  let description = pkg.description || fallbackDescription;
+  if (pkg.elizaos?.displayName) name = pkg.elizaos.displayName;
+
+  let schemaConfigKeys: string[] | undefined;
+  let schemaPluginParameters:
+    | Record<string, Record<string, unknown>>
+    | undefined;
+  let schemaConfigUiHints:
+    | Record<string, Record<string, unknown>>
+    | undefined;
+  let pluginUiSchema: Record<string, unknown> | undefined;
+
+  if (pkg.elizaos?.configSchemaFile) {
+    const schemaPath = path.resolve(
+      path.dirname(pkgPath),
+      pkg.elizaos.configSchemaFile,
+    );
+    if (fs.existsSync(schemaPath)) {
+      const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as {
+        configKeys?: string[];
+        pluginParameters?: Record<string, Record<string, unknown>>;
+        configUiHints?: Record<string, Record<string, unknown>>;
+      };
+      if (Array.isArray(schema.configKeys)) {
+        schemaConfigKeys = schema.configKeys;
+      }
+      if (
+        schema.pluginParameters &&
+        typeof schema.pluginParameters === "object"
+      ) {
+        schemaPluginParameters = schema.pluginParameters;
+      }
+      if (
+        schema.configUiHints &&
+        typeof schema.configUiHints === "object"
+      ) {
+        schemaConfigUiHints = schema.configUiHints;
+      }
+    }
+  }
+
+  if (pkg.elizaos?.pluginUiSchemaFile) {
+    const uiSchemaPath = path.resolve(
+      path.dirname(pkgPath),
+      pkg.elizaos.pluginUiSchemaFile,
+    );
+    if (fs.existsSync(uiSchemaPath)) {
+      const parsed = JSON.parse(fs.readFileSync(uiSchemaPath, "utf-8")) as
+        | Record<string, unknown>
+        | null;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        pluginUiSchema = parsed;
+      }
+    }
+  }
+
+  const pluginParamsMeta =
+    schemaPluginParameters ??
+    pkg.elizaos?.pluginParameters ??
+    pkg.agentConfig?.pluginParameters;
+
+  const configKeys = Array.from(
+    new Set([
+      ...(schemaConfigKeys ?? []),
+      ...(pkg.elizaos?.configKeys ?? []),
+      ...Object.keys(pluginParamsMeta ?? {}),
+    ]),
+  );
+
+  const parameters =
+    pluginParamsMeta && Object.keys(pluginParamsMeta).length > 0
+      ? buildParamDefs(pluginParamsMeta)
+      : configKeys.map((key) => ({
+          key,
+          label: key,
+          description: "",
+          required: false,
+          sensitive:
+            key.toLowerCase().includes("key") ||
+            key.toLowerCase().includes("secret"),
+          type: "string" as const,
+          default: pkg.elizaos?.configDefaults?.[key] ?? undefined,
+          isSet: Boolean(process.env[key]?.trim()),
+          currentValue: null,
+        }));
+
+  return {
+    name,
+    description,
+    configKeys,
+    parameters,
+    configUiHints: schemaConfigUiHints ?? pkg.elizaos?.configUiHints,
+    pluginUiSchema,
+  };
+}
+
+function discoverBundledPluginFromPackage(
+  packageRoot: string,
+  packageName: string,
+): PluginEntry | null {
+  const pluginDirName = packageName.split("/").pop()?.replace(/^@/, "");
+  const siblingRoot = resolveSiblingWorkspacePluginPackageRoot(
+    packageRoot,
+    packageName,
+  );
+  const pkgCandidates = [
+    ...(siblingRoot ? [path.join(siblingRoot, "package.json")] : []),
+    path.join(packageRoot, "node_modules", ...packageName.split("/"), "package.json"),
+    ...(pluginDirName
+      ? [path.join(packageRoot, "plugins", pluginDirName, "package.json")]
+      : []),
+  ];
+
+  for (const pkgPath of pkgCandidates) {
+    try {
+      if (!fs.existsSync(pkgPath)) continue;
+      const metadata = resolvePluginPackageMetadata(
+        pkgPath,
+        packageName,
+        "Bundled local plugin",
+      );
+      const id = packageName
+        .replace(/^@[^/]+\/plugin-/, "")
+        .replace(/^@[^/]+\//, "")
+        .replace(/^plugin-/, "");
+      const category = categorizePlugin(id);
+      const paramInfos: PluginParamInfo[] = metadata.parameters.map((parameter) => ({
+        key: parameter.key,
+        required: parameter.required,
+        sensitive: parameter.sensitive,
+        type: parameter.type,
+        description: parameter.description,
+        default: parameter.default,
+      }));
+      const validation = validatePluginConfig(
+        id,
+        category,
+        metadata.configKeys[0] ?? null,
+        metadata.configKeys,
+        undefined,
+        paramInfos,
+      );
+
+      return {
+        id,
+        name: metadata.name,
+        description: metadata.description,
+        enabled: false,
+        configured:
+          metadata.configKeys.length === 0 ||
+          metadata.parameters.some((parameter) => parameter.isSet),
+        envKey: metadata.configKeys[0] ?? null,
+        category,
+        source: "bundled",
+        installed: true,
+        configKeys: metadata.configKeys,
+        parameters: metadata.parameters,
+        validationErrors: validation.errors,
+        validationWarnings: validation.warnings,
+        ...(metadata.configUiHints
+          ? { configUiHints: metadata.configUiHints }
+          : {}),
+        ...(metadata.pluginUiSchema
+          ? { pluginUiSchema: metadata.pluginUiSchema }
+          : {}),
+      };
+    } catch {
+      // ignore read errors and continue to the next package candidate
+    }
+  }
+
+  return null;
+}
+
+function discoverInstalledPlugins(
+  config: MilaidyConfig,
   bundledIds: Set<string>,
 ): PluginEntry[] {
   const installs = config.plugins?.installs;
@@ -1185,10 +2283,8 @@ export function discoverInstalledPlugins(
     let description = `Installed from registry (v${(record as Record<string, string>).version ?? "unknown"})`;
     let pluginConfigKeys: string[] = [];
     let pluginParameters: PluginParamDef[] = [];
-
-    let pluginIcon: string | null = null;
-    let pluginHomepage: string | undefined;
-    let pluginRepository: string | undefined;
+    let pluginConfigUiHints: Record<string, Record<string, unknown>> | undefined;
+    let pluginUiSchema: Record<string, unknown> | undefined;
 
     if (installPath) {
       // Check npm layout first, then direct layout
@@ -1204,56 +2300,17 @@ export function discoverInstalledPlugins(
       for (const pkgPath of candidates) {
         try {
           if (fs.existsSync(pkgPath)) {
-            const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as {
-              name?: string;
-              description?: string;
-              homepage?: string;
-              repository?: string | { type?: string; url?: string };
-              elizaos?: {
-                displayName?: string;
-                configKeys?: string[];
-                configDefaults?: Record<string, string>;
-                logoUrl?: string;
-              };
-              agentConfig?: {
-                pluginParameters?: Record<string, Record<string, unknown>>;
-              };
-              logoUrl?: string;
-              icon?: string;
-            };
-            if (pkg.name) name = pkg.name;
-            if (pkg.description) description = pkg.description;
-            if (pkg.elizaos?.displayName) name = pkg.elizaos.displayName;
-            if (pkg.elizaos?.configKeys) {
-              pluginConfigKeys = pkg.elizaos.configKeys;
-              const defaults = pkg.elizaos.configDefaults ?? {};
-              pluginParameters = pluginConfigKeys.map((key) => ({
-                key,
-                label: key,
-                description: "",
-                required: false,
-                sensitive:
-                  key.toLowerCase().includes("key") ||
-                  key.toLowerCase().includes("secret"),
-                type: "string" as const,
-                default: defaults[key] ?? undefined,
-                isSet: Boolean(process.env[key]?.trim()),
-                currentValue: null,
-              }));
-            } else if (pkg.agentConfig?.pluginParameters) {
-              pluginConfigKeys = Object.keys(pkg.agentConfig.pluginParameters);
-              pluginParameters = buildParamDefs(
-                pkg.agentConfig.pluginParameters,
-              );
-            }
-            // Map logoUrl or icon from package.json if available
-            pluginIcon =
-              pkg.logoUrl ?? pkg.elizaos?.logoUrl ?? pkg.icon ?? null;
-            pluginHomepage =
-              typeof pkg.homepage === "string" ? pkg.homepage : undefined;
-            pluginRepository =
-              normalizeRepositoryUrl(pkg.repository) ??
-              deriveMiladyRepositoryUrl(packageName, `plugin-${id}`);
+            const metadata = resolvePluginPackageMetadata(
+              pkgPath,
+              name,
+              description,
+            );
+            name = metadata.name;
+            description = metadata.description;
+            pluginConfigKeys = metadata.configKeys;
+            pluginParameters = metadata.parameters;
+            pluginConfigUiHints = metadata.configUiHints;
+            pluginUiSchema = metadata.pluginUiSchema;
             break;
           }
         } catch {
@@ -1265,7 +2322,6 @@ export function discoverInstalledPlugins(
     entries.push({
       id,
       name,
-      npmName: packageName,
       description,
       enabled: false, // Will be updated against the runtime below
       configured:
@@ -1273,27 +2329,731 @@ export function discoverInstalledPlugins(
       envKey: pluginConfigKeys[0] ?? null,
       category,
       source: "store",
+      installed: true,
       configKeys: pluginConfigKeys,
       parameters: pluginParameters,
       validationErrors: [],
       validationWarnings: [],
-      icon: pluginIcon,
-      homepage: pluginHomepage,
-      repository: pluginRepository,
-      setupGuideUrl: resolvePluginSetupGuideUrl(id),
+      ...(pluginConfigUiHints ? { configUiHints: pluginConfigUiHints } : {}),
+      ...(pluginUiSchema ? { pluginUiSchema } : {}),
     });
   }
 
   return entries.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// applyWhatsAppQrOverride is imported from ./whatsapp-routes
+const STREAM555_PLUGIN_CONTROL_ID = "stream555-control";
+const STREAM555_PLUGIN_PRIMARY_IDS = new Set([
+  STREAM555_PLUGIN_CONTROL_ID,
+  "555stream",
+]);
+const STREAM555_PLUGIN_LEGACY_IDS = new Set([
+  "stream555-auth",
+  "stream555-ads",
+]);
+const STREAM555_SYNTHETIC_PLUGIN_IDS = new Set([
+  "stream",
+  STREAM555_PLUGIN_CONTROL_ID,
+  ...STREAM555_PLUGIN_LEGACY_IDS,
+]);
+const ARCADE555_PLUGIN_CONTROL_ID = "555arcade";
+const ARCADE555_PLUGIN_PRIMARY_IDS = new Set([
+  ARCADE555_PLUGIN_CONTROL_ID,
+  "arcade555",
+  "arcade555-canonical",
+]);
+const ARCADE555_PLUGIN_LEGACY_IDS = new Set([
+  "five55-games",
+  "five55-score-capture",
+  "five55-leaderboard",
+  "five55-quests",
+  "five55-battles",
+  "five55-admin",
+  "five55-social",
+  "five55-rewards",
+  "five55-github",
+]);
+
+type Stream555ChannelUiSpec = {
+  enabledKey: string;
+  urlKey: string;
+  streamKeyKey: string;
+};
+
+const STREAM555_CHANNEL_UI_SPECS: Stream555ChannelUiSpec[] = [
+  {
+    enabledKey: "STREAM555_DEST_PUMPFUN_ENABLED",
+    urlKey: "STREAM555_DEST_PUMPFUN_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_PUMPFUN_STREAM_KEY",
+  },
+  {
+    enabledKey: "STREAM555_DEST_X_ENABLED",
+    urlKey: "STREAM555_DEST_X_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_X_STREAM_KEY",
+  },
+  {
+    enabledKey: "STREAM555_DEST_TWITCH_ENABLED",
+    urlKey: "STREAM555_DEST_TWITCH_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_TWITCH_STREAM_KEY",
+  },
+  {
+    enabledKey: "STREAM555_DEST_KICK_ENABLED",
+    urlKey: "STREAM555_DEST_KICK_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_KICK_STREAM_KEY",
+  },
+  {
+    enabledKey: "STREAM555_DEST_YOUTUBE_ENABLED",
+    urlKey: "STREAM555_DEST_YOUTUBE_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_YOUTUBE_STREAM_KEY",
+  },
+  {
+    enabledKey: "STREAM555_DEST_FACEBOOK_ENABLED",
+    urlKey: "STREAM555_DEST_FACEBOOK_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_FACEBOOK_STREAM_KEY",
+  },
+  {
+    enabledKey: "STREAM555_DEST_CUSTOM_ENABLED",
+    urlKey: "STREAM555_DEST_CUSTOM_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_CUSTOM_STREAM_KEY",
+  },
+];
+
+function normalizeStream555PluginId(pluginId: string): string {
+  return pluginId
+    .trim()
+    .toLowerCase()
+    .replace(/^@[^/]+\//, "")
+    .replace(/^plugin-/, "");
+}
+
+function isStream555LegacyPluginId(pluginId: string): boolean {
+  return STREAM555_PLUGIN_LEGACY_IDS.has(normalizeStream555PluginId(pluginId));
+}
+
+function isStream555ControlPluginId(pluginId: string): boolean {
+  return STREAM555_PLUGIN_PRIMARY_IDS.has(normalizeStream555PluginId(pluginId));
+}
+
+function resolveCanonicalPluginId(pluginId: string): string {
+  if (isStream555LegacyPluginId(pluginId) || isStream555ControlPluginId(pluginId)) {
+    return STREAM555_PLUGIN_CONTROL_ID;
+  }
+  if (isArcade555LegacyPluginId(pluginId) || isArcade555ControlPluginId(pluginId)) {
+    return ARCADE555_PLUGIN_CONTROL_ID;
+  }
+  return pluginId;
+}
+
+function resolveCanonicalServiceType(pluginId: string): string | null {
+  if (isStream555LegacyPluginId(pluginId) || isStream555ControlPluginId(pluginId)) {
+    return "stream555";
+  }
+  if (isArcade555LegacyPluginId(pluginId) || isArcade555ControlPluginId(pluginId)) {
+    return "arcade555";
+  }
+  return null;
+}
+
+function normalizeArcade555PluginId(pluginId: string): string {
+  return pluginId
+    .trim()
+    .toLowerCase()
+    .replace(/^@[^/]+\//, "")
+    .replace(/^plugin-/, "");
+}
+
+function isArcade555LegacyPluginId(pluginId: string): boolean {
+  return ARCADE555_PLUGIN_LEGACY_IDS.has(normalizeArcade555PluginId(pluginId));
+}
+
+function isArcade555ControlPluginId(pluginId: string): boolean {
+  return ARCADE555_PLUGIN_PRIMARY_IDS.has(normalizeArcade555PluginId(pluginId));
+}
+
+function dedupePluginValidationIssues(
+  issues: Array<{ field: string; message: string }>,
+): Array<{ field: string; message: string }> {
+  const seen = new Set<string>();
+  const deduped: Array<{ field: string; message: string }> = [];
+  for (const issue of issues) {
+    const key = `${issue.field}::${issue.message}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(issue);
+  }
+  return deduped;
+}
+
+function dedupePluginParams(parameters: PluginParamDef[]): PluginParamDef[] {
+  const seen = new Set<string>();
+  const deduped: PluginParamDef[] = [];
+  for (const parameter of parameters) {
+    if (seen.has(parameter.key)) continue;
+    seen.add(parameter.key);
+    deduped.push(parameter);
+  }
+  return deduped;
+}
+
+function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
+  const canonicalEntry = entries.find(
+    (entry) => normalizeStream555PluginId(entry.id) === "555stream",
+  );
+  const relatedEntries = canonicalEntry
+    ? []
+    : entries.filter((entry) => isStream555LegacyPluginId(entry.id));
+  const controlEntry =
+    canonicalEntry ??
+    entries.find((entry) => isStream555ControlPluginId(entry.id));
+  if (!controlEntry && relatedEntries.length === 0) return entries;
+
+  const baseEntry = controlEntry ?? relatedEntries[0];
+  if (!baseEntry) return entries;
+
+  const mergedEntry: PluginEntry = {
+    ...baseEntry,
+    id: STREAM555_PLUGIN_CONTROL_ID,
+    name: "555 Stream",
+    description:
+      "Unified 555 Stream plugin for auth, go-live control, channel routing, and ad operations.",
+    configured: baseEntry.configured,
+    enabled: baseEntry.enabled,
+    isActive: baseEntry.isActive,
+    loadError: baseEntry.loadError,
+    category: "feature",
+    source: baseEntry.source ?? "bundled",
+    envKey: baseEntry.envKey ?? "STREAM555_PUBLIC_BASE_URL",
+    configKeys: [...baseEntry.configKeys],
+    parameters: baseEntry.parameters.map((parameter) => ({ ...parameter })),
+    validationErrors: [...baseEntry.validationErrors],
+    validationWarnings: [...baseEntry.validationWarnings],
+    ...(baseEntry.configUiHints
+      ? { configUiHints: { ...baseEntry.configUiHints } }
+      : {}),
+  };
+
+  for (const related of relatedEntries) {
+    mergedEntry.configured ||= related.configured;
+    mergedEntry.enabled ||= related.enabled;
+    mergedEntry.isActive = Boolean(mergedEntry.isActive || related.isActive);
+    if (!mergedEntry.loadError && related.loadError) {
+      mergedEntry.loadError = related.loadError;
+    }
+    mergedEntry.validationErrors.push(...related.validationErrors);
+    mergedEntry.validationWarnings.push(...related.validationWarnings);
+  }
+
+  mergedEntry.configKeys = Array.from(new Set(mergedEntry.configKeys));
+  mergedEntry.parameters = dedupePluginParams(mergedEntry.parameters);
+  mergedEntry.validationErrors = dedupePluginValidationIssues(
+    mergedEntry.validationErrors,
+  );
+  mergedEntry.validationWarnings = dedupePluginValidationIssues(
+    mergedEntry.validationWarnings,
+  );
+
+  return entries
+    .filter(
+      (entry) =>
+        !isStream555ControlPluginId(entry.id) &&
+        !isStream555LegacyPluginId(entry.id),
+    )
+    .concat(mergedEntry);
+}
+
+function collapseArcade555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
+  const relatedEntries = entries.filter((entry) =>
+    isArcade555LegacyPluginId(entry.id),
+  );
+  const controlEntry = entries.find((entry) =>
+    isArcade555ControlPluginId(entry.id),
+  );
+  if (!controlEntry && relatedEntries.length === 0) return entries;
+
+  const baseEntry = controlEntry ?? relatedEntries[0];
+  if (!baseEntry) return entries;
+
+  const mergedEntry: PluginEntry = {
+    ...baseEntry,
+    id: ARCADE555_PLUGIN_CONTROL_ID,
+    name: "555 Arcade",
+    description:
+      "Unified 555 Arcade plugin for game sessions, score telemetry, quests, leaderboard, and progression operations.",
+    configured: baseEntry.configured,
+    enabled: baseEntry.enabled,
+    isActive: baseEntry.isActive,
+    loadError: baseEntry.loadError,
+    category: "feature",
+    source: baseEntry.source ?? "bundled",
+    envKey: baseEntry.envKey ?? "ARCADE555_BASE_URL",
+    configKeys: [...baseEntry.configKeys],
+    parameters: baseEntry.parameters.map((parameter) => ({ ...parameter })),
+    validationErrors: [...baseEntry.validationErrors],
+    validationWarnings: [...baseEntry.validationWarnings],
+    ...(baseEntry.configUiHints
+      ? { configUiHints: { ...baseEntry.configUiHints } }
+      : {}),
+  };
+
+  for (const related of relatedEntries) {
+    mergedEntry.configured ||= related.configured;
+    mergedEntry.enabled ||= related.enabled;
+    mergedEntry.isActive = Boolean(mergedEntry.isActive || related.isActive);
+    if (!mergedEntry.loadError && related.loadError) {
+      mergedEntry.loadError = related.loadError;
+    }
+    mergedEntry.configKeys.push(...related.configKeys);
+    mergedEntry.parameters.push(
+      ...related.parameters.map((parameter) => ({ ...parameter })),
+    );
+    mergedEntry.validationErrors.push(...related.validationErrors);
+    mergedEntry.validationWarnings.push(...related.validationWarnings);
+    if (related.configUiHints) {
+      mergedEntry.configUiHints = {
+        ...(mergedEntry.configUiHints ?? {}),
+        ...related.configUiHints,
+      };
+    }
+  }
+
+  mergedEntry.configKeys = Array.from(new Set(mergedEntry.configKeys));
+  mergedEntry.parameters = dedupePluginParams(mergedEntry.parameters);
+  mergedEntry.validationErrors = dedupePluginValidationIssues(
+    mergedEntry.validationErrors,
+  );
+  mergedEntry.validationWarnings = dedupePluginValidationIssues(
+    mergedEntry.validationWarnings,
+  );
+
+  return entries
+    .filter(
+      (entry) =>
+        !isArcade555ControlPluginId(entry.id) &&
+        !isArcade555LegacyPluginId(entry.id),
+    )
+    .concat(mergedEntry);
+}
+
+function collapseFive55PluginEntries(entries: PluginEntry[]): PluginEntry[] {
+  return collapseArcade555PluginEntries(collapseStream555PluginEntries(entries));
+}
+
+function applyStream555ChannelAutoEnableConfig(
+  pluginId: string,
+  config: Record<string, string>,
+): Record<string, string> {
+  if (!isStream555ControlPluginId(pluginId)) return config;
+
+  const nextConfig = { ...config };
+  for (const spec of STREAM555_CHANNEL_UI_SPECS) {
+    const hasExplicitToggle = Object.hasOwn(nextConfig, spec.enabledKey);
+    const hasUrl = Boolean(nextConfig[spec.urlKey]?.trim());
+    const hasStreamKey = Boolean(nextConfig[spec.streamKeyKey]?.trim());
+    if (!hasExplicitToggle && (hasUrl || hasStreamKey)) {
+      nextConfig[spec.enabledKey] = "true";
+    }
+  }
+  return nextConfig;
+}
+
+function parseBooleanLike(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return false;
+  switch (value.trim().toLowerCase()) {
+    case "1":
+    case "true":
+    case "yes":
+    case "on":
+    case "enabled":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function asObjectRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function getRuntimeService(
+  runtime: AgentRuntime | null,
+  serviceType: string,
+): unknown | null {
+  if (!runtime) return null;
+  try {
+    return runtime.getService(serviceType);
+  } catch {
+    return null;
+  }
+}
+
+function readRuntimeBoolean(
+  state: Record<string, unknown> | null,
+  key: string,
+): boolean | null {
+  if (!state || !(key in state)) return null;
+  const value = state[key];
+  return typeof value === "boolean" ? value : parseBooleanLike(value);
+}
+
+function readRuntimeNumber(
+  state: Record<string, unknown> | null,
+  key: string,
+): number | null {
+  if (!state || !(key in state)) return null;
+  const value = state[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function readRuntimeString(
+  state: Record<string, unknown> | null,
+  key: string,
+): string | null {
+  if (!state || typeof state[key] !== "string") return null;
+  const value = String(state[key]).trim();
+  return value.length > 0 ? value : null;
+}
+
+function readRuntimeStringArray(
+  state: Record<string, unknown> | null,
+  key: string,
+): string[] {
+  if (!state) return [];
+  const value = state[key];
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter((item) => item.length > 0);
+}
+
+function countConfiguredStream555Channels(
+  parameters: PluginParamDef[],
+): { saved: number; enabled: number; ready: number } {
+  const paramsByKey = new Map(parameters.map((parameter) => [parameter.key, parameter]));
+  let saved = 0;
+  let enabled = 0;
+  let ready = 0;
+
+  for (const spec of STREAM555_CHANNEL_UI_SPECS) {
+    const urlSet = Boolean(paramsByKey.get(spec.urlKey)?.isSet);
+    const streamKeySet = Boolean(paramsByKey.get(spec.streamKeyKey)?.isSet);
+    const channelEnabled = parseBooleanLike(
+      paramsByKey.get(spec.enabledKey)?.currentValue ??
+        paramsByKey.get(spec.enabledKey)?.default,
+    );
+    if (streamKeySet) saved += 1;
+    if (channelEnabled) enabled += 1;
+    if (channelEnabled && urlSet && streamKeySet) ready += 1;
+  }
+
+  return { saved, enabled, ready };
+}
+
+function resolvePluginInstalled(plugin: PluginEntry): boolean {
+  if (typeof plugin.installed === "boolean") return plugin.installed;
+  if (plugin.isActive) return true;
+  if (plugin.loadError) return true;
+  if (isStream555ControlPluginId(plugin.id) || isArcade555ControlPluginId(plugin.id)) {
+    return true;
+  }
+  return plugin.source === "store" || plugin.parameters.length > 0 || plugin.configKeys.length > 0;
+}
+
+function getRuntimeServiceState(
+  runtime: AgentRuntime | null,
+  serviceType: string,
+): Record<string, unknown> | null {
+  const service = getRuntimeService(runtime, serviceType);
+  const stateGetter = asObjectRecord(service)?.getRuntimeState;
+  if (typeof stateGetter !== "function") return null;
+  try {
+    return asObjectRecord(stateGetter.call(service));
+  } catch {
+    return null;
+  }
+}
+
+function applyPluginOperationalState(
+  plugin: PluginEntry,
+  runtime: AgentRuntime | null,
+): PluginEntry {
+  const installed = resolvePluginInstalled(plugin);
+  const loaded = Boolean(plugin.isActive);
+  const warnings: string[] = [];
+  const errors: string[] = [];
+  if (plugin.loadError) {
+    errors.push(plugin.loadError);
+  }
+
+  if (isStream555ControlPluginId(plugin.id)) {
+    const runtimeState = getRuntimeServiceState(runtime, "stream555");
+    const loaded =
+      Boolean(plugin.isActive) ||
+      Boolean(getRuntimeService(runtime, "stream555")) ||
+      readRuntimeBoolean(runtimeState, "loaded") === true;
+    const channelCounts = countConfiguredStream555Channels(plugin.parameters);
+    const authenticated =
+      readRuntimeBoolean(runtimeState, "authenticated") ??
+      Boolean(
+        process.env.STREAM555_AGENT_API_KEY?.trim() ||
+          process.env.STREAM555_AGENT_TOKEN?.trim() ||
+          process.env.STREAM_API_BEARER_TOKEN?.trim(),
+      );
+    const channelsSaved =
+      readRuntimeNumber(runtimeState, "channelsSaved") ?? channelCounts.saved;
+    const channelsEnabled =
+      readRuntimeNumber(runtimeState, "channelsEnabled") ?? channelCounts.enabled;
+    const channelsReady =
+      readRuntimeNumber(runtimeState, "channelsReady") ?? channelCounts.ready;
+    const ready =
+      loaded &&
+      authenticated &&
+      (channelsEnabled === 0 || channelsReady >= channelsEnabled);
+
+    warnings.push(...readRuntimeStringArray(runtimeState, "warnings"));
+    errors.push(...readRuntimeStringArray(runtimeState, "errors"));
+
+    plugin.installed = installed;
+    plugin.authenticated = authenticated;
+    plugin.ready = ready;
+    plugin.degraded = errors.length > 0 || warnings.length > 0;
+    plugin.operationalWarnings = Array.from(new Set(warnings));
+    plugin.operationalErrors = Array.from(new Set(errors));
+    plugin.operationalCounts = {
+      channelsSaved,
+      channelsEnabled,
+      channelsReady,
+    };
+    plugin.statusSummary = [
+      installed ? "Installed" : "Available",
+      plugin.enabled ? "Enabled" : "Disabled",
+      loaded ? "Loaded" : "Not loaded",
+      authenticated ? "Authenticated" : "Authentication required",
+      ready ? "Ready" : "Setup incomplete",
+    ];
+    return plugin;
+  }
+
+  if (isArcade555ControlPluginId(plugin.id)) {
+    const runtimeState = getRuntimeServiceState(runtime, "arcade555");
+    const loaded =
+      Boolean(plugin.isActive) ||
+      Boolean(getRuntimeService(runtime, "arcade555")) ||
+      readRuntimeBoolean(runtimeState, "loaded") === true;
+    const authenticated =
+      readRuntimeBoolean(runtimeState, "authenticated") ??
+      Boolean(
+        process.env.ARCADE555_AGENT_API_KEY?.trim() ||
+          process.env.ARCADE555_AGENT_TOKEN?.trim() ||
+          process.env.STREAM555_AGENT_API_KEY?.trim() ||
+          process.env.STREAM555_AGENT_TOKEN?.trim() ||
+          process.env.STREAM_API_BEARER_TOKEN?.trim(),
+      );
+    const sessionBootstrapped =
+      readRuntimeBoolean(runtimeState, "sessionBootstrapped") ?? false;
+    const catalogReachable =
+      readRuntimeBoolean(runtimeState, "catalogReachable") ??
+      Boolean(process.env.ARCADE555_BASE_URL?.trim() || process.env.STREAM555_BASE_URL?.trim());
+    const leaderboardReachable =
+      readRuntimeBoolean(runtimeState, "leaderboardReachable") ??
+      Boolean(
+        process.env.ARCADE555_LEADERBOARD_API_URL?.trim() ||
+          process.env.ARCADE555_BASE_URL?.trim() ||
+          process.env.STREAM555_BASE_URL?.trim(),
+      );
+    const questsReachable =
+      readRuntimeBoolean(runtimeState, "questsReachable") ??
+      Boolean(
+        process.env.ARCADE555_QUESTS_API_URL?.trim() ||
+          process.env.ARCADE555_BASE_URL?.trim() ||
+          process.env.STREAM555_BASE_URL?.trim(),
+      );
+    const scorePipelineReachable =
+      readRuntimeBoolean(runtimeState, "scorePipelineReachable") ??
+      Boolean(
+        process.env.ARCADE555_SCORE_CAPTURE_API_URL?.trim() ||
+          process.env.ARCADE555_BASE_URL?.trim() ||
+          process.env.STREAM555_BASE_URL?.trim(),
+      );
+    const ready = loaded && authenticated && sessionBootstrapped && catalogReachable;
+
+    warnings.push(...readRuntimeStringArray(runtimeState, "warnings"));
+    errors.push(...readRuntimeStringArray(runtimeState, "errors"));
+
+    plugin.installed = installed;
+    plugin.authenticated = authenticated;
+    plugin.ready = ready;
+    plugin.degraded = errors.length > 0 || warnings.length > 0;
+    plugin.operationalWarnings = Array.from(new Set(warnings));
+    plugin.operationalErrors = Array.from(new Set(errors));
+    plugin.operationalCounts = {
+      sessionBootstrapped: sessionBootstrapped ? 1 : 0,
+      catalogReachable: catalogReachable ? 1 : 0,
+      leaderboardReachable: leaderboardReachable ? 1 : 0,
+      questsReachable: questsReachable ? 1 : 0,
+      scorePipelineReachable: scorePipelineReachable ? 1 : 0,
+    };
+    plugin.statusSummary = [
+      installed ? "Installed" : "Available",
+      plugin.enabled ? "Enabled" : "Disabled",
+      loaded ? "Loaded" : "Not loaded",
+      authenticated ? "Authenticated" : "Authentication required",
+      sessionBootstrapped ? "Session ready" : "Session not bootstrapped",
+      ready ? "Ready" : "Setup incomplete",
+    ];
+    return plugin;
+  }
+
+  plugin.installed = installed;
+  plugin.authenticated = loaded ? true : null;
+  plugin.ready = loaded;
+  plugin.degraded = errors.length > 0 || warnings.length > 0;
+  plugin.operationalWarnings = warnings;
+  plugin.operationalErrors = errors;
+  plugin.statusSummary = [
+    installed ? "Installed" : "Available",
+    plugin.enabled ? "Enabled" : "Disabled",
+    loaded ? "Loaded" : "Not loaded",
+  ];
+  return plugin;
+}
+
+function resolveApiPluginEntries(state: ServerState): PluginEntry[] {
+  let freshConfig: MilaidyConfig;
+  try {
+    freshConfig = loadMilaidyConfig();
+  } catch {
+    freshConfig = state.config;
+  }
+
+  const bundledIds = new Set(state.plugins.map((plugin) => plugin.id));
+  const installedEntries = discoverInstalledPlugins(freshConfig, bundledIds);
+  const allPlugins: PluginEntry[] = collapseFive55PluginEntries([
+    ...state.plugins,
+    ...installedEntries,
+  ]);
+
+  const configEntries = (
+    freshConfig.plugins as Record<string, unknown> | undefined
+  )?.entries as Record<string, { enabled?: boolean }> | undefined;
+  const loadedNames = state.runtime ? state.runtime.plugins.map((plugin) => plugin.name) : [];
+
+  for (const plugin of allPlugins) {
+    const serviceType = resolveCanonicalServiceType(plugin.id);
+    const suffix = `plugin-${plugin.id}`;
+    const packageName = `@elizaos/plugin-${plugin.id}`;
+    const isLoaded =
+      Boolean(serviceType && getRuntimeService(state.runtime, serviceType)) ||
+      (loadedNames.length > 0 &&
+        loadedNames.some((name) => {
+          const canonicalLoadedId = resolveCanonicalPluginId(name);
+          return (
+            name === plugin.id ||
+            name === suffix ||
+            name === packageName ||
+            name.endsWith(`/${suffix}`) ||
+            name.includes(plugin.id) ||
+            canonicalLoadedId === resolveCanonicalPluginId(plugin.id)
+          );
+        }));
+    plugin.isActive = isLoaded;
+
+    const configEntry =
+      configEntries?.[plugin.id] ??
+      (isStream555ControlPluginId(plugin.id)
+        ? configEntries?.["555stream"]
+        : isArcade555ControlPluginId(plugin.id)
+          ? configEntries?.["arcade555"] ?? configEntries?.["arcade555-canonical"]
+          : undefined);
+    if (configEntry && typeof configEntry.enabled === "boolean") {
+      plugin.enabled = configEntry.enabled;
+    } else {
+      plugin.enabled = isLoaded;
+    }
+
+    plugin.loadError = undefined;
+    if (plugin.enabled && !isLoaded && state.runtime) {
+      const installs = freshConfig.plugins?.installs as
+        | Record<string, unknown>
+        | undefined;
+      const hasInstallRecord =
+        installs?.[plugin.npmName ?? ""] ||
+        installs?.[packageName] ||
+        installs?.[plugin.id];
+      if (hasInstallRecord) {
+        plugin.loadError =
+          "Plugin installed but failed to load — check runtime logs for the exact error.";
+      }
+    }
+  }
+
+  for (const plugin of allPlugins) {
+    for (const param of plugin.parameters) {
+      const envValue = process.env[param.key];
+      param.isSet = Boolean(envValue?.trim());
+      param.currentValue = param.isSet
+        ? redactPluginValue(param.key, envValue ?? "", param.sensitive)
+        : null;
+    }
+    const paramInfos: PluginParamInfo[] = plugin.parameters.map((parameter) => ({
+      key: parameter.key,
+      required: parameter.required,
+      sensitive: parameter.sensitive,
+      type: parameter.type,
+      description: parameter.description,
+      default: parameter.default,
+    }));
+    const validation = validatePluginConfig(
+      plugin.id,
+      plugin.category,
+      plugin.envKey,
+      plugin.configKeys,
+      undefined,
+      paramInfos,
+    );
+    plugin.validationErrors = validation.errors;
+    plugin.validationWarnings = validation.warnings;
+  }
+
+  for (const plugin of allPlugins) {
+    const providerModels = readProviderCache(plugin.id)?.models ?? [];
+
+    for (const param of plugin.parameters) {
+      if (!param.key.toUpperCase().includes("MODEL")) continue;
+
+      const expectedCat = paramKeyToCategory(param.key);
+      const filtered = providerModels.filter((model) => model.category === expectedCat);
+
+      if (!plugin.configUiHints) plugin.configUiHints = {};
+      plugin.configUiHints[param.key] = {
+        ...plugin.configUiHints[param.key],
+        type: "select",
+        options: filtered.map((model) => ({
+          value: model.id,
+          label: model.name !== model.id ? `${model.name} (${model.id})` : model.id,
+        })),
+      };
+    }
+  }
+
+  for (const plugin of allPlugins) {
+    applyPluginOperationalState(plugin, state.runtime);
+  }
+
+  return allPlugins;
+}
 
 /**
  * Discover available plugins from the bundled plugins.json manifest.
  * Falls back to filesystem scanning for monorepo development.
  */
-export function discoverPluginsFromManifest(): PluginEntry[] {
+function discoverPluginsFromManifest(): PluginEntry[] {
   const thisDir =
     import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url));
   const packageRoot = findOwnPackageRoot(thisDir);
@@ -1307,19 +3067,10 @@ export function discoverPluginsFromManifest(): PluginEntry[] {
       // Keys that are auto-injected by infrastructure and should never be
       // exposed as user-facing "config keys" or parameter definitions.
       const HIDDEN_KEYS = new Set(["VERCEL_OIDC_TOKEN"]);
-      const entries = index.plugins
+      const manifestEntries: PluginEntry[] = index.plugins
         .map((p) => {
-          const inferredCategory = categorizePlugin(p.id);
-          const category =
-            inferredCategory === "feature"
-              ? (p.category ?? inferredCategory)
-              : inferredCategory;
+          const category = categorizePlugin(p.id);
           const envKey = p.envKey;
-          const bundledMeta = readBundledPluginPackageMetadata(
-            packageRoot,
-            p.dirName,
-            p.npmName,
-          );
           const filteredConfigKeys = p.configKeys.filter(
             (k) => !HIDDEN_KEYS.has(k),
           );
@@ -1370,37 +3121,2697 @@ export function discoverPluginsFromManifest(): PluginEntry[] {
             version: p.version,
             pluginDeps: p.pluginDeps,
             ...(p.configUiHints ? { configUiHints: p.configUiHints } : {}),
-            icon: p.logoUrl ?? p.icon ?? bundledMeta.icon ?? null,
-            homepage: p.homepage ?? bundledMeta.homepage,
-            repository:
-              p.repository ??
-              bundledMeta.repository ??
-              deriveMiladyRepositoryUrl(p.npmName, p.dirName),
-            setupGuideUrl: p.setupGuideUrl ?? resolvePluginSetupGuideUrl(p.id),
           };
         })
         .sort((a, b) => a.name.localeCompare(b.name));
 
-      applyWhatsAppQrOverride(entries, resolveDefaultAgentWorkspaceDir());
+      const canonicalStreamEntry = discoverBundledPluginFromPackage(
+        packageRoot,
+        "@rndrntwrk/plugin-555stream",
+      );
+      if (
+        canonicalStreamEntry &&
+        !manifestEntries.some(
+          (entry) =>
+            normalizeStream555PluginId(entry.id) ===
+            normalizeStream555PluginId(canonicalStreamEntry.id),
+        )
+      ) {
+        manifestEntries.push(canonicalStreamEntry);
+      }
 
-      return entries;
+      const canonicalArcadeEntry = discoverBundledPluginFromPackage(
+        packageRoot,
+        "@rndrntwrk/plugin-555arcade",
+      );
+      if (
+        canonicalArcadeEntry &&
+        !manifestEntries.some(
+          (entry) =>
+            normalizeArcade555PluginId(entry.id) ===
+            normalizeArcade555PluginId(canonicalArcadeEntry.id),
+        )
+      ) {
+        manifestEntries.push(canonicalArcadeEntry);
+      }
+
+      const syntheticFive55Entries: PluginEntry[] = [
+        {
+          id: "stream",
+          name: "Stream",
+          description:
+            "Stream control and observability bridge for live operations.",
+          enabled: false,
+          configured: Boolean(
+            (process.env.STREAM_API_URL?.trim() ||
+              process.env.STREAM555_BASE_URL?.trim()) &&
+              (process.env.STREAM555_AGENT_API_KEY?.trim() ||
+                process.env.STREAM555_AGENT_TOKEN?.trim() ||
+                process.env.STREAM_API_BEARER_TOKEN?.trim()),
+          ),
+          envKey: "STREAM_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "STREAM_API_URL",
+            "STREAM555_BASE_URL",
+            "STREAM555_AGENT_TOKEN",
+            "STREAM555_AGENT_API_KEY",
+            "STREAM_API_BEARER_TOKEN",
+            "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+            "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+            "STREAM555_DEFAULT_SESSION_ID",
+            "STREAM_SESSION_ID",
+            "STREAM_API_DIALECT",
+            "STREAM_DEFAULT_INPUT_TYPE",
+            "STREAM_DEFAULT_INPUT_URL",
+            "STREAM_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "STREAM_API_URL",
+              type: "string",
+              description:
+                "Legacy stream control API base URL (expects /v1/stream/* endpoints)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_API_URL ?? null,
+              isSet: Boolean(process.env.STREAM_API_URL?.trim()),
+            },
+            {
+              key: "STREAM555_BASE_URL",
+              type: "string",
+              description:
+                "555stream control-plane base URL for agent-v1 routes",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_BASE_URL ?? null,
+              isSet: Boolean(process.env.STREAM555_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN",
+              type: "string",
+              description:
+                "Bearer token for 555stream agent API (stream/session control)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_TOKEN
+                ? maskValue(process.env.STREAM555_AGENT_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_API_KEY",
+              type: "string",
+              description:
+                "Long-lived agent API key exchanged for short-lived JWTs at runtime",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_API_KEY
+                ? maskValue(process.env.STREAM555_AGENT_API_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_API_KEY?.trim()),
+            },
+            {
+              key: "STREAM_API_BEARER_TOKEN",
+              type: "string",
+              description:
+                "Legacy bearer token fallback when STREAM555_AGENT_API_KEY / STREAM555_AGENT_TOKEN are unset",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM_API_BEARER_TOKEN
+                ? maskValue(process.env.STREAM_API_BEARER_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM_API_BEARER_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+              type: "string",
+              description:
+                "Optional token exchange endpoint path (default /api/agent/v1/auth/token/exchange)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+              type: "number",
+              description:
+                "Token refresh buffer for exchanged JWTs (seconds, default 300)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEFAULT_SESSION_ID",
+              type: "string",
+              description:
+                "Preferred 555stream session ID; plugin auto-creates/resumes when unset",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_DEFAULT_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM555_DEFAULT_SESSION_ID?.trim()),
+            },
+            {
+              key: "STREAM_SESSION_ID",
+              type: "string",
+              description:
+                "Optional session override used by the stream plugin",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM_SESSION_ID?.trim()),
+            },
+            {
+              key: "STREAM_API_DIALECT",
+              type: "string",
+              description:
+                "Optional override: 'five55-v1' or 'agent-v1' (auto-detected when unset)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_API_DIALECT ?? null,
+              isSet: Boolean(process.env.STREAM_API_DIALECT?.trim()),
+            },
+            {
+              key: "STREAM_DEFAULT_INPUT_TYPE",
+              type: "string",
+              description:
+                "Default stream input type used by STREAM_LIVE_START when input.type is omitted (e.g. website/screen)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_DEFAULT_INPUT_TYPE ?? null,
+              isSet: Boolean(process.env.STREAM_DEFAULT_INPUT_TYPE?.trim()),
+            },
+            {
+              key: "STREAM_DEFAULT_INPUT_URL",
+              type: "string",
+              description:
+                "Default website input URL used when STREAM_DEFAULT_INPUT_TYPE=website and no input.url is provided",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_DEFAULT_INPUT_URL ?? null,
+              isSet: Boolean(process.env.STREAM_DEFAULT_INPUT_URL?.trim()),
+            },
+            {
+              key: "STREAM_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable legacy stream plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue: process.env.STREAM_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.STREAM_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          configUiHints: {
+            STREAM_API_URL: {
+              label: "Legacy API URL",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM555_BASE_URL: {
+              label: "555stream Base URL",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM_API_DIALECT: {
+              label: "Dialect",
+              group: "Connection",
+              width: "half",
+              type: "select",
+              options: [
+                { value: "agent-v1", label: "agent-v1 (recommended)" },
+                { value: "five55-v1", label: "five55-v1 (legacy)" },
+              ],
+            },
+            STREAM555_AGENT_API_KEY: {
+              label: "Agent API Key",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN: {
+              label: "Agent Bearer Token",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM_API_BEARER_TOKEN: {
+              label: "Legacy Bearer Token",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT: {
+              label: "Token Exchange Endpoint",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS: {
+              label: "Token Refresh Window (s)",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_DEFAULT_SESSION_ID: {
+              label: "Default Session ID",
+              group: "Session",
+              width: "half",
+            },
+            STREAM_SESSION_ID: {
+              label: "Session Override",
+              group: "Session",
+              width: "half",
+            },
+            STREAM_DEFAULT_INPUT_TYPE: {
+              label: "Default Input Type",
+              group: "Defaults",
+              width: "half",
+              type: "select",
+              options: [
+                { value: "website", label: "Website" },
+                { value: "screen", label: "Screen Capture" },
+              ],
+            },
+            STREAM_DEFAULT_INPUT_URL: {
+              label: "Default Input URL",
+              group: "Defaults",
+              width: "full",
+            },
+            STREAM_PLUGIN_ENABLED: {
+              label: "Enabled",
+              group: "Runtime",
+              width: "half",
+            },
+          },
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "stream555-control",
+          name: "555 Stream",
+          description:
+            "Primary 555 Stream plugin for go-live, scene, segment, and ad operations.",
+          enabled: false,
+          configured: Boolean(
+            (process.env.STREAM555_BASE_URL?.trim() ||
+              process.env.STREAM555_PUBLIC_BASE_URL?.trim() ||
+              process.env.STREAM555_INTERNAL_BASE_URL?.trim()) &&
+              (process.env.STREAM555_AGENT_API_KEY?.trim() ||
+                process.env.STREAM555_AGENT_TOKEN?.trim() ||
+                process.env.STREAM_API_BEARER_TOKEN?.trim()),
+          ),
+          envKey: "STREAM555_PUBLIC_BASE_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "STREAM555_BASE_URL",
+            "STREAM555_PUBLIC_BASE_URL",
+            "STREAM555_INTERNAL_BASE_URL",
+            "STREAM555_INTERNAL_AGENT_IDS",
+            "STREAM555_AGENT_TOKEN",
+            "STREAM555_AGENT_API_KEY",
+            "STREAM_API_BEARER_TOKEN",
+            "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+            "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+            "STREAM555_DEFAULT_SESSION_ID",
+            "STREAM_SESSION_ID",
+            "STREAM555_ALLOW_LOCALHOST_APP_URLS",
+            "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
+            "STREAM555_WALLET_AUTH_ALLOW_PROVISION",
+            "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
+            "STREAM555_DEST_SYNC_ON_GO_LIVE",
+            "STREAM555_DEST_PUMPFUN_RTMP_URL",
+            "STREAM555_DEST_PUMPFUN_STREAM_KEY",
+            "STREAM555_DEST_PUMPFUN_ENABLED",
+            "STREAM555_DEST_X_RTMP_URL",
+            "STREAM555_DEST_X_STREAM_KEY",
+            "STREAM555_DEST_X_ENABLED",
+            "STREAM555_DEST_TWITCH_RTMP_URL",
+            "STREAM555_DEST_TWITCH_STREAM_KEY",
+            "STREAM555_DEST_TWITCH_ENABLED",
+            "STREAM555_DEST_KICK_RTMP_URL",
+            "STREAM555_DEST_KICK_STREAM_KEY",
+            "STREAM555_DEST_KICK_ENABLED",
+            "STREAM555_DEST_YOUTUBE_RTMP_URL",
+            "STREAM555_DEST_YOUTUBE_STREAM_KEY",
+            "STREAM555_DEST_YOUTUBE_ENABLED",
+            "STREAM555_DEST_FACEBOOK_RTMP_URL",
+            "STREAM555_DEST_FACEBOOK_STREAM_KEY",
+            "STREAM555_DEST_FACEBOOK_ENABLED",
+            "STREAM555_DEST_CUSTOM_RTMP_URL",
+            "STREAM555_DEST_CUSTOM_STREAM_KEY",
+            "STREAM555_DEST_CUSTOM_ENABLED",
+            "STREAM555_CONTROL_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "STREAM555_BASE_URL",
+              type: "string",
+              description: "Legacy base URL override for all agents",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_BASE_URL ?? null,
+              isSet: Boolean(process.env.STREAM555_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_PUBLIC_BASE_URL",
+              type: "string",
+              description:
+                "Public control-plane base URL for external agents (default https://stream.rndrntwrk.com)",
+              required: false,
+              sensitive: false,
+              default: "https://stream.rndrntwrk.com",
+              currentValue:
+                process.env.STREAM555_PUBLIC_BASE_URL ??
+                "https://stream.rndrntwrk.com",
+              isSet: Boolean(process.env.STREAM555_PUBLIC_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_INTERNAL_BASE_URL",
+              type: "string",
+              description:
+                "Internal control-plane base URL for allow-listed internal agents",
+              required: false,
+              sensitive: false,
+              default: "http://control-plane:3000",
+              currentValue:
+                process.env.STREAM555_INTERNAL_BASE_URL ??
+                "http://control-plane:3000",
+              isSet: Boolean(process.env.STREAM555_INTERNAL_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_INTERNAL_AGENT_IDS",
+              type: "string",
+              description:
+                "Comma-separated internal agent IDs that should use internal base URL",
+              required: false,
+              sensitive: false,
+              default: "alice,alice-internal",
+              currentValue:
+                process.env.STREAM555_INTERNAL_AGENT_IDS ??
+                "alice,alice-internal",
+              isSet: Boolean(process.env.STREAM555_INTERNAL_AGENT_IDS?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_API_KEY",
+              type: "string",
+              description:
+                "Agent API key exchanged for short-lived JWTs (recommended)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_API_KEY
+                ? maskValue(process.env.STREAM555_AGENT_API_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_API_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN",
+              type: "string",
+              description: "Static bearer token for 555stream agent routes",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_TOKEN
+                ? maskValue(process.env.STREAM555_AGENT_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM_API_BEARER_TOKEN",
+              type: "string",
+              description:
+                "Legacy bearer token fallback for agent route authentication",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM_API_BEARER_TOKEN
+                ? maskValue(process.env.STREAM_API_BEARER_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM_API_BEARER_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+              type: "string",
+              description:
+                "Optional token exchange path (default /api/agent/v1/auth/token/exchange)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+              type: "number",
+              description:
+                "Token refresh buffer for exchanged JWTs in seconds (default 300)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEFAULT_SESSION_ID",
+              type: "string",
+              description:
+                "Preferred 555stream session ID for control operations",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_DEFAULT_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM555_DEFAULT_SESSION_ID?.trim()),
+            },
+            {
+              key: "STREAM_SESSION_ID",
+              type: "string",
+              description:
+                "One-off session override for immediate control actions",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM_SESSION_ID?.trim()),
+            },
+            {
+              key: "STREAM555_ALLOW_LOCALHOST_APP_URLS",
+              type: "string",
+              description:
+                "Allow localhost app URLs for STREAM555_GO_LIVE_APP in production (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.STREAM555_ALLOW_LOCALHOST_APP_URLS ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_ALLOW_LOCALHOST_APP_URLS?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
+              type: "string",
+              description:
+                "Wallet auth chain preference. Solana first, fallback to Ethereum when unavailable.",
+              required: false,
+              sensitive: false,
+              default: "solana",
+              currentValue:
+                process.env.STREAM555_WALLET_AUTH_PREFERRED_CHAIN ?? "solana",
+              isSet: Boolean(
+                process.env.STREAM555_WALLET_AUTH_PREFERRED_CHAIN?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_WALLET_AUTH_ALLOW_PROVISION",
+              type: "string",
+              description:
+                "Allow sw4p-linked wallet provisioning when no runtime wallet exists (true/false)",
+              required: false,
+              sensitive: false,
+              default: "true",
+              currentValue:
+                process.env.STREAM555_WALLET_AUTH_ALLOW_PROVISION ?? "true",
+              isSet: Boolean(
+                process.env.STREAM555_WALLET_AUTH_ALLOW_PROVISION?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
+              type: "string",
+              description:
+                "Target chain for sw4p-linked wallet provisioning when fallback is needed.",
+              required: false,
+              sensitive: false,
+              default: "eth",
+              currentValue:
+                process.env.STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN ??
+                "eth",
+              isSet: Boolean(
+                process.env.STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_SYNC_ON_GO_LIVE",
+              type: "string",
+              description:
+                "Automatically sync configured RTMP channels before STREAM555_GO_LIVE (true/false)",
+              required: false,
+              sensitive: false,
+              default: "true",
+              currentValue:
+                process.env.STREAM555_DEST_SYNC_ON_GO_LIVE ?? "true",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_SYNC_ON_GO_LIVE?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_PUMPFUN_RTMP_URL",
+              type: "string",
+              description: "Pump.fun RTMPS endpoint URL",
+              required: false,
+              sensitive: false,
+              default: "rtmps://pump-prod-tg2x8veh.rtmp.livekit.cloud/x",
+              currentValue:
+                process.env.STREAM555_DEST_PUMPFUN_RTMP_URL ??
+                "rtmps://pump-prod-tg2x8veh.rtmp.livekit.cloud/x",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_PUMPFUN_RTMP_URL?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_PUMPFUN_STREAM_KEY",
+              type: "string",
+              description: "Pump.fun stream key",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_DEST_PUMPFUN_STREAM_KEY
+                ? maskValue(process.env.STREAM555_DEST_PUMPFUN_STREAM_KEY)
+                : null,
+              isSet: Boolean(
+                process.env.STREAM555_DEST_PUMPFUN_STREAM_KEY?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_PUMPFUN_ENABLED",
+              type: "string",
+              description: "Enable Pump.fun simulcast channel (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.STREAM555_DEST_PUMPFUN_ENABLED ?? "false",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_PUMPFUN_ENABLED?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_X_RTMP_URL",
+              type: "string",
+              description: "X RTMPS endpoint URL",
+              required: false,
+              sensitive: false,
+              default: "rtmps://or.pscp.tv:443/x",
+              currentValue:
+                process.env.STREAM555_DEST_X_RTMP_URL ??
+                "rtmps://or.pscp.tv:443/x",
+              isSet: Boolean(process.env.STREAM555_DEST_X_RTMP_URL?.trim()),
+            },
+            {
+              key: "STREAM555_DEST_X_STREAM_KEY",
+              type: "string",
+              description: "X stream key",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_DEST_X_STREAM_KEY
+                ? maskValue(process.env.STREAM555_DEST_X_STREAM_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_DEST_X_STREAM_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_DEST_X_ENABLED",
+              type: "string",
+              description: "Enable X simulcast channel (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue: process.env.STREAM555_DEST_X_ENABLED ?? "false",
+              isSet: Boolean(process.env.STREAM555_DEST_X_ENABLED?.trim()),
+            },
+            {
+              key: "STREAM555_DEST_TWITCH_RTMP_URL",
+              type: "string",
+              description: "Twitch RTMPS endpoint URL",
+              required: false,
+              sensitive: false,
+              default: "rtmps://ingest.global-contribute.live-video.net/app",
+              currentValue:
+                process.env.STREAM555_DEST_TWITCH_RTMP_URL ??
+                "rtmps://ingest.global-contribute.live-video.net/app",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_TWITCH_RTMP_URL?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_TWITCH_STREAM_KEY",
+              type: "string",
+              description: "Twitch stream key",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_DEST_TWITCH_STREAM_KEY
+                ? maskValue(process.env.STREAM555_DEST_TWITCH_STREAM_KEY)
+                : null,
+              isSet: Boolean(
+                process.env.STREAM555_DEST_TWITCH_STREAM_KEY?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_TWITCH_ENABLED",
+              type: "string",
+              description: "Enable Twitch simulcast channel (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.STREAM555_DEST_TWITCH_ENABLED ?? "false",
+              isSet: Boolean(process.env.STREAM555_DEST_TWITCH_ENABLED?.trim()),
+            },
+            {
+              key: "STREAM555_DEST_KICK_RTMP_URL",
+              type: "string",
+              description: "Kick RTMPS endpoint URL",
+              required: false,
+              sensitive: false,
+              default: "rtmps://fa723fc1b171.global-contribute.live-video.net",
+              currentValue:
+                process.env.STREAM555_DEST_KICK_RTMP_URL ??
+                "rtmps://fa723fc1b171.global-contribute.live-video.net",
+              isSet: Boolean(process.env.STREAM555_DEST_KICK_RTMP_URL?.trim()),
+            },
+            {
+              key: "STREAM555_DEST_KICK_STREAM_KEY",
+              type: "string",
+              description: "Kick stream key",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_DEST_KICK_STREAM_KEY
+                ? maskValue(process.env.STREAM555_DEST_KICK_STREAM_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_DEST_KICK_STREAM_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_DEST_KICK_ENABLED",
+              type: "string",
+              description: "Enable Kick simulcast channel (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue: process.env.STREAM555_DEST_KICK_ENABLED ?? "false",
+              isSet: Boolean(process.env.STREAM555_DEST_KICK_ENABLED?.trim()),
+            },
+            {
+              key: "STREAM555_DEST_YOUTUBE_RTMP_URL",
+              type: "string",
+              description: "YouTube RTMPS endpoint URL",
+              required: false,
+              sensitive: false,
+              default: "rtmps://a.rtmp.youtube.com/live2",
+              currentValue:
+                process.env.STREAM555_DEST_YOUTUBE_RTMP_URL ??
+                "rtmps://a.rtmp.youtube.com/live2",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_YOUTUBE_RTMP_URL?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_YOUTUBE_STREAM_KEY",
+              type: "string",
+              description: "YouTube stream key",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_DEST_YOUTUBE_STREAM_KEY
+                ? maskValue(process.env.STREAM555_DEST_YOUTUBE_STREAM_KEY)
+                : null,
+              isSet: Boolean(
+                process.env.STREAM555_DEST_YOUTUBE_STREAM_KEY?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_YOUTUBE_ENABLED",
+              type: "string",
+              description: "Enable YouTube simulcast channel (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.STREAM555_DEST_YOUTUBE_ENABLED ?? "false",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_YOUTUBE_ENABLED?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_FACEBOOK_RTMP_URL",
+              type: "string",
+              description: "Facebook RTMPS endpoint URL",
+              required: false,
+              sensitive: false,
+              default: "rtmps://live-api-s.facebook.com:443/rtmp/",
+              currentValue:
+                process.env.STREAM555_DEST_FACEBOOK_RTMP_URL ??
+                "rtmps://live-api-s.facebook.com:443/rtmp/",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_FACEBOOK_RTMP_URL?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_FACEBOOK_STREAM_KEY",
+              type: "string",
+              description: "Facebook stream key",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_DEST_FACEBOOK_STREAM_KEY
+                ? maskValue(process.env.STREAM555_DEST_FACEBOOK_STREAM_KEY)
+                : null,
+              isSet: Boolean(
+                process.env.STREAM555_DEST_FACEBOOK_STREAM_KEY?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_FACEBOOK_ENABLED",
+              type: "string",
+              description: "Enable Facebook simulcast channel (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.STREAM555_DEST_FACEBOOK_ENABLED ?? "false",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_FACEBOOK_ENABLED?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_CUSTOM_RTMP_URL",
+              type: "string",
+              description: "Custom RTMP/RTMPS channel URL",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_DEST_CUSTOM_RTMP_URL ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_DEST_CUSTOM_RTMP_URL?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_CUSTOM_STREAM_KEY",
+              type: "string",
+              description: "Custom channel stream key",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_DEST_CUSTOM_STREAM_KEY
+                ? maskValue(process.env.STREAM555_DEST_CUSTOM_STREAM_KEY)
+                : null,
+              isSet: Boolean(
+                process.env.STREAM555_DEST_CUSTOM_STREAM_KEY?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_CUSTOM_ENABLED",
+              type: "string",
+              description: "Enable custom simulcast channel (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.STREAM555_DEST_CUSTOM_ENABLED ?? "false",
+              isSet: Boolean(process.env.STREAM555_DEST_CUSTOM_ENABLED?.trim()),
+            },
+            {
+              key: "STREAM555_CONTROL_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable stream555-control plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue:
+                process.env.STREAM555_CONTROL_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_CONTROL_PLUGIN_ENABLED?.trim(),
+              ),
+            },
+          ],
+          configUiHints: {
+            STREAM555_BASE_URL: {
+              label: "Primary Base URL Override",
+              hidden: true,
+            },
+            STREAM555_PUBLIC_BASE_URL: {
+              label: "Public Base URL",
+              hidden: true,
+            },
+            STREAM555_INTERNAL_BASE_URL: {
+              label: "Internal Base URL",
+              hidden: true,
+            },
+            STREAM555_INTERNAL_AGENT_IDS: {
+              label: "Internal Agent IDs",
+              hidden: true,
+            },
+            STREAM555_DEFAULT_SESSION_ID: {
+              label: "Default Session ID",
+              hidden: true,
+            },
+            STREAM_SESSION_ID: {
+              label: "Session Override",
+              hidden: true,
+            },
+            STREAM555_AGENT_API_KEY: {
+              label: "Agent API Key",
+              hidden: true,
+            },
+            STREAM555_AGENT_TOKEN: {
+              label: "Agent Token",
+              hidden: true,
+            },
+            STREAM_API_BEARER_TOKEN: {
+              label: "Legacy Bearer Token",
+              hidden: true,
+            },
+            STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT: {
+              label: "Exchange Endpoint",
+              hidden: true,
+            },
+            STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS: {
+              label: "Refresh Window (s)",
+              hidden: true,
+            },
+            STREAM555_ALLOW_LOCALHOST_APP_URLS: {
+              label: "Allow Localhost App URLs",
+              hidden: true,
+            },
+            STREAM555_WALLET_AUTH_PREFERRED_CHAIN: {
+              label: "Preferred Wallet Chain",
+              hidden: true,
+            },
+            STREAM555_WALLET_AUTH_ALLOW_PROVISION: {
+              label: "Allow Wallet Provisioning",
+              hidden: true,
+            },
+            STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN: {
+              label: "Provision Target Chain",
+              hidden: true,
+            },
+            STREAM555_DEST_SYNC_ON_GO_LIVE: {
+              label: "Auto-sync channels before go-live",
+              help: "Automatically sync configured RTMP channels before STREAM555_GO_LIVE.",
+              group: "Channels",
+              width: "full",
+              advanced: true,
+              order: 210,
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
+              ],
+            },
+            STREAM555_DEST_PUMPFUN_ENABLED: {
+              label: "Enable Pump.fun",
+              group: "Channels",
+              width: "full",
+              order: 300,
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
+              ],
+            },
+            STREAM555_DEST_PUMPFUN_RTMP_URL: {
+              label: "Pump.fun RTMPS URL",
+              group: "Channels",
+              width: "half",
+              order: 310,
+              showIf: {
+                field: "STREAM555_DEST_PUMPFUN_ENABLED",
+                op: "eq",
+                value: "true",
+              },
+            },
+            STREAM555_DEST_PUMPFUN_STREAM_KEY: {
+              label: "Pump.fun Stream Key",
+              group: "Channels",
+              width: "half",
+              order: 320,
+              showIf: {
+                field: "STREAM555_DEST_PUMPFUN_ENABLED",
+                op: "eq",
+                value: "true",
+              },
+            },
+            STREAM555_DEST_X_ENABLED: {
+              label: "Enable X",
+              group: "Channels",
+              width: "full",
+              order: 330,
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
+              ],
+            },
+            STREAM555_DEST_X_RTMP_URL: {
+              label: "X RTMPS URL",
+              group: "Channels",
+              width: "half",
+              order: 340,
+              showIf: {
+                field: "STREAM555_DEST_X_ENABLED",
+                op: "eq",
+                value: "true",
+              },
+            },
+            STREAM555_DEST_X_STREAM_KEY: {
+              label: "X Stream Key",
+              group: "Channels",
+              width: "half",
+              order: 350,
+              showIf: {
+                field: "STREAM555_DEST_X_ENABLED",
+                op: "eq",
+                value: "true",
+              },
+            },
+            STREAM555_DEST_TWITCH_ENABLED: {
+              label: "Enable Twitch",
+              group: "Channels",
+              width: "full",
+              order: 360,
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
+              ],
+            },
+            STREAM555_DEST_TWITCH_RTMP_URL: {
+              label: "Twitch RTMPS URL",
+              group: "Channels",
+              width: "half",
+              order: 370,
+              showIf: {
+                field: "STREAM555_DEST_TWITCH_ENABLED",
+                op: "eq",
+                value: "true",
+              },
+            },
+            STREAM555_DEST_TWITCH_STREAM_KEY: {
+              label: "Twitch Stream Key",
+              group: "Channels",
+              width: "half",
+              order: 380,
+              showIf: {
+                field: "STREAM555_DEST_TWITCH_ENABLED",
+                op: "eq",
+                value: "true",
+              },
+            },
+            STREAM555_DEST_KICK_ENABLED: {
+              label: "Enable Kick",
+              group: "Channels",
+              width: "full",
+              order: 390,
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
+              ],
+            },
+            STREAM555_DEST_KICK_RTMP_URL: {
+              label: "Kick RTMPS URL",
+              group: "Channels",
+              width: "half",
+              order: 400,
+              showIf: {
+                field: "STREAM555_DEST_KICK_ENABLED",
+                op: "eq",
+                value: "true",
+              },
+            },
+            STREAM555_DEST_KICK_STREAM_KEY: {
+              label: "Kick Stream Key",
+              group: "Channels",
+              width: "half",
+              order: 410,
+              showIf: {
+                field: "STREAM555_DEST_KICK_ENABLED",
+                op: "eq",
+                value: "true",
+              },
+            },
+            STREAM555_DEST_YOUTUBE_ENABLED: {
+              label: "Enable YouTube",
+              group: "Channels",
+              width: "full",
+              order: 420,
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
+              ],
+            },
+            STREAM555_DEST_YOUTUBE_RTMP_URL: {
+              label: "YouTube RTMPS URL",
+              group: "Channels",
+              width: "half",
+              order: 430,
+              showIf: {
+                field: "STREAM555_DEST_YOUTUBE_ENABLED",
+                op: "eq",
+                value: "true",
+              },
+            },
+            STREAM555_DEST_YOUTUBE_STREAM_KEY: {
+              label: "YouTube Stream Key",
+              group: "Channels",
+              width: "half",
+              order: 440,
+              showIf: {
+                field: "STREAM555_DEST_YOUTUBE_ENABLED",
+                op: "eq",
+                value: "true",
+              },
+            },
+            STREAM555_DEST_FACEBOOK_ENABLED: {
+              label: "Enable Facebook",
+              group: "Channels",
+              width: "full",
+              order: 450,
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
+              ],
+            },
+            STREAM555_DEST_FACEBOOK_RTMP_URL: {
+              label: "Facebook RTMPS URL",
+              group: "Channels",
+              width: "half",
+              order: 460,
+              showIf: {
+                field: "STREAM555_DEST_FACEBOOK_ENABLED",
+                op: "eq",
+                value: "true",
+              },
+            },
+            STREAM555_DEST_FACEBOOK_STREAM_KEY: {
+              label: "Facebook Stream Key",
+              group: "Channels",
+              width: "half",
+              order: 470,
+              showIf: {
+                field: "STREAM555_DEST_FACEBOOK_ENABLED",
+                op: "eq",
+                value: "true",
+              },
+            },
+            STREAM555_DEST_CUSTOM_ENABLED: {
+              label: "Enable Custom",
+              group: "Channels",
+              width: "full",
+              order: 480,
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
+              ],
+            },
+            STREAM555_DEST_CUSTOM_RTMP_URL: {
+              label: "Custom RTMP URL",
+              group: "Channels",
+              width: "half",
+              order: 490,
+              showIf: {
+                field: "STREAM555_DEST_CUSTOM_ENABLED",
+                op: "eq",
+                value: "true",
+              },
+            },
+            STREAM555_DEST_CUSTOM_STREAM_KEY: {
+              label: "Custom Stream Key",
+              group: "Channels",
+              width: "half",
+              order: 500,
+              showIf: {
+                field: "STREAM555_DEST_CUSTOM_ENABLED",
+                op: "eq",
+                value: "true",
+              },
+            },
+            STREAM555_CONTROL_PLUGIN_ENABLED: {
+              label: "Enabled",
+              hidden: true,
+            },
+          },
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "stream555-auth",
+          name: "Stream555 Auth",
+          description:
+            "Agent auth/key-management plugin for provisioning and validating 555stream credentials.",
+          enabled: false,
+          configured: Boolean(
+            (process.env.STREAM555_BASE_URL?.trim() ||
+              process.env.STREAM_API_URL?.trim() ||
+              process.env.STREAM555_PUBLIC_BASE_URL?.trim() ||
+              process.env.STREAM555_INTERNAL_BASE_URL?.trim()),
+          ),
+          envKey: "STREAM555_PUBLIC_BASE_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "STREAM555_BASE_URL",
+            "STREAM_API_URL",
+            "STREAM555_PUBLIC_BASE_URL",
+            "STREAM555_INTERNAL_BASE_URL",
+            "STREAM555_INTERNAL_AGENT_IDS",
+            "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
+            "STREAM555_WALLET_AUTH_ALLOW_PROVISION",
+            "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
+            "STREAM555_ADMIN_API_KEY",
+            "STREAM555_AGENT_DEFAULT_USER_ID",
+            "STREAM555_AGENT_API_KEY",
+            "STREAM555_AGENT_TOKEN",
+            "STREAM_API_BEARER_TOKEN",
+            "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+            "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+            "STREAM555_AUTH_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "STREAM555_BASE_URL",
+              type: "string",
+              description:
+                "Primary 555stream control-plane URL for auth endpoints",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_BASE_URL ?? null,
+              isSet: Boolean(process.env.STREAM555_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_PUBLIC_BASE_URL",
+              type: "string",
+              description:
+                "Public 555stream base URL used for external agents (default https://stream.rndrntwrk.com)",
+              required: false,
+              sensitive: false,
+              default: "https://stream.rndrntwrk.com",
+              currentValue:
+                process.env.STREAM555_PUBLIC_BASE_URL ??
+                "https://stream.rndrntwrk.com",
+              isSet: Boolean(process.env.STREAM555_PUBLIC_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_INTERNAL_BASE_URL",
+              type: "string",
+              description:
+                "Internal 555stream base URL used by allow-listed internal agents",
+              required: false,
+              sensitive: false,
+              default: "http://control-plane:3000",
+              currentValue:
+                process.env.STREAM555_INTERNAL_BASE_URL ??
+                "http://control-plane:3000",
+              isSet: Boolean(process.env.STREAM555_INTERNAL_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_INTERNAL_AGENT_IDS",
+              type: "string",
+              description:
+                "Comma-separated agent IDs that should use internal base URL",
+              required: false,
+              sensitive: false,
+              default: "alice,alice-internal",
+              currentValue:
+                process.env.STREAM555_INTERNAL_AGENT_IDS ??
+                "alice,alice-internal",
+              isSet: Boolean(process.env.STREAM555_INTERNAL_AGENT_IDS?.trim()),
+            },
+            {
+              key: "STREAM_API_URL",
+              type: "string",
+              description:
+                "Legacy base URL fallback when STREAM555_BASE_URL is unset",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_API_URL ?? null,
+              isSet: Boolean(process.env.STREAM_API_URL?.trim()),
+            },
+            {
+              key: "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
+              type: "string",
+              description:
+                "Wallet auth chain preference. Use solana first, fallback to ethereum when unavailable.",
+              required: false,
+              sensitive: false,
+              default: "solana",
+              currentValue:
+                process.env.STREAM555_WALLET_AUTH_PREFERRED_CHAIN ?? "solana",
+              isSet: Boolean(
+                process.env.STREAM555_WALLET_AUTH_PREFERRED_CHAIN?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_WALLET_AUTH_ALLOW_PROVISION",
+              type: "string",
+              description:
+                "Allow linked wallet provisioning via sw4p when no runtime wallet exists.",
+              required: false,
+              sensitive: false,
+              default: "true",
+              currentValue:
+                process.env.STREAM555_WALLET_AUTH_ALLOW_PROVISION ?? "true",
+              isSet: Boolean(
+                process.env.STREAM555_WALLET_AUTH_ALLOW_PROVISION?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
+              type: "string",
+              description:
+                "Target chain for sw4p-linked provisioning when fallback is needed.",
+              required: false,
+              sensitive: false,
+              default: "eth",
+              currentValue:
+                process.env.STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN ??
+                "eth",
+              isSet: Boolean(
+                process.env.STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_ADMIN_API_KEY",
+              type: "string",
+              description:
+                "Admin API key required for API-key mint/list/revoke operations",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_ADMIN_API_KEY
+                ? maskValue(process.env.STREAM555_ADMIN_API_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_ADMIN_API_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_DEFAULT_USER_ID",
+              type: "string",
+              description:
+                "Default userId used when creating agent API keys",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_DEFAULT_USER_ID ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_DEFAULT_USER_ID?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_AGENT_API_KEY",
+              type: "string",
+              description:
+                "Current active agent API key (recommended runtime auth source)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_API_KEY
+                ? maskValue(process.env.STREAM555_AGENT_API_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_API_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN",
+              type: "string",
+              description:
+                "Current active static agent bearer token (legacy fallback)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_TOKEN
+                ? maskValue(process.env.STREAM555_AGENT_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM_API_BEARER_TOKEN",
+              type: "string",
+              description:
+                "Legacy bearer token fallback if STREAM555_AGENT_TOKEN is unset",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM_API_BEARER_TOKEN
+                ? maskValue(process.env.STREAM_API_BEARER_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM_API_BEARER_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+              type: "string",
+              description:
+                "Optional token exchange endpoint path override",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+              type: "number",
+              description:
+                "Token refresh buffer for exchanged JWTs in seconds (default 300)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_AUTH_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable stream555-auth plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue:
+                process.env.STREAM555_AUTH_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.STREAM555_AUTH_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          configUiHints: {
+            STREAM555_BASE_URL: {
+              label: "Primary Base URL Override",
+              group: "Connection",
+              width: "half",
+              advanced: true,
+            },
+            STREAM555_PUBLIC_BASE_URL: {
+              label: "Public Base URL",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM555_INTERNAL_BASE_URL: {
+              label: "Internal Base URL",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM555_INTERNAL_AGENT_IDS: {
+              label: "Internal Agent IDs",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM_API_URL: {
+              label: "Legacy Base URL",
+              group: "Connection",
+              width: "half",
+              advanced: true,
+            },
+            STREAM555_WALLET_AUTH_PREFERRED_CHAIN: {
+              label: "Preferred Wallet Chain",
+              group: "Wallet Auth",
+              width: "half",
+              type: "radio",
+              options: [
+                {
+                  value: "solana",
+                  label: "Solana (recommended)",
+                  description: "Use Solana wallet first when present.",
+                },
+                {
+                  value: "evm",
+                  label: "Ethereum fallback",
+                  description: "Use EVM wallet only when Solana is unavailable.",
+                },
+              ],
+            },
+            STREAM555_WALLET_AUTH_ALLOW_PROVISION: {
+              label: "Allow Wallet Provisioning",
+              group: "Wallet Auth",
+              width: "half",
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
+              ],
+            },
+            STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN: {
+              label: "Provision Target Chain",
+              group: "Wallet Auth",
+              width: "half",
+            },
+            STREAM555_ADMIN_API_KEY: {
+              label: "Admin API Key",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_DEFAULT_USER_ID: {
+              label: "Default User ID",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_API_KEY: {
+              label: "Agent API Key",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN: {
+              label: "Agent Bearer Token",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM_API_BEARER_TOKEN: {
+              label: "Legacy Bearer Token",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT: {
+              label: "Token Exchange Endpoint",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS: {
+              label: "Refresh Window (s)",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AUTH_PLUGIN_ENABLED: {
+              label: "Enabled",
+              group: "Runtime",
+              width: "half",
+            },
+          },
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "stream555-ads",
+          name: "Stream555 Ads",
+          description:
+            "Ad rotation and monetization controls for active 555stream sessions.",
+          enabled: false,
+          configured: Boolean(
+            (process.env.STREAM555_BASE_URL?.trim() ||
+              process.env.STREAM_API_URL?.trim() ||
+              process.env.STREAM555_PUBLIC_BASE_URL?.trim() ||
+              process.env.STREAM555_INTERNAL_BASE_URL?.trim()) &&
+              (process.env.STREAM555_AGENT_API_KEY?.trim() ||
+                process.env.STREAM555_AGENT_TOKEN?.trim() ||
+                process.env.STREAM_API_BEARER_TOKEN?.trim()),
+          ),
+          envKey: "STREAM555_PUBLIC_BASE_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "STREAM555_BASE_URL",
+            "STREAM_API_URL",
+            "STREAM555_PUBLIC_BASE_URL",
+            "STREAM555_INTERNAL_BASE_URL",
+            "STREAM555_INTERNAL_AGENT_IDS",
+            "STREAM555_AGENT_TOKEN",
+            "STREAM555_AGENT_API_KEY",
+            "STREAM_API_BEARER_TOKEN",
+            "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+            "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+            "STREAM555_DEFAULT_SESSION_ID",
+            "STREAM_SESSION_ID",
+            "STREAM555_ADS_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "STREAM555_BASE_URL",
+              type: "string",
+              description: "Legacy base URL override for all agents",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_BASE_URL ?? null,
+              isSet: Boolean(process.env.STREAM555_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_PUBLIC_BASE_URL",
+              type: "string",
+              description:
+                "Public control-plane base URL for external agents (default https://stream.rndrntwrk.com)",
+              required: false,
+              sensitive: false,
+              default: "https://stream.rndrntwrk.com",
+              currentValue:
+                process.env.STREAM555_PUBLIC_BASE_URL ??
+                "https://stream.rndrntwrk.com",
+              isSet: Boolean(process.env.STREAM555_PUBLIC_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_INTERNAL_BASE_URL",
+              type: "string",
+              description:
+                "Internal control-plane base URL for allow-listed internal agents",
+              required: false,
+              sensitive: false,
+              default: "http://control-plane:3000",
+              currentValue:
+                process.env.STREAM555_INTERNAL_BASE_URL ??
+                "http://control-plane:3000",
+              isSet: Boolean(process.env.STREAM555_INTERNAL_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_INTERNAL_AGENT_IDS",
+              type: "string",
+              description:
+                "Comma-separated internal agent IDs that should use internal base URL",
+              required: false,
+              sensitive: false,
+              default: "alice,alice-internal",
+              currentValue:
+                process.env.STREAM555_INTERNAL_AGENT_IDS ??
+                "alice,alice-internal",
+              isSet: Boolean(process.env.STREAM555_INTERNAL_AGENT_IDS?.trim()),
+            },
+            {
+              key: "STREAM_API_URL",
+              type: "string",
+              description:
+                "Legacy base URL fallback when STREAM555_BASE_URL is unset",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_API_URL ?? null,
+              isSet: Boolean(process.env.STREAM_API_URL?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_API_KEY",
+              type: "string",
+              description:
+                "Agent API key exchanged for short-lived JWTs (recommended)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_API_KEY
+                ? maskValue(process.env.STREAM555_AGENT_API_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_API_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN",
+              type: "string",
+              description: "Static bearer token for ads endpoints",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_TOKEN
+                ? maskValue(process.env.STREAM555_AGENT_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM_API_BEARER_TOKEN",
+              type: "string",
+              description: "Legacy bearer token fallback for ads operations",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM_API_BEARER_TOKEN
+                ? maskValue(process.env.STREAM_API_BEARER_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM_API_BEARER_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+              type: "string",
+              description:
+                "Optional token exchange path (default /api/agent/v1/auth/token/exchange)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+              type: "number",
+              description:
+                "Token refresh buffer for exchanged JWTs in seconds (default 300)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEFAULT_SESSION_ID",
+              type: "string",
+              description:
+                "Preferred session ID for ad setup/trigger operations",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_DEFAULT_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM555_DEFAULT_SESSION_ID?.trim()),
+            },
+            {
+              key: "STREAM_SESSION_ID",
+              type: "string",
+              description:
+                "One-off session override for ad setup/trigger operations",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM_SESSION_ID?.trim()),
+            },
+            {
+              key: "STREAM555_ADS_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable stream555-ads plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue:
+                process.env.STREAM555_ADS_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.STREAM555_ADS_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          configUiHints: {
+            STREAM555_BASE_URL: {
+              label: "Primary Base URL Override",
+              group: "Connection",
+              width: "half",
+              advanced: true,
+            },
+            STREAM555_PUBLIC_BASE_URL: {
+              label: "Public Base URL",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM555_INTERNAL_BASE_URL: {
+              label: "Internal Base URL",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM555_INTERNAL_AGENT_IDS: {
+              label: "Internal Agent IDs",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM_API_URL: {
+              label: "Legacy Base URL",
+              group: "Connection",
+              width: "half",
+              advanced: true,
+            },
+            STREAM555_DEFAULT_SESSION_ID: {
+              label: "Default Session ID",
+              group: "Session",
+              width: "half",
+            },
+            STREAM_SESSION_ID: {
+              label: "Session Override",
+              group: "Session",
+              width: "half",
+            },
+            STREAM555_AGENT_API_KEY: {
+              label: "Agent API Key",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN: {
+              label: "Agent Token",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM_API_BEARER_TOKEN: {
+              label: "Legacy Bearer Token",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT: {
+              label: "Exchange Endpoint",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS: {
+              label: "Refresh Window (s)",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_ADS_PLUGIN_ENABLED: {
+              label: "Enabled",
+              group: "Runtime",
+              width: "half",
+            },
+          },
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "swap",
+          name: "Swap",
+          description:
+            "Swap + wallet execution bridge for EVM/SVM strategy actions.",
+          enabled: false,
+          configured: Boolean(process.env.SWAP_API_URL?.trim()),
+          envKey: "SWAP_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: ["SWAP_API_URL", "SWAP_PLUGIN_ENABLED"],
+          parameters: [
+            {
+              key: "SWAP_API_URL",
+              type: "string",
+              description: "Swap API base URL",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.SWAP_API_URL ?? null,
+              isSet: Boolean(process.env.SWAP_API_URL?.trim()),
+            },
+	            {
+	              key: "SWAP_PLUGIN_ENABLED",
+	              type: "string",
+	              description: "Enable/disable swap plugin (1/0)",
+	              required: false,
+	              sensitive: false,
+	              default: "0",
+	              currentValue: process.env.SWAP_PLUGIN_ENABLED ?? null,
+	              isSet: Boolean(process.env.SWAP_PLUGIN_ENABLED?.trim()),
+	            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-games",
+          name: "555 Arcade Games (Legacy)",
+          description: "Legacy compatibility wrapper for canonical 555 Arcade game discovery and play orchestration.",
+          enabled: false,
+          configured: Boolean(
+            process.env.ARCADE555_BASE_URL?.trim() ||
+              process.env.FIVE55_GAMES_API_URL?.trim() ||
+              (process.env.STREAM555_BASE_URL?.trim() &&
+                (process.env.STREAM555_AGENT_API_KEY?.trim() ||
+                  process.env.STREAM555_AGENT_TOKEN?.trim() ||
+                  process.env.STREAM_API_BEARER_TOKEN?.trim())),
+          ),
+          envKey: "ARCADE555_BASE_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "ARCADE555_BASE_URL",
+            "ARCADE555_AGENT_TOKEN",
+            "ARCADE555_VIEWER_BASE_URL",
+            "ARCADE555_ENABLE_LEGACY_HTTP_ALIASES",
+            "ARCADE555_ENABLE_LEGACY_ACTION_ALIASES",
+            "ARCADE555_SUPPRESS_LEGACY_PLUGINS",
+            "FIVE55_GAMES_API_URL",
+            "FIVE55_GAMES_API_DIALECT",
+            "FIVE55_GAMES_API_BEARER_TOKEN",
+            "STREAM555_BASE_URL",
+            "STREAM555_AGENT_TOKEN",
+            "STREAM555_AGENT_API_KEY",
+            "STREAM_API_BEARER_TOKEN",
+            "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+            "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+            "STREAM555_DEFAULT_SESSION_ID",
+            "STREAM_SESSION_ID",
+            "FIVE55_GAMES_VIEWER_BASE_URL",
+            "GAMES_BASE_URL",
+            "FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS",
+            "FIVE55_GAMES_CF_CONNECT_POLL_MS",
+            "FIVE55_GAMES_CF_RECOVERY_ATTEMPTS",
+            "FIVE55_GAMES_SPRINT_SLOT_SECONDS",
+            "FIVE55_GAMES_SPRINT_AD_OFFSET_SECONDS",
+            "ALICE_INTELLIGENCE_ENABLED",
+            "ALICE_LEARNING_WRITEBACK_ENABLED",
+            "FIVE55_GAMES_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "ARCADE555_BASE_URL",
+              type: "string",
+              description:
+                "Canonical 555 Arcade games API base URL (fallback: FIVE55_GAMES_API_URL; expects /api/games/catalog and /api/games/play)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.ARCADE555_BASE_URL ??
+                process.env.FIVE55_GAMES_API_URL ??
+                null,
+              isSet: Boolean(
+                process.env.ARCADE555_BASE_URL?.trim() ||
+                  process.env.FIVE55_GAMES_API_URL?.trim(),
+              ),
+            },
+            {
+              key: "FIVE55_GAMES_API_DIALECT",
+              type: "string",
+              description:
+                "Optional override: 'five55-web' (direct) or 'milaidy-proxy' (legacy /api/five55/games/* compatibility path; canonical route is /api/arcade555/games/*)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_GAMES_API_DIALECT ?? null,
+              isSet: Boolean(process.env.FIVE55_GAMES_API_DIALECT?.trim()),
+            },
+            {
+              key: "ARCADE555_AGENT_TOKEN",
+              type: "string",
+              description:
+                "Canonical arcade bearer token (fallbacks: FIVE55_GAMES_API_BEARER_TOKEN, STREAM555_AGENT_TOKEN)",
+              required: false,
+              sensitive: true,
+              currentValue:
+                process.env.ARCADE555_AGENT_TOKEN
+                  ? maskValue(process.env.ARCADE555_AGENT_TOKEN)
+                  : process.env.FIVE55_GAMES_API_BEARER_TOKEN
+                    ? maskValue(process.env.FIVE55_GAMES_API_BEARER_TOKEN)
+                    : process.env.STREAM555_AGENT_TOKEN
+                      ? maskValue(process.env.STREAM555_AGENT_TOKEN)
+                      : null,
+              isSet: Boolean(
+                process.env.ARCADE555_AGENT_TOKEN?.trim() ||
+                  process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim() ||
+                  process.env.STREAM555_AGENT_TOKEN?.trim(),
+              ),
+            },
+            {
+              key: "FIVE55_GAMES_API_BEARER_TOKEN",
+              type: "string",
+              description:
+                "Optional bearer token for upstream games API calls (used by proxy)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.FIVE55_GAMES_API_BEARER_TOKEN
+                ? maskValue(process.env.FIVE55_GAMES_API_BEARER_TOKEN)
+                : null,
+              isSet: Boolean(process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM555_BASE_URL",
+              type: "string",
+              description:
+                "555stream control-plane base URL (required for agent-v1 gameplay)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_BASE_URL ?? null,
+              isSet: Boolean(process.env.STREAM555_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_API_KEY",
+              type: "string",
+              description:
+                "Agent API key exchanged for short-lived JWTs (recommended for agent-v1 gameplay)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_API_KEY
+                ? maskValue(process.env.STREAM555_AGENT_API_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_API_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN",
+              type: "string",
+              description:
+                "Static bearer token fallback for agent-v1 gameplay routes",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_TOKEN
+                ? maskValue(process.env.STREAM555_AGENT_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM_API_BEARER_TOKEN",
+              type: "string",
+              description:
+                "Legacy bearer fallback if STREAM555_AGENT_TOKEN is unset",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM_API_BEARER_TOKEN
+                ? maskValue(process.env.STREAM_API_BEARER_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM_API_BEARER_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+              type: "string",
+              description:
+                "Optional token exchange endpoint path for agent API key mode",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+              type: "number",
+              description:
+                "Token refresh buffer for exchanged JWTs in seconds (default 300)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEFAULT_SESSION_ID",
+              type: "string",
+              description:
+                "Preferred session ID for GO_LIVE_PLAY / sprint orchestration",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_DEFAULT_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM555_DEFAULT_SESSION_ID?.trim()),
+            },
+            {
+              key: "STREAM_SESSION_ID",
+              type: "string",
+              description:
+                "One-off session override for games orchestration actions",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM_SESSION_ID?.trim()),
+            },
+            {
+              key: "ARCADE555_VIEWER_BASE_URL",
+              type: "string",
+              description:
+                "Canonical viewer base URL used to build playable game links (fallbacks: FIVE55_GAMES_VIEWER_BASE_URL, GAMES_BASE_URL; defaults to https://555.rndrntwrk.com)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.ARCADE555_VIEWER_BASE_URL ??
+                process.env.FIVE55_GAMES_VIEWER_BASE_URL ??
+                process.env.GAMES_BASE_URL ??
+                null,
+              isSet: Boolean(
+                process.env.ARCADE555_VIEWER_BASE_URL?.trim() ||
+                  process.env.FIVE55_GAMES_VIEWER_BASE_URL?.trim() ||
+                  process.env.GAMES_BASE_URL?.trim(),
+              ),
+            },
+            {
+              key: "GAMES_BASE_URL",
+              type: "string",
+              description:
+                "Legacy fallback viewer base URL when FIVE55_GAMES_VIEWER_BASE_URL is unset",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.GAMES_BASE_URL ?? null,
+              isSet: Boolean(process.env.GAMES_BASE_URL?.trim()),
+            },
+            {
+              key: "FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS",
+              type: "number",
+              description:
+                "Cloudflare output provisioning timeout for GO_LIVE_PLAY (ms, default 45000)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS?.trim(),
+              ),
+            },
+            {
+              key: "FIVE55_GAMES_CF_CONNECT_POLL_MS",
+              type: "number",
+              description:
+                "Cloudflare provisioning poll interval for GO_LIVE_PLAY (ms, default 5000)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.FIVE55_GAMES_CF_CONNECT_POLL_MS ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_GAMES_CF_CONNECT_POLL_MS?.trim(),
+              ),
+            },
+            {
+              key: "FIVE55_GAMES_CF_RECOVERY_ATTEMPTS",
+              type: "number",
+              description:
+                "Recovery attempts when output provisioning/connectivity fails (default 1)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.FIVE55_GAMES_CF_RECOVERY_ATTEMPTS ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_GAMES_CF_RECOVERY_ATTEMPTS?.trim(),
+              ),
+            },
+            {
+              key: "FIVE55_GAMES_SPRINT_SLOT_SECONDS",
+              type: "number",
+              description:
+                "Per-slot gameplay duration for live capability sprint action (seconds, default 300)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_GAMES_SPRINT_SLOT_SECONDS ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_GAMES_SPRINT_SLOT_SECONDS?.trim(),
+              ),
+            },
+            {
+              key: "FIVE55_GAMES_SPRINT_AD_OFFSET_SECONDS",
+              type: "number",
+              description:
+                "Ad trigger offset inside sprint slots (seconds, default 270)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.FIVE55_GAMES_SPRINT_AD_OFFSET_SECONDS ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_GAMES_SPRINT_AD_OFFSET_SECONDS?.trim(),
+              ),
+            },
+            {
+              key: "ALICE_INTELLIGENCE_ENABLED",
+              type: "string",
+              description:
+                "Enable advanced Alice-only policy orchestration for gameplay (true/false)",
+              required: false,
+              sensitive: false,
+              default: "true",
+              currentValue: process.env.ALICE_INTELLIGENCE_ENABLED ?? null,
+              isSet: Boolean(process.env.ALICE_INTELLIGENCE_ENABLED?.trim()),
+            },
+            {
+              key: "ALICE_LEARNING_WRITEBACK_ENABLED",
+              type: "string",
+              description:
+                "Persist learning deltas between rounds for Alice gameplay loops (true/false)",
+              required: false,
+              sensitive: false,
+              default: "true",
+              currentValue:
+                process.env.ALICE_LEARNING_WRITEBACK_ENABLED ?? null,
+              isSet: Boolean(
+                process.env.ALICE_LEARNING_WRITEBACK_ENABLED?.trim(),
+              ),
+            },
+            {
+              key: "FIVE55_GAMES_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable legacy 555 Arcade games wrapper (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue: process.env.FIVE55_GAMES_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_GAMES_PLUGIN_ENABLED?.trim()),
+            },
+            {
+              key: "ARCADE555_ENABLE_LEGACY_HTTP_ALIASES",
+              type: "string",
+              description:
+                "Compatibility-only: re-enable deprecated /api/five55/games/* and /api/five55/mastery/* routes (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES ?? null,
+              isSet: Boolean(
+                process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES?.trim(),
+              ),
+            },
+            {
+              key: "ARCADE555_ENABLE_LEGACY_ACTION_ALIASES",
+              type: "string",
+              description:
+                "Compatibility-only: re-enable deprecated FIVE55_* arcade action aliases (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.ARCADE555_ENABLE_LEGACY_ACTION_ALIASES ?? null,
+              isSet: Boolean(
+                process.env.ARCADE555_ENABLE_LEGACY_ACTION_ALIASES?.trim(),
+              ),
+            },
+            {
+              key: "ARCADE555_SUPPRESS_LEGACY_PLUGINS",
+              type: "string",
+              description:
+                "Release B default: suppress legacy arcade wrapper plugins when canonical arcade is enabled (true/false)",
+              required: false,
+              sensitive: false,
+              default: "true",
+              currentValue:
+                process.env.ARCADE555_SUPPRESS_LEGACY_PLUGINS ?? null,
+              isSet: Boolean(
+                process.env.ARCADE555_SUPPRESS_LEGACY_PLUGINS?.trim(),
+              ),
+            },
+          ],
+          configUiHints: {
+            ARCADE555_BASE_URL: {
+              label: "Arcade Base URL",
+              group: "Connection",
+              width: "half",
+            },
+            FIVE55_GAMES_API_URL: {
+              label: "Legacy Games API URL",
+              group: "Connection",
+              width: "half",
+              advanced: true,
+            },
+            FIVE55_GAMES_API_DIALECT: {
+              label: "Dialect",
+              group: "Connection",
+              width: "half",
+              type: "select",
+              options: [
+                { value: "agent-v1", label: "agent-v1 (recommended)" },
+                { value: "milaidy-proxy", label: "milaidy-proxy" },
+                { value: "five55-web", label: "five55-web (legacy)" },
+              ],
+            },
+            FIVE55_GAMES_API_BEARER_TOKEN: {
+              label: "Legacy Games API Token",
+              group: "Connection",
+              width: "half",
+            },
+            ARCADE555_AGENT_TOKEN: {
+              label: "Arcade Agent Token",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM555_BASE_URL: {
+              label: "Stream Base URL",
+              group: "Agent Runtime",
+              width: "half",
+            },
+            STREAM555_AGENT_API_KEY: {
+              label: "Agent API Key",
+              group: "Agent Runtime",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN: {
+              label: "Agent Token",
+              group: "Agent Runtime",
+              width: "half",
+            },
+            STREAM_API_BEARER_TOKEN: {
+              label: "Legacy Bearer Token",
+              group: "Agent Runtime",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT: {
+              label: "Token Exchange Endpoint",
+              group: "Agent Runtime",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS: {
+              label: "Token Refresh Window (s)",
+              group: "Agent Runtime",
+              width: "half",
+            },
+            STREAM555_DEFAULT_SESSION_ID: {
+              label: "Default Session ID",
+              group: "Session",
+              width: "half",
+            },
+            STREAM_SESSION_ID: {
+              label: "Session Override",
+              group: "Session",
+              width: "half",
+            },
+            ARCADE555_VIEWER_BASE_URL: {
+              label: "Viewer Base URL",
+              group: "Viewer",
+              width: "half",
+            },
+            FIVE55_GAMES_VIEWER_BASE_URL: {
+              label: "Legacy Viewer Base URL",
+              group: "Viewer",
+              width: "half",
+              advanced: true,
+            },
+            GAMES_BASE_URL: {
+              label: "Legacy Viewer Base URL",
+              group: "Viewer",
+              width: "half",
+            },
+            FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS: {
+              label: "CF Connect Timeout (ms)",
+              group: "Reliability",
+              width: "half",
+            },
+            FIVE55_GAMES_CF_CONNECT_POLL_MS: {
+              label: "CF Poll Interval (ms)",
+              group: "Reliability",
+              width: "half",
+            },
+            FIVE55_GAMES_CF_RECOVERY_ATTEMPTS: {
+              label: "CF Recovery Attempts",
+              group: "Reliability",
+              width: "half",
+            },
+            FIVE55_GAMES_SPRINT_SLOT_SECONDS: {
+              label: "Sprint Slot Seconds",
+              group: "Sprint",
+              width: "half",
+            },
+            FIVE55_GAMES_SPRINT_AD_OFFSET_SECONDS: {
+              label: "Sprint Ad Offset Seconds",
+              group: "Sprint",
+              width: "half",
+            },
+            ALICE_INTELLIGENCE_ENABLED: {
+              label: "Alice Intelligence",
+              group: "Alice Pilot",
+              width: "half",
+            },
+            ALICE_LEARNING_WRITEBACK_ENABLED: {
+              label: "Alice Learning Writeback",
+              group: "Alice Pilot",
+              width: "half",
+            },
+            ARCADE555_ENABLE_LEGACY_HTTP_ALIASES: {
+              label: "Legacy HTTP Aliases",
+              group: "Compatibility",
+              width: "half",
+            },
+            ARCADE555_ENABLE_LEGACY_ACTION_ALIASES: {
+              label: "Legacy Action Aliases",
+              group: "Compatibility",
+              width: "half",
+            },
+            ARCADE555_SUPPRESS_LEGACY_PLUGINS: {
+              label: "Suppress Legacy Wrappers",
+              group: "Compatibility",
+              width: "half",
+            },
+            FIVE55_GAMES_PLUGIN_ENABLED: {
+              label: "Enabled",
+              group: "Runtime",
+              width: "half",
+            },
+          },
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-score-capture",
+          name: "555 Arcade Score Capture (Legacy)",
+          description: "Legacy compatibility wrapper for canonical 555 Arcade score capture actions.",
+          enabled: false,
+          configured: Boolean(process.env.FIVE55_SCORE_CAPTURE_API_URL?.trim()),
+          envKey: "FIVE55_SCORE_CAPTURE_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "FIVE55_SCORE_CAPTURE_API_URL",
+            "FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "FIVE55_SCORE_CAPTURE_API_URL",
+              type: "string",
+              description: "555 Arcade score capture API base URL (legacy key: FIVE55_SCORE_CAPTURE_API_URL)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_SCORE_CAPTURE_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_SCORE_CAPTURE_API_URL?.trim()),
+            },
+	            {
+	              key: "FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED",
+	              type: "string",
+	              description: "Enable/disable legacy 555 Arcade score capture wrapper (1/0)",
+	              required: false,
+	              sensitive: false,
+	              default: "0",
+	              currentValue:
+	                process.env.FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED ?? null,
+	              isSet: Boolean(
+	                process.env.FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED?.trim(),
+              ),
+            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-leaderboard",
+          name: "555 Arcade Leaderboard (Legacy)",
+          description: "Legacy compatibility wrapper for canonical 555 Arcade leaderboard actions.",
+          enabled: false,
+          configured: Boolean(process.env.FIVE55_LEADERBOARD_API_URL?.trim()),
+          envKey: "FIVE55_LEADERBOARD_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "FIVE55_LEADERBOARD_API_URL",
+            "FIVE55_LEADERBOARD_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "FIVE55_LEADERBOARD_API_URL",
+              type: "string",
+              description: "555 Arcade leaderboard API base URL (legacy key: FIVE55_LEADERBOARD_API_URL)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_LEADERBOARD_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_LEADERBOARD_API_URL?.trim()),
+            },
+	            {
+	              key: "FIVE55_LEADERBOARD_PLUGIN_ENABLED",
+	              type: "string",
+	              description: "Enable/disable legacy 555 Arcade leaderboard wrapper (1/0)",
+	              required: false,
+	              sensitive: false,
+	              default: "0",
+	              currentValue: process.env.FIVE55_LEADERBOARD_PLUGIN_ENABLED ?? null,
+	              isSet: Boolean(
+	                process.env.FIVE55_LEADERBOARD_PLUGIN_ENABLED?.trim(),
+              ),
+            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-quests",
+          name: "555 Arcade Quests (Legacy)",
+          description: "Legacy compatibility wrapper for canonical 555 Arcade quest actions.",
+          enabled: false,
+          configured: Boolean(process.env.FIVE55_QUESTS_API_URL?.trim()),
+          envKey: "FIVE55_QUESTS_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: ["FIVE55_QUESTS_API_URL", "FIVE55_QUESTS_PLUGIN_ENABLED"],
+          parameters: [
+            {
+              key: "FIVE55_QUESTS_API_URL",
+              type: "string",
+              description: "555 Arcade quests API base URL (legacy key: FIVE55_QUESTS_API_URL)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_QUESTS_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_QUESTS_API_URL?.trim()),
+            },
+	            {
+	              key: "FIVE55_QUESTS_PLUGIN_ENABLED",
+	              type: "string",
+	              description: "Enable/disable legacy 555 Arcade quests wrapper (1/0)",
+	              required: false,
+	              sensitive: false,
+	              default: "0",
+	              currentValue: process.env.FIVE55_QUESTS_PLUGIN_ENABLED ?? null,
+	              isSet: Boolean(process.env.FIVE55_QUESTS_PLUGIN_ENABLED?.trim()),
+	            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-battles",
+          name: "555 Arcade Battles (Legacy)",
+          description: "Legacy compatibility wrapper for canonical 555 Arcade battle actions.",
+          enabled: false,
+          configured: Boolean(process.env.FIVE55_BATTLES_API_URL?.trim()),
+          envKey: "FIVE55_BATTLES_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "FIVE55_BATTLES_API_URL",
+            "FIVE55_BATTLES_CREATE_ENDPOINT",
+            "FIVE55_BATTLES_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "FIVE55_BATTLES_API_URL",
+              type: "string",
+              description: "555 Arcade battles API base URL (legacy key: FIVE55_BATTLES_API_URL)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_BATTLES_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_BATTLES_API_URL?.trim()),
+            },
+            {
+              key: "FIVE55_BATTLES_CREATE_ENDPOINT",
+              type: "string",
+              description:
+                "Optional create endpoint override (default: /battle/create)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_BATTLES_CREATE_ENDPOINT ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_BATTLES_CREATE_ENDPOINT?.trim(),
+              ),
+            },
+	            {
+	              key: "FIVE55_BATTLES_PLUGIN_ENABLED",
+	              type: "string",
+	              description: "Enable/disable legacy 555 Arcade battles wrapper (1/0)",
+	              required: false,
+	              sensitive: false,
+	              default: "0",
+	              currentValue: process.env.FIVE55_BATTLES_PLUGIN_ENABLED ?? null,
+	              isSet: Boolean(process.env.FIVE55_BATTLES_PLUGIN_ENABLED?.trim()),
+	            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-admin",
+          name: "555 Arcade Admin (Legacy)",
+          description:
+            "Legacy compatibility wrapper for canonical 555 Arcade admin actions with legacy env fallback.",
+          enabled: false,
+          configured: Boolean(
+            process.env.FIVE55_ADMIN_API_URL?.trim() ||
+              process.env.TWITTER_AGENT_MAIN_API_BASE?.trim() ||
+              process.env.TWITTER_BOT_MAIN_API_BASE?.trim(),
+          ),
+          envKey: "FIVE55_ADMIN_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "FIVE55_ADMIN_API_URL",
+            "FIVE55_ADMIN_BEARER_TOKEN",
+            "ADMIN_API_TOKEN",
+            "TWITTER_AGENT_KEY",
+            "TWITTER_BOT_KEY",
+            "FIVE55_ADMIN_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "FIVE55_ADMIN_API_URL",
+              type: "string",
+              description:
+                "Primary 555 Arcade admin API base URL (falls back to legacy TWITTER_* base envs)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_ADMIN_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_ADMIN_API_URL?.trim()),
+            },
+            {
+              key: "FIVE55_ADMIN_BEARER_TOKEN",
+              type: "string",
+              description:
+                "Primary admin bearer token (falls back to ADMIN_API_TOKEN/TWITTER_* key envs)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.FIVE55_ADMIN_BEARER_TOKEN
+                ? maskValue(process.env.FIVE55_ADMIN_BEARER_TOKEN)
+                : null,
+              isSet: Boolean(process.env.FIVE55_ADMIN_BEARER_TOKEN?.trim()),
+            },
+	            {
+	              key: "FIVE55_ADMIN_PLUGIN_ENABLED",
+	              type: "string",
+	              description: "Enable/disable legacy 555 Arcade admin wrapper (1/0)",
+	              required: false,
+	              sensitive: false,
+	              default: "0",
+	              currentValue: process.env.FIVE55_ADMIN_PLUGIN_ENABLED ?? null,
+	              isSet: Boolean(process.env.FIVE55_ADMIN_PLUGIN_ENABLED?.trim()),
+	            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-social",
+          name: "555 Arcade Social (Legacy)",
+          description: "Legacy compatibility wrapper for canonical 555 Arcade social actions.",
+          enabled: false,
+          configured: Boolean(process.env.FIVE55_SOCIAL_API_URL?.trim()),
+          envKey: "FIVE55_SOCIAL_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: ["FIVE55_SOCIAL_API_URL", "FIVE55_SOCIAL_PLUGIN_ENABLED"],
+          parameters: [
+            {
+              key: "FIVE55_SOCIAL_API_URL",
+              type: "string",
+              description: "555 Arcade social API base URL (legacy key: FIVE55_SOCIAL_API_URL)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_SOCIAL_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_SOCIAL_API_URL?.trim()),
+            },
+	            {
+	              key: "FIVE55_SOCIAL_PLUGIN_ENABLED",
+	              type: "string",
+	              description: "Enable/disable legacy 555 Arcade social wrapper (1/0)",
+	              required: false,
+	              sensitive: false,
+	              default: "0",
+	              currentValue: process.env.FIVE55_SOCIAL_PLUGIN_ENABLED ?? null,
+	              isSet: Boolean(process.env.FIVE55_SOCIAL_PLUGIN_ENABLED?.trim()),
+	            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-rewards",
+          name: "555 Arcade Rewards (Legacy)",
+          description: "Legacy compatibility wrapper for canonical 555 Arcade reward actions.",
+          enabled: false,
+          configured: Boolean(process.env.FIVE55_REWARDS_API_URL?.trim()),
+          envKey: "FIVE55_REWARDS_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "FIVE55_REWARDS_API_URL",
+            "FIVE55_REWARDS_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "FIVE55_REWARDS_API_URL",
+              type: "string",
+              description: "555 Arcade rewards API base URL (legacy key: FIVE55_REWARDS_API_URL)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_REWARDS_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_REWARDS_API_URL?.trim()),
+            },
+	            {
+	              key: "FIVE55_REWARDS_PLUGIN_ENABLED",
+	              type: "string",
+	              description: "Enable/disable legacy 555 Arcade rewards wrapper (1/0)",
+	              required: false,
+	              sensitive: false,
+	              default: "0",
+	              currentValue: process.env.FIVE55_REWARDS_PLUGIN_ENABLED ?? null,
+	              isSet: Boolean(process.env.FIVE55_REWARDS_PLUGIN_ENABLED?.trim()),
+	            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-github",
+          name: "555 Arcade GitHub (Legacy)",
+          description:
+            "GitHub repository discovery surface for Alice operator workflows.",
+          enabled: false,
+          configured: Boolean(
+            process.env.GITHUB_API_TOKEN?.trim() ||
+              process.env.ALICE_GH_TOKEN?.trim(),
+          ),
+          envKey: "GITHUB_API_TOKEN",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "GITHUB_API_TOKEN",
+            "ALICE_GH_TOKEN",
+            "FIVE55_GITHUB_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "GITHUB_API_TOKEN",
+              type: "string",
+              description:
+                "Primary GitHub token used for repository listing actions",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.GITHUB_API_TOKEN
+                ? maskValue(process.env.GITHUB_API_TOKEN)
+                : null,
+              isSet: Boolean(process.env.GITHUB_API_TOKEN?.trim()),
+            },
+            {
+              key: "ALICE_GH_TOKEN",
+              type: "string",
+              description:
+                "Legacy GitHub token fallback used by internal 555 Arcade GitHub compatibility actions",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.ALICE_GH_TOKEN
+                ? maskValue(process.env.ALICE_GH_TOKEN)
+                : null,
+              isSet: Boolean(process.env.ALICE_GH_TOKEN?.trim()),
+            },
+            {
+              key: "FIVE55_GITHUB_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable legacy 555 Arcade GitHub wrapper (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue: process.env.FIVE55_GITHUB_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_GITHUB_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          configUiHints: {
+            GITHUB_API_TOKEN: {
+              label: "GitHub API Token",
+              group: "Authentication",
+              width: "half",
+            },
+            ALICE_GH_TOKEN: {
+              label: "Legacy GitHub Token",
+              group: "Authentication",
+              width: "half",
+            },
+            FIVE55_GITHUB_PLUGIN_ENABLED: {
+              label: "Enabled",
+              group: "Runtime",
+              width: "half",
+            },
+          },
+          validationErrors: [],
+          validationWarnings: [],
+        },
+      ];
+
+      const hasCanonicalStreamPluginPackage = fs.existsSync(
+        path.join(
+          packageRoot,
+          "node_modules",
+          "@rndrntwrk",
+          "plugin-555stream",
+          "package.json",
+        ),
+      );
+      const presentIds = new Set(manifestEntries.map((entry) => entry.id));
+      for (const entry of syntheticFive55Entries) {
+        if (
+          hasCanonicalStreamPluginPackage &&
+          STREAM555_SYNTHETIC_PLUGIN_IDS.has(entry.id)
+        ) {
+          continue;
+        }
+        if (!presentIds.has(entry.id)) {
+          manifestEntries.push(entry);
+        }
+      }
+
+      return collapseFive55PluginEntries(manifestEntries).sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
     } catch (err) {
       logger.debug(
-        `[milady-api] Failed to read plugins.json: ${err instanceof Error ? err.message : err}`,
+        `[milaidy-api] Failed to read plugins.json: ${err instanceof Error ? err.message : err}`,
       );
     }
   }
 
   // Fallback: no manifest found
   logger.debug(
-    "[milady-api] plugins.json not found — run `npm run generate:plugins`",
+    "[milaidy-api] plugins.json not found — run `npm run generate:plugins`",
   );
   return [];
 }
 
 function categorizePlugin(
   id: string,
-): "ai-provider" | "connector" | "streaming" | "database" | "feature" {
+): "ai-provider" | "connector" | "database" | "feature" {
   const aiProviders = [
     "openai",
     "anthropic",
@@ -1419,7 +5830,6 @@ function categorizePlugin(
     "qwen",
     "minimax",
     "zai",
-    "pi-ai",
   ];
   const connectors = [
     "telegram",
@@ -1442,144 +5852,16 @@ function categorizePlugin(
     "zalo",
     "zalouser",
     "tlon",
+    "twitch",
     "nextcloud-talk",
     "instagram",
-    "blooio",
-    "twitch",
-  ];
-  const streamingDests = [
-    "streaming-base",
-    "retake",
-    "custom-rtmp",
-    "youtube",
-    "youtube-streaming",
-    "twitch-streaming",
-    "x-streaming",
-    "pumpfun-streaming",
   ];
   const databases = ["sql", "localdb", "inmemorydb"];
 
   if (aiProviders.includes(id)) return "ai-provider";
-  if (streamingDests.includes(id)) return "streaming";
   if (connectors.includes(id)) return "connector";
   if (databases.includes(id)) return "database";
   return "feature";
-}
-
-const PLUGIN_SETUP_GUIDE_ROOT = "https://docs.milady.ai/plugin-setup-guide";
-const MILADY_REPO_ROOT = "https://github.com/milady-ai/milady";
-
-const PLUGIN_SETUP_GUIDE_ANCHORS: Record<string, string> = {
-  openai: "#openai",
-  anthropic: "#anthropic",
-  "google-genai": "#google-gemini",
-  groq: "#groq",
-  openrouter: "#openrouter",
-  xai: "#xai-grok",
-  ollama: "#ollama-local-models",
-  "local-ai": "#local-ai",
-  "vercel-ai-gateway": "#vercel-ai-gateway",
-  discord: "#discord",
-  telegram: "#telegram",
-  twitter: "#twitter--x",
-  slack: "#slack",
-  whatsapp: "#whatsapp",
-  instagram: "#instagram",
-  bluesky: "#bluesky",
-  farcaster: "#farcaster",
-  github: "#github",
-  twitch: "#twitch",
-  twilio: "#twilio-sms--voice",
-  matrix: "#matrix",
-  msteams: "#microsoft-teams",
-  "google-chat": "#google-chat",
-  signal: "#signal",
-  imessage: "#imessage-macos-only",
-  bluebubbles: "#bluebubbles-imessage-from-any-platform",
-  blooio: "#blooio-sms-via-api",
-  nostr: "#nostr",
-  line: "#line",
-  feishu: "#feishu-lark",
-  mattermost: "#mattermost",
-  "nextcloud-talk": "#nextcloud-talk",
-  tlon: "#tlon-urbit",
-  zalo: "#zalo-vietnam-messaging",
-  zalouser: "#zalo-user-personal",
-  acp: "#acp-agent-communication-protocol",
-  mcp: "#mcp-model-context-protocol",
-  iq: "#iq-solana-on-chain",
-  "gmail-watch": "#gmail-watch",
-  retake: "#retaketv",
-  "streaming-base": "#enable-streaming-streaming-base",
-  "twitch-streaming": "#twitch-streaming",
-  "youtube-streaming": "#youtube-streaming",
-  "x-streaming": "#x-streaming",
-  "pumpfun-streaming": "#pumpfun-streaming",
-  "custom-rtmp": "#custom-rtmp",
-};
-
-export function resolvePluginSetupGuideUrl(id: string): string | undefined {
-  const anchor = PLUGIN_SETUP_GUIDE_ANCHORS[id];
-  return anchor ? `${PLUGIN_SETUP_GUIDE_ROOT}${anchor}` : undefined;
-}
-
-export function normalizeRepositoryUrl(
-  repository: string | { type?: string; url?: string } | null | undefined,
-): string | undefined {
-  const raw =
-    typeof repository === "string"
-      ? repository.trim()
-      : repository?.url?.trim() || "";
-  if (!raw) return undefined;
-  if (/^[\w.-]+\/[\w.-]+$/.test(raw)) return `https://github.com/${raw}`;
-  if (raw.startsWith("git@github.com:")) {
-    return `https://github.com/${raw
-      .slice("git@github.com:".length)
-      .replace(/\.git$/, "")}`;
-  }
-  if (raw.startsWith("git+https://")) return raw.slice(4).replace(/\.git$/, "");
-  if (raw.startsWith("https://") || raw.startsWith("http://")) {
-    return raw.replace(/\.git$/, "");
-  }
-  return undefined;
-}
-
-function deriveMiladyRepositoryUrl(
-  npmName: string | undefined,
-  dirName: string | undefined,
-): string | undefined {
-  if (!npmName?.startsWith("@milady/")) return undefined;
-  if (!dirName?.startsWith("plugin-")) return undefined;
-  return `${MILADY_REPO_ROOT}/tree/main/packages/${dirName}`;
-}
-
-function readBundledPluginPackageMetadata(
-  packageRoot: string,
-  dirName: string,
-  npmName?: string,
-): { homepage?: string; repository?: string; icon?: string | null } {
-  const pkgPath = path.join(packageRoot, "packages", dirName, "package.json");
-  if (!fs.existsSync(pkgPath)) {
-    return { repository: deriveMiladyRepositoryUrl(npmName, dirName) };
-  }
-  try {
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as {
-      homepage?: string;
-      repository?: string | { type?: string; url?: string };
-      logoUrl?: string;
-      icon?: string;
-      elizaos?: { logoUrl?: string };
-    };
-    return {
-      homepage: pkg.homepage ?? undefined,
-      repository:
-        normalizeRepositoryUrl(pkg.repository) ??
-        deriveMiladyRepositoryUrl(npmName, dirName),
-      icon: pkg.logoUrl ?? pkg.elizaos?.logoUrl ?? pkg.icon ?? null,
-    };
-  } catch {
-    return { repository: deriveMiladyRepositoryUrl(npmName, dirName) };
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1587,7 +5869,7 @@ function readBundledPluginPackageMetadata(
 // ---------------------------------------------------------------------------
 
 /** Cache key for persisting skill enable/disable state in the agent database. */
-const SKILL_PREFS_CACHE_KEY = "milady:skill-preferences";
+const SKILL_PREFS_CACHE_KEY = "milaidy:skill-preferences";
 
 /** Shape stored in the cache: maps skill ID → enabled flag. */
 type SkillPreferencesMap = Record<string, boolean>;
@@ -1621,7 +5903,7 @@ async function saveSkillPreferences(
     await runtime.setCache(SKILL_PREFS_CACHE_KEY, prefs);
   } catch (err) {
     logger.debug(
-      `[milady-api] Failed to save skill preferences: ${err instanceof Error ? err.message : err}`,
+      `[milaidy-api] Failed to save skill preferences: ${err instanceof Error ? err.message : err}`,
     );
   }
 }
@@ -1630,7 +5912,7 @@ async function saveSkillPreferences(
 // Skill scan acknowledgments — tracks user review of security findings
 // ---------------------------------------------------------------------------
 
-const SKILL_ACK_CACHE_KEY = "milady:skill-scan-acknowledgments";
+const SKILL_ACK_CACHE_KEY = "milaidy:skill-scan-acknowledgments";
 
 type SkillAcknowledgmentMap = Record<
   string,
@@ -1658,7 +5940,7 @@ async function saveSkillAcknowledgments(
     await runtime.setCache(SKILL_ACK_CACHE_KEY, acks);
   } catch (err) {
     logger.debug(
-      `[milady-api] Failed to save skill acknowledgments: ${err instanceof Error ? err.message : err}`,
+      `[milaidy-api] Failed to save skill acknowledgments: ${err instanceof Error ? err.message : err}`,
     );
   }
 }
@@ -1747,7 +6029,7 @@ async function loadScanReportFromDisk(
  */
 function resolveSkillEnabled(
   id: string,
-  config: MiladyConfig,
+  config: MilaidyConfig,
   dbPrefs: SkillPreferencesMap,
 ): boolean {
   // Database preference takes priority (explicit user action)
@@ -1771,14 +6053,6 @@ function resolveSkillEnabled(
   return true;
 }
 
-function parseSkillDirsSetting(raw: unknown): string[] {
-  if (typeof raw !== "string") return [];
-  return raw
-    .split(",")
-    .map((dir) => dir.trim())
-    .filter((dir) => dir.length > 0);
-}
-
 /**
  * Discover skills from @elizaos/skills and workspace, applying
  * database preferences and config filtering.
@@ -1790,7 +6064,7 @@ function parseSkillDirsSetting(raw: unknown): string[] {
  */
 async function discoverSkills(
   workspaceDir: string,
-  config: MiladyConfig,
+  config: MilaidyConfig,
   runtime: AgentRuntime | null,
 ): Promise<SkillEntry[]> {
   // Load persisted preferences from the agent database
@@ -1859,66 +6133,40 @@ async function discoverSkills(
       }
     } catch {
       logger.debug(
-        "[milady-api] AgentSkillsService not available, falling back to filesystem scan",
+        "[milaidy-api] AgentSkillsService not available, falling back to filesystem scan",
       );
     }
   }
 
   // ── Fallback: filesystem scanning ───────────────────────────────────────
-  const skillsDirs = new Set<string>();
+  const skillsDirs: string[] = [];
 
   // Bundled skills from the @elizaos/skills package
   try {
-    const skillsPkg = (await import(/* @vite-ignore */ "@elizaos/skills")) as {
+    const skillsPkg = (await import("@elizaos/skills")) as {
       getSkillsDir: () => string;
     };
     const bundledDir = skillsPkg.getSkillsDir();
     if (bundledDir && fs.existsSync(bundledDir)) {
-      skillsDirs.add(bundledDir);
+      skillsDirs.push(bundledDir);
     }
   } catch {
     logger.debug(
-      "[milady-api] @elizaos/skills not available for skill discovery",
+      "[milaidy-api] @elizaos/skills not available for skill discovery",
     );
-  }
-
-  // Runtime-provided skill directories (works even when @elizaos/skills is not installed
-  // as a direct dependency and AgentSkillsService catalog sync is degraded).
-  if (runtime && typeof runtime.getSetting === "function") {
-    for (const dir of parseSkillDirsSetting(
-      runtime.getSetting("BUNDLED_SKILLS_DIRS"),
-    )) {
-      if (fs.existsSync(dir)) skillsDirs.add(dir);
-    }
-    for (const dir of parseSkillDirsSetting(
-      runtime.getSetting("EXTRA_SKILLS_DIRS"),
-    )) {
-      if (fs.existsSync(dir)) skillsDirs.add(dir);
-    }
-    for (const dir of parseSkillDirsSetting(
-      runtime.getSetting("WORKSPACE_SKILLS_DIR"),
-    )) {
-      if (fs.existsSync(dir)) skillsDirs.add(dir);
-    }
   }
 
   // Workspace-local skills
   const workspaceSkills = path.join(workspaceDir, "skills");
   if (fs.existsSync(workspaceSkills)) {
-    skillsDirs.add(workspaceSkills);
-  }
-
-  // Marketplace-installed skills (stored under .marketplace, skipped by dot-prefix filter)
-  const marketplaceSkills = path.join(workspaceDir, "skills", ".marketplace");
-  if (fs.existsSync(marketplaceSkills)) {
-    skillsDirs.add(marketplaceSkills);
+    skillsDirs.push(workspaceSkills);
   }
 
   // Extra dirs from config
   const extraDirs = config.skills?.load?.extraDirs;
   if (extraDirs) {
     for (const dir of extraDirs) {
-      if (fs.existsSync(dir)) skillsDirs.add(dir);
+      if (fs.existsSync(dir)) skillsDirs.push(dir);
     }
   }
 
@@ -1939,7 +6187,7 @@ function scanSkillsDir(
   dir: string,
   skills: SkillEntry[],
   seen: Set<string>,
-  config: MiladyConfig,
+  config: MilaidyConfig,
   dbPrefs: SkillPreferencesMap,
 ): void {
   if (!fs.existsSync(dir)) return;
@@ -2022,209 +6270,106 @@ function scanSkillsDir(
 
 /** Maximum request body size (1 MB) — prevents memory-based DoS. */
 const MAX_BODY_BYTES = 1_048_576;
+const MAX_IMPORT_BYTES = 512 * 1_048_576; // 512 MB for agent imports
+const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
+const AGENT_TRANSFER_MAX_PASSWORD_LENGTH = 1024;
 
-/**
- * Raised body limit for chat endpoints that accept base64-encoded image
- * attachments. A single smartphone JPEG is typically 2–5 MB binary
- * (~3–7 MB base64); 20 MB accommodates up to 4 images with room to spare.
- */
-const CHAT_MAX_BODY_BYTES = 20 * 1_048_576;
-const ELEVENLABS_FETCH_TIMEOUT_MS = 20_000;
-const ELEVENLABS_AUDIO_MAX_BYTES = 20 * 1_048_576;
-
-type StreamableServerResponse = Pick<
-  http.ServerResponse,
-  "write" | "once" | "off" | "removeListener"
-> & {
-  writableEnded?: boolean;
-  destroyed?: boolean;
-};
-
-function removeResponseListener(
-  res: StreamableServerResponse,
-  event: "drain" | "error",
-  handler: (...args: unknown[]) => void,
-): void {
-  if (typeof res.off === "function") {
-    res.off(event, handler);
-    return;
-  }
-  if (typeof res.removeListener === "function") {
-    res.removeListener(event, handler);
-  }
-}
-
-function responseContentLength(headers: Pick<Headers, "get">): number | null {
-  const raw = headers.get("content-length");
-  if (!raw) return null;
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return null;
-  return parsed;
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException
-    ? error.name === "AbortError" || error.name === "TimeoutError"
-    : error instanceof Error &&
-        (error.name === "AbortError" || error.name === "TimeoutError");
-}
-
-function createTimeoutError(message: string): Error {
-  const timeoutError = new Error(message);
-  timeoutError.name = "TimeoutError";
-  return timeoutError;
-}
-
-export async function fetchWithTimeoutGuard(
-  input: string | URL,
-  init: RequestInit,
-  timeoutMs: number,
-): Promise<Response> {
-  const controller = new AbortController();
-  const upstreamSignal = init.signal;
-  let timedOut = false;
-
-  const onAbort = () => {
-    controller.abort();
-  };
-
-  if (upstreamSignal) {
-    if (upstreamSignal.aborted) {
-      controller.abort();
-    } else {
-      upstreamSignal.addEventListener("abort", onAbort, { once: true });
-    }
-  }
-
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, timeoutMs);
-
-  try {
-    return await fetch(input, {
-      ...init,
-      signal: controller.signal,
-    });
-  } catch (err) {
-    if (timedOut && isAbortError(err)) {
-      throw createTimeoutError(
-        `Upstream request timed out after ${timeoutMs}ms`,
-      );
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeoutHandle);
-    if (upstreamSignal) {
-      upstreamSignal.removeEventListener("abort", onAbort);
-    }
-  }
-}
-
-async function waitForDrain(res: StreamableServerResponse): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const onDrain = () => {
-      cleanup();
-      resolve();
-    };
-    const onError = (err: unknown) => {
-      cleanup();
-      reject(err instanceof Error ? err : new Error(String(err)));
-    };
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    let tooLarge = false;
+    let settled = false;
     const cleanup = () => {
-      removeResponseListener(
-        res,
-        "drain",
-        onDrain as (...args: unknown[]) => void,
-      );
-      removeResponseListener(
-        res,
-        "error",
-        onError as (...args: unknown[]) => void,
-      );
+      req.off("data", onData);
+      req.off("end", onEnd);
+      req.off("error", onError);
     };
-
-    res.once("drain", onDrain);
-    res.once("error", onError);
+    const onData = (c: Buffer) => {
+      if (settled) return;
+      totalBytes += c.length;
+      if (totalBytes > MAX_BODY_BYTES) {
+        // Keep draining the stream, but stop buffering to avoid memory growth.
+        tooLarge = true;
+        return;
+      }
+      chunks.push(c);
+    };
+    const onEnd = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (tooLarge) {
+        reject(
+          new Error(
+            `Request body exceeds maximum size (${MAX_BODY_BYTES} bytes)`,
+          ),
+        );
+        return;
+      }
+      resolve(Buffer.concat(chunks).toString("utf-8"));
+    };
+    const onError = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(err);
+    };
+    req.on("data", onData);
+    req.on("end", onEnd);
+    req.on("error", onError);
   });
 }
 
 /**
- * Stream a web Response body to an HTTP response while enforcing a strict byte cap.
- * Returns the number of bytes forwarded.
+ * Read raw binary request body with a configurable size limit.
+ * Used for agent import file uploads.
  */
-export async function streamResponseBodyWithByteLimit(
-  upstream: Response,
-  res: StreamableServerResponse,
+function readRawBody(
+  req: http.IncomingMessage,
   maxBytes: number,
-  timeoutMs?: number,
-): Promise<number> {
-  const declaredLength = responseContentLength(upstream.headers);
-  if (declaredLength !== null && declaredLength > maxBytes) {
-    throw new Error(
-      `Upstream response exceeds maximum size of ${maxBytes} bytes`,
-    );
-  }
-
-  if (!upstream.body) {
-    throw new Error("Upstream response did not include a body stream");
-  }
-
-  const reader = upstream.body.getReader();
-  let totalBytes = 0;
-  let streamTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
-  const streamTimeoutPromise =
-    typeof timeoutMs === "number" && timeoutMs > 0
-      ? new Promise<never>((_resolve, reject) => {
-          streamTimeoutHandle = setTimeout(() => {
-            reject(
-              createTimeoutError(
-                `Upstream response body timed out after ${timeoutMs}ms`,
-              ),
-            );
-          }, timeoutMs);
-        })
-      : null;
-
-  try {
-    while (true) {
-      const { done, value } = streamTimeoutPromise
-        ? await Promise.race([reader.read(), streamTimeoutPromise])
-        : await reader.read();
-      if (done) break;
-      if (!value || value.byteLength === 0) continue;
-
-      totalBytes += value.byteLength;
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    let tooLarge = false;
+    let settled = false;
+    const cleanup = () => {
+      req.off("data", onData);
+      req.off("end", onEnd);
+      req.off("error", onError);
+    };
+    const onData = (c: Buffer) => {
+      if (settled) return;
+      totalBytes += c.length;
       if (totalBytes > maxBytes) {
-        throw new Error(
-          `Upstream response exceeds maximum size of ${maxBytes} bytes`,
+        tooLarge = true;
+        return;
+      }
+      chunks.push(c);
+    };
+    const onEnd = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (tooLarge) {
+        reject(
+          new Error(`Request body exceeds maximum size (${maxBytes} bytes)`),
         );
+        return;
       }
-
-      if (res.writableEnded || res.destroyed) {
-        throw new Error("Client connection closed while streaming response");
-      }
-
-      const canContinue = res.write(Buffer.from(value));
-      if (!canContinue) {
-        await waitForDrain(res);
-      }
-    }
-  } catch (err) {
-    try {
-      await reader.cancel(err);
-    } catch {
-      // Best effort cleanup; keep original error.
-    }
-    throw err;
-  } finally {
-    if (streamTimeoutHandle !== null) {
-      clearTimeout(streamTimeoutHandle);
-    }
-    reader.releaseLock();
-  }
-
-  return totalBytes;
+      resolve(Buffer.concat(chunks));
+    };
+    const onError = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(err);
+    };
+    req.on("data", onData);
+    req.on("end", onEnd);
+    req.on("error", onError);
+  });
 }
 
 /**
@@ -2234,27 +6379,160 @@ export async function streamResponseBodyWithByteLimit(
 async function readJsonBody<T = Record<string, unknown>>(
   req: http.IncomingMessage,
   res: http.ServerResponse,
-  options: ReadJsonBodyOptions = {},
 ): Promise<T | null> {
-  return parseJsonBody(req, res, {
-    maxBytes: MAX_BODY_BYTES,
-    ...options,
+  let raw: string;
+  try {
+    raw = await readBody(req);
+  } catch (err) {
+    const msg =
+      err instanceof Error ? err.message : "Failed to read request body";
+    error(res, msg, 413);
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      error(res, "Request body must be a JSON object", 400);
+      return null;
+    }
+    return parsed as T;
+  } catch {
+    error(res, "Invalid JSON in request body", 400);
+    return null;
+  }
+}
+
+function createTimeoutError(message: string): Error {
+  const timeoutError = new Error(message);
+  timeoutError.name = "TimeoutError";
+  return timeoutError;
+}
+
+async function readWithTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  return await new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(createTimeoutError(message));
+    }, timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
   });
 }
 
-const readBody = (req: http.IncomingMessage): Promise<string> =>
-  readRequestBody(req, { maxBytes: MAX_BODY_BYTES }).then(
-    (value) => value ?? "",
-  );
+export async function fetchWithTimeoutGuard(
+  input: string | URL | Request,
+  init: RequestInit = {},
+  timeoutMs = 20_000,
+): Promise<Response> {
+  const controller = new AbortController();
+  const inputSignal = init.signal;
+  let timedOut = false;
 
-let activeTerminalRunCount = 0;
+  if (inputSignal) {
+    if (inputSignal.aborted) {
+      controller.abort(inputSignal.reason);
+    } else {
+      inputSignal.addEventListener(
+        "abort",
+        () => {
+          controller.abort(inputSignal.reason);
+        },
+        { once: true },
+      );
+    }
+  }
+
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (timedOut) {
+      throw createTimeoutError(`Upstream request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function streamResponseBodyWithByteLimit(
+  upstreamResponse: Response,
+  writable: Pick<http.ServerResponse, "write">,
+  maxBytes: number,
+  bodyTimeoutMs = 20_000,
+): Promise<number> {
+  const contentLengthHeader = upstreamResponse.headers.get("content-length");
+  if (contentLengthHeader) {
+    const contentLength = Number.parseInt(contentLengthHeader, 10);
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      throw new Error(
+        `Upstream response exceeds maximum size of ${maxBytes} bytes`,
+      );
+    }
+  }
+
+  if (!upstreamResponse.body) {
+    return 0;
+  }
+
+  const reader = upstreamResponse.body.getReader();
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const chunkResult = await readWithTimeout(
+        reader.read(),
+        bodyTimeoutMs,
+        `Upstream response body timed out after ${bodyTimeoutMs}ms`,
+      );
+
+      if (chunkResult.done) break;
+      const value = chunkResult.value ?? new Uint8Array();
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        throw new Error(
+          `Upstream response exceeds maximum size of ${maxBytes} bytes`,
+        );
+      }
+      writable.write(Buffer.from(value));
+    }
+  } catch (error) {
+    try {
+      await reader.cancel();
+    } catch {
+      // no-op
+    }
+    throw error;
+  }
+
+  return totalBytes;
+}
 
 function json(res: http.ServerResponse, data: unknown, status = 200): void {
-  sendJson(res, data, status);
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json");
+  res.end(JSON.stringify(data));
 }
 
 function error(res: http.ServerResponse, message: string, status = 400): void {
-  sendJsonError(res, message, status);
+  json(res, { error: message }, status);
 }
 
 // ---------------------------------------------------------------------------
@@ -2266,8 +6544,6 @@ function error(res: http.ServerResponse, message: string, status = 400): void {
 const STATIC_MIME: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".gif": "image/gif",
-  ".glb": "model/gltf-binary",
-  ".gltf": "model/gltf+json",
   ".html": "text/html; charset=utf-8",
   ".ico": "image/x-icon",
   ".jpeg": "image/jpeg",
@@ -2276,15 +6552,11 @@ const STATIC_MIME: Record<string, string> = {
   ".json": "application/json; charset=utf-8",
   ".map": "application/json",
   ".mjs": "application/javascript; charset=utf-8",
-  ".mp3": "audio/mpeg",
-  ".ogg": "audio/ogg",
   ".png": "image/png",
   ".svg": "image/svg+xml",
   ".ttf": "font/ttf",
   ".txt": "text/plain; charset=utf-8",
-  ".vrm": "model/gltf-binary",
   ".wasm": "application/wasm",
-  ".wav": "audio/wav",
   ".webp": "image/webp",
   ".woff": "font/woff",
   ".woff2": "font/woff2",
@@ -2313,7 +6585,7 @@ function resolveUiDir(): string | null {
       if (fs.statSync(indexPath).isFile()) {
         uiDir = candidate;
         uiIndexHtml = fs.readFileSync(indexPath);
-        logger.info(`[milady-api] Serving dashboard UI from ${candidate}`);
+        logger.info(`[milaidy-api] Serving dashboard UI from ${candidate}`);
         return uiDir;
       }
     } catch {
@@ -2322,7 +6594,9 @@ function resolveUiDir(): string | null {
   }
 
   uiDir = null;
-  logger.info("[milady-api] No built UI found — dashboard routes are disabled");
+  logger.info(
+    "[milaidy-api] No built UI found — dashboard routes are disabled",
+  );
   return null;
 }
 
@@ -2341,48 +6615,10 @@ function sendStaticResponse(
   res.end(body);
 }
 
-// ── Static file cache ─────────────────────────────────────────────────
-const STATIC_CACHE_MAX = 50;
-const STATIC_CACHE_FILE_LIMIT = 512 * 1024; // 512 KB
-const staticFileCache = new Map<string, { body: Buffer; mtimeMs: number }>();
-
-function getCachedFile(filePath: string, mtimeMs: number): Buffer {
-  return getOrReadCachedFile(
-    staticFileCache,
-    filePath,
-    mtimeMs,
-    (p) => fs.readFileSync(p),
-    STATIC_CACHE_MAX,
-    STATIC_CACHE_FILE_LIMIT,
-  );
-}
-
 /**
  * Serve built dashboard assets from apps/app/dist with SPA fallback.
  * Returns true when the request is handled.
  */
-export function injectApiBaseIntoHtml(
-  html: Buffer,
-  externalBase?: string | null,
-): Buffer {
-  const trimmedBase = externalBase?.trim();
-  if (!trimmedBase) return html;
-
-  const headCloseTag = "</head>";
-  const headCloseIndex = html.indexOf(headCloseTag);
-  if (headCloseIndex < 0) return html;
-
-  const injection = Buffer.from(
-    `<script>window.__MILADY_API_BASE__=${JSON.stringify(trimmedBase)};</script>`,
-  );
-
-  return Buffer.concat([
-    html.subarray(0, headCloseIndex),
-    injection,
-    html.subarray(headCloseIndex),
-  ]);
-}
-
 function serveStaticUi(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -2393,7 +6629,6 @@ function serveStaticUi(
 
   // Keep API and WebSocket namespaces exclusively owned by server handlers.
   if (pathname === "/api" || pathname.startsWith("/api/")) return false;
-  if (pathname === "/v1" || pathname.startsWith("/v1/")) return false;
   if (pathname === "/ws") return false;
 
   let decodedPath: string;
@@ -2418,7 +6653,7 @@ function serveStaticUi(
     const stat = fs.statSync(candidatePath);
     if (stat.isFile()) {
       const ext = path.extname(candidatePath).toLowerCase();
-      const body = getCachedFile(candidatePath, stat.mtimeMs);
+      const body = fs.readFileSync(candidatePath);
       const cacheControl = relativePath.startsWith("assets/")
         ? "public, max-age=31536000, immutable"
         : "public, max-age=0, must-revalidate";
@@ -2436,34 +6671,20 @@ function serveStaticUi(
       return true;
     }
   } catch {
-    // Missing file falls through to SPA index fallback below.
+    // Missing file falls through to SPA index fallback.
   }
 
-  // Only serve the SPA index.html for navigation-like requests (no file extension
-  // or .html). Asset requests (.vrm, .js, .png, etc.) that miss on disk should 404
-  // rather than silently returning HTML — which breaks binary loaders like GLTFLoader.
-  const reqExt = path.extname(decodedPath).toLowerCase();
-  if (reqExt && reqExt !== ".html") return false;
-
   if (!uiIndexHtml) return false;
-
-  // When served behind a reverse proxy (e.g. Railway /proxy/PORT/), inject the
-  // API base so the UI client sends requests to the correct path prefix.
-  const html = injectApiBaseIntoHtml(
-    uiIndexHtml,
-    process.env.MILADY_EXTERNAL_BASE_URL,
-  );
-
   sendStaticResponse(
     req,
     res,
     200,
     {
       "Cache-Control": "public, max-age=0, must-revalidate",
-      "Content-Length": html.length,
+      "Content-Length": uiIndexHtml.length,
       "Content-Type": "text/html; charset=utf-8",
     },
-    html,
+    uiIndexHtml,
   );
   return true;
 }
@@ -2471,19 +6692,18 @@ function serveStaticUi(
 interface ChatGenerationResult {
   text: string;
   agentName: string;
-  usage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-    model?: string;
-  };
 }
 
 interface ChatGenerateOptions {
   onChunk?: (chunk: string) => void;
   isAborted?: () => boolean;
   resolveNoResponseText?: () => string;
+  mode?: ChatMode;
+  modelHint?: string;
 }
+
+const INSUFFICIENT_CREDITS_RE =
+  /\b(?:insufficient(?:[_\s]+(?:credits?|quota))|insufficient_quota|out of credits|max usage reached|quota(?:\s+exceeded)?)\b/i;
 
 const INSUFFICIENT_CREDITS_CHAT_REPLIES = [
   "Sorry, we're out of credits right now. Please top up your credits and try again.",
@@ -2496,10 +6716,102 @@ const INSUFFICIENT_CREDITS_CHAT_REPLIES = [
 const GENERIC_NO_RESPONSE_CHAT_REPLY =
   "Sorry, I couldn't generate a response right now. Please try again.";
 
+const DEFAULT_CLOUD_API_BASE_URL = "https://www.elizacloud.ai/api/v1";
+const DEFAULT_CHAT_TIMEOUT_MS = 120_000;
+const DEFAULT_SSE_HEARTBEAT_MS = 15_000;
+
+type ChatModelSize = "small" | "large";
+type DynamicPromptExecArgs = Parameters<
+  AgentRuntime["dynamicPromptExecFromState"]
+>[0];
+type DynamicPromptExecResult = Awaited<
+  ReturnType<AgentRuntime["dynamicPromptExecFromState"]>
+>;
+
+const chatModelRoutingContext = new AsyncLocalStorage<{
+  modelSize: ChatModelSize;
+}>();
+
 function getErrorMessage(err: unknown, fallback = "generation failed"): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
   return fallback;
+}
+
+function isChatTimeoutError(err: unknown): boolean {
+  const message = getErrorMessage(err, "");
+  return /\btimeout\b|timed out/i.test(message);
+}
+
+function getConfiguredChatTimeoutMs(): number {
+  const raw = process.env.MILAIDY_CHAT_TIMEOUT_MS;
+  if (!raw) return DEFAULT_CHAT_TIMEOUT_MS;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_CHAT_TIMEOUT_MS;
+  return Math.min(Math.max(parsed, 30_000), 300_000);
+}
+
+function resolveChatModelHint(config: MilaidyConfig, mode: ChatMode): string {
+  const modelsCfg = (config.models ?? {}) as Record<string, unknown>;
+  const piAiSmall =
+    typeof modelsCfg.piAiSmall === "string" ? modelsCfg.piAiSmall.trim() : "";
+  const piAiLarge =
+    typeof modelsCfg.piAiLarge === "string" ? modelsCfg.piAiLarge.trim() : "";
+
+  const defaults = config.agents?.defaults as Record<string, unknown> | undefined;
+  const modelCfg =
+    defaults?.model && typeof defaults.model === "object"
+      ? (defaults.model as Record<string, unknown>)
+      : undefined;
+  const primary =
+    typeof modelCfg?.primary === "string" ? modelCfg.primary.trim() : "";
+
+  if (mode === "simple") return piAiSmall || primary || "TEXT_SMALL(default)";
+  return piAiLarge || primary || "TEXT_LARGE(default)";
+}
+
+function resolveChatModelSize(mode: ChatMode): ChatModelSize {
+  return mode === "simple" ? "small" : "large";
+}
+
+function withChatModelRouting<T>(
+  mode: ChatMode,
+  task: () => Promise<T>,
+): Promise<T> {
+  return chatModelRoutingContext.run(
+    { modelSize: resolveChatModelSize(mode) },
+    task,
+  );
+}
+
+function patchRuntimeDynamicPromptModelRouting(runtime: AgentRuntime): void {
+  const rt = runtime as AgentRuntime & {
+    __milaidyChatModelRoutingPatched?: boolean;
+    dynamicPromptExecFromState: (
+      args: DynamicPromptExecArgs,
+    ) => Promise<DynamicPromptExecResult>;
+  };
+  if (rt.__milaidyChatModelRoutingPatched) return;
+
+  const original = rt.dynamicPromptExecFromState.bind(runtime);
+  rt.dynamicPromptExecFromState = async (
+    args: DynamicPromptExecArgs,
+  ): Promise<DynamicPromptExecResult> => {
+    const override = chatModelRoutingContext.getStore();
+    if (!override) return original(args);
+    return original({
+      ...args,
+      options: {
+        ...(args.options ?? {}),
+        modelSize: override.modelSize,
+      },
+    });
+  };
+  rt.__milaidyChatModelRoutingPatched = true;
+}
+
+function isInsufficientCreditsMessage(message: string): boolean {
+  return INSUFFICIENT_CREDITS_RE.test(message);
 }
 
 function pickInsufficientCreditsChatReply(): string {
@@ -2532,7 +6844,8 @@ function resolveNoResponseFallback(logBuffer: LogEntry[]): string {
 }
 
 function getInsufficientCreditsReplyFromError(err: unknown): string | null {
-  return isInsufficientCreditsError(err)
+  const msg = getErrorMessage(err, "");
+  return isInsufficientCreditsMessage(msg)
     ? pickInsufficientCreditsChatReply()
     : null;
 }
@@ -2548,6 +6861,49 @@ function normalizeChatResponseText(
 ): string {
   if (!isNoResponsePlaceholder(text)) return text;
   return resolveNoResponseFallback(logBuffer);
+}
+
+function resolveCloudApiBaseUrl(rawBaseUrl?: string): string {
+  const base = (rawBaseUrl ?? DEFAULT_CLOUD_API_BASE_URL)
+    .trim()
+    .replace(/\/+$/, "");
+  if (base.endsWith("/api/v1")) return base;
+  return `${base}/api/v1`;
+}
+
+async function fetchCloudCreditsByApiKey(
+  baseUrl: string,
+  apiKey: string,
+): Promise<number | null> {
+  const response = await fetch(`${baseUrl}/credits/balance`, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  const creditResponse = (await response.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+
+  if (!response.ok) {
+    const message =
+      typeof creditResponse.error === "string" && creditResponse.error.trim()
+        ? creditResponse.error
+        : `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  const rawBalance =
+    typeof creditResponse.balance === "number"
+      ? creditResponse.balance
+      : typeof (creditResponse.data as Record<string, unknown>)?.balance ===
+          "number"
+        ? ((creditResponse.data as Record<string, unknown>).balance as number)
+        : undefined;
+  return typeof rawBalance === "number" ? rawBalance : null;
 }
 
 function initSse(res: http.ServerResponse): void {
@@ -2567,22 +6923,15 @@ function writeSse(
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
-function writeSseData(
+function startSseHeartbeat(
   res: http.ServerResponse,
-  data: string,
-  event?: string,
-): void {
-  if (res.writableEnded || res.destroyed) return;
-  if (event) res.write(`event: ${event}\n`);
-  res.write(`data: ${data}\n\n`);
-}
-
-function writeSseJson(
-  res: http.ServerResponse,
-  payload: unknown,
-  event?: string,
-): void {
-  writeSseData(res, JSON.stringify(payload), event);
+  intervalMs = DEFAULT_SSE_HEARTBEAT_MS,
+): () => void {
+  const timer = setInterval(() => {
+    writeSse(res, { type: "heartbeat", ts: Date.now() });
+  }, intervalMs);
+  if (typeof timer.unref === "function") timer.unref();
+  return () => clearInterval(timer);
 }
 
 async function generateChatResponse(
@@ -2591,588 +6940,303 @@ async function generateChatResponse(
   agentName: string,
   opts?: ChatGenerateOptions,
 ): Promise<ChatGenerationResult> {
+  patchRuntimeDynamicPromptModelRouting(runtime);
+
   const t0 = Date.now();
+  const chatMode = opts?.mode ?? "power";
+  const modelHint = opts?.modelHint ?? "unknown";
   let firstTokenMs = 0;
   let responseText = "";
-  let activeStreamSource: StreamSource = "unset";
-  const messageSource =
-    typeof message.content.source === "string" &&
-    message.content.source.trim().length > 0
-      ? message.content.source
-      : "api";
-  const emitChunk = (chunk: string): void => {
-    if (!chunk) return;
-    responseText += chunk;
-    opts?.onChunk?.(chunk);
-  };
-  const claimStreamSource = (
-    source: Exclude<StreamSource, "unset">,
-  ): boolean => {
-    if (activeStreamSource === "unset") {
-      activeStreamSource = source;
-      return true;
-    }
-    return activeStreamSource === source;
-  };
-  const computeDelta = (existing: string, incoming: string): string => {
+  const streamingActive = !!opts?.onChunk;
+  const timeoutDuration = getConfiguredChatTimeoutMs();
+  const normalizeDelta = (incoming: string | null | undefined): string => {
     if (!incoming) return "";
-    if (!existing) return incoming;
-    if (incoming === existing) return "";
-    if (incoming.startsWith(existing)) return incoming.slice(existing.length);
-    if (existing.startsWith(incoming)) return "";
+    if (!responseText) return incoming;
 
-    // Small chunks are usually raw token deltas; keep them even if they
-    // repeat suffix characters (e.g., "l" + "l" in "Hello").
-    if (incoming.length <= 3) return incoming;
-
-    const maxOverlap = Math.min(existing.length, incoming.length);
-    for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
-      if (existing.endsWith(incoming.slice(0, overlap))) {
-        const delta = incoming.slice(overlap);
-        if (!delta && overlap === incoming.length) return "";
-        return delta;
-      }
+    // Some providers emit a final "full text so far" chunk at stream end.
+    // Convert cumulative replays into true deltas to avoid duplicated output.
+    if (incoming.startsWith(responseText)) {
+      return incoming.slice(responseText.length);
     }
+
     return incoming;
   };
-  const appendIncomingText = (incoming: string): void => {
-    const delta = computeDelta(responseText, incoming);
-    if (!delta) return;
-    emitChunk(delta);
-  };
-
-  // The core message service emits MESSAGE_SENT but not MESSAGE_RECEIVED.
-  // Emit inbound events here so trajectory/session hooks run for API chat.
-  try {
-    if (typeof runtime.emitEvent === "function") {
-      await runtime.emitEvent("MESSAGE_RECEIVED", {
-        message,
-        source: messageSource,
-      });
-    }
-  } catch (err) {
-    runtime.logger?.warn(
-      {
-        err,
-        src: "milady-api",
-        messageId: message.id,
-        roomId: message.roomId,
-      },
-      "Failed to emit MESSAGE_RECEIVED event",
-    );
-  }
-
-  // Fallback when MESSAGE_RECEIVED hooks are unavailable: start a trajectory
-  // directly so /api/chat still produces rows for the Trajectories view.
 
   let result:
-    | Awaited<
-        ReturnType<NonNullable<AgentRuntime["messageService"]>["handleMessage"]>
-      >
-    | undefined;
-  let _handlerError: unknown = null;
-  try {
-    result = await runtime.messageService?.handleMessage(
-      runtime,
-      message,
-      async (content: Content) => {
-        if (opts?.isAborted?.()) {
-          throw new Error("client_disconnected");
-        }
-
-        // Trace action callback invocations so we can verify handlers execute.
-        const actionTag = (content as Record<string, unknown>)?.action;
-        if (actionTag) {
-          runtime.logger?.info(
-            {
-              src: "milady-api",
-              action: actionTag,
-              hasText: Boolean(extractCompatTextContent(content)),
-            },
-            `[milady-api] Action callback fired: ${actionTag}`,
-          );
-        }
-
-        const chunk = extractCompatTextContent(content);
-        if (!chunk) return [];
-        if (!claimStreamSource("callback")) return [];
-        appendIncomingText(chunk);
-        return [];
-      },
-      {
-        onStreamChunk: opts?.onChunk
-          ? async (chunk: string) => {
-              if (opts?.isAborted?.()) {
-                throw new Error("client_disconnected");
-              }
-              if (!chunk) return;
-              if (!claimStreamSource("onStreamChunk")) return;
-              appendIncomingText(chunk);
-            }
-          : undefined,
-      },
-    );
-
-    // Ensure MESSAGE_SENT hooks run for API chat flows. Some runtimes emit this
-    // internally, but API wrappers can bypass those hooks.
-    try {
-      const responseMessages = Array.isArray(result?.responseMessages)
-        ? (result.responseMessages as Array<{ id?: string; content?: Content }>)
-        : [];
-      if (
-        responseMessages.length > 0 &&
-        typeof runtime.emitEvent === "function"
-      ) {
-        for (const responseMessage of responseMessages) {
-          const memoryLike = {
-            id: responseMessage.id ?? crypto.randomUUID(),
-            roomId: message.roomId,
-            entityId: runtime.agentId,
-            content: responseMessage.content ?? { text: "" },
-            metadata: message.metadata,
-          } as unknown as ReturnType<typeof createMessageMemory>;
-          await runtime.emitEvent("MESSAGE_SENT", {
-            message: memoryLike,
-            source: messageSource,
-          });
-        }
+    | {
+        responseContent?: {
+          text?: string;
+        } | null;
       }
-      return [];
-    },
-    {
-      onStreamChunk: streamingActive
-        ? async (chunk: string) => {
-            if (opts!.isAborted?.()) return;
-            if (!firstTokenMs) firstTokenMs = Date.now() - t0;
-            responseText += chunk;
-            opts!.onChunk!(chunk);
+    | undefined;
+  try {
+    result = await withChatModelRouting(chatMode, async () =>
+      runtime.messageService?.handleMessage(
+        runtime,
+        message,
+        async (content: Content) => {
+          if (opts?.isAborted?.()) {
+            throw new Error("client_disconnected");
           }
-        : undefined,
-      timeoutDuration: 60_000, // 60s instead of 1-hour default
-    },
-  );
-
-  // Log the response mode and actions for debugging action execution
-  if (result) {
-    const rc = result.responseContent as Record<string, unknown> | null;
-    const resultRecord = result as unknown as Record<string, unknown>;
-    runtime.logger?.info(
-      {
-        src: "milady-api",
-        mode: resultRecord.mode,
-        actions: rc?.actions,
-        simple: rc?.simple,
-        hasText: Boolean(rc?.text),
-      },
-      "[milady-api] Chat response metadata",
+          if (content?.text) {
+            const delta = normalizeDelta(content.text);
+            if (!delta) return [];
+            if (!firstTokenMs) firstTokenMs = Date.now() - t0;
+            responseText += delta;
+            opts?.onChunk?.(delta);
+          }
+          return [];
+        },
+        {
+          onStreamChunk: streamingActive
+            ? async (chunk: string) => {
+              if (opts?.isAborted?.()) return;
+              const delta = normalizeDelta(chunk);
+              if (!delta) return;
+              if (!firstTokenMs) firstTokenMs = Date.now() - t0;
+              responseText += delta;
+              opts?.onChunk?.(delta);
+            }
+            : undefined,
+          timeoutDuration,
+          shouldRespondModel: chatMode === "simple" ? "small" : "large",
+        },
+      ),
     );
+  } catch (err) {
+    const totalMs = Date.now() - t0;
+    logger.warn(
+      `[perf] chat response failed: mode=${chatMode}, model=${modelHint}, total=${totalMs}ms, first-token=${firstTokenMs || "n/a"}ms, timeout=${isChatTimeoutError(err)}, error=${getErrorMessage(err)}`,
+    );
+    throw err;
   }
 
-  const resultText = extractCompatTextContent(result?.responseContent);
-
-  // Fallback: if callbacks weren't used for text, stream + return final text.
-  if (!responseText && resultText) {
-    emitChunk(resultText);
-  } else if (
-    resultText &&
-    resultText !== responseText &&
-    resultText.startsWith(responseText)
-  ) {
-    // Keep streaming monotonic when final text extends emitted chunks.
-    emitChunk(resultText.slice(responseText.length));
-  } else if (resultText && resultText !== responseText) {
-    // Canonical final response may differ from streamed chunks (normalization).
-    responseText = resultText;
+  // Fallback: if streaming didn't produce text, use callback/result text
+  if (!responseText && result?.responseContent?.text) {
+    responseText = result.responseContent.text;
+    opts?.onChunk?.(result.responseContent.text);
   }
 
   const noResponseFallback = opts?.resolveNoResponseText?.();
   const finalText = isNoResponsePlaceholder(responseText)
     ? (noResponseFallback ?? (responseText || "(no response)"))
     : responseText;
+  const promptText =
+    typeof message.content?.text === "string" ? message.content.text : "";
+  const boundedText =
+    chatMode === "simple"
+      ? enforceSimpleModeReplyBoundaries(promptText, finalText)
+      : finalText;
 
-  // Estimate token usage from text lengths (~4 chars per token)
-  const promptText = extractCompatTextContent(message.content) ?? "";
-  const estPromptTokens = Math.ceil(promptText.length / 4);
-  const estCompletionTokens = Math.ceil(finalText.length / 4);
+  const totalMs = Date.now() - t0;
+  logger.info(
+    `[perf] chat response: mode=${chatMode}, model=${modelHint}, timeout=false, total=${totalMs}ms, first-token=${firstTokenMs || "n/a"}ms, length=${boundedText.length}`,
+  );
 
   return {
-    text: finalText,
+    text: boundedText,
     agentName,
-    usage: {
-      promptTokens: estPromptTokens,
-      completionTokens: estCompletionTokens,
-      totalTokens: estPromptTokens + estCompletionTokens,
-      model: detectRuntimeModel(runtime, undefined) ?? undefined,
-    },
-  };
-}
-
-async function generateConversationTitle(
-  runtime: AgentRuntime,
-  userMessage: string,
-  agentName: string,
-): Promise<string | null> {
-  // Use small model for speed
-  const modelClass = ModelType.TEXT_SMALL;
-
-  const prompt = `Based on the user's first message in a new chat, generate a very short, concise title (max 4-5 words) for the conversation.
-The agent's name is "${agentName}". The title should reflect the topic or intent of the user.
-Ideally, the title should fit the persona/vibe of the agent if possible, but clarity is more important.
-Do not use quotes. Do not include "Title:" prefix.
-
-User message: "${userMessage}"
-
-Title:`;
-
-  try {
-    // Use maxTokens instead of max_tokens
-    const title = await runtime.useModel(modelClass, {
-      prompt,
-      maxTokens: 20,
-      temperature: 0.7,
-    });
-
-    if (!title) return null;
-
-    let cleanTitle = title.trim();
-    // Remove surrounding quotes if present
-    if (
-      (cleanTitle.startsWith('"') && cleanTitle.endsWith('"')) ||
-      (cleanTitle.startsWith("'") && cleanTitle.endsWith("'"))
-    ) {
-      cleanTitle = cleanTitle.slice(1, -1);
-    }
-
-    // Fallback if empty or too long
-    if (!cleanTitle || cleanTitle.length > 50) return null;
-
-    return cleanTitle;
-  } catch (err) {
-    logger.warn(
-      `[milady] Failed to generate conversation title: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return null;
-  }
-}
-
-function isDuplicateMemoryError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  const msg = err.message.toLowerCase();
-  return (
-    msg.includes("duplicate") ||
-    msg.includes("already exists") ||
-    msg.includes("unique constraint")
-  );
-}
-
-async function persistConversationMemory(
-  runtime: AgentRuntime,
-  memory: ReturnType<typeof createMessageMemory>,
-): Promise<void> {
-  try {
-    await runtime.createMemory(memory, "messages");
-  } catch (err) {
-    if (isDuplicateMemoryError(err)) return;
-    throw err;
-  }
-}
-
-async function hasRecentAssistantMemory(
-  runtime: AgentRuntime,
-  roomId: UUID,
-  text: string,
-  sinceMs: number,
-): Promise<boolean> {
-  const trimmed = text.trim();
-  if (!trimmed) return false;
-
-  try {
-    const recent = await runtime.getMemories({
-      roomId,
-      tableName: "messages",
-      count: 12,
-    });
-
-    return recent.some((memory) => {
-      const contentText = (memory.content as { text?: string })?.text?.trim();
-      const createdAt = memory.createdAt ?? 0;
-      return (
-        memory.entityId === runtime.agentId &&
-        contentText === trimmed &&
-        createdAt >= sinceMs - 2000
-      );
-    });
-  } catch {
-    return false;
-  }
-}
-
-async function persistAssistantConversationMemory(
-  runtime: AgentRuntime,
-  roomId: UUID,
-  text: string,
-  channelType: ChannelType,
-  dedupeSinceMs?: number,
-): Promise<void> {
-  const trimmed = text.trim();
-  if (!trimmed) return;
-
-  if (typeof dedupeSinceMs === "number") {
-    const alreadyPersisted = await hasRecentAssistantMemory(
-      runtime,
-      roomId,
-      trimmed,
-      dedupeSinceMs,
-    );
-    if (alreadyPersisted) return;
-  }
-
-  await persistConversationMemory(
-    runtime,
-    createMessageMemory({
-      id: crypto.randomUUID() as UUID,
-      entityId: runtime.agentId,
-      roomId,
-      content: {
-        text: trimmed,
-        source: "client_chat",
-        channelType,
-      },
-    }),
-  );
-}
-
-const VALID_CHANNEL_TYPES = new Set<string>(Object.values(ChannelType));
-
-function parseRequestChannelType(
-  value: unknown,
-  fallback: ChannelType = ChannelType.DM,
-): ChannelType | null {
-  if (value === undefined || value === null) {
-    return fallback;
-  }
-  if (typeof value !== "string") {
-    return null;
-  }
-  const normalized = value.trim().toUpperCase();
-  if (!VALID_CHANNEL_TYPES.has(normalized)) {
-    return null;
-  }
-  return normalized as ChannelType;
-}
-
-interface ChatImageAttachment {
-  /** Base64-encoded image data (no data URL prefix). */
-  data: string;
-  mimeType: string;
-  name: string;
-}
-
-const MAX_CHAT_IMAGES = 4;
-
-/** Maximum base64 data length for a single image (~3.75 MB binary). */
-const MAX_IMAGE_DATA_BYTES = 5 * 1_048_576;
-
-/** Maximum length of an image filename. */
-const MAX_IMAGE_NAME_LENGTH = 255;
-
-/** Matches a valid standard-alphabet base64 string (RFC 4648 §4, `+/`, optional `=` padding). */
-const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
-
-const ALLOWED_IMAGE_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-]);
-
-/** Returns an error message string, or null if valid. Exported for unit tests. */
-export function validateChatImages(images: unknown): string | null {
-  if (!Array.isArray(images) || images.length === 0) return null;
-  if (images.length > MAX_CHAT_IMAGES)
-    return `Too many images (max ${MAX_CHAT_IMAGES})`;
-  for (const img of images) {
-    if (!img || typeof img !== "object") return "Each image must be an object";
-    const { data, mimeType, name } = img as Record<string, unknown>;
-    if (typeof data !== "string" || !data)
-      return "Each image must have a non-empty data string";
-    if (data.startsWith("data:"))
-      return "Image data must be raw base64, not a data URL";
-    if (data.length > MAX_IMAGE_DATA_BYTES)
-      return `Image too large (max ${MAX_IMAGE_DATA_BYTES / 1_048_576} MB per image)`;
-    if (!BASE64_RE.test(data))
-      return "Image data contains invalid base64 characters";
-    if (typeof mimeType !== "string" || !mimeType)
-      return "Each image must have a mimeType string";
-    if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType.toLowerCase()))
-      return `Unsupported image type: ${mimeType}`;
-    if (typeof name !== "string" || !name)
-      return "Each image must have a name string";
-    if (name.length > MAX_IMAGE_NAME_LENGTH)
-      return `Image name too long (max ${MAX_IMAGE_NAME_LENGTH} characters)`;
-  }
-  return null;
-}
-
-/**
- * Extension of the core Media attachment shape that carries raw image bytes for
- * action handlers (e.g. POST_TWEET) while the message is in-memory. The
- * extra fields are intentionally stripped before the message is persisted.
- *
- * Note: `_data`/`_mimeType` survive only because elizaOS passes the
- * `userMessage` object reference directly to action handlers without
- * deep-cloning or serializing it. If that ever changes, action handlers
- * that read these fields will silently receive `undefined`.
- */
-export interface ChatAttachmentWithData extends Media {
-  /** Raw base64 image data — never written to the database. */
-  _data: string;
-  /** MIME type corresponding to `_data`. */
-  _mimeType: string;
-}
-
-/**
- * Builds in-memory and compact (DB-persisted) attachment arrays from
- * validated images. Exported so it can be unit-tested independently.
- */
-export function buildChatAttachments(
-  images: ChatImageAttachment[] | undefined,
-): {
-  /** In-memory attachments that include `_data`/`_mimeType` for action handlers. */
-  attachments: ChatAttachmentWithData[] | undefined;
-  /** Persistence-safe attachments with `_data`/`_mimeType` stripped. */
-  compactAttachments: Media[] | undefined;
-} {
-  if (!images?.length)
-    return { attachments: undefined, compactAttachments: undefined };
-  // Compact placeholder URL (no base64) keeps the LLM context lean. The raw
-  // image bytes are stashed in `_data`/`_mimeType` for action handlers (e.g.
-  // POST_TWEET) that need to upload them.
-  const attachments: ChatAttachmentWithData[] = images.map((img, i) => ({
-    id: `img-${i}`,
-    url: `attachment:img-${i}`,
-    title: img.name,
-    source: "client_chat",
-    description: "User-attached image",
-    text: "",
-    contentType: ContentType.IMAGE,
-    _data: img.data,
-    _mimeType: img.mimeType,
-  }));
-  // DB-persisted version omits _data/_mimeType so raw bytes aren't stored.
-  const compactAttachments: Media[] = attachments.map(
-    ({ _data: _d, _mimeType: _m, ...rest }) => rest,
-  );
-  return { attachments, compactAttachments };
-}
-
-type MessageMemory = ReturnType<typeof createMessageMemory>;
-
-/**
- * Constructs the in-memory user message (with image data for action handlers)
- * and the persistence-safe counterpart (image data stripped). Extracted to
- * avoid duplicating this logic across the stream and non-stream chat endpoints.
- */
-export function buildUserMessages(params: {
-  images: ChatImageAttachment[] | undefined;
-  prompt: string;
-  userId: UUID;
-  roomId: UUID;
-  channelType: ChannelType;
-}): { userMessage: MessageMemory; messageToStore: MessageMemory } {
-  const { images, prompt, userId, roomId, channelType } = params;
-  const { attachments, compactAttachments } = buildChatAttachments(images);
-  const id = crypto.randomUUID() as UUID;
-  // In-memory message carries _data/_mimeType so action handlers can upload.
-  const userMessage = createMessageMemory({
-    id,
-    entityId: userId,
-    roomId,
-    content: {
-      text: prompt,
-      source: "client_chat",
-      channelType,
-      ...(attachments?.length ? { attachments } : {}),
-    },
-  });
-  // Persisted message: compact placeholder URL, no raw bytes in DB.
-  const messageToStore = compactAttachments?.length
-    ? createMessageMemory({
-        id,
-        entityId: userId,
-        roomId,
-        content: {
-          text: prompt,
-          source: "client_chat",
-          channelType,
-          attachments: compactAttachments,
-        },
-      })
-    : userMessage;
-  return { userMessage, messageToStore };
-}
-
-async function readChatRequestPayload(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-  helpers: {
-    readJsonBody: <T = Record<string, unknown>>(
-      req: http.IncomingMessage,
-      res: http.ServerResponse,
-      options?: ReadJsonBodyOptions,
-    ) => Promise<T | null>;
-    error: (res: http.ServerResponse, message: string, status?: number) => void;
-  },
-  /** Body size limit. Image-capable endpoints pass CHAT_MAX_BODY_BYTES (20 MB);
-   *  legacy/cloud-proxy endpoints that don't process images pass MAX_BODY_BYTES (1 MB). */
-  maxBytes = CHAT_MAX_BODY_BYTES,
-): Promise<{
-  prompt: string;
-  channelType: ChannelType;
-  images?: ChatImageAttachment[];
-} | null> {
-  const body = await helpers.readJsonBody<{
-    text?: string;
-    channelType?: string;
-    images?: ChatImageAttachment[];
-  }>(req, res, { maxBytes });
-  if (!body) return null;
-  if (!body.text?.trim()) {
-    helpers.error(res, "text is required");
-    return null;
-  }
-  const channelType = parseRequestChannelType(body.channelType, ChannelType.DM);
-  if (!channelType) {
-    helpers.error(res, "channelType is invalid", 400);
-    return null;
-  }
-  const imageValidationError = validateChatImages(body.images);
-  if (imageValidationError) {
-    helpers.error(res, imageValidationError, 400);
-    return null;
-  }
-  // Normalize mimeType to lowercase so downstream consumers (Twitter
-  // uploadMedia, content-type headers) never encounter mixed-case variants
-  // that slipped past the allowlist check.
-  const images = Array.isArray(body.images)
-    ? (body.images as ChatImageAttachment[]).map((img) => ({
-        ...img,
-        mimeType: img.mimeType.toLowerCase(),
-      }))
-    : undefined;
-  return {
-    prompt: body.text.trim(),
-    channelType,
-    images,
   };
 }
 
 function parseBoundedLimit(rawLimit: string | null, fallback = 15): number {
-  return parseClampedInteger(rawLimit, {
-    min: 1,
-    max: 50,
-    fallback,
+  if (!rawLimit) return fallback;
+  const parsed = Number.parseInt(rawLimit, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(parsed, 1), 50);
+}
+
+interface GitHubRepoListIntent {
+  owner: string | null;
+  sinceDays: number | null;
+  limit: number | null;
+  includePrivate: boolean | null;
+}
+
+function parseBooleanFlag(raw: string | undefined): boolean | null {
+  if (!raw) return null;
+  const value = raw.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(value)) return true;
+  if (["0", "false", "no", "off"].includes(value)) return false;
+  return null;
+}
+
+function parseGitHubRepoListIntent(prompt: string): GitHubRepoListIntent | null {
+  const normalized = prompt.trim();
+  if (!normalized) return null;
+
+  const hasRepoTarget = /\b(repo|repos|repository|repositories)\b/i.test(
+    normalized,
+  );
+  const hasListVerb = /\b(list|show|get|fetch|pull)\b/i.test(normalized);
+  if (!hasRepoTarget || !hasListVerb) return null;
+
+  const owner =
+    normalized.match(
+      /\b(?:owner|org|organization|username|user)\s*[:=]?\s*([A-Za-z0-9_.-]+)\b/i,
+    )?.[1] ?? null;
+
+  const sinceDaysRaw =
+    normalized.match(/\bsinceDays\s*[:=]?\s*(\d{1,4})\b/i)?.[1] ??
+    normalized.match(/\bsince\s*[:=]?\s*(\d{1,4})\b/i)?.[1] ??
+    normalized.match(/\blast\s+(\d{1,4})\s+days?\b/i)?.[1] ??
+    null;
+  const sinceDays = sinceDaysRaw ? Number.parseInt(sinceDaysRaw, 10) : null;
+
+  const limitRaw =
+    normalized.match(/\blimit\s*[:=]?\s*(\d{1,3})\b/i)?.[1] ?? null;
+  const limit = limitRaw ? Number.parseInt(limitRaw, 10) : null;
+
+  const includePrivateRaw =
+    normalized.match(/\bincludePrivate\s*[:=]?\s*(true|false|1|0|yes|no)\b/i)
+      ?.[
+      1
+    ] ??
+    normalized.match(/\bprivate\s*[:=]?\s*(true|false|1|0|yes|no)\b/i)?.[1] ??
+    undefined;
+  const includePrivate = parseBooleanFlag(includePrivateRaw);
+
+  return {
+    owner,
+    sinceDays:
+      sinceDays && Number.isFinite(sinceDays) && sinceDays > 0
+        ? Math.min(sinceDays, 3650)
+        : null,
+    limit:
+      limit && Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : null,
+    includePrivate,
+  };
+}
+
+function stringifyJson(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function formatGitHubRepoListReply(actionResult: {
+  success: boolean;
+  result?: unknown;
+  error?: string;
+}): string {
+  if (!actionResult.success) {
+    return `GitHub repo fetch failed: ${actionResult.error ?? "unknown error"}`;
+  }
+
+  const resultRecord =
+    actionResult.result && typeof actionResult.result === "object"
+      ? (actionResult.result as Record<string, unknown>)
+      : null;
+
+  const rawText =
+    resultRecord && typeof resultRecord.text === "string"
+      ? resultRecord.text
+      : null;
+
+  if (!rawText) {
+    return "GitHub repo fetch returned no response payload.";
+  }
+
+  let parsedEnvelope: Record<string, unknown> | null = null;
+  try {
+    const parsed: unknown = JSON.parse(rawText);
+    if (parsed && typeof parsed === "object") {
+      parsedEnvelope = parsed as Record<string, unknown>;
+    }
+  } catch {
+    parsedEnvelope = null;
+  }
+
+  if (!parsedEnvelope) return rawText;
+
+  const data =
+    parsedEnvelope.data && typeof parsedEnvelope.data === "object"
+      ? (parsedEnvelope.data as Record<string, unknown>)
+      : null;
+  if (!data) return rawText;
+
+  const repositories = Array.isArray(data.repositories)
+    ? data.repositories
+    : [];
+  const owner =
+    typeof data.owner === "string" && data.owner.trim().length > 0
+      ? data.owner.trim()
+      : "unknown";
+  const sinceDays =
+    typeof data.sinceDays === "number" && Number.isFinite(data.sinceDays)
+      ? data.sinceDays
+      : null;
+  const total =
+    typeof data.total === "number" && Number.isFinite(data.total)
+      ? data.total
+      : repositories.length;
+  const returned =
+    typeof data.returned === "number" && Number.isFinite(data.returned)
+      ? data.returned
+      : repositories.length;
+
+  if (repositories.length === 0) {
+    return sinceDays
+      ? `No repositories found for ${owner} updated in the last ${sinceDays} days.`
+      : `No repositories found for ${owner}.`;
+  }
+
+  const header = sinceDays
+    ? `Found ${returned}/${total} repositories for ${owner} updated in the last ${sinceDays} days:`
+    : `Found ${returned}/${total} repositories for ${owner}:`;
+
+  const lines = repositories.map((entry) => {
+    const repo =
+      entry && typeof entry === "object"
+        ? (entry as Record<string, unknown>)
+        : null;
+    if (!repo) return `- ${stringifyJson(entry)}`;
+    const fullName =
+      typeof repo.fullName === "string" && repo.fullName.trim().length > 0
+        ? repo.fullName.trim()
+        : typeof repo.name === "string" && repo.name.trim().length > 0
+          ? repo.name.trim()
+          : "unknown-repo";
+    const pushedAt =
+      typeof repo.pushedAt === "string" && repo.pushedAt.trim().length > 0
+        ? repo.pushedAt.trim()
+        : null;
+    const updatedAt =
+      typeof repo.updatedAt === "string" && repo.updatedAt.trim().length > 0
+        ? repo.updatedAt.trim()
+        : null;
+    const ts = pushedAt ?? updatedAt ?? "unknown";
+    const visibility = repo.private === true ? "private" : "public";
+    return `- ${fullName} (${visibility}) — ${ts}`;
   });
+
+  return [header, ...lines].join("\n");
+}
+
+async function tryGitHubRepoListShortcut(params: {
+  runtime: AgentRuntime;
+  prompt: string;
+}): Promise<string | null> {
+  const intent = parseGitHubRepoListIntent(params.prompt);
+  if (!intent) return null;
+
+  const actionResponse = await executeRuntimeActionDirect({
+    runtime: params.runtime,
+    toolName: "FIVE55_GITHUB_LIST_REPOS",
+    requestId: crypto.randomUUID(),
+    parameters: {
+      ...(intent.owner ? { owner: intent.owner } : {}),
+      ...(intent.sinceDays !== null ? { sinceDays: String(intent.sinceDays) } : {}),
+      ...(intent.limit !== null ? { limit: String(intent.limit) } : {}),
+      ...(intent.includePrivate !== null
+        ? { includePrivate: String(intent.includePrivate) }
+        : {}),
+    },
+  });
+
+  return formatGitHubRepoListReply(actionResponse);
 }
 
 // ---------------------------------------------------------------------------
@@ -3181,7 +7245,7 @@ function parseBoundedLimit(rawLimit: string | null, fallback = 15): number {
 
 /**
  * Key patterns that indicate a value is sensitive and must be redacted.
- * Matches against the property key at unknown nesting depth.  Aligned with
+ * Matches against the property key at any nesting depth.  Aligned with
  * SENSITIVE_PATTERNS in src/config/schema.ts so every field the UI marks
  * as sensitive is also redacted in the API response.
  *
@@ -3196,15 +7260,7 @@ const SENSITIVE_KEY_RE =
   /password|secret|api.?key|private.?key|seed.?phrase|authorization|connection.?string|credential|(?<!max)tokens?$/i;
 
 function isBlockedObjectKey(key: string): boolean {
-  return (
-    key === "__proto__" ||
-    key === "constructor" ||
-    key === "prototype" ||
-    // Block config include directives — if an API caller embeds "$include"
-    // inside a config patch, the next loadMiladyConfig() → resolveConfigIncludes
-    // pass would read arbitrary local files and merge them into the config.
-    key === "$include"
-  );
+  return key === "__proto__" || key === "constructor" || key === "prototype";
 }
 
 function hasBlockedObjectKeyDeep(value: unknown): boolean {
@@ -3219,7 +7275,7 @@ function hasBlockedObjectKeyDeep(value: unknown): boolean {
   return false;
 }
 
-export function cloneWithoutBlockedObjectKeys<T>(value: T): T {
+function cloneWithoutBlockedObjectKeys<T>(value: T): T {
   if (value === null || value === undefined) return value;
   if (Array.isArray(value)) {
     return value.map((item) => cloneWithoutBlockedObjectKeys(item)) as T;
@@ -3235,7 +7291,7 @@ export function cloneWithoutBlockedObjectKeys<T>(value: T): T {
 }
 
 /**
- * Replace unknown non-empty value with "[REDACTED]".  For arrays, each string
+ * Replace any non-empty value with "[REDACTED]".  For arrays, each string
  * element is individually redacted; for objects, all string leaves are
  * redacted.  Non-string primitives (booleans, numbers) are replaced with
  * the string "[REDACTED]" to avoid leaking e.g. numeric PINs.
@@ -3291,19 +7347,13 @@ function redactConfigSecrets(
   return redactDeep(config) as Record<string, unknown>;
 }
 
-function isRedactedSecretValue(value: unknown): boolean {
-  return (
-    typeof value === "string" && value.trim().toUpperCase() === "[REDACTED]"
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Skill-ID path-traversal guard
 // ---------------------------------------------------------------------------
 
 /**
  * Validate that a user-supplied skill ID is safe to use in filesystem paths.
- * Rejects IDs containing path separators, ".." sequences, or unknown characters
+ * Rejects IDs containing path separators, ".." sequences, or any characters
  * outside the safe set used by the marketplace (`safeName()` in
  * skill-marketplace.ts).  Returns `null` and sends a 400 response if the
  * ID is invalid.
@@ -3327,346 +7377,52 @@ function validateSkillId(
   return skillId;
 }
 
-const ALLOWED_MCP_CONFIG_TYPES = new Set([
-  "stdio",
-  "http",
-  "streamable-http",
-  "sse",
-]);
-
-const ALLOWED_MCP_COMMANDS = new Set([
-  "npx",
-  "node",
-  "bun",
-  "bunx",
-  "deno",
-  "python",
-  "python3",
-  "uvx",
-  "uv",
-  "docker",
-  "podman",
-]);
-
-const BLOCKED_MCP_ENV_KEYS = new Set([
-  "LD_PRELOAD",
-  "LD_LIBRARY_PATH",
-  "DYLD_INSERT_LIBRARIES",
-  "DYLD_LIBRARY_PATH",
-  "NODE_OPTIONS",
-  "NODE_EXTRA_CA_CERTS",
-  "ELECTRON_RUN_AS_NODE",
-  "NODE_TLS_REJECT_UNAUTHORIZED",
-  "HTTP_PROXY",
-  "HTTPS_PROXY",
-  "ALL_PROXY",
-  "NO_PROXY",
-  "NODE_PATH",
-  "SSL_CERT_FILE",
-  "SSL_CERT_DIR",
-  "CURL_CA_BUNDLE",
-  "PATH",
-  "HOME",
-  "SHELL",
-]);
-
-const INTERPRETER_MCP_COMMANDS = new Set([
-  "node",
-  "bun",
-  "deno",
-  "python",
-  "python3",
-  "uv",
-]);
-
-const PACKAGE_RUNNER_MCP_COMMANDS = new Set(["npx", "bunx", "uvx"]);
-const CONTAINER_MCP_COMMANDS = new Set(["docker", "podman"]);
-
-const BLOCKED_INTERPRETER_FLAGS = new Set([
-  "-e",
-  "--eval",
-  "-p",
-  "--print",
-  "-r",
-  "--require",
-  "--import",
-  "--loader",
-  "--experimental-loader",
-  "--preload",
-  "-c",
-  "-m",
-  // V8 inspector — opens an unauthenticated debug port (default 9229) that
-  // allows arbitrary code execution via Chrome DevTools Protocol.  If bound
-  // to 0.0.0.0, any network peer can connect → RCE without any token.
-  "--inspect",
-  "--inspect-brk",
-  "--inspect-wait",
-  "--inspect-port",
-  "--inspect-publish-uid",
-  // Policy / diagnostics file access
-  "--experimental-policy",
-  "--diagnostic-dir",
-]);
-
-const BLOCKED_PACKAGE_RUNNER_FLAGS = new Set(["-c", "--call", "-e", "--eval"]);
-const BLOCKED_CONTAINER_FLAGS = new Set([
-  "--privileged",
-  "-v",
-  "--volume",
-  "--mount",
-  "--cap-add",
-  "--security-opt",
-  "--pid",
-  "--network",
-  "--device",
-  "--ipc",
-  "--uts",
-  "--userns",
-  "--cgroupns",
-]);
-const BLOCKED_DENO_SUBCOMMANDS = new Set(["eval"]);
-const BLOCKED_MCP_REMOTE_HOST_LITERALS = new Set([
-  "localhost",
-  "metadata.google.internal",
-]);
-
-function normalizeMcpCommand(command: string): string {
-  const baseName = command.replace(/\\/g, "/").split("/").pop() ?? "";
-  return baseName.replace(/\.(exe|cmd|bat)$/i, "").toLowerCase();
-}
-
-function hasBlockedFlag(
-  args: string[],
-  blockedFlags: ReadonlySet<string>,
-): string | null {
-  for (const arg of args) {
-    const trimmed = arg.trim();
-    for (const flag of blockedFlags) {
-      if (trimmed === flag || trimmed.startsWith(`${flag}=`)) {
-        return flag;
-      }
-      // Block attached short-option forms like -cpayload or -epayload.
-      if (
-        /^-[A-Za-z]$/.test(flag) &&
-        trimmed.startsWith(flag) &&
-        trimmed.length > flag.length
-      ) {
-        return flag;
-      }
-    }
-  }
-  return null;
-}
-
-function firstPositionalArg(args: string[]): string | null {
-  for (const arg of args) {
-    const trimmed = arg.trim();
-    if (!trimmed || trimmed === "--" || trimmed.startsWith("-")) continue;
-    return trimmed.toLowerCase();
-  }
-  return null;
-}
-
-async function resolveMcpRemoteUrlRejection(
-  rawUrl: string,
-): Promise<string | null> {
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    return "URL must be a valid absolute URL";
-  }
-
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return "URL must use http:// or https://";
-  }
-
-  const hostname = normalizeHostLike(parsed.hostname);
-  if (!hostname) return "URL hostname is required";
-
-  if (
-    BLOCKED_MCP_REMOTE_HOST_LITERALS.has(hostname) ||
-    hostname.endsWith(".localhost") ||
-    hostname.endsWith(".local")
-  ) {
-    return `URL host "${hostname}" is blocked for security reasons`;
-  }
-
-  if (net.isIP(hostname)) {
-    if (isBlockedPrivateOrLinkLocalIp(hostname)) {
-      return `URL host "${hostname}" is blocked for security reasons`;
-    }
-    return null;
-  }
-
-  let addresses: Array<{ address: string }>;
-  try {
-    const resolved = await dnsLookup(hostname, { all: true });
-    addresses = Array.isArray(resolved) ? resolved : [resolved];
-  } catch {
-    return `Could not resolve URL host "${hostname}"`;
-  }
-
-  if (addresses.length === 0) {
-    return `Could not resolve URL host "${hostname}"`;
-  }
-
-  for (const entry of addresses) {
-    if (isBlockedPrivateOrLinkLocalIp(entry.address)) {
-      return `URL host "${hostname}" resolves to blocked address ${entry.address}`;
-    }
-  }
-
-  return null;
-}
-
-export async function validateMcpServerConfig(
-  config: Record<string, unknown>,
-): Promise<string | null> {
-  const configType = config.type;
-  if (
-    typeof configType !== "string" ||
-    !ALLOWED_MCP_CONFIG_TYPES.has(configType)
-  ) {
-    return `Invalid config type. Must be one of: ${[...ALLOWED_MCP_CONFIG_TYPES].join(", ")}`;
-  }
-
-  if (configType === "stdio") {
-    const command =
-      typeof config.command === "string" ? config.command.trim() : "";
-    if (!command) {
-      return "Command is required for stdio servers";
-    }
-    if (!/^[A-Za-z0-9._-]+$/.test(command)) {
-      return "Command must be a bare executable name without path separators";
-    }
-
-    const normalizedCommand = normalizeMcpCommand(command);
-    if (!ALLOWED_MCP_COMMANDS.has(normalizedCommand)) {
-      return (
-        `Command "${command}" is not allowed. ` +
-        `Allowed commands: ${[...ALLOWED_MCP_COMMANDS].join(", ")}`
-      );
-    }
-
-    if (config.args !== undefined) {
-      if (!Array.isArray(config.args)) {
-        return "args must be an array of strings";
-      }
-      for (const arg of config.args) {
-        if (typeof arg !== "string") {
-          return "Each arg must be a string";
-        }
-      }
-      const args = config.args as string[];
-      if (INTERPRETER_MCP_COMMANDS.has(normalizedCommand)) {
-        const blocked = hasBlockedFlag(args, BLOCKED_INTERPRETER_FLAGS);
-        if (blocked) {
-          return `Flag "${blocked}" is not allowed for ${normalizedCommand} MCP servers`;
-        }
-      }
-      if (PACKAGE_RUNNER_MCP_COMMANDS.has(normalizedCommand)) {
-        const blocked = hasBlockedFlag(args, BLOCKED_PACKAGE_RUNNER_FLAGS);
-        if (blocked) {
-          return `Flag "${blocked}" is not allowed for ${normalizedCommand} MCP servers`;
-        }
-      }
-      if (CONTAINER_MCP_COMMANDS.has(normalizedCommand)) {
-        const blocked = hasBlockedFlag(args, BLOCKED_CONTAINER_FLAGS);
-        if (blocked) {
-          return `Flag "${blocked}" is not allowed for ${normalizedCommand} MCP servers`;
-        }
-      }
-      if (normalizedCommand === "deno") {
-        const subcommand = firstPositionalArg(args);
-        if (subcommand && BLOCKED_DENO_SUBCOMMANDS.has(subcommand)) {
-          return `Subcommand "${subcommand}" is not allowed for deno MCP servers`;
-        }
-      }
-    }
-  } else {
-    const url = typeof config.url === "string" ? config.url.trim() : "";
-    if (!url) {
-      return "URL is required for remote servers";
-    }
-    const urlRejection = await resolveMcpRemoteUrlRejection(url);
-    if (urlRejection) return urlRejection;
-  }
-
-  if (config.env !== undefined) {
-    if (
-      typeof config.env !== "object" ||
-      config.env === null ||
-      Array.isArray(config.env)
-    ) {
-      return "env must be a plain object of string key-value pairs";
-    }
-
-    for (const [key, value] of Object.entries(config.env)) {
-      if (isBlockedObjectKey(key)) {
-        return `env key "${key}" is blocked for security reasons`;
-      }
-      if (typeof value !== "string") {
-        return `env.${key} must be a string`;
-      }
-      if (BLOCKED_MCP_ENV_KEYS.has(key.toUpperCase())) {
-        return `env variable "${key}" is not allowed for security reasons`;
-      }
-    }
-  }
-
-  if (config.cwd !== undefined && typeof config.cwd !== "string") {
-    return "cwd must be a string";
-  }
-
-  if (config.timeoutInMillis !== undefined) {
-    if (
-      typeof config.timeoutInMillis !== "number" ||
-      !Number.isFinite(config.timeoutInMillis) ||
-      config.timeoutInMillis < 0
-    ) {
-      return "timeoutInMillis must be a non-negative number";
-    }
-  }
-
-  return null;
-}
-
-export async function resolveMcpServersRejection(
-  servers: Record<string, unknown>,
-): Promise<string | null> {
-  for (const [serverName, serverConfig] of Object.entries(servers)) {
-    if (isBlockedObjectKey(serverName)) {
-      return `Invalid server name: "${serverName}"`;
-    }
-    if (
-      !serverConfig ||
-      typeof serverConfig !== "object" ||
-      Array.isArray(serverConfig)
-    ) {
-      return `Server "${serverName}" config must be a JSON object`;
-    }
-    if (hasBlockedObjectKeyDeep(serverConfig)) {
-      return `Server "${serverName}" contains blocked object keys`;
-    }
-    const configError = await validateMcpServerConfig(
-      serverConfig as Record<string, unknown>,
-    );
-    if (configError) {
-      return `Server "${serverName}": ${configError}`;
-    }
-  }
-  return null;
-}
-
 // ---------------------------------------------------------------------------
 // Onboarding helpers
 // ---------------------------------------------------------------------------
 
 // Use shared presets for full parity between CLI and GUI onboarding.
-import { STYLE_PRESETS } from "../onboarding-presets";
+import {
+  DEFAULT_STYLE_CATCHPHRASE,
+  getStylePresetByCatchphrase,
+  STYLE_CATCHPHRASE_ALIASES,
+  STYLE_PRESETS,
+} from "../onboarding-presets.js";
 
-import { pickRandomNames } from "../runtime/onboarding-names";
+import { pickRandomNames } from "../runtime/onboarding-names.js";
+
+const LEGACY_ALICE_STYLE_MARKERS = [
+  "playful, clever, a little mischievous",
+  "you type like you're in a gc even when you're not",
+];
+
+function maybeMigrateAliceLegacyStyle(config: MilaidyConfig): boolean {
+  const agent = config.agents?.list?.[0];
+  const name = agent?.name?.trim().toLowerCase();
+  if (!agent || name !== "alice") return false;
+
+  const styleAll = Array.isArray(agent.style?.all)
+    ? agent.style.all.join("\n").toLowerCase()
+    : "";
+  const system = typeof agent.system === "string" ? agent.system.toLowerCase() : "";
+  const bio = Array.isArray(agent.bio) ? agent.bio.join("\n").toLowerCase() : "";
+  const source = `${styleAll}\n${system}\n${bio}`;
+
+  const isLegacyProfile = LEGACY_ALICE_STYLE_MARKERS.some((marker) =>
+    source.includes(marker),
+  );
+  if (!isLegacyProfile) return false;
+
+  const canonical = getStylePresetByCatchphrase(DEFAULT_STYLE_CATCHPHRASE);
+  agent.bio = canonical.bio;
+  agent.system = canonical.system.replace(/\{\{name\}\}/g, agent.name ?? "Alice");
+  agent.style = canonical.style;
+  agent.adjectives = canonical.adjectives;
+  agent.topics = canonical.topics;
+  agent.postExamples = canonical.postExamples;
+  agent.messageExamples = canonical.messageExamples;
+  return true;
+}
 
 function getProviderOptions(): Array<{
   id: string;
@@ -3706,10 +7462,10 @@ function getProviderOptions(): Array<{
       id: "pi-ai",
       name: "Pi Credentials (pi-ai)",
       envKey: null,
-      pluginName: "@elizaos/plugin-pi-ai",
+      pluginName: "@mariozechner/pi-ai",
       keyPrefix: null,
       description:
-        "Use credentials from ~/.pi/agent/auth.json (API keys or OAuth).",
+        "Use pi auth (~/.pi/agent/auth.json) for API keys / OAuth (no Milaidy API key required).",
     },
     {
       id: "anthropic",
@@ -3738,7 +7494,7 @@ function getProviderOptions(): Array<{
     {
       id: "gemini",
       name: "Gemini",
-      envKey: "GOOGLE_GENERATIVE_AI_API_KEY",
+      envKey: "GOOGLE_API_KEY",
       pluginName: "@elizaos/plugin-google-genai",
       keyPrefix: null,
       description: "Google's Gemini models.",
@@ -3800,6 +7556,161 @@ function getProviderOptions(): Array<{
       description: "GLM models via z.ai Coding Plan.",
     },
   ];
+}
+
+type CanonicalSubscriptionProvider = "anthropic-subscription" | "openai-codex";
+const OPENAI_SUBSCRIPTION_PI_SMALL_DEFAULT = "openai-codex/gpt-5.1-codex-mini";
+const OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT = "openai-codex/gpt-5.3-codex";
+const OPENAI_AUTH_JWT_CLAIM_PATH = "https://api.openai.com/auth";
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split(".");
+  if (parts.length !== 3 || !parts[1]) return null;
+  const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64.padEnd(
+    base64.length + ((4 - (base64.length % 4)) % 4),
+    "=",
+  );
+  try {
+    return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    return null;
+  }
+}
+
+function isOpenAiSubscriptionToken(value: string | undefined): boolean {
+  if (!value) return false;
+  const payload = decodeJwtPayload(value);
+  const authClaim = payload?.[OPENAI_AUTH_JWT_CLAIM_PATH] as
+    | { chatgpt_account_id?: unknown }
+    | undefined;
+  return typeof authClaim?.chatgpt_account_id === "string";
+}
+
+function clearInjectedOpenAiSubscriptionApiKey(config: MilaidyConfig): void {
+  const runtimeValue = process.env.OPENAI_API_KEY?.trim();
+  if (isOpenAiSubscriptionToken(runtimeValue)) {
+    delete process.env.OPENAI_API_KEY;
+  }
+
+  if (!config.env || typeof config.env !== "object") return;
+  const envCfg = config.env as Record<string, unknown>;
+  const storedValue =
+    typeof envCfg.OPENAI_API_KEY === "string"
+      ? envCfg.OPENAI_API_KEY.trim()
+      : undefined;
+  if (isOpenAiSubscriptionToken(storedValue)) {
+    delete envCfg.OPENAI_API_KEY;
+  }
+}
+
+function enableOpenAiSubscriptionPiAiMode(config: MilaidyConfig): void {
+  if (!config.env || typeof config.env !== "object") config.env = {};
+  const envCfg = config.env as Record<string, unknown>;
+  const vars = (envCfg.vars ?? {}) as Record<string, string>;
+  vars.MILAIDY_USE_PI_AI = "1";
+  envCfg.vars = vars;
+  process.env.MILAIDY_USE_PI_AI = "1";
+
+  if (!config.models || typeof config.models !== "object") config.models = {};
+  const modelsCfg = config.models as Record<string, unknown>;
+  if (
+    typeof modelsCfg.piAiSmall !== "string" ||
+    !modelsCfg.piAiSmall.trim()
+  ) {
+    modelsCfg.piAiSmall = OPENAI_SUBSCRIPTION_PI_SMALL_DEFAULT;
+  }
+  if (
+    typeof modelsCfg.piAiLarge !== "string" ||
+    !modelsCfg.piAiLarge.trim()
+  ) {
+    modelsCfg.piAiLarge = OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT;
+  }
+
+  if (!config.agents) config.agents = {};
+  if (!config.agents.defaults) config.agents.defaults = {};
+  const defaults = config.agents.defaults as Record<string, unknown>;
+  defaults.subscriptionProvider = "openai-subscription";
+
+  const modelCfg =
+    defaults.model && typeof defaults.model === "object"
+      ? (defaults.model as Record<string, unknown>)
+      : {};
+  const selectedLarge =
+    typeof modelsCfg.piAiLarge === "string" && modelsCfg.piAiLarge.trim()
+      ? modelsCfg.piAiLarge
+      : OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT;
+  modelCfg.primary = selectedLarge;
+  defaults.model = modelCfg;
+}
+
+function toCanonicalSubscriptionProvider(
+  provider: string | null | undefined,
+): CanonicalSubscriptionProvider | null {
+  if (!provider) return null;
+  if (provider === "anthropic-subscription") return "anthropic-subscription";
+  if (provider === "openai-subscription" || provider === "openai-codex") {
+    return "openai-codex";
+  }
+  return null;
+}
+
+function toUiSubscriptionProvider(
+  provider: CanonicalSubscriptionProvider,
+): "anthropic-subscription" | "openai-subscription" {
+  return provider === "openai-codex" ? "openai-subscription" : provider;
+}
+
+function isTruthyConfigFlag(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes";
+}
+
+async function restoreOpenAiSubscriptionPiAiModeFromCredentials(
+  config: MilaidyConfig,
+): Promise<boolean> {
+  try {
+    const { getSubscriptionStatus } = await import("../auth/index.js");
+    const status = await getSubscriptionStatus();
+    const openAiCodex = status.find((entry) => entry.provider === "openai-codex");
+    if (!(openAiCodex?.configured && openAiCodex.valid)) return false;
+    enableOpenAiSubscriptionPiAiMode(config);
+    clearInjectedOpenAiSubscriptionApiKey(config);
+    return true;
+  } catch (err) {
+    logger.debug(
+      `[milaidy-api] Failed to reconcile OpenAI subscription mode: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return false;
+  }
+}
+
+function clearSubscriptionProviderState(
+  provider: CanonicalSubscriptionProvider,
+  config: MilaidyConfig,
+): void {
+  if (provider === "anthropic-subscription") {
+    delete process.env.ANTHROPIC_API_KEY;
+    if (config.env && typeof config.env === "object") {
+      delete (config.env as Record<string, unknown>).ANTHROPIC_API_KEY;
+    }
+  } else {
+    clearInjectedOpenAiSubscriptionApiKey(config);
+  }
+
+  const defaults = config.agents?.defaults as Record<string, unknown> | undefined;
+  if (!defaults) return;
+  const selected = defaults.subscriptionProvider;
+  if (
+    selected === provider ||
+    (provider === "openai-codex" && selected === "openai-subscription")
+  ) {
+    delete defaults.subscriptionProvider;
+  }
 }
 
 function getCloudProviderOptions(): Array<{
@@ -4033,7 +7944,7 @@ const PROVIDER_ENV_KEYS: Record<
   },
   "google-genai": {
     envKey: "GOOGLE_GENERATIVE_AI_API_KEY",
-    altEnvKeys: ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+    altEnvKeys: ["GOOGLE_API_KEY"],
   },
   ollama: { envKey: "OLLAMA_BASE_URL" },
   "vercel-ai-gateway": {
@@ -4078,7 +7989,7 @@ function writeProviderCache(cache: ProviderCache): void {
 
 // ── Provider fetchers ────────────────────────────────────────────────────
 
-/** Fetch models from unknown provider's /v1/models endpoint (standard REST). */
+/** Fetch models from any provider's /v1/models endpoint (standard REST). */
 async function fetchModelsREST(
   providerId: string,
   apiKey: string,
@@ -4175,11 +8086,8 @@ async function fetchGoogleModels(apiKey: string): Promise<CachedModel[]> {
 
 async function fetchOllamaModels(baseUrl: string): Promise<CachedModel[]> {
   try {
-    let urlStr = baseUrl.replace(/\/+$/, "");
-    if (!urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
-      urlStr = `http://${urlStr}`;
-    }
-    const res = await fetch(`${urlStr}/api/tags`);
+    const url = baseUrl.replace(/\/+$/, "");
+    const res = await fetch(`${url}/api/tags`);
     if (!res.ok) return [];
     const data = (await res.json()) as { models?: Array<{ name: string }> };
     return (data.models ?? []).map((m) => ({
@@ -4285,7 +8193,7 @@ async function fetchProviderModels(
     case "google-genai":
       return fetchGoogleModels(apiKey);
     case "ollama":
-      return fetchOllamaModels(baseUrl || "http://localhost:11434");
+      return fetchOllamaModels(apiKey);
     case "openrouter":
       return fetchOpenRouterModels(apiKey);
     case "openai":
@@ -4375,6 +8283,45 @@ async function getOrFetchAllProviders(
   return result;
 }
 
+function getPiModelOptions(): Array<{
+  id: string;
+  name: string;
+  provider: string;
+  description: string;
+}> {
+  const options: Array<{
+    id: string;
+    name: string;
+    provider: string;
+    description: string;
+  }> = [];
+
+  try {
+    for (const providerId of piAi.getProviders()) {
+      for (const model of piAi.getModels(providerId)) {
+        const id = `${model.provider}/${model.id}`;
+        options.push({
+          id,
+          name: model.id,
+          provider: model.provider,
+          description: model.api,
+        });
+
+        // Safety cap in case a provider returns an unexpectedly huge list.
+        if (options.length >= 2000) {
+          return options;
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn(
+      `[milaidy-api] Failed to enumerate pi-ai models: ${String(err)}`,
+    );
+  }
+
+  return options;
+}
+
 function getInventoryProviderOptions(): Array<{
   id: string;
   name: string;
@@ -4454,313 +8401,25 @@ function getInventoryProviderOptions(): Array<{
   ];
 }
 
-function ensureWalletKeysInEnvAndConfig(config: MiladyConfig): boolean {
-  const missingEvm =
-    typeof process.env.EVM_PRIVATE_KEY !== "string" ||
-    !process.env.EVM_PRIVATE_KEY.trim();
-  const missingSolana =
-    typeof process.env.SOLANA_PRIVATE_KEY !== "string" ||
-    !process.env.SOLANA_PRIVATE_KEY.trim();
-
-  if (!missingEvm && !missingSolana) {
-    return false;
-  }
-
-  try {
-    const walletKeys = generateWalletKeys();
-    if (
-      !config.env ||
-      typeof config.env !== "object" ||
-      Array.isArray(config.env)
-    ) {
-      config.env = {};
-    }
-    const envConfig = config.env as Record<string, string>;
-
-    if (missingEvm) {
-      envConfig.EVM_PRIVATE_KEY = walletKeys.evmPrivateKey;
-      process.env.EVM_PRIVATE_KEY = walletKeys.evmPrivateKey;
-      logger.info(
-        `[milady-api] Generated EVM wallet: ${walletKeys.evmAddress}`,
-      );
-    }
-
-    if (missingSolana) {
-      envConfig.SOLANA_PRIVATE_KEY = walletKeys.solanaPrivateKey;
-      process.env.SOLANA_PRIVATE_KEY = walletKeys.solanaPrivateKey;
-      logger.info(
-        `[milady-api] Generated Solana wallet: ${walletKeys.solanaAddress}`,
-      );
-    }
-
-    return true;
-  } catch (err) {
-    logger.warn(
-      `[milady-api] Failed to generate wallet keys: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return false;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Trade permission helpers (exported for use by awareness contributors)
-// ---------------------------------------------------------------------------
-
-export type TradePermissionMode =
-  | "user-sign-only"
-  | "manual-local-key"
-  | "agent-auto";
-
-/**
- * Resolve the active trade permission mode from config.
- * Falls back to "user-sign-only" when not configured.
- */
-export function resolveTradePermissionMode(
-  config: MiladyConfig,
-): TradePermissionMode {
-  const raw = (config.features as Record<string, unknown> | undefined)
-    ?.tradePermissionMode;
-  if (
-    raw === "user-sign-only" ||
-    raw === "manual-local-key" ||
-    raw === "agent-auto"
-  ) {
-    return raw;
-  }
-  return "user-sign-only";
-}
-
-/**
- * Returns true if local-key execution is permitted for the given actor.
- * @param mode    The resolved trade permission mode.
- * @param isAgent True when the caller is the agent (autonomous), false for user-initiated flows.
- */
-export function canUseLocalTradeExecution(
-  mode: TradePermissionMode,
-  isAgent: boolean,
-): boolean {
-  if (mode === "agent-auto") return true;
-  if (mode === "manual-local-key") return !isAgent;
-  return false;
-}
-
-// ---------------------------------------------------------------------------
-// Automation & agent permission helpers
-// ---------------------------------------------------------------------------
-
-type AgentAutomationMode = "connectors-only" | "full";
-
-const AGENT_AUTOMATION_HEADER = "x-milady-agent-action";
-const AGENT_AUTOMATION_MODES = new Set<AgentAutomationMode>([
-  "connectors-only",
-  "full",
-]);
-
-function parseAgentAutomationMode(value: unknown): AgentAutomationMode | null {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim().toLowerCase();
-  if (!AGENT_AUTOMATION_MODES.has(normalized as AgentAutomationMode)) {
-    return null;
-  }
-  return normalized as AgentAutomationMode;
-}
-
-function resolveAgentAutomationModeFromConfig(
-  config: MiladyConfig,
-): AgentAutomationMode {
-  const features =
-    config.features && typeof config.features === "object"
-      ? (config.features as Record<string, unknown>)
-      : null;
-  const agentAutomation =
-    features?.agentAutomation &&
-    typeof features.agentAutomation === "object" &&
-    !Array.isArray(features.agentAutomation)
-      ? (features.agentAutomation as Record<string, unknown>)
-      : null;
-  return parseAgentAutomationMode(agentAutomation?.mode) ?? "full";
-}
-
-function isAgentAutomationRequest(req: http.IncomingMessage): boolean {
-  const raw = req.headers[AGENT_AUTOMATION_HEADER];
-  if (typeof raw !== "string") return false;
-  return /^(1|true|yes|agent)$/i.test(raw.trim());
-}
-
-function persistAgentAutomationMode(
-  state: ServerState,
-  mode: AgentAutomationMode,
-): void {
-  state.agentAutomationMode = mode;
-  if (!state.config.features) {
-    state.config.features = {};
-  }
-
-  const features = state.config.features as Record<
-    string,
-    boolean | { enabled?: boolean; [k: string]: unknown }
-  >;
-  const current = features.agentAutomation;
-  const currentObject =
-    current && typeof current === "object" && !Array.isArray(current)
-      ? (current as Record<string, unknown>)
-      : {};
-
-  features.agentAutomation = {
-    ...currentObject,
-    enabled: true,
-    mode,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Route handler
 // ---------------------------------------------------------------------------
 
 interface RequestContext {
   onRestart: (() => Promise<AgentRuntime | null>) | null;
-  onRuntimeSwapped?: () => void;
 }
 
-type TrainingServiceLike = TrainingServiceWithRuntime;
-
-type TrainingServiceCtor = new (options: {
-  getRuntime: () => AgentRuntime | null;
-  getConfig: () => MiladyConfig;
-  setConfig: (nextConfig: MiladyConfig) => void;
-}) => TrainingServiceLike;
-
-async function resolveTrainingServiceCtor(): Promise<TrainingServiceCtor | null> {
-  const candidates = [
-    "../services/training-service",
-    "@elizaos/plugin-training",
-  ] as const;
-
-  for (const specifier of candidates) {
-    try {
-      const loaded = (await import(/* @vite-ignore */ specifier)) as Record<
-        string,
-        unknown
-      >;
-      const ctor = loaded.TrainingService;
-      if (typeof ctor === "function") {
-        return ctor as TrainingServiceCtor;
-      }
-    } catch {
-      // Keep trying fallbacks.
-    }
-  }
-
-  return null;
-}
-
-function mcpServersIncludeStdio(servers: Record<string, unknown>): boolean {
-  return Object.values(servers).some((serverConfig) => {
-    if (
-      !serverConfig ||
-      typeof serverConfig !== "object" ||
-      Array.isArray(serverConfig)
-    ) {
-      return false;
-    }
-    return (serverConfig as Record<string, unknown>).type === "stdio";
-  });
-}
-
-export function resolveMcpTerminalAuthorizationRejection(
-  req: Pick<http.IncomingMessage, "headers">,
-  servers: Record<string, unknown>,
-  body: { terminalToken?: string },
-): TerminalRunRejection | null {
-  if (!mcpServersIncludeStdio(servers)) {
-    return null;
-  }
-  return resolveTerminalRunRejection(req as http.IncomingMessage, body);
-}
-
-const LOCAL_ORIGIN_RE =
-  /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|\[0:0:0:0:0:0:0:1\])(:\d+)?$/i;
+const LOCAL_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
 const APP_ORIGIN_RE =
-  /^(capacitor|capacitor-electron|app|tauri|file|electrobun):\/\/.*$/i;
+  /^(capacitor|capacitor-electron|app):\/\/(localhost|-)?$/i;
 
-/**
- * Hostname allowlist for DNS rebinding protection.
- * Requests with a Host header that doesn't match a known loopback name are
- * rejected before CORS / auth processing.  This prevents a malicious page
- * from rebinding its DNS to 127.0.0.1 and reading the unauthenticated API.
- */
-const LOCAL_HOST_RE =
-  /^(localhost|127\.0\.0\.1|\[?::1\]?|\[?0:0:0:0:0:0:0:1\]?|::ffff:127\.0\.0\.1)$/;
-
-/** Wildcard bind addresses that listen on all interfaces. */
-const WILDCARD_BIND_RE = /^(0\.0\.0\.0|::|0:0:0:0:0:0:0:0)$/;
-
-/** Strip an optional port suffix from a hostname string. */
-function stripPort(host: string): string {
-  return host.replace(/:\d+$/, "");
-}
-
-export function isAllowedHost(req: http.IncomingMessage): boolean {
-  const raw = req.headers.host;
-  if (!raw) return true; // No Host header → non-browser client (e.g. curl)
-
-  let hostname: string;
-  const trimmed = raw.trim().toLowerCase();
-  if (!trimmed) return true;
-
-  if (trimmed.startsWith("[")) {
-    // Bracketed IPv6: [::1]:31337 → ::1
-    const close = trimmed.indexOf("]");
-    hostname = close > 0 ? trimmed.slice(1, close) : trimmed.slice(1);
-  } else if ((trimmed.match(/:/g) || []).length >= 2) {
-    // Bare IPv6 (multiple colons, no brackets): ::1 → ::1
-    hostname = trimmed;
-  } else {
-    // IPv4 or hostname: localhost:31337 → localhost
-    hostname = stripPort(trimmed);
-  }
-
-  if (!hostname) return true;
-
-  const bindHost = (process.env.MILADY_API_BIND ?? "").trim().toLowerCase();
-
-  // When binding on all interfaces (0.0.0.0 / ::), any Host is acceptable —
-  // ensureApiTokenForBindHost already enforces a token for non-loopback binds.
-  if (WILDCARD_BIND_RE.test(stripPort(bindHost))) {
-    return true;
-  }
-
-  // Allow the exact configured bind hostname.
-  if (bindHost && hostname === stripPort(bindHost)) {
-    return true;
-  }
-
-  // Allow explicitly listed extra hostnames via MILADY_ALLOWED_HOSTS
-  // (comma-separated, e.g. "myserver.local,192.168.1.10").
-  const extra = process.env.MILADY_ALLOWED_HOSTS;
-  if (extra) {
-    const allowed = extra
-      .split(",")
-      .map((h) => stripPort(h.trim().toLowerCase()))
-      .filter(Boolean);
-    if (allowed.includes(hostname)) return true;
-  }
-
-  return LOCAL_HOST_RE.test(hostname);
-}
-
-export function resolveCorsOrigin(origin?: string): string | null {
+function resolveCorsOrigin(origin?: string): string | null {
   if (!origin) return null;
   const trimmed = origin.trim();
   if (!trimmed) return null;
 
-  // When bound to a wildcard address, allow any origin. Non-loopback binds still
-  // require an explicit token, so this only relaxes the browser origin check.
-  const bindHost = (process.env.MILADY_API_BIND ?? "").trim().toLowerCase();
-  if (WILDCARD_BIND_RE.test(stripPort(bindHost))) return trimmed;
-
   // Explicit allowlist via env (comma-separated)
-  const extra = process.env.MILADY_ALLOWED_ORIGINS;
+  const extra = process.env.MILAIDY_ALLOWED_ORIGINS;
   if (extra) {
     const allow = extra
       .split(",")
@@ -4771,11 +8430,8 @@ export function resolveCorsOrigin(origin?: string): string | null {
 
   if (LOCAL_ORIGIN_RE.test(trimmed)) return trimmed;
   if (APP_ORIGIN_RE.test(trimmed)) return trimmed;
-  if (trimmed === "null" || trimmed === "file://") {
-    if (process.env.MILADY_ALLOW_NULL_ORIGIN === "1") {
-      return "null";
-    }
-  }
+  if (trimmed === "null" && process.env.MILAIDY_ALLOW_NULL_ORIGIN === "1")
+    return "null";
   return null;
 }
 
@@ -4798,15 +8454,9 @@ function applyCors(
     );
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Milady-Token, X-Api-Key, X-Milady-Export-Token, X-Milady-Client-Id, X-Milady-Terminal-Token, X-Milady-UI-Language",
+      "Content-Type, Authorization, X-Milaidy-Token, X-Api-Key, X-Milaidy-Export-Token",
     );
   }
-
-  // Security headers
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("X-XSS-Protection", "1; mode=block");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 
   return true;
 }
@@ -4815,17 +8465,16 @@ const PAIRING_TTL_MS = 10 * 60 * 1000;
 const PAIRING_WINDOW_MS = 10 * 60 * 1000;
 const PAIRING_MAX_ATTEMPTS = 5;
 const PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const API_RESTART_EXIT_CODE = 75;
 
 let pairingCode: string | null = null;
-/** Guard against concurrent provider switch requests (P0 §3). */
-let providerSwitchInProgress = false;
 let pairingExpiresAt = 0;
 const pairingAttempts = new Map<string, { count: number; resetAt: number }>();
 
 function pairingEnabled(): boolean {
   return (
-    Boolean(process.env.MILADY_API_TOKEN?.trim()) &&
-    process.env.MILADY_PAIRING_DISABLED !== "1"
+    Boolean(process.env.MILAIDY_API_TOKEN?.trim()) &&
+    process.env.MILAIDY_PAIRING_DISABLED !== "1"
   );
 }
 
@@ -4849,19 +8498,18 @@ function ensurePairingCode(): string | null {
     pairingCode = generatePairingCode();
     pairingExpiresAt = now + PAIRING_TTL_MS;
     logger.warn(
-      `[milady-api] Pairing code: ${pairingCode} (valid for 10 minutes)`,
+      `[milaidy-api] Pairing code: ${pairingCode} (valid for 10 minutes)`,
     );
   }
   return pairingCode;
 }
 
 function rateLimitPairing(ip: string | null): boolean {
+  if (process.env.VITEST || process.env.NODE_ENV === "test") {
+    return true;
+  }
   const key = ip ?? "unknown";
   const now = Date.now();
-
-  // Lazy sweep: evict expired entries when map grows beyond 100
-  sweepExpiredEntries(pairingAttempts, now, 100);
-
   const current = pairingAttempts.get(key);
   if (!current || now > current.resetAt) {
     pairingAttempts.set(key, { count: 1, resetAt: now + PAIRING_WINDOW_MS });
@@ -4872,7 +8520,7 @@ function rateLimitPairing(ip: string | null): boolean {
   return true;
 }
 
-export function extractAuthToken(req: http.IncomingMessage): string | null {
+function extractAuthToken(req: http.IncomingMessage): string | null {
   const auth =
     typeof req.headers.authorization === "string"
       ? req.headers.authorization.trim()
@@ -4883,64 +8531,27 @@ export function extractAuthToken(req: http.IncomingMessage): string | null {
   }
 
   const header =
-    (typeof req.headers["x-milady-token"] === "string" &&
-      req.headers["x-milady-token"]) ||
+    (typeof req.headers["x-milaidy-token"] === "string" &&
+      req.headers["x-milaidy-token"]) ||
     (typeof req.headers["x-api-key"] === "string" && req.headers["x-api-key"]);
   if (typeof header === "string" && header.trim()) return header.trim();
 
   return null;
 }
 
-const SAFE_WS_CLIENT_ID_RE = /^[A-Za-z0-9._-]{1,128}$/;
-
-export function normalizeWsClientId(value: unknown): string | null {
-  if (typeof value !== "string") return null;
+function readSingleHeaderValue(
+  value: string | string[] | undefined,
+): string | undefined {
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const trimmed = entry.trim();
+      if (trimmed.length > 0) return trimmed;
+    }
+    return undefined;
+  }
+  if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (!SAFE_WS_CLIENT_ID_RE.test(trimmed)) return null;
-  return trimmed;
-}
-
-function firstHeaderValue(value: string | string[] | undefined): string | null {
-  if (typeof value === "string") return value;
-  if (Array.isArray(value) && typeof value[0] === "string") return value[0];
-  return null;
-}
-
-export function resolveTerminalRunClientId(
-  req: Pick<http.IncomingMessage, "headers">,
-  body: { clientId?: unknown } | null | undefined,
-): string | null {
-  const headerClientId = normalizeWsClientId(
-    firstHeaderValue(req.headers["x-milady-client-id"]),
-  );
-  if (headerClientId) return headerClientId;
-  return normalizeWsClientId(body?.clientId);
-}
-
-const SHARED_TERMINAL_CLIENT_IDS = new Set([
-  "runtime-terminal-action",
-  "runtime-shell-action",
-]);
-
-function isSharedTerminalClientId(clientId: string): boolean {
-  return SHARED_TERMINAL_CLIENT_IDS.has(clientId);
-}
-
-/**
- * Resolve Authorization for Hyperscape API relays.
- *
- * Security: never forward the incoming request Authorization header
- * (which typically carries MILADY_API_TOKEN for this API). Hyperscape relay
- * auth must come from the dedicated HYPERSCAPE_AUTH_TOKEN secret instead.
- */
-export function resolveHyperscapeAuthorizationHeader(
-  req: Pick<http.IncomingMessage, "headers">,
-): string | null {
-  void req;
-  const envToken = process.env.HYPERSCAPE_AUTH_TOKEN?.trim();
-  if (!envToken) return null;
-  return /^Bearer\s+/i.test(envToken) ? envToken : `Bearer ${envToken}`;
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function tokenMatches(expected: string, provided: string): boolean {
@@ -4951,38 +8562,14 @@ function tokenMatches(expected: string, provided: string): boolean {
 }
 
 function isLoopbackBindHost(host: string): boolean {
-  let normalized = host.trim().toLowerCase();
-
-  if (!normalized) return true;
-
-  // Allow users to provide full URLs by mistake (e.g. http://localhost:2138)
-  if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
-    try {
-      const parsed = new URL(normalized);
-      normalized = parsed.hostname.toLowerCase();
-    } catch {
-      // Fall through and parse as raw host value.
-    }
-  }
-
-  // [::1]:2138 -> ::1
-  const bracketedIpv6 = /^\[([^\]]+)\](?::\d+)?$/.exec(normalized);
-  if (bracketedIpv6?.[1]) {
-    normalized = bracketedIpv6[1];
-  } else {
-    // localhost:2138 -> localhost, 127.0.0.1:2138 -> 127.0.0.1
-    const singleColonHostPort = /^([^:]+):(\d+)$/.exec(normalized);
-    if (singleColonHostPort?.[1]) {
-      normalized = singleColonHostPort[1];
-    }
-  }
-
-  normalized = normalized.replace(/^\[|\]$/g, "");
+  const normalized = host
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
   if (!normalized) return true;
   if (
     normalized === "localhost" ||
     normalized === "::1" ||
-    normalized === "0:0:0:0:0:0:0:1" ||
     normalized === "::ffff:127.0.0.1"
   ) {
     return true;
@@ -4991,25 +8578,24 @@ function isLoopbackBindHost(host: string): boolean {
   return false;
 }
 
-export function ensureApiTokenForBindHost(host: string): void {
-  const token = process.env.MILADY_API_TOKEN?.trim();
+function ensureApiTokenForBindHost(host: string): void {
+  const token = process.env.MILAIDY_API_TOKEN?.trim();
   if (token) return;
   if (isLoopbackBindHost(host)) return;
 
   const generated = crypto.randomBytes(32).toString("hex");
-  process.env.MILADY_API_TOKEN = generated;
+  process.env.MILAIDY_API_TOKEN = generated;
 
   logger.warn(
-    `[milady-api] MILADY_API_BIND=${host} is non-loopback and MILADY_API_TOKEN is unset.`,
+    `[milaidy-api] MILAIDY_API_BIND=${host} is non-loopback and MILAIDY_API_TOKEN is unset.`,
   );
-  const tokenFingerprint = `${generated.slice(0, 4)}...${generated.slice(-4)}`;
   logger.warn(
-    `[milady-api] Generated temporary MILADY_API_TOKEN (${tokenFingerprint}) for this process. Set MILADY_API_TOKEN explicitly to override.`,
+    `[milaidy-api] Generated temporary MILAIDY_API_TOKEN=${generated}. Set MILAIDY_API_TOKEN explicitly to override.`,
   );
 }
 
-export function isAuthorized(req: http.IncomingMessage): boolean {
-  const expected = process.env.MILADY_API_TOKEN?.trim();
+function isAuthorized(req: http.IncomingMessage): boolean {
+  const expected = process.env.MILAIDY_API_TOKEN?.trim();
   if (!expected) return true;
   const provided = extractAuthToken(req);
   if (!provided) return false;
@@ -5074,18 +8660,18 @@ export function resolveWalletExportRejection(
     };
   }
 
-  const expected = process.env.MILADY_WALLET_EXPORT_TOKEN?.trim();
+  const expected = process.env.MILAIDY_WALLET_EXPORT_TOKEN?.trim();
   if (!expected) {
     return {
       status: 403,
       reason:
-        "Wallet export is disabled. Set MILADY_WALLET_EXPORT_TOKEN to enable secure exports.",
+        "Wallet export is disabled. Set MILAIDY_WALLET_EXPORT_TOKEN to enable secure exports.",
     };
   }
 
   const headerToken =
-    typeof req.headers["x-milady-export-token"] === "string"
-      ? req.headers["x-milady-export-token"].trim()
+    typeof req.headers["x-milaidy-export-token"] === "string"
+      ? req.headers["x-milaidy-export-token"].trim()
       : "";
   const bodyToken =
     typeof body.exportToken === "string" ? body.exportToken.trim() : "";
@@ -5095,7 +8681,7 @@ export function resolveWalletExportRejection(
     return {
       status: 401,
       reason:
-        "Missing export token. Provide X-Milady-Export-Token header or exportToken in request body.",
+        "Missing export token. Provide X-Milaidy-Export-Token header or exportToken in request body.",
     };
   }
 
@@ -5106,66 +8692,7 @@ export function resolveWalletExportRejection(
   return null;
 }
 
-interface TerminalRunRequestBody {
-  terminalToken?: string;
-}
-
-export interface TerminalRunRejection {
-  status: 401 | 403;
-  reason: string;
-}
-
-export function resolveTerminalRunRejection(
-  req: http.IncomingMessage,
-  body: TerminalRunRequestBody,
-): TerminalRunRejection | null {
-  const expected = process.env.MILADY_TERMINAL_RUN_TOKEN?.trim();
-  const apiTokenEnabled = Boolean(process.env.MILADY_API_TOKEN?.trim());
-
-  // Compatibility mode: local loopback sessions without API token keep
-  // existing behavior unless an explicit terminal token is configured.
-  if (!expected && !apiTokenEnabled) {
-    return null;
-  }
-
-  if (!expected) {
-    return {
-      status: 403,
-      reason:
-        "Terminal run is disabled for token-authenticated API sessions. Set MILADY_TERMINAL_RUN_TOKEN to enable command execution.",
-    };
-  }
-
-  const headerToken =
-    typeof req.headers["x-milady-terminal-token"] === "string"
-      ? req.headers["x-milady-terminal-token"].trim()
-      : "";
-  const bodyToken =
-    typeof body.terminalToken === "string" ? body.terminalToken.trim() : "";
-  const provided = headerToken || bodyToken;
-
-  if (!provided) {
-    return {
-      status: 401,
-      reason:
-        "Missing terminal token. Provide X-Milady-Terminal-Token header or terminalToken in request body.",
-    };
-  }
-
-  if (!tokenMatches(expected, provided)) {
-    return {
-      status: 401,
-      reason: "Invalid terminal token.",
-    };
-  }
-
-  return null;
-}
-
 function extractWsQueryToken(url: URL): string | null {
-  const allowQueryToken = process.env.MILADY_ALLOW_WS_QUERY_TOKEN === "1";
-  if (!allowQueryToken) return null;
-
   const token =
     url.searchParams.get("token") ??
     url.searchParams.get("apiKey") ??
@@ -5177,7 +8704,7 @@ function isWebSocketAuthorized(
   request: http.IncomingMessage,
   url: URL,
 ): boolean {
-  const expected = process.env.MILADY_API_TOKEN?.trim();
+  const expected = process.env.MILAIDY_API_TOKEN?.trim();
   if (!expected) return true;
 
   const headerToken = extractAuthToken(request);
@@ -5215,7 +8742,7 @@ export function resolveWebSocketUpgradeRejection(
   return null;
 }
 
-const RESET_STATE_ALLOWED_SEGMENTS = new Set([".milady", "milady"]);
+const RESET_STATE_ALLOWED_SEGMENTS = new Set([".milaidy", "milaidy"]);
 
 function hasAllowedResetSegment(resolvedState: string): boolean {
   return resolvedState
@@ -5290,8 +8817,8 @@ function rejectWebSocketUpgrade(
       `Content-Length: ${Buffer.byteLength(body)}\r\n` +
       "\r\n" +
       body,
-    () => socket.end(),
   );
+  socket.destroy();
 }
 
 function decodePathComponent(
@@ -5828,20 +9355,28 @@ function serializeForRuntimeDebug(
 // ── Autonomy → User message routing ──────────────────────────────────
 
 /**
- * Route non-conversation text output to the user's active conversation.
+ * Route non-conversation output to the user's active conversation.
  * Stores the message as a Memory in the conversation room and broadcasts
  * a `proactive-message` WS event to the frontend.
+ *
+ * @param source - Channel label shown in the UI (e.g. "autonomy", "telegram").
  */
-export async function routeAutonomyTextToUser(
+async function routeAutonomyToUser(
   state: ServerState,
-  responseText: string,
+  responseMessages: import("@elizaos/core").Memory[],
   source = "autonomy",
 ): Promise<void> {
   const runtime = state.runtime;
   if (!runtime) return;
 
-  const normalizedText = responseText.trim();
-  if (!normalizedText) return;
+  // Collect response text from all response messages
+  const texts: string[] = [];
+  for (const mem of responseMessages) {
+    const text = mem.content?.text?.trim();
+    if (text) texts.push(text);
+  }
+  if (texts.length === 0) return;
+  const responseText = texts.join("\n\n");
 
   // Find target conversation (active, or most recent)
   let conv: ConversationMeta | undefined;
@@ -5858,553 +9393,99 @@ export async function routeAutonomyTextToUser(
   }
   if (!conv) return; // No conversations exist yet
 
-  // Ephemeral sources: broadcast to UI but don't persist to DB.
-  // Coding-agent status updates and coordinator decisions are transient —
-  // they bloat the database without adding long-term value.
-  const ephemeralSources = new Set(["coding-agent", "coordinator", "action"]);
-
-  const messageId = crypto.randomUUID() as UUID;
-
-  if (!ephemeralSources.has(source)) {
-    const agentMessage = createMessageMemory({
-      id: messageId,
-      entityId: runtime.agentId,
-      roomId: conv.roomId,
-      content: {
-        text: normalizedText,
-        source,
-      },
-    });
-    await runtime.createMemory(agentMessage, "messages");
-  }
+  // Store as memory in the conversation's room
+  const agentMessage = createMessageMemory({
+    id: crypto.randomUUID() as UUID,
+    entityId: runtime.agentId,
+    roomId: conv.roomId,
+    content: {
+      text: responseText,
+      source,
+    },
+  });
+  await runtime.createMemory(agentMessage, "messages");
   conv.updatedAt = new Date().toISOString();
 
-  // Broadcast to all WS clients (always, even for ephemeral sources)
+  // Broadcast to all WS clients
   state.broadcastWs?.({
     type: "proactive-message",
     conversationId: conv.id,
     message: {
-      id: messageId,
+      id: agentMessage.id ?? `auto-${Date.now()}`,
       role: "assistant",
-      text: normalizedText,
+      text: responseText,
       timestamp: Date.now(),
       source,
     },
   });
 }
 
-// ── Coding Agent Chat Bridge ──────────────────────────────────────────
-
 /**
- * Get the SwarmCoordinator from the runtime services (if available).
- * Discovers via runtime.getService("SWARM_COORDINATOR") — the coordinator
- * registers itself during PTYService.start().
+ * Monkey-patch `runtime.messageService.handleMessage` to intercept
+ * autonomy output and route it to the user's active conversation.
+ * Follows the same pattern as phetta-companion-plugin.ts:222-280.
  */
-function getCoordinatorFromRuntime(runtime: AgentRuntime): {
-  setChatCallback?: (
-    cb: (text: string, source?: string) => Promise<void>,
-  ) => void;
-  setWsBroadcast?: (cb: (event: SwarmEvent) => void) => void;
-  setAgentDecisionCallback?: (
-    cb: (
-      eventDescription: string,
-      sessionId: string,
-      taskContext: TaskContext,
-    ) => Promise<CoordinationLLMResponse | null>,
-  ) => void;
-  setSwarmCompleteCallback?: (
-    cb: (payload: {
-      tasks: TaskCompletionSummary[];
-      total: number;
-      completed: number;
-      stopped: number;
-      errored: number;
-    }) => Promise<void>,
-  ) => void;
-} | null {
-  const coordinator = runtime.getService("SWARM_COORDINATOR");
-  if (coordinator)
-    return coordinator as ReturnType<typeof getCoordinatorFromRuntime>;
-  return null;
-}
+function patchMessageServiceForAutonomy(state: ServerState): void {
+  const runtime = state.runtime;
+  if (!runtime?.messageService) return;
 
-/**
- * Wire the SwarmCoordinator's chatCallback so coordinator messages
- * appear in the user's chat UI via the existing proactive-message flow.
- * Returns true if successfully wired.
- */
-function wireCodingAgentChatBridge(st: ServerState): boolean {
-  if (!st.runtime) return false;
-  const coordinator = getCoordinatorFromRuntime(st.runtime);
-  if (!coordinator?.setChatCallback) return false;
-  coordinator.setChatCallback(async (text: string, source?: string) => {
-    await routeAutonomyTextToUser(st, text, source ?? "coding-agent");
-  });
-  return true;
-}
+  const svc = runtime.messageService as unknown as {
+    handleMessage: (
+      rt: import("@elizaos/core").IAgentRuntime,
+      message: import("@elizaos/core").Memory,
+      callback?: (
+        content: Content,
+      ) => Promise<import("@elizaos/core").Memory[]>,
+      options?: import("@elizaos/core").MessageProcessingOptions,
+    ) => Promise<import("@elizaos/core").MessageProcessingResult>;
+    __milaidyAutonomyPatched?: boolean;
+  };
 
-/**
- * Wire the SwarmCoordinator's wsBroadcast callback so coordinator events
- * are relayed to all WebSocket clients as "pty-session-event" messages.
- * Returns true if successfully wired.
- */
-function wireCodingAgentWsBridge(st: ServerState): boolean {
-  if (!st.runtime) return false;
-  const coordinator = getCoordinatorFromRuntime(st.runtime);
-  if (!coordinator?.setWsBroadcast) return false;
-  coordinator.setWsBroadcast((event: SwarmEvent) => {
-    // Preserve the coordinator's event type (task_registered, task_complete, etc.)
-    // as `eventType` so it doesn't overwrite the WS message dispatch type.
-    const { type: eventType, ...rest } = event;
-    st.broadcastWs?.({ type: "pty-session-event", eventType, ...rest });
-  });
-  return true;
-}
+  if (svc.__milaidyAutonomyPatched) return;
+  svc.__milaidyAutonomyPatched = true;
 
-/**
- * Wire the SwarmCoordinator's swarmCompleteCallback so that when all agents
- * finish, we synthesize a summary via the agent's LLM and post it as a
- * persisted message in the conversation.
- */
-function wireCodingAgentSwarmSynthesis(st: ServerState): boolean {
-  if (!st.runtime) return false;
-  const coordinator = getCoordinatorFromRuntime(st.runtime);
-  if (!coordinator?.setSwarmCompleteCallback) return false;
+  const orig = svc.handleMessage.bind(svc);
 
-  coordinator.setSwarmCompleteCallback((payload) =>
-    handleSwarmSynthesis(st, payload),
-  );
-  return true;
-}
+  svc.handleMessage = async (
+    rt: import("@elizaos/core").IAgentRuntime,
+    message: import("@elizaos/core").Memory,
+    callback?: (content: Content) => Promise<import("@elizaos/core").Memory[]>,
+    options?: import("@elizaos/core").MessageProcessingOptions,
+  ): Promise<import("@elizaos/core").MessageProcessingResult> => {
+    const result = await orig(rt, message, callback, options);
 
-/**
- * Handle swarm completion by synthesizing a summary via the LLM.
- * Extracted from wireCodingAgentSwarmSynthesis for testability.
- *
- * Paths: (A) LLM returns synthesis → route to user,
- *        (B) LLM returns empty → warn,
- *        (C) LLM throws → fallback generic message.
- */
-export async function handleSwarmSynthesis(
-  st: { runtime: AgentRuntime | null },
-  payload: {
-    tasks: Array<{
-      sessionId: string;
-      label: string;
-      agentType: string;
-      originalTask: string;
-      status: string;
-      completionSummary: string;
-    }>;
-    total: number;
-    completed: number;
-    stopped: number;
-    errored: number;
-  },
-  routeMessage: (text: string, source: string) => Promise<void> = (
-    text,
-    source,
-  ) => routeAutonomyTextToUser(st as ServerState, text, source),
-): Promise<void> {
-  const runtime = st.runtime;
-  if (!runtime) {
-    logger.warn("[swarm-synthesis] No runtime available — skipping synthesis");
-    return;
-  }
-
-  logger.info(
-    `[swarm-synthesis] Generating synthesis for ${payload.total} tasks (${payload.completed} completed, ${payload.stopped} stopped, ${payload.errored} errored)`,
-  );
-
-  const taskLines = payload.tasks
-    .map(
-      (t) =>
-        `- [${t.status.toUpperCase()}] "${t.label}" (${t.agentType})\n  Task: ${t.originalTask}\n  Result: ${t.completionSummary || "No summary available"}`,
-    )
-    .join("\n\n");
-
-  const prompt =
-    `You are summarizing the results of a coding agent swarm for the user. ` +
-    `${payload.total} agents were dispatched. ${payload.completed} completed, ` +
-    `${payload.stopped} stopped, ${payload.errored} errored.\n\n` +
-    `Here are the individual task results:\n\n${taskLines}\n\n` +
-    `Write a concise, conversational summary of what was accomplished. ` +
-    `Highlight key outcomes (PRs created, issues found, research results). ` +
-    `If any tasks failed or stopped, mention what went wrong. ` +
-    `Keep your personality — be warm and helpful but brief.`;
-
-  try {
-    const synthesis = await runtime.useModel(ModelType.TEXT_SMALL, {
-      prompt,
-      maxTokens: 2048,
-      temperature: 0.7,
-    });
-
-    if (synthesis?.trim()) {
-      logger.info("[swarm-synthesis] Synthesis generated, routing to user");
-      await routeMessage(synthesis.trim(), "swarm_synthesis");
-    } else {
-      logger.warn("[swarm-synthesis] LLM returned empty synthesis");
-    }
-  } catch (err) {
-    logger.error(`[swarm-synthesis] LLM call failed: ${err}`);
-    const parts: string[] = [];
-    if (payload.completed > 0) parts.push(`${payload.completed} completed`);
-    if (payload.stopped > 0) parts.push(`${payload.stopped} stopped`);
-    if (payload.errored > 0) parts.push(`${payload.errored} errored`);
-    await routeMessage(
-      `All ${payload.total} coding agents finished (${parts.join(", ")}). Review their work when you're ready.`,
-      "coding-agent",
+    // Detect non-conversation messages (autonomy, background tasks, etc.)
+    const isFromConversation = Array.from(state.conversations.values()).some(
+      (c) => c.roomId === message.roomId,
     );
-  }
-}
 
-// ── Parse Action Block from Milaidy's Response ─────────────────────────
-import {
-  parseActionBlock,
-  stripActionBlockFromDisplay,
-} from "./parse-action-block";
-
-// ── Coordinator Event Routing ───────────────────────────────────────────
-
-/**
- * Wire the SwarmCoordinator's agentDecisionCallback so coordinator events
- * (blocked prompts, turn completions) route through Milaidy's full
- * elizaOS pipeline (memory, personality, actions) so she has conversation
- * context to make informed decisions. The pipeline's model size is
- * The pipeline's model size is temporarily overridden to TEXT_SMALL
- * via the private `runtime.llmModeOption` (no public setter exists).
- * This is intentional — coordinator decisions must be fast to avoid
- * stalling CLI agents waiting for input.
- *
- * Events are serialized (one at a time) to prevent context confusion.
- * Milaidy's response appears in chat via WS broadcast, and the embedded
- * JSON action block is parsed and returned to the coordinator for execution.
- *
- * If the callback fails or Milaidy's response has no action block,
- * returns null → coordinator falls back to the small LLM.
- */
-function wireCoordinatorEventRouting(st: ServerState): boolean {
-  if (!st.runtime) return false;
-  const coordinator = getCoordinatorFromRuntime(st.runtime);
-  if (!coordinator?.setAgentDecisionCallback) return false;
-
-  // Serialization queue — one coordinator event at a time
-  let eventQueue: Promise<void> = Promise.resolve();
-
-  coordinator.setAgentDecisionCallback(
-    async (
-      eventDescription: string,
-      _sessionId: string,
-      _taskCtx: TaskContext,
-    ): Promise<CoordinationLLMResponse | null> => {
-      let resolveOuter!: (v: CoordinationLLMResponse | null) => void;
-      const resultPromise = new Promise<CoordinationLLMResponse | null>((r) => {
-        resolveOuter = r;
-      });
-
-      eventQueue = eventQueue.then(async () => {
-        try {
-          const runtime = st.runtime;
-          if (!runtime) {
-            resolveOuter(null);
-            return;
-          }
-
-          // Ensure the legacy chat connection exists (creates room/world if needed).
-          // We inline the setup here because ensureLegacyChatConnection is
-          // closure-scoped in the route handler and not accessible at module level.
-          const agentName = runtime.character.name ?? "Milady";
-          if (!st.chatUserId || !st.chatRoomId) {
-            const adminId =
-              st.adminEntityId ??
-              (stringToUuid(`${st.agentName}-admin-entity`) as UUID);
-            st.adminEntityId = adminId;
-            st.chatUserId = adminId;
-            st.chatRoomId =
-              st.chatRoomId ??
-              (stringToUuid(`${agentName}-web-chat-room`) as UUID);
-            const worldId = stringToUuid(`${agentName}-web-chat-world`) as UUID;
-            const messageServerId = stringToUuid(
-              `${agentName}-web-server`,
-            ) as UUID;
-            await runtime.ensureConnection({
-              entityId: adminId,
-              roomId: st.chatRoomId,
-              worldId,
-              userName: "User",
-              source: "client_chat",
-              channelId: `${agentName}-web-chat`,
-              type: ChannelType.DM,
-              messageServerId,
-              metadata: { ownership: { ownerId: adminId } },
-            });
-          }
-          if (!st.chatUserId || !st.chatRoomId) {
-            resolveOuter(null);
-            return;
-          }
-
-          // Create a message memory so the event enters Milaidy's conversation history.
-          const message = createMessageMemory({
-            id: crypto.randomUUID() as UUID,
-            entityId: st.chatUserId,
-            agentId: runtime.agentId,
-            roomId: st.chatRoomId,
-            content: {
-              text: eventDescription,
-              source: "coordinator",
-              channelType: "DM",
-            },
-          });
-
-          // Temporarily force TEXT_SMALL — coordinator events are time-sensitive
-          // and TEXT_LARGE can timeout while CLI agents stall waiting for input.
-          // llmModeOption is private with no public setter; cast is intentional.
-          const rt = runtime as unknown as Record<string, unknown>;
-          const prevLlmMode = rt.llmModeOption;
-          rt.llmModeOption = "SMALL";
-          let result: { text: string; agentName?: string };
-          try {
-            result = await generateChatResponse(runtime, message, agentName, {
-              resolveNoResponseText: () => "I'll look into that.",
-            });
-          } finally {
-            rt.llmModeOption = prevLlmMode;
-          }
-
-          // WS broadcast the natural language portion (strip JSON action block).
-          // Both fenced (```json ... ```) and bare JSON must be removed since
-          // the LLM may return either format.
-          if (result.text && result.text !== "(no response)") {
-            const displayText = stripActionBlockFromDisplay(result.text);
-            if (displayText && displayText.length > 2) {
-              const conv = st.activeConversationId
-                ? st.conversations.get(st.activeConversationId)
-                : Array.from(st.conversations.values()).sort(
-                    (a, b) =>
-                      new Date(b.updatedAt).getTime() -
-                      new Date(a.updatedAt).getTime(),
-                  )[0];
-              if (conv) {
-                st.broadcastWs?.({
-                  type: "proactive-message",
-                  conversationId: conv.id,
-                  message: {
-                    id: `coordinator-${Date.now()}`,
-                    role: "assistant",
-                    text: displayText,
-                    timestamp: Date.now(),
-                    source: "coordinator",
-                  },
-                });
-              }
-            }
-          }
-
-          resolveOuter(parseActionBlock(result.text ?? ""));
-        } catch (err) {
-          logger.error(
-            `Coordinator event routing failed: ${err instanceof Error ? err.message : String(err)}`,
+    if (!isFromConversation && result?.responseMessages?.length > 0) {
+      // Forward to user's active conversation (fire-and-forget)
+      const rawSource = message.content?.source;
+      const source = typeof rawSource === "string" ? rawSource : "autonomy";
+      void routeAutonomyToUser(state, result.responseMessages, source).catch(
+        (err) => {
+          logger.warn(
+            `[autonomy-route] Failed to route proactive output: ${err instanceof Error ? err.message : String(err)}`,
           );
-          resolveOuter(null);
-        }
-      });
-
-      return resultPromise;
-    },
-  );
-
-  return true;
-}
-
-/**
- * Fallback handler for /api/coding-agents/* routes when the plugin
- * doesn't export createCodingAgentRouteHandler.
- * Uses the AgentOrchestratorService (CODE_TASK) to provide task data.
- */
-async function handleCodingAgentsFallback(
-  runtime: AgentRuntime,
-  pathname: string,
-  method: string,
-  _req: http.IncomingMessage,
-  res: http.ServerResponse,
-): Promise<boolean> {
-  // GET /api/coding-agents/coordinator/status
-  if (
-    method === "GET" &&
-    pathname === "/api/coding-agents/coordinator/status"
-  ) {
-    const orchestratorService = runtime.getService("CODE_TASK") as {
-      getTasks?: () => Promise<
-        Array<{
-          id?: string;
-          name?: string;
-          description?: string;
-          metadata?: {
-            status?: string;
-            providerId?: string;
-            providerLabel?: string;
-            workingDirectory?: string;
-            progress?: number;
-            steps?: Array<{ status?: string }>;
-          };
-        }>
-      >;
-    } | null;
-
-    if (!orchestratorService?.getTasks) {
-      // Return empty status if service not available
-      json(res, {
-        supervisionLevel: "autonomous",
-        taskCount: 0,
-        tasks: [],
-        pendingConfirmations: 0,
-      });
-      return true;
+        },
+      );
     }
 
-    try {
-      const tasks = await orchestratorService.getTasks();
-
-      // Map tasks to the CodingAgentSession format expected by frontend
-      const mappedTasks = tasks.map((task) => {
-        const meta = task.metadata ?? {};
-        // Map orchestrator status to frontend status
-        let status: string = "active";
-        switch (meta.status) {
-          case "completed":
-            status = "completed";
-            break;
-          case "failed":
-          case "error":
-            status = "error";
-            break;
-          case "cancelled":
-            status = "stopped";
-            break;
-          case "paused":
-            status = "blocked";
-            break;
-          case "running":
-            status = "active";
-            break;
-          case "pending":
-            status = "active";
-            break;
-          default:
-            status = "active";
-        }
-
-        return {
-          sessionId: task.id ?? "",
-          agentType: meta.providerId ?? "eliza",
-          label: meta.providerLabel ?? task.name ?? "Task",
-          originalTask: task.description ?? task.name ?? "",
-          workdir: meta.workingDirectory ?? process.cwd(),
-          status,
-          decisionCount: meta.steps?.length ?? 0,
-          autoResolvedCount:
-            meta.steps?.filter((s) => s.status === "completed").length ?? 0,
-        };
-      });
-
-      json(res, {
-        supervisionLevel: "autonomous",
-        taskCount: mappedTasks.length,
-        tasks: mappedTasks,
-        pendingConfirmations: 0,
-      });
-      return true;
-    } catch (e) {
-      error(res, `Failed to get coding agent status: ${e}`, 500);
-      return true;
-    }
-  }
-
-  // POST /api/coding-agents/:sessionId/stop - Stop a coding agent task
-  const stopMatch = pathname.match(/^\/api\/coding-agents\/([^/]+)\/stop$/);
-  if (method === "POST" && stopMatch) {
-    const sessionId = decodeURIComponent(stopMatch[1]);
-    const ptyService = runtime.getService("PTY_SERVICE") as PTYService | null;
-
-    if (!ptyService?.stopSession) {
-      error(res, "PTY Service not available", 503);
-      return true;
-    }
-
-    try {
-      await ptyService.stopSession(sessionId);
-      json(res, { ok: true });
-      return true;
-    } catch (e) {
-      error(res, `Failed to stop session: ${e}`, 500);
-      return true;
-    }
-  }
-
-  // Not handled by fallback
-  return false;
-}
-
-/**
- * Get the PTYConsoleBridge from the PTYService (if available).
- * Used by the WS PTY handlers to subscribe to output and forward input.
- */
-function getPtyConsoleBridge(st: ServerState) {
-  if (!st.runtime) return null;
-  const ptyService = st.runtime.getService(
-    "PTY_SERVICE",
-  ) as unknown as PTYService | null;
-  return ptyService?.consoleBridge ?? null;
-}
-
-/**
- * Route non-conversation agent events into the active user chat.
- * This avoids monkey-patching the message service and relies on explicit
- * event stream plumbing from AGENT_EVENT.
- */
-async function maybeRouteAutonomyEventToConversation(
-  state: ServerState,
-  event: AgentEventPayloadLike,
-): Promise<void> {
-  if (event.stream !== "assistant") return;
-
-  const payload =
-    event.data && typeof event.data === "object"
-      ? (event.data as Record<string, unknown>)
-      : null;
-  const text = typeof payload?.text === "string" ? payload.text.trim() : "";
-  if (!text) return;
-
-  const hasExplicitSource =
-    typeof payload?.source === "string" && payload.source.trim().length > 0;
-  const source = hasExplicitSource
-    ? (payload?.source as string).trim()
-    : "autonomy";
-
-  // Regular user conversation turns should never be re-routed as proactive.
-  // Some AGENT_EVENT payloads may omit roomId metadata, so rely on source too.
-  if (source === "client_chat") return;
-  if (!hasExplicitSource && !event.roomId) return;
-
-  // Keep regular conversation messages in their own room only.
-  if (
-    event.roomId &&
-    Array.from(state.conversations.values()).some(
-      (c) => c.roomId === event.roomId,
-    )
-  ) {
-    return;
-  }
-
-  await routeAutonomyTextToUser(state, text, source);
+    return result;
+  };
 }
 
 // Rate limiter middleware instance (created lazily)
 let _rateLimiter: RateLimitMiddleware | null = null;
 
 function getRateLimiter(): RateLimitMiddleware {
+  // Tests (unit + e2e) run many requests very quickly from 127.0.0.1 which makes
+  // rate limiting nondeterministic and breaks unrelated assertions. The limiter
+  // has its own focused unit tests in src/api/middleware/rate-limiter.test.ts.
+  if (process.env.VITEST || process.env.NODE_ENV === "test") {
+    return () => true;
+  }
   if (!_rateLimiter) {
     _rateLimiter = createRateLimitMiddleware({
       // Skip rate limiting for health checks
@@ -6412,6 +9493,71 @@ function getRateLimiter(): RateLimitMiddleware {
     });
   }
   return _rateLimiter;
+}
+
+function createHyperscapeOperationalChecks(state: ServerState): HealthCheck[] {
+  if (!resolveHyperscapeAutonomyEnabled(process.env)) {
+    return [];
+  }
+
+  const baseUrl = resolveHyperscapeApiBaseUrl();
+  const wsUrl = resolveHyperscapeWsProbeUrl();
+  return [
+    {
+      name: "hyperscape_api",
+      critical: false,
+      timeoutMs: HYPERSCAPE_HTTP_PROBE_TIMEOUT_MS,
+      check: async () => {
+        const result = await probeHyperscapeApiReachability(baseUrl);
+        return {
+          healthy: result.healthy,
+          message: result.message,
+          details: result.details,
+        };
+      },
+    },
+    {
+      name: "hyperscape_ws",
+      critical: false,
+      timeoutMs: HYPERSCAPE_WS_PROBE_TIMEOUT_MS,
+      check: async () => {
+        const result = await probeHyperscapeWsReachability(wsUrl);
+        return {
+          healthy: result.healthy,
+          message: result.message,
+          details: result.details,
+        };
+      },
+    },
+    {
+      name: "hyperscape_script_mime",
+      critical: false,
+      timeoutMs: HYPERSCAPE_SCRIPT_MIME_PROBE_TIMEOUT_MS,
+      check: async () => {
+        const result = await probeManagedAppScriptMime(HYPERSCAPE_APP_NAME);
+        return {
+          healthy: result.healthy,
+          message: result.message,
+          details: result.details,
+        };
+      },
+    },
+    {
+      name: "hyperscape_autonomy_sessions",
+      critical: false,
+      check: async () => {
+        const snapshot = state.hyperscapeAutonomy.getOperationalSnapshot();
+        const healthy = snapshot.failedSessions === 0;
+        return {
+          healthy,
+          message: healthy
+            ? undefined
+            : `${snapshot.failedSessions} failed autonomy sessions are present`,
+          details: snapshot as unknown as Record<string, unknown>,
+        };
+      },
+    },
+  ];
 }
 
 // Health check handler (created lazily per state)
@@ -6437,11 +9583,58 @@ function getHealthHandler(state: ServerState): ReturnType<typeof createHealthHan
                 })),
           }
         : undefined,
+      extraChecks: createHyperscapeOperationalChecks(state),
     });
     _healthHandler = createHealthHandler(checks);
     _healthHandlerState = state;
   }
   return _healthHandler;
+}
+
+type AppRoutePluginManager = Pick<
+  PluginManagerLike,
+  | "refreshRegistry"
+  | "listInstalledPlugins"
+  | "getRegistryPlugin"
+  | "searchRegistry"
+  | "installPlugin"
+  | "uninstallPlugin"
+>;
+
+function createAppRoutePluginManager(): AppRoutePluginManager {
+  return {
+    refreshRegistry: async () => {
+      const { refreshRegistry } = await import("../services/registry-client.js");
+      return refreshRegistry();
+    },
+    listInstalledPlugins: async () => {
+      const { listInstalledPlugins } = await import(
+        "../services/plugin-installer.js"
+      );
+      return listInstalledPlugins();
+    },
+    getRegistryPlugin: async (name: string) => {
+      const { getPluginInfo } = await import("../services/registry-client.js");
+      return getPluginInfo(name);
+    },
+    searchRegistry: async (query: string, limit = 15) => {
+      const { searchPlugins } = await import("../services/registry-client.js");
+      return searchPlugins(query, limit);
+    },
+    installPlugin: async (
+      pluginName: string,
+      onProgress?: (progress: InstallProgressLike) => void,
+    ) => {
+      const { installPlugin } = await import("../services/plugin-installer.js");
+      return installPlugin(pluginName, onProgress);
+    },
+    uninstallPlugin: async (pluginName: string) => {
+      const { uninstallPlugin } = await import(
+        "../services/plugin-installer.js"
+      );
+      return uninstallPlugin(pluginName);
+    },
+  };
 }
 
 async function handleRequest(
@@ -6459,38 +9652,83 @@ async function handleRequest(
     return;
   }
   const pathname = url.pathname;
+  let appPluginManager: AppRoutePluginManager | null = null;
+  const getAppPluginManager = (): AppRoutePluginManager => {
+    if (!appPluginManager) {
+      appPluginManager = createAppRoutePluginManager();
+    }
+    return appPluginManager;
+  };
+  const requiredCapability = resolveFive55CapabilityForRequest(method, pathname);
+  if (requiredCapability) {
+    try {
+      assertFive55Capability(FIVE55_HTTP_CAPABILITY_POLICY, requiredCapability);
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error
+          ? err.message
+          : "five55 capability denied for this request",
+        403,
+      );
+      return;
+    }
+  }
   const isAuthEndpoint = pathname.startsWith("/api/auth/");
   const registryService = state.registryService;
   const dropService = state.dropService;
 
-  const scheduleRuntimeRestart = (reason: string): void => {
-    if (state.pendingRestartReasons.length >= 50) {
-      // Prevent unbounded growth — keep only first entry + latest
-      state.pendingRestartReasons.splice(
-        1,
-        state.pendingRestartReasons.length - 1,
-      );
-    }
-    if (!state.pendingRestartReasons.includes(reason)) {
-      state.pendingRestartReasons.push(reason);
-    }
-    logger.info(
-      `[milady-api] Restart required: ${reason} (${state.pendingRestartReasons.length} pending)`,
-    );
-    state.broadcastWs?.({
-      type: "restart-required",
-      reasons: [...state.pendingRestartReasons],
-    });
-  };
+  const scheduleRuntimeRestart = (reason: string, delayMs = 300): void => {
+    const restart = () => {
+      if (ctx?.onRestart) {
+        logger.info(`[milaidy-api] Triggering runtime restart (${reason})...`);
+        Promise.resolve(ctx.onRestart())
+          .then((newRuntime) => {
+            if (!newRuntime) {
+              logger.warn("[milaidy-api] Runtime restart returned null");
+              return;
+            }
+            state.runtime = newRuntime;
+            state.chatConnectionReady = null;
+            state.chatConnectionPromise = null;
+            state.agentState = "running";
+            state.agentName = newRuntime.character.name ?? "Milaidy";
+            state.startedAt = Date.now();
+            logger.info("[milaidy-api] Runtime restarted successfully");
+            // Notify WebSocket clients so the UI can refresh
+            state.broadcastWs?.({
+              type: "status",
+              state: state.agentState,
+              agentName: state.agentName,
+              startedAt: state.startedAt,
+              restarted: true,
+            });
+          })
+          .catch((err) => {
+            logger.error(
+              `[milaidy-api] Runtime restart failed: ${err instanceof Error ? err.message : err}`,
+            );
+          });
+        return;
+      }
 
-  const resolveHyperscapeApiBaseUrl = async (): Promise<string> => {
-    const fromEnv = process.env.HYPERSCAPE_API_URL?.trim();
-    if (fromEnv) {
-      return fromEnv.replace(/\/+$/, "");
+      logger.info(
+        `[milaidy-api] No in-process restart handler; exiting for external restart (${reason})`,
+      );
+      if (process.env.VITEST || process.env.NODE_ENV === "test") {
+        logger.info(
+          "[milaidy-api] Skipping process.exit during test execution",
+        );
+        return;
+      }
+      process.exit(API_RESTART_EXIT_CODE);
+    };
+
+    if (delayMs <= 0) {
+      restart();
+      return;
     }
-    // Default to the local Hyperscape API server. Viewer URLs can point at a
-    // client dev server (for example :3333) which does not expose API routes.
-    return "http://localhost:5555";
+    setTimeout(restart, delayMs);
   };
 
   const relayHyperscapeApi = async (
@@ -6501,7 +9739,7 @@ async function handleRequest(
       contentTypeOverride?: string | null;
     },
   ): Promise<void> => {
-    const baseUrl = await resolveHyperscapeApiBaseUrl();
+    const baseUrl = resolveHyperscapeApiBaseUrl();
 
     let upstreamUrl: URL;
     try {
@@ -6571,38 +9809,62 @@ async function handleRequest(
     res.end(responseText);
   };
 
-  // ── DNS rebinding protection ──────────────────────────────────────────
-  // Reject requests whose Host header doesn't match a known loopback
-  // hostname.  Without this check an attacker can rebind their domain's
-  // DNS to 127.0.0.1 and read the unauthenticated localhost API from a
-  // malicious page.
-  if (!isAllowedHost(req)) {
-    const incomingHost = req.headers.host ?? "your-hostname";
-    json(
-      res,
-      {
-        error: "Forbidden — invalid Host header",
-        hint: `To allow this host, set MILADY_ALLOWED_HOSTS=${incomingHost} in your environment, or access via http://localhost`,
-        docs: "https://docs.milady.ai/configuration#allowed-hosts",
-      },
-      403,
-    );
-    return;
-  }
-
   if (!applyCors(req, res)) {
     json(res, { error: "Origin not allowed" }, 403);
     return;
   }
 
-  // Serve dashboard static assets before the auth gate.  serveStaticUi
-  // already refuses /api/, /v1/, and /ws paths, so API endpoints remain
-  // fully protected by the token check below.
-  if (method === "GET" || method === "HEAD") {
-    if (serveStaticUi(req, res, pathname)) return;
+  // Health endpoints (before auth so Kubernetes probes work)
+  if (pathname.startsWith("/health")) {
+    const healthHandler = getHealthHandler(state);
+    if (await healthHandler(req, res)) {
+      return; // Health endpoint handled
+    }
   }
 
-  if (method !== "OPTIONS" && !isAuthEndpoint && !isAuthorized(req)) {
+  // OpenAPI spec endpoint (before auth for documentation access)
+  if (method === "GET" && (pathname === "/api/docs/openapi.json" || pathname === "/api/docs")) {
+    try {
+      const { buildOpenApiSpec } = await import("./openapi/spec.js");
+      json(res, buildOpenApiSpec());
+    } catch {
+      error(res, "Failed to generate OpenAPI spec", 500);
+    }
+    return;
+  }
+
+  // Prometheus metrics endpoint (before auth so scrapers work)
+  if (method === "GET" && pathname === "/metrics") {
+    try {
+      const { metrics } = await import("../telemetry/setup.js");
+      const { exportPrometheusText } = await import("../telemetry/prometheus-exporter.js");
+      const text = exportPrometheusText(metrics.getSnapshot());
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+      res.end(text);
+    } catch {
+      res.statusCode = 500;
+      res.end("# Error generating metrics\n");
+    }
+    return;
+  }
+
+  // Apply rate limiting only to API routes.
+  // Static UI assets (JS/CSS/VRM) should not consume API quotas.
+  if (pathname === "/api" || pathname.startsWith("/api/")) {
+    const rateLimiter = getRateLimiter();
+    if (!rateLimiter(req, res)) {
+      return; // Rate limited - response already sent
+    }
+  }
+
+  const publicUiRequest = isPublicUiRequest(method, pathname);
+  if (
+    method !== "OPTIONS" &&
+    !isAuthEndpoint &&
+    !publicUiRequest &&
+    !isAuthorized(req)
+  ) {
     json(res, { error: "Unauthorized" }, 401);
     return;
   }
@@ -6614,314 +9876,117 @@ async function handleRequest(
     return;
   }
 
-  // ── POST /api/provider/switch ─────────────────────────────────────────
-  // Atomically switch the active AI provider.  Clears competing credentials
-  // and env vars so the runtime loads the correct plugin on restart.
-  if (method === "POST" && pathname === "/api/provider/switch") {
-    const body = await readJsonBody<{ provider: string; apiKey?: string }>(
-      req,
-      res,
+  if (method === "GET" || method === "HEAD") {
+    const refererHeader = readSingleHeaderValue(req.headers.referer);
+    const managedAppRedirect = resolveManagedAppLeakedAssetRedirect(
+      pathname,
+      url.search,
+      refererHeader,
     );
+    if (managedAppRedirect) {
+      res.statusCode = 307;
+      res.setHeader("Location", managedAppRedirect);
+      res.setHeader("Cache-Control", "no-store");
+      res.end();
+      return;
+    }
+  }
+
+  // ── GET /api/auth/status ───────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/auth/status") {
+    const required = Boolean(process.env.MILAIDY_API_TOKEN?.trim());
+    const enabled = pairingEnabled();
+    if (enabled) ensurePairingCode();
+    json(res, {
+      required,
+      pairingEnabled: enabled,
+      expiresAt: enabled ? pairingExpiresAt : null,
+    });
+    return;
+  }
+
+  // ── POST /api/auth/pair ────────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/auth/pair") {
+    const body = await readJsonBody<{ code?: string }>(req, res);
     if (!body) return;
-    const provider = body.provider;
-    if (!provider || typeof provider !== "string") {
-      error(res, "Missing provider", 400);
+
+    const token = process.env.MILAIDY_API_TOKEN?.trim();
+    if (!token) {
+      error(res, "Pairing not enabled", 400);
+      return;
+    }
+    if (!pairingEnabled()) {
+      error(res, "Pairing disabled", 403);
+      return;
+    }
+    if (!rateLimitPairing(req.socket.remoteAddress ?? null)) {
+      error(res, "Too many attempts. Try again later.", 429);
       return;
     }
 
-    // P1 §7 — explicit provider allowlist
-    const VALID_PROVIDERS = new Set([
-      "elizacloud",
-      "pi-ai",
-      "openai-codex",
-      "openai-subscription",
-      "anthropic-subscription",
-      "openai",
-      "anthropic",
-      "deepseek",
-      "google",
-      "groq",
-      "xai",
-      "openrouter",
-    ]);
-    if (!VALID_PROVIDERS.has(provider)) {
-      error(res, "Invalid provider", 400);
-      return;
-    }
-
-    // P0 §3 — race guard: reject concurrent provider switch requests
-    if (providerSwitchInProgress) {
-      error(res, "Provider switch already in progress", 409);
-      return;
-    }
-    providerSwitchInProgress = true;
-
-    const config = state.config;
-    if (!config.cloud) config.cloud = {} as NonNullable<typeof config.cloud>;
-    if (!config.env) config.env = {};
-    const envCfg = config.env as Record<string, string>;
-
-    // Helper: disable cloud inference while preserving cloud connection
-    // for RPC and other services.  Does NOT delete cloud.apiKey or
-    // cloud.enabled — only toggles inference off.
-    const disableCloudInference = () => {
-      const cloudCfg = config.cloud as Record<string, unknown>;
-      cloudCfg.inferenceMode = "byok";
-      if (!cloudCfg.services || typeof cloudCfg.services !== "object") {
-        cloudCfg.services = {};
-      }
-      (cloudCfg.services as Record<string, unknown>).inference = false;
-      // Clean cloud model env vars so the cloud plugin doesn't intercept
-      // model calls — user's own keys handle models.
-      delete process.env.ELIZAOS_CLOUD_SMALL_MODEL;
-      delete process.env.ELIZAOS_CLOUD_LARGE_MODEL;
-    };
-
-    // Helper: enable cloud inference (switching TO cloud)
-    const enableCloudInference = () => {
-      const cloudCfg = config.cloud as Record<string, unknown>;
-      cloudCfg.inferenceMode = "cloud";
-      if (!cloudCfg.services || typeof cloudCfg.services !== "object") {
-        cloudCfg.services = {};
-      }
-      (cloudCfg.services as Record<string, unknown>).inference = true;
-    };
-
-    // Helper: clear pi-ai mode
-    const clearPiAi = () => {
-      delete process.env.MILADY_USE_PI_AI;
-      delete envCfg.MILADY_USE_PI_AI;
-
-      const envRoot = config.env as Record<string, unknown>;
-      const vars = envRoot.vars;
-      if (vars && typeof vars === "object" && !Array.isArray(vars)) {
-        delete (vars as Record<string, unknown>).MILADY_USE_PI_AI;
-      }
-
-      if (state.runtime?.character?.secrets) {
-        const secrets = state.runtime.character.secrets as Record<
-          string,
-          unknown
-        >;
-        delete secrets.MILADY_USE_PI_AI;
-      }
-    };
-
-    // Helper: clear subscription credentials
-    const clearSubscriptions = async () => {
-      try {
-        const { deleteCredentials } = await import("../auth/index");
-        deleteCredentials("anthropic-subscription");
-        deleteCredentials("openai-codex");
-      } catch (err) {
-        logger.warn(
-          `[api] Failed to clear subscriptions: ${err instanceof Error ? err.message : err}`,
-        );
-      }
-      // Don't clear the env keys here — applySubscriptionCredentials on
-      // restart will simply not set them if creds are gone.
-    };
-
-    // Provider-specific env key map
-    const PROVIDER_ENV_KEYS: Record<string, string> = {
-      openai: "OPENAI_API_KEY",
-      anthropic: "ANTHROPIC_API_KEY",
-      deepseek: "DEEPSEEK_API_KEY",
-      google: "GOOGLE_API_KEY",
-      groq: "GROQ_API_KEY",
-      xai: "XAI_API_KEY",
-      openrouter: "OPENROUTER_API_KEY",
-    };
-
-    // Helper: clear all direct API keys from env (except the one we're switching to)
-    const clearOtherApiKeys = (keepKey?: string) => {
-      for (const [, envKey] of Object.entries(PROVIDER_ENV_KEYS)) {
-        if (envKey === keepKey) continue;
-        delete process.env[envKey];
-        delete envCfg[envKey];
-        // P1 §6 — also clear from runtime character secrets
-        if (state.runtime?.character?.secrets) {
-          const secrets = state.runtime.character.secrets as Record<
-            string,
-            unknown
-          >;
-          delete secrets[envKey];
-        }
-      }
-    };
-
-    try {
-      // P0 §4 — input validation for direct API key providers
-      if (PROVIDER_ENV_KEYS[provider]) {
-        const trimmedKey =
-          typeof body.apiKey === "string" ? body.apiKey.trim() : "";
-        if (!trimmedKey) {
-          providerSwitchInProgress = false;
-          error(res, "API key is required for this provider", 400);
-          return;
-        }
-        if (trimmedKey.length > 512) {
-          providerSwitchInProgress = false;
-          error(res, "API key is too long", 400);
-          return;
-        }
-        // Store trimmed key back for use below
-        body.apiKey = trimmedKey;
-      }
-
-      if (provider === "elizacloud") {
-        // Switching TO elizacloud for inference
-        clearPiAi();
-        await clearSubscriptions();
-        clearOtherApiKeys();
-        clearSubscriptionProviderConfig(config);
-        enableCloudInference();
-        // Ensure cloud is enabled — the actual API key should already be in
-        // config.cloud.apiKey from the original cloud login.
-        (config.cloud as Record<string, unknown>).enabled = true;
-        if (config.cloud.apiKey) {
-          process.env.ELIZAOS_CLOUD_API_KEY = config.cloud.apiKey;
-          process.env.ELIZAOS_CLOUD_ENABLED = "true";
-        }
-      } else if (provider === "pi-ai") {
-        // Switching TO pi-ai credentials mode
-        disableCloudInference();
-        await clearSubscriptions();
-        clearOtherApiKeys();
-        process.env.MILADY_USE_PI_AI = "1";
-        envCfg.MILADY_USE_PI_AI = "1";
-
-        const envRoot = config.env as Record<string, unknown>;
-        const vars =
-          envRoot.vars &&
-          typeof envRoot.vars === "object" &&
-          !Array.isArray(envRoot.vars)
-            ? (envRoot.vars as Record<string, unknown>)
-            : {};
-        vars.MILADY_USE_PI_AI = "1";
-        envRoot.vars = vars;
-      } else if (
-        provider === "openai-codex" ||
-        provider === "openai-subscription"
-      ) {
-        // Switching TO OpenAI subscription — keep cloud for RPC
-        clearPiAi();
-        disableCloudInference();
-        clearOtherApiKeys("OPENAI_API_KEY");
-        applySubscriptionProviderConfig(config, provider);
-        // Delete Anthropic subscription but keep OpenAI
-        try {
-          const { deleteCredentials } = await import("../auth/index");
-          deleteCredentials("anthropic-subscription");
-        } catch (err) {
-          logger.warn(
-            `[api] Failed to clear Anthropic subscription: ${err instanceof Error ? err.message : err}`,
-          );
-        }
-        // Apply the OpenAI subscription credentials to env + install stealth
-        try {
-          const { applySubscriptionCredentials } = await import(
-            "../auth/index"
-          );
-          await applySubscriptionCredentials(config);
-        } catch (err) {
-          logger.warn(
-            `[api] Failed to apply OpenAI subscription creds: ${err instanceof Error ? err.message : err}`,
-          );
-        }
-      } else if (provider === "anthropic-subscription") {
-        // Switching TO Anthropic subscription — keep cloud for RPC
-        clearPiAi();
-        disableCloudInference();
-        clearOtherApiKeys("ANTHROPIC_API_KEY");
-        applySubscriptionProviderConfig(config, provider);
-        // Delete OpenAI subscription but keep Anthropic
-        try {
-          const { deleteCredentials } = await import("../auth/index");
-          deleteCredentials("openai-codex");
-        } catch (err) {
-          logger.warn(
-            `[api] Failed to clear OpenAI subscription: ${err instanceof Error ? err.message : err}`,
-          );
-        }
-        // Apply the Anthropic subscription credentials to env + install stealth
-        try {
-          const { applySubscriptionCredentials } = await import(
-            "../auth/index"
-          );
-          await applySubscriptionCredentials(config);
-        } catch (err) {
-          logger.warn(
-            `[api] Failed to apply Anthropic subscription creds: ${err instanceof Error ? err.message : err}`,
-          );
-        }
-      } else if (PROVIDER_ENV_KEYS[provider]) {
-        // Switching TO a direct API key provider — keep cloud for RPC
-        clearPiAi();
-        disableCloudInference();
-        await clearSubscriptions();
-        clearSubscriptionProviderConfig(config);
-        const envKey = PROVIDER_ENV_KEYS[provider];
-        clearOtherApiKeys(envKey);
-        const apiKey = body.apiKey;
-        if (!apiKey) {
-          providerSwitchInProgress = false;
-          error(res, "API key is required for this provider", 400);
-          return;
-        }
-        process.env[envKey] = apiKey;
-        envCfg[envKey] = apiKey;
-      }
-
-      saveMiladyConfig(config);
-
-      // Schedule runtime restart so the new provider takes effect.
-      scheduleRuntimeRestart(`provider switch to ${provider}`);
-      // Keep the lock briefly in restart-capable environments to prevent
-      // double-submits from racing with restart-required propagation.
-      if (ctx?.onRestart) {
-        setTimeout(() => {
-          providerSwitchInProgress = false;
-        }, 250);
-      } else {
-        providerSwitchInProgress = false;
-      }
-
-      json(res, {
-        success: true,
-        provider,
-        restarting: true,
-      });
-    } catch (err) {
-      providerSwitchInProgress = false;
-      // P1 §8 — don't leak internal error details to client
-      logger.error(
-        `[api] Provider switch failed: ${err instanceof Error ? err.stack : err}`,
+    const provided = normalizePairingCode(body.code ?? "");
+    const current = ensurePairingCode();
+    if (!current || Date.now() > pairingExpiresAt) {
+      ensurePairingCode();
+      error(
+        res,
+        "Pairing code expired. Check server logs for a new code.",
+        410,
       );
-      error(res, "Provider switch failed", 500);
+      return;
+    }
+
+    const expected = normalizePairingCode(current);
+    const a = Buffer.from(expected, "utf8");
+    const b = Buffer.from(provided, "utf8");
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      error(res, "Invalid pairing code", 403);
+      return;
+    }
+
+    pairingCode = null;
+    pairingExpiresAt = 0;
+    json(res, { token });
+    return;
+  }
+
+  // ── GET /api/subscription/status ──────────────────────────────────────
+  // Returns the status of subscription-based auth providers
+  if (method === "GET" && pathname === "/api/subscription/status") {
+    try {
+      const { getSubscriptionStatus } = await import("../auth/index.js");
+      const providers = (await getSubscriptionStatus()).map((entry) => ({
+        ...entry,
+        provider: toUiSubscriptionProvider(entry.provider),
+        canonicalProvider: entry.provider,
+      }));
+      json(res, { providers });
+    } catch (err) {
+      error(res, `Failed to get subscription status: ${err}`, 500);
     }
     return;
   }
 
+  // ── POST /api/subscription/anthropic/start ──────────────────────────────
+  // Start Anthropic OAuth flow — returns URL for user to visit
+  if (method === "POST" && pathname === "/api/subscription/anthropic/start") {
+    try {
+      const { startAnthropicLogin } = await import("../auth/index.js");
+      const flow = await startAnthropicLogin();
+      // Store flow in server state for the exchange step
+      state._anthropicFlow = flow;
+      json(res, { authUrl: flow.authUrl });
+    } catch (err) {
+      error(res, `Failed to start Anthropic login: ${err}`, 500);
+    }
+    return;
+  }
+
+  // ── POST /api/subscription/anthropic/exchange ───────────────────────────
+  // Exchange Anthropic auth code for tokens
   if (
-    await handleAuthRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      readJsonBody,
-      json,
-      error,
-      pairingEnabled,
-      ensurePairingCode,
-      normalizePairingCode,
-      rateLimitPairing,
-      getPairingExpiresAt: () => pairingExpiresAt,
-      clearPairing: () => {
-        pairingCode = null;
-        pairingExpiresAt = 0;
-      },
-    })
+    method === "POST" &&
+    pathname === "/api/subscription/anthropic/exchange"
   ) {
     const body = await readJsonBody<{ code: string }>(req, res);
     if (!body) return;
@@ -6930,9 +9995,12 @@ async function handleRequest(
       return;
     }
     try {
-      const { saveCredentials, applySubscriptionCredentials } = await import(
-        "../auth/index.js"
-      );
+      const {
+        saveCredentials,
+        applySubscriptionCredentials,
+        deleteCredentials,
+        validateOpenAiCodexAccess,
+      } = await import("../auth/index.js");
       const flow = state._anthropicFlow;
       if (!flow) {
         error(res, "No active flow — call /start first", 400);
@@ -6951,18 +10019,11 @@ async function handleRequest(
     return;
   }
 
+  // ── POST /api/subscription/anthropic/setup-token ────────────────────────
+  // Accept an Anthropic setup-token (sk-ant-oat01-...) directly
   if (
-    await handleSubscriptionRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      state,
-      readJsonBody,
-      json,
-      error,
-      saveConfig: saveMiladyConfig,
-    })
+    method === "POST" &&
+    pathname === "/api/subscription/anthropic/setup-token"
   ) {
     const body = await readJsonBody<{ token: string }>(req, res);
     if (!body) return;
@@ -7041,9 +10102,12 @@ async function handleRequest(
     if (!body) return;
     let flow: import("../auth/index.js").CodexFlow | undefined;
     try {
-      const { saveCredentials, applySubscriptionCredentials } = await import(
-        "../auth/index.js"
-      );
+      const {
+        saveCredentials,
+        applySubscriptionCredentials,
+        validateOpenAiCodexAccess,
+        deleteCredentials,
+      } = await import("../auth/index.js");
       flow = state._codexFlow;
 
       if (!flow) {
@@ -7078,15 +10142,44 @@ async function handleRequest(
         return;
       }
       await saveCredentials("openai-codex", credentials);
+      const openAiAccess = await validateOpenAiCodexAccess();
+      if (!openAiAccess.valid) {
+        await deleteCredentials("openai-codex");
+        clearSubscriptionProviderState("openai-codex", state.config);
+        saveMilaidyConfig(state.config);
+        try {
+          flow.close();
+        } catch (closeErr) {
+          logger.debug(
+            `[api] OAuth flow cleanup failed: ${closeErr instanceof Error ? closeErr.message : closeErr}`,
+          );
+        }
+        delete state._codexFlow;
+        clearTimeout(state._codexFlowTimer);
+        delete state._codexFlowTimer;
+        error(
+          res,
+          `OpenAI subscription token cannot access Codex responses: ${openAiAccess.reason ?? "token validation failed"}`,
+          400,
+        );
+        return;
+      }
+      enableOpenAiSubscriptionPiAiMode(state.config);
+      clearInjectedOpenAiSubscriptionApiKey(state.config);
+      saveMilaidyConfig(state.config);
       await applySubscriptionCredentials();
       flow.close();
       delete state._codexFlow;
       clearTimeout(state._codexFlowTimer);
       delete state._codexFlowTimer;
+      scheduleRuntimeRestart("openai-subscription-oauth", 450);
       json(res, {
         success: true,
         expiresAt: credentials.expires,
         accountId: credentials.accountId,
+        provider: "openai-subscription",
+        inferenceMode: "pi-ai-codex",
+        restarting: true,
       });
     } catch (err) {
       error(res, `OpenAI exchange failed: ${err}`, 500);
@@ -7097,17 +10190,209 @@ async function handleRequest(
   // ── DELETE /api/subscription/:provider ───────────────────────────────────
   // Remove subscription credentials
   if (method === "DELETE" && pathname.startsWith("/api/subscription/")) {
-    const provider = pathname.split("/").pop();
-    if (provider === "anthropic-subscription" || provider === "openai-codex") {
-      try {
-        const { deleteCredentials } = await import("../auth/index.js");
-        await deleteCredentials(provider);
-        json(res, { success: true });
-      } catch (err) {
-        error(res, `Failed to delete credentials: ${err}`, 500);
+    const requestedProvider = pathname.split("/").pop();
+    const provider = toCanonicalSubscriptionProvider(requestedProvider);
+    if (!provider) {
+      error(
+        res,
+        `Unknown provider: ${requestedProvider} (supported: anthropic-subscription, openai-subscription)`,
+        400,
+      );
+      return;
+    }
+
+    try {
+      const { deleteCredentials } = await import("../auth/index.js");
+      await deleteCredentials(provider);
+      clearSubscriptionProviderState(provider, state.config);
+      saveMilaidyConfig(state.config);
+      json(res, {
+        success: true,
+        provider: toUiSubscriptionProvider(provider),
+      });
+    } catch (err) {
+      error(res, `Failed to delete credentials: ${err}`, 500);
+    }
+    return;
+  }
+
+  // ── POST /api/tts/elevenlabs ───────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/tts/elevenlabs") {
+    const body = await readJsonBody<Record<string, unknown>>(req, res);
+    if (!body) return;
+
+    const asObject = (value: unknown): Record<string, unknown> | null =>
+      value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : null;
+    const asTrimmedString = (value: unknown): string | null =>
+      typeof value === "string" && value.trim().length > 0
+        ? value.trim()
+        : null;
+    const asNonRedactedSecret = (value: unknown): string | null => {
+      const normalized = asTrimmedString(value);
+      if (!normalized) return null;
+      if (normalized.toUpperCase() === "[REDACTED]") return null;
+      return normalized;
+    };
+    const resolveBoundedInt = (
+      value: string | undefined,
+      fallback: number,
+      min: number,
+      max: number,
+    ): number => {
+      const parsed = Number.parseInt(value ?? "", 10);
+      if (!Number.isFinite(parsed)) return fallback;
+      return Math.min(max, Math.max(min, parsed));
+    };
+
+    const text = asTrimmedString(body.text);
+    if (!text) {
+      error(res, "text is required", 400);
+      return;
+    }
+
+    const messages = asObject(state.config.messages);
+    const tts = asObject(messages?.tts);
+    const elevenlabsConfig = asObject(tts?.elevenlabs);
+    const talkConfig = asObject(state.config.talk);
+
+    const apiKey =
+      asNonRedactedSecret(process.env.ELEVENLABS_API_KEY) ??
+      asNonRedactedSecret(elevenlabsConfig?.apiKey) ??
+      asNonRedactedSecret(talkConfig?.apiKey);
+
+    if (!apiKey) {
+      error(
+        res,
+        "ElevenLabs API key is not configured (set ELEVENLABS_API_KEY or messages.tts.elevenlabs.apiKey).",
+        400,
+      );
+      return;
+    }
+
+    const voiceId =
+      asTrimmedString(body.voiceId) ??
+      asTrimmedString(elevenlabsConfig?.voiceId) ??
+      asTrimmedString(process.env.ELEVENLABS_VOICE_ID) ??
+      "EXAVITQu4vr4xnSDxMaL";
+
+    const modelId =
+      asTrimmedString(body.modelId) ??
+      asTrimmedString(body.model_id) ??
+      asTrimmedString(elevenlabsConfig?.modelId) ??
+      asTrimmedString(process.env.ELEVENLABS_MODEL_ID) ??
+      "eleven_flash_v2_5";
+
+    const outputFormat =
+      asTrimmedString(body.outputFormat) ??
+      asTrimmedString(process.env.ELEVENLABS_OUTPUT_FORMAT) ??
+      "mp3_22050_32";
+
+    const applyTextNormalizationRaw =
+      asTrimmedString(body.apply_text_normalization) ??
+      asTrimmedString(elevenlabsConfig?.applyTextNormalization) ??
+      "auto";
+    const applyTextNormalization =
+      applyTextNormalizationRaw === "on" ||
+      applyTextNormalizationRaw === "off" ||
+      applyTextNormalizationRaw === "auto"
+        ? applyTextNormalizationRaw
+        : "auto";
+
+    const voiceSettings =
+      asObject(body.voice_settings) ??
+      asObject(body.voiceSettings) ??
+      asObject(elevenlabsConfig?.voiceSettings);
+
+    const requestBody: Record<string, unknown> = {
+      text,
+      model_id: modelId,
+      apply_text_normalization: applyTextNormalization,
+    };
+    if (voiceSettings) {
+      requestBody.voice_settings = voiceSettings;
+    }
+
+    const requestTimeoutMs = resolveBoundedInt(
+      process.env.MILAIDY_ELEVENLABS_PROXY_TIMEOUT_MS,
+      20_000,
+      1_000,
+      120_000,
+    );
+    const maxAudioBytes = resolveBoundedInt(
+      process.env.MILAIDY_ELEVENLABS_PROXY_MAX_BYTES,
+      10 * 1024 * 1024,
+      1024,
+      100 * 1024 * 1024,
+    );
+
+    const upstreamUrl = new URL(
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream`,
+    );
+    upstreamUrl.searchParams.set("output_format", outputFormat);
+
+    let upstreamResponse: Response;
+    try {
+      upstreamResponse = await fetchWithTimeoutGuard(
+        upstreamUrl.toString(),
+        {
+          method: "POST",
+          headers: {
+            "xi-api-key": apiKey,
+            "Content-Type": "application/json",
+            Accept: "audio/mpeg",
+          },
+          body: JSON.stringify(requestBody),
+        },
+        requestTimeoutMs,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to reach ElevenLabs";
+      error(res, message, err instanceof Error && err.name === "TimeoutError" ? 504 : 502);
+      return;
+    }
+
+    if (!upstreamResponse.ok) {
+      const upstreamBody = await upstreamResponse.text().catch(() => "");
+      const contentType =
+        upstreamResponse.headers.get("content-type") ?? "application/json";
+      res.statusCode = upstreamResponse.status;
+      res.setHeader("Content-Type", contentType);
+      if (upstreamBody) {
+        res.end(upstreamBody);
+      } else {
+        res.end(
+          JSON.stringify({
+            error: `ElevenLabs request failed with status ${upstreamResponse.status}`,
+          }),
+        );
       }
-    } else {
-      error(res, `Unknown provider: ${provider}`, 400);
+      return;
+    }
+
+    const contentType =
+      upstreamResponse.headers.get("content-type") ?? "audio/mpeg";
+    res.statusCode = 200;
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "no-store");
+
+    try {
+      await streamResponseBodyWithByteLimit(
+        upstreamResponse,
+        res,
+        maxAudioBytes,
+        requestTimeoutMs,
+      );
+      res.end();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to stream ElevenLabs response";
+      if (!res.writableEnded && !res.headersSent) {
+        error(res, message, err instanceof Error && err.name === "TimeoutError" ? 504 : 502);
+      } else {
+        res.destroy(err instanceof Error ? err : undefined);
+      }
     }
     return;
   }
@@ -7115,73 +10400,25 @@ async function handleRequest(
   // ── GET /api/status ─────────────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/status") {
     const uptime = state.startedAt ? Date.now() - state.startedAt : undefined;
-    const cloudStatus = {
-      connectionStatus: "disconnected",
-      activeAgentId: null,
-    };
 
-    json(res, {
-      state: state.agentState,
-      agentName: state.agentName,
-      model: state.model,
-      startedAt: state.startedAt,
-      uptime,
-      startup: state.startup,
-      cloud: cloudStatus,
-      pendingRestart: state.pendingRestartReasons.length > 0,
-      pendingRestartReasons: state.pendingRestartReasons,
-    });
-    return;
-  }
-
-  // ── GET /api/health ──────────────────────────────────────────────────────
-  // Structured health check endpoint returning subsystem status.
-  if (method === "GET" && pathname === "/api/health") {
-    const runtime = state.runtime;
-    const uptime = state.startedAt
-      ? Math.floor((Date.now() - state.startedAt) / 1000)
-      : 0;
-
-    const loadedPlugins = state.plugins.filter((p) => p.enabled);
-    const failedPlugins = state.plugins.filter(
-      (p) => !p.enabled && !p.configured,
-    );
-
-    let coordinatorStatus: "ok" | "not_wired" = "not_wired";
-    try {
-      if (runtime?.getService("SWARM_COORDINATOR")) {
-        coordinatorStatus = "ok";
-      }
-    } catch {
-      // not available
-    }
-
-    const connectors: Record<string, string> = state.connectorHealthMonitor
-      ? state.connectorHealthMonitor.getConnectorStatuses()
-      : {};
-    if (Object.keys(connectors).length === 0 && state.config.connectors) {
-      for (const [name, cfg] of Object.entries(state.config.connectors)) {
-        if (
-          cfg &&
-          typeof cfg === "object" &&
-          (cfg as Record<string, unknown>).enabled !== false
-        ) {
-          connectors[name] = "configured";
+    // Cloud mode: report cloud connection status alongside local state
+    const cloudProxy = state.cloudManager?.getProxy();
+    const runMode = cloudProxy ? "cloud" : "local";
+    const cloudStatus = state.cloudManager
+      ? {
+          connectionStatus: state.cloudManager.getStatus(),
+          activeAgentId: state.cloudManager.getActiveAgentId(),
         }
-      }
-    }
+      : undefined;
 
     json(res, {
-      runtime: runtime ? "ok" : "not_initialized",
-      database: runtime ? "ok" : "unknown",
-      plugins: {
-        loaded: loadedPlugins.length,
-        failed: failedPlugins.length,
-      },
-      coordinator: coordinatorStatus,
-      connectors,
+      state: cloudProxy ? "running" : state.agentState,
+      agentName: cloudProxy ? cloudProxy.agentName : state.agentName,
+      model: cloudProxy ? "cloud" : state.model,
       uptime,
-      agentState: state.agentState,
+      startedAt: state.startedAt,
+      runMode,
+      cloud: cloudStatus,
     });
     return;
   }
@@ -7334,35 +10571,21 @@ async function handleRequest(
 
   // ── GET /api/onboarding/options ─────────────────────────────────────────
   if (method === "GET" && pathname === "/api/onboarding/options") {
-    let piAiModels: Array<{
-      id: string;
-      name: string;
-      provider: string;
-      isDefault: boolean;
-    }> = [];
-    let piAiDefaultModel: string | null = null;
-
-    try {
-      const piAi = await listPiAiModelOptions();
-      piAiModels = piAi.models;
-      piAiDefaultModel = piAi.defaultModelSpec ?? null;
-    } catch (err) {
-      logger.warn(
-        `[api] Failed to load pi-ai model options: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
+    const piCreds = await createPiCredentialProvider();
+    const piDefaultModel = (await piCreds.getDefaultModelSpec()) ?? undefined;
 
     json(res, {
       names: pickRandomNames(5),
       styles: STYLE_PRESETS,
+      defaultStyleCatchphrase: DEFAULT_STYLE_CATCHPHRASE,
+      styleAliases: STYLE_CATCHPHRASE_ALIASES,
       providers: getProviderOptions(),
       cloudProviders: getCloudProviderOptions(),
       models: getModelOptions(),
-      piAiModels,
-      piAiDefaultModel,
+      piModels: getPiModelOptions(),
+      piDefaultModel,
       inventoryProviders: getInventoryProviderOptions(),
       sharedStyleRules: "Keep responses brief. Be helpful and concise.",
-      githubOAuthAvailable: Boolean(process.env.GITHUB_OAUTH_CLIENT_ID?.trim()),
     });
     return;
   }
@@ -7401,47 +10624,44 @@ async function handleRequest(
     if (config.agents.list.length === 0) {
       config.agents.list.push({ id: "main", default: true });
     }
+    const onboardingName = (body.name as string).trim();
+    const styleCatchphrase =
+      typeof body.styleCatchphrase === "string"
+        ? body.styleCatchphrase
+        : undefined;
+    const canonicalStylePreset = styleCatchphrase
+      ? getStylePresetByCatchphrase(styleCatchphrase)
+      : null;
     const agent = config.agents.list[0];
-    agent.name = (body.name as string).trim();
+    agent.name = onboardingName;
     agent.workspace = resolveDefaultAgentWorkspaceDir();
-    if (body.bio) agent.bio = body.bio as string[];
-    if (body.systemPrompt) agent.system = body.systemPrompt as string;
-    if (body.style)
-      agent.style = body.style as {
-        all?: string[];
-        chat?: string[];
-        post?: string[];
-      };
-    if (body.adjectives) agent.adjectives = body.adjectives as string[];
-    if (body.topics) agent.topics = body.topics as string[];
-    if (body.postExamples) agent.postExamples = body.postExamples as string[];
-    if (body.messageExamples) {
-      // Normalise to the {examples: [{name, content}]} format that @elizaos/core expects.
-      const raw = body.messageExamples as unknown[];
-      agent.messageExamples = raw.map((item) => {
-        if (
-          item &&
-          typeof item === "object" &&
-          "examples" in (item as Record<string, unknown>)
-        ) {
-          return item as {
-            examples: { name: string; content: { text: string } }[];
-          };
-        }
-        // Old format: [{user, content}, ...] → {examples: [{name, content}, ...]}
-        const arr = item as {
-          user?: string;
-          name?: string;
-          content: { text: string };
-        }[];
-        return {
-          examples: arr.map((m) => ({
-            name: m.name ?? m.user ?? "",
-            content: m.content,
-          })),
+    if (canonicalStylePreset) {
+      agent.bio = canonicalStylePreset.bio;
+      agent.system = canonicalStylePreset.system.replace(
+        /\{\{name\}\}/g,
+        onboardingName,
+      );
+      agent.style = canonicalStylePreset.style;
+      agent.adjectives = canonicalStylePreset.adjectives;
+      agent.topics = canonicalStylePreset.topics;
+      agent.postExamples = canonicalStylePreset.postExamples;
+      agent.messageExamples = canonicalStylePreset.messageExamples;
+    } else {
+      if (body.bio) agent.bio = body.bio as string[];
+      if (body.systemPrompt) agent.system = body.systemPrompt as string;
+      if (body.style)
+        agent.style = body.style as {
+          all?: string[];
+          chat?: string[];
+          post?: string[];
         };
-        // biome-ignore lint/suspicious/noExplicitAny: mixed legacy/new formats
-      }) as any;
+      if (body.adjectives) agent.adjectives = body.adjectives as string[];
+      if (body.topics) agent.topics = body.topics as string[];
+      if (body.postExamples) agent.postExamples = body.postExamples as string[];
+      if (body.messageExamples)
+        agent.messageExamples = body.messageExamples as Array<
+          Array<{ user: string; content: { text: string } }>
+        >;
     }
 
     // ── Theme preference ──────────────────────────────────────────────────
@@ -7460,6 +10680,15 @@ async function handleRequest(
     const runMode = (body.runMode as string) || "local";
     if (!config.cloud) config.cloud = {};
     config.cloud.enabled = runMode === "cloud";
+    if (runMode !== "cloud") {
+      // Keep local/OAuth sessions deterministic by clearing process-level
+      // cloud flags during mode switches.
+      delete process.env.ELIZAOS_CLOUD_ENABLED;
+      delete process.env.ELIZAOS_CLOUD_API_KEY;
+      delete process.env.ELIZAOS_CLOUD_BASE_URL;
+      delete process.env.ELIZAOS_CLOUD_SMALL_MODEL;
+      delete process.env.ELIZAOS_CLOUD_LARGE_MODEL;
+    }
 
     // ── Sandbox mode (from 3-mode onboarding: off / light / standard / max)
     const sandboxMode = (body.sandboxMode as string) || "off";
@@ -7475,7 +10704,7 @@ async function handleRequest(
           unknown
         >
       ).mode = sandboxMode;
-      logger.info(`[milady-api] Sandbox mode set to: ${sandboxMode}`);
+      logger.info(`[milaidy-api] Sandbox mode set to: ${sandboxMode}`);
     }
 
     if (runMode === "cloud") {
@@ -7483,7 +10712,7 @@ async function handleRequest(
         config.cloud.provider = body.cloudProvider as string;
       }
       // Always ensure model defaults when cloud is selected so the cloud
-      // plugin has valid models to call even if the user didn't pick unknown.
+      // plugin has valid models to call even if the user didn't pick any.
       if (!config.models) config.models = {};
       config.models.small =
         (body.smallModel as string) ||
@@ -7495,44 +10724,77 @@ async function handleRequest(
         "anthropic/claude-sonnet-4.5";
     }
 
+    const providerFieldProvided = typeof body.provider === "string";
+    const providerId = providerFieldProvided ? String(body.provider).trim() : "";
+
     // ── Local LLM provider ────────────────────────────────────────────────
+    // Also supports pi-ai (reads credentials from ~/.pi/agent/auth.json and
+    // subscription OAuth credentials from Milaidy secure storage).
     {
+      // Ensure we don't keep stale pi-ai mode when the user switches providers.
       if (!config.env) config.env = {};
       const envCfg = config.env as Record<string, unknown>;
       const vars = (envCfg.vars ?? {}) as Record<string, string>;
-      const providerId = typeof body.provider === "string" ? body.provider : "";
+
+      const wantsPiAi =
+        runMode === "local" &&
+        (providerId === "pi-ai" || providerId === "openai-subscription");
+      const piAiAlreadyEnabled =
+        isTruthyConfigFlag(vars.MILAIDY_USE_PI_AI) ||
+        isTruthyConfigFlag(process.env.MILAIDY_USE_PI_AI);
+
+      if (wantsPiAi) {
+        vars.MILAIDY_USE_PI_AI = "1";
+        process.env.MILAIDY_USE_PI_AI = "1";
+
+        // Optional: persist chosen primary model spec for pi-ai.
+        // When omitted, the backend falls back to pi's default model from settings.json.
+        if (!config.agents) config.agents = {};
+        if (!config.agents.defaults) config.agents.defaults = {};
+        if (!config.agents.defaults.model) config.agents.defaults.model = {};
+
+        const primaryModel =
+          typeof body.primaryModel === "string" ? body.primaryModel.trim() : "";
+        if (primaryModel) {
+          config.agents.defaults.model.primary = primaryModel;
+        } else if (providerId === "openai-subscription") {
+          config.agents.defaults.model.primary = OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT;
+        } else {
+          delete config.agents.defaults.model.primary;
+          if (
+            !config.agents.defaults.model.fallbacks ||
+            config.agents.defaults.model.fallbacks.length === 0
+          ) {
+            delete config.agents.defaults.model;
+          }
+        }
+
+        if (!config.models || typeof config.models !== "object") config.models = {};
+        const modelCfg = config.models as Record<string, unknown>;
+        if (
+          providerId === "openai-subscription" &&
+          (typeof modelCfg.piAiLarge !== "string" || !modelCfg.piAiLarge.trim())
+        ) {
+          modelCfg.piAiLarge = OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT;
+        }
+        if (
+          providerId === "openai-subscription" &&
+          (typeof modelCfg.piAiSmall !== "string" || !modelCfg.piAiSmall.trim())
+        ) {
+          modelCfg.piAiSmall = OPENAI_SUBSCRIPTION_PI_SMALL_DEFAULT;
+        }
+      } else if (runMode !== "local" || providerFieldProvided) {
+        delete vars.MILAIDY_USE_PI_AI;
+        delete process.env.MILAIDY_USE_PI_AI;
+      } else if (piAiAlreadyEnabled) {
+        // Preserve active pi-ai mode when settings are saved without an explicit
+        // provider selection (common in partial updates from the Settings UI).
+        vars.MILAIDY_USE_PI_AI = "1";
+        process.env.MILAIDY_USE_PI_AI = "1";
+      }
 
       // Persist vars back onto config.env
       (envCfg as Record<string, unknown>).vars = vars;
-
-      const clearPiAiFlag = () => {
-        delete vars.MILADY_USE_PI_AI;
-        delete (config.env as Record<string, string>).MILADY_USE_PI_AI;
-        delete process.env.MILADY_USE_PI_AI;
-      };
-
-      if (runMode === "local" && providerId === "pi-ai") {
-        vars.MILADY_USE_PI_AI = "1";
-        process.env.MILADY_USE_PI_AI = "1";
-
-        // Optional primary model override (provider/model).
-        if (!config.agents) config.agents = {};
-        if (!config.agents.defaults) config.agents.defaults = {};
-        const defaults = config.agents.defaults as Record<string, unknown>;
-        const modelConfig = (defaults.model ?? {}) as Record<string, unknown>;
-        const primaryModel =
-          typeof body.primaryModel === "string" ? body.primaryModel.trim() : "";
-
-        if (primaryModel) {
-          modelConfig.primary = primaryModel;
-        } else {
-          delete modelConfig.primary;
-        }
-
-        defaults.model = modelConfig;
-      } else {
-        clearPiAiFlag();
-      }
 
       // API-key providers (envKey backed)
       if (runMode === "local" && providerId && body.providerApiKey) {
@@ -7561,38 +10823,33 @@ async function handleRequest(
       (config.agents.defaults as Record<string, unknown>).subscriptionProvider =
         body.provider;
       logger.info(
-        `[milady-api] Subscription provider selected: ${body.provider} — complete OAuth via /api/subscription/ endpoints`,
+        `[milaidy-api] Subscription provider selected: ${body.provider} — complete OAuth via /api/subscription/ endpoints`,
       );
-
-      // Handle Anthropic setup token (sk-ant-oat01-...) provided during
-      // onboarding. The API-key gate above skips subscription providers
-      // because their envKey is null. Mirrors POST /api/subscription/
-      // anthropic/setup-token in subscription-routes.ts.
-      if (
-        body.provider === "anthropic-subscription" &&
-        typeof body.providerApiKey === "string" &&
-        body.providerApiKey.trim().startsWith("sk-ant-")
-      ) {
-        const token = body.providerApiKey.trim();
-        if (!config.env) config.env = {};
-        (config.env as Record<string, string>).ANTHROPIC_API_KEY = token;
-        process.env.ANTHROPIC_API_KEY = token;
-        logger.info(
-          "[milady-api] Anthropic setup token saved during onboarding",
-        );
-      }
     }
 
-    // ── GitHub token ────────────────────────────────────────────────────
+    const selectedSubscriptionProvider = toCanonicalSubscriptionProvider(
+      (
+        config.agents?.defaults as Record<string, unknown> | undefined
+      )?.subscriptionProvider as string | undefined,
+    );
+    const providerExplicitlyNonPiAi =
+      providerFieldProvided &&
+      providerId.length > 0 &&
+      providerId !== "pi-ai" &&
+      providerId !== "openai-subscription";
     if (
-      body.githubToken &&
-      typeof body.githubToken === "string" &&
-      body.githubToken.trim()
+      runMode === "local" &&
+      !providerExplicitlyNonPiAi &&
+      selectedSubscriptionProvider !== "anthropic-subscription"
     ) {
-      if (!config.env) config.env = {};
-      (config.env as Record<string, string>).GITHUB_TOKEN =
-        body.githubToken.trim();
-      process.env.GITHUB_TOKEN = body.githubToken.trim();
+      const restored = await restoreOpenAiSubscriptionPiAiModeFromCredentials(
+        config,
+      );
+      if (restored) {
+        logger.info(
+          "[milaidy-api] Restored OpenAI subscription pi-ai mode from stored credentials",
+        );
+      }
     }
 
     // ── Connectors (Telegram, Discord, WhatsApp, Twilio, Blooio) ────────
@@ -7609,7 +10866,7 @@ async function handleRequest(
       typeof body.discordToken === "string" &&
       body.discordToken.trim()
     ) {
-      config.connectors.discord = { token: body.discordToken.trim() };
+      config.connectors.discord = { botToken: body.discordToken.trim() };
     }
     if (
       body.whatsappSessionPath &&
@@ -7656,25 +10913,22 @@ async function handleRequest(
       body.blooioApiKey.trim()
     ) {
       if (!config.env) config.env = {};
-      const trimmedKey = (body.blooioApiKey as string).trim();
-      (config.env as Record<string, string>).BLOOIO_API_KEY = trimmedKey;
-      process.env.BLOOIO_API_KEY = trimmedKey;
-
-      const blooioConnector: Record<string, string> = { apiKey: trimmedKey };
-
+      (config.env as Record<string, string>).BLOOIO_API_KEY = (
+        body.blooioApiKey as string
+      ).trim();
+      process.env.BLOOIO_API_KEY = (body.blooioApiKey as string).trim();
       if (
         body.blooioPhoneNumber &&
         typeof body.blooioPhoneNumber === "string" &&
         body.blooioPhoneNumber.trim()
       ) {
-        const trimmedPhone = (body.blooioPhoneNumber as string).trim();
-        (config.env as Record<string, string>).BLOOIO_PHONE_NUMBER =
-          trimmedPhone;
-        process.env.BLOOIO_PHONE_NUMBER = trimmedPhone;
-        blooioConnector.fromNumber = trimmedPhone;
+        (config.env as Record<string, string>).BLOOIO_PHONE_NUMBER = (
+          body.blooioPhoneNumber as string
+        ).trim();
+        process.env.BLOOIO_PHONE_NUMBER = (
+          body.blooioPhoneNumber as string
+        ).trim();
       }
-
-      config.connectors.blooio = blooioConnector;
     }
 
     // ── Inventory / RPC providers ─────────────────────────────────────────
@@ -7698,37 +10952,141 @@ async function handleRequest(
       }
     }
 
-    // ── Ensure wallet keys exist so inventory can resolve addresses ───────
-    ensureWalletKeysInEnvAndConfig(config);
+    // ── Generate wallet keys if not already present ───────────────────────
+    if (!process.env.EVM_PRIVATE_KEY || !process.env.SOLANA_PRIVATE_KEY) {
+      try {
+        const walletKeys = generateWalletKeys();
+
+        if (!process.env.EVM_PRIVATE_KEY) {
+          if (!config.env) config.env = {};
+          (config.env as Record<string, string>).EVM_PRIVATE_KEY =
+            walletKeys.evmPrivateKey;
+          process.env.EVM_PRIVATE_KEY = walletKeys.evmPrivateKey;
+          logger.info(
+            `[milaidy-api] Generated EVM wallet: ${walletKeys.evmAddress}`,
+          );
+        }
+
+        if (!process.env.SOLANA_PRIVATE_KEY) {
+          if (!config.env) config.env = {};
+          (config.env as Record<string, string>).SOLANA_PRIVATE_KEY =
+            walletKeys.solanaPrivateKey;
+          process.env.SOLANA_PRIVATE_KEY = walletKeys.solanaPrivateKey;
+          logger.info(
+            `[milaidy-api] Generated Solana wallet: ${walletKeys.solanaAddress}`,
+          );
+        }
+      } catch (err) {
+        logger.warn(`[milaidy-api] Failed to generate wallet keys: ${err}`);
+      }
+    }
 
     state.config = config;
     state.agentName = (body.name as string) ?? state.agentName;
     try {
-      saveMiladyConfig(config);
+      saveMilaidyConfig(config);
     } catch (err) {
       logger.error(
-        `[milady-api] Failed to save config after onboarding: ${err}`,
+        `[milaidy-api] Failed to save config after onboarding: ${err}`,
       );
       error(res, "Failed to save configuration", 500);
       return;
     }
     logger.info(
-      `[milady-api] Onboarding complete for agent "${body.name}" (mode: ${(body.runMode as string) || "local"})`,
+      `[milaidy-api] Onboarding complete for agent "${body.name}" (mode: ${(body.runMode as string) || "local"})`,
     );
     json(res, { ok: true });
     return;
   }
 
-  if (
-    await handleAgentLifecycleRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      state,
-      json,
-    })
-  ) {
+  // ── POST /api/agent/start ───────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/agent/start") {
+    state.agentState = "running";
+    state.startedAt = Date.now();
+    const detectedModel = state.runtime
+      ? (state.runtime.plugins.find(
+          (p) =>
+            p.name.includes("anthropic") ||
+            p.name.includes("openai") ||
+            p.name.includes("groq"),
+        )?.name ?? "unknown")
+      : "unknown";
+    state.model = detectedModel;
+
+    // Enable the autonomy task — the core TaskService will pick it up
+    // and fire the first tick immediately (updatedAt starts at 0).
+    const svc = getAutonomySvc(state.runtime);
+    if (svc) await svc.enableAutonomy();
+
+    // Patch messageService for autonomy routing (may be first time if runtime
+    // was provided before the API server's patch ran, or after a restart).
+    patchMessageServiceForAutonomy(state);
+
+    json(res, {
+      ok: true,
+      status: {
+        state: state.agentState,
+        agentName: state.agentName,
+        model: state.model,
+        uptime: 0,
+        startedAt: state.startedAt,
+      },
+    });
+    return;
+  }
+
+  // ── POST /api/agent/stop ────────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/agent/stop") {
+    const svc = getAutonomySvc(state.runtime);
+    if (svc) await svc.disableAutonomy();
+
+    state.agentState = "stopped";
+    state.startedAt = undefined;
+    state.model = undefined;
+    json(res, {
+      ok: true,
+      status: { state: state.agentState, agentName: state.agentName },
+    });
+    return;
+  }
+
+  // ── POST /api/agent/pause ───────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/agent/pause") {
+    const svc = getAutonomySvc(state.runtime);
+    if (svc) await svc.disableAutonomy();
+
+    state.agentState = "paused";
+    json(res, {
+      ok: true,
+      status: {
+        state: state.agentState,
+        agentName: state.agentName,
+        model: state.model,
+        uptime: state.startedAt ? Date.now() - state.startedAt : undefined,
+        startedAt: state.startedAt,
+      },
+    });
+    return;
+  }
+
+  // ── POST /api/agent/resume ──────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/agent/resume") {
+    // Re-enable the autonomy task — first tick fires immediately
+    // because the new task is created with updatedAt: 0.
+    const svc = getAutonomySvc(state.runtime);
+    if (svc) await svc.enableAutonomy();
+
+    state.agentState = "running";
+    json(res, {
+      ok: true,
+      status: {
+        state: state.agentState,
+        agentName: state.agentName,
+        model: state.model,
+        uptime: state.startedAt ? Date.now() - state.startedAt : undefined,
+        startedAt: state.startedAt,
+      },
+    });
     return;
   }
 
@@ -7781,89 +11139,278 @@ async function handleRequest(
     if (knowledgeHandled) return;
   }
 
-  if (pathname.startsWith("/api/memory") || pathname === "/api/context/quick") {
-    const memoryHandled = await handleMemoryRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      url,
-      runtime: state.runtime,
-      agentName: state.agentName,
-      readJsonBody,
-      json,
-      error,
-    });
-    if (memoryHandled) return;
+  // ── POST /api/agent/restart ────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/agent/restart") {
+    if (!ctx?.onRestart) {
+      error(
+        res,
+        "Restart is not supported in this mode (no restart handler registered)",
+        501,
+      );
+      return;
+    }
+
+    // Reject if already mid-restart to prevent overlapping restarts.
+    if (state.agentState === "restarting") {
+      error(res, "A restart is already in progress", 409);
+      return;
+    }
+
+    const previousState = state.agentState;
+    state.agentState = "restarting";
+    try {
+      const newRuntime = await ctx.onRestart();
+      if (newRuntime) {
+        state.runtime = newRuntime;
+        state.chatConnectionReady = null;
+        state.chatConnectionPromise = null;
+        state.agentState = "running";
+        state.agentName = newRuntime.character.name ?? "Milaidy";
+        state.startedAt = Date.now();
+        patchMessageServiceForAutonomy(state);
+        json(res, {
+          ok: true,
+          status: {
+            state: state.agentState,
+            agentName: state.agentName,
+            startedAt: state.startedAt,
+          },
+        });
+      } else {
+        // Restore previous state instead of permanently stuck in "error"
+        state.agentState = previousState;
+        error(
+          res,
+          "Restart handler returned null — runtime failed to re-initialize",
+          500,
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Restore previous state so the UI can retry
+      state.agentState = previousState;
+      error(res, `Restart failed: ${msg}`, 500);
+    }
+    return;
   }
 
-  if (
-    await handleAgentAdminRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      state,
-      onRestart: ctx?.onRestart ?? undefined,
-      onRuntimeSwapped: ctx?.onRuntimeSwapped,
-      json,
-      error,
-      resolveStateDir,
-      resolvePath: path.resolve,
-      getHomeDir: os.homedir,
-      isSafeResetStateDir,
-      stateDirExists: fs.existsSync,
-      removeStateDir: (resolvedState) => {
+  // ── POST /api/agent/reset ──────────────────────────────────────────────
+  // Wipe config, workspace (memory), and return to onboarding.
+  if (method === "POST" && pathname === "/api/agent/reset") {
+    try {
+      // 1. Stop the runtime if it's running
+      if (state.runtime) {
+        try {
+          await state.runtime.stop();
+        } catch (stopErr) {
+          const msg =
+            stopErr instanceof Error ? stopErr.message : String(stopErr);
+          logger.warn(
+            `[milaidy-api] Error stopping runtime during reset: ${msg}`,
+          );
+        }
+        state.runtime = null;
+      }
+
+      // 2. Delete the state directory (~/.milaidy/) which contains
+      //    config, workspace, memory, oauth tokens, etc.
+      const stateDir = resolveStateDir();
+
+      // Safety: validate the resolved path before recursive deletion.
+      // MILAIDY_STATE_DIR can be overridden via env/config — if set to
+      // "/" or another sensitive path, rmSync would wipe the filesystem.
+      const resolvedState = path.resolve(stateDir);
+      const home = os.homedir();
+      const isSafe = isSafeResetStateDir(resolvedState, home);
+      if (!isSafe) {
+        logger.warn(
+          `[milaidy-api] Refusing to delete unsafe state dir: "${resolvedState}"`,
+        );
+        error(
+          res,
+          `Reset aborted: state directory "${resolvedState}" does not appear safe to delete`,
+          400,
+        );
+        return;
+      }
+
+      if (fs.existsSync(resolvedState)) {
         fs.rmSync(resolvedState, { recursive: true, force: true });
-      },
-      logWarn: (message) => logger.warn(message),
-    })
-  ) {
+      }
+
+      // 3. Reset server state
+      state.agentState = "stopped";
+      state.agentName = "Milaidy";
+      state.model = undefined;
+      state.startedAt = undefined;
+      state.config = {} as MilaidyConfig;
+      state.chatRoomId = null;
+      state.chatUserId = null;
+      state.chatConnectionReady = null;
+      state.chatConnectionPromise = null;
+
+      json(res, { ok: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, `Reset failed: ${msg}`, 500);
+    }
     return;
   }
 
-  if (
-    await handleAgentTransferRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      state,
-      readJsonBody,
-      json,
-      error,
-    })
-  ) {
+  // ── POST /api/agent/export ─────────────────────────────────────────────
+  // Export the entire agent as a password-encrypted binary file.
+  if (method === "POST" && pathname === "/api/agent/export") {
+    if (!state.runtime) {
+      error(res, "Agent is not running — start it before exporting.", 503);
+      return;
+    }
+
+    const body = await readJsonBody<{
+      password?: string;
+      includeLogs?: boolean;
+    }>(req, res);
+    if (!body) return;
+
+    if (!body.password || typeof body.password !== "string") {
+      error(
+        res,
+        `A password of at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters is required.`,
+        400,
+      );
+      return;
+    }
+
+    if (body.password.length < AGENT_TRANSFER_MIN_PASSWORD_LENGTH) {
+      error(
+        res,
+        `A password of at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters is required.`,
+        400,
+      );
+      return;
+    }
+
+    try {
+      const fileBuffer = await exportAgent(state.runtime, body.password, {
+        includeLogs: body.includeLogs === true,
+      });
+
+      const agentName = (state.runtime.character.name ?? "agent")
+        .replace(/[^a-zA-Z0-9_-]/g, "_")
+        .toLowerCase();
+      const timestamp = new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")
+        .slice(0, 19);
+      const filename = `${agentName}-${timestamp}.eliza-agent`;
+
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"`,
+      );
+      res.setHeader("Content-Length", fileBuffer.length);
+      res.end(fileBuffer);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (err instanceof AgentExportError) {
+        error(res, msg, 400);
+      } else {
+        error(res, `Export failed: ${msg}`, 500);
+      }
+    }
     return;
   }
 
-  if (
-    await handleAutonomyRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      runtime: state.runtime,
-      readJsonBody,
-      json,
-    })
-  ) {
+  // ── GET /api/agent/export/estimate ─────────────────────────────────────────
+  // Get an estimate of the export size before downloading.
+  if (method === "GET" && pathname === "/api/agent/export/estimate") {
+    if (!state.runtime) {
+      error(res, "Agent is not running.", 503);
+      return;
+    }
+
+    try {
+      const estimate = await estimateExportSize(state.runtime);
+      json(res, estimate);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, `Estimate failed: ${msg}`, 500);
+    }
     return;
   }
 
-  if (
-    await handleCharacterRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      state,
-      readJsonBody,
-      json,
-      error,
-      pickRandomNames,
-    })
-  ) {
+  // ── POST /api/agent/import ─────────────────────────────────────────────
+  // Import an agent from a password-encrypted .eliza-agent file.
+  if (method === "POST" && pathname === "/api/agent/import") {
+    if (!state.runtime) {
+      error(res, "Agent is not running — start it before importing.", 503);
+      return;
+    }
+
+    let rawBody: Buffer;
+    try {
+      rawBody = await readRawBody(req, MAX_IMPORT_BYTES);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, msg, 413);
+      return;
+    }
+
+    if (rawBody.length < 5) {
+      error(
+        res,
+        "Request body is too small — expected password + file data.",
+        400,
+      );
+      return;
+    }
+
+    // Parse binary envelope: [4 bytes password length][password][file data]
+    const passwordLength = rawBody.readUInt32BE(0);
+    if (passwordLength < AGENT_TRANSFER_MIN_PASSWORD_LENGTH) {
+      error(
+        res,
+        `Password must be at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters.`,
+        400,
+      );
+      return;
+    }
+    if (passwordLength > AGENT_TRANSFER_MAX_PASSWORD_LENGTH) {
+      error(
+        res,
+        `Password is too long (max ${AGENT_TRANSFER_MAX_PASSWORD_LENGTH} bytes).`,
+        400,
+      );
+      return;
+    }
+    if (rawBody.length < 4 + passwordLength + 1) {
+      error(
+        res,
+        "Request body is incomplete — missing file data after password.",
+        400,
+      );
+      return;
+    }
+
+    const password = rawBody.subarray(4, 4 + passwordLength).toString("utf-8");
+    const fileBuffer = rawBody.subarray(4 + passwordLength);
+
+    try {
+      const result = await importAgent(
+        state.runtime,
+        fileBuffer as Buffer,
+        password,
+      );
+      json(res, result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (err instanceof AgentExportError) {
+        error(res, msg, 400);
+      } else {
+        error(res, `Import failed: ${msg}`, 500);
+      }
+    }
     return;
   }
 
@@ -7922,33 +11469,8 @@ async function handleRequest(
 
   // ── GET /api/agent/autonomy/roles/readiness ──────────────────────────
   if (
-    await handleNfaRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      json,
-      error,
-    })
-  ) {
-    return;
-  }
-
-  if (
-    await handleRegistryRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      url,
-      json,
-      error,
-      getPluginManager: () => requirePluginManager(state.runtime),
-      getLoadedPluginNames: () =>
-        state.runtime?.plugins.map((plugin) => plugin.name) ?? [],
-      getBundledPluginIds: () =>
-        new Set(state.plugins.map((plugin) => plugin.id)),
-    })
+    method === "GET" &&
+    pathname === "/api/agent/autonomy/roles/readiness"
   ) {
     try {
       const autonomySvc = getAutonomySvc(state.runtime);
@@ -8071,7 +11593,10 @@ async function handleRequest(
 
       // Return pending approvals from the gate + recent from persistent log
       const gate = autonomySvc?.getApprovalGate?.();
-      const pending = gate?.getPending() ?? [];
+      const pending = [
+        ...(gate?.getPending() ?? []),
+        ...toPendingStream555Approvals(state.runtime),
+      ];
       const approvalLog = autonomySvc?.getApprovalLog?.();
       let recent: unknown[] = [];
       if (approvalLog) {
@@ -8110,18 +11635,25 @@ async function handleRequest(
     try {
       const autonomySvc = getAutonomySvc(state.runtime);
       const gate = autonomySvc?.getApprovalGate?.();
-      if (!gate) {
-        error(res, "Approval gate not available", 503);
-        return;
-      }
+      const resolved =
+        gate?.resolve(
+          approvalId,
+          decision as "approved" | "denied",
+          decidedBy,
+        ) ??
+        false;
+      const streamResolved = getStream555ApprovalSvc(state.runtime)
+        ?.resolveApproval?.(
+          approvalId,
+          decision as "approved" | "denied",
+          decidedBy,
+        ) ?? false;
 
-      const resolved = gate.resolve(
-        approvalId,
-        decision as "approved" | "denied",
-        decidedBy,
-      );
-
-      if (!resolved) {
+      if (!resolved && !streamResolved) {
+        if (!gate && !getStream555ApprovalSvc(state.runtime)?.resolveApproval) {
+          error(res, "Approval gate not available", 503);
+          return;
+        }
         error(res, "Approval not found or already resolved", 404);
         return;
       }
@@ -8170,9 +11702,11 @@ async function handleRequest(
 
     const autonomySvc = getAutonomySvc(runtime);
     const pipeline = autonomySvc?.getExecutionPipeline?.();
+    const executionMode = pipeline ? "pipeline" : "direct-runtime";
     if (!pipeline) {
-      error(res, "Autonomy execution pipeline not available", 503);
-      return;
+      metrics.counter("milaidy.autonomy.execute_plan_fallback_total", 1, {
+        reason: "pipeline_unavailable",
+      });
     }
 
     const allowedSources = new Set(["llm", "user", "system", "plugin"]);
@@ -8182,6 +11716,13 @@ async function handleRequest(
         ? (body.request.source as "llm" | "user" | "system" | "plugin")
         : "system";
     const stopOnFailure = body.options?.stopOnFailure !== false;
+    const planId = typeof plan.id === "string" ? plan.id.trim() : "";
+    const isQuickLayerPlan = planId.startsWith("quick-layer-");
+    if (isQuickLayerPlan) {
+      metrics.counter("milaidy.quick_layer.plan_total", 1, {
+        plan: planId || "quick-layer-unknown",
+      });
+    }
 
     const results: unknown[] = [];
     let stoppedEarly = false;
@@ -8199,24 +11740,53 @@ async function handleRequest(
       const stepId =
         step.id !== undefined ? String(step.id) : String(index + 1);
       const requestId = `${plan.id ?? "plan"}-${stepId}`;
+      if (isQuickLayerPlan) {
+        metrics.counter("milaidy.quick_layer.dispatch_total", 1, {
+          action: toolName,
+        });
+      }
 
-      const result = await pipeline.execute(
-        {
-          tool: toolName,
-          params,
-          source,
-          requestId,
-        },
-        async (tool, validatedParams, reqId) =>
-          executeRuntimeAction({
+      const result = pipeline
+        ? await pipeline.execute(
+            {
+              tool: toolName,
+              params,
+              source,
+              requestId,
+            },
+            async (tool, validatedParams, reqId) =>
+              executeRuntimeAction({
+                runtime,
+                toolName: tool,
+                requestId: reqId,
+                parameters: (validatedParams ?? {}) as Record<string, unknown>,
+              }),
+          )
+        : await executeRuntimeActionDirect({
             runtime,
-            toolName: tool,
-            requestId: reqId,
-            parameters: (validatedParams ?? {}) as Record<string, unknown>,
-          }),
-      );
+            toolName,
+            requestId,
+            parameters: params as Record<string, unknown>,
+          });
 
       results.push(result);
+      if (
+        isQuickLayerPlan &&
+        result &&
+        typeof result === "object" &&
+        "success" in result
+      ) {
+        const succeeded = (result as { success?: boolean }).success;
+        if (succeeded === true) {
+          metrics.counter("milaidy.quick_layer.success_total", 1, {
+            action: toolName,
+          });
+        } else if (succeeded === false) {
+          metrics.counter("milaidy.quick_layer.failure_total", 1, {
+            action: toolName,
+          });
+        }
+      }
 
       if (
         stopOnFailure &&
@@ -8250,6 +11820,7 @@ async function handleRequest(
     json(res, {
       ok: allSucceeded,
       allSucceeded,
+      executionMode,
       stoppedEarly,
       failedStepIndex,
       stopOnFailure,
@@ -8807,160 +12378,23 @@ async function handleRequest(
 
   // ── GET /api/plugins ────────────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/plugins") {
-    // Re-read config from disk so we pick up plugins installed since server start.
-    let freshConfig: MiladyConfig;
-    try {
-      freshConfig = loadMiladyConfig();
-    } catch {
-      freshConfig = state.config;
-    }
-
-    // Merge user-installed plugins into the list (they don't exist in plugins.json)
-    const bundledIds = new Set(state.plugins.map((p) => p.id));
-    const installedEntries = discoverInstalledPlugins(freshConfig, bundledIds);
-    const allPlugins: PluginEntry[] = [...state.plugins, ...installedEntries];
-
-    // Resolve enabled state from config and loaded state from runtime.
-    // "enabled" = user wants it active (config). "isActive" = actually loaded.
-    const configEntries = (
-      freshConfig.plugins as Record<string, unknown> | undefined
-    )?.entries as Record<string, { enabled?: boolean }> | undefined;
-    const loadedNames = state.runtime
-      ? state.runtime.plugins.map((p) => p.name)
-      : [];
-    for (const plugin of allPlugins) {
-      const suffix = `plugin-${plugin.id}`;
-      const packageName = `@elizaos/plugin-${plugin.id}`;
-      const npmPkgName = plugin.npmName;
-      const isLoaded =
-        loadedNames.length > 0 &&
-        loadedNames.some((name) => {
-          return (
-            name === plugin.id ||
-            name === suffix ||
-            name === packageName ||
-            (npmPkgName != null && name === npmPkgName) ||
-            name.endsWith(`/${suffix}`) ||
-            name.includes(plugin.id)
-          );
-        });
-      plugin.isActive = isLoaded;
-      // Set enabled from config if available, otherwise from runtime
-      const configEntry = configEntries?.[plugin.id];
-      if (configEntry && typeof configEntry.enabled === "boolean") {
-        plugin.enabled = configEntry.enabled;
-      } else {
-        plugin.enabled = isLoaded;
-      }
-      // Detect installed-but-failed-to-load plugins
-      plugin.loadError = undefined;
-      if (plugin.enabled && !isLoaded && state.runtime) {
-        const installs = freshConfig.plugins?.installs as
-          | Record<string, unknown>
-          | undefined;
-        const packageName = `@elizaos/plugin-${plugin.id}`;
-        const hasInstallRecord =
-          installs?.[packageName] || installs?.[plugin.id];
-        if (hasInstallRecord) {
-          plugin.loadError =
-            "Plugin installed but failed to load — the package may be missing compiled files.";
-        }
-      }
-    }
-
-    // Always refresh current env values and re-validate
-    for (const plugin of allPlugins) {
-      for (const param of plugin.parameters) {
-        const envValue = process.env[param.key];
-        param.isSet = Boolean(envValue?.trim());
-        param.currentValue = param.isSet
-          ? param.sensitive
-            ? maskValue(envValue ?? "")
-            : (envValue ?? "")
-          : null;
-      }
-      const paramInfos: PluginParamInfo[] = plugin.parameters.map((p) => ({
-        key: p.key,
-        required: p.required,
-        sensitive: p.sensitive,
-        type: p.type,
-        description: p.description,
-        default: p.default,
-      }));
-      const validation = validatePluginConfig(
-        plugin.id,
-        plugin.category,
-        plugin.envKey,
-        plugin.configKeys,
-        undefined,
-        paramInfos,
-      );
-      plugin.validationErrors = validation.errors;
-      plugin.validationWarnings = validation.warnings;
-    }
-
-    applyWhatsAppQrOverride(allPlugins, resolveDefaultAgentWorkspaceDir());
-
-    // Inject per-provider model options into configUiHints for MODEL fields.
-    // Each provider's cache is independent — no cross-population.
-    // Always set type: "select" on MODEL fields so they render as dropdowns,
-    // even when no models are cached yet (empty dropdown prompts user to fetch).
-    for (const plugin of allPlugins) {
-      const providerModels = readProviderCache(plugin.id)?.models ?? [];
-
-      for (const param of plugin.parameters) {
-        if (!param.key.toUpperCase().includes("MODEL")) continue;
-
-        // Filter to the category this field expects (chat, embedding, image, etc.)
-        const expectedCat = paramKeyToCategory(param.key);
-        const filtered = providerModels.filter(
-          (m) => m.category === expectedCat,
-        );
-
-        if (!plugin.configUiHints) plugin.configUiHints = {};
-        plugin.configUiHints[param.key] = {
-          ...plugin.configUiHints[param.key],
-          type: "select",
-          options: filtered.map((m) => ({
-            value: m.id,
-            label: m.name !== m.id ? `${m.name} (${m.id})` : m.id,
-          })),
-        };
-      }
-    }
-
-    json(res, { plugins: allPlugins });
+    json(res, { plugins: resolveApiPluginEntries(state) });
     return;
   }
 
   // ── PUT /api/plugins/:id ────────────────────────────────────────────────
   if (method === "PUT" && pathname.startsWith("/api/plugins/")) {
-    const pluginId = pathname.slice("/api/plugins/".length);
+    const requestedPluginId = pathname.slice("/api/plugins/".length);
+    const pluginId = resolveCanonicalPluginId(requestedPluginId);
     const body = await readJsonBody<{
       enabled?: boolean;
       config?: Record<string, string>;
     }>(req, res);
     if (!body) return;
 
-    // Search both bundled plugins AND store-installed plugins
-    let plugin = state.plugins.find((p) => p.id === pluginId);
-    if (!plugin) {
-      // Check store-installed plugins from config
-      let freshCfg: MiladyConfig;
-      try {
-        freshCfg = loadMiladyConfig();
-      } catch {
-        freshCfg = state.config;
-      }
-      const bundledIds = new Set(state.plugins.map((p) => p.id));
-      const installed = discoverInstalledPlugins(freshCfg, bundledIds);
-      const found = installed.find((p) => p.id === pluginId);
-      if (found) {
-        // Temporarily add to state.plugins so toggle logic works the same way
-        state.plugins.push(found);
-        plugin = found;
-      }
-    }
+    const plugin = state.plugins.find(
+      (p) => p.id === pluginId || resolveCanonicalPluginId(p.id) === pluginId,
+    );
     if (!plugin) {
       error(res, `Plugin "${pluginId}" not found`, 404);
       return;
@@ -8987,7 +12421,10 @@ async function handleRequest(
       // fields. Users may save partial config (e.g. just the API key) from
       // the Settings page; blocking the save because OTHER required fields
       // aren't set yet is counterproductive.
-      const configObj = body.config;
+      const configObj = applyStream555ChannelAutoEnableConfig(
+        pluginId,
+        body.config,
+      );
       const submittedParamInfos: PluginParamInfo[] = plugin.parameters
         .filter((p) => p.key in configObj)
         .map((p) => ({
@@ -9002,8 +12439,8 @@ async function handleRequest(
         pluginId,
         plugin.category,
         plugin.envKey,
-        plugin.configKeys,
-        body.config,
+        Object.keys(configObj),
+        configObj,
         submittedParamInfos,
       );
 
@@ -9022,7 +12459,7 @@ async function handleRequest(
       if (!state.config.env) {
         state.config.env = {};
       }
-      for (const [key, value] of Object.entries(body.config)) {
+      for (const [key, value] of Object.entries(configObj)) {
         if (
           allowedParamKeys.has(key) &&
           !BLOCKED_ENV_KEYS.has(key.toUpperCase()) &&
@@ -9038,10 +12475,10 @@ async function handleRequest(
       // Save config even when only config values changed (no enable toggle)
       if (body.enabled === undefined) {
         try {
-          saveMiladyConfig(state.config);
+          saveMilaidyConfig(state.config);
         } catch (err) {
           logger.warn(
-            `[milady-api] Failed to save config: ${err instanceof Error ? err.message : err}`,
+            `[milaidy-api] Failed to save config: ${err instanceof Error ? err.message : err}`,
           );
         }
       }
@@ -9081,8 +12518,21 @@ async function handleRequest(
       const entries = (state.config.plugins as Record<string, unknown>)
         .entries as Record<string, Record<string, unknown>>;
       entries[pluginId] = { enabled: body.enabled };
+      if (pluginId === STREAM555_PLUGIN_CONTROL_ID) {
+        entries["555stream"] = { enabled: body.enabled };
+        entries["stream555-auth"] = { enabled: body.enabled };
+        entries["stream555-ads"] = { enabled: body.enabled };
+      }
+      if (pluginId === ARCADE555_PLUGIN_CONTROL_ID) {
+        entries["arcade555-canonical"] = { enabled: body.enabled };
+        entries["arcade555"] = { enabled: body.enabled };
+        entries["555arcade"] = { enabled: body.enabled };
+        for (const legacyPluginId of ARCADE555_PLUGIN_LEGACY_IDS) {
+          entries[legacyPluginId] = { enabled: body.enabled };
+        }
+      }
       logger.info(
-        `[milady-api] ${body.enabled ? "Enabled" : "Disabled"} plugin: ${packageName}`,
+        `[milaidy-api] ${body.enabled ? "Enabled" : "Disabled"} plugin: ${packageName}`,
       );
 
       // Persist capability toggle state in config.features so the runtime
@@ -9092,7 +12542,6 @@ async function handleRequest(
         "vision",
         "browser",
         "computeruse",
-        "coding-agent",
       ]);
       if (CAPABILITY_FEATURE_IDS.has(pluginId)) {
         if (!state.config.features) {
@@ -9103,14 +12552,14 @@ async function handleRequest(
 
       // Save updated config
       try {
-        saveMiladyConfig(state.config);
+        saveMilaidyConfig(state.config);
       } catch (err) {
         logger.warn(
-          `[milady-api] Failed to save config: ${err instanceof Error ? err.message : err}`,
+          `[milaidy-api] Failed to save config: ${err instanceof Error ? err.message : err}`,
         );
       }
 
-      scheduleRuntimeRestart(`Plugin toggle: ${pluginId}`);
+      scheduleRuntimeRestart(`Plugin toggle: ${pluginId}`, 300);
     }
 
     json(res, { ok: true, plugin });
@@ -9122,7 +12571,10 @@ async function handleRequest(
     // Merge bundled + installed plugins for full parameter coverage
     const bundledIds = new Set(state.plugins.map((p) => p.id));
     const installedEntries = discoverInstalledPlugins(state.config, bundledIds);
-    const allPlugins: PluginEntry[] = [...state.plugins, ...installedEntries];
+    const allPlugins: PluginEntry[] = collapseFive55PluginEntries([
+      ...state.plugins,
+      ...installedEntries,
+    ]);
 
     // Sync enabled status from runtime (same logic as GET /api/plugins)
     if (state.runtime) {
@@ -9161,7 +12613,10 @@ async function handleRequest(
     // Build allowlist from all plugin-declared sensitive params
     const bundledIds = new Set(state.plugins.map((p) => p.id));
     const installedEntries = discoverInstalledPlugins(state.config, bundledIds);
-    const allPlugins: PluginEntry[] = [...state.plugins, ...installedEntries];
+    const allPlugins: PluginEntry[] = collapseFive55PluginEntries([
+      ...state.plugins,
+      ...installedEntries,
+    ]);
     const allowedKeys = new Set<string>();
     for (const plugin of allPlugins) {
       for (const param of plugin.parameters) {
@@ -9190,31 +12645,275 @@ async function handleRequest(
     return;
   }
 
+  // ── GET /api/registry/plugins ──────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/registry/plugins") {
+    const { getRegistryPlugins } = await import(
+      "../services/registry-client.js"
+    );
+    const { listInstalledPlugins: listInstalled } = await import(
+      "../services/plugin-installer.js"
+    );
+    try {
+      const registry = await getRegistryPlugins();
+      const installed = await listInstalled();
+      const installedNames = new Set(installed.map((p) => p.name));
+
+      // Also check which plugins are loaded in the runtime
+      const loadedNames = state.runtime
+        ? new Set(state.runtime.plugins.map((p) => p.name))
+        : new Set<string>();
+
+      // Cross-reference with bundled manifest so the Store can hide them
+      const bundledIds = new Set(state.plugins.map((p) => p.id));
+
+      const plugins = Array.from(registry.values()).map((p) => {
+        const shortId = p.name
+          .replace(/^@[^/]+\/plugin-/, "")
+          .replace(/^@[^/]+\//, "")
+          .replace(/^plugin-/, "");
+        return {
+          ...p,
+          installed: installedNames.has(p.name),
+          installedVersion:
+            installed.find((i) => i.name === p.name)?.version ?? null,
+          loaded:
+            loadedNames.has(p.name) ||
+            loadedNames.has(p.name.replace("@elizaos/", "")),
+          bundled: bundledIds.has(shortId),
+        };
+      });
+      json(res, { count: plugins.length, plugins });
+    } catch (err) {
+      error(
+        res,
+        `Failed to fetch registry: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  // ── GET /api/registry/plugins/:name ─────────────────────────────────────
+  if (
+    method === "GET" &&
+    pathname.startsWith("/api/registry/plugins/") &&
+    pathname.length > "/api/registry/plugins/".length
+  ) {
+    const name = decodeURIComponent(
+      pathname.slice("/api/registry/plugins/".length),
+    );
+    const { getPluginInfo } = await import("../services/registry-client.js");
+
+    try {
+      const info = await getPluginInfo(name);
+      if (!info) {
+        error(res, `Plugin "${name}" not found in registry`, 404);
+        return;
+      }
+      json(res, { plugin: info });
+    } catch (err) {
+      error(
+        res,
+        `Failed to look up plugin: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  // ── GET /api/registry/search?q=... ──────────────────────────────────────
+  if (method === "GET" && pathname === "/api/registry/search") {
+    const query = url.searchParams.get("q") || "";
+    if (!query.trim()) {
+      error(res, "Query parameter 'q' is required", 400);
+      return;
+    }
+
+    const { searchPlugins } = await import("../services/registry-client.js");
+
+    try {
+      const limitParam = url.searchParams.get("limit");
+      const limit = limitParam
+        ? Math.min(Math.max(Number(limitParam), 1), 50)
+        : 15;
+      const results = await searchPlugins(query, limit);
+      json(res, { query, count: results.length, results });
+    } catch (err) {
+      error(
+        res,
+        `Search failed: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  // ── POST /api/registry/refresh ──────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/registry/refresh") {
+    const { refreshRegistry } = await import("../services/registry-client.js");
+
+    try {
+      const registry = await refreshRegistry();
+      json(res, { ok: true, count: registry.size });
+    } catch (err) {
+      error(
+        res,
+        `Refresh failed: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
   // ── POST /api/plugins/:id/test ────────────────────────────────────────
   // Test a plugin's connection / configuration validity.
+  const pluginUiStateMatch =
+    method === "GET" && pathname.match(/^\/api\/plugins\/([^/]+)\/ui-state$/);
+  if (pluginUiStateMatch) {
+    const pluginId = resolveCanonicalPluginId(
+      decodeURIComponent(pluginUiStateMatch[1]),
+    );
+    const plugin = resolveApiPluginEntries(state).find(
+      (entry) => resolveCanonicalPluginId(entry.id) === pluginId,
+    );
+    if (!plugin) {
+      json(
+        res,
+        {
+          ok: false,
+          code: "plugin_not_installed",
+          pluginId,
+          message: "Plugin is not installed in this Milaidy runtime.",
+        },
+        404,
+      );
+      return;
+    }
+
+    json(res, {
+      ok: true,
+      pluginId: plugin.id,
+      displayName: plugin.name,
+      installed: plugin.installed ?? true,
+      enabled: plugin.enabled,
+      loaded: Boolean(plugin.isActive),
+      authenticated: plugin.authenticated ?? null,
+      ready: plugin.ready ?? null,
+      degraded: plugin.degraded ?? false,
+      summary: plugin.statusSummary ?? [],
+      warnings: plugin.operationalWarnings ?? [],
+      errors: plugin.operationalErrors ?? [],
+      counts: plugin.operationalCounts ?? {},
+      sections: plugin.pluginUiSchema ?? null,
+    });
+    return;
+  }
+
   const pluginTestMatch =
     method === "POST" && pathname.match(/^\/api\/plugins\/([^/]+)\/test$/);
   if (pluginTestMatch) {
-    const pluginId = decodeURIComponent(pluginTestMatch[1]);
+    const pluginId = resolveCanonicalPluginId(
+      decodeURIComponent(pluginTestMatch[1]),
+    );
     const startMs = Date.now();
 
     try {
+      const pluginEntries = resolveApiPluginEntries(state);
+      const pluginEntry = pluginEntries.find(
+        (entry) => resolveCanonicalPluginId(entry.id) === pluginId,
+      );
+      if (!pluginEntry) {
+        json(
+          res,
+          {
+            success: false,
+            ok: false,
+            code: "plugin_not_installed",
+            pluginId,
+            message: "Plugin is not installed in this Milaidy runtime.",
+            error: "Plugin is not installed in this Milaidy runtime.",
+            durationMs: Date.now() - startMs,
+          },
+          404,
+        );
+        return;
+      }
+
+      if (!pluginEntry.enabled) {
+        json(
+          res,
+          {
+            success: false,
+            ok: false,
+            code: "plugin_disabled",
+            pluginId,
+            message: "Plugin is installed but disabled. Enable it before testing.",
+            error: "Plugin is installed but disabled. Enable it before testing.",
+            durationMs: Date.now() - startMs,
+          },
+          409,
+        );
+        return;
+      }
+
+      if (!pluginEntry.isActive) {
+        json(
+          res,
+          {
+            success: false,
+            ok: false,
+            code: "plugin_not_loaded",
+            pluginId,
+            message:
+              pluginEntry.loadError ??
+              "Plugin is enabled but not loaded in the runtime. Check runtime logs.",
+            error:
+              pluginEntry.loadError ??
+              "Plugin is enabled but not loaded in the runtime. Check runtime logs.",
+            durationMs: Date.now() - startMs,
+          },
+          409,
+        );
+        return;
+      }
+
+      const serviceType = resolveCanonicalServiceType(pluginId);
+      const runtimeService =
+        serviceType && state.runtime ? getRuntimeService(state.runtime, serviceType) : null;
+      const serviceHealthcheck = asObjectRecord(runtimeService)?.healthcheck;
+      if (typeof serviceHealthcheck === "function") {
+        const result = await (
+          serviceHealthcheck as () => Promise<{
+            allPassed?: boolean;
+            checks?: Record<string, unknown>;
+          }>
+        ).call(runtimeService);
+        const allPassed = result?.allPassed !== false;
+        const details = asObjectRecord(result?.checks) ?? {};
+        json(
+          res,
+          {
+            success: allPassed,
+            ok: allPassed,
+            code: allPassed ? "ok" : "dependency_failed",
+            pluginId,
+            message: allPassed
+              ? "Plugin healthcheck passed."
+              : "Plugin loaded but one or more dependency checks failed.",
+            details,
+            durationMs: Date.now() - startMs,
+          },
+          allPassed ? 200 : 502,
+        );
+        return;
+      }
+
       // Find the plugin in the runtime
       const allPlugins = state.runtime?.plugins ?? [];
-      const normalizePluginId = (value: string): string =>
-        value.replace(/^@[^/]+\//, "").replace(/^plugin-/, "");
-
-      const normalizedPluginId = normalizePluginId(pluginId);
-
       const plugin = allPlugins.find((p: { id?: string; name?: string }) => {
-        const runtimeName = p.name ?? "";
-        const runtimeId = normalizePluginId(runtimeName);
-        return (
-          p.id === pluginId ||
-          p.name === pluginId ||
-          runtimeId === pluginId ||
-          runtimeId === normalizedPluginId
-        );
+        const pluginRuntimeId = resolveCanonicalPluginId(p.id ?? "");
+        const pluginRuntimeName = resolveCanonicalPluginId(p.name ?? "");
+        return pluginRuntimeId === pluginId || pluginRuntimeName === pluginId;
       });
 
       if (!plugin) {
@@ -9222,11 +12921,14 @@ async function handleRequest(
           res,
           {
             success: false,
+            ok: false,
+            code: "plugin_not_loaded",
             pluginId,
-            error: "Plugin not found or not loaded",
+            message: "Plugin is enabled but not loaded in the runtime.",
+            error: "Plugin is enabled but not loaded in the runtime.",
             durationMs: Date.now() - startMs,
           },
-          404,
+          409,
         );
         return;
       }
@@ -9238,9 +12940,11 @@ async function handleRequest(
       if (typeof testFn === "function") {
         const result = await (
           testFn as () => Promise<{ ok: boolean; message?: string }>
-        )();
+        ).call(plugin);
         json(res, {
           success: result.ok !== false,
+          ok: result.ok !== false,
+          code: result.ok !== false ? "ok" : "dependency_failed",
           pluginId,
           message:
             result.message ??
@@ -9255,6 +12959,8 @@ async function handleRequest(
       // No test function — return a basic "plugin is loaded" status
       json(res, {
         success: true,
+        ok: true,
+        code: "ok",
         pluginId,
         message: "Plugin is loaded and active (no custom test available)",
         durationMs: Date.now() - startMs,
@@ -9264,7 +12970,10 @@ async function handleRequest(
         res,
         {
           success: false,
+          ok: false,
+          code: "dependency_failed",
           pluginId,
+          message: err instanceof Error ? err.message : String(err),
           error: err instanceof Error ? err.message : String(err),
           durationMs: Date.now() - startMs,
         },
@@ -9296,51 +13005,27 @@ async function handleRequest(
       return;
     }
 
+    const { installPlugin } = await import("../services/plugin-installer.js");
+
     try {
-      const pluginManager = requirePluginManager(state.runtime);
-      const result = await pluginManager.installPlugin(
-        pluginName,
-        (progress: InstallProgressLike) => {
-          logger.info(`[install] ${progress.phase}: ${progress.message}`);
-          state.broadcastWs?.({
-            type: "install-progress",
-            pluginName: progress.pluginName,
-            phase: progress.phase,
-            message: progress.message,
-          });
-        },
-      );
+      const result = await installPlugin(pluginName, (progress) => {
+        logger.info(`[install] ${progress.phase}: ${progress.message}`);
+        state.broadcastWs?.({
+          type: "install-progress",
+          pluginName: progress.pluginName,
+          phase: progress.phase,
+          message: progress.message,
+        });
+      });
 
       if (!result.success) {
         json(res, { ok: false, error: result.error }, 422);
         return;
       }
 
-      // Auto-enable the newly installed plugin so the runtime loads it after restart.
-      const installedId = (result.pluginName ?? pluginName)
-        .replace(/^@[^/]+\/plugin-/, "")
-        .replace(/^@[^/]+\//, "")
-        .replace(/^plugin-/, "");
-      if (!state.config.plugins) {
-        state.config.plugins = {};
-      }
-      if (!state.config.plugins.entries) {
-        (state.config.plugins as Record<string, unknown>).entries = {};
-      }
-      const pluginEntries = (state.config.plugins as Record<string, unknown>)
-        .entries as Record<string, Record<string, unknown>>;
-      pluginEntries[installedId] = { enabled: true };
-      try {
-        saveMiladyConfig(state.config);
-      } catch (err) {
-        logger.warn(
-          `[milady-api] Failed to save config after install: ${err instanceof Error ? err.message : err}`,
-        );
-      }
-
       // If autoRestart is not explicitly false, restart the agent
       if (body.autoRestart !== false && result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${result.pluginName} installed`);
+        scheduleRuntimeRestart(`Plugin ${result.pluginName} installed`, 500);
       }
 
       json(res, {
@@ -9379,9 +13064,10 @@ async function handleRequest(
       return;
     }
 
+    const { uninstallPlugin } = await import("../services/plugin-installer.js");
+
     try {
-      const pluginManager = requirePluginManager(state.runtime);
-      const result = await pluginManager.uninstallPlugin(pluginName);
+      const result = await uninstallPlugin(pluginName);
 
       if (!result.success) {
         json(res, { ok: false, error: result.error }, 422);
@@ -9389,7 +13075,7 @@ async function handleRequest(
       }
 
       if (body.autoRestart !== false && result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} uninstalled`);
+        scheduleRuntimeRestart(`Plugin ${pluginName} uninstalled`, 500);
       }
 
       json(res, {
@@ -9410,165 +13096,20 @@ async function handleRequest(
     return;
   }
 
-  // ── POST /api/plugins/:id/eject ─────────────────────────────────────────
-  if (method === "POST" && pathname.match(/^\/api\/plugins\/[^/]+\/eject$/)) {
-    const pluginName = decodeURIComponent(
-      pathname.slice("/api/plugins/".length, pathname.length - "/eject".length),
-    );
-    try {
-      const pluginManager = requirePluginManager(state.runtime);
-      // Ensure the method exists on the service (it should)
-      if (typeof pluginManager.ejectPlugin !== "function") {
-        throw new Error("Plugin manager does not support ejecting plugins");
-      }
-      const result = await pluginManager.ejectPlugin(pluginName);
-      if (!result.success) {
-        json(res, { ok: false, error: result.error }, 422);
-        return;
-      }
-      if (result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} ejected`);
-      }
-      json(res, {
-        ok: true,
-        pluginName: result.pluginName,
-        requiresRestart: result.requiresRestart,
-        message: `${pluginName} ejected to local source.`,
-      });
-    } catch (err) {
-      error(
-        res,
-        `Eject failed: ${err instanceof Error ? err.message : String(err)}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── POST /api/plugins/:id/sync ──────────────────────────────────────────
-  if (method === "POST" && pathname.match(/^\/api\/plugins\/[^/]+\/sync$/)) {
-    const pluginName = decodeURIComponent(
-      pathname.slice("/api/plugins/".length, pathname.length - "/sync".length),
-    );
-    try {
-      const pluginManager = requirePluginManager(state.runtime);
-      if (typeof pluginManager.syncPlugin !== "function") {
-        throw new Error("Plugin manager does not support syncing plugins");
-      }
-      const result = await pluginManager.syncPlugin(pluginName);
-      if (!result.success) {
-        json(res, { ok: false, error: result.error }, 422);
-        return;
-      }
-      if (result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} synced`);
-      }
-      json(res, {
-        ok: true,
-        pluginName: result.pluginName,
-        requiresRestart: result.requiresRestart,
-        message: `${pluginName} synced with upstream.`,
-      });
-    } catch (err) {
-      error(
-        res,
-        `Sync failed: ${err instanceof Error ? err.message : String(err)}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── POST /api/plugins/:id/reinject ──────────────────────────────────────
-  if (
-    method === "POST" &&
-    pathname.match(/^\/api\/plugins\/[^/]+\/reinject$/)
-  ) {
-    const pluginName = decodeURIComponent(
-      pathname.slice(
-        "/api/plugins/".length,
-        pathname.length - "/reinject".length,
-      ),
-    );
-    try {
-      const pluginManager = requirePluginManager(state.runtime);
-      if (typeof pluginManager.reinjectPlugin !== "function") {
-        throw new Error("Plugin manager does not support reinjecting plugins");
-      }
-      const result = await pluginManager.reinjectPlugin(pluginName);
-      if (!result.success) {
-        json(res, { ok: false, error: result.error }, 422);
-        return;
-      }
-      if (result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} reinjected`);
-      }
-      json(res, {
-        ok: true,
-        pluginName: result.pluginName,
-        requiresRestart: result.requiresRestart,
-        message: `${pluginName} restored to registry version.`,
-      });
-    } catch (err) {
-      error(
-        res,
-        `Reinject failed: ${err instanceof Error ? err.message : String(err)}`,
-        500,
-      );
-    }
-    return;
-  }
-
   // ── GET /api/plugins/installed ──────────────────────────────────────────
   // List plugins that were installed from the registry at runtime.
   if (method === "GET" && pathname === "/api/plugins/installed") {
+    const { listInstalledPlugins } = await import(
+      "../services/plugin-installer.js"
+    );
+
     try {
-      const pluginManager = requirePluginManager(state.runtime);
-      const installed = await pluginManager.listInstalledPlugins();
+      const installed = await listInstalledPlugins();
       json(res, { count: installed.length, plugins: installed });
     } catch (err) {
       error(
         res,
         `Failed to list installed plugins: ${err instanceof Error ? err.message : String(err)}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── GET /api/plugins/ejected ────────────────────────────────────────────
-  // List plugins ejected to local source checkouts with upstream metadata.
-  if (method === "GET" && pathname === "/api/plugins/ejected") {
-    try {
-      const pluginManager = requirePluginManager(state.runtime);
-      if (typeof pluginManager.listEjectedPlugins !== "function") {
-        throw new Error(
-          "Plugin manager does not support listing ejected plugins",
-        );
-      }
-      const plugins = await pluginManager.listEjectedPlugins();
-      json(res, { count: plugins.length, plugins });
-    } catch (err) {
-      error(
-        res,
-        `Failed to list ejected plugins: ${err instanceof Error ? err.message : String(err)}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── GET /api/core/status ────────────────────────────────────────────────
-  // Returns whether @elizaos/core is ejected or resolved from npm.
-  if (method === "GET" && pathname === "/api/core/status") {
-    try {
-      const coreManager = requireCoreManager(state.runtime);
-      const status = await coreManager.getCoreStatus();
-      json(res, status);
-    } catch (err) {
-      error(
-        res,
-        `Failed to get core status: ${err instanceof Error ? err.message : String(err)}`,
         500,
       );
     }
@@ -9670,7 +13211,7 @@ async function handleRequest(
     }
 
     try {
-      saveMiladyConfig(state.config);
+      saveMilaidyConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -9680,6 +13221,7 @@ async function handleRequest(
     // Auto-restart so the change takes effect
     scheduleRuntimeRestart(
       `Plugin ${shortId} ${body.enabled ? "enabled" : "disabled"}`,
+      300,
     );
 
     json(res, {
@@ -9695,7 +13237,7 @@ async function handleRequest(
   if (method === "GET" && pathname === "/api/skills/catalog") {
     try {
       const { getCatalogSkills } = await import(
-        "../services/skill-catalog-client"
+        "../services/skill-catalog-client.js"
       );
       const all = await getCatalogSkills();
       const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
@@ -9778,7 +13320,7 @@ async function handleRequest(
     }
     try {
       const { searchCatalogSkills } = await import(
-        "../services/skill-catalog-client"
+        "../services/skill-catalog-client.js"
       );
       const limit = Math.min(
         100,
@@ -9805,7 +13347,7 @@ async function handleRequest(
     if (slug && slug !== "search") {
       try {
         const { getCatalogSkill } = await import(
-          "../services/skill-catalog-client"
+          "../services/skill-catalog-client.js"
         );
         const skill = await getCatalogSkill(slug);
         if (!skill) {
@@ -9828,7 +13370,7 @@ async function handleRequest(
   if (method === "POST" && pathname === "/api/skills/catalog/refresh") {
     try {
       const { refreshCatalog } = await import(
-        "../services/skill-catalog-client"
+        "../services/skill-catalog-client.js"
       );
       const skills = await refreshCatalog();
       json(res, { ok: true, count: skills.length });
@@ -10253,7 +13795,9 @@ async function handleRequest(
           : "xdg-open";
     execFile(opener, [skillPath], (err) => {
       if (err)
-        logger.warn(`[milady-api] Failed to open skill folder: ${err.message}`);
+        logger.warn(
+          `[milaidy-api] Failed to open skill folder: ${err.message}`,
+        );
     });
     json(res, { ok: true, path: skillPath });
     return;
@@ -10418,7 +13962,7 @@ async function handleRequest(
 
     try {
       fs.writeFileSync(skillMdPath, parsed.content, "utf-8");
-      // Re-discover skills to pick up unknown name/description changes
+      // Re-discover skills to pick up any name/description changes
       state.skills = await discoverSkills(
         workspaceDir,
         state.config,
@@ -10463,7 +14007,7 @@ async function handleRequest(
     } else if (fs.existsSync(path.join(mpDir, "SKILL.md"))) {
       try {
         const { uninstallMarketplaceSkill } = await import(
-          "../services/skill-marketplace"
+          "../services/skill-marketplace.js"
         );
         await uninstallMarketplaceSkill(workspaceDir, skillId);
         deleted = true;
@@ -10527,9 +14071,7 @@ async function handleRequest(
     }
     try {
       const limitStr = url.searchParams.get("limit");
-      const limit = limitStr
-        ? parseClampedInteger(limitStr, { min: 1, max: 50, fallback: 20 })
-        : 20;
+      const limit = limitStr ? Math.min(Math.max(Number(limitStr), 1), 50) : 20;
       const results = await searchSkillsMarketplace(query, { limit });
       json(res, { ok: true, results });
     } catch (err) {
@@ -10560,22 +14102,16 @@ async function handleRequest(
   // ── POST /api/skills/marketplace/install ──────────────────────────────
   if (method === "POST" && pathname === "/api/skills/marketplace/install") {
     const body = await readJsonBody<{
-      slug?: string;
       githubUrl?: string;
       repository?: string;
       path?: string;
       name?: string;
       description?: string;
-      source?: "clawhub" | "skillsmp" | "manual";
     }>(req, res);
     if (!body) return;
 
-    const slug = body.slug?.trim() || "";
-    const githubUrl = body.githubUrl?.trim() || "";
-    const repository = body.repository?.trim() || "";
-
-    if (!slug && !githubUrl && !repository) {
-      error(res, "Install requires a slug, githubUrl, or repository", 400);
+    if (!body.githubUrl?.trim() && !body.repository?.trim()) {
+      error(res, "Install requires a githubUrl or repository", 400);
       return;
     }
 
@@ -10583,98 +14119,15 @@ async function handleRequest(
       const workspaceDir =
         state.config.agents?.defaults?.workspace ??
         resolveDefaultAgentWorkspaceDir();
-
-      // ClawHub-native install path (slug-based via AgentSkillsService).
-      if (slug && !githubUrl && !repository) {
-        if (!state.runtime) {
-          error(
-            res,
-            "Agent runtime not available — start the agent first",
-            503,
-          );
-          return;
-        }
-
-        const service = state.runtime.getService("AGENT_SKILLS_SERVICE") as
-          | {
-              install?: (
-                skillSlug: string,
-                opts?: { version?: string; force?: boolean },
-              ) => Promise<boolean>;
-              isInstalled?: (skillSlug: string) => Promise<boolean>;
-            }
-          | undefined;
-
-        if (!service || typeof service.install !== "function") {
-          error(
-            res,
-            "AgentSkillsService not available — ensure @elizaos/plugin-agent-skills is loaded",
-            501,
-          );
-          return;
-        }
-
-        const alreadyInstalled =
-          typeof service.isInstalled === "function"
-            ? await service.isInstalled(slug)
-            : false;
-
-        if (alreadyInstalled) {
-          json(res, {
-            ok: true,
-            skill: {
-              id: slug,
-              name: body.name?.trim() || slug,
-              source: "clawhub",
-              installedAt: new Date().toISOString(),
-            },
-            alreadyInstalled: true,
-          });
-          return;
-        }
-
-        const success = await service.install(slug);
-        if (!success) {
-          error(res, `Failed to install skill "${slug}"`, 500);
-          return;
-        }
-
-        state.skills = await discoverSkills(
-          workspaceDir,
-          state.config,
-          state.runtime,
-        );
-
-        json(res, {
-          ok: true,
-          skill: {
-            id: slug,
-            name: body.name?.trim() || slug,
-            source: "clawhub",
-            installedAt: new Date().toISOString(),
-          },
-        });
-      } else {
-        const result = await installMarketplaceSkill(workspaceDir, {
-          githubUrl: body.githubUrl,
-          repository: body.repository,
-          path: body.path,
-          name: body.name,
-          description: body.description,
-          source:
-            body.source === "manual" || body.source === "skillsmp"
-              ? body.source
-              : "clawhub",
-        });
-
-        state.skills = await discoverSkills(
-          workspaceDir,
-          state.config,
-          state.runtime,
-        );
-
-        json(res, { ok: true, skill: result });
-      }
+      const result = await installMarketplaceSkill(workspaceDir, {
+        githubUrl: body.githubUrl,
+        repository: body.repository,
+        path: body.path,
+        name: body.name,
+        description: body.description,
+        source: "skillsmp",
+      });
+      json(res, { ok: true, skill: result });
     } catch (err) {
       error(
         res,
@@ -10703,13 +14156,6 @@ async function handleRequest(
         state.config.agents?.defaults?.workspace ??
         resolveDefaultAgentWorkspaceDir();
       const result = await uninstallMarketplaceSkill(workspaceDir, uninstallId);
-
-      state.skills = await discoverSkills(
-        workspaceDir,
-        state.config,
-        state.runtime,
-      );
-
       json(res, { ok: true, skill: result });
     } catch (err) {
       error(
@@ -10739,7 +14185,7 @@ async function handleRequest(
     process.env.SKILLSMP_API_KEY = apiKey;
     if (!state.config.env) state.config.env = {};
     (state.config.env as Record<string, string>).SKILLSMP_API_KEY = apiKey;
-    saveMiladyConfig(state.config);
+    saveMilaidyConfig(state.config);
     json(res, { ok: true, keySet: true });
     return;
   }
@@ -10806,37 +14252,96 @@ async function handleRequest(
     return;
   }
 
-  if (
-    await handleDiagnosticsRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      url,
-      logBuffer: state.logBuffer,
-      eventBuffer: state.eventBuffer,
-      initSse,
-      writeSseJson,
-      json,
-    })
-  ) {
+  // ── GET /api/logs ───────────────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/logs") {
+    let entries = state.logBuffer;
+
+    const sourceFilter = url.searchParams.get("source");
+    if (sourceFilter)
+      entries = entries.filter((e) => e.source === sourceFilter);
+
+    const levelFilter = url.searchParams.get("level");
+    if (levelFilter) entries = entries.filter((e) => e.level === levelFilter);
+
+    // Filter by tag — entries must contain the requested tag
+    const tagFilter = url.searchParams.get("tag");
+    if (tagFilter) entries = entries.filter((e) => e.tags.includes(tagFilter));
+
+    const sinceFilter = url.searchParams.get("since");
+    if (sinceFilter) {
+      const sinceTs = Number(sinceFilter);
+      if (!Number.isNaN(sinceTs))
+        entries = entries.filter((e) => e.timestamp >= sinceTs);
+    }
+
+    const sources = [...new Set(state.logBuffer.map((e) => e.source))].sort();
+    const tags = [...new Set(state.logBuffer.flatMap((e) => e.tags))].sort();
+    json(res, { entries: entries.slice(-200), sources, tags });
     return;
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // Bug report routes
-  // ═══════════════════════════════════════════════════════════════════════
-  if (
-    await handleBugReportRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      readJsonBody,
-      json,
-      error,
-    })
-  ) {
+  // ── GET /api/agent/events?after=evt-123&limit=200 ───────────────────────
+  if (method === "GET" && pathname === "/api/agent/events") {
+    const limitRaw = Number(url.searchParams.get("limit") ?? "200");
+    const limit = Number.isFinite(limitRaw)
+      ? Math.min(Math.max(Math.trunc(limitRaw), 1), 1000)
+      : 200;
+    const afterEventId = url.searchParams.get("after");
+    const autonomyEvents = state.eventBuffer.filter(
+      (event) =>
+        event.type === "agent_event" || event.type === "heartbeat_event",
+    );
+    let startIndex = 0;
+    if (afterEventId) {
+      const idx = autonomyEvents.findIndex(
+        (event) => event.eventId === afterEventId,
+      );
+      if (idx >= 0) startIndex = idx + 1;
+    }
+    const events = autonomyEvents.slice(startIndex, startIndex + limit);
+    const latestEventId =
+      events.length > 0 ? events[events.length - 1].eventId : null;
+    json(res, {
+      events,
+      latestEventId,
+      totalBuffered: autonomyEvents.length,
+      replayed: true,
+    });
+    return;
+  }
+
+  // ── GET /api/extension/status ─────────────────────────────────────────
+  // Check if the Chrome extension relay server is reachable.
+  if (method === "GET" && pathname === "/api/extension/status") {
+    const relayPort = 18792;
+    let relayReachable = false;
+    try {
+      const resp = await fetch(`http://127.0.0.1:${relayPort}/`, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(2000),
+      });
+      relayReachable = resp.ok || resp.status < 500;
+    } catch {
+      relayReachable = false;
+    }
+
+    // Resolve the extension source path (always available in the repo)
+    let extensionPath: string | null = null;
+    try {
+      const serverDir = path.dirname(fileURLToPath(import.meta.url));
+      extensionPath = path.resolve(
+        serverDir,
+        "..",
+        "..",
+        "apps",
+        "chrome-extension",
+      );
+      if (!fs.existsSync(extensionPath)) extensionPath = null;
+    } catch {
+      // ignore
+    }
+
+    json(res, { relayReachable, relayPort, extensionPath });
     return;
   }
 
@@ -10919,18 +14424,211 @@ async function handleRequest(
     const body = await readJsonBody<{ chain?: string; privateKey?: string }>(
       req,
       res,
-      method,
-      pathname,
-      config: state.config,
-      saveConfig: saveMiladyConfig,
-      ensureWalletKeysInEnvAndConfig,
-      resolveWalletExportRejection,
-      scheduleRuntimeRestart,
-      readJsonBody,
-      json,
-      error,
-    })
-  ) {
+    );
+    if (!body) return;
+
+    if (!body.privateKey?.trim()) {
+      error(res, "privateKey is required");
+      return;
+    }
+
+    // Auto-detect chain if not specified
+    let chain: WalletChain;
+    if (body.chain === "evm" || body.chain === "solana") {
+      chain = body.chain;
+    } else if (body.chain) {
+      error(
+        res,
+        `Unsupported chain: ${body.chain}. Must be "evm" or "solana".`,
+      );
+      return;
+    } else {
+      // Auto-detect from key format
+      const detection = validatePrivateKey(body.privateKey.trim());
+      chain = detection.chain;
+    }
+
+    const result = importWallet(chain, body.privateKey.trim());
+
+    if (!result.success) {
+      error(res, result.error ?? "Import failed", 422);
+      return;
+    }
+
+    // Persist to config.env so it survives restarts
+    if (!state.config.env) state.config.env = {};
+    const envKey = chain === "evm" ? "EVM_PRIVATE_KEY" : "SOLANA_PRIVATE_KEY";
+    (state.config.env as Record<string, string>)[envKey] =
+      process.env[envKey] ?? "";
+
+    try {
+      saveMilaidyConfig(state.config);
+    } catch (err) {
+      logger.warn(
+        `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    json(res, {
+      ok: true,
+      chain,
+      address: result.address,
+    });
+    return;
+  }
+
+  // ── POST /api/wallet/generate ──────────────────────────────────────────
+  // Generate a new wallet for a specific chain (or both).
+  if (method === "POST" && pathname === "/api/wallet/generate") {
+    const body = await readJsonBody<{ chain?: string }>(req, res);
+    if (!body) return;
+
+    const chain = body.chain as string | undefined;
+    const validChains: Array<WalletChain | "both"> = ["evm", "solana", "both"];
+
+    if (chain && !validChains.includes(chain as WalletChain | "both")) {
+      error(
+        res,
+        `Unsupported chain: ${chain}. Must be "evm", "solana", or "both".`,
+      );
+      return;
+    }
+
+    const targetChain = (chain ?? "both") as WalletChain | "both";
+
+    if (!state.config.env) state.config.env = {};
+
+    const generated: Array<{ chain: WalletChain; address: string }> = [];
+
+    if (targetChain === "both" || targetChain === "evm") {
+      const result = generateWalletForChain("evm");
+      process.env.EVM_PRIVATE_KEY = result.privateKey;
+      (state.config.env as Record<string, string>).EVM_PRIVATE_KEY =
+        result.privateKey;
+      generated.push({ chain: "evm", address: result.address });
+      logger.info(`[milaidy-api] Generated EVM wallet: ${result.address}`);
+    }
+
+    if (targetChain === "both" || targetChain === "solana") {
+      const result = generateWalletForChain("solana");
+      process.env.SOLANA_PRIVATE_KEY = result.privateKey;
+      (state.config.env as Record<string, string>).SOLANA_PRIVATE_KEY =
+        result.privateKey;
+      generated.push({ chain: "solana", address: result.address });
+      logger.info(`[milaidy-api] Generated Solana wallet: ${result.address}`);
+    }
+
+    try {
+      saveMilaidyConfig(state.config);
+    } catch (err) {
+      logger.warn(
+        `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    json(res, { ok: true, wallets: generated });
+    return;
+  }
+
+  // ── GET /api/wallet/config ─────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/wallet/config") {
+    const addrs = getWalletAddresses();
+    const solanaRpcConfig = getSolanaRpcConfig();
+    const configStatus: WalletConfigStatus = {
+      alchemyKeySet: Boolean(process.env.ALCHEMY_API_KEY),
+      infuraKeySet: Boolean(process.env.INFURA_API_KEY),
+      ankrKeySet: Boolean(process.env.ANKR_API_KEY),
+      heliusKeySet: Boolean(process.env.HELIUS_API_KEY),
+      birdeyeKeySet: Boolean(process.env.BIRDEYE_API_KEY),
+      evmChains: ["Ethereum", "Base", "Arbitrum", "Optimism", "Polygon"],
+      evmAddress: addrs.evmAddress,
+      solanaAddress: addrs.solanaAddress,
+      solanaRpcProvider: solanaRpcConfig?.provider ?? null,
+    };
+    json(res, configStatus);
+    return;
+  }
+
+  // ── PUT /api/wallet/config ─────────────────────────────────────────────
+  if (method === "PUT" && pathname === "/api/wallet/config") {
+    const body = await readJsonBody<Record<string, string>>(req, res);
+    if (!body) return;
+    const allowedKeys = [
+      "ALCHEMY_API_KEY",
+      "INFURA_API_KEY",
+      "ANKR_API_KEY",
+      "HELIUS_API_KEY",
+      "BIRDEYE_API_KEY",
+      "SOLANA_RPC_PROVIDER",
+    ];
+
+    if (!state.config.env) state.config.env = {};
+
+    for (const key of allowedKeys) {
+      const value = body[key];
+      if (typeof value === "string" && value.trim()) {
+        process.env[key] = value.trim();
+        (state.config.env as Record<string, string>)[key] = value.trim();
+      }
+    }
+
+    // Generate SOLANA_RPC_URL based on the provider selection
+    const provider = (body.SOLANA_RPC_PROVIDER || process.env.SOLANA_RPC_PROVIDER || "helius") as SolanaRpcProvider;
+    let rpcUrl: string | null = null;
+
+    if (provider === "alchemy") {
+      const alchemyKey = body.ALCHEMY_API_KEY?.trim() || process.env.ALCHEMY_API_KEY;
+      if (alchemyKey) {
+        rpcUrl = `https://solana-mainnet.g.alchemy.com/v2/${alchemyKey}`;
+      }
+    } else if (provider === "helius") {
+      const heliusKey = body.HELIUS_API_KEY?.trim() || process.env.HELIUS_API_KEY;
+      if (heliusKey) {
+        rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${heliusKey}`;
+      }
+    }
+
+    if (rpcUrl) {
+      process.env.SOLANA_RPC_URL = rpcUrl;
+      (state.config.env as Record<string, string>).SOLANA_RPC_URL = rpcUrl;
+    }
+
+    try {
+      saveMilaidyConfig(state.config);
+    } catch (err) {
+      logger.warn(
+        `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    json(res, { ok: true });
+    return;
+  }
+
+  // ── POST /api/wallet/export ────────────────────────────────────────────
+  // SECURITY: Requires explicit confirmation + a dedicated export token.
+  if (method === "POST" && pathname === "/api/wallet/export") {
+    const body = await readJsonBody<WalletExportRequestBody>(req, res);
+    if (!body) return;
+
+    const rejection = resolveWalletExportRejection(req, body);
+    if (rejection) {
+      error(res, rejection.reason, rejection.status);
+      return;
+    }
+
+    const evmKey = process.env.EVM_PRIVATE_KEY ?? null;
+    const solKey = process.env.SOLANA_PRIVATE_KEY ?? null;
+    const addrs = getWalletAddresses();
+
+    logger.warn("[wallet] Private keys exported via API");
+
+    json(res, {
+      evm: evmKey ? { privateKey: evmKey, address: addrs.evmAddress } : null,
+      solana: solKey
+        ? { privateKey: solKey, address: addrs.solanaAddress }
+        : null,
+    });
     return;
   }
 
@@ -10975,7 +14673,7 @@ async function handleRequest(
     }>(req, res);
     if (!body) return;
 
-    const agentName = body.name || state.agentName || "Milady Agent";
+    const agentName = body.name || state.agentName || "Milaidy Agent";
     const endpoint = body.endpoint || "";
     const tokenURI = body.tokenURI || "";
 
@@ -11016,7 +14714,7 @@ async function handleRequest(
     }>(req, res);
     if (!body) return;
 
-    const agentName = body.name || state.agentName || "Milady Agent";
+    const agentName = body.name || state.agentName || "Milaidy Agent";
     const endpoint = body.endpoint || "";
     const tokenURI = body.tokenURI || "";
 
@@ -11033,29 +14731,12 @@ async function handleRequest(
 
   if (method === "GET" && pathname === "/api/registry/config") {
     const registryConfig = state.config.registry;
-    let chainId = 1;
-    if (registryService) {
-      try {
-        chainId = await registryService.getChainId();
-      } catch {
-        // Keep default if chain RPC is unavailable.
-      }
-    }
-
-    const explorerByChainId: Record<number, string> = {
-      1: "https://etherscan.io",
-      10: "https://optimistic.etherscan.io",
-      137: "https://polygonscan.com",
-      8453: "https://basescan.org",
-      42161: "https://arbiscan.io",
-    };
-
     json(res, {
       configured: Boolean(registryService),
-      chainId,
+      chainId: 1,
       registryAddress: registryConfig?.registryAddress ?? null,
       collectionAddress: registryConfig?.collectionAddress ?? null,
-      explorerUrl: explorerByChainId[chainId] ?? "",
+      explorerUrl: "https://etherscan.io",
     });
     return;
   }
@@ -11095,7 +14776,7 @@ async function handleRequest(
     }>(req, res);
     if (!body) return;
 
-    const agentName = body.name || state.agentName || "Milady Agent";
+    const agentName = body.name || state.agentName || "Milaidy Agent";
     const endpoint = body.endpoint || "";
 
     const result = body.shiny
@@ -11115,32 +14796,17 @@ async function handleRequest(
       endpoint?: string;
       proof?: string[];
     }>(req, res);
-    if (!body) return;
-    let proof = body.proof;
-    if (!proof || proof.length === 0) {
-      const addrs = getWalletAddresses();
-      const walletAddress = addrs.evmAddress ?? "";
-      if (!walletAddress) {
-        error(res, "EVM wallet not configured.");
-        return;
-      }
-      const proofResult = generateProof(walletAddress);
-      if (!proofResult.isWhitelisted) {
-        error(
-          res,
-          "Address not whitelisted. Complete Twitter or NFT verification first.",
-        );
-        return;
-      }
-      proof = proofResult.proof;
+    if (!body || !body.proof) {
+      error(res, "proof array is required");
+      return;
     }
 
-    const agentName = body.name || state.agentName || "Milady Agent";
+    const agentName = body.name || state.agentName || "Milaidy Agent";
     const endpoint = body.endpoint || "";
     const result = await dropService.mintWithWhitelist(
       agentName,
       endpoint,
-      proof,
+      body.proof,
     );
     json(res, result);
     return;
@@ -11158,23 +14824,11 @@ async function handleRequest(
       : false;
     const ogCode = readOGCodeFromState();
 
-    const { info } = buildWhitelistTree();
-    const proofReady = walletAddress
-      ? generateProof(walletAddress).isWhitelisted
-      : false;
-
     json(res, {
       eligible: twitterVerified,
       twitterVerified,
-      nftVerified: twitterVerified, // We'll leave it as is if there's no way to distinguish, or we can check the file
-      whitelisted: walletAddress ? isAddressWhitelisted(walletAddress) : false,
       ogCode: ogCode ?? null,
       walletAddress,
-      merkle: {
-        root: info.root,
-        addressCount: info.addressCount,
-        proofReady,
-      },
     });
     return;
   }
@@ -11186,7 +14840,7 @@ async function handleRequest(
       error(res, "EVM wallet not configured. Complete onboarding first.");
       return;
     }
-    const agentName = state.agentName || "Milady Agent";
+    const agentName = state.agentName || "Milaidy Agent";
     const message = generateVerificationMessage(agentName, walletAddress);
     json(res, { message, walletAddress });
     return;
@@ -11214,88 +14868,16 @@ async function handleRequest(
     return;
   }
 
-  // ── POST /api/whitelist/nft/verify ───────────────────────────────────────
-  // Verify Milady NFT ownership for whitelist eligibility.
-  // Security: only verifies the agent's own wallet — does not accept
-  // arbitrary addresses to prevent whitelist injection from local processes.
-  if (method === "POST" && pathname === "/api/whitelist/nft/verify") {
-    // PR 518 FIX: Restrict to the agent's own wallet to prevent injection
-    const addrs = getWalletAddresses();
-    const address = addrs.evmAddress || "";
-    if (!address) {
-      error(res, "Wallet address is required. Complete onboarding first.", 400);
-      return;
-    }
-
-    try {
-      const result = await verifyAndWhitelistHolder(address);
-      json(res, { ...result, walletAddress: address });
-    } catch (err) {
-      error(
-        res,
-        `NFT verification failed: ${err instanceof Error ? err.message : String(err)}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── GET /api/whitelist/nft/status ────────────────────────────────────────
-  // Check NFT verification status without modifying the whitelist.
-  if (method === "GET" && pathname === "/api/whitelist/nft/status") {
-    const addrs = getWalletAddresses();
-    const walletAddress = addrs.evmAddress ?? "";
-    const whitelisted = walletAddress
-      ? isAddressWhitelisted(walletAddress)
-      : false;
-
-    json(res, {
-      walletAddress,
-      whitelisted,
-      contractAddress:
-        process.env.MILADY_NFT_CONTRACT?.trim() ||
-        "0x5Af0D9827E0c53E4799BB226655A1de152A425a5",
-      message: whitelisted
-        ? "Address is whitelisted for mint."
-        : "Address is not whitelisted. Use POST /api/whitelist/nft/verify to verify NFT ownership.",
-    });
-    return;
-  }
-
-  // ── GET /api/whitelist/merkle/root — tree info and root hash
-  if (method === "GET" && pathname === "/api/whitelist/merkle/root") {
-    const { info } = buildWhitelistTree();
-    json(res, {
-      root: info.root,
-      addressCount: info.addressCount,
-      proofReady: true,
-    });
-    return;
-  }
-
-  // ── GET /api/whitelist/merkle/proof?address=0x... — proof for an address
-  if (method === "GET" && pathname === "/api/whitelist/merkle/proof") {
-    const url = new URL(req.url ?? "", `http://${req.headers.host}`);
-    const addr = url.searchParams.get("address");
-    if (!addr) {
-      error(res, "address query parameter is required", 400);
-      return;
-    }
-    const result = generateProof(addr);
-    json(res, result);
-    return;
-  }
-
   // ── GET /api/update/status ───────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/update/status") {
-    const { VERSION } = await import("../runtime/version");
+    const { VERSION } = await import("../runtime/version.js");
     const {
       resolveChannel,
       checkForUpdate,
       fetchAllChannelVersions,
       CHANNEL_DIST_TAGS,
-    } = await import("../services/update-checker");
-    const { detectInstallMethod } = await import("../services/self-updater");
+    } = await import("../services/update-checker.js");
+    const { detectInstallMethod } = await import("../services/self-updater.js");
     const channel = resolveChannel(state.config.update);
 
     const [check, versions] = await Promise.all([
@@ -11336,7 +14918,7 @@ async function handleRequest(
       lastCheckAt: undefined,
       lastCheckVersion: undefined,
     };
-    saveMiladyConfig(state.config);
+    saveMilaidyConfig(state.config);
     json(res, { channel: ch });
     return;
   }
@@ -11375,11 +14957,9 @@ async function handleRequest(
       return;
     }
     if (!state.config.connectors) state.config.connectors = {};
-    state.config.connectors[connectorName] = cloneWithoutBlockedObjectKeys(
-      config,
-    ) as ConnectorConfig;
+    state.config.connectors[connectorName] = config as ConnectorConfig;
     try {
-      saveMiladyConfig(state.config);
+      saveMilaidyConfig(state.config);
     } catch {
       /* test envs */
     }
@@ -11409,7 +14989,7 @@ async function handleRequest(
       delete state.config.channels[name];
     }
     try {
-      saveMiladyConfig(state.config);
+      saveMilaidyConfig(state.config);
     } catch {
       /* test envs */
     }
@@ -11421,35 +15001,6 @@ async function handleRequest(
     return;
   }
 
-  // ── WhatsApp routes (/api/whatsapp/*) ────────────────────────────────────
-  // Auth: these routes are protected by the isAuthorized(req) gate at L5331.
-  if (pathname.startsWith("/api/whatsapp")) {
-    if (!state.whatsappPairingSessions) {
-      state.whatsappPairingSessions = new Map();
-    }
-    // Clean up disconnected or timed-out sessions
-    for (const [id, session] of state.whatsappPairingSessions) {
-      const status = session.getStatus();
-      if (
-        status === "disconnected" ||
-        status === "timeout" ||
-        status === "error"
-      ) {
-        session.stop();
-        state.whatsappPairingSessions.delete(id);
-      }
-    }
-    const handled = await handleWhatsAppRoute(req, res, pathname, method, {
-      whatsappPairingSessions: state.whatsappPairingSessions,
-      broadcastWs: state.broadcastWs ?? undefined,
-      config: state.config,
-      runtime: state.runtime ?? undefined,
-      saveConfig: () => saveMiladyConfig(state.config),
-      workspaceDir: resolveDefaultAgentWorkspaceDir(),
-    });
-    if (handled) return;
-  }
-
   // ── POST /api/restart ───────────────────────────────────────────────────
   if (method === "POST" && pathname === "/api/restart") {
     json(res, { ok: true, message: "Restarting..." });
@@ -11457,360 +15008,9 @@ async function handleRequest(
     return;
   }
 
-  // ── POST /api/tts/elevenlabs ─────────────────────────────────────────────
-  if (method === "POST" && pathname === "/api/tts/elevenlabs") {
-    const body = await readJsonBody<{
-      text?: string;
-      voiceId?: string;
-      modelId?: string;
-      outputFormat?: string;
-      apiKey?: string;
-      apply_text_normalization?: "auto" | "on" | "off";
-      voice_settings?: {
-        stability?: number;
-        similarity_boost?: number;
-        speed?: number;
-      };
-    }>(req, res);
-    if (!body) return;
-
-    const text = typeof body.text === "string" ? body.text.trim() : "";
-    if (!text) {
-      error(res, "Missing text", 400);
-      return;
-    }
-
-    const messages =
-      state.config && typeof state.config === "object"
-        ? ((state.config as Record<string, unknown>).messages as
-            | Record<string, unknown>
-            | undefined)
-        : undefined;
-    const tts =
-      messages && typeof messages === "object"
-        ? ((messages.tts as Record<string, unknown>) ?? undefined)
-        : undefined;
-    const eleven =
-      tts && typeof tts === "object"
-        ? ((tts.elevenlabs as Record<string, unknown>) ?? undefined)
-        : undefined;
-
-    const requestedApiKey =
-      typeof body.apiKey === "string" ? body.apiKey.trim() : "";
-    const configuredApiKey =
-      typeof eleven?.apiKey === "string" ? eleven.apiKey.trim() : "";
-    const envApiKey =
-      typeof process.env.ELEVENLABS_API_KEY === "string"
-        ? process.env.ELEVENLABS_API_KEY.trim()
-        : "";
-
-    const resolvedApiKey =
-      requestedApiKey && !isRedactedSecretValue(requestedApiKey)
-        ? requestedApiKey
-        : configuredApiKey && !isRedactedSecretValue(configuredApiKey)
-          ? configuredApiKey
-          : envApiKey && !isRedactedSecretValue(envApiKey)
-            ? envApiKey
-            : "";
-
-    if (!resolvedApiKey) {
-      error(
-        res,
-        "ElevenLabs API key is not available. Set ELEVENLABS_API_KEY in Secrets.",
-        400,
-      );
-      return;
-    }
-
-    const voiceId =
-      (typeof body.voiceId === "string" && body.voiceId.trim()) ||
-      (typeof eleven?.voiceId === "string" && eleven.voiceId.trim()) ||
-      "EXAVITQu4vr4xnSDxMaL";
-    const modelId =
-      (typeof body.modelId === "string" && body.modelId.trim()) ||
-      (typeof eleven?.modelId === "string" && eleven.modelId.trim()) ||
-      "eleven_flash_v2_5";
-    const outputFormat =
-      (typeof body.outputFormat === "string" && body.outputFormat.trim()) ||
-      "mp3_22050_32";
-
-    const requestedVoiceSettings =
-      body.voice_settings &&
-      typeof body.voice_settings === "object" &&
-      !Array.isArray(body.voice_settings)
-        ? body.voice_settings
-        : undefined;
-
-    const voiceSettings: Record<string, number> = {};
-    const stability = requestedVoiceSettings?.stability;
-    if (typeof stability === "number" && stability >= 0 && stability <= 1) {
-      voiceSettings.stability = stability;
-    }
-    const similarityBoost = requestedVoiceSettings?.similarity_boost;
-    if (
-      typeof similarityBoost === "number" &&
-      similarityBoost >= 0 &&
-      similarityBoost <= 1
-    ) {
-      voiceSettings.similarity_boost = similarityBoost;
-    }
-    const speed = requestedVoiceSettings?.speed;
-    if (typeof speed === "number" && speed >= 0.5 && speed <= 2) {
-      voiceSettings.speed = speed;
-    }
-
-    const payload: Record<string, unknown> = {
-      text,
-      model_id: modelId,
-      apply_text_normalization:
-        body.apply_text_normalization === "on" ||
-        body.apply_text_normalization === "off"
-          ? body.apply_text_normalization
-          : "auto",
-    };
-    if (Object.keys(voiceSettings).length > 0) {
-      payload.voice_settings = voiceSettings;
-    }
-
-    try {
-      const upstreamUrl = new URL(
-        `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream`,
-      );
-      upstreamUrl.searchParams.set("output_format", outputFormat);
-
-      const upstream = await fetchWithTimeoutGuard(
-        upstreamUrl.toString(),
-        {
-          method: "POST",
-          headers: {
-            "xi-api-key": resolvedApiKey,
-            "Content-Type": "application/json",
-            Accept: "audio/mpeg",
-          },
-          body: JSON.stringify(payload),
-        },
-        ELEVENLABS_FETCH_TIMEOUT_MS,
-      );
-
-      if (!upstream.ok) {
-        const upstreamBody = await upstream.text().catch(() => "");
-        error(
-          res,
-          `ElevenLabs request failed (${upstream.status}): ${upstreamBody.slice(0, 240)}`,
-          upstream.status === 429 ? 429 : 502,
-        );
-        return;
-      }
-
-      const contentType = upstream.headers.get("content-type") || "audio/mpeg";
-      const contentLength = responseContentLength(upstream.headers);
-      if (
-        contentLength !== null &&
-        contentLength > ELEVENLABS_AUDIO_MAX_BYTES
-      ) {
-        error(
-          res,
-          `ElevenLabs response exceeds maximum size of ${ELEVENLABS_AUDIO_MAX_BYTES} bytes`,
-          502,
-        );
-        return;
-      }
-
-      res.writeHead(200, {
-        "Content-Type": contentType,
-        "Cache-Control": "no-store",
-        ...(contentLength !== null
-          ? { "Content-Length": String(contentLength) }
-          : {}),
-      });
-
-      await streamResponseBodyWithByteLimit(
-        upstream,
-        res,
-        ELEVENLABS_AUDIO_MAX_BYTES,
-        ELEVENLABS_FETCH_TIMEOUT_MS,
-      );
-      res.end();
-      return;
-    } catch (err) {
-      if (res.headersSent) {
-        res.destroy(
-          err instanceof Error
-            ? err
-            : new Error(
-                `ElevenLabs proxy error: ${typeof err === "string" ? err : String(err)}`,
-              ),
-        );
-        return;
-      }
-      error(
-        res,
-        `ElevenLabs proxy error: ${err instanceof Error ? err.message : String(err)}`,
-        isAbortError(err) ? 504 : 502,
-      );
-      return;
-    }
-  }
-
-  // ── POST /api/avatar/vrm ─────────────────────────────────────────────────
-  // Upload a custom VRM avatar file. Saved to ~/.milady/avatars/custom.vrm.
-  if (method === "POST" && pathname === "/api/avatar/vrm") {
-    const MAX_VRM_BYTES = 50 * 1024 * 1024; // 50 MB
-    const rawBody = await readRequestBodyBuffer(req, {
-      maxBytes: MAX_VRM_BYTES,
-      returnNullOnTooLarge: true,
-    });
-    if (!rawBody || rawBody.length === 0) {
-      error(res, "Request body is empty or exceeds 50 MB", 400);
-      return;
-    }
-    // VRM files are GLB (binary glTF) — validate the 4-byte magic header
-    const GLB_MAGIC = Buffer.from([0x67, 0x6c, 0x54, 0x46]); // "glTF"
-    if (rawBody.length < 4 || !rawBody.subarray(0, 4).equals(GLB_MAGIC)) {
-      error(res, "Invalid VRM file: not a valid glTF/GLB file", 400);
-      return;
-    }
-    const avatarDir = path.join(resolveStateDir(), "avatars");
-    fs.mkdirSync(avatarDir, { recursive: true });
-    const vrmPath = path.join(avatarDir, "custom.vrm");
-    fs.writeFileSync(vrmPath, rawBody);
-    json(res, { ok: true, size: rawBody.length });
-    return;
-  }
-
-  // ── GET /api/avatar/vrm ──────────────────────────────────────────────────
-  // Serve the user's custom VRM avatar file if it exists.
-  if (
-    (method === "GET" || method === "HEAD") &&
-    pathname === "/api/avatar/vrm"
-  ) {
-    const vrmPath = path.join(resolveStateDir(), "avatars", "custom.vrm");
-    try {
-      const stat = fs.statSync(vrmPath);
-      if (!stat.isFile()) {
-        error(res, "No custom avatar found", 404);
-        return;
-      }
-      const headers: Record<string, string | number> = {
-        "Content-Type": "model/gltf-binary",
-        "Content-Length": stat.size,
-        "Cache-Control": "no-cache",
-      };
-      if (method === "HEAD") {
-        res.writeHead(200, headers);
-        res.end();
-        return;
-      }
-      const body = fs.readFileSync(vrmPath);
-      res.writeHead(200, headers);
-      res.end(body);
-    } catch {
-      error(res, "No custom avatar found", 404);
-    }
-    return;
-  }
-
-  // ── POST /api/avatar/background ──────────────────────────────────────────
-  // Upload a custom background image. Saved to ~/.milady/avatars/custom-background.<ext>.
-  if (method === "POST" && pathname === "/api/avatar/background") {
-    const MAX_BG_BYTES = 10 * 1024 * 1024; // 10 MB
-    const rawBody = await readRequestBodyBuffer(req, {
-      maxBytes: MAX_BG_BYTES,
-      returnNullOnTooLarge: true,
-    });
-    if (!rawBody || rawBody.length === 0) {
-      error(res, "Request body is empty or exceeds 10 MB", 400);
-      return;
-    }
-    // Detect image format from magic bytes
-    let ext = "";
-    if (
-      rawBody[0] === 0x89 &&
-      rawBody[1] === 0x50 &&
-      rawBody[2] === 0x4e &&
-      rawBody[3] === 0x47
-    ) {
-      ext = "png";
-    } else if (rawBody[0] === 0xff && rawBody[1] === 0xd8) {
-      ext = "jpg";
-    } else if (
-      rawBody[0] === 0x52 &&
-      rawBody[1] === 0x49 &&
-      rawBody[2] === 0x46 &&
-      rawBody[3] === 0x46 &&
-      rawBody.length >= 12 &&
-      rawBody[8] === 0x57 &&
-      rawBody[9] === 0x45 &&
-      rawBody[10] === 0x42 &&
-      rawBody[11] === 0x50
-    ) {
-      ext = "webp";
-    } else {
-      error(res, "Invalid image file: expected PNG, JPEG, or WebP", 400);
-      return;
-    }
-    const avatarDir = path.join(resolveStateDir(), "avatars");
-    fs.mkdirSync(avatarDir, { recursive: true });
-    // Remove any previous custom background (may have a different extension)
-    for (const old of ["png", "jpg", "webp"]) {
-      const p = path.join(avatarDir, `custom-background.${old}`);
-      try {
-        fs.unlinkSync(p);
-      } catch {}
-    }
-    const bgPath = path.join(avatarDir, `custom-background.${ext}`);
-    fs.writeFileSync(bgPath, rawBody);
-    json(res, { ok: true, size: rawBody.length });
-    return;
-  }
-
-  // ── GET /api/avatar/background ─────────────────────────────────────────────
-  // Serve the user's custom background image if it exists.
-  if (
-    (method === "GET" || method === "HEAD") &&
-    pathname === "/api/avatar/background"
-  ) {
-    const avatarDir = path.join(resolveStateDir(), "avatars");
-    const MIME: Record<string, string> = {
-      png: "image/png",
-      jpg: "image/jpeg",
-      webp: "image/webp",
-    };
-    let found = "";
-    for (const ext of ["png", "jpg", "webp"]) {
-      const p = path.join(avatarDir, `custom-background.${ext}`);
-      try {
-        if (fs.statSync(p).isFile()) {
-          found = p;
-          break;
-        }
-      } catch {}
-    }
-    if (!found) {
-      error(res, "No custom background found", 404);
-      return;
-    }
-    const stat = fs.statSync(found);
-    const fileExt = path.extname(found).slice(1);
-    const headers: Record<string, string | number> = {
-      "Content-Type": MIME[fileExt] || "application/octet-stream",
-      "Content-Length": stat.size,
-      "Cache-Control": "no-cache",
-    };
-    if (method === "HEAD") {
-      res.writeHead(200, headers);
-      res.end();
-      return;
-    }
-    const body = fs.readFileSync(found);
-    res.writeHead(200, headers);
-    res.end(body);
-    return;
-  }
-
   // ── GET /api/config/schema ───────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/config/schema") {
-    const { buildConfigSchema } = await import("../config/schema");
+    const { buildConfigSchema } = await import("../config/schema.js");
     const result = buildConfigSchema();
     json(res, result);
     return;
@@ -11828,6 +15028,46 @@ async function handleRequest(
     if (!body) return;
 
     // --- Security: validate and safely merge config updates ----------------
+
+    // Only accept known top-level keys from MilaidyConfig.
+    // Unknown or dangerous keys are silently dropped.
+    const ALLOWED_TOP_KEYS = new Set([
+      "meta",
+      "auth",
+      "env",
+      "wizard",
+      "diagnostics",
+      "logging",
+      "update",
+      "browser",
+      "ui",
+      "skills",
+      "plugins",
+      "models",
+      "nodeHost",
+      "agents",
+      "tools",
+      "bindings",
+      "broadcast",
+      "audio",
+      "messages",
+      "commands",
+      "approvals",
+      "session",
+      "web",
+      "channels",
+      "cron",
+      "hooks",
+      "discovery",
+      "talk",
+      "gateway",
+      "memory",
+      "database",
+      "cloud",
+      "x402",
+      "mcp",
+      "features",
+    ]);
 
     // Keys that could enable prototype pollution.
     /**
@@ -11865,7 +15105,7 @@ async function handleRequest(
     // Filter to allowed top-level keys, then deep-merge.
     const filtered: Record<string, unknown> = {};
     for (const key of Object.keys(body)) {
-      if (CONFIG_WRITE_ALLOWED_TOP_KEYS.has(key) && !isBlockedObjectKey(key)) {
+      if (ALLOWED_TOP_KEYS.has(key) && !isBlockedObjectKey(key)) {
         filtered[key] = body[key];
       }
     }
@@ -11882,95 +15122,35 @@ async function handleRequest(
       // merge, even though BLOCKED_ENV_KEYS also blocks them during process.env
       // sync below. Keeping both guards prevents accidental persistence if one
       // path changes in future refactors.
-      delete envPatch.MILADY_API_TOKEN;
-      delete envPatch.MILADY_WALLET_EXPORT_TOKEN;
-      delete envPatch.MILADY_TERMINAL_RUN_TOKEN;
-      delete envPatch.HYPERSCAPE_AUTH_TOKEN;
-      delete envPatch.EVM_PRIVATE_KEY;
-      delete envPatch.SOLANA_PRIVATE_KEY;
-      delete envPatch.GITHUB_TOKEN;
+      delete envPatch.MILAIDY_API_TOKEN;
+      delete envPatch.MILAIDY_WALLET_EXPORT_TOKEN;
       if (
         envPatch.vars &&
         typeof envPatch.vars === "object" &&
         !Array.isArray(envPatch.vars)
       ) {
-        const vars = envPatch.vars as Record<string, unknown>;
-        delete vars.MILADY_API_TOKEN;
-        delete vars.MILADY_WALLET_EXPORT_TOKEN;
-        delete vars.MILADY_TERMINAL_RUN_TOKEN;
-        delete vars.HYPERSCAPE_AUTH_TOKEN;
-        delete vars.EVM_PRIVATE_KEY;
-        delete vars.SOLANA_PRIVATE_KEY;
-        delete vars.GITHUB_TOKEN;
-      }
-
-      // Defense-in-depth: strip ALL BLOCKED_ENV_KEYS from the env patch
-      // before safeMerge.  The explicit deletes above cover known step-up
-      // secrets; this loop catches process-level injection keys
-      // (NODE_OPTIONS, LD_PRELOAD, etc.) so they never reach
-      // saveMiladyConfig() and the persistence→restart RCE chain is closed.
-      for (const key of Object.keys(envPatch)) {
-        if (key === "vars" || key === "shellEnv") continue;
-        if (BLOCKED_ENV_KEYS.has(key.toUpperCase())) {
-          delete envPatch[key];
-        }
-      }
-      if (
-        envPatch.vars &&
-        typeof envPatch.vars === "object" &&
-        !Array.isArray(envPatch.vars)
-      ) {
-        const innerVars = envPatch.vars as Record<string, unknown>;
-        for (const key of Object.keys(innerVars)) {
-          if (BLOCKED_ENV_KEYS.has(key.toUpperCase())) {
-            delete innerVars[key];
-          }
-        }
-      }
-    }
-
-    if (
-      filtered.mcp &&
-      typeof filtered.mcp === "object" &&
-      !Array.isArray(filtered.mcp)
-    ) {
-      const mcpPatch = filtered.mcp as Record<string, unknown>;
-      if (mcpPatch.servers !== undefined) {
-        if (
-          !mcpPatch.servers ||
-          typeof mcpPatch.servers !== "object" ||
-          Array.isArray(mcpPatch.servers)
-        ) {
-          error(res, "mcp.servers must be a JSON object", 400);
-          return;
-        }
-        const mcpRejection = await resolveMcpServersRejection(
-          mcpPatch.servers as Record<string, unknown>,
-        );
-        if (mcpRejection) {
-          error(res, mcpRejection, 400);
-          return;
-        }
-        const mcpTerminalRejection = resolveMcpTerminalAuthorizationRejection(
-          req,
-          mcpPatch.servers as Record<string, unknown>,
-          body as { terminalToken?: string },
-        );
-        if (mcpTerminalRejection) {
-          error(
-            res,
-            `Configuring stdio MCP servers via /api/config requires terminal authorization. ${mcpTerminalRejection.reason}`,
-            mcpTerminalRejection.status,
-          );
-          return;
-        }
+        delete (envPatch.vars as Record<string, unknown>).MILAIDY_API_TOKEN;
+        delete (envPatch.vars as Record<string, unknown>)
+          .MILAIDY_WALLET_EXPORT_TOKEN;
       }
     }
 
     safeMerge(state.config as Record<string, unknown>, filtered);
 
+    const selectedSubscriptionProvider = toCanonicalSubscriptionProvider(
+      (
+        state.config.agents?.defaults as Record<string, unknown> | undefined
+      )?.subscriptionProvider as string | undefined,
+    );
+    if (
+      state.config.cloud?.enabled !== true &&
+      selectedSubscriptionProvider !== "anthropic-subscription"
+    ) {
+      await restoreOpenAiSubscriptionPiAiModeFromCredentials(state.config);
+    }
+
     // If the client updated env vars, synchronise them into process.env so
-    // subsequent hot-restarts see the latest values (loadMiladyConfig()
+    // subsequent hot-restarts see the latest values (loadMilaidyConfig()
     // only fills missing env vars and does not override existing ones).
     if (
       filtered.env &&
@@ -12020,7 +15200,7 @@ async function handleRequest(
     }
 
     try {
-      saveMiladyConfig(state.config);
+      saveMilaidyConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -12030,926 +15210,175 @@ async function handleRequest(
     return;
   }
 
-  // ── GET /api/permissions/automation-mode ──────────────────────────────
-  // Return agent automation permission mode for self-directed config actions.
-  if (method === "GET" && pathname === "/api/permissions/automation-mode") {
-    const mode = state.agentAutomationMode ?? "full";
+  // ═══════════════════════════════════════════════════════════════════════
+  // Permission routes (/api/permissions/*)
+  // System permissions for computer use, microphone, camera, etc.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // ── GET /api/permissions ───────────────────────────────────────────────
+  // Returns all system permission states
+  if (method === "GET" && pathname === "/api/permissions") {
+    const shellEnabled = state.shellEnabled ?? true;
+    const permStates = buildPermissionStateMap(
+      state.permissionStates,
+      shellEnabled,
+    );
+    state.permissionStates = permStates;
     json(res, {
-      mode,
-      options: ["connectors-only", "full"] as AgentAutomationMode[],
+      permissions: permStates,
+      platform: process.platform,
+      shellEnabled,
     });
     return;
   }
 
-  // ── PUT /api/permissions/automation-mode ──────────────────────────────
-  // Update agent automation permission mode.
-  if (method === "PUT" && pathname === "/api/permissions/automation-mode") {
-    const body = await readJsonBody<{ mode?: unknown }>(req, res);
-    if (!body) return;
-    const parsed = parseAgentAutomationMode(body.mode);
-    if (!parsed) {
-      error(res, 'Invalid mode. Expected "connectors-only" or "full".', 400);
+  // ── GET /api/permissions/shell ─────────────────────────────────────────
+  // Return shell toggle status in a stable shape for UI clients.
+  if (method === "GET" && pathname === "/api/permissions/shell") {
+    const enabled = state.shellEnabled ?? true;
+    state.permissionStates = buildPermissionStateMap(
+      state.permissionStates,
+      enabled,
+    );
+    const permission = state.permissionStates.shell;
+
+    // Keep the legacy top-level permission fields for compatibility with
+    // callers that previously treated /api/permissions/shell as a generic
+    // /api/permissions/:id response.
+    json(res, {
+      enabled,
+      ...permission,
+      permission,
+    });
+    return;
+  }
+
+  // ── GET /api/permissions/:id ───────────────────────────────────────────
+  // Returns a single permission state
+  if (method === "GET" && pathname.startsWith("/api/permissions/")) {
+    const permId = pathname.slice("/api/permissions/".length);
+    if (!permId || permId.includes("/")) {
+      error(res, "Invalid permission ID", 400);
       return;
     }
-
-    persistAgentAutomationMode(state, parsed);
-    saveMiladyConfig(state.config);
-
-    json(res, {
-      mode: parsed,
-      options: ["connectors-only", "full"] as AgentAutomationMode[],
-    });
-    return;
-  }
-
-  // ── GET /api/permissions/trade-mode ────────────────────────────────────
-  // Returns the current trade permission mode (must be before handlePermissionRoutes).
-  if (method === "GET" && pathname === "/api/permissions/trade-mode") {
-    const mode = resolveTradePermissionMode(state.config);
-    json(res, {
-      tradePermissionMode: mode,
-      canUserLocalExecute: canUseLocalTradeExecution(mode, false),
-      canAgentAutoTrade: canUseLocalTradeExecution(mode, true),
-    });
-    return;
-  }
-
-  // ── PUT /api/permissions/trade-mode ────────────────────────────────────
-  // Update the trade permission mode.
-  if (method === "PUT" && pathname === "/api/permissions/trade-mode") {
-    const body = await readJsonBody<{ mode?: string }>(req, res);
-    if (!body) return;
-
-    const newMode = body.mode;
-    if (
-      newMode !== "user-sign-only" &&
-      newMode !== "manual-local-key" &&
-      newMode !== "agent-auto"
-    ) {
-      error(
-        res,
-        'mode must be "user-sign-only", "manual-local-key", or "agent-auto"',
-        400,
-      );
+    const permStates = buildPermissionStateMap(
+      state.permissionStates,
+      state.shellEnabled ?? true,
+    );
+    state.permissionStates = permStates;
+    const permState = permStates[permId];
+    if (!permState) {
+      json(res, {
+        id: permId,
+        status: "not-applicable",
+        lastChecked: Date.now(),
+        canRequest: false,
+      });
       return;
     }
+    json(res, permState);
+    return;
+  }
 
-    if (!state.config.features) {
-      state.config.features = {};
-    }
-    (state.config.features as Record<string, unknown>).tradePermissionMode =
-      newMode;
-
-    try {
-      saveMiladyConfig(state.config);
-    } catch (err) {
-      logger.warn(
-        `[api] Trade-mode config save failed: ${err instanceof Error ? err.message : err}`,
-      );
-    }
-
+  // ── POST /api/permissions/refresh ──────────────────────────────────────
+  // Force refresh all permission states (clears cache)
+  if (method === "POST" && pathname === "/api/permissions/refresh") {
+    // Signal to the client that they should refresh permissions via IPC
+    // The actual permission checking happens in the Electron main process
     json(res, {
-      ok: true,
-      tradePermissionMode: newMode,
-      canUserLocalExecute: canUseLocalTradeExecution(newMode, false),
-      canAgentAutoTrade: canUseLocalTradeExecution(newMode, true),
+      message: "Permission refresh requested",
+      action: "ipc:permissions:refresh",
     });
     return;
   }
 
+  // ── POST /api/permissions/:id/request ──────────────────────────────────
+  // Request a specific permission (triggers system prompt or opens settings)
   if (
-    await handlePermissionRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      state,
-      readJsonBody,
-      json,
-      error,
-      saveConfig: saveMiladyConfig,
-      scheduleRuntimeRestart,
-    })
+    method === "POST" &&
+    pathname.match(/^\/api\/permissions\/[^/]+\/request$/)
   ) {
-    return;
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // Agent self-status route
-  // ═══════════════════════════════════════════════════════════════════════
-
-  // ── GET /api/agent/self-status ──────────────────────────────────────────
-  // Returns a snapshot of the agent's current capabilities and status,
-  // used by action handlers (can-i, etc.) to evaluate permissions.
-  if (method === "GET" && pathname === "/api/agent/self-status") {
-    const addrs = getWalletAddresses();
-    const evmAddress = addrs.evmAddress ?? null;
-    const tradePermissionMode = resolveTradePermissionMode(state.config);
-    const localSigner = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
-    const bscRpcReady = Boolean(
-      process.env.NODEREAL_BSC_RPC_URL?.trim() ||
-        process.env.QUICKNODE_BSC_RPC_URL?.trim() ||
-        process.env.BSC_RPC_URL?.trim(),
-    );
-    const canLocalTrade = canUseLocalTradeExecution(tradePermissionMode, false);
-    const canAgentAutoTrade = canUseLocalTradeExecution(
-      tradePermissionMode,
-      true,
-    );
-    const canTrade = Boolean(evmAddress) && bscRpcReady;
-    const automationMode: "connectors-only" | "full" =
-      (state.config.features as Record<string, unknown> | undefined)
-        ?.automationMode === "full"
-        ? "full"
-        : "connectors-only";
-
-    // Include registry snapshot summary if available
-    let registrySummary: string | null = null;
-    const registry = getGlobalAwarenessRegistry();
-    if (registry && state.runtime) {
-      try {
-        registrySummary = await registry.composeSummary(state.runtime);
-      } catch {
-        // Non-fatal: registry may not be initialized yet
-      }
-    }
-
-    // Resolve model from multiple sources (state.model → config → env)
-    const resolvedModel =
-      state.model ??
-      detectRuntimeModel(state.runtime ?? null, state.config) ??
-      null;
-
-    // Derive provider label from model string
-    const resolvedProvider = resolvedModel
-      ? resolveProviderFromModel(resolvedModel)
-      : null;
-
-    // Gather plugin info from the runtime
-    const pluginNames: string[] = [];
-    const aiProviderNames: string[] = [];
-    const connectorNames: string[] = [];
-    const BROWSER_PLUGIN_IDS = new Set([
-      "browser",
-      "browserbase",
-      "chrome-extension",
-    ]);
-    const COMPUTER_PLUGIN_IDS = new Set(["computeruse", "computer-use"]);
-    let hasBrowserPlugin = false;
-    let hasComputerPlugin = false;
-
-    if (state.runtime && Array.isArray(state.runtime.plugins)) {
-      for (const plugin of state.runtime.plugins) {
-        const name = typeof plugin?.name === "string" ? plugin.name.trim() : "";
-        if (!name) continue;
-        pluginNames.push(name);
-        const lower = name.toLowerCase();
-        if (
-          lower.includes("openai") ||
-          lower.includes("anthropic") ||
-          lower.includes("groq") ||
-          lower.includes("gemini") ||
-          lower.includes("openrouter") ||
-          lower.includes("deepseek") ||
-          lower.includes("ollama")
-        ) {
-          aiProviderNames.push(name);
-        }
-        if (
-          lower.includes("discord") ||
-          lower.includes("telegram") ||
-          lower.includes("twitter") ||
-          lower.includes("slack")
-        ) {
-          connectorNames.push(name);
-        }
-        if (BROWSER_PLUGIN_IDS.has(lower)) hasBrowserPlugin = true;
-        if (COMPUTER_PLUGIN_IDS.has(lower)) hasComputerPlugin = true;
-      }
-    }
-
+    const permId = pathname.split("/")[3];
     json(res, {
-      generatedAt: new Date().toISOString(),
-      state: state.agentState,
-      agentName: state.agentName,
-      model: resolvedModel,
-      provider: resolvedProvider,
-      automationMode,
-      tradePermissionMode,
-      shellEnabled: state.shellEnabled !== false,
-      wallet: {
-        hasWallet: Boolean(evmAddress || addrs.solanaAddress),
-        hasEvm: Boolean(evmAddress),
-        hasSolana: Boolean(addrs.solanaAddress),
-        evmAddress,
-        evmAddressShort:
-          evmAddress && evmAddress.length >= 12
-            ? `${evmAddress.slice(0, 6)}...${evmAddress.slice(-4)}`
-            : evmAddress,
-        solanaAddress: addrs.solanaAddress ?? null,
-        solanaAddressShort:
-          addrs.solanaAddress && addrs.solanaAddress.length >= 12
-            ? `${addrs.solanaAddress.slice(0, 4)}...${addrs.solanaAddress.slice(-4)}`
-            : (addrs.solanaAddress ?? null),
-        localSignerAvailable: localSigner,
-        managedBscRpcReady: bscRpcReady,
-      },
-      plugins: {
-        totalActive: pluginNames.length,
-        active: pluginNames,
-        aiProviders: aiProviderNames,
-        connectors: connectorNames,
-      },
-      capabilities: {
-        canTrade,
-        canLocalTrade: canTrade && localSigner && canLocalTrade,
-        canAutoTrade: canTrade && localSigner && canAgentAutoTrade,
-        canUseBrowser: hasBrowserPlugin,
-        canUseComputer: hasComputerPlugin,
-        canRunTerminal: state.shellEnabled !== false,
-        canInstallPlugins: true,
-        canConfigurePlugins: true,
-        canConfigureConnectors: true,
-      },
-      ...(registrySummary !== null ? { registrySummary } : {}),
+      message: `Permission request for ${permId}`,
+      action: `ipc:permissions:request:${permId}`,
     });
     return;
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // Privy wallet routes
-  // ═══════════════════════════════════════════════════════════════════════
-
-  // ── GET /api/privy/status ───────────────────────────────────────────────
-  if (method === "GET" && pathname === "/api/privy/status") {
-    const enabled = isPrivyWalletProvisioningEnabled();
-    json(res, { enabled, configured: enabled });
+  // ── POST /api/permissions/:id/open-settings ────────────────────────────
+  // Open system settings for a specific permission
+  if (
+    method === "POST" &&
+    pathname.match(/^\/api\/permissions\/[^/]+\/open-settings$/)
+  ) {
+    const permId = pathname.split("/")[3];
+    json(res, {
+      message: `Opening settings for ${permId}`,
+      action: `ipc:permissions:openSettings:${permId}`,
+    });
     return;
   }
 
-  // ── POST /api/privy/login ───────────────────────────────────────────────
-  // Provisions Privy wallets for a custom user ID (agent identifier).
-  if (method === "POST" && pathname === "/api/privy/login") {
-    if (!isPrivyWalletProvisioningEnabled()) {
-      error(res, "Privy wallet provisioning is not configured.", 503);
-      return;
-    }
-    const body = await readJsonBody<{ userId?: string }>(req, res);
+  // ── PUT /api/permissions/shell ─────────────────────────────────────────
+  // Toggle shell access enabled/disabled
+  if (method === "PUT" && pathname === "/api/permissions/shell") {
+    const body = await readJsonBody(req, res);
     if (!body) return;
-
-    const userId = (body.userId ?? "").trim();
-    if (!userId) {
-      error(res, "userId is required", 400);
-      return;
-    }
-
-    try {
-      const result = await ensurePrivyWalletsForCustomUser(userId);
-      json(res, { ok: true, ...result });
-    } catch (err) {
-      logger.error(
-        `[api] Privy login failed: ${err instanceof Error ? err.message : err}`,
-      );
-      error(
-        res,
-        `Privy login failed: ${err instanceof Error ? err.message : "unknown error"}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── POST /api/privy/logout ──────────────────────────────────────────────
-  if (method === "POST" && pathname === "/api/privy/logout") {
-    // No-op for server-side managed wallets; Privy sessions are stateless.
-    json(res, { ok: true });
-    return;
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // Subscription status route
-  // ═══════════════════════════════════════════════════════════════════════
-
-  // ── GET /api/subscription/status (direct handler fallback) ─────────────
-  // Note: subscription-routes.ts handles /api/subscription/* but this is
-  // kept here in case the prefix routing is not active.
-  // (handleSubscriptionRoutes already covers this, so no duplicate needed.)
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // BSC trade routes
-  // ═══════════════════════════════════════════════════════════════════════
-
-  // ── POST /api/wallet/trade/preflight ───────────────────────────────────
-  // Check BSC trade readiness (wallet, RPC, chain, gas).
-  if (method === "POST" && pathname === "/api/wallet/trade/preflight") {
-    const body = await readJsonBody<{ tokenAddress?: string }>(req, res);
-    if (!body) return;
-
-    const addrs = getWalletAddresses();
-    try {
-      const result = await buildBscTradePreflight({
-        walletAddress: addrs.evmAddress ?? null,
-        tokenAddress: body.tokenAddress,
-        nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
-        quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
-      });
-      json(res, result);
-    } catch (err) {
-      logger.error(
-        `[api] BSC trade preflight failed: ${err instanceof Error ? err.message : err}`,
-      );
-      error(
-        res,
-        `Trade preflight failed: ${err instanceof Error ? err.message : "unknown error"}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── POST /api/wallet/trade/quote ────────────────────────────────────────
-  // Produce a BSC trade quote (unsigned transaction data).
-  if (method === "POST" && pathname === "/api/wallet/trade/quote") {
-    const body = await readJsonBody<{
-      side?: string;
-      tokenAddress?: string;
-      amount?: string;
-      slippageBps?: number;
-    }>(req, res);
-    if (!body) return;
-
-    if (!body.side || !body.tokenAddress || !body.amount) {
-      error(res, "side, tokenAddress, and amount are required", 400);
-      return;
-    }
-
-    const addrs = getWalletAddresses();
-    try {
-      const result = await buildBscTradeQuote({
-        walletAddress: addrs.evmAddress ?? null,
-        nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
-        quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
-        request: {
-          side: body.side as "buy" | "sell",
-          tokenAddress: body.tokenAddress,
-          amount: body.amount,
-          slippageBps: body.slippageBps,
-        },
-      });
-      json(res, result);
-    } catch (err) {
-      logger.error(
-        `[api] BSC trade quote failed: ${err instanceof Error ? err.message : err}`,
-      );
-      error(
-        res,
-        `Trade quote failed: ${err instanceof Error ? err.message : "unknown error"}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── POST /api/wallet/trade/execute ─────────────────────────────────────
-  // Execute or prepare a BSC trade. In "user-sign-only" mode, returns an
-  // unsigned transaction for the user to sign. In local-key modes, executes
-  // using the server-side EVM private key.
-  if (method === "POST" && pathname === "/api/wallet/trade/execute") {
-    const body = await readJsonBody<{
-      side?: string;
-      tokenAddress?: string;
-      amount?: string;
-      slippageBps?: number;
-      deadlineSeconds?: number;
-      confirm?: boolean;
-      source?: "agent" | "manual";
-    }>(req, res);
-    if (!body) return;
-
-    if (!body.side || !body.tokenAddress || !body.amount) {
-      error(res, "side, tokenAddress, and amount are required", 400);
-      return;
-    }
-
-    const tradePermissionMode = resolveTradePermissionMode(state.config);
-    const isAgentRequest = isAgentAutomationRequest(req);
-    const hasLocalKey = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
-    const canExecuteLocally = canUseLocalTradeExecution(
-      tradePermissionMode,
-      isAgentRequest,
+    const enabled = body.enabled === true;
+    state.shellEnabled = enabled;
+    state.permissionStates = buildPermissionStateMap(
+      state.permissionStates,
+      enabled,
     );
-    const addrs = getWalletAddresses();
 
-    try {
-      const quote = await buildBscTradeQuote({
-        walletAddress: addrs.evmAddress ?? null,
-        nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
-        quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
-        request: {
-          side: body.side as "buy" | "sell",
-          tokenAddress: body.tokenAddress,
-          amount: body.amount,
-          slippageBps: body.slippageBps,
-        },
-      });
-
-      const walletAddress = addrs.evmAddress ?? null;
-
-      // Build the unsigned trade transaction
-      const unsignedTx =
-        quote.side === "buy"
-          ? buildBscBuyUnsignedTx(quote, walletAddress, body.deadlineSeconds)
-          : buildBscSellUnsignedTx(quote, walletAddress, body.deadlineSeconds);
-
-      // Build approval tx for sell (if needed)
-      let unsignedApprovalTx:
-        | import("../contracts/wallet").BscUnsignedApprovalTx
-        | undefined;
-      let requiresApproval = false;
-      if (quote.side === "sell" && walletAddress) {
-        unsignedApprovalTx = buildBscApproveUnsignedTx(
-          quote.tokenAddress,
-          walletAddress,
-          quote.routerAddress,
-          quote.quoteIn.amountWei,
-        );
-        requiresApproval = true;
-      }
-
-      // If local execution is not permitted or no private key, return unsigned tx
-      if (!hasLocalKey || !canExecuteLocally || body.confirm !== true) {
-        json(res, {
-          ok: true,
-          side: quote.side,
-          mode: hasLocalKey && canExecuteLocally ? "local-key" : "user-sign",
-          quote,
-          executed: false,
-          requiresUserSignature: true,
-          unsignedTx,
-          unsignedApprovalTx,
-          requiresApproval,
-        });
-        return;
-      }
-
-      // Execute locally with EVM private key
-      const rpcUrl = resolvePrimaryBscRpcUrl({
-        nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
-        quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
-      });
-
-      if (!rpcUrl) {
-        error(res, "BSC RPC not configured for local execution.", 503);
-        return;
-      }
-
-      const evmKey = process.env.EVM_PRIVATE_KEY ?? "";
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
-      const wallet = new ethers.Wallet(
-        evmKey.startsWith("0x") ? evmKey : `0x${evmKey}`,
-        provider,
-      );
-
-      const nonce = await provider.getTransactionCount(
-        wallet.address,
-        "pending",
-      );
-
-      // Execute approval first if needed
-      let approvalHash: string | undefined;
-      if (requiresApproval && unsignedApprovalTx) {
-        const approvalTxReq: ethers.TransactionRequest = {
-          to: unsignedApprovalTx.to,
-          data: unsignedApprovalTx.data,
-          value: BigInt(unsignedApprovalTx.valueWei),
-          chainId: unsignedApprovalTx.chainId,
-          nonce,
-        };
-        const approvalResponse = await wallet.sendTransaction(approvalTxReq);
-        approvalHash = approvalResponse.hash;
-        // Wait for approval to be mined before submitting trade
-        await approvalResponse.wait(1);
-      }
-
-      const tradeTxReq: ethers.TransactionRequest = {
-        to: unsignedTx.to,
-        data: unsignedTx.data,
-        value: BigInt(unsignedTx.valueWei),
-        chainId: unsignedTx.chainId,
-        nonce: requiresApproval ? nonce + 1 : nonce,
-      };
-
-      const tradeTxResponse = await wallet.sendTransaction(tradeTxReq);
-      const tradeNonce = requiresApproval ? nonce + 1 : nonce;
-
-      const executionResult = {
-        hash: tradeTxResponse.hash,
-        nonce: tradeNonce,
-        gasLimit: tradeTxResponse.gasLimit?.toString() ?? "0",
-        valueWei: unsignedTx.valueWei,
-        explorerUrl: `https://bscscan.com/tx/${tradeTxResponse.hash}`,
-        blockNumber: null as number | null,
-        status: "pending" as "pending" | "success",
-        approvalHash,
-      };
-
-      // Record in ledger
-      const source = body.source ?? "manual";
-      try {
-        recordWalletTradeLedgerEntry({
-          hash: tradeTxResponse.hash,
-          source,
-          side: quote.side,
-          tokenAddress: quote.tokenAddress,
-          slippageBps: quote.slippageBps,
-          route: quote.route,
-          quoteIn: {
-            symbol: quote.quoteIn.symbol,
-            amount: quote.quoteIn.amount,
-            amountWei: quote.quoteIn.amountWei,
-          },
-          quoteOut: {
-            symbol: quote.quoteOut.symbol,
-            amount: quote.quoteOut.amount,
-            amountWei: quote.quoteOut.amountWei,
-          },
-          status: "pending",
-          confirmations: 0,
-          nonce: tradeNonce,
-          blockNumber: null,
-          gasUsed: null,
-          effectiveGasPriceWei: null,
-          explorerUrl: executionResult.explorerUrl,
-        });
-      } catch (ledgerErr) {
-        logger.warn(
-          `[api] Failed to record trade ledger entry: ${ledgerErr instanceof Error ? ledgerErr.message : ledgerErr}`,
-        );
-      }
-
-      provider.destroy();
-
-      json(res, {
-        ok: true,
-        side: quote.side,
-        mode: "local-key",
-        quote,
-        executed: true,
-        requiresUserSignature: false,
-        unsignedTx,
-        unsignedApprovalTx,
-        requiresApproval,
-        execution: executionResult,
-      });
-    } catch (err) {
-      logger.error(
-        `[api] BSC trade execute failed: ${err instanceof Error ? err.message : err}`,
-      );
-      error(
-        res,
-        `Trade execution failed: ${err instanceof Error ? err.message : "unknown error"}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── GET /api/wallet/trade/tx-status ────────────────────────────────────
-  // Check the on-chain status of a BSC transaction by hash.
-  if (method === "GET" && pathname === "/api/wallet/trade/tx-status") {
-    const hash = url.searchParams.get("hash");
-    if (!hash?.trim()) {
-      error(res, "hash query parameter is required", 400);
-      return;
-    }
-
-    const rpcUrl = resolvePrimaryBscRpcUrl({
-      nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
-      quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
-    });
-
-    if (!rpcUrl) {
-      error(res, "BSC RPC not configured.", 503);
-      return;
-    }
-
-    try {
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
-      const receipt = await provider.getTransactionReceipt(hash);
-
-      let txStatus: "pending" | "success" | "reverted" | "not_found";
-      let blockNumber: number | null = null;
-      let gasUsed: string | null = null;
-      let effectiveGasPriceWei: string | null = null;
-      let confirmations = 0;
-      let nonce: number | null = null;
-
-      if (!receipt) {
-        // Check if tx is in mempool
-        const tx = await provider.getTransaction(hash);
-        txStatus = tx ? "pending" : "not_found";
-        if (tx) nonce = tx.nonce;
-      } else {
-        txStatus = receipt.status === 1 ? "success" : "reverted";
-        blockNumber = receipt.blockNumber ?? null;
-        gasUsed = receipt.gasUsed?.toString() ?? null;
-        effectiveGasPriceWei = receipt.gasPrice?.toString() ?? null;
-        const currentBlock = await provider.getBlockNumber();
-        confirmations =
-          blockNumber !== null ? Math.max(0, currentBlock - blockNumber) : 0;
-        const tx = await provider.getTransaction(hash);
-        if (tx) nonce = tx.nonce;
-      }
-
-      // Update ledger if we have a definitive status
-      if (txStatus === "success" || txStatus === "reverted") {
-        try {
-          updateWalletTradeLedgerEntryStatus(hash, {
-            status: txStatus,
-            confirmations,
-            nonce,
-            blockNumber,
-            gasUsed,
-            effectiveGasPriceWei,
-            explorerUrl: `https://bscscan.com/tx/${hash}`,
-          });
-        } catch (ledgerErr) {
-          logger.warn(
-            `[api] Failed to update trade ledger: ${ledgerErr instanceof Error ? ledgerErr.message : ledgerErr}`,
-          );
-        }
-      }
-
-      provider.destroy();
-
-      json(res, {
-        ok: true,
-        hash,
-        status: txStatus,
-        explorerUrl: `https://bscscan.com/tx/${hash}`,
-        chainId: 56,
-        blockNumber,
-        confirmations,
-        nonce,
-        gasUsed,
-        effectiveGasPriceWei,
-      });
-    } catch (err) {
-      logger.error(
-        `[api] BSC tx-status failed: ${err instanceof Error ? err.message : err}`,
-      );
-      error(
-        res,
-        `TX status check failed: ${err instanceof Error ? err.message : "unknown error"}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── GET /api/wallet/trading/profile ────────────────────────────────────
-  // Returns trading P&L profile from the local ledger.
-  if (method === "GET" && pathname === "/api/wallet/trading/profile") {
-    const windowParam = url.searchParams.get("window");
-    const sourceParam = url.searchParams.get("source");
-
-    const window =
-      windowParam === "7d" || windowParam === "30d" || windowParam === "all"
-        ? windowParam
-        : "30d";
-    const source =
-      sourceParam === "agent" ||
-      sourceParam === "manual" ||
-      sourceParam === "all"
-        ? sourceParam
-        : "all";
-
-    try {
-      const profile = loadWalletTradingProfile({ window, source });
-      json(res, profile);
-    } catch (err) {
-      logger.error(
-        `[api] Wallet trading profile failed: ${err instanceof Error ? err.message : err}`,
-      );
-      error(
-        res,
-        `Trading profile fetch failed: ${err instanceof Error ? err.message : "unknown error"}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── POST /api/wallet/transfer/execute ──────────────────────────────────
-  // Execute or prepare a BNB/ERC-20 token transfer.
-  if (method === "POST" && pathname === "/api/wallet/transfer/execute") {
-    const body = await readJsonBody<{
-      toAddress?: string;
-      amount?: string;
-      assetSymbol?: string;
-      tokenAddress?: string;
-      confirm?: boolean;
-    }>(req, res);
-    if (!body) return;
-
-    if (
-      !body.toAddress?.trim() ||
-      !body.amount?.trim() ||
-      !body.assetSymbol?.trim()
-    ) {
-      error(res, "toAddress, amount, and assetSymbol are required", 400);
-      return;
-    }
-
-    const tradePermissionMode = resolveTradePermissionMode(state.config);
-    const isAgentRequest = isAgentAutomationRequest(req);
-    const hasLocalKey = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
-    const canExecuteLocally = canUseLocalTradeExecution(
-      tradePermissionMode,
-      isAgentRequest,
-    );
-    const addrs = getWalletAddresses();
-
-    let toAddress: string;
-    try {
-      toAddress = ethers.getAddress(body.toAddress.trim());
-    } catch {
-      error(res, "Invalid toAddress — must be a valid EVM address", 400);
-      return;
-    }
-
-    const isBnb = body.assetSymbol.toUpperCase() === "BNB";
-
-    // Fetch actual token decimals to avoid wrong amounts for USDC (6), USDT (6), etc.
-    let decimals = 18;
-    if (body.tokenAddress) {
-      try {
-        const tokenContract = new ethers.Contract(
-          body.tokenAddress,
-          ["function decimals() view returns (uint8)"],
-          new ethers.JsonRpcProvider(
-            resolvePrimaryBscRpcUrl({
-              nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
-              quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
-            }) ?? "https://bsc-dataseed1.binance.org/",
-          ),
-        );
-        decimals = Number(await tokenContract.decimals());
-      } catch {
-        // Fallback to 18 if decimals call fails
-      }
-    }
-
-    // Build unsigned transfer tx for user-sign mode
-    const unsignedTx = {
-      chainId: 56,
-      from: addrs.evmAddress ?? null,
-      to: isBnb ? toAddress : (body.tokenAddress ?? toAddress),
-      data: isBnb
-        ? "0x"
-        : (() => {
-            const iface = new ethers.Interface([
-              "function transfer(address to, uint256 amount) returns (bool)",
-            ]);
-            return iface.encodeFunctionData("transfer", [
-              toAddress,
-              ethers.parseUnits(body.amount?.trim(), decimals),
-            ]);
-          })(),
-      valueWei: isBnb ? ethers.parseEther(body.amount.trim()).toString() : "0",
-      explorerUrl: "https://bscscan.com",
-      assetSymbol: body.assetSymbol,
-      amount: body.amount.trim(),
-      tokenAddress: body.tokenAddress,
-    };
-
-    if (!hasLocalKey || !canExecuteLocally || body.confirm !== true) {
-      json(res, {
-        ok: true,
-        mode: hasLocalKey && canExecuteLocally ? "local-key" : "user-sign",
-        executed: false,
-        requiresUserSignature: true,
-        toAddress,
-        amount: body.amount.trim(),
-        assetSymbol: body.assetSymbol,
-        tokenAddress: body.tokenAddress,
-        unsignedTx,
-      });
-      return;
-    }
-
-    // Execute locally
-    const rpcUrl = resolvePrimaryBscRpcUrl({
-      nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
-      quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
-    });
-
-    if (!rpcUrl) {
-      error(res, "BSC RPC not configured for local execution.", 503);
-      return;
-    }
-
-    try {
-      const evmKey = process.env.EVM_PRIVATE_KEY ?? "";
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
-      const wallet = new ethers.Wallet(
-        evmKey.startsWith("0x") ? evmKey : `0x${evmKey}`,
-        provider,
-      );
-
-      const txReq: ethers.TransactionRequest = {
-        to: unsignedTx.to,
-        data: unsignedTx.data,
-        value: BigInt(unsignedTx.valueWei),
-        chainId: unsignedTx.chainId,
-      };
-
-      const txResponse = await wallet.sendTransaction(txReq);
-      const nonce = txResponse.nonce;
-
-      provider.destroy();
-
-      json(res, {
-        ok: true,
-        mode: "local-key",
-        executed: true,
-        requiresUserSignature: false,
-        toAddress,
-        amount: body.amount.trim(),
-        assetSymbol: body.assetSymbol,
-        tokenAddress: body.tokenAddress,
-        unsignedTx,
-        execution: {
-          hash: txResponse.hash,
-          nonce,
-          gasLimit: txResponse.gasLimit?.toString() ?? "0",
-          valueWei: unsignedTx.valueWei,
-          explorerUrl: `https://bscscan.com/tx/${txResponse.hash}`,
-          blockNumber: null,
-          status: "pending",
-        },
-      });
-    } catch (err) {
-      logger.error(
-        `[api] Transfer execute failed: ${err instanceof Error ? err.message : err}`,
-      );
-      error(
-        res,
-        `Transfer failed: ${err instanceof Error ? err.message : "unknown error"}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── POST /api/wallet/production-defaults ───────────────────────────────
-  // Apply opinionated production wallet configuration defaults.
-  // Sets sensible BSC RPC and trade permission defaults when not already
-  // configured.
-  if (method === "POST" && pathname === "/api/wallet/production-defaults") {
-    const changed: string[] = [];
-
+    // Save to config
     if (!state.config.features) {
       state.config.features = {};
     }
-    const features = state.config.features as Record<string, unknown>;
+    state.config.features.shellEnabled = enabled;
+    saveMilaidyConfig(state.config);
 
-    // Default trade permission mode: user-sign-only (safe default)
-    if (!features.tradePermissionMode) {
-      features.tradePermissionMode = "user-sign-only";
-      changed.push("tradePermissionMode=user-sign-only");
-    }
-
-    if (changed.length > 0) {
-      try {
-        saveMiladyConfig(state.config);
-      } catch (err) {
-        logger.warn(
-          `[api] production-defaults config save failed: ${err instanceof Error ? err.message : err}`,
-        );
-      }
+    // If a runtime is active, restart so plugin loading honors the new
+    // shellEnabled flag and shell tools are loaded/unloaded consistently.
+    if (state.runtime && ctx?.onRestart) {
+      scheduleRuntimeRestart(
+        `Shell access ${enabled ? "enabled" : "disabled"}`,
+      );
     }
 
     json(res, {
-      ok: true,
-      applied: changed,
-      tradePermissionMode: resolveTradePermissionMode(state.config),
+      shellEnabled: enabled,
+      permission: state.permissionStates.shell,
     });
+    return;
+  }
+
+  // ── PUT /api/permissions/state ─────────────────────────────────────────
+  // Update permission states from Electron (called by renderer after IPC)
+  if (method === "PUT" && pathname === "/api/permissions/state") {
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+    if (body.permissions && typeof body.permissions === "object") {
+      state.permissionStates = buildPermissionStateMap(
+        {
+          ...(state.permissionStates ?? {}),
+          ...(body.permissions as Record<string, CachedPermissionState>),
+        },
+        state.shellEnabled ?? true,
+      );
+    } else {
+      state.permissionStates = buildPermissionStateMap(
+        state.permissionStates,
+        state.shellEnabled ?? true,
+      );
+    }
+    json(res, { updated: true, permissions: state.permissionStates });
     return;
   }
 
   // ── Cloud routes (/api/cloud/*) ─────────────────────────────────────────
   if (pathname.startsWith("/api/cloud/")) {
-    // Compat proxy routes — transparent proxy to Eliza Cloud v2 /api/compat/*
-    const compatHandled = await handleCloudCompatRoute(
-      req,
-      res,
-      pathname,
-      method,
-      { config: state.config },
-    );
-    if (compatHandled) return;
-
     const cloudState: CloudRouteState = {
       config: state.config,
       cloudManager: state.cloudManager,
@@ -12988,7 +15417,7 @@ async function handleRequest(
         : (stringToUuid(`${state.agentName}-admin-entity`) as UUID);
     if (configured && !isUuidLike(configured)) {
       logger.warn(
-        `[milady-api] Invalid agents.defaults.adminEntityId "${configured}", using deterministic fallback`,
+        `[milaidy-api] Invalid agents.defaults.adminEntityId "${configured}", using deterministic fallback`,
       );
     }
     state.adminEntityId = nextAdminEntityId;
@@ -13031,51 +15460,6 @@ async function handleRequest(
     }
   };
 
-  const markConversationDeleted = (conversationId: string): void => {
-    const normalizedId = conversationId.trim();
-    if (!normalizedId) return;
-    if (state.deletedConversationIds.has(normalizedId)) return;
-
-    state.deletedConversationIds.add(normalizedId);
-    while (state.deletedConversationIds.size > MAX_DELETED_CONVERSATION_IDS) {
-      const oldest = state.deletedConversationIds.values().next().value;
-      if (!oldest) break;
-      state.deletedConversationIds.delete(oldest);
-    }
-
-    try {
-      persistDeletedConversationIdsToState(state.deletedConversationIds);
-    } catch (err) {
-      logger.warn(
-        `[conversations] Failed to persist deleted conversation tombstones: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  };
-
-  const deleteConversationRoomData = async (
-    runtime: AgentRuntime,
-    roomId: UUID,
-  ): Promise<void> => {
-    const runtimeWithDelete = runtime as AgentRuntime & {
-      deleteRoom?: (id: UUID) => Promise<unknown>;
-      adapter?: {
-        db?: {
-          deleteRoom?: (id: UUID) => Promise<unknown>;
-        };
-      };
-    };
-
-    if (typeof runtimeWithDelete.deleteRoom === "function") {
-      await runtimeWithDelete.deleteRoom(roomId);
-      return;
-    }
-
-    const dbDeleteRoom = runtimeWithDelete.adapter?.db?.deleteRoom;
-    if (typeof dbDeleteRoom === "function") {
-      await dbDeleteRoom.call(runtimeWithDelete.adapter?.db, roomId);
-    }
-  };
-
   // Helper: ensure the room for a conversation is set up.
   // Also ensures the world has ownership metadata so the settings provider
   // can find it via findWorldsForOwner during onboarding.
@@ -13084,7 +15468,7 @@ async function handleRequest(
   ): Promise<void> => {
     if (!state.runtime) return;
     const runtime = state.runtime;
-    const agentName = runtime.character.name ?? "Milady";
+    const agentName = runtime.character.name ?? "Milaidy";
     const userId = ensureAdminEntityId();
     const worldId = stringToUuid(`${agentName}-web-chat-world`);
     const messageServerId = stringToUuid(`${agentName}-web-server`) as UUID;
@@ -13168,593 +15552,12 @@ async function handleRequest(
     }
   };
 
-  const ensureCompatChatConnection = async (
-    runtime: AgentRuntime,
-    agentName: string,
-    channelIdPrefix: string,
-    roomKey: string,
-  ): Promise<{ userId: UUID; roomId: UUID; worldId: UUID }> => {
-    const userId = ensureAdminEntityId();
-    const roomId = stringToUuid(
-      `${agentName}-${channelIdPrefix}-room-${roomKey}`,
-    ) as UUID;
-    const worldId = stringToUuid(`${agentName}-web-chat-world`) as UUID;
-    const messageServerId = stringToUuid(`${agentName}-web-server`) as UUID;
-
-    await runtime.ensureConnection({
-      entityId: userId,
-      roomId,
-      worldId,
-      userName: "User",
-      source: "client_chat",
-      channelId: `${channelIdPrefix}-${roomKey}`,
-      type: ChannelType.DM,
-      messageServerId,
-      metadata: { ownership: { ownerId: userId } },
-    });
-    await ensureWorldOwnershipAndRoles(runtime, worldId, userId);
-
-    return { userId, roomId, worldId };
-  };
-
-  // -------------------------------------------------------------------------
-  // OpenAI / Anthropic compatibility endpoints
-  // -------------------------------------------------------------------------
-
-  // ── GET /v1/models (OpenAI compatible) ─────────────────────────────────
-  if (method === "GET" && pathname === "/v1/models") {
-    const created = Math.floor(Date.now() / 1000);
-    const ids = new Set<string>();
-    ids.add("milady");
-    if (state.agentName?.trim()) ids.add(state.agentName.trim());
-    if (state.runtime?.character.name?.trim())
-      ids.add(state.runtime.character.name.trim());
-
-    json(res, {
-      object: "list",
-      data: Array.from(ids).map((id) => ({
-        id,
-        object: "model",
-        created,
-        owned_by: "milady",
-      })),
-    });
-    return;
-  }
-
-  // ── GET /v1/models/:id (OpenAI compatible) ─────────────────────────────
-  if (method === "GET" && /^\/v1\/models\/[^/]+$/.test(pathname)) {
-    const created = Math.floor(Date.now() / 1000);
-    const raw = pathname.split("/")[3] ?? "";
-    const decoded = decodePathComponent(raw, res, "model id");
-    if (!decoded) return;
-    const id = decoded.trim();
-    if (!id) {
-      json(
-        res,
-        {
-          error: {
-            message: "Model id is required",
-            type: "invalid_request_error",
-          },
-        },
-        400,
-      );
-      return;
-    }
-    json(res, { id, object: "model", created, owned_by: "milady" });
-    return;
-  }
-
-  // ── POST /v1/chat/completions (OpenAI compatible) ──────────────────────
-  if (method === "POST" && pathname === "/v1/chat/completions") {
-    const body = await readJsonBody<Record<string, unknown>>(req, res);
-    if (!body) return;
-    if (hasBlockedObjectKeyDeep(body)) {
-      json(
-        res,
-        {
-          error: {
-            message: "Request body contains a blocked object key",
-            type: "invalid_request_error",
-          },
-        },
-        400,
-      );
-      return;
-    }
-    const safeBody = cloneWithoutBlockedObjectKeys(body);
-
-    const extracted = extractOpenAiSystemAndLastUser(safeBody.messages);
-    if (!extracted) {
-      json(
-        res,
-        {
-          error: {
-            message:
-              "messages must be an array containing at least one user message",
-            type: "invalid_request_error",
-          },
-        },
-        400,
-      );
-      return;
-    }
-
-    const roomKey = resolveCompatRoomKey(safeBody).slice(0, 120);
-    const wantsStream =
-      safeBody.stream === true ||
-      (req.headers.accept ?? "").includes("text/event-stream");
-    const requestedModel =
-      typeof safeBody.model === "string" && safeBody.model.trim()
-        ? safeBody.model.trim()
-        : null;
-
-    const prompt = extracted.system
-      ? `${extracted.system}\n\n${extracted.user}`.trim()
-      : extracted.user;
-
-    const created = Math.floor(Date.now() / 1000);
-    const id = `chatcmpl-${crypto.randomUUID()}`;
-    const model = requestedModel ?? state.agentName ?? "milady";
-
-    if (wantsStream) {
-      initSse(res);
-      let aborted = false;
-      req.on("close", () => {
-        aborted = true;
-      });
-
-      const sendChunk = (
-        delta: Record<string, unknown>,
-        finishReason: string | null,
-      ) => {
-        writeSseData(
-          res,
-          JSON.stringify({
-            id,
-            object: "chat.completion.chunk",
-            created,
-            model,
-            choices: [
-              {
-                index: 0,
-                delta,
-                finish_reason: finishReason,
-              },
-            ],
-          }),
-        );
-      };
-
-      try {
-        if (!state.runtime) {
-          writeSseData(
-            res,
-            JSON.stringify({
-              error: {
-                message: "Agent is not running",
-                type: "service_unavailable",
-              },
-            }),
-          );
-          writeSseData(res, "[DONE]");
-          return;
-        }
-
-        sendChunk({ role: "assistant" }, null);
-
-        let fullText = "";
-
-        {
-          const runtime = state.runtime;
-          if (!runtime) throw new Error("Agent is not running");
-          const agentName = runtime.character.name ?? "Milady";
-          const { userId, roomId } = await ensureCompatChatConnection(
-            runtime,
-            agentName,
-            "openai-compat",
-            roomKey,
-          );
-
-          const message = createMessageMemory({
-            id: crypto.randomUUID() as UUID,
-            entityId: userId,
-            agentId: runtime.agentId,
-            roomId,
-            content: {
-              text: prompt,
-              source: "compat_openai",
-              channelType: ChannelType.API,
-            },
-          });
-
-          await generateChatResponse(runtime, message, state.agentName, {
-            isAborted: () => aborted,
-            onChunk: (chunk) => {
-              fullText += chunk;
-              if (chunk) sendChunk({ content: chunk }, null);
-            },
-            resolveNoResponseText: () =>
-              resolveNoResponseFallback(state.logBuffer),
-          });
-        }
-
-        const resolved = normalizeChatResponseText(fullText, state.logBuffer);
-        if (
-          (fullText.trim().length === 0 || isNoResponsePlaceholder(fullText)) &&
-          resolved.trim()
-        ) {
-          // Ensure clients receive a non-empty completion even if the model returned "(no response)".
-          sendChunk({ content: resolved }, null);
-        }
-
-        sendChunk({}, "stop");
-        writeSseData(res, "[DONE]");
-      } catch (err) {
-        if (!aborted) {
-          writeSseData(
-            res,
-            JSON.stringify({
-              error: {
-                message: getErrorMessage(err),
-                type: "server_error",
-              },
-            }),
-          );
-          writeSseData(res, "[DONE]");
-        }
-      } finally {
-        res.end();
-      }
-      return;
-    }
-
-    // Non-streaming
-    try {
-      let responseText: string;
-
-      {
-        if (!state.runtime) {
-          json(
-            res,
-            {
-              error: {
-                message: "Agent is not running",
-                type: "service_unavailable",
-              },
-            },
-            503,
-          );
-          return;
-        }
-        const runtime = state.runtime;
-        const agentName = runtime.character.name ?? "Milady";
-        const { userId, roomId } = await ensureCompatChatConnection(
-          runtime,
-          agentName,
-          "openai-compat",
-          roomKey,
-        );
-        const message = createMessageMemory({
-          id: crypto.randomUUID() as UUID,
-          entityId: userId,
-          roomId,
-          content: {
-            text: prompt,
-            source: "compat_openai",
-            channelType: ChannelType.API,
-          },
-        });
-        const result = await generateChatResponse(
-          runtime,
-          message,
-          state.agentName,
-          {
-            resolveNoResponseText: () =>
-              resolveNoResponseFallback(state.logBuffer),
-          },
-        );
-        responseText = result.text;
-      }
-
-      const resolvedText = normalizeChatResponseText(
-        responseText,
-        state.logBuffer,
-      );
-      json(res, {
-        id,
-        object: "chat.completion",
-        created,
-        model,
-        choices: [
-          {
-            index: 0,
-            message: { role: "assistant", content: resolvedText },
-            finish_reason: "stop",
-          },
-        ],
-      });
-    } catch (err) {
-      json(
-        res,
-        { error: { message: getErrorMessage(err), type: "server_error" } },
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── POST /v1/messages (Anthropic compatible) ───────────────────────────
-  if (method === "POST" && pathname === "/v1/messages") {
-    const body = await readJsonBody<Record<string, unknown>>(req, res);
-    if (!body) return;
-    if (hasBlockedObjectKeyDeep(body)) {
-      json(
-        res,
-        {
-          error: {
-            type: "invalid_request_error",
-            message: "Request body contains a blocked object key",
-          },
-        },
-        400,
-      );
-      return;
-    }
-    const safeBody = cloneWithoutBlockedObjectKeys(body);
-
-    const extracted = extractAnthropicSystemAndLastUser({
-      system: safeBody.system,
-      messages: safeBody.messages,
-    });
-    if (!extracted) {
-      json(
-        res,
-        {
-          error: {
-            type: "invalid_request_error",
-            message:
-              "messages must be an array containing at least one user message",
-          },
-        },
-        400,
-      );
-      return;
-    }
-
-    const roomKey = resolveCompatRoomKey(safeBody).slice(0, 120);
-    const wantsStream =
-      safeBody.stream === true ||
-      (req.headers.accept ?? "").includes("text/event-stream");
-    const requestedModel =
-      typeof safeBody.model === "string" && safeBody.model.trim()
-        ? safeBody.model.trim()
-        : null;
-
-    const prompt = extracted.system
-      ? `${extracted.system}\n\n${extracted.user}`.trim()
-      : extracted.user;
-
-    const id = `msg_${crypto.randomUUID().replace(/-/g, "")}`;
-    const model = requestedModel ?? state.agentName ?? "milady";
-
-    if (wantsStream) {
-      initSse(res);
-      let aborted = false;
-      req.on("close", () => {
-        aborted = true;
-      });
-
-      try {
-        if (!state.runtime) {
-          writeSseJson(
-            res,
-            {
-              type: "error",
-              error: {
-                type: "service_unavailable",
-                message: "Agent is not running",
-              },
-            },
-            "error",
-          );
-          return;
-        }
-
-        writeSseJson(
-          res,
-          {
-            type: "message_start",
-            message: {
-              id,
-              type: "message",
-              role: "assistant",
-              model,
-              content: [],
-              stop_reason: null,
-              stop_sequence: null,
-              usage: { input_tokens: 0, output_tokens: 0 },
-            },
-          },
-          "message_start",
-        );
-        writeSseJson(
-          res,
-          {
-            type: "content_block_start",
-            index: 0,
-            content_block: { type: "text", text: "" },
-          },
-          "content_block_start",
-        );
-
-        let fullText = "";
-
-        const onDelta = (chunk: string) => {
-          if (!chunk) return;
-          fullText += chunk;
-          writeSseJson(
-            res,
-            {
-              type: "content_block_delta",
-              index: 0,
-              delta: { type: "text_delta", text: chunk },
-            },
-            "content_block_delta",
-          );
-        };
-
-        {
-          const runtime = state.runtime;
-          if (!runtime) throw new Error("Agent is not running");
-          const agentName = runtime.character.name ?? "Milady";
-          const { userId, roomId } = await ensureCompatChatConnection(
-            runtime,
-            agentName,
-            "anthropic-compat",
-            roomKey,
-          );
-
-          const message = createMessageMemory({
-            id: crypto.randomUUID() as UUID,
-            entityId: userId,
-            roomId,
-            content: {
-              text: prompt,
-              source: "compat_anthropic",
-              channelType: ChannelType.API,
-            },
-          });
-
-          await generateChatResponse(runtime, message, state.agentName, {
-            isAborted: () => aborted,
-            onChunk: onDelta,
-            resolveNoResponseText: () =>
-              resolveNoResponseFallback(state.logBuffer),
-          });
-        }
-
-        const resolved = normalizeChatResponseText(fullText, state.logBuffer);
-        if (
-          (fullText.trim().length === 0 || isNoResponsePlaceholder(fullText)) &&
-          resolved.trim()
-        ) {
-          onDelta(resolved);
-        }
-
-        writeSseJson(
-          res,
-          { type: "content_block_stop", index: 0 },
-          "content_block_stop",
-        );
-        writeSseJson(
-          res,
-          {
-            type: "message_delta",
-            delta: { stop_reason: "end_turn", stop_sequence: null },
-            usage: { output_tokens: 0 },
-          },
-          "message_delta",
-        );
-        writeSseJson(res, { type: "message_stop" }, "message_stop");
-      } catch (err) {
-        if (!aborted) {
-          writeSseJson(
-            res,
-            {
-              type: "error",
-              error: { type: "server_error", message: getErrorMessage(err) },
-            },
-            "error",
-          );
-        }
-      } finally {
-        res.end();
-      }
-      return;
-    }
-
-    // Non-streaming
-    try {
-      let responseText: string;
-
-      {
-        if (!state.runtime) {
-          json(
-            res,
-            {
-              error: {
-                type: "service_unavailable",
-                message: "Agent is not running",
-              },
-            },
-            503,
-          );
-          return;
-        }
-        const runtime = state.runtime;
-        const agentName = runtime.character.name ?? "Milady";
-        const { userId, roomId } = await ensureCompatChatConnection(
-          runtime,
-          agentName,
-          "anthropic-compat",
-          roomKey,
-        );
-        const message = createMessageMemory({
-          id: crypto.randomUUID() as UUID,
-          entityId: userId,
-          roomId,
-          content: {
-            text: prompt,
-            source: "compat_anthropic",
-            channelType: ChannelType.API,
-          },
-        });
-        const result = await generateChatResponse(
-          runtime,
-          message,
-          state.agentName,
-          {
-            resolveNoResponseText: () =>
-              resolveNoResponseFallback(state.logBuffer),
-          },
-        );
-        responseText = result.text;
-      }
-
-      const resolvedText = normalizeChatResponseText(
-        responseText,
-        state.logBuffer,
-      );
-      json(res, {
-        id,
-        type: "message",
-        role: "assistant",
-        model,
-        content: [{ type: "text", text: resolvedText }],
-        stop_reason: "end_turn",
-        stop_sequence: null,
-        usage: { input_tokens: 0, output_tokens: 0 },
-      });
-    } catch (err) {
-      json(
-        res,
-        { error: { type: "server_error", message: getErrorMessage(err) } },
-        500,
-      );
-    }
-    return;
-  }
-
   // ── GET /api/conversations ──────────────────────────────────────────
   if (method === "GET" && pathname === "/api/conversations") {
-    const convos = Array.from(state.conversations.values())
-      .filter((c) => !state.deletedConversationIds.has(c.id))
-      .sort(
-        (a, b) =>
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-      );
+    const convos = Array.from(state.conversations.values()).sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
     json(res, { conversations: convos });
     return;
   }
@@ -13774,10 +15577,6 @@ async function handleRequest(
       updatedAt: now,
     };
     state.conversations.set(id, conv);
-
-    // Soft cap: evict the oldest conversation when the map exceeds 500
-    evictOldestConversation(state.conversations, 500);
-
     if (state.runtime) {
       await ensureConversationRoom(conv);
       await syncConversationRoomTitle(conv);
@@ -13797,36 +15596,32 @@ async function handleRequest(
       error(res, "Conversation not found", 404);
       return;
     }
-    if (!state.runtime) {
+    if (!state.runtime || state.agentState !== "running") {
       json(res, { messages: [] });
       return;
     }
-    const runtime = state.runtime;
     try {
-      const memories = await runtime.getMemories({
+      const memories = await state.runtime.getMemories({
         roomId: conv.roomId,
         tableName: "messages",
         count: 200,
       });
       // Sort by createdAt ascending
       memories.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
-      const agentId = runtime.agentId;
+      const agentId = state.runtime.agentId;
       const messages = memories.map((m) => {
-        const contentSource = (m.content as Record<string, unknown>)?.source;
-        const meta = m.metadata as Record<string, unknown> | undefined;
-        const entityName = meta?.entityName;
+        const content = isRecord(m.content) ? m.content : {};
+        const contentSource = content.source;
+        const blocks = sanitizeResponseBlocks(content.blocks);
         return {
           id: m.id ?? "",
           role: m.entityId === agentId ? "assistant" : "user",
-          text: (m.content as { text?: string })?.text ?? "",
+          text: typeof content.text === "string" ? content.text : "",
           timestamp: m.createdAt ?? 0,
+          ...(blocks ? { blocks } : {}),
           source:
             typeof contentSource === "string" && contentSource !== "client_chat"
               ? contentSource
-              : undefined,
-          from:
-            typeof entityName === "string" && entityName.length > 0
-              ? entityName
               : undefined,
         };
       });
@@ -13835,12 +15630,106 @@ async function handleRequest(
       logger.warn(
         `[conversations] Failed to fetch messages: ${err instanceof Error ? err.message : String(err)}`,
       );
-      json(res, { messages: [], error: "Failed to fetch messages" }, 500);
+      json(res, { error: "Failed to fetch messages" }, 500);
     }
     return;
   }
 
   // ── POST /api/conversations/:id/messages/stream ─────────────────────
+  if (
+    method === "POST" &&
+    /^\/api\/conversations\/[^/]+\/operator-action$/.test(pathname)
+  ) {
+    const convId = decodeURIComponent(pathname.split("/")[3]);
+    const conv = state.conversations.get(convId);
+    if (!conv) {
+      error(res, "Conversation not found", 404);
+      return;
+    }
+    if (!state.runtime) {
+      error(res, "Agent is not running", 503);
+      return;
+    }
+
+    const body = await readJsonBody<{
+      label?: string;
+      kind?: string;
+      detail?: string;
+      fallbackText?: string;
+    }>(req, res);
+    if (!body) return;
+
+    const label = body.label?.trim();
+    if (!label) {
+      error(res, "label is required", 400);
+      return;
+    }
+    if (
+      body.kind !== "stream" &&
+      body.kind !== "avatar" &&
+      body.kind !== "launch"
+    ) {
+      error(res, "kind must be 'stream', 'avatar', or 'launch'", 400);
+      return;
+    }
+
+    try {
+      const runtime = state.runtime;
+      const userId = ensureAdminEntityId();
+      await ensureConversationRoom(conv);
+
+      const actionBlock: Extract<ResponseBlock, { type: "action-pill" }> = {
+        type: "action-pill",
+        label,
+        kind: body.kind,
+      };
+      if (typeof body.detail === "string" && body.detail.trim().length > 0) {
+        actionBlock.detail = body.detail.trim();
+      }
+
+      const fallbackText =
+        typeof body.fallbackText === "string" && body.fallbackText.trim().length > 0
+          ? body.fallbackText.trim()
+          : label;
+
+      const message = createMessageMemory({
+        id: crypto.randomUUID() as UUID,
+        entityId: userId,
+        agentId: runtime.agentId,
+        roomId: conv.roomId,
+        content: {
+          text: fallbackText,
+          blocks: [actionBlock],
+          source: "operator_action",
+          channelType: ChannelType.DM,
+        },
+      });
+
+      await runtime.createMemory(message, "messages");
+      conv.updatedAt = new Date().toISOString();
+
+      const responseMessage = {
+        id: message.id ?? crypto.randomUUID(),
+        role: "user" as const,
+        text: fallbackText,
+        timestamp: message.createdAt ?? Date.now(),
+        blocks: [actionBlock],
+        source: "operator_action",
+      };
+
+      state.broadcastWs?.({
+        type: "proactive-message",
+        conversationId: conv.id,
+        message: responseMessage,
+      });
+
+      json(res, { message: responseMessage });
+    } catch (err) {
+      error(res, getErrorMessage(err), 500);
+    }
+    return;
+  }
+
   if (
     method === "POST" &&
     /^\/api\/conversations\/[^/]+\/messages\/stream$/.test(pathname)
@@ -13852,51 +15741,99 @@ async function handleRequest(
       return;
     }
 
-    const chatPayload = await readChatRequestPayload(req, res, {
-      readJsonBody,
-      error,
-    });
-    if (!chatPayload) return;
-    const { prompt, channelType, images } = chatPayload;
+    const body = await readJsonBody<{ text?: string; mode?: string }>(req, res);
+    if (!body) return;
+    if (!body.text?.trim()) {
+      error(res, "text is required");
+      return;
+    }
+    if (body.mode && body.mode !== "simple" && body.mode !== "power") {
+      error(res, "mode must be 'simple' or 'power'", 400);
+      return;
+    }
+    const prompt = body.text.trim();
+    const requestedMode: ChatMode = body.mode === "simple" ? "simple" : "power";
+    const modeDecision = resolveEffectiveChatMode(requestedMode, prompt);
+    const mode = modeDecision.effectiveMode;
+    if (modeDecision.autoEscalated) {
+      logger.info(
+        `[chat] auto-escalated mode simple->power for action intent (endpoint=/api/conversations/:id/messages/stream)`,
+      );
+    }
 
-    const runtime = state.runtime;
-    if (!runtime) {
+    // Cloud proxy path
+    const proxy = state.cloudManager?.getProxy();
+    if (proxy) {
+      initSse(res);
+      writeSse(res, {
+        type: "ready",
+        mode,
+        requestedMode,
+        autoEscalated: modeDecision.autoEscalated,
+        ts: Date.now(),
+      });
+      const stopSseHeartbeat = startSseHeartbeat(res);
+      let fullText = "";
+      try {
+        for await (const chunk of proxy.handleChatMessageStream(
+          prompt,
+          conv.roomId,
+          mode,
+        )) {
+          fullText += chunk;
+          writeSse(res, { type: "token", text: chunk });
+        }
+
+        const normalized = normalizeChatResponseText(fullText, state.logBuffer);
+        const resolvedText =
+          mode === "simple"
+            ? enforceSimpleModeReplyBoundaries(prompt, normalized)
+            : normalized;
+        conv.updatedAt = new Date().toISOString();
+        writeSse(res, {
+          type: "done",
+          fullText: resolvedText,
+          agentName: proxy.agentName,
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
+        });
+      } catch (err) {
+        const creditReply = getInsufficientCreditsReplyFromError(err);
+        if (creditReply) {
+          conv.updatedAt = new Date().toISOString();
+          writeSse(res, {
+            type: "done",
+            fullText: creditReply,
+            agentName: proxy.agentName,
+          });
+        } else {
+          writeSse(res, {
+            type: "error",
+            message: getErrorMessage(err),
+          });
+        }
+      } finally {
+        stopSseHeartbeat();
+        res.end();
+      }
+      return;
+    }
+
+    if (!state.runtime) {
       error(res, "Agent is not running", 503);
       return;
     }
 
-    const userId = ensureAdminEntityId();
-    const turnStartedAt = Date.now();
-
-    try {
-      await ensureConversationRoom(conv);
-    } catch (err) {
-      error(
-        res,
-        `Failed to initialize conversation room: ${getErrorMessage(err)}`,
-        500,
-      );
-      return;
-    }
-
-    const { userMessage, messageToStore } = buildUserMessages({
-      images,
-      prompt,
-      userId,
-      roomId: conv.roomId,
-      channelType,
-    });
-
-    try {
-      await persistConversationMemory(runtime, messageToStore);
-    } catch (err) {
-      error(res, `Failed to store user message: ${getErrorMessage(err)}`, 500);
-      return;
-    }
-
-    // ── Local runtime path (existing code below) ───────────────────────
-
     initSse(res);
+    writeSse(res, {
+      type: "ready",
+      mode,
+      requestedMode,
+      autoEscalated: modeDecision.autoEscalated,
+      ts: Date.now(),
+    });
+    const stopSseHeartbeat = startSseHeartbeat(res);
     const sseT0 = Date.now();
     let sseFirstChunkMs = 0;
     let aborted = false;
@@ -13904,22 +15841,51 @@ async function handleRequest(
       aborted = true;
     });
 
-    // SSE heartbeat: keep data flowing during long generation (LLM + action
-    // execution can take 30-60s).  Without this, idle connections can be
-    // dropped by proxies, browsers, or load-balancers.  SSE comments (lines
-    // starting with ':') are ignored by the client parser.
-    const heartbeatInterval = setInterval(() => {
-      if (!aborted && !res.writableEnded) {
-        res.write(": heartbeat\n\n");
-      }
-    }, 5000);
-
     try {
+      const runtime = state.runtime;
+      const userId = ensureAdminEntityId();
+      await ensureConversationRoom(conv);
+
+      const message = createMessageMemory({
+        id: crypto.randomUUID() as UUID,
+        entityId: userId,
+        agentId: runtime.agentId,
+        roomId: conv.roomId,
+        content: {
+          text: prompt,
+          mode,
+          simple: mode === "simple",
+          source: "client_chat",
+          channelType: ChannelType.DM,
+        },
+      });
+
+      const githubShortcutReply = await tryGitHubRepoListShortcut({
+        runtime,
+        prompt,
+      });
+      if (githubShortcutReply) {
+        if (!aborted) {
+          conv.updatedAt = new Date().toISOString();
+          writeSse(res, {
+            type: "done",
+            fullText: githubShortcutReply,
+            agentName: state.agentName,
+            mode,
+            requestedMode,
+            autoEscalated: modeDecision.autoEscalated,
+          });
+        }
+        return;
+      }
+
       const result = await generateChatResponse(
         runtime,
-        userMessage,
+        message,
         state.agentName,
         {
+          mode,
+          modelHint: resolveChatModelHint(state.config, mode),
           isAborted: () => aborted,
           onChunk: (chunk) => {
             if (!sseFirstChunkMs) sseFirstChunkMs = Date.now() - sseT0;
@@ -13931,62 +15897,26 @@ async function handleRequest(
       );
 
       if (!aborted) {
-        await persistAssistantConversationMemory(
-          runtime,
-          conv.roomId,
-          result.text,
-          channelType,
-          turnStartedAt,
-        );
         conv.updatedAt = new Date().toISOString();
-        writeSseJson(res, {
+        writeSse(res, {
           type: "done",
           fullText: result.text,
           agentName: result.agentName,
-          ...(result.usage ? { estimatedUsage: result.usage } : {}),
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
         });
-
-        // Background chat renaming
-        if (conv.title === "New Chat") {
-          // Fire and forget (don't await) to not block the response stream close
-          generateConversationTitle(runtime, prompt, state.agentName).then(
-            (newTitle) => {
-              if (newTitle && state.broadcastWs) {
-                conv.title = newTitle;
-                // Broadcast full conversations list update for simplicity
-                // (or ideally a specific event, but the frontend listens for reloads)
-                state.broadcastWs({
-                  type: "conversation-updated",
-                  conversation: conv,
-                });
-              }
-            },
-          );
-        }
       }
     } catch (err) {
       if (!aborted) {
         const creditReply = getInsufficientCreditsReplyFromError(err);
         if (creditReply) {
-          try {
-            await persistAssistantConversationMemory(
-              runtime,
-              conv.roomId,
-              creditReply,
-              channelType,
-            );
-            conv.updatedAt = new Date().toISOString();
-            writeSse(res, {
-              type: "done",
-              fullText: creditReply,
-              agentName: state.agentName,
-            });
-          } catch (persistErr) {
-            writeSse(res, {
-              type: "error",
-              message: getErrorMessage(persistErr),
-            });
-          }
+          conv.updatedAt = new Date().toISOString();
+          writeSse(res, {
+            type: "done",
+            fullText: creditReply,
+            agentName: state.agentName,
+          });
         } else {
           writeSse(res, {
             type: "error",
@@ -13995,7 +15925,7 @@ async function handleRequest(
         }
       }
     } finally {
-      clearInterval(heartbeatInterval);
+      stopSseHeartbeat();
       logger.info(
         `[perf] SSE /conversations/stream: total=${Date.now() - sseT0}ms, first-chunk=${sseFirstChunkMs || "n/a"}ms`,
       );
@@ -14015,90 +15945,127 @@ async function handleRequest(
       error(res, "Conversation not found", 404);
       return;
     }
-    const chatPayload = await readChatRequestPayload(req, res, {
-      readJsonBody,
-      error,
-    });
-    if (!chatPayload) return;
-    const { prompt, channelType, images } = chatPayload;
-    const runtime = state.runtime;
-    if (!runtime) {
+    const body = await readJsonBody<{ text?: string; mode?: string }>(req, res);
+    if (!body) return;
+    if (!body.text?.trim()) {
+      error(res, "text is required");
+      return;
+    }
+    if (body.mode && body.mode !== "simple" && body.mode !== "power") {
+      error(res, "mode must be 'simple' or 'power'", 400);
+      return;
+    }
+    const requestedMode: ChatMode = body.mode === "simple" ? "simple" : "power";
+    const prompt = body.text.trim();
+    const modeDecision = resolveEffectiveChatMode(requestedMode, prompt);
+    const mode = modeDecision.effectiveMode;
+    if (modeDecision.autoEscalated) {
+      logger.info(
+        `[chat] auto-escalated mode simple->power for action intent (endpoint=/api/conversations/:id/messages)`,
+      );
+    }
+    if (!state.runtime) {
       error(res, "Agent is not running", 503);
       return;
     }
-    const userId = ensureAdminEntityId();
-    const turnStartedAt = Date.now();
+
+    // Cloud proxy path
+    const proxy = state.cloudManager?.getProxy();
+    if (proxy) {
+      try {
+        const responseText = await proxy.handleChatMessage(
+          prompt,
+          conv.roomId,
+          mode,
+        );
+        const normalized = normalizeChatResponseText(responseText, state.logBuffer);
+        const resolvedText =
+          mode === "simple"
+            ? enforceSimpleModeReplyBoundaries(prompt, normalized)
+            : normalized;
+        conv.updatedAt = new Date().toISOString();
+        json(res, {
+          text: resolvedText,
+          agentName: proxy.agentName,
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
+        });
+      } catch (err) {
+        const creditReply = getInsufficientCreditsReplyFromError(err);
+        if (creditReply) {
+          conv.updatedAt = new Date().toISOString();
+          json(res, { text: creditReply, agentName: proxy.agentName });
+        } else {
+          error(res, getErrorMessage(err), 500);
+        }
+      }
+      return;
+    }
 
     try {
+      const runtime = state.runtime;
+      const userId = ensureAdminEntityId();
       await ensureConversationRoom(conv);
-    } catch (err) {
-      error(
-        res,
-        `Failed to initialize conversation room: ${getErrorMessage(err)}`,
-        500,
-      );
-      return;
-    }
 
-    const { userMessage, messageToStore } = buildUserMessages({
-      images,
-      prompt,
-      userId,
-      roomId: conv.roomId,
-      channelType,
-    });
+      const message = createMessageMemory({
+        id: crypto.randomUUID() as UUID,
+        entityId: userId,
+        agentId: runtime.agentId,
+        roomId: conv.roomId,
+        content: {
+          text: prompt,
+          mode,
+          simple: mode === "simple",
+          source: "client_chat",
+          channelType: ChannelType.DM,
+        },
+      });
 
-    try {
-      await persistConversationMemory(runtime, messageToStore);
-    } catch (err) {
-      error(res, `Failed to store user message: ${getErrorMessage(err)}`, 500);
-      return;
-    }
+      const githubShortcutReply = await tryGitHubRepoListShortcut({
+        runtime,
+        prompt,
+      });
+      if (githubShortcutReply) {
+        conv.updatedAt = new Date().toISOString();
+        json(res, {
+          text: githubShortcutReply,
+          agentName: state.agentName,
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
+        });
+        return;
+      }
 
-    try {
       const result = await generateChatResponse(
         runtime,
-        userMessage,
+        message,
         state.agentName,
         {
+          mode,
+          modelHint: resolveChatModelHint(state.config, mode),
           resolveNoResponseText: () =>
             resolveNoResponseFallback(state.logBuffer),
         },
       );
 
-      await persistAssistantConversationMemory(
-        runtime,
-        conv.roomId,
-        result.text,
-        channelType,
-        turnStartedAt,
-      );
       conv.updatedAt = new Date().toISOString();
       json(res, {
         text: result.text,
         agentName: result.agentName,
+        mode,
+        requestedMode,
+        autoEscalated: modeDecision.autoEscalated,
       });
     } catch (err) {
-      logger.warn(
-        `[conversations] POST /messages failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
       const creditReply = getInsufficientCreditsReplyFromError(err);
       if (creditReply) {
-        try {
-          await persistAssistantConversationMemory(
-            runtime,
-            conv.roomId,
-            creditReply,
-            channelType,
-          );
-          conv.updatedAt = new Date().toISOString();
-          json(res, {
-            text: creditReply,
-            agentName: state.agentName,
-          });
-        } catch (persistErr) {
-          error(res, getErrorMessage(persistErr), 500);
-        }
+        conv.updatedAt = new Date().toISOString();
+        json(res, {
+          text: creditReply,
+          agentName: state.agentName,
+        });
       } else {
         error(res, getErrorMessage(err), 500);
       }
@@ -14122,52 +16089,21 @@ async function handleRequest(
     }
 
     const runtime = state.runtime;
-    if (!runtime) {
-      error(res, "Agent is not running", 503);
-      return;
-    }
-    const charName = runtime.character.name ?? state.agentName ?? "Milady";
+    const charName = runtime?.character.name ?? state.agentName ?? "Milaidy";
+    const FALLBACK_MSG = `Hey! I'm ${charName}. What's on your mind?`;
 
-    // Collect post examples from the character, with language support
-    const url = new URL(req.url ?? "", `http://${req.headers.host}`);
-    const lang = url.searchParams.get("lang") ?? "en";
-    const localizedExamples =
-      lang === "zh-CN"
-        ? ((runtime.character as Record<string, unknown>).postExamples_zhCN as
-            | string[]
-            | undefined)
-        : undefined;
-    const postExamples =
-      localizedExamples && localizedExamples.length > 0
-        ? localizedExamples
-        : (runtime.character.postExamples ?? []);
+    // Collect post examples from the character
+    const postExamples = runtime?.character.postExamples ?? [];
     const greeting =
-      postExamples[Math.floor(Math.random() * postExamples.length)];
+      postExamples.length > 0
+        ? postExamples[Math.floor(Math.random() * postExamples.length)]
+        : FALLBACK_MSG;
 
-    if (!greeting?.trim()) {
-      json(res, {
-        text: "",
-        agentName: charName,
-        generated: false,
-      });
-      return;
-    }
-
-    try {
-      await ensureConversationRoom(conv);
-    } catch (err) {
-      error(
-        res,
-        `Failed to initialize conversation room: ${getErrorMessage(err)}`,
-        500,
-      );
-      return;
-    }
-
-    try {
-      await persistConversationMemory(
-        runtime,
-        createMessageMemory({
+    // Store the greeting as an agent message so it persists on refresh
+    if (runtime && state.agentState === "running") {
+      try {
+        await ensureConversationRoom(conv);
+        const agentMemory = createMessageMemory({
           id: crypto.randomUUID() as UUID,
           entityId: runtime.agentId,
           roomId: conv.roomId,
@@ -14176,15 +16112,13 @@ async function handleRequest(
             source: "agent_greeting",
             channelType: ChannelType.DM,
           },
-        }),
-      );
-    } catch (err) {
-      error(
-        res,
-        `Failed to store greeting message: ${getErrorMessage(err)}`,
-        500,
-      );
-      return;
+        });
+        await runtime.createMemory(agentMemory, "messages");
+      } catch (memErr) {
+        logger.debug(
+          `[greeting] Failed to store greeting memory: ${memErr instanceof Error ? memErr.message : String(memErr)}`,
+        );
+      }
     }
 
     conv.updatedAt = new Date().toISOString();
@@ -14226,36 +16160,80 @@ async function handleRequest(
     !pathname.endsWith("/messages")
   ) {
     const convId = decodeURIComponent(pathname.split("/")[3]);
-    const conv = state.conversations.get(convId);
-    if (conv?.roomId && state.runtime) {
-      try {
-        await deleteConversationRoomData(state.runtime, conv.roomId);
-      } catch (err) {
-        logger.debug(
-          `[conversations] Failed to delete room data for ${convId}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
     state.conversations.delete(convId);
-    markConversationDeleted(convId);
     json(res, { ok: true });
     return;
   }
 
   // ── POST /api/chat/stream ────────────────────────────────────────────
   if (method === "POST" && pathname === "/api/chat/stream") {
-    // Legacy cloud-proxy path — forwards messages to a remote sandbox and
-    // does not process image attachments. Retain the standard 1 MB body limit.
-    const chatPayload = await readChatRequestPayload(
-      req,
-      res,
-      { readJsonBody, error },
-      MAX_BODY_BYTES,
-    );
-    if (!chatPayload) return;
-    const { prompt, channelType } = chatPayload;
+    const body = await readJsonBody<{ text?: string; mode?: string }>(req, res);
+    if (!body) return;
+    if (!body.text?.trim()) {
+      error(res, "text is required");
+      return;
+    }
+    if (body.mode && body.mode !== "simple" && body.mode !== "power") {
+      error(res, "mode must be 'simple' or 'power'", 400);
+      return;
+    }
+    const prompt = body.text.trim();
+    const requestedMode: ChatMode = body.mode === "simple" ? "simple" : "power";
+    const modeDecision = resolveEffectiveChatMode(requestedMode, prompt);
+    const mode = modeDecision.effectiveMode;
+    if (modeDecision.autoEscalated) {
+      logger.info(
+        `[chat] auto-escalated mode simple->power for action intent (endpoint=/api/chat/stream)`,
+      );
+    }
 
     // Cloud proxy path
+    const proxy = state.cloudManager?.getProxy();
+    if (proxy) {
+      initSse(res);
+      let fullText = "";
+      try {
+        for await (const chunk of proxy.handleChatMessageStream(
+          prompt,
+          "web-chat",
+          mode,
+        )) {
+          fullText += chunk;
+          writeSse(res, { type: "token", text: chunk });
+        }
+
+        const normalized = normalizeChatResponseText(fullText, state.logBuffer);
+        const resolvedText =
+          mode === "simple"
+            ? enforceSimpleModeReplyBoundaries(prompt, normalized)
+            : normalized;
+        writeSse(res, {
+          type: "done",
+          fullText: resolvedText,
+          agentName: proxy.agentName,
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
+        });
+      } catch (err) {
+        const creditReply = getInsufficientCreditsReplyFromError(err);
+        if (creditReply) {
+          writeSse(res, {
+            type: "done",
+            fullText: creditReply,
+            agentName: proxy.agentName,
+          });
+        } else {
+          writeSse(res, {
+            type: "error",
+            message: getErrorMessage(err),
+          });
+        }
+      } finally {
+        res.end();
+      }
+      return;
+    }
 
     if (!state.runtime) {
       error(res, "Agent is not running", 503);
@@ -14263,6 +16241,14 @@ async function handleRequest(
     }
 
     initSse(res);
+    writeSse(res, {
+      type: "ready",
+      mode,
+      requestedMode,
+      autoEscalated: modeDecision.autoEscalated,
+      ts: Date.now(),
+    });
+    const stopSseHeartbeat = startSseHeartbeat(res);
     const sseT0 = Date.now();
     let sseFirstChunkMs = 0;
     let aborted = false;
@@ -14270,18 +16256,9 @@ async function handleRequest(
       aborted = true;
     });
 
-    // Pause coordinator LLM decisions while processing user message
-    const streamCoordinator = state.runtime.getService("SWARM_COORDINATOR") as
-      | { pause?: () => void; resume?: () => void; isPaused?: boolean }
-      | undefined;
-    const streamDidPause = streamCoordinator && !streamCoordinator.isPaused;
-    if (streamDidPause) {
-      streamCoordinator.pause?.();
-    }
-
     try {
       const runtime = state.runtime;
-      const agentName = runtime.character.name ?? "Milady";
+      const agentName = runtime.character.name ?? "Milaidy";
       await ensureLegacyChatConnection(runtime, agentName);
       const chatUserId = state.chatUserId;
       const chatRoomId = state.chatRoomId;
@@ -14296,16 +16273,38 @@ async function handleRequest(
         roomId: chatRoomId,
         content: {
           text: prompt,
+          mode,
+          simple: mode === "simple",
           source: "client_chat",
-          channelType,
+          channelType: ChannelType.DM,
         },
       });
+
+      const githubShortcutReply = await tryGitHubRepoListShortcut({
+        runtime,
+        prompt,
+      });
+      if (githubShortcutReply) {
+        if (!aborted) {
+          writeSse(res, {
+            type: "done",
+            fullText: githubShortcutReply,
+            agentName: state.agentName,
+            mode,
+            requestedMode,
+            autoEscalated: modeDecision.autoEscalated,
+          });
+        }
+        return;
+      }
 
       const result = await generateChatResponse(
         runtime,
         message,
         state.agentName,
         {
+          mode,
+          modelHint: resolveChatModelHint(state.config, mode),
           isAborted: () => aborted,
           onChunk: (chunk) => {
             if (!sseFirstChunkMs) sseFirstChunkMs = Date.now() - sseT0;
@@ -14317,11 +16316,13 @@ async function handleRequest(
       );
 
       if (!aborted) {
-        writeSseJson(res, {
+        writeSse(res, {
           type: "done",
           fullText: result.text,
           agentName: result.agentName,
-          ...(result.usage ? { estimatedUsage: result.usage } : {}),
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
         });
       }
     } catch (err) {
@@ -14341,17 +16342,17 @@ async function handleRequest(
         }
       }
     } finally {
-      // Resume coordinator after user message processed
-      if (streamDidPause) {
-        streamCoordinator.resume?.();
-      }
+      stopSseHeartbeat();
+      logger.info(
+        `[perf] SSE /chat/stream: total=${Date.now() - sseT0}ms, first-chunk=${sseFirstChunkMs || "n/a"}ms`,
+      );
       res.end();
     }
     return;
   }
 
   // ── POST /api/chat (legacy — routes to default conversation) ───────
-  // Routes messages through the full elizaOS message pipeline so the agent
+  // Routes messages through the full ElizaOS message pipeline so the agent
   // has conversation memory, context, and always responds (DM + client_chat
   // bypass the shouldRespond LLM evaluation).
   //
@@ -14359,34 +16360,149 @@ async function handleRequest(
   // remote sandbox instead of the local runtime.  Supports SSE streaming
   // when the client sends Accept: text/event-stream.
   if (method === "POST" && pathname === "/api/chat") {
-    // Legacy cloud-proxy path — forwards messages to a remote sandbox and
-    // does not process image attachments. Retain the standard 1 MB body limit.
-    const chatPayload = await readChatRequestPayload(
-      req,
-      res,
-      { readJsonBody, error },
-      MAX_BODY_BYTES,
-    );
-    if (!chatPayload) return;
-    const { prompt, channelType } = chatPayload;
+    // ── Cloud proxy path ───────────────────────────────────────────────
+    const proxy = state.cloudManager?.getProxy();
+    if (proxy) {
+      const body = await readJsonBody<{ text?: string; mode?: string }>(
+        req,
+        res,
+      );
+      if (!body) return;
+      if (!body.text?.trim()) {
+        error(res, "text is required");
+        return;
+      }
+      if (body.mode && body.mode !== "simple" && body.mode !== "power") {
+        error(res, "mode must be 'simple' or 'power'", 400);
+        return;
+      }
+      const prompt = body.text.trim();
+      const requestedMode: ChatMode =
+        body.mode === "simple" ? "simple" : "power";
+      const modeDecision = resolveEffectiveChatMode(requestedMode, prompt);
+      const mode = modeDecision.effectiveMode;
+      if (modeDecision.autoEscalated) {
+        logger.info(
+          `[chat] auto-escalated mode simple->power for action intent (endpoint=/api/chat cloud proxy)`,
+        );
+      }
+
+      const wantsStream = (req.headers.accept ?? "").includes(
+        "text/event-stream",
+      );
+
+      if (wantsStream) {
+        initSse(res);
+        writeSse(res, {
+          type: "ready",
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
+          ts: Date.now(),
+        });
+        const stopSseHeartbeat = startSseHeartbeat(res);
+        let fullText = "";
+
+        try {
+          for await (const chunk of proxy.handleChatMessageStream(
+            prompt,
+            "web-chat",
+            mode,
+          )) {
+            fullText += chunk;
+            writeSse(res, { type: "token", text: chunk });
+          }
+          const normalized = normalizeChatResponseText(fullText, state.logBuffer);
+          const resolvedText =
+            mode === "simple"
+              ? enforceSimpleModeReplyBoundaries(prompt, normalized)
+              : normalized;
+          writeSse(res, {
+            type: "done",
+            fullText: resolvedText,
+            agentName: proxy.agentName,
+            mode,
+            requestedMode,
+            autoEscalated: modeDecision.autoEscalated,
+          });
+        } catch (err) {
+          const creditReply = getInsufficientCreditsReplyFromError(err);
+          if (creditReply) {
+            writeSse(res, {
+              type: "done",
+              fullText: creditReply,
+              agentName: proxy.agentName,
+            });
+          } else {
+            writeSse(res, {
+              type: "error",
+              message: getErrorMessage(err),
+            });
+          }
+        } finally {
+          stopSseHeartbeat();
+        }
+        res.end();
+      } else {
+        try {
+          const responseText = await proxy.handleChatMessage(
+            prompt,
+            "web-chat",
+            mode,
+          );
+          const normalized = normalizeChatResponseText(responseText, state.logBuffer);
+          const resolvedText =
+            mode === "simple"
+              ? enforceSimpleModeReplyBoundaries(prompt, normalized)
+              : normalized;
+          json(res, {
+            text: resolvedText,
+            agentName: proxy.agentName,
+            mode,
+            requestedMode,
+            autoEscalated: modeDecision.autoEscalated,
+          });
+        } catch (err) {
+          const creditReply = getInsufficientCreditsReplyFromError(err);
+          if (creditReply) {
+            json(res, { text: creditReply, agentName: proxy.agentName });
+          } else {
+            error(res, getErrorMessage(err), 500);
+          }
+        }
+      }
+      return;
+    }
+
+    // ── Local runtime path (existing code below) ───────────────────────
+    const body = await readJsonBody<{ text?: string; mode?: string }>(req, res);
+    if (!body) return;
+    if (!body.text?.trim()) {
+      error(res, "text is required");
+      return;
+    }
+    if (body.mode && body.mode !== "simple" && body.mode !== "power") {
+      error(res, "mode must be 'simple' or 'power'", 400);
+      return;
+    }
+    const prompt = body.text.trim();
+    const requestedMode: ChatMode = body.mode === "simple" ? "simple" : "power";
+    const modeDecision = resolveEffectiveChatMode(requestedMode, prompt);
+    const mode = modeDecision.effectiveMode;
+    if (modeDecision.autoEscalated) {
+      logger.info(
+        `[chat] auto-escalated mode simple->power for action intent (endpoint=/api/chat local runtime)`,
+      );
+    }
 
     if (!state.runtime) {
       error(res, "Agent is not running", 503);
       return;
     }
 
-    // Pause coordinator LLM decisions while processing user message
-    const chatCoordinator = state.runtime.getService("SWARM_COORDINATOR") as
-      | { pause?: () => void; resume?: () => void; isPaused?: boolean }
-      | undefined;
-    const chatDidPause = chatCoordinator && !chatCoordinator.isPaused;
-    if (chatDidPause) {
-      chatCoordinator.pause?.();
-    }
-
     try {
       const runtime = state.runtime;
-      const agentName = runtime.character.name ?? "Milady";
+      const agentName = runtime.character.name ?? "Milaidy";
       await ensureLegacyChatConnection(runtime, agentName);
       const chatUserId = state.chatUserId;
       const chatRoomId = state.chatRoomId;
@@ -14401,16 +16517,35 @@ async function handleRequest(
         roomId: chatRoomId,
         content: {
           text: prompt,
+          mode,
+          simple: mode === "simple",
           source: "client_chat",
-          channelType,
+          channelType: ChannelType.DM,
         },
       });
+
+      const githubShortcutReply = await tryGitHubRepoListShortcut({
+        runtime,
+        prompt,
+      });
+      if (githubShortcutReply) {
+        json(res, {
+          text: githubShortcutReply,
+          agentName: state.agentName,
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
+        });
+        return;
+      }
 
       const result = await generateChatResponse(
         runtime,
         message,
         state.agentName,
         {
+          mode,
+          modelHint: resolveChatModelHint(state.config, mode),
           resolveNoResponseText: () =>
             resolveNoResponseFallback(state.logBuffer),
         },
@@ -14419,6 +16554,9 @@ async function handleRequest(
       json(res, {
         text: result.text,
         agentName: result.agentName,
+        mode,
+        requestedMode,
+        autoEscalated: modeDecision.autoEscalated,
       });
     } catch (err) {
       const creditReply = getInsufficientCreditsReplyFromError(err);
@@ -14429,11 +16567,6 @@ async function handleRequest(
         });
       } else {
         error(res, getErrorMessage(err), 500);
-      }
-    } finally {
-      // Resume coordinator after user message processed
-      if (chatDidPause) {
-        chatCoordinator.resume?.();
       }
     }
     return;
@@ -14452,126 +16585,2040 @@ async function handleRequest(
 
   // ── Trajectory management API ──────────────────────────────────────────
   if (pathname.startsWith("/api/trajectories")) {
-    if (state.runtime) {
-      const handled = await handleTrajectoryRoute(
-        req,
-        res,
-        state.runtime,
-        pathname,
-        method,
-      );
-      if (handled) return;
-    }
-  }
-
-  // ── Coding Agent API (/api/coding-agents/*, /api/workspace/*, /api/issues/*) ──
-  if (
-    state.runtime &&
-    (pathname.startsWith("/api/coding-agents") ||
-      pathname.startsWith("/api/workspace") ||
-      pathname.startsWith("/api/issues"))
-  ) {
-    // Try to dynamically load the route handler from the local plugin first
-    let handled = false;
-
-    // Try @elizaos/plugin-coding-agent first (local workspace plugin)
-    try {
-      const codingAgentPlugin = await import("@elizaos/plugin-coding-agent");
-      if (codingAgentPlugin.createCodingAgentRouteHandler) {
-        const coordinator = codingAgentPlugin.getCoordinator?.(state.runtime);
-        const handler = codingAgentPlugin.createCodingAgentRouteHandler(
-          state.runtime,
-          coordinator,
-        );
-        handled = await handler(req, res, pathname);
-      }
-    } catch {
-      // Local plugin not available, try npm plugin
-    }
-
-    // Fallback to @elizaos/plugin-agent-orchestrator (npm)
-    if (!handled) {
-      try {
-        // biome-ignore lint/suspicious/noExplicitAny: legacy route handler may not exist in 2.x
-        const orchestratorPlugin: any = await import(
-          "@elizaos/plugin-agent-orchestrator"
-        );
-        if (orchestratorPlugin.createCodingAgentRouteHandler) {
-          const coordinator = orchestratorPlugin.getCoordinator?.(
-            state.runtime,
-          );
-          const handler = orchestratorPlugin.createCodingAgentRouteHandler(
-            state.runtime,
-            coordinator,
-          );
-          handled = await handler(req, res, pathname);
-        }
-      } catch {
-        // Plugin doesn't export these functions - skip routing
-      }
-    }
-
-    // Final fallback: Handle coding-agents routes using AgentOrchestratorService
-    if (!handled && pathname.startsWith("/api/coding-agents")) {
-      handled = await handleCodingAgentsFallback(
-        state.runtime,
-        pathname,
-        method,
-        req,
-        res,
-      );
-    }
-
+    const handled = await handleTrajectoryRoute(
+      req,
+      res,
+      state.runtime,
+      pathname,
+    );
     if (handled) return;
   }
 
-  if (
-    await handleCloudStatusRoutes({
-      req,
+  // ── GET /api/cloud/status ─────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/cloud/status") {
+    const cloudEnabled = Boolean(state.config.cloud?.enabled);
+    const hasApiKey = Boolean(state.config.cloud?.apiKey);
+    const rt = state.runtime;
+    if (!rt) {
+      json(res, {
+        connected: false,
+        enabled: cloudEnabled,
+        hasApiKey,
+        reason: "runtime_not_started",
+      });
+      return;
+    }
+    const cloudAuth = rt.getService("CLOUD_AUTH") as {
+      isAuthenticated: () => boolean;
+      getUserId: () => string | undefined;
+      getOrganizationId: () => string | undefined;
+    } | null;
+    if (cloudAuth?.isAuthenticated()) {
+      json(res, {
+        connected: true,
+        enabled: cloudEnabled,
+        hasApiKey,
+        userId: cloudAuth.getUserId(),
+        organizationId: cloudAuth.getOrganizationId(),
+        topUpUrl: "https://www.elizacloud.ai/dashboard/billing",
+      });
+      return;
+    }
+    json(res, {
+      connected: false,
+      enabled: cloudEnabled,
+      hasApiKey,
+      reason: hasApiKey
+        ? "api_key_present_not_authenticated"
+        : "not_authenticated",
+    });
+    return;
+  }
+
+  // ── GET /api/cloud/credits ──────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/cloud/credits") {
+    const rt = state.runtime;
+    const cloudAuth = rt
+      ? (rt.getService("CLOUD_AUTH") as {
+          isAuthenticated: () => boolean;
+          getClient: () => { get: <T>(path: string) => Promise<T> };
+        } | null)
+      : null;
+    const configApiKey = state.config.cloud?.apiKey?.trim();
+
+    if (!cloudAuth || !cloudAuth.isAuthenticated()) {
+      if (!configApiKey) {
+        json(res, { balance: null, connected: false });
+        return;
+      }
+
+      try {
+        const balance = await fetchCloudCreditsByApiKey(
+          resolveCloudApiBaseUrl(state.config.cloud?.baseUrl),
+          configApiKey,
+        );
+        if (typeof balance !== "number") {
+          json(res, {
+            balance: null,
+            connected: true,
+            error: "unexpected response",
+          });
+          return;
+        }
+        const low = balance < 2.0;
+        const critical = balance < 0.5;
+        json(res, {
+          connected: true,
+          balance,
+          low,
+          critical,
+          topUpUrl: "https://www.elizacloud.ai/dashboard/billing",
+        });
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "cloud API unreachable";
+        logger.debug(
+          `[cloud/credits] Failed to fetch balance via API key: ${msg}`,
+        );
+        json(res, { balance: null, connected: true, error: msg });
+      }
+      return;
+    }
+
+    const authenticatedCloudAuth = cloudAuth as {
+      isAuthenticated: () => boolean;
+      getClient: () => { get: <T>(path: string) => Promise<T> };
+    };
+
+    let balance: number;
+    const client = authenticatedCloudAuth.getClient();
+    try {
+      // The cloud API returns either { balance: number } (direct)
+      // or { success: true, data: { balance: number } } (wrapped).
+      // Handle both formats gracefully.
+      const creditResponse =
+        await client.get<Record<string, unknown>>("/credits/balance");
+      const rawBalance =
+        typeof creditResponse?.balance === "number"
+          ? creditResponse.balance
+          : typeof (creditResponse?.data as Record<string, unknown>)
+                ?.balance === "number"
+            ? ((creditResponse.data as Record<string, unknown>)
+                .balance as number)
+            : undefined;
+      if (typeof rawBalance !== "number") {
+        logger.debug(
+          `[cloud/credits] Unexpected response shape: ${JSON.stringify(creditResponse)}`,
+        );
+        json(res, {
+          balance: null,
+          connected: true,
+          error: "unexpected response",
+        });
+        return;
+      }
+      balance = rawBalance;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "cloud API unreachable";
+      logger.debug(`[cloud/credits] Failed to fetch balance: ${msg}`);
+      json(res, { balance: null, connected: true, error: msg });
+      return;
+    }
+    const low = balance < 2.0;
+    const critical = balance < 0.5;
+    json(res, {
+      connected: true,
+      balance,
+      low,
+      critical,
+      topUpUrl: "https://www.elizacloud.ai/dashboard/billing",
+    });
+    return;
+  }
+
+  // ── Arcade mastery API (/api/arcade555/mastery/* + opt-in legacy /api/five55/mastery/*) ──
+  const canonicalMasteryBase = "/api/arcade555/mastery";
+  const legacyMasteryBase = "/api/five55/mastery";
+  const canonicalGamesBase = "/api/arcade555/games";
+  const legacyGamesBase = "/api/five55/games";
+  const legacyArcadeHttpAliasesEnabled =
+    parseBooleanFlag(process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES) === true;
+  const legacyArcadeHttpSunset = "Wed, 30 Sep 2026 00:00:00 GMT";
+  const buildCanonicalArcadeSuccessor = (legacyPath: string): string =>
+    `${legacyPath.replace(/^\/api\/five55/, "/api/arcade555")}${url.search}`;
+  const applyLegacyArcadeAliasHeaders = (legacyPath: string): void => {
+    res.setHeader("Deprecation", "true");
+    res.setHeader("Sunset", legacyArcadeHttpSunset);
+    res.setHeader(
+      "Link",
+      `<${buildCanonicalArcadeSuccessor(legacyPath)}>; rel="successor-version"`,
+    );
+  };
+  const rejectDisabledLegacyArcadeAlias = (legacyPath: string): boolean => {
+    if (!legacyPath.startsWith("/api/five55/")) return false;
+    applyLegacyArcadeAliasHeaders(legacyPath);
+    if (legacyArcadeHttpAliasesEnabled) return false;
+    json(
       res,
-      method,
-      pathname,
-      config: state.config,
-      runtime: state.runtime,
-      json,
-    })
+      {
+        error:
+          "Legacy /api/five55/* arcade routes are disabled by default in Release B. Use the canonical /api/arcade555/* routes or set ARCADE555_ENABLE_LEGACY_HTTP_ALIASES=true for compatibility mode.",
+        successor: buildCanonicalArcadeSuccessor(legacyPath),
+      },
+      410,
+    );
+    return true;
+  };
+  if (
+    (pathname === legacyMasteryBase ||
+      pathname.startsWith(`${legacyMasteryBase}/`) ||
+      pathname === legacyGamesBase ||
+      pathname.startsWith(`${legacyGamesBase}/`)) &&
+    rejectDisabledLegacyArcadeAlias(pathname)
   ) {
+    return;
+  }
+  const masteryBasePath =
+    pathname === canonicalMasteryBase || pathname.startsWith(`${canonicalMasteryBase}/`)
+      ? canonicalMasteryBase
+      : pathname === legacyMasteryBase || pathname.startsWith(`${legacyMasteryBase}/`)
+        ? legacyMasteryBase
+        : null;
+  const parseActionTextEnvelope = (value: unknown): Record<string, unknown> => {
+    const record =
+      value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : {};
+    const text = typeof record.text === "string" ? record.text : "";
+    if (!text) return {};
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    } catch {
+      return {};
+    }
+  };
+
+  if (
+    method === "GET" &&
+    (pathname === `${canonicalMasteryBase}/catalog` ||
+      pathname === `${legacyMasteryBase}/catalog`)
+  ) {
+    try {
+      const contracts = listMasteryContracts();
+      json(res, {
+        contracts,
+        total: contracts.length,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Failed to load mastery catalog",
+        500,
+      );
+    }
+    return;
+  }
+
+  if (
+    method === "POST" &&
+    (pathname === `${canonicalMasteryBase}/runs` ||
+      pathname === `${legacyMasteryBase}/runs`)
+  ) {
+    const body = await readJsonBody<{
+      suiteId?: string;
+      games?: string[];
+      episodesPerGame?: number;
+      seedMode?: "fixed" | "mixed" | "rolling";
+      maxDurationSec?: number;
+      strict?: boolean;
+      evidenceMode?: "strict" | "basic" | "off";
+    }>(req, res);
+    if (!body) return;
+    if (body.strict === false) {
+      error(
+        res,
+        "strict=false is not allowed. Truth-gated certification always runs with strict=true.",
+        400,
+      );
+      return;
+    }
+
+    const runtime = state.runtime;
+    if (!runtime) {
+      error(res, "Agent runtime not available", 503);
+      return;
+    }
+
+    const masteryCertifyToolName = findRuntimeAction(
+      runtime,
+      "ARCADE555_MASTERY_CERTIFY",
+    )
+      ? "ARCADE555_MASTERY_CERTIFY"
+      : "FIVE55_GAMES_MASTERY_CERTIFY";
+
+    const execution = await executeRuntimeActionDirect({
+      runtime,
+      toolName: masteryCertifyToolName,
+      requestId: `mastery-certify-${Date.now()}`,
+      parameters: {
+        suiteId: body.suiteId,
+        games: Array.isArray(body.games) ? body.games : undefined,
+        episodesPerGame: body.episodesPerGame,
+        seedMode: body.seedMode,
+        maxDurationSec: body.maxDurationSec,
+        strict: true,
+        evidenceMode: body.evidenceMode ?? "strict",
+      },
+    });
+
+    if (!execution.success) {
+      error(
+        res,
+        execution.error || "Failed to start mastery run",
+        500,
+      );
+      return;
+    }
+
+    const actionEnvelope = parseActionTextEnvelope(execution.result);
+    const actionData =
+      actionEnvelope.data &&
+      typeof actionEnvelope.data === "object" &&
+      !Array.isArray(actionEnvelope.data)
+        ? (actionEnvelope.data as Record<string, unknown>)
+        : {};
+    const runId =
+      typeof actionData.runId === "string" && actionData.runId.trim().length > 0
+        ? actionData.runId.trim()
+        : undefined;
+    if (!runId) {
+      error(res, "Mastery certify action did not return runId", 500);
+      return;
+    }
+    const run = await readMasteryRun(runId);
+    json(res, {
+      ok: true,
+      runId,
+      run,
+      executionMode: execution.executionMode,
+      durationMs: execution.durationMs,
+    });
+    return;
+  }
+
+  if (
+    method === "GET" &&
+    (pathname === `${canonicalMasteryBase}/runs` ||
+      pathname === `${legacyMasteryBase}/runs`)
+  ) {
+    const limitRaw = url.searchParams.get("limit");
+    const status = url.searchParams.get("status") ?? undefined;
+    const cursor = url.searchParams.get("cursor");
+    const limit = Number.parseInt(limitRaw ?? "20", 10);
+    try {
+      const page = await listPersistedMasteryRuns({
+        limit: Number.isFinite(limit) ? limit : 20,
+        cursor,
+        status: status && status.trim().length > 0 ? status.trim() : undefined,
+      });
+      json(res, page);
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Failed to list mastery runs",
+        500,
+      );
+    }
+    return;
+  }
+
+  if (method === "GET" && masteryBasePath && pathname.startsWith(`${masteryBasePath}/runs/`)) {
+    const suffix = pathname.slice(`${masteryBasePath}/runs/`.length);
+    const segments = suffix
+      .split("/")
+      .map((entry) => decodeURIComponent(entry || "").trim())
+      .filter((entry) => entry.length > 0);
+    const encodedRunId = segments[0] ?? "";
+    const subresource = segments[1];
+    const runId = encodedRunId;
+    if (!runId) {
+      error(res, "runId is required", 400);
+      return;
+    }
+
+    const run = await readMasteryRun(runId);
+    if (!run) {
+      error(res, "runId not found", 404);
+      return;
+    }
+
+    if (!subresource) {
+      json(res, { run });
+      return;
+    }
+
+    if (subresource === "episodes" && segments.length === 2) {
+      const episodes = await readMasteryEpisodes(runId);
+      json(res, {
+        runId,
+        total: episodes.length,
+        episodes,
+      });
+      return;
+    }
+
+    if (subresource === "logs" && segments.length === 2) {
+      const afterSeqRaw = url.searchParams.get("afterSeq");
+      const limitRaw = url.searchParams.get("limit");
+      const afterSeq = Number.parseInt(afterSeqRaw ?? "0", 10);
+      const limit = Number.parseInt(limitRaw ?? "500", 10);
+      const logs = await readMasteryLogs({
+        runId,
+        afterSeq: Number.isFinite(afterSeq) ? afterSeq : 0,
+        limit: Number.isFinite(limit) ? limit : 500,
+      });
+      json(res, {
+        runId,
+        logs,
+        count: logs.length,
+        nextAfterSeq: logs.length > 0 ? logs[logs.length - 1].seq : afterSeq,
+      });
+      return;
+    }
+
+    if (subresource === "evidence" && segments.length === 2) {
+      const evidence = await readMasteryRunEvidence(runId);
+      json(res, {
+        runId,
+        evidence,
+        total: evidence.length,
+      });
+      return;
+    }
+
+    if (
+      subresource === "episodes"
+      && segments.length === 4
+      && segments[3] === "frames"
+    ) {
+      const episodeId = segments[2];
+      const frames = await readMasteryEpisodeFrames({ runId, episodeId });
+      json(res, {
+        runId,
+        episodeId,
+        frames,
+        total: frames.length,
+      });
+      return;
+    }
+
+    if (
+      subresource === "episodes"
+      && segments.length === 4
+      && segments[3] === "consistency"
+    ) {
+      const episodeId = segments[2];
+      const consistency = await readMasteryEpisodeConsistency({ runId, episodeId });
+      json(res, {
+        runId,
+        episodeId,
+        consistency,
+      });
+      return;
+    }
+
+    error(res, "Unknown mastery run subresource", 404);
+    return;
+  }
+
+  if (method === "GET" && masteryBasePath && pathname.startsWith(`${masteryBasePath}/games/`)) {
+    const suffix = pathname.slice(`${masteryBasePath}/games/`.length);
+    const segments = suffix
+      .split("/")
+      .map((entry) => decodeURIComponent(entry || "").trim())
+      .filter((entry) => entry.length > 0);
+    if (segments.length !== 2 || segments[1] !== "latest") {
+      error(res, "Unknown mastery game route", 404);
+      return;
+    }
+    try {
+      const gameId = canonicalizeMasteryGameId(segments[0] || "");
+      const contract = getMasteryContract(gameId);
+      const latest = await readMasteryGameSnapshot(gameId);
+      json(res, {
+        gameId,
+        contract,
+        latest,
+      });
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Failed to fetch mastery snapshot",
+        400,
+      );
+    }
+    return;
+  }
+
+  // ── Arcade games bridge (/api/arcade555/games/* + opt-in legacy /api/five55/games/*) ──
+  const parseGamesJsonText = (raw: string): unknown => {
+    try {
+      return raw ? (JSON.parse(raw) as unknown) : null;
+    } catch {
+      return null;
+    }
+  };
+  const extractGamesError = (parsed: unknown, raw: string): string => {
+    if (parsed && typeof parsed === "object" && "error" in parsed) {
+      const parsedRecord = parsed as { error?: unknown };
+      if (typeof parsedRecord.error === "string" && parsedRecord.error.trim()) {
+        return parsedRecord.error;
+      }
+    }
+    return raw || "upstream error";
+  };
+  const toBoolean = (value: unknown, fallback: boolean): boolean => {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "true" || normalized === "1") return true;
+      if (normalized === "false" || normalized === "0") return false;
+    }
+    return fallback;
+  };
+  const asRecord = (value: unknown): Record<string, unknown> | null =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  const normalizeCategory = (
+    value: unknown,
+  ): "arcade" | "rpg" | "puzzle" | "racing" | "casino" => {
+    if (typeof value !== "string") return "arcade";
+    const normalized = value.trim().toLowerCase();
+    if (
+      normalized === "arcade" ||
+      normalized === "rpg" ||
+      normalized === "puzzle" ||
+      normalized === "racing" ||
+      normalized === "casino"
+    ) {
+      return normalized;
+    }
+    return "arcade";
+  };
+  const normalizeDifficulty = (
+    value: unknown,
+  ): "easy" | "medium" | "hard" | "expert" => {
+    if (typeof value !== "string") return "medium";
+    const normalized = value.trim().toLowerCase();
+    if (
+      normalized === "easy" ||
+      normalized === "medium" ||
+      normalized === "hard" ||
+      normalized === "expert"
+    ) {
+      return normalized;
+    }
+    return "medium";
+  };
+  const resolveRelativeViewerPath = (gamePath: string): string => {
+    const trimmedPath = gamePath.trim().replace(/^\/+/, "");
+    if (!trimmedPath) return "games/unknown-game/index.html";
+    if (/\.html$/i.test(trimmedPath)) {
+      return trimmedPath.startsWith("games/") ? trimmedPath : `games/${trimmedPath}`;
+    }
+    return `games/${trimmedPath.replace(/\/+$/, "")}/index.html`;
+  };
+  const resolveArcadeViewerBase = (): string =>
+    process.env.ARCADE555_VIEWER_BASE_URL?.trim() ||
+    process.env.FIVE55_GAMES_VIEWER_BASE_URL?.trim() ||
+    process.env.GAMES_BASE_URL?.trim() ||
+    "https://555.rndrntwrk.com";
+  const resolveArcadeGamesApiBase = (): string =>
+    process.env.ARCADE555_BASE_URL?.trim() ||
+    process.env.FIVE55_GAMES_API_URL?.trim() ||
+    "";
+  const resolveArcadeGamesBearer = (): string =>
+    process.env.ARCADE555_AGENT_TOKEN?.trim() ||
+    process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim() ||
+    "";
+  const buildViewerUrl = (gamePath: string, mode: string): string => {
+    const viewerBase = resolveArcadeViewerBase();
+    const relativePath = resolveRelativeViewerPath(gamePath);
+    const viewerUrl = new URL(relativePath, `${viewerBase.replace(/\/+$/, "")}/`);
+    if (mode === "spectate" || mode === "agent") {
+      viewerUrl.searchParams.set("bot", "true");
+    }
+    return viewerUrl.toString();
+  };
+  const normalizeCatalogGame = (
+    value: unknown,
+  ): {
+    id: string;
+    title: string;
+    description: string;
+    category: "arcade" | "rpg" | "puzzle" | "racing" | "casino";
+    difficulty: "easy" | "medium" | "hard" | "expert";
+    path: string;
+    isBeta?: boolean;
+    hasAudio?: boolean;
+    hasSave?: boolean;
+  } | null => {
+    const record = asRecord(value);
+    if (!record) return null;
+    const id =
+      typeof record.id === "string" && record.id.trim().length > 0
+        ? record.id.trim()
+        : null;
+    if (!id) return null;
+    const title =
+      typeof record.title === "string" && record.title.trim().length > 0
+        ? record.title.trim()
+        : typeof record.name === "string" && record.name.trim().length > 0
+          ? record.name.trim()
+          : id;
+    const description =
+      typeof record.description === "string" && record.description.trim().length > 0
+        ? record.description.trim()
+        : "Playable app surfaced in Alice.";
+    const rawPath =
+      typeof record.path === "string" && record.path.trim().length > 0
+        ? record.path.trim()
+        : id;
+    const normalized = {
+      id,
+      title,
+      description,
+      category: normalizeCategory(record.category),
+      difficulty: normalizeDifficulty(record.difficulty),
+      path: `/${resolveRelativeViewerPath(rawPath)}`,
+    };
+    const optionalFields: {
+      isBeta?: boolean;
+      hasAudio?: boolean;
+      hasSave?: boolean;
+    } = {};
+    if (typeof record.isBeta === "boolean") {
+      optionalFields.isBeta = record.isBeta;
+    }
+    if (typeof record.beta === "boolean") {
+      optionalFields.isBeta = record.beta;
+    }
+    if (typeof record.hasAudio === "boolean") {
+      optionalFields.hasAudio = record.hasAudio;
+    }
+    if (typeof record.hasSave === "boolean") {
+      optionalFields.hasSave = record.hasSave;
+    }
+    return {
+      ...normalized,
+      ...optionalFields,
+    };
+  };
+  const resolvePlayPayload = (
+    parsed: unknown,
+    defaults: {
+      gameId: string;
+      mode: string;
+      sessionId?: string;
+    },
+  ): Record<string, unknown> | null => {
+    const parsedRecord = asRecord(parsed);
+    const upstreamGame = asRecord(parsedRecord?.game);
+    const fallbackGameId = defaults.gameId.trim() || "unknown-game";
+    const upstreamGameId =
+      typeof parsedRecord?.gameId === "string" && parsedRecord.gameId.trim().length > 0
+        ? parsedRecord.gameId.trim()
+        : typeof upstreamGame?.id === "string" && upstreamGame.id.trim().length > 0
+          ? upstreamGame.id.trim()
+          : fallbackGameId;
+    const upstreamPath =
+      typeof upstreamGame?.path === "string" && upstreamGame.path.trim().length > 0
+        ? upstreamGame.path.trim()
+        : upstreamGameId;
+    const useNameAsTitle =
+      (typeof upstreamGame?.title !== "string" ||
+        upstreamGame.title.trim().length === 0) &&
+      typeof upstreamGame?.name === "string" &&
+      upstreamGame.name.trim().length > 0;
+    const normalizedGame =
+      normalizeCatalogGame({
+        ...upstreamGame,
+        id: upstreamGameId,
+        ...(useNameAsTitle ? { title: upstreamGame.name } : {}),
+        path: upstreamPath,
+      }) ??
+      normalizeCatalogGame({
+        id: upstreamGameId,
+        title: upstreamGameId,
+        description: "Playable app surfaced in Alice.",
+        category: "arcade",
+        difficulty: "medium",
+        path: upstreamPath,
+      });
+    if (!normalizedGame) return null;
+
+    const viewerUrl = buildViewerUrl(upstreamPath, defaults.mode);
+    const responsePayload: Record<string, unknown> = {
+      game: normalizedGame,
+      mode: defaults.mode,
+      viewer: {
+        url: viewerUrl,
+        sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+        postMessageAuth: false,
+      },
+      launchUrl: viewerUrl,
+      startedAt: new Date().toISOString(),
+    };
+    if (typeof defaults.sessionId === "string" && defaults.sessionId.trim().length > 0) {
+      responsePayload.sessionId = defaults.sessionId;
+    }
+    if (typeof parsedRecord?.requestId === "string") {
+      responsePayload.requestId = parsedRecord.requestId;
+    }
+    if (typeof parsedRecord?.sourceId === "string") {
+      responsePayload.sourceId = parsedRecord.sourceId;
+    }
+    return responsePayload;
+  };
+  const resolveCatalogPayload = (
+    parsed: unknown,
+    defaults: {
+      includeBeta: boolean;
+      category: string;
+      sessionId?: string;
+    },
+  ): Record<string, unknown> => {
+    const payload = asRecord(parsed) ?? {};
+    const games = (Array.isArray(payload.games) ? payload.games : [])
+      .map(normalizeCatalogGame)
+      .filter((game): game is NonNullable<ReturnType<typeof normalizeCatalogGame>> =>
+        Boolean(game),
+      );
+    const total =
+      typeof payload.total === "number" && Number.isFinite(payload.total)
+        ? payload.total
+        : typeof payload.count === "number" && Number.isFinite(payload.count)
+          ? payload.count
+          : games.length;
+    const includeBeta =
+      typeof payload.includeBeta === "boolean"
+        ? payload.includeBeta
+        : defaults.includeBeta;
+    const category =
+      typeof payload.category === "string" && payload.category.trim().length > 0
+        ? payload.category
+        : defaults.category;
+    const response: Record<string, unknown> = {
+      games,
+      total,
+      includeBeta,
+      category,
+    };
+    if (typeof defaults.sessionId === "string" && defaults.sessionId.trim().length > 0) {
+      response.sessionId = defaults.sessionId;
+    }
+    if (typeof payload.requestId === "string") {
+      response.requestId = payload.requestId;
+    }
+    return response;
+  };
+  if (
+    (method === "GET" || method === "POST") &&
+    (pathname === `${canonicalGamesBase}/catalog` ||
+      pathname === `${legacyGamesBase}/catalog`)
+  ) {
+    let body:
+      | {
+          category?: string;
+          includeBeta?: string | boolean;
+          sessionId?: string;
+        }
+      | undefined;
+    if (method === "POST") {
+      const parsed = await readJsonBody<{
+        category?: string;
+        includeBeta?: string | boolean;
+        sessionId?: string;
+      }>(req, res);
+      if (!parsed) return;
+      body = parsed;
+    } else {
+      body = {
+        category: url.searchParams.get("category") ?? undefined,
+        includeBeta: url.searchParams.get("includeBeta") ?? undefined,
+        sessionId: url.searchParams.get("sessionId") ?? undefined,
+      };
+    }
+
+    const includeBeta = toBoolean(body?.includeBeta, true);
+    const requestedCategory =
+      typeof body?.category === "string" && body.category.trim().length > 0
+        ? body.category.trim().toLowerCase()
+        : "all";
+    const requestedSessionId =
+      typeof body?.sessionId === "string" && body.sessionId.trim().length > 0
+        ? body.sessionId.trim()
+        : undefined;
+    const requestBody = {
+      ...(requestedCategory === "all" ? {} : { category: requestedCategory }),
+      includeBeta,
+    };
+
+    const directBase = resolveArcadeGamesApiBase();
+    if (directBase) {
+      let upstreamUrl: URL;
+      try {
+        upstreamUrl = new URL("/api/games/catalog", directBase);
+      } catch {
+        error(res, "Invalid ARCADE555_BASE_URL / FIVE55_GAMES_API_URL", 500);
+        return;
+      }
+      const outboundHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      };
+      const directBearer = resolveArcadeGamesBearer();
+      if (directBearer) outboundHeaders.Authorization = `Bearer ${directBearer}`;
+
+      try {
+        const upstreamRes = await fetch(upstreamUrl.toString(), {
+          method: "POST",
+          headers: outboundHeaders,
+          body: JSON.stringify(requestBody),
+        });
+        const raw = await upstreamRes.text();
+        const parsed = parseGamesJsonText(raw);
+        if (!upstreamRes.ok) {
+          error(res, extractGamesError(parsed, raw), upstreamRes.status);
+          return;
+        }
+        const payload = resolveCatalogPayload(parsed, {
+          includeBeta,
+          category: requestedCategory,
+        });
+        json(res, payload);
+      } catch (err) {
+        error(
+          res,
+          `Failed to fetch games catalog: ${err instanceof Error ? err.message : String(err)}`,
+          502,
+        );
+      }
+      return;
+    }
+
+    const upstreamBase =
+      process.env.STREAM555_BASE_URL?.trim() ||
+      process.env.STREAM_API_URL?.trim();
+    if (!upstreamBase) {
+      error(
+        res,
+        "ARCADE555_BASE_URL (legacy: FIVE55_GAMES_API_URL) is not configured and STREAM555_BASE_URL (or STREAM_API_URL) is unavailable",
+        503,
+      );
+      return;
+    }
+
+    const requestId = createAgentRequestId("api-five55-games-catalog");
+    let sessionId = "";
+    try {
+      sessionId = await ensureGamesAgentSessionId(
+        upstreamBase,
+        requestedSessionId,
+        requestId,
+      );
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Failed to bootstrap stream session",
+        502,
+      );
+      return;
+    }
+    try {
+      const upstreamResponse = await requestGamesAgentJson(
+        upstreamBase,
+        requestId,
+        "POST",
+        `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/catalog`,
+        requestBody,
+      );
+        if (!upstreamResponse.ok) {
+          error(
+            res,
+            `${extractGamesUpstreamError(upstreamResponse.data, upstreamResponse.rawBody)} [requestId: ${upstreamResponse.requestId}]`,
+            upstreamResponse.status || 502,
+          );
+          return;
+      }
+      const payload = resolveCatalogPayload(upstreamResponse.data, {
+        includeBeta,
+        category: requestedCategory,
+        sessionId,
+      });
+      json(res, payload);
+    } catch (err) {
+      error(
+        res,
+        `Failed to fetch games catalog: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  if (
+    method === "POST" &&
+    (pathname === `${canonicalGamesBase}/play` ||
+      pathname === `${legacyGamesBase}/play`)
+  ) {
+    const body = await readJsonBody<{
+      gameId?: string;
+      mode?: string;
+      sessionId?: string;
+    }>(req, res);
+    if (!body) return;
+
+    const modeCandidate =
+      typeof body.mode === "string" ? body.mode.trim().toLowerCase() : "";
+    const mode =
+      modeCandidate === "standard" ||
+      modeCandidate === "ranked" ||
+      modeCandidate === "spectate" ||
+      modeCandidate === "solo" ||
+      modeCandidate === "agent"
+        ? modeCandidate
+        : "spectate";
+    const requestedSessionId =
+      typeof body.sessionId === "string" && body.sessionId.trim().length > 0
+        ? body.sessionId.trim()
+        : undefined;
+    const directBase = resolveArcadeGamesApiBase();
+    if (directBase) {
+      let upstreamUrl: URL;
+      try {
+        upstreamUrl = new URL("/api/games/play", directBase);
+      } catch {
+        error(res, "Invalid ARCADE555_BASE_URL / FIVE55_GAMES_API_URL", 500);
+        return;
+      }
+
+      const outboundHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      };
+      const directBearer = resolveArcadeGamesBearer();
+      if (directBearer) outboundHeaders.Authorization = `Bearer ${directBearer}`;
+
+      try {
+        const upstreamRes = await fetch(upstreamUrl.toString(), {
+          method: "POST",
+          headers: outboundHeaders,
+          body: JSON.stringify({
+            gameId: body.gameId ?? null,
+            mode,
+          }),
+        });
+        const raw = await upstreamRes.text();
+        const parsed = parseGamesJsonText(raw);
+        if (!upstreamRes.ok) {
+          error(res, extractGamesError(parsed, raw), upstreamRes.status);
+          return;
+        }
+        const responsePayload = resolvePlayPayload(parsed, {
+          gameId: typeof body.gameId === "string" ? body.gameId.trim() : "",
+          mode,
+        });
+        if (responsePayload) {
+          json(res, responsePayload);
+          return;
+        }
+        error(res, "Invalid upstream game play payload", 502);
+      } catch (err) {
+        error(
+          res,
+          `Failed to start game session: ${err instanceof Error ? err.message : String(err)}`,
+          502,
+        );
+      }
+      return;
+    }
+
+    const upstreamBase =
+      process.env.STREAM555_BASE_URL?.trim() ||
+      process.env.STREAM_API_URL?.trim();
+    if (!upstreamBase) {
+      error(
+        res,
+        "ARCADE555_BASE_URL (legacy: FIVE55_GAMES_API_URL) is not configured and STREAM555_BASE_URL (or STREAM_API_URL) is unavailable",
+        503,
+      );
+      return;
+    }
+
+    const requestId = createAgentRequestId("api-five55-games-play");
+    let sessionId = "";
+    try {
+      sessionId = await ensureGamesAgentSessionId(
+        upstreamBase,
+        requestedSessionId,
+        requestId,
+      );
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Failed to bootstrap stream session",
+        502,
+      );
+      return;
+    }
+
+    let gameId =
+      typeof body.gameId === "string" && body.gameId.trim().length > 0
+        ? body.gameId.trim()
+        : "";
+
+    if (!gameId) {
+      try {
+        const catalogResponse = await requestGamesAgentJson(
+          upstreamBase,
+          requestId,
+          "POST",
+          `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/catalog`,
+          { includeBeta: true },
+        );
+        if (!catalogResponse.ok) {
+          error(
+            res,
+            `${extractGamesUpstreamError(catalogResponse.data, catalogResponse.rawBody)} [requestId: ${catalogResponse.requestId}]`,
+            catalogResponse.status || 502,
+          );
+          return;
+        }
+        const catalogPayload = asRecord(catalogResponse.data);
+        const catalogGames = Array.isArray(catalogPayload?.games)
+          ? catalogPayload.games
+          : [];
+        const firstGame = catalogGames
+          .map((entry) => asRecord(entry))
+          .find(
+            (entry) =>
+              typeof entry?.id === "string" && entry.id.trim().length > 0,
+          );
+        gameId =
+          typeof firstGame?.id === "string" && firstGame.id.trim().length > 0
+            ? firstGame.id.trim()
+            : "";
+      } catch (err) {
+        error(
+          res,
+          `Failed to resolve default game: ${err instanceof Error ? err.message : String(err)}`,
+          502,
+        );
+        return;
+      }
+    }
+
+    if (!gameId) {
+      error(res, "No playable games available for the current session", 404);
+      return;
+    }
+    try {
+      const upstreamResponse = await requestGamesAgentJson(
+        upstreamBase,
+        requestId,
+        "POST",
+        `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/play`,
+        {
+          gameId,
+          mode,
+        },
+      );
+      if (!upstreamResponse.ok) {
+        error(
+          res,
+          `${extractGamesUpstreamError(upstreamResponse.data, upstreamResponse.rawBody)} [requestId: ${upstreamResponse.requestId}]`,
+          upstreamResponse.status || 502,
+        );
+        return;
+      }
+
+      const responsePayload = resolvePlayPayload(upstreamResponse.data, {
+        gameId,
+        mode,
+        sessionId,
+      });
+      if (!responsePayload) {
+        error(res, "Invalid upstream game play payload", 502);
+        return;
+      }
+      json(res, responsePayload);
+    } catch (err) {
+      error(
+        res,
+        `Failed to start game session: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  if (method === "POST" && pathname === "/api/five55/stream/autonomy/preview") {
+    type AutonomyMode = "newscast" | "topic" | "games" | "free";
+
+    const body = await readJsonBody<{
+      mode?: string;
+      durationMin?: number | string;
+      topic?: string;
+      avatarRuntime?: "auto" | "local" | "premium";
+      speechSeconds?: number | string;
+      avatarMinutes?: number | string;
+    }>(req, res);
+    if (!body) return;
+
+    const modeRaw = typeof body.mode === "string" ? body.mode : "newscast";
+    const mode = modeRaw.trim() as AutonomyMode;
+    if (!["newscast", "topic", "games", "free"].includes(mode)) {
+      error(res, "mode must be one of: newscast, topic, games, free", 400);
+      return;
+    }
+
+    const parsedDuration =
+      typeof body.durationMin === "number" || typeof body.durationMin === "string"
+        ? Number(body.durationMin)
+        : Number.NaN;
+    const durationMin = Number.isFinite(parsedDuration)
+      ? Math.max(5, Math.min(180, Math.floor(parsedDuration)))
+      : 30;
+    const topic =
+      typeof body.topic === "string" && body.topic.trim().length > 0
+        ? body.topic.trim()
+        : undefined;
+    if (mode === "topic" && !topic) {
+      error(res, "topic is required when mode=topic", 400);
+      return;
+    }
+
+    const avatarRuntimeRaw =
+      typeof body.avatarRuntime === "string" ? body.avatarRuntime : undefined;
+    const avatarRuntime: "auto" | "local" | "premium" =
+      avatarRuntimeRaw === "auto" ||
+      avatarRuntimeRaw === "local" ||
+      avatarRuntimeRaw === "premium"
+        ? avatarRuntimeRaw
+        : "local";
+
+    const profileByMode: Record<AutonomyMode, string> = {
+      newscast: "1080p30_standard",
+      topic: "1080p30_standard",
+      games: "1080p60_high",
+      free: "720p30_low",
+    };
+    const speechRatioByMode: Record<AutonomyMode, number> = {
+      newscast: 0.8,
+      topic: 0.75,
+      games: 0.65,
+      free: 0.55,
+    };
+    const addonsByMode: Record<AutonomyMode, string[]> = {
+      newscast: ["tts", "avatar"],
+      topic: ["tts", "avatar"],
+      games: ["capture_browser", "tts", "avatar"],
+      free: ["tts", "avatar"],
+    };
+
+    const speechRatio = speechRatioByMode[mode];
+    const speechSecondsInput =
+      typeof body.speechSeconds === "number" || typeof body.speechSeconds === "string"
+        ? Number(body.speechSeconds)
+        : Number.NaN;
+    const speechSeconds = Number.isFinite(speechSecondsInput)
+      ? Math.max(0, Math.floor(speechSecondsInput))
+      : Math.floor(durationMin * 60 * speechRatio);
+    const avatarMinutesInput =
+      typeof body.avatarMinutes === "number" || typeof body.avatarMinutes === "string"
+        ? Number(body.avatarMinutes)
+        : Number.NaN;
+    const avatarMinutes = Number.isFinite(avatarMinutesInput)
+      ? Math.max(0, Math.floor(avatarMinutesInput))
+      : durationMin;
+
+    const upstreamBase =
+      process.env.STREAM555_BASE_URL?.trim() ||
+      process.env.STREAM_API_URL?.trim();
+    if (!upstreamBase) {
+      error(res, "STREAM555_BASE_URL (or STREAM_API_URL) is not configured", 503);
+      return;
+    }
+
+    const parseJsonText = (raw: string): unknown => {
+      try {
+        return raw ? (JSON.parse(raw) as unknown) : null;
+      } catch {
+        return null;
+      }
+    };
+    const getUpstreamErrorMessage = (parsed: unknown, fallback: string): string => {
+      if (parsed && typeof parsed === "object" && "error" in parsed) {
+        const parsedRecord = parsed as { error?: unknown };
+        if (typeof parsedRecord.error === "string" && parsedRecord.error.trim()) {
+          return parsedRecord.error;
+        }
+      }
+      return fallback;
+    };
+
+    let upstreamToken =
+      process.env.STREAM555_AGENT_TOKEN?.trim() ||
+      process.env.STREAM_API_BEARER_TOKEN?.trim() ||
+      "";
+    const upstreamApiKey = process.env.STREAM555_AGENT_API_KEY?.trim();
+
+    if (!upstreamToken && upstreamApiKey) {
+      let exchangeUrl: URL;
+      try {
+        exchangeUrl = new URL(
+          process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT?.trim() ||
+            "/api/agent/v1/auth/token/exchange",
+          upstreamBase,
+        );
+      } catch {
+        error(res, "Invalid STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT", 500);
+        return;
+      }
+
+      try {
+        const exchangeRes = await fetch(exchangeUrl.toString(), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ apiKey: upstreamApiKey }),
+        });
+        const exchangeRaw = await exchangeRes.text();
+        const exchangeParsed = parseJsonText(exchangeRaw);
+        if (!exchangeRes.ok) {
+          error(
+            res,
+            `Token exchange failed: ${getUpstreamErrorMessage(exchangeParsed, exchangeRaw || "upstream error")}`,
+            exchangeRes.status,
+          );
+          return;
+        }
+        if (
+          !exchangeParsed ||
+          typeof exchangeParsed !== "object" ||
+          Array.isArray(exchangeParsed) ||
+          typeof (exchangeParsed as { token?: unknown }).token !== "string" ||
+          !(exchangeParsed as { token: string }).token.trim()
+        ) {
+          error(res, "Invalid token exchange payload", 502);
+          return;
+        }
+        upstreamToken = (exchangeParsed as { token: string }).token;
+      } catch (err) {
+        error(
+          res,
+          `Failed to exchange agent token: ${err instanceof Error ? err.message : String(err)}`,
+          502,
+        );
+        return;
+      }
+    }
+
+    if (!upstreamToken) {
+      error(
+        res,
+        "STREAM555_AGENT_API_KEY or STREAM555_AGENT_TOKEN (or STREAM_API_BEARER_TOKEN) is required for autonomy preview",
+        503,
+      );
+      return;
+    }
+
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      Authorization: `Bearer ${upstreamToken}`,
+    };
+
+    const profile = profileByMode[mode];
+    const outputCount = 1;
+    const addons = addonsByMode[mode];
+    const estimateUrl = new URL("/api/agent/v1/credits/estimate", upstreamBase);
+    estimateUrl.searchParams.set("profile", profile);
+    estimateUrl.searchParams.set("durationMin", String(durationMin));
+    estimateUrl.searchParams.set("outputCount", String(outputCount));
+    if (addons.length > 0) {
+      estimateUrl.searchParams.set("addons", addons.join(","));
+    }
+    estimateUrl.searchParams.set("avatarRuntime", avatarRuntime);
+    estimateUrl.searchParams.set("speechSeconds", String(speechSeconds));
+    estimateUrl.searchParams.set("avatarMinutes", String(avatarMinutes));
+
+    let estimatePayload: Record<string, unknown>;
+    try {
+      const estimateRes = await fetch(estimateUrl.toString(), {
+        method: "GET",
+        headers,
+      });
+      const estimateRaw = await estimateRes.text();
+      const parsed = parseJsonText(estimateRaw);
+      if (!estimateRes.ok) {
+        error(
+          res,
+          `Credits estimate failed: ${getUpstreamErrorMessage(parsed, estimateRaw || "upstream error")}`,
+          estimateRes.status,
+        );
+        return;
+      }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        error(res, "Invalid credits estimate payload", 502);
+        return;
+      }
+      estimatePayload = parsed as Record<string, unknown>;
+    } catch (err) {
+      error(
+        res,
+        `Failed to request credits estimate: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+      return;
+    }
+
+    let balancePayload: Record<string, unknown> | null = null;
+    try {
+      const balanceUrl = new URL("/api/agent/v1/credits/balance", upstreamBase);
+      const balanceRes = await fetch(balanceUrl.toString(), {
+        method: "GET",
+        headers,
+      });
+      const balanceRaw = await balanceRes.text();
+      const parsed = parseJsonText(balanceRaw);
+      if (
+        balanceRes.ok &&
+        parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed)
+      ) {
+        balancePayload = parsed as Record<string, unknown>;
+      }
+    } catch {
+      balancePayload = null;
+    }
+
+    const grandTotalCredits = estimatePayload.grandTotalCredits;
+    const estimateBalance = estimatePayload.currentBalance;
+    const explicitCanAffordRuntime = estimatePayload.canAffordWithRuntime;
+    const explicitCanAfford = estimatePayload.canAfford;
+    let canStart = false;
+    if (typeof explicitCanAffordRuntime === "boolean") {
+      canStart = explicitCanAffordRuntime;
+    } else if (typeof explicitCanAfford === "boolean") {
+      canStart = explicitCanAfford;
+    } else if (
+      typeof estimateBalance === "number" &&
+      typeof grandTotalCredits === "number"
+    ) {
+      canStart = estimateBalance >= grandTotalCredits;
+    }
+
+    json(res, {
+      mode,
+      topic,
+      durationMin,
+      profile,
+      outputCount,
+      addons,
+      assumptions: {
+        speechRatio,
+        speechSeconds,
+        avatarMinutes,
+        avatarRuntime,
+      },
+      estimate: estimatePayload,
+      balance: balancePayload,
+      canStart,
+      requestId:
+        (typeof estimatePayload.requestId === "string"
+          ? estimatePayload.requestId
+          : undefined) ??
+        (balancePayload && typeof balancePayload.requestId === "string"
+          ? balancePayload.requestId
+          : undefined),
+    });
     return;
   }
 
   // ── App routes (/api/apps/*) ──────────────────────────────────────────
   if (
-    await handleAppsRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      url,
-      appManager: state.appManager,
-      getPluginManager: () => requirePluginManager(state.runtime),
-      parseBoundedLimit,
-      readJsonBody,
-      json,
-      error,
-      runtime: state.runtime,
-    })
+    (method === "GET" || method === "HEAD" || method === "POST") &&
+    pathname.startsWith("/api/apps/local/")
   ) {
+    const proxyPrefix = "/api/apps/local/";
+    const proxyPayload = pathname.slice(proxyPrefix.length);
+    const slashIndex = proxyPayload.indexOf("/");
+    const encodedAppName =
+      slashIndex >= 0 ? proxyPayload.slice(0, slashIndex) : proxyPayload;
+    if (!encodedAppName) {
+      error(res, "app name is required", 400);
+      return;
+    }
+
+    let appName: string;
+    try {
+      appName = decodeURIComponent(encodedAppName);
+    } catch {
+      error(res, "invalid app name encoding", 400);
+      return;
+    }
+
+    const appInfo = await state.appManager.getInfo(
+      getAppPluginManager(),
+      appName,
+    );
+    if (!appInfo) {
+      error(res, `App "${appName}" not found in registry`, 404);
+      return;
+    }
+
+    const templateSubstitutions = (
+      raw: string,
+    ): string =>
+      raw.replace(/\{([A-Z0-9_]+)\}/g, (_full, key: string) => {
+        const value = process.env[key];
+        if (value && value.trim().length > 0) return value.trim();
+        if (key === "RS_SDK_BOT_NAME") {
+          const runtimeBotName = process.env.BOT_NAME?.trim();
+          if (runtimeBotName && runtimeBotName.length > 0) return runtimeBotName;
+          return "testbot";
+        }
+        return "";
+      });
+    const upstreamSourceRaw =
+      appInfo.viewer?.url?.trim() || appInfo.launchUrl?.trim() || "";
+    if (!upstreamSourceRaw) {
+      error(res, `App "${appName}" has no upstream URL configured`, 404);
+      return;
+    }
+
+    let upstreamSource: URL;
+    try {
+      upstreamSource = new URL(templateSubstitutions(upstreamSourceRaw));
+    } catch {
+      error(res, `App "${appName}" has an invalid upstream URL`, 500);
+      return;
+    }
+    if (!/^https?:$/i.test(upstreamSource.protocol)) {
+      error(res, `App "${appName}" has an unsupported upstream protocol`, 400);
+      return;
+    }
+
+    const normalizeHost = (value: string): string =>
+      value.trim().toLowerCase().replace(/^\[|\]$/g, "");
+    const host = normalizeHost(upstreamSource.hostname);
+    const isLoopbackHost =
+      host === "localhost" ||
+      host === "0.0.0.0" ||
+      host === "::1" ||
+      host === "::ffff:127.0.0.1" ||
+      host.startsWith("127.");
+    const allowRemoteProxy =
+      !isLoopbackHost &&
+      isManagedAppRemoteProxyHostAllowed(appName, upstreamSource.hostname);
+    if (!isLoopbackHost && !allowRemoteProxy) {
+      error(
+        res,
+        `App "${appName}" is not configured for local proxy access`,
+        400,
+      );
+      return;
+    }
+
+    const requestedPath =
+      slashIndex >= 0 ? proxyPayload.slice(slashIndex) : undefined;
+    const upstreamPath =
+      requestedPath && requestedPath.length > 0
+        ? requestedPath
+        : upstreamSource.pathname && upstreamSource.pathname.length > 0
+          ? upstreamSource.pathname
+          : "/";
+    const upstreamOrigin = resolveManagedAppUpstreamOrigin(
+      appName,
+      upstreamPath,
+      upstreamSource.origin,
+    );
+    const upstreamUrl = new URL(upstreamOrigin);
+    upstreamUrl.pathname = upstreamPath.startsWith("/")
+      ? upstreamPath
+      : `/${upstreamPath}`;
+    upstreamUrl.search = url.search;
+
+    const forwardHeaders: Record<string, string> = {};
+    const acceptedHeaders = [
+      "accept",
+      "accept-language",
+      "content-type",
+      "if-none-match",
+      "if-modified-since",
+      "origin",
+      "range",
+      "referer",
+      "user-agent",
+    ] as const;
+    for (const headerName of acceptedHeaders) {
+      const value = req.headers[headerName];
+      if (typeof value === "string" && value.trim().length > 0) {
+        forwardHeaders[headerName] = value;
+      }
+    }
+
+    let upstreamRequestBody: Buffer | undefined;
+    if (method === "POST") {
+      try {
+        upstreamRequestBody = await readRawBody(req, MAX_BODY_BYTES);
+        if (upstreamRequestBody.length === 0) {
+          upstreamRequestBody = undefined;
+        }
+      } catch (err) {
+        error(
+          res,
+          err instanceof Error
+            ? err.message
+            : "Request body exceeds maximum size",
+          413,
+        );
+        return;
+      }
+    }
+
+    let upstreamResponse: Response;
+    try {
+      upstreamResponse = await fetch(upstreamUrl.toString(), {
+        method,
+        headers: forwardHeaders,
+        body: upstreamRequestBody,
+        redirect: "manual",
+      });
+    } catch (err) {
+      if (!allowRemoteProxy) {
+        error(
+          res,
+          `Failed to reach local app upstream: ${describeProxyError(err)}`,
+          502,
+        );
+        return;
+      }
+
+      try {
+        upstreamResponse = await fetchWithIpv4Lookup(
+          upstreamUrl.toString(),
+          method,
+          forwardHeaders,
+          upstreamRequestBody,
+        );
+      } catch (ipv4Error) {
+        error(
+          res,
+          `Failed to reach app upstream: ${describeProxyError(err)}; IPv4 retry failed: ${describeProxyError(ipv4Error)}`,
+          502,
+        );
+        return;
+      }
+    }
+
+    const localProxyBase = `/api/apps/local/${encodeURIComponent(appName)}`;
+    const localProxyRoot = `${localProxyBase}/`;
+    const mapLocationHeader = (locationValue: string): string => {
+      const trimmed = locationValue.trim();
+      if (!trimmed) return trimmed;
+      if (trimmed.startsWith("/")) {
+        return `${localProxyBase}${trimmed}`;
+      }
+      try {
+        const parsed = new URL(trimmed);
+        const parsedHost = normalizeHost(parsed.hostname);
+        const parsedLoopback =
+          parsedHost === "localhost" ||
+          parsedHost === "0.0.0.0" ||
+          parsedHost === "::1" ||
+          parsedHost === "::ffff:127.0.0.1" ||
+          parsedHost.startsWith("127.");
+        const parsedRemoteAllowed = isManagedAppRemoteProxyHostAllowed(
+          appName,
+          parsedHost,
+        );
+        if (!parsedLoopback && !parsedRemoteAllowed) return trimmed;
+        return `${localProxyBase}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      } catch {
+        return trimmed;
+      }
+    };
+
+    const passthroughHeaders = [
+      "cache-control",
+      "content-language",
+      "content-type",
+      "etag",
+      "expires",
+      "last-modified",
+      "vary",
+      "referrer-policy",
+      "x-content-type-options",
+    ] as const;
+    for (const headerName of passthroughHeaders) {
+      const value = upstreamResponse.headers.get(headerName);
+      if (value) {
+        res.setHeader(headerName, value);
+      }
+    }
+    if (appName === HYPERSCAPE_APP_NAME) {
+      // Hyperscape embed payload is rewritten per-request. Disable browser cache
+      // to prevent stale chunk maps from resolving to HTML fallback responses.
+      res.setHeader("cache-control", "no-store, no-cache, must-revalidate");
+      res.setHeader("pragma", "no-cache");
+    }
+    res.setHeader("x-frame-options", "SAMEORIGIN");
+    const rawCsp = upstreamResponse.headers.get("content-security-policy");
+    if (rawCsp) {
+      const sanitizedCsp = rawCsp
+        .split(";")
+        .map((directive) => directive.trim())
+        .filter((directive) => directive.length > 0)
+        .filter(
+          (directive) => !directive.toLowerCase().startsWith("frame-ancestors"),
+        )
+        .join("; ");
+      if (sanitizedCsp.length > 0) {
+        res.setHeader("content-security-policy", sanitizedCsp);
+      }
+    }
+    const locationHeader = upstreamResponse.headers.get("location");
+    if (locationHeader) {
+      res.setHeader("Location", mapLocationHeader(locationHeader));
+    }
+
+    res.statusCode = upstreamResponse.status;
+    if (method === "HEAD" || upstreamResponse.status === 304) {
+      res.end();
+      return;
+    }
+
+    const contentType = upstreamResponse.headers.get("content-type") ?? "";
+    const rewriteHtmlForProxy = (html: string): string => {
+      const escapedUpstreamOrigin = upstreamOrigin.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&",
+      );
+      const absoluteOriginPattern = new RegExp(
+        `(\\s(?:src|href|action|poster)=["'])${escapedUpstreamOrigin}/`,
+        "gi",
+      );
+      const absoluteCssPattern = new RegExp(
+        `url\\((['"]?)${escapedUpstreamOrigin}/`,
+        "gi",
+      );
+      const rewrittenHtml = html
+        .replace(
+          /(\s(?:src|href|action|poster)=["'])\/(?!\/)/gi,
+          `$1${localProxyRoot}`,
+        )
+        .replace(/url\((['"]?)\/(?!\/)/gi, `url($1${localProxyRoot}`)
+        .replace(absoluteOriginPattern, `$1${localProxyRoot}`)
+        .replace(absoluteCssPattern, `url($1${localProxyRoot}`);
+      return rewriteManagedAppProxyHtml(appName, rewrittenHtml, localProxyRoot);
+    };
+
+    if (
+      isJavaScriptAssetPath(upstreamPath) &&
+      /text\/html|application\/xhtml\+xml/i.test(contentType)
+    ) {
+      metrics.counter("milaidy.managed_app.chunk_html_fallback_total", 1, {
+        appName,
+        status: String(upstreamResponse.status),
+      });
+      logger.warn(
+        `[managed-app-proxy] JavaScript asset returned HTML (app=${appName}, path=${upstreamPath}, status=${upstreamResponse.status})`,
+      );
+      res.statusCode = upstreamResponse.status >= 400 ? upstreamResponse.status : 502;
+      res.setHeader("content-type", "application/javascript; charset=utf-8");
+      res.setHeader("x-milaidy-managed-app-proxy-error", "js-asset-returned-html");
+      res.end(
+        `throw new Error(${JSON.stringify(
+          `Managed app JS asset returned HTML (${appName} ${upstreamPath}, status ${upstreamResponse.status})`,
+        )});`,
+      );
+      return;
+    }
+
+    if (isJavaScriptLikeResponse(contentType, upstreamPath)) {
+      res.setHeader("content-type", "application/javascript; charset=utf-8");
+      const rawScript = await upstreamResponse.text();
+      const rewrittenScript = rewriteManagedAppProxyJavaScript(
+        appName,
+        rawScript,
+        localProxyBase,
+        localProxyRoot,
+        upstreamPath,
+      );
+      res.end(rewrittenScript);
+      return;
+    }
+
+    if (/text\/html/i.test(contentType)) {
+      const rawHtml = await upstreamResponse.text();
+      res.end(rewriteHtmlForProxy(rawHtml));
+      return;
+    }
+
+    const bodyBuffer = Buffer.from(await upstreamResponse.arrayBuffer());
+    res.end(bodyBuffer);
     return;
   }
 
-  // ── Hyperscape control proxy routes ──────────────────────────────────
-  if (
-    await handleAppsHyperscapeRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      relayHyperscapeApi,
-      readJsonBody,
-      error,
-    })
-  ) {
+  if (method === "GET" && pathname === "/api/apps") {
+    const apps = await state.appManager.listAvailable(getAppPluginManager());
+    json(res, apps);
     return;
+  }
+
+  if (method === "GET" && pathname === "/api/apps/search") {
+    const query = url.searchParams.get("q") ?? "";
+    if (!query.trim()) {
+      json(res, []);
+      return;
+    }
+    const limit = parseBoundedLimit(url.searchParams.get("limit"));
+    const results = await state.appManager.search(
+      getAppPluginManager(),
+      query,
+      limit,
+    );
+    json(res, results);
+    return;
+  }
+
+  if (method === "GET" && pathname === "/api/apps/installed") {
+    const installed = await state.appManager.listInstalled(
+      getAppPluginManager(),
+    );
+    json(res, installed);
+    return;
+  }
+
+  // Launch an app: install its plugin (if needed), return viewer config
+  if (method === "POST" && pathname === "/api/apps/launch") {
+    const body = await readJsonBody<{ name?: string }>(req, res);
+    if (!body) return;
+    if (!body.name?.trim()) {
+      error(res, "name is required");
+      return;
+    }
+    const result = await state.appManager.launch(
+      getAppPluginManager(),
+      body.name.trim(),
+    );
+    json(res, result);
+    return;
+  }
+
+  // Stop an app: disconnects session and uninstalls plugin when installed
+  if (method === "POST" && pathname === "/api/apps/stop") {
+    const body = await readJsonBody<{ name?: string }>(req, res);
+    if (!body) return;
+    if (!body.name?.trim()) {
+      error(res, "name is required");
+      return;
+    }
+    const appName = body.name.trim();
+    const result = await state.appManager.stop(getAppPluginManager(), appName);
+    json(res, result);
+    return;
+  }
+
+  if (method === "GET" && pathname.startsWith("/api/apps/info/")) {
+    const appName = decodeURIComponent(
+      pathname.slice("/api/apps/info/".length),
+    );
+    if (!appName) {
+      error(res, "app name is required");
+      return;
+    }
+    const info = await state.appManager.getInfo(getAppPluginManager(), appName);
+    if (!info) {
+      error(res, `App "${appName}" not found in registry`, 404);
+      return;
+    }
+    json(res, info);
+    return;
+  }
+
+  // ── GET /api/apps/plugins — non-app plugins from registry ───────────
+  if (method === "GET" && pathname === "/api/apps/plugins") {
+    const { listNonAppPlugins } = await import(
+      "../services/registry-client.js"
+    );
+    try {
+      const plugins = await listNonAppPlugins();
+      json(res, plugins);
+    } catch (err) {
+      error(
+        res,
+        `Failed to list plugins: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  // ── GET /api/apps/plugins/search?q=... — search non-app plugins ─────
+  if (method === "GET" && pathname === "/api/apps/plugins/search") {
+    const query = url.searchParams.get("q") ?? "";
+    if (!query.trim()) {
+      json(res, []);
+      return;
+    }
+    const { searchNonAppPlugins } = await import(
+      "../services/registry-client.js"
+    );
+    try {
+      const limit = parseBoundedLimit(url.searchParams.get("limit"));
+      const results = await searchNonAppPlugins(query, limit);
+      json(res, results);
+    } catch (err) {
+      error(
+        res,
+        `Plugin search failed: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  // ── POST /api/apps/refresh — refresh the registry cache ─────────────
+  if (method === "POST" && pathname === "/api/apps/refresh") {
+    const { refreshRegistry } = await import("../services/registry-client.js");
+    try {
+      const registry = await refreshRegistry();
+      json(res, { ok: true, count: registry.size });
+    } catch (err) {
+      error(
+        res,
+        `Refresh failed: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  if (method === "GET" && pathname === "/api/apps/hyperscape/health") {
+    const snapshot = await runHyperscapeOperationalHealthSnapshot();
+    const autonomy = state.hyperscapeAutonomy.getOperationalSnapshot();
+    const statusCode = snapshot.status === "unhealthy" ? 503 : 200;
+    json(
+      res,
+      {
+        status: snapshot.status,
+        checks: snapshot.checks,
+        autonomy,
+        baseUrl: resolveHyperscapeApiBaseUrl(),
+        wsUrl: resolveHyperscapeWsProbeUrl(),
+        at: new Date().toISOString(),
+      },
+      statusCode,
+    );
+    return;
+  }
+
+  const isHyperscapeAutonomyRoute = pathname.startsWith(
+    "/api/apps/hyperscape/autonomy/",
+  );
+  if (isHyperscapeAutonomyRoute && !resolveHyperscapeAutonomyEnabled()) {
+    error(
+      res,
+      "Hyperscape autonomy is disabled (set HYPERSCAPE_AUTONOMY_ENABLED=1 to enable)",
+      503,
+    );
+    return;
+  }
+
+  if (method === "POST" && pathname === "/api/apps/hyperscape/autonomy/sessions") {
+    const body = await readJsonBody<{
+      agentId?: string;
+      goal?: string;
+      streamProfile?: unknown;
+    }>(req, res);
+    if (!body) return;
+
+    const runtime = state.runtime;
+    const agentId =
+      body.agentId?.trim() || resolveDefaultHyperscapeAutonomyAgentId(runtime);
+    if (!agentId) {
+      error(res, "agentId is required");
+      return;
+    }
+
+    const streamProfile =
+      body.streamProfile &&
+      typeof body.streamProfile === "object" &&
+      !Array.isArray(body.streamProfile)
+        ? (body.streamProfile as Record<string, unknown>)
+        : undefined;
+
+    try {
+      const created = await state.hyperscapeAutonomy.createSession({
+        agentId,
+        goal: body.goal?.trim() || undefined,
+        streamProfile,
+      });
+      json(res, created, 202);
+    } catch (err) {
+      error(
+        res,
+        `Failed to create Hyperscape autonomy session: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  if (method === "GET") {
+    const walletProvenanceMatch = pathname.match(
+      /^\/api\/agents\/([^/]+)\/wallet-provenance$/,
+    );
+    if (walletProvenanceMatch) {
+      const agentId = decodeURIComponent(walletProvenanceMatch[1]).trim();
+      if (!agentId) {
+        error(res, "agentId is required");
+        return;
+      }
+      const provenance = state.hyperscapeAutonomy.getWalletProvenance(agentId);
+      if (!provenance) {
+        error(res, `No wallet provenance found for agent "${agentId}"`, 404);
+        return;
+      }
+      json(res, { wallet: provenance });
+      return;
+    }
+
+    const sessionMatch = pathname.match(
+      /^\/api\/apps\/hyperscape\/autonomy\/sessions\/([^/]+)$/,
+    );
+    if (sessionMatch) {
+      const sessionId = decodeURIComponent(sessionMatch[1]).trim();
+      const found = state.hyperscapeAutonomy.getSession(sessionId);
+      if (!found) {
+        error(res, `Hyperscape autonomy session "${sessionId}" not found`, 404);
+        return;
+      }
+      json(res, found);
+      return;
+    }
+  }
+
+  if (method === "POST") {
+    const sessionActionMatch = pathname.match(
+      /^\/api\/apps\/hyperscape\/autonomy\/sessions\/([^/]+)\/(stop|recover)$/,
+    );
+    if (sessionActionMatch) {
+      const sessionId = decodeURIComponent(sessionActionMatch[1]).trim();
+      const action = sessionActionMatch[2];
+      const result =
+        action === "stop"
+          ? await state.hyperscapeAutonomy.stopSession(sessionId)
+          : await state.hyperscapeAutonomy.recoverSession(sessionId);
+      if (!result) {
+        error(res, `Hyperscape autonomy session "${sessionId}" not found`, 404);
+        return;
+      }
+      json(res, result);
+      return;
+    }
+  }
+
+  // ── Hyperscape control proxy routes ──────────────────────────────────
+  if (method === "GET" && pathname === "/api/apps/hyperscape/embedded-agents") {
+    await relayHyperscapeApi("GET", "/api/embedded-agents");
+    return;
+  }
+
+  if (
+    method === "POST" &&
+    pathname === "/api/apps/hyperscape/embedded-agents"
+  ) {
+    await relayHyperscapeApi("POST", "/api/embedded-agents");
+    return;
+  }
+
+  if (method === "POST") {
+    const embeddedActionMatch = pathname.match(
+      /^\/api\/apps\/hyperscape\/embedded-agents\/([^/]+)\/(start|stop|pause|resume|command)$/,
+    );
+    if (embeddedActionMatch) {
+      const characterId = decodeURIComponent(embeddedActionMatch[1]);
+      const action = embeddedActionMatch[2];
+      await relayHyperscapeApi(
+        "POST",
+        `/api/embedded-agents/${encodeURIComponent(characterId)}/${action}`,
+      );
+      return;
+    }
+
+    const messageMatch = pathname.match(
+      /^\/api\/apps\/hyperscape\/agents\/([^/]+)\/message$/,
+    );
+    if (messageMatch) {
+      const agentId = decodeURIComponent(messageMatch[1]);
+      const body = await readJsonBody<{ content?: string }>(req, res);
+      if (!body) return;
+      const content = body.content?.trim();
+      if (!content) {
+        error(res, "content is required");
+        return;
+      }
+      await relayHyperscapeApi(
+        "POST",
+        `/api/embedded-agents/${encodeURIComponent(agentId)}/command`,
+        {
+          rawBodyOverride: JSON.stringify({
+            command: "chat",
+            data: { message: content },
+          }),
+          contentTypeOverride: "application/json",
+        },
+      );
+      return;
+    }
+  }
+
+  if (method === "GET") {
+    const goalMatch = pathname.match(
+      /^\/api\/apps\/hyperscape\/agents\/([^/]+)\/goal$/,
+    );
+    if (goalMatch) {
+      const agentId = decodeURIComponent(goalMatch[1]);
+      await relayHyperscapeApi(
+        "GET",
+        `/api/agents/${encodeURIComponent(agentId)}/goal`,
+      );
+      return;
+    }
+
+    const quickActionsMatch = pathname.match(
+      /^\/api\/apps\/hyperscape\/agents\/([^/]+)\/quick-actions$/,
+    );
+    if (quickActionsMatch) {
+      const agentId = decodeURIComponent(quickActionsMatch[1]);
+      await relayHyperscapeApi(
+        "GET",
+        `/api/agents/${encodeURIComponent(agentId)}/quick-actions`,
+      );
+      return;
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -14602,10 +18649,10 @@ async function handleRequest(
             event.stream === "provider" ||
             event.stream === "evaluator"),
       );
-    const autonomyState = getAutonomyState(state.runtime);
+    const autonomySvc = getAutonomySvc(state.runtime);
     const autonomy = {
-      enabled: autonomyState.enabled,
-      thinking: autonomyState.thinking,
+      enabled: true,
+      thinking: autonomySvc?.isLoopRunning() ?? false,
       lastEventAt: latestAutonomyEvent?.ts ?? null,
     };
     let tasksAvailable = false;
@@ -15321,9 +19368,7 @@ async function handleRequest(
   if (method === "GET" && pathname === "/api/mcp/marketplace/search") {
     const query = url.searchParams.get("q") ?? "";
     const limitStr = url.searchParams.get("limit");
-    const limit = limitStr
-      ? parseClampedInteger(limitStr, { min: 1, max: 50, fallback: 30 })
-      : 30;
+    const limit = limitStr ? Math.min(Math.max(Number(limitStr), 1), 50) : 30;
     try {
       const result = await searchMcpMarketplace(query || undefined, limit);
       json(res, { ok: true, results: result.results });
@@ -15385,7 +19430,6 @@ async function handleRequest(
     const body = await readJsonBody<{
       name?: string;
       config?: Record<string, unknown>;
-      terminalToken?: string;
     }>(req, res);
     if (!body) return;
 
@@ -15404,30 +19448,42 @@ async function handleRequest(
     }
 
     const config = body.config as Record<string, unknown> | undefined;
-    if (!config || typeof config !== "object" || Array.isArray(config)) {
+    if (!config || typeof config !== "object") {
       error(res, "Server config object is required", 400);
       return;
     }
-
-    const mcpRejection = await resolveMcpServersRejection({
-      [serverName]: config,
-    });
-    if (mcpRejection) {
-      error(res, mcpRejection, 400);
+    if (hasBlockedObjectKeyDeep(config)) {
+      error(
+        res,
+        'Invalid server config: "__proto__", "constructor", and "prototype" are not allowed',
+        400,
+      );
       return;
     }
 
-    const mcpTerminalRejection = resolveMcpTerminalAuthorizationRejection(
-      req,
-      { [serverName]: config },
-      body,
-    );
-    if (mcpTerminalRejection) {
+    const configType = config.type as string | undefined;
+    const validTypes = ["stdio", "http", "streamable-http", "sse"];
+    if (!configType || !validTypes.includes(configType)) {
       error(
         res,
-        `Configuring stdio MCP servers requires terminal authorization. ${mcpTerminalRejection.reason}`,
-        mcpTerminalRejection.status,
+        `Invalid config type. Must be one of: ${validTypes.join(", ")}`,
+        400,
       );
+      return;
+    }
+
+    if (configType === "stdio" && !config.command) {
+      error(res, "Command is required for stdio servers", 400);
+      return;
+    }
+
+    if (
+      (configType === "http" ||
+        configType === "streamable-http" ||
+        configType === "sse") &&
+      !config.url
+    ) {
+      error(res, "URL is required for remote servers", 400);
       return;
     }
 
@@ -15439,7 +19495,7 @@ async function handleRequest(
     >[string];
 
     try {
-      saveMiladyConfig(state.config);
+      saveMilaidyConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -15470,7 +19526,7 @@ async function handleRequest(
     if (state.config.mcp?.servers?.[serverName]) {
       delete state.config.mcp.servers[serverName];
       try {
-        saveMiladyConfig(state.config);
+        saveMilaidyConfig(state.config);
       } catch (err) {
         logger.warn(
           `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -15486,37 +19542,16 @@ async function handleRequest(
   if (method === "PUT" && pathname === "/api/mcp/config") {
     const body = await readJsonBody<{
       servers?: Record<string, unknown>;
-      terminalToken?: string;
     }>(req, res);
     if (!body) return;
 
     if (!state.config.mcp) state.config.mcp = {};
-    if (body.servers !== undefined) {
-      if (
-        !body.servers ||
-        typeof body.servers !== "object" ||
-        Array.isArray(body.servers)
-      ) {
-        error(res, "servers must be a JSON object", 400);
-        return;
-      }
-      const mcpRejection = await resolveMcpServersRejection(
-        body.servers as Record<string, unknown>,
-      );
-      if (mcpRejection) {
-        error(res, mcpRejection, 400);
-        return;
-      }
-      const mcpTerminalRejection = resolveMcpTerminalAuthorizationRejection(
-        req,
-        body.servers as Record<string, unknown>,
-        body,
-      );
-      if (mcpTerminalRejection) {
+    if (body.servers && typeof body.servers === "object") {
+      if (hasBlockedObjectKeyDeep(body.servers)) {
         error(
           res,
-          `Configuring stdio MCP servers requires terminal authorization. ${mcpTerminalRejection.reason}`,
-          mcpTerminalRejection.status,
+          'Invalid servers config: "__proto__", "constructor", and "prototype" are not allowed',
+          400,
         );
         return;
       }
@@ -15527,7 +19562,7 @@ async function handleRequest(
     }
 
     try {
-      saveMiladyConfig(state.config);
+      saveMilaidyConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -15603,54 +19638,10 @@ async function handleRequest(
     state.broadcastWs?.({
       type: "emote",
       emoteId: emote.id,
-      path: emote.path,
+      glbPath: emote.glbPath,
       duration: emote.duration,
       loop: emote.loop,
     });
-    json(res, { ok: true });
-    return;
-  }
-
-  // ── POST /api/agent/event ──────────────────────────────────────────────
-  // Push an event into the agent event stream (WebSocket + buffer).
-  // Used by plugins (e.g. retake) to surface activity in the StreamView.
-  // Auth: protected by the isAuthorized(req) gate at L5631.
-  if (method === "POST" && pathname === "/api/agent/event") {
-    const body = await readJsonBody<{
-      stream?: string;
-      data?: Record<string, unknown>;
-      roomId?: string;
-    }>(req, res);
-    if (!body || !body.stream) {
-      error(res, "Missing 'stream' field");
-      return;
-    }
-    if (!AGENT_EVENT_ALLOWED_STREAMS.has(body.stream)) {
-      error(
-        res,
-        `Invalid stream: ${body.stream}. Allowed: ${[...AGENT_EVENT_ALLOWED_STREAMS].join(", ")}`,
-        400,
-      );
-      return;
-    }
-    const envelope: StreamEventEnvelope = {
-      type: "agent_event",
-      version: 1,
-      eventId: `evt-${state.nextEventId}`,
-      ts: Date.now(),
-      stream: body.stream,
-      agentId: state.runtime?.agentId
-        ? String(state.runtime.agentId)
-        : undefined,
-      roomId: body.roomId,
-      payload: body.data ?? {},
-    };
-    state.nextEventId += 1;
-    state.eventBuffer.push(envelope);
-    if (state.eventBuffer.length > 1500) {
-      state.eventBuffer.splice(0, state.eventBuffer.length - 1500);
-    }
-    state.broadcastWs?.(envelope as unknown as Record<string, unknown>);
     json(res, { ok: true });
     return;
   }
@@ -15663,19 +19654,8 @@ async function handleRequest(
       return;
     }
 
-    const body = await readJsonBody<{
-      command?: string;
-      clientId?: unknown;
-      terminalToken?: string;
-    }>(req, res);
+    const body = await readJsonBody<{ command?: string }>(req, res);
     if (!body) return;
-
-    const terminalRejection = resolveTerminalRunRejection(req, body);
-    if (terminalRejection) {
-      error(res, terminalRejection.reason, terminalRejection.status);
-      return;
-    }
-
     const command = typeof body.command === "string" ? body.command.trim() : "";
     if (!command) {
       error(res, "Missing or empty command");
@@ -15688,63 +19668,18 @@ async function handleRequest(
       return;
     }
 
-    // Prevent multiline/control-character payloads that can smuggle
-    // unintended command chains through a single request.
-    if (
-      command.includes("\n") ||
-      command.includes("\r") ||
-      command.includes("\0")
-    ) {
-      error(
-        res,
-        "Command must be a single line without control characters",
-        400,
-      );
-      return;
-    }
-
-    const targetClientId = resolveTerminalRunClientId(req, body);
-    if (!targetClientId) {
-      error(
-        res,
-        "Missing client id. Provide X-Milady-Client-Id header or clientId in the request body.",
-        400,
-      );
-      return;
-    }
-
-    const emitTerminalEvent = (payload: Record<string, unknown>) => {
-      if (isSharedTerminalClientId(targetClientId)) {
-        state.broadcastWs?.(payload);
-        return;
-      }
-      if (typeof state.broadcastWsToClientId !== "function") return;
-      state.broadcastWsToClientId(targetClientId, payload);
-    };
-
-    const { maxConcurrent, maxDurationMs } = resolveTerminalRunLimits();
-    if (activeTerminalRunCount >= maxConcurrent) {
-      error(
-        res,
-        `Too many active terminal runs (${maxConcurrent}). Wait for a command to finish.`,
-        429,
-      );
-      return;
-    }
-
     // Respond immediately — output streams via WebSocket
     json(res, { ok: true });
 
     // Spawn in background and broadcast output
     const { spawn } = await import("node:child_process");
-    const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const runId = `run-${Date.now()}`;
 
-    emitTerminalEvent({
+    state.broadcastWs?.({
       type: "terminal-output",
       runId,
       event: "start",
       command,
-      maxDurationMs,
     });
 
     const proc = spawn(command, {
@@ -15753,32 +19688,8 @@ async function handleRequest(
       env: { ...process.env, FORCE_COLOR: "0" },
     });
 
-    activeTerminalRunCount += 1;
-    let finalized = false;
-    const finalize = () => {
-      if (finalized) return;
-      finalized = true;
-      activeTerminalRunCount = Math.max(0, activeTerminalRunCount - 1);
-      clearTimeout(timeoutHandle);
-    };
-
-    const timeoutHandle = setTimeout(() => {
-      if (proc.killed) return;
-      proc.kill("SIGTERM");
-      emitTerminalEvent({
-        type: "terminal-output",
-        runId,
-        event: "timeout",
-        maxDurationMs,
-      });
-
-      setTimeout(() => {
-        if (!proc.killed) proc.kill("SIGKILL");
-      }, 3000);
-    }, maxDurationMs);
-
     proc.stdout?.on("data", (chunk: Buffer) => {
-      emitTerminalEvent({
+      state.broadcastWs?.({
         type: "terminal-output",
         runId,
         event: "stdout",
@@ -15787,7 +19698,7 @@ async function handleRequest(
     });
 
     proc.stderr?.on("data", (chunk: Buffer) => {
-      emitTerminalEvent({
+      state.broadcastWs?.({
         type: "terminal-output",
         runId,
         event: "stderr",
@@ -15796,8 +19707,7 @@ async function handleRequest(
     });
 
     proc.on("close", (code: number | null) => {
-      finalize();
-      emitTerminalEvent({
+      state.broadcastWs?.({
         type: "terminal-output",
         runId,
         event: "exit",
@@ -15806,8 +19716,7 @@ async function handleRequest(
     });
 
     proc.on("error", (err: Error) => {
-      finalize();
-      emitTerminalEvent({
+      state.broadcastWs?.({
         type: "terminal-output",
         runId,
         event: "error",
@@ -15821,7 +19730,7 @@ async function handleRequest(
   // ── Custom Actions CRUD ──────────────────────────────────────────────
 
   if (method === "GET" && pathname === "/api/custom-actions") {
-    const config = loadMiladyConfig();
+    const config = loadMilaidyConfig();
     json(res, { actions: config.customActions ?? [] });
     return;
   }
@@ -15848,25 +19757,6 @@ async function handleRequest(
         400,
       );
       return;
-    }
-
-    // Security gate: shell and code handlers execute arbitrary commands or
-    // code on the host machine, and the resulting action persists in config
-    // (survives restarts). Require the MILADY_TERMINAL_RUN_TOKEN to prove
-    // the caller has explicit operator authority for code execution.
-    if (handler.type === "shell" || handler.type === "code") {
-      const terminalRejection = resolveTerminalRunRejection(
-        req,
-        body as TerminalRunRequestBody,
-      );
-      if (terminalRejection) {
-        error(
-          res,
-          `Creating ${handler.type} actions requires terminal authorization. ${terminalRejection.reason}`,
-          terminalRejection.status,
-        );
-        return;
-      }
     }
 
     // Validate type-specific required fields
@@ -15913,10 +19803,10 @@ async function handleRequest(
       updatedAt: now,
     };
 
-    const config = loadMiladyConfig();
+    const config = loadMilaidyConfig();
     if (!config.customActions) config.customActions = [];
     config.customActions.push(actionDef);
-    saveMiladyConfig(config);
+    saveMilaidyConfig(config);
 
     // Hot-register into the running agent so it's available immediately
     if (actionDef.enabled) {
@@ -15951,7 +19841,6 @@ async function handleRequest(
         "",
         "- name: string (UPPER_SNAKE_CASE action name)",
         "- description: string (clear description of what the action does)",
-        "- similes: optional string[] of alternative action names and phrases",
         '- handlerType: "http" | "shell" | "code"',
         "- handler: object with type-specific fields:",
         '  For http: { type: "http", method: "GET"|"POST"|etc, url: string, headers?: object, bodyTemplate?: string }',
@@ -15967,6 +19856,7 @@ async function handleRequest(
 
       const llmResponse = await runtime.useModel(ModelType.TEXT_SMALL, {
         prompt: `${systemPrompt}\n\nUser request: ${prompt}`,
+        stopSequences: [],
       });
 
       // Parse the JSON from the LLM response
@@ -16003,27 +19893,11 @@ async function handleRequest(
     );
     if (!body) return;
 
-    const config = loadMiladyConfig();
+    const config = loadMilaidyConfig();
     const def = (config.customActions ?? []).find((a) => a.id === actionId);
     if (!def) {
       error(res, "Action not found", 404);
       return;
-    }
-
-    // Security gate: shell/code handlers execute arbitrary commands on the host.
-    if (def.handler.type === "shell" || def.handler.type === "code") {
-      const terminalRejection = resolveTerminalRunRejection(
-        req,
-        body as TerminalRunRequestBody,
-      );
-      if (terminalRejection) {
-        error(
-          res,
-          `Testing ${def.handler.type} actions requires terminal authorization. ${terminalRejection.reason}`,
-          terminalRejection.status,
-        );
-        return;
-      }
     }
 
     const testParams = body.params ?? {};
@@ -16052,7 +19926,7 @@ async function handleRequest(
     const body = await readJsonBody<Record<string, unknown>>(req, res);
     if (!body) return;
 
-    const config = loadMiladyConfig();
+    const config = loadMilaidyConfig();
     const actions = config.customActions ?? [];
     const idx = actions.findIndex((a) => a.id === actionId);
     if (idx === -1) {
@@ -16072,23 +19946,6 @@ async function handleRequest(
         return;
       }
       newHandler = h as unknown as CustomActionDef["handler"];
-    }
-
-    // Security gate: if the new/updated handler is shell or code, require
-    // terminal authorization — same gate as POST creation.
-    if (newHandler.type === "shell" || newHandler.type === "code") {
-      const terminalRejection = resolveTerminalRunRejection(
-        req,
-        body as TerminalRunRequestBody,
-      );
-      if (terminalRejection) {
-        error(
-          res,
-          `Updating to ${newHandler.type} handler requires terminal authorization. ${terminalRejection.reason}`,
-          terminalRejection.status,
-        );
-        return;
-      }
     }
 
     const updated: CustomActionDef = {
@@ -16115,7 +19972,7 @@ async function handleRequest(
 
     actions[idx] = updated;
     config.customActions = actions;
-    saveMiladyConfig(config);
+    saveMilaidyConfig(config);
 
     json(res, { ok: true, action: updated });
     return;
@@ -16124,7 +19981,7 @@ async function handleRequest(
   if (method === "DELETE" && customActionMatch) {
     const actionId = decodeURIComponent(customActionMatch[1]);
 
-    const config = loadMiladyConfig();
+    const config = loadMilaidyConfig();
     const actions = config.customActions ?? [];
     const idx = actions.findIndex((a) => a.id === actionId);
     if (idx === -1) {
@@ -16134,71 +19991,15 @@ async function handleRequest(
 
     actions.splice(idx, 1);
     config.customActions = actions;
-    saveMiladyConfig(config);
+    saveMilaidyConfig(config);
 
     json(res, { ok: true });
     return;
   }
 
-  // ── Stream Manager routes ──────────────────────────────────────────────
-  // Handled by handleStreamRoute() in stream-routes.ts (registered via
-  // connectorRouteHandlers below). Endpoints: /api/stream/*
-
-  // ── LTCG Autonomy routes ─────────────────────────────────────────────
-  // The LTCG plugin registers these as elizaOS plugin routes, but Milady's
-  // server doesn't dispatch plugin routes. Wire them up directly here.
-  if (pathname.startsWith("/api/ltcg/autonomy")) {
-    try {
-      const { getAutonomyController } = await import("@lunchtable/plugin-ltcg");
-      const ctrl = getAutonomyController();
-
-      if (method === "GET" && pathname === "/api/ltcg/autonomy/status") {
-        json(res, ctrl.getStatus());
-        return;
-      }
-
-      if (method === "POST" && pathname === "/api/ltcg/autonomy/start") {
-        const body = (await readJsonBody(req, res)) ?? {};
-        const bodyRecord = body as Record<string, unknown>;
-        const mode = bodyRecord.mode === "pvp" ? "pvp" : "story";
-        const continuousValue = bodyRecord.continuous;
-        const continuous =
-          typeof continuousValue === "boolean" ? continuousValue : true;
-        await ctrl.start({ mode, continuous });
-        json(res, { ok: true, mode, continuous });
-        return;
-      }
-
-      if (method === "POST" && pathname === "/api/ltcg/autonomy/pause") {
-        ctrl.pause();
-        json(res, { ok: true, state: "paused" });
-        return;
-      }
-
-      if (method === "POST" && pathname === "/api/ltcg/autonomy/resume") {
-        ctrl.resume();
-        json(res, { ok: true, state: "running" });
-        return;
-      }
-
-      if (method === "POST" && pathname === "/api/ltcg/autonomy/stop") {
-        await ctrl.stop();
-        json(res, { ok: true, state: "idle" });
-        return;
-      }
-    } catch (err) {
-      logger.error(
-        `[ltcg-autonomy] ${err instanceof Error ? err.message : err}`,
-      );
-      error(res, err instanceof Error ? err.message : "Autonomy error", 500);
-      return;
-    }
-  }
-
-  // ── Connector plugin routes (dynamically registered) ────────────────────
-  for (const handler of state.connectorRouteHandlers) {
-    const handled = await handler(req, res, pathname, method);
-    if (handled) return;
+  // ── Static UI serving (production) ──────────────────────────────────────
+  if (method === "GET" || method === "HEAD") {
+    if (serveStaticUi(req, res, pathname)) return;
   }
 
   // ── Fallback ────────────────────────────────────────────────────────────
@@ -16212,8 +20013,8 @@ async function handleRequest(
 // the entire server dependency graph into lightweight consumers (e.g. the
 // headless `startEliza()` path).
 // ---------------------------------------------------------------------------
-import { type captureEarlyLogs, flushEarlyLogs } from "./early-logs";
-export type { captureEarlyLogs };
+import { captureEarlyLogs, flushEarlyLogs } from "./early-logs";
+export { captureEarlyLogs };
 
 // ---------------------------------------------------------------------------
 // Server start
@@ -16234,33 +20035,30 @@ export async function startApiServer(opts?: {
   port: number;
   close: () => Promise<void>;
   updateRuntime: (rt: AgentRuntime) => void;
-  updateStartup: (
-    update: Partial<AgentStartupDiagnostics> & {
-      phase?: string;
-      attempt?: number;
-      state?: ServerState["agentState"];
-    },
-  ) => void;
 }> {
-  const apiStartTime = Date.now();
-  console.log(`[milady-api] startApiServer called`);
-
   const port = opts?.port ?? 2138;
   const host =
-    (process.env.MILADY_API_BIND ?? "127.0.0.1").trim() || "127.0.0.1";
+    (process.env.MILAIDY_API_BIND ?? "127.0.0.1").trim() || "127.0.0.1";
   ensureApiTokenForBindHost(host);
-  console.log(`[milady-api] Token check done (${Date.now() - apiStartTime}ms)`);
 
-  let config: MiladyConfig;
+  let config: MilaidyConfig;
   try {
-    config = loadMiladyConfig();
+    config = loadMilaidyConfig();
   } catch (err) {
     logger.warn(
-      `[milady-api] Failed to load config, starting with defaults: ${err instanceof Error ? err.message : err}`,
+      `[milaidy-api] Failed to load config, starting with defaults: ${err instanceof Error ? err.message : err}`,
     );
-    config = {} as MiladyConfig;
+    config = {} as MilaidyConfig;
   }
-  console.log(`[milady-api] Config loaded (${Date.now() - apiStartTime}ms)`);
+
+  // One-time migration for Alice instances that still carry legacy "hehe~"/
+  // old "lol k" profile fields. Persist immediately so restarts stay canonical.
+  if (maybeMigrateAliceLegacyStyle(config)) {
+    saveMilaidyConfig(config);
+    logger.info(
+      "[milaidy-api] Migrated Alice legacy style profile to canonical CEO preset.",
+    );
+  }
 
   // Wallet/inventory routes read from process.env at request-time.
   // Hydrate persisted config.env values so addresses remain visible after restarts.
@@ -16282,22 +20080,7 @@ export async function startApiServer(opts?: {
     }
   }
 
-  // Self-heal older configs where wallet keys were never provisioned
-  // (e.g. RPC/cloud configured outside onboarding).
-  if (ensureWalletKeysInEnvAndConfig(config)) {
-    try {
-      saveMiladyConfig(config);
-    } catch (err) {
-      logger.warn(
-        `[milady-api] Failed to persist generated wallet keys: ${err instanceof Error ? err.message : err}`,
-      );
-    }
-  }
-
   const plugins = discoverPluginsFromManifest();
-  console.log(
-    `[milady-api] Plugins discovered (${Date.now() - apiStartTime}ms)`,
-  );
   const workspaceDir =
     config.agents?.defaults?.workspace ?? resolveDefaultAgentWorkspaceDir();
 
@@ -16305,31 +20088,30 @@ export async function startApiServer(opts?: {
   const initialAgentState = hasRuntime
     ? "running"
     : (opts?.initialAgentState ?? "not_started");
-  const initialStartup: AgentStartupDiagnostics =
-    initialAgentState === "running"
-      ? { phase: "running", attempt: 0 }
-      : initialAgentState === "starting"
-        ? { phase: "starting", attempt: 0 }
-        : { phase: "idle", attempt: 0 };
   const agentName = hasRuntime
-    ? (opts.runtime?.character.name ?? "Milady")
+    ? (opts.runtime?.character.name ?? "Milaidy")
     : (config.agents?.list?.[0]?.name ??
       config.ui?.assistant?.name ??
-      "Milady");
+      "Milaidy");
 
-  const deletedConversationIds = readDeletedConversationIdsFromState();
+  let stateRef: ServerState | null = null;
+  const hyperscapeAutonomy = new HyperscapeAutonomySessionManager({
+    getRuntime: () => stateRef?.runtime ?? null,
+    getHyperscapeApiBaseUrl: () => resolveHyperscapeApiBaseUrl(),
+    onEvent: (event) => {
+      logHyperscapeAutonomyEvent(event);
+      stateRef?.broadcastWs?.(event as unknown as Record<string, unknown>);
+    },
+  });
 
   const state: ServerState = {
     runtime: opts?.runtime ?? null,
     config,
     agentState: initialAgentState,
     agentName,
-    model: hasRuntime
-      ? detectRuntimeModel(opts.runtime ?? null, config)
-      : undefined,
+    model: hasRuntime ? "provided" : undefined,
     startedAt:
       hasRuntime || initialAgentState === "starting" ? Date.now() : undefined,
-    startup: initialStartup,
     plugins,
     // Filled asynchronously after server start to keep startup latency low.
     skills: [],
@@ -16342,64 +20124,39 @@ export async function startApiServer(opts?: {
     chatConnectionPromise: null,
     adminEntityId: null,
     conversations: new Map(),
-    deletedConversationIds,
     cloudManager: null,
     sandboxManager: null,
     appManager: new AppManager(),
+    hyperscapeAutonomy,
     trainingService: null,
     registryService: null,
     dropService: null,
     shareIngestQueue: [],
     broadcastStatus: null,
     broadcastWs: null,
-    broadcastWsToClientId: null,
     activeConversationId: null,
     permissionStates: {},
     shellEnabled: config.features?.shellEnabled !== false,
-    agentAutomationMode: resolveAgentAutomationModeFromConfig(config),
-    tradePermissionMode: resolveTradePermissionMode(config),
-    pendingRestartReasons: [],
-    connectorRouteHandlers: [],
-    connectorHealthMonitor: null,
   };
+  stateRef = state;
 
-  // Closure-captured refs for auto-TTS triggering in the event pipeline.
-  // Set when the streaming connector initializes its route state.
-  let streamRouteStateRef:
-    | import("./stream-routes.js").StreamRouteState
-    | null = null;
-  let onAgentMessageFn:
-    | ((
-        text: string,
-        state: import("./stream-routes.js").StreamRouteState,
-      ) => Promise<void>)
-    | null = null;
-
-  const trainingServiceCtor = await resolveTrainingServiceCtor();
-  const trainingServiceOptions = {
+  const trainingService = new TrainingService({
     getRuntime: () => state.runtime,
     getConfig: () => state.config,
-    setConfig: (nextConfig: MiladyConfig) => {
+    setConfig: (nextConfig: MilaidyConfig) => {
       state.config = nextConfig;
-      saveMiladyConfig(nextConfig);
+      saveMilaidyConfig(nextConfig);
     },
-  };
-  if (trainingServiceCtor) {
-    state.trainingService = new trainingServiceCtor(trainingServiceOptions);
-  } else {
-    logger.warn(
-      "[milady-api] Training service package unavailable; using fallback in-memory implementation",
-    );
-    state.trainingService = new FallbackTrainingService(trainingServiceOptions);
-  }
+  });
   // Register immediately so /api/training routes are available without a startup race.
+  state.trainingService = trainingService;
   const configuredAdminEntityId = config.agents?.defaults?.adminEntityId;
   if (configuredAdminEntityId && isUuidLike(configuredAdminEntityId)) {
     state.adminEntityId = configuredAdminEntityId;
     state.chatUserId = state.adminEntityId;
   } else if (configuredAdminEntityId) {
     logger.warn(
-      `[milady-api] Ignoring invalid agents.defaults.adminEntityId "${configuredAdminEntityId}"`,
+      `[milaidy-api] Ignoring invalid agents.defaults.adminEntityId "${configuredAdminEntityId}"`,
     );
   }
 
@@ -16430,18 +20187,14 @@ export async function startApiServer(opts?: {
             : resolvedSource === "cloud"
               ? ["server", "cloud"]
               : ["system"];
-    pushWithBatchEvict(
-      state.logBuffer,
-      {
-        timestamp: Date.now(),
-        level,
-        message,
-        source: resolvedSource,
-        tags: resolvedTags,
-      },
-      1200,
-      200,
-    );
+    state.logBuffer.push({
+      timestamp: Date.now(),
+      level,
+      message,
+      source: resolvedSource,
+      tags: resolvedTags,
+    });
+    if (state.logBuffer.length > 1000) state.logBuffer.shift();
   };
 
   // ── Flush early-captured logs into the main buffer ────────────────────
@@ -16476,7 +20229,7 @@ export async function startApiServer(opts?: {
   // eliza.ts, services, plugins, etc.) AND the runtime instance logger.
   // A marker prevents double-patching on hot-restart and avoids stacking
   // wrapper functions that would leak memory.
-  const PATCHED_MARKER = "__miladyLogPatched";
+  const PATCHED_MARKER = "__milaidyLogPatched";
   const LEVELS = ["debug", "info", "warn", "error"] as const;
 
   /**
@@ -16512,7 +20265,7 @@ export async function startApiServer(opts?: {
           }
           msg = typeof args[1] === "string" ? args[1] : JSON.stringify(obj);
         }
-        // Auto-extract source from [bracket] prefixes (e.g. "[milady] ...")
+        // Auto-extract source from [bracket] prefixes (e.g. "[milaidy] ...")
         const bracketMatch = /^\[([^\]]+)\]\s*/.exec(msg);
         if (bracketMatch && source === defaultSource) {
           source = bracketMatch[1];
@@ -16571,32 +20324,15 @@ export async function startApiServer(opts?: {
   // Store the restart callback on the state so the route handler can access it.
   const onRestart = opts?.onRestart ?? null;
 
-  console.log(
-    `[milady-api] Creating http server (${Date.now() - apiStartTime}ms)`,
-  );
   const server = http.createServer(async (req, res) => {
     try {
-      await handleRequest(req, res, state, {
-        onRestart,
-        onRuntimeSwapped: () => {
-          bindRuntimeStreams(state.runtime);
-          void wireCoordinatorBridgesWhenReady(state, {
-            wireChatBridge: wireCodingAgentChatBridge,
-            wireWsBridge: wireCodingAgentWsBridge,
-            wireEventRouting: wireCoordinatorEventRouting,
-            wireSwarmSynthesis: wireCodingAgentSwarmSynthesis,
-            context: "restart",
-            logger,
-          });
-        },
-      });
+      await handleRequest(req, res, state, { onRestart });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "internal error";
       addLog("error", msg, "api", ["server", "api"]);
       error(res, msg, 500);
     }
   });
-  console.log(`[milady-api] Server created (${Date.now() - apiStartTime}ms)`);
 
   const broadcastWs = (payload: object): void => {
     const message = JSON.stringify(payload);
@@ -16606,7 +20342,7 @@ export async function startApiServer(opts?: {
           client.send(message);
         } catch (err) {
           logger.error(
-            `[milady-api] WebSocket broadcast error: ${err instanceof Error ? err.message : err}`,
+            `[milaidy-api] WebSocket broadcast error: ${err instanceof Error ? err.message : err}`,
           );
         }
       }
@@ -16637,14 +20373,7 @@ export async function startApiServer(opts?: {
       detachRuntimeStreams = null;
     }
     const svc = getAgentEventSvc(runtime);
-    if (!svc) {
-      if (runtime) {
-        logger.warn(
-          "[milady-api] AGENT_EVENT service not found on runtime — event streaming will be unavailable",
-        );
-      }
-      return;
-    }
+    if (!svc) return;
 
     const unsubAgentEvents = svc.subscribe((event) => {
       pushEvent({
@@ -16658,31 +20387,6 @@ export async function startApiServer(opts?: {
         roomId: event.roomId,
         payload: event.data,
       });
-
-      void maybeRouteAutonomyEventToConversation(state, event).catch((err) => {
-        logger.warn(
-          `[autonomy-route] Failed to route proactive event: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
-
-      // Auto-trigger TTS for assistant messages on the stream
-      const srs = streamRouteStateRef;
-      const ttsHandler = onAgentMessageFn;
-      if (event.stream === "assistant" && srs && ttsHandler) {
-        const payload =
-          event.data && typeof event.data === "object"
-            ? (event.data as Record<string, unknown>)
-            : null;
-        const text =
-          typeof payload?.text === "string" ? payload.text.trim() : "";
-        if (text) {
-          void ttsHandler(text, srs).catch((err) => {
-            logger.warn(
-              `[stream-voice] Auto-TTS trigger failed: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          });
-        }
-      }
     });
 
     const unsubHeartbeat = svc.subscribeHeartbeat((event) => {
@@ -16705,13 +20409,11 @@ export async function startApiServer(opts?: {
       detachTrainingStream = null;
     }
     if (!state.trainingService) return;
-    detachTrainingStream = state.trainingService.subscribe((event: unknown) => {
-      const payload =
-        typeof event === "object" && event !== null ? event : { value: event };
+    detachTrainingStream = state.trainingService.subscribe((event) => {
       pushEvent({
         type: "training_event",
         ts: Date.now(),
-        payload,
+        payload: event,
       });
     });
   };
@@ -16735,14 +20437,12 @@ export async function startApiServer(opts?: {
         );
       } catch (err) {
         logger.warn(
-          `[milady-api] Skill discovery failed during startup: ${err instanceof Error ? err.message : String(err)}`,
+          `[milaidy-api] Skill discovery failed during startup: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     })();
 
     void (async () => {
-      const trainingService = state.trainingService;
-      if (!trainingService) return;
       try {
         await trainingService.initialize();
         bindTrainingStream();
@@ -16752,7 +20452,37 @@ export async function startApiServer(opts?: {
         ]);
       } catch (err) {
         logger.error(
-          `[milady-api] Training service init failed: ${err instanceof Error ? err.message : String(err)}`,
+          `[milaidy-api] Training service init failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    })();
+
+    void (async () => {
+      if (!state.config.cloud?.enabled || !state.config.cloud.apiKey) return;
+      const mgr = new CloudManager(state.config.cloud, {
+        onStatusChange: (s) => {
+          addLog("info", `Cloud connection status: ${s}`, "cloud", [
+            "server",
+            "cloud",
+          ]);
+        },
+      });
+
+      try {
+        await mgr.init();
+        state.cloudManager = mgr;
+        addLog(
+          "info",
+          "Cloud manager initialised (Eliza Cloud enabled)",
+          "cloud",
+          ["server", "cloud"],
+        );
+      } catch (err) {
+        addLog(
+          "warn",
+          `Cloud manager init failed: ${err instanceof Error ? err.message : String(err)}`,
+          "cloud",
+          ["server", "cloud"],
         );
       }
     })();
@@ -16805,243 +20535,13 @@ export async function startApiServer(opts?: {
         logger.warn({ err }, "Failed to initialize ERC-8004 registry service");
       }
     })();
-
-    // ── Connector health monitoring ──────────────────────────────────────────
-    if (state.runtime && state.config.connectors) {
-      state.connectorHealthMonitor = new ConnectorHealthMonitor({
-        runtime: state.runtime,
-        config: state.config,
-        broadcastWs,
-      });
-      state.connectorHealthMonitor.start();
-    }
-
-    // ── Dynamic streaming + connector route loading ────────────────────────
-    // Always register generic stream routes. If a streaming destination is
-    // configured, inject it so /api/stream/live can fetch credentials.
-    void (async () => {
-      try {
-        const { handleStreamRoute, onAgentMessage } = await import(
-          "./stream-routes.js"
-        );
-        onAgentMessageFn = onAgentMessage;
-        // Screen capture manager is injected by Electron host via globalThis
-        const screenCapture = (globalThis as Record<string, unknown>)
-          .__miladyScreenCapture as
-          | {
-              isFrameCaptureActive(): boolean;
-              startFrameCapture(opts: {
-                fps?: number;
-                quality?: number;
-                endpoint?: string;
-              }): Promise<void>;
-            }
-          | undefined;
-
-        // Build destination registry — all configured destinations
-        const connectors = state.config.connectors ?? {};
-        const streaming = (state.config as Record<string, unknown>).streaming as
-          | Record<string, unknown>
-          | undefined;
-        const destinations = new Map<
-          string,
-          import("./stream-routes.js").StreamingDestination
-        >();
-
-        // Retake (API-driven, full integration)
-        if (isConnectorConfigured("retake", connectors.retake)) {
-          try {
-            const retakeMod = "@elizaos/plugin-retake";
-            const { createRetakeDestination } = await import(retakeMod);
-            destinations.set(
-              "retake",
-              createRetakeDestination(
-                connectors.retake as
-                  | { accessToken?: string; apiUrl?: string }
-                  | undefined,
-              ),
-            );
-          } catch (err) {
-            logger.warn(
-              `[milady-api] Failed to load retake destination: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          }
-        }
-
-        // Custom RTMP
-        if (
-          isStreamingDestinationConfigured("customRtmp", streaming?.customRtmp)
-        ) {
-          try {
-            const { createCustomRtmpDestination } = await import(
-              "../plugins/custom-rtmp/index.js"
-            );
-            destinations.set(
-              "custom-rtmp",
-              createCustomRtmpDestination(
-                streaming?.customRtmp as {
-                  rtmpUrl?: string;
-                  rtmpKey?: string;
-                },
-              ),
-            );
-          } catch (err) {
-            logger.warn(
-              `[milady-api] Failed to load custom-rtmp destination: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          }
-        }
-
-        // Twitch
-        if (isStreamingDestinationConfigured("twitch", streaming?.twitch)) {
-          try {
-            const twitchMod = "@elizaos/plugin-twitch-streaming";
-            const { createTwitchDestination } = await import(twitchMod);
-            destinations.set(
-              "twitch",
-              createTwitchDestination(
-                streaming?.twitch as { streamKey?: string },
-              ),
-            );
-          } catch (err) {
-            logger.warn(
-              `[milady-api] Failed to load twitch destination: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          }
-        }
-
-        // YouTube
-        if (isStreamingDestinationConfigured("youtube", streaming?.youtube)) {
-          try {
-            const youtubeMod = "@elizaos/plugin-youtube-streaming";
-            const { createYoutubeDestination } = await import(youtubeMod);
-            destinations.set(
-              "youtube",
-              createYoutubeDestination(
-                streaming?.youtube as { streamKey?: string; rtmpUrl?: string },
-              ),
-            );
-          } catch (err) {
-            logger.warn(
-              `[milady-api] Failed to load youtube destination: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          }
-        }
-
-        // pump.fun
-        if (isStreamingDestinationConfigured("pumpfun", streaming?.pumpfun)) {
-          try {
-            const pumpfunMod = "@elizaos/plugin-pumpfun-streaming";
-            const { createPumpfunDestination } = await import(pumpfunMod);
-            destinations.set(
-              "pumpfun",
-              createPumpfunDestination(
-                streaming?.pumpfun as { streamKey?: string; rtmpUrl?: string },
-              ),
-            );
-          } catch (err) {
-            logger.warn(
-              `[milady-api] Failed to load pumpfun destination: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          }
-        }
-
-        // X (Twitter)
-        if (isStreamingDestinationConfigured("x", streaming?.x)) {
-          try {
-            const xMod = "@elizaos/plugin-x-streaming";
-            const { createXStreamDestination } = await import(xMod);
-            destinations.set(
-              "x",
-              createXStreamDestination(
-                streaming?.x as { streamKey?: string; rtmpUrl?: string },
-              ),
-            );
-          } catch (err) {
-            logger.warn(
-              `[milady-api] Failed to load x destination: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          }
-        }
-
-        // Active destination: config preference → first available
-        const activeDestinationId =
-          (streaming?.activeDestination as string | undefined) ??
-          (destinations.size > 0
-            ? destinations.keys().next().value
-            : undefined);
-
-        const streamState = {
-          streamManager,
-          port,
-          screenCapture,
-          captureUrl: (connectors.retake as Record<string, unknown> | undefined)
-            ?.captureUrl as string | undefined,
-          destinations,
-          activeDestinationId,
-          activeStreamSource: { type: "stream-tab" as const },
-          get config() {
-            const cfg = state.config as Record<string, unknown> | undefined;
-            const msgs = cfg?.messages as Record<string, unknown> | undefined;
-            return msgs
-              ? {
-                  messages: {
-                    tts: msgs.tts as
-                      | import("../config/types.messages").TtsConfig
-                      | undefined,
-                  },
-                }
-              : undefined;
-          },
-        };
-        // Capture streamState in closure for auto-TTS triggering and route handling
-        streamRouteStateRef = streamState;
-        state.connectorRouteHandlers.push((req, res, pathname, method) =>
-          handleStreamRoute(req, res, pathname, method, streamState),
-        );
-
-        const destNames = Array.from(destinations.values())
-          .map((d) => d.name)
-          .join(", ");
-        const destLabel =
-          destinations.size > 0
-            ? `destinations: ${destNames}`
-            : "no destinations";
-        addLog("info", `Stream routes registered (${destLabel})`, "system", [
-          "system",
-          "streaming",
-        ]);
-      } catch (err) {
-        logger.warn(
-          `[milady-api] Failed to load stream routes: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    })();
   };
 
   // ── WebSocket Server ─────────────────────────────────────────────────────
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
+  const wss = new WebSocketServer({ noServer: true });
   const wsClients = new Set<WebSocket>();
-  const wsClientIds = new WeakMap<WebSocket, string>();
-  /** Per-WS-client PTY output subscriptions: sessionId → unsubscribe */
-  const wsClientPtySubscriptions = new WeakMap<
-    WebSocket,
-    Map<string, () => void>
-  >();
   bindRuntimeStreams(opts?.runtime ?? null);
   bindTrainingStream();
-
-  // Wire coding-agent bridges at initial boot (event-driven via getServiceLoadPromise)
-  if (opts?.runtime) {
-    void wireCoordinatorBridgesWhenReady(state, {
-      wireChatBridge: wireCodingAgentChatBridge,
-      wireWsBridge: wireCodingAgentWsBridge,
-      wireEventRouting: wireCoordinatorEventRouting,
-      wireSwarmSynthesis: wireCodingAgentSwarmSynthesis,
-      context: "boot",
-      logger,
-    });
-  }
 
   // Handle upgrade requests for WebSocket
   server.on("upgrade", (request, socket, head) => {
@@ -17060,25 +20560,14 @@ export async function startApiServer(opts?: {
       });
     } catch (err) {
       logger.error(
-        `[milady-api] WebSocket upgrade error: ${err instanceof Error ? err.message : err}`,
+        `[milaidy-api] WebSocket upgrade error: ${err instanceof Error ? err.message : err}`,
       );
       rejectWebSocketUpgrade(socket, 404, "Not found");
     }
   });
 
   // Handle WebSocket connections
-  wss.on("connection", (ws: WebSocket, request: http.IncomingMessage) => {
-    try {
-      const wsUrl = new URL(
-        request.url ?? "/",
-        `http://${request.headers.host ?? "localhost"}`,
-      );
-      const clientId = normalizeWsClientId(wsUrl.searchParams.get("clientId"));
-      if (clientId) wsClientIds.set(ws, clientId);
-    } catch {
-      // Ignore malformed WS URL metadata; auth/path were already validated.
-    }
-
+  wss.on("connection", (ws: WebSocket) => {
     wsClients.add(ws);
     addLog("info", "WebSocket client connected", "websocket", [
       "server",
@@ -17094,9 +20583,6 @@ export async function startApiServer(opts?: {
           agentName: state.agentName,
           model: state.model,
           startedAt: state.startedAt,
-          startup: state.startup,
-          pendingRestart: state.pendingRestartReasons.length > 0,
-          pendingRestartReasons: state.pendingRestartReasons,
         }),
       );
       const replay = state.eventBuffer.slice(-120);
@@ -17105,7 +20591,7 @@ export async function startApiServer(opts?: {
       }
     } catch (err) {
       logger.error(
-        `[milady-api] WebSocket send error: ${err instanceof Error ? err.message : err}`,
+        `[milaidy-api] WebSocket send error: ${err instanceof Error ? err.message : err}`,
       );
     }
 
@@ -17117,118 +20603,16 @@ export async function startApiServer(opts?: {
         } else if (msg.type === "active-conversation") {
           state.activeConversationId =
             typeof msg.conversationId === "string" ? msg.conversationId : null;
-        } else if (
-          msg.type === "pty-subscribe" &&
-          typeof msg.sessionId === "string"
-        ) {
-          const bridge = getPtyConsoleBridge(state);
-          if (bridge) {
-            let subs = wsClientPtySubscriptions.get(ws);
-            if (!subs) {
-              subs = new Map();
-              wsClientPtySubscriptions.set(ws, subs);
-            }
-            // Don't double-subscribe
-            if (!subs.has(msg.sessionId)) {
-              const targetId = msg.sessionId;
-              const listener = (evt: { sessionId: string; data: string }) => {
-                if (evt.sessionId !== targetId) return;
-                if (ws.readyState === 1) {
-                  ws.send(
-                    JSON.stringify({
-                      type: "pty-output",
-                      sessionId: targetId,
-                      data: evt.data,
-                    }),
-                  );
-                }
-              };
-              bridge.on("session_output", listener);
-              subs.set(targetId, () => bridge.off("session_output", listener));
-            }
-          }
-        } else if (
-          msg.type === "pty-unsubscribe" &&
-          typeof msg.sessionId === "string"
-        ) {
-          const subs = wsClientPtySubscriptions.get(ws);
-          const unsub = subs?.get(msg.sessionId);
-          if (unsub) {
-            unsub();
-            subs?.delete(msg.sessionId);
-          }
-        } else if (
-          msg.type === "pty-input" &&
-          typeof msg.sessionId === "string" &&
-          typeof msg.data === "string"
-        ) {
-          // Only allow input to sessions this client has subscribed to
-          const subs = wsClientPtySubscriptions.get(ws);
-          if (!subs?.has(msg.sessionId)) {
-            logger.warn(
-              `[milady-api] pty-input rejected: client not subscribed to session ${msg.sessionId}`,
-            );
-          } else if (msg.data.length > 4096) {
-            logger.warn(
-              `[milady-api] pty-input rejected: payload too large (${msg.data.length} bytes) for session ${msg.sessionId}`,
-            );
-          } else {
-            const bridge = getPtyConsoleBridge(state);
-            if (bridge) {
-              logger.debug(
-                `[milady-api] pty-input: session=${msg.sessionId} len=${msg.data.length}`,
-              );
-              bridge.writeRaw(msg.sessionId, msg.data);
-            }
-          }
-        } else if (
-          msg.type === "pty-resize" &&
-          typeof msg.sessionId === "string"
-        ) {
-          // Only allow resize for sessions this client has subscribed to
-          const subs = wsClientPtySubscriptions.get(ws);
-          if (!subs?.has(msg.sessionId)) {
-            logger.warn(
-              `[milady-api] pty-resize rejected: client not subscribed to session ${msg.sessionId}`,
-            );
-          } else {
-            const bridge = getPtyConsoleBridge(state);
-            if (
-              bridge &&
-              typeof msg.cols === "number" &&
-              typeof msg.rows === "number" &&
-              Number.isFinite(msg.cols) &&
-              Number.isFinite(msg.rows) &&
-              Number.isInteger(msg.cols) &&
-              Number.isInteger(msg.rows) &&
-              msg.cols >= 1 &&
-              msg.cols <= 500 &&
-              msg.rows >= 1 &&
-              msg.rows <= 500
-            ) {
-              bridge.resize(msg.sessionId, msg.cols, msg.rows);
-            } else {
-              logger.warn(
-                `[milady-api] pty-resize rejected: invalid dimensions cols=${msg.cols} rows=${msg.rows}`,
-              );
-            }
-          }
         }
       } catch (err) {
         logger.error(
-          `[milady-api] WebSocket message error: ${err instanceof Error ? err.message : err}`,
+          `[milaidy-api] WebSocket message error: ${err instanceof Error ? err.message : err}`,
         );
       }
     });
 
     ws.on("close", () => {
       wsClients.delete(ws);
-      // Clean up any PTY output subscriptions for this client
-      const subs = wsClientPtySubscriptions.get(ws);
-      if (subs) {
-        for (const unsub of subs.values()) unsub();
-        subs.clear();
-      }
       addLog("info", "WebSocket client disconnected", "websocket", [
         "server",
         "websocket",
@@ -17237,15 +20621,9 @@ export async function startApiServer(opts?: {
 
     ws.on("error", (err) => {
       logger.error(
-        `[milady-api] WebSocket error: ${err instanceof Error ? err.message : err}`,
+        `[milaidy-api] WebSocket error: ${err instanceof Error ? err.message : err}`,
       );
       wsClients.delete(ws);
-      // Clean up PTY subscriptions on error too
-      const subs = wsClientPtySubscriptions.get(ws);
-      if (subs) {
-        for (const unsub of subs.values()) unsub();
-        subs.clear();
-      }
     });
   });
 
@@ -17257,9 +20635,6 @@ export async function startApiServer(opts?: {
       agentName: state.agentName,
       model: state.model,
       startedAt: state.startedAt,
-      startup: state.startup,
-      pendingRestart: state.pendingRestartReasons.length > 0,
-      pendingRestartReasons: state.pendingRestartReasons,
     });
   };
 
@@ -17275,32 +20650,30 @@ export async function startApiServer(opts?: {
           client.send(message);
         } catch (err) {
           logger.error(
-            `[milady-api] WebSocket broadcast error: ${err instanceof Error ? err.message : err}`,
+            `[milaidy-api] WebSocket broadcast error: ${err instanceof Error ? err.message : err}`,
           );
         }
       }
     }
   };
 
-  state.broadcastWsToClientId = (
-    clientId: string,
-    data: Record<string, unknown>,
-  ) => {
+  // Make broadcastStatus accessible to route handlers via state
+  state.broadcastStatus = broadcastStatus;
+
+  // Generic broadcast — sends an arbitrary JSON payload to all WS clients.
+  state.broadcastWs = (data: Record<string, unknown>) => {
     const message = JSON.stringify(data);
-    let delivered = 0;
     for (const client of wsClients) {
-      if (client.readyState !== 1) continue;
-      if (wsClientIds.get(client) !== clientId) continue;
-      try {
-        client.send(message);
-        delivered += 1;
-      } catch (err) {
-        logger.error(
-          `[milady-api] WebSocket targeted send error: ${err instanceof Error ? err.message : err}`,
-        );
+      if (client.readyState === 1) {
+        try {
+          client.send(message);
+        } catch (err) {
+          logger.error(
+            `[milaidy-api] WebSocket broadcast error: ${err instanceof Error ? err.message : err}`,
+          );
+        }
       }
     }
-    return delivered;
   };
 
   // Broadcast status every 5 seconds
@@ -17315,7 +20688,7 @@ export async function startApiServer(opts?: {
     rt: AgentRuntime,
   ): Promise<void> => {
     try {
-      const agentName = rt.character.name ?? "Milady";
+      const agentName = rt.character.name ?? "Milaidy";
       const worldId = stringToUuid(`${agentName}-web-chat-world`);
       const rooms = await rt.getRoomsByWorld(worldId);
       if (!rooms?.length) return;
@@ -17328,7 +20701,6 @@ export async function startApiServer(opts?: {
         if (!channelId.startsWith("web-conv-")) continue;
         const convId = channelId.replace("web-conv-", "");
         if (!convId || state.conversations.has(convId)) continue;
-        if (state.deletedConversationIds.has(convId)) continue;
 
         // Peek at the latest message to get a timestamp
         let updatedAt = new Date().toISOString();
@@ -17366,7 +20738,7 @@ export async function startApiServer(opts?: {
       }
     } catch (err) {
       logger.warn(
-        `[milady-api] Failed to restore conversations from DB: ${err instanceof Error ? err.message : err}`,
+        `[milaidy-api] Failed to restore conversations from DB: ${err instanceof Error ? err.message : err}`,
       );
     }
   };
@@ -17384,13 +20756,8 @@ export async function startApiServer(opts?: {
     bindRuntimeStreams(rt);
     // AppManager doesn't need a runtime reference
     state.agentState = "running";
-    state.agentName = rt.character.name ?? "Milady";
-    state.model = detectRuntimeModel(rt, state.config);
+    state.agentName = rt.character.name ?? "Milaidy";
     state.startedAt = Date.now();
-    state.startup = {
-      phase: "running",
-      attempt: 0,
-    };
     addLog("info", `Runtime restarted — agent: ${state.agentName}`, "system", [
       "system",
       "agent",
@@ -17401,76 +20768,17 @@ export async function startApiServer(opts?: {
 
     // Broadcast status update immediately after restart
     broadcastStatus();
-
-    // Wire coding-agent bridges (event-driven via getServiceLoadPromise)
-    void wireCoordinatorBridgesWhenReady(state, {
-      wireChatBridge: wireCodingAgentChatBridge,
-      wireWsBridge: wireCodingAgentWsBridge,
-      wireEventRouting: wireCoordinatorEventRouting,
-      wireSwarmSynthesis: wireCodingAgentSwarmSynthesis,
-      context: "restart",
-      logger,
-    });
+    // Re-patch the new runtime's messageService for autonomy routing
+    patchMessageServiceForAutonomy(state);
   };
 
-  const updateStartup = (
-    update: Partial<AgentStartupDiagnostics> & {
-      phase?: string;
-      attempt?: number;
-      state?: ServerState["agentState"];
-    },
-  ): void => {
-    const { state: nextState, ...startupUpdate } = update;
-    state.startup = {
-      ...state.startup,
-      ...startupUpdate,
-    };
-    if (nextState) {
-      state.agentState = nextState;
-      if (nextState === "error") {
-        state.startedAt = undefined;
-      } else if (
-        (nextState === "starting" || nextState === "running") &&
-        !state.startedAt
-      ) {
-        state.startedAt = Date.now();
-      }
-    }
-    broadcastStatus();
-  };
+  // Patch the initial runtime (if provided) for autonomy routing
+  patchMessageServiceForAutonomy(state);
 
-  console.log(
-    `[milady-api] Calling server.listen (${Date.now() - apiStartTime}ms)`,
-  );
-  return new Promise((resolve, reject) => {
-    let currentPort = port;
-
-    server.on("error", (err: NodeJS.ErrnoException) => {
-      if (err.code === "EADDRINUSE") {
-        console.warn(
-          `[milady-api] Port ${currentPort} is already in use. Checking fallback...`,
-        );
-        if (currentPort !== 0) {
-          console.warn(`[milady-api] Retrying with dynamic port (0)...`);
-          currentPort = 0;
-          server.listen(0, host);
-          return;
-        }
-      } else {
-        console.error(
-          `[milady-api] Server error: ${err.message} (code: ${err.code})`,
-        );
-      }
-      reject(err);
-    });
-
+  return new Promise((resolve) => {
     server.listen(port, host, () => {
-      console.log(
-        `[milady-api] server.listen callback fired (${Date.now() - apiStartTime}ms)`,
-      );
       const addr = server.address();
-      const actualPort =
-        typeof addr === "object" && addr ? addr.port : currentPort;
+      const actualPort = typeof addr === "object" && addr ? addr.port : port;
       const displayHost =
         typeof addr === "object" && addr ? addr.address : host;
       addLog(
@@ -17480,78 +20788,26 @@ export async function startApiServer(opts?: {
         ["server", "system"],
       );
       logger.info(
-        `[milady-api] Listening on http://${displayHost}:${actualPort}`,
+        `[milaidy-api] Listening on http://${displayHost}:${actualPort}`,
       );
       startDeferredStartupWork();
       resolve({
         port: actualPort,
-        close: () =>
-          new Promise<void>((r) => {
-            const closeAllConnections = (
-              server as { closeAllConnections?: () => void }
-            ).closeAllConnections;
-            const closeIdleConnections = (
-              server as { closeIdleConnections?: () => void }
-            ).closeIdleConnections;
-
-            clearInterval(statusInterval);
-            if (state.connectorHealthMonitor) {
-              state.connectorHealthMonitor.stop();
-              state.connectorHealthMonitor = null;
-            }
-            if (detachRuntimeStreams) {
-              detachRuntimeStreams();
-              detachRuntimeStreams = null;
-            }
-            if (detachTrainingStream) {
-              detachTrainingStream();
-              detachTrainingStream = null;
-            }
-            for (const ws of wsClients) {
-              if (ws.readyState === 1 || ws.readyState === 0) {
-                ws.terminate();
-              }
-            }
-            wsClients.clear();
-            // Clean up WhatsApp pairing sessions
-            if (state.whatsappPairingSessions) {
-              for (const s of state.whatsappPairingSessions.values()) {
-                try {
-                  s.stop();
-                } catch {
-                  /* non-fatal */
-                }
-              }
-              state.whatsappPairingSessions.clear();
-            }
-            wss.close();
-            const closeTimeout = setTimeout(() => r(), 5_000);
-            const resolved = { done: false };
-            const finalize = () => {
-              if (!resolved.done) {
-                resolved.done = true;
-                clearTimeout(closeTimeout);
-                r();
-              }
-            };
-            if (typeof closeAllConnections === "function") {
-              try {
-                closeAllConnections();
-              } catch {
-                // Bun/Node server internals vary by runtime; non-fatal on shutdown.
-              }
-            }
-            if (typeof closeIdleConnections === "function") {
-              try {
-                closeIdleConnections();
-              } catch {
-                // Bun/Node server internals vary by runtime; non-fatal on shutdown.
-              }
-            }
-            server.close(finalize);
-          }),
+        close: async () => {
+          clearInterval(statusInterval);
+          state.hyperscapeAutonomy.dispose();
+          if (detachRuntimeStreams) {
+            detachRuntimeStreams();
+            detachRuntimeStreams = null;
+          }
+          if (detachTrainingStream) {
+            detachTrainingStream();
+            detachTrainingStream = null;
+          }
+          wss.close();
+          await new Promise<void>((r) => server.close(() => r()));
+        },
         updateRuntime,
-        updateStartup,
       });
     });
   });

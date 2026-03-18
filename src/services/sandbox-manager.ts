@@ -62,11 +62,10 @@ export interface SandboxManagerConfig {
     image?: string;
     cdpPort?: number;
     vncPort?: number;
-    noVncPort?: number;
     headless?: boolean;
-    enableNoVnc?: boolean;
     autoStart?: boolean;
     autoStartTimeoutMs?: number;
+    profilePath?: string;
   };
 }
 
@@ -418,48 +417,39 @@ export class SandboxManager {
     return `ws://localhost:${port}`;
   }
 
-  getBrowserNoVncEndpoint(): string | null {
-    if (!this.browserContainerId) return null;
-
-    const noVncEnabled = this.config.browser?.enableNoVnc ?? false;
-    const headless = this.config.browser?.headless ?? false;
-    if (!noVncEnabled || headless) return null;
-
-    const port = this.config.browser?.noVncPort ?? 6080;
-    return `http://localhost:${port}/vnc.html?autoconnect=true&resize=scale&view_only=true`;
-  }
-
   private async createBrowserContainer(): Promise<string> {
     const name = `${this.config.containerPrefix}-browser-${Date.now()}`;
     const cdpPort = this.config.browser?.cdpPort ?? 9222;
     const vncPort = this.config.browser?.vncPort ?? 5900;
-    const noVncPort = this.config.browser?.noVncPort ?? 6080;
-    const enableNoVnc = this.config.browser?.enableNoVnc ?? false;
-    const headless = this.config.browser?.headless ?? false;
+    const browserContainerHome = "/home/node/.milaidy-browser-home";
+    const browserProfilePath =
+      this.config.browser?.profilePath?.trim() ||
+      join(
+        this.config.workspaceRoot ??
+          join(process.env.HOME ?? "/tmp", ".milaidy", "browser-workspace"),
+        "browser",
+      );
     const image =
-      this.config.browser?.image ?? "milady-sandbox-browser:bookworm-slim";
+      this.config.browser?.image ?? "milaidy-sandbox-browser:bookworm-slim";
+    mkdirSync(browserProfilePath, { recursive: true });
 
     return this.engine.runContainer({
       image,
       name,
       detach: true,
-      mounts: [],
+      mounts: [{ host: browserProfilePath, container: browserContainerHome }],
       env: {
-        MILADY_BROWSER_CDP_PORT: String(cdpPort),
-        MILADY_BROWSER_VNC_PORT: String(vncPort),
-        MILADY_BROWSER_NOVNC_PORT: String(noVncPort),
-        MILADY_BROWSER_ENABLE_NOVNC: enableNoVnc ? "1" : "0",
-        MILADY_BROWSER_HEADLESS: headless ? "1" : "0",
+        MILAIDY_BROWSER_HOME: browserContainerHome,
+        MILAIDY_BROWSER_STATE_PATH: browserProfilePath,
+        MILAIDY_BROWSER_CDP_PORT: String(cdpPort),
+        MILAIDY_BROWSER_VNC_PORT: String(vncPort),
       },
       network: "bridge",
       user: "1000:1000",
       capDrop: [],
       ports: [
-        { host: cdpPort, container: cdpPort },
-        { host: vncPort, container: vncPort },
-        ...(enableNoVnc && !headless
-          ? [{ host: noVncPort, container: noVncPort }]
-          : []),
+        { host: cdpPort, container: 9222 },
+        { host: vncPort, container: 5900 },
       ],
     });
   }

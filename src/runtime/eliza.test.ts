@@ -9,54 +9,22 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { logger, type Plugin } from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-// Mock all static plugin star-imports in eliza.ts to avoid ESM resolution
-// failure: @elizaos/plugin-ollama imports MAX_EMBEDDING_TOKENS which Vitest
-// cannot resolve from @elizaos/core at static-analysis time.
-vi.mock("@elizaos/plugin-agent-orchestrator", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-agent-skills", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-anthropic", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-browser", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-cli", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-coding-agent", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-computeruse", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-cron", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-discord", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-edge-tts", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-elevenlabs", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-elizacloud", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-experience", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-form", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-google-genai", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-groq", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-knowledge", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-local-embedding", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-ollama", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-openai", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-openrouter", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-pdf", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-personality", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-plugin-manager", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-rolodex", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-secrets-manager", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-shell", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-sql", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-telegram", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-todo", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-trajectory-logger", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-trust", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
-
 import { findPluginExport } from "../cli/plugins-cli";
 import type { MiladyConfig } from "../config/config";
-import { CONNECTOR_PLUGINS } from "../config/plugin-auto-enable";
 import { CONNECTOR_IDS } from "../config/schema";
 import {
+  ALICE_APP_CATALOG,
+  resolveAppFallbackEnvKey,
+  resolveAppStreamEnvKey,
+  resolveAppUpstreamEnvKey,
+} from "../services/app-catalog";
+import {
+  applyAliceFullDutyDefaults,
   applyCloudConfigToEnv,
   applyConnectorSecretsToEnv,
+  applyRuntimeSecretAliases,
   applyDatabaseConfigToEnv,
   applyX402ConfigToEnv,
   autoResolveDiscordAppId,
@@ -64,19 +32,16 @@ import {
   CHANNEL_PLUGIN_MAP,
   CORE_PLUGINS,
   CUSTOM_PLUGINS_DIRNAME,
-  cleanStalePglitePid,
   collectPluginNames,
-  deduplicatePluginActions,
-  findRuntimePluginExport,
-  isEnvKeyAllowedForForwarding,
-  isRecoverablePgliteInitError,
+  resolveFive55GithubPluginEnabled,
+  resolveFive55PluginEnabled,
+  isRecoverableRuntimeError,
+  isPluginEntryEnabled,
   mergeDropInPlugins,
   repairBrokenInstallRecord,
-  resolveMiladyPluginImportSpecifier,
   resolvePackageEntry,
   resolvePrimaryModel,
   scanDropInPlugins,
-  shouldIgnoreMissingPluginExport,
 } from "./eliza";
 
 // ---------------------------------------------------------------------------
@@ -117,9 +82,14 @@ describe("collectPluginNames", () => {
     "AI_GATEWAY_API_KEY",
     "AIGATEWAY_API_KEY",
     "OLLAMA_BASE_URL",
+    "DISCORD_API_TOKEN",
+    "TELEGRAM_BOT_TOKEN",
+    "GITHUB_API_TOKEN",
+    "ALICE_GH_TOKEN",
     "ELIZAOS_CLOUD_API_KEY",
     "ELIZAOS_CLOUD_ENABLED",
-    "MILADY_USE_PI_AI",
+    "ALICE_FULL_DUTY_MODE",
+    "MILAIDY_USE_PI_AI",
     "OBSIDIAN_VAULT_PATH",
     "OBSIDAN_VAULT_PATH",
   ];
@@ -169,7 +139,7 @@ describe("collectPluginNames", () => {
 
   it("includes all core plugins for an empty config", () => {
     // Guard against accidental removal from CORE_PLUGINS array
-    expect(CORE_PLUGINS).toHaveLength(17);
+    expect(CORE_PLUGINS).toHaveLength(13);
 
     const expectedCorePlugins = [
       "@elizaos/plugin-sql",
@@ -185,10 +155,6 @@ describe("collectPluginNames", () => {
       "@elizaos/plugin-agent-skills",
       "@elizaos/plugin-pdf",
       "@elizaos/plugin-secrets-manager",
-      "@elizaos/plugin-trust",
-      "@elizaos/plugin-todo",
-      "@elizaos/plugin-personality",
-      "@elizaos/plugin-experience",
     ];
     const names = collectPluginNames({} as MiladyConfig);
     for (const plugin of expectedCorePlugins) {
@@ -224,8 +190,8 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-groq")).toBe(false);
   });
 
-  it("adds pi-ai provider plugin when MILADY_USE_PI_AI is enabled", () => {
-    process.env.MILADY_USE_PI_AI = "1";
+  it("adds pi-ai provider plugin when MILAIDY_USE_PI_AI is enabled", () => {
+    process.env.MILAIDY_USE_PI_AI = "1";
     const names = collectPluginNames({} as MiladyConfig);
 
     expect(names.has("@elizaos/plugin-pi-ai")).toBe(true);
@@ -236,7 +202,7 @@ describe("collectPluginNames", () => {
   });
 
   it("cloud mode takes precedence over pi-ai mode", () => {
-    process.env.MILADY_USE_PI_AI = "1";
+    process.env.MILAIDY_USE_PI_AI = "1";
     const config = {
       cloud: { enabled: true },
     } as unknown as MiladyConfig;
@@ -247,7 +213,7 @@ describe("collectPluginNames", () => {
   });
 
   it("pi-ai mode overrides explicit direct-provider entries", () => {
-    process.env.MILADY_USE_PI_AI = "1";
+    process.env.MILAIDY_USE_PI_AI = "1";
     const config = {
       plugins: {
         entries: {
@@ -295,127 +261,13 @@ describe("collectPluginNames", () => {
       connectors: { telegram: { botToken: "tok" }, discord: { token: "tok" } },
     } as MiladyConfig;
     const names = collectPluginNames(config);
-    // Telegram maps to the local enhanced plugin, not the upstream one
+    // Telegram maps to the upstream plugin to avoid broken wrapper packaging.
     expect(names.has("@elizaos/plugin-telegram")).toBe(true);
     expect(names.has("@elizaos/plugin-discord")).toBe(true);
     expect(names.has("@elizaos/plugin-slack")).toBe(false);
   });
 
-  it("treats plugins.allow as additive instead of filtering connector plugins", () => {
-    const config = {
-      plugins: { allow: ["browser"] },
-      connectors: { discord: { token: "tok" } },
-    } as unknown as MiladyConfig;
-    const names = collectPluginNames(config);
-    expect(names.has("@elizaos/plugin-browser")).toBe(true);
-    expect(names.has("@elizaos/plugin-discord")).toBe(true);
-  });
-
-  it("normalizes repoprompt short IDs in plugins.allow", () => {
-    const config = {
-      plugins: { allow: ["repoprompt", "repoPrompt"] },
-    } as unknown as MiladyConfig;
-    const names = collectPluginNames(config);
-
-    expect(names.has("@elizaos/plugin-repoprompt")).toBe(true);
-  });
-
-  it("normalizes streaming-base short IDs in plugins.allow", () => {
-    const config = {
-      plugins: { allow: ["streaming-base"] },
-    } as unknown as MiladyConfig;
-    const names = collectPluginNames(config);
-
-    expect(names.has("@elizaos/plugin-streaming-base")).toBe(true);
-  });
-
-  it("normalizes cua short IDs in plugins.allow", () => {
-    const config = {
-      plugins: { allow: ["cua"] },
-    } as unknown as MiladyConfig;
-    const names = collectPluginNames(config);
-
-    expect(names.has("@elizaos/plugin-cua")).toBe(true);
-  });
-
-  it("loads CUA plugin when features.cua is enabled", () => {
-    const config = {
-      features: { cua: true },
-    } as unknown as MiladyConfig;
-    const names = collectPluginNames(config);
-
-    expect(names.has("@elizaos/plugin-cua")).toBe(true);
-  });
-
-  it("does not load CUA plugin when features.cua.enabled is false", () => {
-    const config = {
-      features: { cua: { enabled: false } },
-    } as unknown as MiladyConfig;
-    const names = collectPluginNames(config);
-
-    expect(names.has("@elizaos/plugin-cua")).toBe(false);
-  });
-
-  it("loads x402 plugin when config.x402.enabled is true", () => {
-    const config = {
-      x402: { enabled: true },
-    } as unknown as MiladyConfig;
-    const names = collectPluginNames(config);
-
-    expect(names.has("@elizaos/plugin-x402")).toBe(true);
-  });
-
-  it("does not load x402 plugin when config.x402.enabled is false", () => {
-    const config = {
-      x402: { enabled: false },
-    } as unknown as MiladyConfig;
-    const names = collectPluginNames(config);
-
-    expect(names.has("@elizaos/plugin-x402")).toBe(false);
-  });
-
-  it("normalizes x402 short IDs in plugins.allow", () => {
-    const config = {
-      plugins: { allow: ["x402"] },
-    } as unknown as MiladyConfig;
-    const names = collectPluginNames(config);
-
-    expect(names.has("@elizaos/plugin-x402")).toBe(true);
-  });
-
-  it("loads x402 plugin via features.x402 flag", () => {
-    const config = {
-      features: { x402: true },
-    } as unknown as MiladyConfig;
-    const names = collectPluginNames(config);
-
-    expect(names.has("@elizaos/plugin-x402")).toBe(true);
-  });
-
-  it("does not load x402 when features.x402.enabled is false", () => {
-    const config = {
-      features: { x402: { enabled: false } },
-    } as unknown as MiladyConfig;
-    const names = collectPluginNames(config);
-
-    expect(names.has("@elizaos/plugin-x402")).toBe(false);
-  });
-
-  it("does not load x402 plugin when x402 config section is absent", () => {
-    const names = collectPluginNames({} as MiladyConfig);
-
-    expect(names.has("@elizaos/plugin-x402")).toBe(false);
-  });
-
-  it("normalizes short plugin IDs in plugins.allow", () => {
-    const config = {
-      plugins: { allow: ["discord"] },
-    } as unknown as MiladyConfig;
-    const names = collectPluginNames(config);
-    expect(names.has("@elizaos/plugin-discord")).toBe(true);
-  });
-
-  it("uses @elizaos/plugin-telegram when telegram is enabled via plugins.entries", () => {
+  it("uses upstream Telegram plugin when telegram is enabled via plugins.entries", () => {
     const config = {
       plugins: {
         entries: { telegram: { enabled: true } },
@@ -425,31 +277,9 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-telegram")).toBe(true);
   });
 
-  it("uses the Milady streaming-base package when enabled via plugins.entries", () => {
-    const config = {
-      plugins: {
-        entries: { "streaming-base": { enabled: true } },
-      },
-    } as unknown as MiladyConfig;
-    const names = collectPluginNames(config);
-
-    expect(names.has("@elizaos/plugin-streaming-base")).toBe(true);
-  });
-
-  it("uses the Milady x-streaming package when enabled via plugins.entries", () => {
-    const config = {
-      plugins: {
-        entries: { "x-streaming": { enabled: true } },
-      },
-    } as unknown as MiladyConfig;
-    const names = collectPluginNames(config);
-
-    expect(names.has("@elizaos/plugin-x-streaming")).toBe(true);
-  });
-
-  it("uses @elizaos/plugin-telegram from CHANNEL_PLUGIN_MAP for connectors with plugins.entries", () => {
-    // When both connectors AND plugins.entries set telegram, the plugin
-    // should load exactly once.
+  it("uses upstream Telegram plugin from CHANNEL_PLUGIN_MAP for connectors with plugins.entries", () => {
+    // When both connectors AND plugins.entries set telegram, the runtime
+    // should keep a single canonical plugin package.
     const config = {
       connectors: { telegram: { botToken: "tok" } },
       plugins: {
@@ -468,7 +298,129 @@ describe("collectPluginNames", () => {
     } as unknown as MiladyConfig;
     const names = collectPluginNames(config);
     expect(names.has("@elizaos/plugin-telegram")).toBe(false);
-    expect(names.has("@elizaos/plugin-telegram")).toBe(false);
+  });
+
+  it("does not resolve internal five55 entries as external @elizaos packages", () => {
+    const config = {
+      plugins: {
+        entries: { "five55-admin": { enabled: true } },
+      },
+    } as unknown as MilaidyConfig;
+    const names = collectPluginNames(config);
+    expect(names.has("@elizaos/plugin-five55-admin")).toBe(false);
+  });
+
+  it("skips plugins.entries packages that are not installed", () => {
+    const config = {
+      plugins: {
+        entries: {
+          "definitely-missing-plugin-zzzzzz": { enabled: true },
+        },
+      },
+    } as unknown as MilaidyConfig;
+    const names = collectPluginNames(config);
+    expect(
+      names.has("@elizaos/plugin-definitely-missing-plugin-zzzzzz"),
+    ).toBe(false);
+  });
+
+  it("maps plugins.entries.coding-agent to @milaidy/plugin-coding-agent", () => {
+    const config = {
+      plugins: {
+        entries: {
+          "coding-agent": { enabled: true },
+        },
+      },
+    } as unknown as MiladyConfig;
+    const names = collectPluginNames(config);
+    expect(names.has("@milaidy/plugin-coding-agent")).toBe(true);
+    expect(names.has("@elizaos/plugin-coding-agent")).toBe(false);
+  });
+
+  it("normalizes legacy @milaidy/plugin-telegram-enhanced allowlist entry", () => {
+    const config = {
+      plugins: {
+        allow: ["@milaidy/plugin-telegram-enhanced"],
+      },
+    } as unknown as MilaidyConfig;
+    const names = collectPluginNames(config);
+    expect(names.has("@elizaos/plugin-telegram")).toBe(true);
+    expect(names.has("@milaidy/plugin-telegram-enhanced")).toBe(false);
+  });
+
+  it("does not auto-load upstream github plugin when GITHUB_API_TOKEN is present", () => {
+    process.env.GITHUB_API_TOKEN = "ghp_test";
+    const names = collectPluginNames({} as MilaidyConfig);
+    expect(names.has("@elizaos/plugin-github")).toBe(false);
+  });
+
+  it("applies full-duty defaults for features and plugin entries when enabled", () => {
+    const appEnvKeys = Object.keys(ALICE_APP_CATALOG).flatMap((packageName) => [
+      resolveAppStreamEnvKey(packageName),
+      resolveAppUpstreamEnvKey(packageName),
+      resolveAppFallbackEnvKey(packageName),
+    ]);
+    const appEnvSnapshot = envSnapshot(appEnvKeys);
+    appEnvSnapshot.save();
+    for (const key of appEnvKeys) delete process.env[key];
+
+    process.env.ALICE_FULL_DUTY_MODE = "true";
+    const config = {} as MiladyConfig;
+    try {
+      const result = applyAliceFullDutyDefaults(config);
+      expect(result.changed).toBe(true);
+      expect(config.features).toMatchObject({
+        browser: true,
+        computeruse: true,
+        vision: true,
+      });
+      expect(config.plugins?.entries).toMatchObject({
+        browser: { enabled: true },
+        computeruse: { enabled: true },
+        vision: { enabled: true },
+        "coding-agent": { enabled: true },
+        scheduling: { enabled: true },
+        webhooks: { enabled: true },
+      });
+
+      const envVars = (config.env?.vars ?? {}) as Record<string, string>;
+      for (const [packageName, appEntry] of Object.entries(ALICE_APP_CATALOG)) {
+        const defaultUrl = appEntry.defaultPublicUrl ?? appEntry.defaultUpstreamUrl;
+        const streamKey = resolveAppStreamEnvKey(packageName);
+        const upstreamKey = resolveAppUpstreamEnvKey(packageName);
+        const fallbackKey = resolveAppFallbackEnvKey(packageName);
+
+        expect(envVars[streamKey]).toBe(defaultUrl);
+        expect(process.env[streamKey]).toBe(defaultUrl);
+        expect(envVars[upstreamKey]).toBe(defaultUrl);
+        expect(process.env[upstreamKey]).toBe(defaultUrl);
+
+        if (appEntry.defaultPublicUrl) {
+          expect(envVars[fallbackKey]).toBe(appEntry.defaultPublicUrl);
+          expect(process.env[fallbackKey]).toBe(appEntry.defaultPublicUrl);
+        } else {
+          expect(envVars[fallbackKey]).toBeUndefined();
+          expect(process.env[fallbackKey]).toBeUndefined();
+        }
+      }
+    } finally {
+      appEnvSnapshot.restore();
+    }
+  });
+
+  it("does not apply full-duty defaults when ALICE_FULL_DUTY_MODE is disabled", () => {
+    delete process.env.ALICE_FULL_DUTY_MODE;
+    const config = {} as MiladyConfig;
+    const result = applyAliceFullDutyDefaults(config);
+    expect(result.changed).toBe(false);
+    expect(config.features).toBeUndefined();
+    expect(config.plugins).toBeUndefined();
+  });
+
+  it("does not auto-load upstream github plugin when only ALICE_GH_TOKEN is present", () => {
+    process.env.ALICE_GH_TOKEN = "ghp_alice";
+    const names = collectPluginNames({} as MilaidyConfig);
+    expect(names.has("@elizaos/plugin-github")).toBe(false);
   });
 
   it("does not add connector plugins for empty connector configs", () => {
@@ -485,8 +437,8 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-elizacloud")).toBe(true);
   });
 
-  it("removes ElizaCloud plugin when cloud is explicitly disabled", () => {
-    const config = { cloud: { enabled: false } } as MiladyConfig;
+  it("does not add ElizaCloud plugin when cloud is disabled in config", () => {
+    const config = { cloud: { enabled: false, apiKey: "ck-test" } } as MilaidyConfig;
     const names = collectPluginNames(config);
     expect(names.has("@elizaos/plugin-elizacloud")).toBe(false);
   });
@@ -657,37 +609,10 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-obsidian")).toBe(true);
   });
 
-  it("preserves fully-qualified optional plugin package names from plugins.allow", () => {
-    const optionalPlugins = [
-      "@elizaos/plugin-cua",
-      "@elizaos/plugin-code",
-      "@elizaos/plugin-xai",
-      "@elizaos/plugin-deepseek",
-      "@elizaos/plugin-mistral",
-      "@elizaos/plugin-together",
-      "@elizaos/plugin-claude-code-workbench",
-    ];
-    const config = {
-      plugins: { allow: optionalPlugins },
-    } as unknown as MiladyConfig;
-
-    const names = collectPluginNames(config);
-
-    for (const pluginName of optionalPlugins) {
-      expect(names.has(pluginName)).toBe(true);
-    }
-  });
-
   it("CHANNEL_PLUGIN_MAP keys match CONNECTOR_IDS from schema", () => {
     expect([...Object.keys(CHANNEL_PLUGIN_MAP)].sort()).toEqual(
       [...CONNECTOR_IDS].sort(),
     );
-  });
-
-  it("CHANNEL_PLUGIN_MAP values match CONNECTOR_PLUGINS for every connector", () => {
-    for (const id of Object.keys(CHANNEL_PLUGIN_MAP)) {
-      expect(CHANNEL_PLUGIN_MAP[id]).toBe(CONNECTOR_PLUGINS[id]);
-    }
   });
 });
 
@@ -748,6 +673,64 @@ describe("repairBrokenInstallRecord", () => {
   });
 });
 
+describe("five55 plugin toggles", () => {
+  const envKeys = [
+    "FIVE55_ADMIN_PLUGIN_ENABLED",
+    "FIVE55_GITHUB_PLUGIN_ENABLED",
+    "GITHUB_API_TOKEN",
+    "ALICE_GH_TOKEN",
+  ];
+  const snap = envSnapshot(envKeys);
+
+  beforeEach(() => {
+    snap.save();
+    for (const k of envKeys) delete process.env[k];
+  });
+
+  afterEach(() => snap.restore());
+
+  it("enables from config entry when env toggle is unset", () => {
+    const config = {
+      plugins: { entries: { "five55-admin": { enabled: true } } },
+    } as unknown as MilaidyConfig;
+    expect(
+      resolveFive55PluginEnabled(
+        config,
+        "FIVE55_ADMIN_PLUGIN_ENABLED",
+        "five55-admin",
+      ),
+    ).toBe(true);
+  });
+
+  it("honors explicit env toggle over config entry", () => {
+    process.env.FIVE55_ADMIN_PLUGIN_ENABLED = "0";
+    const config = {
+      plugins: { entries: { "five55-admin": { enabled: true } } },
+    } as unknown as MilaidyConfig;
+    expect(
+      resolveFive55PluginEnabled(
+        config,
+        "FIVE55_ADMIN_PLUGIN_ENABLED",
+        "five55-admin",
+      ),
+    ).toBe(false);
+  });
+
+  it("github toggle enables from config when env and tokens are absent", () => {
+    const config = {
+      plugins: { entries: { "five55-github": { enabled: true } } },
+    } as unknown as MilaidyConfig;
+    expect(resolveFive55GithubPluginEnabled(config)).toBe(true);
+  });
+
+  it("plugin entry helper handles explicit disabled state", () => {
+    const config = {
+      plugins: { entries: { "five55-admin": { enabled: false } } },
+    } as unknown as MilaidyConfig;
+    expect(isPluginEntryEnabled(config, "five55-admin")).toBe(false);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // applyConnectorSecretsToEnv
 // ---------------------------------------------------------------------------
@@ -780,7 +763,14 @@ describe("applyConnectorSecretsToEnv", () => {
     } as MiladyConfig;
     applyConnectorSecretsToEnv(config);
     expect(process.env.DISCORD_API_TOKEN).toBe("discord-tok-123");
-    expect(process.env.DISCORD_BOT_TOKEN).toBe("discord-tok-123");
+  });
+
+  it("copies Discord botToken from config to env", () => {
+    const config = {
+      connectors: { discord: { botToken: "discord-bot-tok-123" } },
+    } as MilaidyConfig;
+    applyConnectorSecretsToEnv(config);
+    expect(process.env.DISCORD_API_TOKEN).toBe("discord-bot-tok-123");
   });
 
   it("copies legacy Discord botToken from config to env", () => {
@@ -826,7 +816,7 @@ describe("applyConnectorSecretsToEnv", () => {
       connectors: { discord: { token: "  " } },
     } as MiladyConfig;
     applyConnectorSecretsToEnv(config);
-    expect(process.env.DISCORD_BOT_TOKEN).toBeUndefined();
+    expect(process.env.DISCORD_API_TOKEN).toBeUndefined();
   });
 
   it("handles missing connectors gracefully", () => {
@@ -850,112 +840,39 @@ describe("applyConnectorSecretsToEnv", () => {
 });
 
 // ---------------------------------------------------------------------------
-// autoResolveDiscordAppId
+// applyRuntimeSecretAliases
 // ---------------------------------------------------------------------------
 
-describe("autoResolveDiscordAppId", () => {
+describe("applyRuntimeSecretAliases", () => {
   const envKeys = [
-    "DISCORD_APPLICATION_ID",
+    "ALICE_GH_TOKEN",
+    "GITHUB_API_TOKEN",
     "DISCORD_API_TOKEN",
     "DISCORD_BOT_TOKEN",
   ];
   const snap = envSnapshot(envKeys);
-  const originalFetch = globalThis.fetch;
-
   beforeEach(() => {
     snap.save();
-    for (const k of envKeys) delete process.env[k];
+    for (const key of envKeys) delete process.env[key];
+  });
+  afterEach(() => snap.restore());
+
+  it("maps ALICE_GH_TOKEN to GITHUB_API_TOKEN", () => {
+    process.env.ALICE_GH_TOKEN = "ghp_alice";
+    applyRuntimeSecretAliases();
+    expect(process.env.GITHUB_API_TOKEN).toBe("ghp_alice");
   });
 
-  afterEach(() => {
-    snap.restore();
-    vi.restoreAllMocks();
-    globalThis.fetch = originalFetch;
+  it("maps GITHUB_API_TOKEN to ALICE_GH_TOKEN when fallback is missing", () => {
+    process.env.GITHUB_API_TOKEN = "ghp_github";
+    applyRuntimeSecretAliases();
+    expect(process.env.ALICE_GH_TOKEN).toBe("ghp_github");
   });
 
-  it("no-ops when DISCORD_APPLICATION_ID is already set", async () => {
-    process.env.DISCORD_APPLICATION_ID = "app-existing";
-    process.env.DISCORD_API_TOKEN = "tok";
-
-    const fetchMock = vi.fn();
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-    await autoResolveDiscordAppId();
-
-    expect(process.env.DISCORD_APPLICATION_ID).toBe("app-existing");
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("no-ops when no Discord token exists", async () => {
-    const fetchMock = vi.fn();
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-    await autoResolveDiscordAppId();
-
-    expect(process.env.DISCORD_APPLICATION_ID).toBeUndefined();
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("resolves app id from Discord API when token is present", async () => {
-    process.env.DISCORD_API_TOKEN = "tok";
-    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ id: "app-123" }),
-    }));
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-    await autoResolveDiscordAppId();
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://discord.com/api/v10/oauth2/applications/@me",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: "Bot tok",
-        }),
-      }),
-    );
-    expect(process.env.DISCORD_APPLICATION_ID).toBe("app-123");
-    expect(infoSpy).toHaveBeenCalledWith(
-      "[milady] Auto-resolved Discord Application ID: app-123",
-    );
-    expect(warnSpy).not.toHaveBeenCalled();
-  });
-
-  it("logs a warning when Discord API responds with an error", async () => {
-    process.env.DISCORD_API_TOKEN = "tok";
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-
-    globalThis.fetch = vi.fn(async () => ({
-      ok: false,
-      status: 401,
-    })) as unknown as typeof fetch;
-
-    await autoResolveDiscordAppId();
-
-    expect(process.env.DISCORD_APPLICATION_ID).toBeUndefined();
-    expect(warnSpy).toHaveBeenCalledWith(
-      "[milady] Failed to auto-resolve Discord Application ID: 401",
-    );
-  });
-
-  it("logs a warning when the Discord API request throws", async () => {
-    process.env.DISCORD_API_TOKEN = "tok";
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-
-    globalThis.fetch = vi.fn(async () => {
-      throw new Error("network down");
-    }) as unknown as typeof fetch;
-
-    await autoResolveDiscordAppId();
-
-    expect(process.env.DISCORD_APPLICATION_ID).toBeUndefined();
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Could not auto-resolve Discord Application ID"),
-    );
+  it("maps DISCORD_BOT_TOKEN to DISCORD_API_TOKEN", () => {
+    process.env.DISCORD_BOT_TOKEN = "discord_bot";
+    applyRuntimeSecretAliases();
+    expect(process.env.DISCORD_API_TOKEN).toBe("discord_bot");
   });
 });
 
@@ -986,27 +903,15 @@ describe("applyCloudConfigToEnv", () => {
     expect(process.env.ELIZAOS_CLOUD_BASE_URL).toBe("https://cloud.test");
   });
 
-  it("overwrites stale env values with fresh config (hot-reload safety)", () => {
-    process.env.ELIZAOS_CLOUD_API_KEY = "old-key";
-    const config = { cloud: { apiKey: "new-key" } } as MiladyConfig;
-    applyCloudConfigToEnv(config);
-    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("new-key");
-  });
-
-  it("does NOT enable cloud when apiKey present but enabled is not explicitly true", () => {
-    const config = { cloud: { apiKey: "ck-123" } } as MiladyConfig;
-    applyCloudConfigToEnv(config);
-    expect(process.env.ELIZAOS_CLOUD_ENABLED).toBeUndefined();
-    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("ck-123");
-  });
-
-  it("clears ELIZAOS_CLOUD_ENABLED when enabled is explicitly false", () => {
+  it("clears stale cloud env values when cloud mode is disabled", () => {
     process.env.ELIZAOS_CLOUD_ENABLED = "true";
-    const config = {
-      cloud: { enabled: false, apiKey: "ck-123" },
-    } as MiladyConfig;
+    process.env.ELIZAOS_CLOUD_API_KEY = "old-key";
+    process.env.ELIZAOS_CLOUD_BASE_URL = "https://old-cloud.test";
+    const config = { cloud: { enabled: false, apiKey: "new-key" } } as MilaidyConfig;
     applyCloudConfigToEnv(config);
     expect(process.env.ELIZAOS_CLOUD_ENABLED).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_BASE_URL).toBeUndefined();
   });
 
   it("handles missing cloud config gracefully", () => {
@@ -1157,7 +1062,7 @@ describe("applyDatabaseConfigToEnv", () => {
 
     applyDatabaseConfigToEnv(config);
     expect(process.env.PGLITE_DATA_DIR).toBe(
-      path.resolve("/tmp/milady-workspace", ".eliza", ".elizadb"),
+      path.join("/tmp/milady-workspace", ".eliza", ".elizadb"),
     );
   });
 
@@ -1309,7 +1214,7 @@ describe("buildCharacterFromConfig", () => {
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
     "DISCORD_API_TOKEN",
-    "DISCORD_APPLICATION_ID",
+    "GITHUB_API_TOKEN",
   ];
   const snap = envSnapshot(envKeys);
   beforeEach(() => {
@@ -1342,13 +1247,13 @@ describe("buildCharacterFromConfig", () => {
   it("collects API keys from process.env as secrets", () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-test";
     process.env.OPENAI_API_KEY = "sk-oai-test";
-    process.env.DISCORD_API_TOKEN = "discord-api-test";
-    process.env.DISCORD_APPLICATION_ID = "discord-app-123";
-    const char = buildCharacterFromConfig({} as MiladyConfig);
+    process.env.DISCORD_API_TOKEN = "discord-test";
+    process.env.GITHUB_API_TOKEN = "ghp-test";
+    const char = buildCharacterFromConfig({} as MilaidyConfig);
     expect(char.secrets?.ANTHROPIC_API_KEY).toBe("sk-ant-test");
     expect(char.secrets?.OPENAI_API_KEY).toBe("sk-oai-test");
-    expect(char.secrets?.DISCORD_API_TOKEN).toBe("discord-api-test");
-    expect(char.secrets?.DISCORD_APPLICATION_ID).toBe("discord-app-123");
+    expect(char.secrets?.DISCORD_API_TOKEN).toBe("discord-test");
+    expect(char.secrets?.GITHUB_API_TOKEN).toBe("ghp-test");
   });
 
   it("excludes empty or whitespace-only env values from secrets", () => {
@@ -1542,6 +1447,30 @@ describe("resolvePackageEntry", () => {
 
     const entry = await resolvePackageEntry(pkgRoot);
     expect(entry).toBe(path.join(pkgRoot, "dist", "index"));
+  });
+});
+
+describe("isRecoverableRuntimeError", () => {
+  it("matches OpenAI missing-scope failures", () => {
+    expect(
+      isRecoverableRuntimeError(
+        new Error("Missing scopes: model.request on chat.completions"),
+      ),
+    ).toBe(true);
+  });
+
+  it("matches AI no-output stream failures", () => {
+    expect(
+      isRecoverableRuntimeError(
+        new Error("AI_NoOutputGeneratedError: No output generated"),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not match generic coding errors", () => {
+    expect(
+      isRecoverableRuntimeError(new Error("Cannot read properties of undefined")),
+    ).toBe(false);
   });
 });
 
@@ -1878,66 +1807,6 @@ describe("mergeDropInPlugins", () => {
     });
     expect(accepted).toHaveLength(0);
     expect(skipped).toHaveLength(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// resolveMiladyPluginImportSpecifier
-// ---------------------------------------------------------------------------
-
-describe("resolveMiladyPluginImportSpecifier", () => {
-  it("prefers a bundled local plugin wrapper when one exists", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "milady-plugin-"));
-    const runtimeDir = path.join(tmpDir, "runtime");
-    const pluginIndex = path.join(tmpDir, "plugins", "retake", "index.js");
-
-    await fs.mkdir(runtimeDir, { recursive: true });
-    await fs.mkdir(path.dirname(pluginIndex), { recursive: true });
-    await fs.writeFile(pluginIndex, "export default {};\n");
-
-    const specifier = resolveMiladyPluginImportSpecifier(
-      "@milady/plugin-retake",
-      pathToFileURL(path.join(runtimeDir, "eliza.ts")).href,
-    );
-
-    expect(specifier).toBe(pathToFileURL(pluginIndex).href);
-
-    await fs.rm(tmpDir, { recursive: true, force: true });
-  });
-
-  it("falls back to the bundled package when no local wrapper exists", async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "milady-plugin-"));
-    const runtimeDir = path.join(tmpDir, "runtime");
-    await fs.mkdir(runtimeDir, { recursive: true });
-
-    const specifier = resolveMiladyPluginImportSpecifier(
-      "@milady/plugin-x-streaming",
-      pathToFileURL(path.join(runtimeDir, "eliza.ts")).href,
-    );
-
-    expect(specifier).toBe("@milady/plugin-x-streaming");
-
-    await fs.rm(tmpDir, { recursive: true, force: true });
-  });
-
-  it("leaves non-Milady plugins unchanged", () => {
-    expect(resolveMiladyPluginImportSpecifier("@elizaos/plugin-discord")).toBe(
-      "@elizaos/plugin-discord",
-    );
-  });
-});
-
-describe("shouldIgnoreMissingPluginExport", () => {
-  it("ignores helper-only streaming-base package exports", () => {
-    expect(
-      shouldIgnoreMissingPluginExport("@elizaos/plugin-streaming-base"),
-    ).toBe(true);
-  });
-
-  it("does not ignore real plugins", () => {
-    expect(shouldIgnoreMissingPluginExport("@elizaos/plugin-x-streaming")).toBe(
-      false,
-    );
   });
 });
 
@@ -2472,109 +2341,5 @@ describe("deduplicatePluginActions", () => {
     expect(p1.actions?.map((a) => a.name)).toEqual(["SHARED"]);
     expect(p2.actions?.map((a) => a.name)).toEqual(["UNIQUE_2"]);
     expect(p3.actions?.map((a) => a.name)).toEqual(["UNIQUE_3"]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// cleanStalePglitePid
-// ---------------------------------------------------------------------------
-
-describe("cleanStalePglitePid", () => {
-  let tmpDir: string;
-
-  beforeEach(async () => {
-    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pglite-pid-test-"));
-  });
-
-  afterEach(async () => {
-    await fs.rm(tmpDir, { recursive: true, force: true });
-  });
-
-  it("does nothing when postmaster.pid does not exist", () => {
-    // Should not throw
-    cleanStalePglitePid(tmpDir);
-    // No pid file to check
-  });
-
-  it("removes a stale pid file when the process is not running", async () => {
-    const pidPath = path.join(tmpDir, "postmaster.pid");
-    // Use a PID that is extremely unlikely to be running
-    await fs.writeFile(pidPath, "999999999\n/tmp/pglite\n5432\n");
-
-    cleanStalePglitePid(tmpDir);
-
-    const exists = await fs
-      .access(pidPath)
-      .then(() => true)
-      .catch(() => false);
-    expect(exists).toBe(false);
-  });
-
-  it("leaves the pid file intact when the process is still running", async () => {
-    const pidPath = path.join(tmpDir, "postmaster.pid");
-    // Use our own PID — guaranteed to be running
-    await fs.writeFile(pidPath, `${process.pid}\n/tmp/pglite\n5432\n`);
-
-    cleanStalePglitePid(tmpDir);
-
-    const exists = await fs
-      .access(pidPath)
-      .then(() => true)
-      .catch(() => false);
-    expect(exists).toBe(true);
-  });
-
-  it("leaves the pid file intact on EPERM (process exists under different user)", async () => {
-    const pidPath = path.join(tmpDir, "postmaster.pid");
-    await fs.writeFile(pidPath, "12345\n/tmp/pglite\n5432\n");
-
-    // Mock process.kill to throw EPERM (process exists but different owner)
-    const origKill = process.kill;
-    process.kill = ((pid: number, signal?: number) => {
-      if (signal === 0) {
-        const err = new Error("EPERM") as NodeJS.ErrnoException;
-        err.code = "EPERM";
-        throw err;
-      }
-      return origKill.call(process, pid, signal);
-    }) as typeof process.kill;
-
-    try {
-      cleanStalePglitePid(tmpDir);
-    } finally {
-      process.kill = origKill;
-    }
-
-    const exists = await fs
-      .access(pidPath)
-      .then(() => true)
-      .catch(() => false);
-    expect(exists).toBe(true);
-  });
-
-  it("removes a malformed pid file (non-numeric)", async () => {
-    const pidPath = path.join(tmpDir, "postmaster.pid");
-    await fs.writeFile(pidPath, "not-a-number\n");
-
-    cleanStalePglitePid(tmpDir);
-
-    const exists = await fs
-      .access(pidPath)
-      .then(() => true)
-      .catch(() => false);
-    expect(exists).toBe(false);
-  });
-
-  it("removes a malformed pid file (empty)", async () => {
-    const pidPath = path.join(tmpDir, "postmaster.pid");
-    await fs.writeFile(pidPath, "");
-
-    cleanStalePglitePid(tmpDir);
-
-    const exists = await fs
-      .access(pidPath)
-      .then(() => true)
-      .catch(() => false);
-    expect(exists).toBe(false);
   });
 });
