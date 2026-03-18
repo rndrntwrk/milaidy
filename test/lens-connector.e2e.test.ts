@@ -659,25 +659,8 @@ describeIfLiveWrite("Lens Connector - Post Handling", () => {
         return;
       }
 
-      // Now delete by post ID
+      // The delete call not throwing is the assertion — Lens deletion is eventual
       await lensDeletePost(post.id);
-
-      // Lens deletion is eventual — wait and check
-      await sleep(5000);
-
-      // Re-fetch — post may still exist but with isDeleted=true,
-      // or the delete tx may still be processing
-      const result = await lensGraphQL(
-        `query Post($request: PostRequest!) {
-          post(request: $request) { ... on Post { id isDeleted } }
-        }`,
-        { request: { post: post.id } },
-      );
-      const deleted = (result.data as { post?: { isDeleted: boolean } })?.post;
-      // Accept: post is deleted, post is null, or delete is still processing
-      expect(
-        deleted === undefined || deleted === null || deleted.isDeleted === true || deleted.isDeleted === false,
-      ).toBe(true);
     },
     LIVE_WRITE_TIMEOUT,
   );
@@ -1117,73 +1100,21 @@ describe("Lens Connector - Integration", () => {
 // ---------------------------------------------------------------------------
 
 describe("Lens Connector - Configuration", () => {
-  it("validates Lens config structure", () => {
-    const validConfig = {
-      enabled: true,
-      apiKey: "test-lens-key",
-      accountAddress: "0xef105f97073976562b8cf854da76824b39f543b0",
-      privateKey:
-        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-    };
-
-    expect(validConfig.enabled).toBe(true);
-    expect(validConfig.apiKey).toBeDefined();
-    expect(validConfig.accountAddress).toBeDefined();
-    expect(validConfig.privateKey).toBeDefined();
-  });
-
-  it("validates optional Lens config fields", () => {
-    const fullConfig = {
-      enabled: true,
-      apiKey: "test-key",
-      accountAddress: "0xef105f97073976562b8cf854da76824b39f543b0",
-      privateKey: "0x" + "a".repeat(64),
-      pollInterval: 120,
-      postIntervalMin: 90,
-      postIntervalMax: 180,
-    };
-
-    expect(fullConfig.pollInterval).toBe(120);
-    expect(fullConfig.postIntervalMin).toBe(90);
-    expect(fullConfig.postIntervalMax).toBe(180);
-  });
-
   it("post character limit constant is 5000", () => {
     expect(MAX_POST_LENGTH).toBe(5000);
   });
 
-  it("validates Ethereum address format", () => {
-    const addressPattern = /^0x[0-9a-fA-F]{40}$/;
-    const validAddress = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
-    const invalidAddress = "0xabc";
-    const noPrefix = "d8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
-
-    expect(addressPattern.test(validAddress)).toBe(true);
-    expect(addressPattern.test(invalidAddress)).toBe(false);
-    expect(addressPattern.test(noPrefix)).toBe(false);
-  });
-
-  it("validates private key format", () => {
-    const pkPattern = /^0x[0-9a-fA-F]{64}$/;
-
-    expect(
-      pkPattern.test(
-        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-      ),
-    ).toBe(true);
-    expect(pkPattern.test("0xabc")).toBe(false);
-    expect(pkPattern.test("not-a-key")).toBe(false);
-  });
-
-  it("validates environment variable names", () => {
+  it("required environment variables follow LENS_ prefix", () => {
     const envVars = [
       "LENS_API_KEY",
       "LENS_ACCOUNT_ADDRESS",
       "LENS_PRIVATE_KEY",
+      "LENS_APP_ADDRESS",
     ];
 
     for (const envVar of envVars) {
       expect(envVar).toMatch(/^LENS_/);
     }
+    expect(new Set(envVars).size).toBe(envVars.length);
   });
 });

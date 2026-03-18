@@ -66,51 +66,18 @@ describeIfPluginAvailable("Lens Connector - Basic Validation", () => {
   });
 });
 
-describe("Lens Connector - Configuration", () => {
-  it("validates basic Lens configuration structure", () => {
-    const validConfig = {
-      enabled: true,
-      apiKey: "test-lens-key",
-      accountAddress: "0xef105f97073976562b8cf854da76824b39f543b0",
-      privateKey:
-        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-    };
-
-    expect(validConfig.enabled).toBe(true);
-    expect(validConfig.apiKey).toBe("test-lens-key");
-    expect(validConfig.accountAddress).toMatch(/^0x[0-9a-fA-F]{40}$/);
-    expect(validConfig.privateKey).toMatch(/^0x[0-9a-fA-F]{64}$/);
+describe("Lens Connector - Format Validation", () => {
+  it("Ethereum address format is 0x + 40 hex chars", () => {
+    const addressPattern = /^0x[0-9a-fA-F]{40}$/;
+    expect(addressPattern.test("0xef105f97073976562b8cf854da76824b39f543b0")).toBe(true);
+    expect(addressPattern.test("0xabc")).toBe(false);
+    expect(addressPattern.test("not-an-address")).toBe(false);
   });
 
-  it("validates polling configuration", () => {
-    const pollConfig = {
-      mode: "polling" as const,
-      pollInterval: 120,
-    };
-
-    expect(pollConfig.mode).toBe("polling");
-    expect(pollConfig.pollInterval).toBe(120);
-  });
-
-  it("validates wallet and account configuration", () => {
-    const walletConfig = {
-      accountAddress: "0xef105f97073976562b8cf854da76824b39f543b0",
-      privateKey:
-        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-    };
-
-    // Account address is a standard Ethereum address (0x + 40 hex)
-    expect(walletConfig.accountAddress).toMatch(/^0x[0-9a-fA-F]{40}$/);
-    // Private key is 0x + 64 hex chars
-    expect(walletConfig.privateKey).toMatch(/^0x[0-9a-fA-F]{64}$/);
-  });
-
-  it("validates dry run configuration", () => {
-    const dryRunConfig = {
-      dryRun: true,
-    };
-
-    expect(dryRunConfig.dryRun).toBe(true);
+  it("private key format is 0x + 64 hex chars", () => {
+    const pkPattern = /^0x[0-9a-fA-F]{64}$/;
+    expect(pkPattern.test("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")).toBe(true);
+    expect(pkPattern.test("0xabc")).toBe(false);
   });
 });
 
