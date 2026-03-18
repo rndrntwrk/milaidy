@@ -5,3 +5,5 @@ export {
   loadElizaConfig as loadMiladyConfig,
   saveElizaConfig as saveMiladyConfig,
 } from "@elizaos/autonomous/config/config";
+
+export type { ElizaConfig as MiladyConfig } from "@elizaos/autonomous/config/types";

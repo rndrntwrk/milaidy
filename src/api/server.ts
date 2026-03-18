@@ -20,7 +20,7 @@ const _hardenedGuard = createHardenedExportGuard(
  */
 export function resolveWalletExportRejection(
   ...args: Parameters<typeof upstreamResolveWalletExportRejection>
-): ReturnType<typeof upstreamResolveWalletExportRejection> {
+): { status: number; reason: string } | null {
   return _hardenedGuard(...args);
 }
 

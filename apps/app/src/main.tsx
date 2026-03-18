@@ -25,7 +25,7 @@ import {
   APP_RESUME_EVENT,
   COMMAND_PALETTE_EVENT,
   CONNECT_EVENT,
-  dispatchMiladyEvent,
+  dispatchElizaEvent as dispatchMiladyEvent,
   SHARE_TARGET_EVENT,
   TRAY_ACTION_EVENT,
 } from "@elizaos/app-core/events";
