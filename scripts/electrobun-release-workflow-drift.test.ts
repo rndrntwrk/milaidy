@@ -3,6 +3,14 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+const SERVER_TS_PATH = path.join(
+  ROOT,
+  "packages/autonomous/src/api/server.ts",
+);
+const ELIZA_TS_PATH = path.join(
+  ROOT,
+  "packages/autonomous/src/runtime/eliza.ts",
+);
 const WORKFLOW_PATH = path.join(
   ROOT,
   ".github/workflows/release-electrobun.yml",
@@ -416,5 +424,50 @@ describe("Electrobun release workflow drift", () => {
     expect(windowsPackagedTest).not.toContain(
       "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
     );
+  });
+
+  it("imports @elizaos/app-hyperscape/routes dynamically, not as a static top-level import", () => {
+    const serverSource = fs.readFileSync(SERVER_TS_PATH, "utf8");
+
+    // Must use dynamic import inside a try-catch so the API server can start
+    // even when the package is not installed.
+    expect(serverSource).toContain(
+      'await import(\n      "@elizaos/app-hyperscape/routes"',
+    );
+    // Must NOT have a top-level static import of the package
+    const lines = serverSource.split("\n");
+    const staticImports = lines.filter(
+      (line) =>
+        /^\s*import\s/.test(line) &&
+        line.includes("@elizaos/app-hyperscape"),
+    );
+    expect(staticImports).toHaveLength(0);
+  });
+
+  it("logs startApiServer failures to console.error so they are visible in packaged builds", () => {
+    const elizaSource = fs.readFileSync(ELIZA_TS_PATH, "utf8");
+
+    // The catch block around startApiServer must use console.error (not just logger.warn)
+    // so errors are written to stderr and visible in Electrobun agent.ts output.
+    expect(elizaSource).toContain(
+      "console.error(apiErrMsg)",
+    );
+  });
+
+  it("exits with process.exit(1) when startApiServer fails in server-only mode", () => {
+    const elizaSource = fs.readFileSync(ELIZA_TS_PATH, "utf8");
+
+    // Extract the catch block region for startApiServer
+    const catchIndex = elizaSource.indexOf("} catch (apiErr)");
+    expect(catchIndex).toBeGreaterThan(-1);
+
+    const catchBlock = elizaSource.slice(
+      catchIndex,
+      elizaSource.indexOf("// ── Server-only mode", catchIndex),
+    );
+
+    // Must check opts?.serverOnly and call process.exit(1)
+    expect(catchBlock).toContain("opts?.serverOnly");
+    expect(catchBlock).toContain("process.exit(1)");
   });
 });
