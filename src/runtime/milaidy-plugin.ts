@@ -23,7 +23,6 @@ import {
   attachmentsProvider,
   createUniqueUuid,
   entitiesProvider,
-  factsProvider,
   getSessionProviders,
   resolveDefaultSessionStorePath,
 } from "@elizaos/core";
@@ -192,7 +191,7 @@ export function createMilaidyPlugin(config?: MilaidyPluginConfig): Plugin {
 
   // Optionally add bootstrap providers (can be heavy for small context windows)
   const bootstrapProviders = enableBootstrap
-    ? [attachmentsProvider, entitiesProvider, factsProvider]
+    ? [attachmentsProvider, entitiesProvider]
     : [];
 
   // UI catalog provider — injects component knowledge so the agent can
