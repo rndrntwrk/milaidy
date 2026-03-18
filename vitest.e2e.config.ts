@@ -26,6 +26,12 @@ export default defineConfig({
         "stubs",
         "coding-agent-module.ts",
       ),
+      "@elizaos/plugin-pdf": path.join(
+        repoRoot,
+        "test",
+        "stubs",
+        "empty-module.mjs",
+      ),
       "@elizaos/plugin-pi-ai": path.join(
         repoRoot,
         "test",
@@ -47,5 +53,10 @@ export default defineConfig({
     include: ["test/**/*.e2e.test.ts", "test/e2e/**/*.test.ts", "src/**/*.e2e.test.ts"],
     setupFiles: ["test/setup.ts"],
     exclude: ["dist/**", "**/node_modules/**"],
+    server: {
+      deps: {
+        inline: ["@elizaos/core", "zod"],
+      },
+    },
   },
 });

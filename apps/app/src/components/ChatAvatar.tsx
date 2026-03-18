@@ -5,10 +5,12 @@
  * Autonomous Loop sidebar). Voice controls are managed externally.
  */
 
+import { client } from "@milady/app-core/api";
+import { STOP_EMOTE_EVENT } from "@milady/app-core/events";
+import { getVrmPreviewUrl, getVrmUrl, useApp } from "@milady/app-core/state";
+import { resolveAppAssetUrl } from "@milady/app-core/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getVrmPreviewUrl, getVrmUrl, useApp } from "../AppContext";
-import { client } from "../api-client";
-import { resolveAppAssetUrl } from "../asset-url";
+import { AvatarLoader } from "./avatar/AvatarLoader";
 import type { VrmEngine, VrmEngineState } from "./avatar/VrmEngine";
 import { VrmViewer } from "./avatar/VrmViewer";
 
@@ -70,28 +72,29 @@ export function ChatAvatar({
     return client.onWsEvent("emote", (data) => {
       const engine = vrmEngineRef.current;
       if (!engine) return;
-      // Resolve the GLB path through the asset URL resolver so it works
-      // in both http:// and Electron file:// contexts.
-      const rawPath = data.glbPath as string;
+      const rawPath = (data.path ?? data.glbPath) as string;
       const resolvedPath = resolveAppAssetUrl(rawPath);
-      void engine.playEmote(
-        resolvedPath,
-        data.duration as number,
-        data.loop as boolean,
-      );
+      const duration =
+        typeof data.duration === "number" && Number.isFinite(data.duration)
+          ? data.duration
+          : 3;
+      const isLoop = data.loop === true;
+      void engine.playEmote(resolvedPath, duration, isLoop);
     });
   }, [engineReady]);
 
   // Listen for stop-emote events from the EmotePicker control panel.
   useEffect(() => {
     if (!engineReady) return;
-    const handler = () => vrmEngineRef.current?.stopEmote();
-    document.addEventListener("milady:stop-emote", handler);
-    return () => document.removeEventListener("milady:stop-emote", handler);
+    const handler = () => {
+      vrmEngineRef.current?.stopEmote();
+    };
+    document.addEventListener(STOP_EMOTE_EVENT, handler);
+    return () => document.removeEventListener(STOP_EMOTE_EVENT, handler);
   }, [engineReady]);
 
   return (
-    <div className="relative h-full w-full pointer-events-none">
+    <div className="relative h-full w-full">
       <div
         className="absolute inset-0"
         style={{
@@ -107,14 +110,17 @@ export function ChatAvatar({
             style={{
               opacity: vrmLoaded ? 1 : 0,
               transition: "opacity 0.45s ease",
-              transform: "scale(1.22) translateY(-8%)",
-              transformOrigin: "50% 28%",
+              // Keep a stable full-body framing in the narrow chat sidebar.
+              transform: "scale(1.02) translateY(1%)",
+              transformOrigin: "50% 42%",
             }}
           >
             <VrmViewer
               vrmPath={vrmPath}
               mouthOpen={mouthOpen}
               isSpeaking={isSpeaking}
+              interactive
+              interactiveMode="orbitZoom"
               onEngineReady={handleEngineReady}
               onEngineState={handleEngineState}
             />
@@ -127,6 +133,8 @@ export function ChatAvatar({
               className="absolute left-1/2 -translate-x-1/2 bottom-[-2%] h-[122%] object-contain opacity-90"
             />
           )}
+
+          {!vrmLoaded && !showFallback && <AvatarLoader />}
         </div>
       </div>
     </div>

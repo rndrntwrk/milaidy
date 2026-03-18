@@ -6,28 +6,22 @@
  * throughout the app (--bg, --card, --border, --accent, --muted, --txt, etc.).
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useApp } from "../AppContext";
 import type {
   SkillInfo,
   SkillMarketplaceResult,
   SkillScanReportSummary,
-} from "../api-client";
-import { client } from "../api-client";
-import { ConfirmDeleteControl } from "./shared/confirm-delete-control";
-import { StatusBadge } from "./shared/ui-badges";
-import { Switch } from "./shared/ui-switch";
-
-/* ── Shared style constants ─────────────────────────────────────────── */
-
-const inputCls =
-  "px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-[var(--txt)] text-xs focus:border-[var(--accent)] focus:outline-none";
-const btnPrimary =
-  "px-3 py-1.5 text-xs font-medium bg-[var(--accent)] text-[var(--accent-foreground)] border border-[var(--accent)] cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-default";
-const btnGhost =
-  "px-3 py-1.5 text-xs bg-transparent text-[var(--muted)] border border-[var(--border)] cursor-pointer hover:text-[var(--txt)] hover:border-[var(--txt)] transition-colors disabled:opacity-40 disabled:cursor-default";
-const btnDanger =
-  "px-2 py-1 text-[11px] bg-transparent text-[var(--muted)] border border-[var(--border)] cursor-pointer hover:text-[#e74c3c] hover:border-[#e74c3c] transition-colors";
+} from "@milady/app-core/api";
+import { client } from "@milady/app-core/api";
+import {
+  ConfirmDeleteControl,
+  StatusBadge,
+  Switch,
+} from "@milady/app-core/components";
+import { Button, Input } from "@milady/ui";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { useApp } from "../AppContext";
+import { useTimeout } from "../hooks/useTimeout";
 
 /* ── Skill Card ─────────────────────────────────────────────────────── */
 
@@ -56,6 +50,7 @@ function SkillCard({
   onAcknowledge: (id: string) => void;
   onDismissReview: () => void;
 }) {
+  const { t } = useApp();
   const isQuarantined =
     skill.scanStatus === "warning" || skill.scanStatus === "critical";
   const isBlocked = skill.scanStatus === "blocked";
@@ -109,13 +104,14 @@ function SkillCard({
             />
           )}
           {isQuarantined && !isReviewing && (
-            <button
-              type="button"
-              className="px-2.5 py-1 text-[11px] font-medium bg-[#f39c12]/15 text-[#f39c12] border border-[#f39c12]/30 cursor-pointer hover:bg-[#f39c12]/25 transition-colors"
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 px-2 text-[10px] font-bold bg-[#f39c12]/15 text-[#f39c12] border-[#f39c12]/30 hover:bg-[#f39c12]/25 hover:text-[#f39c12] transition-colors"
               onClick={() => onReview(skill.id)}
             >
-              Review Findings
-            </button>
+              {t("skillsview.ReviewFindings")}
+            </Button>
           )}
         </div>
 
@@ -132,18 +128,19 @@ function SkillCard({
       </div>
 
       {/* Footer actions */}
-      <div className="flex items-center gap-1.5 px-4 py-2.5 border-t border-[var(--border)] bg-[var(--bg)]">
-        <button
-          type="button"
-          className={btnGhost}
+      <div className="flex items-center gap-2 px-4 py-3 border-t border-border/40 bg-black/5 mt-auto">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-3 text-[11px] font-bold text-muted hover:text-txt transition-colors"
           onClick={() => onEdit(skill)}
         >
-          Edit
-        </button>
+          {t("skillsview.Edit")}
+        </Button>
         <ConfirmDeleteControl
-          triggerClassName={btnDanger}
-          confirmClassName="px-2 py-1 text-[11px] bg-[#e74c3c] text-white border border-[#e74c3c] cursor-pointer hover:opacity-90 transition-opacity"
-          cancelClassName={btnGhost}
+          triggerClassName="h-7 px-3 text-[11px] font-bold text-danger hover:bg-danger/10 hover:text-danger-foreground transition-colors rounded-md"
+          confirmClassName="px-3 py-1 text-[11px] font-bold bg-danger text-danger-foreground hover:bg-danger/90 transition-colors rounded-md shadow-sm"
+          cancelClassName="px-3 py-1 text-[11px] font-bold text-muted border border-border/40 hover:text-txt transition-colors rounded-md"
           confirmLabel="Yes"
           cancelLabel="No"
           onConfirm={() => onDelete(skill.id, skill.name)}
@@ -162,13 +159,13 @@ function SkillCard({
         <div className="border-t border-[var(--border)] p-4 bg-[var(--bg)]">
           <div className="flex items-center gap-3 mb-3">
             <span className="text-xs font-semibold text-[var(--txt)]">
-              Scan Report
+              {t("skillsview.ScanReport")}
             </span>
             <span className="text-[11px] text-[#e74c3c] font-mono">
-              {skillReviewReport.summary.critical} critical
+              {skillReviewReport.summary.critical} {t("skillsview.critical")}
             </span>
             <span className="text-[11px] text-[#f39c12] font-mono">
-              {skillReviewReport.summary.warn} warnings
+              {skillReviewReport.summary.warn} {t("skillsview.warnings")}
             </span>
           </div>
           {skillReviewReport.findings.length > 0 && (
@@ -204,26 +201,28 @@ function SkillCard({
               )}
             </div>
           )}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className={btnPrimary}
+          <div className="flex gap-2.5 mt-2">
+            <Button
+              variant="default"
+              size="sm"
+              className="h-7 px-3 text-[11px] font-bold tracking-wide shadow-sm"
               onClick={() => onAcknowledge(skill.id)}
             >
-              Acknowledge &amp; Enable
-            </button>
-            <button
-              type="button"
-              className={btnGhost}
+              {t("skillsview.AcknowledgeAmpEn")}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-3 text-[11px] font-bold text-muted hover:text-txt transition-colors"
               onClick={onDismissReview}
             >
-              Dismiss
-            </button>
+              {t("skillsview.Dismiss")}
+            </Button>
           </div>
         </div>
       ) : isReviewing && skillReviewLoading ? (
         <div className="border-t border-[var(--border)] p-4 text-xs text-[var(--muted)] italic">
-          Loading scan report...
+          {t("skillsview.LoadingScanReport")}
         </div>
       ) : null}
     </div>
@@ -245,6 +244,7 @@ function MarketplaceCard({
   onInstall: (item: SkillMarketplaceResult) => void;
   onUninstall: (skillId: string, name: string) => void;
 }) {
+  const { t } = useApp();
   const isInstalling = skillsMarketplaceAction === `install:${item.id}`;
   const isUninstalling = skillsMarketplaceAction === `uninstall:${item.id}`;
   const sourceLabel = item.repository || item.slug || item.id;
@@ -267,7 +267,9 @@ function MarketplaceCard({
           {item.score != null && (
             <>
               <span className="text-[var(--border)]">/</span>
-              <span>score: {item.score.toFixed(2)}</span>
+              <span>
+                {t("skillsview.score")} {item.score.toFixed(2)}
+              </span>
             </>
           )}
           {item.tags && item.tags.length > 0 && (
@@ -286,23 +288,25 @@ function MarketplaceCard({
         </div>
       </div>
       {isInstalled ? (
-        <button
-          type="button"
-          className={btnDanger}
+        <Button
+          variant="destructive"
+          size="sm"
+          className="h-8 px-4 text-[11px] font-bold tracking-wide shadow-sm shrink-0"
           onClick={() => onUninstall(item.id, item.name)}
           disabled={isUninstalling}
         >
           {isUninstalling ? "Removing..." : "Uninstall"}
-        </button>
+        </Button>
       ) : (
-        <button
-          type="button"
-          className={btnPrimary}
+        <Button
+          variant="default"
+          size="sm"
+          className="h-8 px-4 text-[11px] font-bold tracking-wide shadow-sm shrink-0"
           onClick={() => onInstall(item)}
           disabled={isInstalling}
         >
           {isInstalling ? "Installing..." : "Install"}
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -341,11 +345,12 @@ function InstallModal({
   setState: ReturnType<typeof useApp>["setState"];
   onClose: () => void;
 }) {
+  const { t } = useApp();
   const [tab, setTab] = useState<InstallTab>("search");
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -358,20 +363,61 @@ function InstallModal({
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-2xl max-h-[80vh] flex flex-col border border-[var(--border)] bg-[var(--bg)] overflow-hidden mx-4">
+      <div
+        className="w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden mx-4"
+        style={{
+          background:
+            "linear-gradient(148deg, rgba(18,22,34,0.95) 0%, rgba(8,11,20,0.92) 52%, rgba(5,8,14,0.9) 100%)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          borderRadius: 16,
+          backdropFilter: "blur(20px) saturate(115%)",
+          boxShadow:
+            "0 12px 30px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.05)",
+          color: "rgba(247,246,252,0.96)",
+        }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+        <div
+          className="flex items-center justify-between px-5 py-4"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
+        >
           <div>
-            <div className="text-sm font-semibold text-[var(--txt)]">
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 800,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "rgba(247,246,252,0.96)",
+              }}
+            >
               Install Skill
             </div>
-            <div className="text-[11px] text-[var(--muted)] mt-0.5">
+            <div
+              style={{
+                fontSize: 11,
+                color: "rgba(228,232,245,0.6)",
+                marginTop: 2,
+              }}
+            >
               Add skills from the marketplace or a GitHub repository.
             </div>
           </div>
           <button
             type="button"
-            className="text-[var(--muted)] hover:text-[var(--txt)] bg-transparent border-0 cursor-pointer text-lg px-2 transition-colors"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,0.15)",
+              background: "transparent",
+              color: "rgba(255,255,255,0.5)",
+              cursor: "pointer",
+              fontSize: 14,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
             onClick={onClose}
           >
             ×
@@ -379,21 +425,33 @@ function InstallModal({
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-[var(--border)]">
+        <div
+          className="flex"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
+        >
           {(
             [
-              { id: "search" as const, label: "Marketplace" },
-              { id: "url" as const, label: "GitHub URL" },
+              { id: "search" as const, label: "MARKETPLACE" },
+              { id: "url" as const, label: "GITHUB URL" },
             ] as const
           ).map((t) => (
             <button
               type="button"
               key={t.id}
-              className={`flex-1 px-4 py-2.5 text-xs font-medium bg-transparent border-0 border-b-2 cursor-pointer transition-colors ${
-                tab === t.id
-                  ? "text-[var(--accent)] border-b-[var(--accent)]"
-                  : "text-[var(--muted)] border-b-transparent hover:text-[var(--txt)]"
-              }`}
+              style={{
+                flex: 1,
+                padding: "10px 16px",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.1em",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                borderBottom:
+                  tab === t.id ? "2px solid #f0b232" : "2px solid transparent",
+                color: tab === t.id ? "#f0b232" : "rgba(255,255,255,0.45)",
+                transition: "color 0.2s, border-color 0.2s",
+              }}
               onClick={() => setTab(t.id)}
             >
               {t.label}
@@ -407,7 +465,9 @@ function InstallModal({
             <>
               <div className="flex gap-2 items-center mb-4">
                 <input
-                  className={`${inputCls} flex-1 min-w-[200px]`}
+                  type="text"
+                  className="plugins-game-search-input"
+                  style={{ flex: 1, minWidth: 200 }}
                   placeholder="Search skills by keyword..."
                   value={skillsMarketplaceQuery}
                   onChange={(e) =>
@@ -419,7 +479,8 @@ function InstallModal({
                 />
                 <button
                   type="button"
-                  className={btnPrimary}
+                  className="plugins-game-chip"
+                  style={{ minHeight: 36, padding: "0 16px", fontWeight: 700 }}
                   onClick={() => searchSkillsMarketplace()}
                   disabled={skillsMarketplaceLoading}
                 >
@@ -428,24 +489,31 @@ function InstallModal({
               </div>
 
               {skillsMarketplaceError && (
-                <div className="p-2.5 border border-[#e74c3c] text-[#e74c3c] text-xs mb-3">
+                <div
+                  className="p-2.5 text-xs mb-3"
+                  style={{ border: "1px solid #e74c3c", color: "#e74c3c" }}
+                >
                   {skillsMarketplaceError}
                 </div>
               )}
 
               {skillsMarketplaceResults.length === 0 ? (
                 <div className="text-center py-12">
-                  <div className="text-[var(--muted)] text-sm mb-1">
-                    No results
-                  </div>
-                  <div className="text-[var(--muted)] text-[11px]">
-                    Search above to discover skills from the marketplace.
+                  <div
+                    style={{
+                      color: "rgba(255,255,255,0.45)",
+                      fontSize: 12,
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Search above to discover skills.
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
                   <div className="text-[11px] text-[var(--muted)] mb-1">
-                    {skillsMarketplaceResults.length} result
+                    {skillsMarketplaceResults.length} {t("skillsview.result")}
                     {skillsMarketplaceResults.length !== 1 ? "s" : ""}
                   </div>
                   {skillsMarketplaceResults.map((item) => (
@@ -465,17 +533,31 @@ function InstallModal({
 
           {tab === "url" && (
             <div>
-              <div className="text-xs text-[var(--txt)] mb-1 font-medium">
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "rgba(247,246,252,0.9)",
+                  marginBottom: 4,
+                }}
+              >
                 GitHub Repository URL
               </div>
-              <div className="text-[11px] text-[var(--muted)] mb-3">
-                Paste a full GitHub URL or a /tree/... path to install a skill
-                directly.
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "rgba(228,232,245,0.55)",
+                  marginBottom: 12,
+                }}
+              >
+                Paste a full GitHub repository URL to install a skill directly.
               </div>
               <div className="flex gap-2 items-center">
                 <input
-                  className={`${inputCls} flex-1`}
-                  placeholder="https://github.com/owner/repo/tree/main/skills/my-skill"
+                  type="text"
+                  className="plugins-game-search-input"
+                  style={{ flex: 1 }}
+                  placeholder="https://github.com/org/repo"
                   value={skillsMarketplaceManualGithubUrl}
                   onChange={(e) =>
                     setState("skillsMarketplaceManualGithubUrl", e.target.value)
@@ -486,7 +568,8 @@ function InstallModal({
                 />
                 <button
                   type="button"
-                  className={btnPrimary}
+                  className="plugins-game-chip"
+                  style={{ minHeight: 36, padding: "0 16px", fontWeight: 700 }}
                   onClick={() => installSkillFromGithubUrl()}
                   disabled={
                     skillsMarketplaceAction === "install:manual" ||
@@ -500,7 +583,10 @@ function InstallModal({
               </div>
 
               {skillsMarketplaceError && (
-                <div className="p-2.5 border border-[#e74c3c] text-[#e74c3c] text-xs mt-3">
+                <div
+                  className="p-2.5 text-xs mt-3"
+                  style={{ border: "1px solid #e74c3c", color: "#e74c3c" }}
+                >
                   {skillsMarketplaceError}
                 </div>
               )}
@@ -529,21 +615,23 @@ function CreateSkillForm({
   onCancel: () => void;
   onCreate: () => void;
 }) {
+  const { t } = useApp();
   return (
     <div className="border border-[var(--accent)]/40 bg-[var(--card)] mb-4">
       <div className="px-4 py-3 border-b border-[var(--border)]">
         <div className="text-xs font-semibold text-[var(--txt)]">
-          Create New Skill
+          {t("skillsview.CreateNewSkill")}
         </div>
       </div>
       <div className="p-4 flex flex-col gap-3">
         <div>
           <span className="block text-[11px] text-[var(--muted)] mb-1 font-medium">
-            Skill Name <span className="text-[#e74c3c]">*</span>
+            {t("skillsview.SkillName")}{" "}
+            <span className="text-[#e74c3c]">*</span>
           </span>
-          <input
-            className={`${inputCls} w-full`}
-            placeholder="e.g. my-awesome-skill"
+          <Input
+            className="w-full bg-bg/50 border-border/50 focus-visible:ring-accent"
+            placeholder={t("skillsview.eGMyAwesomeSkil")}
             value={skillCreateName}
             onChange={(e) => setState("skillCreateName", e.target.value)}
             onKeyDown={(e) => {
@@ -553,11 +641,11 @@ function CreateSkillForm({
         </div>
         <div>
           <span className="block text-[11px] text-[var(--muted)] mb-1 font-medium">
-            Description
+            {t("skillsview.Description")}
           </span>
-          <input
-            className={`${inputCls} w-full`}
-            placeholder="Brief description of what this skill does (optional)"
+          <Input
+            className="w-full bg-bg/50 border-border/50 focus-visible:ring-accent"
+            placeholder={t("skillsview.BriefDescriptionOf")}
             value={skillCreateDescription}
             onChange={(e) => setState("skillCreateDescription", e.target.value)}
             onKeyDown={(e) => {
@@ -565,18 +653,18 @@ function CreateSkillForm({
             }}
           />
         </div>
-        <div className="flex gap-2 justify-end pt-1">
-          <button type="button" className={btnGhost} onClick={onCancel}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className={btnPrimary}
+        <div className="flex gap-2 justify-end pt-2">
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            {t("skillsview.Cancel")}
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
             onClick={onCreate}
             disabled={skillCreating || !skillCreateName.trim()}
           >
             {skillCreating ? "Creating..." : "Create Skill"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -596,6 +684,7 @@ function EditSkillModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useApp();
   const [content, setContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
   const [loading, setLoading] = useState(true);
@@ -661,7 +750,7 @@ function EditSkillModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -674,29 +763,66 @@ function EditSkillModal({
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-4xl h-[85vh] flex flex-col border border-[var(--border)] bg-[var(--bg)] overflow-hidden mx-4">
+      <div
+        className="w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden mx-4 rounded-xl"
+        style={{
+          background: "rgba(18, 22, 32, 0.96)",
+          border: "1px solid rgba(240, 178, 50, 0.18)",
+          backdropFilter: "blur(24px)",
+          boxShadow:
+            "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
+        }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] shrink-0">
+        <div
+          className="flex items-center justify-between px-5 py-3 shrink-0"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+        >
           <div className="flex items-center gap-3 min-w-0">
-            <div className="font-semibold text-sm text-[var(--txt)] truncate">
+            <div
+              className="font-semibold text-sm truncate"
+              style={{ color: "rgba(240,238,250,0.92)" }}
+            >
               {skillName}
             </div>
-            <span className="text-[10px] font-mono text-[var(--muted)] px-1.5 py-0.5 bg-[var(--card)] border border-[var(--border)]">
-              SKILL.md
+            <span
+              className="text-[10px] font-mono px-1.5 py-0.5"
+              style={{
+                color: "rgba(255,255,255,0.45)",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 4,
+              }}
+            >
+              {t("skillsview.SKILLMd")}
             </span>
             {hasChanges && (
-              <span className="text-[10px] text-[var(--accent)] font-medium">
-                unsaved
+              <span
+                className="text-[10px] font-medium"
+                style={{ color: "#f0b232" }}
+              >
+                {t("skillsview.unsaved")}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-[var(--muted)]">
-              {navigator.platform.includes("Mac") ? "⌘S" : "Ctrl+S"} to save
+            <span
+              className="text-[10px]"
+              style={{ color: "rgba(255,255,255,0.45)" }}
+            >
+              {navigator.platform.includes("Mac") ? "⌘S" : "Ctrl+S"}{" "}
+              {t("skillsview.toSave")}
             </span>
             <button
               type="button"
-              className="text-[var(--muted)] hover:text-[var(--txt)] bg-transparent border-0 cursor-pointer text-lg px-2 transition-colors"
+              className="bg-transparent border-0 cursor-pointer text-lg px-2 transition-colors"
+              style={{ color: "rgba(255,255,255,0.45)" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "rgba(240,238,250,0.92)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "rgba(255,255,255,0.45)";
+              }}
               onClick={onClose}
             >
               ×
@@ -707,23 +833,37 @@ function EditSkillModal({
         {/* Editor body */}
         <div className="flex-1 overflow-hidden">
           {loading ? (
-            <div className="flex items-center justify-center h-full text-[var(--muted)] text-sm">
-              Loading skill source...
+            <div
+              className="flex items-center justify-center h-full text-sm"
+              style={{ color: "rgba(255,255,255,0.45)" }}
+            >
+              {t("skillsview.LoadingSkillSource")}
             </div>
           ) : error && !content ? (
             <div className="flex flex-col items-center justify-center h-full gap-3">
-              <div className="text-[#e74c3c] text-sm">{error}</div>
+              <div className="text-sm font-medium" style={{ color: "#ef4444" }}>
+                {error}
+              </div>
               <button
                 type="button"
-                className={btnGhost}
+                className="px-3 py-1.5 text-xs font-medium rounded cursor-pointer transition-colors"
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  color: "rgba(240,238,250,0.92)",
+                }}
                 onClick={() => loadSource()}
               >
-                Retry
+                {t("skillsview.Retry")}
               </button>
             </div>
           ) : (
             <textarea
-              className="w-full h-full resize-none border-0 bg-[var(--card)] text-[var(--txt)] text-[13px] leading-relaxed font-mono p-5 focus:outline-none"
+              className="w-full h-full resize-none border-0 text-[13px] leading-relaxed font-mono p-5 focus:outline-none"
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                color: "rgba(240,238,250,0.92)",
+              }}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -733,20 +873,43 @@ function EditSkillModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--border)] shrink-0">
-          <div className="text-[11px] text-[var(--muted)]">
+        <div
+          className="flex items-center justify-between px-5 py-3 shrink-0"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
+        >
+          <div
+            className="text-[11px]"
+            style={{ color: "rgba(255,255,255,0.45)" }}
+          >
             {content ? `${content.split("\n").length} lines` : ""}
             {error && content ? (
-              <span className="text-[#e74c3c] ml-3">{error}</span>
+              <span className="ml-3" style={{ color: "#ef4444" }}>
+                {error}
+              </span>
             ) : null}
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" className={btnGhost} onClick={onClose}>
+            <button
+              type="button"
+              className="px-3 py-1.5 text-xs font-medium rounded cursor-pointer transition-colors"
+              style={{
+                background: "transparent",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "rgba(255,255,255,0.6)",
+              }}
+              onClick={onClose}
+            >
               {hasChanges ? "Discard" : "Close"}
             </button>
             <button
               type="button"
-              className={`${btnPrimary} ${saveSuccess ? "!bg-[var(--ok,#16a34a)] !border-[var(--ok,#16a34a)]" : ""}`}
+              className="px-3 py-1.5 text-xs font-medium rounded cursor-pointer transition-colors"
+              style={{
+                background: saveSuccess ? "#22c55e" : "#f0b232",
+                border: "none",
+                color: saveSuccess ? "#fff" : "#000",
+                opacity: saving || !hasChanges ? 0.5 : 1,
+              }}
               onClick={() => handleSave()}
               disabled={saving || !hasChanges}
             >
@@ -761,7 +924,253 @@ function EditSkillModal({
 
 /* ── Main Skills View ───────────────────────────────────────────────── */
 
-export function SkillsView() {
+export function SkillsView({ inModal }: { inModal?: boolean } = {}) {
+  if (inModal) return <SkillsModalView />;
+  return <SkillsFullView />;
+}
+
+/* ── Companion Modal View (sidebar + detail, reuses plugins-game-* CSS) ── */
+
+function SkillsModalView() {
+  const {
+    skills,
+    skillToggleAction,
+    loadSkills,
+    handleSkillToggle,
+    handleDeleteSkill,
+    refreshSkills,
+    setState,
+    skillsMarketplaceQuery,
+    skillsMarketplaceResults,
+    skillsMarketplaceError,
+    skillsMarketplaceLoading,
+    skillsMarketplaceAction,
+    skillsMarketplaceManualGithubUrl,
+    searchSkillsMarketplace,
+    installSkillFromMarketplace,
+    uninstallMarketplaceSkill,
+    installSkillFromGithubUrl,
+  } = useApp();
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [filterText, setFilterText] = useState("");
+  const [filterTab, setFilterTab] = useState<"all" | "on" | "off">("all");
+  const [editingSkill, setEditingSkill] = useState<SkillInfo | null>(null);
+  const [installModalOpen, setInstallModalOpen] = useState(false);
+
+  useEffect(() => {
+    void loadSkills();
+  }, [loadSkills]);
+
+  const filtered = useMemo(() => {
+    const searchLower = filterText.toLowerCase();
+    return skills.filter((s) => {
+      if (filterTab === "on" && !s.enabled) return false;
+      if (filterTab === "off" && s.enabled) return false;
+      if (
+        searchLower &&
+        !s.name.toLowerCase().includes(searchLower) &&
+        !(s.description ?? "").toLowerCase().includes(searchLower)
+      )
+        return false;
+      return true;
+    });
+  }, [skills, filterText, filterTab]);
+
+  const effectiveSelectedId =
+    selectedId && filtered.find((s) => s.id === selectedId)
+      ? selectedId
+      : (filtered[0]?.id ?? null);
+  const selected = effectiveSelectedId
+    ? (skills.find((s) => s.id === effectiveSelectedId) ?? null)
+    : null;
+
+  const tabs: { key: typeof filterTab; label: string }[] = [
+    { key: "all", label: `ALL (${skills.length})` },
+    { key: "on", label: `ON (${skills.filter((s) => s.enabled).length})` },
+    { key: "off", label: `OFF (${skills.filter((s) => !s.enabled).length})` },
+  ];
+
+  return (
+    <div className="plugins-game-modal">
+      {/* ── Left sidebar ── */}
+      <div className="plugins-game-list-panel">
+        <div className="plugins-game-list-head">
+          <div className="plugins-game-section-title">Talents</div>
+          <div className="plugins-game-section-meta">
+            {skills.length} installed
+          </div>
+        </div>
+
+        {/* Search + Install */}
+        <div className="plugins-game-list-search">
+          <div className="plugins-game-list-search-row">
+            <input
+              type="text"
+              placeholder="Search skills..."
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              className="plugins-game-search-input"
+            />
+            <button
+              type="button"
+              className="plugins-game-chip plugins-game-add-btn"
+              onClick={() => setInstallModalOpen(true)}
+            >
+              <span className="plugins-game-add-symbol">+</span> Install
+            </button>
+          </div>
+        </div>
+
+        {/* Filter tabs */}
+        <div className="plugins-game-chip-row">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={`plugins-game-chip plugins-game-chip-small${filterTab === tab.key ? " is-active" : ""}`}
+              onClick={() => setFilterTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Skill list */}
+        <div className="plugins-game-list-scroll">
+          {filtered.length === 0 ? (
+            <div className="plugins-game-list-empty">No skills found</div>
+          ) : (
+            filtered.map((skill) => (
+              <button
+                key={skill.id}
+                type="button"
+                className={`plugins-game-card${effectiveSelectedId === skill.id ? " is-selected" : ""}${!skill.enabled ? " is-disabled" : ""}`}
+                onClick={() => setSelectedId(skill.id)}
+              >
+                <div className="plugins-game-card-icon-shell">
+                  <span className="plugins-game-card-icon">
+                    {skill.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div className="plugins-game-card-body">
+                  <div className="plugins-game-card-name">{skill.name}</div>
+                  <div className="plugins-game-card-meta">
+                    <span
+                      className={`plugins-game-badge ${skill.enabled ? "is-on" : "is-off"}`}
+                    >
+                      {skill.enabled ? "ON" : "OFF"}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* ── Right detail panel ── */}
+      <div className="plugins-game-detail-panel">
+        {selected ? (
+          <>
+            <div className="plugins-game-detail-head">
+              <div className="plugins-game-detail-title-row">
+                <div className="plugins-game-detail-icon-shell">
+                  <span className="plugins-game-detail-icon">
+                    {selected.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div className="plugins-game-detail-main">
+                  <div className="plugins-game-detail-name">
+                    {selected.name}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className={`plugins-game-toggle ${selected.enabled ? "is-on" : "is-off"}`}
+                  onClick={() =>
+                    handleSkillToggle(selected.id, !selected.enabled)
+                  }
+                  disabled={skillToggleAction === selected.id}
+                >
+                  {skillToggleAction === selected.id
+                    ? "..."
+                    : selected.enabled
+                      ? "ON"
+                      : "OFF"}
+                </button>
+              </div>
+            </div>
+            <div className="plugins-game-detail-description">
+              {selected.description || "No description provided."}
+            </div>
+            <div className="plugins-game-detail-actions">
+              <button
+                type="button"
+                className="plugins-game-action-btn"
+                onClick={() => setEditingSkill(selected)}
+              >
+                Edit Source
+              </button>
+              <button
+                type="button"
+                className="plugins-game-action-btn"
+                onClick={() => handleDeleteSkill(selected.id, selected.name)}
+              >
+                Delete
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="plugins-game-detail-empty">
+            <span className="plugins-game-detail-empty-icon">🧠</span>
+            <span className="plugins-game-detail-empty-text">
+              Select a talent to configure
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Portal modals to body so they escape the 3D transform stacking context */}
+      {editingSkill &&
+        createPortal(
+          <EditSkillModal
+            skillId={editingSkill.id}
+            skillName={editingSkill.name}
+            onClose={() => setEditingSkill(null)}
+            onSaved={() => void refreshSkills()}
+          />,
+          document.body,
+        )}
+
+      {installModalOpen &&
+        createPortal(
+          <InstallModal
+            skills={skills}
+            skillsMarketplaceQuery={skillsMarketplaceQuery}
+            skillsMarketplaceResults={skillsMarketplaceResults}
+            skillsMarketplaceError={skillsMarketplaceError}
+            skillsMarketplaceLoading={skillsMarketplaceLoading}
+            skillsMarketplaceAction={skillsMarketplaceAction}
+            skillsMarketplaceManualGithubUrl={skillsMarketplaceManualGithubUrl}
+            searchSkillsMarketplace={searchSkillsMarketplace}
+            installSkillFromMarketplace={installSkillFromMarketplace}
+            uninstallMarketplaceSkill={uninstallMarketplaceSkill}
+            installSkillFromGithubUrl={installSkillFromGithubUrl}
+            setState={setState}
+            onClose={() => setInstallModalOpen(false)}
+          />,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+/* ── Full-Page Skills View ─────────────────────────────────────────── */
+
+function SkillsFullView() {
+  const { setTimeout: _setTimeout } = useTimeout();
+
   const {
     skills,
     skillCreateFormOpen,
@@ -909,39 +1318,46 @@ export function SkillsView() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <input
+      <div className="flex flex-wrap items-center gap-3 mb-6 p-3 border border-border/40 bg-card/60 backdrop-blur-md rounded-2xl shadow-sm">
+        <Input
           type="text"
           placeholder="Filter skills..."
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
-          className={`${inputCls} w-[200px]`}
+          className="w-[240px] h-9 bg-bg/50 border-border/50 focus-visible:ring-accent rounded-xl text-xs"
         />
 
         <span className="flex-1" />
 
-        <button
-          type="button"
-          className={skillCreateFormOpen ? btnGhost : btnPrimary}
+        <Button
+          variant={skillCreateFormOpen ? "ghost" : "default"}
+          size="sm"
+          className={
+            skillCreateFormOpen
+              ? "h-9 px-4 font-bold text-muted hover:text-txt"
+              : "h-9 px-4 font-bold tracking-wide shadow-sm"
+          }
           onClick={() => setState("skillCreateFormOpen", !skillCreateFormOpen)}
         >
           {skillCreateFormOpen ? "Cancel" : "+ New Skill"}
-        </button>
-        <button
-          type="button"
-          className={btnPrimary}
+        </Button>
+        <Button
+          variant="default"
+          size="sm"
+          className="h-9 px-4 font-bold tracking-wide shadow-sm"
           onClick={() => setInstallModalOpen(true)}
         >
-          Install
-        </button>
-        <button
-          type="button"
-          className={btnGhost}
+          Browse Marketplace
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9 px-4 font-bold text-muted hover:text-txt"
           onClick={() => refreshSkills()}
-          title="Refresh skills list"
+          title="Refresh Skills List"
         >
           Refresh
-        </button>
+        </Button>
       </div>
 
       {/* Create form */}
@@ -960,31 +1376,33 @@ export function SkillsView() {
       {skills.length === 0 ? (
         <div className="text-center py-16">
           <div className="text-[var(--muted)] text-sm mb-2">
-            No skills installed
+            No Skills Installed
           </div>
           <div className="text-[var(--muted)] text-[11px] mb-4">
-            Install skills from the marketplace or create a new one.
+            Install skills from the marketplace or create your own.
           </div>
-          <div className="flex justify-center gap-2">
-            <button
-              type="button"
-              className={btnPrimary}
+          <div className="flex justify-center gap-3">
+            <Button
+              variant="default"
+              size="sm"
+              className="h-10 px-6 font-bold tracking-wide shadow-sm"
               onClick={() => setInstallModalOpen(true)}
             >
               Browse Marketplace
-            </button>
-            <button
-              type="button"
-              className={btnGhost}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-10 px-6 font-bold text-muted hover:text-txt"
               onClick={() => setState("skillCreateFormOpen", true)}
             >
               Create Skill
-            </button>
+            </Button>
           </div>
         </div>
       ) : allVisible.length === 0 ? (
         <div className="text-center py-12 text-[var(--muted)] text-xs">
-          No skills match "{filterText}"
+          No skills match filtering "{filterText}"
         </div>
       ) : (
         <div>

@@ -7,15 +7,18 @@
  * Toggle to a 2D scatter-plot graph view of embeddings.
  */
 
+import { client, type QueryResult, type TableInfo } from "@milady/app-core/api";
+import { Button, Input } from "@milady/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { client, type QueryResult, type TableInfo } from "../api-client";
+import { useApp } from "../AppContext";
 
 const PAGE_SIZE = 25;
+const MAX_THREE_PIXEL_RATIO = 2;
 
 type ViewMode = "list" | "graph" | "3d";
 
-/** The dimension columns in the ElizaOS `embeddings` table. */
+/** The dimension columns in the elizaOS `embeddings` table. */
 const DIM_COLUMNS = [
   "dim_384",
   "dim_512",
@@ -90,7 +93,7 @@ function parseEmbedding(val: unknown): number[] | null {
 }
 
 function rowToMemory(row: Record<string, unknown>): MemoryRecord {
-  // Try explicit embedding/vector column first, then check ElizaOS dim_* columns
+  // Try explicit embedding/vector column first, then check elizaOS dim_* columns
   let embeddingVal = row.embedding ?? row.vector ?? row.embeddings;
   if (!embeddingVal) {
     for (const dim of DIM_COLUMNS) {
@@ -219,6 +222,7 @@ function VectorGraph({
   memories: MemoryRecord[];
   onSelect: (mem: MemoryRecord) => void;
 }) {
+  const { t } = useApp();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
@@ -452,11 +456,10 @@ function VectorGraph({
     return (
       <div className="text-center py-16">
         <div className="text-[var(--muted)] text-sm mb-2">
-          Not enough embeddings for graph view
+          {t("vectorbrowserview.NotEnoughEmbedding")}
         </div>
         <div className="text-[var(--muted)] text-xs">
-          Need at least 2 memories with embedding data. Found{" "}
-          {withEmbeddings.length}.
+          {t("vectorbrowserview.NeedAtLeast2Memo")} {withEmbeddings.length}.
         </div>
       </div>
     );
@@ -465,8 +468,7 @@ function VectorGraph({
   return (
     <div ref={containerRef} className="w-full">
       <div className="text-[11px] text-[var(--muted)] mb-2">
-        {withEmbeddings.length} vectors projected to 2D via PCA — click a point
-        to view details
+        {withEmbeddings.length} {t("vectorbrowserview.vectorsProjectedTo")}
       </div>
       <canvas
         ref={canvasRef}
@@ -489,6 +491,7 @@ function VectorGraph3D({
   memories: MemoryRecord[];
   onSelect: (mem: MemoryRecord) => void;
 }) {
+  const { t } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -501,6 +504,7 @@ function VectorGraph3D({
   );
   const isDraggingRef = useRef(false);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   const withEmbeddings = useMemo(
     () => memories.filter(hasEmbedding),
@@ -532,250 +536,361 @@ function VectorGraph3D({
     const container = containerRef.current;
     if (!container || points3D.length === 0) return;
 
-    const W = container.clientWidth;
-    const H = 550;
+    let cancelled = false;
+    cleanupRef.current = null;
 
-    // Scene
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111111);
-    sceneRef.current = scene;
+    // Async renderer creation — tries WebGPU, falls back to WebGL.
+    // All scene setup runs inside this async IIFE so the useEffect callback
+    // itself remains synchronous (required for React cleanup return).
+    void (async () => {
+      const W = container.clientWidth;
+      const H = 550;
 
-    // Camera
-    const camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 1000);
-    camera.position.set(0, 0, 5);
-    cameraRef.current = camera;
+      // Scene
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x111111);
+      sceneRef.current = scene;
 
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(W, H);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    container.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
+      // Camera
+      const camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 1000);
+      camera.position.set(0, 0, 5);
+      cameraRef.current = camera;
 
-    // Compute bounds for scaling
-    let minX = Infinity,
-      maxX = -Infinity;
-    let minY = Infinity,
-      maxY = -Infinity;
-    let minZ = Infinity,
-      maxZ = -Infinity;
-    for (const [x, y, z] of points3D) {
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
-      if (z < minZ) minZ = z;
-      if (z > maxZ) maxZ = z;
-    }
-    const rangeX = maxX - minX || 1;
-    const rangeY = maxY - minY || 1;
-    const rangeZ = maxZ - minZ || 1;
-    const maxRange = Math.max(rangeX, rangeY, rangeZ);
-    const scale = 3 / maxRange;
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    const centerZ = (minZ + maxZ) / 2;
-
-    // Create spheres
-    const spheres: THREE.Mesh[] = [];
-    const geometry = new THREE.SphereGeometry(0.06, 16, 16);
-
-    for (let i = 0; i < points3D.length; i++) {
-      const [x, y, z] = points3D[i];
-      const mem = withEmbeddings[i];
-      const color = typeColors[mem.type] ?? 0x6699ff;
-      const material = new THREE.MeshBasicMaterial({
-        color,
-        transparent: true,
-        opacity: 0.85,
-      });
-      const sphere = new THREE.Mesh(geometry, material);
-      sphere.position.set(
-        (x - centerX) * scale,
-        (y - centerY) * scale,
-        (z - centerZ) * scale,
-      );
-      sphere.userData = { index: i };
-      scene.add(sphere);
-      spheres.push(sphere);
-    }
-    spheresRef.current = spheres;
-
-    // Add subtle grid helper
-    const gridHelper = new THREE.GridHelper(6, 12, 0x333333, 0x222222);
-    gridHelper.position.y = -2;
-    scene.add(gridHelper);
-
-    // Add axis lines
-    const axisLength = 2.5;
-    const axisGeom = new THREE.BufferGeometry();
-    const axisPositions = new Float32Array([
-      -axisLength,
-      0,
-      0,
-      axisLength,
-      0,
-      0, // X axis
-      0,
-      -axisLength,
-      0,
-      0,
-      axisLength,
-      0, // Y axis
-      0,
-      0,
-      -axisLength,
-      0,
-      0,
-      axisLength, // Z axis
-    ]);
-    axisGeom.setAttribute(
-      "position",
-      new THREE.BufferAttribute(axisPositions, 3),
-    );
-    const axisMat = new THREE.LineBasicMaterial({ color: 0x444444 });
-    const axisLines = new THREE.LineSegments(axisGeom, axisMat);
-    scene.add(axisLines);
-
-    // Simple orbit controls (manual implementation)
-    let theta = 0;
-    let phi = Math.PI / 4;
-    let radius = 5;
-    let targetTheta = theta;
-    let targetPhi = phi;
-    let targetRadius = radius;
-
-    const updateCamera = () => {
-      theta += (targetTheta - theta) * 0.1;
-      phi += (targetPhi - phi) * 0.1;
-      radius += (targetRadius - radius) * 0.1;
-      phi = Math.max(0.1, Math.min(Math.PI - 0.1, phi));
-      camera.position.x = radius * Math.sin(phi) * Math.cos(theta);
-      camera.position.y = radius * Math.cos(phi);
-      camera.position.z = radius * Math.sin(phi) * Math.sin(theta);
-      camera.lookAt(0, 0, 0);
-    };
-
-    const onMouseDown = (e: MouseEvent) => {
-      isDraggingRef.current = true;
-      mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
-    };
-
-    const onMouseUp = () => {
-      isDraggingRef.current = false;
-      mouseDownPosRef.current = null;
-    };
-
-    const onMouseMove = (e: MouseEvent) => {
-      if (isDraggingRef.current) {
-        targetTheta -= e.movementX * 0.01;
-        targetPhi -= e.movementY * 0.01;
+      // Renderer — try WebGPU first, fall back to WebGL.
+      let renderer: THREE.WebGLRenderer;
+      if (navigator.gpu) {
+        try {
+          const webgpuModule = (await import("three/webgpu")) as unknown as {
+            WebGPURenderer?: new (options?: {
+              antialias?: boolean;
+            }) => THREE.WebGLRenderer & { init?: () => Promise<void> };
+          };
+          const WebGPURenderer = webgpuModule.WebGPURenderer;
+          if (WebGPURenderer) {
+            const webgpuRenderer = new WebGPURenderer({
+              antialias: true,
+            });
+            await webgpuRenderer.init?.();
+            renderer = webgpuRenderer;
+          } else {
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+          }
+        } catch {
+          renderer = new THREE.WebGLRenderer({ antialias: true });
+        }
+      } else {
+        renderer = new THREE.WebGLRenderer({ antialias: true });
       }
 
-      // Raycasting for hover
-      const rect = renderer.domElement.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1,
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObjects(spheres);
+      // Guard: if the effect was cleaned up while awaiting WebGPU init, abort.
+      if (cancelled) {
+        renderer.dispose();
+        return;
+      }
 
-      if (intersects.length > 0) {
-        const idx = intersects[0].object.userData.index;
-        setHoveredIdx(idx);
-        setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-        // Highlight hovered sphere
-        spheres.forEach((s, i) => {
-          const mat = s.material as THREE.MeshBasicMaterial;
-          mat.opacity = i === idx ? 1 : 0.5;
-          s.scale.setScalar(i === idx ? 1.5 : 1);
+      const raycaster = new THREE.Raycaster();
+      const pointer = new THREE.Vector2();
+      const geometry = new THREE.SphereGeometry(0.06, 16, 16);
+      const spheres: THREE.Mesh[] = [];
+      let gridHelper: THREE.GridHelper | null = null;
+      let axisGeom: THREE.BufferGeometry | null = null;
+      let axisMat: THREE.LineBasicMaterial | null = null;
+      let onMouseDown: ((e: MouseEvent) => void) | null = null;
+      let onMouseUp: (() => void) | null = null;
+      let onMouseMove: ((e: MouseEvent) => void) | null = null;
+      let onClick: ((e: MouseEvent) => void) | null = null;
+      let onWheel: ((e: WheelEvent) => void) | null = null;
+      let onMouseLeave: (() => void) | null = null;
+      let handleResize: (() => void) | null = null;
+      let cleanedUp = false;
+
+      cleanupRef.current = () => {
+        if (cleanedUp) return;
+        cleanedUp = true;
+        cancelAnimationFrame(animationRef.current);
+        if (handleResize) {
+          window.removeEventListener("resize", handleResize);
+        }
+        if (onMouseDown) {
+          renderer.domElement.removeEventListener("mousedown", onMouseDown);
+        }
+        if (onMouseUp) {
+          renderer.domElement.removeEventListener("mouseup", onMouseUp);
+        }
+        if (onMouseMove) {
+          renderer.domElement.removeEventListener("mousemove", onMouseMove);
+        }
+        if (onClick) {
+          renderer.domElement.removeEventListener("click", onClick);
+        }
+        if (onWheel) {
+          renderer.domElement.removeEventListener("wheel", onWheel);
+        }
+        if (onMouseLeave) {
+          renderer.domElement.removeEventListener("mouseleave", onMouseLeave);
+        }
+        geometry.dispose();
+        axisGeom?.dispose();
+        axisMat?.dispose();
+        if (gridHelper) {
+          const gridMaterial = Array.isArray(gridHelper.material)
+            ? gridHelper.material
+            : [gridHelper.material];
+          for (const material of gridMaterial) {
+            material.dispose();
+          }
+          gridHelper.geometry.dispose();
+        }
+        for (const sphere of spheres) {
+          const material = sphere.material;
+          if (Array.isArray(material)) {
+            for (const entry of material) {
+              entry.dispose();
+            }
+          } else {
+            material.dispose();
+          }
+        }
+        renderer.dispose();
+        if (renderer.forceContextLoss) renderer.forceContextLoss();
+        rendererRef.current = null;
+        sceneRef.current = null;
+        cameraRef.current = null;
+        spheresRef.current = [];
+        if (container.contains(renderer.domElement)) {
+          container.removeChild(renderer.domElement);
+        }
+      };
+
+      renderer.setSize(W, H);
+      renderer.setPixelRatio(
+        Math.min(window.devicePixelRatio || 1, MAX_THREE_PIXEL_RATIO),
+      );
+      container.appendChild(renderer.domElement);
+      rendererRef.current = renderer;
+      if (cancelled) {
+        cleanupRef.current?.();
+        cleanupRef.current = null;
+        return;
+      }
+
+      // Compute bounds for scaling
+      let minX = Infinity,
+        maxX = -Infinity;
+      let minY = Infinity,
+        maxY = -Infinity;
+      let minZ = Infinity,
+        maxZ = -Infinity;
+      for (const [x, y, z] of points3D) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (z < minZ) minZ = z;
+        if (z > maxZ) maxZ = z;
+      }
+      const rangeX = maxX - minX || 1;
+      const rangeY = maxY - minY || 1;
+      const rangeZ = maxZ - minZ || 1;
+      const maxRange = Math.max(rangeX, rangeY, rangeZ);
+      const scale = 3 / maxRange;
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      const centerZ = (minZ + maxZ) / 2;
+
+      for (let i = 0; i < points3D.length; i++) {
+        const [x, y, z] = points3D[i];
+        const mem = withEmbeddings[i];
+        const color = typeColors[mem.type] ?? 0x6699ff;
+        const material = new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.85,
         });
-      } else {
+        const sphere = new THREE.Mesh(geometry, material);
+        sphere.position.set(
+          (x - centerX) * scale,
+          (y - centerY) * scale,
+          (z - centerZ) * scale,
+        );
+        sphere.userData = { index: i };
+        scene.add(sphere);
+        spheres.push(sphere);
+      }
+      spheresRef.current = spheres;
+
+      // Add subtle grid helper
+      gridHelper = new THREE.GridHelper(6, 12, 0x333333, 0x222222);
+      gridHelper.position.y = -2;
+      scene.add(gridHelper);
+
+      // Add axis lines
+      const axisLength = 2.5;
+      axisGeom = new THREE.BufferGeometry();
+      const axisPositions = new Float32Array([
+        -axisLength,
+        0,
+        0,
+        axisLength,
+        0,
+        0, // X axis
+        0,
+        -axisLength,
+        0,
+        0,
+        axisLength,
+        0, // Y axis
+        0,
+        0,
+        -axisLength,
+        0,
+        0,
+        axisLength, // Z axis
+      ]);
+      axisGeom.setAttribute(
+        "position",
+        new THREE.BufferAttribute(axisPositions, 3),
+      );
+      axisMat = new THREE.LineBasicMaterial({ color: 0x444444 });
+      const axisLines = new THREE.LineSegments(axisGeom, axisMat);
+      scene.add(axisLines);
+
+      // Simple orbit controls (manual implementation)
+      let theta = 0;
+      let phi = Math.PI / 4;
+      let radius = 5;
+      let targetTheta = theta;
+      let targetPhi = phi;
+      let targetRadius = radius;
+      const updatePointerFromEvent = (e: MouseEvent) => {
+        const rect = renderer.domElement.getBoundingClientRect();
+        pointer.set(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          -((e.clientY - rect.top) / rect.height) * 2 + 1,
+        );
+        return rect;
+      };
+
+      const updateCamera = () => {
+        theta += (targetTheta - theta) * 0.1;
+        phi += (targetPhi - phi) * 0.1;
+        radius += (targetRadius - radius) * 0.1;
+        phi = Math.max(0.1, Math.min(Math.PI - 0.1, phi));
+        camera.position.x = radius * Math.sin(phi) * Math.cos(theta);
+        camera.position.y = radius * Math.cos(phi);
+        camera.position.z = radius * Math.sin(phi) * Math.sin(theta);
+        camera.lookAt(0, 0, 0);
+      };
+
+      onMouseDown = (e: MouseEvent) => {
+        isDraggingRef.current = true;
+        mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+      };
+
+      onMouseUp = () => {
+        isDraggingRef.current = false;
+        mouseDownPosRef.current = null;
+      };
+
+      onMouseMove = (e: MouseEvent) => {
+        if (isDraggingRef.current) {
+          targetTheta -= e.movementX * 0.01;
+          targetPhi -= e.movementY * 0.01;
+        }
+
+        // Raycasting for hover
+        const rect = updatePointerFromEvent(e);
+        raycaster.setFromCamera(pointer, camera);
+        const intersects = raycaster.intersectObjects(spheres);
+
+        if (intersects.length > 0) {
+          const idx = intersects[0].object.userData.index;
+          setHoveredIdx(idx);
+          setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+          // Highlight hovered sphere
+          spheres.forEach((s, i) => {
+            const mat = s.material as THREE.MeshBasicMaterial;
+            mat.opacity = i === idx ? 1 : 0.5;
+            s.scale.setScalar(i === idx ? 1.5 : 1);
+          });
+        } else {
+          setHoveredIdx(null);
+          setTooltipPos(null);
+          spheres.forEach((s) => {
+            const mat = s.material as THREE.MeshBasicMaterial;
+            mat.opacity = 0.85;
+            s.scale.setScalar(1);
+          });
+        }
+      };
+
+      onClick = (e: MouseEvent) => {
+        // Only trigger click if we didn't drag much
+        if (mouseDownPosRef.current) {
+          const dx = Math.abs(e.clientX - mouseDownPosRef.current.x);
+          const dy = Math.abs(e.clientY - mouseDownPosRef.current.y);
+          if (dx > 5 || dy > 5) return; // Was a drag, not a click
+        }
+
+        updatePointerFromEvent(e);
+        raycaster.setFromCamera(pointer, camera);
+        const intersects = raycaster.intersectObjects(spheres);
+        if (intersects.length > 0) {
+          const idx = intersects[0].object.userData.index;
+          if (idx < withEmbeddings.length) {
+            onSelect(withEmbeddings[idx]);
+          }
+        }
+      };
+
+      onWheel = (e: WheelEvent) => {
+        e.preventDefault();
+        targetRadius += e.deltaY * 0.005;
+        targetRadius = Math.max(2, Math.min(15, targetRadius));
+      };
+
+      onMouseLeave = () => {
+        isDraggingRef.current = false;
         setHoveredIdx(null);
         setTooltipPos(null);
-        spheres.forEach((s) => {
-          const mat = s.material as THREE.MeshBasicMaterial;
-          mat.opacity = 0.85;
-          s.scale.setScalar(1);
-        });
+      };
+
+      renderer.domElement.addEventListener("mousedown", onMouseDown);
+      renderer.domElement.addEventListener("mouseup", onMouseUp);
+      renderer.domElement.addEventListener("mousemove", onMouseMove);
+      renderer.domElement.addEventListener("click", onClick);
+      renderer.domElement.addEventListener("wheel", onWheel, {
+        passive: false,
+      });
+      renderer.domElement.addEventListener("mouseleave", onMouseLeave);
+      if (cancelled) {
+        cleanupRef.current?.();
+        cleanupRef.current = null;
+        return;
       }
-    };
 
-    const onClick = (e: MouseEvent) => {
-      // Only trigger click if we didn't drag much
-      if (mouseDownPosRef.current) {
-        const dx = Math.abs(e.clientX - mouseDownPosRef.current.x);
-        const dy = Math.abs(e.clientY - mouseDownPosRef.current.y);
-        if (dx > 5 || dy > 5) return; // Was a drag, not a click
-      }
+      // Animation loop
+      const animate = () => {
+        updateCamera();
+        renderer.render(scene, camera);
+        animationRef.current = requestAnimationFrame(animate);
+      };
+      animate();
 
-      const rect = renderer.domElement.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1,
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObjects(spheres);
-      if (intersects.length > 0) {
-        const idx = intersects[0].object.userData.index;
-        if (idx < withEmbeddings.length) {
-          onSelect(withEmbeddings[idx]);
-        }
-      }
-    };
-
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      targetRadius += e.deltaY * 0.005;
-      targetRadius = Math.max(2, Math.min(15, targetRadius));
-    };
-
-    const onMouseLeave = () => {
-      isDraggingRef.current = false;
-      setHoveredIdx(null);
-      setTooltipPos(null);
-    };
-
-    renderer.domElement.addEventListener("mousedown", onMouseDown);
-    renderer.domElement.addEventListener("mouseup", onMouseUp);
-    renderer.domElement.addEventListener("mousemove", onMouseMove);
-    renderer.domElement.addEventListener("click", onClick);
-    renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
-    renderer.domElement.addEventListener("mouseleave", onMouseLeave);
-
-    // Animation loop
-    const animate = () => {
-      updateCamera();
-      renderer.render(scene, camera);
-      animationRef.current = requestAnimationFrame(animate);
-    };
-    animate();
-
-    // Resize handler
-    const handleResize = () => {
-      const newW = container.clientWidth;
-      camera.aspect = newW / H;
-      camera.updateProjectionMatrix();
-      renderer.setSize(newW, H);
-    };
-    window.addEventListener("resize", handleResize);
+      // Resize handler
+      handleResize = () => {
+        const newW = container.clientWidth;
+        camera.aspect = newW / H;
+        camera.updateProjectionMatrix();
+        renderer.setSize(newW, H);
+      };
+      window.addEventListener("resize", handleResize);
+    })(); // end async IIFE
 
     return () => {
-      cancelAnimationFrame(animationRef.current);
-      window.removeEventListener("resize", handleResize);
-      renderer.domElement.removeEventListener("mousedown", onMouseDown);
-      renderer.domElement.removeEventListener("mouseup", onMouseUp);
-      renderer.domElement.removeEventListener("mousemove", onMouseMove);
-      renderer.domElement.removeEventListener("click", onClick);
-      renderer.domElement.removeEventListener("wheel", onWheel);
-      renderer.domElement.removeEventListener("mouseleave", onMouseLeave);
-      renderer.dispose();
-      if (container.contains(renderer.domElement)) {
-        container.removeChild(renderer.domElement);
-      }
+      cancelled = true;
+      cleanupRef.current?.();
+      cleanupRef.current = null;
     };
   }, [points3D, withEmbeddings, typeColors, onSelect]);
 
@@ -783,11 +898,10 @@ function VectorGraph3D({
     return (
       <div className="text-center py-16">
         <div className="text-[var(--muted)] text-sm mb-2">
-          Not enough embeddings for 3D view
+          {t("vectorbrowserview.NotEnoughEmbedding1")}
         </div>
         <div className="text-[var(--muted)] text-xs">
-          Need at least 2 memories with embedding data. Found{" "}
-          {withEmbeddings.length}.
+          {t("vectorbrowserview.NeedAtLeast2Memo")} {withEmbeddings.length}.
         </div>
       </div>
     );
@@ -798,8 +912,7 @@ function VectorGraph3D({
   return (
     <div className="relative">
       <div className="text-[11px] text-[var(--muted)] mb-2">
-        {withEmbeddings.length} vectors projected to 3D via PCA — drag to
-        rotate, scroll to zoom, click a node to view details
+        {withEmbeddings.length} {t("vectorbrowserview.vectorsProjectedTo1")}
       </div>
       <div
         ref={containerRef}
@@ -861,6 +974,7 @@ function MemoryDetailModal({
   memory: MemoryRecord;
   onClose: () => void;
 }) {
+  const { t } = useApp();
   return (
     <div
       className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-8"
@@ -880,21 +994,22 @@ function MemoryDetailModal({
         {/* Header */}
         <div className="flex items-center justify-between p-3 border-b border-[var(--border)]">
           <div className="text-xs font-medium text-[var(--txt)]">
-            Memory Detail
+            {t("vectorbrowserview.MemoryDetail")}
           </div>
-          <button
-            type="button"
-            className="text-[var(--muted)] hover:text-[var(--txt)] bg-transparent border-0 cursor-pointer text-lg px-2"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-[var(--muted)] hover:text-[var(--txt)] hover:bg-transparent h-6 w-6 text-lg"
             onClick={onClose}
           >
             ×
-          </button>
+          </Button>
         </div>
 
         {/* Content */}
         <div className="p-4">
           <div className="text-[11px] text-[var(--muted)] mb-1 uppercase font-bold">
-            Content
+            {t("vectorbrowserview.Content")}
           </div>
           <div className="text-xs text-[var(--txt)] whitespace-pre-wrap break-words mb-4 p-2 bg-[var(--bg)] border border-[var(--border)] max-h-[200px] overflow-auto">
             {memory.content || "(empty)"}
@@ -902,26 +1017,36 @@ function MemoryDetailModal({
 
           {/* Metadata */}
           <div className="text-[11px] text-[var(--muted)] mb-1 uppercase font-bold">
-            Metadata
+            {t("vectorbrowserview.Metadata")}
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mb-4">
             <span className="text-[var(--muted)]">ID</span>
             <span className="text-[var(--txt)] font-mono truncate">
               {memory.id || "—"}
             </span>
-            <span className="text-[var(--muted)]">Type</span>
+            <span className="text-[var(--muted)]">
+              {t("vectorbrowserview.Type")}
+            </span>
             <span className="text-[var(--txt)]">{memory.type || "—"}</span>
-            <span className="text-[var(--muted)]">Room</span>
+            <span className="text-[var(--muted)]">
+              {t("vectorbrowserview.Room")}
+            </span>
             <span className="text-[var(--txt)] font-mono truncate">
               {memory.roomId || "—"}
             </span>
-            <span className="text-[var(--muted)]">Entity</span>
+            <span className="text-[var(--muted)]">
+              {t("vectorbrowserview.Entity")}
+            </span>
             <span className="text-[var(--txt)] font-mono truncate">
               {memory.entityId || "—"}
             </span>
-            <span className="text-[var(--muted)]">Created</span>
+            <span className="text-[var(--muted)]">
+              {t("vectorbrowserview.Created")}
+            </span>
             <span className="text-[var(--txt)]">{memory.createdAt || "—"}</span>
-            <span className="text-[var(--muted)]">Unique</span>
+            <span className="text-[var(--muted)]">
+              {t("vectorbrowserview.Unique")}
+            </span>
             <span className="text-[var(--txt)]">
               {memory.unique ? "Yes" : "No"}
             </span>
@@ -931,7 +1056,8 @@ function MemoryDetailModal({
           {memory.embedding && (
             <>
               <div className="text-[11px] text-[var(--muted)] mb-1 uppercase font-bold">
-                Embedding ({memory.embedding.length} dimensions)
+                {t("vectorbrowserview.Embedding")}
+                {memory.embedding.length} {t("vectorbrowserview.dimensions")}
               </div>
               <div className="p-2 bg-[var(--bg)] border border-[var(--border)] text-[10px] font-mono text-[var(--muted)] max-h-[150px] overflow-auto break-all mb-4">
                 [{memory.embedding.map((v) => v.toFixed(6)).join(", ")}]
@@ -942,7 +1068,7 @@ function MemoryDetailModal({
           {/* Raw data */}
           <details>
             <summary className="text-[11px] text-[var(--muted)] cursor-pointer hover:text-[var(--txt)] uppercase font-bold mb-1">
-              Raw Record
+              {t("vectorbrowserview.RawRecord")}
             </summary>
             <div className="p-2 bg-[var(--bg)] border border-[var(--border)] text-[10px] font-mono text-[var(--muted)] max-h-[200px] overflow-auto break-all">
               {JSON.stringify(memory.raw, null, 2)}
@@ -957,6 +1083,7 @@ function MemoryDetailModal({
 // ── Main component ─────────────────────────────────────────────────────
 
 export function VectorBrowserView() {
+  const { t } = useApp();
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [selectedTable, setSelectedTable] = useState("");
   const [memories, setMemories] = useState<MemoryRecord[]>([]);
@@ -997,7 +1124,7 @@ export function VectorBrowserView() {
       const available = vectorTables.length > 0 ? vectorTables : allTables;
       setTables(available);
 
-      // Check for separate embeddings table (ElizaOS stores vectors there)
+      // Check for separate embeddings table (elizaOS stores vectors there)
       const embTbl = allTables.find((t) => t.name === "embeddings");
       setHasEmbeddingsTable(!!embTbl);
 
@@ -1208,12 +1335,20 @@ export function VectorBrowserView() {
       {/* Stats bar */}
       {stats && !isConnectionError && (
         <div className="flex gap-4 mb-4 text-[11px] text-[var(--muted)]">
-          <span>{Number(stats.total).toLocaleString()} memories</span>
+          <span>
+            {Number(stats.total).toLocaleString()}{" "}
+            {t("vectorbrowserview.memories")}
+          </span>
           {Number(stats.uniqueCount) > 0 && (
-            <span>{Number(stats.uniqueCount).toLocaleString()} unique</span>
+            <span>
+              {Number(stats.uniqueCount).toLocaleString()}{" "}
+              {t("vectorbrowserview.unique")}
+            </span>
           )}
           {Number(stats.dimensions) > 0 && (
-            <span>{stats.dimensions} dimensions</span>
+            <span>
+              {stats.dimensions} {t("vectorbrowserview.dimensions1")}
+            </span>
           )}
         </div>
       )}
@@ -1223,21 +1358,17 @@ export function VectorBrowserView() {
         <div className="flex flex-wrap items-center gap-3 mb-4">
           {viewMode === "list" && (
             <div className="flex gap-1">
-              <input
+              <Input
                 type="text"
-                placeholder="Search content..."
+                placeholder={t("vectorbrowserview.SearchContent")}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-[var(--txt)] text-xs w-[220px]"
+                className="w-[220px] bg-card text-xs"
               />
-              <button
-                type="button"
-                className="px-3 py-1.5 text-xs bg-[var(--accent)] text-[var(--accent-foreground)] border border-[var(--accent)] cursor-pointer hover:opacity-80"
-                onClick={handleSearch}
-              >
-                Search
-              </button>
+              <Button variant="default" size="sm" onClick={handleSearch}>
+                {t("vectorbrowserview.Search")}
+              </Button>
             </div>
           )}
 
@@ -1266,39 +1397,27 @@ export function VectorBrowserView() {
 
           {/* View mode toggle */}
           <div className="flex gap-1 ml-auto">
-            <button
-              type="button"
-              className={`px-3 py-1.5 text-xs cursor-pointer border transition-colors ${
-                viewMode === "list"
-                  ? "bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--accent)]"
-                  : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
-              }`}
+            <Button
+              variant={viewMode === "list" ? "default" : "outline"}
+              size="sm"
               onClick={() => setViewMode("list")}
             >
-              List
-            </button>
-            <button
-              type="button"
-              className={`px-3 py-1.5 text-xs cursor-pointer border transition-colors ${
-                viewMode === "graph"
-                  ? "bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--accent)]"
-                  : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
-              }`}
+              {t("vectorbrowserview.List")}
+            </Button>
+            <Button
+              variant={viewMode === "graph" ? "default" : "outline"}
+              size="sm"
               onClick={() => setViewMode("graph")}
             >
               2D
-            </button>
-            <button
-              type="button"
-              className={`px-3 py-1.5 text-xs cursor-pointer border transition-colors ${
-                viewMode === "3d"
-                  ? "bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--accent)]"
-                  : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
-              }`}
+            </Button>
+            <Button
+              variant={viewMode === "3d" ? "default" : "outline"}
+              size="sm"
               onClick={() => setViewMode("3d")}
             >
               3D
-            </button>
+            </Button>
           </div>
 
           {viewMode === "list" && (
@@ -1315,21 +1434,21 @@ export function VectorBrowserView() {
         (error.includes("agent is running") ? (
           <div className="text-center py-16">
             <div className="text-[var(--muted)] text-sm mb-2">
-              Database not available
+              {t("vectorbrowserview.DatabaseNotAvailab")}
             </div>
             <div className="text-[var(--muted)] text-xs mb-4">
-              Start the agent to browse vector embeddings.
+              {t("vectorbrowserview.StartTheAgentToB")}
             </div>
-            <button
-              type="button"
-              className="px-3 py-1.5 text-xs bg-[var(--accent)] text-[var(--accent-foreground)] border border-[var(--accent)] cursor-pointer hover:opacity-80"
+            <Button
+              variant="default"
+              size="sm"
               onClick={() => {
                 setError("");
                 loadTables();
               }}
             >
-              Retry Connection
-            </button>
+              {t("vectorbrowserview.RetryConnection")}
+            </Button>
           </div>
         ) : (
           <div className="p-2.5 border border-[var(--danger)] text-[var(--danger)] text-xs mb-3">
@@ -1341,7 +1460,7 @@ export function VectorBrowserView() {
       {viewMode === "graph" &&
         (graphLoading ? (
           <div className="text-center py-16 text-[var(--muted)] text-sm italic">
-            Loading embeddings...
+            {t("vectorbrowserview.LoadingEmbeddings")}
           </div>
         ) : (
           <VectorGraph memories={graphMemories} onSelect={setSelectedMemory} />
@@ -1351,7 +1470,7 @@ export function VectorBrowserView() {
       {viewMode === "3d" &&
         (graphLoading ? (
           <div className="text-center py-16 text-[var(--muted)] text-sm italic">
-            Loading embeddings...
+            {t("vectorbrowserview.LoadingEmbeddings")}
           </div>
         ) : (
           <VectorGraph3D
@@ -1364,12 +1483,12 @@ export function VectorBrowserView() {
       {viewMode === "list" &&
         (loading ? (
           <div className="text-center py-16 text-[var(--muted)] text-sm italic">
-            Loading memories...
+            {t("vectorbrowserview.LoadingMemories")}
           </div>
         ) : memories.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-[var(--muted)] text-sm mb-2">
-              No memories found
+              {t("vectorbrowserview.NoMemoriesFound")}
             </div>
             <div className="text-[var(--muted)] text-xs">
               {search
@@ -1380,10 +1499,10 @@ export function VectorBrowserView() {
         ) : (
           <div className="flex flex-col gap-2">
             {memories.map((mem) => (
-              <button
-                type="button"
+              <Button
                 key={mem.id || `${mem.content.slice(0, 30)}-${mem.createdAt}`}
-                className="border border-[var(--border)] bg-[var(--card)] p-3 cursor-pointer text-left hover:border-[var(--accent)] transition-colors w-full"
+                variant="outline"
+                className="justify-start items-start text-left h-auto p-3 hover:border-accent w-full flex flex-col"
                 onClick={() => setSelectedMemory(mem)}
               >
                 {/* Content preview */}
@@ -1401,24 +1520,29 @@ export function VectorBrowserView() {
                     </span>
                   )}
                   {mem.roomId && mem.roomId !== "undefined" && (
-                    <span>Room: {mem.roomId.slice(0, 12)}</span>
+                    <span>
+                      {t("vectorbrowserview.Room1")} {mem.roomId.slice(0, 12)}
+                    </span>
                   )}
                   {mem.entityId && mem.entityId !== "undefined" && (
-                    <span>Entity: {mem.entityId.slice(0, 12)}</span>
+                    <span>
+                      {t("vectorbrowserview.Entity1")}{" "}
+                      {mem.entityId.slice(0, 12)}
+                    </span>
                   )}
                   {mem.createdAt && mem.createdAt !== "undefined" && (
                     <span>{mem.createdAt}</span>
                   )}
                   {mem.unique && (
                     <span className="px-1.5 py-0.5 bg-green-500/20 text-green-400 font-bold">
-                      unique
+                      {t("vectorbrowserview.unique")}
                     </span>
                   )}
                   {mem.embedding && (
                     <span className="font-mono">[{mem.embedding.length}d]</span>
                   )}
                 </div>
-              </button>
+              </Button>
             ))}
           </div>
         ))}
@@ -1426,25 +1550,25 @@ export function VectorBrowserView() {
       {/* Pagination (list view only) */}
       {viewMode === "list" && totalPages > 1 && (
         <div className="flex items-center justify-center gap-3 mt-4 pb-4">
-          <button
-            type="button"
-            className="px-3 py-1.5 text-xs bg-[var(--accent)] text-[var(--accent-foreground)] border border-[var(--accent)] cursor-pointer hover:opacity-80 disabled:opacity-40 disabled:cursor-default"
+          <Button
+            variant="default"
+            size="sm"
             disabled={page === 0}
             onClick={() => setPage((p) => p - 1)}
           >
-            Prev
-          </button>
+            {t("vectorbrowserview.Prev")}
+          </Button>
           <span className="text-[11px] text-[var(--muted)]">
-            Page {page + 1} of {totalPages}
+            {t("vectorbrowserview.Page")} {page + 1} of {totalPages}
           </span>
-          <button
-            type="button"
-            className="px-3 py-1.5 text-xs bg-[var(--accent)] text-[var(--accent-foreground)] border border-[var(--accent)] cursor-pointer hover:opacity-80 disabled:opacity-40 disabled:cursor-default"
+          <Button
+            variant="default"
+            size="sm"
             disabled={page >= totalPages - 1}
             onClick={() => setPage((p) => p + 1)}
           >
-            Next
-          </button>
+            {t("vectorbrowserview.Next")}
+          </Button>
         </div>
       )}
 

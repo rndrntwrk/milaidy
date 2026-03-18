@@ -10,6 +10,7 @@
  *   - Event bindings via on.press / on.change
  */
 
+import { resolveAppAssetUrl } from "@milady/app-core/utils";
 import React, {
   createContext,
   useCallback,
@@ -17,6 +18,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import { useApp } from "../AppContext";
 import { getByPath, setByPath } from "./config-catalog";
 import type {
   AuthState,
@@ -29,9 +31,14 @@ import type {
   VisibilityCondition,
 } from "./ui-spec";
 
-// ── Context ─────────────────────────────────────────────────────────
-
 const UiContext = createContext<UiRenderContext | null>(null);
+
+const BLOCKED_LINK_PROTOCOLS = new Set([
+  "javascript",
+  "data",
+  "vbscript",
+  "file",
+]);
 
 function useUiCtx(): UiRenderContext {
   const ctx = useContext(UiContext);
@@ -179,6 +186,34 @@ export function evaluateUiVisibility(
     return !evaluateUiVisibility(condition.not, state, auth);
 
   return true;
+}
+
+export function sanitizeLinkHref(href: unknown): string {
+  // Strip ASCII control chars (tab, LF, CR) that browsers silently remove
+  // during URL parsing, preventing bypass attacks like "java\nscript:alert(1)".
+  const raw = String(href ?? "#")
+    .trim()
+    .replace(/[\t\n\r]/g, "");
+  if (!raw) return "#";
+
+  // Keep relative/hash links unchanged.
+  if (
+    raw.startsWith("#") ||
+    raw.startsWith("/") ||
+    raw.startsWith("./") ||
+    raw.startsWith("../") ||
+    raw.startsWith("?")
+  ) {
+    return raw;
+  }
+
+  const match = /^([a-zA-Z][a-zA-Z\d+.-]*):/.exec(raw);
+  if (!match) return raw;
+
+  const protocol = match[1].toLowerCase();
+  if (BLOCKED_LINK_PROTOCOLS.has(protocol)) return "#";
+
+  return raw;
 }
 
 // ── Built-in validators ─────────────────────────────────────────────
@@ -790,6 +825,7 @@ const TableComponent: ComponentFn = (props) => {
 };
 
 const CarouselComponent: ComponentFn = (props) => {
+  const { t } = useApp();
   const items =
     (props.items as Array<{ title: string; description: string }>) ?? [];
   const [current, setCurrent] = useState(0);
@@ -812,7 +848,7 @@ const CarouselComponent: ComponentFn = (props) => {
           onClick={() => setCurrent((p) => Math.max(0, p - 1))}
           disabled={current === 0}
         >
-          &larr;
+          {t("ui-renderer.Larr")}
         </button>
         <span className="text-[10px] text-[var(--muted)] self-center">
           {current + 1} / {items.length}
@@ -823,7 +859,7 @@ const CarouselComponent: ComponentFn = (props) => {
           onClick={() => setCurrent((p) => Math.min(items.length - 1, p + 1))}
           disabled={current === items.length - 1}
         >
-          &rarr;
+          {t("ui-renderer.Rarr")}
         </button>
       </div>
     </div>
@@ -875,12 +911,13 @@ const AvatarComponent: ComponentFn = (props) => {
 
 const ImageComponent: ComponentFn = (props) => {
   const src = props.src as string | undefined;
+  const resolvedSrc = src ? resolveAppAssetUrl(src) : undefined;
   const alt = String(props.alt ?? "");
   const w = props.width ? `${props.width}px` : "auto";
   const h = props.height ? `${props.height}px` : "auto";
-  return src ? (
+  return resolvedSrc ? (
     <img
-      src={src}
+      src={resolvedSrc}
       alt={alt}
       style={{ width: w, height: h }}
       className="object-cover border border-[var(--border)]"
@@ -1033,9 +1070,11 @@ const ButtonComponent: ComponentFn = (props, _children, ctx, el) => {
 };
 
 const LinkComponent: ComponentFn = (props, _children, ctx, el) => {
+  const safeHref = sanitizeLinkHref(props.href);
+
   return (
     <a
-      href={String(props.href ?? "#")}
+      href={safeHref}
       className="text-xs text-[var(--accent)] underline hover:opacity-80"
       target={props.external ? "_blank" : undefined}
       rel={props.external ? "noopener noreferrer" : undefined}
@@ -1136,7 +1175,7 @@ const PaginationComponent: ComponentFn = (props, _children, ctx) => {
         disabled={current <= 1}
         onClick={() => setValue(current - 1)}
       >
-        &larr;
+        ←
       </button>
       {Array.from({ length: total }, (_, i) => i + 1).map((page) => (
         <button
@@ -1158,8 +1197,42 @@ const PaginationComponent: ComponentFn = (props, _children, ctx) => {
         disabled={current >= total}
         onClick={() => setValue(current + 1)}
       >
-        &rarr;
+        →
       </button>
+    </div>
+  );
+};
+
+// ── Metric / KPI ────────────────────────────────────────────────────
+
+const MetricComponent: ComponentFn = (props) => {
+  const trend = props.trend as string | undefined;
+  const trendColor =
+    trend === "up"
+      ? "text-green-400"
+      : trend === "down"
+        ? "text-red-400"
+        : "text-[var(--muted)]";
+  return (
+    <div className="flex flex-col gap-0.5 p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+      <div className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-medium">
+        {String(props.label ?? "")}
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-xl font-semibold text-[var(--txt)]">
+          {props.value != null ? String(props.value) : "—"}
+        </span>
+        {props.unit != null && (
+          <span className="text-xs text-[var(--muted)]">
+            {String(props.unit)}
+          </span>
+        )}
+      </div>
+      {props.change != null && (
+        <div className={`text-[11px] font-medium ${trendColor}`}>
+          {String(props.change)}
+        </div>
+      )}
     </div>
   );
 };
@@ -1407,7 +1480,7 @@ const DialogComponent: ComponentFn = (props, children, ctx) => {
             className="text-[var(--muted)] hover:text-[var(--text)] text-lg leading-none px-1 cursor-pointer"
             onClick={close}
           >
-            &times;
+            ×
           </button>
         </div>
         {children}
@@ -1494,6 +1567,8 @@ const COMPONENTS: Record<string, ComponentFn> = {
   DropdownMenu: DropdownMenuComponent,
   Tabs: TabsComponent,
   Pagination: PaginationComponent,
+  // Metric
+  Metric: MetricComponent,
   // Visualization
   BarGraph: BarGraphComponent,
   LineGraph: LineGraphComponent,
@@ -1511,6 +1586,7 @@ const COMPONENTS: Record<string, ComponentFn> = {
 // ══════════════════════════════════════════════════════════════════════
 
 function ElementRenderer({ elementId }: { elementId: string }) {
+  const { t } = useApp();
   const ctx = useUiCtx();
   const el = ctx.spec.elements[elementId];
   if (!el) return null;
@@ -1524,7 +1600,7 @@ function ElementRenderer({ elementId }: { elementId: string }) {
   if (!component) {
     return (
       <div className="text-[10px] text-[var(--destructive)] border border-dashed border-[var(--destructive)] p-2">
-        Unknown component: {el.type}
+        {t("ui-renderer.UnknownComponent")} {el.type}
       </div>
     );
   }

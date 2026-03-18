@@ -2,106 +2,113 @@
  * Root App component — routing shell.
  */
 
+import { ErrorBoundary } from "@milady/app-core/components";
+import type { Tab } from "@milady/app-core/navigation";
+import {
+  APPS_ENABLED,
+  COMPANION_ENABLED,
+  pathForTab,
+} from "@milady/app-core/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "./AppContext";
 import { AdvancedPageView } from "./components/AdvancedPageView";
 import { AppsPageView } from "./components/AppsPageView";
 import { AutonomousPanel } from "./components/AutonomousPanel";
-import { BugReportModal } from "./components/BugReportModal";
+import { AvatarLoader } from "./components/avatar/AvatarLoader";
 import { CharacterView } from "./components/CharacterView";
 import { ChatView } from "./components/ChatView";
-import { CommandPalette } from "./components/CommandPalette";
+import {
+  COMPANION_OVERLAY_TABS,
+  CompanionShell,
+} from "./components/CompanionShell";
 import { CompanionView } from "./components/CompanionView";
+import { ConnectionFailedBanner } from "./components/ConnectionFailedBanner";
 import { ConnectorsPageView } from "./components/ConnectorsPageView";
 import { ConversationsSidebar } from "./components/ConversationsSidebar";
 import { CustomActionEditor } from "./components/CustomActionEditor";
 import { CustomActionsPanel } from "./components/CustomActionsPanel";
-import { EmotePicker } from "./components/EmotePicker";
 import { GameViewOverlay } from "./components/GameViewOverlay";
 import { Header } from "./components/Header";
 import { InventoryView } from "./components/InventoryView";
 import { KnowledgeView } from "./components/KnowledgeView";
 import { LifoSandboxView } from "./components/LifoSandboxView";
-import { LoadingScreen } from "./components/LoadingScreen";
-import { MemoryDebugPanel } from "./components/MemoryDebugPanel";
-import { Nav } from "./components/Nav";
 import { OnboardingWizard } from "./components/OnboardingWizard";
 import { PairingView } from "./components/PairingView";
-import { RestartBanner } from "./components/RestartBanner";
 import { SaveCommandModal } from "./components/SaveCommandModal";
 import { SettingsView } from "./components/SettingsView";
+import { ShellOverlays } from "./components/ShellOverlays";
 import { StartupFailureView } from "./components/StartupFailureView";
 import { StreamView } from "./components/StreamView";
-import { TerminalPanel } from "./components/TerminalPanel";
-import { ErrorBoundary } from "./components/ui/ErrorBoundary";
+import { SystemWarningBanner } from "./components/SystemWarningBanner";
 import { BugReportProvider, useBugReportState } from "./hooks/useBugReport";
 import { useContextMenu } from "./hooks/useContextMenu";
 import { useLifoAutoPopout } from "./hooks/useLifoAutoPopout";
-import { isLifoPopoutMode } from "./lifo-popout";
-import {
-  ALL_TAB_GROUPS,
-  APPS_ENABLED,
-  COMPANION_ENABLED,
-  pathForTab,
-} from "./navigation";
+import { useStreamPopoutNavigation } from "./hooks/useStreamPopoutNavigation";
+import { isLifoPopoutMode, isLifoPopoutValue } from "./lifo-popout";
 
 const advancedTabs = new Set(
   ALL_TAB_GROUPS.find((group) => group.label === "Advanced")?.tabs ?? [],
 );
 const CHAT_MOBILE_BREAKPOINT_PX = 1024;
 
-/** Check if we're in pop-out mode (StreamView only, no chrome). */
+/** Check if we're in pop-out mode (StreamView only, no chrome).
+ *  Excludes lifo popout values — those use the dedicated LifoSandboxView shell. */
 function useIsPopout(): boolean {
   const [popout] = useState(() => {
     if (typeof window === "undefined") return false;
     const params = new URLSearchParams(
       window.location.search || window.location.hash.split("?")[1] || "",
     );
-    return params.has("popout");
+    if (!params.has("popout")) return false;
+    return !isLifoPopoutValue(params.get("popout"));
   });
   return popout;
 }
 
 function ViewRouter() {
   const { tab } = useApp();
-  switch (tab) {
-    case "chat":
-      return <ChatView />;
-    case "companion":
-      return COMPANION_ENABLED ? <CompanionView /> : <ChatView />;
-    case "stream":
-      return <StreamView />;
-    case "apps":
-      // Apps disabled in production builds; fall through to chat
-      return APPS_ENABLED ? <AppsPageView /> : <ChatView />;
-    case "character":
-      return <CharacterView />;
-    case "wallets":
-      return <InventoryView />;
-    case "knowledge":
-      return <KnowledgeView />;
-    case "connectors":
-      return <ConnectorsPageView />;
-    case "advanced":
-    case "plugins":
-    case "skills":
-    case "actions":
-    case "triggers":
-    case "identity":
-    case "approvals":
-    case "safe-mode":
-    case "governance":
-    case "fine-tuning":
-    case "trajectories":
-    case "runtime":
-    case "database":
-    case "lifo":
-    case "logs":
-    case "security":
-      return <AdvancedPageView />;
-    case "settings": return <SettingsView />;
-    default: return <ChatView />;
-  }
+  const view = (() => {
+    switch (tab) {
+      case "chat":
+        return <ChatView />;
+      case "companion":
+        return COMPANION_ENABLED ? <CompanionView /> : <ChatView />;
+      case "stream":
+        return <StreamView />;
+      case "apps":
+        // Apps disabled in production builds; fall through to chat
+        return APPS_ENABLED ? <AppsPageView /> : <ChatView />;
+      case "character":
+      case "character-select":
+        return <CharacterView />;
+      case "wallets":
+        return <InventoryView />;
+      case "knowledge":
+        return <KnowledgeView />;
+      case "connectors":
+        return <ConnectorsPageView />;
+      case "advanced":
+      case "plugins":
+      case "skills":
+      case "actions":
+      case "triggers":
+      case "fine-tuning":
+      case "trajectories":
+      case "runtime":
+      case "database":
+      case "lifo":
+      case "logs":
+      case "security":
+        return <AdvancedPageView />;
+      case "voice":
+      case "settings":
+        return <SettingsView />;
+      default:
+        return <ChatView />;
+    }
+  })();
+
+  return <ErrorBoundary>{view}</ErrorBoundary>;
 }
 
 export function App() {
@@ -115,36 +122,30 @@ export function App() {
     tab,
     setTab,
     actionNotice,
+    uiShellMode,
     agentStatus,
     unreadConversations,
     activeGameViewerUrl,
     gameOverlayEnabled,
     setActionNotice,
   } = useApp();
+
   const isPopout = useIsPopout();
+  const shellMode = uiShellMode ?? "companion";
+  const effectiveTab: Tab =
+    shellMode === "native" && tab === "companion"
+      ? "chat"
+      : shellMode === "companion" && tab === "chat"
+        ? "companion"
+        : tab;
   const contextMenu = useContextMenu();
 
-  // When the stream is popped out, navigate away; when closed, navigate back.
-  const [streamPoppedOut, setStreamPoppedOut] = useState(false);
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail === "opened") {
-        setStreamPoppedOut(true);
-        setTab("chat");
-      } else if (detail === "closed") {
-        setStreamPoppedOut(false);
-        setTab("stream");
-      }
-    };
-    window.addEventListener("stream-popout", handler);
-    return () => window.removeEventListener("stream-popout", handler);
-  }, [setTab]);
+  useStreamPopoutNavigation(setTab);
 
   const [customActionsPanelOpen, setCustomActionsPanelOpen] = useState(false);
   const [customActionsEditorOpen, setCustomActionsEditorOpen] = useState(false);
   const [editingAction, setEditingAction] = useState<
-    import("./api-client").CustomActionDef | null
+    import("@milady/app-core/api").CustomActionDef | null
   >(null);
   const [isChatMobileLayout, setIsChatMobileLayout] = useState(() =>
     typeof window !== "undefined"
@@ -335,11 +336,10 @@ export function App() {
   }
 
   if (onboardingLoading || agentStarting) {
-    return (
-      <LoadingScreen
-        phase={agentStarting ? "initializing-agent" : startupPhase}
-      />
-    );
+    const loadingLabel = agentStarting
+      ? "Initializing agent"
+      : "Starting systems";
+    return <AvatarLoader label={loadingLabel} fullScreen />;
   }
 
   if (authRequired) return <PairingView />;
@@ -357,20 +357,29 @@ export function App() {
     );
   }
 
+  /* ── Companion shell mode ─────────────────────────────────────────── */
+  if (shellMode === "companion" && COMPANION_OVERLAY_TABS.has(effectiveTab)) {
+    return (
+      <BugReportProvider value={bugReport}>
+        <CompanionShell tab={effectiveTab} actionNotice={actionNotice} />
+        <ShellOverlays actionNotice={actionNotice} />
+      </BugReportProvider>
+    );
+  }
+
+  /* ── Native shell mode (all fork features intact) ─────────────────── */
   return (
     <BugReportProvider value={bugReport}>
-      {tab === "stream" && !streamPoppedOut ? (
+      {tab === "stream" ? (
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
           <Header />
-          <Nav />
           <main className="flex-1 min-h-0 overflow-hidden">
             <StreamView />
           </main>
         </div>
-      ) : isChat || (tab === "stream" && streamPoppedOut) ? (
+      ) : isChat ? (
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
-          <Header />
-          <Nav mobileLeft={mobileChatControls} />
+          <Header mobileLeft={mobileChatControls} />
           <div className="flex flex-1 min-h-0 relative">
             {isChatMobileLayout ? (
               <>
@@ -421,26 +430,24 @@ export function App() {
               }}
             />
           </div>
-          <TerminalPanel />
+          {/* <TerminalPanel /> */}
         </div>
       ) : (
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
           <Header />
-          <Nav />
           <main
             className={`flex-1 min-h-0 py-4 px-3 xl:py-6 xl:px-5 ${isAdvancedTab ? "overflow-hidden" : "overflow-y-auto"}`}
           >
             <ViewRouter />
           </main>
-          <TerminalPanel />
+          {/* <TerminalPanel /> */}
         </div>
       )}
       {/* Persistent game overlay — stays visible across all tabs */}
       {activeGameViewerUrl && gameOverlayEnabled && tab !== "apps" && (
         <GameViewOverlay />
       )}
-      <CommandPalette />
-      <EmotePicker />
+      <ShellOverlays actionNotice={actionNotice} />
       <SaveCommandModal
         open={contextMenu.saveCommandModalOpen}
         text={contextMenu.saveCommandText}
@@ -456,22 +463,8 @@ export function App() {
           setEditingAction(null);
         }}
       />
-      <RestartBanner />
-      <MemoryDebugPanel />
-      <BugReportModal />
-      {actionNotice && (
-        <div
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-2 rounded-lg text-[13px] font-medium z-[10000] text-white ${
-            actionNotice.tone === "error"
-              ? "bg-danger"
-              : actionNotice.tone === "success"
-                ? "bg-ok"
-                : "bg-accent"
-          }`}
-        >
-          {actionNotice.text}
-        </div>
-      )}
+      <ConnectionFailedBanner />
+      <SystemWarningBanner />
     </BugReportProvider>
   );
 }

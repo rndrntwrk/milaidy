@@ -11,6 +11,7 @@
  * Activity feed runs along the right sidebar. Chat ticker at the bottom.
  */
 
+import { client, isApiError } from "@milady/app-core/api";
 import {
   type CSSProperties,
   useCallback,
@@ -20,7 +21,6 @@ import {
   useState,
 } from "react";
 import { useApp } from "../AppContext";
-import { client, isApiError } from "../api-client";
 import { ActivityFeed } from "./stream/ActivityFeed";
 import { AvatarPip } from "./stream/AvatarPip";
 import { ChatContent } from "./stream/ChatContent";
@@ -31,12 +31,14 @@ import {
   FULL_SIZE,
   IS_POPOUT,
   PIP_SIZE,
+  type StreamSourceType,
   TERMINAL_ACTIVE_WINDOW_MS,
 } from "./stream/helpers";
 import { IdleContent } from "./stream/IdleContent";
 import { OverlayLayer } from "./stream/overlays/OverlayLayer";
 import { useOverlayLayout } from "./stream/overlays/useOverlayLayout";
 import { StatusBar } from "./stream/StatusBar";
+import { StreamSettings } from "./stream/StreamSettings";
 import { StreamTerminal } from "./stream/StreamTerminal";
 import { StreamVoiceConfig } from "./stream/StreamVoiceConfig";
 
@@ -44,7 +46,7 @@ import { StreamVoiceConfig } from "./stream/StreamVoiceConfig";
 // StreamView
 // ---------------------------------------------------------------------------
 
-export function StreamView() {
+export function StreamView({ inModal }: { inModal?: boolean } = {}) {
   const {
     agentStatus,
     autonomousEvents,
@@ -52,6 +54,7 @@ export function StreamView() {
     activeGameViewerUrl,
     activeGameSandbox,
     chatAvatarSpeaking,
+    t,
   } = useApp();
 
   const agentName = agentStatus?.agentName ?? "Milady";
@@ -80,6 +83,12 @@ export function StreamView() {
   const [uptime, setUptime] = useState(0);
   const [frameCount, setFrameCount] = useState(0);
   const [audioSource, setAudioSource] = useState("");
+
+  // ── Stream source ─────────────────────────────────────────────────
+  const [streamSource, setStreamSource] = useState<{
+    type: StreamSourceType;
+    url?: string;
+  }>({ type: "stream-tab" });
 
   useEffect(() => {
     let mounted = true;
@@ -113,6 +122,34 @@ export function StreamView() {
       clearInterval(id);
     };
   }, [streamAvailable]);
+
+  // ── Auto-detect game source ─────────────────────────────────────────
+  useEffect(() => {
+    if (!streamLive) return;
+    let cancelled = false;
+    if (activeGameViewerUrl.trim() && streamSource.type !== "game") {
+      client
+        .setStreamSource("game", activeGameViewerUrl)
+        .then((result) => {
+          if (!cancelled && result.ok) {
+            setStreamSource({ type: "game", url: activeGameViewerUrl });
+          }
+        })
+        .catch(() => {});
+    } else if (!activeGameViewerUrl.trim() && streamSource.type === "game") {
+      client
+        .setStreamSource("stream-tab")
+        .then((result) => {
+          if (!cancelled && result.ok) {
+            setStreamSource({ type: "stream-tab" });
+          }
+        })
+        .catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [activeGameViewerUrl, streamLive, streamSource.type]);
 
   const toggleStream = useCallback(async () => {
     if (loadingRef.current) return;
@@ -193,6 +230,25 @@ export function StreamView() {
       .catch(() => {});
   }, []);
 
+  const handleSourceChange = useCallback(
+    async (sourceType: StreamSourceType, customUrl?: string) => {
+      try {
+        const result = await client.setStreamSource(sourceType, customUrl);
+        if (result.ok) {
+          setStreamSource(
+            result.source as { type: StreamSourceType; url?: string },
+          );
+        }
+      } catch {
+        // Non-fatal — UI will show stale state
+      }
+    },
+    [],
+  );
+
+  // Settings panel
+  const [showSettings, setShowSettings] = useState(false);
+
   // PIP mode state — small overlay window
   const [isPip, setIsPip] = useState(false);
 
@@ -258,7 +314,8 @@ export function StreamView() {
     return "idle";
   }, [activeGameViewerUrl, terminalActive, autonomousEvents]);
 
-  const { layout } = useOverlayLayout(activeDestination?.id);
+  const overlayLayout = useOverlayLayout(activeDestination?.id);
+  const { layout } = overlayLayout;
 
   const feedEvents = useMemo(
     () =>
@@ -298,7 +355,9 @@ export function StreamView() {
   return (
     <div
       data-stream-view
-      className={`flex flex-col bg-bg text-txt font-body ${isPip ? "" : "h-full w-full"}`}
+      className={`flex flex-col text-txt font-body ${
+        inModal ? "bg-transparent" : "bg-bg"
+      } ${isPip ? "" : "h-full w-full"}`}
       style={pipStyle}
     >
       <StatusBar
@@ -307,6 +366,7 @@ export function StreamView() {
         viewerCount={viewerCount}
         isPip={isPip}
         onTogglePip={togglePip}
+        streamAvailable={streamAvailable}
         streamLive={streamLive}
         streamLoading={streamLoading}
         onToggleStream={toggleStream}
@@ -320,11 +380,21 @@ export function StreamView() {
         uptime={uptime}
         frameCount={frameCount}
         audioSource={audioSource}
+        streamSource={streamSource}
+        activeGameViewerUrl={activeGameViewerUrl}
+        onSourceChange={handleSourceChange}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       {/* Stream voice config — TTS toggle and status */}
-      {!isPip && (
-        <div className="flex items-center px-4 py-1 border-b border-border bg-bg">
+      {!isPip && streamAvailable && (
+        <div
+          className={`flex items-center px-4 py-1 border-b ${
+            inModal
+              ? "border-[var(--border)] bg-[rgba(255,255,255,0.03)]"
+              : "border-border bg-bg"
+          }`}
+        >
           <StreamVoiceConfig streamLive={streamLive} />
         </div>
       )}
@@ -332,10 +402,29 @@ export function StreamView() {
       <div className="flex flex-1 min-h-0">
         {/* Main content area — shows what the agent is doing */}
         <div className="flex-1 min-w-0 relative">
-          {mode === "gaming" ? (
+          {!streamAvailable ? (
+            <div className="h-full flex items-center justify-center p-6">
+              <div className="max-w-md rounded-2xl border border-border bg-bg-muted/50 p-6 text-center shadow-lg">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-muted">
+                  {t("streamview.StreamingUnavailabl")}
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-txt">
+                  {t("streamview.EnableTheStreaming")}
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-muted">
+                  {t("streamview.MiladyCouldNotRea")}{" "}
+                  <code>{t("streamview.streamingBase")}</code>{" "}
+                  {t("streamview.pluginThenReload")}
+                </p>
+                <p className="mt-4 text-xs text-muted">
+                  {t("streamview.IfThePluginIsAlr")}
+                </p>
+              </div>
+            </div>
+          ) : mode === "gaming" ? (
             <iframe
               src={activeGameViewerUrl}
-              title="Game"
+              title={t("streamview.Game")}
               className="w-full h-full border-0"
               sandbox={
                 activeGameSandbox ||
@@ -363,6 +452,21 @@ export function StreamView() {
 
           {/* VRM avatar — picture-in-picture overlay */}
           <AvatarPip isSpeaking={chatAvatarSpeaking} />
+
+          {/* Stream settings panel */}
+          {showSettings && streamAvailable && (
+            <StreamSettings
+              destinations={destinations}
+              activeDestination={activeDestination}
+              onDestinationChange={handleDestinationChange}
+              streamLive={streamLive}
+              streamSource={streamSource}
+              activeGameViewerUrl={activeGameViewerUrl}
+              onSourceChange={handleSourceChange}
+              overlayLayout={overlayLayout}
+              onClose={() => setShowSettings(false)}
+            />
+          )}
         </div>
 
         {/* Activity sidebar */}

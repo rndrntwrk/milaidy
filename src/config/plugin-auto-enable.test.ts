@@ -5,7 +5,44 @@
  * - applyPluginAutoEnable (connector, auth profile, env var, feature flag, hooks rules)
  * - CONNECTOR_PLUGINS / AUTH_PROVIDER_PLUGINS mappings
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Mock all static plugin star-imports in eliza.ts to avoid ESM resolution
+// failure: @elizaos/plugin-ollama imports MAX_EMBEDDING_TOKENS which Vitest
+// cannot resolve from @elizaos/core at static-analysis time.
+vi.mock("@elizaos/plugin-agent-orchestrator", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-agent-skills", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-anthropic", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-browser", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-cli", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-coding-agent", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-computeruse", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-cron", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-discord", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-edge-tts", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-elevenlabs", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-elizacloud", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-experience", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-form", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-google-genai", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-groq", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-knowledge", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-local-embedding", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-ollama", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-openai", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-openrouter", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-pdf", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-personality", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-plugin-manager", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-rolodex", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-secrets-manager", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-shell", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-sql", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-telegram", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-todo", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-trajectory-logger", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-trust", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
 
 import { CHANNEL_PLUGIN_MAP } from "../runtime/eliza";
 import {
@@ -252,14 +289,14 @@ describe("applyPluginAutoEnable — env vars", () => {
     ).toBe(true);
   });
 
-  it("enables pi-ai plugin when MILAIDY_USE_PI_AI is set", () => {
+  it("enables pi-ai plugin when MILADY_USE_PI_AI is set", () => {
     const params = makeParams({
-      env: { MILAIDY_USE_PI_AI: "1" },
+      env: { MILADY_USE_PI_AI: "1" },
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
     expect(config.plugins?.allow).toContain("pi-ai");
-    expect(changes.some((c) => c.includes("MILAIDY_USE_PI_AI"))).toBe(true);
+    expect(changes.some((c) => c.includes("MILADY_USE_PI_AI"))).toBe(true);
   });
 
   it("skips env var with empty string value", () => {
@@ -613,8 +650,8 @@ describe("CONNECTOR_PLUGINS", () => {
     expect(Object.keys(CONNECTOR_PLUGINS)).toHaveLength(19);
   });
 
-  it("maps retake to @milady/plugin-retake", () => {
-    expect(CONNECTOR_PLUGINS.retake).toBe("@milady/plugin-retake");
+  it("maps retake to @elizaos/plugin-retake", () => {
+    expect(CONNECTOR_PLUGINS.retake).toBe("@elizaos/plugin-retake");
   });
 
   it("has keys matching CONNECTOR_IDS from schema", () => {
@@ -657,8 +694,8 @@ describe("AUTH_PROVIDER_PLUGINS", () => {
     );
   });
 
-  it("maps MILAIDY_USE_PI_AI to pi-ai plugin", () => {
-    expect(AUTH_PROVIDER_PLUGINS.MILAIDY_USE_PI_AI).toBe(
+  it("maps MILADY_USE_PI_AI to pi-ai plugin", () => {
+    expect(AUTH_PROVIDER_PLUGINS.MILADY_USE_PI_AI).toBe(
       "@elizaos/plugin-pi-ai",
     );
   });
@@ -854,9 +891,9 @@ describe("Blooio connector auto-enable", () => {
 
 describe("STREAMING_PLUGINS mapping", () => {
   it("maps known streaming destinations to plugin packages", () => {
-    expect(STREAMING_PLUGINS.retake).toBe("@milady/plugin-retake");
-    expect(STREAMING_PLUGINS.twitch).toBe("@milady/plugin-twitch-streaming");
-    expect(STREAMING_PLUGINS.youtube).toBe("@milady/plugin-youtube-streaming");
+    expect(STREAMING_PLUGINS.retake).toBe("@elizaos/plugin-retake");
+    expect(STREAMING_PLUGINS.twitch).toBe("@elizaos/plugin-twitch-streaming");
+    expect(STREAMING_PLUGINS.youtube).toBe("@elizaos/plugin-youtube-streaming");
     expect(STREAMING_PLUGINS.customRtmp).toBe("@milady/plugin-custom-rtmp");
   });
 });

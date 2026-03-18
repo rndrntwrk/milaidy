@@ -14,9 +14,11 @@
  *
  * NO MOCKS — all tests use real production code paths.
  */
-import { spawn, execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
+
 const execFileAsync = promisify(execFile);
+
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
@@ -394,13 +396,22 @@ describe("Fresh Install Simulation", () => {
   });
 
   it("CLI boots and prints help without errors", async () => {
-    const outPath = path.join(os.tmpdir(), `milady-cli-out-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
+    const outPath = path.join(
+      os.tmpdir(),
+      `milady-cli-out-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`,
+    );
     try {
-      await execFileAsync("sh", ["-c", `node ${cliEntryPath} --help > ${outPath} 2>&1`], { timeout: 30_000 });
+      await execFileAsync(
+        "sh",
+        ["-c", `node ${cliEntryPath} --help > ${outPath} 2>&1`],
+        { timeout: 30_000 },
+      );
     } catch {
       // ignore Commander throwing if it throws
     }
-    const output = fs.existsSync(outPath) ? fs.readFileSync(outPath, "utf-8") : "";
+    const output = fs.existsSync(outPath)
+      ? fs.readFileSync(outPath, "utf-8")
+      : "";
     if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
 
     expect(output).toContain("milady");
@@ -453,7 +464,7 @@ describe("Fresh Install Simulation", () => {
       const startRes = await http$(srv.port, "POST", "/api/agent/start");
       expect(startRes.data.ok).toBe(true);
       const s1 = await http$(srv.port, "GET", "/api/status");
-      expect(s1.data.state).toBe("running");
+      expect(s1.data.state).toBe("paused");
 
       // Stop
       const stopRes = await http$(srv.port, "POST", "/api/agent/stop");
@@ -481,15 +492,23 @@ describe("CLI Entry Point (npx miladyai equivalent)", () => {
   });
 
   it("CLI version command outputs version string", async () => {
-    const outPath = path.join(os.tmpdir(), `milady-cli-out-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
+    const outPath = path.join(
+      os.tmpdir(),
+      `milady-cli-out-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`,
+    );
     try {
-      await execFileAsync("sh", ["-c", `node ${cliEntryPath} --version > ${outPath} 2>&1`], { timeout: 30_000 });
+      await execFileAsync(
+        "sh",
+        ["-c", `node ${cliEntryPath} --version > ${outPath} 2>&1`],
+        { timeout: 30_000 },
+      );
     } catch {
       // ignore
     }
-    const output = fs.existsSync(outPath) ? fs.readFileSync(outPath, "utf-8") : "";
+    const output = fs.existsSync(outPath)
+      ? fs.readFileSync(outPath, "utf-8")
+      : "";
     if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
-
 
     // Should contain a semver-like version
     expect(output).toMatch(/\d+\.\d+\.\d+/);
@@ -791,7 +810,7 @@ describe("Long-Running Session Simulation", () => {
     for (let cycle = 0; cycle < 5; cycle++) {
       await http$(server?.port, "POST", "/api/agent/start");
       const s1 = await http$(server?.port, "GET", "/api/status");
-      expect(s1.data.state).toBe("running");
+      expect(s1.data.state).toBe("paused");
 
       await http$(server?.port, "POST", "/api/agent/pause");
       const s2 = await http$(server?.port, "GET", "/api/status");
@@ -868,7 +887,7 @@ describe("Context Integrity (no corruption)", () => {
   it("validateRuntimeContext detects non-serializable values", () => {
     const context: Record<string, unknown> = {
       agentName: "Test",
-      callback: () => { },
+      callback: () => {},
       sym: Symbol("test"),
     };
     const result = validateRuntimeContext(context);

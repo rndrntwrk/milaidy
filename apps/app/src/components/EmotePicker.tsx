@@ -1,7 +1,13 @@
+import { client } from "@milady/app-core/api";
+import {
+  dispatchMiladyEvent,
+  EMOTE_PICKER_EVENT,
+  STOP_EMOTE_EVENT,
+} from "@milady/app-core/events";
 import { Menu, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../AppContext";
-import { client } from "../api-client";
+import { useTimeout } from "../hooks/useTimeout";
 
 // Types
 interface EmoteItem {
@@ -198,7 +204,9 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export function EmotePicker() {
-  const { emotePickerOpen, openEmotePicker, closeEmotePicker } = useApp();
+  const { setTimeout } = useTimeout();
+
+  const { emotePickerOpen, openEmotePicker, closeEmotePicker, t } = useApp();
   const [search, setSearch] = useState("");
   const [playing, setPlaying] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -301,20 +309,23 @@ export function EmotePicker() {
   }, [search, activeCategory]);
 
   // Play emote
-  const playEmote = useCallback(async (emoteId: string) => {
-    setPlaying(emoteId);
-    try {
-      await client.playEmote(emoteId);
-    } catch (err) {
-      console.error("Failed to play emote:", err);
-    } finally {
-      setTimeout(() => setPlaying(null), 1000);
-    }
-  }, []);
+  const playEmote = useCallback(
+    async (emoteId: string) => {
+      setPlaying(emoteId);
+      try {
+        await client.playEmote(emoteId);
+      } catch (err) {
+        console.error("Failed to play emote:", err);
+      } finally {
+        setTimeout(() => setPlaying(null), 1000);
+      }
+    },
+    [setTimeout],
+  );
 
   // Stop emote
   const stopEmote = useCallback(() => {
-    document.dispatchEvent(new CustomEvent("milady:stop-emote"));
+    dispatchMiladyEvent(STOP_EMOTE_EVENT);
     setPlaying(null);
   }, []);
 
@@ -351,9 +362,9 @@ export function EmotePicker() {
       }
     };
 
-    document.addEventListener("milady:emote-picker", handleElectronToggle);
+    document.addEventListener(EMOTE_PICKER_EVENT, handleElectronToggle);
     return () =>
-      document.removeEventListener("milady:emote-picker", handleElectronToggle);
+      document.removeEventListener(EMOTE_PICKER_EVENT, handleElectronToggle);
   }, [emotePickerOpen, openEmotePicker, closeEmotePicker]);
 
   // Focus search input on open
@@ -368,16 +379,31 @@ export function EmotePicker() {
   return (
     <div
       ref={panelRef}
-      className="fixed bottom-4 left-4 z-[9999] w-[320px] rounded-lg border border-border bg-card shadow-2xl backdrop-blur-md"
+      className="fixed bottom-4 left-4 z-[9999] w-[320px] rounded-xl shadow-2xl"
+      style={{
+        background: "rgba(18, 22, 32, 0.96)",
+        border: "1px solid rgba(240, 178, 50, 0.18)",
+        backdropFilter: "blur(24px)",
+        boxShadow: "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
+      }}
     >
       {/* Header */}
       <div
-        className="flex cursor-move items-center justify-between border-b border-border px-3 py-2"
+        className="flex cursor-move items-center justify-between px-3 py-2"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
         onPointerDown={onPointerDown}
       >
         <div className="flex items-center gap-2">
-          <Menu className="h-4 w-4 text-muted" />
-          <span className="text-sm font-semibold text-txt">Emotes</span>
+          <Menu
+            className="w-4 h-4"
+            style={{ color: "rgba(255,255,255,0.45)" }}
+          />
+          <span
+            className="text-sm font-semibold"
+            style={{ color: "rgba(240,238,250,0.92)" }}
+          >
+            {t("emotepicker.Emotes")}
+          </span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -385,20 +411,28 @@ export function EmotePicker() {
           <button
             type="button"
             onClick={stopEmote}
-            className="rounded bg-danger px-2 py-1 text-xs font-medium text-destructive-fg hover:opacity-90"
+            className="rounded px-2 py-1 text-xs font-medium transition-colors"
+            style={{ background: "#ef4444", color: "#fff" }}
           >
-            Stop
+            {t("emotepicker.Stop")}
           </button>
 
           {/* Shortcut label */}
-          <span className="text-xs text-muted">⌘E</span>
+          <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>
+            ⌘E
+          </span>
 
           {/* Close button */}
           <button
             type="button"
             onClick={closeEmotePicker}
-            className="text-muted hover:text-txt"
-            aria-label="Close emote picker"
+            style={{ color: "rgba(255,255,255,0.45)" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "rgba(240,238,250,0.92)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "rgba(255,255,255,0.45)";
+            }}
           >
             <X className="w-4 h-4" />
           </button>
@@ -406,33 +440,41 @@ export function EmotePicker() {
       </div>
 
       {/* Search */}
-      <div className="border-b border-border px-3 py-2">
+      <div
+        className="px-3 py-2"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+      >
         <input
           ref={inputRef}
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search emotes..."
-          aria-label="Search emotes"
-          className="w-full rounded bg-bg-accent px-2 py-1 text-sm text-txt placeholder-muted focus:outline-none focus:ring-1 focus:ring-accent"
+          placeholder={t("emotepicker.SearchEmotes")}
+          className="w-full rounded px-2 py-1 text-sm focus:outline-none focus:ring-1"
+          style={{
+            background: "rgba(255,255,255,0.06)",
+            color: "rgba(240,238,250,0.92)",
+            border: "1px solid rgba(255,255,255,0.1)",
+          }}
         />
       </div>
 
       {/* Category tabs */}
-      <div className="flex gap-1 overflow-x-auto border-b border-border px-3 py-2" role="tablist" aria-label="Emote categories">
+      <div
+        className="flex gap-1 overflow-x-auto px-3 py-2"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+      >
         <button
           id="emote-tab-all"
           onClick={() => setActiveCategory(null)}
-          role="tab"
-          aria-selected={activeCategory === null}
-          aria-controls="emote-tabpanel"
-          className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${
-            activeCategory === null
-              ? "bg-accent text-accent-fg"
-              : "bg-bg-accent text-txt hover:bg-bg-hover"
-          }`}
+          className="shrink-0 rounded px-2 py-1 text-xs font-medium transition-colors"
+          style={{
+            background:
+              activeCategory === null ? "#f0b232" : "rgba(255,255,255,0.06)",
+            color: activeCategory === null ? "#000" : "rgba(255,255,255,0.6)",
+          }}
         >
-          All
+          {t("emotepicker.All")}
         </button>
         {CATEGORIES.map((cat) => (
           <button
@@ -440,14 +482,12 @@ export function EmotePicker() {
             key={cat}
             id={`emote-tab-${cat}`}
             onClick={() => setActiveCategory(cat)}
-            role="tab"
-            aria-selected={activeCategory === cat}
-            aria-controls="emote-tabpanel"
-            className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${
-              activeCategory === cat
-                ? "bg-accent text-accent-fg"
-                : "bg-bg-accent text-txt hover:bg-bg-hover"
-            }`}
+            className="shrink-0 rounded px-2 py-1 text-xs font-medium transition-colors"
+            style={{
+              background:
+                activeCategory === cat ? "#f0b232" : "rgba(255,255,255,0.06)",
+              color: activeCategory === cat ? "#000" : "rgba(255,255,255,0.6)",
+            }}
           >
             <span className="mr-1">{CATEGORY_ICONS[cat]}</span>
             {CATEGORY_LABELS[cat]}
@@ -456,7 +496,7 @@ export function EmotePicker() {
       </div>
 
       {/* Emote grid */}
-      <div className="max-h-[400px] overflow-y-auto p-3" role="tabpanel" id="emote-tabpanel" aria-labelledby={activeCategory ? `emote-tab-${activeCategory}` : "emote-tab-all"}>
+      <div className="max-h-[400px] overflow-y-auto p-3">
         <div className="grid grid-cols-5 gap-2">
           {filteredEmotes.map((emote) => (
             <button
@@ -465,11 +505,11 @@ export function EmotePicker() {
               onClick={() => playEmote(emote.id)}
               disabled={playing === emote.id}
               title={emote.name}
-              className={`flex aspect-square items-center justify-center rounded text-2xl transition-colors ${
-                playing === emote.id
-                  ? "bg-accent"
-                  : "bg-bg-accent hover:bg-bg-hover"
-              }`}
+              className="flex aspect-square items-center justify-center rounded text-2xl transition-colors"
+              style={{
+                background:
+                  playing === emote.id ? "#f0b232" : "rgba(255,255,255,0.06)",
+              }}
             >
               {emote.icon}
             </button>
@@ -477,8 +517,11 @@ export function EmotePicker() {
         </div>
 
         {filteredEmotes.length === 0 && (
-          <div className="py-8 text-center text-sm text-muted">
-            No emotes found
+          <div
+            className="py-8 text-center text-sm"
+            style={{ color: "rgba(255,255,255,0.3)" }}
+          >
+            {t("emotepicker.NoEmotesFound")}
           </div>
         )}
       </div>

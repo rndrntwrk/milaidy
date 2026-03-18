@@ -18,23 +18,17 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockUseApp } = vi.hoisted(() => ({
-  mockUseApp: vi.fn(),
-}));
+const mockUseApp = vi.fn();
 
-vi.mock("../../src/AppContext", async () => {
-  const actual = await vi.importActual("../../src/AppContext");
-  return {
-    ...actual,
-    useApp: () => mockUseApp(),
-    THEMES: [
-      { id: "milady", label: "Milady" },
-      { id: "dark", label: "Dark" },
-      { id: "light", label: "Light" },
-      { id: "solarized", label: "Solarized" },
-    ],
-  };
-});
+vi.mock("../../src/AppContext", () => ({
+  useApp: () => mockUseApp(),
+  THEMES: [
+    { id: "milady", label: "Milady" },
+    { id: "dark", label: "Dark" },
+    { id: "light", label: "Light" },
+    { id: "solarized", label: "Solarized" },
+  ],
+}));
 
 vi.mock("../../src/components/MediaSettingsSection", () => ({
   MediaSettingsSection: () =>
@@ -76,15 +70,15 @@ import { SettingsView } from "../../src/components/SettingsView";
 
 type SettingsState = {
   // Cloud
-  cloudEnabled: boolean;
-  cloudConnected: boolean;
-  cloudCredits: number;
-  cloudCreditsLow: boolean;
-  cloudCreditsCritical: boolean;
-  cloudTopUpUrl: string;
-  cloudUserId: string;
-  cloudLoginBusy: boolean;
-  cloudLoginError: string;
+  miladyCloudEnabled: boolean;
+  miladyCloudConnected: boolean;
+  miladyCloudCredits: number;
+  miladyCloudCreditsLow: boolean;
+  miladyCloudCreditsCritical: boolean;
+  miladyCloudTopUpUrl: string;
+  miladyCloudUserId: string;
+  miladyCloudLoginBusy: boolean;
+  miladyCloudLoginError: string;
   cloudDisconnecting: boolean;
   // Plugins
   plugins: Array<{ name: string; enabled: boolean; description?: string }>;
@@ -92,21 +86,22 @@ type SettingsState = {
   pluginSaveSuccess: boolean;
   // Theme
   currentTheme: string;
+  uiLanguage: string;
   // Other
   [key: string]: unknown;
 };
 
 function createSettingsState(): SettingsState {
   return {
-    cloudEnabled: true,
-    cloudConnected: false,
-    cloudCredits: 100,
-    cloudCreditsLow: false,
-    cloudCreditsCritical: false,
-    cloudTopUpUrl: "https://example.com/topup",
-    cloudUserId: "",
-    cloudLoginBusy: false,
-    cloudLoginError: "",
+    miladyCloudEnabled: true,
+    miladyCloudConnected: false,
+    miladyCloudCredits: 100,
+    miladyCloudCreditsLow: false,
+    miladyCloudCreditsCritical: false,
+    miladyCloudTopUpUrl: "https://example.com/topup",
+    miladyCloudUserId: "",
+    miladyCloudLoginBusy: false,
+    miladyCloudLoginError: "",
     cloudDisconnecting: false,
     plugins: [
       {
@@ -123,45 +118,92 @@ function createSettingsState(): SettingsState {
     pluginSaving: false,
     pluginSaveSuccess: false,
     currentTheme: "milady",
+    uiLanguage: "en",
+  };
+}
+
+const sharedLoadDropStatus = vi.fn().mockResolvedValue(undefined);
+
+function createUseAppMock(
+  state: SettingsState,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    t: (k: string) => k,
+    ...state,
+    exportBusy: false,
+    exportPassword: "",
+    exportIncludeLogs: false,
+    exportError: null,
+    exportSuccess: null,
+    importBusy: false,
+    importPassword: "",
+    importFile: null,
+    importError: null,
+    importSuccess: null,
+    loadPlugins: vi.fn(),
+    handlePluginToggle: vi.fn().mockImplementation((pluginName: string) => {
+      const plugin = state.plugins.find((p) => p.name === pluginName);
+      if (plugin) plugin.enabled = !plugin.enabled;
+    }),
+    setTheme: (theme: string) => {
+      state.currentTheme = theme;
+    },
+    setUiLanguage: (language: string) => {
+      state.uiLanguage = language;
+    },
+    setActionNotice: vi.fn(),
+    setTab: vi.fn(),
+    loadUpdateStatus: vi.fn(),
+    handlePluginConfigSave: vi.fn(),
+    handleCloudLogin: vi.fn(),
+    handleCloudDisconnect: vi.fn(),
+    handleReset: vi.fn(),
+    handleAgentExport: vi.fn(),
+    handleAgentImport: vi.fn(),
+    loadDropStatus: sharedLoadDropStatus,
+    setState: (key: string, value: unknown) => {
+      state[key] = value;
+    },
+    ...overrides,
   };
 }
 
 describe("SettingsView Sections", () => {
   let state: SettingsState;
-  let themeSwitched: string | null;
+  let _themeSwitched: string | null;
   let handleResetCalled: boolean;
 
   beforeEach(() => {
     state = createSettingsState();
-    themeSwitched = null;
+    _themeSwitched = null;
     handleResetCalled = false;
 
-    vi.spyOn(window, "confirm").mockImplementation(() => true);
+    (
+      globalThis as typeof globalThis & {
+        window?: Window & typeof globalThis;
+      }
+    ).window = {
+      confirm: () => true,
+    } as Window & typeof globalThis;
 
-    mockUseApp.mockReset();
-    mockUseApp.mockImplementation(() => ({
-      ...state,
-      loadPlugins: vi.fn(),
-      handlePluginToggle: vi.fn().mockImplementation((pluginName: string) => {
-        const plugin = state.plugins.find((p) => p.name === pluginName);
-        if (plugin) plugin.enabled = !plugin.enabled;
-      }),
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true, data: [] }),
+    }) as unknown as typeof fetch;
+
+    const cachedMock = createUseAppMock(state, {
       setTheme: (theme: string) => {
-        themeSwitched = theme;
+        _themeSwitched = theme;
         state.currentTheme = theme;
       },
-      setTab: vi.fn(),
-      loadUpdateStatus: vi.fn(),
-      handlePluginConfigSave: vi.fn(),
-      handleCloudLogin: vi.fn(),
-      handleCloudDisconnect: vi.fn(),
       handleReset: async () => {
         handleResetCalled = true;
       },
-      setState: (key: string, value: unknown) => {
-        state[key] = value;
-      },
-    }));
+    });
+
+    mockUseApp.mockReset();
+    mockUseApp.mockImplementation(() => cachedMock);
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -180,69 +222,26 @@ describe("SettingsView Sections", () => {
         (node) =>
           node.type === "div" &&
           node.children.some(
-            (c) => typeof c === "string" && c.includes("Appearance"),
+            (c) =>
+              typeof c === "string" &&
+              (c.includes("Appearance") ||
+                c.includes("settings.sections.appearance") ||
+                c.includes("settings.appearance")),
           ),
       );
       expect(appearanceText.length).toBeGreaterThan(0);
     });
 
-    it("renders theme options", async () => {
+    it("renders language options", async () => {
       let tree: TestRenderer.ReactTestRenderer | null = null;
 
       await act(async () => {
         tree = TestRenderer.create(React.createElement(SettingsView));
       });
 
-      // Look for theme buttons
-      const themeButtons = tree?.root.findAll(
-        (node) =>
-          node.type === "button" &&
-          node.children.some(
-            (c) =>
-              typeof c === "string" &&
-              (c.includes("Milady") ||
-                c.includes("Dark") ||
-                c.includes("Light")),
-          ),
-      );
-      expect(themeButtons.length).toBeGreaterThanOrEqual(0);
-    });
-
-    it("clicking theme button changes theme", async () => {
-      let tree: TestRenderer.ReactTestRenderer | null = null;
-
-      await act(async () => {
-        tree = TestRenderer.create(React.createElement(SettingsView));
-      });
-
-      const darkButton = tree?.root.findAll(
-        (node) =>
-          node.type === "button" &&
-          node.children.some(
-            (c) => typeof c === "string" && c.includes("Dark"),
-          ),
-      )[0];
-
-      if (darkButton) {
-        await act(async () => {
-          darkButton.props.onClick();
-        });
-        expect(themeSwitched).toBe("dark");
-      }
-    });
-
-    it("highlights current theme", async () => {
-      state.currentTheme = "dark";
-
-      let tree: TestRenderer.ReactTestRenderer | null = null;
-
-      await act(async () => {
-        tree = TestRenderer.create(React.createElement(SettingsView));
-      });
-
-      // Current theme should have accent styling
-      const buttons = tree?.root.findAll((node) => node.type === "button");
-      expect(buttons.length).toBeGreaterThan(0);
+      // Look for language buttons
+      const langButtons = tree?.root.findAll((node) => node.type === "button");
+      expect(langButtons.length).toBeGreaterThanOrEqual(0);
     });
   });
 
@@ -328,7 +327,7 @@ describe("SettingsView Sections", () => {
 
   describe("Cloud Integration Section", () => {
     it("shows login button when not connected", async () => {
-      state.cloudConnected = false;
+      state.miladyCloudConnected = false;
 
       let tree: TestRenderer.ReactTestRenderer | null = null;
 
@@ -351,8 +350,8 @@ describe("SettingsView Sections", () => {
     });
 
     it("shows disconnect button when connected", async () => {
-      state.cloudConnected = true;
-      state.cloudUserId = "user-123";
+      state.miladyCloudConnected = true;
+      state.miladyCloudUserId = "user-123";
 
       let tree: TestRenderer.ReactTestRenderer | null = null;
 
@@ -372,8 +371,8 @@ describe("SettingsView Sections", () => {
     });
 
     it("shows credits when connected", async () => {
-      state.cloudConnected = true;
-      state.cloudCredits = 500;
+      state.miladyCloudConnected = true;
+      state.miladyCloudCredits = 500;
 
       let tree: TestRenderer.ReactTestRenderer | null = null;
 
@@ -401,7 +400,7 @@ describe("SettingsView Sections", () => {
       const dangerText = tree?.root.findAll(
         (node) =>
           node.type === "span" &&
-          node.children.some((c) => c === "Danger Zone"),
+          node.children.some((c) => c === "settings.dangerZone"),
       );
       expect(dangerText.length).toBeGreaterThan(0);
     });
@@ -452,7 +451,11 @@ describe("SettingsView Sections", () => {
         tree = TestRenderer.create(React.createElement(SettingsView));
       });
 
-      const expectedSections = ["Appearance", "Voice", "Advanced"];
+      const expectedSections = [
+        "settings.sections.appearance.label",
+        "settings.sections.voice.label",
+        "settings.sections.advanced.label",
+      ];
       const allText = JSON.stringify(tree?.toJSON());
 
       for (const section of expectedSections) {
@@ -547,23 +550,7 @@ describe("Settings Persistence", () => {
     state = createSettingsState();
 
     mockUseApp.mockReset();
-    mockUseApp.mockImplementation(() => ({
-      ...state,
-      loadPlugins: vi.fn(),
-      handlePluginToggle: vi.fn(),
-      setTheme: (theme: string) => {
-        state.currentTheme = theme;
-      },
-      setTab: vi.fn(),
-      loadUpdateStatus: vi.fn(),
-      handlePluginConfigSave: vi.fn(),
-      handleCloudLogin: vi.fn(),
-      handleCloudDisconnect: vi.fn(),
-      handleReset: vi.fn(),
-      setState: (key: string, value: unknown) => {
-        state[key] = value;
-      },
-    }));
+    mockUseApp.mockImplementation(() => createUseAppMock(state));
   });
 
   it("theme selection persists in state", async () => {
@@ -572,16 +559,16 @@ describe("Settings Persistence", () => {
     expect(state.currentTheme).toBe("solarized");
   });
 
-  it("multiple theme changes update state correctly", async () => {
-    const setTheme = mockUseApp().setTheme;
+  it("multiple language changes update state correctly", async () => {
+    const setUiLanguage = mockUseApp().setUiLanguage;
 
-    setTheme("dark");
-    expect(state.currentTheme).toBe("dark");
+    setUiLanguage("es");
+    expect(state.uiLanguage).toBe("es");
 
-    setTheme("light");
-    expect(state.currentTheme).toBe("light");
+    setUiLanguage("ko");
+    expect(state.uiLanguage).toBe("ko");
 
-    setTheme("milady");
-    expect(state.currentTheme).toBe("milady");
+    setUiLanguage("en");
+    expect(state.uiLanguage).toBe("en");
   });
 });

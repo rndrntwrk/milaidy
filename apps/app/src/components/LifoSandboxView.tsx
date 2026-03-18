@@ -4,7 +4,9 @@ import {
   client,
   type SandboxBrowserEndpoints,
   type SandboxWindowInfo,
-} from "../api-client";
+} from "@milady/app-core/api";
+import { pathForTab } from "@milady/app-core/navigation";
+import { useApp } from "../AppContext";
 import { useLifoSync } from "../hooks/useLifoSync";
 import {
   buildLifoPopoutUrl,
@@ -20,7 +22,6 @@ import {
   type LifoRuntime,
   normalizeTerminalText,
 } from "../lifo-runtime";
-import { pathForTab } from "../navigation";
 import { LifoMonitorPanel } from "./LifoMonitorPanel";
 
 interface TerminalOutputEvent {
@@ -38,7 +39,8 @@ function formatError(error: unknown): string {
   return String(error);
 }
 
-export function LifoSandboxView() {
+export function LifoSandboxView({ inModal }: { inModal?: boolean } = {}) {
+  const { t } = useApp();
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const explorerRef = useRef<HTMLDivElement | null>(null);
   const runtimeRef = useRef<LifoRuntime | null>(null);
@@ -447,15 +449,37 @@ export function LifoSandboxView() {
     }
   }, [pipEnabled]);
 
+  const panelCls = inModal
+    ? "rounded-xl border border-[var(--border)] overflow-hidden bg-[rgba(255,255,255,0.04)] backdrop-blur-sm"
+    : "rounded-xl border border-border overflow-hidden bg-panel";
+  const headerCls = inModal
+    ? "rounded-xl border border-[var(--border)] bg-[rgba(255,255,255,0.04)] backdrop-blur-sm p-3"
+    : "rounded-xl border border-border bg-panel p-3";
+  const badgeCls = inModal
+    ? "rounded-full px-2 py-1 text-[11px] font-medium bg-[rgba(255,255,255,0.06)] border border-[var(--border)] text-[var(--muted)]"
+    : "rounded-full px-2 py-1 text-[11px] font-medium bg-card border border-border text-muted";
+  const btnCls = inModal
+    ? "px-3 py-1.5 rounded-md border border-[var(--border)] bg-[rgba(255,255,255,0.06)] text-xs text-[var(--txt)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+    : "px-3 py-1.5 rounded-md border border-border bg-card text-xs text-txt hover:border-accent hover:text-accent transition-colors";
+  const btnAccentCls = inModal
+    ? "px-3 py-1.5 rounded-md border border-[var(--accent)] bg-[var(--accent)] text-white text-xs hover:opacity-90 transition-colors"
+    : "px-3 py-1.5 rounded-md border border-accent bg-accent text-accent-fg text-xs hover:bg-accent-hover transition-colors";
+
   return (
-    <section className="h-full min-h-[620px] flex flex-col gap-3">
-      <header className="rounded-xl border border-border bg-panel p-3">
+    <section
+      className={`h-full flex flex-col gap-3 ${inModal ? "p-4" : "min-h-[620px]"}`}
+    >
+      <header className={headerCls}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-sm font-semibold text-txt">
+            <h2
+              className={`text-sm font-semibold ${inModal ? "text-[var(--txt)]" : "text-txt"}`}
+            >
               {popoutMode ? "Lifo Agent Popout" : "Lifo Agent Surface"}
             </h2>
-            <p className="mt-1 text-xs text-muted">
+            <p
+              className={`mt-1 text-xs ${inModal ? "text-[var(--muted)]" : "text-muted"}`}
+            >
               {popoutMode
                 ? "Dedicated full Lifo runtime. Agent commands execute here in real time."
                 : "Embedded full Lifo watcher. Open popout for the dedicated agent-controlled surface."}
@@ -475,7 +499,7 @@ export function LifoSandboxView() {
               {error ? "error" : ready ? "ready" : "booting"}
             </span>
 
-            <span className="rounded-full px-2 py-1 text-[11px] font-medium bg-card border border-border text-muted">
+            <span className={badgeCls}>
               {popoutMode
                 ? "controller"
                 : controllerOnline
@@ -487,9 +511,9 @@ export function LifoSandboxView() {
               <button
                 type="button"
                 onClick={openPopout}
-                className="px-3 py-1.5 rounded-md border border-accent bg-accent text-accent-fg text-xs hover:bg-accent-hover transition-colors"
+                className={btnAccentCls}
               >
-                Open Lifo Popout
+                {t("lifosandboxview.OpenLifoPopout")}
               </button>
             )}
 
@@ -498,28 +522,25 @@ export function LifoSandboxView() {
                 <button
                   type="button"
                   onClick={togglePip}
-                  className={`px-3 py-1.5 rounded-md border text-xs transition-colors ${
-                    pipEnabled
-                      ? "border-accent bg-accent text-accent-fg"
-                      : "border-border bg-card text-txt hover:border-accent hover:text-accent"
-                  }`}
+                  className={pipEnabled ? btnAccentCls : btnCls}
                 >
                   {pipEnabled ? "Disable PIP" : "Enable PIP"}
                 </button>
-                <button
-                  type="button"
-                  onClick={resetSession}
-                  className="px-3 py-1.5 rounded-md border border-border bg-card text-xs text-txt hover:border-accent hover:text-accent transition-colors"
-                >
-                  Reset
+                <button type="button" onClick={resetSession} className={btnCls}>
+                  {t("lifosandboxview.Reset")}
                 </button>
               </>
             )}
           </div>
         </div>
 
-        <div className="mt-2 text-[11px] text-muted">
-          Agent commands replayed: <span className="text-txt">{runCount}</span>
+        <div
+          className={`mt-2 text-[11px] ${inModal ? "text-[var(--muted)]" : "text-muted"}`}
+        >
+          {t("lifosandboxview.AgentCommandsRepla")}{" "}
+          <span className={inModal ? "text-[var(--txt)]" : "text-txt"}>
+            {runCount}
+          </span>
         </div>
 
         {error && (
@@ -531,22 +552,34 @@ export function LifoSandboxView() {
 
       <div className="grid flex-1 min-h-[360px] grid-cols-1 xl:grid-cols-[360px_1fr] gap-3">
         <div
-          className={`rounded-xl border border-border overflow-hidden bg-panel min-h-[280px] ${
+          className={`${panelCls} min-h-[280px] ${
             popoutMode ? "" : "pointer-events-none select-none"
           }`}
         >
-          <div className="px-3 py-2 text-xs font-semibold border-b border-border text-txt">
-            Explorer
+          <div
+            className={`px-3 py-2 text-xs font-semibold border-b ${
+              inModal
+                ? "border-[var(--border)] text-[var(--txt)]"
+                : "border-border text-txt"
+            }`}
+          >
+            {t("lifosandboxview.Explorer")}
           </div>
           <div ref={explorerRef} className="h-[calc(100%-37px)] w-full" />
         </div>
         <div
-          className={`rounded-xl border border-border overflow-hidden bg-panel min-h-[280px] ${
+          className={`${panelCls} min-h-[280px] ${
             popoutMode ? "" : "pointer-events-none select-none"
           }`}
         >
-          <div className="px-3 py-2 text-xs font-semibold border-b border-border text-txt">
-            Terminal
+          <div
+            className={`px-3 py-2 text-xs font-semibold border-b ${
+              inModal
+                ? "border-[var(--border)] text-[var(--txt)]"
+                : "border-border text-txt"
+            }`}
+          >
+            {t("lifosandboxview.Terminal")}
           </div>
           <div ref={terminalRef} className="h-[calc(100%-37px)] w-full" />
         </div>
@@ -572,9 +605,23 @@ export function LifoSandboxView() {
         />
       )}
 
-      <div className="rounded-xl border border-border bg-panel p-3 min-h-[140px] max-h-[220px] overflow-auto">
-        <div className="text-xs font-semibold text-txt">Agent Replay Log</div>
-        <pre className="mt-2 whitespace-pre-wrap break-words text-[11px] text-muted font-mono">
+      <div
+        className={`${
+          inModal
+            ? "rounded-xl border border-[var(--border)] bg-[rgba(255,255,255,0.04)] backdrop-blur-sm"
+            : "rounded-xl border border-border bg-panel"
+        } p-3 min-h-[140px] max-h-[220px] overflow-auto`}
+      >
+        <div
+          className={`text-xs font-semibold ${inModal ? "text-[var(--txt)]" : "text-txt"}`}
+        >
+          {t("lifosandboxview.AgentReplayLog")}
+        </div>
+        <pre
+          className={`mt-2 whitespace-pre-wrap break-words text-[11px] font-mono ${
+            inModal ? "text-[var(--muted)]" : "text-muted"
+          }`}
+        >
           {output.length > 0
             ? output.join("\n")
             : booting

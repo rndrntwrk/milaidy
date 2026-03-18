@@ -1,68 +1,154 @@
-import { useApp } from "../AppContext";
+import { useCallback, useState } from "react";
+import {
+  getVrmBackgroundUrl,
+  getVrmPreviewUrl,
+  getVrmUrl,
+  useApp,
+} from "../AppContext";
+import { ChatModalView } from "./ChatModalView";
+import { CompanionHeader } from "./companion/CompanionHeader";
+import { CompanionHubNav } from "./companion/CompanionHubNav";
+import { VrmStage } from "./companion/VrmStage";
 
-/**
- * Minimal Companion scaffold for upstream.
- *
- * This view is intentionally lightweight and feature-flagged. It allows
- * iterative Companion work without changing default navigation behavior.
- */
 export function CompanionView() {
-  const { agentStatus, setTab } = useApp();
+  const {
+    selectedVrmIndex,
+    customVrmUrl,
+    customBackgroundUrl,
+    uiLanguage,
+    setUiLanguage,
+    setTab,
+    setUiShellMode,
+    // Header properties
+    agentStatus,
+    miladyCloudEnabled,
+    miladyCloudConnected,
+    miladyCloudCredits,
+    miladyCloudCreditsCritical,
+    miladyCloudCreditsLow,
+    miladyCloudTopUpUrl,
+    walletAddresses,
+    lifecycleBusy,
+    lifecycleAction,
+    handlePauseResume,
+    handleRestart,
+    t,
+  } = useApp();
+
+  // Compute Header properties
+  const name = agentStatus?.agentName ?? "Milady";
+  const agentState = agentStatus?.state ?? "not_started";
+
+  const stateColor =
+    agentState === "running"
+      ? "text-ok border-ok"
+      : agentState === "paused" ||
+          agentState === "restarting" ||
+          agentState === "starting"
+        ? "text-warn border-warn"
+        : agentState === "error"
+          ? "text-danger border-danger"
+          : "text-muted border-muted";
+
+  const restartBusy = lifecycleBusy && lifecycleAction === "restart";
+  const pauseResumeBusy = lifecycleBusy;
+  const pauseResumeDisabled =
+    lifecycleBusy || agentState === "restarting" || agentState === "starting";
+
+  const creditColor = miladyCloudCreditsCritical
+    ? "border-danger text-danger"
+    : miladyCloudCreditsLow
+      ? "border-warn text-warn"
+      : "border-ok text-ok";
+
+  const evmShort = walletAddresses?.evmAddress
+    ? `${walletAddresses.evmAddress.slice(0, 4)}...${walletAddresses.evmAddress.slice(-4)}`
+    : null;
+  const solShort = walletAddresses?.solanaAddress
+    ? `${walletAddresses.solanaAddress.slice(0, 4)}...${walletAddresses.solanaAddress.slice(-4)}`
+    : null;
+  const [cameraZoomed, setCameraZoomed] = useState(true);
+  const handleSwitchToNativeShell = useCallback(() => {
+    setUiShellMode("native");
+    setTab("chat");
+  }, [setTab, setUiShellMode]);
+
+  const safeSelectedVrmIndex = selectedVrmIndex > 0 ? selectedVrmIndex : 1;
+  const vrmPath =
+    selectedVrmIndex === 0 && customVrmUrl
+      ? customVrmUrl
+      : getVrmUrl(safeSelectedVrmIndex);
+  const fallbackPreviewUrl =
+    selectedVrmIndex > 0
+      ? getVrmPreviewUrl(safeSelectedVrmIndex)
+      : getVrmPreviewUrl(1);
+  const vrmBackgroundUrl =
+    selectedVrmIndex === 0 && customVrmUrl
+      ? customBackgroundUrl || getVrmBackgroundUrl(1)
+      : getVrmBackgroundUrl(safeSelectedVrmIndex);
 
   return (
-    <div className="flex flex-col gap-4 p-4 sm:p-6">
-      <section className="border border-border bg-card rounded-lg p-4 sm:p-5">
-        <div className="text-xs uppercase tracking-wide text-muted mb-2">
-          Experimental
-        </div>
-        <h2 className="text-xl font-semibold text-txt-strong mb-2">
-          Companion Mode (Scaffold)
-        </h2>
-        <p className="text-sm text-muted">
-          Companion mode is enabled via feature flag and currently uses a
-          minimal scaffold in upstream. Core workflows remain available from
-          existing tabs while we iterate in small PRs.
-        </p>
-      </section>
+    <div
+      className="absolute inset-0 overflow-hidden text-white font-display rounded-2xl bg-[radial-gradient(circle_at_50%_120%,#212942_0%,#12151e_80%)] animate-in fade-in zoom-in-95 duration-500"
+      style={{
+        backgroundImage: `url("${vrmBackgroundUrl}")`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
+    >
+      <div className="absolute inset-0 z-0 bg-cover opacity-60 bg-[radial-gradient(circle_at_10%_20%,rgba(255,255,255,0.03)_0%,transparent_40%),radial-gradient(circle_at_80%_80%,rgba(0,225,255,0.05)_0%,transparent_40%)] pointer-events-none" />
 
-      <section className="border border-border bg-card rounded-lg p-4 sm:p-5">
-        <div className="text-sm text-muted mb-1">Agent Status</div>
-        <div className="text-base font-medium text-txt-strong capitalize">
-          {agentStatus?.state ?? "unknown"}
-        </div>
-        <div className="text-xs text-muted mt-1">
-          {agentStatus?.agentName ?? "Milady"}
-        </div>
-      </section>
+      {/* Model Layer */}
+      <VrmStage
+        vrmPath={vrmPath}
+        fallbackPreviewUrl={fallbackPreviewUrl}
+        cameraProfile={cameraZoomed ? "companion_close" : "companion"}
+        t={t}
+      />
 
-      <section className="border border-border bg-card rounded-lg p-4 sm:p-5">
-        <div className="text-sm font-medium text-txt-strong mb-3">
-          Quick Navigation
+      {/* UI Overlay */}
+      <div className="absolute inset-0 z-10 flex flex-col px-8 py-6 pointer-events-none [&>*]:pointer-events-auto">
+        <CompanionHeader
+          cameraZoomed={cameraZoomed}
+          setCameraZoomed={setCameraZoomed}
+          name={name}
+          agentState={agentState}
+          stateColor={stateColor}
+          lifecycleBusy={lifecycleBusy}
+          restartBusy={restartBusy}
+          pauseResumeBusy={pauseResumeBusy}
+          pauseResumeDisabled={pauseResumeDisabled}
+          handlePauseResume={handlePauseResume}
+          handleRestart={handleRestart}
+          miladyCloudEnabled={miladyCloudEnabled}
+          miladyCloudConnected={miladyCloudConnected}
+          miladyCloudCredits={miladyCloudCredits}
+          creditColor={creditColor}
+          miladyCloudTopUpUrl={miladyCloudTopUpUrl}
+          evmShort={evmShort}
+          solShort={solShort}
+          handleSwitchToNativeShell={handleSwitchToNativeShell}
+          uiLanguage={uiLanguage}
+          setUiLanguage={setUiLanguage}
+          t={t}
+        />
+
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-3xl h-[45%] z-20 pointer-events-auto">
+          <ChatModalView variant="companion-dock" />
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="btn text-xs py-2 px-3"
-            onClick={() => setTab("chat")}
-          >
-            Open Chat
-          </button>
-          <button
-            type="button"
-            className="btn text-xs py-2 px-3"
-            onClick={() => setTab("character")}
-          >
-            Open Character
-          </button>
-          <button
-            type="button"
-            className="btn text-xs py-2 px-3"
-            onClick={() => setTab("settings")}
-          >
-            Open Settings
-          </button>
+
+        {/* Main Content Area */}
+        <div className="flex-1 grid grid-cols-[1fr_auto] gap-6 min-h-0 relative">
+          {/* Center (Empty to show character) */}
+          <div className="w-full h-full" />
+
+          {/* Right Panel: Actions + Game HUD Menu */}
+          <aside className="fixed top-1/2 -translate-y-1/2 right-6 flex flex-col items-end gap-4 z-[60]">
+            {/* Game HUD Icon Menu */}
+            <CompanionHubNav setTab={setTab} t={t} />
+          </aside>
         </div>
-      </section>
+      </div>
     </div>
   );
 }

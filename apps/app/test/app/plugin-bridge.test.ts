@@ -23,19 +23,19 @@ import {
   isNative,
   isWeb,
   platform,
-} from "../../src/bridge/plugin-bridge";
+} from "@milady/app-core/bridge";
 
 describe("plugin-bridge", () => {
   // -- Platform --
 
   it("detects web platform in test env", () => {
     expect(platform).toBe("web");
-    expect(isWeb).toBe(true);
+    expect(isWeb()).toBe(true);
     expect(isNative).toBe(false);
     expect(isIOS).toBe(false);
     expect(isAndroid).toBe(false);
-    expect(isElectron).toBe(false);
-    expect(isMacOS).toBe(isElectron);
+    expect(isElectron()).toBe(false);
+    expect(isMacOS()).toBe(isElectron());
   });
 
   // -- Capabilities --

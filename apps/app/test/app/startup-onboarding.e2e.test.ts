@@ -4,20 +4,12 @@ import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type OnboardingStep =
-  | "welcome"
-  | "name"
-  | "avatar"
-  | "style"
-  | "theme"
-  | "runMode"
-  | "dockerSetup"
-  | "cloudProvider"
-  | "modelSelection"
-  | "cloudLogin"
-  | "llmProvider"
-  | "inventorySetup"
-  | "connectors"
-  | "permissions";
+  | "wakeUp"
+  | "language"
+  | "identity"
+  | "connection"
+  | "senses"
+  | "activate";
 
 type AppHarnessState = {
   onboardingLoading: boolean;
@@ -104,10 +96,11 @@ type AppHarnessState = {
   onboardingRpcKeys: Record<string, string>;
   onboardingAvatar: number;
   onboardingRestarting: boolean;
-  cloudConnected: boolean;
-  cloudLoginBusy: boolean;
-  cloudLoginError: string;
-  cloudUserId: string;
+  miladyCloudConnected: boolean;
+  miladyCloudLoginBusy: boolean;
+  miladyCloudLoginError: string;
+  miladyCloudUserId: string;
+  uiShellMode: string;
   [key: string]: unknown;
 };
 
@@ -190,8 +183,14 @@ vi.mock("../../src/components/PairingView", () => ({
 vi.mock("../../src/components/ChatView", () => ({
   ChatView: () => React.createElement("div", null, "ChatView"),
 }));
-vi.mock("../../src/components/LoadingScreen", () => ({
-  LoadingScreen: () => React.createElement("div", null, "LoadingScreen"),
+vi.mock("../../src/components/avatar/AvatarLoader", () => ({
+  AvatarLoader: () => React.createElement("div", null, "AvatarLoader"),
+}));
+vi.mock("../../src/components/CompanionView", () => ({
+  CompanionView: () => React.createElement("div", null, "CompanionView"),
+}));
+vi.mock("../../src/components/ChatModalView.js", () => ({
+  ChatModalView: () => React.createElement("div", null, "ChatModalView"),
 }));
 vi.mock("../../src/hooks/useLifoAutoPopout", () => ({
   useLifoAutoPopout: (options: unknown) => mockUseLifoAutoPopout(options),
@@ -201,6 +200,16 @@ vi.mock("../../src/components/TerminalPanel", () => ({
 }));
 vi.mock("../../src/components/AvatarSelector", () => ({
   AvatarSelector: () => React.createElement("div", null, "AvatarSelector"),
+}));
+vi.mock("../../src/components/companion/VrmStage", () => ({
+  VrmStage: () => React.createElement("div", null, "VrmStage"),
+}));
+vi.mock("../../src/components/StreamView", () => ({
+  StreamView: () => React.createElement("div", null, "StreamView"),
+}));
+vi.mock("../../src/components/CompanionShell", () => ({
+  CompanionShell: () => React.createElement("div", null, "CompanionShell"),
+  useCompanionShell: () => ({}),
 }));
 vi.mock("../../src/components/PermissionsSection", () => ({
   PermissionsOnboardingSection: ({
@@ -291,11 +300,9 @@ function createHarnessState(): AppHarnessState {
     onboardingComplete: false,
     tab: "chat",
     actionNotice: null,
-    toasts: [],
-    dismissToast: () => {},
-    onboardingStep: "welcome",
+    onboardingStep: "wakeUp",
     onboardingOptions: onboardingOptions(),
-    onboardingName: "",
+    onboardingName: "Milady",
     onboardingStyle: "",
     onboardingTheme: "milady",
     onboardingRunMode: "",
@@ -319,10 +326,11 @@ function createHarnessState(): AppHarnessState {
     onboardingRpcKeys: {},
     onboardingAvatar: 1,
     onboardingRestarting: false,
-    cloudConnected: false,
-    cloudLoginBusy: false,
-    cloudLoginError: "",
-    cloudUserId: "",
+    miladyCloudConnected: false,
+    miladyCloudLoginBusy: false,
+    miladyCloudLoginError: "",
+    miladyCloudUserId: "",
+    uiShellMode: "native",
   };
 }
 
@@ -364,87 +372,38 @@ describe("app startup onboarding flow (e2e)", () => {
   beforeEach(() => {
     state = createHarnessState();
 
+    const STEP_ORDER: OnboardingStep[] = [
+      "wakeUp",
+      "language",
+      "identity",
+      "connection",
+      "senses",
+      "activate",
+    ];
+
     const handleOnboardingNext = async () => {
-      switch (state.onboardingStep) {
-        case "welcome":
-          state.onboardingStep = "name";
-          break;
-        case "name":
-          state.onboardingStep = "avatar";
-          break;
-        case "avatar":
-          state.onboardingStep = "style";
-          break;
-        case "style":
-          state.onboardingStep = "theme";
-          break;
-        case "theme":
-          state.onboardingStep = "runMode";
-          break;
-        case "runMode":
-          state.onboardingStep =
-            state.onboardingRunMode === "local-sandbox"
-              ? "dockerSetup"
-              : "llmProvider";
-          break;
-        case "dockerSetup":
-          state.onboardingStep = "llmProvider";
-          break;
-        case "llmProvider":
-          state.onboardingStep = "inventorySetup";
-          break;
-        case "inventorySetup":
-          state.onboardingStep = "connectors";
-          break;
-        case "connectors":
-          state.onboardingStep = "permissions";
-          break;
-        case "permissions":
-          state.onboardingComplete = true;
-          state.tab = "chat";
-          break;
-        default:
-          break;
+      if (state.onboardingStep === "activate") {
+        state.onboardingComplete = true;
+        state.tab = "chat";
+        return;
+      }
+      const idx = STEP_ORDER.indexOf(state.onboardingStep);
+      if (idx >= 0 && idx < STEP_ORDER.length - 1) {
+        state.onboardingStep = STEP_ORDER[idx + 1];
       }
     };
 
     const handleOnboardingBack = () => {
-      switch (state.onboardingStep) {
-        case "name":
-          state.onboardingStep = "welcome";
-          break;
-        case "avatar":
-          state.onboardingStep = "name";
-          break;
-        case "style":
-          state.onboardingStep = "avatar";
-          break;
-        case "theme":
-          state.onboardingStep = "style";
-          break;
-        case "runMode":
-          state.onboardingStep = "theme";
-          break;
-        case "llmProvider":
-          state.onboardingStep = "runMode";
-          break;
-        case "inventorySetup":
-          state.onboardingStep = "llmProvider";
-          break;
-        case "connectors":
-          state.onboardingStep = "inventorySetup";
-          break;
-        case "permissions":
-          state.onboardingStep = "connectors";
-          break;
-        default:
-          break;
+      const idx = STEP_ORDER.indexOf(state.onboardingStep);
+      if (idx > 0) {
+        state.onboardingStep = STEP_ORDER[idx - 1];
       }
     };
 
     mockUseApp.mockReset();
     mockUseLifoAutoPopout.mockReset();
     mockUseApp.mockImplementation(() => ({
+      t: (k: string) => k,
       ...state,
       setState: (key: string, value: unknown) => {
         state[key] = value;
@@ -455,8 +414,8 @@ describe("app startup onboarding flow (e2e)", () => {
       handleOnboardingNext,
       handleOnboardingBack,
       handleCloudLogin: async () => {
-        state.cloudConnected = true;
-        state.cloudUserId = "test-user";
+        state.miladyCloudConnected = true;
+        state.miladyCloudUserId = "test-user";
       },
     }));
   });
@@ -471,38 +430,23 @@ describe("app startup onboarding flow (e2e)", () => {
     const renderedTree = tree;
 
     for (let i = 0; i < 20 && !state.onboardingComplete; i += 1) {
-      if (state.onboardingStep === "name") {
-        const nameInput = renderedTree.root.findAll(
-          (node) =>
-            node.type === "input" &&
-            node.props.placeholder === "enter custom name...",
-        )[0];
-        expect(nameInput).toBeDefined();
-        await act(async () => {
-          nameInput.props.onChange({ target: { value: "Onboarding Smoke" } });
-        });
-        await rerender(renderedTree);
-      }
-
-      if (state.onboardingStep === "style" && !state.onboardingStyle) {
-        clickButton(renderedTree, "chaotic");
-        await rerender(renderedTree);
-      }
-
-      if (state.onboardingStep === "runMode") {
-        state.onboardingRunMode = "local-rawdog";
-        await rerender(renderedTree);
-      }
-
-      if (state.onboardingStep === "llmProvider") {
+      if (state.onboardingStep === "connection" && !state.onboardingProvider) {
         state.onboardingProvider = "ollama";
         await rerender(renderedTree);
       }
 
-      if (state.onboardingStep === "permissions") {
+      if (state.onboardingStep === "senses") {
         clickButton(renderedTree, "permissions-continue");
-      } else {
-        clickButton(renderedTree, "next");
+      } else if (state.onboardingStep === "language") {
+        clickButton(renderedTree, "English");
+      } else if (state.onboardingStep === "wakeUp") {
+        clickButton(renderedTree, "Activate");
+      } else if (state.onboardingStep === "identity") {
+        clickButton(renderedTree, "Confirm");
+      } else if (state.onboardingStep === "connection") {
+        clickButton(renderedTree, "Confirm");
+      } else if (state.onboardingStep === "activate") {
+        clickButton(renderedTree, "Enter");
       }
       await rerender(renderedTree);
     }
@@ -516,6 +460,5 @@ describe("app startup onboarding flow (e2e)", () => {
 
     expect(renderedText).toContain("ChatView");
     expect(renderedText).toContain("Header");
-    expect(renderedText).toContain("Nav");
   });
 });

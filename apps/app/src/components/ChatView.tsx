@@ -6,7 +6,14 @@
  * Input row at bottom with mic + textarea + send button.
  */
 
-import { Mic, Paperclip, Send, Square } from "lucide-react";
+import {
+  client,
+  type ImageAttachment,
+  type VoiceConfig,
+} from "@milady/app-core/api";
+import { VOICE_CONFIG_UPDATED_EVENT } from "@milady/app-core/events";
+import { Button, Textarea } from "@milady/ui";
+import { Mic, Paperclip, Send, Smile, Square } from "lucide-react";
 import {
   type ChangeEvent,
   type DragEvent,
@@ -18,12 +25,14 @@ import {
   useState,
 } from "react";
 import { getVrmPreviewUrl, useApp } from "../AppContext";
-import { client, type ImageAttachment, type VoiceConfig } from "../api-client";
+import { useTimeout } from "../hooks/useTimeout";
 import {
   useVoiceChat,
   type VoicePlaybackStartEvent,
 } from "../hooks/useVoiceChat";
+import { AgentActivityBox } from "./AgentActivityBox";
 import { ChatEmptyState, ChatMessage, TypingIndicator } from "./ChatMessage";
+import { MessageContent } from "./MessageContent";
 
 function nowMs(): number {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -33,7 +42,65 @@ function isMobileViewport(): boolean {
   return typeof window !== "undefined" && window.innerWidth < 768;
 }
 
-export const ChatView = memo(function ChatView() {
+const CHAT_INPUT_MIN_HEIGHT_PX = 38;
+const CHAT_INPUT_MAX_HEIGHT_PX = 200;
+
+/**
+ * Routine coding-agent status messages that belong in the activity box, not chat.
+ * These messages are intentionally stored in the database (for audit/debugging)
+ * but filtered from the visible chat UI — this is by design, not a bug.
+ */
+const ROUTINE_CODING_AGENT_RE =
+  /^\[.+?\] (?:Approved:|Responded:|Sent keys:|Turn done, continuing:|Idle for \d+[smh])/;
+
+export function isRoutineCodingAgentMessage(msg: {
+  source?: string;
+  text: string;
+}): boolean {
+  return (
+    msg.source === "coding-agent" && ROUTINE_CODING_AGENT_RE.test(msg.text)
+  );
+}
+
+type ChatViewVariant = "default" | "game-modal";
+
+function GameModalMessage({
+  msg,
+  children,
+}: {
+  msg: { timestamp?: number; role?: string };
+  children: React.ReactNode;
+}) {
+  const [faded, setFaded] = useState(false);
+  useEffect(() => {
+    if (!msg.timestamp) return;
+    const age = Date.now() - msg.timestamp;
+    if (age > 60000) {
+      setFaded(true);
+    } else {
+      const timer = setTimeout(() => setFaded(true), 60000 - age);
+      return () => clearTimeout(timer);
+    }
+  }, [msg.timestamp]);
+
+  const isUser = msg.role === "user";
+  return (
+    <div
+      className={`flex w-full transition-opacity duration-1000 ${faded ? "opacity-0 pointer-events-none" : "opacity-100"} ${isUser ? "justify-end" : "justify-start"}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+interface ChatViewProps {
+  variant?: ChatViewVariant;
+}
+
+export function ChatView({ variant = "default" }: ChatViewProps) {
+  const { setTimeout } = useTimeout();
+
+  const isGameModal = variant === "game-modal";
   const {
     agentStatus,
     chatInput,
@@ -42,6 +109,7 @@ export const ChatView = memo(function ChatView() {
     conversationMessages,
     handleChatSend,
     handleChatStop,
+    handleChatRetry,
     setState,
     droppedFiles,
     shareIngestNotice,
@@ -49,6 +117,10 @@ export const ChatView = memo(function ChatView() {
     selectedVrmIndex,
     chatPendingImages,
     setChatPendingImages,
+    uiLanguage,
+    openEmotePicker,
+    ptySessions,
+    t,
   } = useApp();
 
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -92,10 +164,15 @@ export const ChatView = memo(function ChatView() {
       void loadVoiceConfig();
     };
 
-    window.addEventListener("milady:voice-config-updated", handler);
+    window.addEventListener(VOICE_CONFIG_UPDATED_EVENT, handler);
     return () =>
-      window.removeEventListener("milady:voice-config-updated", handler);
+      window.removeEventListener(VOICE_CONFIG_UPDATED_EVENT, handler);
   }, [loadVoiceConfig]);
+
+  // ── Derived composer state ──────────────────────────────────────
+  const isAgentStarting =
+    agentStatus?.state === "starting" || agentStatus?.state === "restarting";
+  const isComposerLocked = chatSending || isAgentStarting;
 
   // ── Voice chat ────────────────────────────────────────────────────
   const pendingVoiceTurnRef = useRef<{
@@ -114,7 +191,7 @@ export const ChatView = memo(function ChatView() {
 
   const handleVoiceTranscript = useCallback(
     (text: string) => {
-      if (chatSending) return;
+      if (isComposerLocked) return;
       const speechEndedAtMs = nowMs();
       pendingVoiceTurnRef.current = {
         speechEndedAtMs,
@@ -124,7 +201,7 @@ export const ChatView = memo(function ChatView() {
       setState("chatInput", text);
       setTimeout(() => void handleChatSend("VOICE_DM"), 50);
     },
-    [chatSending, setState, handleChatSend],
+    [isComposerLocked, setState, handleChatSend, setTimeout],
   );
 
   const handleVoicePlaybackStart = useCallback(
@@ -156,6 +233,7 @@ export const ChatView = memo(function ChatView() {
   const voice = useVoiceChat({
     onTranscript: handleVoiceTranscript,
     onPlaybackStart: handleVoicePlaybackStart,
+    lang: uiLanguage === "zh-CN" ? "zh-CN" : "en-US",
     voiceConfig,
   });
   const { queueAssistantSpeech, stopSpeaking } = voice;
@@ -171,7 +249,7 @@ export const ChatView = memo(function ChatView() {
             !chatFirstTokenReceived &&
             msg.role === "assistant" &&
             !msg.text.trim()
-          ),
+          ) && !isRoutineCodingAgentMessage(msg),
       ),
     [chatFirstTokenReceived, chatSending, msgs],
   );
@@ -281,11 +359,12 @@ export const ChatView = memo(function ChatView() {
 
   // Keep input focused for fast multi-turn chat.
   useEffect(() => {
-    if (chatSending || isMobileViewport()) return;
+    if (isComposerLocked || isMobileViewport()) return;
     textareaRef.current?.focus();
-  }, [chatSending]);
+  }, [isComposerLocked]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isComposerLocked) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void handleChatSend();
@@ -369,11 +448,53 @@ export const ChatView = memo(function ChatView() {
       <div
         ref={messagesRef}
         data-testid="chat-messages-scroll"
-        className="flex-1 overflow-y-auto py-2 pr-3 sm:pr-4 relative"
+        className="flex-1 overflow-y-auto py-2 pr-3 sm:pr-4 relative flex flex-col"
         style={{ zIndex: 1, scrollbarGutter: "stable both-edges" }}
       >
         {visibleMsgs.length === 0 && !chatSending ? (
           <ChatEmptyState agentName={agentName} />
+        ) : isGameModal ? (
+          <div className="flex flex-col gap-4 py-4 w-full mt-auto">
+            {visibleMsgs.map((msg) => {
+              const isUser = msg.role === "user";
+              return (
+                <GameModalMessage key={msg.id} msg={msg}>
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed ${
+                      isUser
+                        ? "bg-accent/80 text-white rounded-br-sm"
+                        : "bg-black/30 text-white/90 rounded-bl-sm"
+                    }`}
+                  >
+                    <div
+                      className="break-words"
+                      style={{ fontFamily: "var(--font-chat)" }}
+                    >
+                      <MessageContent message={msg} />
+                    </div>
+                  </div>
+                </GameModalMessage>
+              );
+            })}
+            {chatSending && !chatFirstTokenReceived && (
+              <div className="flex w-full justify-start">
+                <div className="max-w-[85%] rounded-2xl rounded-bl-sm px-4 py-3 bg-black/30 flex items-center gap-1">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full bg-white/50 animate-bounce"
+                    style={{ animationDelay: "0ms" }}
+                  />
+                  <span
+                    className="w-1.5 h-1.5 rounded-full bg-white/50 animate-bounce"
+                    style={{ animationDelay: "150ms" }}
+                  />
+                  <span
+                    className="w-1.5 h-1.5 rounded-full bg-white/50 animate-bounce"
+                    style={{ animationDelay: "300ms" }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           <div className="w-full pr-2 sm:pr-3 space-y-1">
             {visibleMsgs.map((msg, i) => {
@@ -387,6 +508,7 @@ export const ChatView = memo(function ChatView() {
                   isGrouped={isGrouped}
                   agentName={agentName}
                   agentAvatarSrc={agentAvatarSrc}
+                  onRetry={handleChatRetry}
                 />
               );
             })}
@@ -400,6 +522,9 @@ export const ChatView = memo(function ChatView() {
           </div>
         )}
       </div>
+
+      {/* Agent activity box — sticky status per active coding-agent task */}
+      <AgentActivityBox sessions={ptySessions} />
 
       {/* Share ingest notice */}
       {shareIngestNotice && (
@@ -438,7 +563,7 @@ export const ChatView = memo(function ChatView() {
               />
               <button
                 type="button"
-                title="Remove image"
+                title={t("chatview.RemoveImage")}
                 aria-label={`Remove image ${img.name}`}
                 onClick={() => removeImage(i)}
                 className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-danger text-white text-[10px] flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity cursor-pointer"
@@ -455,9 +580,11 @@ export const ChatView = memo(function ChatView() {
           className="pb-1 text-[10px] text-muted relative"
           style={{ zIndex: 1 }}
         >
-          Silence end→first token: {voiceLatency.speechEndToFirstTokenMs ?? "—"}
-          ms · end→voice start: {voiceLatency.speechEndToVoiceStartMs ?? "—"}ms
-          · first sentence:{" "}
+          {t("chatview.SilenceEndFirstTo")}{" "}
+          {voiceLatency.speechEndToFirstTokenMs ?? "—"}
+          {t("chatview.msEndVoiceStart")}{" "}
+          {voiceLatency.speechEndToVoiceStartMs ?? "—"}
+          {t("chatview.msFirst")}{" "}
           {voiceLatency.firstSegmentCached == null
             ? "—"
             : voiceLatency.firstSegmentCached
@@ -475,106 +602,236 @@ export const ChatView = memo(function ChatView() {
         className="hidden"
         onChange={handleFileInputChange}
       />
-      <div
-        className="flex gap-1.5 sm:gap-2 items-end border-t border-border pt-3 pb-3 sm:pb-4 relative"
-        style={{ zIndex: 1 }}
-      >
-        {/* Paperclip / image attach button */}
-        <button
-          type="button"
-          className={`h-[38px] w-[38px] shrink-0 flex items-center justify-center border rounded cursor-pointer transition-all duration-200 hover:shadow-sm self-end ${
-            chatPendingImages.length > 0
-              ? "border-accent bg-accent/10 text-accent"
-              : "border-border bg-card text-muted hover:border-accent hover:text-accent"
-          }`}
-          onClick={() => fileInputRef.current?.click()}
-          aria-label="Attach image"
-          title="Attach image"
-          disabled={chatSending}
-        >
-          <Paperclip className="w-4 h-4" />
-        </button>
+      {isGameModal ? (
+        /* ── Game-modal composer ──────────────────────────────────────── */
+        <div className="mt-auto pt-4 relative" style={{ zIndex: 1 }}>
+          <div className="relative flex items-end min-h-[52px] gap-1 transition-all">
+            {/* Mic button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`flex shrink-0 items-center justify-center w-[46px] h-[46px] mb-1.5 rounded-full transition-all ${
+                voice.isListening
+                  ? "bg-accent/20 text-accent"
+                  : "bg-transparent text-white/50 hover:bg-white/10 hover:text-white"
+              } ${isComposerLocked ? "opacity-50" : ""}`}
+              onClick={voice.toggleListening}
+              aria-label={
+                isAgentStarting
+                  ? t("chat.agentStarting")
+                  : voice.isListening
+                    ? t("chat.stopListening")
+                    : t("chat.voiceInput")
+              }
+              disabled={isComposerLocked}
+            >
+              <Mic
+                className={`w-5 h-5 ${voice.isListening ? "animate-pulse" : ""}`}
+              />
+            </Button>
 
-        {/* Mic button — user voice input */}
-        {voice.supported && (
-          <button
-            type="button"
-            className={`h-[38px] w-[38px] flex-shrink-0 flex items-center justify-center border rounded cursor-pointer transition-all self-end ${
-              voice.isListening
-                ? "bg-accent border-accent text-accent-fg shadow-[0_0_10px_rgba(124,58,237,0.4)] animate-pulse"
-                : "border-border bg-card text-muted hover:border-accent hover:text-accent"
-            }`}
-            onClick={voice.toggleListening}
-            aria-label={
-              voice.isListening ? "Stop voice input" : "Start voice input"
-            }
-            aria-pressed={voice.isListening}
-            title={voice.isListening ? "Stop listening" : "Voice input"}
-          >
-            {voice.isListening ? (
-              <Mic className="w-4 h-4 fill-current" />
+            {/* Emote picker toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`flex shrink-0 items-center justify-center w-[46px] h-[46px] mb-1.5 rounded-full bg-transparent text-white/50 hover:bg-white/10 hover:text-white transition-all ${isComposerLocked ? "opacity-50" : ""}`}
+              onClick={openEmotePicker}
+              disabled={isComposerLocked}
+              aria-label={t("chat.openEmotePicker")}
+              title={t("chatview.EmotesE")}
+            >
+              <Smile className="w-5 h-5" />
+            </Button>
+
+            {/* Input */}
+            {voice.isListening && voice.interimTranscript ? (
+              <div className="flex-1 min-w-0 px-4 py-3 text-[15px] leading-relaxed text-white/80 italic font-[var(--font-chat)] bg-black/40 rounded-2xl min-h-[52px] flex items-center">
+                {voice.interimTranscript}
+              </div>
             ) : (
-              <Mic className="w-4 h-4" />
+              <div className="flex-1 relative flex items-center bg-black/40 rounded-2xl focus-within:ring-2 focus-within:ring-accent/10 transition-all min-h-[52px]">
+                <Textarea
+                  ref={textareaRef}
+                  className="w-full min-w-0 px-4 py-3 bg-transparent border-none text-[15px] leading-relaxed text-white resize-none overflow-y-hidden max-h-[150px] focus-visible:ring-0 placeholder:text-white/30 font-[var(--font-chat)] disabled:opacity-50"
+                  rows={1}
+                  aria-label="Chat message"
+                  placeholder={
+                    isAgentStarting
+                      ? t("chat.agentStarting")
+                      : t("chat.inputPlaceholder")
+                  }
+                  value={chatInput}
+                  onChange={(e) => setState("chatInput", e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={isComposerLocked}
+                />
+              </div>
             )}
-          </button>
-        )}
 
-        {/* Textarea / live transcript */}
-        {voice.isListening && voice.interimTranscript ? (
-          <div className="flex-1 min-w-0 px-3 py-2 border border-accent bg-card text-txt text-sm font-body leading-relaxed min-h-[38px] flex items-center">
-            <span className="text-muted italic">{voice.interimTranscript}</span>
+            {/* Send / Stop */}
+            {chatSending ? (
+              <Button
+                variant="destructive"
+                size="icon"
+                className="flex shrink-0 items-center justify-center w-[46px] h-[46px] mb-1.5 rounded-full bg-danger/20 text-danger hover:bg-danger/30 transition-all ml-1"
+                onClick={handleChatStop}
+              >
+                <Square className="w-4 h-4 fill-current" />
+              </Button>
+            ) : (
+              <Button
+                variant="default"
+                size="icon"
+                className="flex shrink-0 items-center justify-center w-[46px] h-[46px] mb-1.5 rounded-full bg-accent text-accent-fg transition-all disabled:opacity-40 ml-1 hover:shadow-[0_0_15px_rgba(240,178,50,0.4)]"
+                onClick={() => void handleChatSend()}
+                disabled={isComposerLocked || !chatInput.trim()}
+              >
+                <Send className="w-5 h-5" />
+              </Button>
+            )}
           </div>
-        ) : (
-          <textarea
-            ref={textareaRef}
-            className="flex-1 min-w-0 px-3 py-2 border border-border bg-card text-txt text-sm font-body leading-relaxed resize-none overflow-y-hidden min-h-[38px] max-h-[200px] focus:border-accent focus:outline-none"
-            rows={1}
-            aria-label="Chat message"
-            placeholder={
-              voice.isListening ? "Listening..." : "Type a message..."
-            }
-            value={chatInput}
-            onChange={(e) => setState("chatInput", e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={chatSending}
-          />
-        )}
+        </div>
+      ) : (
+        /* ── Default composer ─────────────────────────────────────────── */
+        <div
+          className="flex gap-1.5 sm:gap-2 items-end border-t border-border pt-3 pb-3 sm:pb-4 relative"
+          style={{ zIndex: 1 }}
+        >
+          {/* Paperclip / image attach button */}
+          <Button
+            variant={chatPendingImages.length > 0 ? "secondary" : "ghost"}
+            size="icon"
+            className={`h-[38px] w-[38px] shrink-0 ${
+              chatPendingImages.length > 0
+                ? "bg-accent/10 sm:hover:bg-accent/20 border-accent/20 text-accent/80 hover:text-accent shadow-sm"
+                : "text-muted hover:bg-black/5 hover:text-txt"
+            }`}
+            onClick={() => fileInputRef.current?.click()}
+            aria-label="Attach image"
+            title={t("chatview.AttachImage")}
+            disabled={isComposerLocked}
+          >
+            <Paperclip className="w-4 h-4" />
+          </Button>
 
-        {/* Send / Stop */}
-        {chatSending ? (
-          <button
-            type="button"
-            className="h-[38px] shrink-0 px-3 sm:px-4 py-2 border border-danger bg-danger/10 text-danger text-sm cursor-pointer hover:bg-danger/20 transition-all duration-200 hover:shadow-sm self-end flex items-center gap-1.5"
-            onClick={handleChatStop}
-            title="Stop generation"
+          {/* Mic button — user voice input */}
+          {voice.supported && (
+            <Button
+              variant={voice.isListening ? "default" : "ghost"}
+              size="icon"
+              className={`h-[38px] w-[38px] shrink-0 ${
+                voice.isListening
+                  ? "bg-accent shadow-[0_0_10px_rgba(124,58,237,0.4)] animate-pulse"
+                  : "text-muted hover:bg-black/5 hover:text-txt"
+              }`}
+              onClick={voice.toggleListening}
+              aria-label={
+                isAgentStarting
+                  ? t("chat.agentStarting")
+                  : voice.isListening
+                    ? t("chat.stopListening")
+                    : t("chat.voiceInput")
+              }
+              aria-pressed={voice.isListening}
+              title={
+                isAgentStarting
+                  ? t("chat.agentStarting")
+                  : voice.isListening
+                    ? t("chat.stopListening")
+                    : t("chat.voiceInput")
+              }
+              disabled={isComposerLocked}
+            >
+              {voice.isListening ? (
+                <Mic className="w-4 h-4 fill-current" />
+              ) : (
+                <Mic className="w-4 h-4" />
+              )}
+            </Button>
+          )}
+
+          {/* Emote picker toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-[38px] w-[38px] shrink-0 text-muted hover:bg-black/5 hover:text-txt transition-colors"
+            onClick={openEmotePicker}
+            disabled={isComposerLocked}
+            aria-label={t("chat.openEmotePicker")}
+            title={t("chatview.EmotesE")}
           >
-            <Square className="w-3 h-3 fill-current" />
-            <span>Stop</span>
-          </button>
-        ) : voice.isSpeaking ? (
-          <button
-            type="button"
-            className="h-[38px] shrink-0 px-3 sm:px-4 py-2 border border-danger bg-danger/10 text-danger text-sm cursor-pointer hover:bg-danger/20 transition-all duration-200 hover:shadow-sm self-end flex items-center gap-1.5"
-            onClick={stopSpeaking}
-            title="Stop speaking"
-          >
-            <Square className="w-3 h-3 fill-current" />
-            <span>Stop Voice</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="h-[38px] shrink-0 px-4 sm:px-5 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:shadow-sm self-end flex items-center gap-1.5"
-            onClick={() => void handleChatSend()}
-            disabled={chatSending || !chatInput.trim()}
-            aria-label="Send message"
-            title="Send message"
-          >
-            <Send className="w-4 h-4" />
-            <span>Send</span>
-          </button>
-        )}
-      </div>
+            <Smile className="w-4 h-4" />
+          </Button>
+
+          {/* Textarea / live transcript */}
+          {voice.isListening && voice.interimTranscript ? (
+            <div
+              className="flex-1 min-w-0 px-3 py-2 border border-accent bg-card text-txt text-[15px] leading-[1.7] min-h-[38px] flex items-center rounded-md"
+              style={{ fontFamily: "var(--font-chat)" }}
+            >
+              <span className="text-muted italic">
+                {voice.interimTranscript}
+              </span>
+            </div>
+          ) : (
+            <Textarea
+              ref={textareaRef}
+              className="flex-1 min-w-0 px-3 py-2 bg-card/60 backdrop-blur-md border border-border/40 focus-visible:ring-accent text-txt text-[15px] leading-[1.7] resize-none overflow-y-hidden min-h-[38px] max-h-[200px]"
+              style={{ fontFamily: "var(--font-chat)" }}
+              rows={1}
+              aria-label="Chat message"
+              placeholder={
+                isAgentStarting
+                  ? t("chat.agentStarting")
+                  : voice.isListening
+                    ? t("chat.listening")
+                    : t("chat.inputPlaceholder")
+              }
+              value={chatInput}
+              onChange={(e) => setState("chatInput", e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isComposerLocked}
+            />
+          )}
+
+          {/* Send / Stop */}
+          {chatSending ? (
+            <Button
+              variant="destructive"
+              className="h-[38px] shrink-0 px-3 sm:px-4 py-2 text-sm shadow-sm gap-1.5"
+              onClick={handleChatStop}
+              title={t("chat.stopGeneration")}
+            >
+              <Square className="w-3 h-3 fill-current" />
+              <span>{t("chat.stop")}</span>
+            </Button>
+          ) : voice.isSpeaking ? (
+            <Button
+              variant="destructive"
+              className="h-[38px] shrink-0 px-3 sm:px-4 py-2 text-sm shadow-sm gap-1.5"
+              onClick={stopSpeaking}
+              title={t("chat.stopSpeaking")}
+            >
+              <Square className="w-3 h-3 fill-current" />
+              <span>{t("chat.stopVoice")}</span>
+            </Button>
+          ) : (
+            <Button
+              variant="default"
+              className="h-[38px] shrink-0 px-4 sm:px-5 py-2 text-sm shadow-sm gap-1.5 font-bold tracking-wide"
+              onClick={() => void handleChatSend()}
+              disabled={isComposerLocked || !chatInput.trim()}
+              aria-label={t("chat.send")}
+              title={isAgentStarting ? t("chat.agentStarting") : t("chat.send")}
+            >
+              <Send className="w-4 h-4" />
+              <span className="hidden sm:inline">
+                {isAgentStarting ? t("chat.agentStarting") : t("chat.send")}
+              </span>
+            </Button>
+          )}
+        </div>
+      )}
     </section>
   );
-});
+}

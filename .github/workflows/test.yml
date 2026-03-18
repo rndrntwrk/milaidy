@@ -13,23 +13,52 @@ concurrency:
 
 env:
   CI: "true"
+  BUN_VERSION: "1.3.9"
   NODE_OPTIONS: "--max-old-space-size=4096"
 
 jobs:
   unit-tests:
     name: Unit Tests
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # WHY setup-node before bun install: optional deps like @discordjs/opus fall back to node-gyp; Node 22 + colocated cache avoids nodejs.org header download. Engines require >=22.
+      - name: Setup Node.js
+        uses: useblacksmith/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Setup Python (for node-gyp when native prebuilds missing)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install setuptools for distutils (Python 3.12+)
+        run: pip install setuptools
+
+      - name: Install canvas native dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential libpixman-1-dev
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
+
+      # WHY cache global Bun cache: avoids re-downloading tarballs; we do not cache node_modules (upload cost > gain).
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --ignore-scripts
+        env:
+          npm_config_python: ${{ env.pythonLocation }}/bin/python3
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -49,18 +78,44 @@ jobs:
 
   db-check:
     name: Database Security Check
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: useblacksmith/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Setup Python (for node-gyp when native prebuilds missing)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install setuptools for distutils (Python 3.12+)
+        run: pip install setuptools
+
+      - name: Install canvas native dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential libpixman-1-dev
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --ignore-scripts
+        env:
+          npm_config_python: ${{ env.pythonLocation }}/bin/python3
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -70,18 +125,44 @@ jobs:
 
   e2e-tests:
     name: E2E Tests (Vitest)
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: useblacksmith/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Setup Python (for node-gyp when native prebuilds missing)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install setuptools for distutils (Python 3.12+)
+        run: pip install setuptools
+
+      - name: Install canvas native dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential libpixman-1-dev
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
         run: bun install
+        env:
+          npm_config_python: ${{ env.pythonLocation }}/bin/python3
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -97,40 +178,88 @@ jobs:
 
   app-startup-e2e:
     name: App Startup E2E (Onboarding)
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install canvas native dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential libpixman-1-dev
+
+      # WHY useblacksmith: colocated cache avoids nodejs.org download timeouts on Blacksmith runners.
+      - name: Setup Node.js
+        uses: useblacksmith/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Setup Python (for node-gyp)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install setuptools for distutils (Python 3.12+)
+        run: pip install setuptools
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile --ignore-scripts
+        env:
+          npm_config_python: ${{ env.pythonLocation }}/bin/python3
 
       - name: Run repository postinstall patches
         run: bun run postinstall
 
       - name: Run app startup/onboarding tests
         run: >
-          bunx vitest run --config apps/app/vitest.config.ts
-          apps/app/test/electron/electron-startup.e2e.test.ts
-          apps/app/test/electron/electron-plugin-entrypoints.e2e.test.ts
-          apps/app/test/app/startup-chat.e2e.test.ts
-          apps/app/test/app/startup-onboarding.e2e.test.ts
+          bunx vitest run --root apps/app --config vitest.config.ts
+          test/app/startup-chat.e2e.test.ts
+          test/app/startup-onboarding.e2e.test.ts
+          test/app/startup-backend-missing.e2e.test.ts
+          test/app/startup-token-401.e2e.test.ts
 
   electron-ui-e2e:
+    # Desktop packaging/build validation is release-only. Keep PR/branch CI fast.
+    if: startsWith(github.ref, 'refs/tags/v')
     name: Electron Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [blacksmith-4vcpu-ubuntu-2404, macos-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install canvas native dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential libpixman-1-dev
+
+      # WHY split: Blacksmith has colocated Node cache; GitHub-hosted macOS needs v3 to avoid v4 timeouts.
+      - name: Setup Node.js (Blacksmith)
+        if: runner.os == 'Linux'
+        uses: useblacksmith/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Setup Node.js (GitHub-hosted)
+        if: runner.os != 'Linux'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          check-latest: false
 
       - name: Setup Python (for node-gyp)
         uses: actions/setup-python@v5
@@ -143,7 +272,14 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
         run: bun install
@@ -153,18 +289,91 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
 
-      - name: Build web assets
-        run: bun run --filter @milady/app build
+      - name: Build core dist (server bundle)
+        run: |
+          bunx tsdown
+          echo '{"type":"module"}' > dist/package.json
+          node --import tsx scripts/write-build-info.ts
 
-      - name: Build Electron app
-        run: bun run --filter @milady/app build:electron
+      - name: Build renderer assets
+        run: |
+          cd apps/app
+          bunx vite build
+
+      - name: Build native macOS effects dylib
+        if: runner.os == 'macOS'
+        run: |
+          cd apps/app/electrobun
+          bun run build:native-effects
+
+      - name: Bundle backend node_modules into dist/
+        run: node --import tsx scripts/copy-runtime-node-modules.ts --scan-dir dist --target-dist dist
+
+      - name: Build webview bridge preload
+        run: bun run build:preload
+        working-directory: apps/app/electrobun
+
+      - name: Build Electrobun app
+        run: |
+          cd apps/app/electrobun
+          ELECTROBUN_SKIP_CODESIGN=1 bun run build -- --env=canary
+
+      - name: Stage Electrobun build diagnostic logs
+        if: failure()
+        shell: pwsh
+        run: |
+          $diagnosticsDir = Join-Path $env:RUNNER_TEMP "electrobun-ui-e2e-logs"
+          New-Item -ItemType Directory -Force -Path $diagnosticsDir | Out-Null
+
+          $windowsLogPath = $null
+          $candidates = @(
+            (Join-Path $env:HOME ".config/Milady/milady-startup.log")
+          )
+
+          if ($env:USERPROFILE) {
+            $windowsLogPath = Join-Path $env:USERPROFILE ".config/Milady/milady-startup.log"
+            $candidates += $windowsLogPath
+          }
+
+          foreach ($candidate in ($candidates | Select-Object -Unique)) {
+            if (-not (Test-Path $candidate)) {
+              continue
+            }
+
+            $destinationName = if ($windowsLogPath -and $candidate -eq $windowsLogPath) {
+              "milady-startup-windows.log"
+            } else {
+              "milady-startup-unix.log"
+            }
+
+            Copy-Item $candidate (Join-Path $diagnosticsDir $destinationName) -Force
+          }
+
+      - name: Upload Electrobun build diagnostic logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: electrobun-ui-e2e-${{ matrix.os }}-logs
+          path: ${{ runner.temp }}/electrobun-ui-e2e-logs
+          if-no-files-found: warn
+          retention-days: 14
 
   electron-packaged-dmg-e2e:
+    # Desktop packaging/build validation is release-only. Keep PR/branch CI fast.
+    if: startsWith(github.ref, 'refs/tags/v')
     name: Electron Packaged DMG E2E (macOS)
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # WHY v3 + check-latest: false — v4 has slow post-action and nodejs.org timeouts; v3 uses toolcache.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          check-latest: false
 
       - name: Setup Python (for node-gyp)
         uses: actions/setup-python@v5
@@ -177,7 +386,14 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
         run: bun install
@@ -187,21 +403,30 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
 
-      - name: Build web assets
-        run: bun run --filter @milady/app build
-
-      - name: Sync Electron platform
-        run: bun run --filter @milady/app cap:sync:electron
-
-      - name: Build standalone DMG
+      - name: Build and smoke test packaged macOS app
+        env:
+          SMOKE_DIAGNOSTICS_DIR: ${{ runner.temp }}/milady-packaged-dmg-smoke
         run: |
-          cd apps/app/electron
-          bun run electron:make:dmg:test
-        continue-on-error: true
+          STARTUP_TIMEOUT=240 \
+          LIVENESS_TIMEOUT=10 \
+          SKIP_SIGNATURE_CHECK=1 \
+          bash apps/app/electrobun/scripts/smoke-test.sh
+
+      - name: Upload packaged macOS smoke diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: electrobun-packaged-dmg-macos-smoke-diagnostics
+          path: |
+            ${{ runner.temp }}/milady-packaged-dmg-smoke/**
+            apps/app/electrobun/build/**/wrapper-diagnostics.json
+          if-no-files-found: warn
+          retention-days: 14
 
   cloud-live-e2e:
     name: Cloud Live E2E (Eliza Cloud)
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
     steps:
       - name: Check cloud secrets
         id: cloud
@@ -217,17 +442,29 @@ jobs:
         if: steps.cloud.outputs.enabled == 'true'
         uses: actions/checkout@v4
 
+      - name: Install canvas native dependencies
+        if: steps.cloud.outputs.enabled == 'true'
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential libpixman-1-dev
+
       - name: Setup Bun
         if: steps.cloud.outputs.enabled == 'true'
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install
+        if: steps.cloud.outputs.enabled == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
         if: steps.cloud.outputs.enabled == 'true'
         run: |
           for i in 1 2 3 4 5; do
-            bun install --frozen-lockfile && break
+            bun install --frozen-lockfile --ignore-scripts && break
             echo "Attempt $i failed, retrying in $((i * 15))s..."
             sleep $((i * 15))
           done
@@ -248,18 +485,29 @@ jobs:
 
   validation-e2e:
     name: End-to-End Validation (Issue #6)
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install canvas native dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential libpixman-1-dev
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -276,7 +524,7 @@ jobs:
     name: All Tests Passed
     if: always()
     needs: [unit-tests, db-check, e2e-tests, app-startup-e2e, electron-ui-e2e, electron-packaged-dmg-e2e, cloud-live-e2e, validation-e2e]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Check test results
         run: |

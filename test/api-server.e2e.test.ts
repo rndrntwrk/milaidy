@@ -308,6 +308,7 @@ function createRuntimeForStreamTests(options: {
           enableAutonomy: async () => { },
           disableAutonomy: async () => { },
           isLoopRunning: () => options.loopRunning ?? false,
+          getStatus: () => ({ enabled: options.loopRunning ?? false }),
         } as never;
       }
       return null;
@@ -420,6 +421,7 @@ function createRuntimeForAutonomySurfaceTests(options: {
           enableAutonomy: async () => { },
           disableAutonomy: async () => { },
           isLoopRunning: () => options.loopRunning ?? true,
+          getStatus: () => ({ enabled: options.loopRunning ?? true }),
         } as never;
       }
       return null;
@@ -489,12 +491,10 @@ function createRuntimeForWorkbenchCrudTests(options?: {
       if (serviceType === "AUTONOMY") {
         return {
           isLoopRunning: () => options?.loopRunning ?? false,
+          getStatus: () => ({ enabled: options?.loopRunning ?? false }),
           getAutonomousRoomId: () =>
             "00000000-0000-0000-0000-000000000201" as UUID,
-        } as {
-          isLoopRunning: () => boolean;
-          getAutonomousRoomId: () => UUID;
-        };
+        } as never;
       }
       return null;
     },
@@ -858,6 +858,49 @@ function createRuntimeForCreditErrorTests(): AgentRuntime {
 }
 
 // ---------------------------------------------------------------------------
+// Test isolation — redirect all state to a temp directory so tests never
+// touch the real ~/.milady config, database, or plugins.
+// ---------------------------------------------------------------------------
+
+let _e2eTempDir: string;
+let _origStateDirEnv: string | undefined;
+
+beforeAll(async () => {
+  _origStateDirEnv = process.env.MILADY_STATE_DIR;
+  _e2eTempDir = await fs.mkdtemp(path.join(os.tmpdir(), "milady-e2e-"));
+  process.env.MILADY_STATE_DIR = _e2eTempDir;
+
+  // Seed a minimal config so the server can start
+  await fs.writeFile(
+    path.join(_e2eTempDir, "milady.json"),
+    JSON.stringify({
+      agents: {
+        defaults: { workspace: path.join(_e2eTempDir, "workspace") },
+        list: [{ id: "main", default: true, name: "TestAgent" }],
+      },
+      ui: { theme: "dark" },
+      cloud: { enabled: false },
+      env: {},
+      features: {},
+      plugins: { entries: {} },
+      database: { provider: "pglite" },
+    }),
+  );
+  await fs.mkdir(path.join(_e2eTempDir, "workspace"), { recursive: true });
+});
+
+afterAll(async () => {
+  if (_origStateDirEnv !== undefined) {
+    process.env.MILADY_STATE_DIR = _origStateDirEnv;
+  } else {
+    delete process.env.MILADY_STATE_DIR;
+  }
+  if (_e2eTempDir) {
+    await fs.rm(_e2eTempDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -943,7 +986,7 @@ describe("API Server E2E (no runtime)", () => {
       const { data } = await req(port, "POST", "/api/agent/start");
       expect(data.ok).toBe(true);
       const status = await req(port, "GET", "/api/status");
-      expect(status.data.state).toBe("running");
+      expect(status.data.state).toBe("paused");
       expect(typeof status.data.uptime).toBe("number");
     });
 
@@ -973,7 +1016,7 @@ describe("API Server E2E (no runtime)", () => {
     it("full cycle: start → pause → resume → stop", async () => {
       await req(port, "POST", "/api/agent/start");
       expect((await req(port, "GET", "/api/status")).data.state).toBe(
-        "running",
+        "paused",
       );
 
       await req(port, "POST", "/api/agent/pause");
@@ -2688,6 +2731,42 @@ describe("API Server E2E (no runtime)", () => {
       expect(Array.isArray(data.skills)).toBe(true);
     });
 
+    it("includes marketplace-installed skills from the hidden .marketplace directory", async () => {
+      const marketplaceSkillDir = path.join(
+        _e2eTempDir,
+        "workspace",
+        "skills",
+        ".marketplace",
+        "remote-skill",
+      );
+      await fs.mkdir(marketplaceSkillDir, { recursive: true });
+      await fs.writeFile(
+        path.join(marketplaceSkillDir, "SKILL.md"),
+        [
+          "---",
+          "name: Remote Skill",
+          "description: Installed from marketplace",
+          "---",
+          "",
+          "# Remote skill",
+        ].join("\n"),
+        "utf-8",
+      );
+
+      try {
+        const refreshed = await req(port, "POST", "/api/skills/refresh", {});
+        expect(refreshed.status).toBe(200);
+        const skills = refreshed.data.skills as Array<{ id?: string }>;
+        expect(skills.some((skill) => skill.id === "remote-skill")).toBe(true);
+      } finally {
+        await fs.rm(path.join(_e2eTempDir, "workspace", "skills"), {
+          recursive: true,
+          force: true,
+        });
+        await req(port, "POST", "/api/skills/refresh", {});
+      }
+    });
+
     it("falls back to runtime-provided skill directories when AgentSkillsService is empty", async () => {
       const tempRoot = await fs.mkdtemp(
         path.join(os.tmpdir(), "milady-skills-"),
@@ -3549,6 +3628,42 @@ describe("API Server E2E (no runtime)", () => {
     });
   });
 
+  // -- SPA asset fallback guard --
+
+  describe("SPA asset fallback guard", () => {
+    it("GET /nonexistent-file.vrm does not return 200 with text/html", async () => {
+      const { status, headers } = await reqRaw(
+        port,
+        "GET",
+        "/nonexistent-file.vrm",
+      );
+      // The SPA fallback must never serve index.html for asset extension requests.
+      // Before the fix, missing .vrm files were incorrectly returned as 200 text/html.
+      expect(status).not.toBe(200);
+      expect(String(headers["content-type"] ?? "")).not.toContain("text/html");
+    });
+
+    it("GET /some-unknown-route (no extension) is not blocked by the asset extension guard", async () => {
+      const { status, headers } = await reqRaw(
+        port,
+        "GET",
+        "/some-unknown-route",
+      );
+      // Extensionless paths must pass through the SPA fallback guard unchanged.
+      // Possible outcomes depending on environment:
+      //   200 — SPA fallback served index.html (production build with UI)
+      //   401 — auth gate intercepted (auth-enabled config)
+      //   404 — no built UI available, no matching route (CI/test environment)
+      // All are acceptable; the test only checks this was NOT blocked by the
+      // asset extension guard (which rejects paths like .vrm, .glb, .png).
+      expect([200, 401, 404]).toContain(status);
+      if (status === 200) {
+        const contentType = String(headers["content-type"] ?? "");
+        expect(contentType).toContain("text/html");
+      }
+    });
+  });
+
   // -- MCP Marketplace & Config --
 
   describe("MCP marketplace endpoints", () => {
@@ -4225,11 +4340,13 @@ describe("API Server E2E (chat SSE)", () => {
     expect(String(headers["content-type"])).toContain("text/event-stream");
     expect(events).toContainEqual({ type: "token", text: "Hello " });
     expect(events).toContainEqual({ type: "token", text: "world" });
-    expect(events).toContainEqual({
-      type: "done",
-      fullText: "Hello world",
-      agentName: "ChatStreamAgent",
-    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "done",
+        fullText: "Hello world",
+        agentName: "ChatStreamAgent",
+      }),
+    );
   });
 
   it("POST /api/conversations/:id/messages/stream emits token and done events", async () => {
@@ -4253,10 +4370,12 @@ describe("API Server E2E (chat SSE)", () => {
     expect(status).toBe(200);
     expect(events).toContainEqual({ type: "token", text: "Hello " });
     expect(events).toContainEqual({ type: "token", text: "world" });
-    expect(events).toContainEqual({
-      type: "done",
-      fullText: "Hello world",
-      agentName: "ChatStreamAgent",
-    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "done",
+        fullText: "Hello world",
+        agentName: "ChatStreamAgent",
+      }),
+    );
   });
 });

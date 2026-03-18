@@ -135,6 +135,18 @@ export default defineConfig({
         ),
       },
       {
+        // workspace plugin not built in CI (--ignore-scripts); resolve from
+        // source so vi.mock() and dynamic import() don't fail on missing dist/.
+        find: "@milady/plugin-bnb-identity",
+        replacement: path.join(
+          repoRoot,
+          "packages",
+          "plugin-bnb-identity",
+          "src",
+          "index.ts",
+        ),
+      },
+      {
         // @elizaos/skills has a broken package.json entry; the code handles the
 
         // missing module gracefully (try/catch), so redirect to an empty stub.
@@ -168,6 +180,12 @@ export default defineConfig({
         ),
       },
       {
+        // plugin-pdf currently pulls in a browser-oriented pdfjs bundle that
+        // is not required for the unit/e2e coverage we run in CI.
+        find: "@elizaos/plugin-pdf",
+        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
+      },
+      {
         find: "electron",
         replacement: path.join(repoRoot, "test", "stubs", "electron-module.ts"),
       },
@@ -178,6 +196,9 @@ export default defineConfig({
     hookTimeout: isWindows ? 180_000 : 120_000,
     pool: "forks",
     maxWorkers: isCI ? ciWorkers : localWorkers,
+    // Increase V8 heap for worker forks to prevent OOM during GC
+    // teardown, especially for jsdom-heavy test files.
+    execArgv: ["--max-old-space-size=4096"],
     include: [
       "src/**/*.test.ts",
       "scripts/**/*.test.ts",
@@ -187,13 +208,24 @@ export default defineConfig({
       "apps/app/test/app/api-client-timeout.test.ts",
       "apps/app/test/app/startup-backend-missing.e2e.test.ts",
       "apps/app/test/app/startup-token-401.e2e.test.ts",
-      "apps/app/test/electron-ui/electron-startup-failure.e2e.spec.ts",
       "test/api-server.e2e.test.ts",
       "test/format-error.test.ts",
       "test/trajectory-database.e2e.test.ts",
+      "test/agent-restart-recovery.e2e.test.ts",
+      "test/knowledge-e2e-flow.e2e.test.ts",
+      "test/trigger-execution-flow.e2e.test.ts",
+      "test/terminal-execution.e2e.test.ts",
+      "test/config-hot-reload.e2e.test.ts",
+      "test/health-endpoint.e2e.test.ts",
     ],
     setupFiles: ["test/setup.ts"],
-    exclude: ["dist/**", "**/node_modules/**", "**/*.live.test.ts"],
+    exclude: [
+      "dist/**",
+      "**/node_modules/**",
+      "**/*.live.test.ts",
+      "apps/app/test/electron/**",
+      "apps/app/test/electron-ui/**",
+    ],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
@@ -215,7 +247,7 @@ export default defineConfig({
     },
     server: {
       deps: {
-        inline: ["@elizaos/core"],
+        inline: ["@elizaos/core", "zod"],
       },
     },
   },

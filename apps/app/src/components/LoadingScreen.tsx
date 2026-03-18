@@ -1,62 +1,35 @@
 /**
- * Loading screen — ASCII "milady" logo with per-character dither fade.
- *
- * Each letter independently cycles through quantised opacity steps on its
- * own random schedule, producing a constantly shifting dither pattern that
- * resolves into the logo and dissolves again.
+ * Loading screen — NieR: Automata inspired loader with horizontal progress bar,
+ * phase label, and percentage indicator.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { StartupPhase } from "../AppContext";
 
-/* ── ASCII source ──────────────────────────────────────────────────── */
+/* ── Phase config ──────────────────────────────────────────────────── */
 
-const ASCII_LINES = [
-  "        miladym                        iladym      ",
-  "    iladymil                                ady    ",
-  "    mil                                         ad   ",
-  "ymi                                   ladymila     ",
-  "dym                                    ila dymila    ",
-  "dy       miladymil                     ady   milady   ",
-  "    miladymilad                     ymila dymilady  ",
-  "    mi    ladymila                   dymiladymil     ",
-  "adymiladymiladymi                  l  adymila d    ",
-  "ym   iladymiladymil                 ad ymilad  y    ",
-  "m  il  adymiladym  i                  l   ad   y     ",
-  "    mi  ladymila  dy                    mi           ",
-  "    la          dy                         mil      ",
-  "        ad      ym                                   ",
-  "        iladym",
-];
-
-/* ── Types ─────────────────────────────────────────────────────────── */
-
-interface CharCell {
-  char: string;
-  isLetter: boolean;
-  /** Random animation-delay in seconds */
-  delay: number;
-  /** Random animation-duration in seconds */
-  duration: number;
-}
+const PHASE_META: Record<StartupPhase, { label: string; progress: number }> = {
+  "starting-backend": { label: "Initializing systems", progress: 20 },
+  "initializing-agent": { label: "Loading neural network", progress: 50 },
+  ready: { label: "Systems online", progress: 100 },
+};
 
 /* ── Component ─────────────────────────────────────────────────────── */
-
-const PHASE_LABELS: Record<StartupPhase, string> = {
-  "starting-backend": "starting backend",
-  "initializing-agent": "initializing agent",
-};
 
 interface LoadingScreenProps {
   phase?: StartupPhase;
   elapsedSeconds?: number;
+  /** URL of the VRM to prefetch so it’s cached when the 3D viewer mounts. */
+  vrmUrl?: string;
 }
 
 export function LoadingScreen({
   phase = "starting-backend",
   elapsedSeconds,
+  vrmUrl,
 }: LoadingScreenProps) {
-  const [runtimeElapsedSeconds, setRuntimeElapsedSeconds] = useState(0);
+  const [vrmCached, setVrmCached] = useState(false);
+  const [, setRuntimeElapsedSeconds] = useState(0);
 
   useEffect(() => {
     if (typeof elapsedSeconds === "number") return;
@@ -69,71 +42,45 @@ export function LoadingScreen({
     return () => clearInterval(timer);
   }, [elapsedSeconds]);
 
-  const displayedElapsedSeconds =
-    typeof elapsedSeconds === "number"
-      ? Math.max(0, Math.floor(elapsedSeconds))
-      : runtimeElapsedSeconds;
+  // Prefetch VRM binary so the browser cache has it when VrmEngine loads later
+  useEffect(() => {
+    if (!vrmUrl) return;
+    const controller = new AbortController();
+    fetch(vrmUrl, { signal: controller.signal })
+      .then(() => setVrmCached(true))
+      .catch(() => {
+        /* non-blocking — VRM will load normally later */
+      });
+    return () => controller.abort();
+  }, [vrmUrl]);
 
-  /* Build the character grid once — each non-space character gets its
-     own random timing so the dither pattern is never uniform. */
-  const grid = useMemo<CharCell[][]>(
-    () =>
-      ASCII_LINES.map((line) =>
-        [...line].map((char) => ({
-          char,
-          isLetter: char !== " ",
-          delay: Math.random() * 5,
-          duration: 1.4 + Math.random() * 3,
-        })),
-      ),
-    [],
-  );
+  const meta = PHASE_META[phase];
+  const progress = vrmCached ? Math.max(meta.progress, 80) : meta.progress;
+  const label = vrmCached && phase !== "ready" ? "Loading avatar" : meta.label;
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-bg gap-8">
-      <div
-        aria-live="polite"
-        style={{
-          fontFamily: "var(--mono)",
-          fontSize: "clamp(7px, 1.4vw, 14px)",
-          lineHeight: 1.35,
-          color: "var(--text)",
-          userSelect: "none",
-        }}
-      >
-        {grid.map((line) => (
-          <div
-            key={line.map((c) => c.char).join("")}
-            style={{ whiteSpace: "pre" }}
-          >
-            {line.map((c) =>
-              c.isLetter ? (
-                <span
-                  key={`${c.char}-${c.delay.toFixed(3)}-${c.duration.toFixed(3)}`}
-                  className="dither-char"
-                  style={{
-                    animationDelay: `${c.delay.toFixed(2)}s`,
-                    animationDuration: `${c.duration.toFixed(2)}s`,
-                  }}
-                >
-                  {c.char}
-                </span>
-              ) : (
-                <span
-                  key={`${c.char}-${c.delay.toFixed(3)}-${c.duration.toFixed(3)}`}
-                >
-                  {c.char}
-                </span>
-              ),
-            )}
+    <div className="loading-screen">
+      {/* Center content block */}
+      <div className="loading-screen__center">
+        {/* LOADING label */}
+        <div className="loading-screen__title">
+          LOADING
+          <span className="loading-screen__dots" />
+        </div>
+
+        {/* Progress bar row */}
+        <div className="loading-screen__bar-row">
+          <div className="loading-screen__progress-track">
+            <div
+              className="loading-screen__progress-fill"
+              style={{ width: `${progress}%` }}
+            />
           </div>
-        ))}
-      </div>
-      <div
-        className="text-muted text-xs tracking-widest uppercase"
-        style={{ fontFamily: "var(--mono)" }}
-      >
-        {PHASE_LABELS[phase]} ({displayedElapsedSeconds}s)
+          <div className="loading-screen__percent">{progress} %</div>
+        </div>
+
+        {/* Phase label */}
+        <div className="loading-screen__phase">{label}</div>
       </div>
     </div>
   );

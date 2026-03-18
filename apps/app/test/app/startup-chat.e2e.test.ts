@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
+
+import { pathForTab, tabFromPath } from "@milady/app-core/navigation";
 import React from "react";
 import type { ReactTestInstance } from "react-test-renderer";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { pathForTab, tabFromPath } from "../../src/navigation";
 
 const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
@@ -17,14 +18,14 @@ const { mockIsLifoPopoutMode } = vi.hoisted(() => ({
 
 vi.mock("../../src/AppContext", () => ({
   useApp: () => mockUseApp(),
+  getVrmUrl: vi.fn(),
+  getVrmPreviewUrl: vi.fn(),
+  getVrmTitle: vi.fn(),
 }));
 
 vi.mock("../../src/components/Header", () => ({
-  Header: () => React.createElement("div", null, "Header"),
-}));
-vi.mock("../../src/components/Nav", () => ({
-  Nav: ({ mobileLeft }: { mobileLeft?: React.ReactNode }) =>
-    React.createElement("div", null, "Nav", mobileLeft),
+  Header: ({ mobileLeft }: { mobileLeft?: React.ReactNode }) =>
+    React.createElement("div", null, "Header", mobileLeft),
 }));
 vi.mock("../../src/components/CommandPalette", () => ({
   CommandPalette: () => React.createElement("div", null, "CommandPalette"),
@@ -76,11 +77,14 @@ vi.mock("../../src/components/LifoSandboxView", () => ({
 vi.mock("../../src/components/SettingsView", () => ({
   SettingsView: () => React.createElement("div", null, "SettingsView"),
 }));
-vi.mock("../../src/components/LoadingScreen", () => ({
-  LoadingScreen: () => React.createElement("div", null, "LoadingScreen"),
+vi.mock("../../src/components/avatar/AvatarLoader", () => ({
+  AvatarLoader: () => React.createElement("div", null, "AvatarLoader"),
 }));
 vi.mock("../../src/components/StreamView", () => ({
   StreamView: () => React.createElement("div", null, "StreamView"),
+}));
+vi.mock("../../src/components/CompanionView", () => ({
+  CompanionView: () => React.createElement("div", null, "CompanionView"),
 }));
 vi.mock("../../src/hooks/useLifoAutoPopout", () => ({
   useLifoAutoPopout: (options: unknown) => mockUseLifoAutoPopout(options),
@@ -120,6 +124,7 @@ describe("app startup routing (e2e)", () => {
     mockIsLifoPopoutMode.mockReset();
     mockIsLifoPopoutMode.mockReturnValue(false);
     mockUseApp.mockReturnValue({
+      t: (k: string) => k,
       onboardingLoading: false,
       authRequired: false,
       onboardingComplete: true,
@@ -128,6 +133,14 @@ describe("app startup routing (e2e)", () => {
       toasts: [],
       dismissToast: () => {},
       setActionNotice: vi.fn(),
+      uiShellMode: "native",
+      agentStatus: { state: "running", agentName: "Milady" },
+      unreadConversations: new Set(),
+      activeGameViewerUrl: null,
+      gameOverlayEnabled: false,
+      startupPhase: "ready",
+      startupError: null,
+      retryStartup: vi.fn(),
     });
   });
 
@@ -137,7 +150,7 @@ describe("app startup routing (e2e)", () => {
   });
 
   it("renders chat screen when startup state is ready", async () => {
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree = undefined as unknown as TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(App));
     });
@@ -148,7 +161,7 @@ describe("app startup routing (e2e)", () => {
       .join("\n");
 
     expect(renderedText).toContain("ChatView");
-    expect(renderedText).not.toContain("LoadingScreen");
+    expect(renderedText).not.toContain("AvatarLoader");
     expect(renderedText).not.toContain("OnboardingWizard");
     expect(renderedText).not.toContain("PairingView");
     expect(mockUseLifoAutoPopout).toHaveBeenCalled();
@@ -160,6 +173,7 @@ describe("app startup routing (e2e)", () => {
 
   it("renders wallets screen when wallets tab is active", async () => {
     mockUseApp.mockReturnValue({
+      t: (k: string) => k,
       onboardingLoading: false,
       authRequired: false,
       onboardingComplete: true,
@@ -168,9 +182,17 @@ describe("app startup routing (e2e)", () => {
       toasts: [],
       dismissToast: () => {},
       setActionNotice: vi.fn(),
+      uiShellMode: "native",
+      agentStatus: { state: "running", agentName: "Milady" },
+      unreadConversations: new Set(),
+      activeGameViewerUrl: null,
+      gameOverlayEnabled: false,
+      startupPhase: "ready",
+      startupError: null,
+      retryStartup: vi.fn(),
     });
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree = undefined as unknown as TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(App));
     });
@@ -193,7 +215,7 @@ describe("app startup routing (e2e)", () => {
   it("uses mobile chat drawers on narrow viewports", async () => {
     setViewportWidth(390);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree = undefined as unknown as TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(App));
     });
@@ -243,7 +265,7 @@ describe("app startup routing (e2e)", () => {
     mockIsLifoPopoutMode.mockReturnValue(true);
     window.history.pushState({}, "", "/lifo?popout=lifo");
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree = undefined as unknown as TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(App));
     });

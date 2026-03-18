@@ -3,7 +3,10 @@ import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface ChatViewContextStub {
-  agentStatus: { agentName: string } | null;
+  agentStatus: {
+    agentName: string;
+    state?: string;
+  } | null;
   chatInput: string;
   chatSending: boolean;
   chatFirstTokenReceived: boolean;
@@ -14,7 +17,7 @@ interface ChatViewContextStub {
     timestamp: number;
     source?: string;
   }>;
-  handleChatSend: (mode: "simple" | "power") => Promise<void>;
+  handleChatSend: (channelType?: string) => Promise<void>;
   handleChatStop: () => void;
   setState: (key: string, value: unknown) => void;
   droppedFiles: string[];
@@ -28,12 +31,26 @@ interface ChatViewContextStub {
           prev: Array<{ data: string; mimeType: string; name: string }>,
         ) => Array<{ data: string; mimeType: string; name: string }>),
   ) => void;
+  uiLanguage: "en" | "zh-CN";
+  chatMode: "simple" | "power";
+  chatAgentVoiceMuted: boolean;
+  t: (k: string) => string;
+  handleStart: () => Promise<void>;
+  handlePauseResume: () => Promise<void>;
+  handleRestart: () => Promise<void>;
+  handleChatRetry: (id: string) => void;
+  lifecycleBusy: boolean;
+  lifecycleAction: string | null;
+  autonomousEvents: unknown[];
+  workbench: unknown;
+  openEmotePicker: () => void;
+  ptySessions: unknown[];
 }
 
 const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
   mockClient: {
     getCodingAgentStatus: vi.fn(async () => null),
-    getConfig: vi.fn(),
+    getConfig: vi.fn().mockResolvedValue({}),
   },
   mockUseApp: vi.fn(),
   mockUseVoiceChat: vi.fn(),
@@ -57,7 +74,7 @@ vi.mock("../../src/components/MessageContent", () => ({
     React.createElement("span", null, message.text),
 }));
 
-vi.mock("../../src/api-client", () => ({
+vi.mock("@milady/app-core/api", () => ({
   client: mockClient,
 }));
 
@@ -67,7 +84,7 @@ function createContext(
   overrides?: Partial<ChatViewContextStub>,
 ): ChatViewContextStub {
   return {
-    agentStatus: { agentName: "Milady" },
+    agentStatus: { agentName: "Milady", state: "running" },
     chatInput: "",
     chatSending: false,
     chatFirstTokenReceived: false,
@@ -80,6 +97,20 @@ function createContext(
     selectedVrmIndex: 0,
     chatPendingImages: [],
     setChatPendingImages: vi.fn(),
+    chatMode: "simple",
+    chatAgentVoiceMuted: false,
+    handleStart: vi.fn(async () => {}),
+    handlePauseResume: vi.fn(async () => {}),
+    handleRestart: vi.fn(async () => {}),
+    handleChatRetry: vi.fn(),
+    lifecycleBusy: false,
+    lifecycleAction: null,
+    autonomousEvents: [],
+    workbench: null,
+    openEmotePicker: vi.fn(),
+    ptySessions: [],
+    uiLanguage: "en" as const,
+    t: (k: string) => k,
     ...overrides,
   };
 }
@@ -135,7 +166,7 @@ describe("ChatView", () => {
       }),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView));
     });
@@ -160,7 +191,7 @@ describe("ChatView", () => {
       }),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView));
     });
@@ -254,13 +285,13 @@ describe("ChatView", () => {
       }),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView));
     });
     await flush();
 
-    const scroller = tree.root.findByProps({
+    const scroller = tree?.root.findByProps({
       "data-testid": "chat-messages-scroll",
     });
     expect(String(scroller.props.className)).toContain("pr-3");
@@ -291,7 +322,7 @@ describe("ChatView", () => {
     });
     mockUseApp.mockImplementation(() => currentContext);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView), {
         createNodeMock: (element) => {
@@ -328,7 +359,7 @@ describe("ChatView", () => {
     });
 
     await act(async () => {
-      tree.update(React.createElement(ChatView));
+      tree?.update(React.createElement(ChatView));
     });
     await flush();
 
@@ -358,7 +389,7 @@ describe("ChatView", () => {
     });
     mockUseApp.mockImplementation(() => currentContext);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView), {
         createNodeMock: (element) => {
@@ -397,7 +428,7 @@ describe("ChatView", () => {
     });
 
     await act(async () => {
-      tree.update(React.createElement(ChatView));
+      tree?.update(React.createElement(ChatView));
     });
     await flush();
 
@@ -428,7 +459,7 @@ describe("ChatView", () => {
     });
     mockUseApp.mockImplementation(() => currentContext);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView), {
         createNodeMock: (element) => {
@@ -465,7 +496,7 @@ describe("ChatView", () => {
     });
 
     await act(async () => {
-      tree.update(React.createElement(ChatView));
+      tree?.update(React.createElement(ChatView));
     });
     await flush();
 
@@ -488,43 +519,44 @@ describe("ChatView", () => {
 
     mockUseApp.mockReturnValue(createContext());
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView));
     });
     await flush();
 
     const textarea = tree?.root.find((node) => node.type === "textarea");
-    expect(textarea.props["aria-label"]).toBe("Chat message");
+    expect(textarea).toBeDefined();
 
-    const attachButton = tree?.root.find(
-      (node) =>
-        node.type === "button" && node.props["aria-label"] === "Attach image",
-    );
-    expect(attachButton.props["aria-label"]).toBe("Attach image");
+    const buttons = tree?.root.findAllByType("button" as React.ElementType);
 
-    const micButton = tree?.root.find(
-      (node) =>
-        node.type === "button" &&
-        node.props["aria-label"] === "Start voice input",
+    const attachButton = buttons.find(
+      (node) => node.props["aria-label"] === "Attach image",
     );
-    expect(micButton.props["aria-pressed"]).toBe(false);
+    expect(attachButton).toBeDefined();
+
+    const micButton = buttons.find(
+      (node) => node.props["aria-label"] === "chat.voiceInput",
+    );
+    expect(micButton).toBeDefined();
+    expect(micButton?.props["aria-pressed"]).toBe(false);
   });
 
   it("disables send when chat input is empty or whitespace", async () => {
     mockUseApp.mockReturnValue(createContext({ chatInput: "   " }));
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView));
     });
     await flush();
 
-    // Find send button by title since we now use an icon instead of text
-    const sendButton = tree?.root.find(
-      (node) => node.type === "button" && node.props.title === "Send message",
+    // Find send button by aria-label since we now use an icon instead of text
+    const buttons = tree?.root.findAllByType("button" as React.ElementType);
+    const sendButton = buttons.find(
+      (node) => node.props["aria-label"] === "chat.send",
     );
-    expect(sendButton.props.disabled).toBe(true);
+    expect(sendButton?.props.disabled).toBe(true);
   });
 
   it("renders a labeled pending-image remove button that stays visible on mobile", async () => {
@@ -536,7 +568,7 @@ describe("ChatView", () => {
       }),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView));
     });
@@ -607,7 +639,8 @@ describe("addImageFiles functional updater", () => {
       throw new Error("ChatView test renderer did not initialize");
     }
     const fileInput = tree.root.find(
-      (node) => node.type === "input" && node.props.accept === "image/*",
+      (node: TestRenderer.ReactTestInstance) =>
+        node.type === "input" && node.props.accept === "image/*",
     );
 
     const fakeFile = new Proxy(

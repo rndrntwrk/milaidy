@@ -6,9 +6,10 @@
  *   2. Secrets (modal)
  */
 
-import { useCallback, useState } from "react";
+import { client } from "@milady/app-core/api";
+import type { ConfigUiHint } from "@milady/app-core/types";
+import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../AppContext";
-import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { SecretsView } from "./SecretsView";
@@ -29,14 +30,20 @@ type RpcFieldGroup = ReadonlyArray<RpcFieldDefinition>;
 type RpcSectionConfigMap = Record<string, RpcFieldGroup>;
 
 const EVM_RPC_OPTIONS = [
-  { id: "eliza-cloud", label: "Eliza Cloud" },
+  { id: "eliza-cloud", label: "Milady Cloud" },
   { id: "alchemy", label: "Alchemy" },
   { id: "infura", label: "Infura" },
   { id: "ankr", label: "Ankr" },
 ] as const;
 
+const BSC_RPC_OPTIONS = [
+  { id: "eliza-cloud", label: "Milady Cloud" },
+  { id: "nodereal", label: "NodeReal" },
+  { id: "quicknode", label: "QuickNode" },
+] as const;
+
 const SOLANA_RPC_OPTIONS = [
-  { id: "eliza-cloud", label: "Eliza Cloud" },
+  { id: "eliza-cloud", label: "Milady Cloud" },
   { id: "helius-birdeye", label: "Helius + Birdeye" },
 ] as const;
 
@@ -59,14 +66,17 @@ function CloudRpcStatus({
   loginBusy,
   onLogin,
 }: CloudRpcStatusProps) {
+  const { t } = useApp();
   if (connected) {
     return (
       <div className="flex items-center gap-2 text-xs">
         <span className="inline-block w-2 h-2 rounded-full bg-[var(--ok,#16a34a)]" />
-        <span className="font-semibold">Connected to Eliza Cloud</span>
+        <span className="font-semibold">
+          {t("configpageview.ConnectedToElizaC")}
+        </span>
         {credits !== null && (
           <span className="text-[var(--muted)] ml-auto">
-            Credits:{" "}
+            {t("configpageview.Credits")}{" "}
             <span
               className={
                 creditsCritical
@@ -85,7 +95,7 @@ function CloudRpcStatus({
                 rel="noopener noreferrer"
                 className="text-[10px] ml-1.5 text-[var(--accent)]"
               >
-                Top up
+                {t("configpageview.TopUp")}
               </a>
             )}
           </span>
@@ -99,7 +109,7 @@ function CloudRpcStatus({
       <div className="flex items-center gap-2 text-xs">
         <span className="inline-block w-2 h-2 rounded-full bg-[var(--muted)]" />
         <span className="text-[var(--muted)]">
-          Requires Eliza Cloud connection
+          {t("configpageview.RequiresElizaCloud")}
         </span>
       </div>
       <button
@@ -205,6 +215,12 @@ function RpcConfigSection<T extends string>({
         selectedProvider,
         onSelect,
         containerClassName,
+        (key: string) => {
+          // hack to get t function without breaking hook rules
+          return key === "miladyclouddashboard.MiladyCloud"
+            ? "Milady Cloud"
+            : key;
+        },
       )}
 
       <div className="mt-3">
@@ -238,6 +254,7 @@ function renderRpcProviderButtons<T extends string>(
   selectedProvider: T,
   onSelect: (provider: T) => void,
   containerClassName: string,
+  tFallback?: (key: string) => string,
 ) {
   return (
     <div className={containerClassName}>
@@ -257,7 +274,9 @@ function renderRpcProviderButtons<T extends string>(
             <div
               className={`text-xs font-bold whitespace-nowrap ${active ? "" : "text-[var(--text)]"}`}
             >
-              {provider.label}
+              {provider.id === "eliza-cloud" && tFallback
+                ? "Milady Cloud"
+                : provider.label}
             </div>
           </button>
         );
@@ -266,16 +285,179 @@ function renderRpcProviderButtons<T extends string>(
   );
 }
 
+/* ── Cloud services toggle section ───────────────────────────────────── */
+
+type CloudServiceKey = "inference" | "rpc" | "media" | "tts" | "embeddings";
+
+const CLOUD_SERVICE_DEFS: {
+  key: CloudServiceKey;
+  label: string;
+  description: string;
+}[] = [
+  {
+    key: "inference",
+    label: "Model Inference",
+    description:
+      "Use MiladyCloud for LLM calls. Turn off to use your own API keys (Anthropic, OpenAI, etc.)",
+  },
+  {
+    key: "rpc",
+    label: "Blockchain RPC",
+    description: "Use MiladyCloud RPC endpoints for EVM, BSC, and Solana",
+  },
+  {
+    key: "media",
+    label: "Media Generation",
+    description: "Use MiladyCloud for image, video, audio, and vision",
+  },
+  {
+    key: "tts",
+    label: "Text-to-Speech",
+    description: "Use MiladyCloud for TTS voice synthesis",
+  },
+  {
+    key: "embeddings",
+    label: "Embeddings",
+    description: "Use MiladyCloud for text embedding generation",
+  },
+];
+
+function CloudServicesSection() {
+  const { t } = useApp();
+  const [services, setServices] = useState<Record<CloudServiceKey, boolean>>({
+    inference: true,
+    rpc: true,
+    media: true,
+    tts: true,
+    embeddings: true,
+  });
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [needsRestart, setNeedsRestart] = useState(false);
+
+  // Load current config on mount
+  useEffect(() => {
+    let cancelled = false;
+    client
+      .getConfig()
+      .then((cfg) => {
+        if (cancelled) return;
+        const cloud = cfg.cloud as
+          | { services?: Record<string, boolean> }
+          | undefined;
+        if (cloud?.services) {
+          setServices((prev) => ({
+            ...prev,
+            ...Object.fromEntries(
+              Object.entries(cloud.services ?? {}).filter(
+                ([, v]) => typeof v === "boolean",
+              ),
+            ),
+          }));
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleToggle = useCallback(
+    async (key: CloudServiceKey) => {
+      const newValue = !services[key];
+      const updated = { ...services, [key]: newValue };
+      setServices(updated);
+      setSaving(true);
+
+      // Also set inferenceMode based on inference toggle
+      const inferenceMode = updated.inference ? "cloud" : "byok";
+
+      try {
+        await client.updateConfig({
+          cloud: { services: updated, inferenceMode },
+        });
+        setNeedsRestart(true);
+      } catch (err) {
+        // Revert on error
+        setServices(services);
+        console.error("[config] Failed to save cloud services:", err);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [services],
+  );
+
+  if (!loaded) return null;
+
+  return (
+    <div className="p-4 border border-[var(--border)] bg-[var(--card)] mt-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="font-bold text-sm">
+          {t("configpageview.CloudServices")}
+        </div>
+        {needsRestart && (
+          <span className="text-[11px] text-[var(--warning,#f59e0b)] font-medium">
+            {t("configpageview.RestartRequiredFor")}
+          </span>
+        )}
+      </div>
+      <p className="text-[12px] text-[var(--muted)] mb-4">
+        {t("configpageview.ChooseWhichElizaCl")}
+      </p>
+      <div className="space-y-2">
+        {CLOUD_SERVICE_DEFS.map(({ key, label, description }) => (
+          <div
+            key={key}
+            className="flex items-center justify-between p-2.5 border border-[var(--border)] rounded cursor-pointer hover:border-[var(--accent)] transition-colors"
+          >
+            <div className="flex-1 min-w-0 mr-3">
+              <div
+                className="text-[13px] font-medium"
+                id={`cloud-service-${key}`}
+              >
+                {label}
+              </div>
+              <div className="text-[11px] text-[var(--muted)] mt-0.5">
+                {description}
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={services[key]}
+              aria-labelledby={`cloud-service-${key}`}
+              disabled={saving}
+              onClick={() => void handleToggle(key)}
+              className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors cursor-pointer ${
+                services[key] ? "bg-[var(--accent)]" : "bg-[var(--border)]"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${
+                  services[key] ? "translate-x-4" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ── ConfigPageView ──────────────────────────────────────────────────── */
 
 export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
   const {
-    cloudConnected,
-    cloudCredits,
-    cloudCreditsLow,
-    cloudCreditsCritical,
-    cloudTopUpUrl,
-    cloudLoginBusy,
+    t,
+    miladyCloudConnected,
+    miladyCloudCredits,
+    miladyCloudCreditsLow,
+    miladyCloudCreditsCritical,
+    miladyCloudTopUpUrl,
+    miladyCloudLoginBusy,
     walletConfig,
     walletApiKeySaving,
     handleWalletApiKeySave,
@@ -305,6 +487,9 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
   const [selectedEvmRpc, setSelectedEvmRpc] = useState<
     "eliza-cloud" | "alchemy" | "infura" | "ankr"
   >("eliza-cloud");
+  const [selectedBscRpc, setSelectedBscRpc] = useState<
+    "eliza-cloud" | "nodereal" | "quicknode"
+  >("eliza-cloud");
   const [selectedSolanaRpc, setSelectedSolanaRpc] = useState<
     "eliza-cloud" | "helius-birdeye"
   >("eliza-cloud");
@@ -333,6 +518,23 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
     ],
   };
 
+  const bscRpcConfigs: RpcSectionConfigMap = {
+    nodereal: [
+      {
+        configKey: "NODEREAL_BSC_RPC_URL",
+        label: "NodeReal BSC RPC URL",
+        isSet: walletConfig?.nodeRealBscRpcSet ?? false,
+      },
+    ],
+    quicknode: [
+      {
+        configKey: "QUICKNODE_BSC_RPC_URL",
+        label: "QuickNode BSC RPC URL",
+        isSet: walletConfig?.quickNodeBscRpcSet ?? false,
+      },
+    ],
+  };
+
   const solanaRpcConfigs: RpcSectionConfigMap = {
     "helius-birdeye": [
       {
@@ -349,12 +551,12 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
   };
 
   const cloudStatusProps = {
-    connected: cloudConnected,
-    credits: cloudCredits,
-    creditsLow: cloudCreditsLow,
-    creditsCritical: cloudCreditsCritical,
-    topUpUrl: cloudTopUpUrl,
-    loginBusy: cloudLoginBusy,
+    connected: miladyCloudConnected,
+    credits: miladyCloudCredits,
+    creditsLow: miladyCloudCreditsLow,
+    creditsCritical: miladyCloudCreditsCritical,
+    topUpUrl: miladyCloudTopUpUrl,
+    loginBusy: miladyCloudLoginBusy,
     onLogin: () => void handleCloudLogin(),
   };
 
@@ -362,9 +564,11 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
     <div>
       {!embedded && (
         <>
-          <h2 className="text-lg font-bold mb-1">Config</h2>
+          <h2 className="text-lg font-bold mb-1">
+            {t("configpageview.Config")}
+          </h2>
           <p className="text-[13px] text-[var(--muted)] mb-5">
-            Wallet providers and secrets.
+            {t("configpageview.WalletProvidersAnd")}
           </p>
         </>
       )}
@@ -374,12 +578,14 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
           ═══════════════════════════════════════════════════════════════ */}
       <div className="p-4 border border-[var(--border)] bg-[var(--card)]">
         <div className="flex items-center justify-between mb-4">
-          <div className="font-bold text-sm">Wallet &amp; RPC</div>
+          <div className="font-bold text-sm">
+            {t("configpageview.WalletAmpRPC")}
+          </div>
           <button
             type="button"
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--txt)] bg-transparent border border-[var(--border)] rounded cursor-pointer transition-colors hover:border-[var(--accent)]"
             onClick={() => setSecretsOpen(true)}
-            title="Secrets Vault"
+            title={t("configpageview.SecretsVault1")}
           >
             <svg
               width="13"
@@ -391,18 +597,33 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <title>Secrets vault</title>
+              <title>{t("configpageview.SecretsVault")}</title>
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
-            Secrets
+
+            {t("configpageview.Secrets")}
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* BSC */}
+          <RpcConfigSection
+            title={t("configpageview.BSC")}
+            description="BNB Smart Chain — trading and market feed"
+            options={BSC_RPC_OPTIONS}
+            selectedProvider={selectedBscRpc}
+            onSelect={setSelectedBscRpc}
+            providerConfigs={bscRpcConfigs}
+            rpcFieldValues={rpcFieldValues}
+            onRpcFieldChange={handleRpcFieldChange}
+            cloud={cloudStatusProps}
+            containerClassName="grid grid-cols-3 gap-1.5"
+          />
+
           {/* EVM */}
           <RpcConfigSection
-            title="EVM"
+            title={t("configpageview.EVM")}
             description="Ethereum, Base, Arbitrum, Optimism, Polygon"
             options={EVM_RPC_OPTIONS}
             selectedProvider={selectedEvmRpc}
@@ -416,7 +637,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
 
           {/* Solana */}
           <RpcConfigSection
-            title="Solana"
+            title={t("configpageview.Solana")}
             description="Solana mainnet tokens and NFTs"
             options={SOLANA_RPC_OPTIONS}
             selectedProvider={selectedSolanaRpc}
@@ -440,6 +661,11 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
           </button>
         </div>
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          2. CLOUD SERVICES
+          ═══════════════════════════════════════════════════════════════ */}
+      {miladyCloudConnected && <CloudServicesSection />}
 
       {/* ── Secrets modal ── */}
       {secretsOpen && (
@@ -471,18 +697,20 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                   strokeLinejoin="round"
                   className="text-[var(--accent)]"
                 >
-                  <title>Secrets vault</title>
+                  <title>{t("configpageview.SecretsVault")}</title>
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                   <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                 </svg>
-                <span className="font-bold text-sm">Secrets Vault</span>
+                <span className="font-bold text-sm">
+                  {t("configpageview.SecretsVault1")}
+                </span>
               </div>
               <button
                 type="button"
                 className="text-[var(--muted)] hover:text-[var(--txt)] text-lg leading-none px-1 bg-transparent border-0 cursor-pointer"
                 onClick={() => setSecretsOpen(false)}
               >
-                &times;
+                {t("configpageview.Times")}
               </button>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto">

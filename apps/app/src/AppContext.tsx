@@ -5,24 +5,23 @@
  */
 
 import {
-  createContext,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import {
   type AgentStartupDiagnostics,
   type AgentStatus,
-  type AppViewerAuthMessage,
+  type BscTradeExecuteRequest,
+  type BscTradeExecuteResponse,
+  type BscTradePreflightResponse,
+  type BscTradeQuoteRequest,
+  type BscTradeQuoteResponse,
+  type BscTradeTxStatusResponse,
+  type BscTransferExecuteRequest,
+  type BscTransferExecuteResponse,
   type CatalogSkill,
   type CharacterData,
   type CodingAgentSession,
   type Conversation,
   type ConversationChannelType,
   type ConversationMessage,
+  type ConversationMode,
   type CreateTriggerRequest,
   type CustomActionDef,
   client,
@@ -45,7 +44,6 @@ import {
   type SkillScanReportSummary,
   type StreamEventEnvelope,
   type StylePreset,
-  type SystemPermissionId,
   type TriggerHealthSnapshot,
   type TriggerRunRecord,
   type TriggerSummary,
@@ -56,11 +54,73 @@ import {
   type WalletConfigStatus,
   type WalletExportResult,
   type WalletNftsResponse,
+  type WalletTradingProfileResponse,
+  type WalletTradingProfileSourceFilter,
+  type WalletTradingProfileWindow,
   type WhitelistStatus,
   type WorkbenchOverview,
-} from "./api-client";
-import type { ToastItem } from "./components/ui/Toast";
-import { resolveApiUrl, resolveAppAssetUrl } from "./asset-url";
+} from "@milady/app-core/api";
+import { getBackendStartupTimeoutMs } from "@milady/app-core/bridge";
+import {
+  createTranslator,
+  normalizeLanguage,
+  t as translateText,
+  type UiLanguage,
+} from "@milady/app-core/i18n";
+import { pathForTab, type Tab, tabFromPath } from "@milady/app-core/navigation";
+import {
+  type ActionNotice,
+  AGENT_READY_TIMEOUT_MS,
+  AGENT_TRANSFER_MIN_PASSWORD_LENGTH,
+  AppContext,
+  type AppContextValue,
+  type AppState,
+  asApiLikeError,
+  type ChatTurnUsage,
+  computeStreamingDelta,
+  formatSearchBullet,
+  formatStartupErrorDetail,
+  type GamePostMessageAuthPayload,
+  LIFECYCLE_MESSAGES,
+  type LifecycleAction,
+  type LoadConversationMessagesResult,
+  loadAvatarIndex,
+  loadChatAvatarVisible,
+  loadChatMode,
+  loadChatVoiceMuted,
+  loadUiLanguage,
+  loadUiShellMode,
+  normalizeAvatarIndex,
+  normalizeCustomActionName,
+  normalizeUiShellMode,
+  ONBOARDING_PERMISSION_LABELS,
+  type OnboardingNextOptions,
+  type OnboardingStep,
+  parseAgentStatusEvent,
+  parseCustomActionParams,
+  parseProactiveMessageEvent,
+  parseSlashCommandInput,
+  parseStreamEventEnvelopeEvent,
+  type StartupErrorState,
+  type StartupPhase,
+  saveAvatarIndex,
+  saveChatAvatarVisible,
+  saveChatMode,
+  saveChatVoiceMuted,
+  saveUiLanguage,
+  saveUiShellMode,
+  shouldApplyFinalStreamText,
+  type UiShellMode,
+} from "@milady/app-core/state";
+import { resolveApiUrl } from "@milady/app-core/utils";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   type AutonomyEventStore,
   type AutonomyRunHealthMap,
@@ -73,1025 +133,80 @@ import {
   expandSavedCustomCommand,
   loadSavedCustomCommands,
   normalizeSlashCommandName,
-  splitCommandArgs,
 } from "./chat-commands";
 import { isLifoPopoutMode } from "./lifo-popout";
-import { pathForTab, type Tab, tabFromPath } from "./navigation";
 import { getMissingOnboardingPermissions } from "./onboarding-permissions";
-
-// ── VRM helpers ─────────────────────────────────────────────────────────
-
-/** Number of built-in milady VRM avatars shipped with the app. */
-export const VRM_COUNT = 8;
-
-function normalizeAvatarIndex(index: number): number {
-  if (!Number.isFinite(index)) return 1;
-  const n = Math.trunc(index);
-  if (n === 0) return 0;
-  if (n < 1 || n > VRM_COUNT) return 1;
-  return n;
-}
-
-/** Resolve a built-in VRM index (1–8) to its public asset URL. */
-export function getVrmUrl(index: number): string {
-  const normalized = normalizeAvatarIndex(index);
-  const safeIndex = normalized > 0 ? normalized : 1;
-  return resolveAppAssetUrl(`vrms/${safeIndex}.vrm`);
-}
-
-/** Resolve a built-in VRM index (1–8) to its preview thumbnail URL. */
-export function getVrmPreviewUrl(index: number): string {
-  const normalized = normalizeAvatarIndex(index);
-  const safeIndex = normalized > 0 ? normalized : 1;
-  return resolveAppAssetUrl(`vrms/previews/milady-${safeIndex}.png`);
-}
-
-// ── Theme ──────────────────────────────────────────────────────────────
-
-const THEME_STORAGE_KEY = "milady:theme";
-
-export type ThemeName =
-  | "milady"
-  | "qt314"
-  | "web2000"
-  | "programmer"
-  | "haxor"
-  | "psycho";
-
-export const THEMES: ReadonlyArray<{
-  id: ThemeName;
-  label: string;
-  hint: string;
-}> = [
-  { id: "milady", label: "milady", hint: "clean black & white" },
-  { id: "qt314", label: "qt3.14", hint: "soft pastels" },
-  { id: "web2000", label: "web2000", hint: "green hacker vibes" },
-  { id: "programmer", label: "programmer", hint: "vscode dark" },
-  { id: "haxor", label: "haxor", hint: "terminal green" },
-  { id: "psycho", label: "psycho", hint: "pure chaos" },
-];
-
-const VALID_THEMES = new Set<string>(THEMES.map((t) => t.id));
-const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
-
-function loadTheme(): ThemeName {
-  try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored && VALID_THEMES.has(stored)) return stored as ThemeName;
-  } catch {
-    /* ignore */
-  }
-  return "milady";
-}
-
-function applyTheme(name: ThemeName) {
-  document.documentElement.setAttribute("data-theme", name);
-  try {
-    localStorage.setItem(THEME_STORAGE_KEY, name);
-  } catch {
-    /* ignore */
-  }
-}
-
-/* ── Avatar persistence ───────────────────────────────────────────────── */
-const AVATAR_INDEX_KEY = "milady_avatar_index";
-
-function loadAvatarIndex(): number {
-  try {
-    const stored = localStorage.getItem(AVATAR_INDEX_KEY);
-    if (stored) {
-      const n = parseInt(stored, 10);
-      return normalizeAvatarIndex(n);
-    }
-  } catch {
-    /* ignore */
-  }
-  return 1;
-}
-
-function saveAvatarIndex(index: number) {
-  try {
-    localStorage.setItem(AVATAR_INDEX_KEY, String(normalizeAvatarIndex(index)));
-  } catch {
-    /* ignore */
-  }
-}
-
-/* ── Chat UI persistence ──────────────────────────────────────────────── */
-const CHAT_AVATAR_VISIBLE_KEY = "milady:chat:avatarVisible";
-const CHAT_VOICE_MUTED_KEY = "milady:chat:voiceMuted";
-
-function loadChatAvatarVisible(): boolean {
-  try {
-    const stored = localStorage.getItem(CHAT_AVATAR_VISIBLE_KEY);
-    return stored === null ? true : stored === "true";
-  } catch {
-    return true;
-  }
-}
-
-function loadChatVoiceMuted(): boolean {
-  try {
-    const stored = localStorage.getItem(CHAT_VOICE_MUTED_KEY);
-    return stored === null ? true : stored === "true";
-  } catch {
-    return true;
-  }
-}
-
-function saveChatAvatarVisible(value: boolean): void {
-  try {
-    localStorage.setItem(CHAT_AVATAR_VISIBLE_KEY, String(value));
-  } catch {
-    /* ignore */
-  }
-}
-
-function saveChatVoiceMuted(value: boolean): void {
-  try {
-    localStorage.setItem(CHAT_VOICE_MUTED_KEY, String(value));
-  } catch {
-    /* ignore */
-  }
-}
-
-// ── Onboarding step type ───────────────────────────────────────────────
-
-export type OnboardingStep =
-  | "welcome"
-  | "name"
-  | "avatar"
-  | "style"
-  | "theme"
-  | "mint"
-  | "runMode"
-  | "dockerSetup"
-  | "cloudProvider"
-  | "modelSelection"
-  | "cloudLogin"
-  | "llmProvider"
-  | "inventorySetup"
-  | "connectors"
-  | "permissions";
-
-interface OnboardingNextOptions {
-  allowPermissionBypass?: boolean;
-}
-
-const ONBOARDING_PERMISSION_LABELS: Record<SystemPermissionId, string> = {
-  accessibility: "Accessibility",
-  "screen-recording": "Screen Recording",
-  microphone: "Microphone",
-  camera: "Camera",
-  shell: "Shell Access",
-};
-
-// ── Action notice ──────────────────────────────────────────────────────
-
-interface ActionNotice {
-  tone: string;
-  text: string;
-}
-
-type LifecycleAction =
-  | "start"
-  | "stop"
-  | "pause"
-  | "resume"
-  | "restart"
-  | "reset";
-
-const LIFECYCLE_MESSAGES: Record<
-  LifecycleAction,
-  {
-    inProgress: string;
-    progress: string;
-    success: string;
-    verb: string;
-  }
-> = {
-  start: {
-    inProgress: "starting",
-    progress: "Starting agent...",
-    success: "Agent started.",
-    verb: "start",
-  },
-  stop: {
-    inProgress: "stopping",
-    progress: "Stopping agent...",
-    success: "Agent stopped.",
-    verb: "stop",
-  },
-  pause: {
-    inProgress: "pausing",
-    progress: "Pausing agent...",
-    success: "Agent paused.",
-    verb: "pause",
-  },
-  resume: {
-    inProgress: "resuming",
-    progress: "Resuming agent...",
-    success: "Agent resumed.",
-    verb: "resume",
-  },
-  restart: {
-    inProgress: "restarting",
-    progress: "Restarting agent...",
-    success: "Agent restarted.",
-    verb: "restart",
-  },
-  reset: {
-    inProgress: "resetting",
-    progress: "Resetting agent...",
-    success: "Agent reset. Returning to onboarding.",
-    verb: "reset",
-  },
-};
-
-type GamePostMessageAuthPayload = AppViewerAuthMessage;
-
-const AGENT_STATES: ReadonlySet<AgentStatus["state"]> = new Set([
-  "not_started",
-  "starting",
-  "running",
-  "paused",
-  "stopped",
-  "restarting",
-  "error",
-]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function parseAgentStatusEvent(
-  data: Record<string, unknown>,
-): AgentStatus | null {
-  const state = data.state;
-  const agentName = data.agentName;
-  if (
-    typeof state !== "string" ||
-    !AGENT_STATES.has(state as AgentStatus["state"])
-  ) {
-    return null;
-  }
-  if (typeof agentName !== "string") return null;
-  const model = typeof data.model === "string" ? data.model : undefined;
-  const startedAt =
-    typeof data.startedAt === "number" ? data.startedAt : undefined;
-  const uptime = typeof data.uptime === "number" ? data.uptime : undefined;
-  const startup = parseAgentStartupDiagnostics(data.startup);
-  return {
-    state: state as AgentStatus["state"],
-    agentName,
-    model,
-    startedAt,
-    uptime,
-    startup,
-  };
-}
-
-function parseAgentStartupDiagnostics(
-  value: unknown,
-): AgentStartupDiagnostics | undefined {
-  if (!isRecord(value)) return undefined;
-  const phase = value.phase;
-  const attempt = value.attempt;
-  if (typeof phase !== "string" || typeof attempt !== "number") {
-    return undefined;
-  }
-  const startup: AgentStartupDiagnostics = { phase, attempt };
-  if (typeof value.lastError === "string") startup.lastError = value.lastError;
-  if (typeof value.lastErrorAt === "number")
-    startup.lastErrorAt = value.lastErrorAt;
-  if (typeof value.nextRetryAt === "number")
-    startup.nextRetryAt = value.nextRetryAt;
-  return startup;
-}
-
-function parseStreamEventEnvelopeEvent(
-  data: Record<string, unknown>,
-): StreamEventEnvelope | null {
-  const type = data.type;
-  const eventId = data.eventId;
-  const ts = data.ts;
-  const payload = data.payload;
-  if (
-    (type !== "agent_event" &&
-      type !== "heartbeat_event" &&
-      type !== "training_event") ||
-    typeof eventId !== "string" ||
-    typeof ts !== "number" ||
-    !isRecord(payload)
-  ) {
-    return null;
-  }
-
-  const envelope: StreamEventEnvelope = {
-    type,
-    version: 1,
-    eventId,
-    ts,
-    payload,
-  };
-  if (typeof data.runId === "string") envelope.runId = data.runId;
-  if (typeof data.seq === "number") envelope.seq = data.seq;
-  if (typeof data.stream === "string") envelope.stream = data.stream;
-  if (typeof data.sessionKey === "string")
-    envelope.sessionKey = data.sessionKey;
-  if (typeof data.agentId === "string") envelope.agentId = data.agentId;
-  if (typeof data.roomId === "string") envelope.roomId = data.roomId;
-  return envelope;
-}
-
-function parseConversationMessageEvent(
-  value: unknown,
-): ConversationMessage | null {
-  if (!isRecord(value)) return null;
-  const id = value.id;
-  const role = value.role;
-  const text = value.text;
-  const timestamp = value.timestamp;
-  const source = value.source;
-  const from = value.from;
-  if (
-    typeof id !== "string" ||
-    (role !== "user" && role !== "assistant") ||
-    typeof text !== "string" ||
-    typeof timestamp !== "number"
-  ) {
-    return null;
-  }
-  const parsed: ConversationMessage = { id, role, text, timestamp };
-  if (typeof source === "string" && source.length > 0) {
-    parsed.source = source;
-  }
-  if (typeof from === "string" && from.length > 0) {
-    parsed.from = from;
-  }
-  return parsed;
-}
-
-function parseProactiveMessageEvent(
-  data: Record<string, unknown>,
-): { conversationId: string; message: ConversationMessage } | null {
-  const conversationId = data.conversationId;
-  if (typeof conversationId !== "string") return null;
-  const message = parseConversationMessageEvent(data.message);
-  if (!message) return null;
-  return { conversationId, message };
-}
-
-function computeStreamingDelta(existing: string, incoming: string): string {
-  if (!incoming) return "";
-  if (!existing) return incoming;
-  if (incoming === existing) return "";
-  if (incoming.startsWith(existing)) return incoming.slice(existing.length);
-  if (existing.startsWith(incoming)) return "";
-
-  // Small chunks are usually raw token deltas; keep them even if they
-  // duplicate suffix characters (e.g., "l" + "l" in "Hello").
-  if (incoming.length <= 3) return incoming;
-
-  const maxOverlap = Math.min(existing.length, incoming.length);
-  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
-    if (existing.endsWith(incoming.slice(0, overlap))) {
-      const delta = incoming.slice(overlap);
-      if (!delta && overlap === incoming.length) return "";
-      return delta;
-    }
-  }
-  return incoming;
-}
-
-function normalizeStreamComparisonText(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
-}
-
-function shouldApplyFinalStreamText(
-  streamed: string,
-  finalText: string,
-): boolean {
-  if (!finalText.trim()) return false;
-  if (!streamed) return true;
-  if (streamed === finalText) return false;
-  return (
-    normalizeStreamComparisonText(streamed) !==
-    normalizeStreamComparisonText(finalText)
-  );
-}
-
-type SlashCommandInput = {
-  name: string;
-  argsRaw: string;
-};
-
-function parseSlashCommandInput(text: string): SlashCommandInput | null {
-  if (!text.startsWith("/")) return null;
-  const body = text.slice(1).trim();
-  if (!body) return null;
-  const firstSpace = body.search(/\s/);
-  if (firstSpace === -1) {
-    return { name: normalizeSlashCommandName(body), argsRaw: "" };
-  }
-  return {
-    name: normalizeSlashCommandName(body.slice(0, firstSpace)),
-    argsRaw: body.slice(firstSpace + 1).trim(),
-  };
-}
-
-function normalizeCustomActionName(value: string): string {
-  return value
-    .trim()
-    .replace(/[\s-]+/g, "_")
-    .toUpperCase();
-}
-
-function parseCustomActionParams(
-  action: CustomActionDef,
-  argsRaw: string,
-): {
-  params: Record<string, string>;
-  missingRequired: string[];
-} {
-  const tokens = splitCommandArgs(argsRaw);
-  const named = new Map<string, string>();
-  const positional: string[] = [];
-
-  for (const token of tokens) {
-    const eq = token.indexOf("=");
-    if (eq > 0) {
-      const key = token.slice(0, eq).trim().toLowerCase();
-      const value = token.slice(eq + 1).trim();
-      if (key) {
-        named.set(key, value);
-        continue;
-      }
-    }
-    positional.push(token);
-  }
-
-  const params: Record<string, string> = {};
-  const defs = Array.isArray(action.parameters) ? action.parameters : [];
-  const defsByLower = new Map(
-    defs.map((def) => [def.name.trim().toLowerCase(), def.name]),
-  );
-
-  for (const [key, value] of named) {
-    const canonical = defsByLower.get(key);
-    if (canonical) {
-      params[canonical] = value;
-    } else {
-      params[key] = value;
-    }
-  }
-
-  for (const def of defs) {
-    if (params[def.name] == null && positional.length > 0) {
-      params[def.name] = positional.shift() as string;
-    }
-  }
-
-  if (positional.length > 0) {
-    const sink = defs.find((def) =>
-      ["input", "text", "query", "message", "prompt"].includes(
-        def.name.toLowerCase(),
-      ),
-    );
-    if (sink) {
-      const existing = params[sink.name];
-      params[sink.name] = existing
-        ? `${existing} ${positional.join(" ")}`
-        : positional.join(" ");
-    }
-  }
-
-  const missingRequired = defs
-    .filter((def) => def.required)
-    .map((def) => def.name)
-    .filter((name) => !(params[name] ?? "").trim());
-
-  return { params, missingRequired };
-}
-
-function formatSearchBullet(label: string, items: string[]): string {
-  if (items.length === 0) return `${label}: none`;
-  return `${label}:\n${items.map((item) => `- ${item}`).join("\n")}`;
-}
-
-type LoadConversationMessagesResult =
-  | { ok: true }
-  | { ok: false; status?: number; message: string };
-
-export type StartupPhase = "starting-backend" | "initializing-agent";
-
-export type StartupErrorReason =
-  | "backend-timeout"
-  | "backend-unreachable"
-  | "agent-timeout"
-  | "agent-error";
-
-export interface StartupErrorState {
-  reason: StartupErrorReason;
-  phase: StartupPhase;
-  message: string;
-  detail?: string;
-  status?: number;
-  path?: string;
-}
-
-const BACKEND_STARTUP_TIMEOUT_MS = 30_000;
-const AGENT_READY_TIMEOUT_MS = 90_000;
-
-interface ApiLikeError {
-  kind?: string;
-  status?: number;
-  path?: string;
-  message?: string;
-}
-
-function asApiLikeError(err: unknown): ApiLikeError | null {
-  if (!isRecord(err)) return null;
-  const kind = err.kind;
-  const status = err.status;
-  const path = err.path;
-  const message = err.message;
-  const hasApiShape =
-    typeof kind === "string" ||
-    typeof status === "number" ||
-    typeof path === "string";
-  if (!hasApiShape) return null;
-  return {
-    kind: typeof kind === "string" ? kind : undefined,
-    status: typeof status === "number" ? status : undefined,
-    path: typeof path === "string" ? path : undefined,
-    message: typeof message === "string" ? message : undefined,
-  };
-}
-
-function formatStartupErrorDetail(err: unknown): string | undefined {
-  const apiErr = asApiLikeError(err);
-  if (apiErr) {
-    const parts: string[] = [];
-    if (apiErr.path) parts.push(apiErr.path);
-    if (typeof apiErr.status === "number") parts.push(`HTTP ${apiErr.status}`);
-    if (apiErr.message) parts.push(apiErr.message);
-    return parts.filter(Boolean).join(" - ");
-  }
-  if (err instanceof Error && err.message.trim()) {
-    return err.message.trim();
-  }
-  return undefined;
-}
-
-// ── Context value type ─────────────────────────────────────────────────
-
-export interface AppState {
-  // Core
-  tab: Tab;
-  currentTheme: ThemeName;
-  connected: boolean;
-  agentStatus: AgentStatus | null;
-  onboardingComplete: boolean;
-  onboardingLoading: boolean;
-  startupPhase: StartupPhase;
-  startupError: StartupErrorState | null;
-  authRequired: boolean;
-  actionNotice: ActionNotice | null;
-  toasts: ToastItem[];
-  lifecycleBusy: boolean;
-  lifecycleAction: LifecycleAction | null;
-
-  // Deferred restart
-  pendingRestart: boolean;
-  pendingRestartReasons: string[];
-  restartBannerDismissed: boolean;
-
-  // Backend connection state (for crash handling)
-  backendConnection: {
-    state: "connected" | "disconnected" | "reconnecting" | "failed";
-    reconnectAttempt: number;
-    maxReconnectAttempts: number;
-    showDisconnectedUI: boolean;
-  };
-  backendDisconnectedBannerDismissed: boolean;
-
-  // Pairing
-  pairingEnabled: boolean;
-  pairingExpiresAt: number | null;
-  pairingCodeInput: string;
-  pairingError: string | null;
-  pairingBusy: boolean;
-
-  // Chat
-  chatInput: string;
-  chatSending: boolean;
-  chatFirstTokenReceived: boolean;
-  chatAvatarVisible: boolean;
-  chatAgentVoiceMuted: boolean;
-  chatAvatarSpeaking: boolean;
-  conversations: Conversation[];
-  activeConversationId: string | null;
-  conversationMessages: ConversationMessage[];
-  autonomousEvents: StreamEventEnvelope[];
-  autonomousLatestEventId: string | null;
-  autonomousRunHealthByRunId: AutonomyRunHealthMap;
-  /** Active PTY coding agent sessions from the SwarmCoordinator. */
-  ptySessions: CodingAgentSession[];
-  /** Conversation IDs with unread proactive messages from the agent. */
-  unreadConversations: Set<string>;
-
-  // Triggers
-  triggers: TriggerSummary[];
-  triggersLoading: boolean;
-  triggersSaving: boolean;
-  triggerRunsById: Record<string, TriggerRunRecord[]>;
-  triggerHealth: TriggerHealthSnapshot | null;
-  triggerError: string | null;
-
-  // Plugins
-  plugins: PluginInfo[];
-  pluginFilter: "all" | "ai-provider" | "connector" | "feature" | "streaming";
-  pluginStatusFilter: "all" | "enabled" | "disabled";
-  pluginSearch: string;
-  pluginSettingsOpen: Set<string>;
-  pluginAdvancedOpen: Set<string>;
-  pluginSaving: Set<string>;
-  pluginSaveSuccess: Set<string>;
-
-  // Skills
-  skills: SkillInfo[];
-  skillsSubTab: "my" | "browse";
-  skillCreateFormOpen: boolean;
-  skillCreateName: string;
-  skillCreateDescription: string;
-  skillCreating: boolean;
-  skillReviewReport: SkillScanReportSummary | null;
-  skillReviewId: string;
-  skillReviewLoading: boolean;
-  skillToggleAction: string;
-  skillsMarketplaceQuery: string;
-  skillsMarketplaceResults: SkillMarketplaceResult[];
-  skillsMarketplaceError: string;
-  skillsMarketplaceLoading: boolean;
-  skillsMarketplaceAction: string;
-  skillsMarketplaceManualGithubUrl: string;
-
-  // Logs
-  logs: LogEntry[];
-  logSources: string[];
-  logTags: string[];
-  logTagFilter: string;
-  logLevelFilter: string;
-  logSourceFilter: string;
-
-  // Wallet / Inventory
-  walletAddresses: WalletAddresses | null;
-  walletConfig: WalletConfigStatus | null;
-  walletBalances: WalletBalancesResponse | null;
-  walletNfts: WalletNftsResponse | null;
-  walletLoading: boolean;
-  walletNftsLoading: boolean;
-  inventoryView: "tokens" | "nfts";
-  walletExportData: WalletExportResult | null;
-  walletExportVisible: boolean;
-  walletApiKeySaving: boolean;
-  inventorySort: "chain" | "symbol" | "value";
-  walletError: string | null;
-
-  // ERC-8004 Registry
-  registryStatus: RegistryStatus | null;
-  registryLoading: boolean;
-  registryRegistering: boolean;
-  registryError: string | null;
-
-  // Drop / Mint
-  dropStatus: DropStatus | null;
-  dropLoading: boolean;
-  mintInProgress: boolean;
-  mintResult: MintResult | null;
-  mintError: string | null;
-  mintShiny: boolean;
-
-  // Whitelist
-  whitelistStatus: WhitelistStatus | null;
-  whitelistLoading: boolean;
-  twitterVerifyMessage: string | null;
-  twitterVerifyUrl: string;
-  twitterVerifying: boolean;
-
-  // Character
-  characterData: CharacterData | null;
-  characterLoading: boolean;
-  characterSaving: boolean;
-  characterSaveSuccess: string | null;
-  characterSaveError: string | null;
-  characterDraft: CharacterData;
-  selectedVrmIndex: number;
-  customVrmUrl: string;
-
-  // Cloud
-  cloudEnabled: boolean;
-  cloudConnected: boolean;
-  cloudCredits: number | null;
-  cloudCreditsLow: boolean;
-  cloudCreditsCritical: boolean;
-  cloudTopUpUrl: string;
-  cloudUserId: string | null;
-  cloudLoginBusy: boolean;
-  cloudLoginError: string | null;
-  cloudDisconnecting: boolean;
-
-  // Updates
-  updateStatus: UpdateStatus | null;
-  updateLoading: boolean;
-  updateChannelSaving: boolean;
-
-  // Extension
-  extensionStatus: ExtensionStatus | null;
-  extensionChecking: boolean;
-
-  // Store
-  storePlugins: RegistryPlugin[];
-  storeSearch: string;
-  storeFilter: "all" | "installed" | "ai-provider" | "connector" | "feature";
-  storeLoading: boolean;
-  storeInstalling: Set<string>;
-  storeUninstalling: Set<string>;
-  storeError: string | null;
-  storeDetailPlugin: RegistryPlugin | null;
-  storeSubTab: "plugins" | "skills";
-
-  // Catalog
-  catalogSkills: CatalogSkill[];
-  catalogTotal: number;
-  catalogPage: number;
-  catalogTotalPages: number;
-  catalogSort: "downloads" | "stars" | "updated" | "name";
-  catalogSearch: string;
-  catalogLoading: boolean;
-  catalogError: string | null;
-  catalogDetailSkill: CatalogSkill | null;
-  catalogInstalling: Set<string>;
-  catalogUninstalling: Set<string>;
-
-  // Workbench
-  workbenchLoading: boolean;
-  workbench: WorkbenchOverview | null;
-  workbenchTasksAvailable: boolean;
-  workbenchTriggersAvailable: boolean;
-  workbenchTodosAvailable: boolean;
-
-  // Agent export/import
-  exportBusy: boolean;
-  exportPassword: string;
-  exportIncludeLogs: boolean;
-  exportError: string | null;
-  exportSuccess: string | null;
-  importBusy: boolean;
-  importPassword: string;
-  importFile: File | null;
-  importError: string | null;
-  importSuccess: string | null;
-
-  // Onboarding
-  onboardingStep: OnboardingStep;
-  onboardingOptions: OnboardingOptions | null;
-  onboardingName: string;
-  onboardingStyle: string;
-  onboardingTheme: ThemeName;
-  onboardingRunMode: "local-rawdog" | "local-sandbox" | "cloud" | "";
-  onboardingCloudProvider: string;
-  onboardingSmallModel: string;
-  onboardingLargeModel: string;
-  onboardingProvider: string;
-  onboardingApiKey: string;
-  onboardingOpenRouterModel: string;
-  onboardingPrimaryModel: string;
-  onboardingTelegramToken: string;
-  onboardingDiscordToken: string;
-  onboardingWhatsAppSessionPath: string;
-  onboardingTwilioAccountSid: string;
-  onboardingTwilioAuthToken: string;
-  onboardingTwilioPhoneNumber: string;
-  onboardingBlooioApiKey: string;
-  onboardingBlooioPhoneNumber: string;
-  onboardingGithubToken: string;
-  onboardingSubscriptionTab: "token" | "oauth";
-  onboardingElizaCloudTab: "login" | "apikey";
-  onboardingSelectedChains: Set<string>;
-  onboardingRpcSelections: Record<string, string>;
-  onboardingRpcKeys: Record<string, string>;
-  onboardingAvatar: number;
-  onboardingRestarting: boolean;
-
-  // Command palette
-  commandPaletteOpen: boolean;
-  commandQuery: string;
-  commandActiveIndex: number;
-  closeCommandPalette: () => void;
-
-  // Emote picker
-  emotePickerOpen: boolean;
-
-  // MCP
-  mcpConfiguredServers: Record<string, McpServerConfig>;
-  mcpServerStatuses: McpServerStatus[];
-  mcpMarketplaceQuery: string;
-  mcpMarketplaceResults: McpMarketplaceResult[];
-  mcpMarketplaceLoading: boolean;
-  mcpAction: string;
-  mcpAddingServer: McpRegistryServerDetail | null;
-  mcpAddingResult: McpMarketplaceResult | null;
-  mcpEnvInputs: Record<string, string>;
-  mcpHeaderInputs: Record<string, string>;
-
-  // Share ingest
-  droppedFiles: string[];
-  shareIngestNotice: string;
-
-  // Chat image attachments queued for the next message
-  chatPendingImages: ImageAttachment[];
-
-  // Game
-  activeGameApp: string;
-  activeGameDisplayName: string;
-  activeGameViewerUrl: string;
-  activeGameSandbox: string;
-  activeGamePostMessageAuth: boolean;
-  activeGamePostMessagePayload: GamePostMessageAuthPayload | null;
-
-  /** When true, the game iframe persists as a floating overlay across all tabs. */
-  gameOverlayEnabled: boolean;
-
-  // Sub-tabs
-  appsSubTab: "browse" | "games";
-  agentSubTab: "character" | "inventory" | "knowledge";
-  pluginsSubTab: "features" | "connectors" | "plugins";
-  databaseSubTab: "tables" | "media" | "vectors";
-
-  // Config text
-  configRaw: Record<string, unknown>;
-  configText: string;
-}
-
-export interface AppActions {
-  // Navigation
-  setTab: (tab: Tab) => void;
-  setTheme: (theme: ThemeName) => void;
-
-  // Lifecycle
-  handleStart: () => Promise<void>;
-  handleStop: () => Promise<void>;
-  handlePauseResume: () => Promise<void>;
-  handleRestart: () => Promise<void>;
-  handleReset: () => Promise<void>;
-  retryStartup: () => void;
-  dismissRestartBanner: () => void;
-  triggerRestart: () => Promise<void>;
-  dismissBackendDisconnectedBanner: () => void;
-  retryBackendConnection: () => void;
-  restartBackend: () => Promise<void>;
-
-  // Chat
-  handleChatSend: (channelType?: ConversationChannelType) => Promise<void>;
-  handleChatStop: () => void;
-  handleChatClear: () => Promise<void>;
-  handleNewConversation: () => Promise<void>;
-  setChatPendingImages: React.Dispatch<React.SetStateAction<ImageAttachment[]>>;
-  handleSelectConversation: (id: string) => Promise<void>;
-  handleDeleteConversation: (id: string) => Promise<void>;
-  handleRenameConversation: (id: string, title: string) => Promise<void>;
-  /** Send a programmatic message (e.g. from a UiSpec action) without touching chatInput. */
-  sendActionMessage: (text: string) => Promise<void>;
-
-  // Triggers
-  loadTriggers: () => Promise<void>;
-  createTrigger: (
-    request: CreateTriggerRequest,
-  ) => Promise<TriggerSummary | null>;
-  updateTrigger: (
-    id: string,
-    request: UpdateTriggerRequest,
-  ) => Promise<TriggerSummary | null>;
-  deleteTrigger: (id: string) => Promise<boolean>;
-  runTriggerNow: (id: string) => Promise<boolean>;
-  loadTriggerRuns: (id: string) => Promise<void>;
-  loadTriggerHealth: () => Promise<void>;
-
-  // Pairing
-  handlePairingSubmit: () => Promise<void>;
-
-  // Plugins
-  loadPlugins: () => Promise<void>;
-  handlePluginToggle: (pluginId: string, enabled: boolean) => Promise<void>;
-  handlePluginConfigSave: (
-    pluginId: string,
-    config: Record<string, string>,
-  ) => Promise<void>;
-
-  // Skills
-  loadSkills: () => Promise<void>;
-  refreshSkills: () => Promise<void>;
-  handleSkillToggle: (skillId: string, enabled: boolean) => Promise<void>;
-  handleCreateSkill: () => Promise<void>;
-  handleOpenSkill: (skillId: string) => Promise<void>;
-  handleDeleteSkill: (skillId: string, name: string) => Promise<void>;
-  handleReviewSkill: (skillId: string) => Promise<void>;
-  handleAcknowledgeSkill: (skillId: string) => Promise<void>;
-  searchSkillsMarketplace: () => Promise<void>;
-  installSkillFromMarketplace: (item: SkillMarketplaceResult) => Promise<void>;
-  uninstallMarketplaceSkill: (skillId: string, name: string) => Promise<void>;
-  installSkillFromGithubUrl: () => Promise<void>;
-
-  // Logs
-  loadLogs: () => Promise<void>;
-
-  // Inventory
-  loadInventory: () => Promise<void>;
-  loadBalances: () => Promise<void>;
-  loadNfts: () => Promise<void>;
-  handleWalletApiKeySave: (config: Record<string, string>) => Promise<void>;
-  handleExportKeys: () => Promise<void>;
-
-  // Registry / Drop
-  loadRegistryStatus: () => Promise<void>;
-  registerOnChain: () => Promise<void>;
-  syncRegistryProfile: () => Promise<void>;
-  loadDropStatus: () => Promise<void>;
-  mintFromDrop: (shiny: boolean) => Promise<void>;
-  loadWhitelistStatus: () => Promise<void>;
-
-  // Character
-  loadCharacter: () => Promise<void>;
-  handleSaveCharacter: () => Promise<void>;
-  handleCharacterFieldInput: <K extends keyof CharacterData>(
-    field: K,
-    value: CharacterData[K],
-  ) => void;
-  handleCharacterArrayInput: (
-    field: "adjectives" | "topics" | "postExamples",
-    value: string,
-  ) => void;
-  handleCharacterStyleInput: (
-    subfield: "all" | "chat" | "post",
-    value: string,
-  ) => void;
-  handleCharacterMessageExamplesInput: (value: string) => void;
-
-  // Onboarding
-  handleOnboardingNext: (options?: OnboardingNextOptions) => Promise<void>;
-  handleOnboardingBack: () => void;
-
-  // Cloud
-  handleCloudLogin: () => Promise<void>;
-  handleCloudDisconnect: () => Promise<void>;
-
-  // Updates
-  loadUpdateStatus: (force?: boolean) => Promise<void>;
-  handleChannelChange: (channel: ReleaseChannel) => Promise<void>;
-
-  // Extension
-  checkExtensionStatus: () => Promise<void>;
-
-  // Emote picker
-  openEmotePicker: () => void;
-  closeEmotePicker: () => void;
-
-  // Workbench
-  loadWorkbench: () => Promise<void>;
-
-  // Agent export/import
-  handleAgentExport: () => Promise<void>;
-  handleAgentImport: () => Promise<void>;
-
-  // Action notice / toasts
-  setActionNotice: (text: string, tone?: "info" | "success" | "error", ttlMs?: number) => void;
-  dismissToast: (id: string) => void;
-
-  // Generic state setter
-  setState: <K extends keyof AppState>(key: K, value: AppState[K]) => void;
-
-  // Clipboard
-  copyToClipboard: (text: string) => Promise<void>;
-}
-
-type AppContextValue = AppState & AppActions;
-
-const AppContext = createContext<AppContextValue | null>(null);
-
-export function useApp(): AppContextValue {
-  const ctx = useContext(AppContext);
-  if (!ctx) throw new Error("useApp must be used within AppProvider");
-  return ctx;
-}
+import { mapServerTasksToSessions } from "./pty-session-hydrate";
+
+export {
+  type ActionNotice,
+  AGENT_READY_TIMEOUT_MS,
+  AGENT_STATES,
+  AGENT_TRANSFER_MIN_PASSWORD_LENGTH,
+  type AppActions,
+  AppContext,
+  type AppContextValue,
+  type AppState,
+  asApiLikeError,
+  type ChatTurnUsage,
+  computeStreamingDelta,
+  formatSearchBullet,
+  formatStartupErrorDetail,
+  type GamePostMessageAuthPayload,
+  getVrmBackgroundUrl,
+  getVrmPreviewUrl,
+  getVrmTitle,
+  getVrmUrl,
+  isOfficialVrmIndex,
+  LIFECYCLE_MESSAGES,
+  type LifecycleAction,
+  type LoadConversationMessagesResult,
+  loadAvatarIndex,
+  loadChatAvatarVisible,
+  loadChatMode,
+  loadChatVoiceMuted,
+  loadUiLanguage,
+  loadUiShellMode,
+  normalizeAvatarIndex,
+  normalizeCustomActionName,
+  normalizeStreamComparisonText,
+  normalizeUiShellMode,
+  ONBOARDING_PERMISSION_LABELS,
+  type OnboardingNextOptions,
+  type OnboardingStep,
+  parseAgentStartupDiagnostics,
+  parseAgentStatusEvent,
+  parseConversationMessageEvent,
+  parseCustomActionParams,
+  parseProactiveMessageEvent,
+  parseSlashCommandInput,
+  parseStreamEventEnvelopeEvent,
+  type SlashCommandInput,
+  type StartupErrorReason,
+  type StartupErrorState,
+  type StartupPhase,
+  saveAvatarIndex,
+  saveChatAvatarVisible,
+  saveChatMode,
+  saveChatVoiceMuted,
+  saveUiLanguage,
+  saveUiShellMode,
+  shouldApplyFinalStreamText,
+  type UiShellMode,
+  useApp,
+  VRM_COUNT,
+} from "@milady/app-core/state";
+
+import { ConfirmModal, useConfirm } from "@milady/app-core/components";
 
 // ── Provider ───────────────────────────────────────────────────────────
 
 export function AppProvider({ children }: { children: ReactNode }) {
   // --- Core state ---
   const [tab, setTabRaw] = useState<Tab>("chat");
-  const [currentTheme, setCurrentTheme] = useState<ThemeName>(loadTheme);
+  const [uiShellMode, setUiShellModeState] =
+    useState<UiShellMode>(loadUiShellMode);
+  const [uiLanguage, setUiLanguageState] = useState<UiLanguage>(loadUiLanguage);
   const [connected, setConnected] = useState(false);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -1117,7 +232,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [restartBannerDismissed, setRestartBannerDismissed] = useState(false);
 
   // --- Backend connection state (for crash handling) ---
-  const [_backendConnection, setBackendConnection] = useState<{
+  const [backendConnection, setBackendConnection] = useState<{
     state: "connected" | "disconnected" | "reconnecting" | "failed";
     reconnectAttempt: number;
     maxReconnectAttempts: number;
@@ -1129,9 +244,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showDisconnectedUI: false,
   });
   const [
-    _backendDisconnectedBannerDismissed,
+    backendDisconnectedBannerDismissed,
     setBackendDisconnectedBannerDismissed,
   ] = useState(false);
+  const [systemWarnings, setSystemWarnings] = useState<string[]>([]);
 
   // --- Pairing ---
   const [pairingEnabled, setPairingEnabled] = useState(false);
@@ -1144,11 +260,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const [chatFirstTokenReceived, setChatFirstTokenReceived] = useState(false);
+  const [chatLastUsage, setChatLastUsage] = useState<ChatTurnUsage | null>(
+    null,
+  );
   const [chatAvatarVisible, setChatAvatarVisible] = useState(
     loadChatAvatarVisible,
   );
   const [chatAgentVoiceMuted, setChatAgentVoiceMuted] =
     useState(loadChatVoiceMuted);
+  const [chatMode, setChatMode] = useState<ConversationMode>(loadChatMode);
   const [chatAvatarSpeaking, setChatAvatarSpeaking] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<
@@ -1205,6 +325,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     saveChatVoiceMuted(chatAgentVoiceMuted);
   }, [chatAgentVoiceMuted]);
+
+  useEffect(() => {
+    saveChatMode(chatMode);
+  }, [chatMode]);
 
   // --- Triggers ---
   const [triggers, setTriggers] = useState<TriggerSummary[]>([]);
@@ -1291,6 +415,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [inventorySort, setInventorySort] = useState<
     "chain" | "symbol" | "value"
   >("value");
+  const [inventoryChainFocus, setInventoryChainFocus] = useState<string>("bsc");
   const [walletError, setWalletError] = useState<string | null>(null);
 
   // --- ERC-8004 Registry ---
@@ -1332,6 +457,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [characterDraft, setCharacterDraft] = useState<CharacterData>({});
   const [selectedVrmIndex, setSelectedVrmIndexRaw] = useState(loadAvatarIndex);
   const [customVrmUrl, setCustomVrmUrl] = useState("");
+  const [customBackgroundUrl, setCustomBackgroundUrl] = useState("");
 
   // Wrap setter to also persist to localStorage
   const setSelectedVrmIndex = useCallback((v: number) => {
@@ -1342,19 +468,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     client.saveStreamSettings({ avatarIndex: normalized }).catch(() => {});
   }, []);
 
-  // --- Cloud ---
-  const [cloudEnabled, setCloudEnabled] = useState(false);
-  const [cloudConnected, setCloudConnected] = useState(false);
-  const [cloudCredits, setCloudCredits] = useState<number | null>(null);
-  const [cloudCreditsLow, setCloudCreditsLow] = useState(false);
-  const [cloudCreditsCritical, setCloudCreditsCritical] = useState(false);
-  const [cloudTopUpUrl, setCloudTopUpUrl] = useState(
-    "https://www.elizacloud.ai/dashboard/settings?tab=billing",
+  // --- Milady Cloud ---
+  const [miladyCloudEnabled, setMiladyCloudEnabled] = useState(false);
+  const [miladyCloudConnected, setMiladyCloudConnected] = useState(false);
+  const [miladyCloudCredits, setMiladyCloudCredits] = useState<number | null>(
+    null,
   );
-  const [cloudUserId, setCloudUserId] = useState<string | null>(null);
-  const [cloudLoginBusy, setCloudLoginBusy] = useState(false);
-  const [cloudLoginError, setCloudLoginError] = useState<string | null>(null);
-  const [cloudDisconnecting, setCloudDisconnecting] = useState(false);
+  const [miladyCloudCreditsLow, setMiladyCloudCreditsLow] = useState(false);
+  const [miladyCloudCreditsCritical, setMiladyCloudCreditsCritical] =
+    useState(false);
+  const [miladyCloudTopUpUrl, setMiladyCloudTopUpUrl] =
+    useState("/cloud/billing");
+  const [miladyCloudUserId, setMiladyCloudUserId] = useState<string | null>(
+    null,
+  );
+  const [miladyCloudLoginBusy, setMiladyCloudLoginBusy] = useState(false);
+  const [miladyCloudLoginError, setMiladyCloudLoginError] = useState<
+    string | null
+  >(null);
+  const [miladyCloudDisconnecting, setMiladyCloudDisconnecting] =
+    useState(false);
 
   // --- Updates ---
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
@@ -1428,12 +561,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // --- Onboarding ---
   const [onboardingStep, setOnboardingStep] =
-    useState<OnboardingStep>("welcome");
+    useState<OnboardingStep>("wakeUp");
   const [onboardingOptions, setOnboardingOptions] =
     useState<OnboardingOptions | null>(null);
-  const [onboardingName, setOnboardingName] = useState("");
+  const [onboardingName, setOnboardingName] = useState("Eliza");
+  const [onboardingOwnerName, setOnboardingOwnerName] = useState("anon");
+  // const [onboardingSetupMode, setOnboardingSetupMode] = useState<
+  //   "" | "quick" | "advanced"
+  // >(""); // removed: setup mode no longer used in 6-step linear flow
   const [onboardingStyle, setOnboardingStyle] = useState("");
-  const [onboardingTheme, setOnboardingTheme] = useState<ThemeName>(loadTheme);
   const [onboardingRunMode, setOnboardingRunMode] = useState<
     "local-rawdog" | "local-sandbox" | "cloud" | ""
   >("");
@@ -1466,7 +602,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [onboardingSubscriptionTab, setOnboardingSubscriptionTab] = useState<
     "token" | "oauth"
   >("token");
-  const [onboardingElizaCloudTab, setOnboardingElizaCloudTab] = useState<
+  const [onboardingMiladyCloudTab, setOnboardingMiladyCloudTab] = useState<
     "login" | "apikey"
   >("login");
   const [onboardingSelectedChains, setOnboardingSelectedChains] = useState<
@@ -1550,9 +686,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [configText, setConfigText] = useState("");
 
   // --- Refs for timers ---
-  const toastIdCounter = useRef(0);
-  const cloudPollInterval = useRef<number | null>(null);
-  const cloudLoginPollTimer = useRef<number | null>(null);
+  const actionNoticeTimer = useRef<number | null>(null);
+  const miladyCloudPollInterval = useRef<number | null>(null);
+  const miladyCloudLoginPollTimer = useRef<number | null>(null);
   const prevAgentStateRef = useRef<string | null>(null);
   const lifecycleBusyRef = useRef(false);
   const lifecycleActionRef = useRef<LifecycleAction | null>(null);
@@ -1571,27 +707,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Synchronous lock for wallet API key save to prevent duplicate clicks in the same tick. */
   const walletApiKeySavingRef = useRef(false);
   /** Synchronous lock for cloud login action to prevent duplicate clicks in the same tick. */
-  const cloudLoginBusyRef = useRef(false);
+  const miladyCloudLoginBusyRef = useRef(false);
   /** Synchronous lock for update channel changes to prevent duplicate submits. */
   const updateChannelSavingRef = useRef(false);
   /** Synchronous lock for onboarding completion submit to prevent duplicate clicks. */
   const onboardingFinishSavingRef = useRef(false);
 
-  // ── Action notice / toasts ─────────────────────────────────────────
+  // --- Confirm Modal ---
+  const { confirm: confirmModal, modalProps } = useConfirm();
 
-  const toastTimers = useRef<Map<string, number>>(new Map());
-
-  // Clean up all toast timers on unmount
-  useEffect(() => {
-    const timers = toastTimers.current;
-    return () => { timers.forEach((t) => window.clearTimeout(t)); timers.clear(); };
-  }, []);
-
-  const dismissToast = useCallback((id: string) => {
-    const handle = toastTimers.current.get(id);
-    if (handle != null) { window.clearTimeout(handle); toastTimers.current.delete(id); }
-    setToasts((prev: ToastItem[]) => prev.filter((t: ToastItem) => t.id !== id));
-  }, []);
+  // ── Action notice ──────────────────────────────────────────────────
 
   const setActionNotice = useCallback(
     (text: string, tone: "info" | "success" | "error" = "info", ttlMs = 2800) => {
@@ -1623,14 +748,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // ── Theme ──────────────────────────────────────────────────────────
+  // ── Language ────────────────────────────────────────────────────────
 
-  const setTheme = useCallback((name: ThemeName) => {
-    setCurrentTheme(name);
-    applyTheme(name);
-    // Sync to server so headless stream capture uses the same theme
-    client.saveStreamSettings({ theme: name }).catch(() => {});
+  const setUiLanguage = useCallback(
+    (language: UiLanguage) => {
+      const nextLanguage = normalizeLanguage(language);
+      setUiLanguageState(nextLanguage);
+      void client.updateConfig({ ui: { language: nextLanguage } }).catch(() => {
+        setActionNotice(
+          translateText(nextLanguage, "settings.languageSyncFailed"),
+          "error",
+          3200,
+        );
+      });
+    },
+    [setActionNotice],
+  );
+
+  useEffect(() => {
+    saveUiLanguage(uiLanguage);
+    if (
+      typeof (client as unknown as { setUiLanguage?: unknown })
+        .setUiLanguage === "function"
+    ) {
+      (
+        client as unknown as { setUiLanguage: (lang: string) => void }
+      ).setUiLanguage(uiLanguage);
+    }
+  }, [uiLanguage]);
+
+  const setUiShellMode = useCallback((mode: UiShellMode) => {
+    setUiShellModeState(normalizeUiShellMode(mode));
   }, []);
+
+  useEffect(() => {
+    saveUiShellMode(uiShellMode);
+  }, [uiShellMode]);
 
   // ── Navigation ─────────────────────────────────────────────────────
 
@@ -2057,6 +1210,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setWalletNftsLoading(false);
   }, []);
 
+  const getBscTradePreflight = useCallback(
+    async (tokenAddress?: string): Promise<BscTradePreflightResponse> =>
+      client.getBscTradePreflight(tokenAddress),
+    [],
+  );
+
+  const getBscTradeQuote = useCallback(
+    async (request: BscTradeQuoteRequest): Promise<BscTradeQuoteResponse> =>
+      client.getBscTradeQuote(request),
+    [],
+  );
+
+  const getBscTradeTxStatus = useCallback(
+    async (hash: string): Promise<BscTradeTxStatusResponse> =>
+      client.getBscTradeTxStatus(hash),
+    [],
+  );
+
+  const loadWalletTradingProfile = useCallback(
+    async (
+      window: WalletTradingProfileWindow = "30d",
+      source: WalletTradingProfileSourceFilter = "all",
+    ): Promise<WalletTradingProfileResponse> =>
+      client.getWalletTradingProfile(window, source),
+    [],
+  );
+
+  const executeBscTrade = useCallback(
+    async (request: BscTradeExecuteRequest): Promise<BscTradeExecuteResponse> =>
+      client.executeBscTrade(request),
+    [],
+  );
+
+  const executeBscTransfer = useCallback(
+    async (
+      request: BscTransferExecuteRequest,
+    ): Promise<BscTransferExecuteResponse> =>
+      client.executeBscTransfer(request),
+    [],
+  );
+
   const loadInventory = useCallback(async () => {
     await loadWalletConfig();
   }, [loadWalletConfig]);
@@ -2137,40 +1331,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setExtensionChecking(false);
   }, []);
 
-  const pollCloudCredits = useCallback(async () => {
+  const pollCloudCredits = useCallback(async (): Promise<boolean> => {
     const cloudStatus = await client.getCloudStatus().catch(() => null);
     if (!cloudStatus) {
-      setCloudConnected(false);
-      setCloudCredits(null);
-      setCloudCreditsLow(false);
-      setCloudCreditsCritical(false);
-      return;
+      setMiladyCloudConnected(false);
+      setMiladyCloudCredits(null);
+      setMiladyCloudCreditsLow(false);
+      setMiladyCloudCreditsCritical(false);
+      return false;
     }
     // A cached cloud API key represents a completed login and should be shared
     // across all views, even before runtime CLOUD_AUTH fully initializes.
     const isConnected = Boolean(cloudStatus.connected || cloudStatus.hasApiKey);
-    setCloudEnabled(Boolean(cloudStatus.enabled ?? false));
-    setCloudConnected(Boolean(isConnected));
-    setCloudUserId(cloudStatus.userId ?? null);
-    if (cloudStatus.topUpUrl) setCloudTopUpUrl(cloudStatus.topUpUrl);
+    setMiladyCloudEnabled(Boolean(cloudStatus.enabled ?? false));
+    setMiladyCloudConnected(isConnected);
+    setMiladyCloudUserId(cloudStatus.userId ?? null);
+    if (cloudStatus.topUpUrl) setMiladyCloudTopUpUrl(cloudStatus.topUpUrl);
     if (isConnected) {
       const credits = await client.getCloudCredits().catch(() => null);
       if (credits && typeof credits.balance === "number") {
-        setCloudCredits(credits.balance);
-        setCloudCreditsLow(credits.low ?? false);
-        setCloudCreditsCritical(credits.critical ?? false);
-        if (credits.topUpUrl) setCloudTopUpUrl(credits.topUpUrl);
+        setMiladyCloudCredits(credits.balance);
+        setMiladyCloudCreditsLow(credits.low ?? false);
+        setMiladyCloudCreditsCritical(credits.critical ?? false);
+        if (credits.topUpUrl) setMiladyCloudTopUpUrl(credits.topUpUrl);
       } else {
-        setCloudCredits(null);
-        setCloudCreditsLow(false);
-        setCloudCreditsCritical(false);
-        if (credits?.topUpUrl) setCloudTopUpUrl(credits.topUpUrl);
+        setMiladyCloudCredits(null);
+        setMiladyCloudCreditsLow(false);
+        setMiladyCloudCreditsCritical(false);
+        if (credits?.topUpUrl) setMiladyCloudTopUpUrl(credits.topUpUrl);
       }
     } else {
-      setCloudCredits(null);
-      setCloudCreditsLow(false);
-      setCloudCreditsCritical(false);
+      setMiladyCloudCredits(null);
+      setMiladyCloudCreditsLow(false);
+      setMiladyCloudCreditsCritical(false);
     }
+    return isConnected;
   }, []);
 
   // ── Lifecycle actions ──────────────────────────────────────────────
@@ -2252,6 +1447,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ? "resume"
           : null;
     if (!action) return;
+    if (action === "resume") {
+      const confirmed = await confirmModal({
+        title: "Enable Autonomous Mode",
+        message:
+          "Are you sure you want to enable autonomous mode? Auto mode runs the agent continuously and can be expensive.",
+        confirmLabel: "Enable",
+      });
+      if (!confirmed) return;
+    }
     if (!beginLifecycleAction(action)) return;
     setActionNotice(LIFECYCLE_MESSAGES[action].progress, "info", 3000);
     try {
@@ -2275,6 +1479,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [
     agentStatus,
     beginLifecycleAction,
+    confirmModal,
     finishLifecycleAction,
     setActionNotice,
   ]);
@@ -2300,6 +1505,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAgentStatus(s);
       setPendingRestart(false);
       setPendingRestartReasons([]);
+      void loadPlugins();
       setActionNotice(LIFECYCLE_MESSAGES.restart.success, "success", 2400);
     } catch (err) {
       setActionNotice(
@@ -2324,6 +1530,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     beginLifecycleAction,
     finishLifecycleAction,
     setActionNotice,
+    loadPlugins,
   ]);
 
   const dismissRestartBanner = useCallback(() => {
@@ -2335,16 +1542,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [handleRestart]);
 
   // Backend disconnection banner actions
-  const _dismissBackendDisconnectedBanner = useCallback(() => {
+  const dismissBackendDisconnectedBanner = useCallback(() => {
     setBackendDisconnectedBannerDismissed(true);
   }, []);
 
-  const _retryBackendConnection = useCallback(() => {
+  const retryBackendConnection = useCallback(() => {
     setBackendDisconnectedBannerDismissed(false);
     client.resetConnection();
   }, []);
 
-  const _restartBackend = useCallback(async () => {
+  const dismissSystemWarning = useCallback((message: string) => {
+    setSystemWarnings((prev) => prev.filter((m) => m !== message));
+  }, []);
+
+  const restartBackend = useCallback(async () => {
     const electron = (
       window as {
         electron?: {
@@ -2400,7 +1611,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await client.resetAgent();
       setAgentStatus(null);
       setOnboardingComplete(false);
-      setOnboardingStep("welcome");
+      setOnboardingStep("wakeUp");
       setConversationMessages([]);
       setActiveConversationId(null);
       activeConversationIdRef.current = null;
@@ -2437,46 +1648,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ── Chat ───────────────────────────────────────────────────────────
 
   /** Request an agent greeting for a conversation and add it to messages. */
-  const fetchGreeting = useCallback(async (convId: string) => {
-    setChatSending(true);
-    try {
-      const data = await client.requestGreeting(convId);
-      if (data.text) {
-        setConversationMessages((prev: ConversationMessage[]) => [
-          ...prev,
-          {
-            id: `greeting-${Date.now()}`,
-            role: "assistant",
-            text: data.text,
-            timestamp: Date.now(),
-          },
-        ]);
+  const fetchGreeting = useCallback(
+    async (convId: string) => {
+      setChatSending(true);
+      try {
+        const data = await client.requestGreeting(convId, uiLanguage);
+        if (data.text) {
+          setConversationMessages((prev: ConversationMessage[]) => [
+            ...prev,
+            {
+              id: `greeting-${Date.now()}`,
+              role: "assistant",
+              text: data.text,
+              timestamp: Date.now(),
+            },
+          ]);
+        }
+      } catch {
+        /* greeting failed silently — user can still chat */
+      } finally {
+        setChatSending(false);
       }
-    } catch {
-      /* greeting failed silently — user can still chat */
-    } finally {
-      setChatSending(false);
-    }
-  }, []);
+    },
+    [uiLanguage],
+  );
 
-  const handleNewConversation = useCallback(async () => {
-    try {
-      const { conversation } = await client.createConversation();
-      setConversations((prev) => [conversation, ...prev]);
-      setActiveConversationId(conversation.id);
-      activeConversationIdRef.current = conversation.id;
-      setConversationMessages([]);
-      // Agent sends the first message
-      greetingFiredRef.current = true;
-      void fetchGreeting(conversation.id);
-      client.sendWsMessage({
-        type: "active-conversation",
-        conversationId: conversation.id,
-      });
-    } catch {
-      /* ignore */
-    }
-  }, [fetchGreeting]);
+  const handleNewConversation = useCallback(
+    async (title?: string) => {
+      try {
+        const { conversation } = await client.createConversation(title);
+        setConversations((prev) => [conversation, ...prev]);
+        setActiveConversationId(conversation.id);
+        activeConversationIdRef.current = conversation.id;
+        setConversationMessages([]);
+        // Agent sends the first message
+        greetingFiredRef.current = true;
+        void fetchGreeting(conversation.id);
+        client.sendWsMessage({
+          type: "active-conversation",
+          conversationId: conversation.id,
+        });
+      } catch {
+        /* ignore */
+      }
+    },
+    [fetchGreeting],
+  );
+
   const appendLocalCommandTurn = useCallback(
     (userText: string, assistantText: string) => {
       const now = Date.now();
@@ -2557,7 +1775,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         const customAction = customActions.find(
           (action) =>
-            normalizeCustomActionName(action.name).toLowerCase() === slash.name,
+            `/${normalizeCustomActionName(action.name).toLowerCase()}` ===
+            slash.name,
         );
         if (customAction) {
           const { params, missingRequired } = parseCustomActionParams(
@@ -2824,6 +2043,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return changed ? next : prev;
             });
           }
+          // Capture token usage from the stream response
+          if (data.usage) {
+            setChatLastUsage({
+              promptTokens: data.usage.promptTokens,
+              completionTokens: data.usage.completionTokens,
+              totalTokens: data.usage.totalTokens,
+              model: data.usage.model,
+              updatedAt: Date.now(),
+            });
+          }
+
+          // Mark interrupted if stream ended without a "done" event
+          if (!data.completed && streamedAssistantText.trim()) {
+            setConversationMessages((prev) =>
+              prev.map((message) =>
+                message.id === assistantMsgId
+                  ? { ...message, interrupted: true }
+                  : message,
+              ),
+            );
+          }
           void loadConversations();
         } catch (err) {
           const abortError = err as Error;
@@ -2904,6 +2144,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: t is stable but defined later
   const sendActionMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
@@ -2915,7 +2156,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         let convId: string = activeConversationId ?? "";
         if (!convId) {
           try {
-            const { conversation } = await client.createConversation();
+            const { conversation } = await client.createConversation(
+              t("conversations.newChatTitle"),
+            );
             setConversations((prev) => [conversation, ...prev]);
             setActiveConversationId(conversation.id);
             activeConversationIdRef.current = conversation.id;
@@ -3017,7 +2260,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
     chatAbortRef.current = null;
     setChatSending(false);
     setChatFirstTokenReceived(false);
-  }, []);
+
+    // Also stop any active PTY sessions — the user wants everything to halt
+    for (const session of ptySessions) {
+      client.stopCodingAgent(session.sessionId).catch(() => {});
+    }
+  }, [ptySessions]);
+
+  const handleChatRetry = useCallback(
+    (assistantMsgId: string) => {
+      setConversationMessages((prev) => {
+        // Find the interrupted assistant message
+        const assistantIdx = prev.findIndex(
+          (m) => m.id === assistantMsgId && m.role === "assistant",
+        );
+        if (assistantIdx < 0) return prev;
+
+        // Find the preceding user message
+        let userMsg: ConversationMessage | null = null;
+        for (let i = assistantIdx - 1; i >= 0; i--) {
+          if (prev[i].role === "user") {
+            userMsg = prev[i];
+            break;
+          }
+        }
+        if (!userMsg) return prev;
+
+        // Remove the interrupted assistant message
+        const next = prev.filter((m) => m.id !== assistantMsgId);
+
+        // Re-send the user's text by setting the input and triggering send
+        // (done outside setConversationMessages via queueMicrotask to avoid nested updates)
+        const retryText = userMsg.text;
+        queueMicrotask(() => {
+          setChatInput(retryText);
+          // Small delay to let state settle before triggering send
+          setTimeout(() => handleChatSend(), 50);
+        });
+
+        return next;
+      });
+    },
+    [handleChatSend],
+  );
 
   const handleChatClear = useCallback(async () => {
     const convId = activeConversationId;
@@ -3909,29 +3194,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
     const systemPrompt = style?.system
       ? style.system.replace(/\{\{name\}\}/g, onboardingName)
-      : `You are ${onboardingName}, an autonomous AI agent powered by ElizaOS. ${onboardingOptions.sharedStyleRules}`;
+      : `You are ${onboardingName}, an autonomous AI agent powered by elizaOS. ${onboardingOptions.sharedStyleRules}`;
 
-    const isLocalMode =
-      onboardingRunMode === "local-rawdog" ||
-      onboardingRunMode === "local-sandbox";
-    const inventoryProviders: Array<{
-      chain: string;
-      rpcProvider: string;
-      rpcApiKey?: string;
-    }> = [];
-    if (isLocalMode) {
-      for (const chain of onboardingSelectedChains) {
-        const rpcProvider = onboardingRpcSelections[chain] || "elizacloud";
-        const rpcApiKey =
-          onboardingRpcKeys[`${chain}:${rpcProvider}`] || undefined;
-        inventoryProviders.push({ chain, rpcProvider, rpcApiKey });
-      }
-    }
-
-    // Map the 3-mode selection to the API's runMode field
-    // "local-rawdog" and "local-sandbox" both map to "local" for backward compat
-    // Sandbox mode is additionally stored as a separate flag
-    const apiRunMode = onboardingRunMode === "cloud" ? "cloud" : "local";
+    // Default to local mode
+    const apiRunMode = "local";
 
     onboardingFinishBusyRef.current = true;
     setOnboardingRestarting(true);
@@ -3940,14 +3206,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       await client.submitOnboarding({
         name: onboardingName,
-        theme: onboardingTheme,
         runMode: apiRunMode as "local" | "cloud",
-        sandboxMode:
-          onboardingRunMode === "local-sandbox"
-            ? "standard"
-            : onboardingRunMode === "cloud"
-              ? "light"
-              : "off",
+        sandboxMode: "off" as const,
         bio: style?.bio ?? ["An autonomous AI agent."],
         systemPrompt,
         style: style?.style,
@@ -3955,29 +3215,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         topics: style?.topics,
         postExamples: style?.postExamples,
         messageExamples: style?.messageExamples,
-        cloudProvider:
-          onboardingRunMode === "cloud" ? onboardingCloudProvider : undefined,
-        smallModel:
-          onboardingRunMode === "cloud" ? onboardingSmallModel : undefined,
-        largeModel:
-          onboardingRunMode === "cloud" ? onboardingLargeModel : undefined,
-        provider: isLocalMode ? onboardingProvider || undefined : undefined,
-        providerApiKey: isLocalMode ? onboardingApiKey || undefined : undefined,
-        primaryModel: isLocalMode
-          ? onboardingPrimaryModel.trim() || undefined
-          : undefined,
-        inventoryProviders:
-          inventoryProviders.length > 0 ? inventoryProviders : undefined,
-        // Connectors
-        telegramToken: onboardingTelegramToken.trim() || undefined,
-        discordToken: onboardingDiscordToken.trim() || undefined,
-        whatsappSessionPath: onboardingWhatsAppSessionPath.trim() || undefined,
-        twilioAccountSid: onboardingTwilioAccountSid.trim() || undefined,
-        twilioAuthToken: onboardingTwilioAuthToken.trim() || undefined,
-        twilioPhoneNumber: onboardingTwilioPhoneNumber.trim() || undefined,
-        blooioApiKey: onboardingBlooioApiKey.trim() || undefined,
-        blooioPhoneNumber: onboardingBlooioPhoneNumber.trim() || undefined,
-        githubToken: onboardingGithubToken.trim() || undefined,
+        provider: onboardingProvider || undefined,
+        providerApiKey: onboardingApiKey || undefined,
+        primaryModel: onboardingPrimaryModel.trim() || undefined,
       });
       setOnboardingComplete(true);
       setTab("chat");
@@ -4000,261 +3240,156 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingOptions,
     onboardingStyle,
     onboardingName,
-    onboardingTheme,
-    onboardingRunMode,
-    onboardingCloudProvider,
-    onboardingSmallModel,
-    onboardingLargeModel,
     onboardingProvider,
     onboardingApiKey,
     onboardingPrimaryModel,
-    onboardingSelectedChains,
-    onboardingRpcSelections,
-    onboardingRpcKeys,
-    onboardingTelegramToken,
-    onboardingDiscordToken,
-    onboardingWhatsAppSessionPath,
-    onboardingTwilioAccountSid,
-    onboardingTwilioAuthToken,
-    onboardingTwilioPhoneNumber,
-    onboardingBlooioApiKey,
-    onboardingBlooioPhoneNumber,
-    onboardingGithubToken,
     setTab,
   ]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: t is stable but defined later
   const handleOnboardingNext = useCallback(
     async (options?: OnboardingNextOptions) => {
-      const opts = onboardingOptions;
-      switch (onboardingStep) {
-        case "welcome":
-          setOnboardingStep("name");
-          break;
-        case "name":
-          setOnboardingStep("avatar");
-          break;
-        case "avatar":
-          setOnboardingStep("style");
-          break;
-        case "style":
-          setOnboardingStep("theme");
-          break;
-        case "theme": {
-          setTheme(onboardingTheme);
-          // If drop is enabled and user hasn't minted, go to mint step
-          if (
-            dropStatus?.dropEnabled &&
-            !dropStatus.userHasMinted &&
-            !dropStatus.mintedOut
-          ) {
-            setOnboardingStep("mint");
-          } else {
-            setOnboardingStep("runMode");
-          }
-          break;
+      const STEP_ORDER: OnboardingStep[] = [
+        "wakeUp",
+        "language",
+        "identity",
+        "connection",
+        "senses",
+        "activate",
+      ];
+
+      // Auto-select first style if none chosen
+      if (
+        (onboardingStep === "wakeUp" || onboardingStep === "language") &&
+        !onboardingStyle &&
+        onboardingOptions?.styles?.length
+      ) {
+        setState("onboardingStyle", onboardingOptions.styles[0].catchphrase);
+      }
+
+      // At activate step, finish onboarding
+      if (onboardingStep === "activate") {
+        await handleOnboardingFinish();
+        return;
+      }
+
+      // At senses step, check permissions unless bypass
+      if (onboardingStep === "senses") {
+        if (options?.allowPermissionBypass) {
+          await handleOnboardingFinish();
+          return;
         }
-        case "mint":
-          setOnboardingStep("runMode");
-          break;
-        case "runMode":
-          if (onboardingRunMode === "cloud") {
-            if (opts && opts.cloudProviders.length === 1) {
-              setOnboardingCloudProvider(opts.cloudProviders[0].id);
-            }
-            setOnboardingStep("cloudProvider");
-          } else if (onboardingRunMode === "local-sandbox") {
-            setOnboardingStep("dockerSetup");
-          } else {
-            // local-rawdog: skip docker, go straight to LLM provider
-            setOnboardingStep("llmProvider");
-          }
-          break;
-        case "dockerSetup":
-          setOnboardingStep("llmProvider");
-          break;
-        case "cloudProvider":
-          setOnboardingStep("modelSelection");
-          break;
-        case "modelSelection":
-          if (cloudConnected) {
-            setOnboardingStep("connectors");
-          } else {
-            setOnboardingStep("cloudLogin");
-          }
-          break;
-        case "cloudLogin":
-          setOnboardingStep("connectors");
-          break;
-        case "llmProvider":
-          setOnboardingStep("inventorySetup");
-          break;
-        case "inventorySetup":
-          setOnboardingStep("connectors");
-          break;
-        case "connectors":
-          setOnboardingStep("permissions");
-          break;
-        case "permissions": {
-          if (options?.allowPermissionBypass) {
-            await handleOnboardingFinish();
-            break;
-          }
-          try {
-            const permissions = await client.getPermissions();
-            const missingPermissions =
-              getMissingOnboardingPermissions(permissions);
-            if (missingPermissions.length > 0) {
-              const missingLabels = missingPermissions
-                .map((id) => ONBOARDING_PERMISSION_LABELS[id] ?? id)
-                .join(", ");
-              setActionNotice(
-                `Missing required permissions: ${missingLabels}. Grant them or use "Skip for Now".`,
-                "error",
-                5200,
-              );
-              return;
-            }
-          } catch (err) {
+        try {
+          const permissions = await client.getPermissions();
+          const missingPermissions =
+            getMissingOnboardingPermissions(permissions);
+          if (missingPermissions.length > 0) {
+            const missingLabels = missingPermissions
+              .map((id) => ONBOARDING_PERMISSION_LABELS[id] ?? id)
+              .join(", ");
             setActionNotice(
-              `Could not verify permissions (${err instanceof Error ? err.message : "unknown error"}). Use "Skip for Now" to continue.`,
+              `Missing required permissions: ${missingLabels}. Grant them or use "Skip for Now".`,
               "error",
               5200,
             );
             return;
           }
-          await handleOnboardingFinish();
-          break;
+        } catch (err) {
+          setActionNotice(
+            `Could not verify permissions (${err instanceof Error ? err.message : "unknown error"}). Use "Skip for Now" to continue.`,
+            "error",
+            5200,
+          );
+          return;
         }
+      }
+
+      // Advance to next step
+      const currentIndex = STEP_ORDER.indexOf(onboardingStep);
+      if (currentIndex < STEP_ORDER.length - 1) {
+        setOnboardingStep(STEP_ORDER[currentIndex + 1]);
       }
     },
     [
       onboardingStep,
+      onboardingStyle,
       onboardingOptions,
-      onboardingRunMode,
-      onboardingTheme,
-      setTheme,
-      cloudConnected,
       setActionNotice,
       handleOnboardingFinish,
-      dropStatus?.dropEnabled,
-      dropStatus?.userHasMinted,
-      dropStatus?.mintedOut,
     ],
   );
 
   const handleOnboardingBack = useCallback(() => {
-    switch (onboardingStep) {
-      case "name":
-        setOnboardingStep("welcome");
-        break;
-      case "avatar":
-        setOnboardingStep("name");
-        break;
-      case "style":
-        setOnboardingStep("avatar");
-        break;
-      case "theme":
-        setOnboardingStep("style");
-        break;
-      case "mint":
-        setOnboardingStep("theme");
-        break;
-      case "runMode":
-        if (
-          dropStatus?.dropEnabled &&
-          !dropStatus.userHasMinted &&
-          !dropStatus.mintedOut
-        ) {
-          setOnboardingStep("mint");
-        } else {
-          setOnboardingStep("theme");
-        }
-        break;
-      case "cloudProvider":
-        setOnboardingStep("runMode");
-        break;
-      case "modelSelection":
-        setOnboardingStep("cloudProvider");
-        break;
-      case "cloudLogin":
-        setOnboardingStep("modelSelection");
-        if (cloudLoginPollTimer.current) {
-          clearInterval(cloudLoginPollTimer.current);
-          cloudLoginPollTimer.current = null;
-        }
-        cloudLoginBusyRef.current = false;
-        setCloudLoginBusy(false);
-        setCloudLoginError(null);
-        break;
-      case "dockerSetup":
-        setOnboardingStep("runMode");
-        break;
-      case "llmProvider":
-        if (onboardingRunMode === "local-sandbox") {
-          setOnboardingStep("dockerSetup");
-        } else {
-          setOnboardingStep("runMode");
-        }
-        break;
-      case "inventorySetup":
-        setOnboardingStep("llmProvider");
-        break;
-      case "connectors":
-        // Go back to whichever path we came from
-        if (onboardingRunMode === "cloud") {
-          setOnboardingStep("modelSelection");
-        } else {
-          setOnboardingStep("inventorySetup");
-        }
-        break;
-      case "permissions":
-        setOnboardingStep("connectors");
-        break;
+    const STEP_ORDER: OnboardingStep[] = [
+      "wakeUp",
+      "language",
+      "identity",
+      "connection",
+      "senses",
+      "activate",
+    ];
+
+    const currentIndex = STEP_ORDER.indexOf(onboardingStep);
+    if (currentIndex > 0) {
+      setOnboardingStep(STEP_ORDER[currentIndex - 1]);
     }
-  }, [
-    onboardingStep,
-    onboardingRunMode,
-    dropStatus?.dropEnabled,
-    dropStatus?.userHasMinted,
-    dropStatus?.mintedOut,
-  ]);
+  }, [onboardingStep]);
 
   // ── Cloud ──────────────────────────────────────────────────────────
 
   const handleCloudLogin = useCallback(async () => {
-    if (cloudLoginBusyRef.current || cloudLoginBusy) return;
-    cloudLoginBusyRef.current = true;
-    setCloudLoginBusy(true);
-    setCloudLoginError(null);
+    if (miladyCloudLoginBusyRef.current || miladyCloudLoginBusy) return;
+    miladyCloudLoginBusyRef.current = true;
+    setMiladyCloudLoginBusy(true);
+    setMiladyCloudLoginError(null);
     try {
       const resp = await client.cloudLogin();
-      if (!resp.ok) throw new Error("Failed to start login session");
-      window.open(resp.browserUrl, "_blank");
-      // Poll for completion
-      let attempts = 0;
-      cloudLoginPollTimer.current = window.setInterval(async () => {
-        attempts++;
-        if (attempts > 120) {
-          if (cloudLoginPollTimer.current)
-            clearInterval(cloudLoginPollTimer.current);
-          setCloudLoginError("Login timed out. Please try again.");
-          cloudLoginBusyRef.current = false;
-          setCloudLoginBusy(false);
-          return;
+      if (!resp.ok) {
+        setMiladyCloudLoginError(
+          resp.error || "Failed to start Milady Cloud login",
+        );
+        miladyCloudLoginBusyRef.current = false;
+        setMiladyCloudLoginBusy(false);
+        return;
+      }
+
+      // Open login in browser
+      if (resp.browserUrl) {
+        // Use desktop IPC to open in the system browser — window.open() is
+        // a no-op in WKWebView (Electrobun) for external URLs.
+        const electronApi = (
+          window as {
+            electron?: {
+              ipcRenderer: {
+                invoke: (ch: string, p?: unknown) => Promise<unknown>;
+              };
+            };
+          }
+        ).electron;
+        if (electronApi?.ipcRenderer) {
+          await electronApi.ipcRenderer.invoke("desktop:openExternal", {
+            url: resp.browserUrl,
+          });
+        } else {
+          window.open(resp.browserUrl, "_blank");
         }
+      }
+
+      // Start polling
+      miladyCloudLoginPollTimer.current = window.setInterval(async () => {
         try {
+          if (!miladyCloudLoginPollTimer.current) return;
           const poll = await client.cloudLoginPoll(resp.sessionId);
           if (poll.status === "authenticated") {
-            if (cloudLoginPollTimer.current)
-              clearInterval(cloudLoginPollTimer.current);
-            cloudLoginBusyRef.current = false;
-            setCloudLoginBusy(false);
-            // Immediately reflect the login in the UI — don't wait for the
-            // background poll which may race with the config save.
-            setCloudConnected(true);
-            setCloudEnabled(true);
+            if (miladyCloudLoginPollTimer.current)
+              clearInterval(miladyCloudLoginPollTimer.current);
+            miladyCloudLoginPollTimer.current = null;
+            miladyCloudLoginBusyRef.current = false;
+            setMiladyCloudLoginBusy(false);
+            setMiladyCloudConnected(true);
+            setMiladyCloudEnabled(true);
             setActionNotice(
-              "Logged in to Eliza Cloud successfully.",
+              "Logged in to Milady Cloud successfully.",
               "success",
               6000,
             );
@@ -4263,47 +3398,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
             // persist the API key before we query cloud status / credits.
             setTimeout(() => void pollCloudCredits(), 2000);
           } else if (poll.status === "expired" || poll.status === "error") {
-            if (cloudLoginPollTimer.current)
-              clearInterval(cloudLoginPollTimer.current);
-            setCloudLoginError(
-              poll.error ?? "Session expired. Please try again.",
+            if (miladyCloudLoginPollTimer.current)
+              clearInterval(miladyCloudLoginPollTimer.current);
+            miladyCloudLoginPollTimer.current = null;
+            setMiladyCloudLoginError(
+              poll.error ?? "Login session expired. Please try again.",
             );
-            cloudLoginBusyRef.current = false;
-            setCloudLoginBusy(false);
+            miladyCloudLoginBusyRef.current = false;
+            setMiladyCloudLoginBusy(false);
           }
-        } catch {
-          /* keep trying */
+        } catch (pollErr) {
+          // Keep polling unless explicit failure
+          console.error("Milady Cloud login poll error:", pollErr);
         }
       }, 1000);
     } catch (err) {
-      setCloudLoginError(err instanceof Error ? err.message : "Login failed");
-      cloudLoginBusyRef.current = false;
-      setCloudLoginBusy(false);
+      setMiladyCloudLoginError(
+        err instanceof Error ? err.message : "Milady Cloud login failed",
+      );
+      miladyCloudLoginBusyRef.current = false;
+      setMiladyCloudLoginBusy(false);
     }
-  }, [cloudLoginBusy, setActionNotice, pollCloudCredits, loadWalletConfig]);
+  }, [
+    miladyCloudLoginBusy,
+    setActionNotice,
+    pollCloudCredits,
+    loadWalletConfig,
+  ]);
 
   const handleCloudDisconnect = useCallback(async () => {
     if (
       !confirm(
-        "Disconnect from Eliza Cloud? The agent will need a local AI provider to continue working.",
+        "Disconnect from Milady Cloud? The agent will need a local AI provider to continue working.",
       )
     )
       return;
-    setCloudDisconnecting(true);
+    setMiladyCloudDisconnecting(true);
     try {
       await client.cloudDisconnect();
-      setCloudEnabled(false);
-      setCloudConnected(false);
-      setCloudCredits(null);
-      setCloudUserId(null);
-      setActionNotice("Disconnected from Eliza Cloud.", "success");
+      setMiladyCloudEnabled(false);
+      setMiladyCloudConnected(false);
+      setMiladyCloudCredits(null);
+      setMiladyCloudUserId(null);
+      setActionNotice("Disconnected from Milady Cloud.", "success");
     } catch (err) {
       setActionNotice(
-        `Disconnect failed: ${err instanceof Error ? err.message : "error"}`,
+        `Failed to disconnect: ${err instanceof Error ? err.message : err}`,
         "error",
       );
     } finally {
-      setCloudDisconnecting(false);
+      setMiladyCloudDisconnecting(false);
     }
   }, [setActionNotice]);
 
@@ -4448,7 +3592,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         chatInput: setChatInput,
         chatAvatarVisible: setChatAvatarVisible,
         chatAgentVoiceMuted: setChatAgentVoiceMuted,
+        chatLastUsage: setChatLastUsage,
+        chatMode: setChatMode,
         chatAvatarSpeaking: setChatAvatarSpeaking,
+        uiShellMode: setUiShellModeState,
+        uiLanguage: setUiLanguageState,
         autonomousRunHealthByRunId: setAutonomousRunHealthByRunId,
         startupError: setStartupError,
         pairingCodeInput: setPairingCodeInput,
@@ -4468,6 +3616,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         logSourceFilter: setLogSourceFilter,
         inventoryView: setInventoryView,
         inventorySort: setInventorySort,
+        inventoryChainFocus: setInventoryChainFocus,
         exportPassword: setExportPassword,
         exportIncludeLogs: setExportIncludeLogs,
         exportError: setExportError,
@@ -4477,8 +3626,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         importError: setImportError,
         importSuccess: setImportSuccess,
         onboardingName: setOnboardingName,
+        onboardingOwnerName: setOnboardingOwnerName,
         onboardingStyle: setOnboardingStyle,
-        onboardingTheme: setOnboardingTheme,
         onboardingRunMode: setOnboardingRunMode,
         onboardingCloudProvider: setOnboardingCloudProvider,
         onboardingSmallModel: setOnboardingSmallModel,
@@ -4499,13 +3648,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         onboardingBlooioPhoneNumber: setOnboardingBlooioPhoneNumber,
         onboardingGithubToken: setOnboardingGithubToken,
         onboardingSubscriptionTab: setOnboardingSubscriptionTab,
-        onboardingElizaCloudTab: setOnboardingElizaCloudTab,
+        onboardingMiladyCloudTab: setOnboardingMiladyCloudTab,
         onboardingRpcKeys: setOnboardingRpcKeys,
         onboardingAvatar: setOnboardingAvatar,
         onboardingRestarting: setOnboardingRestarting,
-        cloudEnabled: setCloudEnabled,
+        miladyCloudEnabled: setMiladyCloudEnabled,
         selectedVrmIndex: setSelectedVrmIndex,
         customVrmUrl: setCustomVrmUrl,
+        customBackgroundUrl: setCustomBackgroundUrl,
         commandQuery: setCommandQuery,
         commandActiveIndex: setCommandActiveIndex,
         emotePickerOpen: setEmotePickerOpen,
@@ -4565,13 +3715,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Initialization ─────────────────────────────────────────────────
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: t is stable but defined later
   useEffect(() => {
-    applyTheme(currentTheme);
     const startupRunId = startupRetryNonce;
     let unbindStatus: (() => void) | null = null;
     let unbindAgentEvents: (() => void) | null = null;
     let unbindHeartbeatEvents: (() => void) | null = null;
     let unbindProactiveMessages: (() => void) | null = null;
+    let handleVisibilityRef: (() => void) | null = null;
+    let unbindWsReconnect: (() => void) | null = null;
+    let unbindSystemWarnings: (() => void) | null = null;
+    let unbindRestartRequired: (() => void) | null = null;
     let cancelled = false;
     const describeBackendFailure = (
       err: unknown,
@@ -4594,7 +3748,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           reason: "backend-timeout",
           phase: "starting-backend",
           message: `Backend did not become reachable within ${Math.round(
-            BACKEND_STARTUP_TIMEOUT_MS / 1000,
+            getBackendStartupTimeoutMs() / 1000,
           )}s.`,
           detail: formatStartupErrorDetail(err),
           status: apiErr?.status,
@@ -4731,13 +3885,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setStartupPhase("starting-backend");
       setAuthRequired(false);
       setConnected(false);
-      const backendDeadlineAt = Date.now() + BACKEND_STARTUP_TIMEOUT_MS;
+      const backendStartedAt = Date.now();
       let lastBackendError: unknown = null;
 
       // Keep the splash screen up until the backend is reachable.
       let backendAttempts = 0;
       while (!cancelled) {
-        if (Date.now() >= backendDeadlineAt) {
+        if (Date.now() - backendStartedAt >= getBackendStartupTimeoutMs()) {
           setStartupError(describeBackendFailure(lastBackendError, true));
           setOnboardingLoading(false);
           return;
@@ -4791,10 +3945,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       // On fresh installs, unblock to onboarding as soon as options are available.
       if (onboardingNeedsOptions) {
-        const optionsDeadlineAt = Date.now() + BACKEND_STARTUP_TIMEOUT_MS;
+        const optionsStartedAt = Date.now();
         let optionsError: unknown = null;
         while (!cancelled) {
-          if (Date.now() >= optionsDeadlineAt) {
+          if (Date.now() - optionsStartedAt >= getBackendStartupTimeoutMs()) {
             setStartupError(describeBackendFailure(optionsError, true));
             setOnboardingLoading(false);
             return;
@@ -4901,6 +4055,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       setStartupError(null);
+      setStartupPhase("ready");
       setOnboardingLoading(false);
 
       // Load conversations — if none exist, create one and request a greeting
@@ -4934,7 +4089,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } else {
           // First launch — create a conversation and greet
           try {
-            const { conversation } = await client.createConversation();
+            const { conversation } = await client.createConversation(
+              t("conversations.newChatTitle"),
+            );
             setConversations([conversation]);
             setActiveConversationId(conversation.id);
             activeConversationIdRef.current = conversation.id;
@@ -4962,7 +4119,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             greetingFiredRef.current = true;
             setChatSending(true);
             try {
-              const data = await client.requestGreeting(greetConvId);
+              const data = await client.requestGreeting(
+                greetConvId,
+                uiLanguage,
+              );
               if (data.text) {
                 setConversationMessages((prev: ConversationMessage[]) => [
                   ...prev,
@@ -4990,29 +4150,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void loadWorkbench();
       void loadPlugins(); // Hydrate plugin state early so Nav sees streaming-base toggle
 
-      // Hydrate coding agent sessions
-      client
-        .getCodingAgentStatus()
-        .then((status) => {
-          if (status?.tasks) {
-            setPtySessions(
-              status.tasks.map((t) => ({
-                sessionId: t.sessionId,
-                agentType: t.agentType ?? "claude",
-                label: t.label ?? t.sessionId,
-                originalTask: t.originalTask ?? "",
-                workdir: t.workdir ?? "",
-                status: t.status ?? "active",
-                decisionCount: t.decisionCount ?? 0,
-                autoResolvedCount: t.autoResolvedCount ?? 0,
-              })),
-            );
-          }
-        })
-        .catch(() => {}); // non-critical
+      // Hydrate coding agent sessions (also re-called on WS reconnect / server restart)
+      const hydratePtySessions = () => {
+        client
+          .getCodingAgentStatus()
+          .then((status) => {
+            if (status?.tasks) {
+              setPtySessions(mapServerTasksToSessions(status.tasks));
+            }
+          })
+          .catch(() => {}); // non-critical
+      };
+      hydratePtySessions();
+      let ptyHydratedViaWs = false;
 
       // Connect WebSocket
       client.connectWs();
+
+      // Re-hydrate PTY sessions on WS reconnect — events sent during
+      // the disconnect gap are lost, so we reconcile from the server.
+      unbindWsReconnect = client.onWsEvent("ws-reconnected", () => {
+        hydratePtySessions();
+      });
+
+      // Surface system-level warnings (connector failures, wiring exhaustion, etc.)
+      unbindSystemWarnings = client.onWsEvent(
+        "system-warning",
+        (data: Record<string, unknown>) => {
+          const message = typeof data.message === "string" ? data.message : "";
+          if (message) {
+            setSystemWarnings((prev) => {
+              if (prev.includes(message)) return prev;
+              const next = [...prev, message];
+              if (next.length > 50) next.splice(0, next.length - 50);
+              return next;
+            });
+          }
+        },
+      );
+
+      // Re-hydrate when the tab becomes visible — browsers may throttle
+      // or drop WS messages for background tabs.
+      handleVisibilityRef = () => {
+        if (document.visibilityState === "visible") {
+          hydratePtySessions();
+        }
+      };
+      document.addEventListener("visibilitychange", handleVisibilityRef);
+
       unbindStatus = client.onWsEvent(
         "status",
         (data: Record<string, unknown>) => {
@@ -5024,7 +4209,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
               setPendingRestart(false);
               setPendingRestartReasons([]);
               void loadPlugins();
+              hydratePtySessions();
+              ptyHydratedViaWs = true;
             }
+          }
+          // Re-hydrate PTY sessions on first WS status event to close
+          // the race between initial REST fetch and WS connection.
+          if (!ptyHydratedViaWs) {
+            ptyHydratedViaWs = true;
+            hydratePtySessions();
           }
           // Sync pending restart state from periodic broadcasts
           if (typeof data.pendingRestart === "boolean") {
@@ -5039,15 +4232,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         },
       );
-      client.onWsEvent("restart-required", (data: Record<string, unknown>) => {
-        if (Array.isArray(data.reasons)) {
-          setPendingRestartReasons(
-            data.reasons.filter((el): el is string => typeof el === "string"),
-          );
-          setPendingRestart(true);
-          setRestartBannerDismissed(false);
-        }
-      });
+      unbindRestartRequired = client.onWsEvent(
+        "restart-required",
+        (data: Record<string, unknown>) => {
+          if (Array.isArray(data.reasons)) {
+            setPendingRestartReasons(
+              data.reasons.filter((el): el is string => typeof el === "string"),
+            );
+            setPendingRestart(true);
+            setRestartBannerDismissed(false);
+          }
+        },
+      );
       unbindAgentEvents = client.onWsEvent(
         "agent_event",
         (data: Record<string, unknown>) => {
@@ -5165,61 +4361,132 @@ export function AppProvider({ children }: { children: ReactNode }) {
               status: "active",
               decisionCount: 0,
               autoResolvedCount: 0,
+              lastActivity: "Starting",
             },
           ]);
         } else if (eventType === "task_complete" || eventType === "stopped") {
           setPtySessions((prev) =>
             prev.filter((s) => s.sessionId !== sessionId),
           );
-        } else if (eventType === "blocked" || eventType === "escalation") {
-          setPtySessions((prev) =>
-            prev.map((s) =>
-              s.sessionId === sessionId
-                ? { ...s, status: "blocked" as const }
-                : s,
-            ),
-          );
-        } else if (eventType === "tool_running") {
-          const d = data.data as Record<string, unknown> | undefined;
-          const toolDesc =
-            (d?.description as string) ??
-            (d?.toolName as string) ??
-            "external tool";
-          setPtySessions((prev) =>
-            prev.map((s) =>
-              s.sessionId === sessionId
-                ? {
-                    ...s,
-                    status: "tool_running" as const,
-                    toolDescription: toolDesc,
-                  }
-                : s,
-            ),
-          );
-        } else if (
-          eventType === "coordination_decision" ||
-          eventType === "blocked_auto_resolved" ||
-          eventType === "ready"
-        ) {
-          setPtySessions((prev) =>
-            prev.map((s) =>
-              s.sessionId === sessionId
-                ? {
-                    ...s,
-                    status: "active" as const,
-                    toolDescription: undefined,
-                  }
-                : s,
-            ),
-          );
-        } else if (eventType === "error") {
-          setPtySessions((prev) =>
-            prev.map((s) =>
-              s.sessionId === sessionId
-                ? { ...s, status: "error" as const }
-                : s,
-            ),
-          );
+        } else {
+          // Status update — apply to known session, or full re-hydrate if unknown
+          const applyUpdate = (
+            prev: CodingAgentSession[],
+          ): CodingAgentSession[] => {
+            const known = prev.some((s) => s.sessionId === sessionId);
+            if (!known) return prev; // will trigger hydration below
+
+            if (eventType === "blocked" || eventType === "escalation") {
+              const activity =
+                eventType === "escalation"
+                  ? "Escalated — needs attention"
+                  : "Waiting for input";
+              return prev.map((s) =>
+                s.sessionId === sessionId
+                  ? { ...s, status: "blocked" as const, lastActivity: activity }
+                  : s,
+              );
+            }
+            if (eventType === "tool_running") {
+              const d = data.data as Record<string, unknown> | undefined;
+              const toolDesc =
+                (d?.description as string) ??
+                (d?.toolName as string) ??
+                "external tool";
+              return prev.map((s) =>
+                s.sessionId === sessionId
+                  ? {
+                      ...s,
+                      status: "tool_running" as const,
+                      toolDescription: toolDesc,
+                      lastActivity: `Running ${toolDesc}`.slice(0, 60),
+                    }
+                  : s,
+              );
+            }
+            if (eventType === "blocked_auto_resolved") {
+              const d = data.data as Record<string, unknown> | undefined;
+              const prompt =
+                (d?.prompt as string) ?? (d?.reasoning as string) ?? "";
+              const excerpt = prompt
+                ? `Approved: ${prompt}`.slice(0, 60)
+                : "Approved";
+              return prev.map((s) =>
+                s.sessionId === sessionId
+                  ? {
+                      ...s,
+                      status: "active" as const,
+                      toolDescription: undefined,
+                      lastActivity: excerpt,
+                    }
+                  : s,
+              );
+            }
+            // coordination_decision — emitted by swarm decision loop.
+            // d.action values: "approve" | "respond" | "escalate" | "continue"
+            if (eventType === "coordination_decision") {
+              const d = data.data as Record<string, unknown> | undefined;
+              const reasoning =
+                (d?.reasoning as string) ?? (d?.action as string) ?? "";
+              const wasEscalation = (d?.action as string) === "escalate";
+              const excerpt = wasEscalation
+                ? `Escalated: ${reasoning}`.slice(0, 60)
+                : reasoning
+                  ? `Responded: ${reasoning}`.slice(0, 60)
+                  : "Responded";
+              return prev.map((s) =>
+                s.sessionId === sessionId
+                  ? {
+                      ...s,
+                      status: "active" as const,
+                      toolDescription: undefined,
+                      lastActivity: excerpt,
+                    }
+                  : s,
+              );
+            }
+            if (eventType === "ready") {
+              return prev.map((s) =>
+                s.sessionId === sessionId
+                  ? {
+                      ...s,
+                      status: "active" as const,
+                      toolDescription: undefined,
+                      lastActivity: "Running",
+                    }
+                  : s,
+              );
+            }
+            if (eventType === "error") {
+              const d = data.data as Record<string, unknown> | undefined;
+              const errMsg = (d?.message as string) ?? "Unknown error";
+              return prev.map((s) =>
+                s.sessionId === sessionId
+                  ? {
+                      ...s,
+                      status: "error" as const,
+                      lastActivity: `Error: ${errMsg}`.slice(0, 60),
+                    }
+                  : s,
+              );
+            }
+            return prev;
+          };
+
+          let needsHydrate = false;
+          setPtySessions((prev) => {
+            const next = applyUpdate(prev);
+            if (next === prev && !prev.some((s) => s.sessionId === sessionId)) {
+              // Unknown session — flag for re-hydration outside the updater
+              needsHydrate = true;
+              return prev;
+            }
+            return next;
+          });
+          if (needsHydrate) {
+            // Re-hydrate from server to pick up missed registrations
+            hydratePtySessions();
+          }
         }
       });
 
@@ -5250,14 +4517,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } else {
           setSelectedVrmIndex(1);
         }
+        // Restore custom background if one was uploaded
+        const hasBg = await client.hasCustomBackground();
+        if (hasBg) {
+          setCustomBackgroundUrl(
+            resolveApiUrl(`/api/avatar/background?t=${Date.now()}`),
+          );
+        }
       }
 
-      // Cloud polling
-      pollCloudCredits();
-      cloudPollInterval.current = window.setInterval(
-        () => pollCloudCredits(),
-        60_000,
-      );
+      // Cloud polling — always run the initial poll unconditionally so we can
+      // discover a pre-existing API key / connection. If connected, start the
+      // recurring interval too.
+      pollCloudCredits().then((connected) => {
+        if (connected) {
+          miladyCloudPollInterval.current = window.setInterval(
+            () => pollCloudCredits(),
+            60_000,
+          );
+        }
+      });
 
       // Load tab from URL — use hash in file:// mode (Electron packaged builds)
       const navPath =
@@ -5306,20 +4585,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
       window.removeEventListener(navEvent, handleNavChange);
-      if (cloudPollInterval.current) clearInterval(cloudPollInterval.current);
-      if (cloudLoginPollTimer.current)
-        clearInterval(cloudLoginPollTimer.current);
+      if (miladyCloudPollInterval.current)
+        clearInterval(miladyCloudPollInterval.current);
+      if (miladyCloudLoginPollTimer.current)
+        clearInterval(miladyCloudLoginPollTimer.current);
       unbindStatus?.();
       unbindAgentEvents?.();
       unbindHeartbeatEvents?.();
       unbindProactiveMessages?.();
+      unbindWsReconnect?.();
+      unbindSystemWarnings?.();
+      unbindRestartRequired?.();
+      if (handleVisibilityRef)
+        document.removeEventListener("visibilitychange", handleVisibilityRef);
       client.disconnectWs();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     appendAutonomousEvent,
     checkExtensionStatus,
-    currentTheme,
     fetchAutonomyReplay,
     loadCharacter,
     loadInventory,
@@ -5331,6 +4615,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     pollCloudCredits,
     setSelectedVrmIndex,
     startupRetryNonce,
+    uiLanguage,
   ]);
 
   // When agent transitions to "running", send a greeting if conversation is empty
@@ -5366,10 +4651,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Context value ──────────────────────────────────────────────────
 
+  const t = useMemo(() => createTranslator(uiLanguage), [uiLanguage]);
+
   const value: AppContextValue = {
+    // Translations
+    t,
     // State
     tab,
-    currentTheme,
+    uiShellMode,
+    uiLanguage,
     connected,
     agentStatus,
     onboardingComplete,
@@ -5383,6 +4673,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     pendingRestart,
     pendingRestartReasons,
     restartBannerDismissed,
+    backendConnection,
+    backendDisconnectedBannerDismissed,
     pairingEnabled,
     pairingExpiresAt,
     pairingCodeInput,
@@ -5391,8 +4683,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     chatInput,
     chatSending,
     chatFirstTokenReceived,
+    chatLastUsage,
     chatAvatarVisible,
     chatAgentVoiceMuted,
+    chatMode,
     chatAvatarSpeaking,
     conversations,
     activeConversationId,
@@ -5449,6 +4743,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     walletExportVisible,
     walletApiKeySaving,
     inventorySort,
+    inventoryChainFocus,
     walletError,
     registryStatus,
     registryLoading,
@@ -5473,16 +4768,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     characterDraft,
     selectedVrmIndex,
     customVrmUrl,
-    cloudEnabled,
-    cloudConnected,
-    cloudCredits,
-    cloudCreditsLow,
-    cloudCreditsCritical,
-    cloudTopUpUrl,
-    cloudUserId,
-    cloudLoginBusy,
-    cloudLoginError,
-    cloudDisconnecting,
+    customBackgroundUrl,
+    miladyCloudEnabled,
+    miladyCloudConnected,
+    miladyCloudCredits,
+    miladyCloudCreditsLow,
+    miladyCloudCreditsCritical,
+    miladyCloudTopUpUrl,
+    miladyCloudUserId,
+    miladyCloudLoginBusy,
+    miladyCloudLoginError,
+    miladyCloudDisconnecting,
     updateStatus,
     updateLoading,
     updateChannelSaving,
@@ -5526,8 +4822,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingStep,
     onboardingOptions,
     onboardingName,
+    onboardingOwnerName,
     onboardingStyle,
-    onboardingTheme,
     onboardingRunMode,
     onboardingCloudProvider,
     onboardingSmallModel,
@@ -5546,7 +4842,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingBlooioPhoneNumber,
     onboardingGithubToken,
     onboardingSubscriptionTab,
-    onboardingElizaCloudTab,
+    onboardingMiladyCloudTab,
     onboardingSelectedChains,
     onboardingRpcSelections,
     onboardingRpcKeys,
@@ -5586,7 +4882,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Actions
     setTab,
-    setTheme,
+    setUiShellMode,
+    setUiLanguage,
     handleStart,
     handleStop,
     handlePauseResume,
@@ -5595,8 +4892,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     retryStartup,
     dismissRestartBanner,
     triggerRestart,
+    dismissBackendDisconnectedBanner,
+    retryBackendConnection,
+    restartBackend,
+    systemWarnings,
+    dismissSystemWarning,
     handleChatSend,
     handleChatStop,
+    handleChatRetry,
     handleChatClear,
     handleNewConversation,
     setChatPendingImages,
@@ -5631,6 +4934,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadInventory,
     loadBalances,
     loadNfts,
+    executeBscTrade,
+    executeBscTransfer,
+    getBscTradePreflight,
+    getBscTradeQuote,
+    getBscTradeTxStatus,
+    loadWalletTradingProfile,
     handleWalletApiKeySave,
     handleExportKeys,
     loadRegistryStatus,
@@ -5663,5 +4972,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     copyToClipboard,
   };
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return (
+    <AppContext.Provider value={value}>
+      {children}
+      <ConfirmModal {...modalProps} />
+    </AppContext.Provider>
+  );
 }

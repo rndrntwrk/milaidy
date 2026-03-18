@@ -32,7 +32,7 @@ function electronCorsPlugin(): Plugin {
         );
         res.setHeader(
           "Access-Control-Allow-Headers",
-          "Content-Type, Authorization, X-Milady-Token, X-Api-Key, X-Milady-Export-Token",
+          "Content-Type, Authorization, X-Milady-Token, X-Api-Key, X-Milady-Export-Token, X-Milady-Client-Id, X-Milady-Terminal-Token, X-Milady-UI-Language",
         );
 
         if (req.method === "OPTIONS") {
@@ -64,9 +64,9 @@ export default defineConfig({
         find: /^@milady\/capacitor-(.*)/,
         replacement: path.resolve(here, "plugins/$1/src/index.ts"),
       },
-      // Allow importing from the milady src (but NOT @milady/capacitor-* plugin packages)
+      // Allow importing from the milady src (but NOT workspace packages)
       {
-        find: /^@milady(?!\/capacitor-)/,
+        find: /^@milady(?!\/(capacitor-|app-core|ui))/,
         replacement: path.resolve(miladyRoot, "src"),
       },
     ],

@@ -6,8 +6,11 @@
  * APIs (getDatabaseTables, executeDatabaseQuery).
  */
 
+import { client, type QueryResult } from "@milady/app-core/api";
+import { resolveAppAssetUrl } from "@milady/app-core/utils";
+import { Button, Input } from "@milady/ui";
 import { useCallback, useEffect, useState } from "react";
-import { client, type QueryResult } from "../api-client";
+import { useApp } from "../AppContext";
 
 type MediaType = "all" | "image" | "video" | "audio";
 
@@ -25,6 +28,8 @@ const AUDIO_EXTS = /\.(mp3|wav|ogg|flac|aac|m4a|opus)(\?|$)/i;
 const DATA_URI_IMG = /^data:image\//i;
 const DATA_URI_VID = /^data:video\//i;
 const DATA_URI_AUD = /^data:audio\//i;
+const MEDIA_URL_PREFIX =
+  /^(https?:|data:|blob:|file:|capacitor:|capacitor-electron:|app:|\/|\.\/|\.\.\/)/i;
 
 function classifyUrl(url: string): "image" | "video" | "audio" | null {
   if (IMAGE_EXTS.test(url) || DATA_URI_IMG.test(url)) return "image";
@@ -41,6 +46,21 @@ function filenameFromUrl(url: string): string {
   } catch {
     return "media";
   }
+}
+
+function looksLikePotentialMediaUrl(value: string): boolean {
+  const candidate = value.trim();
+  if (!candidate) return false;
+  if (classifyUrl(candidate)) return true;
+  return MEDIA_URL_PREFIX.test(candidate);
+}
+
+function normalizeMediaUrl(url: string): string {
+  const candidate = url.trim();
+  if (!candidate) return candidate;
+  return MEDIA_URL_PREFIX.test(candidate)
+    ? resolveAppAssetUrl(candidate)
+    : candidate;
 }
 
 const FILTER_CHIPS: { id: MediaType; label: string }[] = [
@@ -65,7 +85,7 @@ function extractMediaFromRows(
     for (const val of Object.values(row)) {
       if (typeof val !== "string") continue;
 
-      // Try parsing as JSON content field (ElizaOS memories store JSON in content)
+      // Try parsing as JSON content field (elizaOS memories store JSON in content)
       const urls = extractUrlsFromValue(val);
       for (const url of urls) {
         const mediaType = classifyUrl(url);
@@ -87,33 +107,44 @@ function extractMediaFromRows(
 
 /** Pull URLs out of a string value — handles plain URLs and JSON blobs. */
 function extractUrlsFromValue(val: string): string[] {
-  const urls: string[] = [];
+  const urls = new Set<string>();
 
   // If it looks like JSON, parse it and search recursively
   if (val.startsWith("{") || val.startsWith("[")) {
     try {
       const parsed = JSON.parse(val);
       collectStrings(parsed, urls);
-      return urls;
+      return Array.from(urls);
     } catch {
       // not JSON, fall through to regex
     }
   }
 
-  // Plain URL match
-  const urlRegex = /https?:\/\/[^\s"'<>]+/gi;
+  // Absolute URL/scheme match
+  const urlRegex =
+    /(?:https?:\/\/|file:\/\/|blob:|capacitor(?:-electron)?:\/\/|app:\/\/)[^\s"'<>]+/gi;
   const matches = val.match(urlRegex);
-  if (matches) urls.push(...matches);
+  if (matches) {
+    for (const match of matches) urls.add(match);
+  }
+
+  // Relative/path-like token match
+  const tokens = val
+    .split(/[\s"'<>]+/)
+    .map((token) => token.replace(/^[([{]+/, "").replace(/[)\]},;.!?]+$/, ""));
+  for (const token of tokens) {
+    if (looksLikePotentialMediaUrl(token)) urls.add(token);
+  }
 
   // Data URI match
-  if (val.startsWith("data:")) urls.push(val);
+  if (val.startsWith("data:")) urls.add(val);
 
-  return urls;
+  return Array.from(urls);
 }
 
-function collectStrings(obj: unknown, out: string[]) {
+function collectStrings(obj: unknown, out: Set<string>) {
   if (typeof obj === "string") {
-    if (obj.startsWith("http") || obj.startsWith("data:")) out.push(obj);
+    if (looksLikePotentialMediaUrl(obj)) out.add(obj.trim());
     return;
   }
   if (Array.isArray(obj)) {
@@ -126,6 +157,7 @@ function collectStrings(obj: unknown, out: string[]) {
 }
 
 export function MediaGalleryView() {
+  const { t } = useApp();
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -212,31 +244,33 @@ export function MediaGalleryView() {
     <div>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <input
+        <Input
           type="text"
-          placeholder="Search media..."
+          placeholder={t("mediagalleryview.SearchMedia")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-[var(--txt)] text-xs w-[200px]"
+          className="px-2.5 py-1.5 h-8 text-xs w-[200px] shadow-sm bg-[var(--card)]"
         />
         <div className="flex gap-1">
           {FILTER_CHIPS.map((chip) => (
-            <button
-              type="button"
+            <Button
+              variant={filter === chip.id ? "default" : "outline"}
+              size="sm"
               key={chip.id}
-              className={`px-3 py-1 text-xs cursor-pointer border transition-colors ${
+              className={`px-3 py-1 h-7 text-xs shadow-sm transition-colors ${
                 filter === chip.id
-                  ? "bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--accent)]"
-                  : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
+                  ? ""
+                  : "bg-transparent text-[var(--muted)] hover:text-[var(--txt)] border-[var(--border)]"
               }`}
               onClick={() => setFilter(chip.id)}
             >
               {chip.label}
-            </button>
+            </Button>
           ))}
         </div>
         <span className="text-[11px] text-[var(--muted)] ml-auto">
-          {filtered.length} item{filtered.length !== 1 ? "s" : ""}
+          {filtered.length} {t("mediagalleryview.item")}
+          {filtered.length !== 1 ? "s" : ""}
         </span>
       </div>
 
@@ -248,11 +282,13 @@ export function MediaGalleryView() {
 
       {loading ? (
         <div className="text-center py-16 text-[var(--muted)] text-sm italic">
-          Scanning for media...
+          {t("mediagalleryview.ScanningForMedia")}
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16">
-          <div className="text-[var(--muted)] text-sm mb-2">No media found</div>
+          <div className="text-[var(--muted)] text-sm mb-2">
+            {t("mediagalleryview.NoMediaFound")}
+          </div>
           <div className="text-[var(--muted)] text-xs">
             {media.length === 0
               ? "No images, videos, or audio files were detected in the database."
@@ -272,7 +308,7 @@ export function MediaGalleryView() {
               <div className="w-full aspect-square bg-[var(--bg)] flex items-center justify-center overflow-hidden">
                 {item.type === "image" ? (
                   <img
-                    src={item.url}
+                    src={normalizeMediaUrl(item.url)}
                     alt={item.filename}
                     className="w-full h-full object-cover"
                     loading="lazy"
@@ -352,13 +388,13 @@ export function MediaGalleryView() {
             <div className="p-4 flex items-center justify-center min-h-[200px]">
               {lightboxItem.type === "image" ? (
                 <img
-                  src={lightboxItem.url}
+                  src={normalizeMediaUrl(lightboxItem.url)}
                   alt={lightboxItem.filename}
                   className="max-w-full max-h-[70vh] object-contain"
                 />
               ) : lightboxItem.type === "video" ? (
                 <video
-                  src={lightboxItem.url}
+                  src={normalizeMediaUrl(lightboxItem.url)}
                   controls
                   className="max-w-full max-h-[70vh]"
                 >
@@ -366,7 +402,7 @@ export function MediaGalleryView() {
                 </video>
               ) : (
                 <audio
-                  src={lightboxItem.url}
+                  src={normalizeMediaUrl(lightboxItem.url)}
                   controls
                   className="w-full max-w-[400px]"
                 >
@@ -376,10 +412,16 @@ export function MediaGalleryView() {
             </div>
             {/* Footer info */}
             <div className="p-3 border-t border-[var(--border)] text-[11px] text-[var(--muted)] flex gap-4">
-              <span>Type: {lightboxItem.type}</span>
-              <span>Source: {lightboxItem.source}</span>
+              <span>
+                {t("mediagalleryview.Type")} {lightboxItem.type}
+              </span>
+              <span>
+                {t("mediagalleryview.Source")} {lightboxItem.source}
+              </span>
               {lightboxItem.createdAt && (
-                <span>Date: {lightboxItem.createdAt}</span>
+                <span>
+                  {t("mediagalleryview.Date")} {lightboxItem.createdAt}
+                </span>
               )}
             </div>
           </div>
