@@ -1,6 +1,6 @@
-import { LanguageDropdown } from "./shared/LanguageDropdown.js";
-import { getTabGroups, type TabGroup } from "../navigation.js";
-import { IconTooltip as IconButtonTooltip } from "./ui/IconTooltip.js";
+import { LanguageDropdown } from "@milady/app-core/components";
+import { getTabGroups, type TabGroup } from "../navigation";
+import { IconTooltip as IconButtonTooltip } from "./ui/IconTooltip";
 import {
   AlertTriangle,
   Bug,
