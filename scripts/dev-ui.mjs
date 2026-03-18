@@ -1011,7 +1011,8 @@ process.on("SIGTERM", () => cleanup(0));
 
 function startVite() {
   const viteCmd = hasBun ? "bunx" : "npx";
-  viteProcess = spawn(viteCmd, ["vite", "--port", String(UI_PORT)], {
+  // Rebuild optimized deps so patched @elizaos packages are reflected in dev.
+  viteProcess = spawn(viteCmd, ["vite", "--force", "--port", String(UI_PORT)], {
     cwd: path.join(cwd, appDir),
     env: {
       ...process.env,

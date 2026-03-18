@@ -109,7 +109,9 @@ describe("Native Module Installation Verification", () => {
         ".node",
       ]);
       if (!hasBinding) {
-        console.warn("[native-modules] tfjs-node binding not compiled — skipping (install used --ignore-scripts?)");
+        console.warn(
+          "[native-modules] tfjs-node binding not compiled — skipping (install used --ignore-scripts?)",
+        );
         return;
       }
       expect(hasBinding).toBe(true);
@@ -197,7 +199,9 @@ describe("Native Module Installation Verification", () => {
     it("canvas has native binding", () => {
       const hasBinding = hasNativeBinding("canvas", ["canvas.node", ".node"]);
       if (!hasBinding) {
-        console.warn("[native-modules] canvas binding not compiled — skipping (install used --ignore-scripts?)");
+        console.warn(
+          "[native-modules] canvas binding not compiled — skipping (install used --ignore-scripts?)",
+        );
         return;
       }
       expect(hasBinding).toBe(true);
@@ -239,7 +243,9 @@ describe("Native Module Installation Verification", () => {
     it("face-api.js is installed", () => {
       const packagePath = path.join(packageRoot, "node_modules", "face-api.js");
       if (!fs.existsSync(packagePath)) {
-        console.warn("[native-modules] face-api.js not in root node_modules — transitive dep of @elizaos/plugin-vision");
+        console.warn(
+          "[native-modules] face-api.js not in root node_modules — transitive dep of @elizaos/plugin-vision",
+        );
         return;
       }
       expect(fs.existsSync(packagePath)).toBe(true);
@@ -329,7 +335,9 @@ describe("Plugin-Vision Availability", () => {
       (dep) => !fs.existsSync(path.join(packageRoot, "node_modules", dep)),
     );
     if (missing.length > 0) {
-      console.warn(`[native-modules] vision deps not in root node_modules: ${missing.join(", ")}`);
+      console.warn(
+        `[native-modules] vision deps not in root node_modules: ${missing.join(", ")}`,
+      );
     }
     // At minimum sharp and tesseract should be available (direct deps)
     expect(fs.existsSync(path.join(packageRoot, "node_modules", "sharp"))).toBe(

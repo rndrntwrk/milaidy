@@ -2,7 +2,15 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 
-const MODULE_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".jsx", ".mjs", ".cjs"];
+const MODULE_EXTENSIONS = [
+  ".ts",
+  ".tsx",
+  ".mts",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+];
 const require = createRequire(import.meta.url);
 
 function firstExistingPath(
@@ -26,7 +34,9 @@ export function resolveModuleEntry(basePath: string): string {
   return withExtension ?? basePath;
 }
 
-export function getInstalledPackageRoot(packageName: string): string | undefined {
+export function getInstalledPackageRoot(
+  packageName: string,
+): string | undefined {
   try {
     return path.dirname(require.resolve(`${packageName}/package.json`));
   } catch {
@@ -40,7 +50,9 @@ export function getElizaCoreEntry(_repoRoot: string): string | undefined {
     return undefined;
   }
 
-  return resolveModuleEntry(path.join(packageRoot, "dist", "node", "index.node"));
+  return resolveModuleEntry(
+    path.join(packageRoot, "dist", "node", "index.node"),
+  );
 }
 
 export function getAutonomousSourceRoot(_repoRoot: string): string | undefined {

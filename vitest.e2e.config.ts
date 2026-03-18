@@ -140,7 +140,11 @@ export default defineConfig({
     },
     include: ["test/**/*.e2e.test.ts"],
     setupFiles: ["test/setup.ts"],
-    exclude: ["dist/**", "**/node_modules/**", "test/capacitor-plugins.e2e.test.ts"],
+    exclude: [
+      "dist/**",
+      "**/node_modules/**",
+      "test/capacitor-plugins.e2e.test.ts",
+    ],
     server: {
       deps: {
         inline: [

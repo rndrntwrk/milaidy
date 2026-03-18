@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { startApiServer } from "../src/api/server";
 import type { OAuthCredentials } from "@elizaos/autonomous/auth/types";
 import {
   afterAll,
@@ -13,6 +12,7 @@ import {
   it,
   vi,
 } from "vitest";
+import { startApiServer } from "../src/api/server";
 
 const authMocks = vi.hoisted(() => ({
   getSubscriptionStatus: vi.fn(() => [{ id: "openai-codex" }]),

@@ -373,9 +373,7 @@ describeAnvil("Anvil Contract E2E Tests", () => {
       );
 
       const uri = await collectionContract.tokenURI(2);
-      expect([
-        "ipfs://QmShinyMiladyMetadata",
-      ]).toContain(uri);
+      expect(["ipfs://QmShinyMiladyMetadata"]).toContain(uri);
     });
   });
 

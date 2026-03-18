@@ -30,9 +30,6 @@ function appCoreBridgeStubPlugin(): Plugin {
     name: "app-core-bridge-stub",
     enforce: "pre",
     resolveId(source) {
-      if (source.includes("app-core/bridge")) {
-        console.log("[app-core-bridge-stub] resolveId called for:", source);
-      }
       if (
         source === "@elizaos/app-core/bridge/electrobun-rpc" ||
         source === "@elizaos/app-core/bridge/electrobun-runtime" ||

@@ -97,7 +97,12 @@ export default defineConfig({
               // Stub app-core when workspace is absent — its npm dist has
               // extensionless JS imports that break under vitest/vite.
               find: /^@elizaos\/app-core(\/.*)?$/,
-              replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
+              replacement: path.join(
+                repoRoot,
+                "test",
+                "stubs",
+                "plugin-stub.mjs",
+              ),
             },
           ]),
       {

@@ -843,9 +843,13 @@ describe("Agent Runtime E2E", () => {
             channelType: ChannelType.DM,
           },
         });
-        const retryText = await handleMessageAndCollectText(runtime, retryPrompt, {
-          timeoutMs: 90_000,
-        });
+        const retryText = await handleMessageAndCollectText(
+          runtime,
+          retryPrompt,
+          {
+            timeoutMs: 90_000,
+          },
+        );
         logger.info(`[e2e] multi-turn retry: "${retryText}"`);
         expect(retryText.toLowerCase()).toContain("pineapple");
       },
@@ -1181,12 +1185,7 @@ describe("Agent Runtime E2E", () => {
           ),
           Promise.all(
             prompts.map((prompt) =>
-              postChatPromptWithRetries(
-                server?.port ?? 0,
-                prompt,
-                3,
-                90_000,
-              ),
+              postChatPromptWithRetries(server?.port ?? 0, prompt, 3, 90_000),
             ),
           ),
         ]);
@@ -1507,9 +1506,6 @@ describe("Agent Runtime E2E", () => {
   // ===================================================================
 
   describe("startEliza subprocess", () => {
-    it.skip(
-      "startEliza() boots, prints chat prompt, and exits cleanly (interactive subprocess currently hangs under Vitest; headless startup is covered above)",
-      () => {},
-    );
+    it.skip("startEliza() boots, prints chat prompt, and exits cleanly (interactive subprocess currently hangs under Vitest; headless startup is covered above)", () => {});
   });
 });

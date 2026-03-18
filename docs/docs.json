@@ -183,10 +183,7 @@
           },
           {
             "group": "Runtime",
-            "pages": [
-              "agents/runtime-and-lifecycle",
-              "guides/coding-swarms"
-            ]
+            "pages": ["agents/runtime-and-lifecycle", "guides/coding-swarms"]
           },
           {
             "group": "Database",

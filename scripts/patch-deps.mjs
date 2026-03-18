@@ -17,6 +17,7 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -63,6 +64,21 @@ patchProperLockfileSignalExitCompat(root);
 patchBrokenElizaCoreRuntimeDists(root);
 patchAutonomousMiladyOnboardingPresets(root);
 patchAppCoreMiladyAssets(root);
+
+/**
+ * Vite caches prebundled dependencies under node_modules/.vite. When patch-deps
+ * rewrites installed @elizaos packages, that cache can keep serving the old
+ * upstream app-core bundle until it is cleared or Vite is forced to rebuild.
+ * Always drop the optimize cache here so the frontend picks up patched deps.
+ */
+for (const viteCacheDir of [
+  resolve(root, "node_modules", ".vite"),
+  resolve(root, "apps/app", "node_modules", ".vite"),
+]) {
+  if (!existsSync(viteCacheDir)) continue;
+  rmSync(viteCacheDir, { recursive: true, force: true });
+  console.log(`[patch-deps] Cleared Vite optimize cache: ${viteCacheDir}`);
+}
 
 /**
  * Patch @elizaos/core synthetic action/reply chat messages.

@@ -44,6 +44,15 @@ type RpcMessageHandler = (
 ) => void;
 type RpcRequestMap = Record<string, (params?: unknown) => unknown>;
 
+function isInjectedElectrobunRuntime(): boolean {
+  if (typeof window === "undefined") return false;
+  const w = window as Record<string, unknown>;
+  return (
+    typeof w.__electrobunWindowId === "number" ||
+    typeof w.__electrobunWebviewId === "number"
+  );
+}
+
 vi.mock("@elizaos/app-core/bridge/electrobun-rpc", () => {
   function getElectrobunRendererRpc() {
     if (typeof window === "undefined") return null;
@@ -57,8 +66,9 @@ vi.mock("@elizaos/app-core/bridge/electrobun-rpc", () => {
 
   return {
     getElectrobunRendererRpc,
-    isElectrobunRuntime: () => false,
-    getBackendStartupTimeoutMs: () => 30_000,
+    isElectrobunRuntime: isInjectedElectrobunRuntime,
+    getBackendStartupTimeoutMs: () =>
+      isInjectedElectrobunRuntime() ? 180_000 : 30_000,
     invokeDesktopBridgeRequest: async (options: {
       rpcMethod: string;
       params?: unknown;
@@ -106,8 +116,9 @@ vi.mock("@elizaos/app-core/bridge", () => {
 
   return {
     getElectrobunRendererRpc,
-    isElectrobunRuntime: () => false,
-    getBackendStartupTimeoutMs: () => 30_000,
+    isElectrobunRuntime: isInjectedElectrobunRuntime,
+    getBackendStartupTimeoutMs: () =>
+      isInjectedElectrobunRuntime() ? 180_000 : 30_000,
     invokeDesktopBridgeRequest: async (options: {
       rpcMethod: string;
       params?: unknown;
