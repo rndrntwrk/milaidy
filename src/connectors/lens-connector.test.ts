@@ -66,38 +66,7 @@ describeIfPluginAvailable("Lens Connector - Basic Validation", () => {
   });
 });
 
-describe("Lens Connector - Format Validation", () => {
-  it("Ethereum address format is 0x + 40 hex chars", () => {
-    const addressPattern = /^0x[0-9a-fA-F]{40}$/;
-    expect(addressPattern.test("0xef105f97073976562b8cf854da76824b39f543b0")).toBe(true);
-    expect(addressPattern.test("0xabc")).toBe(false);
-    expect(addressPattern.test("not-an-address")).toBe(false);
-  });
-
-  it("private key format is 0x + 64 hex chars", () => {
-    const pkPattern = /^0x[0-9a-fA-F]{64}$/;
-    expect(pkPattern.test("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")).toBe(true);
-    expect(pkPattern.test("0xabc")).toBe(false);
-  });
-});
-
 describe("Lens Connector - Protocol Constraints", () => {
-  const MAX_POST_LENGTH = 5000;
-
-  it("post character limit is 5000", () => {
-    expect(MAX_POST_LENGTH).toBe(5000);
-  });
-
-  it("short messages fit within post limit", () => {
-    const message = "gm from milady";
-    expect(message.length).toBeLessThanOrEqual(MAX_POST_LENGTH);
-  });
-
-  it("long messages exceed post limit", () => {
-    const longMessage = "A".repeat(5001);
-    expect(longMessage.length).toBeGreaterThan(MAX_POST_LENGTH);
-  });
-
   it("Lens profile handle format is valid", () => {
     const handlePattern = /^@lens\/[a-z0-9_]+$/;
 
@@ -137,36 +106,5 @@ describe("Lens Connector - Protocol Constraints", () => {
     expect(pkPattern.test("0xabc")).toBe(false);
     expect(pkPattern.test("not-a-key")).toBe(false);
     expect(pkPattern.test("0x")).toBe(false);
-  });
-});
-
-describe("Lens Connector - Environment Variables", () => {
-  const REQUIRED_ENV_KEYS = [
-    "LENS_API_KEY",
-    "LENS_ACCOUNT_ADDRESS",
-    "LENS_PRIVATE_KEY",
-  ] as const;
-
-  it("all required env keys follow LENS_ prefix convention", () => {
-    for (const key of REQUIRED_ENV_KEYS) {
-      expect(key).toMatch(/^LENS_[A-Z_]+$/);
-    }
-  });
-
-  it("env keys are distinct", () => {
-    const unique = new Set(REQUIRED_ENV_KEYS);
-    expect(unique.size).toBe(REQUIRED_ENV_KEYS.length);
-  });
-
-  it("config object maps cleanly to env keys", () => {
-    const configToEnv: Record<string, string> = {
-      apiKey: "LENS_API_KEY",
-      accountAddress: "LENS_ACCOUNT_ADDRESS",
-      privateKey: "LENS_PRIVATE_KEY",
-    };
-    expect(Object.keys(configToEnv)).toHaveLength(REQUIRED_ENV_KEYS.length);
-    for (const envKey of Object.values(configToEnv)) {
-      expect(REQUIRED_ENV_KEYS).toContain(envKey);
-    }
   });
 });
