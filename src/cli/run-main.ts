@@ -1,6 +1,7 @@
 import process from "node:process";
 import { getPrimaryCommand, hasHelpOrVersion } from "./argv";
 import { registerSubCliByName } from "./program/register.subclis";
+import { getLogPrefix } from "../utils/log-prefix";
 
 async function loadDotEnv(): Promise<void> {
   try {
@@ -77,16 +78,16 @@ export async function runCli(argv: string[] = process.argv) {
   process.on("unhandledRejection", (reason) => {
     if (shouldIgnoreUnhandledRejection(reason)) {
       console.warn(
-        "[eliza] Provider credits appear exhausted; request failed without output. Top up credits and retry.",
+        `${getLogPrefix()} Provider credits appear exhausted; request failed without output. Top up credits and retry.`,
       );
       return;
     }
-    console.error("[eliza] Unhandled rejection:", formatUncaughtError(reason));
+    console.error(`${getLogPrefix()} Unhandled rejection:`, formatUncaughtError(reason));
     process.exit(1);
   });
 
   process.on("uncaughtException", (error) => {
-    console.error("[eliza] Uncaught exception:", formatUncaughtError(error));
+    console.error(`${getLogPrefix()} Uncaught exception:`, formatUncaughtError(error));
     process.exit(1);
   });
 

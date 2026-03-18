@@ -42,9 +42,6 @@ if (!fs.existsSync(ELIZA_DIST)) {
   process.exit(1);
 }
 
-// @elizaos packages that should NOT be copied (dev tooling, not runtime deps).
-const ELIZAOS_SKIP = new Set(["@elizaos/sweagent-root", "@elizaos/tui"]);
-
 function readJson(p) {
   return JSON.parse(fs.readFileSync(p, "utf8"));
 }
@@ -125,7 +122,7 @@ function collectTransitiveDeps(entryNames) {
 const pkg = readJson(path.join(ROOT, "package.json"));
 const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
 const elizaosPackages = Object.keys(allDeps).filter(
-  (d) => d.startsWith("@elizaos/") && !ELIZAOS_SKIP.has(d),
+  (d) => d.startsWith("@elizaos/"),
 );
 
 const toCopy = elizaosPackages.filter((name) => {

@@ -8,6 +8,7 @@
  */
 import process from "node:process";
 import { applyCliProfileEnv, parseCliProfileArgs } from "./cli/profile";
+import { getLogPrefix } from "./utils/log-prefix";
 
 process.title = "milady";
 
@@ -42,7 +43,7 @@ if (!process.env.NODE_LLAMA_CPP_LOG_LEVEL) {
 
 const parsed = parseCliProfileArgs(process.argv);
 if (!parsed.ok) {
-  console.error(`[eliza] ${parsed.error}`);
+  console.error(`${getLogPrefix()} ${parsed.error}`);
   process.exit(2);
 }
 
@@ -57,7 +58,7 @@ import("./cli/run-main")
   .then(({ runCli }) => runCli(process.argv))
   .catch((error) => {
     console.error(
-      "[eliza] Failed to start CLI:",
+      `${getLogPrefix()} Failed to start CLI:`,
       error instanceof Error ? (error.stack ?? error.message) : error,
     );
     process.exit(1);

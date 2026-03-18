@@ -2,6 +2,7 @@ import fs from "node:fs";
 import https from "node:https";
 import os from "node:os";
 import path from "node:path";
+import { getLogPrefix } from "../utils/log-prefix.js";
 
 export interface EmbeddingManagerConfig {
   /** GGUF model filename (default: detected hardware preset) */
@@ -87,7 +88,7 @@ function writeEmbeddingMeta(meta: EmbeddingMeta): void {
     fs.mkdirSync(EMBEDDING_META_DIR, { recursive: true });
     fs.writeFileSync(EMBEDDING_META_PATH, JSON.stringify(meta, null, 2));
   } catch (err) {
-    getLogger().warn(`[eliza] Failed to write embedding metadata: ${err}`);
+    getLogger().warn(`${getLogPrefix()} Failed to write embedding metadata: ${err}`);
   }
 }
 
@@ -100,7 +101,7 @@ export function checkDimensionMigration(
 
   if (stored && stored.dimensions !== dimensions) {
     log.warn(
-      `[eliza] Embedding dimensions changed (${stored.dimensions} → ${dimensions}). ` +
+      `${getLogPrefix()} Embedding dimensions changed (${stored.dimensions} → ${dimensions}). ` +
         "Existing memory embeddings will be re-indexed on next access.",
     );
   }
@@ -242,7 +243,7 @@ function downloadFile(
         if (expectedBytes != null && bytesReceived !== expectedBytes) {
           settleError(
             new Error(
-              `[eliza] Download failed: bytes received (${bytesReceived}) ` +
+              `${getLogPrefix()} Download failed: bytes received (${bytesReceived}) ` +
                 `does not match Content-Length (${expectedBytes})`,
             ),
           );
@@ -333,10 +334,10 @@ export async function ensureModel(
 
   const url = `https://huggingface.co/${safeRepo}/resolve/main/${safeFilename}`;
   log.info(
-    `[eliza] Downloading embedding model: ${safeFilename} from ${safeRepo}...`,
+    `${getLogPrefix()} Downloading embedding model: ${safeFilename} from ${safeRepo}...`,
   );
 
   await downloadFile(url, modelPath);
-  log.info(`[eliza] Embedding model downloaded: ${modelPath}`);
+  log.info(`${getLogPrefix()} Embedding model downloaded: ${modelPath}`);
   return modelPath;
 }

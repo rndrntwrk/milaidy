@@ -19,6 +19,7 @@ import {
   safeUnlink,
 } from "./embedding-manager-support.js";
 import { detectEmbeddingPreset } from "./embedding-presets.js";
+import { getLogPrefix } from "../utils/log-prefix.js";
 
 // Lazy-imported to keep the module lightweight at parse time.
 // node-llama-cpp pulls in native binaries — importing at the top would slow
@@ -96,7 +97,7 @@ export class ElizaEmbeddingManager {
 
   async generateEmbedding(text: string): Promise<number[]> {
     if (this.disposed) {
-      throw new Error("[eliza] EmbeddingManager has been disposed");
+      throw new Error(`${getLogPrefix()} EmbeddingManager has been disposed`);
     }
 
     // Increment BEFORE any async operations to close TOCTOU window:
@@ -110,7 +111,7 @@ export class ElizaEmbeddingManager {
       await this.ensureInitialized();
 
       if (!this.embeddingContext) {
-        throw new Error("[eliza] Embedding context not available after init");
+        throw new Error(`${getLogPrefix()} Embedding context not available after init`);
       }
 
       // Truncate to prevent GGML assertion crash when text exceeds context window.
@@ -118,7 +119,7 @@ export class ElizaEmbeddingManager {
       let input = text;
       if (input.length > maxChars) {
         getLogger().warn(
-          `[eliza] Embedding input too long (${input.length} chars, ~${Math.ceil(input.length / SAFE_CHARS_PER_TOKEN)} tokens est.) ` +
+          `${getLogPrefix()} Embedding input too long (${input.length} chars, ~${Math.ceil(input.length / SAFE_CHARS_PER_TOKEN)} tokens est.) ` +
             `— truncating to ${maxChars} chars for ${this.contextSize}-token context window`,
         );
         input = input.slice(0, maxChars);
@@ -127,7 +128,7 @@ export class ElizaEmbeddingManager {
       const result = await this.embeddingContext.getEmbeddingFor(input);
       return Array.from(result.vector);
     } catch (err) {
-      getLogger().error(`[eliza] Embedding generation failed: ${err}`);
+      getLogger().error(`${getLogPrefix()} Embedding generation failed: ${err}`);
       return new Array(this.dimensions).fill(0);
     } finally {
       this.inFlightCount -= 1;
@@ -199,7 +200,7 @@ export class ElizaEmbeddingManager {
     const { getLlama, LlamaLogLevel } = await importNodeLlamaCpp();
 
     log.info(
-      `[eliza] Initializing embedding model: ${this.model} ` +
+      `${getLogPrefix()} Initializing embedding model: ${this.model} ` +
         `(dims=${this.dimensions}, gpuLayers=${this.gpuLayers})`,
     );
 
@@ -233,7 +234,7 @@ export class ElizaEmbeddingManager {
       const failureMessage = getErrorMessage(err);
       safeUnlink(modelPath);
       log.warn(
-        `[eliza] Embedding model load failed due to a likely corrupted/incomplete ` +
+        `${getLogPrefix()} Embedding model load failed due to a likely corrupted/incomplete ` +
           `file (${failureMessage}) at ${modelPath}. Deleting file and ` +
           `re-downloading, then retrying once.`,
       );
@@ -273,7 +274,7 @@ export class ElizaEmbeddingManager {
     this.embeddingModel = model;
     this.embeddingContext = context;
     this.initialized = true;
-    log.info(`[eliza] Embedding model loaded: ${this.model}`);
+    log.info(`${getLogPrefix()} Embedding model loaded: ${this.model}`);
 
     this.startIdleTimer();
   }
@@ -290,7 +291,7 @@ export class ElizaEmbeddingManager {
         Date.now() - this.lastUsedAt > this.idleTimeoutMs
       ) {
         getLogger().info(
-          `[eliza] Embedding model idle for >${Math.round(this.idleTimeoutMs / 60_000)} min — unloading to free memory`,
+          `${getLogPrefix()} Embedding model idle for >${Math.round(this.idleTimeoutMs / 60_000)} min — unloading to free memory`,
         );
         void this.idleUnload();
       }
@@ -329,7 +330,7 @@ export class ElizaEmbeddingManager {
       try {
         await this.embeddingContext.dispose();
       } catch (err) {
-        log.warn(`[eliza] Error disposing embedding context: ${err}`);
+        log.warn(`${getLogPrefix()} Error disposing embedding context: ${err}`);
       }
       this.embeddingContext = null;
     }
@@ -338,7 +339,7 @@ export class ElizaEmbeddingManager {
       try {
         await this.embeddingModel.dispose();
       } catch (err) {
-        log.warn(`[eliza] Error disposing embedding model: ${err}`);
+        log.warn(`${getLogPrefix()} Error disposing embedding model: ${err}`);
       }
       this.embeddingModel = null;
     }

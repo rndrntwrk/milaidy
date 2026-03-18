@@ -80,6 +80,7 @@ class TalkModePlugin : Plugin() {
 
     // Audio focus
     private var audioManager: AudioManager? = null
+    private var audioFocusRequest: AudioManager.OnAudioFocusChangeListener? = null
 
     // Config
     private var apiKey: String? = null
@@ -393,7 +394,7 @@ class TalkModePlugin : Plugin() {
 
     @PluginMethod
     override fun requestPermissions(call: PluginCall) {
-        if (!hasPermission(Manifest.permission.RECORD_AUDIO)) {
+        if (!isPermissionGranted(Manifest.permission.RECORD_AUDIO)) {
             requestPermissionForAlias("microphone", call, "handlePermissionResult")
         } else {
             call.resolve(buildPermissionResult())
@@ -1134,7 +1135,7 @@ class TalkModePlugin : Plugin() {
     }
 
     private fun buildPermissionResult(): JSObject {
-        val micGranted = hasPermission(Manifest.permission.RECORD_AUDIO)
+        val micGranted = isPermissionGranted(Manifest.permission.RECORD_AUDIO)
         val speechAvailable = SpeechRecognizer.isRecognitionAvailable(context)
 
         return JSObject().apply {
@@ -1147,7 +1148,7 @@ class TalkModePlugin : Plugin() {
         }
     }
 
-    private fun hasPermission(permission: String): Boolean {
+    private fun isPermissionGranted(permission: String): Boolean {
         return getPermissionState(permission) == com.getcapacitor.PermissionState.GRANTED
     }
 

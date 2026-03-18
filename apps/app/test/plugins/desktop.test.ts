@@ -148,7 +148,9 @@ describe("@miladyai/capacitor-desktop", () => {
 
     it("closeWindow/showWindow/focusWindow call window methods", async () => {
       const closeSpy = vi.spyOn(window, "close");
-      const focusSpy = vi.spyOn(window, "focus");
+      const focusSpy = vi
+        .spyOn(window, "focus")
+        .mockImplementation(() => {}); /* avoid jsdom "Not implemented" */
       await d.closeWindow();
       await d.showWindow();
       await d.focusWindow();
@@ -269,7 +271,9 @@ describe("@miladyai/capacitor-desktop", () => {
   // -- Shell --
 
   it("openExternal opens URL in new tab", async () => {
-    const spy = vi.spyOn(window, "open");
+    const spy = vi
+      .spyOn(window, "open")
+      .mockImplementation(() => null); /* avoid jsdom "Not implemented" */
     await d.openExternal({ url: "https://example.com" });
     expect(spy).toHaveBeenCalledWith("https://example.com", "_blank");
   });

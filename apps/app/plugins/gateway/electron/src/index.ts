@@ -502,9 +502,6 @@ export class GatewayElectron implements GatewayPlugin {
       console.warn("[Gateway] Native discovery failed, using fallback:", error);
     }
 
-    console.warn(
-      "[Gateway] mDNS discovery not available - Electron IPC bridge not configured",
-    );
     return {
       gateways: [],
       status: "Discovery not available on this platform",

@@ -41,8 +41,35 @@ const APP_UI_PORTS = { app: 2138, home: 2142 };
 const UI_PORT = APP_UI_PORTS[appName] ?? 2138;
 const appDir = `apps/${appName}`;
 
-const nameArgMatch = process.argv.find((a) => a.startsWith("--name="));
-const cliName = nameArgMatch ? nameArgMatch.split("=")[1] : "eliza";
+function getCliName() {
+  const nameArgMatch = process.argv.find((a) => a.startsWith("--name="));
+  if (nameArgMatch) return nameArgMatch.split("=")[1];
+
+  try {
+    const pkgPath = path.join(process.cwd(), "package.json");
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+      if (pkg.name) {
+        let name = pkg.name;
+        if (name.startsWith("@")) name = name.split("/")[1];
+        if (name === "miladyai" || name === "milady-ai" || name.includes("milady")) return "milady";
+        if (name === "elizaos" || name.includes("eliza")) return "eliza";
+        return name;
+      }
+    }
+  } catch (e) {
+    // Ignore parsing errors
+  }
+
+  // Fallbacks based on directory structure
+  if (process.cwd().includes("eliza-workspace") || process.cwd().includes("milady")) {
+    return "milady";
+  }
+
+  return "eliza";
+}
+
+const cliName = getCliName();
 const logPrefix = `[${cliName}]`;
 
 const cwd = process.cwd();
@@ -52,7 +79,7 @@ const devLogLevel =
     .trim()
     .toLowerCase() || "info";
 const quietApiLogs = process.env.ELIZA_DEV_QUIET_LOGS === "1";
-const verboseApiLogs = process.env.ELIZA_DEV_VERBOSE_LOGS === "1";
+const verboseApiLogs = process.env.ELIZA_DEV_VERBOSE_LOGS !== "0";
 // These are determined interactively at startup (or from env if already set).
 let onchainEnabled = false;
 let anchorRequested = false;
@@ -1019,12 +1046,30 @@ process.on("SIGINT", () => cleanup(0));
 process.on("SIGTERM", () => cleanup(0));
 
 function startVite() {
+  const pkgPath = path.join(cwd, appDir, "package.json");
+  if (existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+      if (pkg.scripts && pkg.scripts["plugin:build"]) {
+        console.log(`  ${green(logPrefix)} Building plugins for ${appDir}...`);
+        execSync(hasBun ? "bun run plugin:build" : "npm run plugin:build", {
+          cwd: path.join(cwd, appDir),
+          stdio: "inherit",
+          env: process.env,
+        });
+      }
+    } catch (err) {
+      console.error(`  ${green(logPrefix)} Failed to build plugins for ${appDir}:`, err.message);
+    }
+  }
+
   const viteCmd = hasBun ? "bunx" : "npx";
   // Rebuild optimized deps so patched @elizaos packages are reflected in dev.
   viteProcess = spawn(viteCmd, ["vite", "--force", "--port", String(UI_PORT)], {
     cwd: path.join(cwd, appDir),
     env: {
       ...process.env,
+      ELIZA_NAMESPACE: cliName,
       ELIZA_API_PORT: String(API_PORT),
       MILADY_API_PORT: String(API_PORT),
       ELIZA_HOME_API_PORT: String(API_PORT),
@@ -1165,6 +1210,7 @@ if (uiOnly) {
     env: {
       ...process.env,
       ...chainEnv,
+      ELIZA_NAMESPACE: cliName,
       ELIZA_PORT: String(API_PORT),
       ELIZA_HEADLESS: "1",
       LOG_LEVEL: devLogLevel,

@@ -17,8 +17,37 @@ const ORANGE = supportsColor ? "\x1b[38;2;255;165;0m" : "";
 const DIM = supportsColor ? "\x1b[2m" : "";
 const RESET = supportsColor ? "\x1b[0m" : "";
 
-const nameArgMatch = process.argv.find((a) => a.startsWith("--name="));
-const cliName = nameArgMatch ? nameArgMatch.split("=")[1] : "eliza";
+import { readFileSync } from "node:fs";
+
+function getCliName() {
+  const nameArgMatch = process.argv.find((a) => a.startsWith("--name="));
+  if (nameArgMatch) return nameArgMatch.split("=")[1];
+
+  try {
+    const pkgPath = path.join(process.cwd(), "package.json");
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+      if (pkg.name) {
+        let name = pkg.name;
+        if (name.startsWith("@")) name = name.split("/")[1];
+        if (name === "miladyai" || name === "milady-ai" || name.includes("milady")) return "milady";
+        if (name === "elizaos" || name.includes("eliza")) return "eliza";
+        return name;
+      }
+    }
+  } catch (e) {
+    // Ignore parsing errors
+  }
+
+  // Fallbacks based on directory structure
+  if (process.cwd().includes("eliza-workspace") || process.cwd().includes("milady")) {
+    return "milady";
+  }
+
+  return "eliza";
+}
+
+const cliName = getCliName();
 const logPrefix = `[${cliName}]`;
 
 function green(text) {

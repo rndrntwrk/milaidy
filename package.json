@@ -179,7 +179,6 @@
     "@elizaos/plugin-x-streaming": "alpha",
     "@elizaos/plugin-youtube-streaming": "alpha",
     "@elizaos/prompts": "alpha",
-    "@elizaos/sweagent-root": "alpha",
     "@elizaos/tui": "alpha",
     "@elizaos/ui": "alpha",
     "@hapi/boom": "^10.0.1",

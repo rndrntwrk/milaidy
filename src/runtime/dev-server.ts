@@ -1,6 +1,7 @@
 // Timing: Track when the script starts
 const SCRIPT_START = Date.now();
-console.log(`[eliza] Script starting...`);
+import { getLogPrefix } from "../utils/log-prefix";
+console.log(`${getLogPrefix()} Script starting...`);
 
 /**
  * Combined dev server — starts the elizaOS runtime in headless mode and
@@ -19,7 +20,7 @@ import { startApiServer } from "../api/server";
 import { shutdownRuntime, startEliza } from "./eliza";
 import { setRestartHandler } from "./restart";
 
-console.log(`[eliza] Imports complete (${Date.now() - SCRIPT_START}ms)`);
+console.log(`${getLogPrefix()} Imports complete (${Date.now() - SCRIPT_START}ms)`);
 
 // Load .env files for parity with CLI mode (which loads via run-main.ts).
 try {
@@ -29,7 +30,7 @@ try {
   // dotenv not installed or .env not found — non-fatal.
 }
 
-console.log(`[eliza] dotenv loaded (${Date.now() - SCRIPT_START}ms)`);
+console.log(`${getLogPrefix()} dotenv loaded (${Date.now() - SCRIPT_START}ms)`);
 
 const port = Number(process.env.ELIZA_PORT) || 31337;
 
@@ -115,9 +116,9 @@ async function bootstrapRuntime(reason: string): Promise<void> {
   });
 
   try {
-    logger.info(`[eliza] Runtime bootstrap starting (${reason})`);
+    logger.info(`${getLogPrefix()} Runtime bootstrap starting (${reason})`);
     const rt = await createRuntime();
-    logger.info(`[eliza] Runtime created in ${Date.now() - bootstrapStart}ms`);
+    logger.info(`${getLogPrefix()} Runtime created in ${Date.now() - bootstrapStart}ms`);
     const agentName = rt.character.name ?? "Eliza";
 
     if (isShuttingDown) {
@@ -143,7 +144,7 @@ async function bootstrapRuntime(reason: string): Promise<void> {
       state: "running",
     });
     logger.info(
-      `[eliza] Runtime ready — agent: ${agentName} (total: ${Date.now() - bootstrapStart}ms)`,
+      `${getLogPrefix()} Runtime ready — agent: ${agentName} (total: ${Date.now() - bootstrapStart}ms)`,
     );
   } catch (err) {
     const now = Date.now();
@@ -164,7 +165,7 @@ async function bootstrapRuntime(reason: string): Promise<void> {
       state: shouldMarkError ? "error" : "starting",
     });
     logger.error(
-      `[eliza] Runtime bootstrap failed (${formatError(err)}). Retrying in ${Math.round(delayMs / 1000)}s${shouldMarkError ? " (UI state set to error)" : ""}`,
+      `${getLogPrefix()} Runtime bootstrap failed (${formatError(err)}). Retrying in ${Math.round(delayMs / 1000)}s${shouldMarkError ? " (UI state set to error)" : ""}`,
     );
     scheduleRuntimeBootstrap(delayMs, "retry");
   } finally {
@@ -182,7 +183,7 @@ async function createRuntime(): Promise<AgentRuntime> {
       await shutdownRuntime(currentRuntime, "dev-server createRuntime");
     } catch (err) {
       logger.warn(
-        `[eliza] Error stopping old runtime: ${err instanceof Error ? err.message : err}`,
+        `${getLogPrefix()} Error stopping old runtime: ${err instanceof Error ? err.message : err}`,
       );
     }
     currentRuntime = null;
@@ -197,62 +198,53 @@ async function createRuntime(): Promise<AgentRuntime> {
   return currentRuntime;
 }
 
-/**
- * Restart handler for headless / dev-server mode.
- *
- * Stops the current runtime, creates a new one, and hot-swaps the
- * API server's reference so the UI sees the fresh agent immediately.
- *
- * Protected by a lock so concurrent restart requests (e.g. rapid file
- * saves triggering bun --watch while an API restart is in-flight) don't
- * overlap and corrupt state.
- */
+let restartPromise: Promise<void> | null = null;
+
 async function handleRestart(reason?: string): Promise<void> {
   if (isShuttingDown) {
-    logger.warn("[eliza] Restart skipped — process is shutting down");
-    return;
+    throw new Error("Restart skipped — process is shutting down");
   }
 
-  if (isRestarting) {
-    logger.warn(
-      "[eliza] Restart already in progress, skipping duplicate request",
-    );
-    return;
+  if (restartPromise) {
+    logger.info(`${getLogPrefix()} Restart already in progress, awaiting existing restart...`);
+    return restartPromise;
   }
 
-  isRestarting = true;
-  try {
-    clearRuntimeBootTimer();
-    if (runtimeBootInProgress) {
-      logger.warn(
-        "[eliza] Restart requested while runtime bootstrap is in progress; skipping duplicate restart",
+  restartPromise = (async () => {
+    isRestarting = true;
+    try {
+      clearRuntimeBootTimer();
+      if (runtimeBootInProgress) {
+        throw new Error("Restart requested while runtime bootstrap is in progress. Please wait for startup to complete.");
+      }
+
+      logger.info(
+        `${getLogPrefix()} Restart requested${reason ? ` (${reason})` : ""} — bouncing runtime…`,
       );
-      return;
+      apiUpdateStartup?.({
+        phase: "runtime-restart",
+        attempt: 0,
+        lastError: undefined,
+        lastErrorAt: undefined,
+        nextRetryAt: undefined,
+        state: "starting",
+      });
+
+      const rt = await createRuntime();
+      const agentName = rt.character.name ?? "Eliza";
+      logger.info(`${getLogPrefix()} Runtime restarted — agent: ${agentName}`);
+
+      // Hot-swap the API server's runtime reference.
+      if (apiUpdateRuntime) {
+        apiUpdateRuntime(rt);
+      }
+    } finally {
+      isRestarting = false;
+      restartPromise = null;
     }
+  })();
 
-    logger.info(
-      `[eliza] Restart requested${reason ? ` (${reason})` : ""} — bouncing runtime…`,
-    );
-    apiUpdateStartup?.({
-      phase: "runtime-restart",
-      attempt: 0,
-      lastError: undefined,
-      lastErrorAt: undefined,
-      nextRetryAt: undefined,
-      state: "starting",
-    });
-
-    const rt = await createRuntime();
-    const agentName = rt.character.name ?? "Eliza";
-    logger.info(`[eliza] Runtime restarted — agent: ${agentName}`);
-
-    // Hot-swap the API server's runtime reference.
-    if (apiUpdateRuntime) {
-      apiUpdateRuntime(rt);
-    }
-  } finally {
-    isRestarting = false;
-  }
+  return restartPromise;
 }
 
 /**
@@ -267,13 +259,13 @@ async function shutdown(): Promise<void> {
   isShuttingDown = true;
   clearRuntimeBootTimer();
 
-  logger.info("[eliza] Dev server shutting down…");
+  logger.info(`${getLogPrefix()} Dev server shutting down…`);
   if (currentRuntime) {
     try {
       await shutdownRuntime(currentRuntime, "dev-server shutdown");
     } catch (err) {
       logger.warn(
-        `[eliza] Error stopping runtime during shutdown: ${err instanceof Error ? err.message : err}`,
+        `${getLogPrefix()} Error stopping runtime during shutdown: ${err instanceof Error ? err.message : err}`,
       );
     }
     currentRuntime = null;
@@ -320,26 +312,26 @@ async function main() {
   const apiReady = Date.now();
   // Use console.log for startup timing to bypass logger filtering
   console.log(
-    `[eliza] API server ready on port ${actualPort} (${apiReady - apiStart}ms)`,
+    `${getLogPrefix()} API server ready on port ${actualPort} (${apiReady - apiStart}ms)`,
   );
 
   // 2. Boot the elizaOS agent runtime without blocking server readiness.
   scheduleRuntimeBootstrap(0, "startup");
 
   console.log(
-    `[eliza] Startup init complete in ${Date.now() - startupStart}ms, agent bootstrapping...`,
+    `${getLogPrefix()} Startup init complete in ${Date.now() - startupStart}ms, agent bootstrapping...`,
   );
 }
 
 main().catch((err: unknown) => {
   const error = err instanceof Error ? err : new Error(String(err));
-  console.error("[eliza] Fatal error:", error.stack ?? error.message);
+  console.error(`${getLogPrefix()} Fatal error:`, error.stack ?? error.message);
   if (error.cause) {
     const cause =
       error.cause instanceof Error
         ? error.cause
         : new Error(String(error.cause));
-    console.error("[eliza] Caused by:", cause.stack ?? cause.message);
+    console.error(`${getLogPrefix()} Caused by:`, cause.stack ?? cause.message);
   }
   process.exit(1);
 });

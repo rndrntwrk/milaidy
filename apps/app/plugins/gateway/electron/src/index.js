@@ -385,9 +385,6 @@ export class GatewayElectron {
         );
       }
     }
-    console.warn(
-      "[Gateway] mDNS discovery not available - Electron IPC bridge not configured",
-    );
     return {
       gateways: [],
       status: "Discovery not available on this platform",

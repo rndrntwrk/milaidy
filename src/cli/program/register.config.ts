@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import type { ElizaConfig } from "../../config/types.eliza";
 import { theme } from "../../terminal/theme";
+import { getLogPrefix } from "../../utils/log-prefix";
 
 export function registerConfigCli(program: Command) {
   const config = program
@@ -17,7 +18,7 @@ export function registerConfigCli(program: Command) {
         elizaConfig = loadElizaConfig();
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
-        console.error(`[eliza] Could not load config: ${detail}`);
+        console.error(`${getLogPrefix()} Could not load config: ${detail}`);
         process.exit(1);
       }
       const parts = key.split(".");
