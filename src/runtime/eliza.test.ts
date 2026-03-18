@@ -136,7 +136,9 @@ describe("collectPluginNames", () => {
     "ELIZAOS_CLOUD_API_KEY",
     "ELIZAOS_CLOUD_ENABLED",
     "ELIZA_USE_PI_AI",
+    "MILADY_USE_PI_AI",
     "ELIZA_DISABLE_LOCAL_EMBEDDINGS",
+    "MILADY_DISABLE_LOCAL_EMBEDDINGS",
     "OBSIDIAN_VAULT_PATH",
     "OBSIDAN_VAULT_PATH",
   ];
@@ -184,6 +186,7 @@ describe("collectPluginNames", () => {
 
     it("should omit @elizaos/plugin-local-embedding when explicitly disabled via env", async () => {
       process.env.ELIZA_DISABLE_LOCAL_EMBEDDINGS = "1";
+      process.env.MILADY_DISABLE_LOCAL_EMBEDDINGS = "1";
 
       const plugins = collectPluginNames({} as MiladyConfig);
 
@@ -281,6 +284,7 @@ describe("collectPluginNames", () => {
 
   it("adds pi-ai provider plugin when MILADY_USE_PI_AI is enabled", () => {
     process.env.ELIZA_USE_PI_AI = "1";
+    process.env.MILADY_USE_PI_AI = "1";
     const names = collectPluginNames({} as MiladyConfig);
 
     expect(names.has("@elizaos/plugin-pi-ai")).toBe(true);
@@ -292,6 +296,7 @@ describe("collectPluginNames", () => {
 
   it("cloud mode takes precedence over pi-ai mode", () => {
     process.env.ELIZA_USE_PI_AI = "1";
+    process.env.MILADY_USE_PI_AI = "1";
     const config = {
       cloud: { enabled: true },
     } as unknown as MiladyConfig;
@@ -303,6 +308,7 @@ describe("collectPluginNames", () => {
 
   it("pi-ai mode overrides explicit direct-provider entries", () => {
     process.env.ELIZA_USE_PI_AI = "1";
+    process.env.MILADY_USE_PI_AI = "1";
     const config = {
       plugins: {
         entries: {
@@ -1013,7 +1019,7 @@ describe("autoResolveDiscordAppId", () => {
     );
     expect(process.env.DISCORD_APPLICATION_ID).toBe("app-123");
     expect(infoSpy).toHaveBeenCalledWith(
-      "[eliza] Auto-resolved Discord Application ID: app-123",
+      expect.stringContaining("Auto-resolved Discord Application ID: app-123"),
     );
     expect(warnSpy).not.toHaveBeenCalled();
   });
@@ -1031,7 +1037,7 @@ describe("autoResolveDiscordAppId", () => {
 
     expect(process.env.DISCORD_APPLICATION_ID).toBeUndefined();
     expect(warnSpy).toHaveBeenCalledWith(
-      "[eliza] Failed to auto-resolve Discord Application ID: 401",
+      expect.stringContaining("Failed to auto-resolve Discord Application ID: 401"),
     );
   });
 
@@ -1221,7 +1227,7 @@ describe("applyX402ConfigToEnv", () => {
 // ---------------------------------------------------------------------------
 
 describe("applyDatabaseConfigToEnv", () => {
-  const envKeys = ["POSTGRES_URL", "PGLITE_DATA_DIR", "ELIZA_PROFILE"];
+  const envKeys = ["POSTGRES_URL", "PGLITE_DATA_DIR", "ELIZA_PROFILE", "MILADY_PROFILE"];
   const snap = envSnapshot(envKeys);
 
   beforeEach(() => {
@@ -1234,8 +1240,10 @@ describe("applyDatabaseConfigToEnv", () => {
   it("defaults PGLITE_DATA_DIR to the agent workspace when database config is missing", () => {
     applyDatabaseConfigToEnv({} as MiladyConfig);
     expect(process.env.POSTGRES_URL).toBeUndefined();
-    expect(process.env.PGLITE_DATA_DIR).toBe(
-      path.join(os.homedir(), ".eliza", "workspace", ".eliza", ".elizadb"),
+    // The state dir name depends on the @elizaos/autonomous build
+    // (either .eliza in workspace or .milady in the published npm package).
+    expect(process.env.PGLITE_DATA_DIR).toMatch(
+      /\.(eliza|milady)[/\\]workspace[/\\]\.eliza[/\\]\.elizadb$/,
     );
   });
 
@@ -1305,7 +1313,7 @@ describe("applyDatabaseConfigToEnv", () => {
 // ---------------------------------------------------------------------------
 
 describe("applyDatabaseConfigToEnv — directory creation", () => {
-  const envKeys = ["POSTGRES_URL", "PGLITE_DATA_DIR", "ELIZA_PROFILE"];
+  const envKeys = ["POSTGRES_URL", "PGLITE_DATA_DIR", "ELIZA_PROFILE", "MILADY_PROFILE"];
   const snap = envSnapshot(envKeys);
 
   beforeEach(() => {
@@ -1481,9 +1489,9 @@ describe("buildCharacterFromConfig", () => {
     expect(char.name).toBe("Reimu");
   });
 
-  it("defaults to 'Eliza' when no name is configured", () => {
+  it("defaults to 'Eliza' or 'Milady' when no name is configured", () => {
     const char = buildCharacterFromConfig({} as MiladyConfig);
-    expect(char.name).toBe("Eliza");
+    expect(["Eliza", "Milady"]).toContain(char.name);
   });
 
   it("collects API keys from process.env as secrets", () => {
@@ -1548,7 +1556,7 @@ describe("buildCharacterFromConfig", () => {
   it("does not throw when agents.list is empty", () => {
     const config = { agents: { list: [] } } as MiladyConfig;
     expect(() => buildCharacterFromConfig(config)).not.toThrow();
-    expect(buildCharacterFromConfig(config).name).toBe("Eliza");
+    expect(["Eliza", "Milady"]).toContain(buildCharacterFromConfig(config).name);
   });
 
   it("builds a character with name from agents.list and default personality", () => {

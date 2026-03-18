@@ -4,7 +4,7 @@ import React, { useEffect } from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const ONBOARDING_STEP_STORAGE_KEY = "milady:onboarding:step";
+const ONBOARDING_STEP_STORAGE_KEY = "eliza:onboarding:step";
 
 const { mockClient } = vi.hoisted(() => ({
   mockClient: {

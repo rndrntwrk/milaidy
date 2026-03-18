@@ -142,10 +142,10 @@ describe("trigger runtime", () => {
   });
 
   test("honors trigger feature flag settings", () => {
-    const previous = process.env.MILADY_TRIGGERS_ENABLED;
-    process.env.MILADY_TRIGGERS_ENABLED = "0";
+    const previous = process.env.ELIZA_TRIGGERS_ENABLED;
+    process.env.ELIZA_TRIGGERS_ENABLED = "0";
     expect(triggersFeatureEnabled(runtime)).toBe(false);
-    process.env.MILADY_TRIGGERS_ENABLED = previous;
+    process.env.ELIZA_TRIGGERS_ENABLED = previous;
   });
 
   test("executes cron trigger, dispatches and persists next schedule", async () => {
@@ -176,7 +176,7 @@ describe("trigger runtime", () => {
     const runtimeWithLimit = {
       ...runtime,
       getSetting: (key: string) =>
-        key === "MILADY_TRIGGERS_MAX_ACTIVE" ? 12 : undefined,
+        key === "ELIZA_TRIGGERS_MAX_ACTIVE" ? 12 : undefined,
     } as IAgentRuntime;
     expect(getTriggerLimit(runtimeWithLimit)).toBe(12);
   });
