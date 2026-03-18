@@ -55,7 +55,7 @@ describe("detectInstallMethod", () => {
       Buffer.from("/opt/homebrew/bin/eliza"),
     );
     vi.mocked(fs.realpathSync).mockReturnValueOnce(
-      "/opt/homebrew/Cellar/milady/2.0.0/bin/eliza",
+      "/opt/homebrew/Cellar/eliza/2.0.0/bin/eliza",
     );
 
     expect(detectInstallMethod()).toBe("homebrew");
@@ -64,7 +64,7 @@ describe("detectInstallMethod", () => {
   it("detects Snap install", () => {
     vi.mocked(execSync).mockReturnValueOnce(Buffer.from("/snap/bin/eliza"));
     vi.mocked(fs.realpathSync).mockReturnValueOnce(
-      "/snap/milady/current/bin/eliza",
+      "/snap/eliza/current/bin/eliza",
     );
 
     expect(detectInstallMethod()).toBe("snap");
@@ -117,30 +117,30 @@ describe("detectInstallMethod", () => {
 // ============================================================================
 
 describe("buildUpdateCommand", () => {
-  it("npm-global + stable → npm install -g elizaos@latest or miladyai@latest", () => {
+  it("npm-global + stable → npm install -g elizaos@latest or elizaai@latest", () => {
     const result = buildUpdateCommand("npm-global", "stable");
     expect(result).not.toBeNull();
     expect(result?.command).toBe("npm");
     expect(result?.args[0]).toBe("install");
     expect(result?.args[1]).toBe("-g");
-    expect(result?.args[2]).toMatch(/^(elizaos|miladyai)@latest$/);
+    expect(result?.args[2]).toMatch(/^(elizaos|elizaai)@latest$/);
   });
 
-  it("bun-global + stable → bun install -g elizaos@latest or miladyai@latest", () => {
+  it("bun-global + stable → bun install -g elizaos@latest or elizaai@latest", () => {
     const result = buildUpdateCommand("bun-global", "stable");
     expect(result).not.toBeNull();
     expect(result?.command).toBe("bun");
     expect(result?.args[0]).toBe("install");
     expect(result?.args[1]).toBe("-g");
-    expect(result?.args[2]).toMatch(/^(elizaos|miladyai)@latest$/);
+    expect(result?.args[2]).toMatch(/^(elizaos|elizaai)@latest$/);
   });
 
-  it("homebrew → brew upgrade eliza or milady (ignores channel)", () => {
+  it("homebrew → brew upgrade eliza or eliza (ignores channel)", () => {
     const result = buildUpdateCommand("homebrew", "stable");
     expect(result).not.toBeNull();
     expect(result?.command).toBe("brew");
     expect(result?.args[0]).toBe("upgrade");
-    expect(result?.args[1]).toMatch(/^(eliza|milady)$/);
+    expect(result?.args[1]).toMatch(/^(eliza|eliza)$/);
   });
 
   it("homebrew produces identical command regardless of channel", () => {
@@ -180,15 +180,15 @@ describe("buildUpdateCommand", () => {
     // The actual command is a single shell string
     expect(result?.args[1]).toContain("apt-get update");
     expect(result?.args[1]).toContain("apt-get install");
-    expect(result?.args[1]).toMatch(/eliza|milady/);
+    expect(result?.args[1]).toMatch(/eliza|eliza/);
   });
 
-  it("flatpak → flatpak update ai.eliza.Eliza or ai.milady.Milady", () => {
+  it("flatpak → flatpak update ai.eliza.Eliza or ai.eliza.Eliza", () => {
     const result = buildUpdateCommand("flatpak", "stable");
     expect(result).not.toBeNull();
     expect(result?.command).toBe("flatpak");
     expect(result?.args[0]).toBe("update");
-    expect(result?.args[1]).toMatch(/^ai\.(eliza\.Eliza|milady\.Milady)$/);
+    expect(result?.args[1]).toMatch(/^ai\.(eliza\.Eliza|eliza\.Eliza)$/);
   });
 
   it("local-dev → null (cannot auto-update)", () => {
@@ -201,7 +201,7 @@ describe("buildUpdateCommand", () => {
     expect(result).not.toBeNull();
     expect(result?.command).toBe("npm");
     expect(
-      result?.args.some((a: string) => /^(elizaos|miladyai)@latest$/.test(a)),
+      result?.args.some((a: string) => /^(elizaos|elizaai)@latest$/.test(a)),
     ).toBe(true);
   });
 });
@@ -274,7 +274,7 @@ describe("performUpdate", () => {
 
     expect(result.success).toBe(false);
     expect(result.method).toBe("npm-global");
-    expect(result.command).toMatch(/npm install -g (elizaos|miladyai)@latest/);
+    expect(result.command).toMatch(/npm install -g (elizaos|elizaai)@latest/);
     expect(result.error).toContain("E403");
   });
 
@@ -284,7 +284,7 @@ describe("performUpdate", () => {
       if (typeof cmd === "string" && cmd.startsWith("which")) {
         return Buffer.from("/usr/local/bin/eliza");
       }
-      // readPostUpdateVersion calls: milady --version
+      // readPostUpdateVersion calls: eliza --version
       if (typeof cmd === "string" && cmd.includes("--version")) {
         return Buffer.from("2.1.0\n");
       }
@@ -375,7 +375,7 @@ describe("performUpdate edge cases", () => {
 
     expect(result.success).toBe(true);
     expect(result.method).toBe("bun-global");
-    expect(result.command).toMatch(/bun install -g (elizaos|miladyai)@beta/);
+    expect(result.command).toMatch(/bun install -g (elizaos|elizaai)@beta/);
   });
 
   it("handles spawn error event (command not found)", async () => {
@@ -409,7 +409,7 @@ describe("performUpdate edge cases", () => {
     expect(result.newVersion).toBe("2.1.0-beta.3");
   });
 
-  it("parses version from prefixed output like 'milady/2.1.0'", async () => {
+  it("parses version from prefixed output like 'eliza/2.1.0'", async () => {
     vi.mocked(execSync).mockImplementation((cmd: string) => {
       if (typeof cmd === "string" && cmd.includes("--version")) {
         return Buffer.from("eliza/2.1.0\n");

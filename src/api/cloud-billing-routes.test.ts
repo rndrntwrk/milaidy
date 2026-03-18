@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import type http from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MiladyConfig } from "../config/config";
+import type { ElizaConfig } from "../config/config";
 import type { CloudBillingRouteState } from "./cloud-billing-routes";
 import { handleCloudBillingRoute } from "./cloud-billing-routes";
 
@@ -26,7 +26,7 @@ const { validateCloudBaseUrl } = await import(
 );
 
 function makeState(
-  overrides?: Partial<MiladyConfig["cloud"]>,
+  overrides?: Partial<ElizaConfig["cloud"]>,
 ): CloudBillingRouteState {
   return {
     config: {
@@ -35,7 +35,7 @@ function makeState(
         baseUrl: "https://cloud.example.com",
         ...overrides,
       },
-    } as MiladyConfig,
+    } as ElizaConfig,
   };
 }
 
@@ -307,7 +307,7 @@ describe("cloud-billing-routes", () => {
       makeRes(),
       "/api/cloud/billing/checkout",
       "POST",
-      makeState({ serviceKey: "svc-key" } as Partial<MiladyConfig["cloud"]>),
+      makeState({ serviceKey: "svc-key" } as Partial<ElizaConfig["cloud"]>),
     );
 
     expect(result).toBe(true);

@@ -3,8 +3,21 @@
  * (missing in published tarball). Exported for use by patch-deps.mjs and tests.
  * See docs/plugin-resolution-and-node-path.md "Bun and published package exports".
  */
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, resolve } from "node:path";
+
+const ELIZA_CORE_RUNTIME_FILES = [
+  "dist/index.js",
+  "dist/browser/index.browser.js",
+  "dist/node/index.node.js",
+];
 
 /**
  * Find all package.json paths for pkgName under root (main node_modules and
@@ -35,6 +48,61 @@ export function findPackageFilePaths(root, pkgName, relativePath) {
     }
   }
   return candidates;
+}
+
+function hasRequiredFiles(dirPath, relativePaths) {
+  return relativePaths.every((relativePath) =>
+    existsSync(resolve(dirPath, relativePath)),
+  );
+}
+
+/**
+ * Some published @elizaos/core builds in Bun's cache only contain dist/testing,
+ * but their package.json still exports dist/node and dist/browser. Copy the
+ * runtime dist from a healthy install when that happens so dependents can boot.
+ */
+export function repairElizaCoreRuntimeDist(targetPkgDir, sourcePkgDir) {
+  if (!targetPkgDir || !sourcePkgDir) return false;
+  if (targetPkgDir === sourcePkgDir) return false;
+  if (!hasRequiredFiles(sourcePkgDir, ELIZA_CORE_RUNTIME_FILES)) return false;
+  if (hasRequiredFiles(targetPkgDir, ELIZA_CORE_RUNTIME_FILES)) return false;
+
+  const sourceDist = resolve(sourcePkgDir, "dist");
+  const targetDist = resolve(targetPkgDir, "dist");
+
+  rmSync(targetDist, { recursive: true, force: true });
+  cpSync(sourceDist, targetDist, { recursive: true });
+  return true;
+}
+
+/**
+ * Repair any cached @elizaos/core package copies whose runtime dist files are
+ * missing by cloning the dist tree from the healthy root install.
+ */
+export function patchBrokenElizaCoreRuntimeDists(root, log = console.log) {
+  const pkgPaths = findPackageJsonPaths(root, "@elizaos/core");
+  const pkgDirs = pkgPaths.map((pkgPath) => dirname(pkgPath));
+  const sourcePkgDir = pkgDirs.find((pkgDir) =>
+    hasRequiredFiles(pkgDir, ELIZA_CORE_RUNTIME_FILES),
+  );
+
+  if (!sourcePkgDir) {
+    log(
+      "[patch-deps] Skipping @elizaos/core runtime repair: no healthy source dist was found.",
+    );
+    return false;
+  }
+
+  let patched = false;
+  for (const pkgDir of pkgDirs) {
+    if (repairElizaCoreRuntimeDist(pkgDir, sourcePkgDir)) {
+      patched = true;
+      log(
+        `[patch-deps] Repaired @elizaos/core runtime dist in Bun cache: ${pkgDir}`,
+      );
+    }
+  }
+  return patched;
 }
 
 /**

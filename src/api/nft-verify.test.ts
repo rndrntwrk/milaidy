@@ -1,5 +1,5 @@
 /**
- * Unit tests for nft-verify.ts — Milady NFT holder verification.
+ * Unit tests for nft-verify.ts — Eliza NFT holder verification.
  *
  * Mock the ethers provider so no real RPC calls are made.
  */
@@ -33,7 +33,7 @@ vi.mock("ethers", async () => {
 const mockMarkAddressVerified = vi.fn();
 const mockIsAddressWhitelisted = vi.fn().mockReturnValue(false);
 
-vi.mock("@elizaos/autonomous/api/twitter-verify.ts", () => ({
+vi.mock("@elizaos/autonomous/api/twitter-verify", () => ({
   markAddressVerified: (...args: unknown[]) => mockMarkAddressVerified(...args),
   isAddressWhitelisted: (...args: unknown[]) =>
     mockIsAddressWhitelisted(...args),
@@ -55,7 +55,7 @@ vi.mock("@elizaos/core", () => ({
 import {
   verifyAndWhitelistHolder,
   verifyElizaHolder,
-} from "@elizaos/autonomous/api/nft-verify.ts";
+} from "@elizaos/autonomous/api/nft-verify";
 
 // ── Tests ────────────────────────────────────────────────────────────────
 
@@ -72,7 +72,7 @@ describe("nft-verify", () => {
   // ── verifyElizaHolder ─────────────────────────────────────────────
 
   describe("verifyElizaHolder", () => {
-    it("returns verified=true when wallet holds ≥1 Milady NFT", async () => {
+    it("returns verified=true when wallet holds ≥1 Eliza NFT", async () => {
       mockBalanceOf.mockResolvedValue(BigInt(3));
       const result = await verifyElizaHolder(
         "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",

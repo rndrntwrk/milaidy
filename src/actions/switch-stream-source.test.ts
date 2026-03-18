@@ -60,9 +60,7 @@ describe("SWITCH_STREAM_SOURCE action", () => {
   });
 
   it("validates successfully", async () => {
-    const result = await switchStreamSourceAction.validate(
-      {} as never,
-    );
+    const result = await switchStreamSourceAction.validate({} as never);
     expect(result).toBe(true);
   });
 

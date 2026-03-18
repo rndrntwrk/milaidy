@@ -1,21 +1,21 @@
 /**
- * Milady Signal Plugin — Native Presage-based Signal integration.
+ * Eliza Signal Plugin — Native Presage-based Signal integration.
  *
  * Uses QR-authenticated device linking (created via the pairing service)
  * to send and receive Signal messages through the elizaOS runtime.
  *
- * Loaded as `@miladyai/plugin-signal` via CHANNEL_PLUGIN_MAP when
+ * Loaded as `@elizaai/plugin-signal` via CHANNEL_PLUGIN_MAP when
  * `config.connectors.signal` is present.
  *
  * ## Architecture
  *
- * This plugin uses `@miladyai/signal-native`, a standalone Node.js Signal
+ * This plugin uses `@elizaai/signal-native`, a standalone Node.js Signal
  * client built on Presage (Rust) + napi-rs bindings — the "baileys for
  * Signal". No Docker, no Java, no signal-cli required.
  *
  * ## License
  *
- * Plugin code is MIT. The underlying `@miladyai/signal-native` library is
+ * Plugin code is MIT. The underlying `@elizaai/signal-native` library is
  * AGPL-3.0 (inherits from Presage). This plugin lazily imports it via
  * public API, maintaining license isolation.
  */

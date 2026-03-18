@@ -5,7 +5,7 @@
  * authenticated flow end-to-end: auth → onboarding → agent start → chat
  * → wallet operations → agent stop.
  *
- * Required env vars (loaded from ../eliza/.env):
+ * Required env vars (loaded from .env when available):
  *   OPENAI_API_KEY or ANTHROPIC_API_KEY or GROQ_API_KEY — at least one
  *   EVM_PRIVATE_KEY — for wallet operations
  *   SOLANA_PRIVATE_KEY — for wallet operations (optional; uses SOLANA_API_KEY fallback)
@@ -16,8 +16,8 @@ import http from "node:http";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-// Load .env from the eliza workspace root
-const envPath = path.resolve(import.meta.dirname, "..", "..", "eliza", ".env");
+// Load .env from the repository root when present.
+const envPath = path.resolve(import.meta.dirname, "..", ".env");
 try {
   const { config } = await import("dotenv");
   config({ path: envPath });

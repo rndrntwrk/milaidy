@@ -27,9 +27,9 @@ export default defineConfig({
         find: "milady/plugin-sdk",
         replacement: path.join(repoRoot, "src", "plugin-sdk", "index.ts"),
       },
-      // When the eliza workspace exists locally, resolve @elizaos packages from
-      // source so that all transitive imports share a single version. In CI we
-      // fall through to the published package imports instead.
+      // Resolve key @elizaos packages to the installed npm tarball files so
+      // Vitest does not depend on sibling workspace checkouts or package
+      // export quirks.
       ...(elizaCoreEntry
         ? [
             {
@@ -54,6 +54,15 @@ export default defineConfig({
         : []),
       ...(appCoreSourceRoot
         ? [
+            {
+              find: "@elizaos/app-core/bridge",
+              replacement: path.join(
+                repoRoot,
+                "test",
+                "stubs",
+                "app-core-bridge.ts",
+              ),
+            },
             {
               find: /^@elizaos\/app-core\/(.*)/,
               replacement: path.join(appCoreSourceRoot, "$1"),
@@ -249,6 +258,15 @@ export default defineConfig({
       {
         find: "@elizaos/plugin-discord",
         replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
+      },
+      {
+        find: "@elizaos/plugin-telegram",
+        replacement: path.join(
+          repoRoot,
+          "test",
+          "stubs",
+          "plugin-telegram-module.ts",
+        ),
       },
       {
         find: "electron",

@@ -15,8 +15,8 @@ const fetchMock =
   vi.fn<
     (input: string | URL | Request, init?: RequestInit) => Promise<Response>
   >();
-const { saveMiladyConfigMock, validateCloudBaseUrlMock } = vi.hoisted(() => ({
-  saveMiladyConfigMock: vi.fn<(config: unknown) => void>(),
+const { saveElizaConfigMock, validateCloudBaseUrlMock } = vi.hoisted(() => ({
+  saveElizaConfigMock: vi.fn<(config: unknown) => void>(),
   validateCloudBaseUrlMock: vi.fn<(rawUrl: string) => Promise<string | null>>(),
 }));
 
@@ -25,7 +25,7 @@ vi.mock("@elizaos/autonomous/cloud/validate-url", () => ({
 }));
 
 vi.mock("../config/config", () => ({
-  saveMiladyConfig: saveMiladyConfigMock,
+  saveElizaConfig: saveElizaConfigMock,
 }));
 
 function createState(createAgent: (args: unknown) => Promise<unknown>) {
@@ -44,7 +44,7 @@ function createState(createAgent: (args: unknown) => Promise<unknown>) {
 // Keep these route tests hermetic: login helpers should never call the live cloud service.
 beforeEach(() => {
   fetchMock.mockReset();
-  saveMiladyConfigMock.mockReset();
+  saveElizaConfigMock.mockReset();
   validateCloudBaseUrlMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
   validateCloudBaseUrlMock.mockResolvedValue(null);
@@ -613,7 +613,7 @@ describe("handleCloudRoute", () => {
   it("returns a clean response if disconnect config save fails", async () => {
     process.env.ELIZAOS_CLOUD_API_KEY = "ck-test";
     process.env.ELIZAOS_CLOUD_ENABLED = "true";
-    saveMiladyConfigMock.mockImplementationOnce(() => {
+    saveElizaConfigMock.mockImplementationOnce(() => {
       throw new Error("failed to write config");
     });
     const disconnectMock = vi.fn();
@@ -748,7 +748,7 @@ describe("handleCloudRoute", () => {
   });
 
   it("logs non-error disconnect config save failures", async () => {
-    saveMiladyConfigMock.mockImplementationOnce(() => {
+    saveElizaConfigMock.mockImplementationOnce(() => {
       throw "disconnect save failed";
     });
     const state = {
@@ -980,7 +980,7 @@ describe("handleCloudRoute", () => {
   });
 
   it("clears cached cloud auth state for POST /api/cloud/disconnect", async () => {
-    saveMiladyConfigMock.mockClear();
+    saveElizaConfigMock.mockClear();
     process.env.ELIZAOS_CLOUD_API_KEY = "ck-test";
     process.env.ELIZAOS_CLOUD_ENABLED = "true";
 
@@ -1024,7 +1024,7 @@ describe("handleCloudRoute", () => {
     expect(getStatus()).toBe(200);
     expect(getJson()).toEqual({ ok: true, status: "disconnected" });
     expect(disconnectMock).toHaveBeenCalledTimes(1);
-    expect(saveMiladyConfigMock).toHaveBeenCalledTimes(1);
+    expect(saveElizaConfigMock).toHaveBeenCalledTimes(1);
 
     expect(state.config.cloud?.enabled).toBe(false);
     expect(state.config.cloud?.apiKey).toBeUndefined();
@@ -1190,7 +1190,7 @@ describe("handleCloudRoute timeout behavior", () => {
   });
 
   it("logs non-error save failure while handling authenticated login status", async () => {
-    saveMiladyConfigMock.mockImplementation(() => {
+    saveElizaConfigMock.mockImplementation(() => {
       throw "persist blocked";
     });
     const state = cloudState();
@@ -1399,7 +1399,7 @@ describe("handleCloudRoute timeout behavior", () => {
   });
 
   it("returns authenticated state after successful login poll", async () => {
-    saveMiladyConfigMock.mockClear();
+    saveElizaConfigMock.mockClear();
     const initMock = vi.fn();
     const req = createMockIncomingMessage({
       url: "/api/cloud/login/status?sessionId=test-session",
@@ -1432,7 +1432,7 @@ describe("handleCloudRoute timeout behavior", () => {
     expect(handled).toBe(true);
     expect(res.statusCode).toBe(200);
     expect(getJson()).toEqual({ status: "authenticated", keyPrefix: "ak-pfx" });
-    expect(saveMiladyConfigMock).toHaveBeenCalledWith(state.config);
+    expect(saveElizaConfigMock).toHaveBeenCalledWith(state.config);
     expect(initMock).toHaveBeenCalledTimes(1);
     // Keys are scrubbed from process.env into the sealed store
     expect(process.env.ELIZAOS_CLOUD_API_KEY).toBeUndefined();
@@ -1560,7 +1560,7 @@ describe("handleCloudRoute timeout behavior", () => {
   });
 
   it("saves auth data and ignores config save failures during login poll", async () => {
-    saveMiladyConfigMock.mockImplementation(() => {
+    saveElizaConfigMock.mockImplementation(() => {
       throw new Error("persist blocked");
     });
     const initMock = vi.fn();

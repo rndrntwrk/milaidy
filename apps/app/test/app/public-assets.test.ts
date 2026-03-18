@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +9,8 @@ const TEST_DIR = fileURLToPath(new URL(".", import.meta.url));
 const APP_DIR = join(TEST_DIR, "../..");
 const PUBLIC_DIR = join(APP_DIR, "public");
 const BUNDLED_VRM_SOURCE_IDS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
-const BUNDLED_BACKGROUND_SOURCE_IDS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+const BUNDLED_PREVIEW_SOURCE_IDS = [1, 4, 5] as const;
+const BUNDLED_BACKGROUND_SOURCE_IDS = [1, 4, 5] as const;
 const PROVIDER_LOGOS = [
   "logos/anthropic-icon-white.png",
   "logos/anthropic-icon.png",
@@ -47,9 +49,27 @@ function listFiles(dir: string): string[] {
   return files.sort();
 }
 
+function listTrackedPublicFiles(): string[] {
+  try {
+    const output = execFileSync("git", ["ls-files", "--", "public"], {
+      cwd: APP_DIR,
+      encoding: "utf8",
+    });
+
+    return output
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => line.replace(/^public\//, ""))
+      .sort();
+  } catch {
+    return listFiles(PUBLIC_DIR);
+  }
+}
+
 describe("app public bundle assets", () => {
   it("only keeps the runtime allowlist in apps/app/public", () => {
-    const actualFiles = listFiles(PUBLIC_DIR);
+    const actualFiles = listTrackedPublicFiles();
     const expectedFiles = new Set<string>([
       "android-chrome-192x192.png",
       "android-chrome-512x512.png",
@@ -67,7 +87,9 @@ describe("app public bundle assets", () => {
       "worlds/companion-night.spz",
       ...PROVIDER_LOGOS,
       ...EMOTE_CATALOG.map((emote) => emote.path.replace(/^\//, "")),
-      ...BUNDLED_VRM_SOURCE_IDS.map((id) => `vrms/previews/milady-${id}.png`),
+      ...BUNDLED_PREVIEW_SOURCE_IDS.map(
+        (id) => `vrms/previews/milady-${id}.png`,
+      ),
       ...BUNDLED_VRM_SOURCE_IDS.map((id) => `vrms/milady-${id}.vrm.gz`),
       ...BUNDLED_BACKGROUND_SOURCE_IDS.map(
         (id) => `vrms/backgrounds/milady-${id}.png`,

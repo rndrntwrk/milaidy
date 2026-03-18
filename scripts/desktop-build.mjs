@@ -15,7 +15,7 @@ const PROFILE_EXCLUDED_OPTIONAL_PACKS = {
   full: [],
   "no-streaming": ["streaming"],
 };
-const COMMAND_PREFIX = (process.env.MILADY_DESKTOP_COMMAND_PREFIX ?? "")
+const COMMAND_PREFIX = (process.env.ELIZA_DESKTOP_COMMAND_PREFIX ?? "")
   .trim()
   .split(/\s+/)
   .filter(Boolean);
@@ -26,7 +26,7 @@ const flagStart = command === "build" && argv[0]?.startsWith("--") ? 0 : 1;
 const args = argv.slice(flagStart);
 
 const buildProfile =
-  getArgValue(args, "profile") ?? process.env.MILADY_DESKTOP_PROFILE ?? "full";
+  getArgValue(args, "profile") ?? process.env.ELIZA_DESKTOP_PROFILE ?? "full";
 const variant =
   getArgValue(args, "variant") ?? process.env.VITE_APP_VARIANT ?? "base";
 const buildEnv = getArgValue(args, "env") ?? process.env.BUILD_ENV ?? "";
@@ -327,7 +327,7 @@ function packageDesktopBuild() {
   const packageEnv = {
     ...process.env,
     ...(stageMacosReleaseApp && process.platform === "darwin"
-      ? { MILADY_ELECTROBUN_NOTARIZE: "0" }
+      ? { ELIZA_ELECTROBUN_NOTARIZE: "0" }
       : {}),
   };
 
@@ -360,8 +360,8 @@ function packageDesktopBuild() {
         env: {
           ...packageEnv,
           ELECTROBUN_SKIP_CODESIGN: process.env.ELECTROBUN_SKIP_CODESIGN ?? "1",
-          MILADY_STAGE_MACOS_SKIP_DMG:
-            process.env.MILADY_STAGE_MACOS_SKIP_DMG ?? "1",
+          ELIZA_STAGE_MACOS_SKIP_DMG:
+            process.env.ELIZA_STAGE_MACOS_SKIP_DMG ?? "1",
         },
         label: "Staging direct macOS release app",
       },
@@ -395,7 +395,7 @@ Options:
   --exclude-optional-pack <name>   Exclude a manifest-classified optional capability pack during staging
 
 Environment:
-  MILADY_DESKTOP_COMMAND_PREFIX    Prefix every spawned command, e.g. "arch -x86_64"
+  ELIZA_DESKTOP_COMMAND_PREFIX    Prefix every spawned command, e.g. "arch -x86_64"
 `);
 }
 

@@ -32,12 +32,12 @@ export const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 export const DEFAULT_MODELS_DIR = path.join(os.homedir(), ".eliza", "models");
 
 const EMBEDDING_META_DIR =
-  process.env.MILADY_EMBEDDING_META_DIR ??
-  process.env.MILADY_EMBEDDING_META_DIR ??
-  path.join(os.homedir(), ".milady", "state");
+  process.env.ELIZA_EMBEDDING_META_DIR ??
+  process.env.ELIZA_EMBEDDING_META_DIR ??
+  path.join(os.homedir(), ".eliza", "state");
 export const EMBEDDING_META_PATH =
-  process.env.MILADY_EMBEDDING_META_PATH ??
-  process.env.MILADY_EMBEDDING_META_PATH ??
+  process.env.ELIZA_EMBEDDING_META_PATH ??
+  process.env.ELIZA_EMBEDDING_META_PATH ??
   path.join(EMBEDDING_META_DIR, "embedding-meta.json");
 
 let _logger:
@@ -87,7 +87,7 @@ function writeEmbeddingMeta(meta: EmbeddingMeta): void {
     fs.mkdirSync(EMBEDDING_META_DIR, { recursive: true });
     fs.writeFileSync(EMBEDDING_META_PATH, JSON.stringify(meta, null, 2));
   } catch (err) {
-    getLogger().warn(`[milady] Failed to write embedding metadata: ${err}`);
+    getLogger().warn(`[eliza] Failed to write embedding metadata: ${err}`);
   }
 }
 
@@ -100,7 +100,7 @@ export function checkDimensionMigration(
 
   if (stored && stored.dimensions !== dimensions) {
     log.warn(
-      `[milady] Embedding dimensions changed (${stored.dimensions} → ${dimensions}). ` +
+      `[eliza] Embedding dimensions changed (${stored.dimensions} → ${dimensions}). ` +
         "Existing memory embeddings will be re-indexed on next access.",
     );
   }
@@ -242,7 +242,7 @@ function downloadFile(
         if (expectedBytes != null && bytesReceived !== expectedBytes) {
           settleError(
             new Error(
-              `[milady] Download failed: bytes received (${bytesReceived}) ` +
+              `[eliza] Download failed: bytes received (${bytesReceived}) ` +
                 `does not match Content-Length (${expectedBytes})`,
             ),
           );
@@ -256,7 +256,7 @@ function downloadFile(
       https
         .get(
           validatedUrl.toString(),
-          { headers: { "User-Agent": "milady" } },
+          { headers: { "User-Agent": "eliza" } },
           (res) => {
             expectedBytes = parseContentLength(res.headers["content-length"]);
             if (
@@ -333,10 +333,10 @@ export async function ensureModel(
 
   const url = `https://huggingface.co/${safeRepo}/resolve/main/${safeFilename}`;
   log.info(
-    `[milady] Downloading embedding model: ${safeFilename} from ${safeRepo}...`,
+    `[eliza] Downloading embedding model: ${safeFilename} from ${safeRepo}...`,
   );
 
   await downloadFile(url, modelPath);
-  log.info(`[milady] Embedding model downloaded: ${modelPath}`);
+  log.info(`[eliza] Embedding model downloaded: ${modelPath}`);
   return modelPath;
 }

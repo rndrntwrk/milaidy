@@ -21,7 +21,7 @@ import {
   vi,
 } from "vitest";
 import type { InternalHooksConfig } from "../config/types.hooks";
-import type { HookEntry, MiladyHookMetadata } from "./types";
+import type { ElizaHookMetadata, HookEntry } from "./types";
 
 // ---------------------------------------------------------------------------
 // mocks
@@ -104,7 +104,7 @@ function makeEntry(
     source?: HookEntry["hook"]["source"];
   } = {},
 ): HookEntry {
-  const metadata: MiladyHookMetadata | undefined =
+  const metadata: ElizaHookMetadata | undefined =
     opts.events !== undefined
       ? {
           events: opts.events,
@@ -118,7 +118,7 @@ function makeEntry(
     hook: {
       name,
       description: `${name} description`,
-      source: opts.source ?? "milady-bundled",
+      source: opts.source ?? "eliza-bundled",
       filePath: `/fake/hooks/${name}/HOOK.md`,
       baseDir: `/fake/hooks/${name}`,
       handlerPath: opts.handlerPath ?? `/fake/hooks/${name}/handler.ts`,
@@ -324,7 +324,7 @@ describe("path safety — legacy handlers", () => {
     const loadHooks = await getLoadHooks();
     mockDiscoverHooks.mockResolvedValue([]);
 
-    // FAKE_HOME is the mocked homedir — managed hooks dir = FAKE_HOME/.milady/hooks
+    // FAKE_HOME is the mocked homedir — managed hooks dir = FAKE_HOME/.eliza/hooks
     const managedPath = resolve(
       FAKE_HOME,
       ".eliza",
@@ -388,7 +388,7 @@ describe("config extraDirs safety", () => {
     const loadHooks = await getLoadHooks();
     mockDiscoverHooks.mockResolvedValue([]);
 
-    // Use absolute path under the mocked homedir's .milady
+    // Use absolute path under the mocked homedir's .eliza
     const safePath = resolve(FAKE_HOME, ".eliza", "custom-hooks");
     const config: InternalHooksConfig = {
       load: {

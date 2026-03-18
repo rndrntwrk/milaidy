@@ -88,7 +88,7 @@ const findLatestMtime = (dirPath, shouldSkip) => {
 };
 
 const shouldBuild = () => {
-  if (env.MILADY_FORCE_BUILD === "1") {
+  if (env.ELIZA_FORCE_BUILD === "1") {
     return true;
   }
   const stampMtime = statMtime(buildStampPath);
@@ -114,10 +114,10 @@ const shouldBuild = () => {
 };
 
 const logRunner = (message) => {
-  if (env.MILADY_RUNNER_LOG === "0") {
+  if (env.ELIZA_RUNNER_LOG === "0") {
     return;
   }
-  process.stderr.write(`[milady] ${message}\n`);
+  process.stderr.write(`[eliza] ${message}\n`);
 };
 
 /** Exit code used by the restart action to signal "restart requested". */
@@ -125,20 +125,20 @@ const RESTART_EXIT_CODE = 75;
 
 const runNode = () => {
   const { runtime, warning } = chooseMiladyRuntime({
-    requestedRuntime: process.env.MILADY_RUNTIME,
+    requestedRuntime: process.env.ELIZA_RUNTIME,
     platform: process.platform,
     bunVersion: process.versions?.bun,
   });
   if (warning) {
-    logRunner(`${warning} Set MILADY_RUNTIME=bun to force Bun runtime.`);
+    logRunner(`${warning} Set ELIZA_RUNTIME=bun to force Bun runtime.`);
   }
   const execPath = resolveRuntimeExecPath({
     runtime,
     currentExecPath: process.execPath,
     platform: process.platform,
-    explicitNodePath: process.env.MILADY_NODE_PATH,
+    explicitNodePath: process.env.ELIZA_NODE_PATH,
   });
-  const nodeProcess = spawn(execPath, ["milady.mjs", ...args], {
+  const nodeProcess = spawn(execPath, ["eliza.mjs", ...args], {
     cwd,
     env,
     stdio: "inherit",

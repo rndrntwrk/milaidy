@@ -115,6 +115,15 @@ export default defineConfig({
         replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
       },
       {
+        find: "@elizaos/plugin-telegram",
+        replacement: path.join(
+          repoRoot,
+          "test",
+          "stubs",
+          "plugin-telegram-module.ts",
+        ),
+      },
+      {
         find: "electron",
         replacement: path.join(repoRoot, "test", "stubs", "electron-module.ts"),
       },

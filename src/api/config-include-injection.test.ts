@@ -4,7 +4,7 @@
  *
  * Attack vector: An authenticated client sends:
  *   PUT /api/config
- *   { "env": { "$include": "~/.milady/auth/credentials.json" } }
+ *   { "env": { "$include": "~/.eliza/auth/credentials.json" } }
  *
  * Without protection, the persisted config would contain the $include
  * directive, and the next loadElizaConfig() → resolveConfigIncludes
@@ -29,7 +29,7 @@ describe("$include config injection — saveElizaConfig defense-in-depth", () =>
   beforeEach(() => {
     tmpConfigPath = path.join(
       os.tmpdir(),
-      `milady-test-config-${Date.now()}.json`,
+      `eliza-test-config-${Date.now()}.json`,
     );
   });
 
@@ -59,7 +59,7 @@ describe("$include config injection — saveElizaConfig defense-in-depth", () =>
       logging: { level: "error" },
       env: {
         SOME_KEY: "value",
-        $include: "~/.milady/auth/credentials.json",
+        $include: "~/.eliza/auth/credentials.json",
       },
     } as unknown as ElizaConfig;
 

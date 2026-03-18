@@ -4,7 +4,7 @@ import { injectApiBaseIntoHtml } from "./server";
 describe("injectApiBaseIntoHtml", () => {
   it("injects the external API base before </head>", () => {
     const html = Buffer.from(
-      "<html><head><title>Milady</title></head><body /></html>",
+      "<html><head><title>Eliza</title></head><body /></html>",
     );
 
     const injected = injectApiBaseIntoHtml(

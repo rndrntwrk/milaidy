@@ -77,16 +77,16 @@ export async function runCli(argv: string[] = process.argv) {
   process.on("unhandledRejection", (reason) => {
     if (shouldIgnoreUnhandledRejection(reason)) {
       console.warn(
-        "[milady] Provider credits appear exhausted; request failed without output. Top up credits and retry.",
+        "[eliza] Provider credits appear exhausted; request failed without output. Top up credits and retry.",
       );
       return;
     }
-    console.error("[milady] Unhandled rejection:", formatUncaughtError(reason));
+    console.error("[eliza] Unhandled rejection:", formatUncaughtError(reason));
     process.exit(1);
   });
 
   process.on("uncaughtException", (error) => {
-    console.error("[milady] Uncaught exception:", formatUncaughtError(error));
+    console.error("[eliza] Uncaught exception:", formatUncaughtError(error));
     process.exit(1);
   });
 

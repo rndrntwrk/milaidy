@@ -1,6 +1,6 @@
 import type { AgentRuntime } from "@elizaos/core";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import type { MiladyConfig } from "../config/config";
+import type { ElizaConfig } from "../config/config";
 
 const validateCloudBaseUrlMock = vi.hoisted(() =>
   vi.fn(async () => null as string | null),
@@ -29,7 +29,7 @@ function runtimeWithCloudAuth(cloudAuth: unknown): AgentRuntime {
 async function invoke(args: {
   method: string;
   pathname: string;
-  config?: MiladyConfig;
+  config?: ElizaConfig;
   runtime?: AgentRuntime | null;
 }): Promise<InvokeResult> {
   let status = 200;
@@ -40,7 +40,7 @@ async function invoke(args: {
     res: {} as never,
     method: args.method,
     pathname: args.pathname,
-    config: args.config ?? ({} as MiladyConfig),
+    config: args.config ?? ({} as ElizaConfig),
     runtime: args.runtime ?? null,
     json: (_res, data, code = 200) => {
       status = code;
@@ -70,7 +70,7 @@ describe("cloud status routes", () => {
       method: "GET",
       pathname: "/api/cloud/status",
       runtime: null,
-      config: {} as MiladyConfig,
+      config: {} as ElizaConfig,
     });
 
     expect(result.handled).toBe(true);
@@ -87,7 +87,7 @@ describe("cloud status routes", () => {
       method: "GET",
       pathname: "/api/cloud/status",
       runtime: null,
-      config: { cloud: { apiKey: "abc123" } } as MiladyConfig,
+      config: { cloud: { apiKey: "abc123" } } as ElizaConfig,
     });
 
     expect(result.handled).toBe(true);
@@ -107,7 +107,7 @@ describe("cloud status routes", () => {
       method: "GET",
       pathname: "/api/cloud/status",
       runtime: null,
-      config: { cloud: { enabled: true, apiKey: "abc123" } } as MiladyConfig,
+      config: { cloud: { enabled: true, apiKey: "abc123" } } as ElizaConfig,
     });
 
     expect(result.handled).toBe(true);
@@ -127,7 +127,7 @@ describe("cloud status routes", () => {
       method: "GET",
       pathname: "/api/cloud/status",
       runtime: null,
-      config: { cloud: { enabled: false, apiKey: "abc123" } } as MiladyConfig,
+      config: { cloud: { enabled: false, apiKey: "abc123" } } as ElizaConfig,
     });
 
     expect(result.handled).toBe(true);
@@ -153,7 +153,7 @@ describe("cloud status routes", () => {
       method: "GET",
       pathname: "/api/cloud/status",
       runtime,
-      config: { cloud: { enabled: true } } as MiladyConfig,
+      config: { cloud: { enabled: true } } as ElizaConfig,
     });
 
     expect(result.handled).toBe(true);
@@ -173,7 +173,7 @@ describe("cloud status routes", () => {
       method: "GET",
       pathname: "/api/cloud/credits",
       runtime: null,
-      config: {} as MiladyConfig,
+      config: {} as ElizaConfig,
     });
 
     expect(result.handled).toBe(true);
@@ -194,7 +194,7 @@ describe("cloud status routes", () => {
       runtime: null,
       config: {
         cloud: { apiKey: "abc123", baseUrl: "https://cloud.example" },
-      } as MiladyConfig,
+      } as ElizaConfig,
     });
 
     expect(result.handled).toBe(true);
@@ -233,7 +233,7 @@ describe("cloud status routes", () => {
       runtime: null,
       config: {
         cloud: { apiKey: "abc123", baseUrl: "http://127.0.0.1:1234" },
-      } as MiladyConfig,
+      } as ElizaConfig,
     });
 
     expect(result.handled).toBe(true);
@@ -259,7 +259,7 @@ describe("cloud status routes", () => {
       method: "GET",
       pathname: "/api/cloud/credits",
       runtime: null,
-      config: { cloud: { apiKey: "abc123" } } as MiladyConfig,
+      config: { cloud: { apiKey: "abc123" } } as ElizaConfig,
     });
 
     expect(result.handled).toBe(true);
@@ -284,7 +284,7 @@ describe("cloud status routes", () => {
       method: "GET",
       pathname: "/api/cloud/credits",
       runtime: null,
-      config: { cloud: { apiKey: "abc123" } } as MiladyConfig,
+      config: { cloud: { apiKey: "abc123" } } as ElizaConfig,
     });
 
     expect(result.handled).toBe(true);
@@ -307,7 +307,7 @@ describe("cloud status routes", () => {
       method: "GET",
       pathname: "/api/cloud/credits",
       runtime,
-      config: {} as MiladyConfig,
+      config: {} as ElizaConfig,
     });
 
     expect(result.handled).toBe(true);
@@ -332,7 +332,7 @@ describe("cloud status routes", () => {
       method: "GET",
       pathname: "/api/cloud/credits",
       runtime,
-      config: {} as MiladyConfig,
+      config: {} as ElizaConfig,
     });
 
     expect(result.handled).toBe(true);
@@ -357,7 +357,7 @@ describe("cloud status routes", () => {
       method: "GET",
       pathname: "/api/cloud/credits",
       runtime,
-      config: {} as MiladyConfig,
+      config: {} as ElizaConfig,
     });
 
     expect(result.handled).toBe(true);

@@ -18,7 +18,7 @@ describe("createChannelProfileProvider", () => {
   const provider = createChannelProfileProvider();
 
   it("has correct name and description", () => {
-    expect(["elizaChannelProfile", "miladyChannelProfile"]).toContain(
+    expect(["elizaChannelProfile", "elizaChannelProfile"]).toContain(
       provider.name,
     );
     expect(provider.description).toContain("channel-derived execution profile");

@@ -6,11 +6,11 @@ const { createSpanMock, spanSuccessMock, spanFailureMock } = vi.hoisted(() => ({
   spanFailureMock: vi.fn(),
 }));
 
-vi.mock("@elizaos/autonomous/diagnostics/integration-observability.ts", () => ({
+vi.mock("@elizaos/autonomous/diagnostics/integration-observability", () => ({
   createIntegrationTelemetrySpan: createSpanMock,
 }));
 
-import { verifyTweet } from "@elizaos/autonomous/api/twitter-verify.ts";
+import { verifyTweet } from "@elizaos/autonomous/api/twitter-verify";
 
 const VALID_TWEET_URL = "https://x.com/alice/status/123456789";
 const WALLET = "0xAbCdEf1234567890AbCdEf1234567890AbCdEf12";
@@ -34,7 +34,7 @@ describe("twitter-verify observability", () => {
         status: 200,
         json: async () => ({
           tweet: {
-            text: `Verifying my agent "Test" | ${shortAddr} #ElizaAgent #MiladyAgent`,
+            text: `Verifying my agent "Test" | ${shortAddr} #ElizaAgent #ElizaAgent`,
             author: { screen_name: "alice" },
           },
         }),

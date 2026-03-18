@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { MiladyConfig } from "../config/config";
+import type { ElizaConfig } from "../config/config";
 import { createRouteInvoker } from "../test-support/route-test-helpers";
 import {
   handleSubscriptionRoutes,
@@ -39,7 +39,7 @@ describe("subscription routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state = {
-      config: {} as MiladyConfig,
+      config: {} as ElizaConfig,
     };
     saveConfig = vi.fn();
     delete process.env.ANTHROPIC_API_KEY;

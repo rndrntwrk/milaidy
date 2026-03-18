@@ -20,7 +20,7 @@ export function registerStartCommand(program: Command) {
     .addHelpText(
       "after",
       () =>
-        `\n${theme.muted("Docs:")} ${formatDocsLink("/getting-started", "docs.milady.ai/getting-started")}\n`,
+        `\n${theme.muted("Docs:")} ${formatDocsLink("/getting-started", "docs.eliza.ai/getting-started")}\n`,
     )
     .action(startAction);
 

@@ -29,7 +29,7 @@ declare module "@elizaos/signal-native" {
   export function finishLink(authDir: string): Promise<void>;
 }
 
-declare module "@miladyai/signal-native" {
+declare module "@elizaai/signal-native" {
   export interface SignalProfile {
     uuid: string;
     phoneNumber?: string;

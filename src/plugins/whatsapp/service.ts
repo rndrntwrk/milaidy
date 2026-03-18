@@ -46,8 +46,8 @@ function resolveAuthDir(runtime: IAgentRuntime): string {
     return customDir.trim();
   }
   const workspaceDir =
-    process.env.MILADY_WORKSPACE_DIR ??
-    path.join(os.homedir(), ".milady", "workspace");
+    process.env.ELIZA_WORKSPACE_DIR ??
+    path.join(os.homedir(), ".eliza", "workspace");
   return path.join(workspaceDir, "whatsapp-auth", "default");
 }
 
@@ -159,7 +159,7 @@ export class WhatsAppBaileysService extends Service {
         auth: state,
         logger,
         printQRInTerminal: false,
-        browser: ["Milady AI", "Desktop", "1.0.0"],
+        browser: ["Eliza AI", "Desktop", "1.0.0"],
       });
 
       this.sock.ev.on("creds.update", saveCreds);

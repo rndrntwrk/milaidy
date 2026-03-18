@@ -3,7 +3,7 @@ import {
   Markdown,
   type MarkdownTheme,
 } from "@mariozechner/pi-tui";
-import { miladyMarkdownTheme, tuiTheme } from "../theme.js";
+import { elizaMarkdownTheme, tuiTheme } from "../theme.js";
 
 /**
  * User message with a tinted background (Pi-style).
@@ -14,7 +14,7 @@ export class UserMessageComponent implements Component {
 
   constructor(
     text: string,
-    markdownTheme: MarkdownTheme = miladyMarkdownTheme,
+    markdownTheme: MarkdownTheme = elizaMarkdownTheme,
   ) {
     this.markdown = new Markdown(text, 1, 0, markdownTheme, {
       bgColor: (t) => tuiTheme.userMsgBg(t),

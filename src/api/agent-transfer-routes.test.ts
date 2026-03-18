@@ -26,7 +26,7 @@ vi.mock("../services/agent-export", () => ({
 
 function createRuntimeStub(): AgentRuntime {
   return {
-    character: { name: "Milady" },
+    character: { name: "Eliza" },
   } as unknown as AgentRuntime;
 }
 

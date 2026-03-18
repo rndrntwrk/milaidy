@@ -5,8 +5,8 @@ import {
 } from "@elizaos/autonomous/api/cloud-routes";
 import type { CloudManager } from "@elizaos/autonomous/cloud/cloud-manager";
 import type { AgentRuntime } from "@elizaos/core";
-import type { MiladyConfig } from "../config/config";
-import { saveMiladyConfig } from "../config/config";
+import type { ElizaConfig } from "../config/config";
+import { saveElizaConfig } from "../config/config";
 import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability";
 import { scrubCloudSecretsFromEnv } from "./cloud-secrets";
 
@@ -18,7 +18,7 @@ export {
 } from "./cloud-secrets";
 
 export interface CloudRouteState {
-  config: MiladyConfig;
+  config: ElizaConfig;
   cloudManager: CloudManager | null;
   /** The running agent runtime — needed to persist cloud credentials to the DB. */
   runtime: AgentRuntime | null;
@@ -27,7 +27,7 @@ export interface CloudRouteState {
 function toAutonomousState(state: CloudRouteState): AutonomousCloudRouteState {
   return {
     ...state,
-    saveConfig: saveMiladyConfig,
+    saveConfig: saveElizaConfig,
     createTelemetrySpan: createIntegrationTelemetrySpan,
   };
 }

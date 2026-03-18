@@ -84,7 +84,7 @@ describe("connector map parity", () => {
   });
 
   it("uses valid package name prefixes for all plugin mappings", () => {
-    const validPrefix = /^@(elizaos|miladyai)\//;
+    const validPrefix = /^@(elizaos|elizaai)\//;
     for (const pkg of Object.values(CONNECTOR_PLUGINS)) {
       expect(pkg).toMatch(validPrefix);
     }

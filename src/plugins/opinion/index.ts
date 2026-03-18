@@ -4,7 +4,7 @@
  * Enabled by setting OPINION_API_KEY. Supports read-only mode (no private key)
  * or full trading mode (with OPINION_PRIVATE_KEY + OPINION_MULTISIG_ADDRESS).
  *
- * @see https://github.com/milady-ai/milady/pull/802
+ * @see https://github.com/eliza-ai/eliza/pull/802
  */
 import type { Plugin, ServiceClass } from "@elizaos/core";
 import { cancelOpinionOrderAction } from "./actions/cancel-opinion-order.js";

@@ -1838,7 +1838,7 @@ describe("handleStreamRoute — POST /api/stream/settings merge", () => {
 
   it("returns full merged settings in response", async () => {
     const { writeStreamSettings } = await import("./stream-persistence");
-    writeStreamSettings({ theme: "milady" });
+    writeStreamSettings({ theme: "eliza" });
 
     const { res, getJson } = createMockHttpResponse();
     const req = createMockIncomingMessage({
@@ -1857,7 +1857,7 @@ describe("handleStreamRoute — POST /api/stream/settings merge", () => {
     );
 
     const body = getJson();
-    expect(body.settings).toEqual({ theme: "milady", avatarIndex: 3 });
+    expect(body.settings).toEqual({ theme: "eliza", avatarIndex: 3 });
   });
 });
 

@@ -1,7 +1,7 @@
 import type { AgentRuntime } from "@elizaos/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ElizaTUIBridge } from "./eliza-tui-bridge";
-import type { MiladyTUI } from "./tui-app";
+import type { ElizaTUI } from "./tui-app";
 
 interface BridgeTestAccess {
   conversationId: string | null;
@@ -21,7 +21,7 @@ function createBridgeHarness() {
 
   const runtime = {
     agentId: "agent-1",
-    character: { name: "Milady" },
+    character: { name: "Eliza" },
   } as unknown as AgentRuntime;
 
   const tui = {
@@ -31,7 +31,7 @@ function createBridgeHarness() {
       addedComponents.push(component);
     },
     requestRender,
-  } as unknown as MiladyTUI;
+  } as unknown as ElizaTUI;
 
   const bridge = new ElizaTUIBridge(runtime, tui, {
     apiBaseUrl: "http://localhost:3137",

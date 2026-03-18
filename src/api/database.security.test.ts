@@ -12,14 +12,12 @@ const saveConfigMock = vi.fn();
 vi.mock("@elizaos/autonomous/config/config", () => ({
   loadElizaConfig: () => loadConfigMock(),
   saveElizaConfig: (cfg: unknown) => saveConfigMock(cfg),
-  loadElizaConfig: () => loadConfigMock(),
-  saveElizaConfig: (cfg: unknown) => saveConfigMock(cfg),
 }));
 
 import { handleDatabaseRoute } from "@elizaos/autonomous/api/database";
 
 describe("database API security hardening", () => {
-  const prevElizaBind = process.env.ELIZA_API_BIND;
+  const _prevElizaBind = process.env.ELIZA_API_BIND;
   const prevElizaBind = process.env.ELIZA_API_BIND;
 
   beforeEach(() => {

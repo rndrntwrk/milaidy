@@ -1,18 +1,51 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import {
+  getAppCoreSourceRoot,
+  resolveModuleEntry,
+} from "../../test/eliza-package-paths";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const appCorePackageRoot = getAppCoreSourceRoot(here);
 
 export default defineConfig({
   resolve: {
-    alias: {
-      // Deduplicate React so symlinked packages (e.g. @elizaos/app-core ->
-      // eliza/packages/app-core) share the same React instance as the test
-      // renderer and the app itself.
-      react: path.join(here, "node_modules/react"),
-      "react-dom": path.join(here, "node_modules/react-dom"),
-    },
+    alias: [
+      {
+        find: "react",
+        replacement: path.join(here, "node_modules/react"),
+      },
+      {
+        find: "react-dom",
+        replacement: path.join(here, "node_modules/react-dom"),
+      },
+      ...(appCorePackageRoot
+        ? [
+            {
+              find: "@elizaos/app-core/bridge",
+              replacement: path.join(
+                here,
+                "..",
+                "..",
+                "test",
+                "stubs",
+                "app-core-bridge.ts",
+              ),
+            },
+            {
+              find: /^@elizaos\/app-core\/(.*)/,
+              replacement: path.join(appCorePackageRoot, "$1"),
+            },
+            {
+              find: "@elizaos/app-core",
+              replacement: resolveModuleEntry(
+                path.join(appCorePackageRoot, "index"),
+              ),
+            },
+          ]
+        : []),
+    ],
   },
   test: {
     // Use POSIX-style relative globs so test discovery works on Windows too.

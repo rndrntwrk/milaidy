@@ -19,7 +19,7 @@ const CORE_BRANCH = "develop";
 const CORE_PACKAGE_NAME = "@elizaos/core";
 const DEFAULT_CORE_PATHS = ["../packages/typescript/src/index.node.ts"];
 const DEFAULT_CORE_SUBPATHS = ["../packages/typescript/src/*"];
-const UPSTREAM_SCHEMA = "milady-upstream-v1";
+const UPSTREAM_SCHEMA = "eliza-upstream-v1";
 
 function isSupportedUpstreamSchema(value: string): boolean {
   return value === UPSTREAM_SCHEMA;

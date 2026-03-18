@@ -1,6 +1,6 @@
 import type { AgentRuntime } from "@elizaos/core";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { MiladyConfig } from "../config/types";
+import type { ElizaConfig } from "../config/types";
 import { createRouteInvoker } from "../test-support/route-test-helpers";
 import {
   type CharacterRouteState,
@@ -9,7 +9,7 @@ import {
 
 function createRuntimeStub(): AgentRuntime {
   const character: Record<string, unknown> = {
-    name: "Milady",
+    name: "Eliza",
     bio: ["Initial bio"],
     system: "System prompt",
     adjectives: ["curious"],
@@ -19,7 +19,7 @@ function createRuntimeStub(): AgentRuntime {
       {
         examples: [
           { name: "{{user1}}", content: { text: "hello" } },
-          { name: "Milady", content: { text: "hi" } },
+          { name: "Eliza", content: { text: "hi" } },
         ],
       },
     ],
@@ -42,12 +42,12 @@ describe("character routes", () => {
     saveConfig = vi.fn();
     state = {
       runtime: createRuntimeStub(),
-      agentName: "Milady",
+      agentName: "Eliza",
       config: {
         agents: {
-          list: [{ id: "main", default: true, name: "Milady" }],
+          list: [{ id: "main", default: true, name: "Eliza" }],
         },
-      } as MiladyConfig,
+      } as ElizaConfig,
     };
   });
 
@@ -89,9 +89,9 @@ describe("character routes", () => {
 
     expect(result.status).toBe(200);
     expect(result.payload).toMatchObject({
-      agentName: "Milady",
+      agentName: "Eliza",
       character: {
-        name: "Milady",
+        name: "Eliza",
         bio: ["Initial bio"],
         topics: ["fashion", "ai"],
         messageExamples: expect.any(Array),
@@ -273,7 +273,7 @@ describe("character routes", () => {
       body: {
         field: "bio",
         context: {
-          name: "Milady",
+          name: "Eliza",
           system: "agent system",
           bio: "bio text",
         },
@@ -295,7 +295,7 @@ describe("character routes", () => {
       body: {
         field: "system",
         context: {
-          name: "Milady",
+          name: "Eliza",
           system: "agent system",
           bio: "bio text",
         },

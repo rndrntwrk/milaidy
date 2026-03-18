@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { startApiServer } from "@elizaos/autonomous/api/server";
+import { startApiServer } from "../src/api/server";
 import type { OAuthCredentials } from "@elizaos/autonomous/auth/types";
 import {
   afterAll,
@@ -139,8 +139,8 @@ describe("subscription auth routes (e2e contract)", () => {
     stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "milady-subscription-"));
     process.env.MILADY_STATE_DIR = stateDir;
     process.env.ELIZA_STATE_DIR = stateDir;
-    delete process.env.MILADY_CONFIG_PATH;
-    delete process.env.ELIZA_CONFIG_PATH;
+    process.env.MILADY_CONFIG_PATH = path.join(stateDir, "milady.json");
+    process.env.ELIZA_CONFIG_PATH = path.join(stateDir, "milady.json");
     delete process.env.MILADY_API_TOKEN;
     delete process.env.ELIZA_API_TOKEN;
     delete process.env.MILADY_PAIRING_DISABLED;

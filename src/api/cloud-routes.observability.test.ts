@@ -12,13 +12,13 @@ const {
   spanSuccessMock,
   spanFailureMock,
   validateCloudBaseUrlMock,
-  saveMiladyConfigMock,
+  saveElizaConfigMock,
 } = vi.hoisted(() => ({
   createSpanMock: vi.fn(),
   spanSuccessMock: vi.fn(),
   spanFailureMock: vi.fn(),
   validateCloudBaseUrlMock: vi.fn<(rawUrl: string) => Promise<string | null>>(),
-  saveMiladyConfigMock: vi.fn<(config: unknown) => void>(),
+  saveElizaConfigMock: vi.fn<(config: unknown) => void>(),
 }));
 
 vi.mock("../diagnostics/integration-observability", () => ({
@@ -30,7 +30,7 @@ vi.mock("@elizaos/autonomous/cloud/validate-url", () => ({
 }));
 
 vi.mock("../config/config", () => ({
-  saveMiladyConfig: saveMiladyConfigMock,
+  saveElizaConfig: saveElizaConfigMock,
 }));
 
 function cloudState(): CloudRouteState {

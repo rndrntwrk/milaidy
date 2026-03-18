@@ -42,17 +42,17 @@ describe("hasValidVrm", () => {
   });
 
   it("returns false when VRM is an LFS pointer (< 1 KB)", () => {
-    writeFakeFile(join(dir, "milady-1.vrm"), 130);
+    writeFakeFile(join(dir, "eliza-1.vrm"), 130);
     expect(hasValidVrm(dir)).toBe(false);
   });
 
   it("returns true when VRM is a real binary (> 1 KB)", () => {
-    writeFakeFile(join(dir, "milady-1.vrm"), 2048);
+    writeFakeFile(join(dir, "eliza-1.vrm"), 2048);
     expect(hasValidVrm(dir)).toBe(true);
   });
 
   it("returns true when gzipped VRM is a real binary (> 1 KB)", () => {
-    writeFakeFile(join(dir, "milady-1.vrm.gz"), 2048);
+    writeFakeFile(join(dir, "eliza-1.vrm.gz"), 2048);
     expect(hasValidVrm(dir)).toBe(true);
   });
 

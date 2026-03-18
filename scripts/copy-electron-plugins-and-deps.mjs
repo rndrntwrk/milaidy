@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Copy @elizaos/* packages and their transitive deps into
- * apps/app/electron/milady-dist/node_modules.
+ * apps/app/electron/eliza-dist/node_modules.
  *
  * Plugins (@elizaos/plugin-*) are discovered from package.json and only
  * copied when they have a valid dist/ folder (matching the filter used by
@@ -19,7 +19,7 @@
  *   are sometimes listed in plugin dependencies, to avoid bundle bloat.
  *
  * Run from repo root after "Bundle dist for Electron" has created
- * milady-dist/ and copied the bundled JS files.
+ * eliza-dist/ and copied the bundled JS files.
  *
  * Usage: node scripts/copy-electron-plugins-and-deps.mjs
  */
@@ -31,13 +31,13 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
 const NODE_MODULES = path.join(ROOT, "node_modules");
-const MILADY_DIST = path.join(ROOT, "apps", "app", "electron", "milady-dist");
-const MILADY_DIST_NM = path.join(MILADY_DIST, "node_modules");
+const ELIZA_DIST = path.join(ROOT, "apps", "app", "electron", "eliza-dist");
+const ELIZA_DIST_NM = path.join(ELIZA_DIST, "node_modules");
 
-// Fail fast if milady-dist hasn't been created by the preceding build step.
-if (!fs.existsSync(MILADY_DIST)) {
+// Fail fast if eliza-dist hasn't been created by the preceding build step.
+if (!fs.existsSync(ELIZA_DIST)) {
   console.error(
-    `Error: ${MILADY_DIST} does not exist. Run the Electron dist bundle step first.`,
+    `Error: ${ELIZA_DIST} does not exist. Run the Electron dist bundle step first.`,
   );
   process.exit(1);
 }
@@ -146,12 +146,12 @@ console.log(
   `Found ${elizaosPackages.length} @elizaos/* in package.json, ${toCopy.length} to copy (present + valid dist for plugins)`,
 );
 
-fs.mkdirSync(path.join(MILADY_DIST_NM, "@elizaos"), { recursive: true });
+fs.mkdirSync(path.join(ELIZA_DIST_NM, "@elizaos"), { recursive: true });
 
 for (const name of toCopy) {
   const short = name.replace("@elizaos/", "");
   const src = path.join(NODE_MODULES, "@elizaos", short);
-  const dest = path.join(MILADY_DIST_NM, "@elizaos", short);
+  const dest = path.join(ELIZA_DIST_NM, "@elizaos", short);
   if (copyRecursive(src, dest)) {
     console.log("  Copied", name);
   }
@@ -171,8 +171,8 @@ for (const name of sortedDeps) {
       : path.join(NODE_MODULES, name);
   const dest =
     scope != null
-      ? path.join(MILADY_DIST_NM, scope, pkgName)
-      : path.join(MILADY_DIST_NM, name);
+      ? path.join(ELIZA_DIST_NM, scope, pkgName)
+      : path.join(ELIZA_DIST_NM, name);
   if (copyRecursive(src, dest)) {
     console.log("  Copied", name);
   } else {
@@ -201,14 +201,14 @@ for (const file of extensionFiles) {
   }
 }
 
-// Data/wasm files go to milady-dist/
+// Data/wasm files go to eliza-dist/
 const dataFiles = ["pglite.data", "pglite.wasm"];
 for (const file of dataFiles) {
   const src = path.join(PGLITE_DIST, file);
-  const dest = path.join(MILADY_DIST, file);
+  const dest = path.join(ELIZA_DIST, file);
   if (fs.existsSync(src)) {
     fs.copyFileSync(src, dest);
-    console.log(`  Copied ${file} to milady-dist/`);
+    console.log(`  Copied ${file} to eliza-dist/`);
   } else {
     console.warn(`  Warning: ${file} not found in @electric-sql/pglite/dist`);
   }
@@ -220,7 +220,7 @@ console.log("Done copying PGLite files");
 // Native module handling
 // ============================================================================
 // Native modules (node-llama-cpp, sharp, onnxruntime-node, etc.) are marked as
-// external in tsdown.electron.config.ts. They're loaded from milady-dist/node_modules
+// external in tsdown.electron.config.ts. They're loaded from eliza-dist/node_modules
 // at runtime. Many have platform-specific binary packages stored in bun's .bun/
 // directory that need to be copied to the proper location.
 
@@ -269,8 +269,8 @@ function copyBunPackage(pkgPattern, destPkgName, targetVersion = null) {
     : path.join(bunDir, matchingEntry, "node_modules", shortName);
 
   const destPath = scope
-    ? path.join(MILADY_DIST_NM, scope, shortName)
-    : path.join(MILADY_DIST_NM, shortName);
+    ? path.join(ELIZA_DIST_NM, scope, shortName)
+    : path.join(ELIZA_DIST_NM, shortName);
 
   if (copyRecursive(srcPath, destPath)) {
     const version = matchingEntry.split("@").pop();
@@ -285,8 +285,8 @@ function copyBunPackage(pkgPattern, destPkgName, targetVersion = null) {
 // ----------------------------------------------------------------------------
 console.log("  [node-llama-cpp]");
 
-// Get node-llama-cpp version from milady-dist to match the correct binary
-const nlcPkgPath = path.join(MILADY_DIST_NM, "node-llama-cpp", "package.json");
+// Get node-llama-cpp version from eliza-dist to match the correct binary
+const nlcPkgPath = path.join(ELIZA_DIST_NM, "node-llama-cpp", "package.json");
 let nlcVersion = null;
 if (fs.existsSync(nlcPkgPath)) {
   try {
@@ -333,7 +333,7 @@ copyBunPackage("lifecycle-utils", "lifecycle-utils");
 console.log("  [sharp]");
 
 // Read sharp's optionalDependencies to get exact versions needed
-const sharpPkgPath = path.join(MILADY_DIST_NM, "sharp", "package.json");
+const sharpPkgPath = path.join(ELIZA_DIST_NM, "sharp", "package.json");
 const sharpPkg = fs.existsSync(sharpPkgPath) ? readJson(sharpPkgPath) : {};
 const sharpOptDeps = sharpPkg.optionalDependencies ?? {};
 
@@ -400,7 +400,7 @@ console.log("  [onnxruntime-node]");
 
 // Get onnxruntime-node version
 const onnxPkgPath = path.join(
-  MILADY_DIST_NM,
+  ELIZA_DIST_NM,
   "onnxruntime-node",
   "package.json",
 );
@@ -435,9 +435,9 @@ copyBunPackage("koffi", "koffi");
 
 console.log("Done copying native modules");
 
-console.log("milady-dist/node_modules contents:");
+console.log("eliza-dist/node_modules contents:");
 try {
-  console.log(fs.readdirSync(MILADY_DIST_NM).join(" "));
+  console.log(fs.readdirSync(ELIZA_DIST_NM).join(" "));
 } catch {
   console.log("  (empty or not found)");
 }

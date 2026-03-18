@@ -21,12 +21,12 @@ vi.mock("@elizaos/core", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-// Stub the managed dir (~/.milady/hooks) to avoid picking up real hooks
+// Stub the managed dir (~/.eliza/hooks) to avoid picking up real hooks
 vi.mock("node:os", async (importOriginal) => {
   const actual = (await importOriginal()) as typeof import("node:os");
   return {
     ...actual,
-    // Point homedir to a temp location so ~/.milady/hooks doesn't exist
+    // Point homedir to a temp location so ~/.eliza/hooks doesn't exist
     homedir: () => join(tmpdir(), "__discovery_test_fake_home__"),
   };
 });
@@ -99,10 +99,10 @@ describe("frontmatter parsing", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0].hook.name).toBe("my-hook");
     expect(entries[0].frontmatter.description).toBe("A test hook");
-    expect(entries[0].hook.source).toMatch(/^(eliza|milady)-bundled$/);
+    expect(entries[0].hook.source).toMatch(/^(eliza|eliza)-bundled$/);
   });
 
-  it("extracts milady metadata from frontmatter JSON", async () => {
+  it("extracts eliza metadata from frontmatter JSON", async () => {
     const bundled = join(tempRoot, "bundled");
     await createHookDir(bundled, "meta-hook", {
       hookMd: [
@@ -292,7 +292,7 @@ describe("discovery precedence", () => {
 
     expect(entries).toHaveLength(1);
     expect(entries[0].frontmatter.description).toBe("workspace version");
-    expect(entries[0].hook.source).toMatch(/^(eliza|milady)-workspace$/);
+    expect(entries[0].hook.source).toMatch(/^(eliza|eliza)-workspace$/);
   });
 
   it("collects hooks from all sources when names are unique", async () => {

@@ -15,7 +15,6 @@ describe("repoSetupSteps", () => {
   it("keeps repo setup order explicit", () => {
     expect(repoSetupSteps).toEqual([
       "scripts/init-submodules.mjs",
-      "scripts/setup-eliza-workspace.mjs",
       "scripts/ensure-skills.mjs",
       "scripts/ensure-avatars.mjs",
       "scripts/link-browser-server.mjs",

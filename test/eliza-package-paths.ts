@@ -1,20 +1,21 @@
-import fs from "node:fs";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 const MODULE_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".jsx", ".mjs", ".cjs"];
-const preferInstalledEliza = process.env.MILADY_PREFER_INSTALLED_ELIZA === "1";
+const require = createRequire(import.meta.url);
 
 function firstExistingPath(
   candidates: Array<string | undefined>,
 ): string | undefined {
   return candidates.find(
     (candidate): candidate is string =>
-      typeof candidate === "string" && fs.existsSync(candidate),
+      typeof candidate === "string" && existsSync(candidate),
   );
 }
 
 export function resolveModuleEntry(basePath: string): string {
-  if (fs.existsSync(basePath)) {
+  if (existsSync(basePath)) {
     return basePath;
   }
 
@@ -25,45 +26,31 @@ export function resolveModuleEntry(basePath: string): string {
   return withExtension ?? basePath;
 }
 
-export function getElizaWorkspaceRoot(repoRoot: string): string | undefined {
-  if (preferInstalledEliza) {
+export function getInstalledPackageRoot(packageName: string): string | undefined {
+  try {
+    return path.dirname(require.resolve(`${packageName}/package.json`));
+  } catch {
+    return undefined;
+  }
+}
+
+export function getElizaCoreEntry(_repoRoot: string): string | undefined {
+  const packageRoot = getInstalledPackageRoot("@elizaos/core");
+  if (!packageRoot) {
     return undefined;
   }
 
-  const workspaceRoot = path.resolve(repoRoot, "..", "eliza");
-  const workspaceCoreEntry = path.join(
-    workspaceRoot,
-    "packages",
-    "typescript",
-    "src",
-    "index.ts",
-  );
-  return fs.existsSync(workspaceCoreEntry) ? workspaceRoot : undefined;
+  return resolveModuleEntry(path.join(packageRoot, "dist", "node", "index.node"));
 }
 
-export function getElizaCoreEntry(repoRoot: string): string | undefined {
-  const workspaceRoot = getElizaWorkspaceRoot(repoRoot);
-  if (!workspaceRoot) {
-    return undefined;
-  }
+export function getAutonomousSourceRoot(_repoRoot: string): string | undefined {
+  const packageRoot = getInstalledPackageRoot("@elizaos/autonomous");
 
-  return resolveModuleEntry(
-    path.join(workspaceRoot, "packages", "typescript", "src", "index"),
-  );
-}
-
-export function getAutonomousSourceRoot(repoRoot: string): string | undefined {
-  const workspaceRoot = getElizaWorkspaceRoot(repoRoot);
-
-  return workspaceRoot
-    ? path.join(workspaceRoot, "packages", "autonomous", "src")
+  return packageRoot
+    ? path.join(packageRoot, "packages", "autonomous", "src")
     : undefined;
 }
 
-export function getAppCoreSourceRoot(repoRoot: string): string | undefined {
-  const workspaceRoot = getElizaWorkspaceRoot(repoRoot);
-
-  return workspaceRoot
-    ? path.join(workspaceRoot, "packages", "app-core", "src")
-    : undefined;
+export function getAppCoreSourceRoot(_repoRoot: string): string | undefined {
+  return getInstalledPackageRoot("@elizaos/app-core");
 }

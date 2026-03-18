@@ -25,9 +25,7 @@ describe("GET_SELF_STATUS action", () => {
   });
 
   it("validates successfully", async () => {
-    const result = await getSelfStatusAction.validate(
-      {} as never,
-    );
+    const result = await getSelfStatusAction.validate({} as never);
     expect(result).toBe(true);
   });
 

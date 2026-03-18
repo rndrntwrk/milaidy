@@ -39,15 +39,11 @@ describe("benchmark plugin action capture", () => {
   it("only validates BENCHMARK_ACTION when benchmark context exists", async () => {
     const action = getBenchmarkAction();
 
-    const withoutContext = await action.validate(
-      {} as never,
-    );
+    const withoutContext = await action.validate({} as never);
     expect(withoutContext).toBe(false);
 
     setBenchmarkContext({ benchmark: "agentbench", taskId: "task-1" });
-    const withContext = await action.validate(
-      {} as never,
-    );
+    const withContext = await action.validate({} as never);
     expect(withContext).toBe(true);
   });
 

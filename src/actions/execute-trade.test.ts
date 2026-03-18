@@ -441,10 +441,7 @@ describe("EXECUTE_TRADE action", () => {
   });
 
   it("handles missing parameters entirely", async () => {
-    const result = await executeTradeAction.handler(
-      {} as never,
-      undefined,
-    );
+    const result = await executeTradeAction.handler({} as never, undefined);
     expect((result as { success: boolean }).success).toBe(false);
   });
 

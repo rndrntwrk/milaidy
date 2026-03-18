@@ -72,7 +72,6 @@ function fileExistsAny(candidates: string[]): boolean {
 }
 
 dotenv.config({ path: path.resolve(packageRoot, ".env") });
-dotenv.config({ path: path.resolve(packageRoot, "..", "eliza", ".env") });
 
 const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
 const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY);

@@ -48,12 +48,12 @@ describe("applyClaudeCodeStealth", () => {
 });
 
 describe("findProjectRoot", () => {
-  test("returns project root when package name matches 'miladyai'", async () => {
+  test("returns project root when package name matches 'elizaai'", async () => {
     const { findProjectRoot } = await import(
       "@elizaos/autonomous/auth/apply-stealth"
     );
     const path = await import("node:path");
-    // The milady repo has package name "miladyai", which findProjectRoot
+    // The eliza repo has package name "elizaai", which findProjectRoot
     // now recognizes. It should find the repo root, not fall back.
     const result = findProjectRoot(__dirname);
     const expectedRoot = path.resolve(__dirname, "..", "..");
@@ -64,7 +64,7 @@ describe("findProjectRoot", () => {
     const { findProjectRoot } = await import(
       "@elizaos/autonomous/auth/apply-stealth"
     );
-    // Use filesystem root — no package.json with name "miladyai" there
+    // Use filesystem root — no package.json with name "elizaai" there
     const result = findProjectRoot("/tmp");
     expect(result).toBe("/tmp");
   });

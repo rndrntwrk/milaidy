@@ -1,6 +1,9 @@
 export * from "@elizaos/autonomous/api/streaming-text";
 
-export function computeStreamingDelta(existing: string, incoming: string): string {
+export function computeStreamingDelta(
+  existing: string,
+  incoming: string,
+): string {
   if (!incoming) return "";
   if (!existing) return incoming;
   if (incoming === existing) return "";

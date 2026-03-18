@@ -12,11 +12,18 @@
  *    "default" conditions so Bun resolves via "import" → dist/. WHY: See
  *    docs/plugin-resolution-and-node-path.md "Bun and published package exports".
  */
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   patchAgentSkillsCatalogFetch,
+  patchBrokenElizaCoreRuntimeDists,
   patchBunExports,
   patchExtensionlessJsExports,
   patchMissingLifecycleScript,
@@ -51,6 +58,7 @@ patchExtensionlessJsExports(root, "@noble/curves");
 patchExtensionlessJsExports(root, "@noble/hashes");
 patchNobleHashesCompat(root);
 patchProperLockfileSignalExitCompat(root);
+patchBrokenElizaCoreRuntimeDists(root);
 
 /**
  * Patch @elizaos/core synthetic action/reply chat messages.
@@ -65,8 +73,21 @@ patchProperLockfileSignalExitCompat(root);
  * the action results in runtime state/logs, but stop emitting them as
  * user-facing chat memories.
  */
+function addUniquePath(targets, seenRealpaths, path) {
+  if (!existsSync(path)) return;
+  try {
+    const rp = realpathSync(path);
+    if (seenRealpaths.has(rp)) return;
+    seenRealpaths.add(rp);
+    targets.push(path);
+  } catch {
+    if (!targets.includes(path)) targets.push(path);
+  }
+}
+
 function findAllElizaCoreBundleFiles() {
   const targets = [];
+  const seenRealpaths = new Set();
   const relPaths = [
     "dist/index.node.js",
     "dist/index.browser.js",
@@ -79,13 +100,11 @@ function findAllElizaCoreBundleFiles() {
 
   for (const searchRoot of searchRoots) {
     for (const relPath of relPaths) {
-      const npmTarget = resolve(
-        searchRoot,
-        `node_modules/@elizaos/core/${relPath}`,
+      addUniquePath(
+        targets,
+        seenRealpaths,
+        resolve(searchRoot, `node_modules/@elizaos/core/${relPath}`),
       );
-      if (existsSync(npmTarget) && !targets.includes(npmTarget)) {
-        targets.push(npmTarget);
-      }
     }
 
     const bunCacheDir = resolve(searchRoot, "node_modules/.bun");
@@ -96,14 +115,15 @@ function findAllElizaCoreBundleFiles() {
       for (const entry of entries) {
         if (!entry.startsWith("@elizaos+core@")) continue;
         for (const relPath of relPaths) {
-          const bunTarget = resolve(
-            bunCacheDir,
-            entry,
-            `node_modules/@elizaos/core/${relPath}`,
+          addUniquePath(
+            targets,
+            seenRealpaths,
+            resolve(
+              bunCacheDir,
+              entry,
+              `node_modules/@elizaos/core/${relPath}`,
+            ),
           );
-          if (existsSync(bunTarget) && !targets.includes(bunTarget)) {
-            targets.push(bunTarget);
-          }
         }
       }
     } catch {
@@ -120,17 +140,13 @@ const coreGeneratedReplyPattern =
 const coreActionMemoryPattern =
   /const ([$A-Za-z_][\w$]*) = \{\s*id: ([$A-Za-z_][\w$]*),\s*entityId: this\.agentId,\s*roomId: ([$A-Za-z_][\w$]*)\.roomId,\s*worldId: \3\.worldId,\s*content: \{\s*text: ([$A-Za-z_][\w$]*)\?\.text \|\| `Executed action: \$\{([$A-Za-z_][\w$]*)\.name\}`,\s*source: "action"\s*\}\s*\};\s*await this\.createMemory\(\1, "messages"\);/g;
 
+let elizaCorePatched = 0;
 if (elizaCoreBundleTargets.length === 0) {
   console.log(
     "[patch-deps] @elizaos/core bundle not found, skipping chat patch.",
   );
 } else {
-  console.log(
-    `[patch-deps] Found ${elizaCoreBundleTargets.length} @elizaos/core bundle file(s) to patch.`,
-  );
-
   for (const target of elizaCoreBundleTargets) {
-    console.log(`[patch-deps] Patching @elizaos/core chat bundle: ${target}`);
     let src = readFileSync(target, "utf8");
     const original = src;
 
@@ -156,18 +172,15 @@ if (elizaCoreBundleTargets.length === 0) {
         ].join("\n"),
     );
 
-    if (src === original) {
-      console.log(
-        "  - @elizaos/core chat patch already present or signature changed.",
-      );
-      continue;
+    if (src !== original) {
+      writeFileSync(target, src, "utf8");
+      elizaCorePatched++;
+      console.log(`[patch-deps] Applied @elizaos/core chat patch: ${target}`);
     }
-
-    writeFileSync(target, src, "utf8");
-    console.log(
-      "  - Applied @elizaos/core chat patch (no synthetic action/reply messages).",
-    );
   }
+  console.log(
+    `[patch-deps] @elizaos/core: checked ${elizaCoreBundleTargets.length} file(s), applied ${elizaCorePatched} patch(es).`,
+  );
 }
 
 /**
@@ -181,18 +194,17 @@ if (elizaCoreBundleTargets.length === 0) {
  */
 function findAllThreeVrmNodeFiles() {
   const targets = [];
+  const seenRealpaths = new Set();
   const relPaths = ["lib/nodes/index.module.js", "lib/nodes/index.cjs"];
   const searchRoots = [root, resolve(root, "apps/app")];
 
   for (const searchRoot of searchRoots) {
     for (const relPath of relPaths) {
-      const npmTarget = resolve(
-        searchRoot,
-        `node_modules/@pixiv/three-vrm/${relPath}`,
+      addUniquePath(
+        targets,
+        seenRealpaths,
+        resolve(searchRoot, `node_modules/@pixiv/three-vrm/${relPath}`),
       );
-      if (existsSync(npmTarget) && !targets.includes(npmTarget)) {
-        targets.push(npmTarget);
-      }
     }
 
     const bunCacheDir = resolve(searchRoot, "node_modules/.bun");
@@ -202,14 +214,15 @@ function findAllThreeVrmNodeFiles() {
         for (const entry of entries) {
           if (entry.startsWith("@pixiv+three-vrm@")) {
             for (const relPath of relPaths) {
-              const bunTarget = resolve(
-                bunCacheDir,
-                entry,
-                `node_modules/@pixiv/three-vrm/${relPath}`,
+              addUniquePath(
+                targets,
+                seenRealpaths,
+                resolve(
+                  bunCacheDir,
+                  entry,
+                  `node_modules/@pixiv/three-vrm/${relPath}`,
+                ),
               );
-              if (existsSync(bunTarget) && !targets.includes(bunTarget)) {
-                targets.push(bunTarget);
-              }
             }
           }
         }
@@ -226,30 +239,21 @@ const threeVrmNodeTargets = findAllThreeVrmNodeFiles();
 const threeVrmFnCompatBuggy = `return THREE_WEBGPU.tslFn(jsFunc);`;
 const threeVrmFnCompatFixed = `return THREE_TSL.Fn(jsFunc);`;
 
+let threeVrmPatched = 0;
 if (threeVrmNodeTargets.length === 0) {
   console.log("[patch-deps] three-vrm nodes bundle not found, skipping patch.");
 } else {
-  console.log(
-    `[patch-deps] Found ${threeVrmNodeTargets.length} three-vrm node file(s) to patch.`,
-  );
-
   for (const target of threeVrmNodeTargets) {
-    console.log(`[patch-deps] Patching three-vrm nodes: ${target}`);
     let src = readFileSync(target, "utf8");
 
-    if (!src.includes(threeVrmFnCompatBuggy)) {
-      if (src.includes(threeVrmFnCompatFixed)) {
-        console.log("  - three-vrm FnCompat patch already present.");
-      } else {
-        console.log(
-          "  - three-vrm FnCompat signature changed — patch may no longer be needed.",
-        );
-      }
-      continue;
-    }
+    if (!src.includes(threeVrmFnCompatBuggy)) continue;
 
     src = src.replaceAll(threeVrmFnCompatBuggy, threeVrmFnCompatFixed);
     writeFileSync(target, src, "utf8");
-    console.log("  - Applied three-vrm FnCompat patch for Three r182.");
+    threeVrmPatched++;
+    console.log(`[patch-deps] Applied three-vrm FnCompat patch: ${target}`);
   }
+  console.log(
+    `[patch-deps] three-vrm: checked ${threeVrmNodeTargets.length} file(s), applied ${threeVrmPatched} patch(es).`,
+  );
 }

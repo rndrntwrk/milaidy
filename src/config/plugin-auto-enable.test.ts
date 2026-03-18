@@ -289,11 +289,11 @@ describe("applyPluginAutoEnable — env vars", () => {
   });
 
   it("enables pi-ai plugin when USE_PI_AI env is set", () => {
-    // The env key name depends on branding: ELIZA_USE_PI_AI or MILADY_USE_PI_AI.
+    // The env key name depends on branding: ELIZA_USE_PI_AI or ELIZA_USE_PI_AI.
     // Detect which key the source expects by looking at AUTH_PROVIDER_PLUGINS.
     const piAiEnvKey = AUTH_PROVIDER_PLUGINS.ELIZA_USE_PI_AI
       ? "ELIZA_USE_PI_AI"
-      : "MILADY_USE_PI_AI";
+      : "ELIZA_USE_PI_AI";
     const params = makeParams({
       env: { [piAiEnvKey]: "1" },
     });
@@ -702,7 +702,7 @@ describe("AUTH_PROVIDER_PLUGINS", () => {
     // The key name depends on the branding of the resolved source.
     const piAiMapping =
       AUTH_PROVIDER_PLUGINS.ELIZA_USE_PI_AI ??
-      AUTH_PROVIDER_PLUGINS.MILADY_USE_PI_AI;
+      AUTH_PROVIDER_PLUGINS.ELIZA_USE_PI_AI;
     expect(piAiMapping).toBe("@elizaos/plugin-pi-ai");
   });
 

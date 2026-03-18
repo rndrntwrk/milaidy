@@ -12,7 +12,6 @@ const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..");
 
 export const repoSetupSteps = [
   "scripts/init-submodules.mjs",
-  "scripts/setup-eliza-workspace.mjs",
   "scripts/ensure-skills.mjs",
   "scripts/ensure-avatars.mjs",
   "scripts/link-browser-server.mjs",
@@ -43,7 +42,7 @@ function sleep(ms) {
 }
 
 export function getRepoSetupLockPath(repoRoot = DEFAULT_REPO_ROOT) {
-  return path.join(repoRoot, ".milady-repo-setup.lock");
+  return path.join(repoRoot, ".eliza-repo-setup.lock");
 }
 
 export function isRepoSetupLockStale(
@@ -170,7 +169,7 @@ const isMain =
 if (isMain) {
   runRepoSetup().catch((error) => {
     console.error(
-      `[milady] Repo setup failed: ${error instanceof Error ? error.message : String(error)}`,
+      `[eliza] Repo setup failed: ${error instanceof Error ? error.message : String(error)}`,
     );
     process.exit(1);
   });

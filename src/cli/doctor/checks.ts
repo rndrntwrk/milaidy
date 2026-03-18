@@ -1,5 +1,5 @@
 /**
- * Health check functions for `milady doctor`.
+ * Health check functions for `eliza doctor`.
  *
  * All functions are pure / injectable — no top-level side effects — so they
  * can be unit-tested without touching the filesystem or network.
@@ -119,7 +119,7 @@ export function checkRuntime(): CheckResult {
 export function checkNodeModules(projectRoot?: string): CheckResult {
   const root =
     projectRoot ??
-    path.resolve(process.env.MILADY_PROJECT_ROOT ?? process.cwd());
+    path.resolve(process.env.ELIZA_PROJECT_ROOT ?? process.cwd());
   const nmDir = path.join(root, "node_modules");
 
   if (!existsSync(nmDir)) {
@@ -144,7 +144,7 @@ export function checkNodeModules(projectRoot?: string): CheckResult {
 export function checkBuildArtifacts(projectRoot?: string): CheckResult {
   const root =
     projectRoot ??
-    path.resolve(process.env.MILADY_PROJECT_ROOT ?? process.cwd());
+    path.resolve(process.env.ELIZA_PROJECT_ROOT ?? process.cwd());
   const distEntry = path.join(root, "dist", "entry.js");
 
   if (!existsSync(distEntry)) {
@@ -172,13 +172,13 @@ export function checkBuildArtifacts(projectRoot?: string): CheckResult {
 function resolveConfigPath(
   env: Record<string, string | undefined> = process.env,
 ): string {
-  if (env.MILADY_CONFIG_PATH?.trim()) {
-    return env.MILADY_CONFIG_PATH;
+  if (env.ELIZA_CONFIG_PATH?.trim()) {
+    return env.ELIZA_CONFIG_PATH;
   }
 
   const stateDir =
-    env.MILADY_STATE_DIR?.trim() || path.join(os.homedir(), ".milady");
-  return path.join(stateDir, "milady.json");
+    env.ELIZA_STATE_DIR?.trim() || path.join(os.homedir(), ".eliza");
+  return path.join(stateDir, "eliza.json");
 }
 
 export function checkConfigFile(
@@ -193,7 +193,7 @@ export function checkConfigFile(
       category: "config",
       status: "warn",
       detail: `Not found: ${resolved}`,
-      fix: "milady setup",
+      fix: "eliza setup",
       autoFixable: true,
     };
   }
@@ -249,7 +249,7 @@ export function checkModelKey(
     category: "config",
     status: "fail",
     detail: "No model provider API key found",
-    fix: "milady setup",
+    fix: "eliza setup",
     autoFixable: true,
   };
 }
@@ -261,7 +261,7 @@ export function checkModelKey(
 export function checkStateDir(
   env: Record<string, string | undefined> = process.env,
 ): CheckResult {
-  const dir = env.MILADY_STATE_DIR ?? path.join(os.homedir(), ".milady");
+  const dir = env.ELIZA_STATE_DIR ?? path.join(os.homedir(), ".eliza");
 
   if (!existsSync(dir)) {
     return {
@@ -294,7 +294,7 @@ export function checkStateDir(
 export function checkDatabase(
   env: Record<string, string | undefined> = process.env,
 ): CheckResult {
-  const stateDir = env.MILADY_STATE_DIR ?? path.join(os.homedir(), ".milady");
+  const stateDir = env.ELIZA_STATE_DIR ?? path.join(os.homedir(), ".eliza");
   const dbDir = path.join(stateDir, "workspace", ".eliza", ".elizadb");
 
   if (!existsSync(dbDir)) {
@@ -319,7 +319,7 @@ const MIN_FREE_BYTES = 1 * 1024 * 1024 * 1024; // 1 GiB
 export function checkDiskSpace(
   env: Record<string, string | undefined> = process.env,
 ): CheckResult {
-  const dir = env.MILADY_STATE_DIR ?? os.homedir();
+  const dir = env.ELIZA_STATE_DIR ?? os.homedir();
 
   try {
     const stats = statfsSync(dir);
@@ -362,10 +362,10 @@ const LOOPBACK_BIND_RE =
 export function checkHostConfig(
   env: Record<string, string | undefined> = process.env,
 ): CheckResult {
-  const rawBind = env.MILADY_API_BIND?.trim() ?? "127.0.0.1";
+  const rawBind = env.ELIZA_API_BIND?.trim() ?? "127.0.0.1";
   const bindHost = rawBind.replace(/:\d+$/, "").toLowerCase();
-  const token = env.MILADY_API_TOKEN?.trim() ?? "";
-  const allowedHosts = env.MILADY_ALLOWED_HOSTS?.trim() ?? "";
+  const token = env.ELIZA_API_TOKEN?.trim() ?? "";
+  const allowedHosts = env.ELIZA_ALLOWED_HOSTS?.trim() ?? "";
 
   const isWildcard = WILDCARD_BIND_RE.test(bindHost);
   const isLoopback = LOOPBACK_BIND_RE.test(bindHost);
@@ -377,8 +377,8 @@ export function checkHostConfig(
       label: "Host binding",
       category: "config",
       status: "warn",
-      detail: `MILADY_API_BIND=${rawBind} — token is auto-generated each restart`,
-      fix: "Set a stable MILADY_API_TOKEN=<secret> in your environment",
+      detail: `ELIZA_API_BIND=${rawBind} — token is auto-generated each restart`,
+      fix: "Set a stable ELIZA_API_TOKEN=<secret> in your environment",
     };
   }
 
@@ -389,8 +389,8 @@ export function checkHostConfig(
       label: "Host binding",
       category: "config",
       status: "warn",
-      detail: `MILADY_API_BIND=${rawBind} without MILADY_API_TOKEN — token auto-generated each restart`,
-      fix: "Set a stable MILADY_API_TOKEN=<secret>",
+      detail: `ELIZA_API_BIND=${rawBind} without ELIZA_API_TOKEN — token auto-generated each restart`,
+      fix: "Set a stable ELIZA_API_TOKEN=<secret>",
     };
   }
 
@@ -399,7 +399,7 @@ export function checkHostConfig(
       label: "Host binding",
       category: "config",
       status: "pass",
-      detail: `${rawBind} + MILADY_ALLOWED_HOSTS=${allowedHosts}`,
+      detail: `${rawBind} + ELIZA_ALLOWED_HOSTS=${allowedHosts}`,
     };
   }
 
@@ -483,7 +483,7 @@ export async function checkPort(port: number): Promise<CheckResult> {
     category: "network",
     status: "warn",
     detail: owner ? `In use by ${owner}` : "In use by another process",
-    fix: `MILADY_PORT=<other> milady start`,
+    fix: `ELIZA_PORT=<other> eliza start`,
   };
 }
 

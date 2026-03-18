@@ -2,7 +2,7 @@
  * Signal native service — Presage-based Signal client for elizaOS.
  *
  * Mirrors the WhatsApp Baileys service pattern:
- * - Lazy-imports `@miladyai/signal-native` at runtime
+ * - Lazy-imports `@elizaai/signal-native` at runtime
  * - Uses QR-based device linking (secondary device)
  * - Receives messages via streaming callback
  * - Sends via registered send handler
@@ -21,8 +21,8 @@ import {
 } from "@elizaos/core";
 
 // Lazy-loaded native bindings type
-type SignalNative = typeof import("@miladyai/signal-native");
-const SIGNAL_NATIVE_MODULE_ID = "@miladyai/signal-native";
+type SignalNative = typeof import("@elizaai/signal-native");
+const SIGNAL_NATIVE_MODULE_ID = "@elizaai/signal-native";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -34,8 +34,8 @@ function resolveAuthDir(runtime: IAgentRuntime): string {
     return customDir.trim();
   }
   const workspaceDir =
-    process.env.MILADY_WORKSPACE_DIR ??
-    path.join(os.homedir(), ".milady", "workspace");
+    process.env.ELIZA_WORKSPACE_DIR ??
+    path.join(os.homedir(), ".eliza", "workspace");
   return path.join(workspaceDir, "signal-auth", "default");
 }
 
@@ -96,10 +96,10 @@ export class SignalNativeService extends Service {
       this.native = await import(/* @vite-ignore */ SIGNAL_NATIVE_MODULE_ID);
     } catch (err) {
       runtime.logger.error(
-        `[signal] Failed to load @miladyai/signal-native: ${err}`,
+        `[signal] Failed to load @elizaai/signal-native: ${err}`,
       );
       runtime.logger.info(
-        "[signal] Install it with: bun add @miladyai/signal-native",
+        "[signal] Install it with: bun add @elizaai/signal-native",
       );
       return;
     }

@@ -566,10 +566,7 @@ describe("TRANSFER_TOKEN action", () => {
   });
 
   it("handles missing parameters entirely", async () => {
-    const result = await transferTokenAction.handler(
-      {} as never,
-      undefined,
-    );
+    const result = await transferTokenAction.handler({} as never, undefined);
     expect((result as { success: boolean }).success).toBe(false);
   });
 });

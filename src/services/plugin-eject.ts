@@ -16,7 +16,7 @@ import {
 import { getPluginInfo } from "./registry-client";
 
 const execFileAsync = promisify(execFile);
-const UPSTREAM_SCHEMA = "milady-upstream-v1";
+const UPSTREAM_SCHEMA = "eliza-upstream-v1";
 
 function isSupportedUpstreamSchema(value: string): boolean {
   return value === UPSTREAM_SCHEMA;

@@ -83,7 +83,7 @@ describe("conversation message truncation route", () => {
   ]);
   const runtime = {
     agentId: "00000000-0000-0000-0000-000000000999" as UUID,
-    character: { name: "Milady" },
+    character: { name: "Eliza" },
     ensureConnection: vi.fn(async () => undefined),
     getService: vi.fn(() => null),
     getRoom: vi.fn(async () => null),

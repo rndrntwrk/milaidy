@@ -306,9 +306,7 @@ describe("buildChatAttachments", () => {
   });
 
   it("produces matching lengths for attachments and compactAttachments", () => {
-    const { attachments, compactAttachments } = buildChatAttachments([
-      img,
-    ]);
+    const { attachments, compactAttachments } = buildChatAttachments([img]);
     expect(attachments).toHaveLength(3);
     expect(compactAttachments).toHaveLength(3);
   });

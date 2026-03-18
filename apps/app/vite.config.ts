@@ -154,6 +154,12 @@ export default defineConfig({
     react(),
     electronCorsPlugin(),
   ],
+  esbuild: {
+    // Override tsconfig target — some extended configs use ES2024 which older
+    // esbuild does not recognize; this avoids "Unrecognized target environment"
+    // warnings regardless of tsconfig resolution.
+    target: "es2022",
+  },
   resolve: {
     dedupe: ["react", "react-dom", "three", "@sparkjsdev/spark"],
   },

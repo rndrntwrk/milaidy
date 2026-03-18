@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const REPOSITORY = "milady-ai/milady";
+const REPOSITORY = "eliza-ai/eliza";
 const OUTPUT_PATH = path.resolve(
   process.cwd(),
   "apps/homepage/src/generated/release-data.ts",
@@ -13,7 +13,7 @@ const OUTPUT_PATH = path.resolve(
 const RELEASES_URL = `https://api.github.com/repos/${REPOSITORY}/releases?per_page=20`;
 const RELEASES_PAGE_URL = `https://github.com/${REPOSITORY}/releases`;
 
-const installBaseUrl = "https://milady.ai";
+const installBaseUrl = "https://eliza.ai";
 const scripts = {
   shell: {
     url: `${installBaseUrl}/install.sh`,
@@ -203,7 +203,7 @@ function toModule(payload) {
 async function fetchReleases() {
   const headers = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "milady-homepage-release-data",
+    "User-Agent": "eliza-homepage-release-data",
   };
 
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
