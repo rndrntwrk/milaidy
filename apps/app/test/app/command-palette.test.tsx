@@ -102,6 +102,20 @@ describe("CommandPalette keyboard behavior", () => {
     addListenerSpy = vi.spyOn(window, "addEventListener");
   });
 
+  it("does not render the palette UI while closed", () => {
+    const ctx = createContext({
+      commandPaletteOpen: false,
+    });
+    mockUseApp.mockReturnValue(ctx);
+
+    let tree!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      tree = TestRenderer.create(React.createElement(CommandPalette));
+    });
+
+    expect(tree.toJSON()).toBeNull();
+  });
+
   it("handles arrow navigation when no commands match", () => {
     const ctx = createContext({
       commandQuery: "this-will-not-match-any-command",

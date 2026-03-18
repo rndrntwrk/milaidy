@@ -188,6 +188,10 @@ export function CommandPalette() {
     }
   }, [commandQuery, setState]);
 
+  if (!commandPaletteOpen) {
+    return null;
+  }
+
   return (
     <div
       className="fixed inset-0 z-[9999] flex items-start justify-center pt-30"
