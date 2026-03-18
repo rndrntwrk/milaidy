@@ -68,6 +68,58 @@ patchAppCoreMiladyAssets(root);
 patchAutonomousTypeError(root);
 
 /**
+ * Patch @elizaos/plugin-pdf broken ESM bundle.
+ *
+ * The published alpha.15 bundle exports `default3 as default` but never
+ * defines `default3`. We replace it with a harmless empty default export.
+ * Remove once a fixed @elizaos/plugin-pdf is published.
+ */
+function patchPluginPdfBrokenDefault() {
+  const relPaths = [
+    "dist/node/index.node.js",
+    "dist/index.js",
+  ];
+  const searchDirs = [
+    resolve(root, "node_modules/@elizaos/plugin-pdf"),
+  ];
+  // Also search inside .bun cache
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith("@elizaos+plugin-pdf@")) {
+          searchDirs.push(
+            resolve(bunCacheDir, entry, "node_modules/@elizaos/plugin-pdf"),
+          );
+        }
+      }
+    } catch {}
+  }
+
+  let patched = 0;
+  for (const dir of searchDirs) {
+    for (const relPath of relPaths) {
+      const target = resolve(dir, relPath);
+      if (!existsSync(target)) continue;
+      let src = readFileSync(target, "utf8");
+      const hasBroken = src.includes("default3 as default") || src.includes("{} as default");
+      if (!hasBroken) continue;
+      // Replace broken default exports with 'pdfPlugin as default' since
+      // pdfPlugin is the main export and default3 / {} were broken aliases for it.
+      src = src.replace(/\bdefault3 as default\b/g, "pdfPlugin as default");
+      src = src.replace(/\{} as default/g, "pdfPlugin as default");
+      writeFileSync(target, src, "utf8");
+      patched++;
+      console.log(`[patch-deps] Applied plugin-pdf default3 fix: ${target}`);
+    }
+  }
+  if (patched > 0) {
+    console.log(`[patch-deps] plugin-pdf: fixed ${patched} broken bundle(s).`);
+  }
+}
+patchPluginPdfBrokenDefault();
+
+/**
  * Vite caches prebundled dependencies under node_modules/.vite. When patch-deps
  * rewrites installed @elizaos packages, that cache can keep serving the old
  * upstream app-core bundle until it is cleared or Vite is forced to rebuild.
