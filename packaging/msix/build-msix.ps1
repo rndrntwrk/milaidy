@@ -104,6 +104,11 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "MSIX package created: $msixOutput"
 
+if ($env:SKIP_MSIX_SIGN) {
+  Write-Host "SKIP_MSIX_SIGN detected. Skipping MSIX verification as Azure Trusted Signing will run next."
+  exit 0
+}
+
 # Sign the MSIX package
 $pfxPath = Join-Path $env:RUNNER_TEMP "code-signing-cert.pfx"
 [System.IO.File]::WriteAllBytes($pfxPath, [System.Convert]::FromBase64String($certBase64))

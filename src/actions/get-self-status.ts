@@ -46,8 +46,9 @@ export const getSelfStatusAction: Action = {
 
   handler: async (runtime, _message, _state, options) => {
     const registry =
-      (runtime.getService("AWARENESS_REGISTRY") as AwarenessRegistry | null) ??
-      getGlobalAwarenessRegistry();
+      ((await runtime.getService(
+        "AWARENESS_REGISTRY",
+      )) as AwarenessRegistry | null) ?? getGlobalAwarenessRegistry();
     if (!registry) {
       return {
         text: "Self-awareness registry is not available.",

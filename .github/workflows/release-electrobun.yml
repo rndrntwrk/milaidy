@@ -653,11 +653,26 @@ jobs:
           WINDOWS_SIGN_CERT_BASE64: ${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}
           WINDOWS_SIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}
           WINDOWS_SIGN_TIMESTAMP_URL: ${{ secrets.WINDOWS_SIGN_TIMESTAMP_URL }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
         shell: pwsh
         run: pwsh -File apps/app/electrobun/scripts/sign-windows.ps1 -ArtifactsDir (Join-Path $PWD "apps/app/electrobun/artifacts") -BuildDir (Join-Path $PWD "apps/app/electrobun/build")
 
+      - name: Azure Trusted Signing (Executables)
+        if: matrix.platform.os == 'windows' && secrets.AZURE_TENANT_ID != ''
+        uses: azure/trusted-signing-action@v0.5.0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_SIGN_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_SIGN_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ secrets.AZURE_SIGN_PROFILE_NAME }}
+          files-folder: apps/app/electrobun
+          files-folder-filter: exe
+          files-folder-recurse: true
+
       - name: Verify Windows code signature
-        if: matrix.platform.os == 'windows' && env.WINDOWS_SIGN_CERT_BASE64 != ''
+        if: matrix.platform.os == 'windows' && (env.WINDOWS_SIGN_CERT_BASE64 != '' || secrets.AZURE_TENANT_ID != '')
         env:
           WINDOWS_SIGN_CERT_BASE64: ${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}
         shell: pwsh
@@ -693,12 +708,27 @@ jobs:
           WINDOWS_SIGN_CERT_BASE64: ${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}
           WINDOWS_SIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}
           WINDOWS_SIGN_TIMESTAMP_URL: ${{ secrets.WINDOWS_SIGN_TIMESTAMP_URL }}
+          SKIP_MSIX_SIGN: ${{ secrets.AZURE_TENANT_ID != '' && '1' || '' }}
         shell: pwsh
         run: |
           pwsh -File packaging/msix/build-msix.ps1 `
             -BuildDir (Join-Path $PWD "apps/app/electrobun/build") `
             -OutputDir (Join-Path $PWD "apps/app/electrobun/artifacts") `
             -Version "${{ needs.prepare.outputs.version }}"
+
+      - name: Azure Trusted Signing (MSIX)
+        if: matrix.platform.os == 'windows' && secrets.AZURE_TENANT_ID != ''
+        uses: azure/trusted-signing-action@v0.5.0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_SIGN_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_SIGN_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ secrets.AZURE_SIGN_PROFILE_NAME }}
+          files-folder: apps/app/electrobun/artifacts
+          files-folder-filter: msix
+          files-folder-recurse: true
 
       - name: Verify macOS signature and notarization
         if: matrix.platform.os == 'macos'

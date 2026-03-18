@@ -14,7 +14,11 @@
     "strict": true,
     "target": "es2023",
     "useDefineForClassFields": false,
-    "baseUrl": "."
+    "baseUrl": ".",
+    "paths": {
+      "@elizaos/core": ["../eliza/packages/typescript/src/index.node.ts"],
+      "@elizaos/core/*": ["../eliza/packages/typescript/src/*"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": [

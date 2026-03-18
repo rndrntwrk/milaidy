@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Development script that starts:
- * 1. The Milady dev server (runtime + API on port 31337) with restart support
+ * 1. The Milady dev server (\[(eliza|milady)(?:-api)?\]|runtime + API on port 31337) with restart support
  * 2. The vite app dev server (port 2138, proxies /api and /ws to 31337)
  *
  * Automatically kills zombie processes on both ports before starting.
@@ -32,14 +32,18 @@ import {
 } from "./lib/dev-ui-onchain.mjs";
 import { buildVisionDepsFailureMessage } from "./lib/dev-ui-vision.mjs";
 
-const API_PORT = 31337;
+const API_PORT = Number(process.env.MILADY_API_PORT) || 31337;
 
 // --app=<name> selects which app to serve (default: "app" → apps/app)
 const appArgMatch = process.argv.find((a) => a.startsWith("--app="));
 const appName = appArgMatch ? appArgMatch.split("=")[1] : "app";
-const APP_UI_PORTS = { app: 2138, home: 2140 };
+const APP_UI_PORTS = { app: 2138, home: 2142 };
 const UI_PORT = APP_UI_PORTS[appName] ?? 2138;
 const appDir = `apps/${appName}`;
+
+const nameArgMatch = process.argv.find((a) => a.startsWith("--name="));
+const cliName = nameArgMatch ? nameArgMatch.split("=")[1] : "eliza";
+const logPrefix = `[${cliName}]`;
 
 const cwd = process.cwd();
 const uiOnly = process.argv.includes("--ui-only");
@@ -111,12 +115,12 @@ async function promptYesNo(question, defaultYes = false) {
 async function installFoundry() {
   if (process.platform === "win32") {
     console.log(
-      `  ${green("[eliza]")} ${dim("Windows: install Foundry manually → https://book.getfoundry.sh/getting-started/installation")}`,
+      `  ${green(logPrefix)} ${dim("Windows: install Foundry manually → https://book.getfoundry.sh/getting-started/installation")}`,
     );
     return false;
   }
 
-  console.log(`  ${green("[eliza]")} Installing Foundry...`);
+  console.log(`  ${green(logPrefix)} Installing Foundry...`);
   const ok = await new Promise((resolve) => {
     const installer = spawn(
       "sh",
@@ -129,7 +133,7 @@ async function installFoundry() {
 
   if (!ok) {
     console.error(
-      `  ${green("[eliza]")} Foundry installer failed. Install manually: https://book.getfoundry.sh`,
+      `  ${green(logPrefix)} Foundry installer failed. Install manually: https://book.getfoundry.sh`,
     );
     return false;
   }
@@ -227,7 +231,7 @@ function loadMiladyConfigForDev() {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(
-      `${green("[eliza]")} Failed to parse config at ${configPath}: ${msg}`,
+      `${green(logPrefix)} Failed to parse config at ${configPath}: ${msg}`,
     );
     return null;
   }
@@ -596,7 +600,7 @@ async function bootstrapOnchainDev() {
     if (which("forge")) {
       try {
         console.log(
-          `  ${green("[eliza]")} Building contract artifacts (forge build --skip Harness)...`,
+          `  ${green(logPrefix)} Building contract artifacts (forge build --skip Harness)...`,
         );
         execSync("forge build --skip Harness", {
           cwd: path.join(cwd, "test", "contracts"),
@@ -689,7 +693,7 @@ async function bootstrapOnchainDev() {
         anvil.kill("SIGTERM");
         throw new Error(msg);
       }
-      console.log(`  ${green("[eliza]")} ${dim(msg)}`);
+      console.log(`  ${green(logPrefix)} ${dim(msg)}`);
     } else if (!which("anchor")) {
       const msg =
         "Anchor CLI not found in PATH. Skipping anchor localnet bootstrap.";
@@ -697,7 +701,7 @@ async function bootstrapOnchainDev() {
         anvil.kill("SIGTERM");
         throw new Error(msg);
       }
-      console.log(`  ${green("[eliza]")} ${dim(msg)}`);
+      console.log(`  ${green(logPrefix)} ${dim(msg)}`);
     } else {
       const { proc: anchorProc, getBufferedStderr: getAnchorStderr } =
         spawnWithBufferedLogs("anchor", ["localnet", "--skip-build"], {
@@ -737,7 +741,7 @@ async function bootstrapOnchainDev() {
           );
         }
         console.log(
-          `  ${green("[eliza]")} ${dim(`Anchor localnet unavailable: ${msg}`)}`,
+          `  ${green(logPrefix)} ${dim(`Anchor localnet unavailable: ${msg}`)}`,
         );
       }
     }
@@ -777,7 +781,7 @@ async function bootstrapOnchainDev() {
 const SUPPRESS_RE = /^\s*(Info|Warn|Debug|Trace)\s/;
 const SUPPRESS_UNSTRUCTURED_RE = /^\[dotenv[@\d]/;
 const STARTUP_RE =
-  /\[eliza(?:-api)?\]|runtime bootstrap|runtime ready|runtime created|api server ready|plugin.*load|startup.*complete|\d+ms|\[PTYService|\[SwarmCoordinator\]|Triage:/i;
+  /\[eliza(?:-api)?\]|\[(eliza|milady)(?:-api)?\]|runtime bootstrap|\[(eliza|milady)(?:-api)?\]|runtime ready|\[(eliza|milady)(?:-api)?\]|runtime created|api server ready|plugin.*load|startup.*complete|\d+ms|\[PTYService|\[SwarmCoordinator\]|Triage:/i;
 
 function createErrorFilter(dest) {
   let buf = "";
@@ -950,11 +954,11 @@ killPort(UI_PORT);
 
 // Ensure vision dependencies are installed
 try {
-  execSync("node scripts/ensure-vision-deps.mjs", { stdio: "inherit" });
+  execSync(`node scripts/ensure-vision-deps.mjs --name=${cliName}`, { stdio: "inherit" });
 } catch (error) {
   process.env.ELIZA_VISION_DEPS_STATUS = "degraded";
   console.warn(
-    buildVisionDepsFailureMessage(error, "node scripts/ensure-vision-deps.mjs"),
+    buildVisionDepsFailureMessage(error, `node scripts/ensure-vision-deps.mjs --name=${cliName}`),
   );
 }
 
@@ -1017,6 +1021,7 @@ function startVite() {
     env: {
       ...process.env,
       ELIZA_API_PORT: String(API_PORT),
+      MILADY_API_PORT: String(API_PORT),
       ELIZA_HOME_API_PORT: String(API_PORT),
     },
     stdio: ["inherit", "pipe", "pipe"],
@@ -1026,7 +1031,7 @@ function startVite() {
     const text = data.toString();
     if (text.includes("ready")) {
       console.log(
-        `\n  ${green("[eliza]")} ${orange(`http://localhost:${UI_PORT}/`)}\n`,
+        `\n  ${green(logPrefix)} ${orange(`http://localhost:${UI_PORT}/`)}\n`,
       );
     }
   });
@@ -1038,7 +1043,7 @@ function startVite() {
   viteProcess.on("exit", (code) => {
     if (shuttingDown) return;
     if (code !== 0) {
-      console.error(`${green("[eliza]")} vite exited with code ${code}`);
+      console.error(`${green(logPrefix)} vite exited with code ${code}`);
       cleanup(code ?? 1);
     }
   });
@@ -1047,10 +1052,10 @@ function startVite() {
 if (uiOnly) {
   startVite();
 } else {
-  console.log(`${orange("\neliza dev mode")}\n`);
-  console.log(`  ${green("[eliza]")} ${green("Starting dev server...")}\n`);
+  console.log(`${orange(`\n${cliName} dev mode`)}\n`);
+  console.log(`  ${green(logPrefix)} ${green("Starting dev server...")}\n`);
   console.log(
-    `  ${green("[eliza]")} ${dim(
+    `  ${green(logPrefix)} ${dim(
       `API log level=${devLogLevel}${
         quietApiLogs
           ? " (errors only)"
@@ -1081,7 +1086,7 @@ if (uiOnly) {
   let chainEnv = {};
   if (onchainEnabled) {
     console.log(
-      `  ${green("[eliza]")} ${green("Bootstrapping local chain...")}`,
+      `  ${green(logPrefix)} ${green("Bootstrapping local chain...")}`,
     );
     try {
       const chain = await bootstrapOnchainDev();
@@ -1091,28 +1096,28 @@ if (uiOnly) {
       tempOnchainDir = chain.tempDir;
 
       console.log(
-        `  ${green("[eliza]")} ${dim(`Anvil ready at ${ANVIL_RPC_URL} (chainId=${ANVIL_CHAIN_ID})`)}`,
+        `  ${green(logPrefix)} ${dim(`Anvil ready at ${ANVIL_RPC_URL} (chainId=${ANVIL_CHAIN_ID})`)}`,
       );
       console.log(
-        `  ${green("[eliza]")} ${dim(`Registry deployed: ${chain.registryAddress}`)}`,
+        `  ${green(logPrefix)} ${dim(`Registry deployed: ${chain.registryAddress}`)}`,
       );
       console.log(
-        `  ${green("[eliza]")} ${dim(`Collection deployed: ${chain.collectionAddress}`)}`,
+        `  ${green(logPrefix)} ${dim(`Collection deployed: ${chain.collectionAddress}`)}`,
       );
       if (chain.anchorConfigured) {
         console.log(
-          `  ${green("[eliza]")} ${dim(`Anchor localnet ready at ${ANCHOR_RPC_URL}`)}`,
+          `  ${green(logPrefix)} ${dim(`Anchor localnet ready at ${ANCHOR_RPC_URL}`)}`,
         );
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`  ${green("[eliza]")} ${msg}`);
+      console.error(`  ${green(logPrefix)} ${msg}`);
       cleanup(1);
       process.exit(1);
     }
   } else {
     console.log(
-      `  ${green("[eliza]")} ${dim("On-chain bootstrap disabled (ELIZA_DEV_ONCHAIN=0)")}`,
+      `  ${green(logPrefix)} ${dim("On-chain bootstrap disabled (ELIZA_DEV_ONCHAIN=0)")}`,
     );
   }
 
@@ -1128,7 +1133,7 @@ if (uiOnly) {
   );
   if (resolvedStealthImports.length > 0) {
     console.log(
-      `  ${green("[eliza]")} ${dim(`Stealth imports enabled: ${resolvedStealthImports.join(", ")}`)}`,
+      `  ${green(logPrefix)} ${dim(`Stealth imports enabled: ${resolvedStealthImports.join(", ")}`)}`,
     );
   }
 
@@ -1140,7 +1145,7 @@ if (uiOnly) {
           filePath,
         ]),
         "--watch",
-        "src/runtime/dev-server.ts",
+        "src/\[(eliza|milady)(?:-api)?\]|runtime/dev-server.ts",
       ]
     : [
         "node",
@@ -1148,7 +1153,7 @@ if (uiOnly) {
         "--import",
         "tsx",
         "--watch",
-        "src/runtime/dev-server.ts",
+        "src/\[(eliza|milady)(?:-api)?\]|runtime/dev-server.ts",
       ];
   apiProcess = spawn(apiCmd[0], apiCmd.slice(1), {
     cwd,
@@ -1180,7 +1185,7 @@ if (uiOnly) {
   apiProcess.on("exit", (code) => {
     if (shuttingDown) return;
     if (code !== 0) {
-      console.error(`\n  ${green("[eliza]")} Server exited with code ${code}`);
+      console.error(`\n  ${green(logPrefix)} Server exited with code ${code}`);
       cleanup(code ?? 1);
     }
   });
@@ -1189,7 +1194,7 @@ if (uiOnly) {
   const dots = setInterval(() => {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
     process.stdout.write(
-      `\r  ${green("[eliza]")} ${green(`Waiting for API server... ${dim(`${elapsed}s`)}`)}`,
+      `\r  ${green(logPrefix)} ${green(`Waiting for API server... ${dim(`${elapsed}s`)}`)}`,
     );
   }, 1000);
 
@@ -1198,13 +1203,13 @@ if (uiOnly) {
       clearInterval(dots);
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       console.log(
-        `\r  ${green("[eliza]")} ${green(`API server ready`)} ${dim(`(${elapsed}s)`)}          `,
+        `\r  ${green(logPrefix)} ${green(`API server ready`)} ${dim(`(${elapsed}s)`)}          `,
       );
       startVite();
     })
     .catch((err) => {
       clearInterval(dots);
-      console.error(`\n  ${green("[eliza]")} ${err.message}`);
+      console.error(`\n  ${green(logPrefix)} ${err.message}`);
       cleanup(1);
     });
 }

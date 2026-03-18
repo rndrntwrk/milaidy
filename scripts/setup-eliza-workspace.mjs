@@ -4,6 +4,8 @@ import { spawn, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -20,9 +22,7 @@ export const LOCAL_ELIZA_FORCE_ENV = "ELIZA_FORCE_LOCAL_ELIZA";
 export const ELIZA_GIT_URL = "https://github.com/elizaos/eliza.git";
 export const ELIZA_BRANCH = "develop";
 export const ELIZA_REQUIRED_FILES = [
-  path.join("packages", "autonomous", "src", "index.ts"),
-  path.join("packages", "app-core", "src", "index.ts"),
-  path.join("packages", "ui", "package.json"),
+  "package.json",
 ];
 export const ELIZA_BUILD_STEPS = [
   {
@@ -42,28 +42,6 @@ export const ELIZA_BUILD_STEPS = [
     cwd: path.join("packages", "ui"),
     args: ["run", "build"],
     label: "@elizaos/ui",
-  },
-];
-export const ELIZA_LINKS = [
-  {
-    target: path.join("packages", "autonomous"),
-    links: [path.join("node_modules", "@elizaos", "autonomous")],
-  },
-  {
-    target: path.join("packages", "app-core"),
-    links: [
-      path.join("node_modules", "@elizaos", "app-core"),
-      path.join("apps", "app", "node_modules", "@elizaos", "app-core"),
-      path.join("apps", "home", "node_modules", "@elizaos", "app-core"),
-    ],
-  },
-  {
-    target: path.join("packages", "ui"),
-    links: [
-      path.join("node_modules", "@elizaos", "ui"),
-      path.join("apps", "app", "node_modules", "@elizaos", "ui"),
-      path.join("apps", "home", "node_modules", "@elizaos", "ui"),
-    ],
   },
 ];
 
@@ -195,12 +173,71 @@ export function getElizaPackageLinks(
   repoRoot = DEFAULT_REPO_ROOT,
   elizaRoot = getSiblingElizaRoot(repoRoot),
 ) {
-  return ELIZA_LINKS.flatMap(({ target, links }) =>
-    links.map((relativeLinkPath) => ({
-      linkPath: path.join(repoRoot, relativeLinkPath),
-      targetPath: path.join(elizaRoot, target),
-    })),
-  );
+  const links = [];
+  const searchDirs = [
+    path.join(elizaRoot, "packages"),
+    path.join(elizaRoot, "plugins"),
+  ];
+
+  for (const parentDir of searchDirs) {
+    if (!existsSync(parentDir)) continue;
+
+    let dirEntries = [];
+    try {
+      dirEntries = readdirSync(parentDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of dirEntries) {
+      if (!entry.isDirectory()) continue;
+
+      const targetPath = path.join(parentDir, entry.name);
+      const pkgPath = path.join(targetPath, "package.json");
+
+      if (!existsSync(pkgPath)) continue;
+
+      try {
+        const pkgJson = JSON.parse(readFileSync(pkgPath, "utf-8"));
+        const name = pkgJson.name;
+        if (!name || !name.startsWith("@elizaos/")) continue;
+
+        const basename = name.slice("@elizaos/".length);
+        const relativeTarget = path.relative(elizaRoot, targetPath);
+
+        const linkPaths = [
+          path.join(repoRoot, "node_modules", "@elizaos", basename),
+          path.join(
+            repoRoot,
+            "apps",
+            "app",
+            "node_modules",
+            "@elizaos",
+            basename,
+          ),
+          path.join(
+            repoRoot,
+            "apps",
+            "home",
+            "node_modules",
+            "@elizaos",
+            basename,
+          ),
+        ];
+
+        for (const linkPath of linkPaths) {
+          links.push({
+            linkPath,
+            targetPath: path.join(elizaRoot, relativeTarget),
+          });
+        }
+      } catch (e) {
+        // Skip unparseable package.json
+      }
+    }
+  }
+
+  return links;
 }
 
 export function isPackageLinkCurrent(linkPath, targetPath) {

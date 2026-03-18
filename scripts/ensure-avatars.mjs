@@ -3,7 +3,7 @@
  * Ensure avatar assets (VRMs, animations, backgrounds) are present in the app.
  *
  * On a fresh clone, apps/app/public/vrms/ and animations/ may be empty or
- * contain only Git LFS pointers.  This script clones the eliza-ai/avatars
+ * contain only Git LFS pointers.  This script clones the elizaos/avatars
  * repository (org-owned) into a temp directory and copies the assets into
  * the correct locations under apps/app/public/.
  *
@@ -41,9 +41,9 @@ const UNUSED_ANIMATION_PATHS = [
   join("mixamo", "Crying.fbx"),
 ];
 
-// eliza-ai/avatars is an org-owned repo in the eliza-ai GitHub organization.
+// elizaos/avatars is an org-owned repo in the elizaos GitHub organization.
 // Pinned to a specific commit for reproducible installs (supply-chain safety).
-const AVATARS_REPO = "https://github.com/eliza-ai/avatars.git";
+const AVATARS_REPO = "https://github.com/elizaos/avatars.git";
 const AVATARS_COMMIT = "50f6bf0ad6db583581d4cbaeb377ca005b45195b";
 const AVATARS_REF = process.env.MILADY_AVATARS_REF?.trim() || "";
 const TAG = "[ensure-avatars]";

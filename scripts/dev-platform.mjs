@@ -41,7 +41,7 @@ const services = [
           args: ["--watch", "src/runtime/dev-server.ts"],
           cwd: repoRoot,
           env: {
-            ELIZA_PORT: "31337",
+            ELIZA_PORT: String(process.env.MILADY_API_PORT || 31337),
             ELIZA_HEADLESS: "1",
           },
         },

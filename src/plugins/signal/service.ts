@@ -70,7 +70,9 @@ export class SignalNativeService extends Service {
   }
 
   static async stopRuntime(runtime: IAgentRuntime): Promise<void> {
-    const svc = runtime.getService("signal") as SignalNativeService | null;
+    const svc = (await runtime.getService(
+      "signal",
+    )) as SignalNativeService | null;
     if (svc) {
       await svc.stop();
     }

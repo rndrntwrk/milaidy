@@ -169,7 +169,8 @@ const SETUP_GUIDE_ANCHORS = {
   "custom-rtmp": "#custom-rtmp",
 };
 
-const ELIZA_REPO_ROOT = "https://github.com/eliza-ai/eliza";
+const ELIZA_REPO_ROOT = "https://github.com/elizaos/eliza";
+const MILADY_REPO_ROOT = "https://github.com/milady-ai/milady";
 const TAG_STOPWORDS = new Set([
   "plugin",
   "plugins",
@@ -244,7 +245,7 @@ export function normalizeRepositoryUrl(repository) {
 function deriveMiladyRepositoryUrl(npmName, dirName) {
   if (!npmName?.startsWith("@elizaai/")) return undefined;
   if (!dirName?.startsWith("plugin-")) return undefined;
-  return `${ELIZA_REPO_ROOT}/tree/main/packages/${dirName}`;
+  return `${MILADY_REPO_ROOT}/tree/main/packages/${dirName}`;
 }
 
 function readLocalPackageMetadata(dirName, npmName) {

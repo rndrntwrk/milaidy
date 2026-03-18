@@ -54,15 +54,29 @@ function createRuntimeWithTrajectoryLogger(logger: Record<string, unknown>): {
   return { runtime, dbExecute };
 }
 
-function withNodeEnv<T>(value: string | undefined, run: () => T): T {
+function withNodeEnv<T>(
+  value: string | undefined,
+  run: () => T | Promise<T>,
+): T | Promise<T> {
   const previous = process.env.NODE_ENV;
   if (value === undefined) delete process.env.NODE_ENV;
   else process.env.NODE_ENV = value;
-  try {
-    return run();
-  } finally {
+
+  const restore = () => {
     if (previous === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = previous;
+  };
+
+  try {
+    const result = run();
+    if (result instanceof Promise) {
+      return result.finally(restore);
+    }
+    restore();
+    return result;
+  } catch (error) {
+    restore();
+    throw error;
   }
 }
 
@@ -297,7 +311,7 @@ describe("installDatabaseTrajectoryLogger", () => {
     expect(insertSql).toContain("implement feature X");
   });
 
-  it("applies the production default when patching an enabled logger", () => {
+  it("applies the production default when patching an enabled logger", async () => {
     const setEnabled = vi.fn();
     const logger = {
       listTrajectories: vi.fn(),
@@ -309,7 +323,9 @@ describe("installDatabaseTrajectoryLogger", () => {
     } as Record<string, unknown>;
 
     const { runtime } = createRuntimeWithTrajectoryLogger(logger);
-    withNodeEnv("production", () => installDatabaseTrajectoryLogger(runtime));
+    await withNodeEnv("production", () =>
+      installDatabaseTrajectoryLogger(runtime),
+    );
 
     expect(setEnabled).toHaveBeenCalledWith(false);
   });

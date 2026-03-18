@@ -113,7 +113,9 @@ export class WhatsAppBaileysService extends Service {
   }
 
   static async stopRuntime(runtime: IAgentRuntime): Promise<void> {
-    const svc = runtime.getService("whatsapp") as WhatsAppBaileysService | null;
+    const svc = (await runtime.getService(
+      "whatsapp",
+    )) as WhatsAppBaileysService | null;
     if (svc) {
       await svc.stop();
     }

@@ -74,7 +74,7 @@ describe("plugin metadata discovery", () => {
           homepage: "https://retake.tv",
           repository: {
             type: "git",
-            url: "git+https://github.com/eliza-ai/eliza.git",
+            url: "git+https://github.com/elizaos/eliza.git",
           },
           keywords: ["streaming", "video", "creator"],
           agentConfig: {
@@ -110,7 +110,7 @@ describe("plugin metadata discovery", () => {
     expect(plugins).toHaveLength(1);
     expect(plugins[0]?.category).toBe("streaming");
     expect(plugins[0]?.homepage).toBe("https://retake.tv");
-    expect(plugins[0]?.repository).toBe("https://github.com/eliza-ai/eliza");
+    expect(plugins[0]?.repository).toBe("https://github.com/elizaos/eliza");
     expect(plugins[0]?.setupGuideUrl).toMatch(
       /^https:\/\/docs\.(elizaos|eliza|eliza)\.ai\/plugin-setup-guide#retaketv$/,
     );

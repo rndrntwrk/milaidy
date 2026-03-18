@@ -415,7 +415,7 @@ public class SwabblePlugin: CAPPlugin, CAPBridgedPlugin {
             ]
         }
 
-        var gateConfig: GateConfig {
+        fileprivate var gateConfig: GateConfig {
             GateConfig(triggers: triggers, minPostTriggerGap: minPostTriggerGap,
                        minCommandLength: minCommandLength)
         }

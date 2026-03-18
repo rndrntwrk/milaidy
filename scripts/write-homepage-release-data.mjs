@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const REPOSITORY = "eliza-ai/eliza";
+const REPOSITORY = "milady-ai/milady";
 const OUTPUT_PATH = path.resolve(
   process.cwd(),
   "apps/homepage/src/generated/release-data.ts",

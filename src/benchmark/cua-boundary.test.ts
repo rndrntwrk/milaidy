@@ -4,7 +4,7 @@
  * resolveHost(), resolvePort(), parseBooleanValue(), compactCuaStep/Result(),
  * handleCuaRoute(), and CUA permission mapping.
  *
- * @see https://github.com/eliza-ai/eliza/issues/590
+ * @see https://github.com/elizaos/eliza/issues/590
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

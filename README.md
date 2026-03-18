@@ -280,6 +280,25 @@ milady doctor             # diagnose issues
 
 ---
 
+## Developing Eliza Packages Locally
+
+Milady relies heavily on `@elizaos/*` packages internally. If you want to customize Eliza plugins, or work on `../eliza` and see your changes reflected in `milady` instantly, we have a workspace linking tool.
+
+The setup script handles everything automatically—it will even clone `eliza` for you into `../eliza` if you don't already have it checked out.
+
+Just run the workspace setup script:
+```bash
+bun run setup:eliza-workspace
+```
+This script will:
+- Discover all `@elizaos/*` packages inside `../eliza/packages/` and `../eliza/plugins/`.
+- Compile required prerequisites.
+- Automatically symlink each discovered package directly into `milady/node_modules/@elizaos/` and its `apps/*/node_modules/` folders.
+
+Whenever you save a file in `../eliza`, TypeScript and bundlers running in `milady` will pick up the live local package rather than depending on published NPM packages. Just restart your `milady` instances to pull in changes for backend code.
+
+---
+
 ## TUI (Terminal UI)
 
 When running, milady shows a live terminal interface:

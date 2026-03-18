@@ -61,76 +61,76 @@ function which(cmd) {
 
 function installMacOs() {
   if (which("imagesnap")) {
-    console.log(`  ${green("[eliza]")} ${dim("imagesnap installed")}`);
+    console.log(`  ${green(logPrefix)} ${dim("imagesnap installed")}`);
     return;
   }
 
   if (!which("brew")) {
     console.warn(
-      `  ${orange("[eliza]")} ${dim("Homebrew not found. Install manually: brew install imagesnap")}`,
+      `  ${orange(logPrefix)} ${dim("Homebrew not found. Install manually: brew install imagesnap")}`,
     );
     return;
   }
 
-  console.log(`  ${green("[eliza]")} Installing imagesnap via Homebrew...`);
+  console.log(`  ${green(logPrefix)} Installing imagesnap via Homebrew...`);
   try {
     execSync("brew install imagesnap", { stdio: "inherit" });
-    console.log(`  ${green("[eliza]")} imagesnap installed successfully`);
+    console.log(`  ${green(logPrefix)} imagesnap installed successfully`);
   } catch (_err) {
     console.error(
-      `  ${orange("[eliza]")} ${dim("Failed to install imagesnap")}`,
+      `  ${orange(logPrefix)} ${dim("Failed to install imagesnap")}`,
     );
   }
 }
 
 function installLinux() {
   if (which("fswebcam")) {
-    console.log(`  ${green("[eliza]")} ${dim("fswebcam installed")}`);
+    console.log(`  ${green(logPrefix)} ${dim("fswebcam installed")}`);
     return;
   }
 
   if (!which("apt-get")) {
     console.warn(
-      `  ${orange("[eliza]")} ${dim("apt-get not found. Install manually: sudo apt-get install fswebcam")}`,
+      `  ${orange(logPrefix)} ${dim("apt-get not found. Install manually: sudo apt-get install fswebcam")}`,
     );
     return;
   }
 
-  console.log(`  ${green("[eliza]")} Installing fswebcam via apt-get...`);
+  console.log(`  ${green(logPrefix)} Installing fswebcam via apt-get...`);
   try {
     execSync("sudo apt-get install -y fswebcam", { stdio: "inherit" });
-    console.log(`  ${green("[eliza]")} fswebcam installed successfully`);
+    console.log(`  ${green(logPrefix)} fswebcam installed successfully`);
   } catch (_err) {
     console.error(
-      `  ${orange("[eliza]")} ${dim("Failed to install fswebcam. (Sudo privileges may be required)")}`,
+      `  ${orange(logPrefix)} ${dim("Failed to install fswebcam. (Sudo privileges may be required)")}`,
     );
   }
 }
 
 function installWindows() {
   if (which("ffmpeg")) {
-    console.log(`  ${green("[eliza]")} ${dim("ffmpeg installed")}`);
+    console.log(`  ${green(logPrefix)} ${dim("ffmpeg installed")}`);
     return;
   }
 
   if (!which("winget")) {
     console.warn(
-      `  ${orange("[eliza]")} ${dim("winget not found. Install manually from ffmpeg.org and add to PATH.")}`,
+      `  ${orange(logPrefix)} ${dim("winget not found. Install manually from ffmpeg.org and add to PATH.")}`,
     );
     return;
   }
 
-  console.log(`  ${green("[eliza]")} Installing ffmpeg via winget...`);
+  console.log(`  ${green(logPrefix)} Installing ffmpeg via winget...`);
   try {
     execSync(
       "winget install -e --id Gyan.FFmpeg --accept-source-agreements --accept-package-agreements",
       { stdio: "inherit" },
     );
     console.log(
-      `  ${green("[eliza]")} ffmpeg installed successfully. Restart your terminal if necessary.`,
+      `  ${green(logPrefix)} ffmpeg installed successfully. Restart your terminal if necessary.`,
     );
   } catch (_err) {
-    console.error(`  ${orange("[eliza]")} ${dim("Failed to install ffmpeg")}`);
+    console.error(`  ${orange(logPrefix)} ${dim("Failed to install ffmpeg")}`);
   }
 }
 
@@ -149,7 +149,7 @@ function main() {
   } else {
     // Unsupported platform
     console.log(
-      `  ${green("[eliza]")} ${dim(`Platform ${platform} unsupported for automatic camera deps`)}`,
+      `  ${green(logPrefix)} ${dim(`Platform ${platform} unsupported for automatic camera deps`)}`,
     );
   }
 }

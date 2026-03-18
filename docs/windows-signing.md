@@ -48,18 +48,31 @@ Add these at: **Settings > Secrets and variables > Actions > New repository secr
 
 ### For Azure Trusted Signing:
 
-This requires modifying the workflow to use the Azure action instead of signtool. See the Azure Trusted Signing documentation.
+The workflow natively supports `azure/trusted-signing-action`. To use it, add these repository secrets:
+
+| Secret | Description |
+|--------|-------------|
+| `AZURE_TENANT_ID` | Your Azure Tenant ID |
+| `AZURE_CLIENT_ID` | The App Registration Client ID |
+| `AZURE_CLIENT_SECRET` | The App Registration Client Secret |
+| `AZURE_SIGN_ENDPOINT` | Your Trusted Signing Endpoint (e.g., `https://eus.codesigning.azure.net/`) |
+| `AZURE_SIGN_ACCOUNT_NAME` | The name of your Trusted Signing Account |
+| `AZURE_SIGN_PROFILE_NAME` | The name of your Certificate Profile |
+
+> **Need help securely obtaining these Azure credentials?** Check out the full setup guide in [azure-trusted-signing-setup.md](./azure-trusted-signing-setup.md).
+
+When `AZURE_TENANT_ID` is present, the pipeline will automatically skip PFX-based signing and use Azure Trusted Signing for both executables and the MSIX package.
 
 ## How It Works
 
-1. `release-electrobun.yml` checks for `WINDOWS_SIGN_CERT_BASE64`
-2. If present, runs `sign-windows.ps1` which:
+1. `release-electrobun.yml` checks for Azure Trusted Signing secrets (`AZURE_TENANT_ID`). If found, it natively uses `azure/trusted-signing-action` and skips PFX signing.
+2. If Azure secrets are not found, it checks for `WINDOWS_SIGN_CERT_BASE64` and runs `sign-windows.ps1` which:
    - Decodes the PFX to a temp file
    - Signs all `.exe` files with `signtool` (SHA-256 + timestamp)
    - Verifies each signature
    - Cleans up the temp certificate
-3. If absent, logs a warning and builds unsigned (no failure)
-4. After signing, `build-msix.ps1` creates and signs the MSIX package
+3. If neither are present, logs a warning and builds unsigned (no failure).
+4. After executable signing, `build-msix.ps1` creates the MSIX package. It signs the MSIX using PFX if available, or leaves it for Azure Trusted Signing to handle in the next workflow step.
 
 ## SmartScreen Notes
 
