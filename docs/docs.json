@@ -27,7 +27,7 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Docs",
+        "tab": "Getting Started",
         "groups": [
           {
             "group": "Getting Started",
@@ -40,39 +40,108 @@
             ]
           },
           {
-            "group": "Agent",
-            "pages": [
-              "agents/character-interface",
-              "agents/personality-and-behavior",
-              "agents/memory-and-state",
-              "agents/runtime-and-lifecycle"
-            ]
-          },
-          {
             "group": "Configuration",
-            "pages": ["configuration", "config-schema", "model-providers"]
+            "pages": [
+              "configuration",
+              "config-schema",
+              "model-providers"
+            ]
           },
           {
             "group": "Guides",
             "pages": [
+              "guides/beginners-user-guide",
+              "guides/beginners-development-guide",
+              "guides/learning-paths",
+              "guides/developer-playbook",
+              "guides/first-extension-walkthrough",
               "guides/autonomous-mode",
-              "guides/custom-actions",
-              "guides/triggers",
               "guides/hooks",
-              "guides/knowledge",
-              "guides/media-generation",
-              "guides/training",
-              "guides/agent-export",
-              "guides/themes",
               "guides/config-includes",
               "guides/emotes",
               "guides/local-models",
               "guides/mcp-marketplace",
-              "chat-commands"
+              "chat-commands",
+              "guides/media-generation",
+              "plugin-setup-guide",
+              "guides/themes",
+              "guides/agent-export"
             ]
           },
           {
-            "group": "Connectors",
+            "group": "Apps & Platforms",
+            "pages": [
+              "apps/overview",
+              "apps/desktop",
+              "apps/desktop/native-modules",
+              "apps/desktop/deep-linking",
+              "apps/mobile",
+              "apps/mobile/capacitor-plugins",
+              "apps/mobile/build-guide",
+              "apps/chrome-extension",
+              "apps/tui"
+            ]
+          },
+          {
+            "group": "Infrastructure",
+            "pages": [
+              "deployment",
+              "self-updates",
+              "guides/cloud"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "guides/contribution-guide"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Dashboard",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "apps/dashboard",
+              "dashboard/pairing"
+            ]
+          },
+          {
+            "group": "Chat",
+            "pages": [
+              "dashboard/chat"
+            ]
+          },
+          {
+            "group": "Stream",
+            "pages": [
+              "dashboard/stream"
+            ]
+          },
+          {
+            "group": "Character",
+            "pages": [
+              "agents/character-interface",
+              "agents/personality-and-behavior",
+              "agents/memory-and-state"
+            ]
+          },
+          {
+            "group": "Wallets",
+            "pages": [
+              "guides/wallet"
+            ]
+          },
+          {
+            "group": "Knowledge",
+            "pages": [
+              "guides/knowledge"
+            ]
+          },
+          {
+            "group": "Social",
             "pages": [
               "guides/connectors",
               "guides/whatsapp",
@@ -83,74 +152,34 @@
             ]
           },
           {
-            "group": "Infrastructure",
+            "group": "Apps",
             "pages": [
-              "guides/wallet",
-              "guides/sandbox",
-              "guides/cloud",
-              "deployment",
-              "self-updates"
+              "dashboard/apps"
             ]
           },
           {
-            "group": "Contributing",
-            "pages": ["guides/contribution-guide"]
+            "group": "Settings",
+            "pages": [
+              "apps/dashboard/settings",
+              "apps/dashboard/talk-mode"
+            ]
           }
         ]
       },
       {
-        "tab": "Apps",
+        "tab": "Advanced",
         "groups": [
           {
-            "group": "Overview",
-            "pages": ["apps/overview"]
-          },
-          {
-            "group": "Desktop App",
-            "pages": [
-              "apps/desktop",
-              "apps/desktop/native-modules",
-              "apps/desktop/deep-linking"
-            ]
-          },
-          {
-            "group": "Mobile App",
-            "pages": [
-              "apps/mobile",
-              "apps/mobile/capacitor-plugins",
-              "apps/mobile/build-guide"
-            ]
-          },
-          {
-            "group": "Chrome Extension",
-            "pages": ["apps/chrome-extension"]
-          },
-          {
-            "group": "Dashboard",
-            "pages": ["apps/dashboard", "apps/dashboard/settings"]
-          },
-          {
-            "group": "TUI",
-            "pages": ["apps/tui"]
-          }
-        ]
-      },
-      {
-        "tab": "Plugins",
-        "groups": [
-          {
-            "group": "Overview",
+            "group": "Plugins",
             "pages": [
               "plugins/overview",
+              "plugins/decision-guide",
               "plugins/architecture",
-              "plugins/registry"
-            ]
-          },
-          {
-            "group": "Development",
-            "pages": [
+              "plugins/registry",
+              "guides/registry",
               "plugins/create-a-plugin",
               "plugins/development",
+              "plugins/testing",
               "plugins/local-plugins",
               "plugins/plugin-eject",
               "plugins/patterns",
@@ -160,8 +189,63 @@
           },
           {
             "group": "Skills",
-            "pages": ["plugins/skills"]
+            "pages": [
+              "plugins/skills"
+            ]
           },
+          {
+            "group": "Actions",
+            "pages": [
+              "guides/custom-actions"
+            ]
+          },
+          {
+            "group": "Triggers",
+            "pages": [
+              "guides/triggers"
+            ]
+          },
+          {
+            "group": "Fine-Tuning",
+            "pages": [
+              "guides/training"
+            ]
+          },
+          {
+            "group": "Trajectories",
+            "pages": [
+              "advanced/trajectories"
+            ]
+          },
+          {
+            "group": "Runtime",
+            "pages": [
+              "agents/runtime-and-lifecycle"
+            ]
+          },
+          {
+            "group": "Database",
+            "pages": [
+              "advanced/database"
+            ]
+          },
+          {
+            "group": "Logs",
+            "pages": [
+              "advanced/logs"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "guides/sandbox"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Plugin Registry",
+        "groups": [
           {
             "group": "Core Plugins",
             "pages": [
@@ -191,12 +275,21 @@
               "plugin-registry/platform/twitter",
               "plugin-registry/platform/slack",
               "plugin-registry/platform/whatsapp",
-              "plugin-registry/platform/farcaster"
+              "plugin-registry/platform/farcaster",
+              "plugin-registry/platform/signal",
+              "plugin-registry/platform/imessage",
+              "plugin-registry/platform/bluebubbles",
+              "plugin-registry/platform/msteams",
+              "plugin-registry/platform/googlechat",
+              "plugin-registry/platform/mattermost"
             ]
           },
           {
             "group": "DeFi & Blockchain",
-            "pages": ["plugin-registry/defi/evm", "plugin-registry/defi/solana"]
+            "pages": [
+              "plugin-registry/defi/evm",
+              "plugin-registry/defi/solana"
+            ]
           },
           {
             "group": "Feature Plugins",
@@ -246,12 +339,22 @@
               "rest/diagnostics",
               "rest/subscriptions",
               "rest/trajectories",
-              "rest/v1-compat"
+              "rest/v1-compat",
+              "rest/stream",
+              "rest/memory",
+              "rest/avatar",
+              "rest/whatsapp-pairing",
+              "rest/bug-report",
+              "rest/ltcg",
+              "rest/coding-agents",
+              "rest/whitelist"
             ]
           },
           {
             "group": "WebSocket",
-            "pages": ["websocket-events"]
+            "pages": [
+              "websocket-events"
+            ]
           },
           {
             "group": "Runtime Reference",
@@ -272,7 +375,9 @@
         "groups": [
           {
             "group": "Overview",
-            "pages": ["cli/overview"]
+            "pages": [
+              "cli/overview"
+            ]
           },
           {
             "group": "Commands",
@@ -291,7 +396,9 @@
           },
           {
             "group": "Environment",
-            "pages": ["cli/environment"]
+            "pages": [
+              "cli/environment"
+            ]
           }
         ]
       }
@@ -305,6 +412,12 @@
     }
   },
   "contextual": {
-    "options": ["copy", "view", "chatgpt", "claude", "perplexity"]
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "perplexity"
+    ]
   }
 }

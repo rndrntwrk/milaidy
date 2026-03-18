@@ -2,7 +2,7 @@
  * Root App component — routing shell.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useApp } from "./AppContext.js";
 import { TAB_GROUPS } from "./navigation.js";
 import { Header } from "./components/Header.js";
@@ -36,9 +36,37 @@ import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
 import { MiladyOsDashboard } from "./components/MiladyOsDashboard.js";
 import { MiladyBootShell } from "./components/MiladyBootShell.js";
 import { ActivityIcon, ThreadsIcon } from "./components/ui/Icons.js";
+import { StreamView } from "./components/StreamView.js";
+import {
+  COMPANION_OVERLAY_TABS,
+  CompanionShell,
+} from "./components/CompanionShell.js";
+import { CompanionView } from "./components/CompanionView.js";
+import { ConnectionFailedBanner } from "./components/ConnectionFailedBanner.js";
+import { ShellOverlays } from "./components/ShellOverlays.js";
+import { SystemWarningBanner } from "./components/SystemWarningBanner.js";
+import { LifoSandboxView } from "./components/LifoSandboxView.js";
+import { useLifoAutoPopout } from "./hooks/useLifoAutoPopout.js";
+import { useStreamPopoutNavigation } from "./hooks/useStreamPopoutNavigation.js";
+import { isLifoPopoutMode, isLifoPopoutValue } from "./lifo-popout.js";
+import type { Tab } from "./navigation.js";
 
 const advancedTabs = new Set(TAB_GROUPS.find(g => g.label === "Advanced")?.tabs ?? []);
 const CHAT_MOBILE_BREAKPOINT_PX = 1024;
+
+/** Check if we're in pop-out mode (StreamView only, no chrome).
+ *  Excludes lifo popout values — those use the dedicated LifoSandboxView shell. */
+function useIsPopout(): boolean {
+  const [popout] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(
+      window.location.search || window.location.hash.split("?")[1] || "",
+    );
+    if (!params.has("popout")) return false;
+    return !isLifoPopoutValue(params.get("popout"));
+  });
+  return popout;
+}
 
 function ViewRouter() {
   const { tab } = useApp();
@@ -48,6 +76,8 @@ function ViewRouter() {
     case "wallets": return <InventoryView />;
     case "knowledge": return <KnowledgeView />;
     case "connectors": return <ConnectorsPageView />;
+    case "stream": return <StreamView />;
+    case "companion": return <CompanionView />;
     case "advanced":
     case "plugins":
     case "skills":
@@ -61,9 +91,11 @@ function ViewRouter() {
     case "trajectories":
     case "runtime":
     case "database":
+    case "lifo":
     case "logs":
     case "security":
       return <AdvancedPageView />;
+    case "voice":
     case "settings": return <SettingsView />;
     default: return <ChatView />;
   }
@@ -79,19 +111,34 @@ export function App() {
     retryStartup,
     tab,
     currentTheme,
+    setTab,
+    actionNotice,
+    uiShellMode,
     agentStatus,
     unreadConversations,
     activeGameViewerUrl,
     gameOverlayEnabled,
     toasts,
     dismissToast,
+    setActionNotice,
   } = useApp();
+
+  const isPopout = useIsPopout();
+  const shellMode = uiShellMode ?? "companion";
+  const effectiveTab: Tab =
+    shellMode === "native" && tab === "companion"
+      ? "chat"
+      : shellMode === "companion" && tab === "chat"
+        ? "companion"
+        : tab;
   const contextMenu = useContextMenu();
+
+  useStreamPopoutNavigation(setTab);
 
   const [customActionsPanelOpen, setCustomActionsPanelOpen] = useState(false);
   const [customActionsEditorOpen, setCustomActionsEditorOpen] = useState(false);
   const [editingAction, setEditingAction] = useState<
-    import("./api-client").CustomActionDef | null
+    import("./api-client.js").CustomActionDef | null
   >(null);
   const [isChatMobileLayout, setIsChatMobileLayout] = useState(() =>
     typeof window !== "undefined"
@@ -196,7 +243,45 @@ export function App() {
   }, [isChat]);
 
   const bugReport = useBugReportState();
+  const lifoPopoutMode = useMemo(() => isLifoPopoutMode(), []);
+
+  useLifoAutoPopout({
+    enabled:
+      !lifoPopoutMode &&
+      !onboardingLoading &&
+      onboardingComplete &&
+      !authRequired,
+    targetPath: pathForTab("lifo", import.meta.env.BASE_URL),
+    onPopupBlocked: () => {
+      setActionNotice(
+        "Lifo popout blocked by the browser. Allow popups to watch agent computer-use live.",
+        "error",
+        3800,
+      );
+    },
+  });
+
   const agentStarting = agentStatus?.state === "starting";
+
+  useEffect(() => {
+    const STARTUP_TIMEOUT_MS = 300_000;
+    if ((startupPhase as string) !== "ready" && !startupError) {
+      const timer = setTimeout(() => {
+        retryStartup();
+      }, STARTUP_TIMEOUT_MS);
+      return () => clearTimeout(timer);
+    }
+  }, [startupPhase, startupError, retryStartup]);
+
+  // Pop-out mode — render only StreamView, skip startup gates.
+  // Platform init is skipped in main.tsx; AppProvider hydrates WS in background.
+  if (isPopout) {
+    return (
+      <div className="flex flex-col h-screen w-screen font-body text-txt bg-bg overflow-hidden">
+        <StreamView />
+      </div>
+    );
+  }
 
   if (startupError) {
     return (
@@ -240,6 +325,29 @@ export function App() {
     );
   }
 
+  if (lifoPopoutMode) {
+    return (
+      <BugReportProvider value={bugReport}>
+        <div className="flex h-screen w-screen min-h-0 bg-bg text-txt">
+          <main className="flex-1 min-h-0 overflow-hidden p-3 xl:p-4">
+            <LifoSandboxView />
+          </main>
+        </div>
+      </BugReportProvider>
+    );
+  }
+
+  /* ── Companion shell mode ─────────────────────────────────────────── */
+  if (shellMode === "companion" && COMPANION_OVERLAY_TABS.has(effectiveTab)) {
+    return (
+      <BugReportProvider value={bugReport}>
+        <CompanionShell tab={effectiveTab} actionNotice={actionNotice} />
+        <ShellOverlays actionNotice={actionNotice} />
+      </BugReportProvider>
+    );
+  }
+
+  /* ── Native shell mode (all fork features intact) ─────────────────── */
   return (
     <BugReportProvider value={bugReport}>
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[10001] focus:px-4 focus:py-2 focus:bg-accent focus:text-accent-fg focus:rounded">
@@ -247,16 +355,57 @@ export function App() {
       </a>
       {currentTheme === "milady-os" ? (
         <ErrorBoundary><MiladyOsDashboard /></ErrorBoundary>
-      ) : isChat ? (
+      ) : tab === "stream" ? (
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
           <Header />
-          <Nav mobileLeft={mobileChatControls} />
+          <main className="flex-1 min-h-0 overflow-hidden">
+            <StreamView />
+          </main>
+        </div>
+      ) : isChat ? (
+        <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
+          <Header mobileLeft={mobileChatControls} />
           <div className="flex flex-1 min-h-0 relative">
-            <ConversationsSidebar />
-            <main id="main-content" className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pt-2 px-3 sm:pt-3 sm:px-5">
-              <ErrorBoundary><ChatView /></ErrorBoundary>
-            </main>
-            <AutonomousPanel />
+            {isChatMobileLayout ? (
+              <>
+                <main className="flex flex-col flex-1 min-w-0 overflow-visible pt-2 px-2">
+                  <ErrorBoundary>
+                    <ChatView />
+                  </ErrorBoundary>
+                </main>
+
+                {mobileConversationsOpen && (
+                  <div className="fixed inset-0 z-[120] bg-bg">
+                    <ConversationsSidebar
+                      mobile
+                      onClose={() => setMobileConversationsOpen(false)}
+                    />
+                  </div>
+                )}
+
+                {mobileAutonomousOpen && (
+                  <div className="fixed inset-0 z-[120] bg-bg">
+                    <AutonomousPanel
+                      mobile
+                      onClose={() => setMobileAutonomousOpen(false)}
+                    />
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <ConversationsSidebar />
+                <main
+                  id="main-content"
+                  className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pt-2 px-3 sm:pt-3 sm:px-5"
+                >
+                  <ErrorBoundary>
+                    <ChatView />
+                  </ErrorBoundary>
+                </main>
+                <AutonomousPanel />
+              </>
+            )}
             <CustomActionsPanel
               open={customActionsPanelOpen}
               onClose={() => setCustomActionsPanelOpen(false)}
@@ -266,7 +415,7 @@ export function App() {
               }}
             />
           </div>
-          <TerminalPanel />
+          {/* <TerminalPanel /> */}
         </div>
       ) : (
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
@@ -275,15 +424,14 @@ export function App() {
           <main id="main-content" className={`flex-1 min-h-0 py-4 px-3 sm:py-6 sm:px-5 ${isAdvancedTab ? "overflow-hidden" : "overflow-y-auto"}`}>
             <ErrorBoundary><ViewRouter /></ErrorBoundary>
           </main>
-          <TerminalPanel />
+          {/* <TerminalPanel /> */}
         </div>
       )}
       {/* Persistent game overlay — stays visible across all tabs */}
       {activeGameViewerUrl && gameOverlayEnabled && tab !== "apps" && (
         <GameViewOverlay />
       )}
-      <CommandPalette />
-      <EmotePicker />
+      <ShellOverlays actionNotice={actionNotice} />
       <SaveCommandModal
         open={contextMenu.saveCommandModalOpen}
         text={contextMenu.saveCommandText}
@@ -301,6 +449,8 @@ export function App() {
       />
       <BugReportModal />
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      <ConnectionFailedBanner />
+      <SystemWarningBanner />
     </BugReportProvider>
   );
 }

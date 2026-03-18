@@ -8,18 +8,18 @@
  * - Connection status indicator
  */
 
+import { client, type LogEntry } from "@milady/app-core/api";
+import { formatTime } from "@milady/app-core/components";
+import { Button, Input } from "@milady/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../AppContext";
 import {
-  client,
   type Five55MasteryContract,
   type Five55MasteryEvidenceFrame,
   type Five55MasteryGameSnapshot,
   type Five55MasteryConsistencyVerdict,
-  type LogEntry,
-} from "../api-client";
+} from "../api-client.js";
 import { useRetakeCapture } from "../hooks/useRetakeCapture";
-import { formatTime } from "./shared/format";
 
 const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
 const READY_EVENT_BY_AUTH_TYPE: Record<string, string> = {
@@ -48,7 +48,10 @@ const TAG_COLORS: Record<string, { bg: string; fg: string }> = {
   websocket: { bg: "rgba(20, 184, 166, 0.15)", fg: "rgb(20, 184, 166)" },
 };
 
+import { useTimeout } from "../hooks/useTimeout";
+
 export function GameView() {
+  const { setTimeout } = useTimeout();
   const {
     activeGameApp,
     activeGameDisplayName,
@@ -62,7 +65,9 @@ export function GameView() {
     loadLogs,
     setState,
     setActionNotice,
+    t,
   } = useApp();
+  const isElectrobun = !!window.electron;
   const [stopping, setStopping] = useState(false);
   const [showLogsPanel, setShowLogsPanel] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<
@@ -81,6 +86,8 @@ export function GameView() {
     useState<Five55MasteryEvidenceFrame[]>([]);
   const [masteryConsistency, setMasteryConsistency] =
     useState<Five55MasteryConsistencyVerdict | null>(null);
+  const [gameWindowId, setGameWindowId] = useState<string | null>(null);
+  const gameWindowIdRef = useRef<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const authSentRef = useRef(false);
   const viewerSessionRef = useRef<string>("");
@@ -89,14 +96,14 @@ export function GameView() {
   // Stream iframe frames to retake.tv when capture is active
   useRetakeCapture(iframeRef, retakeCapture);
 
-  // Send command to the agent - routes through ElizaOS which processes
+  // Send command to the agent - routes through elizaOS which processes
   // the message and decides what hyperscape actions to take
   const handleSendChat = useCallback(async () => {
     const content = chatInput.trim();
     if (!content) return;
     setSendingChat(true);
     try {
-      // Send message to ElizaOS agent - it will process and execute hyperscape actions
+      // Send message to elizaOS agent - it will process and execute hyperscape actions
       // Examples: "go chop some wood", "attack the goblin", "go to the bank"
       const response = await client.sendChatRest(content, "DM");
       setChatInput("");
@@ -121,7 +128,12 @@ export function GameView() {
     } finally {
       setSendingChat(false);
     }
-  }, [chatInput, setActionNotice, loadLogs]);
+  }, [
+    chatInput,
+    setActionNotice,
+    loadLogs, // Refresh logs to show activity
+    setTimeout,
+  ]);
   const postMessageTargetOrigin = useMemo(
     () => resolvePostMessageTargetOrigin(activeGameViewerUrl),
     [activeGameViewerUrl],
@@ -179,6 +191,45 @@ export function GameView() {
       }
     };
   }, [showLogsPanel, loadLogs]);
+
+  // Open the game URL in an isolated Electrobun BrowserWindow.
+  // Runs whenever the viewer URL or game title changes and we're inside the desktop app.
+  useEffect(() => {
+    if (!isElectrobun || !activeGameViewerUrl) return;
+
+    let cancelled = false;
+
+    window.electron.ipcRenderer
+      .invoke("game:openWindow", {
+        url: activeGameViewerUrl,
+        title: activeGameDisplayName || activeGameApp || "Game",
+      })
+      .then((result) => {
+        if (cancelled) return;
+        const res = result as { id: string } | null;
+        if (res?.id) {
+          gameWindowIdRef.current = res.id;
+          setGameWindowId(res.id);
+          setConnectionStatus("connected");
+        }
+      })
+      .catch((err) => {
+        console.warn("[GameView] game:openWindow failed:", err);
+        // Fall through — iframe fallback is still rendered
+      });
+
+    return () => {
+      cancelled = true;
+      // Close the game window when GameView unmounts or the URL changes
+      if (gameWindowIdRef.current) {
+        window.electron.ipcRenderer
+          .invoke("canvas:destroyWindow", { id: gameWindowIdRef.current })
+          .catch(() => {});
+        gameWindowIdRef.current = null;
+        setGameWindowId(null);
+      }
+    };
+  }, [activeGameViewerUrl, activeGameApp, activeGameDisplayName, isElectrobun]);
 
   // Reset auth handshake state when the active viewer session changes.
   useEffect(() => {
@@ -341,17 +392,18 @@ export function GameView() {
   if (!activeGameViewerUrl) {
     return (
       <div className="flex items-center justify-center py-10 text-muted italic">
-        No active game session.{" "}
-        <button
-          type="button"
+        {t("game.noActiveSession")}{" "}
+        <Button
+          variant="default"
+          size="sm"
           onClick={() => {
             setState("tab", "apps");
             setState("appsSubTab", "browse");
           }}
-          className="text-xs px-3 py-1 bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40 ml-2"
+          className="ml-2 font-bold tracking-wide shadow-sm"
         >
-          Back to Apps
-        </button>
+          {t("game.backToApps")}
+        </Button>
       </div>
     );
   }
@@ -359,26 +411,28 @@ export function GameView() {
   const renderLogsPanel = () => (
     <div className="w-80 border-l border-border bg-card flex flex-col min-h-0">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-        <span className="font-bold text-xs">Agent Activity</span>
+        <span className="font-bold text-xs">{t("game.agentActivity")}</span>
         <span className="flex-1" />
-        <button
-          type="button"
-          className="text-[10px] px-2 py-0.5 border border-border bg-card cursor-pointer hover:border-accent"
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-6 text-[10px] px-2 py-0 border-border bg-card hover:border-accent"
           onClick={() => void loadLogs()}
         >
-          Refresh
-        </button>
-        <button
-          type="button"
-          className="text-[10px] px-2 py-0.5 border border-border bg-card cursor-pointer hover:border-accent"
+          {t("common.refresh")}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-6 text-[10px] px-2 py-0 border-border bg-card hover:border-accent"
           onClick={() => setShowLogsPanel(false)}
         >
-          Hide
-        </button>
+          {t("common.hide")}
+        </Button>
       </div>
       {/* Chat input for sending commands to agent */}
       <div className="flex items-center gap-2 px-2 py-2 border-b border-border">
-        <input
+        <Input
           type="text"
           value={chatInput}
           onChange={(e) => setChatInput(e.target.value)}
@@ -388,23 +442,24 @@ export function GameView() {
               handleSendChat();
             }
           }}
-          placeholder="e.g. 'go chop wood' or 'attack the goblin'"
-          className="flex-1 px-2 py-1 text-xs border border-border bg-bg rounded-none focus:border-accent focus:outline-none"
+          placeholder={t("game.chatPlaceholder")}
+          className="flex-1 h-8 text-xs bg-bg focus-visible:ring-accent"
           disabled={sendingChat}
         />
-        <button
-          type="button"
+        <Button
+          variant="default"
+          size="sm"
           onClick={handleSendChat}
           disabled={sendingChat || !chatInput.trim()}
-          className="text-xs px-2 py-1 bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+          className="h-8 shadow-sm font-bold tracking-wide"
         >
-          {sendingChat ? "..." : "Send"}
-        </button>
+          {sendingChat ? "..." : t("common.send")}
+        </Button>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto p-2 text-[11px] font-mono">
         {gameLogs.length === 0 ? (
           <div className="text-center py-4 text-muted italic">
-            No agent activity yet.
+            {t("game.noAgentActivity")}
           </div>
         ) : (
           gameLogs.slice(0, 50).map((entry: LogEntry, idx) => (
@@ -469,84 +524,78 @@ export function GameView() {
           className={`text-[10px] px-1.5 py-0.5 border ${connectionStatusColor}`}
         >
           {connectionStatus === "connected"
-            ? "Connected"
+            ? t("game.connected")
             : connectionStatus === "connecting"
-              ? "Connecting..."
-              : "Disconnected"}
+              ? t("game.connecting")
+              : t("game.disconnected")}
         </span>
         {activeGamePostMessageAuth ? (
           <span className="text-[10px] px-1.5 py-0.5 border border-border text-muted">
-            postMessage auth
+            {t("gameview.postMessageAuth")}
           </span>
         ) : null}
         <span className="flex-1" />
         {/* Toggle logs panel */}
-        <button
-          type="button"
-          className={`text-xs px-3 py-1 border cursor-pointer hover:bg-accent-hover disabled:opacity-40 ${
-            showLogsPanel
-              ? "bg-accent text-accent-fg border-accent"
-              : "bg-card text-txt border-border hover:border-accent"
-          }`}
+        <Button
+          variant={showLogsPanel ? "default" : "outline"}
+          size="sm"
+          className="h-7 text-xs shadow-sm hover:border-accent"
           onClick={() => setShowLogsPanel(!showLogsPanel)}
         >
-          {showLogsPanel ? "Hide Logs" : "Show Logs"}
-        </button>
+          {showLogsPanel ? t("game.hideLogs") : t("game.showLogs")}
+        </Button>
         {retakeEnabled && (
-          <button
-            type="button"
-            className={`text-xs px-3 py-1 border cursor-pointer hover:bg-accent-hover disabled:opacity-40 ${
-              retakeCapture
-                ? "bg-accent text-accent-fg border-accent"
-                : "bg-card text-txt border-border hover:border-accent"
-            }`}
+          <Button
+            variant={retakeCapture ? "default" : "outline"}
+            size="sm"
+            className="h-7 text-xs shadow-sm hover:border-accent"
             onClick={() => setRetakeCapture(!retakeCapture)}
-            title="Stream this view to retake.tv (requires active retake stream)"
+            title={t("game.retakeTitle")}
           >
-            {retakeCapture ? "Stop Capture" : "Retake Capture"}
-          </button>
+            {retakeCapture ? t("game.stopCapture") : t("game.retakeCapture")}
+          </Button>
         )}
-        <button
-          type="button"
-          className={`text-xs px-3 py-1 border cursor-pointer hover:bg-accent-hover disabled:opacity-40 ${
-            gameOverlayEnabled
-              ? "bg-accent text-accent-fg border-accent"
-              : "bg-card text-txt border-border hover:border-accent"
-          }`}
+        <Button
+          variant={gameOverlayEnabled ? "default" : "outline"}
+          size="sm"
+          className="h-7 text-xs shadow-sm hover:border-accent"
           onClick={() => setState("gameOverlayEnabled", !gameOverlayEnabled)}
           title={
             gameOverlayEnabled
-              ? "Disable floating overlay"
-              : "Keep game visible when switching tabs"
+              ? t("game.disableOverlay")
+              : t("game.keepVisible")
           }
         >
-          {gameOverlayEnabled ? "Unpin Overlay" : "Keep on Top"}
-        </button>
-        <button
-          type="button"
-          className="text-xs px-3 py-1 bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+          {gameOverlayEnabled ? t("game.unpinOverlay") : t("game.keepOnTop")}
+        </Button>
+        <Button
+          variant="default"
+          size="sm"
+          className="h-7 text-xs shadow-sm"
           onClick={handleOpenInNewTab}
         >
-          Open in New Tab
-        </button>
-        <button
-          type="button"
-          className="text-xs px-3 py-1 bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+          {t("game.openInNewTab")}
+        </Button>
+        <Button
+          variant="default"
+          size="sm"
+          className="h-7 text-xs shadow-sm"
           disabled={stopping}
           onClick={handleStop}
         >
-          {stopping ? "Stopping..." : "Stop"}
-        </button>
-        <button
-          type="button"
-          className="text-xs px-3 py-1 bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+          {stopping ? t("game.stopping") : t("game.stop")}
+        </Button>
+        <Button
+          variant="default"
+          size="sm"
+          className="h-7 text-xs shadow-sm"
           onClick={() => {
             setState("tab", "apps");
             setState("appsSubTab", "browse");
           }}
         >
-          Back to Apps
-        </button>
+          {t("game.backToApps")}
+        </Button>
       </div>
       {activeFive55GameId && masteryContract ? (
         <div className="px-4 py-2 border-b border-border bg-bg-hover/40 text-[11px]">
@@ -655,13 +704,35 @@ export function GameView() {
       ) : null}
       <div className="flex-1 min-h-0 flex">
         <div className="flex-1 min-h-0 relative">
-          <iframe
-            ref={iframeRef}
-            src={activeGameViewerUrl}
-            sandbox={activeGameSandbox}
-            className="w-full h-full border-none"
-            title={activeGameDisplayName || "Game"}
-          />
+          {isElectrobun ? (
+            /* Electrobun mode: game runs in an isolated BrowserWindow opened
+               via game:openWindow RPC. The div below is a placeholder that
+               fills the same space in the layout while the native window is
+               positioned by the OS window manager. */
+            <div className="w-full h-full flex flex-col items-center justify-center bg-bg text-muted gap-3">
+              {gameWindowId ? (
+                <>
+                  <span className="text-sm font-semibold text-txt">
+                    {activeGameDisplayName || activeGameApp}
+                  </span>
+                  <span className="text-xs text-muted">
+                    {t("game.openInNativeWindow")}
+                  </span>
+                </>
+              ) : (
+                <span className="text-xs italic">{t("game.launching")}</span>
+              )}
+            </div>
+          ) : (
+            /* Web / dev-server fallback: standard iframe */
+            <iframe
+              ref={iframeRef}
+              src={activeGameViewerUrl}
+              sandbox={activeGameSandbox}
+              className="w-full h-full border-none"
+              title={activeGameDisplayName || "Game"}
+            />
+          )}
         </div>
         {showLogsPanel && renderLogsPanel()}
       </div>

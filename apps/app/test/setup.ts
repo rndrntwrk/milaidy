@@ -6,72 +6,11 @@
  */
 import { vi } from "vitest";
 
-vi.mock("react-dom", async () => {
-  const actual = await vi.importActual<typeof import("react-dom")>("react-dom");
-  return {
-    ...actual,
-    createPortal: (node: unknown) => node,
-  };
-});
-
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-
-function createMockCanvasContext2D() {
-  return {
-    fillStyle: "#000000",
-    strokeStyle: "#000000",
-    globalAlpha: 1,
-    lineWidth: 1,
-    font: "12px sans-serif",
-    textAlign: "start",
-    textBaseline: "alphabetic",
-    clearRect: vi.fn(),
-    fillRect: vi.fn(),
-    strokeRect: vi.fn(),
-    beginPath: vi.fn(),
-    moveTo: vi.fn(),
-    lineTo: vi.fn(),
-    arc: vi.fn(),
-    closePath: vi.fn(),
-    fill: vi.fn(),
-    stroke: vi.fn(),
-    save: vi.fn(),
-    restore: vi.fn(),
-    translate: vi.fn(),
-    rotate: vi.fn(),
-    scale: vi.fn(),
-    setTransform: vi.fn(),
-    resetTransform: vi.fn(),
-    drawImage: vi.fn(),
-    fillText: vi.fn(),
-    strokeText: vi.fn(),
-    measureText: vi.fn((text = "") => ({
-      width: String(text).length * 8,
-      actualBoundingBoxAscent: 8,
-      actualBoundingBoxDescent: 2,
-    })),
-    createLinearGradient: vi.fn(() => ({
-      addColorStop: vi.fn(),
-    })),
-    createRadialGradient: vi.fn(() => ({
-      addColorStop: vi.fn(),
-    })),
-    createPattern: vi.fn(() => null),
-    getImageData: vi.fn((x = 0, y = 0, width = 0, height = 0) => ({
-      data: new Uint8ClampedArray(Math.max(1, width * height * 4)),
-      width,
-      height,
-      colorSpace: "srgb",
-    })),
-    putImageData: vi.fn(),
-  };
-}
-
-const sharedCanvasContext = createMockCanvasContext2D();
 
 const originalConsoleError = console.error.bind(console);
 
@@ -203,16 +142,14 @@ if (!nav.userAgent) {
 // ---------------------------------------------------------------------------
 
 if (typeof globalThis.document === "undefined") {
+  const mockHead = { appendChild: vi.fn(), removeChild: vi.fn() };
   Object.defineProperty(globalThis, "document", {
     value: {
       createElement: vi.fn(() => ({
-        getContext: vi.fn(() => sharedCanvasContext),
+        getContext: vi.fn(() => ({ drawImage: vi.fn() })),
         toDataURL: vi.fn(() => "data:image/jpeg;base64,dGVzdA=="),
         appendChild: vi.fn(),
         removeChild: vi.fn(),
-        remove: vi.fn(),
-        nodeType: 1,
-        nodeName: "CANVAS",
         play: vi.fn(() => Promise.resolve()),
         style: {},
         width: 0,
@@ -220,13 +157,11 @@ if (typeof globalThis.document === "undefined") {
         videoWidth: 1920,
         videoHeight: 1080,
       })),
-      body: {
-        style: {},
-        nodeType: 1,
-        nodeName: "BODY",
-        appendChild: vi.fn(),
-        removeChild: vi.fn(),
-      },
+      createTextNode: vi.fn((text: string) => ({ textContent: text })),
+      getElementsByTagName: vi.fn((tagName: string) =>
+        tagName?.toLowerCase() === "head" ? [mockHead] : [],
+      ),
+      head: mockHead,
       hidden: false,
       hasFocus: vi.fn(() => true),
       documentElement: { requestFullscreen: vi.fn() },
@@ -237,19 +172,6 @@ if (typeof globalThis.document === "undefined") {
       querySelectorAll: vi.fn(() => []),
       activeElement: null,
     },
-    writable: true,
-    configurable: true,
-  });
-}
-
-if (typeof globalThis.HTMLCanvasElement !== "undefined") {
-  Object.defineProperty(globalThis.HTMLCanvasElement.prototype, "getContext", {
-    value: vi.fn(() => sharedCanvasContext),
-    writable: true,
-    configurable: true,
-  });
-  Object.defineProperty(globalThis.HTMLCanvasElement.prototype, "toDataURL", {
-    value: vi.fn(() => "data:image/png;base64,dGVzdA=="),
     writable: true,
     configurable: true,
   });
@@ -292,66 +214,18 @@ if (typeof globalThis.sessionStorage === "undefined") {
 }
 
 if (typeof globalThis.window === "undefined") {
-  const windowListeners = new Map<string, Set<(event: Event) => void>>();
-  const toEventHandler = (
-    listener: EventListenerOrEventListenerObject | null | undefined,
-  ): ((event: Event) => void) | null => {
-    if (!listener) return null;
-    if (typeof listener === "function") return listener;
-    if (
-      typeof listener === "object" &&
-      typeof listener.handleEvent === "function"
-    ) {
-      return listener.handleEvent.bind(listener) as (event: Event) => void;
-    }
-    return null;
-  };
-  const addWindowEventListener = (
-    type: string,
-    listener: EventListenerOrEventListenerObject | null,
-  ) => {
-    const handler = toEventHandler(listener);
-    if (!handler) return;
-    const handlers = windowListeners.get(type) ?? new Set<(event: Event) => void>();
-    handlers.add(handler);
-    windowListeners.set(type, handlers);
-  };
-  const removeWindowEventListener = (
-    type: string,
-    listener: EventListenerOrEventListenerObject | null,
-  ) => {
-    const handler = toEventHandler(listener);
-    if (!handler) return;
-    const handlers = windowListeners.get(type);
-    if (!handlers) return;
-    handlers.delete(handler);
-    if (handlers.size === 0) {
-      windowListeners.delete(type);
-    }
-  };
-  const dispatchWindowEvent = (event: Event): boolean => {
-    const eventType = (event as { type?: string }).type;
-    if (!eventType) return false;
-    for (const handler of windowListeners.get(eventType) ?? []) {
-      handler(event);
-    }
-    return true;
-  };
-
   Object.defineProperty(globalThis, "window", {
     value: {
       close: vi.fn(),
       focus: vi.fn(),
       open: vi.fn(),
-      setTimeout: (...args: Parameters<typeof globalThis.setTimeout>) =>
-        globalThis.setTimeout(...args),
-      clearTimeout: (...args: Parameters<typeof globalThis.clearTimeout>) =>
-        globalThis.clearTimeout(...args),
       location: { reload: vi.fn() },
-      screenX: 0, screenY: 0, outerWidth: 1920, outerHeight: 1080,
-      addEventListener: vi.fn(addWindowEventListener),
-      removeEventListener: vi.fn(removeWindowEventListener),
-      dispatchEvent: vi.fn(dispatchWindowEvent),
+      screenX: 0,
+      screenY: 0,
+      outerWidth: 1920,
+      outerHeight: 1080,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       localStorage: globalThis.localStorage,
       sessionStorage: globalThis.sessionStorage,
       navigator: globalThis.navigator,
@@ -382,76 +256,59 @@ if (typeof globalThis.window === "undefined") {
       configurable: true,
     });
   }
-  if (typeof win.setTimeout !== "function") {
-    win.setTimeout = (...args: Parameters<typeof globalThis.setTimeout>) =>
-      globalThis.setTimeout(...args);
-  }
-  if (typeof win.clearTimeout !== "function") {
-    win.clearTimeout = (...args: Parameters<typeof globalThis.clearTimeout>) =>
-      globalThis.clearTimeout(...args);
-  }
-  if (
-    typeof win.addEventListener !== "function" ||
-    typeof win.removeEventListener !== "function" ||
-    typeof win.dispatchEvent !== "function"
-  ) {
-    const listeners = new Map<string, Set<(event: Event) => void>>();
-    const toEventHandler = (
-      listener: EventListenerOrEventListenerObject | null | undefined,
-    ): ((event: Event) => void) | null => {
-      if (!listener) return null;
-      if (typeof listener === "function") return listener;
-      if (
-        typeof listener === "object" &&
-        typeof listener.handleEvent === "function"
-      ) {
-        return listener.handleEvent.bind(listener) as (event: Event) => void;
-      }
-      return null;
-    };
-
-    win.addEventListener = vi.fn(
-      (type: string, listener: EventListenerOrEventListenerObject | null) => {
-        const handler = toEventHandler(listener);
-        if (!handler) return;
-        const handlers = listeners.get(type) ?? new Set<(event: Event) => void>();
-        handlers.add(handler);
-        listeners.set(type, handlers);
-      },
-    );
-    win.removeEventListener = vi.fn(
-      (type: string, listener: EventListenerOrEventListenerObject | null) => {
-        const handler = toEventHandler(listener);
-        if (!handler) return;
-        const handlers = listeners.get(type);
-        if (!handlers) return;
-        handlers.delete(handler);
-        if (handlers.size === 0) listeners.delete(type);
-      },
-    );
-    win.dispatchEvent = vi.fn((event: Event) => {
-      const eventType = (event as { type?: string }).type;
-      if (!eventType) return false;
-      for (const handler of listeners.get(eventType) ?? []) {
-        handler(event);
-      }
-      return true;
-    });
-  }
 }
 
-if (typeof globalThis.KeyboardEvent === "undefined") {
-  class MockKeyboardEvent extends Event {
-    key: string;
+if (typeof globalThis.HTMLCanvasElement !== "undefined") {
+  const createCanvas2DContext = (): CanvasRenderingContext2D =>
+    ({
+      fillRect: vi.fn(),
+      clearRect: vi.fn(),
+      getImageData: vi.fn(() => ({
+        data: new Uint8ClampedArray(0),
+        width: 0,
+        height: 0,
+      })),
+      putImageData: vi.fn(),
+      drawImage: vi.fn(),
+      beginPath: vi.fn(),
+      closePath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      fill: vi.fn(),
+      arc: vi.fn(),
+      rect: vi.fn(),
+      save: vi.fn(),
+      restore: vi.fn(),
+      translate: vi.fn(),
+      rotate: vi.fn(),
+      scale: vi.fn(),
+      transform: vi.fn(),
+      setTransform: vi.fn(),
+      resetTransform: vi.fn(),
+      fillText: vi.fn(),
+      strokeText: vi.fn(),
+      measureText: vi.fn(() => ({ width: 0 })),
+      createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+      createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+      createPattern: vi.fn(() => null),
+      canvas: document.createElement("canvas"),
+      lineWidth: 1,
+      globalAlpha: 1,
+      fillStyle: "#000",
+      strokeStyle: "#000",
+    }) as unknown as CanvasRenderingContext2D;
 
-    constructor(type: string, init?: { key?: string }) {
-      super(type);
-      this.key = init?.key ?? "";
-    }
-  }
+  Object.defineProperty(globalThis.HTMLCanvasElement.prototype, "getContext", {
+    value: vi.fn((contextType: string) =>
+      contextType === "2d" ? createCanvas2DContext() : null,
+    ),
+    writable: true,
+    configurable: true,
+  });
 
-  Object.defineProperty(globalThis, "KeyboardEvent", {
-    value: MockKeyboardEvent,
+  Object.defineProperty(globalThis.HTMLCanvasElement.prototype, "toDataURL", {
+    value: vi.fn(() => "data:image/png;base64,dGVzdA=="),
     writable: true,
     configurable: true,
   });

@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
+
+import type { AppViewerAuthMessage } from "@milady/app-core/api";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AppViewerAuthMessage } from "../../src/api-client";
 
 interface GameContextStub {
+  t: (key: string) => string;
   activeGameApp: string;
   activeGameDisplayName: string;
   activeGameViewerUrl: string;
@@ -28,12 +30,13 @@ interface GameContextStub {
 
 const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
   mockClientFns: {
+    getCodingAgentStatus: vi.fn(async () => null),
     stopApp: vi.fn(),
   },
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/api-client", () => ({
+vi.mock("@milady/app-core/api", () => ({
   client: mockClientFns,
 }));
 vi.mock("../../src/AppContext", () => ({
@@ -44,6 +47,7 @@ import { GameView } from "../../src/components/GameView";
 
 function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
   return {
+    t: (k: string) => k,
     activeGameApp: "@elizaos/app-hyperscape",
     activeGameDisplayName: "Hyperscape",
     activeGameViewerUrl: "http://localhost:5175/viewer",
@@ -111,7 +115,7 @@ describe("GameView", () => {
     await flush();
 
     await act(async () => {
-      findButtonByText(tree?.root, "Back to Apps").props.onClick();
+      findButtonByText(tree?.root, "game.backToApps").props.onClick();
     });
 
     expect(ctx.setState).toHaveBeenCalledWith("tab", "apps");
@@ -130,7 +134,7 @@ describe("GameView", () => {
     await flush();
 
     await act(async () => {
-      findButtonByText(tree?.root, "Open in New Tab").props.onClick();
+      findButtonByText(tree?.root, "game.openInNewTab").props.onClick();
     });
 
     expect(openSpy).toHaveBeenCalledWith(
@@ -146,7 +150,7 @@ describe("GameView", () => {
 
     openSpy.mockReturnValueOnce(null);
     await act(async () => {
-      findButtonByText(tree?.root, "Open in New Tab").props.onClick();
+      findButtonByText(tree?.root, "game.openInNewTab").props.onClick();
     });
     expect(ctx.setActionNotice).toHaveBeenCalledWith(
       "Popup blocked. Allow popups and try again.",
@@ -176,7 +180,7 @@ describe("GameView", () => {
     await flush();
 
     await act(async () => {
-      await findButtonByText(tree?.root, "Stop").props.onClick();
+      await findButtonByText(tree?.root, "game.stop").props.onClick();
     });
 
     expect(mockClientFns.stopApp).toHaveBeenCalledWith(ctx.activeGameApp);
@@ -211,7 +215,7 @@ describe("GameView", () => {
     await flush();
 
     await act(async () => {
-      await findButtonByText(tree?.root, "Stop").props.onClick();
+      await findButtonByText(tree?.root, "game.stop").props.onClick();
     });
     expect(ctx.setActionNotice).toHaveBeenCalledWith(
       "Failed to stop: stop failed",
@@ -239,7 +243,7 @@ describe("GameView", () => {
     await flush();
 
     await act(async () => {
-      await findButtonByText(tree?.root, "Stop").props.onClick();
+      await findButtonByText(tree?.root, "game.stop").props.onClick();
     });
     expect(ctx.setActionNotice).toHaveBeenCalledWith(
       "No active session or installed plugin found.",
@@ -390,7 +394,7 @@ describe("GameView", () => {
     await flush();
 
     await act(async () => {
-      findButtonByText(tree?.root, "Back to Apps").props.onClick();
+      findButtonByText(tree?.root, "game.backToApps").props.onClick();
     });
     expect(ctx.setState).toHaveBeenCalledWith("tab", "apps");
   });

@@ -1,25 +1,15 @@
-import { useMemo, useState } from "react";
-import { useApp } from "../AppContext";
 import type {
   StreamEventEnvelope,
   TriggerSummary,
   WorkbenchTask,
   WorkbenchTodo,
-} from "../api-client";
-import { ChatAvatar } from "./ChatAvatar";
-import { formatTime } from "./shared/format";
-import { Button } from "./ui/Button";
-import { Card, CardContent } from "./ui/Card";
-import {
-  AgentIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  CloseIcon,
-  EyeIcon,
-  EyeOffIcon,
-  MicIcon,
-  SystemIcon,
-} from "./ui/Icons";
+} from "@milady/app-core/api";
+import { formatTime } from "@milady/app-core/components";
+import { Button } from "@milady/ui";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useApp } from "../AppContext";
+import { CodingAgentsSection } from "./CodingAgentsSection";
 
 function getEventText(event: StreamEventEnvelope): string {
   const payload = event.payload as Record<
@@ -46,7 +36,7 @@ function getEventTone(event: StreamEventEnvelope): string {
     return "text-ok";
   }
   if (event.stream === "assistant") return "text-accent";
-  return "text-white/52";
+  return "text-muted";
 }
 
 function isThoughtStream(stream: string | undefined): boolean {
@@ -55,6 +45,37 @@ function isThoughtStream(stream: string | undefined): boolean {
 
 function isActionStream(stream: string | undefined): boolean {
   return stream === "action" || stream === "tool" || stream === "provider";
+}
+
+function formatRunId(runId: string): string {
+  if (runId.length <= 16) return runId;
+  return `${runId.slice(0, 8)}…${runId.slice(-6)}`;
+}
+
+function getRunHealthBadgeClasses(status: string): string {
+  switch (status) {
+    case "gap_detected":
+      return "border-danger text-danger bg-danger/10";
+    case "partial":
+      return "border-accent text-accent bg-accent/10";
+    case "recovered":
+      return "border-ok text-ok bg-ok/10";
+    default:
+      return "border-border text-muted bg-card";
+  }
+}
+
+function getRunHealthLabel(status: string): string {
+  switch (status) {
+    case "gap_detected":
+      return "Gap detected";
+    case "partial":
+      return "Partial";
+    case "recovered":
+      return "Recovered";
+    default:
+      return "OK";
+  }
 }
 
 interface AutonomousPanelProps {
@@ -67,17 +88,16 @@ export function AutonomousPanel({
   onClose,
 }: AutonomousPanelProps) {
   const {
+    t,
     agentStatus,
     autonomousEvents,
+    autonomousRunHealthByRunId,
+    ptySessions,
     workbench,
     workbenchLoading,
     workbenchTasksAvailable,
     workbenchTriggersAvailable,
     workbenchTodosAvailable,
-    chatAvatarVisible,
-    chatAgentVoiceMuted,
-    chatAvatarSpeaking,
-    setState,
   } = useApp();
 
   const [tasksCollapsed, setTasksCollapsed] = useState(false);
@@ -105,6 +125,22 @@ export function AutonomousPanel({
         .find((event) => isActionStream(event.stream)),
     [autonomousEvents],
   );
+  const runHealthRows = useMemo(
+    () =>
+      Object.values(autonomousRunHealthByRunId).sort((left, right) => {
+        const unresolvedLeft = left.missingSeqs.length > 0 ? 1 : 0;
+        const unresolvedRight = right.missingSeqs.length > 0 ? 1 : 0;
+        if (unresolvedLeft !== unresolvedRight) {
+          return unresolvedRight - unresolvedLeft;
+        }
+        return left.runId.localeCompare(right.runId);
+      }),
+    [autonomousRunHealthByRunId],
+  );
+  const unresolvedRunCount = useMemo(
+    () => runHealthRows.filter((row) => row.missingSeqs.length > 0).length,
+    [runHealthRows],
+  );
 
   const isAgentStopped = agentStatus?.state === "stopped" || !agentStatus;
   const tasks = workbench?.tasks ?? [];
@@ -113,15 +149,15 @@ export function AutonomousPanel({
 
   return (
     <aside
-      className="hidden h-full flex-col border-l border-white/10 bg-white/[0.03] font-body text-[13px] lg:flex lg:min-w-[320px] lg:w-[320px] xl:min-w-[420px] xl:w-[420px]"
+      className={`${mobile ? "w-full min-w-0" : "w-[280px] min-w-[280px] xl:w-[340px] xl:min-w-[340px] 2xl:w-[420px] 2xl:min-w-[420px] border-l"} border-border bg-bg flex flex-col h-full font-body text-[13px]`}
       data-testid="autonomous-panel"
     >
-      <div className="flex items-start justify-between gap-2 border-b border-white/10 px-3 py-3">
+      <div className="px-3 py-2 border-b border-border flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-xs uppercase tracking-[0.22em] text-white/44">
+          <div className="text-xs uppercase tracking-wide text-muted">
             {mobile ? "Status" : "Autonomous Loop"}
           </div>
-          <div className="mt-1 text-[12px] text-white/54">
+          <div className="mt-1 text-[12px] text-muted">
             {agentStatus?.state === "running"
               ? "Live stream connected"
               : `Agent state: ${agentStatus?.state ?? "offline"}`}
@@ -129,95 +165,179 @@ export function AutonomousPanel({
         </div>
         {mobile && (
           <Button
-            size="icon"
             variant="ghost"
+            size="icon"
+            className="w-7 h-7 text-muted hover:text-accent border border-border bg-card shrink-0"
             onClick={onClose}
             aria-label="Close autonomous panel"
           >
-            <CloseIcon className="h-4 w-4" />
+            {t("autonomouspanel.Times")}
           </Button>
         )}
       </div>
 
       {isAgentStopped ? (
-        <div className="flex flex-1 items-center justify-center">
-          <p className="text-white/45">Agent not running</p>
+        <div className="flex items-center justify-center flex-1">
+          <p className="text-muted">{t("autonomouspanel.AgentNotRunning")}</p>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="border-b border-white/10 px-3 py-3">
-            <div className="mb-2 text-xs uppercase tracking-[0.22em] text-white/40">
-              Current
+        <div
+          className="flex-1 min-h-0 overflow-y-auto"
+          style={{ scrollbarGutter: "stable" }}
+        >
+          <div className="border-b border-border px-3 py-2">
+            <div className="text-xs uppercase tracking-wide text-muted mb-2">
+              {t("autonomouspanel.Current")}
             </div>
-            <div className="grid gap-2">
-              <Card className="border-white/8 bg-white/[0.03]">
-                <CardContent className="space-y-1 p-3">
-                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/42">
-                    <SystemIcon className="h-3.5 w-3.5" />
-                    Latest summary
-                  </div>
-                  <div className="text-sm text-white/82">
-                    {latestThought
-                      ? getEventText(latestThought)
-                      : "No summary events yet"}
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="border-white/8 bg-white/[0.03]">
-                <CardContent className="space-y-1 p-3">
-                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/42">
-                    <AgentIcon className="h-3.5 w-3.5" />
-                    Latest action
-                  </div>
-                  <div className="text-sm text-white/82">
-                    {latestAction
-                      ? getEventText(latestAction)
-                      : "No action events yet"}
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="space-y-2">
+              <div>
+                <div className="text-[11px] text-muted uppercase">
+                  {t("autonomouspanel.Thought")}
+                </div>
+                <div className="text-txt">
+                  {latestThought
+                    ? getEventText(latestThought)
+                    : "No thought events yet"}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted uppercase">
+                  {t("autonomouspanel.Action")}
+                </div>
+                <div className="text-txt">
+                  {latestAction
+                    ? getEventText(latestAction)
+                    : "No action events yet"}
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 border border-border rounded bg-card/60 px-2 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[11px] text-muted uppercase">
+                  {t("autonomouspanel.ReplayHealth")}
+                </div>
+                <span
+                  className={`px-1.5 py-0.5 text-[10px] border ${unresolvedRunCount > 0 ? "border-danger text-danger" : "border-ok text-ok"}`}
+                >
+                  {unresolvedRunCount > 0
+                    ? `Gaps ${unresolvedRunCount}`
+                    : "No gaps"}
+                </span>
+              </div>
+              {runHealthRows.length === 0 ? (
+                <div className="mt-1 text-[11px] text-muted">
+                  {t("autonomouspanel.NoReplayDiagnostic")}
+                </div>
+              ) : (
+                <div className="mt-2 flex flex-col gap-1 max-h-[120px] overflow-y-auto">
+                  {runHealthRows.map((row) => (
+                    <div
+                      key={row.runId}
+                      className="flex items-center justify-between gap-2 text-[11px]"
+                    >
+                      <span className="text-muted font-mono">
+                        {formatRunId(row.runId)}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {row.lastSeq !== null && (
+                          <span className="px-1.5 py-0.5 border border-border text-muted">
+                            {t("autonomouspanel.seq")} {row.lastSeq}
+                          </span>
+                        )}
+                        {row.missingSeqs.length > 0 && (
+                          <span className="px-1.5 py-0.5 border border-danger text-danger">
+                            {t("autonomouspanel.missing")}{" "}
+                            {row.missingSeqs.slice(0, 3).join(",")}
+                            {row.missingSeqs.length > 3 ? ",…" : ""}
+                          </span>
+                        )}
+                        <span
+                          className={`px-1.5 py-0.5 border ${getRunHealthBadgeClasses(row.status)}`}
+                        >
+                          {getRunHealthLabel(row.status)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="border-b border-white/10">
-            <button
-              type="button"
-              className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/42 transition-colors hover:bg-white/[0.04]"
+          {ptySessions.length > 0 && (
+            <CodingAgentsSection sessions={ptySessions} />
+          )}
+
+          <div className="border-b border-border">
+            <Button
+              variant="ghost"
+              className="flex justify-between items-center px-3 py-2 h-auto rounded-none hover:bg-bg-hover text-xs font-semibold uppercase tracking-wide text-muted w-full"
               onClick={() => setEventsCollapsed(!eventsCollapsed)}
             >
-              <span>Event Stream ({events.length})</span>
-              {eventsCollapsed ? (
-                <ChevronRightIcon className="h-4 w-4" />
-              ) : (
-                <ChevronDownIcon className="h-4 w-4" />
-              )}
-            </button>
+              <span>
+                {t("autonomouspanel.EventStream")}
+                {events.length})
+              </span>
+              <span>
+                {eventsCollapsed ? (
+                  <ChevronRight className="w-3 h-3" />
+                ) : (
+                  <ChevronDown className="w-3 h-3" />
+                )}
+              </span>
+            </Button>
             {!eventsCollapsed && (
-              <div className="space-y-2 px-3 pb-3">
+              <div className="px-3 pb-2 max-h-[320px] overflow-y-auto space-y-2">
                 {events.length === 0 ? (
-                  <div className="py-2 text-sm text-white/45">No events yet</div>
+                  <div className="text-muted text-sm py-2">
+                    {t("autonomouspanel.NoEventsYet")}
+                  </div>
                 ) : (
                   events.map((event) => (
-                    <Card
+                    <div
                       key={event.eventId}
-                      className="border-white/8 bg-white/[0.03]"
+                      className="rounded border border-border px-2 py-1"
                     >
-                      <CardContent className="p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <span
-                            className={`text-[11px] uppercase tracking-[0.18em] ${getEventTone(event)}`}
-                          >
-                            {event.stream ?? event.type}
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`text-[11px] uppercase ${getEventTone(event)}`}
+                        >
+                          {event.stream ?? event.type}
+                        </span>
+                        <span className="text-[11px] text-muted">
+                          {formatTime(event.ts, { fallback: "—" })}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-1 flex-wrap">
+                        {typeof event.runId === "string" && event.runId && (
+                          <span className="px-1.5 py-0.5 text-[10px] border border-border text-muted font-mono">
+                            {t("autonomouspanel.run")}{" "}
+                            {formatRunId(event.runId)}
                           </span>
-                          <span className="text-[11px] text-white/36">
-                            {formatTime(event.ts, { fallback: "—" })}
-                          </span>
-                        </div>
-                        <div className="mt-1 break-words text-[12px] text-white/74">
-                          {getEventText(event)}
-                        </div>
-                      </CardContent>
-                    </Card>
+                        )}
+                        {typeof event.seq === "number" &&
+                          Number.isFinite(event.seq) && (
+                            <span className="px-1.5 py-0.5 text-[10px] border border-border text-muted">
+                              {t("autonomouspanel.seq")} {Math.trunc(event.seq)}
+                            </span>
+                          )}
+                        {typeof event.runId === "string" &&
+                          autonomousRunHealthByRunId[event.runId] && (
+                            <span
+                              className={`px-1.5 py-0.5 text-[10px] border ${getRunHealthBadgeClasses(
+                                autonomousRunHealthByRunId[event.runId].status,
+                              )}`}
+                            >
+                              {getRunHealthLabel(
+                                autonomousRunHealthByRunId[event.runId].status,
+                              )}
+                            </span>
+                          )}
+                      </div>
+                      <div className="text-[12px] text-txt mt-1 break-words">
+                        {getEventText(event)}
+                      </div>
+                    </div>
                   ))
                 )}
               </div>
@@ -226,61 +346,70 @@ export function AutonomousPanel({
 
           {workbenchLoading ? (
             <div className="flex items-center justify-center py-5">
-              <p className="text-white/45">Loading workbench&hellip;</p>
+              <p className="text-muted">
+                {t("autonomouspanel.LoadingWorkbenchHe")}
+              </p>
             </div>
           ) : (
             <>
               {workbenchTasksAvailable && (
-                <div className="border-b border-white/10">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/42 transition-colors hover:bg-white/[0.04]"
+                <div className="border-b border-border">
+                  <Button
+                    variant="ghost"
+                    className="flex justify-between items-center px-3 py-2 h-auto rounded-none hover:bg-bg-hover text-xs font-semibold uppercase tracking-wide text-muted w-full"
                     onClick={() => setTasksCollapsed(!tasksCollapsed)}
                   >
-                    <span>Tasks ({tasks.length})</span>
-                    {tasksCollapsed ? (
-                      <ChevronRightIcon className="h-4 w-4" />
-                    ) : (
-                      <ChevronDownIcon className="h-4 w-4" />
-                    )}
-                  </button>
+                    <span>
+                      {t("autonomouspanel.Tasks")}
+                      {tasks.length})
+                    </span>
+                    <span>
+                      {tasksCollapsed ? (
+                        <ChevronRight className="w-3 h-3" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3" />
+                      )}
+                    </span>
+                  </Button>
                   {!tasksCollapsed && (
-                    <div className="space-y-2 px-3 py-2">
+                    <div className="px-3 py-2">
                       {tasks.length === 0 ? (
-                        <div className="py-2 text-sm text-white/45">No tasks</div>
+                        <div className="text-muted text-sm py-2">
+                          {t("autonomouspanel.NoTasks")}
+                        </div>
                       ) : (
                         tasks.map((task: WorkbenchTask) => (
-                          <Card key={task.id} className="border-white/8 bg-white/[0.03]">
-                            <CardContent className="flex gap-2 p-3">
-                              <input
-                                type="checkbox"
-                                checked={task.isCompleted}
-                                readOnly
-                                className="mt-0.5"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div
-                                  className={`text-white/84 ${
-                                    task.isCompleted ? "line-through opacity-60" : ""
-                                  }`}
-                                >
-                                  {task.name}
-                                </div>
-                                {task.tags.length > 0 && (
-                                  <div className="mt-1 flex flex-wrap gap-1">
-                                    {task.tags.map((tag: string) => (
-                                      <span
-                                        key={tag}
-                                        className="rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[11px] text-white/48"
-                                      >
-                                        {tag}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
+                          <div key={task.id} className="flex gap-2 py-2">
+                            <input
+                              type="checkbox"
+                              checked={task.isCompleted}
+                              readOnly
+                              className="mt-0.5"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div
+                                className={`text-txt-strong ${
+                                  task.isCompleted
+                                    ? "line-through opacity-60"
+                                    : ""
+                                }`}
+                              >
+                                {task.name}
                               </div>
-                            </CardContent>
-                          </Card>
+                              {task.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {task.tags.map((tag: string) => (
+                                    <span
+                                      key={tag}
+                                      className="px-1.5 py-0.5 text-[11px] bg-bg-muted text-muted rounded"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         ))
                       )}
                     </div>
@@ -289,34 +418,42 @@ export function AutonomousPanel({
               )}
 
               {workbenchTriggersAvailable && (
-                <div className="border-b border-white/10">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/42 transition-colors hover:bg-white/[0.04]"
+                <div className="border-b border-border">
+                  <Button
+                    variant="ghost"
+                    className="flex justify-between items-center px-3 py-2 h-auto rounded-none hover:bg-bg-hover text-xs font-semibold uppercase tracking-wide text-muted w-full"
                     onClick={() => setTriggersCollapsed(!triggersCollapsed)}
                   >
-                    <span>Triggers ({triggers.length})</span>
-                    {triggersCollapsed ? (
-                      <ChevronRightIcon className="h-4 w-4" />
-                    ) : (
-                      <ChevronDownIcon className="h-4 w-4" />
-                    )}
-                  </button>
+                    <span>
+                      {t("autonomouspanel.Triggers")}
+                      {triggers.length})
+                    </span>
+                    <span>
+                      {triggersCollapsed ? (
+                        <ChevronRight className="w-3 h-3" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3" />
+                      )}
+                    </span>
+                  </Button>
                   {!triggersCollapsed && (
-                    <div className="space-y-2 px-3 py-2">
+                    <div className="px-3 py-2">
                       {triggers.length === 0 ? (
-                        <div className="py-2 text-sm text-white/45">No triggers</div>
+                        <div className="text-muted text-sm py-2">
+                          {t("autonomouspanel.NoTriggers")}
+                        </div>
                       ) : (
                         triggers.map((trigger: TriggerSummary) => (
-                          <Card key={trigger.id} className="border-white/8 bg-white/[0.03]">
-                            <CardContent className="space-y-1 p-3">
-                              <div className="text-white/84">{trigger.displayName}</div>
-                              <div className="text-[11px] text-white/44">
-                                {trigger.triggerType} · {trigger.enabled ? "enabled" : "disabled"} · runs {" "}
-                                {trigger.runCount}
-                              </div>
-                            </CardContent>
-                          </Card>
+                          <div key={trigger.id} className="py-2">
+                            <div className="text-txt-strong">
+                              {trigger.displayName}
+                            </div>
+                            <div className="text-[11px] text-muted mt-1">
+                              {trigger.triggerType} ·{" "}
+                              {trigger.enabled ? "enabled" : "disabled"}{" "}
+                              {t("autonomouspanel.Runs")} {trigger.runCount}
+                            </div>
+                          </div>
                         ))
                       )}
                     </div>
@@ -325,45 +462,52 @@ export function AutonomousPanel({
               )}
 
               {workbenchTodosAvailable && (
-                <div className="border-b border-white/10">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/42 transition-colors hover:bg-white/[0.04]"
+                <div className="border-b border-border">
+                  <Button
+                    variant="ghost"
+                    className="flex justify-between items-center px-3 py-2 h-auto rounded-none hover:bg-bg-hover text-xs font-semibold uppercase tracking-wide text-muted w-full"
                     onClick={() => setTodosCollapsed(!todosCollapsed)}
                   >
-                    <span>Todos ({todos.length})</span>
-                    {todosCollapsed ? (
-                      <ChevronRightIcon className="h-4 w-4" />
-                    ) : (
-                      <ChevronDownIcon className="h-4 w-4" />
-                    )}
-                  </button>
+                    <span>
+                      {t("autonomouspanel.Todos")}
+                      {todos.length})
+                    </span>
+                    <span>
+                      {todosCollapsed ? (
+                        <ChevronRight className="w-3 h-3" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3" />
+                      )}
+                    </span>
+                  </Button>
                   {!todosCollapsed && (
-                    <div className="space-y-2 px-3 py-2">
+                    <div className="px-3 py-2">
                       {todos.length === 0 ? (
-                        <div className="py-2 text-sm text-white/45">No todos</div>
+                        <div className="text-muted text-sm py-2">
+                          {t("autonomouspanel.NoTodos")}
+                        </div>
                       ) : (
                         todos.map((todo: WorkbenchTodo) => (
-                          <Card
+                          <div
                             key={todo.id}
-                            className="border-white/8 bg-white/[0.03]"
+                            className="flex items-start gap-2 py-2"
                           >
-                            <CardContent className="flex items-start gap-2 p-3">
-                              <input
-                                type="checkbox"
-                                checked={todo.isCompleted}
-                                readOnly
-                                className="mt-0.5"
-                              />
-                              <div
-                                className={`flex-1 text-white/82 ${
-                                  todo.isCompleted ? "line-through opacity-60" : ""
-                                }`}
-                              >
-                                {todo.name}
-                              </div>
-                            </CardContent>
-                          </Card>
+                            <input
+                              type="checkbox"
+                              checked={todo.isCompleted}
+                              readOnly
+                              className="mt-0.5"
+                            />
+                            <div
+                              className={`flex-1 text-txt ${
+                                todo.isCompleted
+                                  ? "line-through opacity-60"
+                                  : ""
+                              }`}
+                            >
+                              {todo.name}
+                            </div>
+                          </div>
                         ))
                       )}
                     </div>
@@ -374,59 +518,6 @@ export function AutonomousPanel({
           )}
         </div>
       )}
-
-      <div className="border-t border-white/10 px-3 py-3">
-        <div className="mb-2 text-xs uppercase tracking-[0.22em] text-white/40">
-          Chat Controls
-        </div>
-
-        <Card
-          className={`${mobile ? "h-[300px]" : "h-[260px] xl:h-[320px] 2xl:h-[420px]"} relative overflow-hidden border-white/10 bg-white/[0.03]`}
-        >
-          {chatAvatarVisible ? (
-            <ChatAvatar isSpeaking={chatAvatarSpeaking} />
-          ) : (
-            <div className="flex h-full w-full items-end justify-center pb-5 text-xs text-white/45">
-              Avatar hidden
-            </div>
-          )}
-        </Card>
-
-        <div className="flex flex-col gap-2 pt-2">
-          <div className="text-[10px] leading-relaxed text-white/44">
-            Channel profile is selected automatically from message channel type.
-            Voice messages always use fast compact mode for lower latency.
-          </div>
-
-          <div className="grid grid-cols-2 gap-1.5">
-            <Button
-              size="sm"
-              variant={chatAvatarVisible ? "secondary" : "outline"}
-              onClick={() => setState("chatAvatarVisible", !chatAvatarVisible)}
-              title={chatAvatarVisible ? "Hide avatar" : "Show avatar"}
-            >
-              {chatAvatarVisible ? (
-                <EyeIcon className="h-4 w-4" />
-              ) : (
-                <EyeOffIcon className="h-4 w-4" />
-              )}
-              Avatar
-            </Button>
-
-            <Button
-              size="sm"
-              variant={chatAgentVoiceMuted ? "outline" : "secondary"}
-              onClick={() => setState("chatAgentVoiceMuted", !chatAgentVoiceMuted)}
-              title={
-                chatAgentVoiceMuted ? "Unmute agent voice" : "Mute agent voice"
-              }
-            >
-              <MicIcon className="h-4 w-4" />
-              Voice
-            </Button>
-          </div>
-        </div>
-      </div>
     </aside>
   );
 }

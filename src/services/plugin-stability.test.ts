@@ -15,6 +15,7 @@
 import type { Plugin, Provider, ProviderResult } from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { validateRuntimeContext } from "../api/plugin-validation";
+import { CONNECTOR_PLUGINS } from "../config/plugin-auto-enable";
 import type { MiladyConfig } from "../config/types.milady";
 import { createSessionKeyProvider } from "../providers/session-bridge";
 import { createWorkspaceProvider } from "../providers/workspace-provider";
@@ -49,20 +50,7 @@ function _getCoreOverride(pkg: RootPackageJson): string | undefined {
 // Constants — Full plugin enumeration
 // ---------------------------------------------------------------------------
 // CORE_PLUGINS and OPTIONAL_CORE_PLUGINS are imported from eliza.ts
-
-/** Connector plugins (loaded when connector config is present). */
-const CONNECTOR_PLUGINS: Record<string, string> = {
-  discord: "@elizaos/plugin-discord",
-  telegram: "@elizaos/plugin-telegram",
-  slack: "@elizaos/plugin-slack",
-  whatsapp: "@milady/plugin-whatsapp",
-  signal: "@elizaos/plugin-signal",
-  imessage: "@elizaos/plugin-imessage",
-  bluebubbles: "@elizaos/plugin-bluebubbles",
-  msteams: "@elizaos/plugin-msteams",
-  mattermost: "@elizaos/plugin-mattermost",
-  googlechat: "@elizaos/plugin-google-chat",
-};
+// CONNECTOR_PLUGINS is imported from ../config/plugin-auto-enable (canonical source)
 
 /** Model-provider plugins (loaded when env key is set). */
 const PROVIDER_PLUGINS: Record<string, string> = {
@@ -120,7 +108,7 @@ const envKeysToClean = [
   "OLLAMA_BASE_URL",
   "ELIZAOS_CLOUD_API_KEY",
   "ELIZAOS_CLOUD_ENABLED",
-  "MILAIDY_USE_PI_AI",
+  "MILADY_USE_PI_AI",
   "DISCORD_BOT_TOKEN",
   "TELEGRAM_BOT_TOKEN",
   "SLACK_BOT_TOKEN",
@@ -157,7 +145,7 @@ describe("Plugin Enumeration", () => {
   });
 
   it("lists all connector plugins", () => {
-    expect(Object.keys(CONNECTOR_PLUGINS).length).toBe(10);
+    expect(Object.keys(CONNECTOR_PLUGINS).length).toBeGreaterThanOrEqual(17);
     for (const [connector, pluginName] of Object.entries(CONNECTOR_PLUGINS)) {
       expect(typeof connector).toBe("string");
       expect(pluginName).toMatch(/^@(elizaos|milady)\/plugin-/);
@@ -957,9 +945,9 @@ describe("Version Skew Detection (issue #10)", () => {
     expect(coreVersion).toBeDefined();
     // Core can use "next" dist-tag if overrides pin the actual version.
     const coreOverride = getDependencyOverride(pkg);
-    if (coreVersion === "next") {
+    if (coreVersion === "next" || coreVersion === "alpha") {
       expect(coreOverride).toBeDefined();
-      if (coreOverride !== "next") {
+      if (coreOverride !== "next" && coreOverride !== "alpha") {
         expect(coreOverride).toMatch(/^\d+\.\d+\.\d+/);
       }
     } else if (isWorkspaceDependency(coreVersion)) {
@@ -986,7 +974,7 @@ describe("Version Skew Detection (issue #10)", () => {
       // or they can be pinned to a specific alpha version.
       // Workspace links are valid in monorepo development.
       // See docs/ELIZAOS_VERSIONING.md for details and update procedures
-      if (ver !== "next" && !isWorkspaceDependency(ver)) {
+      if (ver !== "next" && ver !== "alpha" && !isWorkspaceDependency(ver)) {
         expect(ver).toMatch(/^\d+\.\d+\.\d+/);
       }
     }

@@ -1,21 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { client, type CustomActionDef } from "../api-client";
+import { type CustomActionDef, client } from "@milady/app-core/api";
+import { Button, Input } from "@milady/ui";
+import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../AppContext";
 import { CustomActionEditor } from "./CustomActionEditor";
-import { collectFive55ActionTimeline } from "./five55ActionEnvelope";
-import { QUICK_LAYER_DOCK } from "./quickLayerCatalog";
-import { Badge } from "./ui/Badge.js";
-import { Button } from "./ui/Button.js";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/Card.js";
 
 export function CustomActionsView() {
-  const {
-    setTab,
-    setActionNotice,
-    conversationMessages,
-    quickLayerStatuses,
-    runQuickLayer,
-  } = useApp();
+  const { t } = useApp();
   const [actions, setActions] = useState<CustomActionDef[]>([]);
   const [search, setSearch] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
@@ -23,25 +13,6 @@ export function CustomActionsView() {
     null,
   );
   const [loading, setLoading] = useState(true);
-
-  const quickLayers = QUICK_LAYER_DOCK;
-
-  const triggerDockedLayer = useCallback(
-    (layerId: (typeof quickLayers)[number]["id"], layerLabel: string) => {
-      setActionNotice(`Running ${layerLabel} from Actions tab...`, "info", 2200);
-      void runQuickLayer(layerId);
-    },
-    [runQuickLayer, setActionNotice],
-  );
-
-  const actionTimeline = useMemo(
-    () => collectFive55ActionTimeline(conversationMessages),
-    [conversationMessages],
-  );
-  const recentActionTimeline = useMemo(
-    () => [...actionTimeline].reverse().slice(0, 80),
-    [actionTimeline],
-  );
 
   const loadActions = useCallback(async () => {
     try {
@@ -169,170 +140,24 @@ export function CustomActionsView() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Card className="max-w-md px-6 py-8 text-center">
-          <div className="text-sm uppercase tracking-[0.2em] text-white/55">Loading actions...</div>
-        </Card>
+      <div className="flex items-center justify-center h-full">
+        <div className="text-muted">
+          {t("customactionsview.LoadingActions")}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <CardTitle>Studio Action Layers</CardTitle>
-              <CardDescription>
-                Moved from Chat. Runs through the same quick-layer execution engine.
-              </CardDescription>
-            </div>
-            <Button variant="outline" onClick={() => setTab("plugins")} title="Open plugin settings" className="rounded-2xl">
-              Manage Plugins
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="flex flex-wrap gap-2">
-            {quickLayers.map((layer) => {
-              const status = quickLayerStatuses[layer.id];
-              const tone =
-                status === "active"
-                  ? "border-white/18 bg-white/[0.14] text-white"
-                  : status === "disabled"
-                    ? "border-danger/25 bg-danger/10 text-danger"
-                    : "border-white/10 bg-white/[0.04] text-white/65";
-              return (
-                <Button
-                  key={layer.id}
-                  variant="ghost"
-                  className={`h-9 rounded-2xl border px-3 text-[11px] uppercase tracking-[0.18em] ${tone}`}
-                  onClick={() => triggerDockedLayer(layer.id, layer.label)}
-                  title={`${layer.label} (${status})`}
-                >
-                  {layer.label}
-                </Button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <CardTitle>Recent Action Timeline</CardTitle>
-              <CardDescription>
-                Live execution envelopes captured from chat.
-              </CardDescription>
-            </div>
-            <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em]">
-              {actionTimeline.length} total
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {recentActionTimeline.length === 0 ? (
-            <div className="text-xs text-white/52">
-              No action envelopes detected yet. Run a tool action in chat to populate this timeline.
-            </div>
-          ) : (
-            <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-              {recentActionTimeline.map((entry) => {
-                const { envelope } = entry;
-                const stage =
-                  envelope.trace?.stage ?? (envelope.ok ? "succeeded" : "failed");
-                const stageTone = envelope.ok ? "text-ok" : "text-danger";
-                const timestamp = new Date(entry.timestamp).toLocaleTimeString([], {
-                  hour12: false,
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                });
-                return (
-                  <div
-                    key={`${entry.messageId}-${envelope.action}-${envelope.trace?.actionId ?? entry.timestamp}`}
-                    className="rounded-2xl border border-white/8 bg-black/14 p-3"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="text-xs font-semibold text-white/88">
-                          {envelope.module} · {envelope.action}
-                        </div>
-                        <div className="mt-0.5 text-[11px] text-white/50">
-                          {envelope.code} · status {envelope.status}
-                          {envelope.retryable ? " · retryable" : ""}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className={`text-[11px] font-semibold ${stageTone}`}>
-                          {stage}
-                        </div>
-                        <div className="text-[10px] text-white/40">{timestamp}</div>
-                      </div>
-                    </div>
-                    <div className="mt-1 whitespace-pre-wrap break-words text-xs text-white/76">
-                      {envelope.message}
-                    </div>
-                    {(envelope.trace?.sessionId ||
-                      envelope.trace?.segmentId ||
-                      envelope.trace?.actionId ||
-                      envelope.trace?.idempotencyKey) && (
-                      <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px] text-white/45">
-                        {envelope.trace?.sessionId && (
-                          <span className="rounded-full border border-white/10 px-1.5 py-0.5">
-                            session {envelope.trace.sessionId}
-                          </span>
-                        )}
-                        {envelope.trace?.segmentId && (
-                          <span className="rounded-full border border-white/10 px-1.5 py-0.5">
-                            segment {envelope.trace.segmentId}
-                          </span>
-                        )}
-                        {envelope.trace?.actionId && (
-                          <span className="rounded-full border border-white/10 px-1.5 py-0.5">
-                            action {envelope.trace.actionId}
-                          </span>
-                        )}
-                        {envelope.trace?.idempotencyKey && (
-                          <span className="rounded-full border border-white/10 px-1.5 py-0.5">
-                            idem {envelope.trace.idempotencyKey}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {(envelope.data !== undefined || envelope.details !== undefined) && (
-                      <details className="mt-1.5">
-                        <summary className="cursor-pointer text-[11px] text-white/50">
-                          payload
-                        </summary>
-                        <pre className="m-0 mt-1 rounded-2xl border border-white/8 bg-black/18 p-2 text-[10px] whitespace-pre-wrap break-words text-white/50">
-                          {JSON.stringify(
-                            envelope.data !== undefined ? envelope.data : envelope.details,
-                            null,
-                            2,
-                          )}
-                        </pre>
-                      </details>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-white/92">Custom Actions</h1>
-          <p className="text-xs text-white/48">Build and manage reusable operator actions.</p>
-        </div>
+    <div className="flex flex-col h-full p-4 space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-bold text-txt">
+          {t("customactionsview.CustomActions")}
+        </h1>
         <div className="flex items-center gap-2">
-          <label className="inline-flex h-10 cursor-pointer items-center justify-center rounded-2xl border border-white/12 bg-black/20 px-4 text-[11px] font-medium uppercase tracking-[0.22em] text-white/72 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-white">
-            Import
+          <label className="px-3 py-1.5 text-sm border border-border bg-surface text-muted rounded cursor-pointer hover:bg-card transition-colors">
+            {t("customactionsview.Import")}
             <input
               type="file"
               accept="application/json"
@@ -340,57 +165,75 @@ export function CustomActionsView() {
               className="hidden"
             />
           </label>
-          <Button variant="outline" onClick={handleExport} disabled={actions.length === 0} className="rounded-2xl">
-            Export
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={actions.length === 0}
+            className="px-3 py-1.5 h-8 text-sm text-muted bg-surface hover:bg-card shadow-sm disabled:opacity-50"
+          >
+            {t("customactionsview.Export")}
           </Button>
-          <Button variant="default" onClick={handleCreate} className="rounded-2xl">
-            Create Action
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleCreate}
+            className="px-3 py-1.5 h-8 text-sm shadow-sm font-medium tracking-wide"
+          >
+            {t("customactionsview.CreateAction")}
           </Button>
         </div>
       </div>
 
+      {/* Search Bar */}
       <div className="flex items-center">
-        <input
+        <Input
           type="text"
-          placeholder="Search actions by name or description..."
+          placeholder={t("customactionsview.SearchActionsByNa")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search actions"
-          className="flex-1 rounded-[20px] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-white/20"
+          className="flex-1 px-3 py-2 h-9 text-sm bg-surface text-txt shadow-sm"
         />
       </div>
 
+      {/* Actions Grid */}
       {filteredActions.length === 0 ? (
-        <Card className="flex flex-1 flex-col items-center justify-center space-y-4 p-8 text-center">
-          <p className="text-white/52">
+        <div className="flex flex-col items-center justify-center flex-1 space-y-4">
+          <p className="text-muted text-center">
             {search
               ? "No actions match your search."
               : "No custom actions yet. Create one to get started."}
           </p>
           {!search && (
-            <Button variant="default" onClick={handleCreate} className="rounded-2xl">
-              Create Action
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleCreate}
+              className="px-4 py-2 text-sm shadow-sm font-medium tracking-wide"
+            >
+              {t("customactionsview.CreateAction")}
             </Button>
           )}
-        </Card>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 overflow-auto md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 overflow-auto">
           {filteredActions.map((action) => (
-            <Card
+            <div
               key={action.id}
-              className="space-y-3 p-4 transition-colors hover:border-white/18"
+              className="border border-border bg-card rounded p-4 space-y-3 cursor-pointer hover:border-accent/50 transition-colors"
             >
               <button
                 type="button"
-                className="m-0 w-full cursor-pointer border-0 bg-transparent p-0 text-left"
+                className="w-full bg-transparent border-0 p-0 m-0 text-left cursor-pointer"
                 onClick={() => handleEdit(action)}
               >
+                {/* Name and Badge */}
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="flex-1 break-words text-sm font-semibold text-white/90">
+                  <h3 className="font-bold text-sm text-txt flex-1 break-words">
                     {action.name}
                   </h3>
                   <span
-                    className={`rounded-full px-2 py-0.5 text-xs ${getBadgeColor(
+                    className={`px-2 py-0.5 text-xs rounded ${getBadgeColor(
                       action.handler.type,
                     )}`}
                   >
@@ -398,20 +241,24 @@ export function CustomActionsView() {
                   </span>
                 </div>
 
+                {/* Description */}
                 {action.description && (
-                  <p className="line-clamp-3 text-xs text-white/52">
+                  <p className="text-xs text-muted line-clamp-3">
                     {action.description}
                   </p>
                 )}
 
-                <p className="text-xs text-white/45">
-                  {action.parameters?.length || 0} parameter
+                {/* Parameters Count */}
+                <p className="text-xs text-muted">
+                  {action.parameters?.length || 0}{" "}
+                  {t("customactionsview.parameter")}
                   {action.parameters?.length === 1 ? "" : "s"}
                 </p>
               </button>
 
-              <div className="flex items-center justify-between border-t border-white/8 pt-2">
-                <label className="flex cursor-pointer items-center gap-2">
+              {/* Actions Row */}
+              <div className="flex items-center justify-between pt-2 border-t border-border">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={action.enabled}
@@ -420,19 +267,31 @@ export function CustomActionsView() {
                     }
                     className="cursor-pointer"
                   />
-                  <span className="text-xs text-white/50">Enabled</span>
+                  <span className="text-xs text-muted">
+                    {t("customactionsview.Enabled")}
+                  </span>
                 </label>
 
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleEdit(action)} className="rounded-xl">
-                    Edit
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(action)}
+                    className="px-2 py-1 h-6 text-xs bg-surface text-muted hover:bg-card shadow-sm"
+                  >
+                    {t("customactionsview.Edit")}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleDelete(action.id, action.name)} className="rounded-xl border-danger/25 text-danger hover:bg-danger/10">
-                    Delete
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDelete(action.id, action.name)}
+                    className="px-2 py-1 h-6 text-xs bg-surface text-danger border-danger/20 hover:bg-danger/10 shadow-sm"
+                  >
+                    {t("customactionsview.Delete")}
                   </Button>
                 </div>
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       )}

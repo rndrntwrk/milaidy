@@ -183,6 +183,23 @@ describe("MCP config write path", () => {
     expect(servers["del-target"]).toBeUndefined();
   });
 
+  it("POST rejects missing config object (400)", async () => {
+    const { status, data } = await req(port, "POST", "/api/mcp/config/server", {
+      name: "no-config",
+    });
+    expect(status).toBe(400);
+    expect(data.error).toContain("Server config object is required");
+  });
+
+  it("POST rejects array config (400)", async () => {
+    const { status, data } = await req(port, "POST", "/api/mcp/config/server", {
+      name: "array-config",
+      config: [{ type: "stdio", command: "npx" }],
+    });
+    expect(status).toBe(400);
+    expect(data.error).toContain("Server config object is required");
+  });
+
   it("DELETE is idempotent for nonexistent server name", async () => {
     const { status, data } = await req(
       port,
@@ -412,7 +429,163 @@ describe("MCP reject-path: remote & env validation", () => {
 });
 
 // ===========================================================================
-// 5. MCP runtime status
+// 5. MCP reject-path: PUT validation
+// ===========================================================================
+
+describe("MCP reject-path: PUT validation", () => {
+  it("rejects array servers value (400)", async () => {
+    const { status, data } = await req(port, "PUT", "/api/mcp/config", {
+      servers: [{ type: "stdio", command: "npx" }],
+    });
+    expect(status).toBe(400);
+    expect(data.error).toContain("servers must be a JSON object");
+  });
+
+  it("rejects null servers value (400)", async () => {
+    const { status, data } = await req(port, "PUT", "/api/mcp/config", {
+      servers: null,
+    });
+    expect(status).toBe(400);
+    expect(data.error).toContain("servers must be a JSON object");
+  });
+
+  it("rejects PUT with invalid server config inside servers map (400)", async () => {
+    const { status, data } = await req(port, "PUT", "/api/mcp/config", {
+      servers: {
+        "bad-server": { type: "stdio", command: "curl" },
+      },
+    });
+    expect(status).toBe(400);
+    expect(data.error).toContain("not allowed");
+  });
+});
+
+// ===========================================================================
+// 6. MCP reject-path: deep prototype pollution & config inclusion
+// ===========================================================================
+
+describe("MCP reject-path: prototype pollution & config inclusion", () => {
+  it("rejects $include key in server config (400)", async () => {
+    const { status, data } = await req(port, "POST", "/api/mcp/config/server", {
+      name: "include-attack",
+      config: {
+        type: "stdio",
+        command: "npx",
+        args: ["-y", "@test/ok"],
+        $include: "/etc/passwd",
+      },
+    });
+    expect(status).toBe(400);
+    expect(typeof data.error).toBe("string");
+  });
+
+  it("rejects constructor as server name inside PUT servers map (400)", async () => {
+    const { status, data } = await req(port, "PUT", "/api/mcp/config", {
+      servers: {
+        constructor: {
+          type: "stdio",
+          command: "npx",
+          args: ["-y", "@test/ok"],
+        },
+      },
+    });
+    expect(status).toBe(400);
+    expect(typeof data.error).toBe("string");
+  });
+
+  it("rejects $include key nested in env object via POST (400)", async () => {
+    const { status, data } = await req(port, "POST", "/api/mcp/config/server", {
+      name: "env-include",
+      config: {
+        type: "stdio",
+        command: "npx",
+        args: ["-y", "@test/ok"],
+        env: { $include: "/etc/shadow" },
+      },
+    });
+    expect(status).toBe(400);
+    expect(typeof data.error).toBe("string");
+  });
+
+  it("rejects $include as server name via POST (400)", async () => {
+    const { status, data } = await req(port, "POST", "/api/mcp/config/server", {
+      name: "$include",
+      config: {
+        type: "stdio",
+        command: "npx",
+        args: ["-y", "@test/ok"],
+      },
+    });
+    expect(status).toBe(400);
+    expect(typeof data.error).toBe("string");
+  });
+
+  it("rejects cloud metadata SSRF target via remote URL (400)", async () => {
+    const { status, data } = await req(port, "POST", "/api/mcp/config/server", {
+      name: "ssrf-metadata",
+      config: {
+        type: "streamable-http",
+        url: "http://metadata.google.internal/computeMetadata/v1/",
+      },
+    });
+    expect(status).toBe(400);
+    expect(typeof data.error).toBe("string");
+  });
+
+  it("does not reject http config type at type-validation stage", async () => {
+    // Uses a non-resolving host — DNS check fails but the type itself is accepted
+    const { data } = await req(port, "POST", "/api/mcp/config/server", {
+      name: "http-type-test",
+      config: {
+        type: "http",
+        url: "https://mcp.example.com/api",
+      },
+    });
+    // Error should be DNS resolution, not "Invalid config type"
+    const errStr = String(data.error ?? "");
+    expect(errStr).not.toContain("Invalid config type");
+  });
+
+  it("does not reject sse config type at type-validation stage", async () => {
+    const { data } = await req(port, "POST", "/api/mcp/config/server", {
+      name: "sse-type-test",
+      config: {
+        type: "sse",
+        url: "https://mcp.example.com/events",
+      },
+    });
+    const errStr = String(data.error ?? "");
+    expect(errStr).not.toContain("Invalid config type");
+  });
+
+  it("handles URL-encoded server name in DELETE path", async () => {
+    const name = "server with spaces";
+    await req(port, "POST", "/api/mcp/config/server", {
+      name,
+      config: {
+        type: "stdio",
+        command: "npx",
+        args: ["-y", "@test/spaces"],
+      },
+    });
+
+    const { status, data } = await req(
+      port,
+      "DELETE",
+      `/api/mcp/config/server/${encodeURIComponent(name)}`,
+    );
+    expect(status).toBe(200);
+    expect(data.ok).toBe(true);
+
+    // Verify it was removed
+    const { data: configData } = await req(port, "GET", "/api/mcp/config");
+    const servers = configData.servers as Record<string, unknown>;
+    expect(servers[name]).toBeUndefined();
+  });
+});
+
+// ===========================================================================
+// 7. MCP runtime status
 // ===========================================================================
 
 describe("MCP runtime status", () => {

@@ -5,15 +5,55 @@
  * - applyPluginAutoEnable (connector, auth profile, env var, feature flag, hooks rules)
  * - CONNECTOR_PLUGINS / AUTH_PROVIDER_PLUGINS mappings
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+// Mock all static plugin star-imports in eliza.ts to avoid ESM resolution
+// failure: @elizaos/plugin-ollama imports MAX_EMBEDDING_TOKENS which Vitest
+// cannot resolve from @elizaos/core at static-analysis time.
+vi.mock("@elizaos/plugin-agent-orchestrator", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-agent-skills", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-anthropic", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-browser", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-cli", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-coding-agent", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-computeruse", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-cron", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-discord", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-edge-tts", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-elevenlabs", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-elizacloud", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-experience", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-form", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-google-genai", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-groq", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-knowledge", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-local-embedding", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-ollama", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-openai", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-openrouter", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-pdf", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-personality", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-plugin-manager", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-rolodex", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-secrets-manager", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-shell", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-sql", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-telegram", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-todo", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-trajectory-logger", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-trust", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
+
+import { CHANNEL_PLUGIN_MAP } from "../runtime/eliza";
 import {
   type ApplyPluginAutoEnableParams,
   AUTH_PROVIDER_PLUGINS,
   applyPluginAutoEnable,
   CONNECTOR_PLUGINS,
-  INTEGRATION_ENV_PLUGINS,
-} from "./plugin-auto-enable.js";
+  isStreamingDestinationConfigured,
+  STREAMING_PLUGINS,
+} from "./plugin-auto-enable";
+import { CONNECTOR_IDS } from "./schema";
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -249,14 +289,14 @@ describe("applyPluginAutoEnable — env vars", () => {
     ).toBe(true);
   });
 
-  it("enables pi-ai plugin when MILAIDY_USE_PI_AI is set", () => {
+  it("enables pi-ai plugin when MILADY_USE_PI_AI is set", () => {
     const params = makeParams({
-      env: { MILAIDY_USE_PI_AI: "1" },
+      env: { MILADY_USE_PI_AI: "1" },
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
     expect(config.plugins?.allow).toContain("pi-ai");
-    expect(changes.some((c) => c.includes("MILAIDY_USE_PI_AI"))).toBe(true);
+    expect(changes.some((c) => c.includes("MILADY_USE_PI_AI"))).toBe(true);
   });
 
   it("skips env var with empty string value", () => {
@@ -325,20 +365,59 @@ describe("applyPluginAutoEnable — env vars", () => {
     expect(anthropicEntries).toHaveLength(1);
   });
 
-  it("does not auto-enable upstream github plugin when GITHUB_API_TOKEN is set", () => {
+  it("auto-enables cua plugin when CUA_API_KEY is set", () => {
     const params = makeParams({
-      env: { GITHUB_API_TOKEN: "ghp_test_123" },
+      env: { CUA_API_KEY: "cua-key" },
     });
-    const { config } = applyPluginAutoEnable(params);
-    expect(config.plugins?.allow ?? []).not.toContain("github");
+    const { config, changes } = applyPluginAutoEnable(params);
+
+    expect(config.plugins?.allow).toContain("cua");
+    expect(changes.some((c) => c.includes("CUA_API_KEY"))).toBe(true);
   });
 
-  it("does not auto-enable upstream github plugin when ALICE_GH_TOKEN is set", () => {
+  it("auto-enables cua plugin when CUA_HOST is set", () => {
     const params = makeParams({
-      env: { ALICE_GH_TOKEN: "ghp_test_alice" },
+      env: { CUA_HOST: "https://cua.example" },
+    });
+    const { config, changes } = applyPluginAutoEnable(params);
+
+    expect(config.plugins?.allow).toContain("cua");
+    expect(changes.some((c) => c.includes("CUA_HOST"))).toBe(true);
+  });
+
+  it("respects cua enabled=false override for env auto-enable", () => {
+    const params = makeParams({
+      config: {
+        plugins: { entries: { cua: { enabled: false } } },
+      },
+      env: { CUA_API_KEY: "cua-key" },
     });
     const { config } = applyPluginAutoEnable(params);
-    expect(config.plugins?.allow ?? []).not.toContain("github");
+
+    expect(config.plugins?.allow ?? []).not.toContain("cua");
+  });
+
+  it("respects x402 enabled=false override for env auto-enable", () => {
+    const params = makeParams({
+      config: {
+        plugins: { entries: { x402: { enabled: false } } },
+      },
+      env: { X402_API_KEY: "x402-key" },
+    });
+    const { config } = applyPluginAutoEnable(params);
+
+    expect(config.plugins?.allow ?? []).not.toContain("x402");
+  });
+
+  it("does not duplicate cua when both CUA_API_KEY and CUA_HOST are set", () => {
+    const params = makeParams({
+      env: { CUA_API_KEY: "cua-key", CUA_HOST: "https://cua.example" },
+    });
+    const { config } = applyPluginAutoEnable(params);
+    const allow = config.plugins?.allow ?? [];
+
+    const cuaEntries = allow.filter((p) => p === "cua");
+    expect(cuaEntries).toHaveLength(1);
   });
 });
 
@@ -567,18 +646,28 @@ describe("CONNECTOR_PLUGINS", () => {
     expect(CONNECTOR_PLUGINS.discord).toBe("@elizaos/plugin-discord");
   });
 
-  it("contains 17 connector mappings", () => {
-    expect(Object.keys(CONNECTOR_PLUGINS)).toHaveLength(17);
+  it("contains 19 connector mappings", () => {
+    expect(Object.keys(CONNECTOR_PLUGINS)).toHaveLength(19);
   });
 
-  it("maps retake to @milady/plugin-retake", () => {
-    expect(CONNECTOR_PLUGINS.retake).toBe("@milady/plugin-retake");
+  it("maps retake to @elizaos/plugin-retake", () => {
+    expect(CONNECTOR_PLUGINS.retake).toBe("@elizaos/plugin-retake");
   });
 
   it("has keys matching CONNECTOR_IDS from schema", () => {
     expect([...Object.keys(CONNECTOR_PLUGINS)].sort()).toEqual(
       [...CONNECTOR_IDS].sort(),
     );
+  });
+
+  it("CONNECTOR_PLUGINS values match CHANNEL_PLUGIN_MAP for every connector", () => {
+    for (const id of Object.keys(CONNECTOR_PLUGINS)) {
+      expect(CONNECTOR_PLUGINS[id]).toBe(CHANNEL_PLUGIN_MAP[id]);
+    }
+  });
+
+  it("maps blooio to @elizaos/plugin-blooio", () => {
+    expect(CONNECTOR_PLUGINS.blooio).toBe("@elizaos/plugin-blooio");
   });
 });
 
@@ -605,8 +694,8 @@ describe("AUTH_PROVIDER_PLUGINS", () => {
     );
   });
 
-  it("maps MILAIDY_USE_PI_AI to pi-ai plugin", () => {
-    expect(AUTH_PROVIDER_PLUGINS.MILAIDY_USE_PI_AI).toBe(
+  it("maps MILADY_USE_PI_AI to pi-ai plugin", () => {
+    expect(AUTH_PROVIDER_PLUGINS.MILADY_USE_PI_AI).toBe(
       "@elizaos/plugin-pi-ai",
     );
   });
@@ -763,12 +852,264 @@ describe("Retake connector auto-enable", () => {
   });
 });
 
-describe("INTEGRATION_ENV_PLUGINS", () => {
-  it("does not map GITHUB_API_TOKEN to upstream github plugin", () => {
-    expect(INTEGRATION_ENV_PLUGINS.GITHUB_API_TOKEN).toBeUndefined();
+describe("Blooio connector auto-enable", () => {
+  it("auto-enables when apiKey is set", () => {
+    const { config } = applyPluginAutoEnable(
+      makeParams({
+        config: { connectors: { blooio: { apiKey: "blk-test-key" } } },
+      }),
+    );
+    expect(config.plugins?.allow).toContain("blooio");
   });
 
-  it("does not map ALICE_GH_TOKEN fallback to upstream github plugin", () => {
-    expect(INTEGRATION_ENV_PLUGINS.ALICE_GH_TOKEN).toBeUndefined();
+  it("does not auto-enable when config is empty", () => {
+    const { config } = applyPluginAutoEnable(
+      makeParams({
+        config: { connectors: { blooio: {} } },
+      }),
+    );
+    expect(config.plugins?.allow ?? []).not.toContain("blooio");
+  });
+
+  it("does not auto-enable when enabled is explicitly false", () => {
+    const { config } = applyPluginAutoEnable(
+      makeParams({
+        config: {
+          connectors: {
+            blooio: { enabled: false, apiKey: "blk-test-key" },
+          },
+        },
+      }),
+    );
+    expect(config.plugins?.allow ?? []).not.toContain("blooio");
+  });
+});
+
+// ============================================================================
+//  Streaming destination auto-enable
+// ============================================================================
+
+describe("STREAMING_PLUGINS mapping", () => {
+  it("maps known streaming destinations to plugin packages", () => {
+    expect(STREAMING_PLUGINS.retake).toBe("@elizaos/plugin-retake");
+    expect(STREAMING_PLUGINS.twitch).toBe("@elizaos/plugin-twitch-streaming");
+    expect(STREAMING_PLUGINS.youtube).toBe("@elizaos/plugin-youtube-streaming");
+    expect(STREAMING_PLUGINS.customRtmp).toBe("@milady/plugin-custom-rtmp");
+  });
+});
+
+describe("isStreamingDestinationConfigured", () => {
+  it("returns false for null/undefined config", () => {
+    expect(isStreamingDestinationConfigured("retake", null)).toBe(false);
+    expect(isStreamingDestinationConfigured("twitch", undefined)).toBe(false);
+  });
+
+  it("returns false for non-object config", () => {
+    expect(isStreamingDestinationConfigured("retake", "string")).toBe(false);
+    expect(isStreamingDestinationConfigured("twitch", 42)).toBe(false);
+  });
+
+  it("returns false when enabled is explicitly false", () => {
+    expect(
+      isStreamingDestinationConfigured("retake", {
+        enabled: false,
+        accessToken: "tok",
+      }),
+    ).toBe(false);
+    expect(
+      isStreamingDestinationConfigured("twitch", {
+        enabled: false,
+        streamKey: "sk",
+      }),
+    ).toBe(false);
+  });
+
+  it("detects retake via accessToken", () => {
+    expect(
+      isStreamingDestinationConfigured("retake", { accessToken: "rtk-abc" }),
+    ).toBe(true);
+  });
+
+  it("detects retake via enabled: true (no accessToken)", () => {
+    expect(isStreamingDestinationConfigured("retake", { enabled: true })).toBe(
+      true,
+    );
+  });
+
+  it("rejects retake with empty config", () => {
+    expect(isStreamingDestinationConfigured("retake", {})).toBe(false);
+  });
+
+  it("detects twitch via streamKey", () => {
+    expect(
+      isStreamingDestinationConfigured("twitch", { streamKey: "live_abc" }),
+    ).toBe(true);
+  });
+
+  it("detects youtube via streamKey", () => {
+    expect(
+      isStreamingDestinationConfigured("youtube", { streamKey: "xxxx-xxxx" }),
+    ).toBe(true);
+  });
+
+  it("detects customRtmp when both rtmpUrl and rtmpKey are present", () => {
+    expect(
+      isStreamingDestinationConfigured("customRtmp", {
+        rtmpUrl: "rtmp://example.com/live",
+        rtmpKey: "key123",
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects customRtmp when only rtmpUrl is present (missing rtmpKey)", () => {
+    expect(
+      isStreamingDestinationConfigured("customRtmp", {
+        rtmpUrl: "rtmp://example.com/live",
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects customRtmp when only rtmpKey is present (missing rtmpUrl)", () => {
+    expect(
+      isStreamingDestinationConfigured("customRtmp", { rtmpKey: "key123" }),
+    ).toBe(false);
+  });
+
+  it("returns false for unknown destination names", () => {
+    expect(
+      isStreamingDestinationConfigured("unknown", { streamKey: "sk" }),
+    ).toBe(false);
+  });
+});
+
+describe("applyPluginAutoEnable — streaming destinations", () => {
+  it("auto-enables retake-streaming plugin when retake accessToken is set", () => {
+    const { config, changes } = applyPluginAutoEnable(
+      makeParams({
+        config: {
+          streaming: { retake: { accessToken: "rtk-test" } },
+          // biome-ignore lint/suspicious/noExplicitAny: partial test config
+        } as any,
+      }),
+    );
+    expect(config.plugins?.allow).toContain("retake");
+    expect(changes.some((c) => c.includes("streaming: retake"))).toBe(true);
+  });
+
+  it("auto-enables twitch-streaming plugin when twitch streamKey is set", () => {
+    const { config, changes } = applyPluginAutoEnable(
+      makeParams({
+        config: {
+          streaming: { twitch: { streamKey: "live_abc" } },
+          // biome-ignore lint/suspicious/noExplicitAny: partial test config
+        } as any,
+      }),
+    );
+    expect(config.plugins?.allow).toContain("twitch-streaming");
+    expect(changes.some((c) => c.includes("streaming: twitch"))).toBe(true);
+  });
+
+  it("auto-enables youtube-streaming plugin when youtube streamKey is set", () => {
+    const { config, changes } = applyPluginAutoEnable(
+      makeParams({
+        config: {
+          streaming: { youtube: { streamKey: "xxxx-xxxx" } },
+          // biome-ignore lint/suspicious/noExplicitAny: partial test config
+        } as any,
+      }),
+    );
+    expect(config.plugins?.allow).toContain("youtube-streaming");
+    expect(changes.some((c) => c.includes("streaming: youtube"))).toBe(true);
+  });
+
+  it("auto-enables custom-rtmp plugin when customRtmp has rtmpUrl and rtmpKey", () => {
+    const { config, changes } = applyPluginAutoEnable(
+      makeParams({
+        config: {
+          streaming: {
+            customRtmp: {
+              rtmpUrl: "rtmp://example.com/live",
+              rtmpKey: "key123",
+            },
+          },
+          // biome-ignore lint/suspicious/noExplicitAny: partial test config
+        } as any,
+      }),
+    );
+    expect(config.plugins?.allow).toContain("custom-rtmp");
+    expect(changes.some((c) => c.includes("streaming: customRtmp"))).toBe(true);
+  });
+
+  it("skips activeDestination meta field", () => {
+    const { config } = applyPluginAutoEnable(
+      makeParams({
+        config: {
+          streaming: {
+            activeDestination: "twitch",
+            twitch: { streamKey: "live_abc" },
+          },
+          // biome-ignore lint/suspicious/noExplicitAny: partial test config
+        } as any,
+      }),
+    );
+    // activeDestination should not result in any plugin — only twitch should be added
+    const allow = config.plugins?.allow ?? [];
+    expect(allow).toContain("twitch-streaming");
+    expect(allow).not.toContain("activeDestination");
+  });
+
+  it("does not auto-enable streaming plugin when enabled is explicitly false", () => {
+    const { config } = applyPluginAutoEnable(
+      makeParams({
+        config: {
+          streaming: { twitch: { enabled: false, streamKey: "live_abc" } },
+          // biome-ignore lint/suspicious/noExplicitAny: partial test config
+        } as any,
+      }),
+    );
+    expect(config.plugins?.allow ?? []).not.toContain("twitch-streaming");
+  });
+
+  it("does not auto-enable streaming plugin when shortId is disabled in plugins.entries", () => {
+    const { config } = applyPluginAutoEnable(
+      makeParams({
+        config: {
+          streaming: { twitch: { streamKey: "live_abc" } },
+          plugins: { entries: { "twitch-streaming": { enabled: false } } },
+          // biome-ignore lint/suspicious/noExplicitAny: partial test config
+        } as any,
+      }),
+    );
+    expect(config.plugins?.allow ?? []).not.toContain("twitch-streaming");
+  });
+
+  it("does not auto-enable when streaming config is empty", () => {
+    const { changes } = applyPluginAutoEnable(
+      makeParams({
+        // biome-ignore lint/suspicious/noExplicitAny: partial test config
+        config: { streaming: {} } as any,
+      }),
+    );
+    expect(changes.filter((c) => c.includes("streaming:"))).toHaveLength(0);
+  });
+
+  it("enables multiple streaming plugins simultaneously", () => {
+    const { config, changes } = applyPluginAutoEnable(
+      makeParams({
+        config: {
+          streaming: {
+            retake: { accessToken: "rtk-test" },
+            twitch: { streamKey: "live_abc" },
+            youtube: { streamKey: "xxxx-xxxx" },
+          },
+          // biome-ignore lint/suspicious/noExplicitAny: partial test config
+        } as any,
+      }),
+    );
+    const allow = config.plugins?.allow ?? [];
+    expect(allow).toContain("retake");
+    expect(allow).toContain("twitch-streaming");
+    expect(allow).toContain("youtube-streaming");
+    expect(changes.length).toBeGreaterThanOrEqual(3);
   });
 });

@@ -5,8 +5,6 @@
 import { useApp } from "../AppContext";
 import { DatabaseView } from "./DatabaseView";
 import { MediaGalleryView } from "./MediaGalleryView";
-import { SectionToolbar } from "./SectionToolbar";
-import { SelectablePillGrid } from "./SelectablePillGrid";
 import { VectorBrowserView } from "./VectorBrowserView";
 
 const DB_TABS = [
@@ -16,20 +14,37 @@ const DB_TABS = [
 ];
 
 export function DatabasePageView() {
+  const { t } = useApp();
   const { databaseSubTab, setState } = useApp();
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
-      <SectionToolbar>
-        <SelectablePillGrid
-          className="pro-streamer-subtab-grid"
-          size="compact"
-          value={databaseSubTab}
-          onChange={(next) => setState("databaseSubTab", next)}
-          options={DB_TABS.map((tab) => ({ value: tab.id, label: tab.label }))}
-        />
-      </SectionToolbar>
+    <div className="flex flex-col h-full">
+      <h2 className="text-lg font-bold mb-1">
+        {t("databasepageview.Databases")}
+      </h2>
+      <p className="text-[13px] text-[var(--muted)] mb-4">
+        {t("databasepageview.BrowseAndQueryAge")}
+      </p>
 
+      {/* Sub-tab bar */}
+      <div className="flex gap-1 border-b border-[var(--border)] mb-5">
+        {DB_TABS.map((t) => (
+          <button
+            type="button"
+            key={t.id}
+            className={`px-4 py-2 text-[13px] bg-transparent border-0 border-b-2 cursor-pointer transition-colors ${
+              databaseSubTab === t.id
+                ? "text-[var(--accent)] font-medium border-b-[var(--accent)]"
+                : "text-[var(--muted)] border-b-transparent hover:text-[var(--txt)]"
+            }`}
+            onClick={() => setState("databaseSubTab", t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Sub-tab content */}
       <div className="flex-1 min-h-0">
         {databaseSubTab === "tables" && <DatabaseView />}
         {databaseSubTab === "media" && <MediaGalleryView />}

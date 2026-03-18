@@ -1,6 +1,11 @@
+---
+title: Plugin Registry Guide
+description: How to discover, configure, submit, and maintain plugins in the Milady/elizaOS plugin registry.
+---
+
 # Plugin Registry Guide
 
-The plugin registry is the central index of available ElizaOS plugins. This guide covers discovering, using, and submitting plugins to the registry.
+The plugin registry is the central index of available elizaOS plugins. This guide covers discovering, using, and submitting plugins to the registry.
 
 ## Table of Contents
 
@@ -22,7 +27,7 @@ The plugin registry is:
 - **Metadata** including name, description, category, and configuration
 - **Discovery system** for finding and loading plugins
 
-Milaidy ships with a bundled `plugins.json` containing 90+ plugins from the ElizaOS ecosystem.
+Milaidy ships with a bundled `plugins.json` containing 90+ plugins from the elizaOS ecosystem.
 
 ---
 
@@ -133,7 +138,7 @@ Each plugin in the registry has a manifest entry:
   "dirName": "plugin-telegram",
   "name": "Telegram",
   "npmName": "@elizaos/plugin-telegram",
-  "description": "Telegram bot connector for ElizaOS agents",
+  "description": "Telegram bot connector for elizaOS agents",
   "category": "connector",
   "envKey": "TELEGRAM_BOT_TOKEN",
   "configKeys": [
@@ -460,8 +465,8 @@ pnpm add elizaos-plugin-custom-feature
 
 ## Next Steps
 
-- [Plugin Development Guide](./plugin-development.md) — Create your own plugins
-- [Local Plugin Development](./local-plugins.md) — Develop without publishing
+- [Plugin Development Guide](/plugins/development) — Create your own plugins
+- [Local Plugin Development](/plugins/local-plugins) — Develop without publishing
 - [Contributing Guide](./contributing.md) — Submit plugins upstream
 
 ---
@@ -518,7 +523,7 @@ pnpm add elizaos-plugin-custom-feature
 bunx vitest run src/services/plugin-installer.test.ts src/services/skill-marketplace.test.ts src/services/mcp-marketplace.test.ts
 
 # Plugin install e2e lifecycle
-bunx vitest run --config vitest.e2e.config.ts test/plugin-install.e2e.test.ts test/skills-marketplace.e2e.test.ts
+bunx vitest run --config vitest.e2e.config.ts test/plugin-install.e2e.test.ts test/skills-marketplace-api.e2e.test.ts test/skills-marketplace-services.e2e.test.ts
 
 # On-chain service tests
 bunx vitest run src/api/tx-service.test.ts src/api/registry-service.test.ts src/api/drop-service.test.ts

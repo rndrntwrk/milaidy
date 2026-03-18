@@ -1,28 +1,16 @@
 /**
- * Milady Retake Plugin — retake.tv streaming integration.
+ * Milady Retake.tv Plugin — chat polling + streaming integration.
  *
- * Manages RTMP streaming to retake.tv via FFmpeg, including browser capture,
- * frame piping, and stream lifecycle (go-live / go-offline).
- *
- * Loaded as `@milady/plugin-retake` via CHANNEL_PLUGIN_MAP when
- * `config.connectors.retake` is present.
- *
- * ## HTTP Routes (registered dynamically)
- *
- * - POST /api/retake/frame  — pipe captured frames to StreamManager
- * - POST /api/retake/live   — start streaming to retake.tv
- * - POST /api/retake/offline — stop stream and notify retake.tv
+ * Re-exports from @elizaos/plugin-retake so tsdown bundles it into
+ * milady-dist/plugins/retake/index.js for the Electron runtime.
  */
 
-import type { IAgentRuntime, Plugin } from "@elizaos/core";
-
-export const retakePlugin: Plugin = {
-  name: "retake",
-  description: "Retake.tv RTMP streaming (browser capture → FFmpeg → RTMP)",
-
-  init: async (_config: Record<string, string>, runtime: IAgentRuntime) => {
-    runtime.logger.info("[retake] Plugin initialized");
-  },
-};
-
-export default retakePlugin;
+export type {
+  RetakeChatComment,
+  StreamingDestination,
+} from "@elizaos/plugin-retake";
+export {
+  createRetakeDestination,
+  retakePlugin as default,
+  retakePlugin,
+} from "@elizaos/plugin-retake";

@@ -7,7 +7,7 @@ const { mockGetSecrets, mockUpdateSecrets } = vi.hoisted(() => ({
   mockUpdateSecrets: vi.fn(),
 }));
 
-vi.mock("../../src/api-client", () => ({
+vi.mock("@milady/app-core/api", () => ({
   client: {
     getSecrets: mockGetSecrets,
     updateSecrets: mockUpdateSecrets,
@@ -56,7 +56,8 @@ describe("SecretsView picker keyboard behavior", () => {
 
     const addSecretButton = tree.root.find(
       (node) =>
-        node.type === "button" && node.props.children?.includes?.("Add Secret"),
+        node.type === "button" &&
+        node.props.children === "secretsview.AddSecret",
     );
 
     await act(async () => {
@@ -65,19 +66,25 @@ describe("SecretsView picker keyboard behavior", () => {
 
     expect(tree.root.findAllByProps({ role: "dialog" }).length).toBe(1);
 
+    const dialog = tree.root.findByProps({ role: "dialog" });
+    const preventDefault = vi.fn();
+
     await act(async () => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+      dialog.props.onKeyDown({ key: "Enter", preventDefault });
     });
+    expect(preventDefault).not.toHaveBeenCalled();
     expect(tree.root.findAllByProps({ role: "dialog" }).length).toBe(1);
 
     await act(async () => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: " " }));
+      dialog.props.onKeyDown({ key: " ", preventDefault });
     });
+    expect(preventDefault).not.toHaveBeenCalled();
     expect(tree.root.findAllByProps({ role: "dialog" }).length).toBe(1);
 
     await act(async () => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      dialog.props.onKeyDown({ key: "Escape", preventDefault });
     });
+    expect(preventDefault).toHaveBeenCalledTimes(1);
     expect(tree.root.findAllByProps({ role: "dialog" }).length).toBe(0);
   });
 });

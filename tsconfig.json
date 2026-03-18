@@ -17,19 +17,18 @@
     "strict": true,
     "target": "es2023",
     "useDefineForClassFields": false,
-    "baseUrl": ".",
-    "paths": {
-      "@elizaos/plugin-*": ["./packages/plugin-*/src/index.ts"],
-      "@elizaos/*": ["./plugins/*/src/index.ts"]
-    }
+    "baseUrl": "."
   },
   "include": ["src/**/*"],
   "exclude": [
     "node_modules",
     "dist",
+    "packages",
+    "plugins",
     "src/**/*.test.ts",
     "src/**/*.test.tsx",
     "src/**/test-helpers.ts",
-    "src/services/training-service.ts"
+    "src/services/training-service.ts",
+    "src/plugins/retake/**"
   ]
 }

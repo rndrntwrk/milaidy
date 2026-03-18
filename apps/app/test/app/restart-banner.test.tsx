@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 interface RestartBannerContextStub {
+  t: (key: string) => string;
   pendingRestart: boolean;
   pendingRestartReasons: string[];
   restartBannerDismissed: boolean;
@@ -28,6 +29,7 @@ function makeContext(
   overrides: Partial<RestartBannerContextStub> = {},
 ): RestartBannerContextStub {
   return {
+    t: (k: string) => k,
     pendingRestart: false,
     pendingRestartReasons: [],
     restartBannerDismissed: false,
@@ -137,7 +139,7 @@ describe("RestartBanner", () => {
     );
 
     const markup = renderToStaticMarkup(React.createElement(RestartBanner));
-    expect(markup).toContain("bg-amber-600");
+    expect(markup).toContain("rgba(240, 178, 50, 0.15)");
     expect(markup).toContain("z-[9998]");
   });
 

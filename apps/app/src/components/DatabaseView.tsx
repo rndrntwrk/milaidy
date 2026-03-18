@@ -6,7 +6,6 @@
  *  - SQL editor: code textarea with run button and results grid
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type ColumnInfo,
   client,
@@ -14,12 +13,11 @@ import {
   type QueryResult,
   type TableInfo,
   type TableRowsResponse,
-} from "../api-client";
-import { SectionEmptyState, SectionErrorState, SectionLoadingState } from "./SectionStates.js";
-import { SectionShell } from "./SectionShell.js";
-import { Button } from "./ui/Button.js";
-import { CloseIcon } from "./ui/Icons";
-import { Input } from "./ui/Input.js";
+} from "@milady/app-core/api";
+import { Badge, Button, Input, Textarea } from "@milady/ui";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useApp } from "../AppContext";
 
 type DbView = "tables" | "query";
 type SortDir = "asc" | "desc" | null;
@@ -94,6 +92,7 @@ function CellPopover({
   value: string;
   onClose: () => void;
 }) {
+  const { t } = useApp();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -106,25 +105,23 @@ function CellPopover({
   return (
     <div
       ref={ref}
-      className="fixed z-50 bg-[var(--card)] border border-[var(--border)] shadow-lg p-3 max-w-[500px] max-h-[300px] overflow-auto"
+      className="fixed z-50 bg-card/60 backdrop-blur-md border border-border/40 shadow-[0_8px_30px_rgba(var(--accent),0.15)] rounded-xl p-4 max-w-[500px] max-h-[300px] overflow-auto"
       style={{ top: "50%", left: "50%", transform: "translate(-50%, -50%)" }}
     >
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] text-[var(--muted)] uppercase font-bold">
-          Cell Value
+      <div className="flex items-center justify-between mb-3 border-b border-border/40 pb-2">
+        <span className="text-xs text-muted uppercase font-bold tracking-wider">
+          {t("databaseview.CellValue")}
         </span>
         <Button
-          type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7 rounded-full text-[var(--muted)] hover:text-[var(--txt)]"
+          className="w-6 h-6 rounded-full hover:bg-bg-hover hover:text-txt hover:shadow-[0_0_10px_rgba(var(--accent),0.2)] transition-all"
           onClick={onClose}
-          aria-label="Close cell value"
         >
-          <CloseIcon className="h-3.5 w-3.5" />
+          ×
         </Button>
       </div>
-      <pre className="text-xs text-[var(--txt)] font-mono whitespace-pre-wrap break-all m-0">
+      <pre className="text-xs text-txt font-mono whitespace-pre-wrap break-all m-0 bg-bg/40 p-3 rounded-lg border border-border/40">
         {value}
       </pre>
     </div>
@@ -150,16 +147,17 @@ function ResultsGrid({
   onSort?: (col: string) => void;
   onCellClick?: (value: string) => void;
 }) {
+  const { t } = useApp();
   return (
     <div
-      className="overflow-auto border border-[var(--border)] bg-[var(--card)]"
+      className="overflow-auto border border-border/40 bg-card/40 backdrop-blur-md rounded-2xl shadow-inner"
       style={{ maxHeight: "calc(100vh - 340px)" }}
     >
       <table className="w-full border-collapse text-[12px] font-mono">
-        <thead className="sticky top-0 z-10">
-          <tr className="bg-[var(--bg)]">
+        <thead className="sticky top-0 z-10 backdrop-blur-xl bg-bg/80 border-b border-border/40 shadow-sm">
+          <tr>
             {/* Row number column */}
-            <th className="w-[50px] min-w-[50px] px-2 py-2 text-[10px] text-[var(--muted)] font-medium text-right border-b border-r border-[var(--border)] bg-[var(--bg)]">
+            <th className="w-[50px] min-w-[50px] px-3 py-2.5 text-[10px] text-muted font-medium text-right border-r border-border/40">
               #
             </th>
             {columns.map((col) => {
@@ -168,24 +166,28 @@ function ResultsGrid({
               return (
                 <th
                   key={col}
-                  className="px-3 py-2 text-left border-b border-r border-[var(--border)] bg-[var(--bg)] whitespace-nowrap cursor-pointer select-none hover:bg-[var(--border)]/30 transition-colors"
+                  className="px-4 py-2.5 text-left border-r border-border/40 whitespace-nowrap cursor-pointer select-none hover:bg-bg-hover transition-colors group"
                   onClick={() => onSort?.(col)}
                 >
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-[var(--txt)] font-semibold">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-txt font-semibold group-hover:text-accent transition-colors">
                       {col}
                     </span>
                     {meta && (
-                      <span
-                        className={`text-[9px] px-1 py-px rounded font-medium ${typeBadgeColor(meta.type)}`}
+                      <Badge
+                        variant="outline"
+                        className={`text-[9px] px-1.5 py-0 border-none font-medium ${typeBadgeColor(meta.type)}`}
                       >
                         {typeLabel(meta.type)}
-                      </span>
+                      </Badge>
                     )}
                     {meta?.isPrimaryKey && (
-                      <span className="text-[9px] px-1 py-px rounded font-bold text-yellow-400 bg-yellow-400/10">
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] px-1.5 py-0 border-none font-bold text-yellow-400 bg-yellow-400/10 shadow-[0_0_8px_rgba(250,204,21,0.2)]"
+                      >
                         PK
-                      </span>
+                      </Badge>
                     )}
                     {isSorted && (
                       <span className="text-[10px] text-[var(--accent)]">
@@ -202,9 +204,9 @@ function ResultsGrid({
           {rows.map((row, i) => (
             <tr
               key={JSON.stringify(row)}
-              className="border-b border-[var(--border)] hover:bg-[var(--accent)]/5 transition-colors"
+              className="border-b border-border/20 hover:bg-accent/10 transition-colors group"
             >
-              <td className="px-2 py-1.5 text-[10px] text-[var(--muted)] text-right border-r border-[var(--border)] bg-[var(--bg)]/50 tabular-nums">
+              <td className="px-3 py-2 text-[10px] text-muted text-right border-r border-border/30 bg-bg/20 tabular-nums group-hover:text-accent/70 transition-colors">
                 {i + 1}
               </td>
               {columns.map((col) => {
@@ -215,7 +217,7 @@ function ResultsGrid({
                 return (
                   <td
                     key={col}
-                    className="px-3 py-1.5 border-r border-[var(--border)] max-w-[280px] truncate cursor-default"
+                    className="px-4 py-2 border-r border-border/20 max-w-[280px] truncate cursor-default transition-colors"
                     title={display}
                     onClick={() => {
                       if (isExpandable) onCellClick(display);
@@ -232,7 +234,7 @@ function ResultsGrid({
                   >
                     {isNull ? (
                       <span className="text-[var(--muted)] italic opacity-50">
-                        NULL
+                        {t("databaseview.NULL")}
                       </span>
                     ) : (
                       <span className="text-[var(--txt)]">{display}</span>
@@ -263,37 +265,37 @@ function PaginationBar({
   onPrev: () => void;
   onNext: () => void;
 }) {
+  const { t } = useApp();
   const start = offset + 1;
   const end = Math.min(offset + limit, total);
   const hasPrev = offset > 0;
   const hasNext = offset + limit < total;
 
   return (
-    <div className="flex items-center justify-between px-3 py-2 border border-t-0 border-[var(--border)] bg-[var(--bg)] text-[11px] text-[var(--muted)]">
-      <span>
-        {total.toLocaleString()} row{total !== 1 ? "s" : ""}
+    <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/40 bg-card/60 backdrop-blur-md rounded-b-2xl text-[11px] text-muted">
+      <span className="font-medium">
+        {total.toLocaleString()} {t("databaseview.row")}
+        {total !== 1 ? "s" : ""}
         {total > 0 && ` · showing ${start}-${end}`}
       </span>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2">
         <Button
-          type="button"
           variant="outline"
           size="sm"
-          className="rounded-full px-3 text-[11px]"
+          className="h-auto min-h-[1.75rem] py-1 whitespace-normal break-words text-left text-[11px] rounded-lg border-border/50 hover:border-accent hover:text-accent hover:shadow-[0_0_10px_rgba(var(--accent),0.2)] transition-all bg-bg/50 backdrop-blur-sm"
           disabled={!hasPrev}
           onClick={onPrev}
         >
-          Prev
+          {t("databaseview.Prev")}
         </Button>
         <Button
-          type="button"
           variant="outline"
           size="sm"
-          className="rounded-full px-3 text-[11px]"
+          className="h-auto min-h-[1.75rem] py-1 whitespace-normal break-words text-left text-[11px] rounded-lg border-border/50 hover:border-accent hover:text-accent hover:shadow-[0_0_10px_rgba(var(--accent),0.2)] transition-all bg-bg/50 backdrop-blur-sm"
           disabled={!hasNext}
           onClick={onNext}
         >
-          Next
+          {t("databaseview.Next")}
         </Button>
       </div>
     </div>
@@ -303,6 +305,7 @@ function PaginationBar({
 // ── Main component ────────────────────────────────────────────────────
 
 export function DatabaseView() {
+  const { t } = useApp();
   const [dbStatus, setDbStatus] = useState<DatabaseStatus | null>(null);
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [selectedTable, setSelectedTable] = useState("");
@@ -477,169 +480,212 @@ export function DatabaseView() {
       t.name.toLowerCase().includes(sidebarSearch.toLowerCase()),
   );
 
-  const toolbar = (
-    <div className="flex flex-wrap items-center gap-2">
-      <Button
-        type="button"
-        variant={view === "tables" ? "secondary" : "outline"}
-        onClick={() => setView("tables")}
-      >
-        Tables
-      </Button>
-      <Button
-        type="button"
-        variant={view === "query" ? "secondary" : "outline"}
-        onClick={() => setView("query")}
-      >
-        SQL
-      </Button>
-      {view === "tables" ? (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setSidebarCollapsed((current) => !current)}
-        >
-          {sidebarCollapsed ? "Show list" : "Hide list"}
-        </Button>
-      ) : null}
-      <Button
-        type="button"
-        variant="outline"
-        onClick={async () => {
-          const status = await loadStatus();
-          if (status?.connected) {
-            await loadTables();
-          }
-        }}
-      >
-        Refresh
-      </Button>
-    </div>
-  );
-
   return (
-    <SectionShell
-      title={view === "tables" ? "Database" : "SQL editor"}
-      description={
-        dbStatus?.connected
-          ? `${dbStatus.provider} · ${dbStatus.tableCount} tables indexed`
-          : "Browse local tables and query results."
-      }
-      toolbar={toolbar}
-      className="h-full"
-      contentClassName="flex min-h-0 flex-1 flex-col gap-4"
-    >
+    <div className="flex flex-col h-full gap-4">
+      {/* Top bar */}
+      <div className="flex items-center gap-3 p-3 bg-card/60 backdrop-blur-xl border border-border/40 rounded-2xl shadow-sm">
+        <div className="flex items-center gap-2 text-xs text-muted font-medium bg-bg/50 px-3 py-1.5 rounded-lg border border-border/30">
+          {dbStatus ? (
+            <>
+              <span
+                className={`w-2 h-2 rounded-full shadow-[0_0_8px_currentColor] ${dbStatus.connected ? "text-green-400 bg-green-400" : "text-red-400 bg-red-400"}`}
+              />
+              <span className="tracking-wide">{dbStatus.provider}</span>
+              <span className="opacity-40">·</span>
+              <span>
+                {dbStatus.tableCount} {t("databaseview.tables")}
+              </span>
+            </>
+          ) : (
+            <span>{t("databaseview.Connecting")}</span>
+          )}
+        </div>
+
+        <div className="flex-1" />
+
+        {/* View toggle */}
+        <div className="flex p-1 bg-bg/50 backdrop-blur-md border border-border/40 rounded-xl shadow-inner gap-1">
+          <Button
+            variant={view === "tables" ? "default" : "ghost"}
+            size="sm"
+            className={`h-auto min-h-[1.75rem] px-4 py-1 whitespace-normal break-words text-left text-xs font-medium rounded-lg transition-all duration-300 ${
+              view === "tables"
+                ? "bg-accent text-accent-fg shadow-[0_0_15px_rgba(var(--accent),0.4)] border border-accent/50 scale-105"
+                : "text-muted hover:text-txt hover:bg-bg-hover hover:border-border/50"
+            }`}
+            onClick={() => setView("tables")}
+          >
+            {t("databaseview.TableEditor")}
+          </Button>
+          <Button
+            variant={view === "query" ? "default" : "ghost"}
+            size="sm"
+            className={`h-auto min-h-[1.75rem] px-4 py-1 whitespace-normal break-words text-left text-xs font-medium rounded-lg transition-all duration-300 ${
+              view === "query"
+                ? "bg-accent text-accent-fg shadow-[0_0_15px_rgba(var(--accent),0.4)] border border-accent/50 scale-105"
+                : "text-muted hover:text-txt hover:bg-bg-hover hover:border-border/50"
+            }`}
+            onClick={() => setView("query")}
+          >
+            {t("databaseview.SQLEditor")}
+          </Button>
+        </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-auto min-h-[2.25rem] whitespace-normal break-words px-4 py-1.5 text-xs font-medium rounded-xl border-border/50 hover:border-accent hover:text-accent transition-all duration-300 bg-bg/50 backdrop-blur-md shadow-sm hover:shadow-[0_0_15px_rgba(var(--accent),0.3)]"
+          onClick={async () => {
+            const status = await loadStatus();
+            if (status?.connected) {
+              await loadTables();
+            }
+          }}
+        >
+          {t("databaseview.Refresh")}
+        </Button>
+      </div>
 
       {dbStatus && !dbStatus.connected && (
-        <SectionEmptyState
-          className="mb-3"
-          title="Database not available"
-          description="This browser needs a local agent with an attached database connection. In cloud mode the data layer is managed remotely."
-          actionLabel="Refresh"
-          onAction={() => {
-            void loadStatus();
-          }}
-        />
+        <div className="p-4 border border-border/40 bg-card/60 backdrop-blur-md rounded-2xl text-muted text-sm shadow-sm">
+          <p className="m-0 mb-2 font-medium text-txt tracking-wide">
+            {t("databaseview.DatabaseNotAvailab")}
+          </p>
+          <p className="m-0 text-xs">{t("databaseview.TheDatabaseViewer")}</p>
+        </div>
       )}
 
       {errorMessage && (
-        <SectionErrorState
-          className="mb-3"
-          title="Database action failed"
-          description="The last database request did not complete successfully."
-          actionLabel="Dismiss"
-          onAction={() => setErrorMessage("")}
-          details={errorMessage}
-        />
+        <div className="p-3 border border-danger/50 bg-danger/10 text-danger text-sm rounded-xl mb-2 flex items-center justify-between shadow-[0_0_15px_rgba(231,76,60,0.15)] backdrop-blur-md">
+          <span className="font-medium tracking-wide">{errorMessage}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="w-6 h-6 rounded-full text-danger hover:bg-danger/20 hover:text-danger-foreground transition-colors"
+            onClick={() => setErrorMessage("")}
+          >
+            ×
+          </Button>
+        </div>
       )}
 
       {view === "tables" ? (
-        <div className="grid flex-1 min-h-0 gap-4 xl:grid-cols-[19rem_minmax(0,1fr)]">
-          <SectionShell
-            title="Table list"
-            description="Choose a table to inspect."
-            className={sidebarCollapsed ? "hidden xl:block xl:min-w-0 xl:opacity-0" : ""}
-            contentClassName="gap-3"
+        /* ── Table Editor ──────────────────────────────────────── */
+        <div className="flex flex-1 min-h-0 gap-4">
+          {/* Sidebar */}
+          <div
+            className={`flex-shrink-0 border border-border/40 bg-card/60 backdrop-blur-xl rounded-2xl transition-all overflow-hidden flex flex-col shadow-sm ${sidebarCollapsed ? "w-0 opacity-0 border-none m-0" : "w-[220px]"}`}
           >
-              <div className="flex items-center gap-1">
+            <div className="p-3 flex flex-col h-full gap-3">
+              <div className="relative">
                 <Input
                   type="text"
-                  placeholder="Filter tables..."
+                  placeholder={t("databaseview.FilterTables")}
                   value={sidebarSearch}
                   onChange={(e) => setSidebarSearch(e.target.value)}
-                  className="flex-1 min-w-0 text-[11px]"
+                  className="w-full h-9 rounded-xl border-border/50 bg-bg/50 backdrop-blur-sm text-xs focus-visible:ring-accent/50 focus-visible:border-accent pr-8 shadow-inner"
                 />
               </div>
+              <div className="text-[10px] text-muted uppercase font-bold tracking-widest px-2 bg-black/10 py-1.5 rounded-lg border border-white/5 inline-flex items-center shadow-inner">
+                {t("databaseview.Tables")} ({filteredTables.length})
+              </div>
               {loading && tables.length === 0 ? (
-                <SectionLoadingState
-                  title="Loading tables"
-                  description="Pulling the latest schema and row counts."
-                  className="border-none bg-transparent shadow-none"
-                />
+                <div className="text-xs text-muted px-2 py-4 italic text-center opacity-70">
+                  {t("databaseview.Loading")}
+                </div>
               ) : (
-                <div className="flex flex-col gap-2 max-h-[calc(100vh-24rem)] overflow-auto">
+                <div className="flex flex-col gap-1 flex-1 overflow-auto pr-1 custom-scrollbar">
                   {filteredTables.map((t) => (
-                    <button
-                      type="button"
+                    <Button
+                      variant={selectedTable === t.name ? "secondary" : "ghost"}
                       key={t.name}
                       onClick={() => handleSelectTable(t.name)}
-                      className={`flex w-full items-center justify-between rounded-2xl border px-3 py-2.5 text-left text-sm transition-colors ${
+                      className={`justify-start h-8 px-3 text-xs w-full transition-all duration-300 rounded-xl ${
                         selectedTable === t.name
-                          ? "border-white/18 bg-white/[0.1] text-white"
-                          : "border-white/8 bg-white/[0.02] text-[var(--txt)] hover:border-white/14 hover:bg-white/[0.05]"
+                          ? "bg-accent/20 text-accent font-semibold border border-accent/30 shadow-[0_0_10px_rgba(var(--accent),0.1)] translate-x-1"
+                          : "text-muted hover:text-txt hover:bg-bg-hover hover:translate-x-0.5"
                       }`}
                     >
-                      <span className="truncate">{t.name}</span>
-                      <span className="ml-2 flex-shrink-0 text-[11px] tabular-nums text-[var(--muted)]">
-                        {t.rowCount}
+                      <span className="truncate flex-1 text-left">
+                        {t.name}
                       </span>
-                    </button>
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] px-1.5 py-0 h-4 border-white/10 bg-black/20 text-muted-foreground ml-2 tabular-nums"
+                      >
+                        {t.rowCount}
+                      </Badge>
+                    </Button>
                   ))}
                 </div>
               )}
-          </SectionShell>
+            </div>
+          </div>
 
-          <SectionShell
-            title={selectedTable || "Table data"}
-            description={
-              selectedTable
-                ? "Browse rows, sort columns, and inspect values."
-                : "Select a table to browse rows."
+          {/* Toggle sidebar */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="flex-shrink-0 w-6 h-12 flex items-center justify-center rounded-xl bg-card/40 backdrop-blur-sm border border-border/40 my-auto shadow-sm text-muted hover:text-txt hover:bg-bg-hover hover:border-accent/40 transition-all hover:scale-110"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            title={
+              sidebarCollapsed
+                ? t("databaseview.showSidebar", {
+                    defaultValue: "Show sidebar",
+                  })
+                : t("databaseview.hideSidebar", {
+                    defaultValue: "Hide sidebar",
+                  })
             }
-            toolbar={
-              selectedTable && columnMeta.size > 0 ? (
-                <span className="text-sm text-white/55">{columnMeta.size} columns</span>
-              ) : undefined
-            }
-            className="min-h-0"
-            contentClassName="flex min-h-0 flex-1 flex-col gap-4"
           >
+            {sidebarCollapsed ? (
+              <ChevronRight className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronLeft className="w-3.5 h-3.5" />
+            )}
+          </Button>
+
+          {/* Main grid area */}
+          <div className="flex-1 min-w-0 flex flex-col bg-card/40 backdrop-blur-xl border border-border/40 rounded-2xl shadow-sm overflow-hidden p-2">
             {!selectedTable ? (
               <div className="flex-1 flex items-center justify-center">
-                <SectionEmptyState
-                  title="Select a table"
-                  description="Pick a table from the list to inspect rows, columns, and values."
-                  className="max-w-md border-none bg-transparent shadow-none"
-                />
+                <div className="text-center p-8 border border-white/5 bg-black/10 rounded-3xl shadow-inner backdrop-blur-md">
+                  <div className="text-muted text-base font-medium mb-2 tracking-wide">
+                    {t("databaseview.SelectATable")}
+                  </div>
+                  <div className="text-muted text-xs opacity-60 tracking-wider uppercase">
+                    {t("databaseview.ChooseATableFrom")}
+                  </div>
+                </div>
               </div>
             ) : loading && !tableData ? (
-              <div className="flex-1 flex items-center justify-center">
-                <SectionLoadingState
-                  title="Loading table"
-                  description="Fetching rows and schema for the selected table."
-                  className="max-w-md border-none bg-transparent shadow-none"
-                />
+              <div className="flex-1 flex items-center justify-center font-medium text-muted text-sm italic tracking-widest animate-pulse">
+                {t("databaseview.Loading")}
               </div>
             ) : tableData ? (
               <>
+                {/* Table header bar */}
+                <div className="flex items-center gap-3 px-3 py-2 text-xs mb-2 bg-bg/40 rounded-xl border border-border/30">
+                  <span className="text-txt font-semibold tracking-wide">
+                    {selectedTable}
+                  </span>
+                  {columnMeta.size > 0 && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] text-muted border-white/10 bg-black/20 font-medium"
+                    >
+                      {columnMeta.size} {t("databaseview.columns")}
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Data grid */}
                 <div className="flex-1 min-h-0">
                   {tableData.rows.length === 0 ? (
-                    <div className="flex items-center justify-center h-full">
-                      <SectionEmptyState
-                        title="Table is empty"
-                        description="This table has no rows yet."
-                        className="max-w-md border-none bg-transparent shadow-none"
-                      />
+                    <div className="flex items-center justify-center h-full border border-border/40 bg-card/40 rounded-t-2xl">
+                      <div className="text-muted text-sm p-6 bg-black/10 rounded-2xl border border-white/5 shadow-inner backdrop-blur-md font-medium tracking-wide">
+                        {t("databaseview.TableIsEmpty")}
+                      </div>
                     </div>
                   ) : (
                     <ResultsGrid
@@ -664,19 +710,16 @@ export function DatabaseView() {
                 />
               </>
             ) : null}
-          </SectionShell>
+          </div>
         </div>
       ) : (
-        <SectionShell
-          title="Query editor"
-          description="Run ad hoc SQL and inspect results."
-          className="flex-1"
-          contentClassName="flex min-h-0 flex-1 flex-col gap-4"
-        >
+        /* ── SQL Editor ────────────────────────────────────────── */
+        <div className="flex flex-col flex-1 min-h-0 gap-4">
           {/* Editor area */}
-          <div className="flex flex-col">
-            <div className="relative">
-              <textarea
+          <div className="flex flex-col bg-card/60 backdrop-blur-xl border border-border/40 rounded-2xl p-4 shadow-sm">
+            <div className="relative group">
+              <div className="absolute -inset-[1px] bg-gradient-to-r from-accent/0 via-accent/30 to-accent/0 rounded-2xl opacity-0 group-focus-within:opacity-100 blur transition-opacity duration-500" />
+              <Textarea
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
                 onKeyDown={(e) => {
@@ -685,50 +728,61 @@ export function DatabaseView() {
                     runQuery();
                   }
                 }}
-                placeholder="SELECT * FROM memories LIMIT 50;"
+                placeholder={t("databaseview.SELECTFROMMemori")}
                 rows={6}
-                className="min-h-[10rem] w-full resize-y rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-[13px] font-mono leading-relaxed text-[var(--txt)]"
+                className="w-full relative bg-bg/80 backdrop-blur-md border-border/50 text-txt text-sm font-mono resize-y leading-relaxed rounded-xl focus-visible:ring-accent focus-visible:border-accent custom-scrollbar shadow-inner"
                 spellCheck={false}
               />
             </div>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-3 mt-3">
               <Button
-                type="button"
-                variant="secondary"
+                variant="default"
+                size="sm"
+                className="px-6 h-auto min-h-[2.25rem] whitespace-normal break-words text-left py-1.5 text-xs font-bold rounded-xl bg-accent text-accent-fg hover:opacity-90 disabled:opacity-40 shadow-[0_0_15px_rgba(var(--accent),0.4)] transition-all hover:scale-[1.02]"
                 disabled={queryLoading || !queryText.trim()}
                 onClick={runQuery}
               >
-                {queryLoading ? "Running..." : "Run"}
+                {queryLoading
+                  ? t("common.running", { defaultValue: "Running..." })
+                  : t("databaseview.runQuery", { defaultValue: "Run Query" })}
               </Button>
-              <span className="text-[10px] text-[var(--muted)]">
-                {navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Enter
-              </span>
+              <kbd className="text-[10px] text-muted font-mono bg-bg/50 px-2 py-1 rounded-md border border-border/30 shadow-inner tracking-wider">
+                {navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}{" "}
+                {t("databaseview.Enter")}
+              </kbd>
               {queryResult && (
-                <span className="text-[10px] text-[var(--muted)] ml-auto">
-                  {queryResult.rowCount} row
+                <div className="text-xs text-muted ml-auto bg-black/10 px-3 py-1.5 rounded-lg border border-white/5 font-medium shadow-inner tracking-wide">
+                  <span className="text-txt">{queryResult.rowCount}</span>{" "}
+                  {t("databaseview.row")}
                   {queryResult.rowCount !== 1 ? "s" : ""} ·{" "}
-                  {queryResult.durationMs}ms
-                </span>
+                  <span className="text-accent">
+                    {queryResult.durationMs}ms
+                  </span>
+                </div>
               )}
             </div>
           </div>
 
           {/* Query history dropdown */}
           {queryHistory.length > 0 && !queryResult && (
-            <div className="overflow-hidden rounded-2xl border border-white/8 bg-white/[0.03]">
-              <div className="px-3 py-2 text-[11px] text-[var(--muted)] border-b border-white/8">
-                Recent queries
+            <div className="border border-border/40 bg-card/40 backdrop-blur-xl rounded-2xl shadow-sm overflow-hidden">
+              <div className="px-4 py-2.5 text-[10px] text-muted uppercase font-bold tracking-widest bg-bg/60 border-b border-border/40 shadow-inner">
+                {t("databaseview.RecentQueries")}
               </div>
-              {queryHistory.slice(0, 5).map((q) => (
-                <button
-                  type="button"
-                  key={q}
-                  className="w-full px-3 py-2 text-[11px] font-mono text-[var(--txt)] text-left bg-transparent border-0 border-b border-white/8 cursor-pointer hover:bg-[var(--accent)]/5 truncate"
-                  onClick={() => setQueryText(q)}
-                >
-                  {q}
-                </button>
-              ))}
+              <div className="flex flex-col">
+                {queryHistory.slice(0, 5).map((q) => (
+                  <Button
+                    variant="ghost"
+                    key={q}
+                    className="w-full px-4 py-3 h-auto justify-start text-[11px] font-mono text-txt text-left rounded-none border-b border-border/20 hover:bg-accent/10 hover:text-accent transition-colors truncate"
+                    onClick={() => setQueryText(q)}
+                  >
+                    <span className="truncate opacity-80 group-hover:opacity-100">
+                      {q}
+                    </span>
+                  </Button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -744,18 +798,19 @@ export function DatabaseView() {
           )}
 
           {queryResult && queryResult.rows.length === 0 && (
-            <SectionEmptyState
-              title="Query returned no rows"
-              description="Run another query or broaden the result set."
-            />
+            <div className="flex items-center justify-center p-8 border border-border/40 bg-card/60 backdrop-blur-xl rounded-2xl shadow-sm text-muted text-sm tracking-wide font-medium">
+              <div className="px-6 py-4 bg-black/10 shadow-inner rounded-xl border border-white/5">
+                {t("databaseview.QueryReturnedNoRo")}
+              </div>
+            </div>
           )}
-        </SectionShell>
+        </div>
       )}
 
       {/* Cell inspect overlay */}
       {cellInspect !== null && (
         <CellPopover value={cellInspect} onClose={() => setCellInspect(null)} />
       )}
-    </SectionShell>
+    </div>
   );
 }

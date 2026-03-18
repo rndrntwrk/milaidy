@@ -929,7 +929,9 @@ describe("registry-client", () => {
       expect(hyperscape?.viewer?.postMessageAuth).toBe(true);
 
       const pluginInfo = await getPluginInfo("@elizaos/app-hyperscape");
-      expect(pluginInfo?.localPath).toContain("plugins/app-hyperscape");
+      expect(pluginInfo?.localPath).toContain(
+        path.join("plugins", "app-hyperscape"),
+      );
     });
 
     it("applies local app viewer override over legacy registry viewer paths", async () => {

@@ -1,33 +1,18 @@
+import { type CustomActionDef, client } from "@milady/app-core/api";
+import { Button, Input } from "@milady/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { client, type CustomActionDef } from "../api-client";
 import { useApp } from "../AppContext";
-import { QUICK_LAYER_DOCK } from "./quickLayerCatalog";
-import { Button } from "./ui/Button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "./ui/Card";
-import {
-  CloseIcon,
-  EditIcon,
-  PlusIcon,
-  SearchIcon,
-  StackIcon,
-  TrashIcon,
-} from "./ui/Icons";
 
 interface CustomActionsPanelProps {
   open: boolean;
   onClose: () => void;
   onOpenEditor: (action?: CustomActionDef | null) => void;
 }
+
 const HANDLER_TYPE_COLORS: Record<string, string> = {
-  http: "bg-blue-500/20 text-blue-300",
-  shell: "bg-emerald-500/20 text-emerald-300",
-  code: "bg-violet-500/20 text-violet-300",
+  http: "bg-blue-500/20 text-blue-400",
+  shell: "bg-green-500/20 text-green-400",
+  code: "bg-purple-500/20 text-purple-400",
 };
 
 const HANDLER_TYPE_NAMES: Record<string, string> = {
@@ -41,7 +26,7 @@ export function CustomActionsPanel({
   onClose,
   onOpenEditor,
 }: CustomActionsPanelProps) {
-  const { setActionNotice, quickLayerStatuses, runQuickLayer } = useApp();
+  const { t } = useApp();
   const [actions, setActions] = useState<CustomActionDef[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -61,31 +46,32 @@ export function CustomActionsPanel({
     }
   }, []);
 
-  const layerStatuses = useMemo(
-    () =>
-      new Map(
-        QUICK_LAYER_DOCK.map((layer) => [
-          layer.id,
-          quickLayerStatuses[layer.id],
-        ]),
-      ),
-    [quickLayerStatuses],
-  );
-
-  const triggerDockedLayer = useCallback(
-    (layerId: (typeof QUICK_LAYER_DOCK)[number]["id"], layerLabel: string) => {
-      setActionNotice(`Running ${layerLabel} from Actions drawer...`, "info", 2200);
-      onClose();
-      void runQuickLayer(layerId);
-    },
-    [onClose, runQuickLayer, setActionNotice],
-  );
-
   useEffect(() => {
     if (open) {
       void loadActions();
     }
-  }, [loadActions, open]);
+  }, [open, loadActions]);
+
+  const filteredActions = useMemo(() => {
+    const searchTerm = search.trim().toLowerCase();
+    if (!searchTerm) return actions;
+
+    return actions.filter((action) => {
+      const hasName = action.name.toLowerCase().includes(searchTerm);
+      const hasDescription =
+        typeof action.description === "string" &&
+        action.description.toLowerCase().includes(searchTerm);
+      const hasAlias = (action.similes ?? []).some((alias) =>
+        alias.toLowerCase().includes(searchTerm),
+      );
+      return hasName || hasDescription || hasAlias;
+    });
+  }, [actions, search]);
+
+  const enabledCount = useMemo(
+    () => actions.filter((action) => action.enabled).length,
+    [actions],
+  );
 
   const handleToggleEnabled = async (action: CustomActionDef) => {
     try {
@@ -134,193 +120,159 @@ export function CustomActionsPanel({
     onOpenEditor(null);
   };
 
-  const enabledCount = useMemo(
-    () => actions.filter((action) => action.enabled).length,
-    [actions],
-  );
-
-  const filteredActions = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return actions;
-    return actions.filter((action) => {
-      const aliases = (action.similes ?? []).join(" ").toLowerCase();
-      return (
-        action.name.toLowerCase().includes(needle) ||
-        (action.description ?? "").toLowerCase().includes(needle) ||
-        aliases.includes(needle) ||
-        action.handler.type.toLowerCase().includes(needle)
-      );
-    });
-  }, [actions, search]);
-
   return (
     <div
-      className={`flex flex-col border-l border-white/10 bg-white/[0.03] backdrop-blur-xl transition-all duration-200 ${
+      className={`border-l border-border bg-card flex flex-col transition-all duration-200 ${
         open ? "w-80" : "w-0 overflow-hidden"
       }`}
     >
       {open && (
         <>
-          <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
+          {/* Header */}
+          <div className="flex items-start justify-between p-4 border-b border-border">
             <div>
-              <h2 className="text-sm font-semibold uppercase tracking-[0.22em] text-white/88">
-                Custom Actions
+              <h2 className="text-sm font-semibold text-txt">
+                {t("customactionspanel.CustomActions")}
               </h2>
-              <p className="mt-1 text-xs text-white/48">
-                {actions.length} action{actions.length === 1 ? "" : "s"} · {" "}
-                {enabledCount} enabled
+              <p className="text-xs text-muted mt-0.5">
+                {actions.length} {t("customactionspanel.action")}
+                {actions.length === 1 ? "" : "s"} · {enabledCount}{" "}
+                {t("customactionspanel.enabled")}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={handleCreate}>
-                <PlusIcon className="h-3.5 w-3.5" />
-                Create
-              </Button>
-              <Button size="icon" variant="ghost" onClick={onClose} aria-label="Close panel">
-                <CloseIcon className="h-4 w-4" />
-              </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="text-muted hover:text-txt h-7 w-7"
+              aria-label="Close panel"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
+                <title>{t("customactionspanel.ClosePanel")}</title>
+                <path d="M12 4L4 12M4 4l8 8" />
+              </svg>
+            </Button>
+          </div>
+
+          <div className="space-y-3 p-3 border-b border-border">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleCreate}
+              className="w-full px-3 py-2 h-9 text-sm font-medium shadow-sm"
+            >
+              {t("customactionspanel.NewCustomAction")}
+            </Button>
+
+            <div className="relative">
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={t("customactionspanel.SearchByNameDesc")}
+                className="w-full h-8 bg-surface text-xs placeholder:text-muted/50 shadow-sm focus-visible:ring-1 focus-visible:ring-accent"
+              />
             </div>
+
+            {error && (
+              <div className="text-xs text-danger bg-danger/10 border border-danger/30 px-2 py-1 rounded">
+                {error}
+              </div>
+            )}
           </div>
 
-          <div className="space-y-3 border-b border-white/10 p-3">
-            <Card className="border-white/8 bg-white/[0.03]">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2">
-                  <StackIcon className="h-4 w-4 text-white/70" />
-                  Studio quick actions
-                </CardTitle>
-                <CardDescription>
-                  Broadcast and game controls routed through the same operator action layer.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <label className="relative block">
-                  <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
-                  <input
-                    type="search"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search actions or aliases"
-                    className="h-11 w-full rounded-full border border-white/10 bg-black/30 pl-10 pr-4 text-sm text-white outline-none transition-colors placeholder:text-white/25 focus:border-white/20"
-                  />
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {QUICK_LAYER_DOCK.map((layer) => {
-                    const status = layerStatuses.get(layer.id) ?? "available";
-                    const tone =
-                      status === "active"
-                        ? "border-accent/40 bg-accent/10 text-accent"
-                        : status === "disabled"
-                          ? "border-danger/40 bg-danger/10 text-danger"
-                          : "border-white/10 bg-white/[0.04] text-white/58";
-                    return (
-                      <button
-                        key={layer.id}
-                        onClick={() => triggerDockedLayer(layer.id, layer.label)}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] transition-all ${tone}`}
-                        title={`${layer.label} (${status})`}
-                      >
-                        {layer.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-            {error ? <div className="text-xs text-danger">{error}</div> : null}
-          </div>
-
+          {/* Action List */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            <div className="px-0.5 text-[11px] uppercase tracking-[0.22em] text-white/40">
-              Custom actions
-            </div>
             {loading ? (
-              <div className="py-8 text-center text-xs text-white/45">
-                Loading your actions...
+              <div className="text-center text-muted text-xs py-8">
+                {t("customactionspanel.LoadingYourActions")}
               </div>
             ) : filteredActions.length === 0 ? (
-              <Card className="border-dashed border-white/10 bg-white/[0.03]">
-                <CardContent className="py-10 text-center text-xs text-white/45">
-                  {search
-                    ? "No actions match this search."
-                    : "No custom actions yet. Create one to get started."}
-                </CardContent>
-              </Card>
+              <div className="text-center text-muted text-xs py-8">
+                {search
+                  ? "No actions match this search."
+                  : "No custom actions yet. Create one to get started."}
+              </div>
             ) : (
               filteredActions.map((action) => (
-                <Card
+                <div
                   key={action.id}
-                  className="border-white/10 bg-white/[0.04]"
+                  className="border border-border bg-surface rounded p-2 space-y-2"
                 >
-                  <CardContent className="space-y-3 p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-white/86">
-                          {action.name}
-                        </div>
-                        <p className="mt-1 text-[10px] text-white/42">
-                          {action.parameters?.length || 0} parameter
-                          {(action.parameters?.length || 0) === 1 ? "" : "s"}
-                          {action.similes?.length
-                            ? ` • ${action.similes.length} alias`.concat(
-                                action.similes.length === 1 ? "" : "es",
-                              )
-                            : ""}
-                        </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-xs text-txt truncate">
+                        {action.name}
                       </div>
-
-                      <span
-                        className={`whitespace-nowrap rounded-full px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${
-                          HANDLER_TYPE_COLORS[action.handler.type] ||
-                          "bg-white/[0.06] text-white/58"
-                        }`}
-                      >
-                        {HANDLER_TYPE_NAMES[action.handler.type] ??
-                          action.handler.type}
-                      </span>
-                    </div>
-
-                    {action.description && (
-                      <p className="line-clamp-2 break-words text-xs text-white/56">
-                        {action.description}
+                      <p className="text-[10px] text-muted mt-0.5">
+                        {action.parameters?.length || 0}{" "}
+                        {t("customactionspanel.parameter")}
+                        {(action.parameters?.length || 0) === 1 ? "" : "s"}
+                        {action.similes?.length
+                          ? ` • ${action.similes.length} alias`.concat(
+                              action.similes.length === 1 ? "" : "es",
+                            )
+                          : ""}
                       </p>
-                    )}
-
-                    <div className="flex items-center gap-2 border-t border-white/8 pt-2">
-                      <label className="flex cursor-pointer items-center gap-2 text-xs text-white/54">
-                        <input
-                          type="checkbox"
-                          checked={action.enabled}
-                          onChange={() => handleToggleEnabled(action)}
-                          className="h-3 w-3 cursor-pointer accent-accent"
-                        />
-                        <span>Enabled</span>
-                      </label>
-
-                      <div className="ml-auto flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleEdit(action)}
-                          title="Edit action"
-                        >
-                          <EditIcon className="h-3.5 w-3.5" />
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDelete(action)}
-                          title="Delete action"
-                          className="text-danger hover:text-danger"
-                        >
-                          <TrashIcon className="h-3.5 w-3.5" />
-                          Delete
-                        </Button>
-                      </div>
                     </div>
-                  </CardContent>
-                </Card>
+
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap ${
+                        HANDLER_TYPE_COLORS[action.handler.type] ||
+                        "bg-surface text-muted"
+                      }`}
+                    >
+                      {HANDLER_TYPE_NAMES[action.handler.type] ??
+                        action.handler.type}
+                    </span>
+                  </div>
+
+                  {action.description && (
+                    <p className="text-xs text-muted line-clamp-2 break-words">
+                      {action.description}
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-1 border-t border-border">
+                    <label className="flex items-center gap-1 cursor-pointer text-xs text-muted">
+                      <input
+                        type="checkbox"
+                        checked={action.enabled}
+                        onChange={() => handleToggleEnabled(action)}
+                        className="w-3 h-3 cursor-pointer accent-accent"
+                      />
+                      <span>{t("customactionspanel.Enabled")}</span>
+                    </label>
+
+                    <div className="ml-auto flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEdit(action)}
+                        className="h-6 px-2 text-xs text-accent hover:text-accent/80 hover:bg-accent/10"
+                        title={t("customactionspanel.EditAction")}
+                      >
+                        {t("customactionspanel.Edit")}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(action)}
+                        className="h-6 px-2 text-xs text-danger hover:text-danger/80 hover:bg-danger/10"
+                        title={t("customactionspanel.DeleteAction")}
+                      >
+                        {t("customactionspanel.Delete")}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               ))
             )}
           </div>

@@ -1,5 +1,5 @@
+import { ApiError, MiladyClient } from "@milady/app-core/api";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { ApiError, MiladyClient } from "../../src/api-client";
 
 function buildSseResponse(chunks: string[]): Response {
   const encoder = new TextEncoder();
@@ -83,7 +83,11 @@ describe("MiladyClient streaming chat endpoints", () => {
     );
 
     expect(tokens).toEqual(["Hello ", "world"]);
-    expect(result).toEqual({ text: "Hello world", agentName: "Milady" });
+    expect(result).toEqual({
+      text: "Hello world",
+      agentName: "Milady",
+      completed: true,
+    });
 
     const firstCall = fetchMock.mock.calls[0];
     const requestUrl = String(firstCall[0]);
@@ -117,7 +121,11 @@ describe("MiladyClient streaming chat endpoints", () => {
     );
 
     expect(tokens).toEqual(["A", "B"]);
-    expect(result).toEqual({ text: "AB", agentName: "rasp" });
+    expect(result).toEqual({
+      text: "AB",
+      agentName: "Milady",
+      completed: false,
+    });
   });
 
   test("streams CRLF-delimited SSE events before stream completion", async () => {
@@ -149,6 +157,7 @@ describe("MiladyClient streaming chat endpoints", () => {
     await expect(pending).resolves.toEqual({
       text: "Hello",
       agentName: "Milady",
+      completed: true,
     });
   });
 
@@ -181,78 +190,5 @@ describe("MiladyClient streaming chat endpoints", () => {
       status: 401,
       path: "/api/chat/stream",
     });
-  });
-
-  test("logs operator actions without routing through the chat endpoint", async () => {
-    fetchMock.mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          message: {
-            id: "msg-operator-1",
-            role: "user",
-            text: "Backflip",
-            timestamp: 123,
-            source: "operator_action",
-            blocks: [
-              {
-                type: "action-pill",
-                label: "Backflip",
-                kind: "avatar",
-                detail: "One-shot motion",
-              },
-            ],
-          },
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
-      ),
-    );
-
-    const client = new MiladyClient("http://localhost:2138", "token");
-    const result = await client.logConversationOperatorAction("conv-1", {
-      label: "Backflip",
-      kind: "avatar",
-      detail: "One-shot motion",
-      fallbackText: "Backflip",
-    });
-
-    expect(result).toEqual({
-      message: {
-        id: "msg-operator-1",
-        role: "user",
-        text: "Backflip",
-        timestamp: 123,
-        source: "operator_action",
-        blocks: [
-          {
-            type: "action-pill",
-            label: "Backflip",
-            kind: "avatar",
-            detail: "One-shot motion",
-          },
-        ],
-      },
-    });
-
-    const firstCall = fetchMock.mock.calls[0];
-    const requestUrl = String(firstCall[0]);
-    const requestInit = firstCall[1] as RequestInit;
-    const requestHeaders = requestInit.headers as Record<string, string>;
-
-    expect(requestUrl).toBe(
-      "http://localhost:2138/api/conversations/conv-1/operator-action",
-    );
-    expect(requestInit.method).toBe("POST");
-    expect(requestHeaders.Authorization).toBe("Bearer token");
-    expect(requestInit.body).toBe(
-      JSON.stringify({
-        label: "Backflip",
-        kind: "avatar",
-        detail: "One-shot motion",
-        fallbackText: "Backflip",
-      }),
-    );
   });
 });

@@ -1,16 +1,21 @@
 /**
  * Reusable avatar/character VRM selector.
  *
- * Shows the built-in stage avatars plus an optional custom VRM upload tile.
- * Slot 1 is the default Pro Streamer stage avatar.
+ * Shows a single row/grid of bundled VRM avatars as thumbnail images.
+ * The selected avatar gets a highlight ring. No text labels.
+ * Supports drag-and-drop for custom VRM uploads.
  */
 
-import { useRef } from "react";
-import { getVrmPreviewUrl, VRM_COUNT } from "../AppContext";
-import { PlusIcon } from "./ui/Icons";
+import { useCallback, useRef, useState } from "react";
+import {
+  getVrmPreviewUrl,
+  getVrmTitle,
+  useApp,
+  VRM_COUNT,
+} from "../AppContext";
 
 export interface AvatarSelectorProps {
-  /** Currently selected index (1-8 for built-in, 0 for custom) */
+  /** Currently selected index (1-N for bundled, 0 for custom) */
   selected: number;
   /** Called when a built-in avatar is selected */
   onSelect: (index: number) => void;
@@ -22,6 +27,33 @@ export interface AvatarSelectorProps {
   fullWidth?: boolean;
 }
 
+function isVrmFile(file: File): boolean {
+  return file.name.toLowerCase().endsWith(".vrm");
+}
+
+async function validateVrmFile(file: File): Promise<string | null> {
+  try {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer.slice(0, 32));
+    const textHeader = new TextDecoder().decode(bytes);
+    if (textHeader.startsWith("version https://git-lfs.github.com/spec/v1")) {
+      return "This .vrm is a Git LFS pointer, not the real model file. Export/download the actual VRM binary.";
+    }
+    const isGlbMagic =
+      bytes.length >= 4 &&
+      bytes[0] === 0x67 && // g
+      bytes[1] === 0x6c && // l
+      bytes[2] === 0x54 && // T
+      bytes[3] === 0x46; // F
+    if (!isGlbMagic) {
+      return "Invalid VRM file. Please select a valid .vrm binary.";
+    }
+    return null;
+  } catch {
+    return "Could not read the selected file. Please try another .vrm.";
+  }
+}
+
 export function AvatarSelector({
   selected,
   onSelect,
@@ -29,22 +61,58 @@ export function AvatarSelector({
   showUpload = true,
   fullWidth = false,
 }: AvatarSelectorProps) {
+  const { t } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleVrmFile = useCallback(
+    (file: File) => {
+      if (!isVrmFile(file)) {
+        alert("Please select a .vrm file");
+        return;
+      }
+      void (async () => {
+        const validationError = await validateVrmFile(file);
+        if (validationError) {
+          alert(validationError);
+          return;
+        }
+        onUpload?.(file);
+        onSelect(0);
+      })();
+    },
+    [onUpload, onSelect],
+  );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.name.endsWith(".vrm")) {
-      alert("Please select a .vrm file");
-      return;
-    }
-    onUpload?.(file);
-    onSelect(0); // 0 = custom
+    if (file) handleVrmFile(file);
   };
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragOver(false);
+      const file = e.dataTransfer.files[0];
+      if (file) handleVrmFile(file);
+    },
+    [handleVrmFile],
+  );
+
   const avatarIndices = Array.from({ length: VRM_COUNT }, (_, i) => i + 1);
-  const avatarLabel = (index: number) =>
-    index === 1 ? "Alice" : `Avatar ${index}`;
   const containerClass = fullWidth
     ? "grid gap-3 w-full"
     : "flex flex-wrap gap-3 justify-start";
@@ -55,8 +123,8 @@ export function AvatarSelector({
     ? "relative w-full aspect-square shrink-0 rounded-lg overflow-hidden cursor-pointer transition-all"
     : "relative w-24 h-24 shrink-0 rounded-lg overflow-hidden cursor-pointer transition-all";
   const uploadButtonClass = fullWidth
-    ? "w-full aspect-square shrink-0 rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer transition-all"
-    : "w-24 h-24 shrink-0 rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer transition-all";
+    ? "w-full aspect-square shrink-0 rounded-lg border-2 flex flex-col items-center justify-center cursor-pointer transition-all"
+    : "w-24 h-24 shrink-0 rounded-lg border-2 flex flex-col items-center justify-center cursor-pointer transition-all";
 
   return (
     <div className={fullWidth ? "w-full" : undefined}>
@@ -70,24 +138,17 @@ export function AvatarSelector({
                 : "opacity-60 hover:opacity-100 hover:scale-105"
             }`}
             onClick={() => onSelect(i)}
-            aria-label={`Select ${avatarLabel(i)}`}
-            title={avatarLabel(i)}
             type="button"
           >
             <img
               src={getVrmPreviewUrl(i)}
-              alt={avatarLabel(i)}
+              alt={getVrmTitle(i)}
               className="w-full h-full object-cover"
             />
-            {i === 1 ? (
-              <span className="pointer-events-none absolute left-2 top-2 rounded-full border border-white/14 bg-black/65 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white/88 shadow-sm backdrop-blur">
-                Default
-              </span>
-            ) : null}
           </button>
         ))}
 
-        {/* Upload custom VRM */}
+        {/* Upload custom VRM — click or drag-and-drop */}
         {showUpload && (
           <>
             <input
@@ -99,15 +160,43 @@ export function AvatarSelector({
             />
             <button
               className={`${uploadButtonClass} ${
-                selected === 0
-                  ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)] ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--card)] scale-105"
-                  : "border-[var(--border)] text-[var(--muted)] opacity-60 hover:opacity-100 hover:border-[var(--accent)] hover:scale-105"
+                dragOver
+                  ? "border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent)] scale-105 border-solid"
+                  : selected === 0
+                    ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)] ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--card)] scale-105 border-solid"
+                    : "border-[var(--border)] text-[var(--muted)] opacity-60 hover:opacity-100 hover:border-[var(--accent)] hover:scale-105 border-dashed"
               }`}
               onClick={() => fileInputRef.current?.click()}
-              title="Upload custom VRM"
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              title={t("avatarselector.UploadCustomVrm")}
               type="button"
             >
-              <PlusIcon className="h-5 w-5" aria-label="Add new persona" />
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-label="Upload VRM"
+              >
+                <title>{t("avatarselector.UploadVRM")}</title>
+                {dragOver ? (
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5-5 5 5M12 5v10" />
+                ) : (
+                  <path d="M12 5v14m-7-7h14" />
+                )}
+              </svg>
+              {dragOver && (
+                <span className="text-[10px] mt-1 font-medium">
+                  {t("avatarselector.dropVrm")}
+                </span>
+              )}
             </button>
           </>
         )}

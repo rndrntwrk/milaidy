@@ -2,7 +2,7 @@
  * Pairing view component — simple pairing screen for authentication.
  */
 
-import { useApp } from "../AppContext";
+import { useApp } from "../AppContext.js";
 import { MiladyBootShell } from "./MiladyBootShell.js";
 
 const PAIRING_DOCS_URL =
@@ -18,6 +18,7 @@ export function PairingView() {
     pairingBusy,
     handlePairingSubmit,
     setState,
+    t,
   } = useApp();
 
   const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -44,10 +45,10 @@ export function PairingView() {
       {currentTheme !== "milady-os" ? (
         <>
           <h1 className="mb-2 text-lg font-semibold text-txt-strong">
-            Pairing Required
+            {t("pairingview.PairingRequired")}
           </h1>
           <p className="mb-4 leading-relaxed text-muted">
-            Enter the pairing code from the server logs to authenticate.
+            {t("pairingview.EnterThePairingCo")}
           </p>
         </>
       ) : null}
@@ -59,14 +60,14 @@ export function PairingView() {
               htmlFor="pairing-code"
               className="mb-2 block text-sm text-txt-strong"
             >
-              Pairing Code
+              {t("pairingview.PairingCode")}
             </label>
             <input
               id="pairing-code"
               type="text"
               value={pairingCodeInput}
               onChange={handleCodeChange}
-              placeholder="Enter pairing code"
+              placeholder={t("pairingview.EnterPairingCode")}
               disabled={pairingBusy}
               className="w-full rounded-lg border border-border bg-bg-muted px-3 py-2.5 text-sm text-txt focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
@@ -94,11 +95,11 @@ export function PairingView() {
         </form>
       ) : (
         <div className="space-y-2 text-sm text-muted">
-          <p>Pairing is not enabled on this server.</p>
-          <p>Next steps:</p>
+          <p>{t("pairingview.PairingIsNotEnabl")}</p>
+          <p>{t("pairingview.NextSteps")}</p>
           <ol className="list-decimal space-y-1 pl-5">
-            <li>Ask the server owner for an API token.</li>
-            <li>Enable pairing on the server and restart the app.</li>
+            <li>{t("pairingview.AskTheServerOwner")}</li>
+            <li>{t("pairingview.EnablePairingOnTh")}</li>
           </ol>
           <a
             href={PAIRING_DOCS_URL}
@@ -106,7 +107,7 @@ export function PairingView() {
             rel="noreferrer"
             className="inline-flex rounded border border-border px-3 py-2 text-txt hover:border-accent hover:text-accent"
           >
-            Pairing setup docs
+            {t("pairingview.PairingSetupDocs")}
           </a>
         </div>
       )}

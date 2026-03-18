@@ -6,9 +6,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getVrmPreviewUrl, getVrmUrl, useApp } from "../AppContext";
-import { client } from "../api-client";
-import type { StageSceneMark, StageScenePreset } from "../proStreamerStageScene";
+import { getVrmPreviewUrl, getVrmUrl, useApp } from "../AppContext.js";
+import { client } from "../api-client.js";
+import { STOP_EMOTE_EVENT } from "../events.js";
+import type { StageSceneMark, StageScenePreset } from "../proStreamerStageScene.js";
+import { AvatarLoader } from "./avatar/AvatarLoader.js";
 import type { VrmEngine, VrmEngineState } from "./avatar/VrmEngine";
 import { VrmViewer } from "./avatar/VrmViewer";
 
@@ -138,13 +140,15 @@ export function ChatAvatar({
   // Listen for stop-emote events from the EmotePicker control panel.
   useEffect(() => {
     if (!engineReady) return;
-    const handler = () => vrmEngineRef.current?.stopEmote();
-    document.addEventListener("milady:stop-emote", handler);
-    return () => document.removeEventListener("milady:stop-emote", handler);
+    const handler = () => {
+      vrmEngineRef.current?.stopEmote();
+    };
+    document.addEventListener(STOP_EMOTE_EVENT, handler);
+    return () => document.removeEventListener(STOP_EMOTE_EVENT, handler);
   }, [engineReady]);
 
   return (
-    <div className="relative h-full w-full pointer-events-none">
+    <div className="relative h-full w-full">
       <div
         className="absolute inset-0"
         style={{
@@ -185,6 +189,8 @@ export function ChatAvatar({
               className="absolute left-1/2 top-1/2 h-[104%] -translate-x-1/2 -translate-y-[46%] object-contain opacity-95 sm:h-[112%] lg:h-[118%] xl:h-[122%]"
             />
           )}
+
+          {!vrmLoaded && !showFallback && <AvatarLoader />}
         </div>
       </div>
     </div>

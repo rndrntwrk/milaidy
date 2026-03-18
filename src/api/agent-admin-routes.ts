@@ -1,5 +1,6 @@
 import type { AgentRuntime, UUID } from "@elizaos/core";
 import type { MiladyConfig } from "../config/config";
+import { detectRuntimeModel } from "./agent-model";
 import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
 
 type AgentStateStatus =
@@ -30,6 +31,9 @@ export interface AgentAdminRouteContext
     Pick<RouteHelpers, "json" | "error"> {
   state: AgentAdminRouteState;
   onRestart?: (() => Promise<AgentRuntime | null>) | undefined;
+  /** Called after a successful restart swaps state.runtime so the server can
+   *  re-bind streams and re-wire coordinator bridges. */
+  onRuntimeSwapped?: () => void;
   resolveStateDir: () => string;
   resolvePath: (value: string) => string;
   getHomeDir: () => string;
@@ -48,6 +52,7 @@ export async function handleAgentAdminRoutes(
     pathname,
     state,
     onRestart,
+    onRuntimeSwapped,
     json,
     error,
     resolveStateDir,
@@ -86,14 +91,17 @@ export async function handleAgentAdminRoutes(
         state.chatConnectionPromise = null;
         state.agentState = "running";
         state.agentName = newRuntime.character.name ?? "Milady";
+        state.model = detectRuntimeModel(newRuntime);
         state.startedAt = Date.now();
         state.pendingRestartReasons = [];
+        onRuntimeSwapped?.();
         json(res, {
           ok: true,
           pendingRestart: false,
           status: {
             state: state.agentState,
             agentName: state.agentName,
+            model: state.model,
             startedAt: state.startedAt,
           },
         });

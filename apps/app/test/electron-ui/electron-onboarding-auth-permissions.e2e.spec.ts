@@ -18,9 +18,7 @@ const repoRoot = path.resolve(here, "../../../..");
 const electronAppDir = path.join(repoRoot, "apps", "app", "electron");
 const webDistIndex = path.join(repoRoot, "apps", "app", "dist", "index.html");
 const electronEntryCandidates = [
-  path.join(electronAppDir, "out", "src", "index"),
   path.join(electronAppDir, "out", "src", "index.js"),
-  path.join(electronAppDir, "build", "src", "index"),
   path.join(electronAppDir, "build", "src", "index.js"),
 ];
 
@@ -45,27 +43,6 @@ async function ensureBuildArtifacts(): Promise<void> {
 
 async function clickOnboardingNext(page: Page): Promise<void> {
   await page.getByRole("button", { name: /^next$/i }).click();
-}
-
-const onboardingWelcomeText = /welcome to pro streamer/i;
-const chatInputPlaceholder = /continue the conversation/i;
-
-async function closeElectronApp(app: ElectronApplication | null): Promise<void> {
-  if (!app) return;
-  const process = app.process();
-  let timedOut = false;
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    process?.kill("SIGKILL");
-  }, 5_000);
-  try {
-    await app.close().catch(() => undefined);
-  } finally {
-    clearTimeout(timeout);
-    if (timedOut) {
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-  }
 }
 
 test("electron auth + onboarding permissions flow works end-to-end", async () => {
@@ -99,34 +76,38 @@ test("electron auth + onboarding permissions flow works end-to-end", async () =>
     const electronExecutable = electronRequire("electron") as string;
 
     const launchApp = async (token?: string): Promise<Page> => {
+      const env = { ...process.env };
+      delete env.ELECTRON_RUN_AS_NODE;
+      delete env.NODE_OPTIONS;
+
       app = await electron.launch({
         executablePath: electronExecutable,
         cwd: electronAppDir,
         args: [electronAppDir],
         env: {
-          ...process.env,
+          ...env,
           MILADY_ELECTRON_SKIP_EMBEDDED_AGENT: "1",
-          MILADY_ELECTRON_TEST_API_BASE: api.baseUrl,
+          MILADY_ELECTRON_TEST_API_BASE: api?.baseUrl,
           MILADY_ELECTRON_DISABLE_AUTO_UPDATER: "1",
           MILADY_ELECTRON_DISABLE_DEVTOOLS: "1",
           MILADY_ELECTRON_USER_DATA_DIR: userDataDir,
           MILADY_API_TOKEN: token ?? "",
         },
       });
-      return app.firstWindow();
+      return app?.firstWindow();
     };
 
     const unauthPage = await launchApp();
     await expect(
-      unauthPage.getByRole("heading", { name: /pairing link/i }),
+      unauthPage.getByRole("heading", { name: /pairing required/i }),
     ).toBeVisible({
       timeout: 60_000,
     });
-    await closeElectronApp(app);
+    await app?.close();
     app = null;
 
     const page = await launchApp("desktop-auth-token");
-    await expect(page.getByText(onboardingWelcomeText)).toBeVisible({
+    await expect(page.getByText(/welcome to milady/i)).toBeVisible({
       timeout: 60_000,
     });
 
@@ -137,7 +118,7 @@ test("electron auth + onboarding permissions flow works end-to-end", async () =>
     await page.getByRole("button", { name: /chaotic/i }).click();
     await clickOnboardingNext(page); // style -> theme
     await page
-      .getByRole("button", { name: /milady/i })
+      .getByRole("button", { name: /default/i })
       .first()
       .click();
     await clickOnboardingNext(page); // theme -> runMode
@@ -173,13 +154,13 @@ test("electron auth + onboarding permissions flow works end-to-end", async () =>
     );
     await page.getByRole("button", { name: /^continue$/i }).click();
 
-    await expect(page.getByPlaceholder(chatInputPlaceholder)).toBeVisible({
+    await expect(page.getByPlaceholder("Type a message...")).toBeVisible({
       timeout: 45_000,
     });
-    expect(api.requests).toContain("GET /api/auth/status");
-    expect(api.requests).toContain("GET /api/onboarding/status");
+    expect(api?.requests).toContain("GET /api/auth/status");
+    expect(api?.requests).toContain("GET /api/onboarding/status");
   } finally {
-    await closeElectronApp(app);
+    await app?.close();
     await api?.close();
     await fs.rm(userDataDir, { recursive: true, force: true });
   }

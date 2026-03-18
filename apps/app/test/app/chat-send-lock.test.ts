@@ -50,6 +50,36 @@ const { mockClient } = vi.hoisted(() => ({
       text: "ok",
       agentName: "Milady",
     })),
+    listCustomActions: vi.fn(async () => []),
+    testCustomAction: vi.fn(async () => ({
+      ok: true,
+      output: "ok",
+      durationMs: 10,
+    })),
+    rememberMemory: vi.fn(async () => ({
+      ok: true,
+      id: "mem-1",
+      text: "saved",
+      createdAt: Date.now(),
+    })),
+    searchMemory: vi.fn(async () => ({
+      query: "q",
+      results: [],
+      count: 0,
+      limit: 6,
+    })),
+    searchKnowledge: vi.fn(async () => ({
+      query: "q",
+      threshold: 0.2,
+      results: [],
+      count: 0,
+    })),
+    quickContext: vi.fn(async () => ({
+      query: "q",
+      answer: "quick answer",
+      memories: [],
+      knowledge: [],
+    })),
     sendWsMessage: vi.fn(),
     connectWs: vi.fn(),
     disconnectWs: vi.fn(),
@@ -65,17 +95,16 @@ const { mockClient } = vi.hoisted(() => ({
     getWalletAddresses: vi.fn(async () => null),
     getConfig: vi.fn(async () => ({})),
     getCloudStatus: vi.fn(async () => ({ enabled: false, connected: false })),
+    getCodingAgentStatus: vi.fn(async () => null),
     getWorkbenchOverview: vi.fn(async () => ({
       tasks: [],
       triggers: [],
       todos: [],
     })),
-    listEmotes: vi.fn(async () => ({ emotes: [] })),
-    listFive55MasteryRuns: vi.fn(async () => ({ runs: [] })),
   },
 }));
 
-vi.mock("../../src/api-client", () => ({
+vi.mock("@milady/app-core/api", () => ({
   client: mockClient,
   SkillScanReportSummary: {},
 }));
@@ -96,11 +125,6 @@ type ProbeApi = {
   handleChatSend: () => Promise<void>;
   handleChatStop: () => void;
   getConversationMessages: () => Array<{ id: string; role: string; text: string }>;
-  snapshot: () => {
-    conversationMessages: Array<{ id: string; role: string; text: string }>;
-    chatSending: boolean;
-    chatFirstTokenReceived: boolean;
-  };
 };
 
 function Probe(props: { onReady: (api: ProbeApi) => void }) {
@@ -119,15 +143,6 @@ function Probe(props: { onReady: (api: ProbeApi) => void }) {
           role: msg.role,
           text: msg.text,
         })),
-      snapshot: () => ({
-        conversationMessages: app.conversationMessages.map((msg) => ({
-          id: msg.id,
-          role: msg.role,
-          text: msg.text,
-        })),
-        chatSending: app.chatSending,
-        chatFirstTokenReceived: app.chatFirstTokenReceived,
-      }),
     });
   }, [app, onReady]);
 
@@ -196,6 +211,36 @@ describe("chat send locking", () => {
       text: "ok",
       agentName: "Milady",
     });
+    mockClient.listCustomActions.mockResolvedValue([]);
+    mockClient.testCustomAction.mockResolvedValue({
+      ok: true,
+      output: "ok",
+      durationMs: 10,
+    });
+    mockClient.rememberMemory.mockResolvedValue({
+      ok: true,
+      id: "mem-1",
+      text: "saved",
+      createdAt: Date.now(),
+    });
+    mockClient.searchMemory.mockResolvedValue({
+      query: "q",
+      results: [],
+      count: 0,
+      limit: 6,
+    });
+    mockClient.searchKnowledge.mockResolvedValue({
+      query: "q",
+      threshold: 0.2,
+      results: [],
+      count: 0,
+    });
+    mockClient.quickContext.mockResolvedValue({
+      query: "q",
+      answer: "quick answer",
+      memories: [],
+      knowledge: [],
+    });
     mockClient.sendWsMessage.mockImplementation(() => {});
     mockClient.connectWs.mockImplementation(() => {});
     mockClient.disconnectWs.mockImplementation(() => {});
@@ -222,8 +267,7 @@ describe("chat send locking", () => {
       triggers: [],
       todos: [],
     });
-    mockClient.listEmotes.mockResolvedValue({ emotes: [] });
-    mockClient.listFive55MasteryRuns.mockResolvedValue({ runs: [] });
+    mockClient.getCodingAgentStatus.mockResolvedValue(null);
   });
 
   it("allows only one same-tick chat send request", async () => {
@@ -614,41 +658,24 @@ describe("chat send locking", () => {
     });
   });
 
-  it("preserves buffered streamed tokens when stop aborts before frame flush", async () => {
-    const previousRaf = globalThis.requestAnimationFrame;
-    const previousCancelRaf = globalThis.cancelAnimationFrame;
-    const rafSpy = vi.fn(() => 999);
-    const cancelSpy = vi.fn();
-    Object.assign(globalThis, {
-      requestAnimationFrame: rafSpy,
-      cancelAnimationFrame: cancelSpy,
-    });
-
-    mockClient.sendConversationMessageStream.mockImplementation(
-      async (
-        _conversationId,
-        _text,
-        onToken,
-        _mode,
-        signal,
-      ) => {
-        onToken("partial");
-        await new Promise<never>((_resolve, reject) => {
-          const abortError = new Error("aborted");
-          abortError.name = "AbortError";
-          if (signal?.aborted) {
-            reject(abortError);
-            return;
-          }
-          signal?.addEventListener(
-            "abort",
-            () => reject(abortError),
-            { once: true },
-          );
-        });
-        return { text: "", agentName: "Milaidy" };
+  it("executes custom actions via slash commands without persisting chat", async () => {
+    mockClient.listCustomActions.mockResolvedValue([
+      {
+        id: "action-1",
+        name: "SAY_HELLO",
+        description: "Says hello",
+        parameters: [{ name: "name", description: "Name", required: true }],
+        handler: { type: "code", code: "return 'ok';" },
+        enabled: true,
+        createdAt: "2026-02-01T00:00:00.000Z",
+        updatedAt: "2026-02-01T00:00:00.000Z",
       },
-    );
+    ]);
+    mockClient.testCustomAction.mockResolvedValue({
+      ok: true,
+      output: "Hello, Alice!",
+      durationMs: 12,
+    });
 
     let api: ProbeApi | null = null;
     let tree: TestRenderer.ReactTestRenderer;
@@ -667,45 +694,169 @@ describe("chat send locking", () => {
       );
     });
 
-    expect(api).not.toBeNull();
-
     await act(async () => {
-      await api!.handleSelectConversation("conv-1");
-      api!.setChatInput("hello");
-    });
-
-    let sendPromise: Promise<void> | null = null;
-    await act(async () => {
-      sendPromise = api!.handleChatSend();
+      await api?.handleSelectConversation("conv-1");
+      api?.setChatInput("/say_hello name=Alice");
     });
 
     await act(async () => {
-      api!.handleChatStop();
-      await sendPromise;
+      await api?.handleChatSend();
     });
 
-    const preservedPartial = api!
-      .getConversationMessages()
-      .some((message) => message.role === "assistant" && message.text.includes("partial"));
-    expect(preservedPartial).toBe(true);
-    expect(api?.snapshot().chatSending).toBe(false);
-    expect(api?.snapshot().chatFirstTokenReceived).toBe(false);
-
-    if (previousRaf) {
-      globalThis.requestAnimationFrame = previousRaf;
-    } else {
-      delete (globalThis as { requestAnimationFrame?: typeof requestAnimationFrame })
-        .requestAnimationFrame;
-    }
-    if (previousCancelRaf) {
-      globalThis.cancelAnimationFrame = previousCancelRaf;
-    } else {
-      delete (globalThis as { cancelAnimationFrame?: typeof cancelAnimationFrame })
-        .cancelAnimationFrame;
-    }
+    expect(mockClient.testCustomAction).toHaveBeenCalledWith("action-1", {
+      name: "Alice",
+    });
+    expect(mockClient.sendConversationMessageStream).toHaveBeenCalledTimes(0);
+    const assistant = [...(api?.snapshot().conversationMessages ?? [])]
+      .reverse()
+      .find((message) => message.role === "assistant");
+    expect(assistant?.text).toContain("Hello, Alice!");
 
     await act(async () => {
-      tree!.unmount();
+      tree?.unmount();
+    });
+  });
+
+  it("handles #remember by storing memory and skipping conversation send", async () => {
+    let api: ProbeApi | null = null;
+    let tree: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          AppProvider,
+          null,
+          React.createElement(Probe, {
+            onReady: (nextApi) => {
+              api = nextApi;
+            },
+          }),
+        ),
+      );
+    });
+
+    await act(async () => {
+      await api?.handleSelectConversation("conv-1");
+      api?.setChatInput("# remember we use typescript");
+    });
+
+    await act(async () => {
+      await api?.handleChatSend();
+    });
+
+    expect(mockClient.rememberMemory).toHaveBeenCalledWith("we use typescript");
+    expect(mockClient.sendConversationMessageStream).toHaveBeenCalledTimes(0);
+    const assistant = [...(api?.snapshot().conversationMessages ?? [])]
+      .reverse()
+      .find((message) => message.role === "assistant");
+    expect(assistant?.text).toContain("Saved memory note");
+
+    await act(async () => {
+      tree?.unmount();
+    });
+  });
+
+  it("rejects $ with trailing text and requires bare $", async () => {
+    mockClient.quickContext.mockResolvedValue({
+      query: "hello",
+      answer: "Hi there.",
+      memories: [
+        { id: "m1", text: "we use typescript", createdAt: 1, score: 1 },
+      ],
+      knowledge: [
+        {
+          id: "k1",
+          text: "Milady is a TypeScript project",
+          similarity: 0.91,
+          documentTitle: "README.md",
+        },
+      ],
+    });
+
+    let api: ProbeApi | null = null;
+    let tree: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          AppProvider,
+          null,
+          React.createElement(Probe, {
+            onReady: (nextApi) => {
+              api = nextApi;
+            },
+          }),
+        ),
+      );
+    });
+
+    await act(async () => {
+      await api?.handleSelectConversation("conv-1");
+      api?.setChatInput("$ hello");
+    });
+
+    await act(async () => {
+      await api?.handleChatSend();
+    });
+
+    expect(mockClient.quickContext).toHaveBeenCalledTimes(0);
+    expect(mockClient.sendConversationMessageStream).toHaveBeenCalledTimes(0);
+    const assistant = [...(api?.snapshot().conversationMessages ?? [])]
+      .reverse()
+      .find((message) => message.role === "assistant");
+    expect(assistant?.text).toContain("Use bare `$` only");
+
+    await act(async () => {
+      tree?.unmount();
+    });
+  });
+
+  it("handles bare $ as quick context shortcut", async () => {
+    mockClient.quickContext.mockResolvedValue({
+      query: "default",
+      answer: "Default quick context.",
+      memories: [],
+      knowledge: [],
+    });
+
+    let api: ProbeApi | null = null;
+    let tree: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          AppProvider,
+          null,
+          React.createElement(Probe, {
+            onReady: (nextApi) => {
+              api = nextApi;
+            },
+          }),
+        ),
+      );
+    });
+
+    await act(async () => {
+      await api?.handleSelectConversation("conv-1");
+      api?.setChatInput("$");
+    });
+
+    await act(async () => {
+      await api?.handleChatSend();
+    });
+
+    expect(mockClient.quickContext).toHaveBeenCalledWith(
+      "What is most relevant from memory and knowledge right now?",
+      { limit: 6 },
+    );
+    expect(mockClient.sendConversationMessageStream).toHaveBeenCalledTimes(0);
+    const assistant = [...(api?.snapshot().conversationMessages ?? [])]
+      .reverse()
+      .find((message) => message.role === "assistant");
+    expect(assistant?.text).toContain("Default quick context.");
+
+    await act(async () => {
+      tree?.unmount();
     });
   });
 });

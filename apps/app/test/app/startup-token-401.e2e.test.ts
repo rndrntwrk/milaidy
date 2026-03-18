@@ -4,20 +4,22 @@ import React, { useEffect } from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockClientTarget, mockClient } = vi.hoisted(() => {
-  const target: Record<string, any> = {};
-  const client = new Proxy(target, {
-    get(innerTarget, prop) {
-      if (!(prop in innerTarget)) {
-        innerTarget[prop as string] = vi.fn(async () => ({}));
-      }
-      return innerTarget[prop as string];
-    },
-  });
-  return { mockClientTarget: target, mockClient: client as any };
-});
+const { mockClient } = vi.hoisted(() => ({
+  mockClient: {
+    hasToken: vi.fn(() => true),
+    getCodingAgentStatus: vi.fn(async () => null),
+    setToken: vi.fn(),
+    getAuthStatus: vi.fn(async () => ({
+      required: true,
+      pairingEnabled: true,
+      expiresAt: null,
+    })),
+    getOnboardingStatus: vi.fn(async () => ({ complete: true })),
+    disconnectWs: vi.fn(),
+  },
+}));
 
-vi.mock("../../src/api-client", () => ({
+vi.mock("@milady/app-core/api", () => ({
   client: mockClient,
   SkillScanReportSummary: {},
 }));
@@ -50,44 +52,12 @@ function Probe(props: { onChange: (snapshot: StartupSnapshot) => void }) {
 describe("startup stale token handling", () => {
   beforeEach(() => {
     Object.assign(document.documentElement, { setAttribute: vi.fn() });
-    for (const fn of Object.values(mockClientTarget)) {
-      if (typeof fn === "function" && "mockReset" in fn) {
-        (fn as { mockReset: () => void }).mockReset();
-      }
-    }
     mockClient.hasToken.mockReturnValue(true);
-    mockClient.setToken.mockImplementation(() => {});
     mockClient.disconnectWs.mockImplementation(() => {});
-    mockClient.connectWs.mockImplementation(() => {});
-    mockClient.onWsEvent.mockReturnValue(() => {});
     mockClient.getAuthStatus.mockResolvedValue({
       required: true,
       pairingEnabled: true,
       expiresAt: null,
-    });
-    mockClient.listEmotes.mockResolvedValue({ emotes: [] });
-    mockClient.listFive55MasteryRuns.mockResolvedValue({ runs: [] });
-    mockClient.getAgentEvents.mockResolvedValue({
-      events: [],
-      latestEventId: null,
-    });
-    mockClient.getStatus.mockResolvedValue({
-      state: "running",
-      agentName: "Milady",
-      model: undefined,
-      startedAt: undefined,
-      uptime: undefined,
-    });
-    mockClient.getWalletAddresses.mockResolvedValue(null);
-    mockClient.getConfig.mockResolvedValue({});
-    mockClient.getCloudStatus.mockResolvedValue({
-      enabled: false,
-      connected: false,
-    });
-    mockClient.getWorkbenchOverview.mockResolvedValue({
-      tasks: [],
-      triggers: [],
-      todos: [],
     });
     const err = Object.assign(new Error("Unauthorized"), {
       kind: "http",

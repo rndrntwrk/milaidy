@@ -21,7 +21,8 @@ on:
 
 jobs:
   benchmark:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -39,9 +40,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          check-latest: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
         run: |

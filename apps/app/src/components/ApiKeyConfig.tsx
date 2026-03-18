@@ -4,14 +4,14 @@
  * Extracted from SettingsView.tsx for decomposition (P2 §10).
  */
 
+import { client, type PluginParamDef } from "@milady/app-core/api";
+import { autoLabel } from "@milady/app-core/components";
+import type { ConfigUiHint } from "@milady/app-core/types";
 import { useCallback, useState } from "react";
 import { useApp } from "../AppContext";
-import { client, type PluginParamDef } from "../api-client";
-import type { ConfigUiHint } from "../types";
+import { useTimeout } from "../hooks/useTimeout";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
-import { configRenderModeForTheme } from "./shared/configRenderMode";
-import { autoLabel } from "./shared/labels";
 
 interface ProviderPlugin {
   id: string;
@@ -41,8 +41,9 @@ export function ApiKeyConfig({
   handlePluginConfigSave,
   loadPlugins,
 }: ApiKeyConfigProps) {
-  const { currentTheme } = useApp();
-  const configRenderMode = configRenderModeForTheme(currentTheme);
+  const { setTimeout } = useTimeout();
+
+  const { t } = useApp();
   const [pluginFieldValues, setPluginFieldValues] = useState<
     Record<string, Record<string, string>>
   >({});
@@ -87,7 +88,7 @@ export function ApiKeyConfig({
       }
       setModelsFetching(false);
     },
-    [loadPlugins],
+    [loadPlugins, setTimeout],
   );
 
   if (!selectedProvider || selectedProvider.parameters.length === 0)
@@ -138,11 +139,11 @@ export function ApiKeyConfig({
     <div className="mt-4 pt-4 border-t border-[var(--border)]">
       <div className="flex justify-between items-center mb-3">
         <div className="text-xs font-semibold">
-          {selectedProvider.name} Settings
+          {selectedProvider.name} {t("apikeyconfig.Settings")}
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-[var(--muted)]">
-            {setCount}/{params.length} configured
+            {setCount}/{params.length} {t("apikeyconfig.configured")}
           </span>
           <span
             className="text-[11px] px-2 py-[3px] border"
@@ -167,7 +168,6 @@ export function ApiKeyConfig({
         setKeys={setKeys}
         registry={defaultRegistry}
         pluginId={selectedProvider.id}
-        renderMode={configRenderMode}
         onChange={(key, value) =>
           handlePluginFieldChange(selectedProvider.id, key, String(value ?? ""))
         }

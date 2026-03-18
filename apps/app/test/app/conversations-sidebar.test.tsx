@@ -8,6 +8,8 @@ const { mockUseApp } = vi.hoisted(() => ({
 
 vi.mock("../../src/AppContext", () => ({
   useApp: () => mockUseApp(),
+  getVrmPreviewUrl: (index: number) => `mock-vrm-${index}.png`,
+  VRM_COUNT: 8,
 }));
 
 import { ConversationsSidebar } from "../../src/components/ConversationsSidebar";
@@ -20,6 +22,7 @@ type ConversationStub = {
 
 function createContext(overrides: Record<string, unknown> = {}) {
   return {
+    t: (k: string) => k,
     conversations: [
       {
         id: "conv-1",
@@ -33,6 +36,7 @@ function createContext(overrides: Record<string, unknown> = {}) {
     handleSelectConversation: vi.fn(async () => {}),
     handleDeleteConversation: vi.fn(async () => {}),
     handleRenameConversation: vi.fn(async () => {}),
+    uiLanguage: "en",
     ...overrides,
   };
 }
@@ -43,7 +47,7 @@ function findButtonByText(
 ): TestRenderer.ReactTestInstance {
   return tree.root.find(
     (node) =>
-      node.type === "button" &&
+      (node.type === "button" || typeof node.type === "function") &&
       node.children.some(
         (child) => typeof child === "string" && child === label,
       ),
@@ -72,8 +76,8 @@ describe("ConversationsSidebar", () => {
     });
 
     expect(handleDeleteConversation).not.toHaveBeenCalled();
-    expect(findButtonByText(tree, "Yes")).toBeDefined();
-    expect(findButtonByText(tree, "No")).toBeDefined();
+    expect(findButtonByText(tree, "conversations.deleteYes")).toBeDefined();
+    expect(findButtonByText(tree, "conversations.deleteNo")).toBeDefined();
   });
 
   it("deletes only after clicking Yes", async () => {
@@ -92,7 +96,7 @@ describe("ConversationsSidebar", () => {
       deleteTrigger.props.onClick({ stopPropagation: () => {} });
     });
 
-    const yesButton = findButtonByText(tree, "Yes");
+    const yesButton = findButtonByText(tree, "conversations.deleteYes");
     await act(async () => {
       yesButton.props.onClick();
       await Promise.resolve();

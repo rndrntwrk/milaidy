@@ -29,7 +29,18 @@ export const CONNECTOR_PLUGINS: Record<string, string> = {
   feishu: "@elizaos/plugin-feishu",
   matrix: "@elizaos/plugin-matrix",
   nostr: "@elizaos/plugin-nostr",
-  retake: "@milady/plugin-retake",
+  retake: "@elizaos/plugin-retake",
+  blooio: "@elizaos/plugin-blooio",
+  twitch: "@elizaos/plugin-twitch",
+};
+
+export const STREAMING_PLUGINS: Record<string, string> = {
+  retake: "@elizaos/plugin-retake",
+  twitch: "@elizaos/plugin-twitch-streaming",
+  youtube: "@elizaos/plugin-youtube-streaming",
+  customRtmp: "@milady/plugin-custom-rtmp",
+  pumpfun: "@elizaos/plugin-pumpfun-streaming",
+  x: "@elizaos/plugin-x-streaming",
 };
 
 const PROVIDER_PLUGINS: Record<string, string> = {
@@ -75,13 +86,13 @@ export const AUTH_PROVIDER_PLUGINS: Record<string, string> = {
   PERPLEXITY_API_KEY: "@elizaos/plugin-perplexity",
   ELIZAOS_CLOUD_API_KEY: "@elizaos/plugin-elizacloud",
   ELIZAOS_CLOUD_ENABLED: "@elizaos/plugin-elizacloud",
-  MILAIDY_USE_PI_AI: "@elizaos/plugin-pi-ai",
+  MILADY_USE_PI_AI: "@elizaos/plugin-pi-ai",
   CUA_API_KEY: "@elizaos/plugin-cua",
   CUA_HOST: "@elizaos/plugin-cua",
   OBSIDIAN_VAULT_PATH: "@elizaos/plugin-obsidian",
   OBSIDAN_VAULT_PATH: "@elizaos/plugin-obsidian",
   REPOPROMPT_CLI_PATH: "@elizaos/plugin-repoprompt",
-  CLAUDE_CODE_WORKBENCH_ENABLED: "@milaidy/plugin-claude-code-workbench",
+  CLAUDE_CODE_WORKBENCH_ENABLED: "@elizaos/plugin-claude-code-workbench",
 };
 
 export const INTEGRATION_ENV_PLUGINS: Record<string, string> = {
@@ -104,7 +115,7 @@ const FEATURE_PLUGINS: Record<string, string> = {
   tts: "@elizaos/plugin-tts",
   stt: "@elizaos/plugin-stt",
   agentSkills: "@elizaos/plugin-agent-skills",
-  directives: "@elizaos/plugin-directives",
+  // directives: "@elizaos/plugin-directives", // not yet ready — package doesn't exist
   commands: "@elizaos/plugin-commands",
   diagnosticsOtel: "@elizaos/plugin-diagnostics-otel",
   webhooks: "@elizaos/plugin-webhooks",
@@ -119,7 +130,7 @@ const FEATURE_PLUGINS: Record<string, string> = {
   vision: "@elizaos/plugin-vision",
   computeruse: "@elizaos/plugin-computeruse",
   repoprompt: "@elizaos/plugin-repoprompt",
-  claudeCodeWorkbench: "@milaidy/plugin-claude-code-workbench",
+  claudeCodeWorkbench: "@elizaos/plugin-claude-code-workbench",
 };
 
 export function isConnectorConfigured(
@@ -194,6 +205,36 @@ export function isConnectorConfigured(
       );
     case "retake":
       return Boolean(config.accessToken || config.enabled === true);
+    case "twitch":
+      return Boolean(
+        config.accessToken || config.clientId || config.enabled === true,
+      );
+    default:
+      return false;
+  }
+}
+
+export function isStreamingDestinationConfigured(
+  destName: string,
+  destConfig: unknown,
+): boolean {
+  if (!destConfig || typeof destConfig !== "object") return false;
+  const config = destConfig as Record<string, unknown>;
+  if (config.enabled === false) return false;
+
+  switch (destName) {
+    case "retake":
+      return Boolean(config.accessToken || config.enabled === true);
+    case "twitch":
+      return Boolean(config.streamKey || config.enabled === true);
+    case "youtube":
+      return Boolean(config.streamKey || config.enabled === true);
+    case "customRtmp":
+      return Boolean(config.rtmpUrl && config.rtmpKey);
+    case "pumpfun":
+      return Boolean(config.streamKey && config.rtmpUrl);
+    case "x":
+      return Boolean(config.streamKey && config.rtmpUrl);
     default:
       return false;
   }
@@ -253,6 +294,33 @@ export function applyPluginAutoEnable(
         connectorName,
         changes,
         `connector: ${connectorName}`,
+      );
+    }
+  }
+
+  // Streaming destinations
+  const streaming = (updatedConfig as Record<string, unknown>).streaming as
+    | Record<string, unknown>
+    | undefined;
+  if (streaming) {
+    for (const [destName, destConfig] of Object.entries(streaming)) {
+      if (destName === "activeDestination") continue; // skip meta field
+      const pluginName = STREAMING_PLUGINS[destName];
+      if (!pluginName) continue;
+      if (!isStreamingDestinationConfigured(destName, destConfig)) continue;
+      // Derive short ID from the package name (e.g. "@elizaos/plugin-twitch-streaming" → "twitch-streaming")
+      const shortId = pluginName.includes("/plugin-")
+        ? pluginName.slice(
+            pluginName.lastIndexOf("/plugin-") + "/plugin-".length,
+          )
+        : destName;
+      if (pluginsConfig.entries[shortId]?.enabled === false) continue;
+      addToAllowlist(
+        pluginsConfig.allow,
+        pluginName,
+        shortId,
+        changes,
+        `streaming: ${destName}`,
       );
     }
   }

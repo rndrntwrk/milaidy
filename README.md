@@ -19,9 +19,11 @@ Grab from **[Releases](https://github.com/milady-ai/milady/releases/latest)**:
 | Platform | File | |
 |----------|------|---|
 | macOS (Apple Silicon) | [`Milady-arm64.dmg`](https://github.com/milady-ai/milady/releases/latest) | for your overpriced rectangle |
-| macOS (Intel) | [`Milady-x64.dmg`](https://github.com/milady-ai/milady/releases/latest) | boomer mac |
+| macOS (Intel) | [`Milady-x64.dmg`](https://github.com/milady-ai/milady/releases/latest) | boomer mac (why separate arm64/x64: [Build & release](docs/build-and-release.md#macos-why-two-dmgs-arm64-and-x64)) |
 | Windows | [`Milady-Setup.exe`](https://github.com/milady-ai/milady/releases/latest) | for the gamer anons |
-| Linux | [`Milady.AppImage`](https://github.com/milady-ai/milady/releases/latest) / [`.deb`](https://github.com/milady-ai/milady/releases/latest) | I use arch btw |
+| iOS | [App Store](https://apps.apple.com/app/milady-private-ai-assistant/id0000000000) | for the privacy-pilled |
+| Android | [Google Play](https://play.google.com/store/apps/details?id=ai.milady.app) / [APK](https://github.com/milady-ai/milady/releases/latest) | for the degen on the go |
+| Linux | [`.AppImage`](https://github.com/milady-ai/milady/releases/latest) / [`.deb`](https://github.com/milady-ai/milady/releases/latest) / [Snap](#snap) / [Flatpak](#flatpak) / [APT repo](#debian--ubuntu-apt) | I use arch btw |
 
 Signed and notarized. No Gatekeeper FUD. We're legit.
 
@@ -93,6 +95,56 @@ NPM global:
 npm install -g miladyai
 milady setup
 ```
+
+
+
+### Homebrew (macOS / Linux)
+
+```bash
+brew tap milady-ai/milaidy
+brew install milaidy          # CLI
+brew install --cask milaidy   # Desktop app (macOS only)
+```
+
+### Snap
+
+```bash
+sudo snap install milady
+milady setup
+```
+
+Snap packages auto-update in the background. Available on Ubuntu, Fedora, Manjaro, and any distro with [snapd](https://snapcraft.io/docs/installing-snapd) installed.
+
+For the latest development builds:
+```bash
+sudo snap install milady --edge
+```
+
+### Flatpak
+
+```bash
+flatpak install flathub ai.milady.Milady
+flatpak run ai.milady.Milady
+```
+
+Or sideload from a [release bundle](https://github.com/milady-ai/milady/releases/latest):
+```bash
+flatpak --user install milady.flatpak
+```
+
+### Debian / Ubuntu (APT)
+
+```bash
+# Add the repository
+curl -fsSL https://apt.milaidy.com/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/milady.gpg
+echo "deb [signed-by=/usr/share/keyrings/milady.gpg] https://apt.milaidy.com stable main" | \
+  sudo tee /etc/apt/sources.list.d/milady.list
+
+# Install
+sudo apt update && sudo apt install milady
+```
+
+Works on Debian 12+, Ubuntu 22.04+, Linux Mint 22+, Pop!_OS, and other Debian derivatives. Updates come through `apt upgrade`.
 
 ### Security: API token
 
@@ -270,6 +322,44 @@ Or use `~/.milady/.env` for secrets.
 | [xAI](https://x.ai) | `XAI_API_KEY` | grok, based |
 | [DeepSeek](https://deepseek.com) | `DEEPSEEK_API_KEY` | reasoning arc |
 
+### Using Ollama (local models)
+
+[Ollama](https://ollama.ai) lets you run models locally with zero API keys. Install it, pull a model, and configure Milady:
+
+```bash
+# install ollama
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# pull a model
+ollama pull gemma3:4b
+```
+
+> **⚠️ Known issue:** The `@elizaos/plugin-ollama` has an SDK version incompatibility with the current AI SDK. Use Ollama's **OpenAI-compatible endpoint** as a workaround:
+
+Edit `~/.milady/milady.json`:
+
+```json5
+{
+  env: {
+    OPENAI_API_KEY: "ollama",           // any non-empty string works
+    OPENAI_BASE_URL: "http://localhost:11434/v1",  // ollama's openai-compat endpoint
+    SMALL_MODEL: "gemma3:4b",           // or any model you pulled
+    LARGE_MODEL: "gemma3:4b",
+  },
+}
+```
+
+This routes through the OpenAI plugin instead of the broken Ollama plugin. Works with any Ollama model — just make sure `ollama serve` is running.
+
+**Recommended models for local use:**
+
+| Model | Size | Vibe |
+|-------|------|------|
+| `gemma3:4b` | ~3GB | fast, good for chat |
+| `llama3.2` | ~2GB | lightweight, quick responses |
+| `mistral` | ~4GB | solid all-rounder |
+| `deepseek-r1:8b` | ~5GB | reasoning arc |
+
 ---
 
 ## Prerequisites
@@ -295,6 +385,11 @@ Dev mode with hot reload:
 ```bash
 bun run dev
 ```
+
+### Documentation (with WHYs)
+
+- **[Plugin resolution and NODE_PATH](docs/plugin-resolution-and-node-path.md)** — Why we set `NODE_PATH` in three places so dynamic plugin imports resolve when building from source (CLI, desktop dev, Electron).
+- **[Build and release](docs/build-and-release.md)** — Why the release pipeline uses strict shell, retries, setup-node v3/Blacksmith, Bun cache, timeouts; why size-report pipelines handle SIGPIPE; why Windows plugin build uses `npx -p typescript tsc`.
 
 ---
 

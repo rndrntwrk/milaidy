@@ -11,16 +11,15 @@
  *   - Prompt generation: registry.catalog.prompt() for AI system prompts
  */
 
+import type { ConfigUiHint, PluginUiTheme } from "@milady/app-core/types";
 import React, {
-  type ComponentType,
-  type SVGProps,
   forwardRef,
   useCallback,
   useImperativeHandle,
   useMemo,
   useState,
 } from "react";
-import type { ConfigUiHint } from "../types";
+import { useApp } from "../AppContext";
 import type {
   FieldRegistry,
   FieldRenderer,
@@ -37,51 +36,6 @@ import {
   runValidation,
 } from "./config-catalog";
 import { ConfigField } from "./config-field";
-import { Button } from "./ui/Button.js";
-import {
-  ActivityIcon,
-  AgentIcon,
-  ArbitrumIcon,
-  BaseChainIcon,
-  BellIcon,
-  BookIcon,
-  BrainIcon,
-  BroadcastIcon,
-  CalendarIcon,
-  ChartIcon,
-  ChevronRightIcon,
-  CloudIcon,
-  CodeIcon,
-  ConnectionIcon,
-  CreditIcon,
-  DatabaseIcon,
-  DocumentIcon,
-  EditIcon,
-  EthereumIcon,
-  FlaskIcon,
-  FolderIcon,
-  GlobeIcon,
-  KeyIcon,
-  LightningIcon,
-  LockIcon,
-  MegaphoneIcon,
-  MicIcon,
-  MonitorIcon,
-  OperatorIcon,
-  OutputIcon,
-  PackageIcon,
-  PhoneIcon,
-  RestartIcon,
-  RulerIcon,
-  SettingsIcon,
-  ShieldIcon,
-  SolanaIcon,
-  SparkIcon,
-  ThreadsIcon,
-  VideoIcon,
-  WalletIcon,
-  XBrandIcon,
-} from "./ui/Icons";
 
 // ── Props ──────────────────────────────────────────────────────────────
 
@@ -109,10 +63,8 @@ export interface ConfigRendererProps {
   ) => React.ReactNode;
   /** Show a validation error summary above the form fields when errors exist. Defaults to true. */
   showValidationSummary?: boolean;
-  /** Visual mode for embedded config surfaces. Defaults to legacy schema chrome. */
-  renderMode?: "minimal" | "legacy";
   /** Partial theme overrides for plugin UI tokens. */
-  theme?: Partial<import("../types").PluginUiTheme>;
+  theme?: Partial<PluginUiTheme>;
 }
 
 /** Handle exposed by ConfigRenderer via ref for parent-driven validation. */
@@ -123,92 +75,90 @@ export interface ConfigRendererHandle {
 
 // ── Group icons ────────────────────────────────────────────────────────
 
-type GroupIconComponent = ComponentType<SVGProps<SVGSVGElement>>;
-
-const GROUP_ICONS: Record<string, GroupIconComponent> = {
+const GROUP_ICONS: Record<string, string> = {
   // Auth & Security
-  auth: KeyIcon,
-  authentication: KeyIcon,
-  security: ShieldIcon,
-  permissions: LockIcon,
-  "api keys": KeyIcon,
+  auth: "\u{1F511}",
+  authentication: "\u{1F511}",
+  security: "\u{1F6E1}\uFE0F",
+  permissions: "\u{1F512}",
+  "api keys": "\u{1F511}",
   // Connection & Network
-  connection: ConnectionIcon,
-  network: GlobeIcon,
-  api: CodeIcon,
-  webhook: MegaphoneIcon,
+  connection: "\u{1F517}",
+  network: "\u{1F310}",
+  api: "\u{1F50C}",
+  webhook: "\u{1F4E1}",
   // Models & AI
-  models: AgentIcon,
-  model: AgentIcon,
-  "ai models": AgentIcon,
-  "text generation": AgentIcon,
-  embeddings: BrainIcon,
+  models: "\u{1F916}",
+  model: "\u{1F916}",
+  "ai models": "\u{1F916}",
+  "text generation": "\u{1F916}",
+  embeddings: "\u{1F9E0}",
   // Behavior & Config
-  behavior: SettingsIcon,
-  configuration: SettingsIcon,
-  general: SettingsIcon,
-  defaults: SettingsIcon,
-  advanced: SettingsIcon,
-  features: SparkIcon,
+  behavior: "\u2699\uFE0F",
+  configuration: "\u2699\uFE0F",
+  general: "\u2699\uFE0F",
+  defaults: "\u2699\uFE0F",
+  advanced: "\u{1F527}",
+  features: "\u2728",
   // Time & Scheduling
-  timing: ActivityIcon,
-  scheduling: CalendarIcon,
+  timing: "\u23F1\uFE0F",
+  scheduling: "\u{1F4C5}",
   // Storage & Data
-  storage: DatabaseIcon,
-  bucket: PackageIcon,
-  paths: FolderIcon,
-  output: OutputIcon,
-  repository: BookIcon,
+  storage: "\u{1F4BE}",
+  bucket: "\u{1F4E6}",
+  paths: "\u{1F4C2}",
+  output: "\u{1F4E4}",
+  repository: "\u{1F4DA}",
   // Communication
-  messaging: ThreadsIcon,
-  channels: BroadcastIcon,
-  chatrooms: ThreadsIcon,
-  voice: MicIcon,
-  speech: MicIcon,
-  "speech-to-text": MicIcon,
+  messaging: "\u{1F4AC}",
+  channels: "\u{1F4E2}",
+  chatrooms: "\u{1F4AC}",
+  voice: "\u{1F3A4}",
+  speech: "\u{1F3A4}",
+  "speech-to-text": "\u{1F3A4}",
   // Identity
-  identity: OperatorIcon,
-  "client identity": OperatorIcon,
-  session: OperatorIcon,
+  identity: "\u{1F464}",
+  "client identity": "\u{1F464}",
+  session: "\u{1F464}",
   // Display & Media
-  display: MonitorIcon,
-  media: VideoIcon,
+  display: "\u{1F3A8}",
+  media: "\u{1F3AC}",
   // Notifications
-  notifications: BellIcon,
-  logging: DocumentIcon,
+  notifications: "\u{1F514}",
+  logging: "\u{1F4DD}",
   // Finance & Trading
-  trading: ChartIcon,
-  "risk management": ShieldIcon,
-  wallet: WalletIcon,
-  payment: CreditIcon,
-  pricing: CreditIcon,
+  trading: "\u{1F4C8}",
+  "risk management": "\u{1F6E1}\uFE0F",
+  wallet: "\u{1F4B0}",
+  payment: "\u{1F4B3}",
+  pricing: "\u{1F4B2}",
   // Blockchain
-  blockchain: ConnectionIcon,
-  ethereum: EthereumIcon,
-  solana: SolanaIcon,
-  base: BaseChainIcon,
-  arbitrum: ArbitrumIcon,
-  bsc: ConnectionIcon,
-  testnets: FlaskIcon,
-  "dex config": ChartIcon,
+  blockchain: "\u26D3\uFE0F",
+  ethereum: "\u26D3\uFE0F",
+  solana: "\u26D3\uFE0F",
+  base: "\u26D3\uFE0F",
+  arbitrum: "\u26D3\uFE0F",
+  bsc: "\u26D3\uFE0F",
+  testnets: "\u{1F9EA}",
+  "dex config": "\u{1F4CA}",
   // Social
-  posting: EditIcon,
-  "x/twitter authentication": KeyIcon,
-  "x/twitter behavior": XBrandIcon,
+  posting: "\u{1F4DD}",
+  "x/twitter authentication": "\u{1F511}",
+  "x/twitter behavior": "\u{1F426}",
   // System
-  limits: RulerIcon,
-  providers: CloudIcon,
-  commands: CodeIcon,
-  actions: LightningIcon,
-  policies: DocumentIcon,
-  autonomy: AgentIcon,
-  "background jobs": RestartIcon,
-  "n8n connection": ConnectionIcon,
-  app: PhoneIcon,
+  limits: "\u{1F4CF}",
+  providers: "\u{1F50C}",
+  commands: "\u2318",
+  actions: "\u26A1",
+  policies: "\u{1F4DC}",
+  autonomy: "\u{1F916}",
+  "background jobs": "\u{1F504}",
+  "n8n connection": "\u{1F517}",
+  app: "\u{1F4F1}",
 };
 
-function groupIcon(group: string): GroupIconComponent {
-  return GROUP_ICONS[group.toLowerCase()] ?? SettingsIcon;
+function groupIcon(group: string): string {
+  return GROUP_ICONS[group.toLowerCase()] ?? "\u25A0";
 }
 
 // ── Width → Tailwind column span ───────────────────────────────────────
@@ -240,6 +190,7 @@ function ValidationSummary({
   fieldLabels,
   pluginId,
 }: ValidationSummaryProps) {
+  const { t } = useApp();
   const errorEntries = [...fieldErrors.entries()].filter(
     ([, errors]) => errors.length > 0,
   );
@@ -263,21 +214,19 @@ function ValidationSummary({
     >
       <div className="text-[13px] font-semibold text-[var(--destructive)] mb-2">
         {totalErrors} {totalErrors === 1 ? "field needs" : "fields need"}{" "}
-        attention
+        {t("config-renderer.attention")}
       </div>
       <ul className="list-none m-0 p-0 flex flex-col gap-1">
         {errorEntries.map(([key]) => (
           <li key={key}>
-            <Button
+            <button
               type="button"
-              variant="ghost"
-              size="sm"
-              className="h-auto w-full justify-start rounded-none p-0 text-left text-[12px] text-[var(--destructive)] hover:bg-transparent hover:text-[var(--destructive)]"
+              className="text-[12px] text-[var(--destructive)] cursor-pointer bg-transparent border-none p-0 hover:underline transition-all text-left flex items-center gap-1.5"
               onClick={() => handleFieldClick(key)}
             >
-              <ChevronRightIcon className="h-3.5 w-3.5 opacity-60" />
+              <span className="opacity-60">{t("config-renderer.Rarr")}</span>
               <span>{fieldLabels.get(key) ?? key}</span>
-            </Button>
+            </button>
           </li>
         ))}
       </ul>
@@ -288,7 +237,7 @@ function ValidationSummary({
 // ── Theme mapping ──────────────────────────────────────────────────────
 
 /** Maps PluginUiTheme keys to CSS variable names. */
-const THEME_TO_CSS: Record<keyof import("../types").PluginUiTheme, string> = {
+const THEME_TO_CSS: Record<keyof PluginUiTheme, string> = {
   fieldGap: "--plugin-field-gap",
   groupGap: "--plugin-group-gap",
   sectionPadding: "--plugin-section-padding",
@@ -321,15 +270,11 @@ export const ConfigRenderer = forwardRef<
     onChange,
     renderField: renderFieldOverride,
     showValidationSummary = true,
-    renderMode = "legacy",
     theme,
   }: ConfigRendererProps,
   ref,
 ) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [groupOpenState, setGroupOpenState] = useState<Record<string, boolean>>(
-    {},
-  );
   const [fieldErrors, setFieldErrors] = useState<Map<string, string[]>>(
     new Map(),
   );
@@ -425,13 +370,6 @@ export const ConfigRenderer = forwardRef<
     [validateField, onChange],
   );
 
-  const toggleGroupOpen = useCallback((group: string) => {
-    setGroupOpenState((prev) => ({
-      ...prev,
-      [group]: !(prev[group] ?? true),
-    }));
-  }, []);
-
   // ── Action execution ─────────────────────────────────────────────────
 
   const executeAction = useCallback(
@@ -465,7 +403,6 @@ export const ConfigRenderer = forwardRef<
         required: field.required,
         errors: fieldErrors.get(field.key),
         readonly: field.readonly,
-        uiMode: renderMode,
         onReveal:
           isSensitive && revealSecret && pluginId
             ? () => revealSecret(pluginId, field.key)
@@ -614,43 +551,35 @@ export const ConfigRenderer = forwardRef<
     for (const [key, value] of Object.entries(theme)) {
       const cssVar = THEME_TO_CSS[key as keyof typeof THEME_TO_CSS];
       if (cssVar && value) {
-        style[cssVar] = value;
+        style[cssVar] = value as string;
       }
     }
     return Object.keys(style).length > 0 ? style : undefined;
   }, [theme]);
+
+  // ── useApp for i18n ─────────────────────────────────────────────────
+  const { t: tFn } = useApp();
 
   // ── Empty state ──────────────────────────────────────────────────────
 
   if (!schema) {
     return (
       <div className="text-xs text-[var(--muted)] italic py-3">
-        No schema provided.
+        {tFn("config-renderer.NoSchemaProvided")}
       </div>
     );
   }
 
   // ── Render ───────────────────────────────────────────────────────────
 
-  const minimalChrome = renderMode !== "legacy";
-
   return (
     <div style={themeStyle}>
       {/* Progress indicator */}
-      {!minimalChrome &&
-        configProgress &&
+      {configProgress &&
         configProgress.requiredTotal > 0 &&
         configProgress.requiredSet < configProgress.requiredTotal && (
           <div className="mb-4 px-3.5 py-2.5 border border-[var(--warning,#f39c12)] bg-[color-mix(in_srgb,var(--warning,#f39c12)_6%,transparent)] rounded-sm">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[12px] font-semibold text-[var(--warning,#f39c12)]">
-                {configProgress.requiredSet}/{configProgress.requiredTotal}{" "}
-                required fields configured
-              </span>
-              <span className="text-[11px] text-[var(--muted)]">
-                {configProgress.configured}/{configProgress.total} total
-              </span>
-            </div>
+            <ConfigProgressText configProgress={configProgress} />
             <div className="w-full h-1.5 bg-[var(--border)] rounded-full overflow-hidden">
               <div
                 className="h-full bg-[var(--warning,#f39c12)] rounded-full transition-all duration-300"
@@ -670,141 +599,30 @@ export const ConfigRenderer = forwardRef<
         />
       ) : null}
 
-      {[...groups.entries()].map(([group, fields], groupIndex) => {
-        const normalizedGroup = group.trim().toLowerCase();
-        const displayGroup =
-          normalizedGroup === "destinations" ? "Channels" : group;
-        const GroupIcon = groupIcon(displayGroup);
-        const isCollapsibleGroup =
-          normalizedGroup === "destinations" || normalizedGroup === "channels";
-        const isGroupOpen = isCollapsibleGroup
-          ? (groupOpenState[group] ?? true)
-          : true;
-        const visibleChannelCount = fields.filter((field) =>
-          /^STREAM555_DEST_[A-Z0-9]+_ENABLED$/i.test(field.key),
-        ).length;
-        const channelBaseCount = new Set(
-          fields
-            .map((field) =>
-              field.key.match(
-                /^(STREAM555_DEST_[A-Z0-9]+)_(?:ENABLED|RTMP_URL|STREAM_KEY)$/i,
-              ),
-            )
-            .filter((match): match is RegExpMatchArray => Boolean(match))
-            .map((match) => match[1]),
-        ).size;
-        const groupCount =
-          isCollapsibleGroup &&
-          (channelBaseCount > 0 || visibleChannelCount > 0)
-            ? Math.max(channelBaseCount, visibleChannelCount)
-            : fields.length;
-
-        return (
-          <div key={group} className={groupIndex > 0 ? "mt-5" : ""}>
-            {(!minimalChrome ? showHeaders || isCollapsibleGroup : isCollapsibleGroup) &&
-              (isCollapsibleGroup ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className={
-                    minimalChrome
-                      ? "group mb-3 h-auto w-full justify-start gap-3 rounded-none border-none bg-transparent p-0 text-left hover:bg-transparent"
-                      : "group mb-3 h-auto w-full justify-start gap-2 rounded-none border-none bg-transparent p-0 text-left hover:bg-transparent"
-                  }
-                  onClick={() => toggleGroupOpen(group)}
-                  aria-expanded={isGroupOpen}
-                >
-                  <ChevronRightIcon
-                    className={
-                      minimalChrome
-                        ? `h-3.5 w-3.5 text-white/42 transition-transform duration-200 group-hover:text-white/70 ${isGroupOpen ? "rotate-90" : ""}`
-                        : `h-3.5 w-3.5 text-[var(--muted)] transition-transform duration-200 group-hover:text-[var(--text)] ${isGroupOpen ? "rotate-90" : ""}`
-                    }
-                  />
-                  <span className={minimalChrome ? "inline-flex text-base leading-none opacity-80" : "inline-flex text-base leading-none"}>
-                    <GroupIcon className="h-[18px] w-[18px]" />
-                  </span>
-                  <span
-                    className={
-                      minimalChrome
-                        ? "text-[11px] font-semibold uppercase tracking-[0.22em] text-white/62"
-                        : "text-[12px] font-bold uppercase tracking-wider text-[var(--text)] opacity-70"
-                    }
-                  >
-                    {displayGroup}
-                  </span>
-                  <span
-                    className={
-                      minimalChrome
-                        ? "inline-flex min-h-6 min-w-[1.75rem] items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-2 text-[10px] font-medium uppercase tracking-[0.14em] text-white/58"
-                        : "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold bg-[var(--accent-subtle,rgba(255,255,255,0.05))] text-[var(--accent)] border border-[var(--border)] rounded-sm"
-                    }
-                  >
-                    {groupCount}
-                  </span>
-                  <span className={minimalChrome ? "ml-1 h-px flex-1 bg-white/10" : "ml-1 h-px flex-1 bg-[var(--border)]"} />
-                </Button>
-              ) : (
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="inline-flex text-base leading-none">
-                    <GroupIcon className="h-[18px] w-[18px]" />
-                  </span>
-                  <span className="text-[12px] font-bold uppercase tracking-wider text-[var(--text)] opacity-70">
-                    {displayGroup}
-                  </span>
-                  <span className="flex-1 h-px bg-[var(--border)] ml-1" />
-                </div>
-              ))}
-              {isGroupOpen && (
-                <div className="grid grid-cols-6 gap-x-5 gap-y-0">
-                  {fields.map((f) => renderField(f))}
-                </div>
-              )}
+      {[...groups.entries()].map(([group, fields], groupIndex) => (
+        <div key={group} className={groupIndex > 0 ? "mt-5" : ""}>
+          {showHeaders && (
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-base leading-none">{groupIcon(group)}</span>
+              <span className="text-[12px] font-bold uppercase tracking-wider text-[var(--text)] opacity-70">
+                {group}
+              </span>
+              <span className="flex-1 h-px bg-[var(--border)] ml-1" />
             </div>
-          );
-        })}
+          )}
+          <div className="grid grid-cols-6 gap-x-5 gap-y-0">
+            {fields.map((f) => renderField(f))}
+          </div>
+        </div>
+      ))}
 
       {advanced.length > 0 && (
-        <div className={minimalChrome ? "mt-6 border-t border-white/10 pt-4" : "mt-5 border-t border-[var(--border)] pt-4"}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className={
-              minimalChrome
-                ? "group mb-3 h-auto w-full justify-start gap-3 rounded-none p-0 hover:bg-transparent"
-                : "group mb-3 h-auto w-full justify-start gap-2 rounded-none p-0 hover:bg-transparent"
-            }
-            onClick={() => setAdvancedOpen((prev) => !prev)}
-          >
-            <ChevronRightIcon
-              className={
-                minimalChrome
-                  ? `h-3.5 w-3.5 text-white/42 transition-transform duration-200 group-hover:text-white/70 ${advancedOpen ? "rotate-90" : ""}`
-                  : `h-3.5 w-3.5 text-[var(--muted)] transition-transform duration-200 group-hover:text-[var(--text)] ${advancedOpen ? "rotate-90" : ""}`
-              }
-            />
-            <span
-              className={
-                minimalChrome
-                  ? "text-[11px] font-semibold uppercase tracking-[0.22em] text-white/62 transition-colors group-hover:text-white/82"
-                  : "text-[12px] font-bold uppercase tracking-wider text-[var(--muted)] transition-colors group-hover:text-[var(--text)]"
-              }
-            >
-              {minimalChrome ? "Advanced settings" : "Advanced"}
-            </span>
-            <span
-              className={
-                minimalChrome
-                  ? "inline-flex min-h-6 min-w-[1.75rem] items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-2 text-[10px] font-medium uppercase tracking-[0.14em] text-white/58"
-                  : "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold bg-[var(--accent-subtle,rgba(255,255,255,0.05))] text-[var(--accent)] border border-[var(--border)] rounded-sm"
-              }
-            >
-              {advanced.length}
-            </span>
-            <span className={minimalChrome ? "ml-1 h-px flex-1 bg-white/10" : "ml-1 h-px flex-1 bg-[var(--border)] opacity-50"} />
-          </Button>
+        <div className="mt-5 pt-4 border-t border-[var(--border)]">
+          <AdvancedSectionToggle
+            advanced={advanced}
+            advancedOpen={advancedOpen}
+            setAdvancedOpen={setAdvancedOpen}
+          />
           {advancedOpen && (
             <div className="grid grid-cols-6 gap-x-5 gap-y-0 pt-1 animate-[cr-slide_var(--duration-normal,200ms)_ease]">
               {advanced.map((f) => renderField(f))}
@@ -815,6 +633,64 @@ export const ConfigRenderer = forwardRef<
     </div>
   );
 });
+
+function ConfigProgressText({
+  configProgress,
+}: {
+  configProgress: {
+    requiredSet: number;
+    requiredTotal: number;
+    configured: number;
+    total: number;
+  };
+}) {
+  const { t } = useApp();
+  return (
+    <div className="flex items-center justify-between mb-1.5">
+      <span className="text-[12px] font-semibold text-[var(--warning,#f39c12)]">
+        {configProgress.requiredSet}/{configProgress.requiredTotal}{" "}
+        {t("config-renderer.requiredFieldsConf")}
+      </span>
+      <span className="text-[11px] text-[var(--muted)]">
+        {configProgress.configured}/{configProgress.total}{" "}
+        {t("config-renderer.total")}
+      </span>
+    </div>
+  );
+}
+
+function AdvancedSectionToggle({
+  advanced,
+  advancedOpen,
+  setAdvancedOpen,
+}: {
+  advanced: ResolvedField[];
+  advancedOpen: boolean;
+  setAdvancedOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  const { t } = useApp();
+  return (
+    <button
+      type="button"
+      className="flex items-center gap-2 cursor-pointer select-none group mb-3"
+      onClick={() => setAdvancedOpen((prev) => !prev)}
+    >
+      <span
+        className="inline-block text-[10px] text-[var(--muted)] transition-transform duration-200 group-hover:text-[var(--text)]"
+        style={{ transform: advancedOpen ? "rotate(90deg)" : "none" }}
+      >
+        &#9654;
+      </span>
+      <span className="text-[12px] font-bold uppercase tracking-wider text-[var(--muted)] group-hover:text-[var(--text)] transition-colors">
+        {t("config-renderer.Advanced")}
+      </span>
+      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold bg-[var(--accent-subtle,rgba(255,255,255,0.05))] text-[var(--accent)] border border-[var(--border)] rounded-sm">
+        {advanced.length}
+      </span>
+      <span className="flex-1 h-px bg-[var(--border)] opacity-50 ml-1" />
+    </button>
+  );
+}
 
 // ── Default registry ───────────────────────────────────────────────────
 

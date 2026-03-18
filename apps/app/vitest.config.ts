@@ -6,43 +6,21 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   test: {
-    include: [path.join(here, "test/**/*.test.{ts,tsx}")],
+    // Use POSIX-style relative globs so test discovery works on Windows too.
+    include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
+    exclude: ["test/electron/**", "test/electron-ui/**"],
     setupFiles: [path.join(here, "test/setup.ts")],
     environment: "node",
     alias: {
       electron: path.join(here, "test/__mocks__/electron.ts"),
       "@elizaos/skills": path.join(here, "test/__mocks__/elizaos-skills.ts"),
-      "@opentelemetry/sdk-node": path.join(
+      "@elizaos/plugin-pdf": path.join(
         here,
-        "test/__mocks__/opentelemetry.ts",
-      ),
-      "@opentelemetry/auto-instrumentations-node": path.join(
-        here,
-        "test/__mocks__/opentelemetry.ts",
-      ),
-      "@opentelemetry/exporter-trace-otlp-http": path.join(
-        here,
-        "test/__mocks__/opentelemetry.ts",
-      ),
-      "@opentelemetry/exporter-metrics-otlp-http": path.join(
-        here,
-        "test/__mocks__/opentelemetry.ts",
-      ),
-      "@opentelemetry/resources": path.join(
-        here,
-        "test/__mocks__/opentelemetry.ts",
-      ),
-      "@opentelemetry/semantic-conventions": path.join(
-        here,
-        "test/__mocks__/opentelemetry.ts",
-      ),
-      "@opentelemetry/sdk-trace-base": path.join(
-        here,
-        "test/__mocks__/opentelemetry.ts",
-      ),
-      "@opentelemetry/sdk-metrics": path.join(
-        here,
-        "test/__mocks__/opentelemetry.ts",
+        "..",
+        "..",
+        "test",
+        "stubs",
+        "empty-module.mjs",
       ),
       "@milady/capacitor-gateway": path.join(
         here,

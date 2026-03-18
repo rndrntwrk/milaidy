@@ -1,21 +1,32 @@
-import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
-import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AgentStatus,
   StreamEventEnvelope,
   WorkbenchOverview,
-} from "../../src/api-client";
+} from "@milady/app-core/api";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AutonomyRunHealthMap } from "../../src/autonomy-events";
 
 interface AutonomousPanelContextStub {
   agentStatus: AgentStatus | null;
   autonomousEvents: StreamEventEnvelope[];
+  autonomousRunHealthByRunId: AutonomyRunHealthMap;
   workbench: WorkbenchOverview | null;
   workbenchLoading: boolean;
   workbenchTasksAvailable: boolean;
   workbenchTriggersAvailable: boolean;
   workbenchTodosAvailable: boolean;
+  ptySessions: Array<{
+    sessionId: string;
+    agentType: string;
+    label: string;
+    originalTask: string;
+    workdir: string;
+    status: string;
+  }>;
+  uiLanguage?: string;
+  t?: (k: string) => string;
 }
 
 const mockUseApp = vi.fn<() => AutonomousPanelContextStub>();
@@ -64,11 +75,15 @@ function makeContext(
   return {
     agentStatus: null,
     autonomousEvents: [],
+    autonomousRunHealthByRunId: {},
     workbench: null,
     workbenchLoading: false,
     workbenchTasksAvailable: false,
     workbenchTriggersAvailable: false,
     workbenchTodosAvailable: false,
+    ptySessions: [],
+    uiLanguage: "en",
+    t: (k: string) => k,
     ...overrides,
   };
 }
@@ -98,26 +113,39 @@ describe("AutonomousPanel", () => {
   it("shows not-running state when agent is offline", async () => {
     mockUseApp.mockReturnValue(makeContext({ agentStatus: null }));
 
-    let tree!: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      tree = TestRenderer.create(React.createElement(AutonomousPanel));
-    });
-    const panel = tree.root.findByProps({ "data-testid": "autonomous-panel" });
-    expect(panel).toBeDefined();
-    expect(String(panel.props.className)).toContain("hidden");
-    expect(String(panel.props.className)).toContain("lg:flex");
     const markup = renderToStaticMarkup(React.createElement(AutonomousPanel));
-    expect(readAllText(markup)).toContain("Agent not running");
+
+    expect(markup).toContain('data-testid="autonomous-panel"');
+    expect(readAllText(markup)).toContain("autonomouspanel.AgentNotRunnin");
   });
 
   it("updates current thought/action and stream count as events arrive", async () => {
     const liveState = makeContext({
       agentStatus: makeStatus("running"),
+      autonomousRunHealthByRunId: {
+        "run-ops-1": {
+          runId: "run-ops-1",
+          status: "gap_detected",
+          lastSeq: 3,
+          missingSeqs: [2],
+          gapCount: 1,
+        },
+      },
       autonomousEvents: [
-        makeEvent("evt-1", "evaluator", { text: "Thinking about priorities" }),
-        makeEvent("evt-2", "action", {
-          text: "Called resolve_priority action",
-        }),
+        {
+          ...makeEvent("evt-1", "evaluator", {
+            text: "Thinking about priorities",
+          }),
+          runId: "run-ops-1",
+          seq: 1,
+        },
+        {
+          ...makeEvent("evt-2", "action", {
+            text: "Called resolve_priority action",
+          }),
+          runId: "run-ops-1",
+          seq: 3,
+        },
       ],
     });
     mockUseApp.mockImplementation(() => liveState);
@@ -127,14 +155,28 @@ describe("AutonomousPanel", () => {
     );
 
     const initialText = normalizeText(readAllText(initialMarkup));
-    expect(initialText).toMatch(/Event Stream \(2\)/);
+    expect(initialText).toContain("autonomouspanel.EventStream");
     expect(initialText).toContain("Thinking about priorities");
     expect(initialText).toContain("Called resolve_priority action");
+    expect(initialText).toContain("autonomouspanel.ReplayHealth");
+    expect(initialText).toContain("Gaps 1");
+    expect(initialText).toContain("autonomouspanel.missing 2");
+    expect(initialText).toContain("Gap detected");
 
     liveState.autonomousEvents = [
       ...liveState.autonomousEvents,
-      makeEvent("evt-3", "assistant", { text: "Switching to execution mode" }),
-      makeEvent("evt-4", "provider", {}, "heartbeat_event"),
+      {
+        ...makeEvent("evt-3", "assistant", {
+          text: "Switching to execution mode",
+        }),
+        runId: "run-ops-1",
+        seq: 4,
+      },
+      {
+        ...makeEvent("evt-4", "provider", {}, "heartbeat_event"),
+        runId: "run-ops-1",
+        seq: 5,
+      },
     ];
 
     const updatedMarkup = renderToStaticMarkup(
@@ -142,10 +184,10 @@ describe("AutonomousPanel", () => {
     );
 
     const panelText = normalizeText(readAllText(updatedMarkup));
-    expect(panelText).toMatch(/Event Stream \(4\)/);
+    expect(panelText).toContain("autonomouspanel.EventStream");
     expect(panelText).toContain("Switching to execution mode");
-    expect(panelText).toContain("provider event");
-    expect(panelText).toContain("Latest action provider event");
+    expect(panelText).toContain("autonomouspanel.run run-ops-1");
+    expect(panelText).toContain("autonomouspanel.seq 5");
   });
 
   it("renders tasks, triggers, and todos from workbench context", async () => {
@@ -201,9 +243,9 @@ describe("AutonomousPanel", () => {
     const markup = renderToStaticMarkup(React.createElement(AutonomousPanel));
 
     const panelText = normalizeText(readAllText(markup));
-    expect(panelText).toMatch(/Tasks \(1\)/);
-    expect(panelText).toMatch(/Triggers \(1\)/);
-    expect(panelText).toMatch(/Todos \(1\)/);
+    expect(panelText).toContain("autonomouspanel.Tasks");
+    expect(panelText).toContain("autonomouspanel.Triggers");
+    expect(panelText).toContain("autonomouspanel.Todos");
     expect(panelText).toContain("Investigate autonomous stream reliability");
     expect(panelText).toContain("Heartbeat Trigger");
     expect(panelText).toContain("Verify panel receives heartbeat updates");

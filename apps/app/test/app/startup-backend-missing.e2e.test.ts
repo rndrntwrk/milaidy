@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const { mockClient } = vi.hoisted(() => ({
   mockClient: {
     hasToken: vi.fn(() => false),
+    getCodingAgentStatus: vi.fn(async () => null),
     setToken: vi.fn(),
     listEmotes: vi.fn(async () => []),
     onWsEvent: vi.fn(() => () => {}),
@@ -20,7 +21,7 @@ const { mockClient } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../../src/api-client", () => ({
+vi.mock("@milady/app-core/api", () => ({
   client: mockClient,
   SkillScanReportSummary: {},
 }));

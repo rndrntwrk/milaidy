@@ -1,5 +1,5 @@
 /**
- * Milady plugin for ElizaOS — workspace context, session keys, and agent
+ * Milady plugin for elizaOS — workspace context, session keys, and agent
  * lifecycle actions (restart).
  *
  * Compaction is handled by core auto-compaction in the recent-messages provider.
@@ -12,11 +12,22 @@ import type {
   Plugin,
   Provider,
   ProviderResult,
+  ServiceClass,
   State,
 } from "@elizaos/core";
+import { AgentEventService } from "@elizaos/core";
 import { emoteAction } from "../actions/emote";
 import { restartAction } from "../actions/restart";
 import { sendMessageAction } from "../actions/send-message";
+import {
+  goLiveAction,
+  goOfflineAction,
+  manageOverlayWidgetAction,
+  setStreamDestinationAction,
+  speakOnStreamAction,
+} from "../actions/stream-control";
+import { switchStreamSourceAction } from "../actions/switch-stream-source";
+import { terminalAction } from "../actions/terminal";
 import { EMOTE_CATALOG } from "../emotes/catalog";
 import { adminTrustProvider } from "../providers/admin-trust";
 import {
@@ -84,10 +95,13 @@ export function createMiladyPlugin(config?: MiladyPluginConfig): Plugin {
         text: [
           "## Available Emotes",
           "",
-          "You can play emote animations on your 3D avatar using the PLAY_EMOTE action.",
-          "Use emotes sparingly and naturally during conversation to express yourself.",
+          "You have a 3D VRM avatar that can perform emote animations via the PLAY_EMOTE action.",
+          "When viewers ask you to dance, wave, do tricks, or express emotions — ALWAYS use PLAY_EMOTE alongside REPLY.",
+          'Include both actions: actions: ["REPLY", "PLAY_EMOTE"] with the emote parameter set to the emote ID.',
           "",
           `Available emote IDs: ${ids}`,
+          "",
+          "Common mappings: dance/vibe → dance-happy, wave/greet → wave, flip/backflip → flip, cry/sad → crying, fight/punch → punching, fish → fishing",
         ].join("\n"),
       };
     },
@@ -132,6 +146,8 @@ export function createMiladyPlugin(config?: MiladyPluginConfig): Plugin {
     description:
       "Milady workspace context, session keys, and lifecycle actions",
 
+    services: [AgentEventService as unknown as ServiceClass],
+
     init: async (_pluginConfig, runtime) => {
       registerTriggerTaskWorker(runtime);
       ensureAutonomousStateTracking(runtime);
@@ -149,8 +165,15 @@ export function createMiladyPlugin(config?: MiladyPluginConfig): Plugin {
     actions: [
       restartAction,
       sendMessageAction,
+      terminalAction,
       createTriggerTaskAction,
       emoteAction,
+      switchStreamSourceAction,
+      goLiveAction,
+      goOfflineAction,
+      setStreamDestinationAction,
+      speakOnStreamAction,
+      manageOverlayWidgetAction,
       ...loadCustomActions(),
     ],
   };

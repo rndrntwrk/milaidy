@@ -1,15 +1,11 @@
-import { useCallback, useEffect, useRef, useMemo } from "react";
-import { useApp } from "../AppContext.js";
-import { useBugReport } from "../hooks/useBugReport.js";
-import { Dialog } from "./ui/Dialog.js";
-import { isTabEnabled } from "../miladyHudRouting.js";
-
-interface CommandItem {
-  id: string;
-  label: string;
-  hint?: string;
-  action: () => void;
-}
+import { COMMAND_PALETTE_EVENT } from "@milady/app-core/events";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useApp } from "../AppContext";
+import { useBugReport } from "../hooks/useBugReport";
+import {
+  buildCommandPaletteCommands,
+  type CommandItem,
+} from "./command-palette-commands";
 
 export function CommandPalette() {
   const {
@@ -28,164 +24,49 @@ export function CommandPalette() {
     handleChatClear,
     activeGameViewerUrl,
     setState,
+    t,
   } = useApp();
   const { open: openBugReport } = useBugReport();
-  const closeCommandPalette = useCallback(() => {
-    setState("commandPaletteOpen", false);
-    setState("commandQuery", "");
-    setState("commandActiveIndex", 0);
-  }, [setState]);
+  const closeCommandPalette = useCallback(
+    () => setState("commandPaletteOpen", false),
+    [setState],
+  );
 
   const inputRef = useRef<HTMLInputElement>(null);
 
   const agentState = agentStatus?.state ?? "stopped";
-  const isRunning = agentState === "running";
-  const isPaused = agentState === "paused";
   const currentGameViewerUrl =
     typeof activeGameViewerUrl === "string" ? activeGameViewerUrl : "";
 
-  // Build command list
   const allCommands = useMemo<CommandItem[]>(() => {
-    const commands: CommandItem[] = [];
-
-    // Lifecycle commands
-    if (agentState === "stopped" || agentState === "not_started") {
-      commands.push({
-        id: "start-agent",
-        label: "Start Agent",
-        action: handleStart,
-      });
-    }
-    if (isRunning || isPaused) {
-      commands.push({
-        id: "pause-resume-agent",
-        label: isPaused ? "Resume Agent" : "Pause Agent",
-        action: handlePauseResume,
-      });
-    }
-    commands.push({
-      id: "restart-agent",
-      label: "Restart Agent",
-      action: handleRestart,
+    return buildCommandPaletteCommands({
+      agentState,
+      activeGameViewerUrl: currentGameViewerUrl,
+      handleStart,
+      handlePauseResume,
+      handleRestart,
+      setTab,
+      setAppsSubTab: () => setState("appsSubTab", "games"),
+      loadPlugins,
+      loadSkills,
+      loadLogs,
+      loadWorkbench,
+      handleChatClear,
+      openBugReport,
     });
-
-    // Navigation commands
-    commands.push(
-      { id: "nav-chat", label: "Open Chat", action: () => setTab("chat") },
-      {
-        id: "nav-character",
-        label: "Open Character",
-        action: () => setTab("character"),
-      },
-      {
-        id: "nav-triggers",
-        label: "Open Triggers",
-        action: () => setTab("triggers"),
-      },
-      {
-        id: "nav-wallets",
-        label: "Open Wallets",
-        action: () => setTab("wallets"),
-      },
-      {
-        id: "nav-knowledge",
-        label: "Open Knowledge",
-        action: () => setTab("knowledge"),
-      },
-      {
-        id: "nav-connectors",
-        label: "Open Social",
-        action: () => setTab("connectors"),
-      },
-      {
-        id: "nav-plugins",
-        label: "Open Plugins",
-        action: () => setTab("plugins"),
-      },
-      {
-        id: "nav-config",
-        label: "Open Config",
-        action: () => setTab("settings"),
-      },
-      {
-        id: "nav-database",
-        label: "Open Database",
-        action: () => setTab("database"),
-      },
-      {
-        id: "nav-settings",
-        label: "Open Settings",
-        action: () => setTab("settings"),
-      },
-      { id: "nav-logs", label: "Open Logs", action: () => setTab("logs") },
-      {
-        id: "nav-security",
-        label: "Open Security",
-        action: () => setTab("security"),
-      },
-    );
-
-    if (isTabEnabled("apps")) {
-      commands.splice(1, 0, {
-        id: "nav-apps",
-        label: "Open Apps",
-        action: () => setTab("apps"),
-      });
-    }
-
-    if (isTabEnabled("apps") && currentGameViewerUrl.trim()) {
-      commands.push({
-        id: "nav-current-game",
-        label: "Open Current Game",
-        action: () => {
-          setTab("apps");
-          setState("appsSubTab", "games");
-        },
-      });
-    }
-
-    // Refresh commands
-    commands.push(
-      { id: "refresh-plugins", label: "Refresh Features", action: loadPlugins },
-      { id: "refresh-skills", label: "Refresh Skills", action: loadSkills },
-      { id: "refresh-logs", label: "Refresh Logs", action: loadLogs },
-      {
-        id: "refresh-workbench",
-        label: "Refresh Workbench",
-        action: loadWorkbench,
-      },
-    );
-
-    // Chat commands
-    commands.push({
-      id: "chat-clear",
-      label: "Clear Chat",
-      action: handleChatClear,
-    });
-
-    // Bug report
-    commands.push({
-      id: "report-bug",
-      label: "Report Bug",
-      action: openBugReport,
-    });
-
-    return commands;
   }, [
     agentState,
-    isRunning,
-    isPaused,
+    currentGameViewerUrl,
     handleStart,
     handlePauseResume,
     handleRestart,
     setTab,
-    currentGameViewerUrl,
     setState,
-    handleChatClear,
     loadPlugins,
     loadSkills,
     loadLogs,
     loadWorkbench,
+    handleChatClear,
     openBugReport,
   ]);
 
@@ -195,6 +76,35 @@ export function CommandPalette() {
     const query = commandQuery.toLowerCase();
     return allCommands.filter((cmd) => cmd.label.toLowerCase().includes(query));
   }, [allCommands, commandQuery]);
+
+  // Listen for milady:command-palette from main.tsx (electron shortcut Cmd/Ctrl+K)
+  useEffect(() => {
+    const toggle = () => {
+      setState("commandPaletteOpen", !commandPaletteOpen);
+      if (!commandPaletteOpen) {
+        setState("commandQuery", "");
+        setState("commandActiveIndex", 0);
+      }
+    };
+    document.addEventListener(COMMAND_PALETTE_EVENT, toggle);
+    return () => document.removeEventListener(COMMAND_PALETTE_EVENT, toggle);
+  }, [commandPaletteOpen, setState]);
+
+  // Also listen for Ctrl/Meta+K in the browser (non-native context)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setState("commandPaletteOpen", !commandPaletteOpen);
+        if (!commandPaletteOpen) {
+          setState("commandQuery", "");
+          setState("commandActiveIndex", 0);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [commandPaletteOpen, setState]);
 
   // Auto-focus input when opened
   useEffect(() => {
@@ -279,38 +189,68 @@ export function CommandPalette() {
   }, [commandQuery, setState]);
 
   return (
-    <Dialog
-      open={commandPaletteOpen}
-      onClose={closeCommandPalette}
-      ariaLabel="Command palette"
+    <div
+      className="fixed inset-0 z-[9999] flex items-start justify-center pt-30"
+      style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          closeCommandPalette();
+        }
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          closeCommandPalette();
+        }
+      }}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
     >
-      <div className="bg-bg border border-border w-[520px] max-h-[420px] flex flex-col shadow-2xl">
+      <div
+        className="w-[520px] max-h-[420px] flex flex-col rounded-xl"
+        style={{
+          background: "rgba(18, 22, 32, 0.96)",
+          border: "1px solid rgba(240, 178, 50, 0.18)",
+          backdropFilter: "blur(24px)",
+          boxShadow:
+            "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
+        }}
+        role="document"
+      >
         <input
           ref={inputRef}
           type="text"
-          className="w-full px-4 py-3.5 border-b border-border bg-transparent text-[15px] text-txt outline-none font-body"
-          placeholder="Type to search commands..."
-          aria-label="Search commands"
+          className="w-full px-4 py-3.5 bg-transparent text-[15px] outline-none font-body"
+          style={{
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            color: "rgba(240,238,250,0.92)",
+          }}
+          placeholder={t("commandpalette.TypeToSearchComma")}
           value={commandQuery}
           onChange={(e) => setState("commandQuery", e.target.value)}
         />
         <div className="flex-1 overflow-y-auto py-1" role="listbox">
           {filteredCommands.length === 0 ? (
-            <div className="py-5 text-center text-muted text-[13px]">
-              No commands found
+            <div
+              className="py-5 text-center text-[13px]"
+              style={{ color: "rgba(255,255,255,0.45)" }}
+            >
+              {t("commandpalette.NoCommandsFound")}
             </div>
           ) : (
             filteredCommands.map((cmd, idx) => (
               <button
                 type="button"
                 key={cmd.id}
-                role="option"
-                aria-selected={idx === commandActiveIndex}
-                className={`w-full px-4 py-2.5 cursor-pointer flex justify-between items-center text-left text-sm font-body ${
-                  idx === commandActiveIndex
-                    ? "bg-bg-hover"
-                    : "hover:bg-bg-hover"
-                }`}
+                className="w-full px-4 py-2.5 cursor-pointer flex justify-between items-center text-left text-sm font-body border-0"
+                style={{
+                  background:
+                    idx === commandActiveIndex
+                      ? "rgba(255,255,255,0.06)"
+                      : "transparent",
+                  color: "rgba(240,238,250,0.92)",
+                }}
                 onClick={() => {
                   cmd.action();
                   closeCommandPalette();
@@ -319,13 +259,18 @@ export function CommandPalette() {
               >
                 <span>{cmd.label}</span>
                 {cmd.hint && (
-                  <span className="text-xs text-muted">{cmd.hint}</span>
+                  <span
+                    className="text-xs"
+                    style={{ color: "rgba(255,255,255,0.45)" }}
+                  >
+                    {cmd.hint}
+                  </span>
                 )}
               </button>
             ))
           )}
         </div>
       </div>
-    </Dialog>
+    </div>
   );
 }

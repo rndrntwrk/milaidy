@@ -10,6 +10,7 @@
  *   - Event bindings via on.press / on.change
  */
 
+import { resolveAppAssetUrl } from "@milady/app-core/utils";
 import React, {
   createContext,
   useCallback,
@@ -17,12 +18,8 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import { useApp } from "../AppContext";
 import { getByPath, setByPath } from "./config-catalog";
-import { Button } from "./ui/Button";
-import { Card } from "./ui/Card";
-import { Dialog } from "./ui/Dialog";
-import { Sheet } from "./ui/Sheet";
-import { ChevronRightIcon, CloseIcon, StarIcon } from "./ui/Icons";
 import type {
   AuthState,
   CondExpr,
@@ -34,9 +31,14 @@ import type {
   VisibilityCondition,
 } from "./ui-spec";
 
-// ── Context ─────────────────────────────────────────────────────────
-
 const UiContext = createContext<UiRenderContext | null>(null);
+
+const BLOCKED_LINK_PROTOCOLS = new Set([
+  "javascript",
+  "data",
+  "vbscript",
+  "file",
+]);
 
 function useUiCtx(): UiRenderContext {
   const ctx = useContext(UiContext);
@@ -184,6 +186,34 @@ export function evaluateUiVisibility(
     return !evaluateUiVisibility(condition.not, state, auth);
 
   return true;
+}
+
+export function sanitizeLinkHref(href: unknown): string {
+  // Strip ASCII control chars (tab, LF, CR) that browsers silently remove
+  // during URL parsing, preventing bypass attacks like "java\nscript:alert(1)".
+  const raw = String(href ?? "#")
+    .trim()
+    .replace(/[\t\n\r]/g, "");
+  if (!raw) return "#";
+
+  // Keep relative/hash links unchanged.
+  if (
+    raw.startsWith("#") ||
+    raw.startsWith("/") ||
+    raw.startsWith("./") ||
+    raw.startsWith("../") ||
+    raw.startsWith("?")
+  ) {
+    return raw;
+  }
+
+  const match = /^([a-zA-Z][a-zA-Z\d+.-]*):/.exec(raw);
+  if (!match) return raw;
+
+  const protocol = match[1].toLowerCase();
+  if (BLOCKED_LINK_PROTOCOLS.has(protocol)) return "#";
+
+  return raw;
 }
 
 // ── Built-in validators ─────────────────────────────────────────────
@@ -795,6 +825,7 @@ const TableComponent: ComponentFn = (props) => {
 };
 
 const CarouselComponent: ComponentFn = (props) => {
+  const { t } = useApp();
   const items =
     (props.items as Array<{ title: string; description: string }>) ?? [];
   const [current, setCurrent] = useState(0);
@@ -817,7 +848,7 @@ const CarouselComponent: ComponentFn = (props) => {
           onClick={() => setCurrent((p) => Math.max(0, p - 1))}
           disabled={current === 0}
         >
-          &larr;
+          {t("ui-renderer.Larr")}
         </button>
         <span className="text-[10px] text-[var(--muted)] self-center">
           {current + 1} / {items.length}
@@ -828,7 +859,7 @@ const CarouselComponent: ComponentFn = (props) => {
           onClick={() => setCurrent((p) => Math.min(items.length - 1, p + 1))}
           disabled={current === items.length - 1}
         >
-          <ChevronRightIcon className="h-3.5 w-3.5" />
+          {t("ui-renderer.Rarr")}
         </button>
       </div>
     </div>
@@ -880,12 +911,13 @@ const AvatarComponent: ComponentFn = (props) => {
 
 const ImageComponent: ComponentFn = (props) => {
   const src = props.src as string | undefined;
+  const resolvedSrc = src ? resolveAppAssetUrl(src) : undefined;
   const alt = String(props.alt ?? "");
   const w = props.width ? `${props.width}px` : "auto";
   const h = props.height ? `${props.height}px` : "auto";
-  return src ? (
+  return resolvedSrc ? (
     <img
-      src={src}
+      src={resolvedSrc}
       alt={alt}
       style={{ width: w, height: h }}
       className="object-cover border border-[var(--border)]"
@@ -966,15 +998,12 @@ const RatingComponent: ComponentFn = (props) => {
       ) : null}
       <div className="flex gap-0.5">
         {Array.from({ length: max }, (_, i) => i + 1).map((starValue) => (
-          <StarIcon
+          <span
             key={starValue}
-            className={`h-4 w-4 ${
-              starValue <= value
-                ? "text-[var(--warn,#f39c12)]"
-                : "text-[var(--muted)] opacity-30"
-            }`}
-            fill={starValue <= value ? "currentColor" : "none"}
-          />
+            className={`text-sm ${starValue <= value ? "text-[var(--warn,#f39c12)]" : "text-[var(--muted)] opacity-30"}`}
+          >
+            ★
+          </span>
         ))}
       </div>
     </div>
@@ -1041,9 +1070,11 @@ const ButtonComponent: ComponentFn = (props, _children, ctx, el) => {
 };
 
 const LinkComponent: ComponentFn = (props, _children, ctx, el) => {
+  const safeHref = sanitizeLinkHref(props.href);
+
   return (
     <a
-      href={String(props.href ?? "#")}
+      href={safeHref}
       className="text-xs text-[var(--accent)] underline hover:opacity-80"
       target={props.external ? "_blank" : undefined}
       rel={props.external ? "noopener noreferrer" : undefined}
@@ -1144,7 +1175,7 @@ const PaginationComponent: ComponentFn = (props, _children, ctx) => {
         disabled={current <= 1}
         onClick={() => setValue(current - 1)}
       >
-        &larr;
+        ←
       </button>
       {Array.from({ length: total }, (_, i) => i + 1).map((page) => (
         <button
@@ -1166,8 +1197,42 @@ const PaginationComponent: ComponentFn = (props, _children, ctx) => {
         disabled={current >= total}
         onClick={() => setValue(current + 1)}
       >
-        <ChevronRightIcon className="h-3.5 w-3.5" />
+        →
       </button>
+    </div>
+  );
+};
+
+// ── Metric / KPI ────────────────────────────────────────────────────
+
+const MetricComponent: ComponentFn = (props) => {
+  const trend = props.trend as string | undefined;
+  const trendColor =
+    trend === "up"
+      ? "text-green-400"
+      : trend === "down"
+        ? "text-red-400"
+        : "text-[var(--muted)]";
+  return (
+    <div className="flex flex-col gap-0.5 p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+      <div className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-medium">
+        {String(props.label ?? "")}
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-xl font-semibold text-[var(--txt)]">
+          {props.value != null ? String(props.value) : "—"}
+        </span>
+        {props.unit != null && (
+          <span className="text-xs text-[var(--muted)]">
+            {String(props.unit)}
+          </span>
+        )}
+      </div>
+      {props.change != null && (
+        <div className={`text-[11px] font-medium ${trendColor}`}>
+          {String(props.change)}
+        </div>
+      )}
     </div>
   );
 };
@@ -1322,10 +1387,12 @@ const CollapsibleComponent: ComponentFn = (props, children) => {
         className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold cursor-pointer hover:bg-[var(--bg-hover)] transition-colors"
         onClick={() => setOpen(!open)}
       >
-        <ChevronRightIcon
-          className="h-3.5 w-3.5 transition-transform"
+        <span
+          className="text-[10px] transition-transform"
           style={{ transform: open ? "rotate(90deg)" : "none" }}
-        />
+        >
+          &#9654;
+        </span>
         {String(props.title ?? "Collapsible")}
       </button>
       {open && <div className="px-3 pb-3">{children}</div>}
@@ -1357,10 +1424,12 @@ const AccordionComponent: ComponentFn = (props) => {
             className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold cursor-pointer hover:bg-[var(--bg-hover)]"
             onClick={() => toggle(i)}
           >
-            <ChevronRightIcon
-              className="h-3.5 w-3.5 transition-transform"
+            <span
+              className="text-[10px] transition-transform"
               style={{ transform: openSet.has(i) ? "rotate(90deg)" : "none" }}
-            />
+            >
+              &#9654;
+            </span>
             {item.title}
           </button>
           {openSet.has(i) && (
@@ -1380,38 +1449,43 @@ const DialogComponent: ComponentFn = (props, children, ctx) => {
     if (openPath) ctx.setState(openPath, false);
   };
   return (
-    <Dialog
-      open={isOpen}
-      onClose={close}
-      className="max-w-md bg-[#07090e]/96"
-      ariaLabelledBy={
-        props.title ? `ui-renderer-dialog-${String(props.title)}` : undefined
-      }
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) close();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          close();
+        }
+      }}
+      role="dialog"
+      aria-modal="true"
     >
-      <Card className="w-full max-w-md border-white/12 bg-[#07090e]/96 p-5 shadow-[0_24px_72px_rgba(0,0,0,0.36)]" role="dialog" aria-modal="true">
-        <div className="mb-3 flex items-center justify-between">
+      <div className="w-full max-w-md border border-[var(--border)] bg-[var(--card)] p-5 shadow-lg">
+        <div className="flex items-center justify-between mb-3">
           <div>
             {props.title ? (
-              <div
-                id={`ui-renderer-dialog-${String(props.title)}`}
-                className="text-sm font-bold text-white"
-              >
-                {String(props.title)}
-              </div>
+              <div className="font-bold text-sm">{String(props.title)}</div>
             ) : null}
             {props.description ? (
-              <div className="mt-0.5 text-xs text-white/58">
+              <div className="text-xs text-[var(--muted)] mt-0.5">
                 {String(props.description)}
               </div>
             ) : null}
           </div>
-          <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={close} aria-label={props.title ? `Close ${String(props.title)}` : "Close dialog"}>
-            <CloseIcon className="h-4 w-4" />
-          </Button>
+          <button
+            type="button"
+            className="text-[var(--muted)] hover:text-[var(--text)] text-lg leading-none px-1 cursor-pointer"
+            onClick={close}
+          >
+            ×
+          </button>
         </div>
         {children}
-      </Card>
-    </Dialog>
+      </div>
+    </div>
   );
 };
 
@@ -1423,13 +1497,33 @@ const DrawerComponent: ComponentFn = (props, children, ctx) => {
     if (openPath) ctx.setState(openPath, false);
   };
   return (
-    <Sheet
-      open={true}
-      onClose={close}
-      side="bottom"
+    <div
+      className="fixed inset-0 z-50 flex items-end bg-black/50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) close();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          close();
+        }
+      }}
+      role="dialog"
+      aria-modal="true"
     >
-      {children}
-    </Sheet>
+      <div className="w-full max-h-[80vh] border-t border-[var(--border)] bg-[var(--card)] p-5 shadow-lg overflow-y-auto animate-[slide-up_200ms_ease]">
+        <div className="w-10 h-1 bg-[var(--border)] mx-auto mb-3 rounded-full" />
+        {props.title ? (
+          <div className="font-bold text-sm">{String(props.title)}</div>
+        ) : null}
+        {props.description ? (
+          <div className="text-xs text-[var(--muted)] mt-0.5 mb-3">
+            {String(props.description)}
+          </div>
+        ) : null}
+        {children}
+      </div>
+    </div>
   );
 };
 
@@ -1473,6 +1567,8 @@ const COMPONENTS: Record<string, ComponentFn> = {
   DropdownMenu: DropdownMenuComponent,
   Tabs: TabsComponent,
   Pagination: PaginationComponent,
+  // Metric
+  Metric: MetricComponent,
   // Visualization
   BarGraph: BarGraphComponent,
   LineGraph: LineGraphComponent,
@@ -1490,6 +1586,7 @@ const COMPONENTS: Record<string, ComponentFn> = {
 // ══════════════════════════════════════════════════════════════════════
 
 function ElementRenderer({ elementId }: { elementId: string }) {
+  const { t } = useApp();
   const ctx = useUiCtx();
   const el = ctx.spec.elements[elementId];
   if (!el) return null;
@@ -1503,7 +1600,7 @@ function ElementRenderer({ elementId }: { elementId: string }) {
   if (!component) {
     return (
       <div className="text-[10px] text-[var(--destructive)] border border-dashed border-[var(--destructive)] p-2">
-        Unknown component: {el.type}
+        {t("ui-renderer.UnknownComponent")} {el.type}
       </div>
     );
   }
@@ -1527,9 +1624,9 @@ function ElementRenderer({ elementId }: { elementId: string }) {
             </UiContext.Provider>
           ));
           const repeatKey = el.repeat?.key;
-          const itemKey = repeatKey
-            ? String(item[repeatKey] ?? Math.random())
-            : String(Math.random());
+          const itemKey = String(
+            repeatKey != null ? item[repeatKey] : Math.random(),
+          );
           return (
             <React.Fragment key={itemKey}>
               {component(resolvedProps, childNodes, itemCtx, el)}

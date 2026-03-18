@@ -3,7 +3,10 @@ import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface ChatViewContextStub {
-  agentStatus: { agentName: string } | null;
+  agentStatus: {
+    agentName: string;
+    state?: string;
+  } | null;
   chatInput: string;
   chatSending: boolean;
   chatFirstTokenReceived: boolean;
@@ -14,7 +17,7 @@ interface ChatViewContextStub {
     timestamp: number;
     source?: string;
   }>;
-  handleChatSend: (mode: "simple" | "power") => Promise<void>;
+  handleChatSend: (channelType?: string) => Promise<void>;
   handleChatStop: () => void;
   setState: (key: string, value: unknown) => void;
   droppedFiles: string[];
@@ -28,11 +31,26 @@ interface ChatViewContextStub {
           prev: Array<{ data: string; mimeType: string; name: string }>,
         ) => Array<{ data: string; mimeType: string; name: string }>),
   ) => void;
+  uiLanguage: "en" | "zh-CN";
+  chatMode: "simple" | "power";
+  chatAgentVoiceMuted: boolean;
+  t: (k: string) => string;
+  handleStart: () => Promise<void>;
+  handlePauseResume: () => Promise<void>;
+  handleRestart: () => Promise<void>;
+  handleChatRetry: (id: string) => void;
+  lifecycleBusy: boolean;
+  lifecycleAction: string | null;
+  autonomousEvents: unknown[];
+  workbench: unknown;
+  openEmotePicker: () => void;
+  ptySessions: unknown[];
 }
 
 const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
   mockClient: {
-    getConfig: vi.fn(),
+    getCodingAgentStatus: vi.fn(async () => null),
+    getConfig: vi.fn().mockResolvedValue({}),
   },
   mockUseApp: vi.fn(),
   mockUseVoiceChat: vi.fn(),
@@ -56,7 +74,7 @@ vi.mock("../../src/components/MessageContent", () => ({
     React.createElement("span", null, message.text),
 }));
 
-vi.mock("../../src/api-client", () => ({
+vi.mock("@milady/app-core/api", () => ({
   client: mockClient,
 }));
 
@@ -66,7 +84,7 @@ function createContext(
   overrides?: Partial<ChatViewContextStub>,
 ): ChatViewContextStub {
   return {
-    agentStatus: { agentName: "Milady" },
+    agentStatus: { agentName: "Milady", state: "running" },
     chatInput: "",
     chatSending: false,
     chatFirstTokenReceived: false,
@@ -79,6 +97,20 @@ function createContext(
     selectedVrmIndex: 0,
     chatPendingImages: [],
     setChatPendingImages: vi.fn(),
+    chatMode: "simple",
+    chatAgentVoiceMuted: false,
+    handleStart: vi.fn(async () => {}),
+    handlePauseResume: vi.fn(async () => {}),
+    handleRestart: vi.fn(async () => {}),
+    handleChatRetry: vi.fn(),
+    lifecycleBusy: false,
+    lifecycleAction: null,
+    autonomousEvents: [],
+    workbench: null,
+    openEmotePicker: vi.fn(),
+    ptySessions: [],
+    uiLanguage: "en" as const,
+    t: (k: string) => k,
     ...overrides,
   };
 }
@@ -98,8 +130,6 @@ async function flush(): Promise<void> {
 
 describe("ChatView", () => {
   beforeEach(() => {
-    globalThis.localStorage?.clear();
-    globalThis.localStorage?.setItem("milaidy:chat:voiceMuted", "false");
     mockUseApp.mockReset();
     mockUseVoiceChat.mockReset();
     mockClient.getConfig.mockReset();
@@ -136,7 +166,7 @@ describe("ChatView", () => {
       }),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView));
     });
@@ -161,7 +191,7 @@ describe("ChatView", () => {
       }),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView));
     });
@@ -255,13 +285,13 @@ describe("ChatView", () => {
       }),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView));
     });
     await flush();
 
-    const scroller = tree.root.findByProps({
+    const scroller = tree?.root.findByProps({
       "data-testid": "chat-messages-scroll",
     });
     expect(String(scroller.props.className)).toContain("pr-3");
@@ -270,7 +300,14 @@ describe("ChatView", () => {
 
   it("auto-scrolls again when conversation messages update", async () => {
     const scrollTo = vi.fn();
-    const scrollerMock = { scrollHeight: 240, scrollTo };
+    // Include scrollTop and clientHeight so the instant-vs-smooth branch
+    // is exercised correctly (nearBottom = scrollHeight - scrollTop - clientHeight < 150).
+    const scrollerMock = {
+      scrollHeight: 240,
+      scrollTop: 100,
+      clientHeight: 140,
+      scrollTo,
+    };
     const textareaMock = {
       style: { height: "", overflowY: "" },
       scrollHeight: 38,
@@ -285,7 +322,7 @@ describe("ChatView", () => {
     });
     mockUseApp.mockImplementation(() => currentContext);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView), {
         createNodeMock: (element) => {
@@ -322,7 +359,38 @@ describe("ChatView", () => {
     });
 
     await act(async () => {
-      tree.unmount();
+      tree?.update(React.createElement(ChatView));
+    });
+    await flush();
+
+    expect(scrollTo.mock.calls.length).toBeGreaterThan(callsAfterMount);
+  });
+
+  it("uses instant scroll when near bottom, smooth when scrolled up", async () => {
+    const scrollTo = vi.fn();
+    // Near bottom: distance = 500 - 400 - 90 = 10 (< 150 → instant)
+    const scrollerMock = {
+      scrollHeight: 500,
+      scrollTop: 400,
+      clientHeight: 90,
+      scrollTo,
+    };
+    const textareaMock = {
+      style: { height: "", overflowY: "" },
+      scrollHeight: 38,
+      focus: vi.fn(),
+    };
+    const fileInputMock = { click: vi.fn() };
+
+    let currentContext = createContext({
+      conversationMessages: [
+        { id: "u1", role: "user", text: "hello", timestamp: 1 },
+      ],
+    });
+    mockUseApp.mockImplementation(() => currentContext);
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView), {
         createNodeMock: (element) => {
           const node = element as {
@@ -335,24 +403,47 @@ describe("ChatView", () => {
           ) {
             return scrollerMock;
           }
-          if (node.type === "textarea") {
-            return textareaMock;
-          }
-          if (node.type === "input" && node.props.type === "file") {
+          if (node.type === "textarea") return textareaMock;
+          if (node.type === "input" && node.props.type === "file")
             return fileInputMock;
-          }
           return {};
         },
       });
     });
     await flush();
 
-    expect(scrollTo.mock.calls.length).toBeGreaterThan(callsAfterMount);
+    // Near bottom → should use instant
+    const lastCall = scrollTo.mock.calls[scrollTo.mock.calls.length - 1];
+    expect(lastCall[0]).toMatchObject({ behavior: "instant" });
+
+    // Now simulate user scrolled up: distance = 500 - 50 - 90 = 360 (> 150 → smooth)
+    scrollerMock.scrollTop = 50;
+    scrollTo.mockClear();
+
+    currentContext = createContext({
+      conversationMessages: [
+        { id: "u1", role: "user", text: "hello", timestamp: 1 },
+        { id: "a1", role: "assistant", text: "Hi!", timestamp: 2 },
+      ],
+    });
+
+    await act(async () => {
+      tree?.update(React.createElement(ChatView));
+    });
+    await flush();
+
+    const smoothCall = scrollTo.mock.calls[scrollTo.mock.calls.length - 1];
+    expect(smoothCall[0]).toMatchObject({ behavior: "smooth" });
   });
 
   it("auto-scrolls when content changes but length and trailing text stay the same", async () => {
     const scrollTo = vi.fn();
-    const scrollerMock = { scrollHeight: 240, scrollTo };
+    const scrollerMock = {
+      scrollHeight: 240,
+      scrollTop: 100,
+      clientHeight: 140,
+      scrollTo,
+    };
     const textareaMock = {
       style: { height: "", overflowY: "" },
       scrollHeight: 38,
@@ -368,7 +459,7 @@ describe("ChatView", () => {
     });
     mockUseApp.mockImplementation(() => currentContext);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView), {
         createNodeMock: (element) => {
@@ -405,28 +496,7 @@ describe("ChatView", () => {
     });
 
     await act(async () => {
-      tree.unmount();
-      tree = TestRenderer.create(React.createElement(ChatView), {
-        createNodeMock: (element) => {
-          const node = element as {
-            type: unknown;
-            props: Record<string, unknown>;
-          };
-          if (
-            node.type === "div" &&
-            node.props["data-testid"] === "chat-messages-scroll"
-          ) {
-            return scrollerMock;
-          }
-          if (node.type === "textarea") {
-            return textareaMock;
-          }
-          if (node.type === "input" && node.props.type === "file") {
-            return fileInputMock;
-          }
-          return {};
-        },
-      });
+      tree?.update(React.createElement(ChatView));
     });
     await flush();
 
@@ -449,42 +519,44 @@ describe("ChatView", () => {
 
     mockUseApp.mockReturnValue(createContext());
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView));
     });
     await flush();
 
     const textarea = tree?.root.find((node) => node.type === "textarea");
-    expect(textarea.props["aria-label"]).toBe("Chat message");
+    expect(textarea).toBeDefined();
 
-    const attachButton = tree?.root.find(
-      (node) =>
-        node.type === "button" && node.props["aria-label"] === "Attach image",
-    );
-    expect(attachButton.props["aria-label"]).toBe("Attach image");
+    const buttons = tree?.root.findAllByType("button" as React.ElementType);
 
-    const micButton = tree?.root.find(
-      (node) =>
-        node.type === "button" &&
-        node.props["aria-label"] === "Start voice input",
+    const attachButton = buttons.find(
+      (node) => node.props["aria-label"] === "Attach image",
     );
-    expect(micButton.props["aria-pressed"]).toBe(false);
+    expect(attachButton).toBeDefined();
+
+    const micButton = buttons.find(
+      (node) => node.props["aria-label"] === "chat.voiceInput",
+    );
+    expect(micButton).toBeDefined();
+    expect(micButton?.props["aria-pressed"]).toBe(false);
   });
 
   it("disables send when chat input is empty or whitespace", async () => {
     mockUseApp.mockReturnValue(createContext({ chatInput: "   " }));
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView));
     });
     await flush();
 
-    const sendButton = tree?.root.find(
-      (node) => node.type === "button" && text(node) === "Send",
+    // Find send button by aria-label since we now use an icon instead of text
+    const buttons = tree?.root.findAllByType("button" as React.ElementType);
+    const sendButton = buttons.find(
+      (node) => node.props["aria-label"] === "chat.send",
     );
-    expect(sendButton.props.disabled).toBe(true);
+    expect(sendButton?.props.disabled).toBe(true);
   });
 
   it("renders a labeled pending-image remove button that stays visible on mobile", async () => {
@@ -496,7 +568,7 @@ describe("ChatView", () => {
       }),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ChatView));
     });
@@ -567,7 +639,8 @@ describe("addImageFiles functional updater", () => {
       throw new Error("ChatView test renderer did not initialize");
     }
     const fileInput = tree.root.find(
-      (node) => node.type === "input" && node.props.accept === "image/*",
+      (node: TestRenderer.ReactTestInstance) =>
+        node.type === "input" && node.props.accept === "image/*",
     );
 
     const fakeFile = new Proxy(

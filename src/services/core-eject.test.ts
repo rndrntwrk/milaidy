@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let mockedStateDir = "";
 let originalCwd = "";
+const toPosix = (value: string) => value.replaceAll("\\", "/");
 
 vi.mock("node:child_process", () => ({
   execFile: vi.fn(),
@@ -204,7 +205,7 @@ describe("core-eject", () => {
 
       expect(result.success).toBe(true);
       expect(result.upstreamCommit).toBe("head123");
-      await expect(fs.access(result.ejectedPath)).resolves.toBeUndefined();
+      await fs.access(result.ejectedPath);
 
       const upstreamRaw = await fs.readFile(
         path.join(mockedStateDir, "core", ".upstream.json"),
@@ -223,12 +224,12 @@ describe("core-eject", () => {
       const tsconfig = JSON.parse(tsconfigRaw) as {
         compilerOptions: { paths: Record<string, string[]> };
       };
-      expect(tsconfig.compilerOptions.paths["@elizaos/core"][0]).toContain(
-        "state/core/eliza/packages/core/dist",
-      );
-      expect(tsconfig.compilerOptions.paths["@elizaos/core/*"][0]).toContain(
-        "state/core/eliza/packages/core/dist",
-      );
+      expect(
+        toPosix(tsconfig.compilerOptions.paths["@elizaos/core"][0]),
+      ).toContain("state/core/eliza/packages/core/dist");
+      expect(
+        toPosix(tsconfig.compilerOptions.paths["@elizaos/core/*"][0]),
+      ).toContain("state/core/eliza/packages/core/dist");
     });
 
     it("returns already ejected when checkout exists", async () => {
@@ -261,7 +262,7 @@ describe("core-eject", () => {
       setExecFileHandler(async (file, args) => {
         if (file === "git" && args[0] === "clone") {
           const targetDir = args[args.length - 1];
-          if (targetDir.includes("/eliza") && !firstCloneFinished) {
+          if (toPosix(targetDir).includes("/eliza") && !firstCloneFinished) {
             await firstCloneGate;
             firstCloneFinished = true;
           } else if (!firstCloneFinished) {
@@ -331,7 +332,8 @@ describe("core-eject", () => {
           return { stdout: "2\n" };
         }
         if (file === "git" && args[0] === "merge") return;
-        if (file === "bun" && args.join(" ") === "install") return;
+        if (file === "bun" && args.join(" ") === "install --ignore-scripts")
+          return;
         if (
           file === "bun" &&
           args.join(" ") === "run --filter @elizaos/core build"
@@ -503,6 +505,24 @@ describe("core-eject", () => {
       expect(status.commitHash).toBe("corehead987");
       expect(status.localChanges).toBe(true);
       expect(status.upstream?.$schema).toBe("milaidy-upstream-v1");
+    });
+  });
+
+  describe("postinstall script prevention (regression)", () => {
+    it("every execFileAsync install call in core-eject.ts includes --ignore-scripts", async () => {
+      const { readFileSync } = await import("node:fs");
+      const { resolve } = await import("node:path");
+      const source = readFileSync(
+        resolve(__dirname, "../services/core-eject.ts"),
+        "utf-8",
+      );
+      const installCalls = [
+        ...source.matchAll(/execFileAsync\([^)]*\[([^\]]*"install"[^\]]*)\]/gs),
+      ];
+      expect(installCalls.length).toBeGreaterThanOrEqual(1);
+      for (const match of installCalls) {
+        expect(match[0]).toContain("--ignore-scripts");
+      }
     });
   });
 });

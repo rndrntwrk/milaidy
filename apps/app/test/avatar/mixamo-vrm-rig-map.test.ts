@@ -55,17 +55,11 @@ describe("mixamoVRMRigMap", () => {
       "mixamorigRightArm",
       "mixamorigRightForeArm",
       "mixamorigRightHand",
-    ];
+    ] as const;
 
     for (const [index, leftKey] of leftArm.entries()) {
-      const rightKey = rightArm[index];
-      expect(rightKey).toBeDefined();
-      if (!rightKey) {
-        throw new Error(`Missing right arm key at index ${index}`);
-      }
-
       const leftBone = mixamoVRMRigMap[leftKey];
-      const rightBone = mixamoVRMRigMap[rightKey];
+      const rightBone = mixamoVRMRigMap[rightArm[index]];
       expect(leftBone).toBeDefined();
       expect(rightBone).toBeDefined();
       // Left bone name should have "left", right should have "right"
@@ -86,17 +80,11 @@ describe("mixamoVRMRigMap", () => {
       "mixamorigRightLeg",
       "mixamorigRightFoot",
       "mixamorigRightToeBase",
-    ];
+    ] as const;
 
     for (const [index, leftKey] of leftLeg.entries()) {
-      const rightKey = rightLeg[index];
-      expect(rightKey).toBeDefined();
-      if (!rightKey) {
-        throw new Error(`Missing right leg key at index ${index}`);
-      }
-
       const leftBone = mixamoVRMRigMap[leftKey];
-      const rightBone = mixamoVRMRigMap[rightKey];
+      const rightBone = mixamoVRMRigMap[rightLeg[index]];
       expect(leftBone).toBeDefined();
       expect(rightBone).toBeDefined();
       expect(leftBone?.toLowerCase()).toContain("left");

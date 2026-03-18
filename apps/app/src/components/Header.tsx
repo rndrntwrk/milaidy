@@ -1,254 +1,416 @@
-import { useEffect } from "react";
-import { useApp } from "../AppContext";
-import { useBugReport } from "../hooks/useBugReport";
-import { resolveAgentDisplayName } from "./shared/agentDisplayName.js";
+import { LanguageDropdown } from "./shared/LanguageDropdown.js";
+import { getTabGroups, type TabGroup } from "../navigation.js";
+import { IconTooltip as IconButtonTooltip } from "./ui/IconTooltip.js";
 import {
-  BugIcon,
-  ConnectionIcon,
-  CreditIcon,
-  PauseIcon,
-  PlayIcon,
-  RestartIcon,
-  WalletIcon,
-} from "./ui/Icons.js";
+  AlertTriangle,
+  Bug,
+  CircleDollarSign,
+  Menu,
+  Monitor,
+  Smartphone,
+  X,
+} from "lucide-react";
+import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useApp } from "../AppContext.js";
+import { useBugReport } from "../hooks/useBugReport.js";
+import { resolveAgentDisplayName } from "./shared/agentDisplayName.js";
+import { AgentModeDropdown } from "./shared/AgentModeDropdown.js";
 
-export function Header() {
+const NAV_LABEL_I18N_KEY: Record<string, string> = {
+  Chat: "nav.chat",
+  Companion: "nav.companion",
+  Stream: "nav.stream",
+  Character: "nav.character",
+  Wallets: "nav.wallets",
+  Knowledge: "nav.knowledge",
+  Social: "nav.social",
+  Apps: "nav.apps",
+  Settings: "nav.settings",
+  Advanced: "nav.advanced",
+};
+
+interface HeaderProps {
+  mobileLeft?: ReactNode;
+}
+
+export function Header({ mobileLeft }: HeaderProps) {
   const {
     agentStatus,
-    cloudEnabled,
-    cloudConnected,
-    cloudCredits,
-    cloudCreditsCritical,
-    cloudCreditsLow,
-    cloudTopUpUrl,
-    walletAddresses,
-    lifecycleBusy,
-    lifecycleAction,
-    handlePauseResume,
-    handleRestart,
-    copyToClipboard,
+    miladyCloudEnabled,
+    miladyCloudConnected,
+    miladyCloudCredits,
+    miladyCloudCreditsCritical,
+    miladyCloudCreditsLow,
+    miladyCloudTopUpUrl,
+    tab,
     setTab,
-    dropStatus,
+    plugins,
     loadDropStatus,
-    registryStatus,
+    uiShellMode,
+    setUiShellMode,
+    uiLanguage,
+    setUiLanguage,
+    t,
   } = useApp();
+
+  const [copied, setCopied] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     void loadDropStatus();
   }, [loadDropStatus]);
 
+  // Clear copied state after 2 seconds
+  useEffect(() => {
+    if (copied) {
+      const timer = setTimeout(() => setCopied(null), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [copied]);
+
+  // Close mobile menu on escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const streamingEnabled = useMemo(
+    () => plugins.some((p) => p.id === "streaming-base" && p.enabled),
+    [plugins],
+  );
+
+  const tabGroups = useMemo(
+    () => getTabGroups(streamingEnabled),
+    [streamingEnabled],
+  );
+
+  const activeGroup = useMemo(
+    () => tabGroups.find((group) => group.tabs.includes(tab)) ?? tabGroups[0],
+    [tab, tabGroups],
+  );
+
   const name = resolveAgentDisplayName(agentStatus?.agentName);
-  const state = agentStatus?.state ?? "not_started";
 
-  const stateColor =
-    state === "running"
-      ? "text-ok border-ok"
-      : state === "paused" || state === "restarting" || state === "starting"
-        ? "text-warn border-warn"
-        : state === "error"
-          ? "text-danger border-danger"
-          : "text-muted border-muted";
-  const restartBusy = lifecycleBusy && lifecycleAction === "restart";
-  const pauseResumeBusy = lifecycleBusy;
-  const pauseResumeDisabled =
-    lifecycleBusy || state === "restarting" || state === "starting";
-
-  const creditColor = cloudCreditsCritical
-    ? "border-danger text-danger"
-    : cloudCreditsLow
-      ? "border-warn text-warn"
-      : "border-ok text-ok";
-
-  const evmShort = walletAddresses?.evmAddress
-    ? `${walletAddresses.evmAddress.slice(0, 6)}...${walletAddresses.evmAddress.slice(-4)}`
-    : null;
-  const solShort = walletAddresses?.solanaAddress
-    ? `${walletAddresses.solanaAddress.slice(0, 4)}...${walletAddresses.solanaAddress.slice(-4)}`
-    : null;
+  const creditColor = miladyCloudCreditsCritical
+    ? "border-danger text-danger bg-danger/10"
+    : miladyCloudCreditsLow
+      ? "border-warn text-warn bg-warn/10"
+      : "border-ok text-ok bg-ok/10";
 
   const { open: openBugReport } = useBugReport();
 
-  const iconBtn =
-    "inline-flex items-center justify-center w-7 h-7 border border-border bg-bg cursor-pointer text-sm leading-none hover:border-accent hover:text-accent transition-colors";
+  // Minimum 44px touch targets for mobile
+  const iconBtnBase =
+    "inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] border border-border/50 bg-bg/50 backdrop-blur-md cursor-pointer text-sm leading-none hover:border-accent hover:text-accent font-medium hover:-translate-y-0.5 transition-all duration-300 hover:shadow-[0_0_15px_rgba(var(--accent),0.5)] active:scale-95 rounded-xl text-txt shadow-sm";
+
+  // Shell mode toggle (companion vs native)
+  const shellMode = uiShellMode ?? "companion";
+  const isNativeShell = shellMode === "native";
+  const shellToggleActionLabel = isNativeShell
+    ? t("header.switchToCompanion")
+    : t("header.switchToNative");
+
+  const handleShellToggle = () => {
+    const nextMode = shellMode === "companion" ? "native" : "companion";
+    setUiShellMode(nextMode);
+    setTab(nextMode === "companion" ? "companion" : "chat");
+  };
 
   return (
-    <header className="border-b border-border py-2 px-3 sm:py-3 sm:px-4">
-      <div className="flex items-center gap-2 min-w-0">
-        <div className="shrink-0 min-w-0">
-          <span
-            className="text-base font-bold text-txt-strong truncate block"
-            data-testid="agent-name"
-          >
-            {name}
-          </span>
-        </div>
-        <div className="flex-1 min-w-0 overflow-x-auto">
-          <div className="flex items-center gap-1.5 w-max ml-auto pr-0.5">
-            {dropStatus?.dropEnabled &&
-              dropStatus?.publicMintOpen &&
-              !dropStatus?.mintedOut &&
-              !dropStatus?.userHasMinted &&
-              !registryStatus?.registered && (
-                <button
-                  type="button"
-                  onClick={() => setTab("character")}
-                  className="inline-flex shrink-0 items-center gap-1 px-2.5 py-1.5 border border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[11px] sm:text-xs font-bold text-[var(--accent)] cursor-pointer hover:bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] transition-colors animate-pulse"
-                >
-                  <span
-                    className="inline-block w-2 h-2 rounded-full bg-[var(--accent)] animate-ping"
-                    style={{ animationDuration: "1.5s" }}
-                  />
-                  <span className="sm:hidden">Mint</span>
-                  <span className="hidden sm:inline">Free Mint Live!</span>
-                </button>
-              )}
-            {(cloudEnabled || cloudConnected) &&
-              (cloudConnected ? (
-                <a
-                  href={cloudTopUpUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`inline-flex shrink-0 items-center gap-1 px-2 py-1.5 border font-mono text-[11px] sm:text-xs no-underline transition-colors hover:border-accent hover:text-accent ${cloudCredits === null ? "border-muted text-muted" : creditColor}`}
-                >
-                  <CreditIcon width="14" height="14" />
-                  {cloudCredits === null
-                    ? "Cloud connected"
-                    : `$${cloudCredits.toFixed(2)}`}
-                </a>
-              ) : (
-                <span className="inline-flex shrink-0 items-center gap-1 px-2 py-1.5 border border-danger text-danger font-mono text-[11px] sm:text-xs">
-                  Cloud disconnected
-                </span>
-              ))}
-            <div className="flex items-center gap-1.5 shrink-0">
+    <>
+      <header className="border-b border-border/50 bg-bg/80 backdrop-blur-xl py-2 px-3 sm:py-3 sm:px-4 z-20 sticky top-0 w-full transition-all">
+        <div className="flex items-center justify-between gap-3 min-w-0 w-full">
+          {/* Left: Agent Name or mobileLeft */}
+          <div className="flex items-center gap-2 shrink-0 min-w-0 lg:w-[260px]">
+            <div className="hidden md:block min-w-0">
               <span
-                className={`inline-flex items-center h-7 px-2 border font-mono text-[11px] sm:text-xs leading-none ${stateColor}`}
-                data-testid="status-pill"
+                className="text-base font-bold text-txt-strong truncate block"
+                data-testid="agent-name"
               >
-                {state}
+                {name}
               </span>
-              {state === "restarting" ||
-              state === "starting" ||
-              state === "not_started" ||
-              state === "stopped" ? (
-                <span className="inline-flex items-center justify-center w-7 h-7 text-sm leading-none opacity-60">
-                  <ConnectionIcon width="16" height="16" className="animate-pulse" />
-                </span>
+            </div>
+            <div className="md:hidden flex items-center gap-2 min-w-0">
+              {mobileLeft ? (
+                mobileLeft
               ) : (
+                <div className="flex items-center gap-2">
+                  <activeGroup.icon className="w-4 h-4 text-accent" />
+                  <span className="text-[13px] font-semibold text-accent truncate">
+                    {t(
+                      NAV_LABEL_I18N_KEY[activeGroup.label] ??
+                        activeGroup.label,
+                    )}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Center: Desktop/Tablet Nav */}
+          <nav className="hidden md:flex flex-1 items-center justify-center gap-1 overflow-x-auto whitespace-nowrap px-2 scrollbar-hide">
+            {tabGroups.map((group: TabGroup) => {
+              const primaryTab = group.tabs[0];
+              const isActive = group.tabs.includes(tab);
+              const Icon = group.icon;
+              return (
                 <button
                   type="button"
-                  onClick={handlePauseResume}
-                  aria-label={
-                    state === "paused" ? "Resume autonomy" : "Pause autonomy"
-                  }
-                  title={
-                    state === "paused" ? "Resume autonomy" : "Pause autonomy"
-                  }
-                  className={`${iconBtn} disabled:opacity-40 disabled:cursor-not-allowed`}
-                  disabled={pauseResumeDisabled}
+                  key={group.label}
+                  className={`inline-flex items-center justify-center gap-1.5 shrink-0 px-3 lg:px-4 py-2 text-[12px] bg-transparent border border-transparent cursor-pointer transition-all duration-300 rounded-full ${
+                    isActive
+                      ? "text-accent-fg font-bold bg-accent shadow-[0_0_15px_rgba(var(--accent),0.4)] border-accent/50 scale-105"
+                      : "text-muted hover:text-txt hover:bg-bg-hover hover:border-border/50"
+                  }`}
+                  onClick={() => setTab(primaryTab)}
+                  title={group.description}
                 >
-                  {pauseResumeBusy ? (
-                    <ConnectionIcon width="15" height="15" className="animate-pulse" />
-                  ) : state === "paused" ? (
-                    <PlayIcon width="15" height="15" />
+                  <Icon className="w-4 h-4" />
+                  <span className="hidden lg:inline">
+                    {t(NAV_LABEL_I18N_KEY[group.label] ?? group.label)}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Right side controls */}
+          <div className="flex shrink-0 items-center justify-end gap-2 lg:w-[260px]">
+            {/* Scrollable controls */}
+            <div className="overflow-x-auto scrollbar-hide min-w-0 hidden sm:block">
+              <div className="flex items-center gap-2 w-max ml-auto pr-0.5">
+                {/* Cloud Credits */}
+                {(miladyCloudEnabled || miladyCloudConnected) &&
+                  (miladyCloudConnected ? (
+                    <a
+                      href={miladyCloudTopUpUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 h-11 border rounded-md font-mono text-[11px] sm:text-xs no-underline transition-all duration-200 hover:border-accent hover:text-accent hover:shadow-sm ${miladyCloudCredits === null ? "border-muted text-muted" : creditColor}`}
+                      title={t("header.CloudCreditsBalanc")}
+                    >
+                      <CircleDollarSign className="w-3.5 h-3.5" />
+                      {miladyCloudCredits === null
+                        ? t("header.miladyCloudConnected")
+                        : `$${miladyCloudCredits.toFixed(2)}`}
+                    </a>
                   ) : (
-                    <PauseIcon width="15" height="15" />
+                    <span className="inline-flex shrink-0 items-center gap-1 px-2.5 py-1.5 h-11 border border-danger text-danger bg-danger/10 rounded-md font-mono text-[11px] sm:text-xs">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">
+                        {t("header.cloudDisconnected")}
+                      </span>
+                      <span className="sm:hidden">{t("header.Cloud")}</span>
+                    </span>
+                  ))}
+              </div>
+            </div>
+
+            <div className="hidden sm:flex items-center gap-2 shrink-0">
+              <IconButtonTooltip label={shellToggleActionLabel}>
+                <button
+                  type="button"
+                  onClick={handleShellToggle}
+                  className={iconBtnBase}
+                  aria-label={shellToggleActionLabel}
+                  data-testid="ui-shell-toggle"
+                >
+                  {isNativeShell ? (
+                    <Smartphone className="w-5 h-5" />
+                  ) : (
+                    <Monitor className="w-5 h-5" />
                   )}
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={handleRestart}
-                aria-label="Restart agent"
-                disabled={lifecycleBusy || state === "restarting"}
-                title="Restart agent"
-                className="inline-flex items-center h-7 px-2 sm:px-3 border border-border bg-bg text-[11px] sm:text-xs font-mono cursor-pointer hover:border-accent hover:text-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              </IconButtonTooltip>
+
+              <IconButtonTooltip
+                label={t("header.reportBug")}
+                shortcut="Shift+?"
               >
-                {restartBusy || state === "restarting" ? (
-                  <>
-                    <RestartIcon width="15" height="15" className="sm:hidden animate-spin" />
-                    <span className="hidden sm:inline">Restarting...</span>
-                  </>
-                ) : (
-                  <>
-                    <RestartIcon width="15" height="15" className="sm:hidden" />
-                    <span className="hidden sm:inline">Restart</span>
-                  </>
-                )}
-              </button>
+                <button
+                  type="button"
+                  onClick={openBugReport}
+                  aria-label={t("header.reportBug")}
+                  className={iconBtnBase}
+                >
+                  <Bug className="w-5 h-5" />
+                </button>
+              </IconButtonTooltip>
             </div>
+
+            <div className="hidden md:flex items-center gap-2 shrink-0">
+              {/* Agent Mode */}
+              <AgentModeDropdown />
+
+              {/* Language Selector */}
+              {!isNativeShell && (
+                <LanguageDropdown
+                  uiLanguage={uiLanguage}
+                  setUiLanguage={setUiLanguage}
+                  t={t}
+                />
+              )}
+            </div>
+
+            {/* Mobile Hamburger */}
             <button
               type="button"
-              onClick={openBugReport}
-              aria-label="Report a bug"
-              title="Report a bug"
-              className={iconBtn}
+              className={`md:hidden ${iconBtnBase}`}
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open navigation menu"
+              aria-expanded={mobileMenuOpen}
             >
-              <BugIcon width="16" height="16" />
+              <Menu className="w-5 h-5" />
             </button>
-            {(evmShort || solShort) && (
-              <div className="wallet-wrapper relative inline-flex shrink-0 group">
-                <button
-                  type="button"
-                  onClick={() => setTab("wallets")}
-                  aria-label="Open wallets"
-                  className="inline-flex items-center justify-center w-7 h-7 border border-border bg-bg cursor-pointer hover:border-accent hover:text-accent transition-colors"
-                >
-                  <WalletIcon width="16" height="16" />
-                </button>
-                <div className="wallet-tooltip hidden group-hover:block absolute top-full right-0 mt-2 p-3 border border-border bg-bg z-50 min-w-[280px] shadow-lg">
-                  {evmShort && (
-                    <div className="flex items-center gap-2 text-xs py-1">
-                      <span className="font-bold font-mono min-w-[30px]">
-                        EVM
-                      </span>
-                      <code className="font-mono flex-1 truncate">
-                        {evmShort}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const evmAddress = walletAddresses?.evmAddress;
-                          if (evmAddress) {
-                            copyToClipboard(evmAddress);
-                          }
-                        }}
-                        className="px-1.5 py-1 border border-border bg-bg text-[10px] font-mono cursor-pointer hover:border-accent hover:text-accent"
-                      >
-                        copy
-                      </button>
-                    </div>
-                  )}
-                  {solShort && (
-                    <div className="flex items-center gap-2 text-xs py-1 border-t border-border">
-                      <span className="font-bold font-mono min-w-[30px]">
-                        SOL
-                      </span>
-                      <code className="font-mono flex-1 truncate">
-                        {solShort}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const solanaAddress = walletAddresses?.solanaAddress;
-                          if (solanaAddress) {
-                            copyToClipboard(solanaAddress);
-                          }
-                        }}
-                        className="px-1.5 py-1 border border-border bg-bg text-[10px] font-mono cursor-pointer hover:border-accent hover:text-accent"
-                      >
-                        copy
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-[140] md:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation menu"
+        >
+          {/* Backdrop */}
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/30 backdrop-blur-sm w-full h-full border-0 cursor-pointer"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Close navigation menu"
+          />
+
+          {/* Menu Panel */}
+          <div className="absolute right-0 top-0 bottom-0 w-[280px] max-w-[85vw] bg-bg border-l border-border shadow-2xl animate-in slide-in-from-right duration-200 flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-bg-accent">
+              <div className="flex items-center gap-2">
+                <span className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
+                  <activeGroup.icon className="w-4 h-4 text-accent-fg" />
+                </span>
+                <span className="text-sm font-semibold text-txt-strong">
+                  {t("nav.Menu")}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] border border-border/50 bg-card/50 backdrop-blur-sm text-txt cursor-pointer hover:border-accent hover:text-accent transition-all duration-300 hover:shadow-[0_0_15px_rgba(var(--accent),0.3)] hover:-translate-y-0.5 active:scale-95 rounded-xl"
+                onClick={() => setMobileMenuOpen(false)}
+                aria-label="Close navigation menu"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-3 px-3">
+              <div className="flex flex-col gap-1">
+                {tabGroups.map((group: TabGroup, index) => {
+                  const primaryTab = group.tabs[0];
+                  const isActive = group.tabs.includes(tab);
+                  const Icon = group.icon;
+                  return (
+                    <button
+                      key={group.label}
+                      type="button"
+                      className={`w-full flex items-center gap-3 px-3 py-3.5 border rounded-xl text-[14px] font-medium transition-all duration-300 cursor-pointer min-h-[48px] ${
+                        isActive
+                          ? "border-accent/50 bg-accent text-accent-fg shadow-[0_0_15px_rgba(var(--accent),0.3)] scale-[1.02]"
+                          : "border-transparent bg-transparent text-txt hover:border-border/50 hover:bg-bg-hover"
+                      }`}
+                      style={{ animationDelay: `${index * 50}ms` }}
+                      onClick={() => {
+                        setTab(primaryTab);
+                        setMobileMenuOpen(false);
+                      }}
+                    >
+                      <span
+                        className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${
+                          isActive ? "bg-accent/20" : "bg-bg-accent"
+                        }`}
+                      >
+                        <Icon
+                          className={`w-4 h-4 ${isActive ? "text-accent" : "text-muted"}`}
+                        />
+                      </span>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium">
+                          {t(NAV_LABEL_I18N_KEY[group.label] ?? group.label)}
+                        </div>
+                        {group.description && (
+                          <div className="text-[11px] text-muted mt-0.5">
+                            {group.description}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Settings for Mobile */}
+              <div className="mt-4 pt-4 border-t border-border flex flex-col gap-3">
+                <div className="flex flex-col gap-2 justify-between">
+                  <AgentModeDropdown />
+                  {!isNativeShell && (
+                    <LanguageDropdown
+                      uiLanguage={uiLanguage}
+                      setUiLanguage={setUiLanguage}
+                      t={t}
+                    />
+                  )}
+                  <div className="flex gap-2">
+                    <IconButtonTooltip label={shellToggleActionLabel}>
+                      <button
+                        type="button"
+                        onClick={handleShellToggle}
+                        className={iconBtnBase}
+                        aria-label={shellToggleActionLabel}
+                        data-testid="ui-shell-toggle"
+                      >
+                        {isNativeShell ? (
+                          <Smartphone className="w-5 h-5" />
+                        ) : (
+                          <Monitor className="w-5 h-5" />
+                        )}
+                      </button>
+                    </IconButtonTooltip>
+
+                    <IconButtonTooltip
+                      label={t("header.reportBug")}
+                      shortcut="Shift+?"
+                    >
+                      <button
+                        type="button"
+                        onClick={openBugReport}
+                        aria-label={t("header.reportBug")}
+                        className={iconBtnBase}
+                      >
+                        <Bug className="w-5 h-5" />
+                      </button>
+                    </IconButtonTooltip>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-border p-3 text-[11px] text-muted text-center">
+              {t("nav.Press")}{" "}
+              <kbd className="px-1.5 py-0.5 bg-bg-accent border border-border rounded text-[10px] font-mono">
+                {t("nav.ESC")}
+              </kbd>{" "}
+              {t("nav.toClose")}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

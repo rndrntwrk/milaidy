@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
 import {
+  ALL_TAB_GROUPS,
   pathForTab,
-  TAB_GROUPS,
   tabFromPath,
   titleForTab,
-} from "../../src/navigation";
+} from "@milady/app-core/navigation";
+import { describe, expect, it } from "vitest";
 
 describe("navigation", () => {
   it("maps security tab to path and title", () => {
@@ -13,10 +13,17 @@ describe("navigation", () => {
     expect(titleForTab("security")).toBe("Security");
   });
 
+  it("maps lifo tab to path and title", () => {
+    expect(pathForTab("lifo")).toBe("/lifo");
+    expect(tabFromPath("/lifo")).toBe("lifo");
+    expect(titleForTab("lifo")).toBe("Lifo");
+  });
+
   it("includes security in the advanced tab group", () => {
-    const advancedGroup = TAB_GROUPS.find(
+    const advancedGroup = ALL_TAB_GROUPS.find(
       (group) => group.label === "Advanced",
     );
     expect(advancedGroup?.tabs).toContain("security");
+    expect(advancedGroup?.tabs).toContain("lifo");
   });
 });

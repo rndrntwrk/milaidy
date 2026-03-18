@@ -1,9 +1,33 @@
+import { client } from "@milady/app-core/api";
+import { Button } from "@milady/ui";
 import { useCallback, useEffect, useState } from "react";
-import { client } from "../api-client";
+import { useApp } from "../AppContext";
+import { useTimeout } from "../hooks/useTimeout";
 import { ConfigSaveFooter } from "./ConfigSaveFooter";
 
 type AgentTab = "claude" | "gemini" | "codex" | "aider";
 type AiderProvider = "anthropic" | "openai" | "google";
+type ApprovalPreset = "readonly" | "standard" | "permissive" | "autonomous";
+type AgentSelectionStrategy = "fixed" | "ranked";
+
+const APPROVAL_PRESETS: {
+  value: ApprovalPreset;
+  label: string;
+  desc: string;
+}[] = [
+  { value: "readonly", label: "Read Only", desc: "Read-only tools only" },
+  {
+    value: "standard",
+    label: "Standard",
+    desc: "Read + write, asks for shell/network",
+  },
+  {
+    value: "permissive",
+    label: "Permissive",
+    desc: "File ops auto-approved, asks for shell",
+  },
+  { value: "autonomous", label: "Autonomous", desc: "All tools auto-approved" },
+];
 
 interface ModelOption {
   value: string;
@@ -57,6 +81,8 @@ const ENV_PREFIX: Record<AgentTab, string> = {
 };
 
 export function CodingAgentSettingsSection() {
+  const { setTimeout } = useTimeout();
+
   const [activeTab, setActiveTab] = useState<AgentTab>("claude");
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState(false);
@@ -66,6 +92,7 @@ export function CodingAgentSettingsSection() {
 
   // Model preferences stored by env var name
   const [prefs, setPrefs] = useState<Record<string, string>>({});
+  const { t } = useApp();
 
   // Dynamic model lists keyed by provider ID (e.g. "anthropic" → ModelOption[])
   const [providerModels, setProviderModels] = useState<
@@ -96,6 +123,14 @@ export function CodingAgentSettingsSection() {
         }
         if (env.PARALLAX_AIDER_PROVIDER)
           loaded.PARALLAX_AIDER_PROVIDER = env.PARALLAX_AIDER_PROVIDER;
+        if (env.PARALLAX_DEFAULT_APPROVAL_PRESET)
+          loaded.PARALLAX_DEFAULT_APPROVAL_PRESET =
+            env.PARALLAX_DEFAULT_APPROVAL_PRESET;
+        if (env.PARALLAX_AGENT_SELECTION_STRATEGY)
+          loaded.PARALLAX_AGENT_SELECTION_STRATEGY =
+            env.PARALLAX_AGENT_SELECTION_STRATEGY;
+        if (env.PARALLAX_DEFAULT_AGENT_TYPE)
+          loaded.PARALLAX_DEFAULT_AGENT_TYPE = env.PARALLAX_DEFAULT_AGENT_TYPE;
         setPrefs(loaded);
 
         // Process fetched models — filter to "chat" category only
@@ -154,7 +189,7 @@ export function CodingAgentSettingsSection() {
       setSaveError(err instanceof Error ? err.message : "Failed to save");
     }
     setSaving(false);
-  }, [prefs]);
+  }, [prefs, setTimeout]);
 
   // Resolve the provider ID for the current tab
   const getProviderId = (tab: AgentTab, aiderProv: AiderProvider): string => {
@@ -170,7 +205,7 @@ export function CodingAgentSettingsSection() {
   if (loading) {
     return (
       <div className="py-4 text-center text-[var(--muted)] text-xs">
-        Loading coding agent configuration...
+        {t("codingagentsettingssection.LoadingCodingAgent")}
       </div>
     );
   }
@@ -184,25 +219,115 @@ export function CodingAgentSettingsSection() {
   const fastValue = prefs[`${prefix}_MODEL_FAST`] ?? "";
   const isDynamic = !!providerModels[providerId];
 
+  const approvalPreset = (prefs.PARALLAX_DEFAULT_APPROVAL_PRESET ||
+    "permissive") as ApprovalPreset;
+  const selectionStrategy = (prefs.PARALLAX_AGENT_SELECTION_STRATEGY ||
+    "fixed") as AgentSelectionStrategy;
+  const defaultAgentType = (prefs.PARALLAX_DEFAULT_AGENT_TYPE ||
+    "claude") as AgentTab;
+
   return (
     <div className="flex flex-col gap-4">
+      {/* Agent selection strategy */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold">
+          {t("codingagentsettingssection.AgentSelectionStra")}
+        </span>
+        <select
+          className="px-2.5 py-1.5 border border-border bg-card text-xs focus:border-accent focus:outline-none shadow-sm"
+          value={selectionStrategy}
+          onChange={(e) =>
+            setPref("PARALLAX_AGENT_SELECTION_STRATEGY", e.target.value)
+          }
+        >
+          <option value="fixed">{t("codingagentsettingssection.Fixed")}</option>
+          <option value="ranked">
+            {t("codingagentsettingssection.RankedAutoSelect")}
+          </option>
+        </select>
+        <div className="text-[11px] text-[var(--muted)]">
+          {selectionStrategy === "fixed"
+            ? "Always use the selected default agent type when none is specified."
+            : "Automatically select the best-performing installed agent based on success rate and stall metrics."}
+        </div>
+      </div>
+
+      {/* Default agent type — only shown when strategy is "fixed" */}
+      {selectionStrategy === "fixed" && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold">
+            {t("codingagentsettingssection.DefaultAgentType")}
+          </span>
+          <select
+            className="px-2.5 py-1.5 border border-border bg-card text-xs focus:border-accent focus:outline-none shadow-sm"
+            value={defaultAgentType}
+            onChange={(e) =>
+              setPref("PARALLAX_DEFAULT_AGENT_TYPE", e.target.value)
+            }
+          >
+            <option value="claude">
+              {t("codingagentsettingssection.Claude")}
+            </option>
+            <option value="gemini">
+              {t("codingagentsettingssection.Gemini")}
+            </option>
+            <option value="codex">
+              {t("codingagentsettingssection.Codex")}
+            </option>
+            <option value="aider">
+              {t("codingagentsettingssection.Aider")}
+            </option>
+          </select>
+          <div className="text-[11px] text-[var(--muted)]">
+            {t("codingagentsettingssection.AgentUsedWhenNoE")}
+          </div>
+        </div>
+      )}
+
+      {/* Default approval preset — global, not per-agent */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold">
+          {t("codingagentsettingssection.DefaultPermissionL")}
+        </span>
+        <select
+          className="px-2.5 py-1.5 border border-border bg-card text-xs focus:border-accent focus:outline-none shadow-sm"
+          value={approvalPreset}
+          onChange={(e) =>
+            setPref("PARALLAX_DEFAULT_APPROVAL_PRESET", e.target.value)
+          }
+        >
+          {APPROVAL_PRESETS.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <div className="text-[11px] text-[var(--muted)]">
+          {APPROVAL_PRESETS.find((p) => p.value === approvalPreset)?.desc ?? ""}
+          {
+            " — applies to all newly spawned agents unless overridden per-spawn."
+          }
+        </div>
+      </div>
+
       {/* Agent tabs */}
-      <div className="flex border border-[var(--border)]">
+      <div className="flex border border-border">
         {(["claude", "gemini", "codex", "aider"] as AgentTab[]).map((agent) => {
           const active = activeTab === agent;
           return (
-            <button
+            <Button
               key={agent}
-              type="button"
-              className={`flex-1 px-3 py-2 text-xs font-semibold cursor-pointer transition-colors border-r last:border-r-0 border-[var(--border)] ${
+              variant={active ? "default" : "ghost"}
+              size="sm"
+              className={`flex-1 h-9 px-3 py-2 text-xs font-semibold rounded-none border-r last:border-r-0 border-border ${
                 active
-                  ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
-                  : "bg-[var(--card)] text-[var(--muted)] hover:text-[var(--text)]"
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted hover:text-txt"
               }`}
               onClick={() => setActiveTab(agent)}
             >
               {AGENT_LABELS[agent]}
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -210,15 +335,23 @@ export function CodingAgentSettingsSection() {
       {/* Aider provider selector */}
       {activeTab === "aider" && (
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold">Provider</span>
+          <span className="text-xs font-semibold">
+            {t("codingagentsettingssection.Provider")}
+          </span>
           <select
-            className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs focus:border-[var(--accent)] focus:outline-none"
+            className="px-2.5 py-1.5 border border-border bg-card text-xs focus:border-accent focus:outline-none shadow-sm"
             value={aiderProvider}
             onChange={(e) => setPref("PARALLAX_AIDER_PROVIDER", e.target.value)}
           >
-            <option value="anthropic">Anthropic</option>
-            <option value="openai">OpenAI</option>
-            <option value="google">Google</option>
+            <option value="anthropic">
+              {t("codingagentsettingssection.Anthropic")}
+            </option>
+            <option value="openai">
+              {t("codingagentsettingssection.OpenAI")}
+            </option>
+            <option value="google">
+              {t("codingagentsettingssection.Google")}
+            </option>
           </select>
         </div>
       )}
@@ -226,15 +359,17 @@ export function CodingAgentSettingsSection() {
       {/* Model selectors — both use the same list, user picks tier preference */}
       <div className="flex gap-3">
         <div className="flex-1 flex flex-col gap-1.5">
-          <span className="text-xs font-semibold">Powerful Model</span>
+          <span className="text-xs font-semibold">
+            {t("codingagentsettingssection.PowerfulModel")}
+          </span>
           <select
-            className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs focus:border-[var(--accent)] focus:outline-none"
+            className="px-2.5 py-1.5 border border-border bg-card text-xs focus:border-accent focus:outline-none shadow-sm"
             value={powerfulValue}
             onChange={(e) =>
               setPref(`${prefix}_MODEL_POWERFUL`, e.target.value)
             }
           >
-            <option value="">Default</option>
+            <option value="">{t("codingagentsettingssection.Default")}</option>
             {modelOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
@@ -243,13 +378,15 @@ export function CodingAgentSettingsSection() {
           </select>
         </div>
         <div className="flex-1 flex flex-col gap-1.5">
-          <span className="text-xs font-semibold">Fast Model</span>
+          <span className="text-xs font-semibold">
+            {t("codingagentsettingssection.FastModel")}
+          </span>
           <select
-            className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs focus:border-[var(--accent)] focus:outline-none"
+            className="px-2.5 py-1.5 border border-border bg-card text-xs focus:border-accent focus:outline-none shadow-sm"
             value={fastValue}
             onChange={(e) => setPref(`${prefix}_MODEL_FAST`, e.target.value)}
           >
-            <option value="">Default</option>
+            <option value="">{t("codingagentsettingssection.Default")}</option>
             {modelOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
@@ -258,7 +395,6 @@ export function CodingAgentSettingsSection() {
           </select>
         </div>
       </div>
-
       <div className="text-[11px] text-[var(--muted)]">
         {isDynamic
           ? "Models fetched from provider API. These are preferences — the CLI may override based on availability."

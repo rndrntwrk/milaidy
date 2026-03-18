@@ -12,65 +12,48 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { IAgentRuntime } from "@elizaos/core";
-import { createConnection } from "node:net";
 import { logger } from "@elizaos/core";
-import { deriveEvmAddress, deriveSolanaAddress } from "../api/wallet.js";
+import { deriveEvmAddress, deriveSolanaAddress } from "../api/wallet";
 import type {
   AppLaunchResult,
   AppStopResult,
   AppViewerAuthMessage,
   InstalledAppInfo,
-} from "../contracts/apps.js";
+} from "../contracts/apps";
 import type {
   InstalledPluginInfo,
   InstallProgressLike,
   PluginManagerLike,
   RegistryPluginInfo,
   RegistrySearchResult,
-} from "./plugin-manager-types.js";
-import { listInstalledPlugins } from "./plugin-installer.js";
-import {
-  ALICE_APP_CATALOG,
-  resolveManagedAppFallbackUrl,
-} from "./app-catalog.js";
-import {
-  type RegistryAppInfo,
-  getAppInfo as registryGetAppInfo,
-  getRegistryPlugins as registryGetPlugins,
-  getPluginInfo as registryGetPluginInfo,
-} from "./registry-client.js";
+} from "./plugin-manager-types";
+import { getPluginInfo, getRegistryPlugins } from "./registry-client";
 
 const LOCAL_PLUGINS_DIR = "plugins";
-const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
-const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
-const HYPERSCAPE_AUTH_MESSAGE_TYPE = "HYPERSCAPE_AUTH";
-const HYPERSCAPE_AUTH_REQUIRED_ERROR =
-  "Hyperscape authentication required: HYPERSCAPE_AUTH_TOKEN is missing. Fix wallet-auth token issuance and redeploy secrets before launching Hyperscape.";
-const RS_2004SCAPE_APP_NAME = "@elizaos/app-2004scape";
-const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
-const HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS = 3;
-const HYPERSCAPE_WALLET_AUTH_TIMEOUT_MS = 10_000;
-const HYPERSCAPE_WALLET_AUTH_BACKOFF_MS = 1_500;
-const HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS = 3;
-const SAFE_APP_URL_PROTOCOLS = new Set(["http:", "https:"]);
-type AppViewerConfig = NonNullable<AppLaunchResult["viewer"]>;
-const LOCAL_APP_DEFAULT_FALLBACK_URLS: Readonly<Record<string, string>> =
-  Object.fromEntries(
-    Object.entries(ALICE_APP_CATALOG)
-      .map(([packageName]) => [packageName, resolveManagedAppFallbackUrl(packageName)])
-      .filter((entry): entry is [string, string] => typeof entry[1] === "string"),
-  );
 
 export type {
   AppLaunchResult,
   AppStopResult,
   AppViewerAuthMessage,
   InstalledAppInfo,
-} from "../contracts/apps.js";
+} from "../contracts/apps";
 
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
+const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
+const HYPERSCAPE_AUTH_MESSAGE_TYPE = "HYPERSCAPE_AUTH";
+const RS_2004SCAPE_APP_NAME = "@elizaos/app-2004scape";
+const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
+const SAFE_APP_URL_PROTOCOLS = new Set(["http:", "https:"]);
+const ALLOWED_APP_URL_TEMPLATE_KEYS = new Set([
+  // Public display identity only.
+  "BOT_NAME",
+  "RS_SDK_BOT_NAME",
+  // Non-secret endpoint routing values.
+  "HYPERSCAPE_CLIENT_URL",
+  "HYPERSCAPE_SERVER_URL",
+]);
+
+type AppViewerConfig = NonNullable<AppLaunchResult["viewer"]>;
 
 interface RegistryAppPlugin extends RegistryPluginInfo {
   viewer?: {
@@ -79,8 +62,8 @@ interface RegistryAppPlugin extends RegistryPluginInfo {
     postMessageAuth?: boolean;
     sandbox?: string;
   };
-  launchType?: string;
-  launchUrl?: string | null;
+  launchType?: "connect" | "local";
+  launchUrl?: string;
   displayName?: string;
 }
 
@@ -110,58 +93,6 @@ function mergeAppMeta(
   appInfo.category = meta.category ?? appInfo.category;
   appInfo.capabilities = meta.capabilities ?? appInfo.capabilities;
   appInfo.icon = meta.icon ?? appInfo.icon;
-}
-
-function mergeRegistryAppFallback(
-  appInfo: RegistryAppPlugin,
-  fallback: RegistryAppInfo,
-): RegistryAppPlugin {
-  appInfo.displayName = appInfo.displayName ?? fallback.displayName;
-  appInfo.launchType = appInfo.launchType ?? fallback.launchType;
-  appInfo.launchUrl = appInfo.launchUrl ?? fallback.launchUrl;
-  appInfo.icon = appInfo.icon ?? fallback.icon;
-  appInfo.category = appInfo.category ?? fallback.category;
-  appInfo.capabilities =
-    appInfo.capabilities && appInfo.capabilities.length > 0
-      ? appInfo.capabilities
-      : fallback.capabilities;
-  appInfo.viewer = appInfo.viewer ?? fallback.viewer;
-  if (!appInfo.description || appInfo.description.trim().length === 0) {
-    appInfo.description = fallback.description;
-  }
-  if ((!appInfo.gitRepo || appInfo.gitRepo.trim().length === 0) && fallback.repository) {
-    appInfo.gitRepo = fallback.repository;
-  }
-  if ((!appInfo.gitUrl || appInfo.gitUrl.trim().length === 0) && fallback.repository) {
-    appInfo.gitUrl = fallback.repository;
-  }
-  if (!Array.isArray(appInfo.topics)) {
-    appInfo.topics = [];
-  }
-  return appInfo;
-}
-
-function toPluginInfoFromAppInfo(appInfo: RegistryAppInfo): RegistryAppPlugin {
-  return {
-    name: appInfo.name,
-    gitRepo: appInfo.repository,
-    gitUrl: appInfo.repository,
-    displayName: appInfo.displayName,
-    description: appInfo.description,
-    homepage: appInfo.repository,
-    topics: [],
-    stars: appInfo.stars,
-    language: "TypeScript",
-    kind: "app",
-    launchType: appInfo.launchType,
-    launchUrl: appInfo.launchUrl,
-    icon: appInfo.icon,
-    category: appInfo.category,
-    capabilities: [...appInfo.capabilities],
-    viewer: appInfo.viewer,
-    npm: appInfo.npm,
-    supports: appInfo.supports,
-  };
 }
 
 function isAutoInstallable(appInfo: RegistryPluginInfo): boolean {
@@ -218,132 +149,12 @@ function getTemplateFallbackValue(key: string): string | undefined {
   return undefined;
 }
 
-function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname
-    .trim()
-    .toLowerCase()
-    .replace(/^\[|\]$/g, "");
-  if (!normalized) return false;
-  if (normalized === "localhost" || normalized === "::1") return true;
-  if (normalized === "0.0.0.0") return true;
-  if (normalized === "::ffff:127.0.0.1") return true;
-  return normalized.startsWith("127.");
-}
-
-function isRuntimeTestEnvironment(): boolean {
-  return (
-    process.env.NODE_ENV === "test" ||
-    Boolean(process.env.VITEST) ||
-    Boolean(process.env.VITEST_WORKER_ID) ||
-    Boolean(process.env.JEST_WORKER_ID)
-  );
-}
-
-function shouldValidateLocalAppUpstream(): boolean {
-  const explicit =
-    process.env.MILAIDY_VALIDATE_LOCAL_APP_UPSTREAM?.trim().toLowerCase();
-  if (explicit === "1" || explicit === "true") return true;
-  if (explicit === "0" || explicit === "false") return false;
-  if (isRuntimeTestEnvironment()) return false;
-  return true;
-}
-
-function resolveLocalUpstreamCandidate(
-  appInfo: {
-    viewer?: { url: string };
-    launchUrl?: string | null;
-  },
-): string | null {
-  const candidates = [appInfo.viewer?.url, appInfo.launchUrl]
-    .map((value) =>
-      typeof value === "string" && value.trim().length > 0
-        ? substituteTemplateVars(value)
-        : "",
-    )
-    .filter((value) => value.length > 0);
-
-  for (const candidate of candidates) {
-    try {
-      const parsed = new URL(candidate);
-      if (!/^https?:$/i.test(parsed.protocol)) continue;
-      if (!isLoopbackHostname(parsed.hostname)) continue;
-      return parsed.toString();
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
-
-async function isLoopbackUpstreamReachable(
-  candidateUrl: string,
-  timeoutMs = 1000,
-): Promise<boolean> {
-  let parsed: URL;
-  try {
-    parsed = new URL(candidateUrl);
-  } catch {
-    return false;
-  }
-  if (!/^https?:$/i.test(parsed.protocol)) return false;
-  if (!isLoopbackHostname(parsed.hostname)) return true;
-
-  const port = parsed.port
-    ? Number(parsed.port)
-    : parsed.protocol === "https:"
-      ? 443
-      : 80;
-  if (!Number.isFinite(port) || port <= 0) return false;
-
-  return await new Promise<boolean>((resolve) => {
-    const socket = createConnection({
-      host: parsed.hostname,
-      port,
-    });
-    let settled = false;
-    const settle = (reachable: boolean): void => {
-      if (settled) return;
-      settled = true;
-      socket.removeAllListeners();
-      socket.destroy();
-      resolve(reachable);
-    };
-    socket.setTimeout(timeoutMs);
-    socket.once("connect", () => settle(true));
-    socket.once("timeout", () => settle(false));
-    socket.once("error", () => settle(false));
-  });
-}
-
-function resolveAppLaunchFallbackUrl(appInfo: {
-  name: string;
-  repository?: string | null;
-}): string | null {
-  const slug = appInfo.name
-    .replace(/^@[^/]+\//, "")
-    .replace(/^app-/, "")
-    .replace(/[^a-z0-9]+/gi, "_")
-    .replace(/^_+|_+$/g, "")
-    .toUpperCase();
-  const fallbackEnvKey = slug ? `MILAIDY_APP_FALLBACK_URL_${slug}` : undefined;
-  const fallbackFromEnv =
-    fallbackEnvKey &&
-    process.env[fallbackEnvKey] &&
-    process.env[fallbackEnvKey]?.trim().length
-      ? (process.env[fallbackEnvKey]?.trim() ?? null)
-      : null;
-  if (fallbackFromEnv) return fallbackFromEnv;
-
-  const defaultFallback = LOCAL_APP_DEFAULT_FALLBACK_URLS[appInfo.name];
-  if (defaultFallback) return defaultFallback;
-
-  const repository =
-    typeof appInfo.repository === "string" ? appInfo.repository.trim() : "";
-  return repository.length > 0 ? repository : null;
-}
-
 function substituteTemplateVars(raw: string): string {
   return raw.replace(/\{([A-Z0-9_]+)\}/g, (_full, key: string) => {
+    if (!ALLOWED_APP_URL_TEMPLATE_KEYS.has(key)) {
+      return getTemplateFallbackValue(key) ?? "";
+    }
+
     const value = process.env[key];
     if (value && value.trim().length > 0) {
       return value.trim();
@@ -364,17 +175,11 @@ function buildViewerUrl(
   const [pathPart, queryPartRaw] = beforeHash.split("?", 2);
   const queryParams = new URLSearchParams(queryPartRaw ?? "");
   for (const [key, rawValue] of Object.entries(embedParams)) {
-    const value = substituteTemplateVars(rawValue).trim();
-    if (value.length === 0) {
-      queryParams.delete(key);
-      continue;
-    }
-    queryParams.set(key, value);
+    queryParams.set(key, substituteTemplateVars(rawValue));
   }
   const query = queryParams.toString();
   const hash = hashPartRaw ? `#${hashPartRaw}` : "";
-  const urlWithParams = `${pathPart}${query.length > 0 ? `?${query}` : ""}${hash}`;
-  return urlWithParams;
+  return `${pathPart}${query.length > 0 ? `?${query}` : ""}${hash}`;
 }
 
 function normalizeSafeAppUrl(url: string): string | null {
@@ -408,8 +213,8 @@ function buildViewerAuthMessage(
     const authToken = process.env.HYPERSCAPE_AUTH_TOKEN?.trim();
     const characterId = process.env.HYPERSCAPE_CHARACTER_ID?.trim();
 
-    // Spectator mode is authenticated; token is mandatory.
-    if (!authToken) return undefined;
+    // Need at least authToken OR characterId for spectator mode
+    if (!authToken && !characterId) return undefined;
 
     const sessionToken = process.env.HYPERSCAPE_SESSION_TOKEN?.trim();
     const agentId = process.env.HYPERSCAPE_EMBED_AGENT_ID?.trim();
@@ -479,11 +284,8 @@ function buildViewerConfig(
     }
 
     return {
-      url: buildViewerUrl(
-        appInfo.viewer.url,
-        appInfo.viewer.embedParams,
-      ),
-      embedParams: appInfo.viewer.embedParams,
+      url: viewerUrl,
+      embedParams: viewerInfo.embedParams,
       postMessageAuth,
       sandbox: viewerInfo.sandbox ?? DEFAULT_VIEWER_SANDBOX,
       authMessage,
@@ -500,54 +302,67 @@ function buildViewerConfig(
       );
     }
     return {
-      url: launchUrl,
+      url: viewerUrl,
       sandbox: DEFAULT_VIEWER_SANDBOX,
     };
   }
   return null;
 }
 
+/**
+ * Get wallet addresses from agent runtime settings (character secrets).
+ * Falls back to process.env if runtime is not available.
+ */
 function getWalletAddressesFromRuntime(
   runtime: IAgentRuntime | null | undefined,
 ): { evmAddress: string | null; solanaAddress: string | null } {
+  const PLACEHOLDER_RE =
+    /^\[?\s*(REDACTED|PLACEHOLDER|TODO|CHANGEME|EMPTY)\s*]?$/i;
   let evmAddress: string | null = null;
   let solanaAddress: string | null = null;
+
+  // Try runtime settings first (character secrets), fall back to process.env
   const evmKey =
     (runtime?.getSetting?.("EVM_PRIVATE_KEY") as string | undefined)?.trim() ||
     process.env.EVM_PRIVATE_KEY?.trim();
-  if (evmKey) {
+
+  if (evmKey && !PLACEHOLDER_RE.test(evmKey)) {
     try {
       evmAddress = deriveEvmAddress(evmKey);
-    } catch (error) {
-      logger.warn(
-        `[app-manager] Invalid EVM key for hyperscape auth: ${describeError(error)}`,
-      );
+    } catch (e) {
+      logger.warn(`[app-manager] Bad EVM key: ${e}`);
     }
   }
 
-  const solanaKey =
-    (runtime?.getSetting?.("SOLANA_PRIVATE_KEY") as string | undefined)?.trim() ||
-    process.env.SOLANA_PRIVATE_KEY?.trim();
-  if (solanaKey) {
+  const solKey =
+    (
+      runtime?.getSetting?.("SOLANA_PRIVATE_KEY") as string | undefined
+    )?.trim() || process.env.SOLANA_PRIVATE_KEY?.trim();
+
+  if (solKey && !PLACEHOLDER_RE.test(solKey)) {
     try {
-      solanaAddress = deriveSolanaAddress(solanaKey);
-    } catch (error) {
-      logger.warn(
-        `[app-manager] Invalid Solana key for hyperscape auth: ${describeError(error)}`,
-      );
+      solanaAddress = deriveSolanaAddress(solKey);
+    } catch (e) {
+      logger.warn(`[app-manager] Bad SOL key: ${e}`);
     }
   }
 
   return { evmAddress, solanaAddress };
 }
 
+/**
+ * Auto-provision a hyperscape agent using wallet-based authentication.
+ * The agent's wallet address becomes its identity - no manual registration needed.
+ * Uses agent.character.settings.secrets for wallet credentials.
+ */
 async function autoProvisionHyperscapeAgent(
   runtime: IAgentRuntime | null | undefined,
 ): Promise<{
-  characterId?: string;
+  characterId: string;
   authToken?: string;
 } | null> {
-  const existingCharacterId =
+  // Check if already configured (from runtime settings or env)
+  const existingCharId =
     (
       runtime?.getSetting?.("HYPERSCAPE_CHARACTER_ID") as string | undefined
     )?.trim() || process.env.HYPERSCAPE_CHARACTER_ID?.trim();
@@ -555,29 +370,29 @@ async function autoProvisionHyperscapeAgent(
     (
       runtime?.getSetting?.("HYPERSCAPE_AUTH_TOKEN") as string | undefined
     )?.trim() || process.env.HYPERSCAPE_AUTH_TOKEN?.trim();
-  if (existingCharacterId) {
-    process.env.HYPERSCAPE_CHARACTER_ID = existingCharacterId;
-  }
-  if (existingToken) {
-    process.env.HYPERSCAPE_AUTH_TOKEN = existingToken;
-  }
-  if (existingCharacterId || existingToken) {
-    return {
-      characterId: existingCharacterId || undefined,
-      authToken: existingToken || undefined,
-    };
+
+  if (existingCharId && existingToken) {
+    logger.info(
+      `[app-manager] Hyperscape already configured with character: ${existingCharId}`,
+    );
+    return { characterId: existingCharId, authToken: existingToken };
   }
 
+  // Derive wallet addresses from runtime settings (character secrets)
   const walletAddresses = getWalletAddressesFromRuntime(runtime);
-  const walletAddress = walletAddresses.evmAddress || walletAddresses.solanaAddress;
+  const walletAddress =
+    walletAddresses.evmAddress || walletAddresses.solanaAddress;
+
   if (!walletAddress) {
     logger.warn(
-      "[app-manager] Hyperscape auto-provision skipped: no EVM or Solana private key available.",
+      "[app-manager] No wallet address found for hyperscape auto-auth (need EVM_PRIVATE_KEY or SOLANA_PRIVATE_KEY in character secrets)",
     );
     return null;
   }
 
   const walletType = walletAddresses.evmAddress ? "evm" : "solana";
+
+  // Get server URL for API calls (from runtime settings or env)
   const serverUrl =
     (
       runtime?.getSetting?.("HYPERSCAPE_SERVER_URL") as string | undefined
@@ -588,269 +403,64 @@ async function autoProvisionHyperscapeAgent(
     .replace(/^ws:/, "http:")
     .replace(/^wss:/, "https:")
     .replace(/\/ws$/, "");
+
+  // Get agent name from runtime or env
   const agentName =
     runtime?.character?.name ||
     (runtime?.getSetting?.("BOT_NAME") as string | undefined)?.trim() ||
     process.env.BOT_NAME ||
     "Agent";
 
-  const withTimeout = async (
-    input: string,
-    init: RequestInit,
-    timeoutMs: number,
-  ): Promise<Response> => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      return await fetch(input, {
-        ...init,
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
-  };
+  try {
+    logger.info(
+      `[app-manager] Auto-provisioning hyperscape agent with wallet: ${walletAddress.slice(0, 10)}...`,
+    );
 
-  const walletAuthBody = JSON.stringify({ walletAddress, walletType, agentName });
-
-  for (
-    let attempt = 1;
-    attempt <= HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS;
-    attempt += 1
-  ) {
-    let response: Response;
-    try {
-      response = await withTimeout(
-        `${apiBaseUrl}/api/agents/wallet-auth`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: walletAuthBody,
-        },
-        HYPERSCAPE_WALLET_AUTH_TIMEOUT_MS,
-      );
-    } catch (error) {
-      logger.warn(
-        `[app-manager] Hyperscape wallet-auth request failed on attempt ${attempt}/${HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS}: ${describeError(error)}`,
-      );
-      if (attempt < HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * attempt),
-        );
-      }
-      continue;
-    }
+    // Authenticate using wallet address
+    const response = await fetch(`${apiBaseUrl}/api/agents/wallet-auth`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        walletAddress,
+        walletType,
+        agentName,
+      }),
+    });
 
     if (!response.ok) {
-      const details = await response.text().catch(() => "");
+      const errorText = await response.text().catch(() => "Unknown error");
       logger.warn(
-        `[app-manager] Hyperscape wallet-auth failed (${response.status}) on attempt ${attempt}/${HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS}: ${details}`,
+        `[app-manager] Hyperscape wallet auth failed: ${response.status} ${errorText}`,
       );
-
-      const shouldRetry =
-        attempt < HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS &&
-        [408, 429, 500, 502, 503, 504].includes(response.status);
-      if (shouldRetry) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * attempt),
-        );
-        continue;
-      }
-      break;
+      return null;
     }
 
-    const payload = (await response.json()) as {
-      success?: boolean;
+    const result = (await response.json()) as {
+      success: boolean;
       authToken?: string;
       characterId?: string;
-      data?: { authToken?: string; characterId?: string; agentId?: string };
-      token?: string;
-      agentId?: string;
     };
-    const authToken =
-      payload.authToken?.trim() ||
-      payload.data?.authToken?.trim() ||
-      payload.token?.trim();
-    const characterId =
-      payload.characterId?.trim() ||
-      payload.data?.characterId?.trim() ||
-      payload.data?.agentId?.trim() ||
-      payload.agentId?.trim();
 
-    if (!payload.success || !characterId || !authToken) {
-      logger.warn(
-        `[app-manager] Hyperscape wallet-auth returned incomplete payload on attempt ${attempt}/${HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS}.`,
-      );
-      break;
-    }
-
-    process.env.HYPERSCAPE_CHARACTER_ID = characterId;
-    process.env.HYPERSCAPE_AUTH_TOKEN = authToken;
-    logger.info(`[app-manager] Auto-provisioned hyperscape agent: ${characterId}`);
-    return {
-      characterId,
-      authToken,
-    };
-  }
-
-  for (
-    let fallbackAttempt = 1;
-    fallbackAttempt <= HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS;
-    fallbackAttempt += 1
-  ) {
-    let fallbackResponse: Response;
-    try {
-      fallbackResponse = await withTimeout(
-        `${apiBaseUrl}/api/embedded-agents`,
-        { method: "GET" },
-        HYPERSCAPE_WALLET_AUTH_TIMEOUT_MS,
-      );
-    } catch (error) {
-      logger.warn(
-        `[app-manager] Hyperscape embedded-agent fallback request failed on attempt ${fallbackAttempt}/${HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS}: ${describeError(error)}`,
-      );
-      if (fallbackAttempt < HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * fallbackAttempt),
-        );
-      }
-      continue;
-    }
-
-    if (!fallbackResponse.ok) {
-      const fallbackDetails = await fallbackResponse.text().catch(() => "");
-      logger.warn(
-        `[app-manager] Hyperscape embedded-agent fallback failed (${fallbackResponse.status}) on attempt ${fallbackAttempt}/${HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS}: ${fallbackDetails}`,
-      );
-      const shouldRetry =
-        fallbackAttempt < HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS &&
-        [408, 429, 500, 502, 503, 504].includes(fallbackResponse.status);
-      if (shouldRetry) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * fallbackAttempt),
-        );
-        continue;
-      }
+    if (!result.success || !result.authToken || !result.characterId) {
+      logger.warn("[app-manager] Hyperscape wallet auth returned failure");
       return null;
     }
 
-    const fallbackPayload = (await fallbackResponse.json()) as {
-      success?: boolean;
-      agents?: Array<{
-        characterId?: string;
-        agentId?: string;
-        state?: string;
-      }>;
-    };
-    const fallbackCharacterId =
-      fallbackPayload.agents
-        ?.find((agent) => agent.state === "running")
-        ?.characterId?.trim() ||
-      fallbackPayload.agents
-        ?.find((agent) => agent.state === "running")
-        ?.agentId?.trim() ||
-      fallbackPayload.agents?.[0]?.characterId?.trim() ||
-      fallbackPayload.agents?.[0]?.agentId?.trim();
-    if (!fallbackCharacterId) {
-      logger.warn(
-        `[app-manager] Hyperscape embedded-agent fallback returned no usable character id on attempt ${fallbackAttempt}/${HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS}.`,
-      );
-      if (fallbackAttempt < HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * fallbackAttempt),
-        );
-        continue;
-      }
-      return null;
-    }
+    // Set environment variables for the plugin and viewer
+    // (These are still needed for other parts of the system that read from env)
+    process.env.HYPERSCAPE_CHARACTER_ID = result.characterId;
+    process.env.HYPERSCAPE_AUTH_TOKEN = result.authToken;
 
-    process.env.HYPERSCAPE_CHARACTER_ID = fallbackCharacterId;
-    logger.warn(
-      `[app-manager] Using existing hyperscape character fallback without auth token: ${fallbackCharacterId}`,
+    logger.info(
+      `[app-manager] Auto-provisioned hyperscape agent: ${result.characterId}`,
     );
-    return { characterId: fallbackCharacterId };
-  }
 
-  logger.warn("[app-manager] Hyperscape auto-provision exhausted all fallback attempts.");
-  return null;
-}
-
-function getPluginPackageName(
-  appInfo: {
-    name: string;
-    npm: {
-      package: string;
-      v0Version?: string | null;
-      v1Version?: string | null;
-      v2Version?: string | null;
-    };
-  },
-  pluginInfo?: {
-    npm: {
-      package: string;
-      v0Version: string | null;
-      v1Version: string | null;
-      v2Version: string | null;
-    };
-  },
-): string {
-  const pluginPackage = pluginInfo?.npm.package;
-  if (pluginPackage && pluginPackage.trim().length > 0) {
-    return pluginPackage;
-  }
-  if (appInfo.npm.package && appInfo.npm.package.trim().length > 0) {
-    return appInfo.npm.package;
-  }
-  return appInfo.name;
-}
-
-function isPluginInstallable(
-  appInfo: {
-    npm: {
-      v0Version?: string | null;
-      v1Version?: string | null;
-      v2Version?: string | null;
-    };
-  },
-  pluginInfo?: {
-    localPath?: string;
-    npm: {
-      v0Version: string | null;
-      v1Version: string | null;
-      v2Version: string | null;
-    };
-  },
-): boolean {
-  if (pluginInfo?.localPath) {
-    return true;
-  }
-  return (
-    [appInfo.npm.v2Version, appInfo.npm.v1Version, appInfo.npm.v0Version].some(
-      (version) => typeof version === "string" && version.trim().length > 0,
-    ) ||
-    (typeof pluginInfo?.npm.v2Version === "string" &&
-      pluginInfo.npm.v2Version.trim().length > 0) ||
-    (typeof pluginInfo?.npm.v1Version === "string" &&
-      pluginInfo.npm.v1Version.trim().length > 0) ||
-    (typeof pluginInfo?.npm.v0Version === "string" &&
-      pluginInfo.npm.v0Version.trim().length > 0)
-  );
-}
-
-async function getPluginMetadata(appName: string): Promise<{
-  npm: {
-    package: string;
-    v0Version: string | null;
-    v1Version: string | null;
-    v2Version: string | null;
-  };
-  localPath?: string;
-} | null> {
-  try {
-    return await registryGetPluginInfo(appName);
+    return { characterId: result.characterId, authToken: result.authToken };
   } catch (error) {
     logger.warn(
-      `[app-manager] Failed to load plugin metadata for "${appName}": ${describeError(error)}`,
+      `[app-manager] Failed to auto-provision hyperscape agent: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     );
     return null;
   }
@@ -867,7 +477,7 @@ export class AppManager {
     // registry-client but not by the elizaos
     // plugin-manager service.
     try {
-      const localRegistry = await registryGetPlugins();
+      const localRegistry = await getRegistryPlugins();
       for (const [name, info] of localRegistry) {
         if (!registry.has(name) && info.kind === "app") {
           registry.set(name, info);
@@ -918,29 +528,7 @@ export class AppManager {
     pluginManager: PluginManagerLike,
     name: string,
   ): Promise<RegistryPluginInfo | null> {
-    const pluginInfo = (await pluginManager.getRegistryPlugin(
-      name,
-    )) as RegistryAppPlugin | null;
-    let fallbackInfo: RegistryAppInfo | null = null;
-    try {
-      fallbackInfo = await registryGetAppInfo(name);
-    } catch (error) {
-      logger.warn(
-        `[app-manager] Failed to load app metadata for "${name}": ${describeError(error)}`,
-      );
-    }
-
-    if (!pluginInfo && !fallbackInfo) return null;
-    if (!pluginInfo && fallbackInfo) {
-      return toPluginInfoFromAppInfo(fallbackInfo);
-    }
-
-    const merged = { ...(pluginInfo as RegistryAppPlugin) };
-    mergeAppMeta(merged, merged.appMeta);
-    if (fallbackInfo) {
-      mergeRegistryAppFallback(merged, fallbackInfo);
-    }
-    return merged;
+    return pluginManager.getRegistryPlugin(name);
   }
 
   /**
@@ -958,108 +546,36 @@ export class AppManager {
     onProgress?: (progress: InstallProgressLike) => void,
     runtime?: IAgentRuntime | null,
   ): Promise<AppLaunchResult> {
-    const appInfo = (await this.getInfo(pluginManager, name)) as RegistryAppPlugin | null;
-    if (!appInfo) {
-      throw new Error(`App "${name}" not found in the registry.`);
-    }
-    const pluginMeta = await getPluginMetadata(name);
-    const launchUrlRaw = appInfo.launchUrl
-      ? substituteTemplateVars(appInfo.launchUrl)
-      : null;
-    let launchUrl = launchUrlRaw;
-    let viewer = buildViewerConfig(appInfo, launchUrl);
-
-    const isTestRun = isRuntimeTestEnvironment();
-    if (!isTestRun && shouldValidateLocalAppUpstream()) {
-      const localUpstream = resolveLocalUpstreamCandidate(appInfo);
-      if (localUpstream) {
-        const upstreamReachable =
-          await isLoopbackUpstreamReachable(localUpstream);
-        if (!upstreamReachable) {
-          const fallbackUrl = resolveAppLaunchFallbackUrl(appInfo);
-          if (!fallbackUrl) {
-            throw new Error(
-              `Local app upstream is unreachable (${localUpstream}) and no fallback URL is configured.`,
-            );
-          }
-          logger.warn(
-            `[app-manager] Local app upstream unreachable for "${name}" (${localUpstream}); falling back to ${fallbackUrl}.`,
-          );
-          launchUrl = fallbackUrl;
-          viewer = null;
+    let appInfo = (await pluginManager.getRegistryPlugin(
+      name,
+    )) as RegistryAppPlugin | null;
+    // Supplement with local registry metadata since the elizaos plugin-manager
+    // service doesn't include our local workspace app discovery.
+    try {
+      const localInfo = await getPluginInfo(name);
+      if (localInfo) {
+        const meta = localInfo.appMeta;
+        if (!appInfo) {
+          appInfo = { ...localInfo } as RegistryAppPlugin;
+          mergeAppMeta(appInfo, meta);
+        } else if (meta && !appInfo.viewer) {
+          // Merge local metadata into existing registry entry
+          mergeAppMeta(appInfo, meta);
+          appInfo.kind = localInfo.kind ?? appInfo.kind;
         }
       }
+    } catch {
+      // local lookup is best-effort
     }
-
-    // Hyperscape auth resolution must run before non-installable early returns
-    // so spectator viewer launches always include postMessage credentials.
-    if (!isTestRun && name === HYPERSCAPE_APP_NAME) {
-      const provisionResult = await autoProvisionHyperscapeAgent(runtime);
-      const hyperscapeAuthToken =
-        provisionResult?.authToken?.trim() ||
-        process.env.HYPERSCAPE_AUTH_TOKEN?.trim();
-      if (!hyperscapeAuthToken) {
-        logger.error(
-          "[app-manager] Hyperscape launch blocked: missing HYPERSCAPE_AUTH_TOKEN after auto-provision attempt.",
-        );
-        throw new Error(HYPERSCAPE_AUTH_REQUIRED_ERROR);
-      }
-      process.env.HYPERSCAPE_AUTH_TOKEN = hyperscapeAuthToken;
-      // Viewer metadata is env-derived; re-resolve now that hyperscape
-      // credentials may have been hydrated from runtime settings.
-      viewer = buildViewerConfig(appInfo, launchUrl);
+    if (!appInfo) {
+      throw new Error(`App "${name}" not found in the registry.`);
     }
 
     // The app's plugin is what the agent needs to play the game.
     // It's the same npm package name as the app, or a separate plugin ref.
-    const pluginName = getPluginPackageName(appInfo, pluginMeta ?? undefined);
+    const pluginName = resolvePluginPackageName(appInfo);
 
-    // In test runs we exercise the API surface and viewer metadata without
-    // performing real plugin installs (which would require network access and
-    // slow down CI). Plugin installer behavior is covered by unit tests.
-    if (isTestRun) {
-      this.activeSessions.set(name, {
-        appName: name,
-        pluginName,
-        launchType: appInfo.launchType,
-        launchUrl,
-        viewerUrl: viewer?.url ?? null,
-        startedAt: new Date().toISOString(),
-      });
-
-      return {
-        pluginInstalled: false,
-        needsRestart: false,
-        displayName: appInfo.displayName,
-        launchType: appInfo.launchType,
-        launchUrl,
-        viewer,
-      };
-    }
-
-    const installable = isPluginInstallable(appInfo, pluginMeta ?? undefined);
-    if (!installable) {
-      logger.info(
-        `[app-manager] Skipping plugin install for "${name}" because no install source is configured.`,
-      );
-      this.activeSessions.set(name, {
-        appName: name,
-        pluginName,
-        launchType: appInfo.launchType,
-        launchUrl,
-        viewerUrl: viewer?.url ?? null,
-        startedAt: new Date().toISOString(),
-      });
-      return {
-        pluginInstalled: false,
-        needsRestart: false,
-        displayName: appInfo.displayName,
-        launchType: appInfo.launchType,
-        launchUrl,
-        viewer,
-      };
-    }
-
+    // Check if this is a local plugin (already present in plugins/ directory)
     const isLocal = isLocalPlugin(appInfo);
 
     // Check if the plugin is already installed
@@ -1100,7 +616,41 @@ export class AppManager {
       logger.info(`[app-manager] Plugin already installed: ${pluginName}`);
     }
 
+    // Auto-provision hyperscape agent if needed
+    if (name === HYPERSCAPE_APP_NAME) {
+      const provisionResult = await autoProvisionHyperscapeAgent(runtime);
+      // If auto-provisioning failed and no credentials exist, don't launch viewer
+      if (
+        !provisionResult &&
+        !process.env.HYPERSCAPE_CHARACTER_ID?.trim() &&
+        !process.env.HYPERSCAPE_AUTH_TOKEN?.trim()
+      ) {
+        logger.warn(
+          "[app-manager] Hyperscape requires authentication but auto-provisioning failed. " +
+            "Set HYPERSCAPE_CHARACTER_ID and HYPERSCAPE_AUTH_TOKEN, or ensure the hyperscape server is running.",
+        );
+        throw new Error(
+          "Hyperscape authentication required. Set HYPERSCAPE_CHARACTER_ID and HYPERSCAPE_AUTH_TOKEN, " +
+            "or ensure the hyperscape server is running at " +
+            (process.env.HYPERSCAPE_SERVER_URL || "localhost:5555") +
+            " for auto-provisioning.",
+        );
+      }
+    }
+
     // Build viewer config from registry app metadata
+    const resolvedLaunchUrl = appInfo.launchUrl
+      ? substituteTemplateVars(appInfo.launchUrl)
+      : null;
+    const launchUrl = resolvedLaunchUrl
+      ? normalizeSafeAppUrl(resolvedLaunchUrl)
+      : null;
+    if (resolvedLaunchUrl && !launchUrl) {
+      throw new Error(
+        `Refusing to launch app "${appInfo.name}": unsafe launch URL`,
+      );
+    }
+    const viewer = buildViewerConfig(appInfo, launchUrl);
     this.activeSessions.set(name, {
       appName: name,
       pluginName,
@@ -1130,11 +680,10 @@ export class AppManager {
     if (!appInfo) {
       throw new Error(`App "${name}" not found in the registry.`);
     }
-    const pluginMeta = await getPluginMetadata(name);
 
     const hadSession = this.activeSessions.delete(name);
-    const pluginName = getPluginPackageName(appInfo, pluginMeta ?? undefined);
-    const installed = listInstalledPlugins();
+    const pluginName = resolvePluginPackageName(appInfo);
+    const installed = await pluginManager.listInstalledPlugins();
     const isPluginInstalled = installed.some(
       (plugin) => plugin.name === pluginName,
     );

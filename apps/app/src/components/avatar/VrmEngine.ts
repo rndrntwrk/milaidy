@@ -1,16 +1,28 @@
-import { type VRM, VRMLoaderPlugin, VRMUtils } from "@pixiv/three-vrm";
-import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { resolveAppAssetUrl } from "../../asset-url";
-import { computeStageCoverFit } from "../../proStreamerStageFit";
+import { resolveAppAssetUrl } from "@milady/app-core/utils";
 import {
-  type VRMHumanBoneName,
-  instantiateProStreamerStageScene,
-  type ProStreamerStageSceneContract,
-  type StageMarkTransform,
-  type StageSceneMark,
-  type StageScenePreset,
-} from "../../proStreamerStageScene";
+  MToonMaterialLoaderPlugin,
+  type VRM,
+  VRMLoaderPlugin,
+  VRMUtils,
+} from "@pixiv/three-vrm";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import {
+  type AnimationLoaderContext,
+  loadEmoteClip,
+  loadIdleClip,
+} from "./VrmAnimationLoader";
+import { VrmBlinkController } from "./VrmBlinkController";
+import {
+  type CameraAnimationConfig,
+  type CameraProfile,
+  type InteractionMode,
+  VrmCameraManager,
+} from "./VrmCameraManager";
+import { VrmFootShadow } from "./VrmFootShadow";
+
+export type { CameraAnimationConfig, CameraProfile, InteractionMode };
 
 export type VrmEngineState = {
   vrmLoaded: boolean;
@@ -18,98 +30,87 @@ export type VrmEngineState = {
   idlePlaying: boolean;
   idleTime: number;
   idleTracks: number;
-  activeAnimationState: "idle" | "emote" | "static-fallback";
-  activeIdleSource:
-    | "alice-raw"
-    | "mixamo-retargeted"
-    | "legacy-fallback"
-    | "procedural-fallback"
-    | null;
-  idleFallbackActive: boolean;
-  idleHealthy: boolean;
 };
 
 type UpdateCallback = () => void;
-
-type VrmFrameMetrics = {
-  distance: number;
-  shoulderHeight: number;
-};
-
-type MarkTransition = {
-  duration: number;
-  elapsed: number;
-  fromPosition: THREE.Vector3;
-  toPosition: THREE.Vector3;
-  fromQuaternion: THREE.Quaternion;
-  toQuaternion: THREE.Quaternion;
-  walkQuaternion: THREE.Quaternion;
-};
-
-type ResolvedAnimationSource = "alice-raw" | "mixamo-retargeted";
-
-type IdleCandidatePlan = {
-  glbUrl: string;
-  fallbackActive: boolean;
-};
-
-export type CameraAnimationConfig = {
-  enabled: boolean;
-  swayAmplitude: number;
-  bobAmplitude: number;
-  rotationAmplitude: number;
-  speed: number;
+type RendererBackend = "webgl" | "webgpu";
+type RendererLike = Pick<
+  THREE.WebGLRenderer,
+  | "dispose"
+  | "domElement"
+  | "render"
+  | "setClearColor"
+  | "setPixelRatio"
+  | "setSize"
+> & {
+  forceContextLoss?: () => void;
+  outputColorSpace?: string;
+  shadowMap?: {
+    enabled: boolean;
+    type: THREE.ShadowMapType;
+  };
+  toneMapping?: THREE.ToneMapping;
+  toneMappingExposure?: number;
 };
 
 const DEFAULT_CAMERA_ANIMATION: CameraAnimationConfig = {
-  enabled: true,
+  enabled: false,
   swayAmplitude: 0.06,
   bobAmplitude: 0.03,
   rotationAmplitude: 0.01,
   speed: 0.8,
 };
+const MAX_RENDERER_PIXEL_RATIO = 2;
 
-type BlinkPhase = "idle" | "closing" | "closed" | "opening";
-
-function cloneVector3(value: THREE.Vector3): THREE.Vector3 {
-  return new THREE.Vector3(value.x, value.y, value.z);
+function getRendererPixelRatio(): number {
+  if (typeof window === "undefined") return 1;
+  return Math.min(
+    Math.max(window.devicePixelRatio || 1, 1),
+    MAX_RENDERER_PIXEL_RATIO,
+  );
 }
 
-function cloneQuaternion(value: THREE.Quaternion): THREE.Quaternion {
-  return new THREE.Quaternion(value.x, value.y, value.z, value.w);
-}
-
-function quaternionsClose(
-  left: THREE.Quaternion,
-  right: THREE.Quaternion,
-  epsilon = 1e-4,
-): boolean {
-  return 1 - Math.abs(left.dot(right)) < epsilon;
-}
-
-function yawFacingQuaternion(
-  from: THREE.Vector3,
-  to: THREE.Vector3,
-  fallback: THREE.Quaternion,
-): THREE.Quaternion {
-  const direction = new THREE.Vector3(to.x - from.x, 0, to.z - from.z);
-  if (direction.lengthSq() < 1e-6) {
-    return cloneQuaternion(fallback);
+/**
+ * Create the best available renderer for the current platform.
+ * Tries WebGPU first (better performance on macOS WKWebView and modern CEF).
+ * Falls back to WebGL if WebGPU is unavailable or fails to initialize.
+ * THREE.WebGPURenderer is async-init and requires await renderer.init().
+ */
+async function createRenderer(
+  canvas: HTMLCanvasElement,
+): Promise<{ backend: RendererBackend; renderer: RendererLike }> {
+  if (typeof navigator !== "undefined" && navigator.gpu) {
+    try {
+      const { WebGPURenderer } = await import("three/webgpu");
+      const renderer = new WebGPURenderer({
+        canvas,
+        alpha: true,
+        antialias: true,
+      }) as unknown as RendererLike & { init?: () => Promise<unknown> };
+      await renderer.init?.();
+      console.info("[VrmEngine] Using WebGPURenderer");
+      return { backend: "webgpu", renderer };
+    } catch (err) {
+      console.warn(
+        "[VrmEngine] WebGPURenderer failed, falling back to WebGL:",
+        err,
+      );
+    }
   }
-
-  const yaw = Math.atan2(direction.x, direction.z);
-  return new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0));
-}
-
-function easeInOutQuad(t: number): number {
-  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    alpha: true,
+    antialias: true,
+  }) as unknown as RendererLike;
+  console.info("[VrmEngine] Using WebGLRenderer");
+  return { backend: "webgl", renderer };
 }
 
 export class VrmEngine {
-  private renderer: THREE.WebGLRenderer | null = null;
+  private renderer: RendererLike | null = null;
+  private rendererBackend: RendererBackend = "webgl";
   private scene: THREE.Scene | null = null;
   private camera: THREE.PerspectiveCamera | null = null;
-  private characterRoot: THREE.Group | null = null;
   private clock = new THREE.Clock();
   private vrm: VRM | null = null;
   private mixer: THREE.AnimationMixer | null = null;
@@ -118,320 +119,333 @@ export class VrmEngine {
   private onUpdate: UpdateCallback | null = null;
   private initialized = false;
   private loadingAborted = false;
-
+  private vrmLoadRequestId = 0;
+  private vrmReady = false;
+  private teleportProgress = 1.0;
+  private teleportProgressUniform: { value: number } | null = null;
+  private teleportDissolvedMaterials: THREE.Material[] = [];
   private mouthValue = 0;
   private mouthSmoothed = 0;
   private vrmName: string | null = null;
-  private lookAtTarget = new THREE.Vector3(0, 1, 0);
-  private readonly idleFallbackGlbUrl = resolveAppAssetUrl("animations/idle.glb");
-  private readonly guaranteedIdleFallbackGlbUrl = resolveAppAssetUrl(
-    "animations/alice/idle/catching-breath.glb",
-  );
-  private readonly walkGlbUrl = resolveAppAssetUrl(
-    "animations/alice/movement/walking.glb",
-  );
-  private idleGlbUrls: string[] = [];
-  private activeIdleGlbUrl: string | null = null;
-  private activeIdleSource: VrmEngineState["activeIdleSource"] = null;
-  private idleRotationDeadline = Number.POSITIVE_INFINITY;
-  private idleFallbackActive = false;
-  private verifiedIdleGlbUrls = new Set<string>();
-  private failedIdleGlbUrls = new Set<string>();
-  private rejectedIdleReasons = new Map<string, string>();
-  private forceFaceCameraFlip = true;
-
+  private lookAtTarget = new THREE.Vector3(0, 0.5, 0);
+  private readonly idleGlbUrl = resolveAppAssetUrl("animations/idle.glb");
   private cameraAnimation: CameraAnimationConfig = {
     ...DEFAULT_CAMERA_ANIMATION,
   };
   private baseCameraPosition = new THREE.Vector3();
   private elapsedTime = 0;
-
   private speaking = false;
   private speakingStartTime = 0;
-
-  private blinkPhase: BlinkPhase = "idle";
-  private blinkTimer = 0;
-  private blinkPhaseTimer = 0;
-  private blinkValue = 0;
-  private nextBlinkDelay = 2 + Math.random() * 3;
-
-  private static readonly BLINK_CLOSE_DURATION = 0.06;
-  private static readonly BLINK_HOLD_DURATION = 0.04;
-  private static readonly BLINK_OPEN_DURATION = 0.12;
-  private static readonly BLINK_MIN_INTERVAL = 1.8;
-  private static readonly BLINK_MAX_INTERVAL = 5.5;
-  private static readonly DOUBLE_BLINK_CHANCE = 0.15;
-
+  private readonly blinkController = new VrmBlinkController();
+  private readonly footShadow = new VrmFootShadow();
+  private readonly cameraManager = new VrmCameraManager();
   private emoteAction: THREE.AnimationAction | null = null;
   private emoteTimeout: ReturnType<typeof setTimeout> | null = null;
-  private emoteClipCache = new Map<
-    string,
-    { clip: THREE.AnimationClip; source: ResolvedAnimationSource }
-  >();
+  private emoteClipCache = new Map<string, THREE.AnimationClip>();
   private emoteRequestId = 0;
+  private controls: OrbitControls | null = null;
+  private interactionEnabled = false;
+  private interactionMode: InteractionMode = "free";
+  private cameraProfile: CameraProfile = "chat";
+  private readyPromise: Promise<void> = Promise.resolve();
+  private resolveReady: (() => void) | null = null;
+  private rejectReady: ((error?: unknown) => void) | null = null;
 
-  private currentScenePreset: StageScenePreset = "default";
-  private currentSceneMark: StageSceneMark = "stage";
-  private frameMetrics: VrmFrameMetrics | null = null;
-  private stageScene: ProStreamerStageSceneContract | null = null;
-  private stageLoadRequestId = 0;
-  private markTransition: MarkTransition | null = null;
-  private currentRigPosition = new THREE.Vector3();
-  private currentRigQuaternion = new THREE.Quaternion();
-  private viewportSize = new THREE.Vector2(1, 1);
-  private baseVrmLocalPosition = new THREE.Vector3();
-  private baseVrmLocalQuaternion = new THREE.Quaternion();
-  private proceduralIdleActive = false;
-  private proceduralIdleBoneBases = new Map<VRMHumanBoneName, THREE.Quaternion>();
+  // Transition state
+  private isCameraTransitioning = false;
+  private transitionStartFov = 0;
+  private transitionTargetFov = 0;
+  private transitionStartPos = new THREE.Vector3();
+  private transitionTargetPos = new THREE.Vector3();
+  private transitionStartLookAt = new THREE.Vector3();
+  private transitionTargetLookAt = new THREE.Vector3();
+  private transitionProgress = 0;
+  private transitionDuration = 0.8; // seconds
+
+  private handleControlStart = (): void => {
+    if (!this.interactionEnabled) return;
+  };
+  private handleControlEnd = (): void => {
+    if (!this.interactionEnabled) return;
+    if (this.camera) {
+      this.baseCameraPosition.copy(this.camera.position);
+    }
+    if (this.controls) {
+      this.lookAtTarget.copy(this.controls.target);
+    }
+  };
+
+  whenReady(): Promise<void> {
+    return this.readyPromise;
+  }
+
+  private resetReadyPromise(): void {
+    this.readyPromise = new Promise<void>((resolve, reject) => {
+      this.resolveReady = resolve;
+      this.rejectReady = reject;
+    });
+  }
+
+  private settleReady(error?: unknown): void {
+    if (error) {
+      this.rejectReady?.(error);
+    } else {
+      this.resolveReady?.();
+    }
+    this.resolveReady = null;
+    this.rejectReady = null;
+  }
 
   setup(canvas: HTMLCanvasElement, onUpdate: UpdateCallback): void {
     if (this.initialized && this.renderer?.domElement === canvas) {
       this.onUpdate = onUpdate;
       return;
     }
-
-    if (this.initialized) {
-      this.dispose();
-    }
-
+    if (this.initialized) this.dispose();
     this.onUpdate = onUpdate;
     this.loadingAborted = false;
-
-    const renderer = new THREE.WebGLRenderer({
-      canvas,
-      alpha: true,
-      antialias: true,
-    });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setClearColor(0x000000, 0);
-    this.renderer = renderer;
-
-    const scene = new THREE.Scene();
-    this.scene = scene;
-
-    const camera = new THREE.PerspectiveCamera(25, 1, 0.01, 1000);
-    camera.position.set(0, 1.1, 2.8);
-    this.camera = camera;
-
-    const characterRoot = new THREE.Group();
-    scene.add(characterRoot);
-    this.characterRoot = characterRoot;
-
-    const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
-    keyLight.position.set(1.5, 2.0, 1.5);
-    scene.add(keyLight);
-
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.35);
-    fillLight.position.set(-1.8, 1.0, 1.0);
-    scene.add(fillLight);
-
-    const ambient = new THREE.AmbientLight(0xffffff, 0.55);
-    scene.add(ambient);
-
-    this.resize(canvas.clientWidth, canvas.clientHeight);
-    this.initialized = true;
-    this.loop();
+    this.resetReadyPromise();
+    // Async renderer creation: tries WebGPU, falls back to WebGL.
+    // setup() remains synchronous for callers; the loop starts after init resolves.
+    void (async () => {
+      try {
+        const { backend, renderer } = await createRenderer(canvas);
+        // Guard: if dispose() was called while we were awaiting, abort.
+        if (this.loadingAborted) {
+          renderer.dispose();
+          if (backend === "webgl") {
+            renderer.forceContextLoss?.();
+          }
+          this.settleReady();
+          return;
+        }
+        renderer.setPixelRatio(getRendererPixelRatio());
+        renderer.setClearColor(0x000000, 0);
+        if (backend === "webgl") {
+          const webglRenderer = renderer as THREE.WebGLRenderer;
+          webglRenderer.shadowMap.enabled = true;
+          webglRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+          webglRenderer.toneMapping = THREE.NoToneMapping;
+          webglRenderer.toneMappingExposure = 1.0;
+          webglRenderer.outputColorSpace = THREE.SRGBColorSpace;
+        }
+        this.renderer = renderer;
+        this.rendererBackend = backend;
+        const scene = new THREE.Scene();
+        this.scene = scene;
+        const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
+        camera.position.set(0, 1.2, 5.0);
+        this.camera = camera;
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = false;
+        controls.target.copy(this.lookAtTarget);
+        controls.addEventListener("start", this.handleControlStart);
+        controls.addEventListener("end", this.handleControlEnd);
+        this.cameraManager.applyInteractionMode(controls, this.interactionMode);
+        controls.update();
+        this.controls = controls;
+        this.setInteractionEnabled(this.interactionEnabled);
+        const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambient);
+        const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        keyLight.position.set(1, 1, 1).normalize();
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.setScalar(1024);
+        scene.add(keyLight);
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        fillLight.position.set(-1, 0.5, -1).normalize();
+        scene.add(fillLight);
+        this.footShadow.create(scene);
+        this.resize(canvas.clientWidth, canvas.clientHeight);
+        this.initialized = true;
+        this.loop();
+        this.settleReady();
+      } catch (error) {
+        this.initialized = false;
+        this.renderer = null;
+        this.rendererBackend = "webgl";
+        this.scene = null;
+        this.camera = null;
+        this.controls = null;
+        console.error("[VrmEngine] Failed to initialize renderer:", error);
+        this.settleReady(error);
+      }
+    })();
   }
 
   isInitialized(): boolean {
     return this.initialized && this.renderer !== null;
   }
-
   dispose(): void {
     this.loadingAborted = true;
     this.initialized = false;
-    this.markTransition = null;
-
+    this.settleReady();
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
-    if (this.characterRoot && this.vrm) {
-      this.characterRoot.remove(this.vrm.scene);
+    if (this.scene && this.vrm) {
+      this.scene.remove(this.vrm.scene);
       VRMUtils.deepDispose(this.vrm.scene);
     }
-    if (this.scene && this.stageScene?.sceneRoot.parent === this.scene) {
-      this.scene.remove(this.stageScene.sceneRoot);
+    if (this.scene) {
+      this.footShadow.dispose(this.scene);
+    }
+    if (this.controls) {
+      this.controls.removeEventListener("start", this.handleControlStart);
+      this.controls.removeEventListener("end", this.handleControlEnd);
+      this.controls.dispose();
+      this.controls = null;
     }
     this.vrm = null;
+    this.vrmReady = false;
     this.vrmName = null;
     this.mixer = null;
     this.idleAction = null;
-    this.activeIdleGlbUrl = null;
-    this.activeIdleSource = null;
-    this.idleRotationDeadline = Number.POSITIVE_INFINITY;
-    this.idleFallbackActive = false;
-    this.verifiedIdleGlbUrls.clear();
-    this.failedIdleGlbUrls.clear();
-    this.rejectedIdleReasons.clear();
-    this.frameMetrics = null;
-    this.stageScene = null;
-    this.currentRigPosition.set(0, 0, 0);
-    this.currentRigQuaternion.identity();
-    this.baseVrmLocalPosition.set(0, 0, 0);
-    this.baseVrmLocalQuaternion.identity();
-    this.proceduralIdleActive = false;
-    this.proceduralIdleBoneBases.clear();
     if (this.emoteTimeout !== null) {
       clearTimeout(this.emoteTimeout);
       this.emoteTimeout = null;
     }
     this.emoteAction = null;
     this.emoteClipCache.clear();
-    this.renderer?.dispose();
+    this.teleportProgress = 1.0;
+    this.cleanupTeleportDissolve();
+    if (this.renderer) {
+      this.renderer.dispose();
+      if (this.rendererBackend === "webgl") {
+        this.renderer.forceContextLoss?.();
+      }
+    }
     this.renderer = null;
+    this.rendererBackend = "webgl";
     this.scene = null;
     this.camera = null;
-    this.characterRoot = null;
     this.onUpdate = null;
   }
+  setInteractionEnabled(enabled: boolean): void {
+    this.interactionEnabled = enabled;
+    if (this.controls) {
+      this.controls.enabled = enabled;
+    }
+  }
+  setInteractionMode(mode: InteractionMode): void {
+    this.interactionMode = mode;
+    if (this.controls) {
+      this.cameraManager.applyInteractionMode(this.controls, mode);
+      this.controls.update();
+    }
+  }
+  setCameraProfile(profile: CameraProfile): void {
+    if (this.cameraProfile === profile) return;
 
+    // Save current state for transition
+    if (this.camera) {
+      this.transitionStartFov = this.camera.fov;
+      this.transitionStartPos.copy(this.camera.position);
+      this.transitionStartLookAt.copy(this.lookAtTarget);
+
+      this.cameraProfile = profile;
+      if (profile === "companion" || profile === "companion_close") {
+        this.cameraAnimation = { ...this.cameraAnimation, enabled: false };
+      }
+
+      const targetLookAt = new THREE.Vector3();
+      const targetPos = new THREE.Vector3();
+
+      if (this.vrm) {
+        this.cameraManager.centerAndFrame(
+          this.vrm,
+          this.camera,
+          this.controls,
+          this.cameraProfile,
+          targetLookAt,
+          targetPos,
+          (c) =>
+            this.cameraManager.applyInteractionMode(c, this.interactionMode),
+        );
+      } else if (this.controls) {
+        this.cameraManager.applyCameraProfileToCamera(
+          this.camera,
+          this.controls,
+          this.cameraProfile,
+        );
+        targetPos.copy(this.camera.position);
+      }
+
+      this.transitionTargetFov = this.camera.fov;
+      this.transitionTargetPos.copy(targetPos);
+      this.transitionTargetLookAt.copy(targetLookAt);
+
+      // Reset position/fov back to start, we will lerp to target in loop
+      this.camera.fov = this.transitionStartFov;
+      this.camera.position.copy(this.transitionStartPos);
+      this.camera.updateProjectionMatrix();
+
+      this.isCameraTransitioning = true;
+      this.transitionProgress = 0;
+    } else {
+      this.cameraProfile = profile;
+    }
+  }
   resize(width: number, height: number): void {
     if (!this.renderer || !this.camera) return;
     if (width <= 0 || height <= 0) return;
     const aspect = width / height;
     if (!Number.isFinite(aspect) || aspect <= 0) return;
-    this.viewportSize.set(width, height);
     this.renderer.setSize(width, height, false);
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
-    if (this.currentScenePreset === "pro-streamer-stage") {
-      this.applySceneLayout({ animateMark: false });
-    }
   }
-
   getState(): VrmEngineState {
     const idlePlaying = this.idleAction?.isRunning() ?? false;
-    const emotePlaying = this.emoteAction?.isRunning() ?? false;
-    const proceduralIdlePlaying = this.proceduralIdleActive && !emotePlaying;
     return {
-      vrmLoaded: this.vrm !== null,
+      vrmLoaded: this.vrm !== null && this.vrmReady,
       vrmName: this.vrmName,
-      idlePlaying: idlePlaying || proceduralIdlePlaying,
+      idlePlaying,
       idleTime: this.idleAction?.time ?? 0,
       idleTracks: this.idleAction?.getClip()?.tracks.length ?? 0,
-      activeAnimationState: emotePlaying
-        ? "emote"
-        : idlePlaying || proceduralIdlePlaying
-          ? "idle"
-          : "static-fallback",
-      activeIdleSource: this.activeIdleSource,
-      idleFallbackActive: this.idleFallbackActive,
-      idleHealthy:
-        (idlePlaying && (this.idleAction?.getClip()?.tracks.length ?? 0) > 0) ||
-        proceduralIdlePlaying,
     };
   }
-
   setMouthOpen(value: number): void {
     this.mouthValue = Math.max(0, Math.min(1, value));
   }
-
   setSpeaking(speaking: boolean): void {
     if (speaking && !this.speaking) {
       this.speakingStartTime = this.elapsedTime;
     }
     this.speaking = speaking;
   }
-
-  private setHumanoidAutoUpdateForSource(
-    vrm: VRM | null,
-    source: ResolvedAnimationSource | VrmEngineState["activeIdleSource"] | null,
-  ): void {
-    const humanoid = vrm?.humanoid;
-    if (!humanoid) return;
-    humanoid.autoUpdateHumanBones = source !== "alice-raw";
-  }
-
   setCameraAnimation(config: Partial<CameraAnimationConfig>): void {
     this.cameraAnimation = { ...this.cameraAnimation, ...config };
   }
-
-  setForceFaceCameraFlip(enabled: boolean): void {
-    this.forceFaceCameraFlip = enabled;
-  }
-
-  setIdleGlbUrls(glbUrls: string[]): void {
-    const nextUrls = Array.from(
-      new Set(glbUrls.map((value) => value.trim()).filter(Boolean)),
-    );
-    const unchanged =
-      nextUrls.length === this.idleGlbUrls.length &&
-      nextUrls.every((url, index) => url === this.idleGlbUrls[index]);
-    if (unchanged) return;
-
-    this.idleGlbUrls = nextUrls;
-    this.activeIdleGlbUrl = null;
-    this.activeIdleSource = null;
-    this.idleRotationDeadline = Number.POSITIVE_INFINITY;
-    this.idleFallbackActive = false;
-    this.verifiedIdleGlbUrls.clear();
-    this.failedIdleGlbUrls.clear();
-    this.rejectedIdleReasons.clear();
-
-    if (this.vrm && !this.emoteAction) {
-      void this.loadAndPlayIdle(this.vrm);
-    }
-  }
-
-  async setScenePreset(preset: StageScenePreset): Promise<void> {
-    this.currentScenePreset = preset;
-
-    if (preset === "pro-streamer-stage") {
-      await this.ensureStageSceneLoaded();
-    } else {
-      this.detachStageScene();
-    }
-
-    this.applySceneLayout({ animateMark: false });
-
-    if (this.vrm && !this.emoteAction) {
-      void this.loadAndPlayIdle(this.vrm);
-    }
-  }
-
-  async setSceneMark(mark: StageSceneMark): Promise<void> {
-    this.currentSceneMark = mark;
-    this.applySceneLayout({ animateMark: true });
-  }
-
   async playEmote(
-    glbPath: string,
+    path: string,
     duration: number,
     loop: boolean,
   ): Promise<void> {
     const vrm = this.vrm;
     const mixer = this.mixer;
     if (!vrm || !mixer) return;
-
     this.stopEmote();
-
-    this.emoteRequestId += 1;
+    this.emoteRequestId++;
     const requestId = this.emoteRequestId;
-
-    const resolvedClip = await this.loadEmoteClip(glbPath, vrm);
-    if (!resolvedClip || this.vrm !== vrm || this.mixer !== mixer) return;
+    const clip = await this.loadEmoteClipCached(path, vrm);
+    if (!clip || this.vrm !== vrm || this.mixer !== mixer) return;
     if (this.emoteRequestId !== requestId) return;
-
-    const action = mixer.clipAction(resolvedClip.clip);
+    const action = mixer.clipAction(clip);
     action.reset();
     action.setLoop(
       loop ? THREE.LoopRepeat : THREE.LoopOnce,
       loop ? Infinity : 1,
     );
     action.clampWhenFinished = !loop;
-
     const fadeDuration = 0.3;
     if (this.idleAction) {
       this.idleAction.fadeOut(fadeDuration);
     }
-    this.setHumanoidAutoUpdateForSource(vrm, resolvedClip.source);
-    this.resetProceduralIdlePose();
     action.fadeIn(fadeDuration);
     action.play();
     this.emoteAction = action;
-    this.idleRotationDeadline = Number.POSITIVE_INFINITY;
-
     if (!loop) {
       const safeDuration =
         Number.isFinite(duration) && duration > 0 ? duration : 3;
@@ -443,867 +457,379 @@ export class VrmEngine {
       }, returnDelay);
     }
   }
-
   stopEmote(): void {
     if (this.emoteTimeout !== null) {
       clearTimeout(this.emoteTimeout);
       this.emoteTimeout = null;
     }
-
     const fadeDuration = 0.3;
     if (this.emoteAction) {
       this.emoteAction.fadeOut(fadeDuration);
       this.emoteAction = null;
     }
     if (this.idleAction) {
-      this.setHumanoidAutoUpdateForSource(this.vrm, this.activeIdleSource);
       this.idleAction.reset();
       this.idleAction.fadeIn(fadeDuration);
       this.idleAction.play();
-      const clipDuration = this.idleAction.getClip()?.duration ?? 6;
-      this.scheduleNextIdleRotation(clipDuration);
-    } else if (this.vrm) {
-      this.setHumanoidAutoUpdateForSource(this.vrm, null);
-      void this.loadAndPlayIdle(this.vrm);
     }
   }
-
   async loadVrmFromUrl(url: string, name?: string): Promise<void> {
+    await this.whenReady();
     if (!this.scene) throw new Error("VrmEngine not initialized");
     if (!this.camera) throw new Error("VrmEngine not initialized");
     if (this.loadingAborted) return;
-
-    if (this.characterRoot && this.vrm) {
-      this.characterRoot.remove(this.vrm.scene);
+    const requestId = ++this.vrmLoadRequestId;
+    if (this.vrm) {
+      this.scene.remove(this.vrm.scene);
       VRMUtils.deepDispose(this.vrm.scene);
       this.vrm = null;
+      this.vrmReady = false;
       this.vrmName = null;
       this.mixer = null;
       this.idleAction = null;
-      this.frameMetrics = null;
       this.stopEmote();
       this.emoteClipCache.clear();
-      this.activeIdleGlbUrl = null;
-      this.activeIdleSource = null;
-      this.idleRotationDeadline = Number.POSITIVE_INFINITY;
-      this.idleFallbackActive = false;
-      this.verifiedIdleGlbUrls.clear();
-      this.failedIdleGlbUrls.clear();
-      this.rejectedIdleReasons.clear();
     }
-
     const loader = new GLTFLoader();
-    loader.register((parser) => new VRMLoaderPlugin(parser));
-
-    const originalWarn = console.warn;
-    type ConsoleArg =
-      | string
-      | number
-      | boolean
-      | bigint
-      | symbol
-      | null
-      | undefined
-      | object;
-    console.warn = (...args: ConsoleArg[]) => {
-      const msg = args.map((arg) => String(arg)).join(" ");
-      if (msg.includes("VRMExpressionLoaderPlugin: An expression preset")) {
-        return;
+    const webGpuNodes =
+      this.rendererBackend === "webgpu"
+        ? await import("@pixiv/three-vrm/nodes")
+        : null;
+    loader.register((parser) => {
+      if (webGpuNodes) {
+        const mtoonMaterialPlugin = new MToonMaterialLoaderPlugin(parser, {
+          materialType: webGpuNodes.MToonNodeMaterial,
+        });
+        return new VRMLoaderPlugin(parser, { mtoonMaterialPlugin });
       }
-      originalWarn(...args);
-    };
-
-    let gltf: Awaited<ReturnType<typeof loader.loadAsync>>;
-    try {
-      gltf = await loader.loadAsync(url);
-    } finally {
-      console.warn = originalWarn;
-    }
-
-    if (this.loadingAborted || !this.scene || !this.characterRoot) return;
-
-    const vrm = gltf.userData.vrm as VRM | undefined;
-    if (!vrm) {
-      throw new Error("Loaded asset is not a VRM");
-    }
-
-    if (vrm.humanoid) {
-      vrm.humanoid.autoUpdateHumanBones = true;
-    }
-
-    VRMUtils.removeUnnecessaryVertices(vrm.scene);
-    VRMUtils.combineSkeletons(vrm.scene);
-    vrm.scene.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.frustumCulled = false;
-      }
+      return new VRMLoaderPlugin(parser);
     });
-
-    this.frameMetrics = this.normalizeModel(vrm);
-    if (this.currentScenePreset === "pro-streamer-stage") {
-      this.ensureFacingCamera(vrm);
-    } else if (this.forceFaceCameraFlip) {
-      vrm.scene.rotateY(Math.PI);
-      vrm.scene.updateMatrixWorld(true);
-    } else {
-      this.ensureFacingCamera(vrm);
-    }
-
-    if (this.loadingAborted || !this.scene || !this.characterRoot) return;
-
-    this.baseVrmLocalPosition.copy(vrm.scene.position);
-    this.baseVrmLocalQuaternion.copy(vrm.scene.quaternion);
-    this.proceduralIdleActive = false;
-    this.captureProceduralIdleBoneBases(vrm);
-    vrm.scene.visible = true;
-    this.characterRoot.add(vrm.scene);
-    this.vrm = vrm;
-    this.vrmName = name ?? null;
-    this.resetBlink();
-    this.applySceneLayout({ animateMark: false });
-    void this.loadAndPlayIdle(vrm);
-  }
-
-  private async ensureStageSceneLoaded(): Promise<void> {
-    if (!this.scene) return;
-    if (this.stageScene) {
-      if (this.stageScene.sceneRoot.parent !== this.scene) {
-        this.scene.add(this.stageScene.sceneRoot);
-      }
+    const gltf = await loader.loadAsync(url);
+    if (
+      this.loadingAborted ||
+      !this.scene ||
+      requestId !== this.vrmLoadRequestId
+    ) {
+      const staleVrm = gltf.userData.vrm as VRM | undefined;
+      if (staleVrm) VRMUtils.deepDispose(staleVrm.scene);
       return;
     }
-
-    const requestId = ++this.stageLoadRequestId;
+    const vrm = gltf.userData.vrm as VRM | undefined;
+    if (!vrm) throw new Error("Loaded asset is not a VRM");
+    VRMUtils.removeUnnecessaryVertices(vrm.scene);
+    if (this.camera) {
+      this.cameraManager.centerAndFrame(
+        vrm,
+        this.camera,
+        this.controls,
+        this.cameraProfile,
+        this.lookAtTarget,
+        this.baseCameraPosition,
+        (c) => this.cameraManager.applyInteractionMode(c, this.interactionMode),
+      );
+    }
     try {
-      const contract = await instantiateProStreamerStageScene();
-      if (
-        this.loadingAborted ||
-        !this.scene ||
-        this.currentScenePreset !== "pro-streamer-stage" ||
-        requestId !== this.stageLoadRequestId
-      ) {
-        return;
+      VRMUtils.rotateVRM0(vrm);
+    } catch {
+      /* optional in some versions */
+    }
+    this.cameraManager.ensureFacingCamera(vrm, this.camera);
+    if (
+      this.loadingAborted ||
+      !this.scene ||
+      requestId !== this.vrmLoadRequestId
+    ) {
+      VRMUtils.deepDispose(vrm.scene);
+      return;
+    }
+    vrm.scene.visible = false;
+    vrm.scene.traverse((obj) => {
+      obj.frustumCulled = false;
+    });
+    this.scene.add(vrm.scene);
+    this.vrm = vrm;
+    this.vrmName = name ?? null;
+    vrm.springBoneManager?.reset?.();
+    this.blinkController.reset();
+
+    try {
+      await this.loadAndPlayIdle(vrm);
+      if (!this.loadingAborted && this.vrm === vrm) {
+        this.vrmReady = true;
+        await this.playTeleportReveal(vrm);
+        vrm.scene.visible = true;
       }
-      this.stageScene = contract;
-      this.scene.add(contract.sceneRoot);
-      contract.sceneRoot.updateMatrixWorld(true);
+    } catch {
+      if (!this.loadingAborted && this.vrm === vrm) {
+        this.vrmReady = true;
+        vrm.scene.visible = true;
+      }
+    }
+  }
+
+  private async playTeleportReveal(vrm: VRM): Promise<void> {
+    this.teleportProgress = 0.0;
+    this.cleanupTeleportDissolve();
+
+    try {
+      const tsl = await import("three/tsl");
+
+      const uProgress = tsl.uniform(0.0);
+      this.teleportProgressUniform = uProgress;
+
+      vrm.scene.traverse((obj: THREE.Object3D) => {
+        if (!(obj instanceof THREE.Mesh)) return;
+        const mats = Array.isArray(obj.material)
+          ? obj.material
+          : [obj.material];
+        for (const mat of mats) {
+          if (!mat.isNodeMaterial || mat.userData._dissolveApplied) continue;
+          mat.userData._dissolveApplied = true;
+          mat.userData._origOpacityNode = mat.opacityNode ?? null;
+          // biome-ignore lint/suspicious/noExplicitAny: Three.js NodeMaterial emissiveNode is not in public types
+          mat.userData._origEmissiveNode = (mat as any).emissiveNode ?? null;
+          mat.userData._origAlphaTest = mat.alphaTest;
+
+          // World-space Y from TSL
+          const worldY = tsl.positionWorld.y;
+
+          // Sweep threshold: -0.2 → 2.0 as progress goes 0 → 1
+          const threshold = uProgress.mul(2.2).add(-0.2);
+
+          // Distance above dissolve line
+          const diff = worldY.sub(threshold);
+
+          // Dither noise using a hash of world position
+          const noiseCoord = tsl.vec2(
+            worldY.mul(40.0),
+            tsl.positionWorld.x.add(tsl.positionWorld.z).mul(30.0),
+          );
+          const noise = tsl.fract(
+            tsl
+              .sin(tsl.dot(noiseCoord, tsl.vec2(12.9898, 78.233)))
+              .mul(43758.5453),
+          );
+
+          // Ratio: 0 = fully visible, 1 = fully hidden (wider zone = 0.3)
+          const ratio = diff.div(0.3).clamp(0.0, 1.0);
+
+          // Dithered alpha: visible when noise >= ratio
+          const dissolveAlpha = tsl.step(ratio, noise);
+
+          // --- Holographic glow at the dissolve edge ---
+          // Glow is strongest right at the dissolve boundary
+          const edgeDist = diff.abs();
+          const glowWidth = tsl.float(0.15);
+          const glowIntensity = tsl
+            .float(1.0)
+            .sub(edgeDist.div(glowWidth).clamp(0.0, 1.0));
+          // Holographic color: cyan-magenta shift based on world position
+          const hueShift = tsl.fract(worldY.mul(3.0).add(uProgress.mul(2.0)));
+          const holoR = tsl
+            .smoothstep(tsl.float(0.3), tsl.float(0.7), hueShift)
+            .mul(0.8)
+            .add(0.2);
+          const holoG = tsl.float(0.9);
+          const holoB = tsl
+            .smoothstep(tsl.float(0.7), tsl.float(0.3), hueShift)
+            .mul(0.8)
+            .add(0.2);
+          const holoColor = tsl.vec3(holoR, holoG, holoB);
+
+          // Only show glow when dissolve is active and fragment is visible
+          const glowActive = tsl
+            .step(tsl.float(0.001), uProgress)
+            .mul(tsl.float(1.0).sub(tsl.step(tsl.float(0.999), uProgress)));
+          const emissiveBoost = holoColor.mul(
+            glowIntensity.mul(3.0).mul(glowActive).mul(dissolveAlpha),
+          );
+
+          // Compose with existing nodes
+          const origOpacity = mat.opacityNode;
+          mat.opacityNode = origOpacity
+            ? origOpacity.mul(dissolveAlpha)
+            : dissolveAlpha;
+
+          // biome-ignore lint/suspicious/noExplicitAny: Three.js NodeMaterial emissiveNode is not in public types
+          const origEmissive = (mat as any).emissiveNode;
+          // biome-ignore lint/suspicious/noExplicitAny: Three.js NodeMaterial emissiveNode is not in public types
+          (mat as any).emissiveNode = origEmissive
+            ? origEmissive.add(emissiveBoost)
+            : emissiveBoost;
+
+          mat.alphaTest = 0.01;
+          mat.transparent = true;
+          mat.needsUpdate = true;
+          this.teleportDissolvedMaterials.push(mat);
+        }
+      });
     } catch (err) {
-      console.error("[VrmEngine] Failed to load pro streamer stage:", err);
-      this.stageScene = null;
+      console.warn(
+        "[VrmEngine] TSL dissolve unavailable, showing instantly:",
+        err,
+      );
     }
   }
 
-  private detachStageScene(): void {
-    if (this.scene && this.stageScene?.sceneRoot.parent === this.scene) {
-      this.scene.remove(this.stageScene.sceneRoot);
+  private cleanupTeleportDissolve(): void {
+    for (const mat of this.teleportDissolvedMaterials) {
+      if (mat.userData._dissolveApplied) {
+        (mat as unknown as Record<string, unknown>).opacityNode =
+          mat.userData._origOpacityNode ?? null;
+        (mat as unknown as Record<string, unknown>).emissiveNode =
+          mat.userData._origEmissiveNode ?? null;
+        mat.alphaTest = mat.userData._origAlphaTest ?? 0;
+        delete mat.userData._dissolveApplied;
+        delete mat.userData._origOpacityNode;
+        delete mat.userData._origEmissiveNode;
+        delete mat.userData._origAlphaTest;
+        mat.needsUpdate = true;
+      }
     }
-    this.stageScene = null;
+    this.teleportDissolvedMaterials = [];
+    this.teleportProgressUniform = null;
   }
-
+  private get animationLoaderContext(): AnimationLoaderContext {
+    return {
+      isAborted: () => this.loadingAborted,
+      isCurrentVrm: (vrm: VRM) => this.vrm === vrm,
+    };
+  }
   private loop(): void {
     this.animationFrameId = requestAnimationFrame(() => this.loop());
     const renderer = this.renderer;
     const scene = this.scene;
     const camera = this.camera;
     if (!renderer || !scene || !camera) return;
-
-    const delta = this.clock.getDelta();
-    this.elapsedTime += delta;
-    this.mixer?.update(delta);
-
+    const rawDelta = this.clock.getDelta();
+    const stableDelta = Math.min(rawDelta, 1 / 30);
+    this.elapsedTime += rawDelta;
+    this.mixer?.update(rawDelta);
     if (this.vrm) {
+      if (this.teleportProgress < 1.0) {
+        this.teleportProgress += stableDelta * 2.0; // ~0.5 seconds duration
+        if (this.teleportProgress > 1.0) this.teleportProgress = 1.0;
+
+        if (this.teleportProgressUniform) {
+          this.teleportProgressUniform.value = this.teleportProgress;
+        }
+
+        if (this.teleportProgress >= 1.0) {
+          this.cleanupTeleportDissolve();
+        }
+      }
+
       this.applyMouthToVrm(this.vrm);
-      this.updateBlink(delta);
-      this.updateProceduralIdle();
-      this.vrm.update(delta);
+      const blinkValue = this.blinkController.update(rawDelta);
+      this.vrm.expressionManager?.setValue("blink", blinkValue);
+      this.vrm.update(stableDelta);
+      this.footShadow.update(this.vrm);
     }
 
-    if (this.currentScenePreset === "pro-streamer-stage" && this.stageScene) {
-      this.updateMarkTransition(delta);
-    } else {
-      this.updateDefaultCamera(camera);
+    // Process camera transition
+    if (this.isCameraTransitioning) {
+      this.transitionProgress += stableDelta / this.transitionDuration;
+      let finished = false;
+      if (this.transitionProgress >= 1.0) {
+        this.transitionProgress = 1.0;
+        this.isCameraTransitioning = false;
+        finished = true;
+      }
+
+      // Smooth step easing
+      const t = this.transitionProgress;
+      const ease = t * t * (3.0 - 2.0 * t);
+
+      camera.position.lerpVectors(
+        this.transitionStartPos,
+        this.transitionTargetPos,
+        ease,
+      );
+      this.baseCameraPosition.copy(camera.position);
+
+      this.lookAtTarget.lerpVectors(
+        this.transitionStartLookAt,
+        this.transitionTargetLookAt,
+        ease,
+      );
+
+      camera.fov = THREE.MathUtils.lerp(
+        this.transitionStartFov,
+        this.transitionTargetFov,
+        ease,
+      );
+      camera.updateProjectionMatrix();
+
+      if (this.controls) {
+        this.controls.target.copy(this.lookAtTarget);
+        if (finished) {
+          this.controls.update(); // Sync once at the very end when bounds match
+        }
+      }
+    }
+
+    const manualCameraActive = this.interactionEnabled;
+    if (
+      !manualCameraActive &&
+      this.cameraAnimation.enabled &&
+      this.baseCameraPosition.length() > 0 &&
+      !this.isCameraTransitioning
+    ) {
+      this.cameraManager.applyCameraSway(
+        camera,
+        this.baseCameraPosition,
+        this.cameraAnimation,
+        this.elapsedTime,
+      );
+    }
+    if (this.controls) {
+      if (manualCameraActive && !this.isCameraTransitioning) {
+        this.controls.update();
+        this.lookAtTarget.copy(this.controls.target);
+      } else if (!this.isCameraTransitioning) {
+        this.controls.target.copy(this.lookAtTarget);
+      }
+    }
+    if (!manualCameraActive || this.isCameraTransitioning) {
       camera.lookAt(this.lookAtTarget);
     }
-
-    if (
-      this.vrm &&
-      this.idleAction &&
-      !this.emoteAction &&
-      this.elapsedTime >= this.idleRotationDeadline
-    ) {
-      this.idleRotationDeadline = Number.POSITIVE_INFINITY;
-      void this.loadAndPlayIdle(this.vrm);
-    }
-
     renderer.render(scene, camera);
     this.onUpdate?.();
   }
-
-  private updateDefaultCamera(camera: THREE.PerspectiveCamera): void {
-    if (!this.cameraAnimation.enabled || this.baseCameraPosition.length() <= 0) {
-      return;
-    }
-
-    const t = this.elapsedTime * this.cameraAnimation.speed;
-
-    const swayX =
-      Math.sin(t * 0.5) * 0.6 +
-      Math.sin(t * 0.8 + 1.2) * 0.25 +
-      Math.sin(t * 1.3 + 2.5) * 0.15;
-
-    const bobY =
-      Math.sin(t * 0.7 + 0.5) * 0.5 +
-      Math.sin(t * 1.1 + 1.8) * 0.3 +
-      Math.sin(t * 0.3) * 0.2;
-
-    const swayZ =
-      Math.sin(t * 0.4 + 1.0) * 0.4 + Math.sin(t * 0.9 + 2.0) * 0.3;
-
-    camera.position.x =
-      this.baseCameraPosition.x + swayX * this.cameraAnimation.swayAmplitude;
-    camera.position.y =
-      this.baseCameraPosition.y + bobY * this.cameraAnimation.bobAmplitude;
-    camera.position.z =
-      this.baseCameraPosition.z +
-      swayZ * this.cameraAnimation.swayAmplitude * 0.5;
-
-    const rotX =
-      Math.sin(t * 0.6 + 0.3) * this.cameraAnimation.rotationAmplitude * 0.5;
-    const rotY = Math.sin(t * 0.4) * this.cameraAnimation.rotationAmplitude;
-
-    camera.rotation.x = rotX;
-    camera.rotation.y = rotY;
-  }
-
-  private normalizeModel(vrm: VRM): VrmFrameMetrics {
-    const camera = this.camera;
-    if (!camera) {
-      return {
-        distance: 2.8,
-        shoulderHeight: 0.42,
-      };
-    }
-
-    const box = new THREE.Box3().setFromObject(vrm.scene);
-    const initialSize = box.getSize(new THREE.Vector3());
-
-    const height = Math.max(0.001, initialSize.y);
-    const width = Math.max(0.001, initialSize.x);
-    const depth = Math.max(0.001, initialSize.z);
-
-    const standardHeight = 1.0;
-    const scaleFactor = standardHeight / height;
-    vrm.scene.scale.multiplyScalar(scaleFactor);
-    vrm.scene.updateMatrixWorld(true);
-
-    const box3 = new THREE.Box3().setFromObject(vrm.scene);
-    const center3 = box3.getCenter(new THREE.Vector3());
-    vrm.scene.position.x -= center3.x;
-    vrm.scene.position.z -= center3.z;
-    vrm.scene.position.y -= box3.min.y;
-    vrm.scene.updateMatrixWorld(true);
-
-    const scaledHeight = standardHeight;
-    const scaledWidth = width * scaleFactor;
-    const scaledDepth = depth * scaleFactor;
-    const upperBodyHeight = Math.max(
-      scaledWidth,
-      scaledHeight * 0.55,
-      scaledDepth,
-    );
-    const shoulderHeight = scaledHeight * 0.42;
-
-    const fovRad = (camera.fov * Math.PI) / 180;
-    const distance = (upperBodyHeight * 0.5) / Math.tan(fovRad * 0.5);
-
-    return {
-      distance,
-      shoulderHeight,
-    };
-  }
-
-  private getConfiguredIdleGlbUrls(): string[] {
-    return Array.from(
-      new Set(this.idleGlbUrls.map((value) => value.trim()).filter(Boolean)),
-    );
-  }
-
-  private getIdleFallbackGlbUrls(): string[] {
-    return this.currentScenePreset === "pro-streamer-stage"
-      ? [this.guaranteedIdleFallbackGlbUrl, this.idleFallbackGlbUrl]
-      : [this.idleFallbackGlbUrl, this.guaranteedIdleFallbackGlbUrl];
-  }
-
-  private getIdleCandidatePlans(): IdleCandidatePlan[] {
-    const ordered: IdleCandidatePlan[] = [];
-    const seen = new Set<string>();
-    const push = (
-      glbUrl: string | null | undefined,
-      fallbackActive = false,
-    ) => {
-      const trimmed = glbUrl?.trim();
-      if (!trimmed || seen.has(trimmed) || this.failedIdleGlbUrls.has(trimmed)) {
-        return;
-      }
-      seen.add(trimmed);
-      ordered.push({
-        glbUrl: trimmed,
-        fallbackActive,
-      });
-    };
-
-    const configuredChoices = this.getConfiguredIdleGlbUrls().filter(
-      (glbUrl) =>
-        this.verifiedIdleGlbUrls.has(glbUrl) &&
-        !this.failedIdleGlbUrls.has(glbUrl),
-    );
-    const activeIndex = configuredChoices.indexOf(this.activeIdleGlbUrl ?? "");
-    const rotatedChoices =
-      activeIndex >= 0
-        ? [
-            ...configuredChoices.slice(activeIndex + 1),
-            ...configuredChoices.slice(0, activeIndex),
-          ]
-        : configuredChoices;
-    for (const glbUrl of rotatedChoices) {
-      if (glbUrl === this.activeIdleGlbUrl) continue;
-      push(glbUrl);
-    }
-
-    if (this.activeIdleGlbUrl && !this.failedIdleGlbUrls.has(this.activeIdleGlbUrl)) {
-      push(this.activeIdleGlbUrl, this.idleFallbackActive);
-    }
-
-    for (const glbUrl of this.getIdleFallbackGlbUrls()) {
-      push(glbUrl, true);
-    }
-    return ordered;
-  }
-
-  private rememberRejectedIdle(glbUrl: string, reason: string): void {
-    this.failedIdleGlbUrls.add(glbUrl);
-    this.verifiedIdleGlbUrls.delete(glbUrl);
-    this.rejectedIdleReasons.set(glbUrl, reason);
-  }
-
-  private async loadAnimationAsset(
-    glbPath: string,
-    vrm: VRM,
-  ): Promise<Awaited<ReturnType<GLTFLoader["loadAsync"]>> | null> {
-    if (this.vrm !== vrm) return null;
-
-    const loader = new GLTFLoader();
-    const gltf = await loader.loadAsync(glbPath);
-    if (this.vrm !== vrm) return null;
-
-    gltf.scene.updateMatrixWorld(true);
-    vrm.scene.updateMatrixWorld(true);
-    return gltf;
-  }
-
-  private async loadIdleClip(
-    glbPath: string,
-    vrm: VRM,
-  ): Promise<{ clip: THREE.AnimationClip; source: ResolvedAnimationSource } | null> {
-    const cached = this.emoteClipCache.get(glbPath);
-    if (cached && this.verifiedIdleGlbUrls.has(glbPath)) return cached;
-
-    try {
-      const { classifyIdleGltfAnimationClipForVrm } = await import(
-        "./resolveGltfAnimationClipForVrm"
-      );
-      const gltf = await this.loadAnimationAsset(glbPath, vrm);
-      if (!gltf) return null;
-
-      const classification = classifyIdleGltfAnimationClipForVrm(
-        { scene: gltf.scene, animations: gltf.animations },
-        vrm,
-      );
-      if (classification.status === "rejected") {
-        this.rejectedIdleReasons.set(glbPath, classification.reason);
-        return null;
-      }
-
-      const resolved = {
-        clip: classification.clip,
-        source: classification.source,
-      };
-      this.emoteClipCache.set(glbPath, resolved);
-      this.rejectedIdleReasons.delete(glbPath);
-      return resolved;
-    } catch (err) {
-      const reason =
-        err instanceof Error ? err.message : "Failed to load idle clip";
-      console.error(`[VrmEngine] Failed to load idle: ${glbPath}`, err);
-      this.rejectedIdleReasons.set(glbPath, reason);
-      return null;
-    }
-  }
-
-  private async classifyConfiguredIdleCandidates(vrm: VRM): Promise<void> {
-    for (const glbUrl of this.getConfiguredIdleGlbUrls()) {
-      if (
-        this.verifiedIdleGlbUrls.has(glbUrl) ||
-        this.failedIdleGlbUrls.has(glbUrl)
-      ) {
-        continue;
-      }
-
-      const resolved = await this.loadIdleClip(glbUrl, vrm);
-      if (this.loadingAborted || this.vrm !== vrm) return;
-
-      if (resolved) {
-        this.failedIdleGlbUrls.delete(glbUrl);
-        this.rejectedIdleReasons.delete(glbUrl);
-        this.verifiedIdleGlbUrls.add(glbUrl);
-        continue;
-      }
-
-      this.rememberRejectedIdle(
-        glbUrl,
-        this.rejectedIdleReasons.get(glbUrl) ??
-          "idle clip failed classification or load",
-      );
-    }
-  }
-
-  private scheduleNextIdleRotation(clipDuration: number): void {
-    const safeDuration =
-      Number.isFinite(clipDuration) && clipDuration > 0 ? clipDuration : 6;
-    this.idleRotationDeadline =
-      this.elapsedTime + Math.max(12, safeDuration * 2);
-  }
-
-  private applySceneLayout(options: { animateMark: boolean }): void {
-    const camera = this.camera;
-    const characterRoot = this.characterRoot;
-    if (!camera || !characterRoot) return;
-
-    if (this.currentScenePreset === "pro-streamer-stage" && this.stageScene) {
-      characterRoot.scale.setScalar(
-        Math.max(0.1, this.stageScene.anchorMetadata.targetHeightM * 2.8),
-      );
-      this.applyStageCamera(this.stageScene);
-      const targetMark =
-        this.currentSceneMark === "portrait"
-          ? this.stageScene.portraitMark
-          : this.stageScene.stageMark;
-
-      if (!this.vrm || !options.animateMark) {
-        this.markTransition = null;
-        this.applyMarkTransform(targetMark);
-        if (this.vrm) {
-          this.ensureFacingCamera(this.vrm);
-        }
-        return;
-      }
-
-      this.transitionToMark(targetMark);
-      return;
-    }
-
-    this.markTransition = null;
-    characterRoot.position.set(0, 0, 0);
-    characterRoot.quaternion.identity();
-    characterRoot.scale.setScalar(1);
-    this.currentRigPosition.copy(characterRoot.position);
-    this.currentRigQuaternion.copy(characterRoot.quaternion);
-
-    if (!this.frameMetrics) return;
-
-    this.lookAtTarget.set(0, this.frameMetrics.shoulderHeight, 0);
-    camera.near = Math.max(0.01, this.frameMetrics.distance / 100);
-    camera.far = Math.max(100, this.frameMetrics.distance * 100);
-    camera.position.set(0, this.frameMetrics.shoulderHeight, this.frameMetrics.distance);
-    this.baseCameraPosition.copy(camera.position);
-    camera.updateProjectionMatrix();
-  }
-
-  private applyStageCamera(stageScene: ProStreamerStageSceneContract): void {
-    const camera = this.camera;
-    if (!camera) return;
-
-    const authoredCamera = stageScene.stageCamera;
-    const authoredPosition = stageScene.stageCameraNode.getWorldPosition(
-      new THREE.Vector3(),
-    );
-
-    const viewportAspect =
-      this.viewportSize.y > 0
-        ? this.viewportSize.x / this.viewportSize.y
-        : camera.aspect > 0
-          ? camera.aspect
-          : stageScene.backdropMetrics.aspect;
-    const lookTarget = stageScene.backdropMetrics.center;
-
-    camera.position.copy(authoredPosition);
-    camera.up.set(0, 1, 0);
-    camera.lookAt(lookTarget);
-    camera.updateMatrixWorld(true);
-
-    const cameraForward = new THREE.Vector3(0, 0, -1)
-      .applyQuaternion(camera.quaternion)
-      .normalize();
-    const numerator = Math.abs(
-      lookTarget.clone().sub(camera.position).dot(stageScene.backdropMetrics.normal),
-    );
-    const denominator = Math.max(
-      1e-6,
-      Math.abs(cameraForward.dot(stageScene.backdropMetrics.normal)),
-    );
-    const cameraToPlaneDistance = numerator / denominator;
-
-    const coverFit = computeStageCoverFit({
-      backdropWidth: stageScene.backdropMetrics.width,
-      backdropHeight: stageScene.backdropMetrics.height,
-      viewportAspect,
-      cameraToPlaneDistance,
-    });
-
-    camera.fov = coverFit.fovDegrees;
-    camera.near = authoredCamera.near;
-    camera.far = authoredCamera.far;
-    camera.updateProjectionMatrix();
-  }
-
-  private applyMarkTransform(mark: StageMarkTransform): void {
-    const characterRoot = this.characterRoot;
-    if (!characterRoot) return;
-
-    characterRoot.position.copy(mark.position);
-    characterRoot.quaternion.copy(mark.quaternion);
-    this.currentRigPosition.copy(mark.position);
-    this.currentRigQuaternion.copy(mark.quaternion);
-  }
-
-  private transitionToMark(targetMark: StageMarkTransform): void {
-    const characterRoot = this.characterRoot;
-    if (!characterRoot) return;
-
-    const currentPosition = cloneVector3(this.currentRigPosition);
-    const currentQuaternion = cloneQuaternion(this.currentRigQuaternion);
-    const targetPosition = cloneVector3(targetMark.position);
-    const targetQuaternion = cloneQuaternion(targetMark.quaternion);
-    const distance = currentPosition.distanceTo(targetPosition);
-    const rotationClose = quaternionsClose(currentQuaternion, targetQuaternion);
-
-    if (distance < 1e-3 && rotationClose) {
-      this.markTransition = null;
-      this.applyMarkTransform(targetMark);
-      return;
-    }
-
-    this.markTransition = {
-      duration: 0.9,
-      elapsed: 0,
-      fromPosition: currentPosition,
-      toPosition: targetPosition,
-      fromQuaternion: currentQuaternion,
-      toQuaternion: targetQuaternion,
-      walkQuaternion: yawFacingQuaternion(
-        currentPosition,
-        targetPosition,
-        targetQuaternion,
-      ),
-    };
-
-    if (distance >= 0.05) {
-      void this.playEmote(this.walkGlbUrl, 0, true);
-    }
-  }
-
-  private updateMarkTransition(delta: number): void {
-    const transition = this.markTransition;
-    const characterRoot = this.characterRoot;
-    if (!transition || !characterRoot) return;
-
-    transition.elapsed += delta;
-    const progress = Math.min(1, transition.elapsed / transition.duration);
-    const easedProgress = easeInOutQuad(progress);
-
-    characterRoot.position.lerpVectors(
-      transition.fromPosition,
-      transition.toPosition,
-      easedProgress,
-    );
-
-    if (progress < 0.7) {
-      const facingT = Math.min(1, progress / 0.25);
-      characterRoot.quaternion.copy(transition.fromQuaternion);
-      characterRoot.quaternion.slerp(transition.walkQuaternion, facingT);
-    } else {
-      const settleT = Math.min(1, (progress - 0.7) / 0.3);
-      characterRoot.quaternion.copy(transition.walkQuaternion);
-      characterRoot.quaternion.slerp(transition.toQuaternion, settleT);
-    }
-
-    this.currentRigPosition.copy(characterRoot.position);
-    this.currentRigQuaternion.copy(characterRoot.quaternion);
-
-    if (progress >= 1) {
-      this.applyMarkTransform({
-        position: transition.toPosition,
-        quaternion: transition.toQuaternion,
-      });
-      if (this.vrm) {
-        this.ensureFacingCamera(this.vrm);
-      }
-      this.markTransition = null;
-      this.stopEmote();
-    }
-  }
-
   private async loadAndPlayIdle(vrm: VRM): Promise<void> {
     if (this.loadingAborted) return;
-
-    if (this.currentScenePreset === "pro-streamer-stage") {
-      this.activateProceduralIdleFallback();
-      return;
-    }
-
-    await this.classifyConfiguredIdleCandidates(vrm);
-    if (this.loadingAborted || this.vrm !== vrm) return;
-
-    const configuredIdleGlbUrls = this.getConfiguredIdleGlbUrls();
-    const candidates = this.getIdleCandidatePlans();
-
-    let clip: THREE.AnimationClip | null = null;
-    let resolvedIdleGlbUrl: string | null = null;
-    let resolvedIdleSource: VrmEngineState["activeIdleSource"] = null;
-    let fallbackActive = false;
-    for (const candidate of candidates) {
-      const resolved = this.verifiedIdleGlbUrls.has(candidate.glbUrl)
-        ? (this.emoteClipCache.get(candidate.glbUrl) ??
-            (await this.loadEmoteClip(candidate.glbUrl, vrm)))
-        : await this.loadEmoteClip(candidate.glbUrl, vrm);
-      if (this.loadingAborted || this.vrm !== vrm) return;
-      if (!resolved) {
-        this.failedIdleGlbUrls.add(candidate.glbUrl);
-        this.verifiedIdleGlbUrls.delete(candidate.glbUrl);
-        continue;
-      }
-      clip = resolved.clip;
-      resolvedIdleGlbUrl = candidate.glbUrl;
-      fallbackActive = candidate.fallbackActive;
-      resolvedIdleSource =
-        candidate.glbUrl === this.idleFallbackGlbUrl
-          ? "legacy-fallback"
-          : resolved.source;
-      if (configuredIdleGlbUrls.includes(candidate.glbUrl)) {
-        this.failedIdleGlbUrls.delete(candidate.glbUrl);
-        this.rejectedIdleReasons.delete(candidate.glbUrl);
-        this.verifiedIdleGlbUrls.add(candidate.glbUrl);
-      }
-      break;
-    }
-
-    if (
-      !clip ||
-      !resolvedIdleGlbUrl ||
-      !resolvedIdleSource ||
-      this.loadingAborted ||
-      this.vrm !== vrm
-    ) {
-      if (this.currentScenePreset === "pro-streamer-stage") {
-        this.activateProceduralIdleFallback();
-      } else {
-        this.activeIdleGlbUrl = null;
-        this.activeIdleSource = null;
-        this.idleFallbackActive = false;
-        this.idleRotationDeadline = Number.POSITIVE_INFINITY;
-        this.setHumanoidAutoUpdateForSource(vrm, null);
-      }
-      return;
-    }
-
-    let mixer = this.mixer;
-    if (!mixer) {
-      mixer = new THREE.AnimationMixer(vrm.scene);
-      this.mixer = mixer;
-    }
-
+    const clip = await loadIdleClip(
+      vrm,
+      this.idleGlbUrl,
+      this.animationLoaderContext,
+    );
+    if (!clip) return;
+    const mixer = new THREE.AnimationMixer(vrm.scene);
+    this.mixer = mixer;
     const action = mixer.clipAction(clip);
-    const previousIdleAction = this.idleAction;
-
     action.reset();
     action.setLoop(THREE.LoopRepeat, Infinity);
-    action.clampWhenFinished = false;
-
-    if (previousIdleAction && previousIdleAction !== action) {
-      previousIdleAction.fadeOut(0.25);
-    }
-
-    this.setHumanoidAutoUpdateForSource(vrm, resolvedIdleSource);
-    this.resetProceduralIdlePose();
     action.fadeIn(0.25);
     action.play();
-
+    action.timeScale = 1.0;
     this.idleAction = action;
-    this.activeIdleGlbUrl = resolvedIdleGlbUrl;
-    this.activeIdleSource = resolvedIdleSource;
-    this.idleFallbackActive =
-      fallbackActive || resolvedIdleSource === "legacy-fallback";
-    this.scheduleNextIdleRotation(clip.duration);
   }
-
-  private updateProceduralIdle(): void {
-    const vrm = this.vrm;
-    if (!vrm) return;
-
-    if (
-      this.currentScenePreset !== "pro-streamer-stage" ||
-      this.emoteAction ||
-      this.markTransition
-    ) {
-      if (this.proceduralIdleActive) {
-        this.resetProceduralIdlePose();
-      }
-      return;
-    }
-
-    if (!this.proceduralIdleActive) {
-      return;
-    }
-
-    const breathingLift =
-      Math.sin(this.elapsedTime * 1.15) * 0.018 +
-      Math.sin(this.elapsedTime * 0.45 + 0.8) * 0.006;
-    const swayYaw = Math.sin(this.elapsedTime * 0.62) * 0.018;
-    const swayRoll = Math.sin(this.elapsedTime * 0.74 + 0.4) * 0.01;
-
-    vrm.scene.position.copy(this.baseVrmLocalPosition);
-    vrm.scene.position.y += breathingLift;
-    vrm.scene.quaternion.copy(this.baseVrmLocalQuaternion);
-    vrm.scene.quaternion.multiply(
-      new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(0, swayYaw, swayRoll),
-      ),
-    );
-    this.applyProceduralIdleBonePose(vrm);
-    vrm.scene.updateMatrixWorld(true);
-  }
-
-  private activateProceduralIdleFallback(): void {
-    if (this.idleAction) {
-      this.idleAction.stop();
-      this.idleAction = null;
-    }
-
-    this.setHumanoidAutoUpdateForSource(this.vrm, "procedural-fallback");
-    this.resetProceduralIdlePose();
-    this.activeIdleGlbUrl = null;
-    this.activeIdleSource = "procedural-fallback";
-    this.idleFallbackActive = true;
-    this.idleRotationDeadline = Number.POSITIVE_INFINITY;
-    this.proceduralIdleActive = true;
-  }
-
-  private resetProceduralIdlePose(): void {
-    const vrm = this.vrm;
-    if (!vrm) return;
-
-    vrm.scene.position.copy(this.baseVrmLocalPosition);
-    vrm.scene.quaternion.copy(this.baseVrmLocalQuaternion);
-    this.restoreProceduralIdleBoneBases(vrm);
-    vrm.scene.updateMatrixWorld(true);
-    this.proceduralIdleActive = false;
-  }
-
-  private captureProceduralIdleBoneBases(vrm: VRM): void {
-    this.proceduralIdleBoneBases.clear();
-    const humanoid = vrm.humanoid;
-    if (!humanoid) return;
-
-    const boneNames: VRMHumanBoneName[] = [
-      "chest",
-      "neck",
-      "leftUpperArm",
-      "rightUpperArm",
-      "leftLowerArm",
-      "rightLowerArm",
-    ];
-
-    for (const boneName of boneNames) {
-      const bone = humanoid.getNormalizedBoneNode(boneName);
-      if (!bone) continue;
-      this.proceduralIdleBoneBases.set(
-        boneName,
-        bone.quaternion.clone(),
-      );
-    }
-  }
-
-  private restoreProceduralIdleBoneBases(vrm: VRM): void {
-    const humanoid = vrm.humanoid;
-    if (!humanoid) return;
-
-    for (const [boneName, baseQuaternion] of this.proceduralIdleBoneBases) {
-      const bone = humanoid.getNormalizedBoneNode(boneName);
-      if (!bone) continue;
-      bone.quaternion.copy(baseQuaternion);
-    }
-  }
-
-  private applyProceduralIdleBonePose(vrm: VRM): void {
-    const humanoid = vrm.humanoid;
-    if (!humanoid) return;
-
-    const poseBone = (
-      boneName: VRMHumanBoneName,
-      euler: THREE.Euler,
-    ) => {
-      const bone = humanoid.getNormalizedBoneNode(boneName);
-      const baseQuaternion = this.proceduralIdleBoneBases.get(boneName);
-      if (!bone || !baseQuaternion) return;
-      bone.quaternion.copy(baseQuaternion);
-      bone.quaternion.multiply(
-        new THREE.Quaternion().setFromEuler(euler),
-      );
-    };
-
-    const breathe = Math.sin(this.elapsedTime * 1.15);
-    const drift = Math.sin(this.elapsedTime * 0.62 + 0.6);
-    poseBone("chest", new THREE.Euler(0.03 * breathe, 0, 0.01 * drift));
-    poseBone("neck", new THREE.Euler(-0.02 * breathe, 0.05 * drift, 0));
-    poseBone("leftUpperArm", new THREE.Euler(-0.08, 0.04, -1.1 + 0.04 * drift));
-    poseBone("rightUpperArm", new THREE.Euler(-0.08, -0.04, 1.1 - 0.04 * drift));
-    poseBone("leftLowerArm", new THREE.Euler(0.06, 0, -0.14 + 0.02 * breathe));
-    poseBone("rightLowerArm", new THREE.Euler(0.06, 0, 0.14 - 0.02 * breathe));
-  }
-
-  private async loadEmoteClip(
-    glbPath: string,
+  private async loadEmoteClipCached(
+    path: string,
     vrm: VRM,
-  ): Promise<{ clip: THREE.AnimationClip; source: ResolvedAnimationSource } | null> {
-    const cached = this.emoteClipCache.get(glbPath);
+  ): Promise<THREE.AnimationClip | null> {
+    const cached = this.emoteClipCache.get(path);
     if (cached) return cached;
-
-    try {
-      const { resolveGltfAnimationClipForVrm } = await import(
-        "./resolveGltfAnimationClipForVrm"
-      );
-      const gltf = await this.loadAnimationAsset(glbPath, vrm);
-      if (!gltf) return null;
-
-      const resolved = resolveGltfAnimationClipForVrm(
-        { scene: gltf.scene, animations: gltf.animations },
-        vrm,
-      );
-
-      this.emoteClipCache.set(glbPath, resolved);
-      return resolved;
-    } catch (err) {
-      console.error(`[VrmEngine] Failed to load emote: ${glbPath}`, err);
-      return null;
+    const clip = await loadEmoteClip(path, vrm, this.animationLoaderContext);
+    if (clip) {
+      this.emoteClipCache.set(path, clip);
     }
+    return clip;
   }
-
   private applyMouthToVrm(vrm: VRM): void {
     const manager = vrm.expressionManager;
     if (!manager) return;
-
     let target: number;
-
     if (this.speaking) {
       const elapsed = this.elapsedTime - this.speakingStartTime;
       const base = Math.sin(elapsed * 12) * 0.3 + 0.4;
@@ -1313,113 +839,9 @@ export class VrmEngine {
     } else {
       target = this.mouthValue;
     }
-
     const next = Math.max(0, Math.min(1, target));
     const alpha = next > this.mouthSmoothed ? 0.3 : 0.2;
     this.mouthSmoothed = this.mouthSmoothed * (1 - alpha) + next * alpha;
     manager.setValue("aa", this.mouthSmoothed);
-  }
-
-  private updateBlink(delta: number): void {
-    const vrm = this.vrm;
-    if (!vrm?.expressionManager) return;
-
-    switch (this.blinkPhase) {
-      case "idle":
-        this.blinkTimer += delta;
-        if (this.blinkTimer >= this.nextBlinkDelay) {
-          this.blinkPhase = "closing";
-          this.blinkPhaseTimer = 0;
-        }
-        break;
-
-      case "closing": {
-        this.blinkPhaseTimer += delta;
-        const t = Math.min(
-          1,
-          this.blinkPhaseTimer / VrmEngine.BLINK_CLOSE_DURATION,
-        );
-        this.blinkValue = t * t;
-        if (t >= 1) {
-          this.blinkPhase = "closed";
-          this.blinkPhaseTimer = 0;
-          this.blinkValue = 1;
-        }
-        break;
-      }
-
-      case "closed":
-        this.blinkPhaseTimer += delta;
-        if (this.blinkPhaseTimer >= VrmEngine.BLINK_HOLD_DURATION) {
-          this.blinkPhase = "opening";
-          this.blinkPhaseTimer = 0;
-        }
-        break;
-
-      case "opening": {
-        this.blinkPhaseTimer += delta;
-        const t = Math.min(
-          1,
-          this.blinkPhaseTimer / VrmEngine.BLINK_OPEN_DURATION,
-        );
-        const eased = 1 - (1 - t) * (1 - t);
-        this.blinkValue = 1 - eased;
-        if (t >= 1) {
-          this.blinkPhase = "idle";
-          this.blinkPhaseTimer = 0;
-          this.blinkValue = 0;
-          this.blinkTimer = 0;
-          this.scheduleNextBlink();
-        }
-        break;
-      }
-    }
-
-    vrm.expressionManager.setValue("blink", this.blinkValue);
-  }
-
-  private scheduleNextBlink(): void {
-    const range = VrmEngine.BLINK_MAX_INTERVAL - VrmEngine.BLINK_MIN_INTERVAL;
-    this.nextBlinkDelay = VrmEngine.BLINK_MIN_INTERVAL + Math.random() * range;
-
-    if (Math.random() < VrmEngine.DOUBLE_BLINK_CHANCE) {
-      this.nextBlinkDelay = 0.12 + Math.random() * 0.08;
-    }
-  }
-
-  private resetBlink(): void {
-    this.blinkPhase = "idle";
-    this.blinkTimer = 0;
-    this.blinkPhaseTimer = 0;
-    this.blinkValue = 0;
-    this.nextBlinkDelay = 1.5 + Math.random() * 2;
-  }
-
-  private ensureFacingCamera(vrm: VRM): void {
-    const camera = this.camera;
-    if (!camera) return;
-
-    const probe = vrm.humanoid?.getNormalizedBoneNode("hips") ?? vrm.scene;
-    vrm.scene.updateMatrixWorld(true);
-
-    const forward = new THREE.Vector3();
-    probe.getWorldDirection(forward);
-
-    const vrmPos = new THREE.Vector3();
-    vrm.scene.getWorldPosition(vrmPos);
-
-    const toCamera = new THREE.Vector3().subVectors(camera.position, vrmPos);
-
-    forward.y = 0;
-    toCamera.y = 0;
-    if (forward.lengthSq() < 1e-6 || toCamera.lengthSq() < 1e-6) return;
-
-    forward.normalize();
-    toCamera.normalize();
-
-    if (forward.dot(toCamera) < 0) {
-      vrm.scene.rotateY(Math.PI);
-      vrm.scene.updateMatrixWorld(true);
-    }
   }
 }
