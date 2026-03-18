@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useApp } from "./AppContext.js";
-import { TAB_GROUPS } from "./navigation.js";
+import { TAB_GROUPS, pathForTab } from "./navigation.js";
 import { Header } from "./components/Header.js";
 import { Nav } from "./components/Nav.js";
 import { CommandPalette } from "./components/CommandPalette.js";

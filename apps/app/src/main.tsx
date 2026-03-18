@@ -43,6 +43,7 @@ const platform = Capacitor.getPlatform();
 const isNative = Capacitor.isNativePlatform();
 const isIOS = platform === "ios";
 const isAndroid = platform === "android";
+const isWeb = isWebPlatform();
 
 function isElectronPlatform(): boolean {
   return platform === "electron" || isElectrobunRuntime();
@@ -476,5 +477,5 @@ export {
   isIOS,
   isAndroid,
   isElectronPlatform as isElectron,
-  isWebPlatform as isWeb,
+  isWeb,
 };
