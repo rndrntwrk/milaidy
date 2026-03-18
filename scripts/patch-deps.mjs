@@ -126,3 +126,35 @@ if (threeVrmNodeTargets.length === 0) {
     console.log("  - Applied three-vrm FnCompat patch for Three r182.");
   }
 }
+
+// ---------------------------------------------------------------------------
+// 3) @elizaos/plugin-sql: Make migration failures non-fatal.
+//    The todo plugin migration fails on existing PGlite databases that lack
+//    the agent_id column. Instead of crashing the entire runtime, log the
+//    error and continue. Non-critical plugins (todo, etc.) shouldn't block
+//    startup.
+// ---------------------------------------------------------------------------
+{
+  const pluginSqlTargets = [
+    "node_modules/@elizaos/plugin-sql/dist/node/index.node.js",
+    "node_modules/@elizaos/plugin-sql/dist/browser/index.browser.js",
+  ]
+    .map((rel) => resolve(scriptDir, "..", rel))
+    .filter(existsSync);
+
+  const fatalThrow = `throw new Error(\`\${failureCount} migration(s) failed:`;
+  const tolerantWarn = `console.warn(\`[plugin-sql] \${failureCount} migration(s) failed (non-fatal):`;
+
+  for (const target of pluginSqlTargets) {
+    let src = readFileSync(target, "utf8");
+    if (!src.includes(fatalThrow)) {
+      if (src.includes(tolerantWarn)) {
+        console.log(`[patch-deps] plugin-sql migration tolerance already patched: ${target}`);
+      }
+      continue;
+    }
+    src = src.replace(fatalThrow, tolerantWarn);
+    writeFileSync(target, src, "utf8");
+    console.log(`[patch-deps] Patched plugin-sql to tolerate migration failures: ${target}`);
+  }
+}
