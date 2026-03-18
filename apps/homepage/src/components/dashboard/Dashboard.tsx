@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { ConnectionProvider } from "../../lib/ConnectionProvider";
 import { AuthGate } from "./AuthGate";
+import { AgentGrid } from "./AgentGrid";
+import { BillingPanel } from "./BillingPanel";
 import { ConnectionBar } from "./ConnectionBar";
+import { ExportPanel } from "./ExportPanel";
+import { LogsPanel } from "./LogsPanel";
+import { MetricsPanel } from "./MetricsPanel";
 import { Sidebar, type DashboardSection } from "./Sidebar";
 
 export function Dashboard() {
@@ -30,14 +35,14 @@ export function Dashboard() {
 function DashboardContent({ section }: { section: DashboardSection }) {
   switch (section) {
     case "agents":
-      return <div className="text-text-muted font-mono text-sm">Agent grid coming next...</div>;
+      return <AgentGrid />;
     case "metrics":
-      return <div className="text-text-muted font-mono text-sm">Metrics panel coming soon...</div>;
+      return <MetricsPanel />;
     case "logs":
-      return <div className="text-text-muted font-mono text-sm">Logs panel coming soon...</div>;
+      return <LogsPanel />;
     case "export":
-      return <div className="text-text-muted font-mono text-sm">Export panel coming soon...</div>;
+      return <ExportPanel connectionId="" />;
     case "billing":
-      return <div className="text-text-muted font-mono text-sm">Billing panel coming soon...</div>;
+      return <BillingPanel />;
   }
 }
