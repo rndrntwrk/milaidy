@@ -16,3 +16,4 @@ This folder contains repo-specific skills derived from recently merged PRs.
 - `pre-review-no-diff-approve`
 - `electrobun-tutorial-examples`
 - `integration-dod-map`
+- `app-hardening-green-guardian`

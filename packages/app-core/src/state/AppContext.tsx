@@ -4042,6 +4042,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       clearPersistedOnboardingStep();
       onboardingResumeConnectionRef.current = null;
       onboardingCompletionCommittedRef.current = true;
+      setOnboardingDetectedProviders((providers) =>
+        providers.map((provider) => {
+          const nextProvider = { ...provider };
+          delete nextProvider.apiKey;
+          return nextProvider;
+        }),
+      );
       setOnboardingComplete(true);
       setTab("character-select");
     } catch (err) {

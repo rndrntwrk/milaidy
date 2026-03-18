@@ -399,9 +399,16 @@ export function registerRpcHandlers(
     },
 
     // ---- Credentials Auto-Detection ----
-    credentialsScanProviders: async () => ({
-      providers: await scanProviderCredentials(),
-    }),
+    credentialsScanProviders: async (params?: { context?: "onboarding" }) => {
+      if (params?.context !== "onboarding") {
+        throw new Error(
+          "credentials:scanProviders is only available during onboarding",
+        );
+      }
+      return {
+        providers: await scanProviderCredentials(),
+      };
+    },
 
     // ---- GPU Window ----
     gpuWindowCreate: async (

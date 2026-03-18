@@ -55,6 +55,7 @@ export async function scanProviderCredentials(): Promise<DetectedProvider[]> {
   }>({
     rpcMethod: "credentialsScanProviders",
     ipcChannel: "credentials:scanProviders",
+    params: { context: "onboarding" },
   });
   return result?.providers ?? [];
 }

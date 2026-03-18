@@ -740,7 +740,7 @@ export type MiladyRPCSchema = {
 
       // ---- Credentials Auto-Detection ----
       credentialsScanProviders: {
-        params: undefined;
+        params: { context: "onboarding" };
         response: { providers: DetectedProvider[] };
       };
 
