@@ -1,6 +1,8 @@
 // Timing: Track when the script starts
 const SCRIPT_START = Date.now();
+
 import { getLogPrefix } from "../utils/log-prefix";
+
 console.log(`${getLogPrefix()} Script starting...`);
 
 /**
@@ -20,7 +22,9 @@ import { startApiServer } from "../api/server";
 import { shutdownRuntime, startEliza } from "./eliza";
 import { setRestartHandler } from "./restart";
 
-console.log(`${getLogPrefix()} Imports complete (${Date.now() - SCRIPT_START}ms)`);
+console.log(
+  `${getLogPrefix()} Imports complete (${Date.now() - SCRIPT_START}ms)`,
+);
 
 // Load .env files for parity with CLI mode (which loads via run-main.ts).
 try {
@@ -118,7 +122,9 @@ async function bootstrapRuntime(reason: string): Promise<void> {
   try {
     logger.info(`${getLogPrefix()} Runtime bootstrap starting (${reason})`);
     const rt = await createRuntime();
-    logger.info(`${getLogPrefix()} Runtime created in ${Date.now() - bootstrapStart}ms`);
+    logger.info(
+      `${getLogPrefix()} Runtime created in ${Date.now() - bootstrapStart}ms`,
+    );
     const agentName = rt.character.name ?? "Eliza";
 
     if (isShuttingDown) {
@@ -206,7 +212,9 @@ async function handleRestart(reason?: string): Promise<void> {
   }
 
   if (restartPromise) {
-    logger.info(`${getLogPrefix()} Restart already in progress, awaiting existing restart...`);
+    logger.info(
+      `${getLogPrefix()} Restart already in progress, awaiting existing restart...`,
+    );
     return restartPromise;
   }
 
@@ -215,7 +223,9 @@ async function handleRestart(reason?: string): Promise<void> {
     try {
       clearRuntimeBootTimer();
       if (runtimeBootInProgress) {
-        throw new Error("Restart requested while runtime bootstrap is in progress. Please wait for startup to complete.");
+        throw new Error(
+          "Restart requested while runtime bootstrap is in progress. Please wait for startup to complete.",
+        );
       }
 
       logger.info(

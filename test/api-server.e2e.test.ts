@@ -28,6 +28,7 @@ import { WebSocket } from "ws";
 import { startApiServer } from "../src/api/server";
 import { AGENT_NAME_POOL } from "../src/runtime/onboarding-names";
 
+
 vi.mock("../src/services/mcp-marketplace", () => ({
   searchMcpMarketplace: vi
     .fn()
@@ -475,8 +476,10 @@ function createRuntimeForWorkbenchCrudTests(options?: {
         query.tags?.every((tag) => task.tags?.includes(tag)),
       );
     },
-    getTask: async (taskId: UUID) =>
-      tasks.find((task) => task.id === taskId) ?? null,
+    getTask: async (taskId: UUID) => {
+      const found = tasks.find((task) => task.id === taskId) ?? null;
+      return found;
+    },
     createTask: async (task: Task) => {
       const id = (task.id as UUID | undefined) ?? (crypto.randomUUID() as UUID);
       const created: Task = {
@@ -492,6 +495,7 @@ function createRuntimeForWorkbenchCrudTests(options?: {
           ? {
               ...task,
               ...update,
+              isCompleted: (update as Record<string, unknown>).completed ?? update.isCompleted ?? task.isCompleted,
               metadata: {
                 ...((task.metadata as Record<string, unknown> | undefined) ??
                   {}),

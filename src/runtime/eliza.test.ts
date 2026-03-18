@@ -44,7 +44,6 @@ vi.mock("@elizaos/plugin-secrets-manager", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-shell", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-sql", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-telegram", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-todo", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-trajectory-logger", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-trust", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
@@ -253,7 +252,6 @@ describe("collectPluginNames", () => {
       "@elizaos/plugin-pdf",
       "@elizaos/plugin-secrets-manager",
       "@elizaos/plugin-trust",
-      "@elizaos/plugin-todo",
       "@elizaos/plugin-personality",
       "@elizaos/plugin-experience",
     ];

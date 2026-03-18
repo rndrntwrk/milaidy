@@ -73,7 +73,7 @@ describe("hasRequiredElizaWorkspaceFiles", () => {
     expect(
       hasRequiredElizaWorkspaceFiles(elizaRoot, {
         pathExists: (candidate) =>
-          candidate !== path.join(elizaRoot, "packages", "ui", "package.json"),
+          candidate !== path.join(elizaRoot, "package.json"),
       }),
     ).toBe(false);
 
@@ -106,43 +106,79 @@ describe("hasInstalledElizaDependencies", () => {
 
 describe("getElizaPackageLinks", () => {
   it("links Milady package entries to the sibling eliza checkout", () => {
-    expect(
-      getElizaPackageLinks("/repo/milady", "/repo/eliza").map(
+    const tempRoot = mkdtempSync(
+      path.join(os.tmpdir(), "milady-setup-eliza-links-"),
+    );
+
+    try {
+      const elizaRoot = path.join(tempRoot, "eliza");
+      const miladyRoot = path.join(tempRoot, "milady");
+
+      const packages = ["app-core", "autonomous", "ui"];
+      for (const pkg of packages) {
+        const targetDir = path.join(elizaRoot, "packages", pkg);
+        mkdirSync(targetDir, { recursive: true });
+        writeFileSync(
+          path.join(targetDir, "package.json"),
+          JSON.stringify({ name: `@elizaos/${pkg}` }),
+          "utf8",
+        );
+      }
+
+      const expectedLinks = getElizaPackageLinks(miladyRoot, elizaRoot).map(
         ({ linkPath, targetPath }) => ({
           linkPath,
           targetPath,
         }),
-      ),
-    ).toEqual([
-      {
-        linkPath: "/repo/milady/node_modules/@elizaos/autonomous",
-        targetPath: "/repo/eliza/packages/autonomous",
-      },
-      {
-        linkPath: "/repo/milady/node_modules/@elizaos/app-core",
-        targetPath: "/repo/eliza/packages/app-core",
-      },
-      {
-        linkPath: "/repo/milady/apps/app/node_modules/@elizaos/app-core",
-        targetPath: "/repo/eliza/packages/app-core",
-      },
-      {
-        linkPath: "/repo/milady/apps/home/node_modules/@elizaos/app-core",
-        targetPath: "/repo/eliza/packages/app-core",
-      },
-      {
-        linkPath: "/repo/milady/node_modules/@elizaos/ui",
-        targetPath: "/repo/eliza/packages/ui",
-      },
-      {
-        linkPath: "/repo/milady/apps/app/node_modules/@elizaos/ui",
-        targetPath: "/repo/eliza/packages/ui",
-      },
-      {
-        linkPath: "/repo/milady/apps/home/node_modules/@elizaos/ui",
-        targetPath: "/repo/eliza/packages/ui",
-      },
-    ]);
+      );
+
+      expect(expectedLinks).toEqual(
+        expect.arrayContaining([
+          {
+            linkPath: path.join(miladyRoot, "node_modules/@elizaos/autonomous"),
+            targetPath: path.join(elizaRoot, "packages/autonomous"),
+          },
+          {
+            linkPath: path.join(miladyRoot, "node_modules/@elizaos/app-core"),
+            targetPath: path.join(elizaRoot, "packages/app-core"),
+          },
+          {
+            linkPath: path.join(
+              miladyRoot,
+              "apps/app/node_modules/@elizaos/app-core",
+            ),
+            targetPath: path.join(elizaRoot, "packages/app-core"),
+          },
+          {
+            linkPath: path.join(
+              miladyRoot,
+              "apps/home/node_modules/@elizaos/app-core",
+            ),
+            targetPath: path.join(elizaRoot, "packages/app-core"),
+          },
+          {
+            linkPath: path.join(miladyRoot, "node_modules/@elizaos/ui"),
+            targetPath: path.join(elizaRoot, "packages/ui"),
+          },
+          {
+            linkPath: path.join(
+              miladyRoot,
+              "apps/app/node_modules/@elizaos/ui",
+            ),
+            targetPath: path.join(elizaRoot, "packages/ui"),
+          },
+          {
+            linkPath: path.join(
+              miladyRoot,
+              "apps/home/node_modules/@elizaos/ui",
+            ),
+            targetPath: path.join(elizaRoot, "packages/ui"),
+          },
+        ]),
+      );
+    } finally {
+      rmSync(tempRoot, { force: true, recursive: true });
+    }
   });
 });
 

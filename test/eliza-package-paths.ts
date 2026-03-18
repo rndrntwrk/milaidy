@@ -83,9 +83,16 @@ export function getAutonomousSourceRoot(repoRoot: string): string | undefined {
     return undefined;
   }
 
-  return path.basename(packageRoot) === "src"
-    ? packageRoot
-    : path.join(packageRoot, "packages", "autonomous", "src");
+  if (path.basename(packageRoot) === "src") {
+    return packageRoot;
+  }
+
+  const directSrc = path.join(packageRoot, "src");
+  if (existsSync(directSrc)) {
+    return directSrc;
+  }
+
+  return path.join(packageRoot, "packages", "autonomous", "src");
 }
 
 export function getAppCoreSourceRoot(repoRoot: string): string | undefined {

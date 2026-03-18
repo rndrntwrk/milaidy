@@ -6,6 +6,7 @@
  *   • Dimension migration detection with warning logging
  */
 
+import { getLogPrefix } from "../utils/log-prefix.js";
 import {
   checkDimensionMigration,
   DEFAULT_IDLE_TIMEOUT_MS,
@@ -19,7 +20,6 @@ import {
   safeUnlink,
 } from "./embedding-manager-support.js";
 import { detectEmbeddingPreset } from "./embedding-presets.js";
-import { getLogPrefix } from "../utils/log-prefix.js";
 
 // Lazy-imported to keep the module lightweight at parse time.
 // node-llama-cpp pulls in native binaries — importing at the top would slow
@@ -111,7 +111,9 @@ export class ElizaEmbeddingManager {
       await this.ensureInitialized();
 
       if (!this.embeddingContext) {
-        throw new Error(`${getLogPrefix()} Embedding context not available after init`);
+        throw new Error(
+          `${getLogPrefix()} Embedding context not available after init`,
+        );
       }
 
       // Truncate to prevent GGML assertion crash when text exceeds context window.
@@ -128,7 +130,9 @@ export class ElizaEmbeddingManager {
       const result = await this.embeddingContext.getEmbeddingFor(input);
       return Array.from(result.vector);
     } catch (err) {
-      getLogger().error(`${getLogPrefix()} Embedding generation failed: ${err}`);
+      getLogger().error(
+        `${getLogPrefix()} Embedding generation failed: ${err}`,
+      );
       return new Array(this.dimensions).fill(0);
     } finally {
       this.inFlightCount -= 1;

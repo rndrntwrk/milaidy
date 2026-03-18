@@ -155,7 +155,7 @@
     "@elizaos/plugin-groq": "alpha",
     "@elizaos/plugin-knowledge": "alpha",
     "@elizaos/plugin-local-embedding": "alpha",
-    "@elizaos/plugin-ollama": "alpha",
+    "@elizaos/plugin-ollama": "2.0.0-alpha.7",
     "@elizaos/plugin-openai": "alpha",
     "@elizaos/plugin-openrouter": "alpha",
     "@elizaos/plugin-pdf": "alpha",
@@ -170,7 +170,6 @@
     "@elizaos/plugin-sql": "alpha",
     "@elizaos/plugin-streaming-base": "alpha",
     "@elizaos/plugin-telegram": "alpha",
-    "@elizaos/plugin-todo": "alpha",
     "@elizaos/plugin-trajectory-logger": "alpha",
     "@elizaos/plugin-trust": "alpha",
     "@elizaos/plugin-twitch": "alpha",
@@ -226,6 +225,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.7",
+    "@types/bun": "^1.3.10",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^25.5.0",
     "@types/pg": "^8.18.0",
@@ -245,7 +245,8 @@
     "@elizaos/core": "alpha",
     "@elizaos/prompts": "alpha",
     "libsignal": "git+https://github.com/whiskeysockets/libsignal-node.git#1c30d7d7e76a3b0aa120b04dc6a26f5a12dccf67",
-    "pty-manager": "1.9.8"
+    "pty-manager": "1.9.8",
+    "@elizaos/plugin-ollama": "2.0.0-alpha.7"
   },
   "patchedDependencies": {
     "electrobun@1.15.1": "patches/electrobun@1.15.1.patch"

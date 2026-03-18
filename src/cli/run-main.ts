@@ -1,7 +1,7 @@
 import process from "node:process";
+import { getLogPrefix } from "../utils/log-prefix";
 import { getPrimaryCommand, hasHelpOrVersion } from "./argv";
 import { registerSubCliByName } from "./program/register.subclis";
-import { getLogPrefix } from "../utils/log-prefix";
 
 async function loadDotEnv(): Promise<void> {
   try {
@@ -82,12 +82,18 @@ export async function runCli(argv: string[] = process.argv) {
       );
       return;
     }
-    console.error(`${getLogPrefix()} Unhandled rejection:`, formatUncaughtError(reason));
+    console.error(
+      `${getLogPrefix()} Unhandled rejection:`,
+      formatUncaughtError(reason),
+    );
     process.exit(1);
   });
 
   process.on("uncaughtException", (error) => {
-    console.error(`${getLogPrefix()} Uncaught exception:`, formatUncaughtError(error));
+    console.error(
+      `${getLogPrefix()} Uncaught exception:`,
+      formatUncaughtError(error),
+    );
     process.exit(1);
   });
 

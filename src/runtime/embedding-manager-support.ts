@@ -88,7 +88,9 @@ function writeEmbeddingMeta(meta: EmbeddingMeta): void {
     fs.mkdirSync(EMBEDDING_META_DIR, { recursive: true });
     fs.writeFileSync(EMBEDDING_META_PATH, JSON.stringify(meta, null, 2));
   } catch (err) {
-    getLogger().warn(`${getLogPrefix()} Failed to write embedding metadata: ${err}`);
+    getLogger().warn(
+      `${getLogPrefix()} Failed to write embedding metadata: ${err}`,
+    );
   }
 }
 

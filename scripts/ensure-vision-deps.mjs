@@ -30,17 +30,25 @@ function getCliName() {
       if (pkg.name) {
         let name = pkg.name;
         if (name.startsWith("@")) name = name.split("/")[1];
-        if (name === "miladyai" || name === "milady-ai" || name.includes("milady")) return "milady";
+        if (
+          name === "miladyai" ||
+          name === "milady-ai" ||
+          name.includes("milady")
+        )
+          return "milady";
         if (name === "elizaos" || name.includes("eliza")) return "eliza";
         return name;
       }
     }
-  } catch (e) {
+  } catch (_e) {
     // Ignore parsing errors
   }
 
   // Fallbacks based on directory structure
-  if (process.cwd().includes("eliza-workspace") || process.cwd().includes("milady")) {
+  if (
+    process.cwd().includes("eliza-workspace") ||
+    process.cwd().includes("milady")
+  ) {
     return "milady";
   }
 

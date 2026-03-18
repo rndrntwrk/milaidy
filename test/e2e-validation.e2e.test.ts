@@ -493,7 +493,6 @@ describe("Plugin Stress Test", () => {
     "@elizaos/plugin-pdf",
     "@elizaos/plugin-scratchpad",
     "@elizaos/plugin-secrets-manager",
-    "@elizaos/plugin-todo",
     "@elizaos/plugin-trust",
     "@elizaos/plugin-vision",
     "@elizaos/plugin-cron",

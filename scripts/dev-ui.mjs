@@ -52,17 +52,25 @@ function getCliName() {
       if (pkg.name) {
         let name = pkg.name;
         if (name.startsWith("@")) name = name.split("/")[1];
-        if (name === "miladyai" || name === "milady-ai" || name.includes("milady")) return "milady";
+        if (
+          name === "miladyai" ||
+          name === "milady-ai" ||
+          name.includes("milady")
+        )
+          return "milady";
         if (name === "elizaos" || name.includes("eliza")) return "eliza";
         return name;
       }
     }
-  } catch (e) {
+  } catch (_e) {
     // Ignore parsing errors
   }
 
   // Fallbacks based on directory structure
-  if (process.cwd().includes("eliza-workspace") || process.cwd().includes("milady")) {
+  if (
+    process.cwd().includes("eliza-workspace") ||
+    process.cwd().includes("milady")
+  ) {
     return "milady";
   }
 
@@ -1050,7 +1058,7 @@ function startVite() {
   if (existsSync(pkgPath)) {
     try {
       const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-      if (pkg.scripts && pkg.scripts["plugin:build"]) {
+      if (pkg.scripts?.["plugin:build"]) {
         console.log(`  ${green(logPrefix)} Building plugins for ${appDir}...`);
         execSync(hasBun ? "bun run plugin:build" : "npm run plugin:build", {
           cwd: path.join(cwd, appDir),
@@ -1059,7 +1067,10 @@ function startVite() {
         });
       }
     } catch (err) {
-      console.error(`  ${green(logPrefix)} Failed to build plugins for ${appDir}:`, err.message);
+      console.error(
+        `  ${green(logPrefix)} Failed to build plugins for ${appDir}:`,
+        err.message,
+      );
     }
   }
 
@@ -1195,7 +1206,7 @@ if (uiOnly) {
           filePath,
         ]),
         "--watch",
-        "src/[(eliza|milady)(?:-api)?]|runtime/dev-server.ts",
+        "src/runtime/dev-server.ts",
       ]
     : [
         "node",
@@ -1203,7 +1214,7 @@ if (uiOnly) {
         "--import",
         "tsx",
         "--watch",
-        "src/[(eliza|milady)(?:-api)?]|runtime/dev-server.ts",
+        "src/runtime/dev-server.ts",
       ];
   apiProcess = spawn(apiCmd[0], apiCmd.slice(1), {
     cwd,

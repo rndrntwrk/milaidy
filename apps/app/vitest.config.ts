@@ -77,14 +77,6 @@ export default defineConfig({
     environment: "node",
     alias: {
       "@elizaos/skills": path.join(here, "test/__mocks__/elizaos-skills.ts"),
-      "@elizaos/plugin-pdf": path.join(
-        here,
-        "..",
-        "..",
-        "test",
-        "stubs",
-        "empty-module.mjs",
-      ),
       "@miladyai/capacitor-gateway": path.join(
         here,
         "plugins/gateway/src/index.ts",

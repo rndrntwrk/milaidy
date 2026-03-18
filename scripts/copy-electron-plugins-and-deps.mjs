@@ -121,8 +121,8 @@ function collectTransitiveDeps(entryNames) {
 // Discover @elizaos/* from package.json and filter to those present.
 const pkg = readJson(path.join(ROOT, "package.json"));
 const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
-const elizaosPackages = Object.keys(allDeps).filter(
-  (d) => d.startsWith("@elizaos/"),
+const elizaosPackages = Object.keys(allDeps).filter((d) =>
+  d.startsWith("@elizaos/"),
 );
 
 const toCopy = elizaosPackages.filter((name) => {

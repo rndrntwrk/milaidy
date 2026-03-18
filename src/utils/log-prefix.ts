@@ -7,7 +7,7 @@ export function getLogPrefix(): string {
   if (cachedPrefix !== null) {
     return cachedPrefix;
   }
-  
+
   // Also check if CLI passed --name
   const nameArgMatch = process.argv.find((a) => a.startsWith("--name="));
   if (nameArgMatch) {
@@ -23,7 +23,11 @@ export function getLogPrefix(): string {
       if (pkg.name) {
         let name = pkg.name;
         if (name.startsWith("@")) name = name.split("/")[1];
-        if (name === "miladyai" || name === "milady-ai" || name.includes("milady")) {
+        if (
+          name === "miladyai" ||
+          name === "milady-ai" ||
+          name.includes("milady")
+        ) {
           cachedPrefix = "[milady]";
           return cachedPrefix;
         }
@@ -31,17 +35,20 @@ export function getLogPrefix(): string {
           cachedPrefix = "[eliza]";
           return cachedPrefix;
         }
-        
+
         cachedPrefix = `[${name}]`;
         return cachedPrefix;
       }
     }
-  } catch (e) {
+  } catch (_e) {
     // Ignore parsing errors
   }
 
   // Fallbacks based on directory structure
-  if (process.cwd().includes("eliza-workspace") || process.cwd().includes("milady")) {
+  if (
+    process.cwd().includes("eliza-workspace") ||
+    process.cwd().includes("milady")
+  ) {
     cachedPrefix = "[milady]";
     return cachedPrefix;
   }

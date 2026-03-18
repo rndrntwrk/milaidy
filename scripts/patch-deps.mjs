@@ -26,6 +26,7 @@ import {
   patchAgentSkillsCatalogFetch,
   patchAppCoreMiladyAssets,
   patchAutonomousMiladyOnboardingPresets,
+  patchAutonomousTypeError,
   patchBrokenElizaCoreRuntimeDists,
   patchBunExports,
   patchExtensionlessJsExports,
@@ -64,6 +65,7 @@ patchProperLockfileSignalExitCompat(root);
 patchBrokenElizaCoreRuntimeDists(root);
 patchAutonomousMiladyOnboardingPresets(root);
 patchAppCoreMiladyAssets(root);
+patchAutonomousTypeError(root);
 
 /**
  * Vite caches prebundled dependencies under node_modules/.vite. When patch-deps

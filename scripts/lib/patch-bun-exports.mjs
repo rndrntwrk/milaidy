@@ -629,11 +629,23 @@ export function patchAutonomousMiladyOnboardingPresets(
   log = console.log,
   source = loadMiladyOnboardingPresetsSource(root),
 ) {
-  const candidates = findPackageFilePaths(
-    root,
-    "@elizaos/autonomous",
-    "packages/autonomous/src/onboarding-presets.js",
-  );
+  const candidates = [
+    ...findPackageFilePaths(
+      root,
+      "@elizaos/autonomous",
+      "packages/autonomous/src/onboarding-presets.js",
+    ),
+    ...findPackageFilePaths(
+      root,
+      "@elizaos/autonomous",
+      "src/onboarding-presets.js",
+    ),
+    ...findPackageFilePaths(
+      root,
+      "@elizaos/autonomous",
+      "src/onboarding-presets.ts",
+    ),
+  ];
 
   let patched = false;
   for (const filePath of candidates) {
@@ -884,6 +896,29 @@ export function patchProperLockfileSignalExitCompat(root, log = console.log) {
       log(
         "[patch-deps] Patched proper-lockfile: signal-exit v3/v4 compatibility applied.",
       );
+    }
+  }
+  return patched;
+}
+
+export function patchAutonomousTypeError(root, log = console.log) {
+  const candidates = findPackageFilePaths(
+    root,
+    "@elizaos/autonomous",
+    "src/api/server.ts",
+  );
+  let patched = false;
+  for (const filePath of candidates) {
+    if (!existsSync(filePath)) continue;
+    let source = readFileSync(filePath, "utf8");
+    if (source.includes("as SubscriptionAuthApi")) {
+      source = source.replaceAll(
+        "as SubscriptionAuthApi",
+        "as unknown as SubscriptionAuthApi",
+      );
+      writeFileSync(filePath, source, "utf8");
+      patched = true;
+      log("[patch-deps] Patched @elizaos/autonomous type error in server.ts");
     }
   }
   return patched;

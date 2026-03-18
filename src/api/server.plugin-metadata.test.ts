@@ -42,7 +42,7 @@ describe("plugin metadata discovery", () => {
       expect(retake?.category).toBe("streaming");
       expect(retake?.tags?.length).toBeGreaterThan(0);
       expect(retake?.setupGuideUrl).toMatch(
-        /^https:\/\/docs\.(elizaos|eliza|eliza)\.ai\/plugin-setup-guide#retaketv$/,
+        /^https:\/\/docs\.(elizaos|eliza|milady)\.ai\/plugin-setup-guide#retaketv$/,
       );
       expect(retake?.repository).toContain("plugin-retake");
     },
@@ -112,7 +112,7 @@ describe("plugin metadata discovery", () => {
     expect(plugins[0]?.homepage).toBe("https://retake.tv");
     expect(plugins[0]?.repository).toBe("https://github.com/elizaos/eliza");
     expect(plugins[0]?.setupGuideUrl).toMatch(
-      /^https:\/\/docs\.(elizaos|eliza|eliza)\.ai\/plugin-setup-guide#retaketv$/,
+      /^https:\/\/docs\.(elizaos|eliza|milady)\.ai\/plugin-setup-guide#retaketv$/,
     );
     expect(plugins[0]?.tags).toEqual(
       expect.arrayContaining(["streaming", "video", "creator"]),

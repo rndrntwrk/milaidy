@@ -1,5 +1,4 @@
 import { logger } from "@elizaos/core";
-// @ts-expect-error - plugin package currently ships without type declarations
 import { MessageManager } from "@elizaos/plugin-telegram";
 import { Markup } from "telegraf";
 import { smartChunkTelegramText } from "./chunking.js";
