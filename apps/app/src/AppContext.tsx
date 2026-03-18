@@ -6814,6 +6814,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setStartupError(null);
       setOnboardingLoading(false);
 
+      // Hydrate character data early so Asset Vault identity panel is populated
+      void loadCharacter();
+
       // Load conversations — if none exist, create one and request a greeting
       let greetConvId: string | null = null;
       try {
