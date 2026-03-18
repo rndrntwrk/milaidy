@@ -8583,6 +8583,16 @@ function ensureApiTokenForBindHost(host: string): void {
   if (token) return;
   if (isLoopbackBindHost(host)) return;
 
+  // Allow deployments behind external auth (e.g. Cloudflare Access) to skip
+  // the auto-generated pairing token.  Set MILAIDY_AUTH_DISABLED=1 in the
+  // environment to disable.  The UI dashboard will load without pairing.
+  if (process.env.MILAIDY_AUTH_DISABLED === "1") {
+    logger.info(
+      `[milaidy-api] MILAIDY_AUTH_DISABLED=1 — skipping auto-generated API token for non-loopback bind ${host}.`,
+    );
+    return;
+  }
+
   const generated = crypto.randomBytes(32).toString("hex");
   process.env.MILAIDY_API_TOKEN = generated;
 
@@ -8595,6 +8605,7 @@ function ensureApiTokenForBindHost(host: string): void {
 }
 
 function isAuthorized(req: http.IncomingMessage): boolean {
+  if (process.env.MILAIDY_AUTH_DISABLED === "1") return true;
   const expected = process.env.MILAIDY_API_TOKEN?.trim();
   if (!expected) return true;
   const provided = extractAuthToken(req);
@@ -9894,8 +9905,11 @@ async function handleRequest(
 
   // ── GET /api/auth/status ───────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/auth/status") {
-    const required = Boolean(process.env.MILAIDY_API_TOKEN?.trim());
-    const enabled = pairingEnabled();
+    // When MILAIDY_AUTH_DISABLED=1 (e.g. behind Cloudflare Access),
+    // report auth as not required so the dashboard loads without pairing.
+    const authDisabled = process.env.MILAIDY_AUTH_DISABLED === "1";
+    const required = !authDisabled && Boolean(process.env.MILAIDY_API_TOKEN?.trim());
+    const enabled = !authDisabled && pairingEnabled();
     if (enabled) ensurePairingCode();
     json(res, {
       required,

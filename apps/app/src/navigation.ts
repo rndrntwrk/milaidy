@@ -12,6 +12,11 @@ import {
 export { APPS_ENABLED } from "./miladyHudRouting.js";
 export type { Tab } from "./miladyHudRouting.js";
 
+export interface TabGroup {
+  label: string;
+  tabs: Tab[];
+}
+
 const ALL_TAB_GROUPS = [
   { label: "Chat", tabs: ["chat"] as Tab[] },
   { label: "Character", tabs: ["character"] as Tab[] },
@@ -45,6 +50,13 @@ const ALL_TAB_GROUPS = [
 export const TAB_GROUPS = APPS_ENABLED
   ? ALL_TAB_GROUPS
   : ALL_TAB_GROUPS.filter((g) => g.label !== "Apps");
+
+/** Compute visible tab groups. Pass streamEnabled explicitly for React reactivity. */
+export function getTabGroups(_streamEnabled = false): TabGroup[] {
+  return APPS_ENABLED
+    ? [...ALL_TAB_GROUPS]
+    : ALL_TAB_GROUPS.filter((g) => g.label !== "Apps");
+}
 
 const TAB_PATHS: Record<Tab, string> = {
   chat: "/chat",

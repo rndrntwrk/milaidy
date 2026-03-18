@@ -172,6 +172,20 @@ export function getVrmPreviewUrl(index: number): string {
     : resolveAppAssetUrl(`vrms/previews/milady-${safeIndex}.png`);
 }
 
+/** Resolve a bundled VRM index (1-N) to its custom background URL. */
+export function getVrmBackgroundUrl(index: number): string {
+  const normalized = normalizeAvatarIndex(index);
+  const safeIndex = normalized > 0 ? normalized : 1;
+  return resolveAppAssetUrl(`vrms/backgrounds/milady-${safeIndex}.png`);
+}
+
+/** Human-readable roster title for bundled avatars. */
+export function getVrmTitle(index: number): string {
+  const normalized = normalizeAvatarIndex(index);
+  const safeIndex = normalized > 0 ? normalized : 1;
+  return `MILADY-${String(safeIndex).padStart(2, "0")}`;
+}
+
 const VRM_CDN_BASE =
   "https://555stream-image-service.gl4sspr1sm.workers.dev/vrm-stage";
 
