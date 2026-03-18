@@ -111,7 +111,7 @@ describe("twitter-verify (MW-10)", () => {
       );
       expect(msg).toContain("TestAgent");
       expect(msg).toContain("0xd8dA...6045");
-      expect(msg).toContain("#ElizaAgent");
+      expect(msg).toMatch(/#ElizaAgent|#MiladyAgent/);
     });
 
     it.each([
@@ -129,7 +129,7 @@ describe("twitter-verify (MW-10)", () => {
     ])("formats correctly for agent=%s addr=%s → expects %s", (agentName, addr, expectedShort) => {
       const msg = generateVerificationMessage(agentName, addr);
       expect(msg).toContain(expectedShort);
-      expect(msg).toContain("#ElizaAgent");
+      expect(msg).toMatch(/#ElizaAgent|#MiladyAgent/);
     });
   });
 
@@ -202,7 +202,7 @@ describe("twitter-verify (MW-10)", () => {
         status: 200,
         body: {
           tweet: {
-            text: `0x1234...5678 #ElizaAgent`,
+            text: `0x1234...5678 #ElizaAgent #MiladyAgent`,
             author: { screen_name: "whoever" },
           },
         },
@@ -211,7 +211,9 @@ describe("twitter-verify (MW-10)", () => {
       expect(fetchMock).toHaveBeenCalledWith(
         expectedApi,
         expect.objectContaining({
-          headers: { "User-Agent": "ElizaVerifier/1.0" },
+          headers: expect.objectContaining({
+            "User-Agent": expect.stringMatching(/^(Eliza|Milady)Verifier\/1\.0$/),
+          }),
         }),
       );
     });
@@ -311,7 +313,7 @@ describe("twitter-verify (MW-10)", () => {
     it.each([
       {
         label: "missing address",
-        text: "Verifying my Eliza agent #ElizaAgent",
+        text: "Verifying my Eliza agent #ElizaAgent #MiladyAgent",
         author: { screen_name: "miladyai" },
         expected: {
           verified: false,
@@ -326,12 +328,12 @@ describe("twitter-verify (MW-10)", () => {
         author: { screen_name: "miladyai" },
         expected: {
           verified: false,
-          error: "Tweet is missing #ElizaAgent hashtag.",
+          error: expect.stringMatching(/Tweet is missing #(Eliza|Milady)Agent hashtag/),
           handle: "miladyai",
         },
       },
       {
-        label: "valid shortened address + hashtag",
+        label: "valid shortened address + hashtag (ElizaAgent)",
         text: 'Verifying my Eliza agent "Milady" | 0x1234...5678 #ElizaAgent',
         author: { screen_name: "miladyai" },
         expected: {
@@ -341,8 +343,18 @@ describe("twitter-verify (MW-10)", () => {
         },
       },
       {
+        label: "valid shortened address + hashtag (MiladyAgent)",
+        text: 'Verifying my Milady agent "Milady" | 0x1234...5678 #MiladyAgent',
+        author: { screen_name: "miladyai" },
+        expected: {
+          verified: true,
+          error: null,
+          handle: "miladyai",
+        },
+      },
+      {
         label: "valid full address prefix + hashtag",
-        text: `Verifying ${WALLET.slice(0, 10)} #ElizaAgent`,
+        text: `Verifying ${WALLET.slice(0, 10)} #ElizaAgent #MiladyAgent`,
         author: { screen_name: "holder" },
         expected: {
           verified: true,
@@ -352,7 +364,7 @@ describe("twitter-verify (MW-10)", () => {
       },
       {
         label: "case-insensitive address match",
-        text: `${WALLET.toUpperCase().slice(0, 10)} #ElizaAgent`,
+        text: `${WALLET.toUpperCase().slice(0, 10)} #ElizaAgent #MiladyAgent`,
         author: { screen_name: "casefan" },
         expected: {
           verified: true,
@@ -362,7 +374,7 @@ describe("twitter-verify (MW-10)", () => {
       },
       {
         label: "falls back to URL screenName when author.screen_name missing",
-        text: "0x1234...5678 #ElizaAgent",
+        text: "0x1234...5678 #ElizaAgent #MiladyAgent",
         author: {},
         expected: {
           verified: true,

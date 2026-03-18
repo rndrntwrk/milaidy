@@ -141,24 +141,23 @@ if (typeof globalThis.HTMLCanvasElement !== "undefined") {
 import { withIsolatedTestHome } from "./test-env";
 
 // ── Environment isolation ────────────────────────────────────────────
-// Snapshot process.env before each test file so that env mutations made by
-// individual tests (e.g. setting MILADY_API_TOKEN) don't leak to subsequent
-// test files running in the same forked worker process.
-const envSnapshot = { ...process.env };
+// Snapshot process.env at file level so that env mutations made by any test
+// or beforeAll/afterAll hooks don't leak to the next test file when running
+// in the same forked worker.
+const fileEnvSnapshot = { ...process.env };
 
-afterEach(() => {
-  // Restore env: delete keys that were added, restore original values.
+afterAll(() => {
+  // Restore env to its state when this file started.
   for (const key of Object.keys(process.env)) {
-    if (!(key in envSnapshot)) {
+    if (!(key in fileEnvSnapshot)) {
       delete process.env[key];
-    } else if (process.env[key] !== envSnapshot[key]) {
-      process.env[key] = envSnapshot[key];
+    } else if (process.env[key] !== fileEnvSnapshot[key]) {
+      process.env[key] = fileEnvSnapshot[key];
     }
   }
-  // Restore keys that may have been deleted by tests.
-  for (const key of Object.keys(envSnapshot)) {
+  for (const key of Object.keys(fileEnvSnapshot)) {
     if (!(key in process.env)) {
-      process.env[key] = envSnapshot[key];
+      process.env[key] = fileEnvSnapshot[key];
     }
   }
 });

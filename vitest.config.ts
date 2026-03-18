@@ -267,6 +267,7 @@ export default defineConfig({
     testTimeout: 120_000,
     hookTimeout: isWindows ? 180_000 : 120_000,
     pool: "forks",
+    singleFork: true,
     maxWorkers: isCI ? ciWorkers : localWorkers,
     restoreMocks: true,
     // Increase V8 heap for worker forks to prevent OOM during GC

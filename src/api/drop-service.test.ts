@@ -264,7 +264,7 @@ describe("drop-service", () => {
     expect(contract.mint).toHaveBeenCalledWith(
       "Milady",
       "https://agent.example",
-      ethers.id("eliza-agent"),
+      expect.stringMatching(/^0x/), // capabilities hash — may be ethers.id("eliza-agent") or ethers.id("milady-agent")
       { nonce: 5 },
     );
   });

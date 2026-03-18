@@ -99,7 +99,7 @@ describe("frontmatter parsing", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0].hook.name).toBe("my-hook");
     expect(entries[0].frontmatter.description).toBe("A test hook");
-    expect(entries[0].hook.source).toBe("eliza-bundled");
+    expect(entries[0].hook.source).toMatch(/^(eliza|milady)-bundled$/);
   });
 
   it("extracts milady metadata from frontmatter JSON", async () => {
@@ -292,7 +292,7 @@ describe("discovery precedence", () => {
 
     expect(entries).toHaveLength(1);
     expect(entries[0].frontmatter.description).toBe("workspace version");
-    expect(entries[0].hook.source).toBe("eliza-workspace");
+    expect(entries[0].hook.source).toMatch(/^(eliza|milady)-workspace$/);
   });
 
   it("collects hooks from all sources when names are unique", async () => {

@@ -140,11 +140,13 @@ describe("isAllowedHost — DNS rebinding protection", () => {
 
   it("allows any hostname when ELIZA_API_BIND=::", () => {
     process.env.ELIZA_API_BIND = "::";
+    process.env.MILADY_API_BIND = "::";
     expect(isAllowedHost(fakeReq("10.0.0.1"))).toBe(true);
   });
 
   it("allows any hostname when ELIZA_API_BIND=0.0.0.0 with port suffix", () => {
     process.env.ELIZA_API_BIND = "0.0.0.0:31337";
+    process.env.MILADY_API_BIND = "0.0.0.0:31337";
     expect(isAllowedHost(fakeReq("192.168.1.1"))).toBe(true);
   });
 

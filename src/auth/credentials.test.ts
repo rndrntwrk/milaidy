@@ -51,6 +51,7 @@ describe("applySubscriptionCredentials", () => {
   const savedEnv: Record<string, string | undefined> = {};
 
   beforeEach(() => {
+    vi.resetModules();
     vi.clearAllMocks();
     savedEnv.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
     savedEnv.OPENAI_API_KEY = process.env.OPENAI_API_KEY;

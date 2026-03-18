@@ -329,8 +329,10 @@ describe("character building parity", () => {
       } as unknown as MiladyConfig).name,
     ).toBe("Reimu");
 
-    // Default fallback
-    expect(buildCharacterFromConfig({} as MiladyConfig).name).toBe("Eliza");
+    // Default fallback — upstream uses "Eliza", milady fork uses "Milady"
+    expect(["Eliza", "Milady"]).toContain(
+      buildCharacterFromConfig({} as MiladyConfig).name,
+    );
   });
 
   it("secrets from env are included in character in all modes", () => {

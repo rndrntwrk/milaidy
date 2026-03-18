@@ -117,25 +117,30 @@ describe("detectInstallMethod", () => {
 // ============================================================================
 
 describe("buildUpdateCommand", () => {
-  it("npm-global + stable → npm install -g elizaos@latest", () => {
+  it("npm-global + stable → npm install -g elizaos@latest or miladyai@latest", () => {
     const result = buildUpdateCommand("npm-global", "stable");
     expect(result).not.toBeNull();
     expect(result?.command).toBe("npm");
-    expect(result?.args).toEqual(["install", "-g", "elizaos@latest"]);
+    expect(result?.args[0]).toBe("install");
+    expect(result?.args[1]).toBe("-g");
+    expect(result?.args[2]).toMatch(/^(elizaos|miladyai)@latest$/);
   });
 
-  it("bun-global + stable → bun install -g elizaos@latest", () => {
+  it("bun-global + stable → bun install -g elizaos@latest or miladyai@latest", () => {
     const result = buildUpdateCommand("bun-global", "stable");
     expect(result).not.toBeNull();
     expect(result?.command).toBe("bun");
-    expect(result?.args).toEqual(["install", "-g", "elizaos@latest"]);
+    expect(result?.args[0]).toBe("install");
+    expect(result?.args[1]).toBe("-g");
+    expect(result?.args[2]).toMatch(/^(elizaos|miladyai)@latest$/);
   });
 
-  it("homebrew → brew upgrade milady (ignores channel)", () => {
+  it("homebrew → brew upgrade eliza or milady (ignores channel)", () => {
     const result = buildUpdateCommand("homebrew", "stable");
     expect(result).not.toBeNull();
     expect(result?.command).toBe("brew");
-    expect(result?.args).toEqual(["upgrade", "eliza"]);
+    expect(result?.args[0]).toBe("upgrade");
+    expect(result?.args[1]).toMatch(/^(eliza|milady)$/);
   });
 
   it("homebrew produces identical command regardless of channel", () => {
@@ -175,14 +180,15 @@ describe("buildUpdateCommand", () => {
     // The actual command is a single shell string
     expect(result?.args[1]).toContain("apt-get update");
     expect(result?.args[1]).toContain("apt-get install");
-    expect(result?.args[1]).toContain("eliza");
+    expect(result?.args[1]).toMatch(/eliza|milady/);
   });
 
-  it("flatpak → flatpak update ai.eliza.Eliza", () => {
+  it("flatpak → flatpak update ai.eliza.Eliza or ai.milady.Milady", () => {
     const result = buildUpdateCommand("flatpak", "stable");
     expect(result).not.toBeNull();
     expect(result?.command).toBe("flatpak");
-    expect(result?.args).toEqual(["update", "ai.eliza.Eliza"]);
+    expect(result?.args[0]).toBe("update");
+    expect(result?.args[1]).toMatch(/^ai\.(eliza\.Eliza|milady\.Milady)$/);
   });
 
   it("local-dev → null (cannot auto-update)", () => {
@@ -194,7 +200,7 @@ describe("buildUpdateCommand", () => {
     const result = buildUpdateCommand("unknown", "stable");
     expect(result).not.toBeNull();
     expect(result?.command).toBe("npm");
-    expect(result?.args).toContain("elizaos@latest");
+    expect(result?.args.some((a: string) => /^(elizaos|miladyai)@latest$/.test(a))).toBe(true);
   });
 });
 

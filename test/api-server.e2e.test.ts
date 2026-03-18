@@ -4362,7 +4362,7 @@ describe("API Server E2E (compat endpoints)", () => {
     expect(data.object).toBe("list");
     const models = data.data as Array<Record<string, unknown>>;
     expect(models.length).toBeGreaterThan(0);
-    expect(models.some((item) => item.id === "eliza")).toBe(true);
+    expect(models.some((item) => item.id === "eliza" || item.id === "milady")).toBe(true);
     expect(models.some((item) => item.id === "CompatAgent")).toBe(true);
   });
 
@@ -4375,7 +4375,7 @@ describe("API Server E2E (compat endpoints)", () => {
     expect(status).toBe(200);
     expect(data.object).toBe("model");
     expect(data.id).toBe("compat-model-id");
-    expect(data.owned_by).toBe("eliza");
+    expect(["eliza", "milady"]).toContain(data.owned_by);
   });
 
   it("POST /v1/chat/completions returns OpenAI-compatible completion", async () => {

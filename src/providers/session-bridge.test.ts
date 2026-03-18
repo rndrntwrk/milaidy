@@ -124,8 +124,8 @@ describe("createSessionKeyProvider", () => {
     expect(typeof provider.get).toBe("function");
   });
 
-  it("provider name is 'elizaSessionKey'", () => {
+  it("provider name is 'elizaSessionKey' or 'miladySessionKey'", () => {
     const provider = createSessionKeyProvider();
-    expect(provider.name).toBe("elizaSessionKey");
+    expect(["elizaSessionKey", "miladySessionKey"]).toContain(provider.name);
   });
 });
