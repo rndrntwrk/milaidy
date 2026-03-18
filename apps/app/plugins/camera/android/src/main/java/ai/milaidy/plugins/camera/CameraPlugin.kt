@@ -174,7 +174,7 @@ class CameraPlugin : Plugin() {
         }
     }
 
-    private fun hasRequiredPermissions(): Boolean {
+    override fun hasRequiredPermissions(): Boolean {
         return getPermissionState("camera") == com.getcapacitor.PermissionState.GRANTED
     }
 
@@ -946,7 +946,7 @@ class CameraPlugin : Plugin() {
     // ---- Permissions ----
 
     @PluginMethod
-    fun checkPermissions(call: PluginCall) {
+    override fun checkPermissions(call: PluginCall) {
         val cameraStatus = getPermissionState("camera")
         val micStatus = getPermissionState("microphone")
 
@@ -958,7 +958,7 @@ class CameraPlugin : Plugin() {
     }
 
     @PluginMethod
-    fun requestPermissions(call: PluginCall) {
+    override fun requestPermissions(call: PluginCall) {
         requestAllPermissions(call, "handleAllPermissionsResult")
     }
 

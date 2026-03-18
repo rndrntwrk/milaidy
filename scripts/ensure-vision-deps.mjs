@@ -17,6 +17,10 @@ const ORANGE = supportsColor ? "\x1b[38;2;255;165;0m" : "";
 const DIM = supportsColor ? "\x1b[2m" : "";
 const RESET = supportsColor ? "\x1b[0m" : "";
 
+const nameArgMatch = process.argv.find((a) => a.startsWith("--name="));
+const cliName = nameArgMatch ? nameArgMatch.split("=")[1] : "eliza";
+const logPrefix = `[${cliName}]`;
+
 function green(text) {
   return `${GREEN}${text}${RESET}`;
 }

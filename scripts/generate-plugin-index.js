@@ -169,7 +169,7 @@ const SETUP_GUIDE_ANCHORS = {
   "custom-rtmp": "#custom-rtmp",
 };
 
-const ELIZA_REPO_ROOT = "https://github.com/elizaos/eliza";
+const _ELIZA_REPO_ROOT = "https://github.com/elizaos/eliza";
 const MILADY_REPO_ROOT = "https://github.com/milady-ai/milady";
 const TAG_STOPWORDS = new Set([
   "plugin",

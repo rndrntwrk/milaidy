@@ -387,12 +387,12 @@ class TalkModePlugin : Plugin() {
     }
 
     @PluginMethod
-    fun checkPermissions(call: PluginCall) {
+    override fun checkPermissions(call: PluginCall) {
         call.resolve(buildPermissionResult())
     }
 
     @PluginMethod
-    fun requestPermissions(call: PluginCall) {
+    override fun requestPermissions(call: PluginCall) {
         if (!hasPermission(Manifest.permission.RECORD_AUDIO)) {
             requestPermissionForAlias("microphone", call, "handlePermissionResult")
         } else {

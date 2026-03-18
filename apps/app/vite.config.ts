@@ -84,8 +84,8 @@ function publicSrcPlugin(): Plugin {
             return;
           }
         }
-        if (url === "/animations/idle.glb") {
-          const file = path.join(publicSrc, "animations", "idle.glb");
+        if (url.startsWith("/animations/") && url.endsWith(".glb")) {
+          const file = path.join(publicSrc, url.slice(1)); // url is /animations/..., slice(1) makes it animations/...
           if (fs.existsSync(file)) {
             res.setHeader("Content-Type", "model/gltf-binary");
             fs.createReadStream(file).pipe(res);

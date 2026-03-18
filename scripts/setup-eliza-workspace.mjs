@@ -21,9 +21,7 @@ export const LOCAL_ELIZA_SKIP_ENV = "ELIZA_SKIP_LOCAL_ELIZA";
 export const LOCAL_ELIZA_FORCE_ENV = "ELIZA_FORCE_LOCAL_ELIZA";
 export const ELIZA_GIT_URL = "https://github.com/elizaos/eliza.git";
 export const ELIZA_BRANCH = "develop";
-export const ELIZA_REQUIRED_FILES = [
-  "package.json",
-];
+export const ELIZA_REQUIRED_FILES = ["package.json"];
 export const ELIZA_BUILD_STEPS = [
   {
     check: path.join("packages", "prompts", "dist", "typescript", "index.ts"),
@@ -231,7 +229,7 @@ export function getElizaPackageLinks(
             targetPath: path.join(elizaRoot, relativeTarget),
           });
         }
-      } catch (e) {
+      } catch (_e) {
         // Skip unparseable package.json
       }
     }

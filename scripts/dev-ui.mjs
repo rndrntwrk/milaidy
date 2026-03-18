@@ -954,11 +954,16 @@ killPort(UI_PORT);
 
 // Ensure vision dependencies are installed
 try {
-  execSync(`node scripts/ensure-vision-deps.mjs --name=${cliName}`, { stdio: "inherit" });
+  execSync(`node scripts/ensure-vision-deps.mjs --name=${cliName}`, {
+    stdio: "inherit",
+  });
 } catch (error) {
   process.env.ELIZA_VISION_DEPS_STATUS = "degraded";
   console.warn(
-    buildVisionDepsFailureMessage(error, `node scripts/ensure-vision-deps.mjs --name=${cliName}`),
+    buildVisionDepsFailureMessage(
+      error,
+      `node scripts/ensure-vision-deps.mjs --name=${cliName}`,
+    ),
   );
 }
 
@@ -1145,7 +1150,7 @@ if (uiOnly) {
           filePath,
         ]),
         "--watch",
-        "src/\[(eliza|milady)(?:-api)?\]|runtime/dev-server.ts",
+        "src/[(eliza|milady)(?:-api)?]|runtime/dev-server.ts",
       ]
     : [
         "node",
@@ -1153,7 +1158,7 @@ if (uiOnly) {
         "--import",
         "tsx",
         "--watch",
-        "src/\[(eliza|milady)(?:-api)?\]|runtime/dev-server.ts",
+        "src/[(eliza|milady)(?:-api)?]|runtime/dev-server.ts",
       ];
   apiProcess = spawn(apiCmd[0], apiCmd.slice(1), {
     cwd,
