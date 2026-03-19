@@ -3034,12 +3034,46 @@ async function initializeDatabaseAdapter(runtime: IRuntimeAdapterOwner): Promise
 }
 
 /**
+ * Run plugin-sql migrations before plugin initialization so the runtime can
+ * safely create and look up the agent row during startup.
+ */
+/** @internal Exported for testing. */
+export async function bootstrapDatabaseSchema(
+  runtime: IRuntimeAdapterOwner,
+  plugins: Plugin[],
+): Promise<void> {
+  const adapter = runtime.adapter as { db?: unknown } | undefined;
+  if (!adapter?.db) {
+    throw new Error(
+      "Database adapter does not expose a db handle for schema bootstrap",
+    );
+  }
+
+  logger.info(
+    `[milaidy] Bootstrapping plugin database schema for ${plugins.length} plugins`,
+  );
+
+  const { DatabaseMigrationService } = await import("@elizaos/plugin-sql");
+  const migrationService = new DatabaseMigrationService();
+
+  await migrationService.initializeWithDatabase(adapter.db as never);
+  migrationService.discoverAndRegisterPluginSchemas(plugins);
+  await migrationService.runAllPluginMigrations({
+    verbose: false,
+    dryRun: false,
+    force: false,
+  });
+  logger.info("[milaidy] Plugin database schema bootstrap complete");
+}
+
+/**
  * Minimal subset of AgentRuntime required for adapter lifecycle operations.
  */
 interface IRuntimeAdapterOwner {
   adapter: {
     isReady: () => Promise<boolean>;
     init: () => Promise<void>;
+    db?: unknown;
   };
 }
 
@@ -4563,6 +4597,7 @@ export async function startEliza(
     //     all plugin inits — too late for plugins that need runtime.db during init.
     //     The call is idempotent (runtime.initialize checks adapter.isReady()).
     await initializeDatabaseAdapter(runtime);
+    await bootstrapDatabaseSchema(runtime, resolvedPlugins.map((p) => p.plugin));
     logger.info("[milaidy] Database adapter initialized early (before plugin inits)");
   } else {
     const loadedNames = resolvedPlugins.map((p) => p.name).join(", ");
@@ -5261,6 +5296,12 @@ export async function startEliza(
           if (freshSqlPlugin) {
             await newRuntime.registerPlugin(freshSqlPlugin.plugin);
             await initializeDatabaseAdapter(newRuntime);
+            await bootstrapDatabaseSchema(newRuntime, [
+              freshMilaidyPlugin,
+              ...freshFive55SurfacePlugins,
+              ...freshOtherPlugins.map((p) => p.plugin),
+              freshSqlPlugin.plugin,
+            ]);
           }
           if (freshLocalEmbeddingPlugin) {
             await newRuntime.registerPlugin(freshLocalEmbeddingPlugin.plugin);
