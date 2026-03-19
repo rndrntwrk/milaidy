@@ -212,8 +212,7 @@ describe("applyOnboardingConnectionConfig", () => {
     expect((config.env as Record<string, string>)?.ANTHROPIC_API_KEY).toBe(
       "sk-ant-oat01-test-token",
     );
-    expect(applySubscriptionCredentials).not.toHaveBeenCalled();
-    expect(deleteCredentials).toHaveBeenCalledWith("anthropic-subscription");
+    expect(applySubscriptionCredentials).toHaveBeenCalledWith(config);
     expect(deleteCredentials).toHaveBeenCalledWith("openai-codex");
   });
 

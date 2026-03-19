@@ -113,9 +113,7 @@ export class WhatsAppBaileysService extends Service {
   }
 
   static async stopRuntime(runtime: IAgentRuntime): Promise<void> {
-    const svc = runtime.getService(
-      "whatsapp",
-    ) as WhatsAppBaileysService | null;
+    const svc = runtime.getService("whatsapp") as WhatsAppBaileysService | null;
     if (svc) {
       await svc.stop();
     }
@@ -238,7 +236,7 @@ export class WhatsAppBaileysService extends Service {
         for (const msg of messages) {
           try {
             await this.handleIncomingMessage(
-              msg as Record<string, unknown>,
+              msg as unknown as Record<string, unknown>,
             );
           } catch (err) {
             this.runtime.logger.error(
@@ -495,7 +493,7 @@ export class WhatsAppBaileysService extends Service {
       opts: { onResponse: (content: Content) => Promise<Memory[]> },
     ) => Promise<void>;
   } | null {
-    const rt = this.runtime as Record<string, unknown>;
+    const rt = this.runtime as unknown as Record<string, unknown>;
     if (
       "elizaOS" in rt &&
       typeof rt.elizaOS === "object" &&
@@ -514,7 +512,7 @@ export class WhatsAppBaileysService extends Service {
       callback: (content: Content) => Promise<Memory[]>,
     ) => Promise<unknown>;
   } | null {
-    const rt = this.runtime as Record<string, unknown>;
+    const rt = this.runtime as unknown as Record<string, unknown>;
     const svc = rt.messageService as Record<string, unknown> | null | undefined;
     if (svc && typeof svc.handleMessage === "function") {
       return svc as ReturnType<typeof this.getMessageService> & object;

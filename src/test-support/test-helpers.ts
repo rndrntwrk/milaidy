@@ -287,7 +287,7 @@ export function createMockHttpResponse<T = unknown>(): MockResponsePayload<T> {
       legacyStatus = statusCode;
       res._status = legacyStatus;
     },
-  } as http.ServerResponse & {
+  } as unknown as http.ServerResponse & {
     _status: number;
     _body: string;
     writeHead: (statusCode: number) => void;

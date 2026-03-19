@@ -518,7 +518,7 @@ function createMockAdapter(db: MockDb): IDatabaseAdapter<object> {
     getPairingAllowlist: async () => [],
     createPairingAllowlistEntry: async () => uuid(),
     deletePairingAllowlistEntry: async () => {},
-  } as unknown as } as unknown as as Partial<IDatabaseAdapter<object>> as IDatabaseAdapter<object>;
+  } as unknown as IDatabaseAdapter<object>;
 }
 
 function createMockRuntime(db: MockDb): AgentRuntime {

@@ -7,8 +7,8 @@ import {
 import { createElizaPlugin } from "./eliza-plugin";
 
 describe("getAgentEventService", () => {
-  it("prefers the canonical lowercase service type", async () => {
-    const lowercaseService = { name: "lowercase" };
+  it("prefers the canonical lowercase service type", () => {
+    const lowercaseService = { name: "lowercase", subscribe: vi.fn() };
     const runtime = {
       getService: vi.fn((serviceType: string) => {
         if (serviceType === "agent_event") return lowercaseService;
@@ -16,12 +16,12 @@ describe("getAgentEventService", () => {
       }),
     };
 
-    await expect(getAgentEventService(runtime)).resolves.toBe(lowercaseService);
+    expect(getAgentEventService(runtime)).toBe(lowercaseService);
     expect(runtime.getService).toHaveBeenCalledWith("agent_event");
   });
 
-  it("falls back to the legacy uppercase service type", async () => {
-    const uppercaseService = { name: "uppercase" };
+  it("falls back to the legacy uppercase service type", () => {
+    const uppercaseService = { name: "uppercase", subscribe: vi.fn() };
     const runtime = {
       getService: vi.fn((serviceType: string) => {
         if (serviceType === "AGENT_EVENT") return uppercaseService;
@@ -29,18 +29,18 @@ describe("getAgentEventService", () => {
       }),
     };
 
-    await expect(getAgentEventService(runtime)).resolves.toBe(uppercaseService);
+    expect(getAgentEventService(runtime)).toBe(uppercaseService);
     expect(
       runtime.getService.mock.calls.map(([serviceType]) => serviceType),
     ).toEqual([...AGENT_EVENT_SERVICE_TYPES]);
   });
 
-  it("returns null when no agent-event service is registered", async () => {
+  it("returns null when no agent-event service is registered", () => {
     const runtime = {
       getService: vi.fn(() => null),
     };
 
-    await expect(getAgentEventService(runtime)).resolves.toBeNull();
+    expect(getAgentEventService(runtime)).toBeNull();
   });
 });
 

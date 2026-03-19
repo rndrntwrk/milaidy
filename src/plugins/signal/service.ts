@@ -70,9 +70,7 @@ export class SignalNativeService extends Service {
   }
 
   static async stopRuntime(runtime: IAgentRuntime): Promise<void> {
-    const svc = runtime.getService(
-      "signal",
-    ) as SignalNativeService | null;
+    const svc = runtime.getService("signal") as SignalNativeService | null;
     if (svc) {
       await svc.stop();
     }
@@ -356,7 +354,7 @@ export class SignalNativeService extends Service {
       opts: { onResponse: (content: Content) => Promise<Memory[]> },
     ) => Promise<void>;
   } | null {
-    const rt = this.runtime as Record<string, unknown>;
+    const rt = this.runtime as unknown as Record<string, unknown>;
     if (
       rt.elizaOS &&
       typeof rt.elizaOS === "object" &&
@@ -376,7 +374,7 @@ export class SignalNativeService extends Service {
       callback: (content: Content) => Promise<Memory[]>,
     ) => Promise<unknown>;
   } | null {
-    const rt = this.runtime as Record<string, unknown>;
+    const rt = this.runtime as unknown as Record<string, unknown>;
     const svc = rt.messageService as Record<string, unknown> | null | undefined;
     if (svc && typeof svc.handleMessage === "function") {
       return svc as ReturnType<typeof this.getMessageService> & object;

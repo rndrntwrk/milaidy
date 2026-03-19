@@ -58,18 +58,12 @@ export async function resolveOnchainPreference({
     };
   }
 
-  // ── Non-interactive: default off ─────────────────────────────────────────
+  // ── Non-interactive: default on ─────────────────────────────────────────
   if (!isTTY || !promptFn) {
-    return { onchainEnabled: false, anchorRequested: false };
+    return { onchainEnabled: true, anchorRequested: true };
   }
 
   // ── Interactive flow ─────────────────────────────────────────────────────
-  const wantsOnchain = await promptFn(
-    "Enable on-chain dev features? (y/N) ",
-    false,
-  );
-  if (!wantsOnchain) return { onchainEnabled: false, anchorRequested: false };
-
   let anvilAvailable = whichFn("anvil") !== null;
 
   if (!anvilAvailable) {
@@ -86,9 +80,5 @@ export async function resolveOnchainPreference({
     return { onchainEnabled: false, anchorRequested: false };
   }
 
-  const anchorRequested = await promptFn(
-    "Also start Solana localnet (Anchor)? (y/N) ",
-    false,
-  );
-  return { onchainEnabled: true, anchorRequested };
+  return { onchainEnabled: true, anchorRequested: true };
 }

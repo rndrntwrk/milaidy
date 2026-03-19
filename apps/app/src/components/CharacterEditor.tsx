@@ -10,7 +10,13 @@ import {
   dispatchWindowEvent,
   VOICE_CONFIG_UPDATED_EVENT,
 } from "@elizaos/app-core/events";
-import { getVrmPreviewUrl, useApp } from "@elizaos/app-core/state";
+import {
+  CharacterRoster,
+  type CharacterRosterEntry,
+  CHARACTER_PRESET_META,
+  resolveRosterEntries,
+} from "./CharacterRoster";
+import { useApp } from "@elizaos/app-core/state";
 import { PREMADE_VOICES, sanitizeApiKey } from "@elizaos/app-core/voice";
 import { Button, Input, Textarea, ThemedSelect } from "@elizaos/ui";
 /* Inline SVG icon helpers – avoids adding lucide-react as a dependency. */
@@ -22,7 +28,6 @@ const RotateCcw = ({ className }: { className?: string }) => <Icon className={cl
 const Volume2 = ({ className }: { className?: string }) => <svg {...svgBase} className={className}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>;
 const VolumeX = ({ className }: { className?: string }) => <svg {...svgBase} className={className}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg>;
 import { useCallback, useEffect, useState } from "react";
-import { AvatarSelector } from "@elizaos/app-core/components/AvatarSelector";
 import "./CharacterEditor.css";
 
 /* ── Constants ─────────────────────────────────────────────────────── */
@@ -64,21 +69,7 @@ const VOICE_SELECT_GROUPS = [
   },
 ];
 
-// Mirrored from CharacterView — patched at install time with Milady catalog data.
-const CHARACTER_PRESET_META: Record<
-  string,
-  { name: string; avatarIndex: number; voicePresetId?: string }
-> = {
-  "uwu~": { name: "Chen", avatarIndex: 1, voicePresetId: "sarah" },
-  "hell yeah": { name: "Jin", avatarIndex: 2, voicePresetId: "adam" },
-  "lol k": { name: "Kei", avatarIndex: 3, voicePresetId: "lily" },
-  Noted: { name: "Momo", avatarIndex: 4, voicePresetId: "alice" },
-  "hehe~": { name: "Rin", avatarIndex: 5, voicePresetId: "gigi" },
-  "...": { name: "Ryu", avatarIndex: 6, voicePresetId: "daniel" },
-  "lmao kms": { name: "Satoshi", avatarIndex: 7, voicePresetId: "callum" },
-};
-
-/* ── Helpers (copied from CharacterView internals) ─────────────────── */
+/* ── Helpers ───────────────────────────────────────────────────────── */
 
 interface OnboardingPreset {
   catchphrase: string;
@@ -92,19 +83,11 @@ interface OnboardingPreset {
   postExamples: string[];
 }
 
-interface RosterEntry {
-  id: string;
-  name: string;
-  avatarIndex: number;
-  voicePresetId?: string;
-  preset: OnboardingPreset;
-}
-
 function replaceCharacterToken(value: string, name: string) {
   return value.replaceAll("{{name}}", name).replaceAll("{{agentName}}", name);
 }
 
-function buildCharacterDraftFromPreset(entry: RosterEntry) {
+function buildCharacterDraftFromPreset(entry: CharacterRosterEntry) {
   const p = entry.preset;
   const name = entry.name;
   return {
@@ -127,20 +110,6 @@ function buildCharacterDraftFromPreset(entry: RosterEntry) {
   };
 }
 
-function resolveRosterEntries(
-  styles: OnboardingPreset[],
-): RosterEntry[] {
-  return styles.map((preset, index) => {
-    const meta = CHARACTER_PRESET_META[preset.catchphrase];
-    return {
-      id: preset.catchphrase,
-      name: meta?.name ?? `Character ${index + 1}`,
-      avatarIndex: meta?.avatarIndex ?? (index % 8) + 1,
-      voicePresetId: meta?.voicePresetId,
-      preset,
-    };
-  });
-}
 
 /* ── Component ─────────────────────────────────────────────────────── */
 
@@ -201,8 +170,15 @@ export function CharacterEditor({
 
   /* ── Generation ─────────────────────────────────────────────────── */
   const [generating, setGenerating] = useState<string | null>(null);
-  const [mobilePage, setMobilePage] = useState<"identity" | "style">("identity");
+  const [mobilePage, setMobilePage] = useState<"identity" | "style" | "examples">("identity");
+  const [rightTab, setRightTab] = useState<"style" | "examples">("style");
   const [customizing, setCustomizing] = useState(false);
+
+  // Sync rightTab with mobilePage on mobile
+  useEffect(() => {
+    if (mobilePage === "style") setRightTab("style");
+    else if (mobilePage === "examples") setRightTab("examples");
+  }, [mobilePage]);
 
   /* ── Style entry state ──────────────────────────────────────────── */
   const [pendingStyleEntries, setPendingStyleEntries] = useState<
@@ -246,14 +222,13 @@ export function CharacterEditor({
       .then((opts: any) => {
         if (!cancelled) setRosterStyles(opts.styles ?? []);
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       cancelled = true;
     };
   }, [(onboardingOptions as any)?.styles]);
 
   const characterRoster = resolveRosterEntries(rosterStyles);
-  const visibleCharacterRoster = characterRoster.slice(0, 7);
 
   const d = characterDraft;
   const bioText =
@@ -270,7 +245,7 @@ export function CharacterEditor({
     : characterData;
 
   /* ── Resolve active roster entry ────────────────────────────────── */
-  const activeRosterEntry: RosterEntry | null = (() => {
+  const activeCharacterRosterEntry: CharacterRosterEntry | null = (() => {
     if (selectedCharacterId) {
       const found = characterRoster.find((e) => e.id === selectedCharacterId);
       if (found) return found;
@@ -301,7 +276,7 @@ export function CharacterEditor({
             setSelectedVoicePresetId(preset?.id ?? null);
           }
         }
-      } catch {}
+      } catch { }
       setVoiceLoading(false);
     })();
   }, []);
@@ -319,7 +294,7 @@ export function CharacterEditor({
   );
 
   const applyVoicePresetForEntry = useCallback(
-    (entry: RosterEntry) => {
+    (entry: CharacterRosterEntry) => {
       setVoiceSaveError(null);
       if (!entry.voicePresetId) return;
       const voicePreset = PREMADE_VOICES.find(
@@ -332,7 +307,7 @@ export function CharacterEditor({
 
   /* ── Character defaults ─────────────────────────────────────────── */
   const applyCharacterDefaults = useCallback(
-    (entry: RosterEntry) => {
+    (entry: CharacterRosterEntry) => {
       const next = buildCharacterDraftFromPreset(entry);
       handleFieldEdit("name", next.name ?? "");
       handleFieldEdit("username", next.username ?? "");
@@ -347,7 +322,7 @@ export function CharacterEditor({
   );
 
   const commitCharacterSelection = useCallback(
-    (entry: RosterEntry, applyDefaults: boolean) => {
+    (entry: CharacterRosterEntry, applyDefaults: boolean) => {
       setSelectedCharacterId(entry.id);
       setState("selectedVrmIndex", entry.avatarIndex);
       if (!voiceSelectionLocked && selectedCharacterId !== entry.id) {
@@ -368,7 +343,7 @@ export function CharacterEditor({
 
   /* ── Select character from roster ───────────────────────────────── */
   const handleSelectCharacter = useCallback(
-    (entry: RosterEntry) => {
+    (entry: CharacterRosterEntry) => {
       commitCharacterSelection(entry, true);
     },
     [commitCharacterSelection],
@@ -383,7 +358,7 @@ export function CharacterEditor({
       !currentCharacter
     )
       return;
-    const entry = activeRosterEntry ?? characterRoster[0] ?? null;
+    const entry = activeCharacterRosterEntry ?? characterRoster[0] ?? null;
     if (!entry) return;
     commitCharacterSelection(entry, true);
   }, [
@@ -392,7 +367,7 @@ export function CharacterEditor({
     commitCharacterSelection,
     currentCharacter,
     selectedCharacterId,
-    activeRosterEntry,
+    activeCharacterRosterEntry,
   ]);
 
   /* ── Sync customizing state with tab ─────────────────────────────── */
@@ -474,10 +449,10 @@ export function CharacterEditor({
 
   /* ── Reset to defaults ──────────────────────────────────────────── */
   const handleResetToDefaults = useCallback(() => {
-    if (!activeRosterEntry) return;
-    applyCharacterDefaults(activeRosterEntry);
-    applyVoicePresetForEntry(activeRosterEntry);
-  }, [activeRosterEntry, applyCharacterDefaults, applyVoicePresetForEntry]);
+    if (!activeCharacterRosterEntry) return;
+    applyCharacterDefaults(activeCharacterRosterEntry);
+    applyVoicePresetForEntry(activeCharacterRosterEntry);
+  }, [activeCharacterRosterEntry, applyCharacterDefaults, applyVoicePresetForEntry]);
 
   /* ── Generate field ─────────────────────────────────────────────── */
   const getCharContext = useCallback(
@@ -525,7 +500,7 @@ export function CharacterEditor({
               if (parsed.chat) handleStyleEdit("chat", parsed.chat.join("\n"));
               if (parsed.post) handleStyleEdit("post", parsed.post.join("\n"));
             }
-          } catch {}
+          } catch { }
         } else if (field === "chatExamples") {
           try {
             const parsed = JSON.parse(generated);
@@ -538,7 +513,7 @@ export function CharacterEditor({
               }));
               handleFieldEdit("messageExamples", formatted);
             }
-          } catch {}
+          } catch { }
         } else if (field === "postExamples") {
           try {
             const parsed = JSON.parse(generated);
@@ -552,9 +527,9 @@ export function CharacterEditor({
                 handleCharacterArrayInput("postExamples", parsed.join("\n"));
               }
             }
-          } catch {}
+          } catch { }
         }
-      } catch {}
+      } catch { }
       setGenerating(null);
     },
     [getCharContext, d, handleFieldEdit, handleStyleEdit, handleCharacterArrayInput],
@@ -631,8 +606,6 @@ export function CharacterEditor({
   const voiceSelectValue = selectedVoicePresetId ?? null;
   const combinedSaveError = voiceSaveError ?? characterSaveError;
 
-  const rosterSlantClipPath =
-    "polygon(32px 0, 100% 0, calc(100% - 32px) 100%, 0 100%)";
 
   /* ── Loading state ──────────────────────────────────────────────── */
   if (characterLoading && !characterData) {
@@ -646,325 +619,372 @@ export function CharacterEditor({
   /* ── Render ─────────────────────────────────────────────────────── */
   return (
     <div className="ce-root">
-      {/* ── Character Roster (always visible) ──────────────────────── */}
-      <section className="ce-section">
-        <div className="ce-section-header">
-          <span className="ce-label">Character</span>
-          {customizing && (
-            <button
-              type="button"
-              className="ce-back-btn"
-              onClick={() => { setCustomizing(false); setTab("character-select"); }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-              Back
-            </button>
-          )}
-        </div>
-        <div className="ce-roster" data-testid="character-roster-grid">
-              {visibleCharacterRoster.length > 0 ? (
-                visibleCharacterRoster.map((entry) => {
-                  const isSelected = selectedCharacterId === entry.id;
-                  return (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      className={`ce-roster-card ${isSelected ? "ce-roster-card--active" : ""}`}
-                      onClick={() => handleSelectCharacter(entry)}
-                      data-testid={`character-preset-${entry.id}`}
-                    >
-                      <div
-                        className={`ce-roster-card-frame ${isSelected ? "ce-roster-card-frame--active" : ""}`}
-                        style={{ clipPath: rosterSlantClipPath }}
-                      >
-                        <div
-                          className="ce-roster-card-inner"
-                          style={{ clipPath: rosterSlantClipPath }}
-                        >
-                          <img
-                            src={getVrmPreviewUrl(entry.avatarIndex)}
-                            alt={entry.name}
-                            className={`ce-roster-card-img ${isSelected ? "ce-roster-card-img--active" : ""}`}
-                          />
-                          <div className="ce-roster-card-label">
-                            <div
-                              className={`ce-roster-card-name ${isSelected ? "ce-roster-card-name--active" : ""}`}
-                              style={{
-                                clipPath:
-                                  "polygon(0px 0, 100% 0, calc(100% - 4px) 100%, -8px 100%)",
-                              }}
-                            >
-                              {entry.name}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="ce-roster-empty">
-                  Loading character presets...
-                </div>
-              )}
-            </div>
-          </section>
-
-      {/* ── Customize button (only when not customizing) ────────────── */}
+      {/* ── Character Roster (when NOT customizing) ────────────────── */}
       {!customizing && (
-        <div className="ce-customize-bar">
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            className="ce-customize-btn"
-            onClick={() => { setCustomizing(true); setTab("character"); }}
-          >
-            Customize
-          </Button>
+        <div className="ce-roster-wrap">
+          <CharacterRoster
+            entries={characterRoster}
+            selectedId={selectedCharacterId}
+            onSelect={handleSelectCharacter}
+          />
         </div>
       )}
 
-      {/* ── Editor panels (only when customizing) ──────────────────── */}
-      {customizing && (<>
-      {/* ── Mobile page tabs ──────────────────────────────────────── */}
-      <div className="ce-page-tabs">
-        <button
-          type="button"
-          className={`ce-page-tab ${mobilePage === "identity" ? "ce-page-tab--active" : ""}`}
-          onClick={() => setMobilePage("identity")}
-        >
-          Identity
-        </button>
-        <button
-          type="button"
-          className={`ce-page-tab ${mobilePage === "style" ? "ce-page-tab--active" : ""}`}
-          onClick={() => setMobilePage("style")}
-        >
-          Style & Examples
-        </button>
-      </div>
-
-      <div className="ce-panels">
-        {/* ── LEFT PANEL ────────────────────────────────────────────── */}
-        <div className={`ce-panel ce-panel-left ${mobilePage !== "identity" ? "ce-panel--hidden" : ""}`}>
-          {/* Avatar */}
-          <section className="ce-section">
-            <div className="ce-section-header">
-              <span className="ce-label">Avatar</span>
-            </div>
-            <AvatarSelector
-              selected={selectedVrmIndex}
-              onSelect={(index: number) => setState("selectedVrmIndex", index)}
-              onUpload={handleCustomVrmUpload}
-              showUpload
-              fullWidth
-            />
-          </section>
-
-          {/* Name */}
-          <section className="ce-section">
-            <div className="ce-section-header">
-              <span className="ce-label">Name</span>
-            </div>
-            <Input
-              type="text"
-              value={d.name ?? ""}
-              placeholder="Agent name"
-              onChange={(e: any) => handleFieldEdit("name", e.target.value)}
-              className="ce-input"
-            />
-          </section>
-
-          {/* Bio / About Me */}
-          <section className="ce-section ce-section--grow">
-            <div className="ce-section-header">
-              <span className="ce-label">About Me</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ce-regen-btn"
-                onClick={() => void handleGenerate("bio")}
-                disabled={generating === "bio"}
-              >
-                {generating === "bio" ? "generating..." : "regenerate"}
-              </Button>
-            </div>
-            <Textarea
-              value={bioText}
-              placeholder="Describe who your agent is..."
-              onChange={(e: any) => handleFieldEdit("bio", e.target.value)}
-              className="ce-textarea ce-textarea--grow"
-            />
-          </section>
-
-          {/* System Prompt / Directions */}
-          <section className="ce-section ce-section--grow">
-            <div className="ce-section-header">
-              <span className="ce-label">System Prompt</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ce-regen-btn"
-                onClick={() => void handleGenerate("system")}
-                disabled={generating === "system"}
-              >
-                {generating === "system" ? "generating..." : "regenerate"}
-              </Button>
-            </div>
-            <Textarea
-              value={d.system ?? ""}
-              maxLength={10000}
-              placeholder="Write in first person..."
-              onChange={(e: any) => handleFieldEdit("system", e.target.value)}
-              className="ce-textarea ce-textarea--grow"
-            />
-          </section>
+      {/* ── Mobile page tabs (when customizing) ────────────────────── */}
+      {customizing && (
+        <div className="ce-page-tabs">
+          <button
+            type="button"
+            className={`ce-page-tab ${mobilePage === "identity" ? "ce-page-tab--active" : ""}`}
+            onClick={() => setMobilePage("identity")}
+          >
+            Identity
+          </button>
+          <button
+            type="button"
+            className={`ce-page-tab ${mobilePage === "style" ? "ce-page-tab--active" : ""}`}
+            onClick={() => setMobilePage("style")}
+          >
+            Style Rules
+          </button>
+          <button
+            type="button"
+            className={`ce-page-tab ${mobilePage === "examples" ? "ce-page-tab--active" : ""}`}
+            onClick={() => setMobilePage("examples")}
+          >
+            Examples
+          </button>
         </div>
+      )}
 
-        {/* ── RIGHT PANEL ───────────────────────────────────────────── */}
-        <div className={`ce-panel ce-panel-right ${mobilePage !== "style" ? "ce-panel--hidden" : ""}`}>
-          {/* Style Rules */}
-          <section className="ce-section">
-            <div className="ce-section-header">
-              <span className="ce-label">Style Rules</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ce-regen-btn"
-                onClick={() => void handleGenerate("style", "replace")}
-                disabled={generating === "style"}
-              >
-                {generating === "style" ? "generating..." : "regenerate"}
-              </Button>
+      {customizing && (<>
+        <div className="ce-panels">
+          {/* ── LEFT PANEL ────────────────────────────────────────────── */}
+          <div className={`ce-panel ce-panel-left ${mobilePage !== "identity" ? "ce-panel--hidden" : ""}`}>
+            {/* Name */}
+            <section className="ce-section">
+              <div className="ce-section-header">
+                <span className="ce-label">Name</span>
+              </div>
+              <Input
+                type="text"
+                value={d.name ?? ""}
+                placeholder="Agent name"
+                onChange={(e: any) => handleFieldEdit("name", e.target.value)}
+                className="ce-input"
+              />
+            </section>
+
+            {/* Bio / About Me */}
+            <section className="ce-section ce-section--grow">
+              <div className="ce-section-header">
+                <span className="ce-label">About Me</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ce-regen-btn"
+                  onClick={() => void handleGenerate("bio")}
+                  disabled={generating === "bio"}
+                >
+                  {generating === "bio" ? "generating..." : "regenerate"}
+                </Button>
+              </div>
+              <Textarea
+                value={bioText}
+                rows={4}
+                placeholder="Describe who your agent is..."
+                onChange={(e: any) => handleFieldEdit("bio", e.target.value)}
+                className="ce-textarea ce-textarea--compact"
+              />
+            </section>
+
+            {/* System Prompt / Directions */}
+            <section className="ce-section ce-section--grow">
+              <div className="ce-section-header">
+                <span className="ce-label">System Prompt</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ce-regen-btn"
+                  onClick={() => void handleGenerate("system")}
+                  disabled={generating === "system"}
+                >
+                  {generating === "system" ? "generating..." : "regenerate"}
+                </Button>
+              </div>
+              <Textarea
+                value={d.system ?? ""}
+                rows={4}
+                maxLength={10000}
+                placeholder="Write in first person..."
+                onChange={(e: any) => handleFieldEdit("system", e.target.value)}
+                className="ce-textarea ce-textarea--compact"
+              />
+            </section>
+          </div>
+
+          {/* ── RIGHT PANEL ───────────────────────────────────────────── */}
+          <div className={`ce-panel ce-panel-right ${mobilePage === "identity" ? "ce-panel--hidden" : ""}`}>
+            {/* ── Toggle: Style Rules / Examples ───────────────────────── */}
+            <div className="ce-right-toggle-row">
+              <div className="ce-right-toggle">
+                <button
+                  type="button"
+                  className={`ce-right-toggle-btn ${rightTab === "style" ? "ce-right-toggle-btn--active" : ""}`}
+                  onClick={() => setRightTab("style")}
+                >
+                  Style Rules
+                </button>
+                <button
+                  type="button"
+                  className={`ce-right-toggle-btn ${rightTab === "examples" ? "ce-right-toggle-btn--active" : ""}`}
+                  onClick={() => setRightTab("examples")}
+                >
+                  Examples
+                </button>
+              </div>
+              {customizing && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="ce-reset-btn"
+                  onClick={handleResetToDefaults}
+                  disabled={!activeCharacterRosterEntry}
+                  title="Reset to Defaults"
+                >
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                  Reset
+                </Button>
+              )}
             </div>
-            <div className="ce-style-sections">
-              {STYLE_SECTION_KEYS.map((key) => {
-                const items = d.style?.[key] ?? [];
-                return (
-                  <div
-                    key={key}
-                    className="ce-style-group"
-                    data-testid={`style-section-${key}`}
-                  >
-                    <div className="ce-style-group-header">
-                      <span className="ce-style-group-label">{key}</span>
-                      <span className="ce-style-group-count">
-                        {items.length} rule{items.length === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                    <div className="ce-style-entries">
-                      {items.length > 0 ? (
-                        items.map((item, index) => (
-                          <div
-                            key={`${key}:${item}:${index}`}
-                            className="ce-style-entry"
-                          >
-                            <span className="ce-style-entry-num">
-                              {index + 1}
-                            </span>
-                            <Textarea
-                              value={styleEntryDrafts[key]?.[index] ?? item}
-                              rows={1}
-                              onChange={(e: any) =>
-                                handleStyleEntryDraftChange(
-                                  key,
-                                  index,
-                                  e.target.value,
-                                )
-                              }
-                              onBlur={() => handleCommitStyleEntry(key, index)}
-                              className="ce-style-entry-input"
-                            />
-                            <button
-                              type="button"
-                              className="ce-style-entry-remove"
-                              onClick={() => handleRemoveStyleEntry(key, index)}
-                              title="Remove"
+
+            {/* Style Rules */}
+            <section className="ce-section ce-section--grow" style={{ display: rightTab === "style" ? undefined : "none" }}>
+              <div className="ce-section-header">
+                <span className="ce-label">Style Rules</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ce-regen-btn"
+                  onClick={() => void handleGenerate("style", "replace")}
+                  disabled={generating === "style"}
+                >
+                  {generating === "style" ? "generating..." : "regenerate"}
+                </Button>
+              </div>
+              <div className="ce-style-sections">
+                {STYLE_SECTION_KEYS.map((key) => {
+                  const items = d.style?.[key] ?? [];
+                  return (
+                    <div
+                      key={key}
+                      className="ce-style-group"
+                      data-testid={`style-section-${key}`}
+                    >
+                      <div className="ce-style-group-header">
+                        <span className="ce-style-group-label">{key}</span>
+                        <span className="ce-style-group-count">
+                          {items.length} rule{items.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      <div className="ce-style-entries">
+                        {items.length > 0 ? (
+                          items.map((item, index) => (
+                            <div
+                              key={`${key}:${item}:${index}`}
+                              className="ce-style-entry"
                             >
-                              <svg
-                                width="10"
-                                height="10"
-                                viewBox="0 0 10 10"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.5"
-                                strokeLinecap="round"
+                              <span className="ce-style-entry-num">
+                                {index + 1}
+                              </span>
+                              <Textarea
+                                value={styleEntryDrafts[key]?.[index] ?? item}
+                                rows={1}
+                                onChange={(e: any) =>
+                                  handleStyleEntryDraftChange(
+                                    key,
+                                    index,
+                                    e.target.value,
+                                  )
+                                }
+                                onBlur={() => handleCommitStyleEntry(key, index)}
+                                className="ce-style-entry-input"
+                              />
+                              <button
+                                type="button"
+                                className="ce-style-entry-remove"
+                                onClick={() => handleRemoveStyleEntry(key, index)}
+                                title="Remove"
                               >
-                                <path d="M2 2l6 6M8 2l-6 6" />
-                              </svg>
-                            </button>
+                                <svg
+                                  width="10"
+                                  height="10"
+                                  viewBox="0 0 10 10"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                >
+                                  <path d="M2 2l6 6M8 2l-6 6" />
+                                </svg>
+                              </button>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="ce-style-empty">
+                            {STYLE_SECTION_EMPTY_STATES[key]}
                           </div>
-                        ))
-                      ) : (
-                        <div className="ce-style-empty">
-                          {STYLE_SECTION_EMPTY_STATES[key]}
-                        </div>
-                      )}
-                    </div>
-                    <div className="ce-style-add">
-                      <Input
-                        type="text"
-                        value={pendingStyleEntries[key]}
-                        placeholder={STYLE_SECTION_PLACEHOLDERS[key]}
-                        onChange={(e: any) =>
-                          handlePendingStyleEntryChange(key, e.target.value)
-                        }
-                        onKeyDown={(e: any) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleAddStyleEntry(key);
+                        )}
+                      </div>
+                      <div className="ce-style-add">
+                        <Input
+                          type="text"
+                          value={pendingStyleEntries[key]}
+                          placeholder={STYLE_SECTION_PLACEHOLDERS[key]}
+                          onChange={(e: any) =>
+                            handlePendingStyleEntryChange(key, e.target.value)
                           }
+                          onKeyDown={(e: any) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddStyleEntry(key);
+                            }
+                          }}
+                          className="ce-input ce-input--sm"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="ce-regen-btn"
+                          onClick={() => handleAddStyleEntry(key)}
+                          disabled={!pendingStyleEntries[key].trim()}
+                        >
+                          + add
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* Chat Examples */}
+            <section className="ce-section ce-section--grow" style={{ display: rightTab === "examples" ? undefined : "none" }}>
+              <div className="ce-section-header">
+                <span className="ce-label">Chat Examples</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ce-regen-btn"
+                  onClick={() => void handleGenerate("chatExamples", "replace")}
+                  disabled={generating === "chatExamples"}
+                >
+                  {generating === "chatExamples" ? "generating..." : "generate"}
+                </Button>
+              </div>
+              <div className="ce-examples-list">
+                {(d.messageExamples ?? []).map((convo, ci) => (
+                  <div
+                    key={ci}
+                    className="ce-example-convo"
+                  >
+                    <div className="ce-example-convo-header">
+                      <span className="ce-example-convo-label">
+                        Conversation {ci + 1}
+                      </span>
+                      <button
+                        type="button"
+                        className="ce-style-entry-remove"
+                        onClick={() => {
+                          const updated = [...(d.messageExamples ?? [])];
+                          updated.splice(ci, 1);
+                          handleFieldEdit("messageExamples", updated);
                         }}
-                        className="ce-input ce-input--sm"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="ce-regen-btn"
-                        onClick={() => handleAddStyleEntry(key)}
-                        disabled={!pendingStyleEntries[key].trim()}
                       >
-                        + add
-                      </Button>
+                        <svg
+                          width="10"
+                          height="10"
+                          viewBox="0 0 10 10"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                        >
+                          <path d="M2 2l6 6M8 2l-6 6" />
+                        </svg>
+                      </button>
+                    </div>
+                    <div className="ce-example-messages">
+                      {convo.examples.map((msg, mi) => (
+                        <div key={mi} className="ce-example-msg">
+                          <span
+                            className={`ce-example-msg-role ${msg.name === "{{user1}}" ? "" : "ce-example-msg-role--agent"}`}
+                          >
+                            {msg.name === "{{user1}}" ? "user" : "agent"}
+                          </span>
+                          <input
+                            type="text"
+                            value={msg.content?.text ?? ""}
+                            onChange={(e) => {
+                              const updated = [...(d.messageExamples ?? [])];
+                              const convoClone = {
+                                examples: [...updated[ci].examples],
+                              };
+                              convoClone.examples[mi] = {
+                                ...convoClone.examples[mi],
+                                content: { text: e.target.value },
+                              };
+                              updated[ci] = convoClone;
+                              handleFieldEdit("messageExamples", updated);
+                            }}
+                            className="ce-example-msg-input"
+                          />
+                        </div>
+                      ))}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </section>
+                ))}
+                {(d.messageExamples ?? []).length === 0 && (
+                  <div className="ce-style-empty">No chat examples yet.</div>
+                )}
+              </div>
+            </section>
 
-          {/* Chat Examples */}
-          <section className="ce-section">
-            <div className="ce-section-header">
-              <span className="ce-label">Chat Examples</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ce-regen-btn"
-                onClick={() => void handleGenerate("chatExamples", "replace")}
-                disabled={generating === "chatExamples"}
-              >
-                {generating === "chatExamples" ? "generating..." : "generate"}
-              </Button>
-            </div>
-            <div className="ce-examples-list">
-              {(d.messageExamples ?? []).map((convo, ci) => (
-                <div
-                  key={ci}
-                  className="ce-example-convo"
+            {/* Post Examples */}
+            <section className="ce-section ce-section--grow" style={{ display: rightTab === "examples" ? undefined : "none" }}>
+              <div className="ce-section-header">
+                <span className="ce-label">Post Examples</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ce-regen-btn"
+                  onClick={() => void handleGenerate("postExamples", "replace")}
+                  disabled={generating === "postExamples"}
                 >
-                  <div className="ce-example-convo-header">
-                    <span className="ce-example-convo-label">
-                      Conversation {ci + 1}
-                    </span>
+                  {generating === "postExamples" ? "generating..." : "generate"}
+                </Button>
+              </div>
+              <div className="ce-examples-list">
+                {(d.postExamples ?? []).map((post, pi) => (
+                  <div key={pi} className="ce-example-post">
+                    <input
+                      type="text"
+                      value={post}
+                      onChange={(e) => {
+                        const updated = [...(d.postExamples ?? [])];
+                        updated[pi] = e.target.value;
+                        handleFieldEdit("postExamples", updated);
+                      }}
+                      className="ce-example-msg-input"
+                    />
                     <button
                       type="button"
                       className="ce-style-entry-remove"
                       onClick={() => {
-                        const updated = [...(d.messageExamples ?? [])];
-                        updated.splice(ci, 1);
-                        handleFieldEdit("messageExamples", updated);
+                        const updated = [...(d.postExamples ?? [])];
+                        updated.splice(pi, 1);
+                        handleFieldEdit("postExamples", updated);
                       }}
                     >
                       <svg
@@ -980,109 +1000,24 @@ export function CharacterEditor({
                       </svg>
                     </button>
                   </div>
-                  <div className="ce-example-messages">
-                    {convo.examples.map((msg, mi) => (
-                      <div key={mi} className="ce-example-msg">
-                        <span
-                          className={`ce-example-msg-role ${msg.name === "{{user1}}" ? "" : "ce-example-msg-role--agent"}`}
-                        >
-                          {msg.name === "{{user1}}" ? "user" : "agent"}
-                        </span>
-                        <input
-                          type="text"
-                          value={msg.content?.text ?? ""}
-                          onChange={(e) => {
-                            const updated = [...(d.messageExamples ?? [])];
-                            const convoClone = {
-                              examples: [...updated[ci].examples],
-                            };
-                            convoClone.examples[mi] = {
-                              ...convoClone.examples[mi],
-                              content: { text: e.target.value },
-                            };
-                            updated[ci] = convoClone;
-                            handleFieldEdit("messageExamples", updated);
-                          }}
-                          className="ce-example-msg-input"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {(d.messageExamples ?? []).length === 0 && (
-                <div className="ce-style-empty">No chat examples yet.</div>
-              )}
-            </div>
-          </section>
-
-          {/* Post Examples */}
-          <section className="ce-section">
-            <div className="ce-section-header">
-              <span className="ce-label">Post Examples</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ce-regen-btn"
-                onClick={() => void handleGenerate("postExamples", "replace")}
-                disabled={generating === "postExamples"}
-              >
-                {generating === "postExamples" ? "generating..." : "generate"}
-              </Button>
-            </div>
-            <div className="ce-examples-list">
-              {(d.postExamples ?? []).map((post, pi) => (
-                <div key={pi} className="ce-example-post">
-                  <input
-                    type="text"
-                    value={post}
-                    onChange={(e) => {
-                      const updated = [...(d.postExamples ?? [])];
-                      updated[pi] = e.target.value;
-                      handleFieldEdit("postExamples", updated);
-                    }}
-                    className="ce-example-msg-input"
-                  />
-                  <button
-                    type="button"
-                    className="ce-style-entry-remove"
-                    onClick={() => {
-                      const updated = [...(d.postExamples ?? [])];
-                      updated.splice(pi, 1);
-                      handleFieldEdit("postExamples", updated);
-                    }}
-                  >
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 10 10"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    >
-                      <path d="M2 2l6 6M8 2l-6 6" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-              {(d.postExamples ?? []).length === 0 && (
-                <div className="ce-style-empty">No post examples yet.</div>
-              )}
-              <button
-                type="button"
-                className="ce-add-post-btn"
-                onClick={() => {
-                  const updated = [...(d.postExamples ?? []), ""];
-                  handleFieldEdit("postExamples", updated);
-                }}
-              >
-                + Add Post
-              </button>
-            </div>
-          </section>
+                ))}
+                {(d.postExamples ?? []).length === 0 && (
+                  <div className="ce-style-empty">No post examples yet.</div>
+                )}
+                <button
+                  type="button"
+                  className="ce-add-post-btn"
+                  onClick={() => {
+                    const updated = [...(d.postExamples ?? []), ""];
+                    handleFieldEdit("postExamples", updated);
+                  }}
+                >
+                  + Add Post
+                </button>
+              </div>
+            </section>
+          </div>
         </div>
-      </div>
       </>)}
 
       {/* ── Footer ─────────────────────────────────────────────────── */}
@@ -1100,20 +1035,6 @@ export function CharacterEditor({
         )}
 
         <div className="ce-footer-actions">
-          {/* Reset */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="ce-reset-btn"
-            onClick={handleResetToDefaults}
-            disabled={!activeRosterEntry}
-            title="Reset all fields to the selected character's defaults"
-          >
-            <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-            Reset to Defaults
-          </Button>
-
           {/* Voice picker */}
           <div className="ce-voice-picker" data-testid="character-voice-picker">
             <Button
@@ -1175,7 +1096,7 @@ export function CharacterEditor({
             </Button>
           </div>
 
-          {/* Save */}
+          {/* Select Character — only in roster view, centered */}
           <Button
             size="lg"
             className="ce-save-btn"
@@ -1184,6 +1105,39 @@ export function CharacterEditor({
           >
             {characterSaving || voiceSaving ? "saving..." : "Save Character"}
           </Button>
+
+          {/* Save Character — only in customize view */}
+          {customizing && (
+
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              className="ce-save-btn"
+              onClick={() => {
+                setCustomizing(false);
+                setTab("character-select");
+              }}
+            >
+              Select Character
+            </Button>
+          )}
+
+          {/* Customize Character — only in roster view */}
+          {!customizing && (
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              className="ce-save-btn"
+              onClick={() => {
+                setCustomizing(true);
+                setTab("character");
+              }}
+            >
+              Customize Character
+            </Button>
+          )}
         </div>
       </div>
     </div>

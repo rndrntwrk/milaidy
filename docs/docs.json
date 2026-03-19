@@ -214,7 +214,6 @@
           {
             "group": "Core Plugins",
             "pages": [
-              "plugin-registry/bootstrap",
               "plugin-registry/knowledge",
               "plugin-registry/sql",
               "plugin-registry/secrets-manager"

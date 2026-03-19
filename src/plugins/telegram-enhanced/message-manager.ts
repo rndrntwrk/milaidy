@@ -183,7 +183,11 @@ export class EnhancedTelegramMessageManager extends MessageManager {
     }, TYPING_INTERVAL_MS);
 
     try {
-      await super.handleMessage(ctx);
+      // upstream .d.ts doesn't expose handleMessage on the base class
+      type WithHandleMessage = { handleMessage(ctx: unknown): Promise<void> };
+      await (
+        MessageManager.prototype as unknown as WithHandleMessage
+      ).handleMessage.call(this, ctx);
     } catch (error) {
       logger.error(
         { error },

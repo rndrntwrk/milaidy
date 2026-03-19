@@ -142,10 +142,7 @@ export function buildCharacterFromConfig(
 
   // Inject preset knowledge so every agent starts with foundational
   // context about ELIZA, elizaOS, and the Milady project.
-  character.knowledge = [
-    ...PRESET_KNOWLEDGE,
-    ...(character.knowledge ?? []),
-  ];
+  character.knowledge = [...PRESET_KNOWLEDGE, ...(character.knowledge ?? [])];
 
   return character;
 }
