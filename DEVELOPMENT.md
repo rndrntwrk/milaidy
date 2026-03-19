@@ -55,24 +55,6 @@ ELIZA_DEV_LOG_LEVEL=debug bun run dev   # verbose API logs
 - **UI changes**: Vite HMR reloads components instantly
 - **Runtime/API changes**: Bun `--watch` restarts the API process
 
-## Working with Local Eliza Packages
-
-If you're developing `@elizaos/*` packages alongside Milady:
-
-```bash
-bun run setup:eliza-workspace
-```
-
-This will:
-- Clone `github.com/elizaos/eliza` (develop branch) into `../eliza` if not present
-- Run `bun install` in the Eliza repo
-- Build required packages (prompts, skills, ui)
-- Symlink all discovered `@elizaos/*` packages into Milady's `node_modules`
-
-After setup, edits to `../eliza/packages/*` or `../eliza/plugins/*` are picked up by Milady's bundler immediately. Restart the API server to pick up backend changes.
-
-**Skip local Eliza**: `ELIZA_SKIP_LOCAL_ELIZA=1 bun install`
-
 ## Configuration
 
 ### Config File
@@ -106,7 +88,6 @@ Copy `.env.example` to `.env` for development secrets. Key variables:
 | `MILADY_GATEWAY_PORT` | Gateway WebSocket port | 18789 |
 | `LOG_LEVEL` | Runtime log level | info |
 | `ELIZA_DEV_LOG_LEVEL` | Dev script log level | info |
-| `ELIZA_SKIP_LOCAL_ELIZA` | Skip local Eliza linking | 0 |
 | `ELIZA_CONFIG_PATH` | Override config file path | `~/.eliza/eliza.json` |
 
 ## Testing
@@ -164,8 +145,6 @@ lsof -ti :2138 | xargs kill -9
 ```bash
 bun run repair    # re-runs postinstall (patches + links)
 ```
-
-If using local Eliza, re-run `bun run setup:eliza-workspace`.
 
 ### Stale build artifacts
 

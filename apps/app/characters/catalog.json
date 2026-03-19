@@ -91,6 +91,12 @@
       "name": "Satoshi",
       "avatarAssetId": 7,
       "voicePresetId": "callum"
+    },
+    {
+      "catchphrase": "Let's figure this out together.",
+      "name": "Yuki",
+      "avatarAssetId": 8,
+      "voicePresetId": "nova"
     }
   ]
 }

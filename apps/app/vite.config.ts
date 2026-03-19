@@ -154,32 +154,6 @@ export default defineConfig({
   resolve: {
     dedupe: ["react", "react-dom", "three", "@sparkjsdev/spark"],
     alias: [
-      // Map @miladyai imports from the linked eliza source to resolve correctly
-      {
-        find: /^@miladyai\/app-core$/,
-        replacement: path.resolve(
-          miladyRoot,
-          "../eliza/packages/app-core/src/index.ts",
-        ),
-      },
-      {
-        find: /^@miladyai\/app-core\/(.*)$/,
-        replacement: path.resolve(
-          miladyRoot,
-          "../eliza/packages/app-core/src/$1",
-        ),
-      },
-      {
-        find: /^@miladyai\/ui$/,
-        replacement: path.resolve(
-          miladyRoot,
-          "../eliza/packages/ui/src/index.ts",
-        ),
-      },
-      {
-        find: /^@miladyai\/ui\/(.*)$/,
-        replacement: path.resolve(miladyRoot, "../eliza/packages/ui/src/$1"),
-      },
       // Capacitor plugins — resolve to local plugin sources
       {
         find: /^@miladyai\/capacitor-agent$/,
@@ -262,8 +236,8 @@ export default defineConfig({
       },
     },
     fs: {
-      // Allow serving files from the app directory, milady src, and eliza src
-      allow: [here, miladyRoot, path.resolve(miladyRoot, "../eliza")],
+      // Allow serving files from the app directory and milady src
+      allow: [here, miladyRoot],
     },
     watch: {
       // Polling is only needed in Docker/WSL where native fs events are unreliable
