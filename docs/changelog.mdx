@@ -323,6 +323,10 @@ Agent-originated wallet transfer requests can no longer bypass the manual-local-
 - VRM avatar face orientation no longer flips incorrectly
 - Companion UI regressions in settings, stream navigation, VRM loading, and shell close flows are resolved
 
+## Command palette and real-time sidebar
+
+The command palette now uses a centralized command registry, making it easier to discover and access actions. The conversation sidebar also updates in real time via WebSocket events instead of polling, so new messages and status changes appear instantly.
+
 ## Additional fixes
 
 - Voice and agent-mode dropdowns are no longer hidden behind other elements
@@ -423,6 +427,18 @@ The BNB identity plugin now supports BAP-578 NFA (Non-Fungible Agent) learning p
 ## Improved upload error messages
 
 Document uploads exceeding 32 MB now return a clear, human-readable error message explaining the limit, instead of a raw byte-limit error.
+
+## Opinion markets plugin
+
+A new opinion markets plugin lets your agent trade on prediction markets through a central limit order book (CLOB). You can get market details, list available markets, place bets, cancel orders, check positions, and redeem winnings — all from chat actions or the REST API.
+
+## BNB identity plugin
+
+A new BNB Chain identity plugin gives your agent on-chain identity management. This is the foundation for the NFA learning provenance feature and other blockchain-based identity workflows. See the [wallet guide](/guides/wallet) for details.
+
+## Agent self-awareness
+
+Your agent can now introspect its own state using the new self-awareness system. A `GET_SELF_STATUS` action returns a unified view of runtime health, wallet state, cloud connectivity, active connectors, and plugin health — helping your agent make context-aware decisions.
 
 ## Swarm completion summaries
 
