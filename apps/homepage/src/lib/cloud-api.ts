@@ -1,29 +1,26 @@
-/** Single source of truth for the Eliza Cloud base URL. */
-export const CLOUD_BASE =
-  import.meta.env.VITE_CLOUD_BASE ?? "https://www.elizacloud.ai";
-
-// ---------------------------------------------------------------------------
-// Cloud API types
-// ---------------------------------------------------------------------------
+import { CLOUD_BASE } from "./runtime-config";
 
 export interface CloudAgentDetail {
   id: string;
-  agentName: string;
-  name?: string; // fallback
+  name: string;
+  /** Backend returns agentName; mapped to name by listAgents(). */
+  agentName?: string;
   status: string;
-  databaseStatus?: string;
   model?: string;
   bridgeUrl?: string;
+  webUiUrl?: string;
   tokens?: { used: number; limit: number };
-  errorMessage?: string | null;
-  lastBackupAt?: string | null;
-  lastHeartbeatAt?: string | null;
+  errors?: string[];
   createdAt?: string;
   updatedAt?: string;
-  token_address?: string | null;
-  token_chain?: string | null;
-  token_name?: string | null;
-  token_ticker?: string | null;
+  billing?: {
+    plan?: string;
+    costPerHour?: number;
+    totalCost?: number;
+    currency?: string;
+  };
+  uptime?: number;
+  region?: string;
 }
 
 export interface CloudBackup {
@@ -44,24 +41,6 @@ export interface JobStatus {
   error?: string;
 }
 
-export interface BridgeResponse {
-  jsonrpc: string;
-  id: string;
-  result?: { state: string; uptime?: number; memories?: number };
-  error?: { code: number; message: string };
-}
-
-/** Response envelope used by most Cloud API endpoints. */
-interface CloudEnvelope<T> {
-  success: boolean;
-  data?: T;
-  agents?: T;
-}
-
-// ---------------------------------------------------------------------------
-// CloudClient — talks to elizacloud.ai with X-Api-Key auth
-// ---------------------------------------------------------------------------
-
 export class CloudClient {
   private apiKey: string;
 
@@ -80,27 +59,26 @@ export class CloudClient {
     return res.json();
   }
 
-  /** Unwrap { success, data } envelope — cloud API wraps all list responses. */
-  private unwrapList<T>(
-    json: CloudEnvelope<T[]> | T[] | Record<string, unknown>,
-  ): T[] {
-    if (Array.isArray(json)) return json as T[];
-    const obj = json as Record<string, unknown>;
-    // Try known envelope keys in order of likelihood
-    for (const key of ["data", "agents", "backups", "containers"]) {
-      if (Array.isArray(obj[key])) return obj[key] as T[];
-    }
-    return [];
-  }
-
-  // -- Agent management -----------------------------------------------------
-
+  // Agent management
   async listAgents(): Promise<CloudAgentDetail[]> {
-    const json = await this.request<CloudEnvelope<CloudAgentDetail[]>>(
-      "/api/v1/milady/agents",
-      { method: "GET" },
-    );
-    return this.unwrapList(json);
+    const data = await this.request<
+      | CloudAgentDetail[]
+      | { agents?: CloudAgentDetail[]; data?: CloudAgentDetail[] }
+    >("/api/v1/milady/agents", {
+      method: "GET",
+    });
+    const raw = Array.isArray(data)
+      ? data
+      : ((data as { agents?: CloudAgentDetail[]; data?: CloudAgentDetail[] })
+          .agents ??
+        (data as { agents?: CloudAgentDetail[]; data?: CloudAgentDetail[] })
+          .data ??
+        []);
+    // Backend returns agentName; normalize to name for the rest of the app
+    return raw.map((a) => ({
+      ...a,
+      name: a.name || a.agentName || a.id,
+    }));
   }
 
   async getAgent(agentId: string): Promise<CloudAgentDetail> {
@@ -113,10 +91,26 @@ export class CloudClient {
     config?: object;
     environmentVars?: Record<string, string>;
   }): Promise<{ id: string }> {
-    return this.request("/api/v1/milady/agents", {
+    // Backend expects agentName (not name) and agentConfig (not config)
+    const payload: Record<string, unknown> = {
+      agentName: config.name,
+    };
+    if (config.characterId) payload.characterId = config.characterId;
+    if (config.config) payload.agentConfig = config.config;
+    if (config.environmentVars)
+      payload.environmentVars = config.environmentVars;
+
+    const res = await this.request<{
+      success?: boolean;
+      data?: { id: string };
+      id?: string;
+    }>("/api/v1/milady/agents", {
       method: "POST",
-      body: JSON.stringify(config),
+      body: JSON.stringify(payload),
     });
+    // Backend wraps response in { success, data: { id, ... } }
+    const id = res.data?.id ?? res.id ?? "";
+    return { id };
   }
 
   async deleteAgent(agentId: string): Promise<void> {
@@ -125,8 +119,7 @@ export class CloudClient {
     });
   }
 
-  // -- Lifecycle ------------------------------------------------------------
-
+  // Lifecycle
   async provisionAgent(agentId: string): Promise<{ jobId?: string }> {
     return this.request(`/api/v1/milady/agents/${agentId}/provision`, {
       method: "POST",
@@ -145,8 +138,7 @@ export class CloudClient {
     });
   }
 
-  // -- Snapshots & backups --------------------------------------------------
-
+  // Snapshots & backups
   async takeSnapshot(agentId: string): Promise<void> {
     await this.request(`/api/v1/milady/agents/${agentId}/snapshot`, {
       method: "POST",
@@ -154,11 +146,14 @@ export class CloudClient {
   }
 
   async listBackups(agentId: string): Promise<CloudBackup[]> {
-    const json = await this.request<CloudEnvelope<CloudBackup[]>>(
-      `/api/v1/milady/agents/${agentId}/backups`,
-      { method: "GET" },
-    );
-    return this.unwrapList(json);
+    const data = await this.request<
+      CloudBackup[] | { backups?: CloudBackup[]; data?: CloudBackup[] }
+    >(`/api/v1/milady/agents/${agentId}/backups`, { method: "GET" });
+    return Array.isArray(data)
+      ? data
+      : ((data as { backups?: CloudBackup[]; data?: CloudBackup[] }).backups ??
+          (data as { backups?: CloudBackup[]; data?: CloudBackup[] }).data ??
+          []);
   }
 
   async restoreBackup(agentId: string, backupId?: string): Promise<void> {
@@ -168,13 +163,12 @@ export class CloudClient {
     });
   }
 
-  // -- Bridge (JSON-RPC to sandbox) -----------------------------------------
-
+  // Bridge (JSON-RPC to sandbox)
   async bridge(
     agentId: string,
     method: string,
     params?: object,
-  ): Promise<BridgeResponse> {
+  ): Promise<Record<string, unknown>> {
     return this.request(`/api/v1/milady/agents/${agentId}/bridge`, {
       method: "POST",
       body: JSON.stringify({
@@ -190,25 +184,19 @@ export class CloudClient {
     agentId: string,
   ): Promise<{ state: string; uptime?: number; memories?: number }> {
     const res = await this.bridge(agentId, "status.get");
-    return res.result ?? { state: "unknown" };
+    return res.result ?? res;
   }
 
-  // -- Credits & billing ----------------------------------------------------
-
+  // Credits & billing
   async getCreditsBalance(): Promise<CreditBalance> {
     return this.request("/api/credits/balance", { method: "GET" });
   }
 
-  async getCreditsSummary(): Promise<CreditBalance & { used?: number }> {
+  async getCreditsSummary(): Promise<object> {
     return this.request("/api/v1/credits/summary", { method: "GET" });
   }
 
-  async getBillingSettings(): Promise<{ autoTopUp?: boolean; plan?: string }> {
-    return this.request("/api/v1/billing/settings", { method: "GET" });
-  }
-
-  // -- Jobs (async operation polling) ---------------------------------------
-
+  // Jobs (async operation polling)
   async getJobStatus(jobId: string): Promise<JobStatus> {
     return this.request(`/api/v1/jobs/${jobId}`, { method: "GET" });
   }
@@ -226,27 +214,41 @@ export class CloudClient {
     throw new Error("Job timed out");
   }
 
-  // -- Containers -----------------------------------------------------------
-
-  async listContainers(): Promise<CloudAgentDetail[]> {
-    const json = await this.request<CloudEnvelope<CloudAgentDetail[]>>(
-      "/api/v1/containers",
-      { method: "GET" },
-    );
-    return this.unwrapList(json);
+  // Containers (for container-level monitoring)
+  async listContainers(): Promise<Record<string, unknown>[]> {
+    const data = await this.request<
+      | Record<string, unknown>[]
+      | {
+          containers?: Record<string, unknown>[];
+          data?: Record<string, unknown>[];
+        }
+    >("/api/v1/containers", {
+      method: "GET",
+    });
+    return Array.isArray(data)
+      ? data
+      : ((
+          data as {
+            containers?: Record<string, unknown>[];
+            data?: Record<string, unknown>[];
+          }
+        ).containers ??
+          (
+            data as {
+              containers?: Record<string, unknown>[];
+              data?: Record<string, unknown>[];
+            }
+          ).data ??
+          []);
   }
 
-  async getContainerHealth(
-    containerId: string,
-  ): Promise<{ status: string; uptime?: number }> {
+  async getContainerHealth(containerId: string): Promise<object> {
     return this.request(`/api/v1/containers/${containerId}/health`, {
       method: "GET",
     });
   }
 
-  async getContainerMetrics(
-    containerId: string,
-  ): Promise<{ cpu?: number; memory?: number; disk?: number }> {
+  async getContainerMetrics(containerId: string): Promise<object> {
     return this.request(`/api/v1/containers/${containerId}/metrics`, {
       method: "GET",
     });
@@ -255,14 +257,35 @@ export class CloudClient {
   async getContainerLogs(containerId: string): Promise<string> {
     const res = await fetch(
       `${CLOUD_BASE}/api/v1/containers/${containerId}/logs`,
-      { headers: { "X-Api-Key": this.apiKey } },
+      {
+        headers: { "X-Api-Key": this.apiKey },
+      },
     );
     if (!res.ok) throw new Error(`Logs ${res.status}`);
     return res.text();
   }
 
-  // -- Session info ---------------------------------------------------------
+  // Billing settings
+  async getBillingSettings(): Promise<object> {
+    return this.request("/api/v1/billing/settings", { method: "GET" });
+  }
 
+  // Pairing token (for opening Web UI with auth handoff)
+  async getPairingToken(agentId: string): Promise<{
+    token: string;
+    redirectUrl: string;
+    expiresIn: number;
+  }> {
+    const res = await this.request<
+      | { token: string; redirectUrl: string; expiresIn: number }
+      | { data: { token: string; redirectUrl: string; expiresIn: number } }
+    >(`/api/v1/milady/agents/${agentId}/pairing-token`, { method: "POST" });
+    // Backend may wrap in { data: ... } or return flat
+    if ("data" in res && res.data?.redirectUrl) return res.data;
+    return res as { token: string; redirectUrl: string; expiresIn: number };
+  }
+
+  // Session info
   async getCurrentSession(): Promise<{
     credits?: number;
     requests?: number;
@@ -272,15 +295,15 @@ export class CloudClient {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Local/remote agent types & client
-// ---------------------------------------------------------------------------
-
 export type ConnectionType = "local" | "remote" | "cloud";
 
 export interface ConnectionInfo {
   url: string;
   type: ConnectionType;
+  /** Optional bearer token for agents that require auth (e.g. MILADY_API_TOKEN).
+   *  Sent as `Authorization: Bearer {authToken}`.
+   *  Note: X-Api-Key is NOT used here because agent CORS only allows "Authorization". */
+  authToken?: string;
 }
 
 export interface AgentStatus {
@@ -305,25 +328,89 @@ export interface LogEntry {
   agentName: string;
 }
 
-/** Client for direct HTTP to local/remote agent instances. No cloud API key. */
 export class CloudApiClient {
   private baseUrl: string;
+  private type: ConnectionType;
+  private authToken?: string;
 
   constructor(connection: ConnectionInfo) {
     this.baseUrl = connection.url.replace(/\/$/, "");
+    this.type = connection.type;
+    this.authToken = connection.authToken;
+  }
+
+  private buildHeaders(opts: RequestInit = {}): Headers {
+    // Use Authorization for local/remote agents because their browser CORS policy
+    // explicitly allows bearer auth, while custom headers like X-Api-Key may be blocked.
+    const headers = new Headers(opts.headers);
+    if (this.authToken) {
+      headers.set("Authorization", `Bearer ${this.authToken}`);
+    }
+    return headers;
+  }
+
+  private async rawFetch(
+    path: string,
+    opts: RequestInit = {},
+  ): Promise<Response> {
+    return fetch(`${this.baseUrl}${path}`, {
+      ...opts,
+      headers: this.buildHeaders(opts),
+    });
   }
 
   private async request<T>(path: string, opts: RequestInit = {}): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, opts);
+    const res = await this.rawFetch(path, opts);
     if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
     return res.json();
   }
 
-  async health(): Promise<{ status: string; uptime: number }> {
-    return this.request("/api/health", { method: "GET" });
+  async health(): Promise<{
+    status?: string;
+    ready?: boolean;
+    uptime: number;
+    memoryUsage?: object;
+    agentState?: string;
+  }> {
+    const primary = await this.rawFetch("/api/health", { method: "GET" });
+    if (primary.ok) {
+      return primary.json();
+    }
+    if (primary.status !== 404) {
+      throw new Error(`API ${primary.status}: /api/health`);
+    }
+
+    const fallback = await this.rawFetch("/health", { method: "GET" });
+    if (!fallback.ok) {
+      throw new Error(`API ${fallback.status}: /health`);
+    }
+    return fallback.json();
   }
 
   async getAgentStatus(): Promise<AgentStatus> {
+    // Our self-hosted agents expose /api/status (not /api/agent/status).
+    // Try /api/status first (returns agentName, state, uptime directly),
+    // fall back to /api/agent/status for compatibility with other implementations.
+    try {
+      const data = await this.request<{
+        state?: string;
+        agentName?: string;
+        uptime?: number;
+        memories?: number;
+        model?: string;
+      }>("/api/status", { method: "GET" });
+      if (data.state) {
+        return {
+          state: data.state as AgentStatus["state"],
+          agentName: data.agentName ?? "Agent",
+          model: data.model ?? "—",
+          uptime: data.uptime,
+          memories: data.memories,
+        };
+      }
+    } catch {
+      // fall through to legacy endpoint
+    }
     return this.request("/api/agent/status", { method: "GET" });
   }
 
@@ -349,9 +436,12 @@ export class CloudApiClient {
   }
 
   async exportAgent(password: string, includeLogs?: boolean): Promise<Blob> {
+    const headers = this.buildHeaders();
+    headers.set("Content-Type", "application/json");
+
     const res = await fetch(`${this.baseUrl}/api/agent/export`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ password, includeLogs }),
     });
     if (!res.ok) throw new Error(`Export failed: ${res.status}`);
@@ -370,6 +460,7 @@ export class CloudApiClient {
     const envelope = new Blob([lengthBuf, passwordBytes, fileBytes]);
     const res = await fetch(`${this.baseUrl}/api/agent/import`, {
       method: "POST",
+      headers: this.buildHeaders(),
       body: envelope,
     });
     if (!res.ok) throw new Error(`Import failed: ${res.status}`);
@@ -391,7 +482,7 @@ export class CloudApiClient {
     return this.request(`/api/logs${qs ? `?${qs}` : ""}`, { method: "GET" });
   }
 
-  async getBilling(): Promise<{ balance?: number; plan?: string }> {
+  async getBilling(): Promise<object> {
     return this.request("/api/billing", { method: "GET" });
   }
 }

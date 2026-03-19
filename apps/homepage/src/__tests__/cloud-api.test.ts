@@ -30,6 +30,30 @@ describe("CloudApiClient", () => {
     expect(result.status).toBe("ok");
   });
 
+  it("health() falls back to /health when /api/health returns 404", async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ status: "ok", uptime: 50 }),
+      });
+
+    const result = await client.health();
+
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      "http://localhost:2138/api/health",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:2138/health",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(result.status).toBe("ok");
+  });
+
   it("startAgent() calls POST /api/agent/start", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -77,6 +101,25 @@ describe("CloudApiClient", () => {
       }),
     );
     expect(result).toBeInstanceOf(Blob);
+  });
+
+  it("exportAgent() forwards Authorization for remote agents", async () => {
+    const remoteClient = new CloudApiClient({
+      url: "https://agent.example.com",
+      type: "remote",
+      authToken: "secret-token",
+    });
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      blob: () => Promise.resolve(new Blob(["data"])),
+    });
+
+    await remoteClient.exportAgent("mypass");
+
+    const headers = mockFetch.mock.calls[0][1].headers as Headers;
+    expect(headers.get("Authorization")).toBe("Bearer secret-token");
   });
 
   it("stopAgent() calls POST /api/agent/stop", async () => {
@@ -206,6 +249,26 @@ describe("CloudApiClient", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("importAgent() forwards Authorization for remote agents", async () => {
+    const remoteClient = new CloudApiClient({
+      url: "https://agent.example.com",
+      type: "remote",
+      authToken: "secret-token",
+    });
+    const mockFile = new File(["file-content"], "test.bin");
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ ok: true }),
+    });
+
+    await remoteClient.importAgent(mockFile, "pass");
+
+    const headers = mockFetch.mock.calls[0][1].headers as Headers;
+    expect(headers.get("Authorization")).toBe("Bearer secret-token");
+  });
+
   it("getBilling() calls GET /api/billing", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -248,7 +311,7 @@ describe("CloudClient", () => {
     });
     const agents = await cc.listAgents();
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://www.elizacloud.ai/api/v1/milady/agents",
+      expect.stringContaining("/api/v1/milady/agents"),
       expect.objectContaining({ method: "GET" }),
     );
     // Verify X-Api-Key header
@@ -267,7 +330,7 @@ describe("CloudClient", () => {
     });
     await cc.suspendAgent("agent-123");
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://www.elizacloud.ai/api/v1/milady/agents/agent-123/suspend",
+      expect.stringContaining("/api/v1/milady/agents/agent-123/suspend"),
       expect.objectContaining({ method: "POST" }),
     );
   });
@@ -280,7 +343,7 @@ describe("CloudClient", () => {
     });
     const result = await cc.resumeAgent("agent-123");
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://www.elizacloud.ai/api/v1/milady/agents/agent-123/resume",
+      expect.stringContaining("/api/v1/milady/agents/agent-123/resume"),
       expect.objectContaining({ method: "POST" }),
     );
     expect(result.jobId).toBe("job-1");
@@ -294,7 +357,7 @@ describe("CloudClient", () => {
     });
     const balance = await cc.getCreditsBalance();
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://www.elizacloud.ai/api/credits/balance",
+      expect.stringContaining("/api/credits/balance"),
       expect.objectContaining({ method: "GET" }),
     );
     expect(balance.balance).toBe(5000);
@@ -308,7 +371,7 @@ describe("CloudClient", () => {
     });
     await cc.takeSnapshot("agent-123");
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://www.elizacloud.ai/api/v1/milady/agents/agent-123/snapshot",
+      expect.stringContaining("/api/v1/milady/agents/agent-123/snapshot"),
       expect.objectContaining({ method: "POST" }),
     );
   });
@@ -426,12 +489,12 @@ describe("CloudClient", () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ id: "new-agent" }),
+      json: () => Promise.resolve({ success: true, data: { id: "new-agent" } }),
     });
     const result = await cc.createAgent({ name: "Test Agent" });
     expect(result.id).toBe("new-agent");
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.name).toBe("Test Agent");
+    expect(body.agentName).toBe("Test Agent");
   });
 
   it("getAgent() calls GET /api/v1/milady/agents/:id", async () => {

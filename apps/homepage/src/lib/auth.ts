@@ -1,4 +1,4 @@
-import { CLOUD_BASE } from "./cloud-api";
+import { CLOUD_BASE } from "./runtime-config";
 
 const TOKEN_KEY = "milady-cloud-token";
 
@@ -41,7 +41,9 @@ export async function cloudLoginPoll(
 ): Promise<{ status: string; apiKey?: string }> {
   const res = await fetch(
     `${CLOUD_BASE}/api/auth/cli-session/${encodeURIComponent(sessionId)}`,
-    { redirect: "manual" },
+    {
+      redirect: "manual",
+    },
   );
   if (res.status === 404) throw new Error("Session expired");
   if (!res.ok) throw new Error(`Poll failed: ${res.status}`);
@@ -50,12 +52,11 @@ export async function cloudLoginPoll(
 
 export interface CloudAgent {
   id: string;
-  agentName: string;
-  name?: string;
+  name: string;
+  /** Backend returns agentName; normalized to name by fetchCloudAgents(). */
+  agentName?: string;
   status: string;
   model?: string;
-  errorMessage?: string | null;
-  lastHeartbeatAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -67,15 +68,14 @@ export async function fetchCloudAgents(): Promise<CloudAgent[]> {
     const res = await fetch(`${CLOUD_BASE}/api/v1/milady/agents`, {
       headers: { "X-Api-Key": token },
     });
-    if (!res.ok) {
-      console.warn("[fetchCloudAgents] API returned", res.status);
-      return [];
-    }
-    const json = await res.json();
-    // Cloud API returns { success: true, data: [...] }
-    return json?.data ?? json?.agents ?? (Array.isArray(json) ? json : []);
-  } catch (err) {
-    console.warn("[fetchCloudAgents] Failed:", err);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const raw: CloudAgent[] = Array.isArray(data)
+      ? data
+      : (data.agents ?? data.data ?? []);
+    // Backend returns agentName; normalize to name
+    return raw.map((a) => ({ ...a, name: a.name || a.agentName || a.id }));
+  } catch {
     return [];
   }
 }
