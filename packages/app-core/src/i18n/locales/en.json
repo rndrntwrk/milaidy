@@ -1094,6 +1094,8 @@
   "streamsettings.NavSource": "Source",
   "onboarding.stepName.wakeUp": "Initialize",
   "onboarding.stepSub.wakeUp": "System boot",
+  "onboarding.stepName.identity": "Identity",
+  "onboarding.stepSub.identity": "Character profile",
   "onboarding.stepSub.connection": "Neural link",
   "onboarding.stepName.rpc": "RPC",
   "onboarding.stepSub.rpc": "Blockchain access",

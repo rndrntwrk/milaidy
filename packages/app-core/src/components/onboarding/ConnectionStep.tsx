@@ -1346,24 +1346,23 @@ export function ConnectionStep() {
               <div
                 style={{
                   padding: "0.75rem",
-                  border: "1px solid var(--border)",
-                  background: "var(--bg-hover)",
+                  border: "1px solid rgba(240, 185, 11, 0.25)",
+                  background: "rgba(240, 185, 11, 0.08)",
                   fontSize: "0.875rem",
-                  borderRadius: "0.25rem",
+                  borderRadius: "0.5rem",
                 }}
               >
                 <p
                   style={{
-                    fontWeight: "500",
+                    fontWeight: "600",
                     marginBottom: "0.25rem",
-                    color: "var(--text)",
+                    color: "rgba(240, 238, 250, 0.94)",
                   }}
                 >
                   {t("onboarding.almostThere")}
                 </p>
                 <p
-                  className="onboarding-desc"
-                  style={{ lineHeight: "1.5", textAlign: "left" }}
+                  style={{ lineHeight: "1.5", textAlign: "left", color: "rgba(240, 238, 250, 0.75)", fontSize: "0.8125rem" }}
                 >
                   {t("onboarding.redirectInstructions")}{" "}
                   <code
