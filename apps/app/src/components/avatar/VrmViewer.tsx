@@ -7,6 +7,10 @@
 
 import { resolveAppAssetUrl } from "@milady/app-core/utils";
 import { useEffect, useRef } from "react";
+import type {
+  StageSceneMark,
+  StageScenePreset,
+} from "../../proStreamerStageScene";
 import {
   type CameraProfile,
   type InteractionMode,
@@ -14,7 +18,7 @@ import {
   type VrmEngineState,
 } from "./VrmEngine";
 
-const DEFAULT_VRM_PATH = resolveAppAssetUrl("vrms/milady-1.vrm");
+const DEFAULT_VRM_PATH = resolveAppAssetUrl("vrms/alice.vrm");
 
 export type VrmViewerProps = {
   /** Path to the VRM file to load (default: bundled Miwaifus #1) */
@@ -28,8 +32,11 @@ export type VrmViewerProps = {
   cameraProfile?: CameraProfile;
   /** Interaction behavior for camera controls */
   interactiveMode?: InteractionMode;
+  scenePreset?: StageScenePreset;
+  sceneMark?: StageSceneMark;
   onEngineState?: (state: VrmEngineState) => void;
   onEngineReady?: (engine: VrmEngine) => void;
+  onViewerError?: (error: Error) => void;
 };
 
 export function VrmViewer(props: VrmViewerProps) {
@@ -47,6 +54,7 @@ export function VrmViewer(props: VrmViewerProps) {
   const currentVrmPathRef = useRef<string>("");
   const onEngineReadyRef = useRef(props.onEngineReady);
   const onEngineStateRef = useRef(props.onEngineState);
+  const onViewerErrorRef = useRef(props.onViewerError);
 
   mouthOpenRef.current = props.mouthOpen;
   isSpeakingRef.current = props.isSpeaking ?? false;
@@ -55,6 +63,7 @@ export function VrmViewer(props: VrmViewerProps) {
   interactionModeRef.current = props.interactiveMode ?? "free";
   onEngineReadyRef.current = props.onEngineReady;
   onEngineStateRef.current = props.onEngineState;
+  onViewerErrorRef.current = props.onViewerError;
 
   // Setup engine once
   useEffect(() => {
@@ -87,6 +96,9 @@ export function VrmViewer(props: VrmViewerProps) {
     engine.setCameraProfile(cameraProfileRef.current);
     engine.setInteractionMode(interactionModeRef.current);
     engine.setInteractionEnabled(interactiveRef.current);
+    engine.setIdleGlbUrls([]);
+    void engine.setScenePreset(props.scenePreset ?? "default");
+    void engine.setSceneMark(props.sceneMark ?? "stage");
 
     const resize = () => {
       const el = canvasRef.current;
@@ -108,6 +120,11 @@ export function VrmViewer(props: VrmViewerProps) {
       },
       (error) => {
         console.warn("Failed to initialize VRM renderer:", error);
+        onViewerErrorRef.current?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to initialize VRM renderer"),
+        );
       },
     );
 
@@ -141,6 +158,18 @@ export function VrmViewer(props: VrmViewerProps) {
     engine.setInteractionMode(props.interactiveMode ?? "free");
   }, [props.interactiveMode]);
 
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    void engine.setScenePreset(props.scenePreset ?? "default");
+  }, [props.scenePreset]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    void engine.setSceneMark(props.sceneMark ?? "stage");
+  }, [props.sceneMark]);
+
   // Load VRM when path changes
   useEffect(() => {
     const engine = engineRef.current;
@@ -168,6 +197,9 @@ export function VrmViewer(props: VrmViewerProps) {
           currentVrmPathRef.current = "";
         }
         console.warn("Failed to load VRM:", err);
+        onViewerErrorRef.current?.(
+          err instanceof Error ? err : new Error("Failed to load VRM"),
+        );
       }
     })();
 

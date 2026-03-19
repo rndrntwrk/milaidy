@@ -8,6 +8,14 @@ import {
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { computeStageCoverFit } from "../../proStreamerStageFit";
+import {
+  instantiateProStreamerStageScene,
+  type ProStreamerStageSceneContract,
+  type StageMarkTransform,
+  type StageSceneMark,
+  type StageScenePreset,
+} from "../../proStreamerStageScene";
 import {
   type AnimationLoaderContext,
   loadEmoteClip,
@@ -70,6 +78,14 @@ function getRendererPixelRatio(): number {
   );
 }
 
+function cloneVector3(value: THREE.Vector3): THREE.Vector3 {
+  return new THREE.Vector3(value.x, value.y, value.z);
+}
+
+function cloneQuaternion(value: THREE.Quaternion): THREE.Quaternion {
+  return new THREE.Quaternion(value.x, value.y, value.z, value.w);
+}
+
 /**
  * Create the best available renderer for the current platform.
  * Tries WebGPU first (better performance on macOS WKWebView and modern CEF).
@@ -111,6 +127,7 @@ export class VrmEngine {
   private rendererBackend: RendererBackend = "webgl";
   private scene: THREE.Scene | null = null;
   private camera: THREE.PerspectiveCamera | null = null;
+  private characterRoot: THREE.Group | null = null;
   private clock = new THREE.Clock();
   private vrm: VRM | null = null;
   private mixer: THREE.AnimationMixer | null = null;
@@ -129,6 +146,7 @@ export class VrmEngine {
   private vrmName: string | null = null;
   private lookAtTarget = new THREE.Vector3(0, 0.5, 0);
   private readonly idleGlbUrl = resolveAppAssetUrl("animations/idle.glb");
+  private idleGlbUrls: string[] = [];
   private cameraAnimation: CameraAnimationConfig = {
     ...DEFAULT_CAMERA_ANIMATION,
   };
@@ -147,6 +165,12 @@ export class VrmEngine {
   private interactionEnabled = false;
   private interactionMode: InteractionMode = "free";
   private cameraProfile: CameraProfile = "chat";
+  private currentScenePreset: StageScenePreset = "default";
+  private currentSceneMark: StageSceneMark = "stage";
+  private stageScene: ProStreamerStageSceneContract | null = null;
+  private stageLoadRequestId = 0;
+  private currentRigPosition = new THREE.Vector3();
+  private currentRigQuaternion = new THREE.Quaternion();
   private readyPromise: Promise<void> = Promise.resolve();
   private resolveReady: (() => void) | null = null;
   private rejectReady: ((error?: unknown) => void) | null = null;
@@ -233,6 +257,9 @@ export class VrmEngine {
         this.rendererBackend = backend;
         const scene = new THREE.Scene();
         this.scene = scene;
+        const characterRoot = new THREE.Group();
+        scene.add(characterRoot);
+        this.characterRoot = characterRoot;
         const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
         camera.position.set(0, 1.2, 5.0);
         this.camera = camera;
@@ -266,6 +293,7 @@ export class VrmEngine {
         this.rendererBackend = "webgl";
         this.scene = null;
         this.camera = null;
+        this.characterRoot = null;
         this.controls = null;
         console.error("[VrmEngine] Failed to initialize renderer:", error);
         this.settleReady(error);
@@ -284,10 +312,13 @@ export class VrmEngine {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
-    if (this.scene && this.vrm) {
+    if (this.characterRoot && this.vrm && this.vrm.scene.parent === this.characterRoot) {
+      this.characterRoot.remove(this.vrm.scene);
+    } else if (this.scene && this.vrm && this.vrm.scene.parent === this.scene) {
       this.scene.remove(this.vrm.scene);
       VRMUtils.deepDispose(this.vrm.scene);
     }
+    this.detachStageScene();
     if (this.scene) {
       this.footShadow.dispose(this.scene);
     }
@@ -320,6 +351,7 @@ export class VrmEngine {
     this.rendererBackend = "webgl";
     this.scene = null;
     this.camera = null;
+    this.characterRoot = null;
     this.onUpdate = null;
   }
   setInteractionEnabled(enabled: boolean): void {
@@ -337,6 +369,11 @@ export class VrmEngine {
   }
   setCameraProfile(profile: CameraProfile): void {
     if (this.cameraProfile === profile) return;
+    if (this.currentScenePreset === "pro-streamer-stage") {
+      this.cameraProfile = profile;
+      this.applySceneLayout();
+      return;
+    }
 
     // Save current state for transition
     if (this.camera) {
@@ -387,6 +424,32 @@ export class VrmEngine {
       this.cameraProfile = profile;
     }
   }
+  setIdleGlbUrls(urls: string[]): void {
+    this.idleGlbUrls = urls
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+  async setScenePreset(preset: StageScenePreset): Promise<void> {
+    if (this.currentScenePreset === preset) {
+      if (preset === "pro-streamer-stage") {
+        await this.ensureStageSceneLoaded();
+      }
+      this.applySceneLayout();
+      return;
+    }
+
+    this.currentScenePreset = preset;
+    if (preset === "pro-streamer-stage") {
+      await this.ensureStageSceneLoaded();
+    } else {
+      this.detachStageScene();
+    }
+    this.applySceneLayout();
+  }
+  async setSceneMark(mark: StageSceneMark): Promise<void> {
+    this.currentSceneMark = mark;
+    this.applySceneLayout();
+  }
   resize(width: number, height: number): void {
     if (!this.renderer || !this.camera) return;
     if (width <= 0 || height <= 0) return;
@@ -395,6 +458,9 @@ export class VrmEngine {
     this.renderer.setSize(width, height, false);
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
+    if (this.currentScenePreset === "pro-streamer-stage" && this.stageScene) {
+      this.applyStageCamera(this.stageScene);
+    }
   }
   getState(): VrmEngineState {
     const idlePlaying = this.idleAction?.isRunning() ?? false;
@@ -477,10 +543,15 @@ export class VrmEngine {
     await this.whenReady();
     if (!this.scene) throw new Error("VrmEngine not initialized");
     if (!this.camera) throw new Error("VrmEngine not initialized");
+    if (!this.characterRoot) throw new Error("VrmEngine not initialized");
     if (this.loadingAborted) return;
     const requestId = ++this.vrmLoadRequestId;
     if (this.vrm) {
-      this.scene.remove(this.vrm.scene);
+      if (this.vrm.scene.parent === this.characterRoot) {
+        this.characterRoot.remove(this.vrm.scene);
+      } else {
+        this.scene.remove(this.vrm.scene);
+      }
       VRMUtils.deepDispose(this.vrm.scene);
       this.vrm = null;
       this.vrmReady = false;
@@ -517,7 +588,7 @@ export class VrmEngine {
     const vrm = gltf.userData.vrm as VRM | undefined;
     if (!vrm) throw new Error("Loaded asset is not a VRM");
     VRMUtils.removeUnnecessaryVertices(vrm.scene);
-    if (this.camera) {
+    if (this.currentScenePreset !== "pro-streamer-stage" && this.camera) {
       this.cameraManager.centerAndFrame(
         vrm,
         this.camera,
@@ -533,10 +604,13 @@ export class VrmEngine {
     } catch {
       /* optional in some versions */
     }
-    this.cameraManager.ensureFacingCamera(vrm, this.camera);
+    if (this.currentScenePreset !== "pro-streamer-stage") {
+      this.cameraManager.ensureFacingCamera(vrm, this.camera);
+    }
     if (
       this.loadingAborted ||
       !this.scene ||
+      !this.characterRoot ||
       requestId !== this.vrmLoadRequestId
     ) {
       VRMUtils.deepDispose(vrm.scene);
@@ -546,11 +620,12 @@ export class VrmEngine {
     vrm.scene.traverse((obj) => {
       obj.frustumCulled = false;
     });
-    this.scene.add(vrm.scene);
+    this.characterRoot.add(vrm.scene);
     this.vrm = vrm;
     this.vrmName = name ?? null;
     vrm.springBoneManager?.reset?.();
     this.blinkController.reset();
+    this.applySceneLayout();
 
     try {
       await this.loadAndPlayIdle(vrm);
@@ -695,6 +770,136 @@ export class VrmEngine {
       isCurrentVrm: (vrm: VRM) => this.vrm === vrm,
     };
   }
+  private async ensureStageSceneLoaded(): Promise<void> {
+    if (!this.scene) return;
+    if (this.stageScene) {
+      if (this.stageScene.sceneRoot.parent !== this.scene) {
+        this.scene.add(this.stageScene.sceneRoot);
+      }
+      return;
+    }
+
+    const requestId = ++this.stageLoadRequestId;
+    try {
+      const contract = await instantiateProStreamerStageScene();
+      if (
+        this.loadingAborted ||
+        !this.scene ||
+        this.currentScenePreset !== "pro-streamer-stage" ||
+        requestId !== this.stageLoadRequestId
+      ) {
+        return;
+      }
+      this.stageScene = contract;
+      this.scene.add(contract.sceneRoot);
+      contract.sceneRoot.updateMatrixWorld(true);
+    } catch (error) {
+      console.error("[VrmEngine] Failed to load pro streamer stage:", error);
+      this.stageScene = null;
+    }
+  }
+  private detachStageScene(): void {
+    if (this.scene && this.stageScene?.sceneRoot.parent === this.scene) {
+      this.scene.remove(this.stageScene.sceneRoot);
+    }
+    this.stageScene = null;
+  }
+  private applySceneLayout(): void {
+    const camera = this.camera;
+    const characterRoot = this.characterRoot;
+    if (!camera || !characterRoot) return;
+
+    if (this.currentScenePreset === "pro-streamer-stage" && this.stageScene) {
+      characterRoot.scale.setScalar(
+        Math.max(0.1, this.stageScene.anchorMetadata.targetHeightM * 2.8),
+      );
+      this.applyStageCamera(this.stageScene);
+      this.applyMarkTransform(
+        this.currentSceneMark === "portrait"
+          ? this.stageScene.portraitMark
+          : this.stageScene.stageMark,
+      );
+      if (this.vrm) {
+        this.cameraManager.ensureFacingCamera(this.vrm, camera);
+      }
+      return;
+    }
+
+    characterRoot.position.set(0, 0, 0);
+    characterRoot.quaternion.identity();
+    characterRoot.scale.setScalar(1);
+    this.currentRigPosition.copy(characterRoot.position);
+    this.currentRigQuaternion.copy(characterRoot.quaternion);
+
+    if (this.vrm) {
+      this.cameraManager.centerAndFrame(
+        this.vrm,
+        camera,
+        this.controls,
+        this.cameraProfile,
+        this.lookAtTarget,
+        this.baseCameraPosition,
+        (controls) =>
+          this.cameraManager.applyInteractionMode(controls, this.interactionMode),
+      );
+    }
+  }
+  private applyStageCamera(stageScene: ProStreamerStageSceneContract): void {
+    const camera = this.camera;
+    if (!camera) return;
+
+    const authoredCamera = stageScene.stageCamera;
+    const authoredPosition = stageScene.stageCameraNode.getWorldPosition(
+      new THREE.Vector3(),
+    );
+    const viewportAspect =
+      camera.aspect > 0 ? camera.aspect : stageScene.backdropMetrics.aspect;
+    const lookTarget = stageScene.backdropMetrics.center;
+
+    camera.position.copy(authoredPosition);
+    camera.up.set(0, 1, 0);
+    this.lookAtTarget.copy(lookTarget);
+    camera.lookAt(lookTarget);
+    camera.updateMatrixWorld(true);
+
+    const cameraForward = new THREE.Vector3(0, 0, -1)
+      .applyQuaternion(camera.quaternion)
+      .normalize();
+    const numerator = Math.abs(
+      lookTarget.clone().sub(camera.position).dot(stageScene.backdropMetrics.normal),
+    );
+    const denominator = Math.max(
+      1e-6,
+      Math.abs(cameraForward.dot(stageScene.backdropMetrics.normal)),
+    );
+    const cameraToPlaneDistance = numerator / denominator;
+    const coverFit = computeStageCoverFit({
+      backdropWidth: stageScene.backdropMetrics.width,
+      backdropHeight: stageScene.backdropMetrics.height,
+      viewportAspect,
+      cameraToPlaneDistance,
+    });
+
+    camera.fov = coverFit.fovDegrees;
+    camera.near = authoredCamera.near;
+    camera.far = authoredCamera.far;
+    camera.updateProjectionMatrix();
+    this.baseCameraPosition.copy(camera.position);
+
+    if (this.controls) {
+      this.controls.target.copy(this.lookAtTarget);
+      this.controls.update();
+    }
+  }
+  private applyMarkTransform(mark: StageMarkTransform): void {
+    const characterRoot = this.characterRoot;
+    if (!characterRoot) return;
+
+    characterRoot.position.copy(mark.position);
+    characterRoot.quaternion.copy(mark.quaternion);
+    this.currentRigPosition.copy(mark.position);
+    this.currentRigQuaternion.copy(mark.quaternion);
+  }
   private loop(): void {
     this.animationFrameId = requestAnimationFrame(() => this.loop());
     const renderer = this.renderer;
@@ -798,9 +1003,10 @@ export class VrmEngine {
   }
   private async loadAndPlayIdle(vrm: VRM): Promise<void> {
     if (this.loadingAborted) return;
+    const idleGlbUrl = this.idleGlbUrls[0] || this.idleGlbUrl;
     const clip = await loadIdleClip(
       vrm,
-      this.idleGlbUrl,
+      idleGlbUrl,
       this.animationLoaderContext,
     );
     if (!clip) return;

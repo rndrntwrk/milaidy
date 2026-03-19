@@ -22,6 +22,9 @@ vi.mock("../../src/components/avatar/VrmEngine", () => {
     setInteractionEnabled = vi.fn();
     setCameraProfile = vi.fn();
     setInteractionMode = vi.fn();
+    setIdleGlbUrls = vi.fn();
+    setScenePreset = vi.fn(async () => {});
+    setSceneMark = vi.fn(async () => {});
     resize = vi.fn();
     dispose = vi.fn();
     isInitialized = vi.fn(() => false);
