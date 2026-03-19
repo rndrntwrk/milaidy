@@ -2,6 +2,31 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 
+/**
+ * Return the sibling eliza workspace root (../eliza) if it exists and has the
+ * requested package.  This avoids relying on node_modules symlinks which bun
+ * may revert during execution.
+ */
+function getSiblingElizaPackageRoot(
+  packageName: string,
+  repoRoot: string,
+): string | undefined {
+  const elizaRoot = path.resolve(repoRoot, "..", "eliza");
+  if (!existsSync(path.join(elizaRoot, "package.json"))) return undefined;
+
+  const packageMap: Record<string, string> = {
+    "@elizaos/core": path.join(elizaRoot, "packages", "typescript"),
+    "@elizaos/autonomous": path.join(elizaRoot, "packages", "autonomous"),
+    "@elizaos/app-core": path.join(elizaRoot, "packages", "app-core"),
+  };
+
+  const candidate = packageMap[packageName];
+  if (candidate && existsSync(path.join(candidate, "package.json"))) {
+    return candidate;
+  }
+  return undefined;
+}
+
 const MODULE_EXTENSIONS = [
   ".ts",
   ".tsx",
@@ -46,6 +71,12 @@ export function getInstalledPackageRoot(
   packageName: string,
   fromDir?: string,
 ): string | undefined {
+  // Prefer sibling eliza workspace to avoid bun reverting symlinks
+  if (fromDir) {
+    const sibling = getSiblingElizaPackageRoot(packageName, fromDir);
+    if (sibling) return sibling;
+  }
+
   const scopedRequire = getRequireFor(fromDir);
 
   try {

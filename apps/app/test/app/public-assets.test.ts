@@ -72,11 +72,19 @@ describe("app public bundle assets", () => {
       ...MILADY_CHARACTER_ASSETS.map((asset) =>
         asset.previewPath.replace(/^\//, ""),
       ),
+      // Eliza-branded previews (1:1 copies of milady previews for rebranding)
+      ...MILADY_CHARACTER_ASSETS.map((asset) =>
+        asset.previewPath.replace(/^\//, "").replace("milady-", "eliza-"),
+      ),
       ...MILADY_CHARACTER_ASSETS.map((asset) =>
         asset.compressedVrmPath.replace(/^\//, ""),
       ),
       ...MILADY_CHARACTER_ASSETS.map((asset) =>
         asset.backgroundPath.replace(/^\//, ""),
+      ),
+      // Eliza-branded backgrounds (1:1 copies for rebranding)
+      ...MILADY_CHARACTER_ASSETS.map((asset) =>
+        asset.backgroundPath.replace(/^\//, "").replace("milady-", "eliza-"),
       ),
     ]);
 
