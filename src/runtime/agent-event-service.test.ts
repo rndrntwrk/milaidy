@@ -79,7 +79,7 @@ describe("createElizaPlugin", () => {
   });
 
   it("honours DISABLE_EMOTES by removing PLAY_EMOTE at init", async () => {
-    const plugin = createMiladyPlugin();
+    const plugin = createElizaPlugin();
     const runtime = {
       character: { settings: { DISABLE_EMOTES: true } },
       getService: vi.fn(() => null),
