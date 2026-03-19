@@ -120,6 +120,55 @@ function patchPluginPdfBrokenDefault() {
 patchPluginPdfBrokenDefault();
 
 /**
+ * Patch @elizaos/autonomous ensureBrowserServerLink() file extension.
+ *
+ * The upstream code checks for `dist/index` without `.js` extension, but
+ * existsSync() requires the full filename. Fix to `dist/index.js`.
+ * Remove once the upstream adds the extension.
+ */
+function patchBrowserServerIndexExtension() {
+  const searchDirs = [
+    resolve(root, "node_modules/@elizaos/autonomous"),
+  ];
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith("@elizaos+autonomous@")) {
+          searchDirs.push(
+            resolve(bunCacheDir, entry, "node_modules/@elizaos/autonomous"),
+          );
+        }
+      }
+    } catch {}
+  }
+
+  let patched = 0;
+  for (const dir of searchDirs) {
+    const target = resolve(dir, "src/runtime/eliza.ts");
+    if (!existsSync(target)) continue;
+    let src = readFileSync(target, "utf8");
+    if (!src.includes('"dist", "index"')) continue;
+    // Only fix the two browser-server checks, not other index references
+    src = src.replace(
+      /path\.join\(serverDir, "dist", "index"\)/g,
+      'path.join(serverDir, "dist", "index.js")',
+    );
+    src = src.replace(
+      /path\.join\(stagehandDir, "dist", "index"\)/g,
+      'path.join(stagehandDir, "dist", "index.js")',
+    );
+    writeFileSync(target, src, "utf8");
+    patched++;
+    console.log(`[patch-deps] Applied browser server index.js extension fix: ${target}`);
+  }
+  if (patched > 0) {
+    console.log(`[patch-deps] autonomous: fixed ${patched} browser server check(s).`);
+  }
+}
+patchBrowserServerIndexExtension();
+
+/**
  * Patch @elizaos/autonomous server reset safety check.
  *
  * The upstream isSafeResetStateDir only allows state directories whose path
