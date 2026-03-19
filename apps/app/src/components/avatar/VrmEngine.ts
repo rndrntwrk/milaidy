@@ -69,6 +69,7 @@ const DEFAULT_CAMERA_ANIMATION: CameraAnimationConfig = {
   speed: 0.8,
 };
 const MAX_RENDERER_PIXEL_RATIO = 2;
+const WEBGPU_RENDERER_ENABLED = false;
 
 function getRendererPixelRatio(): number {
   if (typeof window === "undefined") return 1;
@@ -95,7 +96,10 @@ function cloneQuaternion(value: THREE.Quaternion): THREE.Quaternion {
 async function createRenderer(
   canvas: HTMLCanvasElement,
 ): Promise<{ backend: RendererBackend; renderer: RendererLike }> {
-  if (typeof navigator !== "undefined" && navigator.gpu) {
+  // WebGPU currently renders the emissive pro-streamer backdrop black in the
+  // production Alice shell. Keep the operator-facing renderer on WebGL until
+  // that material path is proven stable again.
+  if (WEBGPU_RENDERER_ENABLED && typeof navigator !== "undefined" && navigator.gpu) {
     try {
       const { WebGPURenderer } = await import("three/webgpu");
       const renderer = new WebGPURenderer({
