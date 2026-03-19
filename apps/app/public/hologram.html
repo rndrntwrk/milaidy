@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaoBot Hologram — Looking Glass</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+      height: 100vh;
+    }
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    /* Control overlay */
+    #controls {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: 360px;
+    }
+    .panel {
+      background: rgba(10, 10, 10, 0.85);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 16px 20px;
+    }
+    .panel h2 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: rgba(255, 255, 255, 0.4);
+      margin-bottom: 10px;
+    }
+    #enter-lg-btn {
+      width: 100%;
+      padding: 14px 20px;
+      background: linear-gradient(135deg, #00d4ff 0%, #7b2fbe 50%, #ff0066 100%);
+      border: none;
+      border-radius: 12px;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    #enter-lg-btn:hover {
+      transform: scale(1.02);
+      box-shadow: 0 4px 24px rgba(0, 212, 255, 0.3);
+    }
+    #enter-lg-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    #status {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      line-height: 1.5;
+    }
+    #status .ok { color: #00ff88; }
+    #status .warn { color: #ffaa00; }
+    #status .err { color: #ff4466; }
+
+    /* Chat overlay (bottom) */
+    #chat-overlay {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      z-index: 10;
+      display: flex;
+      gap: 10px;
+    }
+    #chat-input {
+      flex: 1;
+      padding: 12px 16px;
+      background: rgba(10, 10, 10, 0.85);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      color: white;
+      font-size: 14px;
+      outline: none;
+    }
+    #chat-input:focus {
+      border-color: rgba(0, 212, 255, 0.4);
+    }
+    #chat-send {
+      padding: 12px 20px;
+      background: rgba(0, 212, 255, 0.15);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      border-radius: 12px;
+      color: #00d4ff;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    #chat-response {
+      position: fixed;
+      bottom: 70px;
+      left: 20px;
+      right: 20px;
+      z-index: 10;
+      background: rgba(10, 10, 10, 0.75);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 14px 18px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: rgba(255, 255, 255, 0.8);
+      max-height: 120px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    /* Sliders */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .slider-row label {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      min-width: 70px;
+    }
+    .slider-row input[type="range"] {
+      flex: 1;
+      accent-color: #00d4ff;
+    }
+    .slider-row .val {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.6);
+      min-width: 30px;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="controls">
+    <div class="panel">
+      <h2>TaoBot Hologram</h2>
+      <button id="enter-lg-btn" disabled>Connecting...</button>
+      <div id="status" style="margin-top: 10px;"></div>
+    </div>
+
+    <div class="panel" id="lg-settings" style="display:none;">
+      <h2>Looking Glass Settings</h2>
+      <div class="slider-row">
+        <label>Depth</label>
+        <input type="range" id="depthiness" min="0.5" max="3" step="0.1" value="1.5">
+        <span class="val" id="depthiness-val">1.5</span>
+      </div>
+      <div class="slider-row">
+        <label>Focus Y</label>
+        <input type="range" id="targetY" min="0" max="2" step="0.05" value="0.8">
+        <span class="val" id="targetY-val">0.8</span>
+      </div>
+      <div class="slider-row">
+        <label>Diameter</label>
+        <input type="range" id="targetDiam" min="0.5" max="5" step="0.1" value="2.5">
+        <span class="val" id="targetDiam-val">2.5</span>
+      </div>
+      <div class="slider-row">
+        <label>FOV</label>
+        <input type="range" id="fov" min="10" max="50" step="1" value="20">
+        <span class="val" id="fov-val">20</span>
+      </div>
+      <div class="slider-row">
+        <label>Views</label>
+        <input type="range" id="numViews" min="24" max="80" step="1" value="45">
+        <span class="val" id="numViews-val">45</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="chat-response"></div>
+  <div id="chat-overlay">
+    <input id="chat-input" type="text" placeholder="Talk to TaoBot..." autocomplete="off">
+    <button id="chat-send">Send</button>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/",
+      "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.3.3/lib/three-vrm.module.min.js"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+    import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+    const statusEl = document.getElementById('status');
+    const enterBtn = document.getElementById('enter-lg-btn');
+    const settingsPanel = document.getElementById('lg-settings');
+    const chatInput = document.getElementById('chat-input');
+    const chatSend = document.getElementById('chat-send');
+    const chatResponse = document.getElementById('chat-response');
+
+    function log(msg, cls = '') {
+      statusEl.innerHTML += `<div class="${cls}">${msg}</div>`;
+    }
+
+    // ── Looking Glass WebXR Polyfill ──
+    let polyfillLoaded = false;
+    log('Loading Looking Glass WebXR polyfill...');
+
+    try {
+      const lgModule = await import(
+        'https://unpkg.com/@lookingglass/webxr@0.6.0/dist/@lookingglass/bundle/webxr.js'
+      );
+
+      const config = lgModule.LookingGlassConfig;
+      config.tileHeight = 512;
+      config.numViews = 45;
+      config.targetY = 0.8;
+      config.targetZ = 0;
+      config.targetDiam = 2.5;
+      config.fovy = (20 * Math.PI) / 180;
+      config.depthiness = 1.5;
+      config.inlineView = 1;
+
+      new lgModule.LookingGlassWebXRPolyfill();
+      polyfillLoaded = true;
+      log('Looking Glass polyfill ready', 'ok');
+
+      // Wire settings sliders
+      settingsPanel.style.display = 'block';
+
+      const sliders = {
+        depthiness: (v) => { config.depthiness = parseFloat(v); },
+        targetY: (v) => { config.targetY = parseFloat(v); },
+        targetDiam: (v) => { config.targetDiam = parseFloat(v); },
+        fov: (v) => { config.fovy = (parseFloat(v) * Math.PI) / 180; },
+        numViews: (v) => { config.numViews = parseInt(v); },
+      };
+
+      for (const [id, setter] of Object.entries(sliders)) {
+        const input = document.getElementById(id);
+        const valEl = document.getElementById(id + '-val');
+        input.addEventListener('input', () => {
+          setter(input.value);
+          valEl.textContent = input.value;
+        });
+      }
+
+    } catch (err) {
+      log('Looking Glass polyfill unavailable: ' + err.message, 'warn');
+      log('Running in standard 3D mode (no hologram)', 'warn');
+    }
+
+    // ── Three.js Setup ──
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
+    camera.position.set(0, 1.0, 2.5);
+    camera.lookAt(0, 0.8, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setClearColor(0x0a0a0a);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    // Enable WebXR
+    renderer.xr.enabled = true;
+
+    // Add "Enter Looking Glass" button (replaces our custom button)
+    if (polyfillLoaded) {
+      const vrBtn = VRButton.createButton(renderer);
+      // Replace the default VRButton with our styled one
+      enterBtn.textContent = 'Enter Looking Glass';
+      enterBtn.disabled = false;
+      enterBtn.addEventListener('click', () => {
+        vrBtn.click();
+      });
+    } else {
+      enterBtn.textContent = 'Looking Glass Not Available';
+    }
+
+    // ── Lighting ──
+    const ambientLight = new THREE.AmbientLight(0x404050, 0.8);
+    scene.add(ambientLight);
+
+    const keyLight = new THREE.DirectionalLight(0xfff0dd, 2.0);
+    keyLight.position.set(2, 3, 2);
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x8888ff, 0.6);
+    fillLight.position.set(-2, 1, 1);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0x00ddff, 0.8);
+    rimLight.position.set(0, 2, -2);
+    scene.add(rimLight);
+
+    // ── Load Backdrop ──
+    log('Loading arcology backdrop...');
+    const bgLoader = new GLTFLoader();
+    bgLoader.load('/stages/pro-streamer-stage.glb', (gltf) => {
+      scene.add(gltf.scene);
+      log('Backdrop loaded', 'ok');
+    }, undefined, (err) => {
+      log('Backdrop failed: ' + err.message, 'warn');
+    });
+
+    // ── Load TaoBot VRM ──
+    log('Loading TaoBot VRM...');
+    const loader = new GLTFLoader();
+    loader.register((parser) => new VRMLoaderPlugin(parser));
+
+    let vrm = null;
+    let speaking = false;
+
+    loader.load('/vrms/taobot.vrm', (gltf) => {
+      vrm = gltf.userData.vrm;
+      if (vrm) {
+        VRMUtils.removeUnnecessaryVertices(vrm.scene);
+        scene.add(vrm.scene);
+        vrm.scene.rotation.y = Math.PI;
+        log('TaoBot VRM loaded (' +
+          Object.keys(vrm.humanoid.humanBones).length + ' bones)', 'ok');
+      } else {
+        scene.add(gltf.scene);
+        log('GLTF loaded (no VRM data)', 'warn');
+      }
+    }, (progress) => {
+      if (progress.total > 0) {
+        const pct = Math.round(progress.loaded / progress.total * 100);
+        if (pct % 25 === 0) log('VRM: ' + pct + '%');
+      }
+    }, (err) => {
+      log('VRM load error: ' + err.message, 'err');
+    });
+
+    // ── Animation Loop ──
+    const clock = new THREE.Clock();
+
+    // Mouth sync simulation
+    function getMouthValue(time) {
+      if (!speaking) return 0;
+      const base = Math.sin(time * 12) * 0.3 + 0.4;
+      const detail = Math.sin(time * 18.7) * 0.15;
+      const slow = Math.sin(time * 4.2) * 0.1;
+      return Math.max(0, Math.min(1, base + detail + slow));
+    }
+
+    // Blink system
+    let nextBlink = 2;
+    let blinkPhase = 'open';
+    let blinkTimer = 0;
+
+    function updateBlink(delta, elapsed) {
+      if (blinkPhase === 'open') {
+        nextBlink -= delta;
+        if (nextBlink <= 0) {
+          blinkPhase = 'closing';
+          blinkTimer = 0;
+        }
+        return 0;
+      }
+      blinkTimer += delta;
+      if (blinkPhase === 'closing' && blinkTimer > 0.06) {
+        blinkPhase = 'holding';
+        blinkTimer = 0;
+        return 1;
+      }
+      if (blinkPhase === 'holding' && blinkTimer > 0.04) {
+        blinkPhase = 'opening';
+        blinkTimer = 0;
+        return 1;
+      }
+      if (blinkPhase === 'opening' && blinkTimer > 0.12) {
+        blinkPhase = 'open';
+        nextBlink = 1.8 + Math.random() * 3.7;
+        return 0;
+      }
+      if (blinkPhase === 'closing') return blinkTimer / 0.06;
+      if (blinkPhase === 'opening') return 1 - (blinkTimer / 0.12);
+      return 1;
+    }
+
+    renderer.setAnimationLoop((time) => {
+      const delta = clock.getDelta();
+      const elapsed = clock.elapsedTime;
+
+      if (vrm) {
+        vrm.update(delta);
+
+        // Mouth
+        const mouthVal = getMouthValue(elapsed);
+        try {
+          vrm.expressionManager?.setValue('aa', mouthVal);
+        } catch {}
+
+        // Blink
+        const blinkVal = updateBlink(delta, elapsed);
+        try {
+          vrm.expressionManager?.setValue('blink', blinkVal);
+        } catch {}
+
+        // Gentle idle sway
+        if (vrm.humanoid?.humanBones?.spine) {
+          const bone = vrm.humanoid.humanBones.spine.node;
+          bone.rotation.z = Math.sin(elapsed * 0.5) * 0.01;
+          bone.rotation.x = Math.sin(elapsed * 0.3) * 0.005;
+        }
+      }
+
+      renderer.render(scene, camera);
+    });
+
+    // ── Resize ──
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ── Chat Integration (connects to milaidy backend) ──
+    const API_BASE = window.location.origin;
+
+    async function sendChat(message) {
+      if (!message.trim()) return;
+      chatResponse.style.display = 'block';
+      chatResponse.textContent = 'TaoBot is thinking...';
+      speaking = false;
+
+      try {
+        // Get or create conversation
+        const convRes = await fetch(API_BASE + '/api/conversations');
+        const convData = await convRes.json();
+        let convId = convData.conversations?.[0]?.id;
+
+        if (!convId) {
+          const newConv = await fetch(API_BASE + '/api/conversations', { method: 'POST' });
+          const newData = await newConv.json();
+          convId = newData.id;
+        }
+
+        // Send message
+        const res = await fetch(API_BASE + '/api/conversations/' + convId + '/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: message }),
+        });
+
+        const data = await res.json();
+        const reply = data.messages?.find(m => m.role === 'assistant')?.content?.text
+          || data.text
+          || 'The river flows in silence.';
+
+        chatResponse.textContent = reply;
+
+        // Simulate speaking for the duration of the response
+        speaking = true;
+        const speakDuration = Math.min(reply.length * 40, 8000);
+        setTimeout(() => { speaking = false; }, speakDuration);
+
+      } catch (err) {
+        chatResponse.textContent = 'Connection error: ' + err.message;
+      }
+    }
+
+    chatSend.addEventListener('click', () => {
+      sendChat(chatInput.value);
+      chatInput.value = '';
+    });
+
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        sendChat(chatInput.value);
+        chatInput.value = '';
+      }
+    });
+
+    log('Ready. Click "Enter Looking Glass" to project hologram.', 'ok');
+  </script>
+</body>
+</html>
