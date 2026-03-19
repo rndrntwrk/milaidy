@@ -15,6 +15,7 @@ vi.mock("../../src/components/avatar/VrmEngine", () => {
     getState = vi.fn(() => ({
       vrmLoaded: true,
       vrmName: "milady-1.vrm",
+      stageLoaded: true,
       idlePlaying: false,
       idleTime: 0,
       idleTracks: 0,

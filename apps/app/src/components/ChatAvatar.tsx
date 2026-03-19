@@ -40,16 +40,28 @@ export function ChatAvatar({
     selectedVrmIndex > 0
       ? getVrmPreviewUrl(selectedVrmIndex)
       : getVrmPreviewUrl(1);
+  const isStageScene = scenePreset === "pro-streamer-stage";
 
   const vrmEngineRef = useRef<VrmEngine | null>(null);
   const lastTriggeredEmoteRef = useRef<{ key: string; at: number } | null>(null);
   const [engineReady, setEngineReady] = useState(false);
   const [vrmLoaded, setVrmLoaded] = useState(false);
+  const [stageLoaded, setStageLoaded] = useState(!isStageScene);
   const [showFallback, setShowFallback] = useState(false);
   const [viewerFailed, setViewerFailed] = useState(false);
-  const isStageScene = scenePreset === "pro-streamer-stage";
+  const [viewerErrorMessage, setViewerErrorMessage] = useState<string | null>(null);
+  const [stageStartupTimedOut, setStageStartupTimedOut] = useState(false);
 
   const avatarVisible = engineReady || vrmLoaded || showFallback;
+  const avatarReady = engineReady && vrmLoaded && (!isStageScene || stageLoaded);
+  const showStageFailure = isStageScene && (viewerFailed || stageStartupTimedOut);
+  const renderState = showStageFailure
+    ? "error"
+    : avatarReady
+      ? "ready"
+      : showFallback && !isStageScene
+        ? "fallback"
+        : "loading";
 
   const handleEngineReady = useCallback((engine: VrmEngine) => {
     vrmEngineRef.current = engine;
@@ -57,18 +69,36 @@ export function ChatAvatar({
   }, []);
 
   const handleEngineState = useCallback((state: VrmEngineState) => {
+    setStageLoaded(state.stageLoaded);
     if (state.vrmLoaded) {
       setVrmLoaded(true);
       setShowFallback(false);
     }
   }, []);
 
-  const handleViewerError = useCallback(() => {
+  const handleViewerError = useCallback((error: Error) => {
     setEngineReady(false);
     setVrmLoaded(false);
+    setStageLoaded(false);
     setViewerFailed(true);
-    setShowFallback(true);
-  }, []);
+    setViewerErrorMessage(error.message);
+    setShowFallback(!isStageScene);
+  }, [isStageScene]);
+
+  useEffect(() => {
+    setStageLoaded(!isStageScene);
+  }, [isStageScene]);
+
+  useEffect(() => {
+    if (!isStageScene || avatarReady || viewerFailed) {
+      setStageStartupTimedOut(false);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setStageStartupTimedOut(true);
+    }, 12000);
+    return () => window.clearTimeout(timer);
+  }, [avatarReady, isStageScene, viewerFailed]);
 
   const triggerEmote = useCallback(
     (glbPath: string, duration: number, loop: boolean) => {
@@ -94,13 +124,18 @@ export function ChatAvatar({
   useEffect(() => {
     setEngineReady(false);
     setVrmLoaded(false);
+    setStageLoaded(!isStageScene);
     setShowFallback(false);
     setViewerFailed(false);
+    setViewerErrorMessage(null);
+    setStageStartupTimedOut(false);
     const timer = window.setTimeout(() => {
-      setShowFallback(true);
+      if (!isStageScene) {
+        setShowFallback(true);
+      }
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [vrmPath]);
+  }, [isStageScene, vrmPath]);
 
   // Subscribe to WebSocket emote events and trigger avatar animations.
   useEffect(() => {
@@ -148,7 +183,12 @@ export function ChatAvatar({
   }, [engineReady]);
 
   return (
-    <div className="relative h-full w-full">
+    <div
+      className="relative h-full w-full"
+      data-avatar-render-state={renderState}
+      data-avatar-stage-ready={avatarReady && isStageScene ? "true" : undefined}
+      data-avatar-stage-error={showStageFailure ? "true" : undefined}
+    >
       <div
         className="absolute inset-0"
         style={{
@@ -164,7 +204,7 @@ export function ChatAvatar({
           <div
             className="absolute inset-0"
             style={{
-              opacity: vrmLoaded && !viewerFailed ? 1 : 0,
+              opacity: avatarReady && !viewerFailed ? 1 : 0,
               transition: "opacity 0.45s ease",
               transform: isStageScene ? undefined : "scale(1.22) translateY(-8%)",
               transformOrigin: isStageScene ? undefined : "50% 28%",
@@ -182,7 +222,7 @@ export function ChatAvatar({
             />
           </div>
 
-          {showFallback && (!vrmLoaded || viewerFailed) && (
+          {showFallback && (!vrmLoaded || viewerFailed) && !isStageScene && (
             <img
               src={fallbackPreviewUrl}
               alt="avatar preview"
@@ -190,7 +230,25 @@ export function ChatAvatar({
             />
           )}
 
-          {!vrmLoaded && !showFallback && <AvatarLoader />}
+          {showStageFailure ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50 px-6 text-center">
+              <div className="max-w-sm rounded-[24px] border border-danger/30 bg-black/72 px-5 py-4 text-white/80 shadow-[0_18px_60px_rgba(0,0,0,0.42)]">
+                <div className="text-[10px] uppercase tracking-[0.24em] text-danger">
+                  Stage renderer blocked
+                </div>
+                <div className="mt-2 text-sm leading-relaxed">
+                  {viewerErrorMessage ??
+                    "Alice stage did not finish loading. Reload the stage before treating camera as live."}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {!avatarReady && !showFallback && !showStageFailure && (
+            <AvatarLoader
+              label={isStageScene ? "Loading Alice stage" : "Initializing entity"}
+            />
+          )}
         </div>
       </div>
     </div>

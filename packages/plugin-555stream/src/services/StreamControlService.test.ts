@@ -68,8 +68,12 @@ describe("StreamControlService", () => {
 
     assert.equal(service.serviceType, "stream555");
     assert.equal(runtimeState.loaded, true);
+    assert.equal(runtimeState.baseUrlConfigured, true);
     assert.equal(runtimeState.authenticated, true);
+    assert.equal(runtimeState.authConfigured, true);
     assert.match(runtimeState.authSource, /static bearer/i);
+    assert.equal(runtimeState.wsState, "disconnected");
+    assert.equal(runtimeState.lastWsError, null);
     assert.equal(runtimeState.channelsSaved, 2);
     assert.equal(runtimeState.channelsEnabled, 1);
     assert.equal(runtimeState.channelsReady, 1);
@@ -90,6 +94,10 @@ describe("StreamControlService", () => {
     } as IAgentRuntime);
 
     assert.equal(service.getConfig()?.baseUrl, "http://control-plane:3000");
+    assert.equal(
+      ((service as unknown as { wsClient?: { url?: string } }).wsClient?.url),
+      "ws://control-plane:3000/api/agent/v1/ws",
+    );
 
     await service.stop();
   });

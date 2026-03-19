@@ -3646,7 +3646,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const streamPlugin =
         plugins.find((plugin) => isStream555PrimaryPlugin(plugin.id)) ?? null;
       const streamSummary = streamPlugin
-        ? buildStream555StatusSummary(streamPlugin.parameters ?? [])
+        ? buildStream555StatusSummary(
+            streamPlugin.parameters ?? [],
+            streamPlugin,
+          )
         : null;
       const buildLaunchResult = (
         state: GoLiveLaunchResult["state"],

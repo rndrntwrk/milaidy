@@ -110,11 +110,21 @@ export function VrmViewer(props: VrmViewerProps) {
       const rect = el.getBoundingClientRect();
       engine.resize(rect.width, rect.height);
     };
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      if (!active) return;
+      onViewerErrorRef.current?.(new Error("WebGL context lost"));
+    };
     const resizeObserver =
       typeof ResizeObserver !== "undefined"
         ? new ResizeObserver(() => resize())
         : null;
     resizeObserver?.observe(canvas);
+    canvas.addEventListener?.(
+      "webglcontextlost",
+      handleContextLost as EventListener,
+      false,
+    );
     window.addEventListener("resize", resize);
     void engine.whenReady().then(
       () => {
@@ -140,6 +150,11 @@ export function VrmViewer(props: VrmViewerProps) {
     return () => {
       active = false;
       mountedRef.current = false;
+      canvas.removeEventListener?.(
+        "webglcontextlost",
+        handleContextLost as EventListener,
+        false,
+      );
       window.removeEventListener("resize", resize);
       resizeObserver?.disconnect();
 

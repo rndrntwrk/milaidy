@@ -165,6 +165,14 @@ function makeSummary(overrides: Record<string, unknown> = {}) {
     hasSolanaWallet: true,
     hasEvmWallet: false,
     walletDetectionAvailable: true,
+    runtimeLoaded: true,
+    wsConnected: false,
+    sessionBound: false,
+    runtimeHealth: "diagnostic",
+    runtimeWarnings: [],
+    runtimeErrors: [],
+    runtimeBlockers: [],
+    lastRuntimeError: null,
     destinations: [
       {
         id: "twitch",

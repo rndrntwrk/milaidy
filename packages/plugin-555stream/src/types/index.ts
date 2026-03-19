@@ -213,8 +213,12 @@ export interface CheckResult {
 
 export interface Stream555RuntimeState {
   loaded: boolean;
+  baseUrlConfigured: boolean;
   authenticated: boolean;
+  authConfigured: boolean;
   authSource: string;
+  wsState: 'disconnected' | 'connecting' | 'connected' | 'error';
+  lastWsError: string | null;
   sessionBound: boolean;
   channelsSaved: number;
   channelsEnabled: number;

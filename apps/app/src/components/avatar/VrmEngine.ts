@@ -35,6 +35,7 @@ export type { CameraAnimationConfig, CameraProfile, InteractionMode };
 export type VrmEngineState = {
   vrmLoaded: boolean;
   vrmName: string | null;
+  stageLoaded: boolean;
   idlePlaying: boolean;
   idleTime: number;
   idleTracks: number;
@@ -241,9 +242,6 @@ export class VrmEngine {
         // Guard: if dispose() was called while we were awaiting, abort.
         if (this.loadingAborted) {
           renderer.dispose();
-          if (backend === "webgl") {
-            renderer.forceContextLoss?.();
-          }
           this.settleReady();
           return;
         }
@@ -355,9 +353,6 @@ export class VrmEngine {
     this.cleanupTeleportDissolve();
     if (this.renderer) {
       this.renderer.dispose();
-      if (this.rendererBackend === "webgl") {
-        this.renderer.forceContextLoss?.();
-      }
     }
     this.renderer = null;
     this.rendererBackend = "webgl";
@@ -479,6 +474,8 @@ export class VrmEngine {
     return {
       vrmLoaded: this.vrm !== null && this.vrmReady,
       vrmName: this.vrmName,
+      stageLoaded:
+        this.currentScenePreset !== "pro-streamer-stage" || this.stageScene !== null,
       idlePlaying,
       idleTime: this.idleAction?.time ?? 0,
       idleTracks: this.idleAction?.getClip()?.tracks.length ?? 0,

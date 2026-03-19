@@ -1,4 +1,4 @@
-import type { PluginParamDef } from "./api-client";
+import type { PluginInfo, PluginParamDef } from "./api-client";
 
 export type Stream555DestinationSpec = {
   id: string;
@@ -25,6 +25,12 @@ export type Stream555DestinationStatus = {
   readinessState: Stream555DestinationReadinessState;
 };
 
+export type Stream555RuntimeHealthState =
+  | "ready"
+  | "diagnostic"
+  | "warning"
+  | "blocked";
+
 export type Stream555StatusSummary = {
   authState: "connected" | "wallet_enabled" | "not_configured";
   authMode: string;
@@ -34,6 +40,14 @@ export type Stream555StatusSummary = {
   hasSolanaWallet: boolean;
   hasEvmWallet: boolean;
   walletDetectionAvailable: boolean;
+  runtimeLoaded: boolean;
+  wsConnected: boolean;
+  sessionBound: boolean;
+  runtimeHealth: Stream555RuntimeHealthState;
+  runtimeWarnings: string[];
+  runtimeErrors: string[];
+  runtimeBlockers: string[];
+  lastRuntimeError: string | null;
   destinations: Stream555DestinationStatus[];
   savedDestinations: number;
   enabledDestinations: number;
@@ -160,6 +174,15 @@ export function isStream555LegacyPlugin(pluginId: string): boolean {
 
 export function buildStream555StatusSummary(
   params: PluginParamDef[],
+  plugin?: Pick<
+    PluginInfo,
+    | "isActive"
+    | "authenticated"
+    | "ready"
+    | "operationalWarnings"
+    | "operationalErrors"
+    | "operationalCounts"
+  > | null,
 ): Stream555StatusSummary {
   const paramByKey = new Map(params.map((param) => [param.key, param]));
   const hasConfiguredParam = (
@@ -212,16 +235,39 @@ export function buildStream555StatusSummary(
     preferredChain === "solana" ||
     preferredChain === "evm" ||
     walletProvisionAllowed;
-  const authState = credentialAuthReady
+  const runtimeAuthenticated = plugin?.authenticated;
+  let authState = credentialAuthReady
     ? "connected"
     : walletAuthEnabled
       ? "wallet_enabled"
       : "not_configured";
-  const authMode = credentialAuthReady
+  if (runtimeAuthenticated === false) {
+    authState = walletAuthEnabled ? "wallet_enabled" : "not_configured";
+  }
+  const authMode = authState === "connected"
     ? "API key/token"
     : walletAuthEnabled
       ? `Wallet auth (${preferredChain === "evm" ? "Ethereum fallback" : "Solana preferred"})`
       : "Not configured";
+  const runtimeWarnings = Array.from(
+    new Set(
+      (plugin?.operationalWarnings ?? [])
+        .map((warning) => String(warning ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const runtimeErrors = Array.from(
+    new Set(
+      (plugin?.operationalErrors ?? [])
+        .map((error) => String(error ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const runtimeLoaded =
+    Boolean(plugin?.isActive) ||
+    Number(plugin?.operationalCounts?.runtimeLoaded ?? 0) > 0;
+  const wsConnected = Number(plugin?.operationalCounts?.wsConnected ?? 0) > 0;
+  const sessionBound = Number(plugin?.operationalCounts?.sessionBound ?? 0) > 0;
 
   const destinations = STREAM555_DESTINATION_SPECS.map((spec) => {
     const enabledParam = paramByKey.get(spec.enabledKey);
@@ -260,6 +306,18 @@ export function buildStream555StatusSummary(
   const readyDestinations = destinations.filter(
     (destination) => destination.readinessState === "ready",
   ).length;
+  const runtimeBlockers = [
+    ...runtimeErrors,
+    ...(runtimeErrors.length === 0 ? runtimeWarnings : []),
+  ];
+  const runtimeHealth: Stream555RuntimeHealthState =
+    runtimeErrors.length > 0
+      ? "blocked"
+      : runtimeWarnings.length > 0
+        ? "warning"
+        : runtimeLoaded
+          ? "ready"
+          : "diagnostic";
 
   return {
     authState,
@@ -270,6 +328,14 @@ export function buildStream555StatusSummary(
     hasSolanaWallet: solanaWalletState.configured,
     hasEvmWallet: evmWalletState.configured,
     walletDetectionAvailable,
+    runtimeLoaded,
+    wsConnected,
+    sessionBound,
+    runtimeHealth,
+    runtimeWarnings,
+    runtimeErrors,
+    runtimeBlockers,
+    lastRuntimeError: runtimeErrors[0] ?? runtimeWarnings[0] ?? null,
     destinations,
     savedDestinations,
     enabledDestinations,

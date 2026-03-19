@@ -2805,6 +2805,20 @@ function applyPluginOperationalState(
           process.env.STREAM555_AGENT_TOKEN?.trim() ||
           process.env.STREAM_API_BEARER_TOKEN?.trim(),
       );
+    const baseUrlConfigured =
+      readRuntimeBoolean(runtimeState, "baseUrlConfigured") ??
+      Boolean(
+        process.env.STREAM555_PUBLIC_BASE_URL?.trim() ||
+          process.env.STREAM555_INTERNAL_BASE_URL?.trim() ||
+          process.env.STREAM555_BASE_URL?.trim(),
+      );
+    const authConfigured =
+      readRuntimeBoolean(runtimeState, "authConfigured") ?? authenticated;
+    const wsState = readRuntimeString(runtimeState, "wsState");
+    const wsConnected = wsState === "connected";
+    const sessionBound =
+      readRuntimeBoolean(runtimeState, "sessionBound") ?? false;
+    const lastWsError = readRuntimeString(runtimeState, "lastWsError");
     const channelsSaved =
       readRuntimeNumber(runtimeState, "channelsSaved") ?? channelCounts.saved;
     const channelsEnabled =
@@ -2826,6 +2840,11 @@ function applyPluginOperationalState(
     plugin.operationalWarnings = Array.from(new Set(warnings));
     plugin.operationalErrors = Array.from(new Set(errors));
     plugin.operationalCounts = {
+      runtimeLoaded: loaded ? 1 : 0,
+      baseUrlConfigured: baseUrlConfigured ? 1 : 0,
+      authConfigured: authConfigured ? 1 : 0,
+      wsConnected: wsConnected ? 1 : 0,
+      sessionBound: sessionBound ? 1 : 0,
       channelsSaved,
       channelsEnabled,
       channelsReady,
@@ -2834,7 +2853,13 @@ function applyPluginOperationalState(
       installed ? "Installed" : "Available",
       plugin.enabled ? "Enabled" : "Disabled",
       loaded ? "Loaded" : "Not loaded",
+      baseUrlConfigured ? "Base URL configured" : "Base URL missing",
       authenticated ? "Authenticated" : "Authentication required",
+      wsConnected
+        ? "Agent socket connected"
+        : lastWsError
+          ? "Agent socket error"
+          : "Agent socket idle",
       ready ? "Ready" : "Setup incomplete",
     ];
     return plugin;

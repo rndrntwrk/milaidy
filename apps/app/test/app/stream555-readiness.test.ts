@@ -76,4 +76,40 @@ describe("stream555 readiness", () => {
       readinessState: "missing-url",
     });
   });
+
+  it("merges runtime diagnostics from the active plugin", () => {
+    const summary = buildStream555StatusSummary(
+      [
+        makeParam({
+          key: "STREAM555_DEST_TWITCH_ENABLED",
+          currentValue: "true",
+          isSet: true,
+        }),
+        makeParam({
+          key: "STREAM555_DEST_TWITCH_STREAM_KEY",
+          currentValue: "••••1234",
+          isSet: true,
+        }),
+      ],
+      {
+        isActive: true,
+        authenticated: false,
+        ready: false,
+        operationalWarnings: ["one or more enabled channels are missing RTMP URL or stream key"],
+        operationalErrors: ["agent websocket error: Unexpected server response: 404"],
+        operationalCounts: {
+          wsConnected: 0,
+          sessionBound: 0,
+        },
+      },
+    );
+
+    expect(summary.runtimeLoaded).toBe(true);
+    expect(summary.wsConnected).toBe(false);
+    expect(summary.runtimeHealth).toBe("blocked");
+    expect(summary.lastRuntimeError).toContain("404");
+    expect(summary.runtimeBlockers).toContain(
+      "agent websocket error: Unexpected server response: 404",
+    );
+  });
 });

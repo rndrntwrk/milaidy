@@ -113,7 +113,13 @@ function deriveAgentWsUrl(baseUrl: string): string {
   const parsed = new URL(baseUrl);
   parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
   const normalizedPath = parsed.pathname.replace(/\/+$/g, '');
-  parsed.pathname = normalizedPath ? `${normalizedPath}/ws` : '/ws';
+  if (normalizedPath.endsWith('/api/agent/v1')) {
+    parsed.pathname = `${normalizedPath}/ws`;
+  } else if (!normalizedPath || normalizedPath === '/') {
+    parsed.pathname = '/api/agent/v1/ws';
+  } else {
+    parsed.pathname = `${normalizedPath}/api/agent/v1/ws`;
+  }
   parsed.search = '';
   parsed.hash = '';
   return parsed.toString();
@@ -134,6 +140,7 @@ export class StreamControlService implements Service {
   private wsClient: WsClient | null = null;
   private sessionState: Map<string, SessionState> = new Map();
   private boundSessionId: string | null = null;
+  private lastWsError: string | null = null;
 
   /**
    * Get service type identifier
@@ -183,6 +190,7 @@ export class StreamControlService implements Service {
       token: this.config.agentToken,
       tokenProvider: () => resolveAgentBearer(this.config?.baseUrl ?? baseUrl),
     });
+    this.lastWsError = null;
 
     // Set up WebSocket message handlers
     this.setupWsHandlers();
@@ -199,6 +207,7 @@ export class StreamControlService implements Service {
     }
     this.sessionState.clear();
     this.boundSessionId = null;
+    this.lastWsError = null;
     this.wsClient = null;
     this.httpClient = null;
     this.config = null;
@@ -304,11 +313,20 @@ export class StreamControlService implements Service {
     const warnings: string[] = [];
     const errors: string[] = [];
 
-    if (!this.config?.baseUrl?.trim()) {
+    const baseUrlConfigured = Boolean(this.config?.baseUrl?.trim());
+    const authConfigured = isAgentAuthConfigured();
+    const wsState = this.wsClient?.getState() ?? 'disconnected';
+
+    if (!baseUrlConfigured) {
       errors.push('stream base URL not configured');
     }
-    if (!isAgentAuthConfigured()) {
+    if (!authConfigured) {
       errors.push('stream authentication not configured');
+    }
+    if (this.lastWsError) {
+      errors.push(`agent websocket error: ${this.lastWsError}`);
+    } else if (wsState === 'error') {
+      errors.push('agent websocket entered an error state');
     }
     if (channelsEnabled > 0 && channelsReady < channelsEnabled) {
       warnings.push('one or more enabled channels are missing RTMP URL or stream key');
@@ -319,8 +337,12 @@ export class StreamControlService implements Service {
 
     return {
       loaded: Boolean(this.config && this.httpClient && this.wsClient),
-      authenticated: Boolean(this.config?.agentToken?.trim()) && isAgentAuthConfigured(),
+      baseUrlConfigured,
+      authenticated: Boolean(this.config?.agentToken?.trim()) && authConfigured,
+      authConfigured,
       authSource: describeAgentAuthSource(),
+      wsState,
+      lastWsError: this.lastWsError,
       sessionBound: Boolean(this.boundSessionId),
       channelsSaved,
       channelsEnabled,
@@ -1915,9 +1937,13 @@ export class StreamControlService implements Service {
 
     this.wsClient.onStateChange((state) => {
       console.log(`[555stream] WebSocket state: ${state}`);
+      if (state === 'connected') {
+        this.lastWsError = null;
+      }
     });
 
     this.wsClient.onError((error) => {
+      this.lastWsError = error.message;
       console.error('[555stream] WebSocket error:', error);
     });
   }

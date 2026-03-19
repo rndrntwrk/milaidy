@@ -148,6 +148,23 @@ function describeReadinessState(
   }
 }
 
+function buildSetupBlockedMessage(summary: ReturnType<typeof buildStream555StatusSummary>) {
+  if (summary.authState !== "connected") {
+    return summary.lastRuntimeError && /auth/i.test(summary.lastRuntimeError)
+      ? summary.lastRuntimeError
+      : "Authenticate and enable at least one ready destination before continuing.";
+  }
+  if (summary.readyDestinations === 0) {
+    return summary.lastRuntimeError
+      ? `No ready destinations yet: ${summary.lastRuntimeError}`
+      : "Enable at least one ready destination before continuing.";
+  }
+  if (summary.runtimeBlockers.length > 0) {
+    return summary.runtimeBlockers[0];
+  }
+  return "Authenticate and enable at least one ready destination before continuing.";
+}
+
 function InlineNoticeCard({ notice }: { notice: InlineNotice }) {
   const badgeVariant =
     notice.tone === "success"
@@ -224,8 +241,8 @@ export function GoLiveModal() {
     [plugins],
   );
   const summary = useMemo(
-    () => buildStream555StatusSummary(streamPlugin?.parameters ?? []),
-    [streamPlugin?.parameters],
+    () => buildStream555StatusSummary(streamPlugin?.parameters ?? [], streamPlugin),
+    [streamPlugin],
   );
   const waitingForStreamPlugin = goLiveModalOpen && !streamPlugin && streamPluginLoading;
   const setupRequired =
@@ -424,6 +441,7 @@ export function GoLiveModal() {
       }
       const refreshedSummary = buildStream555StatusSummary(
         refreshedPlugin.parameters ?? [],
+        refreshedPlugin,
       );
       if (
         refreshedSummary.authState !== "connected" ||
@@ -431,8 +449,7 @@ export function GoLiveModal() {
       ) {
         setInlineNotice({
           tone: "warning",
-          message:
-            "Authenticate and enable at least one ready destination before continuing.",
+          message: buildSetupBlockedMessage(refreshedSummary),
         });
         return;
       }
@@ -577,7 +594,7 @@ export function GoLiveModal() {
 
   const renderSetupState = () => (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="rounded-[24px] border-white/10 bg-white/[0.04] p-4">
           <div className="text-[10px] uppercase tracking-[0.22em] text-white/42">Auth</div>
           <div className="mt-2 text-lg font-semibold text-white">
@@ -623,6 +640,27 @@ export function GoLiveModal() {
                 : "Provision disabled"}
           </div>
         </Card>
+        <Card className="rounded-[24px] border-white/10 bg-white/[0.04] p-4">
+          <div className="text-[10px] uppercase tracking-[0.22em] text-white/42">Runtime</div>
+          <div className="mt-2 text-lg font-semibold text-white">
+            {waitingForStreamPlugin
+              ? "Checking runtime"
+              : summary.runtimeHealth === "blocked"
+                ? "Blocked"
+                : summary.runtimeHealth === "warning"
+                  ? "Warnings"
+                  : summary.runtimeLoaded
+                    ? "Ready"
+                    : "Diagnostics only"}
+          </div>
+          <div className="mt-1 text-sm text-white/58">
+            {waitingForStreamPlugin
+              ? "Resolving live transport"
+              : summary.wsConnected
+                ? "Agent websocket connected"
+                : summary.lastRuntimeError ?? "Waiting to bind on first launch"}
+          </div>
+        </Card>
       </div>
 
       <Card className="rounded-[28px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5">
@@ -635,6 +673,28 @@ export function GoLiveModal() {
             ? "Checking the live runtime for 555 Stream controls and destination readiness."
             : "Configure authentication and at least one ready destination here. You do not need to leave the stage to finish Stream555 onboarding."}
         </div>
+        {!waitingForStreamPlugin &&
+        (summary.runtimeBlockers.length > 0 || summary.runtimeWarnings.length > 0) ? (
+          <div className="mt-4 rounded-[22px] border border-white/10 bg-black/24 p-4">
+            <div className="text-[10px] uppercase tracking-[0.22em] text-white/42">
+              Runtime diagnostics
+            </div>
+            <div className="mt-2 space-y-2 text-sm leading-relaxed text-white/70">
+              {summary.runtimeBlockers.map((blocker) => (
+                <div key={`blocker-${blocker}`} className="text-danger">
+                  {blocker}
+                </div>
+              ))}
+              {summary.runtimeWarnings
+                .filter((warning) => !summary.runtimeBlockers.includes(warning))
+                .map((warning) => (
+                  <div key={`warning-${warning}`} className="text-warn">
+                    {warning}
+                  </div>
+                ))}
+            </div>
+          </div>
+        ) : null}
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
             type="button"
