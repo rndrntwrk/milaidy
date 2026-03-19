@@ -6876,6 +6876,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let unbindAgentEvents: (() => void) | null = null;
     let unbindHeartbeatEvents: (() => void) | null = null;
     let unbindProactiveMessages: (() => void) | null = null;
+    let loadWorkbenchBootstrapTimer: number | null = null;
+    let startupHydrationTimer: number | null = null;
+    let startupHydrationWorkTimer: number | null = null;
     let cancelled = false;
     const describeBackendFailure = (
       err: unknown,
@@ -7228,7 +7231,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      void loadWorkbench();
+      loadWorkbenchBootstrapTimer = window.setTimeout(() => {
+        void loadWorkbench();
+      }, 20_000);
 
       // Connect WebSocket
       client.connectWs();
@@ -7286,15 +7291,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
       );
 
-      try {
-        const replay = await client.getAgentEvents({ limit: 300 });
-        if (replay.events.length > 0) {
-          setAutonomousEvents(replay.events);
-          setAutonomousLatestEventId(replay.latestEventId);
+      void (async () => {
+        try {
+          const replay = await client.getAgentEvents({ limit: 300 });
+          if (replay.events.length > 0) {
+            setAutonomousEvents(replay.events);
+            setAutonomousLatestEventId(replay.latestEventId);
+          }
+        } catch (err) {
+          console.warn("[milady] Failed to fetch autonomous event replay", err);
         }
-      } catch (err) {
-        console.warn("[milady] Failed to fetch autonomous event replay", err);
-      }
+      })();
 
       // Handle proactive messages from autonomy
       unbindProactiveMessages = client.onWsEvent(
@@ -7370,42 +7377,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
       );
 
-      // Load wallet addresses for header
-      try {
-        setWalletAddresses(await client.getWalletAddresses());
-      } catch (err) {
-        logStartupWarning("failed to load wallet addresses", err);
-      }
+      // Background hydration for wallet/avatar metadata must not block camera launch.
+      startupHydrationTimer = window.setTimeout(() => {
+        void (async () => {
+          try {
+            setWalletAddresses(await client.getWalletAddresses());
+          } catch (err) {
+            logStartupWarning("failed to load wallet addresses", err);
+          }
+        })();
 
-      // Restore avatar selection from config (server-persisted under "ui")
-      let resolvedIndex = loadAvatarIndex();
-      try {
-        const cfg = await client.getConfig();
-        const ui = cfg.ui as Record<string, unknown> | undefined;
-        if (ui?.avatarIndex != null) {
-          resolvedIndex = normalizeAvatarIndex(Number(ui.avatarIndex));
-          setSelectedVrmIndex(resolvedIndex);
-        }
-      } catch (err) {
-        logStartupWarning("failed to load config for avatar selection", err);
-      }
-      // If custom avatar selected, verify the file still exists on the server
-      if (resolvedIndex === 0) {
-        const hasVrm = await client.hasCustomVrm();
-        if (hasVrm) {
-          setCustomVrmUrl(`/api/avatar/vrm?t=${Date.now()}`);
-        } else {
-          setSelectedVrmIndex(1);
-        }
-      }
+        void (async () => {
+          let resolvedIndex = loadAvatarIndex();
+          try {
+            const cfg = await client.getConfig();
+            const ui = cfg.ui as Record<string, unknown> | undefined;
+            if (ui?.avatarIndex != null) {
+              resolvedIndex = normalizeAvatarIndex(Number(ui.avatarIndex));
+              setSelectedVrmIndex(resolvedIndex);
+            }
+          } catch (err) {
+            logStartupWarning("failed to load config for avatar selection", err);
+          }
+          // If custom avatar selected, verify the file still exists on the server.
+          // This stays best-effort so startup can expose the camera controls immediately.
+          if (resolvedIndex === 0) {
+            try {
+              const hasVrm = await client.hasCustomVrm();
+              if (hasVrm) {
+                setCustomVrmUrl(`/api/avatar/vrm?t=${Date.now()}`);
+              } else {
+                setSelectedVrmIndex(1);
+              }
+            } catch (err) {
+              logStartupWarning("failed to confirm custom VRM asset", err);
+              setSelectedVrmIndex(1);
+            }
+          }
+        })();
 
-      // Cloud polling
-      pollCloudCredits();
-      cloudPollInterval.current = window.setInterval(
-        () => pollCloudCredits(),
-        60_000,
-      );
-      void loadFive55MasteryRuns();
+        startupHydrationWorkTimer = window.setTimeout(() => {
+          // Cloud polling is useful, but it should not compete with initial camera readiness.
+          pollCloudCredits();
+          cloudPollInterval.current = window.setInterval(
+            () => pollCloudCredits(),
+            60_000,
+          );
+          void loadFive55MasteryRuns();
+        }, 20_000);
+      }, 0);
 
       // Load tab from URL — use hash in file:// mode (Electron packaged builds)
       const navPath =
@@ -7470,6 +7490,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (cloudPollInterval.current) clearInterval(cloudPollInterval.current);
       if (cloudLoginPollTimer.current)
         clearInterval(cloudLoginPollTimer.current);
+      if (loadWorkbenchBootstrapTimer !== null)
+        window.clearTimeout(loadWorkbenchBootstrapTimer);
+      if (startupHydrationTimer !== null)
+        window.clearTimeout(startupHydrationTimer);
+      if (startupHydrationWorkTimer !== null)
+        window.clearTimeout(startupHydrationWorkTimer);
       unbindStatus?.();
       unbindAgentEvents?.();
       unbindHeartbeatEvents?.();

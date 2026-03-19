@@ -168,9 +168,20 @@ export const ChatView = memo(function ChatView() {
   }, [loadMasteryRuns, masterySuiteStarting, setActionNotice]);
 
   useEffect(() => {
-    void loadMasteryRuns();
+    const startupDelayMs = import.meta.env.MODE === "test" ? 0 : 20_000;
+    let startupTimer: ReturnType<typeof setTimeout> | null = null;
+    if (startupDelayMs === 0) {
+      void loadMasteryRuns();
+    } else {
+      startupTimer = setTimeout(() => {
+        void loadMasteryRuns();
+      }, startupDelayMs);
+    }
     const timer = setInterval(() => void loadMasteryRuns(), 8000);
-    return () => clearInterval(timer);
+    return () => {
+      if (startupTimer !== null) clearTimeout(startupTimer);
+      clearInterval(timer);
+    };
   }, [loadMasteryRuns]);
 
   // Load saved voice config on mount so the correct TTS provider is used
