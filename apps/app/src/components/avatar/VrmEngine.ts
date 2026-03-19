@@ -287,8 +287,16 @@ export class VrmEngine {
         fillLight.position.set(-1, 0.5, -1).normalize();
         scene.add(fillLight);
         this.footShadow.create(scene);
-        this.resize(canvas.clientWidth, canvas.clientHeight);
         this.initialized = true;
+        if (this.currentScenePreset === "pro-streamer-stage") {
+          await this.ensureStageSceneLoaded();
+          if (this.loadingAborted) {
+            this.settleReady();
+            return;
+          }
+        }
+        this.resize(canvas.clientWidth, canvas.clientHeight);
+        this.applySceneLayout();
         this.loop();
         this.settleReady();
       } catch (error) {

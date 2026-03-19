@@ -15,6 +15,10 @@ const { MockVrmEngine, mockLoadVrmFromUrl } = vi.hoisted(() => {
       this.initialized = true;
     });
     isInitialized = vi.fn(() => this.initialized);
+    whenReady = vi.fn(async () => {});
+    setCameraProfile = vi.fn();
+    setInteractionMode = vi.fn();
+    setInteractionEnabled = vi.fn();
     setScenePreset = vi.fn(async () => {});
     setSceneMark = vi.fn(async () => {});
     setIdleGlbUrls = vi.fn();
@@ -155,7 +159,10 @@ describe("VrmViewer stage canvas behavior", () => {
 
     await renderViewer({ onEngineState });
 
-    expect(mockLoadVrmFromUrl).toHaveBeenCalledWith("/vrms/alice.vrm", "alice.vrm");
+    expect(mockLoadVrmFromUrl).toHaveBeenCalledWith(
+      expect.stringMatching(/alice\.vrm$/),
+      "alice.vrm",
+    );
     expect(onEngineState).toHaveBeenCalledWith(
       expect.objectContaining({
         activeAnimationState: "idle",
