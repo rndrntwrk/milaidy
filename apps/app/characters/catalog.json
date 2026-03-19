@@ -51,43 +51,43 @@
   ],
   "injectedCharacters": [
     {
-      "catchphrase": "uwu~",
+      "catchphrase": "I'm here to help you.",
       "name": "Chen",
       "avatarAssetId": 1,
       "voicePresetId": "sarah"
     },
     {
-      "catchphrase": "hell yeah",
+      "catchphrase": "I'm here to get things done.",
       "name": "Jin",
       "avatarAssetId": 2,
       "voicePresetId": "adam"
     },
     {
-      "catchphrase": "lol k",
+      "catchphrase": "I'm online and ready.",
       "name": "Kei",
       "avatarAssetId": 3,
       "voicePresetId": "lily"
     },
     {
-      "catchphrase": "Noted.",
+      "catchphrase": "I'm ready to assist.",
       "name": "Momo",
       "avatarAssetId": 4,
       "voicePresetId": "alice"
     },
     {
-      "catchphrase": "hehe~",
+      "catchphrase": "Let's build something fun.",
       "name": "Rin",
       "avatarAssetId": 5,
       "voicePresetId": "gigi"
     },
     {
-      "catchphrase": "...",
+      "catchphrase": "I am ready when you are.",
       "name": "Ryu",
       "avatarAssetId": 6,
       "voicePresetId": "daniel"
     },
     {
-      "catchphrase": "lmao kms",
+      "catchphrase": "Show me what we're building.",
       "name": "Satoshi",
       "avatarAssetId": 7,
       "voicePresetId": "callum"

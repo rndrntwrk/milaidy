@@ -36,7 +36,12 @@ const MOCK_ROUTES = {
     postExamples: [],
   },
   "/api/registry/status": { registered: false },
-  "/api/drop/status": { dropEnabled: false, publicMintOpen: false, mintedOut: false, userHasMinted: false },
+  "/api/drop/status": {
+    dropEnabled: false,
+    publicMintOpen: false,
+    mintedOut: false,
+    userHasMinted: false,
+  },
   "/api/wallet/config": { evmAddress: null },
   "/api/wallet/addresses": {},
   "/api/conversations": { conversations: [] },
@@ -58,7 +63,10 @@ const MOCK_ROUTES = {
 const server = http.createServer((req, res) => {
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+  );
   res.setHeader("Access-Control-Allow-Headers", "*");
 
   if (req.method === "OPTIONS") {

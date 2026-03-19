@@ -279,7 +279,8 @@ async function tryCreateHarness(): Promise<Harness | null> {
   } catch (err) {
     // pglite WASM may crash with "Failed query" caused by RuntimeError: Aborted()
     const message = err instanceof Error ? err.message : String(err);
-    const cause = err instanceof Error ? (err as { cause?: unknown }).cause : undefined;
+    const cause =
+      err instanceof Error ? (err as { cause?: unknown }).cause : undefined;
     if (
       err instanceof WebAssembly.RuntimeError ||
       cause instanceof WebAssembly.RuntimeError ||

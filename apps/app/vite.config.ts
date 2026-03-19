@@ -157,19 +157,65 @@ export default defineConfig({
       // Map @miladyai imports from the linked eliza source to resolve correctly
       {
         find: /^@miladyai\/app-core$/,
-        replacement: path.resolve(miladyRoot, "../eliza/packages/app-core/src/index.ts"),
+        replacement: path.resolve(
+          miladyRoot,
+          "../eliza/packages/app-core/src/index.ts",
+        ),
       },
       {
         find: /^@miladyai\/app-core\/(.*)$/,
-        replacement: path.resolve(miladyRoot, "../eliza/packages/app-core/src/$1"),
+        replacement: path.resolve(
+          miladyRoot,
+          "../eliza/packages/app-core/src/$1",
+        ),
       },
       {
         find: /^@miladyai\/ui$/,
-        replacement: path.resolve(miladyRoot, "../eliza/packages/ui/src/index.ts"),
+        replacement: path.resolve(
+          miladyRoot,
+          "../eliza/packages/ui/src/index.ts",
+        ),
       },
       {
         find: /^@miladyai\/ui\/(.*)$/,
         replacement: path.resolve(miladyRoot, "../eliza/packages/ui/src/$1"),
+      },
+      // Capacitor plugins — resolve to local plugin sources
+      {
+        find: /^@miladyai\/capacitor-agent$/,
+        replacement: path.resolve(here, "plugins/agent/src/index.ts"),
+      },
+      {
+        find: /^@miladyai\/capacitor-camera$/,
+        replacement: path.resolve(here, "plugins/camera/src/index.ts"),
+      },
+      {
+        find: /^@miladyai\/capacitor-canvas$/,
+        replacement: path.resolve(here, "plugins/canvas/src/index.ts"),
+      },
+      {
+        find: /^@miladyai\/capacitor-desktop$/,
+        replacement: path.resolve(here, "plugins/desktop/src/index.ts"),
+      },
+      {
+        find: /^@miladyai\/capacitor-gateway$/,
+        replacement: path.resolve(here, "plugins/gateway/src/index.ts"),
+      },
+      {
+        find: /^@miladyai\/capacitor-location$/,
+        replacement: path.resolve(here, "plugins/location/src/index.ts"),
+      },
+      {
+        find: /^@miladyai\/capacitor-screencapture$/,
+        replacement: path.resolve(here, "plugins/screencapture/src/index.ts"),
+      },
+      {
+        find: /^@miladyai\/capacitor-swabble$/,
+        replacement: path.resolve(here, "plugins/swabble/src/index.ts"),
+      },
+      {
+        find: /^@miladyai\/capacitor-talkmode$/,
+        replacement: path.resolve(here, "plugins/talkmode/src/index.ts"),
       },
     ],
   },

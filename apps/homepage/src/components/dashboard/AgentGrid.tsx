@@ -35,7 +35,10 @@ export function AgentGrid({ selectedAgentId, onSelectAgent }: AgentGridProps) {
     async (agentId: string) => {
       const agent = agents.find((a) => a.id === agentId);
       if (!agent?.cloudAgentId) return;
-      if (!window.confirm(`Delete agent "${agent.name}"? This cannot be undone.`)) return;
+      if (
+        !window.confirm(`Delete agent "${agent.name}"? This cannot be undone.`)
+      )
+        return;
       try {
         await deleteAgent(agent.cloudAgentId);
         if (selectedAgentId === agentId) onSelectAgent(null);

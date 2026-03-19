@@ -9,23 +9,23 @@ import {
 export * from "@elizaos/autonomous/runtime/eliza";
 
 import {
-  applyCloudConfigToEnv as upstreamApplyCloudConfigToEnv,
   type BootElizaRuntimeOptions,
+  type StartElizaOptions,
+  applyCloudConfigToEnv as upstreamApplyCloudConfigToEnv,
   bootElizaRuntime as upstreamBootElizaRuntime,
   buildCharacterFromConfig as upstreamBuildCharacterFromConfig,
   collectPluginNames as upstreamCollectPluginNames,
   shutdownRuntime as upstreamShutdownRuntime,
   startEliza as upstreamStartEliza,
-  type StartElizaOptions,
 } from "@elizaos/autonomous/runtime/eliza";
 import { HISTORY_KNOWLEDGE } from "../knowledge/history";
 import { ensureRuntimeSqlCompatibility } from "../utils/sql-compat";
 import type { EmbeddingProgressCallback } from "./embedding-manager-support.js";
-import { detectEmbeddingPreset } from "./embedding-presets.js";
 import {
   DEFAULT_MODELS_DIR,
   ensureModel,
 } from "./embedding-manager-support.js";
+import { detectEmbeddingPreset } from "./embedding-presets.js";
 
 const BRAND_ENV_ALIASES = [
   ["MILADY_USE_PI_AI", "ELIZA_USE_PI_AI"],
@@ -279,7 +279,9 @@ async function warmupEmbeddingModel(
     process.env.MILADY_CLOUD_EMBEDDINGS_DISABLED === "1" ||
     process.env.ELIZA_CLOUD_EMBEDDINGS_DISABLED === "1"
   ) {
-    logger.info("[milady] Cloud embeddings disabled — skipping embedding model warmup");
+    logger.info(
+      "[milady] Cloud embeddings disabled — skipping embedding model warmup",
+    );
     return;
   }
 
@@ -300,7 +302,13 @@ async function warmupEmbeddingModel(
   };
 
   try {
-    await ensureModel(modelsDir, preset.modelRepo, preset.model, false, progressCb);
+    await ensureModel(
+      modelsDir,
+      preset.modelRepo,
+      preset.model,
+      false,
+      progressCb,
+    );
   } catch (err) {
     // Non-fatal: the plugin will attempt its own download on first use
     logger.warn(

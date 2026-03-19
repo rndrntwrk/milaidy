@@ -898,7 +898,7 @@ async function syncPermissionsToRestApi(
   }
 }
 
-async function startAgent(win: BrowserWindow): Promise<void> {
+async function _startAgent(win: BrowserWindow): Promise<void> {
   const runtimeResolution = resolveDesktopRuntimeMode(
     process.env as Record<string, string | undefined>,
   );

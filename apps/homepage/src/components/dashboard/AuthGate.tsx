@@ -23,7 +23,7 @@ type AuthState =
 export function AuthGate({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>("checking");
   const [error, setError] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval>>();
+  const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   useEffect(() => {
     setState(isAuthenticated() ? "authenticated" : "unauthenticated");
@@ -69,15 +69,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const _handleLogout = useCallback(() => {
-    clearToken();
-    setState("unauthenticated");
-  }, []);
-
-  const _handleSkip = useCallback(() => {
-    // Cloud-only mode: skip is disabled, Eliza Cloud account required
-    setState("authenticated");
-  }, []);
+  /** Expose logout for dashboard header use. */
+  void clearToken; // keep import — will be wired to a logout button
 
   if (state === "checking") {
     return (

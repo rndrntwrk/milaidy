@@ -15,30 +15,12 @@ console.log(`${getLogPrefix()} Script starting...`);
  * Usage: bun src/runtime/dev-server.ts   (with ELIZA_HEADLESS=1)
  *        (or via the dev script: bun run dev)
  */
-import crypto from "node:crypto";
 import process from "node:process";
 import type { AgentRuntime } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import { startApiServer } from "../api/server";
 import { shutdownRuntime, startEliza } from "./eliza";
 import { setRestartHandler } from "./restart";
-
-/**
- * Auto-generate a connection key for remote access when running headless.
- * If MILADY_API_TOKEN or ELIZA_API_TOKEN is already set, use that.
- * Otherwise, generate a random key and set it.
- */
-function ensureConnectionKey(): string {
-  const existing =
-    process.env.MILADY_API_TOKEN?.trim() ||
-    process.env.ELIZA_API_TOKEN?.trim();
-  if (existing) return existing;
-
-  const generated = crypto.randomBytes(16).toString("hex");
-  process.env.MILADY_API_TOKEN = generated;
-  process.env.ELIZA_API_TOKEN = generated;
-  return generated;
-}
 
 console.log(
   `${getLogPrefix()} Imports complete (${Date.now() - SCRIPT_START}ms)`,
@@ -307,9 +289,6 @@ process.on("SIGTERM", () => void shutdown());
 async function main() {
   const startupStart = Date.now();
 
-  // Ensure a connection key exists for remote access
-  const connectionKey = ensureConnectionKey();
-
   // Register the in-process restart handler so the RESTART_AGENT action
   // (and the POST /api/agent/restart endpoint) work without killing the
   // process.
@@ -346,13 +325,21 @@ async function main() {
     `${getLogPrefix()} API server ready on port ${actualPort} (${apiReady - apiStart}ms)`,
   );
 
-  // Print connection info for remote clients
+  // Print connection info
+  const apiToken =
+    process.env.MILADY_API_TOKEN?.trim() || process.env.ELIZA_API_TOKEN?.trim();
   console.log("");
   console.log(`${getLogPrefix()} ╭──────────────────────────────────────────╮`);
   console.log(`${getLogPrefix()} │  Milady is running.                      │`);
   console.log(`${getLogPrefix()} │                                          │`);
-  console.log(`${getLogPrefix()} │  Connect at: http://localhost:${String(actualPort).padEnd(13)}│`);
-  console.log(`${getLogPrefix()} │  Connection key: ${connectionKey.slice(0, 20).padEnd(22)}│`);
+  console.log(
+    `${getLogPrefix()} │  Connect at: http://localhost:${String(actualPort).padEnd(13)}│`,
+  );
+  if (apiToken) {
+    console.log(
+      `${getLogPrefix()} │  Connection key: ${apiToken.slice(0, 20).padEnd(22)}│`,
+    );
+  }
   console.log(`${getLogPrefix()} ╰──────────────────────────────────────────╯`);
   console.log("");
 

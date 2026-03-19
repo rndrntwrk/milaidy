@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { execSync } from "node:child_process";
 /**
  * Post-install setup for @elizaos/plugin-browser:
  *
@@ -21,7 +22,6 @@ import {
   symlinkSync,
   unlinkSync,
 } from "node:fs";
-import { execSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";

@@ -75,13 +75,8 @@ patchAutonomousTypeError(root);
  * Remove once a fixed @elizaos/plugin-pdf is published.
  */
 function patchPluginPdfBrokenDefault() {
-  const relPaths = [
-    "dist/node/index.node.js",
-    "dist/index.js",
-  ];
-  const searchDirs = [
-    resolve(root, "node_modules/@elizaos/plugin-pdf"),
-  ];
+  const relPaths = ["dist/node/index.node.js", "dist/index.js"];
+  const searchDirs = [resolve(root, "node_modules/@elizaos/plugin-pdf")];
   // Also search inside .bun cache
   const bunCacheDir = resolve(root, "node_modules/.bun");
   if (existsSync(bunCacheDir)) {
@@ -102,7 +97,8 @@ function patchPluginPdfBrokenDefault() {
       const target = resolve(dir, relPath);
       if (!existsSync(target)) continue;
       let src = readFileSync(target, "utf8");
-      const hasBroken = src.includes("default3 as default") || src.includes("{} as default");
+      const hasBroken =
+        src.includes("default3 as default") || src.includes("{} as default");
       if (!hasBroken) continue;
       // Replace broken default exports with 'pdfPlugin as default' since
       // pdfPlugin is the main export and default3 / {} were broken aliases for it.
@@ -127,9 +123,7 @@ patchPluginPdfBrokenDefault();
  * Remove once the upstream adds the extension.
  */
 function patchBrowserServerIndexExtension() {
-  const searchDirs = [
-    resolve(root, "node_modules/@elizaos/autonomous"),
-  ];
+  const searchDirs = [resolve(root, "node_modules/@elizaos/autonomous")];
   const bunCacheDir = resolve(root, "node_modules/.bun");
   if (existsSync(bunCacheDir)) {
     try {
@@ -160,10 +154,14 @@ function patchBrowserServerIndexExtension() {
     );
     writeFileSync(target, src, "utf8");
     patched++;
-    console.log(`[patch-deps] Applied browser server index.js extension fix: ${target}`);
+    console.log(
+      `[patch-deps] Applied browser server index.js extension fix: ${target}`,
+    );
   }
   if (patched > 0) {
-    console.log(`[patch-deps] autonomous: fixed ${patched} browser server check(s).`);
+    console.log(
+      `[patch-deps] autonomous: fixed ${patched} browser server check(s).`,
+    );
   }
 }
 patchBrowserServerIndexExtension();
@@ -189,10 +187,16 @@ function patchAutonomousResetAllowedSegments() {
     return;
   }
   let src = readFileSync(serverJs, "utf8");
-  const needle = 'const RESET_STATE_ALLOWED_SEGMENTS = new Set([".eliza", "eliza"])';
+  const needle =
+    'const RESET_STATE_ALLOWED_SEGMENTS = new Set([".eliza", "eliza"])';
   if (!src.includes(needle)) {
-    if (src.includes('"milady"') && src.includes('RESET_STATE_ALLOWED_SEGMENTS')) {
-      console.log("[patch-deps] autonomous server.js already patched for milady reset.");
+    if (
+      src.includes('"milady"') &&
+      src.includes("RESET_STATE_ALLOWED_SEGMENTS")
+    ) {
+      console.log(
+        "[patch-deps] autonomous server.js already patched for milady reset.",
+      );
     } else {
       console.log(
         "[patch-deps] autonomous server.js: expected reset-segments pattern not found, skipping.",
@@ -205,7 +209,9 @@ function patchAutonomousResetAllowedSegments() {
     'const RESET_STATE_ALLOWED_SEGMENTS = new Set([".eliza", "eliza", ".milady", "milady"])',
   );
   writeFileSync(serverJs, src, "utf8");
-  console.log("[patch-deps] Applied autonomous reset-segments patch for milady namespace.");
+  console.log(
+    "[patch-deps] Applied autonomous reset-segments patch for milady namespace.",
+  );
 }
 patchAutonomousResetAllowedSegments();
 
@@ -324,7 +330,9 @@ export function AvatarLoader({ label = "Initializing entity", fullScreen = false
 `;
     writeFileSync(target, replacement, "utf8");
     patched++;
-    console.log(`[patch-deps] Applied AvatarLoader linear progress patch: ${target}`);
+    console.log(
+      `[patch-deps] Applied AvatarLoader linear progress patch: ${target}`,
+    );
   }
   if (patched > 0) {
     console.log(`[patch-deps] AvatarLoader: patched ${patched} file(s).`);

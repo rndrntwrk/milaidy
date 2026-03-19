@@ -7,6 +7,7 @@ interface AgentCardProps {
   onResume: () => void;
   onPause: () => void;
   onStop: () => void;
+  onDelete?: () => void;
   onSelect: () => void;
   selected: boolean;
 }
@@ -40,6 +41,7 @@ export function AgentCard({
   onResume,
   onPause,
   onStop,
+  onDelete,
   onSelect,
   selected,
 }: AgentCardProps) {
@@ -142,6 +144,15 @@ export function AgentCard({
           <span className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-text-muted">
             Status unknown
           </span>
+        )}
+        {onDelete && (
+          <button
+            type="button"
+            onClick={stopProp(onDelete)}
+            className="ml-auto px-2 py-1 text-[10px] font-mono uppercase tracking-wider border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/10 hover:text-red-500 transition-colors"
+          >
+            Delete
+          </button>
         )}
       </div>
     </button>

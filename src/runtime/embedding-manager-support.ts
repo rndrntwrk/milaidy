@@ -394,10 +394,7 @@ export async function ensureModel(
     ? (downloaded, total) => {
         const totalStr = total ? formatBytes(total) : "unknown size";
         const pct = total ? Math.round((downloaded / total) * 100) : 0;
-        onProgress(
-          "downloading",
-          `${safeFilename} ${pct}% of ${totalStr}`,
-        );
+        onProgress("downloading", `${safeFilename} ${pct}% of ${totalStr}`);
       }
     : undefined;
 

@@ -329,8 +329,8 @@ describe("character building parity", () => {
       } as Partial<ElizaConfig> as ElizaConfig).name,
     ).toBe("Reimu");
 
-    // Default fallback — upstream uses "Eliza", eliza fork uses "Eliza"
-    expect(["Eliza", "Eliza"]).toContain(
+    // Default fallback — upstream uses "Milady"
+    expect(["Milady", "Eliza"]).toContain(
       buildCharacterFromConfig({} as ElizaConfig).name,
     );
   });

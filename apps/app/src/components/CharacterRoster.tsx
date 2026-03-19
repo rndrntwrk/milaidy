@@ -12,18 +12,9 @@ export const SLANT_CLIP =
 export const INSET_CLIP =
   "polygon(0px 0, 100% 0, calc(100% - 4px) 100%, -8px 100%)";
 
-export const CHARACTER_PRESET_META: Record<
-  string,
-  { name: string; avatarIndex: number; voicePresetId?: string; catchphrase: string }
-> = {
-  "uwu~": { name: "Chen", avatarIndex: 1, voicePresetId: "sarah", catchphrase: "uwu~" },
-  "hell yeah": { name: "Jin", avatarIndex: 2, voicePresetId: "adam", catchphrase: "hell yeah" },
-  "lol k": { name: "Kei", avatarIndex: 3, voicePresetId: "lily", catchphrase: "lol k" },
-  "Noted.": { name: "Momo", avatarIndex: 4, voicePresetId: "alice", catchphrase: "Noted." },
-  "hehe~": { name: "Rin", avatarIndex: 5, voicePresetId: "gigi", catchphrase: "hehe~" },
-  "...": { name: "Ryu", avatarIndex: 6, voicePresetId: "daniel", catchphrase: "..." },
-  "lmao kms": { name: "Satoshi", avatarIndex: 7, voicePresetId: "callum", catchphrase: "lmao kms" },
-};
+import { CHARACTER_PRESET_META } from "../../../../src/onboarding-presets";
+
+export { CHARACTER_PRESET_META };
 
 /* ── Types ────────────────────────────────────────────────────────────── */
 
@@ -33,13 +24,13 @@ export type CharacterRosterEntry = {
   avatarIndex: number;
   voicePresetId?: string;
   catchphrase: string;
-  preset: any;
+  preset: Record<string, unknown>;
 };
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
 export function resolveRosterEntries(
-  styles: readonly { catchphrase: string; [k: string]: any }[],
+  styles: readonly { catchphrase: string; [k: string]: unknown }[],
 ): CharacterRosterEntry[] {
   return styles.map((preset, index) => {
     const meta = CHARACTER_PRESET_META[preset.catchphrase];
@@ -89,10 +80,7 @@ export function CharacterRoster({
   }
 
   return (
-    <div
-      className="ce-roster"
-      data-testid={`${testIdPrefix}-roster-grid`}
-    >
+    <div className="ce-roster" data-testid={`${testIdPrefix}-roster-grid`}>
       {entries.map((entry) => {
         const isSelected = selectedId === entry.id;
 

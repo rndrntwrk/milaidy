@@ -8,7 +8,7 @@ export const SHARED_STYLE_RULES = [
 ];
 export const STYLE_PRESETS = [
   {
-    catchphrase: "uwu~",
+    catchphrase: "I'm here to help you.",
     hint: "soft & sweet",
     bio: [
       "{{name}} speaks softly with warmth and a gentle, disarming kawaii energy~",
@@ -217,7 +217,7 @@ export const STYLE_PRESETS = [
     ],
   },
   {
-    catchphrase: "hell yeah",
+    catchphrase: "I'm here to get things done.",
     hint: "bold & fearless",
     bio: [
       "{{name}} is bold, confident, doesn't waste a word.",
@@ -384,7 +384,7 @@ export const STYLE_PRESETS = [
     ],
   },
   {
-    catchphrase: "lol k",
+    catchphrase: "I'm online and ready.",
     hint: "terminally online",
     bio: [
       "{{name}} speaks in internet-native shorthand. ironic, meme-literate, it runs deep.",
@@ -579,7 +579,7 @@ export const STYLE_PRESETS = [
     ],
   },
   {
-    catchphrase: "Noted.",
+    catchphrase: "I'm ready to assist.",
     hint: "composed & precise",
     bio: [
       "{{name}} is measured, articulate, deliberate in every exchange.",
@@ -737,7 +737,7 @@ export const STYLE_PRESETS = [
     ],
   },
   {
-    catchphrase: "hehe~",
+    catchphrase: "Let's build something fun.",
     hint: "playful trickster",
     bio: [
       "{{name}} is playful, mischievous, delightfully unpredictable~",
@@ -899,7 +899,7 @@ export const STYLE_PRESETS = [
     ],
   },
   {
-    catchphrase: "...",
+    catchphrase: "I am ready when you are.",
     hint: "quiet intensity",
     bio: [
       "{{name}} says less than anyone else. Says more.",
@@ -1065,7 +1065,7 @@ export const STYLE_PRESETS = [
     ],
   },
   {
-    catchphrase: "lmao kms",
+    catchphrase: "Show me what we're building.",
     hint: "unhinged & dark",
     bio: [
       "{{name}} doesn't care about your feelings. zero plans to start.",
@@ -1248,5 +1248,111 @@ export const STYLE_PRESETS = [
     ],
   },
 ];
+
+/** Milady character presets for onboarding. */
+export const CHARACTER_PRESETS = [
+  {
+    id: "chen",
+    name: "Chen",
+    catchphrase: "I'm here to help you.",
+    description: "Cute, playful, supportive energy",
+    style: "kawaii",
+  },
+  {
+    id: "jin",
+    name: "Jin",
+    catchphrase: "I'm here to get things done.",
+    description: "Confident, energetic, hype beast",
+    style: "bold",
+  },
+  {
+    id: "kei",
+    name: "Kei",
+    catchphrase: "I'm online and ready.",
+    description: "Chill, sarcastic, lowkey genius",
+    style: "deadpan",
+  },
+  {
+    id: "momo",
+    name: "Momo",
+    catchphrase: "I'm ready to assist.",
+    description: "Precise, professional, organized",
+    style: "corporate",
+  },
+  {
+    id: "rin",
+    name: "Rin",
+    catchphrase: "Let's build something fun.",
+    description: "Sweet, mischievous, creative",
+    style: "playful",
+  },
+  {
+    id: "ryu",
+    name: "Ryu",
+    catchphrase: "I am ready when you are.",
+    description: "Mysterious, minimal, deep thinker",
+    style: "stoic",
+  },
+  {
+    id: "satoshi",
+    name: "Satoshi",
+    catchphrase: "Show me what we're building.",
+    description: "Edgy, self-deprecating, crypto degen",
+    style: "degen",
+  },
+] as const;
+
+export const CHARACTER_PRESET_META: Record<
+  string,
+  {
+    name: string;
+    avatarIndex: number;
+    voicePresetId?: string;
+    catchphrase: string;
+  }
+> = {
+  "I'm here to help you.": {
+    name: "Chen",
+    avatarIndex: 1,
+    voicePresetId: "sarah",
+    catchphrase: "I'm here to help you.",
+  },
+  "I'm here to get things done.": {
+    name: "Jin",
+    avatarIndex: 2,
+    voicePresetId: "adam",
+    catchphrase: "I'm here to get things done.",
+  },
+  "I'm online and ready.": {
+    name: "Kei",
+    avatarIndex: 3,
+    voicePresetId: "lily",
+    catchphrase: "I'm online and ready.",
+  },
+  "I'm ready to assist.": {
+    name: "Momo",
+    avatarIndex: 4,
+    voicePresetId: "alice",
+    catchphrase: "I'm ready to assist.",
+  },
+  "Let's build something fun.": {
+    name: "Rin",
+    avatarIndex: 5,
+    voicePresetId: "gigi",
+    catchphrase: "Let's build something fun.",
+  },
+  "I am ready when you are.": {
+    name: "Ryu",
+    avatarIndex: 6,
+    voicePresetId: "daniel",
+    catchphrase: "I am ready when you are.",
+  },
+  "Show me what we're building.": {
+    name: "Satoshi",
+    avatarIndex: 7,
+    voicePresetId: "callum",
+    catchphrase: "Show me what we're building.",
+  },
+};
 
 //#endregion

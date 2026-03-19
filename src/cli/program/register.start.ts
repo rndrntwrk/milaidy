@@ -33,16 +33,14 @@ async function startAction() {
   // Auto-generate a connection key only when binding to a network address
   // and no token is already configured. Localhost access stays open.
   const existingToken =
-    process.env.MILADY_API_TOKEN?.trim() ||
-    process.env.ELIZA_API_TOKEN?.trim();
+    process.env.MILADY_API_TOKEN?.trim() || process.env.ELIZA_API_TOKEN?.trim();
 
   if (!existingToken && isNetworkBind()) {
     generateConnectionKey();
   }
 
   const connectionKey =
-    process.env.MILADY_API_TOKEN?.trim() ||
-    process.env.ELIZA_API_TOKEN?.trim();
+    process.env.MILADY_API_TOKEN?.trim() || process.env.ELIZA_API_TOKEN?.trim();
 
   await runCommandWithRuntime(defaultRuntime, async () => {
     const { startEliza } = await import("../../runtime/eliza");
@@ -65,7 +63,9 @@ async function startAction() {
     console.log("│                                          │");
     console.log(`│  Connect at: http://localhost:${port.padEnd(13)}│`);
     if (connectionKey) {
-      console.log(`│  Connection key: ${connectionKey.slice(0, 20).padEnd(22)}│`);
+      console.log(
+        `│  Connection key: ${connectionKey.slice(0, 20).padEnd(22)}│`,
+      );
     }
     console.log("╰──────────────────────────────────────────╯");
     console.log("");

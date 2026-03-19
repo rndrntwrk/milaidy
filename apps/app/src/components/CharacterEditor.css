@@ -97,19 +97,19 @@
 /* ── Customize / Back buttons ──────────────────────────────────── */
 
 .ce-customize-btn {
-  border-radius: 0.75rem !important;
-  padding: 0 2rem !important;
-  font-size: 13px !important;
-  font-weight: 700 !important;
+  border-radius: 0.75rem;
+  padding: 0 2rem;
+  font-size: 13px;
+  font-weight: 700;
   letter-spacing: 0.05em;
-  background: #facc15 !important;
-  color: #1a1a1a !important;
-  border-color: #facc15 !important;
+  background: #facc15;
+  color: #1a1a1a;
+  border-color: #facc15;
   box-shadow: 0 0 15px rgba(250, 204, 21, 0.25);
 }
 
 .ce-customize-btn:hover {
-  background: #fbbf24 !important;
+  background: #fbbf24;
   box-shadow: 0 0 20px rgba(250, 204, 21, 0.45);
 }
 
@@ -187,11 +187,11 @@
 }
 
 .ce-regen-btn {
-  height: 24px !important;
-  padding: 0 8px !important;
-  font-size: 10px !important;
-  font-weight: 700 !important;
-  color: #facc15 !important;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #facc15;
 }
 
 /* ── Inputs ────────────────────────────────────────────────────── */
@@ -369,6 +369,25 @@
   flex-shrink: 0;
 }
 
+.ce-reset-btn {
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  padding: 0 1rem;
+  font-size: 12px;
+  font-weight: 600;
+  background: #facc15;
+  color: #1a1a1a;
+  border-color: #facc15;
+}
+
+.ce-reset-btn:hover {
+  background: #fbbf24;
+}
+
+.ce-reset-btn:disabled {
+  opacity: 0.4;
+}
+
 .ce-right-toggle-row .ce-reset-btn {
   margin-left: auto;
   white-space: nowrap;
@@ -478,13 +497,13 @@
 }
 
 .ce-style-entry-input {
-  min-height: 1.5rem !important;
+  min-height: 1.5rem;
   min-width: 0;
   flex: 1;
   resize: none;
-  border: none !important;
-  background: transparent !important;
-  padding: 0 !important;
+  border: none;
+  background: transparent;
+  padding: 0;
   font-family: var(--font-mono, monospace);
   font-size: 12px;
   line-height: 1.5;
@@ -492,8 +511,8 @@
 }
 
 .ce-style-entry-input:focus-visible {
-  ring: none !important;
-  box-shadow: none !important;
+  outline: none;
+  box-shadow: none;
 }
 
 .ce-style-entry-remove {
@@ -672,25 +691,6 @@
   flex-wrap: wrap;
 }
 
-.ce-reset-btn {
-  height: 2.25rem !important;
-  border-radius: 0.75rem !important;
-  padding: 0 1rem !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
-  background: #facc15 !important;
-  color: #1a1a1a !important;
-  border-color: #facc15 !important;
-}
-
-.ce-reset-btn:hover {
-  background: #fbbf24 !important;
-}
-
-.ce-reset-btn:disabled {
-  opacity: 0.4;
-}
-
 .ce-voice-picker {
   display: flex;
   align-items: center;
@@ -699,40 +699,40 @@
 
 /* Fix voice select menu hover visibility */
 .ce-voice-picker button:hover {
-  background: rgba(255, 255, 255, 0.1) !important;
-  color: var(--txt, #fff) !important;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--txt, #fff);
 }
 
 .ce-voice-lock-btn {
-  height: 2rem !important;
-  width: 2rem !important;
-  border-radius: 9999px !important;
-  border-color: transparent !important;
-  background: transparent !important;
-  padding: 0 !important;
-  box-shadow: none !important;
-  color: var(--muted, #999) !important;
+  height: 2rem;
+  width: 2rem;
+  border-radius: 9999px;
+  border-color: transparent;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+  color: var(--muted, #999);
 }
 .ce-voice-lock-btn:hover {
-  color: var(--txt, #fff) !important;
+  color: var(--txt, #fff);
 }
 
 .ce-save-btn {
-  height: 2.25rem !important;
-  border-radius: 0.75rem !important;
-  padding: 0 1.5rem !important;
-  font-size: 13px !important;
-  font-weight: 700 !important;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  padding: 0 1.5rem;
+  font-size: 13px;
+  font-weight: 700;
   letter-spacing: 0.05em;
-  background: #facc15 !important;
-  color: #1a1a1a !important;
-  border-color: #facc15 !important;
+  background: #facc15;
+  color: #1a1a1a;
+  border-color: #facc15;
   box-shadow: 0 0 15px rgba(250, 204, 21, 0.25);
   transition: all 0.2s;
 }
 
 .ce-save-btn:hover {
-  background: #fbbf24 !important;
+  background: #fbbf24;
   box-shadow: 0 0 20px rgba(250, 204, 21, 0.45);
 }
 

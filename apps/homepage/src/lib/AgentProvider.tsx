@@ -46,7 +46,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const [agents, setAgents] = useState<ManagedAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [cloudClient, setCloudClient] = useState<CloudClient | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval>>();
+  const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const tokenRef = useRef<string | null>(null);
 
   const fetchAll = useCallback(async () => {

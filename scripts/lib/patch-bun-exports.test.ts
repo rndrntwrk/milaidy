@@ -44,7 +44,7 @@ const MOCK_MILADY_CATALOG = {
   ],
   injectedCharacters: [
     {
-      catchphrase: "Noted.",
+      catchphrase: "I'm ready to assist.",
       name: "Rin",
       avatarAssetId: 1,
       voicePresetId: "alice",
@@ -56,7 +56,7 @@ const MOCK_MILADY_CATALOG = {
       },
     },
     {
-      catchphrase: "uwu~",
+      catchphrase: "I'm here to help you.",
       name: "Ai",
       avatarAssetId: 2,
       voicePresetId: "sarah",
@@ -703,8 +703,8 @@ describe("patch-bun-exports", () => {
       writeFileSync(
         filePath,
         `const IDENTITY_PRESETS = {
-    "Noted.": { name: "Rin", avatarIndex: 1 },
-    "uwu~": { name: "Ai", avatarIndex: 2 },
+    "I'm ready to assist.": { name: "Rin", avatarIndex: 1 },
+    "I'm here to help you.": { name: "Ai", avatarIndex: 2 },
 };
 styles.slice(0, 4);
 `,
@@ -717,8 +717,12 @@ styles.slice(0, 4);
       );
       expect(patched).toBe(true);
       const updated = readFileSync(filePath, "utf8");
-      expect(updated).toContain('"Noted.": { name: "Rin", avatarIndex: 1 }');
-      expect(updated).toContain('"uwu~": { name: "Ai", avatarIndex: 2 }');
+      expect(updated).toContain(
+        '"I\'m ready to assist.": { name: "Rin", avatarIndex: 1 }',
+      );
+      expect(updated).toContain(
+        '"I\'m here to help you.": { name: "Ai", avatarIndex: 2 }',
+      );
       expect(updated).toContain("styles.slice(0, 2);");
     } finally {
       rmSync(tmp, { recursive: true, force: true });
@@ -740,7 +744,7 @@ styles.slice(0, 4);
       writeFileSync(
         filePath,
         `const CHARACTER_PRESET_META = {
-    "Noted.": { name: "Rin", avatarIndex: 1, voicePresetId: "alice" },
+    "I'm ready to assist.": { name: "Rin", avatarIndex: 1, voicePresetId: "alice" },
 };
 const visibleCharacterRoster = characterRoster.slice(0, 4);
 const avatarIndex = meta?.avatarIndex ?? (index % 4) + 1;
@@ -755,7 +759,7 @@ const avatarIndex = meta?.avatarIndex ?? (index % 4) + 1;
       expect(patched).toBe(true);
       const updated = readFileSync(filePath, "utf8");
       expect(updated).toContain(
-        '"uwu~": { name: "Ai", avatarIndex: 2, voicePresetId: "sarah" }',
+        '"I\'m here to help you.": { name: "Ai", avatarIndex: 2, voicePresetId: "sarah" }',
       );
       expect(updated).toContain("characterRoster.slice(0, 2)");
       expect(updated).toContain("(index % 4) + 1");

@@ -11,24 +11,69 @@ import {
   dispatchWindowEvent,
   VOICE_CONFIG_UPDATED_EVENT,
 } from "@elizaos/app-core/events";
-import {
-  CharacterRoster,
-  type CharacterRosterEntry,
-  CHARACTER_PRESET_META,
-  resolveRosterEntries,
-} from "./CharacterRoster";
 import { useApp } from "@elizaos/app-core/state";
 import { PREMADE_VOICES, sanitizeApiKey } from "@elizaos/app-core/voice";
 import { Button, Input, Textarea, ThemedSelect } from "@elizaos/ui";
+import { STYLE_PRESETS } from "../../../../src/onboarding-presets";
+import {
+  CharacterRoster,
+  type CharacterRosterEntry,
+  resolveRosterEntries,
+} from "./CharacterRoster";
+
 /* Inline SVG icon helpers – avoids adding lucide-react as a dependency. */
-const svgBase = { xmlns: "http://www.w3.org/2000/svg", width: 24, height: 24, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-const Icon = ({ className, d }: { className?: string; d: string }) => <svg {...svgBase} className={className}><path d={d} /></svg>;
-const Lock = ({ className }: { className?: string }) => <svg {...svgBase} className={className}><rect width="18" x="3" y="11" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>;
-const LockOpen = ({ className }: { className?: string }) => <svg {...svgBase} className={className}><rect width="18" x="3" y="11" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 9.9-1" /></svg>;
-const RotateCcw = ({ className }: { className?: string }) => <Icon className={className} d="M1 4v6h6M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />;
-const Volume2 = ({ className }: { className?: string }) => <svg {...svgBase} className={className}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>;
-const VolumeX = ({ className }: { className?: string }) => <svg {...svgBase} className={className}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg>;
-import { useCallback, useEffect, useState } from "react";
+const svgBase = {
+  xmlns: "http://www.w3.org/2000/svg",
+  width: 24,
+  height: 24,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+const Icon = ({ className, d }: { className?: string; d: string }) => (
+  <svg {...svgBase} className={className} aria-hidden="true">
+    <path d={d} />
+  </svg>
+);
+const Lock = ({ className }: { className?: string }) => (
+  <svg {...svgBase} className={className} aria-hidden="true">
+    <rect width="18" x="3" y="11" height="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+const LockOpen = ({ className }: { className?: string }) => (
+  <svg {...svgBase} className={className} aria-hidden="true">
+    <rect width="18" x="3" y="11" height="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+  </svg>
+);
+const RotateCcw = ({ className }: { className?: string }) => (
+  <Icon className={className} d="M1 4v6h6M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+);
+const Volume2 = ({ className }: { className?: string }) => (
+  <svg {...svgBase} className={className} aria-hidden="true">
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+  </svg>
+);
+const VolumeX = ({ className }: { className?: string }) => (
+  <svg {...svgBase} className={className} aria-hidden="true">
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+    <line x1="23" y1="9" x2="17" y2="15" />
+    <line x1="17" y1="9" x2="23" y2="15" />
+  </svg>
+);
+
+import {
+  type ChangeEvent,
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import "./CharacterEditor.css";
 
 /* ── Constants ─────────────────────────────────────────────────────── */
@@ -78,9 +123,7 @@ interface OnboardingPreset {
   system: string;
   adjectives: string[];
   style: { all: string[]; chat: string[]; post: string[] };
-  messageExamples: Array<
-    Array<{ user: string; content: { text: string } }>
-  >;
+  messageExamples: Array<Array<{ user: string; content: { text: string } }>>;
   postExamples: string[];
 }
 
@@ -89,15 +132,19 @@ function replaceCharacterToken(value: string, name: string) {
 }
 
 function buildCharacterDraftFromPreset(entry: CharacterRosterEntry) {
-  const p = entry.preset;
+  const p = entry.preset as OnboardingPreset;
   const name = entry.name;
   return {
     name,
     username: name,
-    bio: p.bio.map((l) => replaceCharacterToken(l, name)).join("\n"),
+    bio: p.bio.map((l: string) => replaceCharacterToken(l, name)).join("\n"),
     system: replaceCharacterToken(p.system, name),
     adjectives: [...p.adjectives],
-    style: { all: [...p.style.all], chat: [...p.style.chat], post: [...p.style.post] },
+    style: {
+      all: [...p.style.all],
+      chat: [...p.style.chat],
+      post: [...p.style.post],
+    },
     messageExamples: p.messageExamples.map((convo) => ({
       examples: convo.map((msg) => ({
         name:
@@ -107,15 +154,16 @@ function buildCharacterDraftFromPreset(entry: CharacterRosterEntry) {
         content: { text: replaceCharacterToken(msg.content.text, name) },
       })),
     })),
-    postExamples: p.postExamples.map((ex) => replaceCharacterToken(ex, name)),
+    postExamples: p.postExamples.map((ex: string) =>
+      replaceCharacterToken(ex, name),
+    ),
   };
 }
-
 
 /* ── Component ─────────────────────────────────────────────────────── */
 
 export function CharacterEditor({
-  sceneOverlay = false,
+  sceneOverlay: _sceneOverlay = false,
 }: {
   sceneOverlay?: boolean;
 } = {}) {
@@ -135,18 +183,18 @@ export function CharacterEditor({
     loadCharacter,
     setState,
     onboardingOptions,
-    selectedVrmIndex,
-    t,
-    registryStatus,
-    registryLoading,
-    registryRegistering,
-    registryError,
-    dropStatus,
+    selectedVrmIndex: _selectedVrmIndex,
+    t: _t,
+    registryStatus: _registryStatus,
+    registryLoading: _registryLoading,
+    registryRegistering: _registryRegistering,
+    registryError: _registryError,
+    dropStatus: _dropStatus,
     loadRegistryStatus,
-    registerOnChain,
-    syncRegistryProfile,
+    registerOnChain: _registerOnChain,
+    syncRegistryProfile: _syncRegistryProfile,
     loadDropStatus,
-    walletConfig,
+    walletConfig: _walletConfig,
   } = useApp();
 
   useEffect(() => {
@@ -157,6 +205,7 @@ export function CharacterEditor({
 
   const handleFieldEdit = useCallback(
     (field: string, value: unknown) => {
+      // biome-ignore lint/suspicious/noExplicitAny: typed field key interop
       handleCharacterFieldInput(field as any, value as any);
     },
     [handleCharacterFieldInput],
@@ -164,6 +213,7 @@ export function CharacterEditor({
 
   const handleStyleEdit = useCallback(
     (key: string, value: string) => {
+      // biome-ignore lint/suspicious/noExplicitAny: typed field key interop
       handleCharacterStyleInput(key as any, value);
     },
     [handleCharacterStyleInput],
@@ -171,7 +221,9 @@ export function CharacterEditor({
 
   /* ── Generation ─────────────────────────────────────────────────── */
   const [generating, setGenerating] = useState<string | null>(null);
-  const [mobilePage, setMobilePage] = useState<"identity" | "style" | "examples">("identity");
+  const [mobilePage, setMobilePage] = useState<
+    "identity" | "style" | "examples"
+  >("identity");
   const [rightTab, setRightTab] = useState<"style" | "examples">("style");
   const [customizing, setCustomizing] = useState(false);
 
@@ -194,11 +246,16 @@ export function CharacterEditor({
     null,
   );
   const [rosterStyles, setRosterStyles] = useState<OnboardingPreset[]>(
+    // biome-ignore lint/suspicious/noExplicitAny: onboardingOptions is untyped API response
     (onboardingOptions as any)?.styles ?? [],
   );
 
   /* ── Voice config state ─────────────────────────────────────────── */
-  const [voiceConfig, setVoiceConfig] = useState<Record<string, any>>({});
+  type VoiceConfig = Record<
+    string,
+    Record<string, string> | string | undefined
+  >;
+  const [voiceConfig, setVoiceConfig] = useState<VoiceConfig>({});
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceSaving, setVoiceSaving] = useState(false);
   const [voiceSaveError, setVoiceSaveError] = useState<string | null>(null);
@@ -212,21 +269,18 @@ export function CharacterEditor({
   const [voiceSelectionLocked, setVoiceSelectionLocked] = useState(false);
 
   /* ── Load roster ────────────────────────────────────────────────── */
+  // Use static STYLE_PRESETS shipped in the frontend bundle — no API call
+  // needed. If the server provides styles via onboardingOptions, prefer those.
   useEffect(() => {
+    // biome-ignore lint/suspicious/noExplicitAny: onboardingOptions is untyped API response
     if ((onboardingOptions as any)?.styles?.length) {
+      // biome-ignore lint/suspicious/noExplicitAny: onboardingOptions is untyped API response
       setRosterStyles((onboardingOptions as any).styles);
-      return;
+    } else {
+      // biome-ignore lint/suspicious/noExplicitAny: STYLE_PRESETS needs cast to OnboardingPreset[]
+      setRosterStyles(STYLE_PRESETS as any);
     }
-    let cancelled = false;
-    void client
-      .getOnboardingOptions()
-      .then((opts: any) => {
-        if (!cancelled) setRosterStyles(opts.styles ?? []);
-      })
-      .catch(() => { });
-    return () => {
-      cancelled = true;
-    };
+    // biome-ignore lint/suspicious/noExplicitAny: onboardingOptions is untyped API response
   }, [(onboardingOptions as any)?.styles]);
 
   const characterRoster = resolveRosterEntries(rosterStyles);
@@ -239,8 +293,8 @@ export function CharacterEditor({
         ? (d.bio as string[]).join("\n")
         : "";
 
-  const hasCharacterContent = (c: any) =>
-    Boolean(c && Object.keys(c).length > 0);
+  const hasCharacterContent = (c: unknown) =>
+    Boolean(c && Object.keys(c as Record<string, unknown>).length > 0);
   const currentCharacter = hasCharacterContent(characterDraft)
     ? characterDraft
     : characterData;
@@ -266,8 +320,11 @@ export function CharacterEditor({
     void (async () => {
       setVoiceLoading(true);
       try {
-        const cfg: any = await client.getConfig();
-        const tts = cfg.messages?.tts;
+        const cfg = await client.getConfig();
+        type TtsConfig = Record<string, Record<string, string> | undefined>;
+        type MessagesConfig = { tts?: TtsConfig };
+        const messages = cfg.messages as MessagesConfig | undefined;
+        const tts = messages?.tts;
         if (tts) {
           setVoiceConfig(tts);
           if (tts.elevenlabs?.voiceId) {
@@ -277,7 +334,7 @@ export function CharacterEditor({
             setSelectedVoicePresetId(preset?.id ?? null);
           }
         }
-      } catch { }
+      } catch {}
       setVoiceLoading(false);
     })();
   }, []);
@@ -431,9 +488,11 @@ export function CharacterEditor({
   /* ── Persist voice config ───────────────────────────────────────── */
   const persistVoiceConfig = useCallback(async () => {
     setVoiceSaveError(null);
-    const normalized: any = {
-      ...voiceConfig.elevenlabs,
-      modelId: voiceConfig.elevenlabs?.modelId ?? DEFAULT_ELEVEN_FAST_MODEL,
+    const normalized: Record<string, string> = {
+      ...(voiceConfig.elevenlabs as Record<string, string> | undefined),
+      modelId:
+        (voiceConfig.elevenlabs as Record<string, string> | undefined)
+          ?.modelId ?? DEFAULT_ELEVEN_FAST_MODEL,
     };
     const sanitizedKey = sanitizeApiKey(normalized?.apiKey);
     if (sanitizedKey) normalized.apiKey = sanitizedKey;
@@ -469,7 +528,11 @@ export function CharacterEditor({
     if (!activeCharacterRosterEntry) return;
     applyCharacterDefaults(activeCharacterRosterEntry);
     applyVoicePresetForEntry(activeCharacterRosterEntry);
-  }, [activeCharacterRosterEntry, applyCharacterDefaults, applyVoicePresetForEntry]);
+  }, [
+    activeCharacterRosterEntry,
+    applyCharacterDefaults,
+    applyVoicePresetForEntry,
+  ]);
 
   /* ── Generate field ─────────────────────────────────────────────── */
   const getCharContext = useCallback(
@@ -484,7 +547,7 @@ export function CharacterEditor({
   );
 
   const handleGenerate = useCallback(
-    async (field: string, mode = "replace") => {
+    async (field: string, mode: "replace" | "append" = "replace") => {
       setGenerating(field);
       try {
         const { generated } = await client.generateCharacterField(
@@ -517,20 +580,21 @@ export function CharacterEditor({
               if (parsed.chat) handleStyleEdit("chat", parsed.chat.join("\n"));
               if (parsed.post) handleStyleEdit("post", parsed.post.join("\n"));
             }
-          } catch { }
+          } catch {}
         } else if (field === "chatExamples") {
           try {
             const parsed = JSON.parse(generated);
             if (Array.isArray(parsed)) {
-              const formatted = parsed.map((convo: any) => ({
-                examples: convo.map((msg: any) => ({
+              type ConvoMsg = { user: string; content: { text: string } };
+              const formatted = parsed.map((convo: ConvoMsg[]) => ({
+                examples: convo.map((msg: ConvoMsg) => ({
                   name: msg.user,
                   content: { text: msg.content.text },
                 })),
               }));
               handleFieldEdit("messageExamples", formatted);
             }
-          } catch { }
+          } catch {}
         } else if (field === "postExamples") {
           try {
             const parsed = JSON.parse(generated);
@@ -544,12 +608,18 @@ export function CharacterEditor({
                 handleCharacterArrayInput("postExamples", parsed.join("\n"));
               }
             }
-          } catch { }
+          } catch {}
         }
-      } catch { }
+      } catch {}
       setGenerating(null);
     },
-    [getCharContext, d, handleFieldEdit, handleStyleEdit, handleCharacterArrayInput],
+    [
+      getCharContext,
+      d,
+      handleFieldEdit,
+      handleStyleEdit,
+      handleCharacterArrayInput,
+    ],
   );
 
   /* ── Style entry handlers ───────────────────────────────────────── */
@@ -608,21 +678,11 @@ export function CharacterEditor({
     [d.style, handleStyleEdit, styleEntryDrafts],
   );
 
-  const handleCustomVrmUpload = useCallback(
-    (file: File) => {
-      const url = URL.createObjectURL(file);
-      setState("customVrmUrl", url);
-      setState("selectedVrmIndex", 0);
-    },
-    [setState],
-  );
-
   /* ── Derived ────────────────────────────────────────────────────── */
   const activeVoicePreset =
     PREMADE_VOICES.find((p) => p.id === selectedVoicePresetId) ?? null;
   const voiceSelectValue = selectedVoicePresetId ?? null;
   const combinedSaveError = voiceSaveError ?? characterSaveError;
-
 
   /* ── Loading state ──────────────────────────────────────────────── */
   if (characterLoading && !characterData) {
@@ -674,10 +734,12 @@ export function CharacterEditor({
         </div>
       )}
 
-      {customizing && (<>
+      {customizing && (
         <div className="ce-panels">
           {/* ── LEFT PANEL ────────────────────────────────────────────── */}
-          <div className={`ce-panel ce-panel-left ${mobilePage !== "identity" ? "ce-panel--hidden" : ""}`}>
+          <div
+            className={`ce-panel ce-panel-left ${mobilePage !== "identity" ? "ce-panel--hidden" : ""}`}
+          >
             {/* Name */}
             <section className="ce-section">
               <div className="ce-section-header">
@@ -687,7 +749,9 @@ export function CharacterEditor({
                 type="text"
                 value={d.name ?? ""}
                 placeholder="Agent name"
-                onChange={(e: any) => handleFieldEdit("name", e.target.value)}
+                onChange={(
+                  e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+                ) => handleFieldEdit("name", e.target.value)}
                 className="ce-input"
               />
             </section>
@@ -710,7 +774,9 @@ export function CharacterEditor({
                 value={bioText}
                 rows={4}
                 placeholder="Describe who your agent is..."
-                onChange={(e: any) => handleFieldEdit("bio", e.target.value)}
+                onChange={(
+                  e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+                ) => handleFieldEdit("bio", e.target.value)}
                 className="ce-textarea ce-textarea--compact"
               />
             </section>
@@ -734,14 +800,18 @@ export function CharacterEditor({
                 rows={4}
                 maxLength={10000}
                 placeholder="Write in first person..."
-                onChange={(e: any) => handleFieldEdit("system", e.target.value)}
+                onChange={(
+                  e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+                ) => handleFieldEdit("system", e.target.value)}
                 className="ce-textarea ce-textarea--compact"
               />
             </section>
           </div>
 
           {/* ── RIGHT PANEL ───────────────────────────────────────────── */}
-          <div className={`ce-panel ce-panel-right ${mobilePage === "identity" ? "ce-panel--hidden" : ""}`}>
+          <div
+            className={`ce-panel ce-panel-right ${mobilePage === "identity" ? "ce-panel--hidden" : ""}`}
+          >
             {/* ── Toggle: Style Rules / Examples ───────────────────────── */}
             <div className="ce-right-toggle-row">
               <div className="ce-right-toggle">
@@ -777,7 +847,10 @@ export function CharacterEditor({
             </div>
 
             {/* Style Rules */}
-            <section className="ce-section ce-section--grow" style={{ display: rightTab === "style" ? undefined : "none" }}>
+            <section
+              className="ce-section ce-section--grow"
+              style={{ display: rightTab === "style" ? undefined : "none" }}
+            >
               <div className="ce-section-header">
                 <span className="ce-label">Style Rules</span>
                 <Button
@@ -809,7 +882,7 @@ export function CharacterEditor({
                         {items.length > 0 ? (
                           items.map((item, index) => (
                             <div
-                              key={`${key}:${item}:${index}`}
+                              key={`${key}:${item}`}
                               className="ce-style-entry"
                             >
                               <span className="ce-style-entry-num">
@@ -818,20 +891,28 @@ export function CharacterEditor({
                               <Textarea
                                 value={styleEntryDrafts[key]?.[index] ?? item}
                                 rows={1}
-                                onChange={(e: any) =>
+                                onChange={(
+                                  e: ChangeEvent<
+                                    HTMLInputElement | HTMLTextAreaElement
+                                  >,
+                                ) =>
                                   handleStyleEntryDraftChange(
                                     key,
                                     index,
                                     e.target.value,
                                   )
                                 }
-                                onBlur={() => handleCommitStyleEntry(key, index)}
+                                onBlur={() =>
+                                  handleCommitStyleEntry(key, index)
+                                }
                                 className="ce-style-entry-input"
                               />
                               <button
                                 type="button"
                                 className="ce-style-entry-remove"
-                                onClick={() => handleRemoveStyleEntry(key, index)}
+                                onClick={() =>
+                                  handleRemoveStyleEntry(key, index)
+                                }
                                 title="Remove"
                               >
                                 <svg
@@ -842,6 +923,7 @@ export function CharacterEditor({
                                   stroke="currentColor"
                                   strokeWidth="1.5"
                                   strokeLinecap="round"
+                                  aria-hidden="true"
                                 >
                                   <path d="M2 2l6 6M8 2l-6 6" />
                                 </svg>
@@ -859,10 +941,14 @@ export function CharacterEditor({
                           type="text"
                           value={pendingStyleEntries[key]}
                           placeholder={STYLE_SECTION_PLACEHOLDERS[key]}
-                          onChange={(e: any) =>
+                          onChange={(
+                            e: ChangeEvent<
+                              HTMLInputElement | HTMLTextAreaElement
+                            >,
+                          ) =>
                             handlePendingStyleEntryChange(key, e.target.value)
                           }
-                          onKeyDown={(e: any) => {
+                          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                             if (e.key === "Enter") {
                               e.preventDefault();
                               handleAddStyleEntry(key);
@@ -887,7 +973,12 @@ export function CharacterEditor({
             </section>
 
             {/* Chat Examples */}
-            <section className="ce-section ce-section--grow" style={{ display: rightTab === "examples" ? undefined : "none" }}>
+            <section
+              className="ce-section ce-section--grow"
+              style={{
+                display: rightTab === "examples" ? undefined : "none",
+              }}
+            >
               <div className="ce-section-header">
                 <span className="ce-label">Chat Examples</span>
                 <Button
@@ -903,7 +994,7 @@ export function CharacterEditor({
               <div className="ce-examples-list">
                 {(d.messageExamples ?? []).map((convo, ci) => (
                   <div
-                    key={ci}
+                    key={`convo-${convo.examples?.[0]?.name ?? ""}-${convo.examples?.[0]?.content?.text?.slice(0, 10) ?? ""}`}
                     className="ce-example-convo"
                   >
                     <div className="ce-example-convo-header">
@@ -927,6 +1018,7 @@ export function CharacterEditor({
                           stroke="currentColor"
                           strokeWidth="1.5"
                           strokeLinecap="round"
+                          aria-hidden="true"
                         >
                           <path d="M2 2l6 6M8 2l-6 6" />
                         </svg>
@@ -934,7 +1026,10 @@ export function CharacterEditor({
                     </div>
                     <div className="ce-example-messages">
                       {convo.examples.map((msg, mi) => (
-                        <div key={mi} className="ce-example-msg">
+                        <div
+                          key={`msg-${msg.name}-${msg.content?.text?.slice(0, 10) ?? ""}`}
+                          className="ce-example-msg"
+                        >
                           <span
                             className={`ce-example-msg-role ${msg.name === "{{user1}}" ? "" : "ce-example-msg-role--agent"}`}
                           >
@@ -969,7 +1064,12 @@ export function CharacterEditor({
             </section>
 
             {/* Post Examples */}
-            <section className="ce-section ce-section--grow" style={{ display: rightTab === "examples" ? undefined : "none" }}>
+            <section
+              className="ce-section ce-section--grow"
+              style={{
+                display: rightTab === "examples" ? undefined : "none",
+              }}
+            >
               <div className="ce-section-header">
                 <span className="ce-label">Post Examples</span>
                 <Button
@@ -984,7 +1084,10 @@ export function CharacterEditor({
               </div>
               <div className="ce-examples-list">
                 {(d.postExamples ?? []).map((post, pi) => (
-                  <div key={pi} className="ce-example-post">
+                  <div
+                    key={`post-${post.slice(0, 30)}`}
+                    className="ce-example-post"
+                  >
                     <input
                       type="text"
                       value={post}
@@ -1012,6 +1115,7 @@ export function CharacterEditor({
                         stroke="currentColor"
                         strokeWidth="1.5"
                         strokeLinecap="round"
+                        aria-hidden="true"
                       >
                         <path d="M2 2l6 6M8 2l-6 6" />
                       </svg>
@@ -1035,7 +1139,7 @@ export function CharacterEditor({
             </section>
           </div>
         </div>
-      </>)}
+      )}
 
       {/* ── Footer ─────────────────────────────────────────────────── */}
       <div className="ce-footer">

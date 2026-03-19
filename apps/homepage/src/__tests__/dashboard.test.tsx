@@ -8,7 +8,6 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentCard } from "../components/dashboard/AgentCard";
 import { AgentDetail } from "../components/dashboard/AgentDetail";
-import { ConnectionModal } from "../components/dashboard/ConnectionModal";
 import { LogsPanel } from "../components/dashboard/LogsPanel";
 import { MetricsPanel } from "../components/dashboard/MetricsPanel";
 import { Sidebar } from "../components/dashboard/Sidebar";
@@ -18,23 +17,36 @@ vi.mock("../lib/AgentProvider", () => ({
   useAgents: () => ({
     agents: [
       {
-        id: "local-default",
+        id: "cloud-test-1",
         name: "Test Agent",
-        source: "local" as const,
+        source: "cloud" as const,
         status: "running" as const,
         model: "gpt-4",
-        sourceUrl: "http://localhost:2138",
-        client: {
-          exportAgent: vi.fn(),
-          importAgent: vi.fn(),
+        sourceUrl: "https://www.elizacloud.ai/api/v1/milady/agents/test-1",
+        cloudAgent: {
+          id: "test-1",
+          agentName: "Test Agent",
+          status: "running",
         },
+        cloudClient: {
+          listAgents: vi.fn(),
+          suspendAgent: vi.fn(),
+          resumeAgent: vi.fn(),
+          listBackups: vi.fn().mockResolvedValue([]),
+          takeSnapshot: vi.fn(),
+        },
+        cloudAgentId: "test-1",
       },
     ],
     loading: false,
-    cloudClient: null,
+    cloudClient: {
+      listAgents: vi.fn(),
+      createAgent: vi.fn(),
+      deleteAgent: vi.fn(),
+    },
     refresh: vi.fn(),
-    addRemoteUrl: vi.fn(),
-    removeRemote: vi.fn(),
+    createAgent: vi.fn(),
+    deleteAgent: vi.fn(),
   }),
 }));
 
@@ -89,62 +101,7 @@ describe("Sidebar", () => {
   });
 });
 
-/* ------------------------------------------------------------------ */
-/*  ConnectionModal                                                   */
-/* ------------------------------------------------------------------ */
-describe("ConnectionModal", () => {
-  it("renders name and url inputs", () => {
-    const onSubmit = vi.fn();
-    const onClose = vi.fn();
-    render(<ConnectionModal onSubmit={onSubmit} onClose={onClose} />);
-
-    expect(screen.getByPlaceholderText("My Remote Agent")).toBeTruthy();
-    expect(screen.getByPlaceholderText("http://10.0.0.5:2138")).toBeTruthy();
-  });
-
-  it("Connect button is disabled when name is empty", () => {
-    const onSubmit = vi.fn();
-    render(<ConnectionModal onSubmit={onSubmit} onClose={() => {}} />);
-
-    const connectBtn = screen.getByText("Connect");
-    expect(connectBtn).toBeDisabled();
-  });
-
-  it("Connect button is disabled when url is empty", () => {
-    const onSubmit = vi.fn();
-    render(<ConnectionModal onSubmit={onSubmit} onClose={() => {}} />);
-
-    // Fill name but leave url empty (url starts empty now)
-    fireEvent.change(screen.getByPlaceholderText("My Remote Agent"), {
-      target: { value: "Test" },
-    });
-
-    const connectBtn = screen.getByText("Connect");
-    expect(connectBtn).toBeDisabled();
-  });
-
-  it("calls onSubmit when Connect is clicked with valid inputs", () => {
-    const onSubmit = vi.fn();
-    render(<ConnectionModal onSubmit={onSubmit} onClose={() => {}} />);
-
-    fireEvent.change(screen.getByPlaceholderText("My Remote Agent"), {
-      target: { value: "Test Agent" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("http://10.0.0.5:2138"), {
-      target: { value: "http://10.0.0.5:2138" },
-    });
-
-    const connectBtn = screen.getByText("Connect");
-    expect(connectBtn).not.toBeDisabled();
-    fireEvent.click(connectBtn);
-
-    expect(onSubmit).toHaveBeenCalledWith({
-      name: "Test Agent",
-      url: "http://10.0.0.5:2138",
-      type: "remote",
-    });
-  });
-});
+/* ConnectionModal tests removed — remote connections no longer supported in cloud-only mode */
 
 /* ------------------------------------------------------------------ */
 /*  AgentCard                                                         */
@@ -241,29 +198,12 @@ describe("LogsPanel", () => {
 /*  ExportPanel (rendered with mocked useAgents)                      */
 /* ------------------------------------------------------------------ */
 describe("ExportPanel", () => {
-  it("renders password input and export/import buttons", async () => {
+  it("renders cloud snapshot UI for cloud agent", async () => {
     const { ExportPanel } = await import("../components/dashboard/ExportPanel");
-    const { container } = render(<ExportPanel connectionId="local-default" />);
+    const { container } = render(<ExportPanel connectionId="cloud-test-1" />);
     const text = container.textContent ?? "";
-    expect(text).toContain("Password");
-    expect(screen.getByText("Export Agent")).toBeTruthy();
-    expect(screen.getByText("Import Agent")).toBeTruthy();
-  });
-
-  it("Export button is disabled when password < 4 chars", async () => {
-    const { ExportPanel } = await import("../components/dashboard/ExportPanel");
-    render(<ExportPanel connectionId="local-default" />);
-    const exportBtn = screen.getByText("Export Agent");
-    expect(exportBtn).toBeDisabled();
-
-    // Type 3 chars — still disabled
-    const pwInput = screen.getByLabelText("Password (min 4 chars)");
-    fireEvent.change(pwInput, { target: { value: "abc" } });
-    expect(screen.getByText("Export Agent")).toBeDisabled();
-
-    // Type 4 chars — enabled
-    fireEvent.change(pwInput, { target: { value: "abcd" } });
-    expect(screen.getByText("Export Agent")).not.toBeDisabled();
+    // Cloud agents show snapshot controls instead of password export
+    expect(text).toContain("Snapshot");
   });
 });
 
@@ -280,20 +220,20 @@ describe("AgentDetail", () => {
 
   it("renders Metrics tab by default", () => {
     const { container } = render(
-      <AgentDetail agent={agent} connectionId="local-default" />,
+      <AgentDetail agent={agent} connectionId="cloud-test-1" />,
     );
     expect(container.textContent).toContain("Metrics coming soon");
   });
 
   it("shows agent name in header", () => {
     const { container } = render(
-      <AgentDetail agent={agent} connectionId="local-default" />,
+      <AgentDetail agent={agent} connectionId="cloud-test-1" />,
     );
     expect(container.textContent).toContain("Detail Agent");
   });
 
   it("renders all three tab buttons", () => {
-    render(<AgentDetail agent={agent} connectionId="local-default" />);
+    render(<AgentDetail agent={agent} connectionId="cloud-test-1" />);
     expect(screen.getByText("Metrics")).toBeTruthy();
     expect(screen.getByText("Logs")).toBeTruthy();
     expect(screen.getByText("Snapshots")).toBeTruthy();
@@ -301,17 +241,17 @@ describe("AgentDetail", () => {
 
   it("switches to Logs tab", () => {
     const { container } = render(
-      <AgentDetail agent={agent} connectionId="local-default" />,
+      <AgentDetail agent={agent} connectionId="cloud-test-1" />,
     );
     fireEvent.click(screen.getByText("Logs"));
     expect(container.textContent).toContain("Logs coming soon");
   });
 
   it("switches to Snapshots tab", () => {
-    render(<AgentDetail agent={agent} connectionId="local-default" />);
+    render(<AgentDetail agent={agent} connectionId="cloud-test-1" />);
     fireEvent.click(screen.getByText("Snapshots"));
-    // Snapshots tab renders ExportPanel which has "Export Agent" button
-    expect(screen.getByText("Export Agent")).toBeTruthy();
+    // Snapshots tab renders ExportPanel which shows cloud snapshot controls
+    expect(screen.getByText("Take Snapshot")).toBeTruthy();
   });
 });
 
@@ -482,7 +422,7 @@ describe("AuthGate", () => {
     expect(result?.getByText("Dashboard Content")).toBeTruthy();
   });
 
-  it("shows login UI when not authenticated", async () => {
+  it("shows login UI when not authenticated (no skip option)", async () => {
     let result: ReturnType<typeof render>;
     await act(async () => {
       const { AuthGate } = await import("../components/dashboard/AuthGate");
@@ -493,24 +433,8 @@ describe("AuthGate", () => {
       );
     });
     expect(result?.getByText("Login with Eliza Cloud")).toBeTruthy();
-    expect(result?.getByText("Skip (local only)")).toBeTruthy();
-  });
-
-  it("renders children after clicking Skip", async () => {
-    let result: ReturnType<typeof render>;
-    await act(async () => {
-      const { AuthGate } = await import("../components/dashboard/AuthGate");
-      result = render(
-        <AuthGate>
-          <div>Dashboard Content</div>
-        </AuthGate>,
-      );
-    });
-    const skipBtn = result?.getByText("Skip (local only)");
-    await act(async () => {
-      fireEvent.click(skipBtn);
-    });
-    expect(result?.getByText("Dashboard Content")).toBeTruthy();
+    // Cloud-only mode: no skip button
+    expect(result?.queryByText("Skip (local only)")).toBeNull();
   });
 
   it("shows Eliza Cloud heading in login view", async () => {
