@@ -52,6 +52,8 @@ export function VrmViewer(props: VrmViewerProps) {
   const lastStateEmitMsRef = useRef<number>(0);
   const mountedRef = useRef(true);
   const currentVrmPathRef = useRef<string>("");
+  const setupRunIdRef = useRef(0);
+  const loadRunIdRef = useRef(0);
   const onEngineReadyRef = useRef(props.onEngineReady);
   const onEngineStateRef = useRef(props.onEngineState);
   const onViewerErrorRef = useRef(props.onViewerError);
@@ -71,6 +73,8 @@ export function VrmViewer(props: VrmViewerProps) {
     if (!canvas) return;
 
     mountedRef.current = true;
+    const setupRunId = ++setupRunIdRef.current;
+    let active = true;
 
     let engine = engineRef.current;
     if (!engine || !engine.isInitialized()) {
@@ -114,11 +118,16 @@ export function VrmViewer(props: VrmViewerProps) {
     window.addEventListener("resize", resize);
     void engine.whenReady().then(
       () => {
-        if (!mountedRef.current) return;
+        if (!active || !mountedRef.current) return;
+        if (engineRef.current !== engine) return;
+        if (setupRunIdRef.current !== setupRunId) return;
         resize();
         onEngineReadyRef.current?.(engine);
       },
       (error) => {
+        if (!active) return;
+        if (engineRef.current !== engine) return;
+        if (setupRunIdRef.current !== setupRunId) return;
         console.warn("Failed to initialize VRM renderer:", error);
         onViewerErrorRef.current?.(
           error instanceof Error
@@ -129,6 +138,7 @@ export function VrmViewer(props: VrmViewerProps) {
     );
 
     return () => {
+      active = false;
       mountedRef.current = false;
       window.removeEventListener("resize", resize);
       resizeObserver?.disconnect();
@@ -177,6 +187,8 @@ export function VrmViewer(props: VrmViewerProps) {
 
     const vrmUrl = props.vrmPath ?? DEFAULT_VRM_PATH;
     if (vrmUrl === currentVrmPathRef.current) return;
+    const loadRunId = ++loadRunIdRef.current;
+    let active = true;
     currentVrmPathRef.current = vrmUrl;
 
     const abortController = new AbortController();
@@ -184,16 +196,24 @@ export function VrmViewer(props: VrmViewerProps) {
     void (async () => {
       try {
         await engine.whenReady();
-        if (!mountedRef.current || abortController.signal.aborted) return;
+        if (!active || !mountedRef.current || abortController.signal.aborted) return;
+        if (engineRef.current !== engine) return;
+        if (loadRunIdRef.current !== loadRunId) return;
         await engine.loadVrmFromUrl(
           vrmUrl,
           vrmUrl.split("/").pop() ?? "avatar.vrm",
         );
-        if (!mountedRef.current || abortController.signal.aborted) return;
+        if (!active || !mountedRef.current || abortController.signal.aborted) return;
+        if (engineRef.current !== engine) return;
+        if (loadRunIdRef.current !== loadRunId) return;
         onEngineStateRef.current?.(engine.getState());
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
-        if (currentVrmPathRef.current === vrmUrl) {
+        if (
+          active &&
+          loadRunIdRef.current === loadRunId &&
+          currentVrmPathRef.current === vrmUrl
+        ) {
           currentVrmPathRef.current = "";
         }
         console.warn("Failed to load VRM:", err);
@@ -204,8 +224,12 @@ export function VrmViewer(props: VrmViewerProps) {
     })();
 
     return () => {
+      active = false;
       abortController.abort();
-      if (currentVrmPathRef.current === vrmUrl) {
+      if (
+        loadRunIdRef.current === loadRunId &&
+        currentVrmPathRef.current === vrmUrl
+      ) {
         currentVrmPathRef.current = "";
       }
     };

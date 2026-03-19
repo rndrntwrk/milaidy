@@ -161,4 +161,65 @@ describe("VrmViewer", () => {
       renderer?.unmount();
     });
   });
+
+  it("ignores stale StrictMode ready callbacks from the first engine", async () => {
+    const onEngineReady = vi.fn();
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <StrictMode>
+          <VrmViewer
+            vrmPath="/vrms/milady-1.vrm"
+            mouthOpen={0}
+            onEngineReady={onEngineReady}
+          />
+        </StrictMode>,
+        {
+          createNodeMock: (element) => {
+            if (element.type === "canvas") {
+              return {
+                getBoundingClientRect: () => ({
+                  width: 640,
+                  height: 480,
+                  top: 0,
+                  left: 0,
+                  bottom: 480,
+                  right: 640,
+                  x: 0,
+                  y: 0,
+                  toJSON: () => ({}),
+                }),
+              };
+            }
+            return null;
+          },
+        },
+      );
+    });
+
+    const instances = getMockInstances();
+    expect(instances.length).toBeGreaterThanOrEqual(2);
+
+    await act(async () => {
+      instances[0]?.resolveReady();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onEngineReady).not.toHaveBeenCalled();
+
+    await act(async () => {
+      instances.at(-1)?.resolveReady();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onEngineReady).toHaveBeenCalledTimes(1);
+    expect(onEngineReady).toHaveBeenLastCalledWith(instances.at(-1));
+
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
 });
