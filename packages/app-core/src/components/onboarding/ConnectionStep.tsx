@@ -299,34 +299,34 @@ export function ConnectionStep() {
           <div className="onboarding-question">
             {t("onboarding.hostingQuestion")}
           </div>
-          <div className="mb-4 flex items-center justify-center gap-2">
+          <div className="mb-4 flex items-center justify-center rounded-full border border-border/40 bg-card/30 p-0.5">
             <button
               type="button"
-              className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors ${
+              className={`flex-1 rounded-full px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors ${
                 onboardingMode === "basic"
-                  ? "border-accent/40 bg-accent/10 text-txt"
-                  : "border-border/60 bg-card/30 text-muted hover:text-txt"
+                  ? "bg-accent/15 border border-accent/40 text-txt"
+                  : "border border-transparent text-muted hover:text-txt"
               }`}
               onClick={() => {
                 setState("onboardingMode", "basic");
                 setState("onboardingActiveGuide", null);
               }}
             >
-              Fast setup
+              Quick start
             </button>
             <button
               type="button"
-              className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors ${
+              className={`flex-1 rounded-full px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors ${
                 onboardingMode === "advanced"
-                  ? "border-accent/40 bg-accent/10 text-txt"
-                  : "border-border/60 bg-card/30 text-muted hover:text-txt"
+                  ? "bg-accent/15 border border-accent/40 text-txt"
+                  : "border border-transparent text-muted hover:text-txt"
               }`}
               onClick={() => {
                 setState("onboardingMode", "advanced");
                 setState("onboardingActiveGuide", "provider");
               }}
             >
-              Advanced configuration
+              Advanced
             </button>
           </div>
           {onboardingMode === "advanced" && (
