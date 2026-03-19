@@ -152,7 +152,7 @@ describe("resolveWebSocketUpgradeRejection", () => {
   it.each([
     "capacitor://localhost",
     "app://localhost",
-    "capacitor-electron://localhost",
+    "electrobun://localhost",
     "app://-",
   ])("accepts app-protocol origins (%s)", (origin) => {
     delete process.env.ELIZA_API_TOKEN;

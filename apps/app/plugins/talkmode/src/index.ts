@@ -5,5 +5,4 @@ const loadWeb = () => import("./web").then((m) => new m.TalkModeWeb());
 
 export const TalkMode = registerPlugin<TalkModePlugin>("TalkMode", {
   web: loadWeb,
-  electron: loadWeb,
 });

@@ -6,5 +6,4 @@ const loadWeb = () => import("./web").then((m) => new m.DesktopWeb());
 
 export const Desktop = registerPlugin<DesktopPlugin>("Desktop", {
   web: loadWeb,
-  electron: loadWeb,
 });

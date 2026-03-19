@@ -7,6 +7,7 @@
 
 import fs from "node:fs";
 import { createServer as createNetServer } from "node:net";
+import os from "node:os";
 import path from "node:path";
 import Electrobun, {
   ApplicationMenu,
@@ -530,7 +531,7 @@ function wireRpcAndModules(
   // Create the sendToWebview callback that native modules use to push events.
   // Uses typed RPC push messages instead of JS evaluation.
   const sendToWebview = (message: string, payload?: unknown): void => {
-    // Resolve via map (Electron-style colon format) or use message directly
+    // Resolve via map (legacy colon-separated format) or use message directly
     // as the RPC method name (Electrobun camelCase format).
     const rpcMessage = PUSH_CHANNEL_TO_RPC_MESSAGE[message] ?? message;
     if (rpc?.send) {
@@ -874,6 +875,19 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error("[Main] Fatal error during startup:", err);
+  const msg = `[Main] Fatal error during startup: ${err?.stack ?? err}`;
+  console.error(msg);
+  // Write to startup log so it's visible even without a console
+  try {
+    const logDir =
+      process.platform === "win32"
+        ? path.join(process.env.APPDATA ?? "", "Milady")
+        : path.join(os.homedir(), ".config", "Milady");
+    fs.mkdirSync(logDir, { recursive: true });
+    fs.appendFileSync(
+      path.join(logDir, "milady-startup.log"),
+      `[${new Date().toISOString()}] ${msg}\n`,
+    );
+  } catch {}
   process.exit(1);
 });

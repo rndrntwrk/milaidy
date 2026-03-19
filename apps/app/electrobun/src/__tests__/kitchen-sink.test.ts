@@ -1181,7 +1181,7 @@ describe("Reverse mapping consistency", () => {
 describe("DesktopManager — tray", () => {
   let manager: DesktopManager;
   let sendFn: Mock<SendToWebview>;
-  const MockTray = electrobunBun.Tray as ReturnType<typeof vi.fn>;
+  const MockTray = electrobunBun.Tray as unknown as ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1361,7 +1361,7 @@ describe("DesktopManager — window management", () => {
     sendFn = vi.fn();
     manager.setSendToWebview(sendFn);
     manager.setMainWindow(
-      fakeWindow as Parameters<DesktopManager["setMainWindow"]>[0],
+      fakeWindow as unknown as Parameters<DesktopManager["setMainWindow"]>[0],
     );
   });
 
@@ -1642,15 +1642,15 @@ describe("DesktopManager — clipboard", () => {
   });
 
   it("clipboardAvailableFormats() gracefully handles missing API (returns empty array)", async () => {
-    const saved = (mockUtils as Record<string, unknown>)
+    const saved = (mockUtils as unknown as Record<string, unknown>)
       .clipboardAvailableFormats;
     (
-      mockUtils as Record<string, unknown>
+      mockUtils as unknown as Record<string, unknown>
     ).clipboardAvailableFormats = undefined;
     const result = await manager.clipboardAvailableFormats();
     expect(result.formats).toEqual([]);
     (
-      mockUtils as Record<string, unknown>
+      mockUtils as unknown as Record<string, unknown>
     ).clipboardAvailableFormats = saved;
   });
 });
@@ -1824,10 +1824,10 @@ describe("DesktopManager — app lifecycle", () => {
 
 describe("DesktopManager — auto launch", () => {
   let manager: DesktopManager;
-  const mockExistsSync = nodeFs.existsSync as Mock<
+  const mockExistsSync = nodeFs.existsSync as unknown as Mock<
     typeof nodeFs.existsSync
   >;
-  const mockReadFileSync = nodeFs.readFileSync as Mock<
+  const mockReadFileSync = nodeFs.readFileSync as unknown as Mock<
     typeof nodeFs.readFileSync
   >;
 
@@ -1866,7 +1866,7 @@ describe("DesktopManager — auto launch", () => {
     setPlatform("darwin");
     mockExistsSync.mockReturnValue(false);
     const mockSpawn = (
-      globalThis as { Bun: { spawn: ReturnType<typeof vi.fn> } }
+      globalThis as unknown as { Bun: { spawn: ReturnType<typeof vi.fn> } }
     ).Bun.spawn;
     await manager.setAutoLaunch({ enabled: false });
     expect(mockSpawn).not.toHaveBeenCalled();
@@ -2166,7 +2166,7 @@ describe("MacWindowEffects — API surface", () => {
   });
 
   it("functions that take a pointer return boolean", () => {
-    const fakePtr = Symbol("ptr") as import("bun:ffi").Pointer;
+    const fakePtr = Symbol("ptr") as unknown as import("bun:ffi").Pointer;
     expect(typeof macEffects.enableVibrancy(fakePtr)).toBe("boolean");
     expect(typeof macEffects.ensureShadow(fakePtr)).toBe("boolean");
     expect(typeof macEffects.setTrafficLightsPosition(fakePtr, 10, 8)).toBe(
@@ -2217,7 +2217,7 @@ describe("CanvasManager — URL security (navigate)", () => {
       on: vi.fn(),
       ptr: null,
     };
-    (mgr as { windows: Map<string, unknown> }).windows.set(
+    (mgr as unknown as { windows: Map<string, unknown> }).windows.set(
       "test-id",
       {
         id: "test-id",
@@ -2249,7 +2249,7 @@ describe("CanvasManager — URL security (navigate)", () => {
       on: vi.fn(),
       ptr: null,
     };
-    (mgr as { windows: Map<string, unknown> }).windows.set(
+    (mgr as unknown as { windows: Map<string, unknown> }).windows.set(
       "test-id",
       {
         id: "test-id",
@@ -2283,7 +2283,7 @@ describe("CanvasManager — URL security (navigate)", () => {
       on: vi.fn(),
       ptr: null,
     };
-    (mgr as { windows: Map<string, unknown> }).windows.set(
+    (mgr as unknown as { windows: Map<string, unknown> }).windows.set(
       "test-id",
       {
         id: "test-id",
@@ -2323,7 +2323,7 @@ describe("CanvasManager — URL security (navigate)", () => {
       on: vi.fn(),
       ptr: null,
     };
-    (mgr as { windows: Map<string, unknown> }).windows.set(
+    (mgr as unknown as { windows: Map<string, unknown> }).windows.set(
       "test-id",
       {
         id: "test-id",
@@ -2357,7 +2357,7 @@ describe("CanvasManager — eval security", () => {
       webview: { url: "https://external.com", rpc: null, loadURL: vi.fn() },
       on: vi.fn(),
     };
-    (mgr as { windows: Map<string, unknown> }).windows.set("win-1", {
+    (mgr as unknown as { windows: Map<string, unknown> }).windows.set("win-1", {
       id: "win-1",
       window: fakeWin,
       url: "https://external.com",
@@ -2385,7 +2385,7 @@ describe("CanvasManager — eval security", () => {
       },
       on: vi.fn(),
     };
-    (mgr as { windows: Map<string, unknown> }).windows.set("win-2", {
+    (mgr as unknown as { windows: Map<string, unknown> }).windows.set("win-2", {
       id: "win-2",
       window: fakeWin,
       url: "http://localhost:3000/",
@@ -2407,7 +2407,7 @@ describe("CanvasManager — eval security", () => {
       },
       on: vi.fn(),
     };
-    (mgr as { windows: Map<string, unknown> }).windows.set("win-3", {
+    (mgr as unknown as { windows: Map<string, unknown> }).windows.set("win-3", {
       id: "win-3",
       window: fakeWin,
       url: "about:blank",
@@ -2443,7 +2443,7 @@ describe("CanvasManager — window operations", () => {
     id: string,
     win: ReturnType<typeof makeWindow>,
   ) {
-    (mgr as { windows: Map<string, unknown> }).windows.set(id, {
+    (mgr as unknown as { windows: Map<string, unknown> }).windows.set(id, {
       id,
       window: win,
       url: "about:blank",
@@ -2572,7 +2572,7 @@ describe("CanvasManager — window creation via BrowserWindow", () => {
 
   it("createWindow() calls new BrowserWindow() with correct options", async () => {
     const MockBrowserWindow =
-      electrobunBun.BrowserWindow as MockBrowserWindowCtor;
+      electrobunBun.BrowserWindow as unknown as MockBrowserWindowCtor;
     MockBrowserWindow.mockClear();
     const mgr = new CanvasManager();
     const result = await mgr.createWindow({
@@ -2593,7 +2593,7 @@ describe("CanvasManager — window creation via BrowserWindow", () => {
 
   it("createWindow() uses defaults when options are minimal", async () => {
     const MockBrowserWindow =
-      electrobunBun.BrowserWindow as MockBrowserWindowCtor;
+      electrobunBun.BrowserWindow as unknown as MockBrowserWindowCtor;
     MockBrowserWindow.mockClear();
     const mgr = new CanvasManager();
     await mgr.createWindow({});
@@ -3593,7 +3593,7 @@ describe("pushApiBaseToRenderer — injects API base into webview RPC", () => {
 describe("loadWindowState — window state persistence", () => {
   // loadWindowState is not exported, so we test it via the index.ts startup-bootstrap.
   // For direct logic testing, we exercise the branches manually here.
-  const mockFs = nodeFs as {
+  const mockFs = nodeFs as unknown as {
     existsSync: Mock<typeof nodeFs.existsSync>;
     readFileSync: Mock<typeof nodeFs.readFileSync>;
   };
@@ -3675,7 +3675,7 @@ describe("applyMacOSWindowEffects — native effect constants", () => {
       configurable: true,
     });
     try {
-      const fakePtr = Symbol("ptr") as import("bun:ffi").Pointer;
+      const fakePtr = Symbol("ptr") as unknown as import("bun:ffi").Pointer;
       // On non-darwin, all macEffects functions get null from getLib()
       // and return false (no-op). Verify they don't throw.
       expect(() => macEffects.enableVibrancy(fakePtr)).not.toThrow();
@@ -3815,26 +3815,25 @@ describe("PermissionManager — checkFeaturePermissions", () => {
 // INTERACTIVE CHECKLIST — Human-in-the-loop verification
 //
 // These tests document behaviors that require a running app instance and
-// human judgment to verify. They are marked as skipped manual checks so they
-// stay visible in the file without inflating the automated pending backlog.
+// human judgment to verify. They are marked as `it.todo` so they appear in
+// the test report as pending items but never block CI.
 //
 // To verify manually:
 //   1. Run `bun run start` (or `bun run dev`) in apps/app/electrobun/
 //   2. Work through each checklist item below
-//   3. Replace the skipped entry with an automated assertion or remove it once
-//      the behavior is covered elsewhere
+//   3. Mark as passing by converting `it.todo` → `it.skip` with a note
 // INTERACTIVE: Game windows (isolated BrowserWindow for game clients)
 // ============================================================================
 
 describe.skip("INTERACTIVE: Game windows", () => {
-  it.skip(
+  it.todo(
     "gameOpenWindow — opens an external game URL in an isolated BrowserWindow",
   );
-  it.skip("gameOpenWindow — returned id appears in canvasListWindows result");
-  it.skip(
+  it.todo("gameOpenWindow — returned id appears in canvasListWindows result");
+  it.todo(
     "gameOpenWindow — window uses game-isolated session partition (no cookie bleed from main renderer)",
   );
-  it.skip(
+  it.todo(
     "canvasDestroyWindow — closes a game window opened via gameOpenWindow",
   );
 });
@@ -3843,271 +3842,271 @@ describe.skip("INTERACTIVE: Game windows", () => {
 // ============================================================================
 
 describe.skip("INTERACTIVE: Tray icon and menu", () => {
-  it.skip("Tray icon appears in the macOS menu bar after app launch");
-  it.skip("Tray icon tooltip reads 'Milady' on hover");
-  it.skip("Left-clicking the tray icon opens the companion window");
-  it.skip("Right-clicking the tray icon shows the tray context menu");
-  it.skip("Tray menu shows: Show, Check for Updates, Restart Agent, Quit");
-  it.skip("Clicking 'Show' from tray menu brings the main window to front");
-  it.skip("Clicking 'Quit' from tray menu exits the app cleanly");
-  it.skip(
+  it.todo("Tray icon appears in the macOS menu bar after app launch");
+  it.todo("Tray icon tooltip reads 'Milady' on hover");
+  it.todo("Left-clicking the tray icon opens the companion window");
+  it.todo("Right-clicking the tray icon shows the tray context menu");
+  it.todo("Tray menu shows: Show, Check for Updates, Restart Agent, Quit");
+  it.todo("Clicking 'Show' from tray menu brings the main window to front");
+  it.todo("Clicking 'Quit' from tray menu exits the app cleanly");
+  it.todo(
     "Tray icon persists after main window is closed (exitOnLastWindowClosed: false)",
   );
-  it.skip("Tray icon is removed when the app quits");
-  it.skip(
+  it.todo("Tray icon is removed when the app quits");
+  it.todo(
     "Tray menu 'Restart Agent' triggers agent restart and shows status update",
   );
 });
 
 describe.skip("INTERACTIVE: Window vibrancy and macOS effects", () => {
-  it.skip("Main window has native vibrancy effect (frosted glass) on macOS");
-  it.skip("Window shadow is present and correct depth");
-  it.skip("Traffic light buttons (close/minimize/maximize) are at x=14, y=12");
-  it.skip(
+  it.todo("Main window has native vibrancy effect (frosted glass) on macOS");
+  it.todo("Window shadow is present and correct depth");
+  it.todo("Traffic light buttons (close/minimize/maximize) are at x=14, y=12");
+  it.todo(
     "Draggable region starts at x=92 and covers full header height (40px)",
   );
-  it.skip("Window can be dragged by clicking the header region");
-  it.skip("Window cannot be dragged by clicking below the drag region");
-  it.skip("Window retains vibrancy when resized");
-  it.skip(
+  it.todo("Window can be dragged by clicking the header region");
+  it.todo("Window cannot be dragged by clicking below the drag region");
+  it.todo("Window retains vibrancy when resized");
+  it.todo(
     "orderOut / makeKeyAndOrderFront cycle shows/hides window without dock bounce",
   );
 });
 
 describe.skip("INTERACTIVE: Window state persistence", () => {
-  it.skip("App remembers window position between restarts");
-  it.skip("App remembers window size between restarts");
-  it.skip("Window restores to saved bounds after relaunch");
-  it.skip(
+  it.todo("App remembers window position between restarts");
+  it.todo("App remembers window size between restarts");
+  it.todo("Window restores to saved bounds after relaunch");
+  it.todo(
     "Abnormal window position (off-screen) is corrected to safe defaults on restore",
   );
-  it.skip("State file is written to the correct path in app data directory");
+  it.todo("State file is written to the correct path in app data directory");
 });
 
 describe.skip("INTERACTIVE: Audio and microphone", () => {
-  it.skip(
+  it.todo(
     "Microphone permission prompt appears when first accessing microphone",
   );
-  it.skip("Microphone input works after permission is granted");
-  it.skip("TalkMode activates and deactivates cleanly via RPC");
-  it.skip("TalkMode stop clears audio buffers and releases microphone");
-  it.skip(
+  it.todo("Microphone input works after permission is granted");
+  it.todo("TalkMode activates and deactivates cleanly via RPC");
+  it.todo("TalkMode stop clears audio buffers and releases microphone");
+  it.todo(
     "Swabble (wake word) detection activates without errors when enabled",
   );
-  it.skip("Swabble fires 'wakeWordDetected' event when wake word is spoken");
-  it.skip("Swabble stops cleanly when disabled via RPC");
-  it.skip(
+  it.todo("Swabble fires 'wakeWordDetected' event when wake word is spoken");
+  it.todo("Swabble stops cleanly when disabled via RPC");
+  it.todo(
     "Audio transcription (Whisper) produces non-empty text for clear speech",
   );
-  it.skip("Audio transcription gracefully handles silence / empty input");
+  it.todo("Audio transcription gracefully handles silence / empty input");
 });
 
 describe.skip("INTERACTIVE: Camera", () => {
-  it.skip("Camera permission prompt appears on first camera access");
-  it.skip(
+  it.todo("Camera permission prompt appears on first camera access");
+  it.todo(
     "Camera devices list shows at least one device after permission grant",
   );
-  it.skip("Camera preview renders in the UI when stream is started");
-  it.skip("Camera stream stops and releases device when stopped");
-  it.skip("Taking a photo returns base64 image data");
-  it.skip("Photo quality is acceptable at default settings");
-  it.skip("Camera gracefully handles permission denied");
-  it.skip(
+  it.todo("Camera preview renders in the UI when stream is started");
+  it.todo("Camera stream stops and releases device when stopped");
+  it.todo("Taking a photo returns base64 image data");
+  it.todo("Photo quality is acceptable at default settings");
+  it.todo("Camera gracefully handles permission denied");
+  it.todo(
     "Switching between front/rear camera works on devices with multiple cameras",
   );
 });
 
 describe.skip("INTERACTIVE: Screen capture", () => {
-  it.skip(
+  it.todo(
     "Screen recording permission prompt appears on first capture attempt",
   );
-  it.skip(
+  it.todo(
     "getSources returns at least one screen source after permission grant",
   );
-  it.skip("takeScreenshot returns a non-empty base64 PNG");
-  it.skip("startRecording begins recording without errors");
-  it.skip("stopRecording stops and returns recorded data path");
-  it.skip("pauseRecording and resumeRecording work correctly");
-  it.skip("captureWindow captures a specific window by source ID");
-  it.skip("Frame capture mode streams frames at configured interval");
-  it.skip("Canvas window snapshot captures correct region");
-  it.skip("Screen capture gracefully handles permission denied");
+  it.todo("takeScreenshot returns a non-empty base64 PNG");
+  it.todo("startRecording begins recording without errors");
+  it.todo("stopRecording stops and returns recorded data path");
+  it.todo("pauseRecording and resumeRecording work correctly");
+  it.todo("captureWindow captures a specific window by source ID");
+  it.todo("Frame capture mode streams frames at configured interval");
+  it.todo("Canvas window snapshot captures correct region");
+  it.todo("Screen capture gracefully handles permission denied");
 });
 
 describe.skip("INTERACTIVE: System permissions UI", () => {
-  it.skip(
+  it.todo(
     "Requesting accessibility permission opens System Preferences to Accessibility",
   );
-  it.skip(
+  it.todo(
     "Requesting screen recording permission opens System Preferences to Screen Recording",
   );
-  it.skip("Requesting microphone permission triggers the OS prompt");
-  it.skip("Requesting camera permission triggers the OS prompt");
-  it.skip(
+  it.todo("Requesting microphone permission triggers the OS prompt");
+  it.todo("Requesting camera permission triggers the OS prompt");
+  it.todo(
     "Permission status reflects actual system state after granting/denying",
   );
-  it.skip(
+  it.todo(
     "Permissions settings UI shows correct granted/denied state per permission",
   );
-  it.skip(
+  it.todo(
     "checkFeaturePermissions returns missing=[] once all required permissions are granted",
   );
-  it.skip(
+  it.todo(
     "Shell permission disabled via setShellEnabled(false) is respected immediately",
   );
 });
 
 describe.skip("INTERACTIVE: Deep links and URL schemes", () => {
-  it.skip(
+  it.todo(
     "Opening milady:// URL from browser triggers the app's open-url handler",
   );
-  it.skip("Deep link payload is forwarded to the renderer via RPC");
-  it.skip(
+  it.todo("Deep link payload is forwarded to the renderer via RPC");
+  it.todo(
     "Deep link received while app is closed causes app to launch and handle the link",
   );
-  it.skip(
+  it.todo(
     "Deep link received while app is open does not launch a second instance",
   );
-  it.skip("Malformed deep link URL does not crash the app");
+  it.todo("Malformed deep link URL does not crash the app");
 });
 
 describe.skip("INTERACTIVE: Context menu", () => {
-  it.skip(
+  it.todo(
     "Right-clicking selected text shows context menu with 'Ask Agent' option",
   );
-  it.skip("'Ask Agent' menu item sends selected text to the agent via RPC");
-  it.skip("Context menu 'Save as...' triggers save-as flow");
-  it.skip("Context menu 'Share' opens native share sheet");
-  it.skip("Context menu closes when clicking elsewhere");
-  it.skip("Context menu appears at cursor position");
+  it.todo("'Ask Agent' menu item sends selected text to the agent via RPC");
+  it.todo("Context menu 'Save as...' triggers save-as flow");
+  it.todo("Context menu 'Share' opens native share sheet");
+  it.todo("Context menu closes when clicking elsewhere");
+  it.todo("Context menu appears at cursor position");
 });
 
 describe.skip("INTERACTIVE: Global keyboard shortcuts", () => {
-  it.skip(
+  it.todo(
     "Registering a global shortcut triggers callback when pressed from any app",
   );
-  it.skip("Unregistering a shortcut stops it from firing");
-  it.skip(
+  it.todo("Unregistering a shortcut stops it from firing");
+  it.todo(
     "Registering a shortcut already in use by the OS returns registered: false",
   );
-  it.skip("unregisterAllShortcuts clears all registered shortcuts");
-  it.skip("Shortcuts survive window focus changes");
-  it.skip(
-    "Shortcut accelerator strings follow Electron format (CmdOrCtrl, Alt, Shift)",
+  it.todo("unregisterAllShortcuts clears all registered shortcuts");
+  it.todo("Shortcuts survive window focus changes");
+  it.todo(
+    "Shortcut accelerator strings follow the legacy desktop accelerator format (CmdOrCtrl, Alt, Shift)",
   );
 });
 
 describe.skip("INTERACTIVE: Auto-launch", () => {
-  it.skip("setAutoLaunch({ enabled: true }) adds the app to login items");
-  it.skip(
+  it.todo("setAutoLaunch({ enabled: true }) adds the app to login items");
+  it.todo(
     "App launches automatically after system restart when auto-launch is enabled",
   );
-  it.skip("setAutoLaunch({ enabled: false }) removes the app from login items");
-  it.skip(
+  it.todo("setAutoLaunch({ enabled: false }) removes the app from login items");
+  it.todo(
     "getAutoLaunchStatus returns { enabled: true } when auto-launch is set",
   );
-  it.skip(
+  it.todo(
     "getAutoLaunchStatus returns { enabled: false } after disabling auto-launch",
   );
-  it.skip("Auto-launch survives app updates without needing to be re-enabled");
+  it.todo("Auto-launch survives app updates without needing to be re-enabled");
 });
 
 describe.skip("INTERACTIVE: Clipboard", () => {
-  it.skip(
+  it.todo(
     "Writing text to clipboard and reading it back returns the same string",
   );
-  it.skip(
+  it.todo(
     "Writing an image to clipboard and reading it back returns base64 data",
   );
-  it.skip("Clipboard read returns null when clipboard is empty");
-  it.skip("Clipboard operations work when app is in background");
-  it.skip("Reading clipboard image format returns a valid PNG");
+  it.todo("Clipboard read returns null when clipboard is empty");
+  it.todo("Clipboard operations work when app is in background");
+  it.todo("Reading clipboard image format returns a valid PNG");
 });
 
 describe.skip("INTERACTIVE: Power state and battery", () => {
-  it.skip("getPowerState returns { onBattery, percent } with correct types");
-  it.skip(
+  it.todo("getPowerState returns { onBattery, percent } with correct types");
+  it.todo(
     "Power state reflects actual battery status on battery-powered devices",
   );
-  it.skip("Power state shows plugged-in when device is charging");
-  it.skip("Power state percent is between 0 and 100");
+  it.todo("Power state shows plugged-in when device is charging");
+  it.todo("Power state percent is between 0 and 100");
 });
 
 describe.skip("INTERACTIVE: Application menu", () => {
-  it.skip(
+  it.todo(
     "Application menu shows Milady, Edit, View, Window menus in macOS menu bar",
   );
-  it.skip("Milady > Check for Updates triggers the updater flow");
-  it.skip("Milady > Quit Milady exits the app cleanly");
-  it.skip(
+  it.todo("Milady > Check for Updates triggers the updater flow");
+  it.todo("Milady > Quit Milady exits the app cleanly");
+  it.todo(
     "Edit menu contains standard text editing items (Cut, Copy, Paste, Select All)",
   );
-  it.skip("View menu Reload action reloads the renderer window");
-  it.skip("View menu Toggle DevTools opens/closes browser devtools");
-  it.skip("Window menu Minimize minimizes the main window");
-  it.skip("Window menu Close Window closes the main window");
-  it.skip("Keyboard shortcut Cmd+Q triggers quit");
-  it.skip("Keyboard shortcut Cmd+R triggers reload");
-  it.skip("Keyboard shortcut Cmd+Option+I opens devtools");
+  it.todo("View menu Reload action reloads the renderer window");
+  it.todo("View menu Toggle DevTools opens/closes browser devtools");
+  it.todo("Window menu Minimize minimizes the main window");
+  it.todo("Window menu Close Window closes the main window");
+  it.todo("Keyboard shortcut Cmd+Q triggers quit");
+  it.todo("Keyboard shortcut Cmd+R triggers reload");
+  it.todo("Keyboard shortcut Cmd+Option+I opens devtools");
 });
 
 describe.skip("INTERACTIVE: Gateway discovery (mDNS)", () => {
-  it.skip("startDiscovery finds local gateway instances on the same network");
-  it.skip("Discovered gateways include host, port, and name fields");
-  it.skip("stopDiscovery clears the discovered gateways list");
-  it.skip("Gateway discovery sends gatewayDiscovery push event to renderer");
-  it.skip("Gateway discovery gracefully handles network changes");
-  it.skip(
+  it.todo("startDiscovery finds local gateway instances on the same network");
+  it.todo("Discovered gateways include host, port, and name fields");
+  it.todo("stopDiscovery clears the discovered gateways list");
+  it.todo("Gateway discovery sends gatewayDiscovery push event to renderer");
+  it.todo("Gateway discovery gracefully handles network changes");
+  it.todo(
     "If no local gateways are running, discovery returns empty list (not crash)",
   );
 });
 
 describe.skip("INTERACTIVE: Canvas windows (computer-use / A2UI)", () => {
-  it.skip("canvasCreateWindow creates a visible BrowserWindow");
-  it.skip("canvasNavigate loads the given URL in the canvas window");
-  it.skip("canvasSnapshot returns a base64 PNG of the canvas window content");
-  it.skip(
+  it.todo("canvasCreateWindow creates a visible BrowserWindow");
+  it.todo("canvasNavigate loads the given URL in the canvas window");
+  it.todo("canvasSnapshot returns a base64 PNG of the canvas window content");
+  it.todo(
     "canvasEval executes JavaScript in the canvas window and returns the result",
   );
-  it.skip("canvasHide moves the canvas window off-screen (invisible)");
-  it.skip("canvasShow restores the canvas window to its saved position");
-  it.skip("canvasResize changes window dimensions to given width/height");
-  it.skip("a2uiPush calls window.miladyA2UI.push() in the canvas page");
-  it.skip("a2uiReset calls window.miladyA2UI.reset() in the canvas page");
-  it.skip(
+  it.todo("canvasHide moves the canvas window off-screen (invisible)");
+  it.todo("canvasShow restores the canvas window to its saved position");
+  it.todo("canvasResize changes window dimensions to given width/height");
+  it.todo("a2uiPush calls window.miladyA2UI.push() in the canvas page");
+  it.todo("a2uiReset calls window.miladyA2UI.reset() in the canvas page");
+  it.todo(
     "canvasDestroyWindow closes and removes the window from the registry",
   );
-  it.skip("canvasListWindows returns all currently open canvas windows");
-  it.skip("Canvas window is sandboxed — cannot access main app origin");
-  it.skip("Canvas navigate blocks external URLs (non-localhost, non-file)");
-  it.skip("Canvas eval blocks execution when canvas URL is external");
+  it.todo("canvasListWindows returns all currently open canvas windows");
+  it.todo("Canvas window is sandboxed — cannot access main app origin");
+  it.todo("Canvas navigate blocks external URLs (non-localhost, non-file)");
+  it.todo("Canvas eval blocks execution when canvas URL is external");
 });
 
 describe.skip("INTERACTIVE: Agent lifecycle", () => {
-  it.skip("Agent starts within 10 seconds of app launch");
-  it.skip("Agent status transitions: not_started → starting → running");
-  it.skip("Agent status push event fires on each state change");
-  it.skip("Agent port is reachable via HTTP after status reaches 'running'");
-  it.skip("Agent stop transitions status to 'stopped'");
-  it.skip("Agent restart starts a new process with the same port");
-  it.skip("Agent crash triggers status update with error field");
-  it.skip("Agent is automatically restarted after crash (if configured)");
-  it.skip(
+  it.todo("Agent starts within 10 seconds of app launch");
+  it.todo("Agent status transitions: not_started → starting → running");
+  it.todo("Agent status push event fires on each state change");
+  it.todo("Agent port is reachable via HTTP after status reaches 'running'");
+  it.todo("Agent stop transitions status to 'stopped'");
+  it.todo("Agent restart starts a new process with the same port");
+  it.todo("Agent crash triggers status update with error field");
+  it.todo("Agent is automatically restarted after crash (if configured)");
+  it.todo(
     "Stopping agent while it is still starting does not leave zombie process",
   );
 });
 
 describe.skip("INTERACTIVE: Updater", () => {
-  it.skip(
+  it.todo(
     "Check for updates contacts the release server and returns update info",
   );
-  it.skip("Available update shows version number and release notes");
-  it.skip("Downloading update shows progress events in renderer");
-  it.skip("Downloaded update is verified before applying");
-  it.skip("Applying update relaunches the app with the new version");
-  it.skip("If already on latest version, 'no update available' is shown");
-  it.skip("Update check works on both canary and stable channels");
-  it.skip(
+  it.todo("Available update shows version number and release notes");
+  it.todo("Downloading update shows progress events in renderer");
+  it.todo("Downloaded update is verified before applying");
+  it.todo("Applying update relaunches the app with the new version");
+  it.todo("If already on latest version, 'no update available' is shown");
+  it.todo("Update check works on both canary and stable channels");
+  it.todo(
     "Failed download surfaces an error to the renderer (does not silently fail)",
   );
 });

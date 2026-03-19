@@ -61,8 +61,8 @@ const isNative = Capacitor.isNativePlatform();
 const isIOS = platform === "ios";
 const isAndroid = platform === "android";
 
-function isElectronPlatform(): boolean {
-  return platform === "electron" || isElectrobunRuntime();
+function isDesktopPlatform(): boolean {
+  return isElectrobunRuntime();
 }
 
 function isWebPlatform(): boolean {
@@ -135,7 +135,7 @@ async function initializePlatform(): Promise<void> {
   initializeCapacitorBridge();
 
   if (isIOS || isAndroid) {
-    // Configure status bar for mobile platforms (not available on Electron)
+    // Configure status bar for mobile platforms (not available on desktop)
     await initializeStatusBar();
 
     // Configure keyboard behavior
@@ -145,11 +145,11 @@ async function initializePlatform(): Promise<void> {
     initializeAppLifecycle();
   }
 
-  if (isElectronPlatform()) {
-    // Electron-specific initialization
-    await initializeElectron();
+  if (isDesktopPlatform()) {
+    // Electrobun-specific initialization
+    await initializeDesktopShell();
   } else {
-    // On Electron the main process owns runtime startup; avoid an extra early
+    // On desktop the main process owns runtime startup; avoid an extra early
     // plugin status probe that can race backend boot and spam fetch errors.
     await initializeAgent();
   }
@@ -311,17 +311,17 @@ function handleDeepLink(url: string): void {
 }
 
 /**
- * Initialize Electron-specific features
+ * Initialize desktop shell-specific features
  */
-async function initializeElectron(): Promise<void> {
-  document.body.classList.add("electron");
+async function initializeDesktopShell(): Promise<void> {
+  document.body.classList.add("desktop");
 
   try {
     const version = await Desktop.getVersion();
     const desktopNativeReady =
-      typeof version.electron === "string" &&
-      version.electron !== "N/A" &&
-      version.electron !== "unknown";
+      typeof version.runtime === "string" &&
+      version.runtime !== "N/A" &&
+      version.runtime !== "unknown";
     if (!desktopNativeReady) {
       return;
     }
@@ -417,7 +417,7 @@ function isPopoutWindow(): boolean {
 
 /**
  * In popout mode, inject the API base from the URL query string so the
- * client can connect without the Electron main-process injection.
+ * client can connect without the desktop main-process injection.
  */
 function injectPopoutApiBase(): void {
   const params = new URLSearchParams(
@@ -503,7 +503,7 @@ if (document.readyState === "loading") {
 // Export platform utilities for use by other modules
 export {
   isAndroid,
-  isElectronPlatform as isElectron,
+  isDesktopPlatform as isDesktop,
   isIOS,
   isNative,
   isWebPlatform as isWeb,
