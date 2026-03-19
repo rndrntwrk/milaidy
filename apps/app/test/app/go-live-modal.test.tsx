@@ -325,6 +325,49 @@ describe("GoLiveModal", () => {
     expect(app.loadPlugins).toHaveBeenCalledTimes(1);
   });
 
+  it("shows a loading state instead of false stream unavailability while plugins are refreshing", async () => {
+    let resolveLoad: (() => void) | null = null;
+    const app = makeAppContext({
+      plugins: [],
+      loadPlugins: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveLoad = resolve;
+          }),
+      ),
+    });
+    mockBuildStream555StatusSummary.mockImplementation(() =>
+      makeSummary({
+        authState: "wallet_enabled",
+        authMode: "Wallet auth",
+        readyDestinations: 0,
+        enabledDestinations: 0,
+        destinations: [],
+      }),
+    );
+    mockUseApp.mockReturnValue(app);
+
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GoLiveModal));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expectText(tree.root, "Loading 555 Stream");
+    expect(
+      tree.root.findAll((node) =>
+        collectNodeText(node.children).includes("555 Stream unavailable"),
+      ),
+    ).toHaveLength(0);
+    expect(findButtonByText(tree.root, "Continue").props.disabled).toBe(true);
+
+    await act(async () => {
+      resolveLoad?.();
+      await Promise.resolve();
+    });
+  });
+
   it("keeps setup gating in place until auth and ready destinations exist", async () => {
     const summary = makeSummary({
       authState: "wallet_enabled",

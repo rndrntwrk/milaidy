@@ -217,6 +217,7 @@ export function GoLiveModal() {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
   const [inlineNotice, setInlineNotice] = useState<InlineNotice | null>(null);
+  const [streamPluginLoading, setStreamPluginLoading] = useState(false);
 
   const streamPlugin = useMemo(
     () => plugins.find((plugin) => isStream555PrimaryPlugin(plugin.id)) ?? null,
@@ -226,6 +227,7 @@ export function GoLiveModal() {
     () => buildStream555StatusSummary(streamPlugin?.parameters ?? []),
     [streamPlugin?.parameters],
   );
+  const waitingForStreamPlugin = goLiveModalOpen && !streamPlugin && streamPluginLoading;
   const setupRequired =
     !streamPlugin ||
     summary.authState !== "connected" ||
@@ -295,8 +297,20 @@ export function GoLiveModal() {
   );
 
   useEffect(() => {
-    if (!goLiveModalOpen || streamPlugin) return;
-    void loadPlugins();
+    if (!goLiveModalOpen || streamPlugin) {
+      setStreamPluginLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setStreamPluginLoading(true);
+    void loadPlugins().finally(() => {
+      if (!cancelled) {
+        setStreamPluginLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [goLiveModalOpen, loadPlugins, streamPlugin]);
 
   useLayoutEffect(() => {
@@ -567,30 +581,46 @@ export function GoLiveModal() {
         <Card className="rounded-[24px] border-white/10 bg-white/[0.04] p-4">
           <div className="text-[10px] uppercase tracking-[0.22em] text-white/42">Auth</div>
           <div className="mt-2 text-lg font-semibold text-white">
-            {summary.authState === "connected"
-              ? "Connected"
-              : summary.authState === "wallet_enabled"
-                ? "Wallet auth ready"
-                : "Authentication required"}
+            {waitingForStreamPlugin
+              ? "Checking runtime"
+              : summary.authState === "connected"
+                ? "Connected"
+                : summary.authState === "wallet_enabled"
+                  ? "Wallet auth ready"
+                  : "Authentication required"}
           </div>
-          <div className="mt-1 text-sm text-white/58">{summary.authMode}</div>
+          <div className="mt-1 text-sm text-white/58">
+            {waitingForStreamPlugin ? "Fetching 555 Stream status" : summary.authMode}
+          </div>
         </Card>
         <Card className="rounded-[24px] border-white/10 bg-white/[0.04] p-4">
           <div className="text-[10px] uppercase tracking-[0.22em] text-white/42">Ready channels</div>
           <div className="mt-2 text-lg font-semibold text-white">
-            {summary.readyDestinations}/{summary.enabledDestinations || summary.destinations.length}
+            {waitingForStreamPlugin
+              ? "..."
+              : `${summary.readyDestinations}/${summary.enabledDestinations || summary.destinations.length}`}
           </div>
           <div className="mt-1 text-sm text-white/58">
-            {summary.savedDestinations} destination keys saved
+            {waitingForStreamPlugin
+              ? "Checking destination sync"
+              : `${summary.savedDestinations} destination keys saved`}
           </div>
         </Card>
         <Card className="rounded-[24px] border-white/10 bg-white/[0.04] p-4">
           <div className="text-[10px] uppercase tracking-[0.22em] text-white/42">Preferred chain</div>
           <div className="mt-2 text-lg font-semibold text-white">
-            {summary.preferredChain === "evm" ? "Ethereum fallback" : "Solana"}
+            {waitingForStreamPlugin
+              ? "Checking"
+              : summary.preferredChain === "evm"
+                ? "Ethereum fallback"
+                : "Solana"}
           </div>
           <div className="mt-1 text-sm text-white/58">
-            {summary.walletProvisionAllowed ? "Provision allowed" : "Provision disabled"}
+            {waitingForStreamPlugin
+              ? "Awaiting runtime response"
+              : summary.walletProvisionAllowed
+                ? "Provision allowed"
+                : "Provision disabled"}
           </div>
         </Card>
       </div>
@@ -601,7 +631,9 @@ export function GoLiveModal() {
           {streamPlugin ? <Badge variant="outline">{streamPlugin.name}</Badge> : null}
         </div>
         <div className="mt-3 text-sm leading-relaxed text-white/68">
-          Configure authentication and at least one ready destination here. You do not need to leave the stage to finish Stream555 onboarding.
+          {waitingForStreamPlugin
+            ? "Checking the live runtime for 555 Stream controls and destination readiness."
+            : "Configure authentication and at least one ready destination here. You do not need to leave the stage to finish Stream555 onboarding."}
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
@@ -609,7 +641,7 @@ export function GoLiveModal() {
             variant="secondary"
             size="sm"
             className="rounded-full"
-            disabled={Boolean(busyAction)}
+            disabled={Boolean(busyAction) || waitingForStreamPlugin}
             onClick={() =>
               void executeStreamSetupAction(
                 "wallet-login",
@@ -629,7 +661,7 @@ export function GoLiveModal() {
               variant="outline"
               size="sm"
               className="rounded-full"
-              disabled={Boolean(busyAction)}
+              disabled={Boolean(busyAction) || waitingForStreamPlugin}
               onClick={() =>
                 void executeStreamSetupAction(
                   "wallet-provision",
@@ -648,10 +680,13 @@ export function GoLiveModal() {
             variant="ghost"
             size="sm"
             className="rounded-full"
-            disabled={Boolean(busyAction)}
-            onClick={() => void loadPlugins()}
+            disabled={Boolean(busyAction) || waitingForStreamPlugin}
+            onClick={() => {
+              setStreamPluginLoading(true);
+              void loadPlugins().finally(() => setStreamPluginLoading(false));
+            }}
           >
-            Refresh status
+            {waitingForStreamPlugin ? "Refreshing..." : "Refresh status"}
           </Button>
         </div>
 
@@ -911,6 +946,8 @@ export function GoLiveModal() {
                 </Badge>
                 <span>{streamPlugin.name}</span>
               </>
+            ) : waitingForStreamPlugin ? (
+              <Badge variant="warning">Loading 555 Stream</Badge>
             ) : (
               <Badge variant="danger">555 Stream unavailable</Badge>
             )}
@@ -943,6 +980,7 @@ export function GoLiveModal() {
                 variant="default"
                 size="sm"
                 className="rounded-full"
+                disabled={waitingForStreamPlugin}
                 onClick={() => void handleContinueFromSetup()}
               >
                 Continue
