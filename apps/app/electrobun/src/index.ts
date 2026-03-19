@@ -382,21 +382,14 @@ async function startRendererServer(): Promise<string> {
     ".gltf": "model/gltf+json",
   };
 
-  // Determine the expected agent API base URL so we can inject it into the
-  // HTML before the renderer JS runs. This prevents a 404 fatal-error loop
-  // where the renderer fetches /api/auth/status relative to the static server.
-  // If the agent falls back to a dynamic port, apiBaseUpdate messages will
-  // update window.__MILADY_API_BASE__ and the client will pick it up lazily.
-  const initialApiBase = resolveInitialApiBase(
-    process.env as Record<string, string | undefined>,
-  );
+  // The renderer server now reverse-proxies /api/* to the agent, so the
+  // frontend can use relative paths (same origin). We still inject the base
+  // URL pointing to self so legacy code that reads __MILADY_API_BASE__ works.
+  const selfBase = `http://127.0.0.1:${port}`;
 
   // Inject the API base into index.html so it's available before React mounts.
   function injectApiBaseIntoHtml(html: string): string {
-    if (!initialApiBase) {
-      return html;
-    }
-    const script = `<script>window.__MILADY_API_BASE__=${JSON.stringify(initialApiBase)};</script>`;
+    const script = `<script>window.__MILADY_API_BASE__=${JSON.stringify(selfBase)};</script>`;
     // Inject before </head> if present, otherwise before <body>
     if (html.includes("</head>")) {
       return html.replace("</head>", `${script}</head>`);
@@ -407,12 +400,57 @@ async function startRendererServer(): Promise<string> {
     return script + html;
   }
 
+  // Resolve the agent API port for reverse-proxying /api/* requests.
+  // This keeps the renderer and API on the same origin (5174) so
+  // WKWebView doesn't block cross-origin fetches.
+  const agentPort = Number(process.env.MILADY_PORT) || 2138;
+  const agentBase = `http://127.0.0.1:${agentPort}`;
+
   Bun.serve({
     port,
     hostname: "127.0.0.1",
-    fetch(req) {
-      const urlPath =
-        new URL(req.url).pathname.replace(/^\//, "") || "index.html";
+    async fetch(req) {
+      const url = new URL(req.url);
+
+      // Reverse-proxy /api/* and /ws to the agent backend
+      if (url.pathname.startsWith("/api/") || url.pathname === "/ws") {
+        try {
+          const target = `${agentBase}${url.pathname}${url.search}`;
+          const proxyRes = await fetch(target, {
+            method: req.method,
+            headers: req.headers,
+            body: req.method !== "GET" && req.method !== "HEAD" ? req.body : undefined,
+            redirect: "manual",
+          });
+          const resHeaders = new Headers(proxyRes.headers);
+          resHeaders.set("Access-Control-Allow-Origin", "*");
+          return new Response(proxyRes.body, {
+            status: proxyRes.status,
+            statusText: proxyRes.statusText,
+            headers: resHeaders,
+          });
+        } catch {
+          return new Response(JSON.stringify({ error: "Agent unavailable" }), {
+            status: 502,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      // Handle CORS preflight for /api/*
+      if (req.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Milady-Token, X-Api-Key",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
+
+      const urlPath = url.pathname.replace(/^\//, "") || "index.html";
       let filePath = path.join(rendererDir, urlPath);
       // Path traversal guard: ensure resolved path stays within rendererDir
       if (
@@ -428,7 +466,7 @@ async function startRendererServer(): Promise<string> {
       try {
         const content = fs.readFileSync(filePath);
         const ext = path.extname(filePath);
-        // Inject API base into HTML responses
+        // Inject API base into HTML responses — point to self (same origin)
         if (ext === ".html" || filePath.endsWith("index.html")) {
           const html = injectApiBaseIntoHtml(content.toString("utf8"));
           return new Response(html, {
@@ -891,6 +929,17 @@ async function startAgent(win: BrowserWindow): Promise<void> {
       `[Main] Skipping embedded agent startup (${runtimeResolution.mode} mode)`,
     );
     injectApiBase(win);
+    return;
+  }
+
+  // In dev-platform mode, the API server runs externally — skip spawning
+  // a second agent child process to avoid double-backend conflicts.
+  if (process.env.MILADY_DESKTOP_SKIP_AGENT === "1") {
+    const devPort = Number(process.env.MILADY_PORT) || 31337;
+    console.log(
+      `[Main] Skipping embedded agent (MILADY_DESKTOP_SKIP_AGENT=1), using external API on port ${devPort}`,
+    );
+    pushApiBaseToRenderer(win, `http://127.0.0.1:${devPort}`);
     return;
   }
 

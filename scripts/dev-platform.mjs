@@ -52,7 +52,15 @@ const services = [
     cmd: "bun",
     args: ["run", "dev"],
     cwd: electrobunDir,
-    env: { ELECTROBUN_SKIP_CODESIGN: "1" },
+    env: {
+      ELECTROBUN_SKIP_CODESIGN: "1",
+      // Point the renderer at the dev API server (31337) instead of the
+      // packaged agent child (2138) to avoid double-backend conflicts.
+      MILADY_PORT: "31337",
+      // Tell the electrobun shell not to spawn its own agent child process
+      // since dev-platform already runs the API server externally.
+      MILADY_DESKTOP_SKIP_AGENT: "1",
+    },
   },
 ];
 
