@@ -11,7 +11,8 @@
       "name": "dev-ui-only",
       "runtimeExecutable": "/bin/zsh",
       "runtimeArgs": ["-l", "-c", "npm run dev:ui"],
-      "port": 2138
+      "port": 2138,
+      "autoPort": false
     },
     {
       "name": "home",

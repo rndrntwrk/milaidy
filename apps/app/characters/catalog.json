@@ -66,7 +66,7 @@
       "catchphrase": "I'm online and ready.",
       "name": "Kei",
       "avatarAssetId": 3,
-      "voicePresetId": "lily"
+      "voicePresetId": "josh"
     },
     {
       "catchphrase": "I'm ready to assist.",
@@ -78,7 +78,7 @@
       "catchphrase": "Let's build something fun.",
       "name": "Rin",
       "avatarAssetId": 5,
-      "voicePresetId": "gigi"
+      "voicePresetId": "matilda"
     },
     {
       "catchphrase": "I am ready when you are.",
@@ -90,13 +90,13 @@
       "catchphrase": "Show me what we're building.",
       "name": "Satoshi",
       "avatarAssetId": 7,
-      "voicePresetId": "callum"
+      "voicePresetId": "brian"
     },
     {
       "catchphrase": "Let's figure this out together.",
       "name": "Yuki",
       "avatarAssetId": 8,
-      "voicePresetId": "nova"
+      "voicePresetId": "lily"
     }
   ]
 }

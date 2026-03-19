@@ -1451,7 +1451,7 @@ export const CHARACTER_PRESET_META: Record<
   "I'm online and ready.": {
     name: "Kei",
     avatarIndex: 3,
-    voicePresetId: "lily",
+    voicePresetId: "josh",
     catchphrase: "I'm online and ready.",
   },
   "I'm ready to assist.": {
@@ -1463,7 +1463,7 @@ export const CHARACTER_PRESET_META: Record<
   "Let's build something fun.": {
     name: "Rin",
     avatarIndex: 5,
-    voicePresetId: "gigi",
+    voicePresetId: "matilda",
     catchphrase: "Let's build something fun.",
   },
   "I am ready when you are.": {
@@ -1475,13 +1475,13 @@ export const CHARACTER_PRESET_META: Record<
   "Show me what we're building.": {
     name: "Satoshi",
     avatarIndex: 7,
-    voicePresetId: "callum",
+    voicePresetId: "brian",
     catchphrase: "Show me what we're building.",
   },
   "Let's figure this out together.": {
     name: "Yuki",
     avatarIndex: 8,
-    voicePresetId: "nova",
+    voicePresetId: "lily",
     catchphrase: "Let's figure this out together.",
   },
 };

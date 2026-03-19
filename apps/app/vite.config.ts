@@ -120,20 +120,18 @@ function publicSrcPlugin(): Plugin {
  * version so CharacterView picks up the correct preset meta (catchphrases,
  * avatar indices, character names).
  */
-function characterRosterOverridePlugin(): Plugin {
+function characterOverridePlugin(): Plugin {
   const miladyRoster = path.resolve(here, "src/components/CharacterRoster.tsx");
+  const miladyEditor = path.resolve(here, "src/components/CharacterEditor.tsx");
   return {
-    name: "milady-character-roster-override",
+    name: "milady-character-override",
     enforce: "pre",
     resolveId(source, importer) {
-      if (
-        source === "./CharacterRoster" &&
-        importer &&
-        importer.includes("app-core") &&
-        importer.includes("components/")
-      ) {
-        return miladyRoster;
-      }
+      if (!importer || !importer.includes("app-core")) return;
+      if (!importer.includes("components/") && !importer.includes("App.tsx"))
+        return;
+      if (source === "./CharacterRoster") return miladyRoster;
+      if (source === "./CharacterView") return miladyEditor;
     },
   };
 }
@@ -162,7 +160,7 @@ export default defineConfig({
   base: "./",
   publicDir: path.resolve(here, "public"),
   plugins: [
-    characterRosterOverridePlugin(),
+    characterOverridePlugin(),
     publicSrcPlugin(),
     sparkWasmDataUrlPlugin(),
     tailwindcss(),

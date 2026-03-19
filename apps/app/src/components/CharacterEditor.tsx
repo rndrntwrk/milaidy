@@ -164,8 +164,10 @@ function buildCharacterDraftFromPreset(entry: CharacterRosterEntry) {
 
 export function CharacterEditor({
   sceneOverlay: _sceneOverlay = false,
+  inModal: _inModal = false,
 }: {
   sceneOverlay?: boolean;
+  inModal?: boolean;
 } = {}) {
   const {
     tab,
@@ -334,7 +336,7 @@ export function CharacterEditor({
             setSelectedVoicePresetId(preset?.id ?? null);
           }
         }
-      } catch {}
+      } catch { }
       setVoiceLoading(false);
     })();
   }, []);
@@ -403,7 +405,7 @@ export function CharacterEditor({
           });
         }, 800);
         // Speak the catchphrase via TTS
-        void client.streamVoiceSpeak(entry.catchphrase).catch(() => {});
+        void client.streamVoiceSpeak(entry.catchphrase).catch(() => { });
       }
     },
     [
@@ -580,7 +582,7 @@ export function CharacterEditor({
               if (parsed.chat) handleStyleEdit("chat", parsed.chat.join("\n"));
               if (parsed.post) handleStyleEdit("post", parsed.post.join("\n"));
             }
-          } catch {}
+          } catch { }
         } else if (field === "chatExamples") {
           try {
             const parsed = JSON.parse(generated);
@@ -594,7 +596,7 @@ export function CharacterEditor({
               }));
               handleFieldEdit("messageExamples", formatted);
             }
-          } catch {}
+          } catch { }
         } else if (field === "postExamples") {
           try {
             const parsed = JSON.parse(generated);
@@ -608,9 +610,9 @@ export function CharacterEditor({
                 handleCharacterArrayInput("postExamples", parsed.join("\n"));
               }
             }
-          } catch {}
+          } catch { }
         }
-      } catch {}
+      } catch { }
       setGenerating(null);
     },
     [
@@ -708,18 +710,12 @@ export function CharacterEditor({
       )}
 
       {/* ── Mobile page tabs (when customizing) ────────────────────── */}
+      {/* Identity (left panel) always shows; these tabs toggle the right panel content */}
       {customizing && (
         <div className="ce-page-tabs">
           <button
             type="button"
-            className={`ce-page-tab ${mobilePage === "identity" ? "ce-page-tab--active" : ""}`}
-            onClick={() => setMobilePage("identity")}
-          >
-            Identity
-          </button>
-          <button
-            type="button"
-            className={`ce-page-tab ${mobilePage === "style" ? "ce-page-tab--active" : ""}`}
+            className={`ce-page-tab ${mobilePage === "style" || mobilePage === "identity" ? "ce-page-tab--active" : ""}`}
             onClick={() => setMobilePage("style")}
           >
             Style Rules
@@ -738,22 +734,71 @@ export function CharacterEditor({
         <div className="ce-panels">
           {/* ── LEFT PANEL ────────────────────────────────────────────── */}
           <div
-            className={`ce-panel ce-panel-left ${mobilePage !== "identity" ? "ce-panel--hidden" : ""}`}
+            className="ce-panel ce-panel-left"
           >
-            {/* Name */}
+            {/* Name + Voice (50/50 split) */}
             <section className="ce-section">
-              <div className="ce-section-header">
-                <span className="ce-label">Name</span>
+              <div className="ce-name-voice-row">
+                <div className="ce-name-voice-col">
+                  <div className="ce-section-header">
+                    <span className="ce-label">Name</span>
+                  </div>
+                  <Input
+                    type="text"
+                    value={d.name ?? ""}
+                    placeholder="Agent name"
+                    onChange={(
+                      e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+                    ) => handleFieldEdit("name", e.target.value)}
+                    className="ce-input"
+                  />
+                </div>
+                <div className="ce-name-voice-col">
+                  <div className="ce-section-header">
+                    <span className="ce-label">Voice</span>
+                  </div>
+                  <div className="ce-voice-inline">
+                    <ThemedSelect
+                      value={voiceSelectValue}
+                      groups={VOICE_SELECT_GROUPS}
+                      onChange={(id: string) => {
+                        const preset = PREMADE_VOICES.find((p) => p.id === id);
+                        if (preset) handleSelectPreset(preset);
+                      }}
+                      placeholder="Select a voice"
+                      menuPlacement="bottom"
+                      className="ce-voice-inline-select"
+                      triggerClassName="h-8 rounded-md border-border/50 bg-bg/65 px-3 py-0 text-[11px] shadow-inner backdrop-blur-sm"
+                      menuClassName="border-border/60 bg-bg/92 shadow-2xl backdrop-blur-md"
+                    />
+                    <Button
+                      type="button"
+                      variant={voiceTesting ? "destructive" : "outline"}
+                      size="icon"
+                      className="ce-voice-test-btn"
+                      onClick={() => {
+                        if (voiceTesting) {
+                          handleStopTest();
+                        } else if (activeCharacterRosterEntry?.catchphrase) {
+                          setVoiceTesting(true);
+                          void client
+                            .streamVoiceSpeak(activeCharacterRosterEntry.catchphrase)
+                            .then(() => setVoiceTesting(false))
+                            .catch(() => setVoiceTesting(false));
+                        }
+                      }}
+                      aria-label={voiceTesting ? "Stop voice preview" : "Preview voice"}
+                      disabled={!activeVoicePreset || voiceLoading}
+                    >
+                      {voiceTesting ? (
+                        <VolumeX className="h-3.5 w-3.5" />
+                      ) : (
+                        <Volume2 className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
               </div>
-              <Input
-                type="text"
-                value={d.name ?? ""}
-                placeholder="Agent name"
-                onChange={(
-                  e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-                ) => handleFieldEdit("name", e.target.value)}
-                className="ce-input"
-              />
             </section>
 
             {/* Bio / About Me */}
@@ -810,7 +855,7 @@ export function CharacterEditor({
 
           {/* ── RIGHT PANEL ───────────────────────────────────────────── */}
           <div
-            className={`ce-panel ce-panel-right ${mobilePage === "identity" ? "ce-panel--hidden" : ""}`}
+            className="ce-panel ce-panel-right"
           >
             {/* ── Toggle: Style Rules / Examples ───────────────────────── */}
             <div className="ce-right-toggle-row">
@@ -818,14 +863,14 @@ export function CharacterEditor({
                 <button
                   type="button"
                   className={`ce-right-toggle-btn ${rightTab === "style" ? "ce-right-toggle-btn--active" : ""}`}
-                  onClick={() => setRightTab("style")}
+                  onClick={() => { setRightTab("style"); setMobilePage("style"); }}
                 >
                   Style Rules
                 </button>
                 <button
                   type="button"
                   className={`ce-right-toggle-btn ${rightTab === "examples" ? "ce-right-toggle-btn--active" : ""}`}
-                  onClick={() => setRightTab("examples")}
+                  onClick={() => { setRightTab("examples"); setMobilePage("examples"); }}
                 >
                   Examples
                 </button>
@@ -1156,67 +1201,6 @@ export function CharacterEditor({
         )}
 
         <div className="ce-footer-actions">
-          {/* Voice picker */}
-          <div className="ce-voice-picker" data-testid="character-voice-picker">
-            <Button
-              type="button"
-              variant={voiceSelectionLocked ? "default" : "outline"}
-              size="icon"
-              className="ce-voice-lock-btn"
-              onClick={() => setVoiceSelectionLocked((v) => !v)}
-              aria-label={
-                voiceSelectionLocked
-                  ? "Unlock voice selection"
-                  : "Lock voice selection"
-              }
-              title={
-                voiceSelectionLocked
-                  ? "Voice stays pinned when switching characters"
-                  : "Lock current voice"
-              }
-            >
-              {voiceSelectionLocked ? (
-                <Lock className="h-3.5 w-3.5" />
-              ) : (
-                <LockOpen className="h-3.5 w-3.5" />
-              )}
-            </Button>
-            <ThemedSelect
-              value={voiceSelectValue}
-              groups={VOICE_SELECT_GROUPS}
-              onChange={(id: string) => {
-                const preset = PREMADE_VOICES.find((p) => p.id === id);
-                if (preset) handleSelectPreset(preset);
-              }}
-              placeholder="Select a voice"
-              menuPlacement="top"
-              className="w-[11rem] max-w-[58vw]"
-              triggerClassName="h-8 rounded-full border-border/50 bg-bg/65 px-4 py-0 text-[11px] shadow-inner backdrop-blur-sm"
-              menuClassName="border-border/60 bg-bg/92 shadow-2xl backdrop-blur-md"
-            />
-            <Button
-              type="button"
-              variant={voiceTesting ? "destructive" : "outline"}
-              size="icon"
-              className="ce-voice-lock-btn"
-              onClick={() =>
-                voiceTesting
-                  ? handleStopTest()
-                  : activeVoicePreset
-                    ? handleTestVoice(activeVoicePreset.previewUrl)
-                    : undefined
-              }
-              aria-label={voiceTesting ? "Stop voice preview" : "Preview voice"}
-              disabled={!activeVoicePreset || voiceLoading}
-            >
-              {voiceTesting ? (
-                <VolumeX className="h-3.5 w-3.5" />
-              ) : (
-                <Volume2 className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          </div>
-
           {/* Save Character */}
           <Button
             size="sm"
@@ -1224,7 +1208,7 @@ export function CharacterEditor({
             disabled={characterSaving || voiceSaving}
             onClick={() => void handleSaveAll()}
           >
-            {characterSaving || voiceSaving ? "saving..." : "Save Character"}
+            {characterSaving || voiceSaving ? "saving..." : "Save"}
           </Button>
 
           {/* Back to roster — only in customize view */}
@@ -1239,7 +1223,7 @@ export function CharacterEditor({
                 setTab("character-select");
               }}
             >
-              Select Character
+              Select
             </Button>
           )}
 
@@ -1263,3 +1247,9 @@ export function CharacterEditor({
     </div>
   );
 }
+
+/**
+ * Re-export as CharacterView so the upstream App.tsx import resolves here
+ * when the Vite alias redirects ./CharacterView to this file.
+ */
+export { CharacterEditor as CharacterView };

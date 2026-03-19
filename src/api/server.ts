@@ -3,7 +3,7 @@ import http from "node:http";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentRuntime } from "@elizaos/core";
+import type { AgentRuntime, Content } from "@elizaos/core";
 
 // Re-export the full upstream server API.
 export * from "@elizaos/autonomous/api/server";
@@ -135,6 +135,105 @@ interface CompatPluginRecord {
 
 const DATABASE_UNAVAILABLE_MESSAGE =
   "Database not available. The agent may not be running or the database adapter is not initialized.";
+
+/** WeakSet to avoid double-patching the same messageService instance. */
+const patchedMessageServices = new WeakSet<object>();
+
+/**
+ * Wraps `runtime.messageService.handleMessage` so that every message
+ * automatically starts a trajectory (with a step ID), sets that ID on
+ * `message.metadata.trajectoryStepId`, and ends the trajectory when the
+ * handler completes or throws.
+ *
+ * Without this, the core runtime never calls `logLlmCall` because the
+ * required `trajectoryStepId` is never present in the async-local context.
+ */
+function patchMessageServiceForTrajectories(runtime: AgentRuntime): void {
+  const ms = runtime.messageService;
+  if (!ms || typeof ms.handleMessage !== "function") return;
+  if (patchedMessageServices.has(ms as object)) return;
+  patchedMessageServices.add(ms as object);
+
+  const original = ms.handleMessage.bind(ms);
+
+  ms.handleMessage = async (
+    rt: AgentRuntime,
+    message: Parameters<typeof original>[1],
+    callback: (content: Content) => Promise<unknown[]>,
+    options?: Parameters<typeof original>[3],
+  ) => {
+    // Resolve the trajectory logger service (may be registered under
+    // "trajectory_logger" service type).
+    const trajLogger = rt.getService("trajectory_logger") as
+      | {
+          isEnabled?: () => boolean;
+          startTrajectory?: (
+            stepIdOrAgentId: string,
+            options?: {
+              agentId?: string;
+              source?: string;
+              metadata?: Record<string, unknown>;
+            },
+          ) => Promise<string>;
+          endTrajectory?: (
+            stepIdOrTrajectoryId: string,
+            status?: string,
+          ) => Promise<void>;
+        }
+      | null
+      | undefined;
+
+    const isEnabled =
+      trajLogger &&
+      (typeof trajLogger.isEnabled !== "function" || trajLogger.isEnabled());
+
+    let stepId: string | undefined;
+
+    if (isEnabled && typeof trajLogger.startTrajectory === "function") {
+      try {
+        const userText =
+          typeof (message as { content?: { text?: string } }).content?.text ===
+          "string"
+            ? (message as { content: { text: string } }).content.text.slice(
+                0,
+                200,
+              )
+            : "";
+        stepId = await trajLogger.startTrajectory(rt.agentId, {
+          agentId: rt.agentId,
+          source: "chat",
+          metadata: { trigger: userText },
+        });
+      } catch {
+        // Non-fatal — fall through without trajectory tracking.
+      }
+    }
+
+    // Stamp the step ID onto the message metadata so the core runtime's
+    // `handleMessage` → `runWithTrajectoryContext` picks it up.
+    if (stepId) {
+      const msg = message as { metadata?: Record<string, unknown> };
+      msg.metadata = msg.metadata ?? {};
+      msg.metadata.trajectoryStepId = stepId;
+    }
+
+    try {
+      return await original(rt, message, callback, options);
+    } finally {
+      if (
+        stepId &&
+        trajLogger &&
+        typeof trajLogger.endTrajectory === "function"
+      ) {
+        try {
+          await trajLogger.endTrajectory(stepId, "completed");
+        } catch {
+          // Best-effort cleanup.
+        }
+      }
+    }
+  };
+}
 const CAPABILITY_FEATURE_IDS = new Set([
   "vision",
   "browser",
@@ -1208,6 +1307,7 @@ export async function startApiServer(
   try {
     if (compatState.current) {
       await ensureRuntimeSqlCompatibility(compatState.current);
+      patchMessageServiceForTrajectories(compatState.current);
     }
 
     const server = await upstreamStartApiServer(...args);
@@ -1218,6 +1318,7 @@ export async function startApiServer(
     server.updateRuntime = (runtime: AgentRuntime) => {
       compatState.current = runtime;
       void ensureRuntimeSqlCompatibility(runtime);
+      patchMessageServiceForTrajectories(runtime);
       originalUpdateRuntime(runtime);
     };
 
