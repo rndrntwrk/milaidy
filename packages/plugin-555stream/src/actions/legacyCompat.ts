@@ -669,12 +669,21 @@ async function resolveBearerHeaders(
   options?: Record<string, unknown>,
 ): Promise<Record<string, string>> {
   const base = resolveBaseUrl(service, options);
-  const staticBearer =
-    optionString(options, 'bearerToken') ||
-    service.getConfig()?.agentToken ||
-    trimEnv(STREAM555_AGENT_TOKEN_ENV) ||
-    trimEnv(STREAM_API_BEARER_TOKEN_ENV);
-  const token = staticBearer || (await resolveAgentBearer(base));
+  const explicitBearer = optionString(options, 'bearerToken');
+  let token = explicitBearer;
+
+  if (!token && trimEnv(STREAM555_AGENT_API_KEY_ENV)) {
+    token = await resolveAgentBearer(base);
+  }
+
+  if (!token) {
+    token =
+      trimEnv(STREAM555_AGENT_TOKEN_ENV) ||
+      trimEnv(STREAM_API_BEARER_TOKEN_ENV) ||
+      service.getConfig()?.agentToken ||
+      (await resolveAgentBearer(base));
+  }
+
   return {
     Accept: 'application/json',
     'Content-Type': 'application/json',
