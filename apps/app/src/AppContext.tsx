@@ -103,6 +103,7 @@ import {
 import {
   didToolActionSucceed,
   findLastToolEnvelope,
+  getToolActionData,
   getToolActionFailureMessage,
 } from "./components/quickLayerPlan.js";
 import {
@@ -267,6 +268,9 @@ export interface GoLiveLaunchResult {
   followUp?: GoLiveLaunchFollowUp;
 }
 
+const GUIDED_GO_LIVE_STATUS_TIMEOUT_MS = 45_000;
+const GUIDED_GO_LIVE_STATUS_POLL_MS = 1_500;
+
 function labelForGoLiveLaunchMode(mode: GoLiveLaunchMode): string {
   switch (mode) {
     case "camera":
@@ -282,6 +286,153 @@ function labelForGoLiveLaunchMode(mode: GoLiveLaunchMode): string {
     default:
       return "Camera";
   }
+}
+
+type ToolActionDataRecord = Record<string, unknown>;
+
+function readToolActionString(
+  data: ToolActionDataRecord | null,
+  key: string,
+): string | null {
+  const value = data?.[key];
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function readToolActionBoolean(
+  data: ToolActionDataRecord | null,
+  key: string,
+): boolean | null {
+  const value = data?.[key];
+  return typeof value === "boolean" ? value : null;
+}
+
+function readToolActionRecord(
+  data: ToolActionDataRecord | null,
+  key: string,
+): ToolActionDataRecord | null {
+  const value = data?.[key];
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as ToolActionDataRecord)
+    : null;
+}
+
+function formatGuidedBlockedPlatforms(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const labels = value
+    .map((entry) => {
+      if (typeof entry === "string" && entry.trim().length > 0) {
+        return entry.trim();
+      }
+      if (!entry || typeof entry !== "object") return null;
+      const record = entry as ToolActionDataRecord;
+      const platform =
+        readToolActionString(record, "platform") ??
+        readToolActionString(record, "id");
+      const status =
+        readToolActionString(record, "status") ??
+        readToolActionString(record, "outputStatus");
+      const reason =
+        readToolActionString(record, "error") ??
+        readToolActionString(record, "reason");
+      if (!platform) return null;
+      const suffix = [status, reason].filter(Boolean).join(": ");
+      return suffix.length > 0 ? `${platform} (${suffix})` : platform;
+    })
+    .filter((value): value is string => Boolean(value));
+  return labels.length > 0 ? labels.join(", ") : null;
+}
+
+function isGuidedOutputActive(status: string | null): boolean {
+  const normalized = status?.trim().toLowerCase();
+  return (
+    normalized === "active" ||
+    normalized === "connected" ||
+    normalized === "live"
+  );
+}
+
+function isGuidedStreamDelivering(
+  statusData: ToolActionDataRecord | null,
+): boolean {
+  if (!statusData) return false;
+  if (readToolActionString(statusData, "phase") !== "live") return false;
+
+  const cloudflare = readToolActionRecord(statusData, "cloudflare");
+  if (readToolActionBoolean(cloudflare, "isConnected") === false) {
+    return false;
+  }
+
+  const requiredOutputsReady = readToolActionBoolean(
+    statusData,
+    "requiredOutputsReady",
+  );
+  if (requiredOutputsReady === true) return true;
+  if (requiredOutputsReady === false) return false;
+
+  const platforms = readToolActionRecord(statusData, "platforms");
+  if (!platforms) return true;
+  const enabledPlatforms = Object.values(platforms).filter(
+    (platform): platform is ToolActionDataRecord =>
+      Boolean(platform) &&
+      typeof platform === "object" &&
+      !Array.isArray(platform) &&
+      Boolean((platform as ToolActionDataRecord).enabled),
+  );
+  if (enabledPlatforms.length === 0) return true;
+
+  return enabledPlatforms.every((platform) => {
+    const deliveryState = readToolActionString(platform, "deliveryState");
+    const outputStatus = readToolActionString(platform, "outputStatus");
+    if (isGuidedOutputActive(deliveryState)) return true;
+    return isGuidedOutputActive(outputStatus);
+  });
+}
+
+function describeGuidedGoLiveStatus(
+  statusData: ToolActionDataRecord | null,
+  fallback: string,
+): string {
+  const directReason = readToolActionString(statusData, "statusReason");
+  if (directReason) return directReason;
+
+  const blockedPlatforms = formatGuidedBlockedPlatforms(
+    statusData?.blockedPlatforms,
+  );
+  if (blockedPlatforms) {
+    return `outputs still blocked: ${blockedPlatforms}`;
+  }
+
+  if (readToolActionString(statusData, "publisher") === "none") {
+    return "publisher did not attach";
+  }
+
+  const cloudflare = readToolActionRecord(statusData, "cloudflare");
+  if (readToolActionBoolean(cloudflare, "isConnected") === false) {
+    return "Cloudflare did not connect";
+  }
+
+  const phase = readToolActionString(statusData, "phase");
+  if (phase === "outputs_pending" || phase === "ingest_connected") {
+    return "ingest connected, outputs still warming";
+  }
+  if (phase === "starting") {
+    return "publisher is still starting";
+  }
+  if (phase === "queued") {
+    return "stream job queued";
+  }
+
+  const requiredOutputsReady = readToolActionBoolean(
+    statusData,
+    "requiredOutputsReady",
+  );
+  if (requiredOutputsReady === false) {
+    return "required outputs are not active yet";
+  }
+
+  return fallback;
 }
 
 const CANONICAL_GAMES_GO_LIVE_PLAY_ACTION = "ARCADE555_GAMES_GO_LIVE_PLAY";
@@ -3750,6 +3901,71 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return false;
         }
       };
+      const sleep = (ms: number) =>
+        new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+      const pollGoLiveDelivery = async (
+        sessionId: string,
+        label: string,
+      ): Promise<{
+        ok: boolean;
+        message?: string;
+        statusData?: ToolActionDataRecord | null;
+      }> => {
+        const deadlineAt = Date.now() + GUIDED_GO_LIVE_STATUS_TIMEOUT_MS;
+        let lastStatusData: ToolActionDataRecord | null = null;
+        let lastFailureMessage: string | null = null;
+
+        while (Date.now() < deadlineAt) {
+          const statusPlan = await executePlanWithRetry(
+            {
+              plan: {
+                id: `${label}-status`,
+                steps: [
+                  {
+                    id: "stream-status",
+                    toolName: "STREAM555_STREAM_STATUS",
+                    params: { sessionId },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
+            },
+            { label },
+          );
+
+          if (!didToolActionSucceed(statusPlan, "STREAM555_STREAM_STATUS")) {
+            lastFailureMessage = getToolActionFailureMessage(
+              statusPlan,
+              "STREAM555_STREAM_STATUS",
+              "stream status check did not succeed",
+            );
+          } else {
+            lastStatusData = getToolActionData(
+              statusPlan,
+              "STREAM555_STREAM_STATUS",
+            );
+            if (isGuidedStreamDelivering(lastStatusData)) {
+              return { ok: true, statusData: lastStatusData };
+            }
+            lastFailureMessage = describeGuidedGoLiveStatus(
+              lastStatusData,
+              "stream delivery did not reach live state",
+            );
+          }
+
+          await sleep(GUIDED_GO_LIVE_STATUS_POLL_MS);
+        }
+
+        return {
+          ok: false,
+          message: describeGuidedGoLiveStatus(
+            lastStatusData,
+            lastFailureMessage ?? "stream delivery did not reach live state",
+          ),
+          statusData: lastStatusData,
+        };
+      };
 
       dismissGoLiveInlineNotice();
 
@@ -3830,11 +4046,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
             );
           }
 
+          const goLiveData = getToolActionData(goLivePlan, "STREAM555_GO_LIVE");
+          const goLiveSessionId = readToolActionString(goLiveData, "sessionId");
+          if (!goLiveSessionId) {
+            return failed(
+              "Camera launch failed: go-live did not return a session id.",
+            );
+          }
+
+          const delivery = await pollGoLiveDelivery(
+            goLiveSessionId,
+            "Guided camera delivery check",
+          );
+          if (!delivery.ok) {
+            return failed(
+              `Camera launch failed: ${delivery.message ?? "stream delivery did not reach live state"}`,
+            );
+          }
+
           setLiveSecondarySources([]);
           setLiveBroadcastState("live");
           return completeLaunch(
             launchLabel,
-            succeeded("Camera is live and connected."),
+            succeeded("Camera is live and delivering."),
           );
         } else if (config.launchMode === "radio") {
           if (!stream555ControlAvailable) {

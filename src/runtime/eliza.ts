@@ -132,6 +132,15 @@ interface PluginLoadReportEntry {
   reason?: string;
 }
 
+interface CanonicalPluginResolution {
+  plugin: Plugin;
+  packageName: string;
+  sourceEntry: string;
+  sourceRoot: string | null;
+  packageVersion: string | null;
+  buildSha: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -880,7 +889,6 @@ function canResolvePluginPackage(
 
 const CANONICAL_STREAM_PLUGIN_PACKAGE_CANDIDATES = [
   "@rndrntwrk/plugin-555stream",
-  "@elizaos-plugins/plugin-555stream",
 ] as const;
 
 const CANONICAL_ARCADE_PLUGIN_PACKAGE_CANDIDATES = [
@@ -904,37 +912,80 @@ function resolveInstalledPackageVersion(packageName: string): string | null {
   }
 }
 
+function resolveCanonicalPluginPackageVersion(
+  sourceRoot: string | null,
+  fallbackPackageName: string,
+): string | null {
+  if (!sourceRoot) {
+    return resolveInstalledPackageVersion(fallbackPackageName);
+  }
+  try {
+    const packageJson = JSON.parse(
+      readFileSync(path.join(sourceRoot, "package.json"), "utf-8"),
+    ) as { version?: unknown };
+    return typeof packageJson.version === "string"
+      && packageJson.version.trim().length > 0
+      ? packageJson.version.trim()
+      : null;
+  } catch {
+    return resolveInstalledPackageVersion(fallbackPackageName);
+  }
+}
+
+function resolveRuntimeBuildSha(): string | null {
+  const candidates = [
+    process.env.MILAIDY_BUILD_SHA,
+    process.env.GIT_COMMIT,
+    process.env.GIT_SHA,
+    process.env.RAILWAY_GIT_COMMIT_SHA,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") continue;
+    const trimmed = candidate.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return null;
+}
+
+async function loadCanonicalStreamPluginFromEntry(
+  candidate: string,
+  options: {
+    packageName: string;
+    sourceRoot: string | null;
+    sourceLabel: string;
+  },
+): Promise<CanonicalPluginResolution | null> {
+  try {
+    const mod = (await import(pathToFileURL(candidate).href)) as PluginModuleShape & {
+      stream555Plugin?: Plugin;
+    };
+    const plugin = mod.default ?? mod.plugin ?? mod.stream555Plugin;
+    if (!plugin) return null;
+    logger.info(
+      `[milaidy] Canonical stream plugin resolved from ${options.sourceLabel} ${candidate}`,
+    );
+    return {
+      plugin,
+      packageName: options.packageName,
+      sourceEntry: candidate,
+      sourceRoot: options.sourceRoot,
+      packageVersion: resolveCanonicalPluginPackageVersion(
+        options.sourceRoot,
+        options.packageName,
+      ),
+      buildSha: resolveRuntimeBuildSha(),
+    };
+  } catch (err) {
+    logger.warn(
+      `[milaidy] Failed to load canonical stream plugin from ${options.sourceLabel} ${candidate}: ${formatError(err)}`,
+    );
+    return null;
+  }
+}
+
 async function resolveCanonicalStreamPlugin(
   config: MilaidyConfig,
-): Promise<Plugin | null> {
-  const inRepoVendorRoot = path.resolve(
-    findMilaidyProjectRoot(path.dirname(fileURLToPath(import.meta.url))),
-    "plugins",
-    "plugin-555stream",
-  );
-  for (const candidate of [
-    path.join(inRepoVendorRoot, "dist", "index.js"),
-    path.join(inRepoVendorRoot, "src", "index.ts"),
-  ]) {
-    if (!existsSync(candidate)) continue;
-    try {
-      const mod = (await import(pathToFileURL(candidate).href)) as PluginModuleShape & {
-        stream555Plugin?: Plugin;
-      };
-      const plugin = mod.default ?? mod.plugin ?? mod.stream555Plugin;
-      if (plugin) {
-        logger.info(
-          `[milaidy] Canonical stream plugin resolved from in-repo vendor ${candidate}`,
-        );
-        return plugin;
-      }
-    } catch (err) {
-      logger.warn(
-        `[milaidy] Failed to load canonical stream plugin from in-repo vendor ${candidate}: ${formatError(err)}`,
-      );
-    }
-  }
-
+): Promise<CanonicalPluginResolution | null> {
   const siblingRoot = resolveSiblingWorkspacePackageRoot(
     "@rndrntwrk/plugin-555stream",
   );
@@ -944,22 +995,12 @@ async function resolveCanonicalStreamPlugin(
       path.join(siblingRoot, "src", "index.ts"),
     ]) {
       if (!existsSync(candidate)) continue;
-      try {
-        const mod = (await import(pathToFileURL(candidate).href)) as PluginModuleShape & {
-          stream555Plugin?: Plugin;
-        };
-        const plugin = mod.default ?? mod.plugin ?? mod.stream555Plugin;
-        if (plugin) {
-          logger.info(
-            `[milaidy] Canonical stream plugin resolved from local workspace ${candidate}`,
-          );
-          return plugin;
-        }
-      } catch (err) {
-        logger.warn(
-          `[milaidy] Failed to load canonical stream plugin from local workspace ${candidate}: ${formatError(err)}`,
-        );
-      }
+      const resolution = await loadCanonicalStreamPluginFromEntry(candidate, {
+        packageName: "@rndrntwrk/plugin-555stream",
+        sourceRoot: siblingRoot,
+        sourceLabel: "canonical workspace",
+      });
+      if (resolution) return resolution;
     }
   }
 
@@ -974,7 +1015,14 @@ async function resolveCanonicalStreamPlugin(
         logger.info(
           `[milaidy] Canonical stream plugin resolved from ${packageName}`,
         );
-        return plugin;
+        return {
+          plugin,
+          packageName,
+          sourceEntry: packageName,
+          sourceRoot: resolveBundledPackageRootFromNodeModules(packageName),
+          packageVersion: resolveInstalledPackageVersion(packageName),
+          buildSha: resolveRuntimeBuildSha(),
+        };
       }
     } catch (err) {
       logger.warn(
@@ -3999,7 +4047,9 @@ export async function startEliza(
     : null;
   const canonicalStreamPluginRequested =
     resolveStream555CanonicalPluginEnabled(config);
-  const canonicalStreamPlugin = await resolveCanonicalStreamPlugin(config);
+  const canonicalStreamPluginResolution =
+    await resolveCanonicalStreamPlugin(config);
+  const canonicalStreamPlugin = canonicalStreamPluginResolution?.plugin ?? null;
   if (canonicalStreamPluginRequested && !canonicalStreamPlugin) {
     logger.warn(
       "[milaidy] STREAM555_CANONICAL_PLUGIN_ENABLED requested but canonical stream plugin package is not installed; continuing without canonical plugin.",
@@ -4044,6 +4094,9 @@ export async function startEliza(
   const stream555CanonicalEnabled =
     (canonicalStreamPluginRequested || stream555LegacyRequested) &&
     Boolean(canonicalStreamPlugin);
+  const canonicalStreamPluginVersion =
+    canonicalStreamPluginResolution?.packageVersion ??
+    resolveInstalledPackageVersion("@rndrntwrk/plugin-555stream");
 
   if (stream555LegacyRequested) {
     logger.info(
@@ -4154,6 +4207,23 @@ export async function startEliza(
       keepLegacyGamesPlugin: keepLegacyGamesPluginForMastery,
       legacyActionAliasesEnabled: legacyArcadeActionAliasesEnabled,
       legacyHttpAliasesEnabled: legacyArcadeHttpAliasesEnabled,
+    })}`,
+  );
+  logger.info(
+    `[milaidy] 555 Stream runtime summary: ${JSON.stringify({
+      packageName:
+        canonicalStreamPluginResolution?.packageName ??
+        "@rndrntwrk/plugin-555stream",
+      packageVersion: canonicalStreamPluginVersion ?? "unresolved",
+      canonicalPluginEnabled: canonicalStreamPluginRequested,
+      canonicalPluginLoaded: Boolean(canonicalStreamPlugin),
+      resolvedPluginRoot: canonicalStreamPluginResolution?.sourceRoot ?? null,
+      resolvedPluginEntry: canonicalStreamPluginResolution?.sourceEntry ?? null,
+      buildSha:
+        canonicalStreamPluginResolution?.buildSha ?? resolveRuntimeBuildSha(),
+      actionOverlapSuppressed:
+        five55PluginFlags.stream && !shouldLoadLegacyStreamPlugin,
+      legacyBundledPluginEnabled: shouldLoadLegacyStreamPlugin,
     })}`,
   );
 
@@ -4882,8 +4952,10 @@ export async function startEliza(
           );
           const freshCanonicalStreamPluginRequested =
             resolveStream555CanonicalPluginEnabled(freshConfig);
-          const freshCanonicalStreamPlugin =
+          const freshCanonicalStreamPluginResolution =
             await resolveCanonicalStreamPlugin(freshConfig);
+          const freshCanonicalStreamPlugin =
+            freshCanonicalStreamPluginResolution?.plugin ?? null;
           if (
             freshCanonicalStreamPluginRequested &&
             !freshCanonicalStreamPlugin
@@ -4933,6 +5005,9 @@ export async function startEliza(
           const freshStream555CanonicalEnabled =
             (freshCanonicalStreamPluginRequested || freshStream555LegacyRequested) &&
             Boolean(freshCanonicalStreamPlugin);
+          const freshCanonicalStreamPluginVersion =
+            freshCanonicalStreamPluginResolution?.packageVersion ??
+            resolveInstalledPackageVersion("@rndrntwrk/plugin-555stream");
 
           if (freshStream555LegacyRequested) {
             logger.info(
@@ -4956,7 +5031,6 @@ export async function startEliza(
               legacyHttpAliasesEnabled: freshLegacyArcadeHttpAliasesEnabled,
             })}`,
           );
-
           const freshFive55PluginFlags = {
             swap: resolveFive55PluginEnabled(
               freshConfig,
@@ -5052,6 +5126,27 @@ export async function startEliza(
                 ),
               })),
             )}`,
+          );
+          logger.info(
+            `[milaidy] 555 Stream hot-reload summary: ${JSON.stringify({
+              packageName:
+                freshCanonicalStreamPluginResolution?.packageName ??
+                "@rndrntwrk/plugin-555stream",
+              packageVersion: freshCanonicalStreamPluginVersion ?? "unresolved",
+              canonicalPluginEnabled: freshCanonicalStreamPluginRequested,
+              canonicalPluginLoaded: Boolean(freshCanonicalStreamPlugin),
+              resolvedPluginRoot:
+                freshCanonicalStreamPluginResolution?.sourceRoot ?? null,
+              resolvedPluginEntry:
+                freshCanonicalStreamPluginResolution?.sourceEntry ?? null,
+              buildSha:
+                freshCanonicalStreamPluginResolution?.buildSha ??
+                resolveRuntimeBuildSha(),
+              actionOverlapSuppressed:
+                freshFive55PluginFlags.stream &&
+                !shouldLoadFreshLegacyStreamPlugin,
+              legacyBundledPluginEnabled: shouldLoadFreshLegacyStreamPlugin,
+            })}`,
           );
           if (
             freshFive55PluginFlags.stream &&

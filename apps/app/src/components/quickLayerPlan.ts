@@ -136,3 +136,11 @@ export function getToolActionFailureMessage(
   }
   return fallback;
 }
+
+export function getToolActionData(
+  plan: ParsedAutonomyPlanResponse,
+  actionName: string,
+): Record<string, unknown> | null {
+  const envelope = findLastToolEnvelope(plan.results ?? [], actionName);
+  return envelope?.data ?? null;
+}

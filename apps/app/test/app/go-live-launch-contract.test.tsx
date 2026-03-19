@@ -383,7 +383,26 @@ describe("AppContext go-live launch contract", () => {
     const { api, tree } = await renderApp([makeStreamPlugin(readyTwitchParams())]);
     mockClient.executeAutonomyPlan.mockResolvedValueOnce(
       planResponse(
-        planStep("STREAM555_GO_LIVE", true, "go live connected"),
+        planStep("STREAM555_GO_LIVE", true, "go live connected", {
+          sessionId: "session-camera-1",
+        }),
+      ),
+    );
+    mockClient.executeAutonomyPlan.mockResolvedValueOnce(
+      planResponse(
+        planStep("STREAM555_STREAM_STATUS", true, "delivery confirmed", {
+          sessionId: "session-camera-1",
+          phase: "live",
+          cloudflare: { isConnected: true },
+          platforms: {
+            twitch: {
+              enabled: true,
+              status: "live",
+              outputStatus: "active",
+              deliveryState: "active",
+            },
+          },
+        }),
       ),
     );
 
@@ -399,12 +418,10 @@ describe("AppContext go-live launch contract", () => {
     expect(result).toMatchObject({
       state: "success",
       tone: "success",
-      message: "Camera is live and connected.",
+      message: "Camera is live and delivering.",
     });
-    expect(mockClient.executeAutonomyPlan).toHaveBeenCalledTimes(1);
-    expect(mockClient.executeAutonomyPlan.mock.calls[0]?.[0]?.plan?.steps).toHaveLength(
-      1,
-    );
+    expect(mockClient.executeAutonomyPlan).toHaveBeenCalledTimes(2);
+    expect(mockClient.executeAutonomyPlan.mock.calls[0]?.[0]?.plan?.steps).toHaveLength(1);
     expect(mockClient.executeAutonomyPlan.mock.calls[0]?.[0]?.plan?.steps?.[0]).toMatchObject({
       toolName: "STREAM555_GO_LIVE",
       params: {
@@ -413,10 +430,70 @@ describe("AppContext go-live launch contract", () => {
         destinationPlatforms: "twitch",
       },
     });
+    expect(mockClient.executeAutonomyPlan.mock.calls[1]?.[0]?.plan?.steps?.[0]).toMatchObject({
+      toolName: "STREAM555_STREAM_STATUS",
+      params: {
+        sessionId: "session-camera-1",
+      },
+    });
 
     await act(async () => {
       tree.unmount();
     });
+  });
+
+  it("fails camera launch when delivery never reaches active outputs", async () => {
+    vi.useFakeTimers();
+    const { api, tree } = await renderApp([makeStreamPlugin(readyTwitchParams())]);
+    mockClient.executeAutonomyPlan.mockResolvedValueOnce(
+      planResponse(
+        planStep("STREAM555_GO_LIVE", true, "go live connected", {
+          sessionId: "session-camera-2",
+        }),
+      ),
+    );
+    mockClient.executeAutonomyPlan.mockResolvedValue(
+      planResponse(
+        planStep("STREAM555_STREAM_STATUS", true, "outputs pending", {
+          sessionId: "session-camera-2",
+          phase: "outputs_pending",
+          cloudflare: { isConnected: true },
+          blockedPlatforms: ["twitch"],
+          platforms: {
+            twitch: {
+              enabled: true,
+              status: "connecting",
+              outputStatus: "pending",
+              deliveryState: "pending",
+            },
+          },
+        }),
+      ),
+    );
+
+    const resultPromise = api.launchGoLive({
+        channels: ["twitch"],
+        launchMode: "camera",
+        layoutMode: "camera-full",
+      });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50_000);
+    });
+    let result!: GoLiveLaunchResult;
+    await act(async () => {
+      result = await resultPromise;
+    });
+
+    expect(result).toMatchObject({
+      state: "failed",
+      tone: "error",
+    });
+    expect(result.message).toContain("outputs still blocked");
+
+    await act(async () => {
+      tree.unmount();
+    });
+    vi.useRealTimers();
   });
 
   it("returns success for lo-fi radio when both steps succeed", async () => {

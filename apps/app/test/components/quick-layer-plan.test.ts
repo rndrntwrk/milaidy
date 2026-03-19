@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   didToolActionSucceed,
   findLastToolEnvelope,
+  getToolActionData,
   getToolActionFailureMessage,
 } from "../../src/components/quickLayerPlan.js";
 
@@ -116,6 +117,9 @@ describe("quickLayerPlan helpers", () => {
 
     expect(didToolActionSucceed(plan, "STREAM555_GO_LIVE")).toBe(true);
     expect(didToolActionSucceed(plan, "STREAM555_GO_LIVE_SEGMENTS")).toBe(false);
+    expect(getToolActionData(plan, "STREAM555_GO_LIVE")).toEqual({
+      status: "created",
+    });
   });
 
   it("extracts a useful failure message when available", () => {
@@ -165,5 +169,11 @@ describe("quickLayerPlan helpers", () => {
         "segment bootstrap failed",
       ),
     ).toBe("STREAM555_GO_LIVE_SEGMENTS failed: Stream already active");
+  });
+
+  it("returns null action data when no structured payload exists", () => {
+    expect(
+      getToolActionData({ allSucceeded: true, results: [] }, "STREAM555_GO_LIVE"),
+    ).toBeNull();
   });
 });
