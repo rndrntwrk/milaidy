@@ -115,6 +115,29 @@ function publicSrcPlugin(): Plugin {
   };
 }
 
+/**
+ * Redirects the upstream @elizaos/app-core CharacterRoster to milady's
+ * version so CharacterView picks up the correct preset meta (catchphrases,
+ * avatar indices, character names).
+ */
+function characterRosterOverridePlugin(): Plugin {
+  const miladyRoster = path.resolve(here, "src/components/CharacterRoster.tsx");
+  return {
+    name: "milady-character-roster-override",
+    enforce: "pre",
+    resolveId(source, importer) {
+      if (
+        source === "./CharacterRoster" &&
+        importer &&
+        importer.includes("app-core") &&
+        importer.includes("components/")
+      ) {
+        return miladyRoster;
+      }
+    },
+  };
+}
+
 function sparkWasmDataUrlPlugin(): Plugin {
   return {
     name: "spark-wasm-data-url",
@@ -139,6 +162,7 @@ export default defineConfig({
   base: "./",
   publicDir: path.resolve(here, "public"),
   plugins: [
+    characterRosterOverridePlugin(),
     publicSrcPlugin(),
     sparkWasmDataUrlPlugin(),
     tailwindcss(),
