@@ -9,7 +9,11 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { getMiladyDistFallbackCandidates, resolveConfigDir } from "../agent";
+import {
+  ensureDesktopApiToken,
+  getMiladyDistFallbackCandidates,
+  resolveConfigDir,
+} from "../agent";
 
 // ---------------------------------------------------------------------------
 // resolveConfigDir
@@ -118,5 +122,27 @@ describe("getMiladyDistFallbackCandidates", () => {
       "resources/app/milady-dist",
     );
     expect(candidates).toContain(winResourcesPath);
+  });
+});
+
+describe("ensureDesktopApiToken", () => {
+  it("reuses an existing token and mirrors both env aliases", () => {
+    const env: NodeJS.ProcessEnv = {
+      MILADY_API_TOKEN: "desktop-token",
+    };
+
+    expect(ensureDesktopApiToken(env)).toBe("desktop-token");
+    expect(env.MILADY_API_TOKEN).toBe("desktop-token");
+    expect(env.ELIZA_API_TOKEN).toBe("desktop-token");
+  });
+
+  it("generates a token when neither alias is configured", () => {
+    const env: NodeJS.ProcessEnv = {};
+
+    const token = ensureDesktopApiToken(env);
+
+    expect(token).toMatch(/^[a-f0-9]{32}$/);
+    expect(env.MILADY_API_TOKEN).toBe(token);
+    expect(env.ELIZA_API_TOKEN).toBe(token);
   });
 });

@@ -33,7 +33,7 @@ import {
   CloudAuthWindowManager,
   readNavigationEventUrl,
 } from "./cloud-auth-window";
-import { getAgentManager } from "./native/agent";
+import { ensureDesktopApiToken, getAgentManager } from "./native/agent";
 import { getDesktopManager } from "./native/desktop";
 import { disposeNativeModules, initializeNativeModules } from "./native/index";
 import {
@@ -924,7 +924,8 @@ function injectApiBase(win: BrowserWindow): void {
   const agent = getAgentManager();
   const port =
     agent.getPort() ?? (Number(process.env.MILADY_PORT) || DEFAULT_PORT);
-  pushApiBaseToRenderer(win, `http://127.0.0.1:${port}`);
+  const apiToken = ensureDesktopApiToken();
+  pushApiBaseToRenderer(win, `http://127.0.0.1:${port}`, apiToken);
   setAgentReady(true);
 }
 
@@ -971,7 +972,11 @@ async function _startAgent(win: BrowserWindow): Promise<void> {
     const status = await agent.start();
 
     if (status.state === "running" && status.port) {
-      pushApiBaseToRenderer(win, `http://127.0.0.1:${status.port}`);
+      pushApiBaseToRenderer(
+        win,
+        `http://127.0.0.1:${status.port}`,
+        process.env.MILADY_API_TOKEN,
+      );
       setAgentReady(true);
       // Sync real OS permission states to the REST API so the renderer
       // can display them and capability toggles can unlock.

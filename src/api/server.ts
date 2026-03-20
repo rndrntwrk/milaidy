@@ -4,7 +4,7 @@ import http from "node:http";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { type AgentRuntime, stringToUuid } from "@elizaos/core";
+import { type AgentRuntime, logger, stringToUuid } from "@elizaos/core";
 
 // Re-export the full upstream server API.
 export * from "@elizaos/autonomous/api/server";
@@ -345,6 +345,22 @@ function ensureCompatApiAuthorized(
 
   sendJsonErrorResponse(res, 401, "Unauthorized");
   return false;
+}
+
+function ensureCompatSensitiveRouteAuthorized(
+  req: Pick<http.IncomingMessage, "headers">,
+  res: http.ServerResponse,
+): boolean {
+  if (!getCompatApiToken()) {
+    sendJsonErrorResponse(
+      res,
+      403,
+      "Sensitive endpoint requires API token authentication",
+    );
+    return false;
+  }
+
+  return ensureCompatApiAuthorized(req, res);
 }
 
 const MAX_BODY_BYTES = 1_048_576; // 1 MB
@@ -1889,7 +1905,7 @@ async function handleMiladyCompatRoute(
 
   // ── POST /api/agent/reset — Wipe config and restart onboarding ──────
   if (method === "POST" && url.pathname === "/api/agent/reset") {
-    if (!ensureCompatApiAuthorized(req, res)) {
+    if (!ensureCompatSensitiveRouteAuthorized(req, res)) {
       return true;
     }
 
@@ -1922,7 +1938,7 @@ async function handleMiladyCompatRoute(
   // Returns generated wallet private keys + addresses so the Save Keys
   // onboarding screen can display them. Gated by onboarding not yet complete.
   if (method === "GET" && url.pathname === "/api/wallet/keys") {
-    if (!ensureCompatApiAuthorized(req, res)) {
+    if (!ensureCompatSensitiveRouteAuthorized(req, res)) {
       return true;
     }
 
@@ -2049,8 +2065,10 @@ async function handleMiladyCompatRoute(
           }
         }
         saveElizaConfig(config);
-      } catch {
-        // Non-fatal — upstream may still handle it
+      } catch (err) {
+        logger.warn(
+          `[milady-api] Failed to persist onboarding state: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     } catch {
       // JSON parse failed — let upstream handle the error

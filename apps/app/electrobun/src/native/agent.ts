@@ -17,6 +17,7 @@
  * remote -- it simply connects to `http://localhost:{port}`.
  */
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -122,6 +123,26 @@ export function resolveConfigDir(opts?: {
     return joinPortable(roaming, "Milady");
   }
   return joinPortable(homedir, ".config", "Milady");
+}
+
+export function ensureDesktopApiToken(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const existing =
+    env.MILADY_API_TOKEN?.trim() ?? env.ELIZA_API_TOKEN?.trim() ?? "";
+  if (existing) {
+    env.MILADY_API_TOKEN = existing;
+    env.ELIZA_API_TOKEN = existing;
+    return existing;
+  }
+
+  const generated = crypto.randomBytes(16).toString("hex");
+  env.MILADY_API_TOKEN = generated;
+  env.ELIZA_API_TOKEN = generated;
+  diagnosticLog(
+    "[Agent] Generated local API token for embedded desktop runtime",
+  );
+  return generated;
 }
 
 let diagnosticLogPath: string | null = null;
@@ -520,6 +541,8 @@ export class AgentManager {
       diagnosticLog(`[Agent] ${reason}`);
       throw new Error(reason);
     }
+
+    ensureDesktopApiToken();
 
     // Reset per-startup flags
     this.pgliteRecoveryDone = false;
