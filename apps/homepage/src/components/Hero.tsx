@@ -55,7 +55,7 @@ function TypewriterLoop() {
   return (
     <>
       {display}
-      <span className="ml-[0.04em] inline-block h-[0.8em] w-[0.06em] animate-[cursor-blink_1s_step-end_infinite] align-middle bg-brand" />
+      <span className="inline-block w-[0.06em] h-[0.8em] bg-brand ml-[0.04em] align-middle cursor-blink" />
     </>
   );
 }
@@ -82,12 +82,17 @@ export function HeroBackground() {
   };
 
   return (
-    <section className="absolute inset-x-0 top-0 bottom-[30%] sm:bottom-0 flex flex-col items-center justify-start sm:justify-center px-4 sm:px-6 md:px-12 pt-24 sm:pt-12 pointer-events-none overflow-visible sm:overflow-hidden">
+    <section className="absolute inset-x-0 top-0 bottom-[45%] sm:bottom-0 flex flex-col items-center justify-start sm:justify-center px-4 sm:px-6 md:px-12 pt-24 sm:pt-12 pointer-events-none overflow-hidden">
       {/* Corner accents — sharp, terminal-like */}
       <div className="hidden sm:block absolute top-12 left-12 w-6 h-6 border-t border-l border-brand/30" />
       <div className="hidden sm:block absolute top-12 right-12 w-6 h-6 border-t border-r border-brand/30" />
       <div className="hidden sm:block absolute bottom-12 left-12 w-6 h-6 border-b border-l border-brand/30" />
       <div className="hidden sm:block absolute bottom-12 right-12 w-6 h-6 border-b border-r border-brand/30" />
+
+      {/* Grid lines */}
+      <div className="hidden md:block absolute top-0 bottom-0 left-[20%] w-px bg-border-subtle" />
+      <div className="hidden md:block absolute top-0 bottom-0 right-[20%] w-px bg-border-subtle" />
+      <div className="hidden md:block absolute top-[30%] left-0 right-0 h-px bg-border-subtle" />
 
       <motion.div
         className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center"
@@ -97,10 +102,10 @@ export function HeroBackground() {
       >
         <motion.h1
           variants={itemVariants}
-          className="text-[13vw] sm:text-[11vw] lg:text-[13vw] font-black leading-[0.76] tracking-tighter uppercase text-white/95 flex flex-col items-center pointer-events-none select-none mt-16 sm:mt-12 max-w-none"
+          className="text-[28vw] sm:text-[11vw] lg:text-[13vw] font-black leading-[0.76] tracking-tighter uppercase text-white/95 flex flex-col items-center pointer-events-none select-none mt-16 sm:mt-12 max-w-[10ch] sm:max-w-none"
         >
           <span>MILADY</span>
-          <span className="w-full break-words hyphens-none text-center text-[11vw] text-brand drop-shadow-[0_10px_28px_rgba(240,185,11,0.18)] sm:text-[9vw] lg:text-[11vw]">
+          <span className="text-white/90 drop-shadow-lg text-[28vw] sm:text-[9vw] lg:text-[11vw] break-words hyphens-none text-center w-full">
             <TypewriterLoop />
           </span>
         </motion.h1>
@@ -137,7 +142,7 @@ export function HeroInstallDock() {
       {/* Version badge — terminal style */}
       <div className="flex items-center gap-3 font-mono text-[10px] sm:text-[11px] tracking-wider">
         <div className="flex items-center gap-2 px-3 py-1.5 bg-brand/5 border border-brand/20">
-          <span className="w-1.5 h-1.5 rounded-full bg-brand animate-[status-pulse_2s_ease-in-out_infinite]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-brand status-pulse" />
           <span className="text-brand">{tagName}</span>
         </div>
         <span className="text-text-subtle">{publishedAt}</span>

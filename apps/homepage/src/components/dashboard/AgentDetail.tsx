@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import type { ManagedAgent } from "../../lib/AgentProvider";
 import type { AgentStatus } from "../../lib/cloud-api";
-import { formatUptime as formatUptimeShared } from "../../lib/format";
 import { openWebUI } from "../../lib/open-web-ui";
 import { ExportPanel } from "./ExportPanel";
 import { LogsPanel } from "./LogsPanel";
@@ -18,7 +17,14 @@ interface AgentDetailProps {
 }
 
 function formatUptime(seconds?: number): string {
-  return formatUptimeShared(seconds, true);
+  if (!seconds) return "—";
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  return `${m}m ${s}s`;
 }
 
 function formatDate(dateStr?: string): string {
@@ -38,7 +44,7 @@ function formatDate(dateStr?: string): string {
 
 const STATE_COLORS: Record<string, { text: string; bg: string }> = {
   running: { text: "text-emerald-400", bg: "bg-emerald-500" },
-  paused: { text: "text-brand", bg: "bg-brand" },
+  paused: { text: "text-amber-400", bg: "bg-amber-500" },
   stopped: { text: "text-red-400", bg: "bg-red-500" },
   provisioning: { text: "text-brand", bg: "bg-brand" },
   unknown: { text: "text-text-muted", bg: "bg-text-muted" },
@@ -62,29 +68,17 @@ export function AgentDetail({
       try {
         switch (action) {
           case "suspend":
-            await managedAgent.cloudClient.suspendAgent(
-              managedAgent.cloudAgentId,
-            );
+            await managedAgent.cloudClient.suspendAgent(managedAgent.cloudAgentId);
             break;
           case "resume":
-            await managedAgent.cloudClient.resumeAgent(
-              managedAgent.cloudAgentId,
-            );
+            await managedAgent.cloudClient.resumeAgent(managedAgent.cloudAgentId);
             break;
           case "snapshot":
-            await managedAgent.cloudClient.takeSnapshot(
-              managedAgent.cloudAgentId,
-            );
+            await managedAgent.cloudClient.takeSnapshot(managedAgent.cloudAgentId);
             break;
           case "delete":
-            if (
-              window.confirm(
-                `Delete agent "${agent.agentName}"? This cannot be undone.`,
-              )
-            ) {
-              await managedAgent.cloudClient.deleteAgent(
-                managedAgent.cloudAgentId,
-              );
+            if (window.confirm(`Delete agent "${agent.agentName}"? This cannot be undone.`)) {
+              await managedAgent.cloudClient.deleteAgent(managedAgent.cloudAgentId);
             }
             break;
         }
@@ -106,19 +100,15 @@ export function AgentDetail({
         <div className="flex items-center gap-3">
           {/* Window controls aesthetic */}
           <div className="flex items-center gap-1.5">
-            <span
-              className={`w-2.5 h-2.5 rounded-full ${stateColors.bg} ${agent.state === "running" ? "animate-[status-pulse_2s_ease-in-out_infinite]" : ""}`}
-            />
+            <span className={`w-2.5 h-2.5 rounded-full ${stateColors.bg} ${agent.state === "running" ? "status-pulse" : ""}`} />
           </div>
-
+          
           {/* Agent name */}
           <div className="flex items-center gap-2">
             <span className="font-mono text-sm font-medium text-text-light">
               {agent.agentName}
             </span>
-            <span
-              className={`font-mono text-[10px] tracking-wider ${stateColors.text}`}
-            >
+            <span className={`font-mono text-[10px] tracking-wider ${stateColors.text}`}>
               [{agent.state.toUpperCase()}]
             </span>
           </div>
@@ -129,13 +119,7 @@ export function AgentDetail({
           {webUIUrl && (
             <button
               type="button"
-              onClick={() =>
-                openWebUI(
-                  webUIUrl,
-                  managedAgent.source,
-                  managedAgent.cloudAgentId,
-                )
-              }
+              onClick={() => openWebUI(webUIUrl, managedAgent.source)}
               className="flex items-center gap-1.5 px-3 py-1.5 
                 bg-brand text-dark font-mono text-[11px] font-semibold tracking-wide
                 hover:bg-brand-hover transition-colors"
@@ -149,11 +133,7 @@ export function AgentDetail({
                 stroke="currentColor"
                 strokeWidth={2.5}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
               </svg>
             </button>
           )}
@@ -161,17 +141,16 @@ export function AgentDetail({
       </div>
 
       {/* Tab navigation - terminal style */}
-      <div className="flex items-center overflow-x-auto border-b border-border bg-dark/50">
+      <div className="flex items-center border-b border-border bg-dark/50">
         {TABS.map((t) => (
           <button
             type="button"
             key={t}
             onClick={() => setTab(t)}
-            className={`relative shrink-0 px-5 py-3 font-mono text-xs tracking-wide transition-colors duration-150
-              ${
-                tab === t
-                  ? "text-brand bg-surface"
-                  : "text-text-muted hover:text-text-light hover:bg-surface/50"
+            className={`relative px-5 py-3 font-mono text-xs tracking-wide transition-all duration-150
+              ${tab === t
+                ? "text-brand bg-surface"
+                : "text-text-muted hover:text-text-light hover:bg-surface/50"
               }`}
           >
             {t.toUpperCase()}
@@ -230,9 +209,7 @@ function OverviewTab({
           </div>
         </DataBlock>
         <DataBlock label="MODEL">
-          <span className="font-mono text-text-light">
-            {agent.model || "—"}
-          </span>
+          <span className="font-mono text-text-light">{agent.model || "—"}</span>
         </DataBlock>
         <DataBlock label="UPTIME">
           <span className="font-mono text-text-light tabular-nums">
@@ -241,9 +218,7 @@ function OverviewTab({
         </DataBlock>
         <DataBlock label="MEMORIES">
           <span className="font-mono text-text-light tabular-nums">
-            {agent.memories !== undefined
-              ? agent.memories.toLocaleString()
-              : "—"}
+            {agent.memories !== undefined ? agent.memories.toLocaleString() : "—"}
           </span>
         </DataBlock>
       </div>
@@ -269,7 +244,7 @@ function OverviewTab({
               <span className="font-mono text-brand tabular-nums">
                 {managedAgent.billing.costPerHour != null
                   ? `$${managedAgent.billing.costPerHour.toFixed(2)}/HR`
-                  : (managedAgent.billing.plan?.toUpperCase() ?? "—")}
+                  : managedAgent.billing.plan?.toUpperCase() ?? "—"}
               </span>
             </DataBlock>
           )}
@@ -389,10 +364,9 @@ function CloudActionButton({
   const isLoading = loading === action;
   const colors = {
     success: "text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/20",
-    warn: "text-brand hover:bg-brand/10 border-brand/20",
+    warn: "text-amber-400 hover:bg-amber-500/10 border-amber-500/20",
     danger: "text-red-400 hover:bg-red-500/10 border-red-500/20",
-    default:
-      "text-text-muted hover:text-text-light hover:bg-surface-elevated border-border",
+    default: "text-text-muted hover:text-text-light hover:bg-surface-elevated border-border",
   };
 
   return (

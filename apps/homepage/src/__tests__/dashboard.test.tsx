@@ -203,17 +203,6 @@ describe("AgentCard", () => {
     expect(screen.queryByText("Resume")).toBeNull();
   });
 
-  it("renders svg icons for pause and stop controls", () => {
-    const { container } = render(
-      <AgentCard {...baseProps} agent={makeAgent({ state: "running" })} />,
-    );
-    const pauseButton = screen.getByText("Pause").closest("button");
-    const stopButton = screen.getByText("Stop").closest("button");
-    expect(pauseButton?.querySelector("svg")).toBeTruthy();
-    expect(stopButton?.querySelector("svg")).toBeTruthy();
-    expect(container.querySelectorAll("button svg").length).toBeGreaterThan(0);
-  });
-
   it("calls onStop when Stop is clicked", () => {
     const onStop = vi.fn();
     render(
@@ -452,10 +441,9 @@ describe("AgentCard regression", () => {
     render(
       <AgentCard {...baseProps} onSelect={onSelect} agent={makeAgent()} />,
     );
-    const cardButton = screen.getByRole("button", {
-      name: /open details for testagent/i,
-    });
-    fireEvent.click(cardButton);
+    // Card is now an <article> element, not a button
+    const article = screen.getByRole("article");
+    fireEvent.click(article);
     expect(onSelect).toHaveBeenCalled();
   });
 
@@ -509,13 +497,60 @@ describe("AgentCard regression", () => {
   });
 });
 
+/* ------------------------------------------------------------------ */
+/*  AuthGate                                                           */
+/* ------------------------------------------------------------------ */
+describe("AuthGate", () => {
+  it("renders children when authenticated", async () => {
+    localStorage.setItem("milady-cloud-token", "test-key");
+    let result: ReturnType<typeof render>;
+    await act(async () => {
+      const { AuthGate } = await import("../components/dashboard/AuthGate");
+      result = render(
+        <AuthGate>
+          <div>Dashboard Content</div>
+        </AuthGate>,
+      );
+    });
+    expect(result?.getByText("Dashboard Content")).toBeTruthy();
+  });
+
+  it("renders children when not authenticated", async () => {
+    let result: ReturnType<typeof render>;
+    await act(async () => {
+      const { AuthGate } = await import("../components/dashboard/AuthGate");
+      result = render(
+        <AuthGate>
+          <div>Dashboard Content</div>
+        </AuthGate>,
+      );
+    });
+    expect(result?.getByText("Dashboard Content")).toBeTruthy();
+  });
+
+  it("does not block the dashboard anymore", async () => {
+    let result: ReturnType<typeof render>;
+    await act(async () => {
+      const { AuthGate } = await import("../components/dashboard/AuthGate");
+      result = render(
+        <AuthGate>
+          <div>child</div>
+        </AuthGate>,
+      );
+    });
+    expect(result?.queryByText("Sign in with Eliza Cloud")).toBeNull();
+    expect(result?.getByText("child")).toBeTruthy();
+  });
+});
+
 describe("CreateAgentForm", () => {
   it("shows a Sign In button for unauthenticated users", () => {
     vi.spyOn(auth, "isAuthenticated").mockReturnValue(false);
 
     render(<CreateAgentForm onCreated={vi.fn()} onCancel={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "Sign In" })).toBeTruthy();
+    // New design uses uppercase "SIGN IN"
+    expect(screen.getByText("SIGN IN")).toBeTruthy();
     expect(screen.queryByLabelText("Agent Name")).toBeNull();
   });
 
@@ -537,7 +572,8 @@ describe("CreateAgentForm", () => {
     render(<CreateAgentForm onCreated={vi.fn()} onCancel={vi.fn()} />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+      // New design uses uppercase "SIGN IN"
+      fireEvent.click(screen.getByText("SIGN IN"));
       await Promise.resolve();
     });
 

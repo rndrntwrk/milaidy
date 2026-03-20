@@ -31,6 +31,30 @@ describe("CloudApiClient", () => {
     expect(result.status).toBe("ok");
   });
 
+  it("health() falls back to /health when /api/health returns 404", async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ status: "ok", uptime: 50 }),
+      });
+
+    const result = await client.health();
+
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      "http://localhost:2138/api/health",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:2138/health",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(result.status).toBe("ok");
+  });
+
   it("health() returns a running probe response when /api/health is unauthorized", async () => {
     // With no authToken, a 401 immediately returns a synthetic "running" response.
     // No additional probes are made — a 401 proves the agent is alive.
@@ -203,6 +227,28 @@ describe("CloudApiClient", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
+  it("getAgentStatus() falls back to legacy endpoint on 404 (non-Milady agent)", async () => {
+    // For non-Milady agents (like localhost), 404 on /api/status falls back to /api/agent/status
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            agentName: "Legacy Public Agent",
+            model: "gpt-4",
+            state: "paused",
+          }),
+      });
+
+    await expect(client.getAgentStatus()).resolves.toEqual({
+      agentName: "Legacy Public Agent",
+      model: "gpt-4",
+      state: "paused",
+    });
+  });
+
   it("getAgentStatus() throws on unauthorized when auth token is provided", async () => {
     // When a token is provided but rejected (401), that's a real auth failure.
     // We don't fall back — the token should have worked.
@@ -222,7 +268,51 @@ describe("CloudApiClient", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
-  it("getAgentStatus() throws on 404", async () => {
+  it("getAgentStatus() returns synthetic status for unauthenticated legacy fallback 401", async () => {
+    // For non-Milady agents without auth: if /api/status returns 404 and
+    // /api/agent/status returns 401, we return synthetic "running" status.
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      .mockResolvedValueOnce({ ok: false, status: 401 });
+
+    await expect(client.getAgentStatus()).resolves.toEqual({
+      state: "running",
+      agentName: "",
+      model: "—",
+      uptime: 0,
+    });
+  });
+
+  it("getAgentStatus() falls back to /api/agent/status on 404", async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            agentName: "Legacy",
+            model: "gpt-4",
+            state: "paused",
+          }),
+      });
+
+    await expect(client.getAgentStatus()).resolves.toEqual({
+      agentName: "Legacy",
+      model: "gpt-4",
+      state: "paused",
+    });
+
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:2138/api/agent/status",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("getAgentStatus() skips legacy fallback for Milady agents", async () => {
+    // Milady agents (milady.ai, waifu.fun) don't use legacy /api/agent/status.
+    // 404 on /api/status is an error, not a fallback trigger.
     const miladyClient = new CloudApiClient({
       url: "https://abc123.milady.ai",
       type: "remote",
@@ -234,6 +324,7 @@ describe("CloudApiClient", () => {
       "API 404: /api/status",
     );
 
+    // Only one request made (no legacy fallback for Milady)
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
@@ -249,7 +340,35 @@ describe("CloudApiClient", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
-  it("health() throws on 404", async () => {
+  it("getAgentStatus() falls back to legacy endpoint on invalid JSON (non-Milady)", async () => {
+    // For non-Milady agents, invalid JSON from /api/status falls through to legacy.
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.reject(new Error("invalid json")),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            agentName: "Legacy Parse Fallback",
+            model: "gpt-4",
+            state: "running",
+          }),
+      });
+
+    await expect(client.getAgentStatus()).resolves.toEqual({
+      agentName: "Legacy Parse Fallback",
+      model: "gpt-4",
+      state: "running",
+    });
+  });
+
+  it("health() skips legacy fallback for Milady agents", async () => {
+    // Milady agents (milady.ai, waifu.fun) don't use legacy /health.
+    // 404 on /api/health is an error, not a fallback trigger.
     const miladyClient = new CloudApiClient({
       url: "https://abc123.milady.ai",
       type: "remote",
@@ -259,6 +378,7 @@ describe("CloudApiClient", () => {
 
     await expect(miladyClient.health()).rejects.toThrow("API 404: /api/health");
 
+    // Only one request made (no legacy fallback for Milady)
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
@@ -556,10 +676,8 @@ describe("CloudClient", () => {
       status: 200,
       json: () => Promise.resolve({ result: { state: "running" } }),
     });
-    const result = (await cc.bridge("agent-1", "status.get")) as {
-      result: { state: string };
-    };
-    const body = JSON.parse(String(mockFetch.mock.calls[0][1].body));
+    const result = await cc.bridge("agent-1", "status.get");
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.method).toBe("status.get");
     expect(body.jsonrpc).toBe("2.0");
     expect(body.id).toBeDefined();
