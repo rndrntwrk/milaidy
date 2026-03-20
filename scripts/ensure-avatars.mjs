@@ -29,6 +29,7 @@ const ROOT = resolve(__dirname, "..");
 const PUBLIC = join(ROOT, "apps", "app", "public");
 const VRMS_DIR = join(PUBLIC, "vrms");
 const ANIMATIONS_DIR = join(PUBLIC, "animations");
+const PRIMARY_VRM_FILENAME = "alice.vrm";
 
 // milady-ai/avatars is an org-owned repo in the milady-ai GitHub organization.
 // Pinned to a specific commit for reproducible installs (supply-chain safety).
@@ -43,6 +44,25 @@ export function hasValidVrm(dir) {
     const files = readdirSync(dir).filter((f) => f.endsWith(".vrm"));
     if (files.length === 0) return false;
     const stat = statSync(join(dir, files[0]));
+    return stat.size > 1024;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Return true only when the default camera VRM is present and non-trivial.
+ *
+ * We intentionally require `alice.vrm` here instead of any VRM file because
+ * the production soak depends on Alice specifically. A checkout that contains
+ * other avatars but is missing the default Alice model is still incomplete.
+ */
+export function hasValidPrimaryVrm(dir, filename = PRIMARY_VRM_FILENAME) {
+  if (!existsSync(dir)) return false;
+  try {
+    const file = join(dir, filename);
+    if (!existsSync(file)) return false;
+    const stat = statSync(file);
     return stat.size > 1024;
   } catch {
     return false;
@@ -87,11 +107,17 @@ export function runEnsureAvatars({
   log = console.log,
   logError = console.error,
   _hasValidVrm = hasValidVrm,
+  _hasValidPrimaryVrm = hasValidPrimaryVrm,
   _hasValidAnimations = hasValidAnimations,
   _gitAvailable = gitAvailable,
   _exec = execSync,
 } = {}) {
-  if (!force && _hasValidVrm(VRMS_DIR) && _hasValidAnimations(ANIMATIONS_DIR)) {
+  if (
+    !force &&
+    _hasValidVrm(VRMS_DIR) &&
+    _hasValidPrimaryVrm(VRMS_DIR) &&
+    _hasValidAnimations(ANIMATIONS_DIR)
+  ) {
     log(`${TAG} Avatar assets already present — skipping`);
     return { cloned: false, reason: "already-present" };
   }
@@ -164,7 +190,7 @@ export function runEnsureAvatars({
     }
 
     // Verify the copy produced valid assets (use injected validators for testability)
-    const vrmsOk = _hasValidVrm(VRMS_DIR);
+    const vrmsOk = _hasValidPrimaryVrm(VRMS_DIR);
     const animsOk = _hasValidAnimations(ANIMATIONS_DIR);
 
     if (!vrmsOk || !animsOk) {

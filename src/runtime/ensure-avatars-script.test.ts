@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   hasValidAnimations,
   hasValidVrm,
+  hasValidPrimaryVrm,
   runEnsureAvatars,
 } from "../../scripts/ensure-avatars.mjs";
 
@@ -54,6 +55,35 @@ describe("hasValidVrm", () => {
   it("ignores non-VRM files", () => {
     writeFakeFile(join(dir, "readme.txt"), 5000);
     expect(hasValidVrm(dir)).toBe(false);
+  });
+});
+
+// ── hasValidPrimaryVrm ──────────────────────────────────────────────
+
+describe("hasValidPrimaryVrm", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = makeTmpDir("primary-vrm");
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("returns false when alice.vrm is missing even if other VRMs exist", () => {
+    writeFakeFile(join(dir, "milady-1.vrm"), 4096);
+    expect(hasValidPrimaryVrm(dir)).toBe(false);
+  });
+
+  it("returns true when alice.vrm is a real binary (> 1 KB)", () => {
+    writeFakeFile(join(dir, "alice.vrm"), 2048);
+    expect(hasValidPrimaryVrm(dir)).toBe(true);
+  });
+
+  it("returns false when alice.vrm is an LFS pointer (< 1 KB)", () => {
+    writeFakeFile(join(dir, "alice.vrm"), 100);
+    expect(hasValidPrimaryVrm(dir)).toBe(false);
   });
 });
 
@@ -124,6 +154,7 @@ describe("runEnsureAvatars", () => {
       log: (msg: string) => logs.push(msg),
       logError: (msg: string) => logs.push(msg),
       _hasValidVrm: presentVrm,
+      _hasValidPrimaryVrm: presentVrm,
       _hasValidAnimations: presentAnims,
     });
 
@@ -138,11 +169,29 @@ describe("runEnsureAvatars", () => {
       log: () => {},
       logError: () => {},
       _hasValidVrm: presentVrm,
+      _hasValidPrimaryVrm: presentVrm,
       _hasValidAnimations: presentAnims,
     });
     expect(result.cloned).toBe(false);
     expect(result.reason).toBe("already-present");
     expect(result).not.toHaveProperty("error");
+  });
+
+  it("does not treat other VRMs as sufficient when alice.vrm is missing", () => {
+    const logs: string[] = [];
+    const result = runEnsureAvatars({
+      force: false,
+      log: (msg: string) => logs.push(msg),
+      logError: (msg: string) => logs.push(msg),
+      _hasValidVrm: presentVrm,
+      _hasValidPrimaryVrm: absentVrm,
+      _hasValidAnimations: presentAnims,
+      _gitAvailable: () => false,
+    });
+
+    expect(result.reason).not.toBe("already-present");
+    expect(result.reason).toBe("no-git");
+    expect(logs.some((m: string) => m.includes("git not found"))).toBe(true);
   });
 
   it("bypasses already-present check when force=true", () => {
@@ -155,6 +204,7 @@ describe("runEnsureAvatars", () => {
       log: (msg: string) => logs.push(msg),
       logError: (msg: string) => logs.push(msg),
       _hasValidVrm: presentVrm,
+      _hasValidPrimaryVrm: presentVrm,
       _hasValidAnimations: presentAnims,
       _gitAvailable: () => false,
     });
@@ -172,6 +222,7 @@ describe("runEnsureAvatars", () => {
       log: (msg: string) => logs.push(msg),
       logError: (msg: string) => logs.push(msg),
       _hasValidVrm: absentVrm,
+      _hasValidPrimaryVrm: absentVrm,
       _hasValidAnimations: absentAnims,
       _gitAvailable: () => false,
     });
@@ -204,6 +255,7 @@ describe("runEnsureAvatars", () => {
       log: (msg: string) => logs.push(msg),
       logError: (msg: string) => logs.push(msg),
       _hasValidVrm: absentVrm,
+      _hasValidPrimaryVrm: absentVrm,
       _hasValidAnimations: absentAnims,
     });
     expect(result.cloned).toBe(false);
@@ -220,6 +272,7 @@ describe("runEnsureAvatars", () => {
       log: () => {},
       logError: () => {},
       _hasValidVrm: absentVrm,
+      _hasValidPrimaryVrm: absentVrm,
       _hasValidAnimations: absentAnims,
     });
     expect(result.cloned).toBe(false);
@@ -233,6 +286,7 @@ describe("runEnsureAvatars", () => {
       log: () => {},
       logError: (msg: string) => errors.push(msg),
       _hasValidVrm: presentVrm,
+      _hasValidPrimaryVrm: presentVrm,
       _hasValidAnimations: presentAnims,
       _gitAvailable: () => true,
       _exec: () => {
@@ -259,6 +313,7 @@ describe("runEnsureAvatars", () => {
       log: () => {},
       logError: (msg: string) => errors.push(msg),
       _hasValidVrm: absentVrm,
+      _hasValidPrimaryVrm: absentVrm,
       _hasValidAnimations: absentAnims,
       _gitAvailable: () => true,
       _exec: () => {},
@@ -277,6 +332,7 @@ describe("runEnsureAvatars", () => {
       log: (msg: string) => logs.push(msg),
       logError: () => {},
       _hasValidVrm: presentVrm,
+      _hasValidPrimaryVrm: presentVrm,
       _hasValidAnimations: presentAnims,
       _gitAvailable: () => true,
       _exec: () => {},
@@ -300,6 +356,7 @@ describe("runEnsureAvatars", () => {
 describe("module exports", () => {
   it("exports expected functions", () => {
     expect(typeof hasValidVrm).toBe("function");
+    expect(typeof hasValidPrimaryVrm).toBe("function");
     expect(typeof hasValidAnimations).toBe("function");
     expect(typeof runEnsureAvatars).toBe("function");
   });
