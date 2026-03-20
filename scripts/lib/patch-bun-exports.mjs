@@ -110,16 +110,16 @@ export function patchBrokenElizaCoreRuntimeDists(root, log = console.log) {
 }
 
 /**
- * Bust stale Bun cache entries for @elizaos packages.
+ * Detect stale Bun module cache and warn the user.
  *
  * Bun's content-addressable cache deduplicates packages by tarball hash. When
  * upstream publishes multiple versions with identical (stale) build artifacts,
- * they share a hash. Later, when a fixed version publishes with different
- * content, Bun may still serve the old cached extraction because the hash
- * didn't change from the user's previously-installed version. We detect this
- * by checking whether multiple cached versions share the same content hash —
- * if so, they are stale and we remove them so the next `bun install`
- * re-extracts fresh tarballs from the registry.
+ * they share a hash and Bun serves stale content. We can't safely remove
+ * entries during postinstall (symlinks break), so we detect the condition
+ * and tell the user to run `bun run repair` which does:
+ *   rm -rf node_modules/.bun && bun install
+ *
+ * Runs once per package.json version (stamp-guarded).
  *
  * Bun cache entry format: @scope+pkg@version+contenthash
  * e.g. @elizaos+core@2.0.0-alpha.77+f9c270f5561f2899
@@ -128,54 +128,68 @@ export function bustStaleBunCache(root, log = console.log) {
   const bunCacheDir = resolve(root, "node_modules/.bun");
   if (!existsSync(bunCacheDir)) return 0;
 
-  const prefixes = ["@elizaos+core@", "@elizaos+autonomous@", "@elizaos+app-core@"];
-  let removed = 0;
+  // Only check once per package.json version.
+  const pkgJsonPath = resolve(root, "package.json");
+  const stampPath = resolve(bunCacheDir, ".bust-cache-stamp");
+  if (existsSync(pkgJsonPath) && existsSync(stampPath)) {
+    try {
+      const pkgVersion = JSON.parse(readFileSync(pkgJsonPath, "utf8")).version || "";
+      const stamp = readFileSync(stampPath, "utf8").trim();
+      if (stamp === pkgVersion) return 0;
+    } catch {}
+  }
+
+  const prefixes = [
+    "@elizaos+core@",
+    "@elizaos+autonomous@",
+    "@elizaos+app-core@",
+    "@elizaos+prompts@",
+    "@elizaos+skills@",
+    "@elizaos+tui@",
+  ];
+  let staleCount = 0;
+
+  let allEntries;
+  try {
+    allEntries = readdirSync(bunCacheDir);
+  } catch (err) {
+    log(`[patch-deps] Warning: failed to read Bun cache: ${err.message}`);
+    return 0;
+  }
 
   for (const prefix of prefixes) {
-    let entries;
-    try {
-      entries = readdirSync(bunCacheDir).filter((e) => e.startsWith(prefix));
-    } catch (err) {
-      log(`[patch-deps] Warning: failed to read Bun cache for ${prefix}: ${err.message}`);
-      continue;
-    }
+    const entries = allEntries.filter((e) => e.startsWith(prefix));
     if (entries.length < 2) continue;
 
     // Group by content hash (the part after the last '+')
     const byHash = new Map();
     for (const entry of entries) {
       const plusIdx = entry.lastIndexOf("+");
-      // Guard against unexpected naming format — skip entries without a hash segment
       if (plusIdx === -1 || plusIdx === entry.length - 1) continue;
       const hash = entry.slice(plusIdx + 1);
       if (!byHash.has(hash)) byHash.set(hash, []);
       byHash.get(hash).push(entry);
     }
 
-    // If multiple versions share a hash, the content is identical (stale).
-    // Remove all entries in that group so Bun re-extracts fresh tarballs.
-    for (const [hash, group] of byHash) {
-      if (group.length < 2) continue;
-      for (const entry of group) {
-        const entryPath = resolve(bunCacheDir, entry);
-        try {
-          rmSync(entryPath, { recursive: true, force: true });
-          removed++;
-        } catch (err) {
-          log(`[patch-deps] Warning: failed to remove stale cache entry ${entry}: ${err.message}`);
-        }
-      }
-      log(
-        `[patch-deps] Removed ${group.length} stale Bun cache entries for ${prefix}* (hash ${hash})`,
-      );
+    for (const [, group] of byHash) {
+      if (group.length >= 2) staleCount += group.length - 1;
     }
   }
-  if (removed > 0) {
+
+  // Write stamp regardless so we don't re-check every install.
+  try {
+    const pkgVersion = existsSync(pkgJsonPath)
+      ? JSON.parse(readFileSync(pkgJsonPath, "utf8")).version || ""
+      : "";
+    writeFileSync(stampPath, pkgVersion, "utf8");
+  } catch {}
+
+  if (staleCount > 0) {
     log(
-      `[patch-deps] Cleared ${removed} stale Bun cache entries. Run \`bun install\` again if needed.`,
+      `[patch-deps] ⚠️  Detected ${staleCount} stale Bun cache entries. Run: rm -rf node_modules/.bun && bun install`,
     );
   }
-  return removed;
+  return staleCount;
 }
 
 /**

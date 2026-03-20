@@ -1318,33 +1318,15 @@ describe("bustStaleBunCache", () => {
     try {
       mkdirSync(join(tmp, "node_modules"), { recursive: true });
       const logs: string[] = [];
-      const removed = bustStaleBunCache(tmp, (msg: string) => logs.push(msg));
-      expect(removed).toBe(0);
+      const count = bustStaleBunCache(tmp, (msg: string) => logs.push(msg));
+      expect(count).toBe(0);
       expect(logs).toHaveLength(0);
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
   });
 
-  it("does nothing when only one entry per prefix", () => {
-    const tmp = makeTmp();
-    try {
-      const bunDir = join(tmp, "node_modules/.bun");
-      makeBunCacheEntry(bunDir, "@elizaos+core@2.0.0-alpha.81+abc123");
-      makeBunCacheEntry(bunDir, "@elizaos+autonomous@2.0.0-alpha.81+def456");
-
-      const logs: string[] = [];
-      const removed = bustStaleBunCache(tmp, (msg: string) => logs.push(msg));
-      expect(removed).toBe(0);
-      // Entries still exist
-      expect(existsSync(join(bunDir, "@elizaos+core@2.0.0-alpha.81+abc123"))).toBe(true);
-      expect(existsSync(join(bunDir, "@elizaos+autonomous@2.0.0-alpha.81+def456"))).toBe(true);
-    } finally {
-      rmSync(tmp, { recursive: true, force: true });
-    }
-  });
-
-  it("removes entries when two versions share the same hash", () => {
+  it("detects stale entries when two versions share the same hash", () => {
     const tmp = makeTmp();
     try {
       const bunDir = join(tmp, "node_modules/.bun");
@@ -1352,17 +1334,18 @@ describe("bustStaleBunCache", () => {
       makeBunCacheEntry(bunDir, "@elizaos+core@2.0.0-alpha.81+samehash");
 
       const logs: string[] = [];
-      const removed = bustStaleBunCache(tmp, (msg: string) => logs.push(msg));
-      expect(removed).toBe(2);
-      expect(existsSync(join(bunDir, "@elizaos+core@2.0.0-alpha.77+samehash"))).toBe(false);
-      expect(existsSync(join(bunDir, "@elizaos+core@2.0.0-alpha.81+samehash"))).toBe(false);
+      const count = bustStaleBunCache(tmp, (msg: string) => logs.push(msg));
+      expect(count).toBe(1);
       expect(logs.some((l) => l.includes("stale Bun cache entries"))).toBe(true);
+      // Entries are NOT removed (detect-only), just warned about
+      expect(existsSync(join(bunDir, "@elizaos+core@2.0.0-alpha.77+samehash"))).toBe(true);
+      expect(existsSync(join(bunDir, "@elizaos+core@2.0.0-alpha.81+samehash"))).toBe(true);
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
   });
 
-  it("preserves entries when two versions have different hashes", () => {
+  it("returns 0 when versions have different hashes", () => {
     const tmp = makeTmp();
     try {
       const bunDir = join(tmp, "node_modules/.bun");
@@ -1370,31 +1353,62 @@ describe("bustStaleBunCache", () => {
       makeBunCacheEntry(bunDir, "@elizaos+autonomous@2.0.0-alpha.81+newhash");
 
       const logs: string[] = [];
-      const removed = bustStaleBunCache(tmp, (msg: string) => logs.push(msg));
-      expect(removed).toBe(0);
-      expect(existsSync(join(bunDir, "@elizaos+autonomous@2.0.0-alpha.77+oldhash"))).toBe(true);
-      expect(existsSync(join(bunDir, "@elizaos+autonomous@2.0.0-alpha.81+newhash"))).toBe(true);
+      const count = bustStaleBunCache(tmp, (msg: string) => logs.push(msg));
+      expect(count).toBe(0);
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
   });
 
-  it("only removes matching prefix groups, not unrelated packages", () => {
+  it("skips when stamp matches package.json version", () => {
     const tmp = makeTmp();
     try {
       const bunDir = join(tmp, "node_modules/.bun");
-      // Stale core entries (same hash)
-      makeBunCacheEntry(bunDir, "@elizaos+core@2.0.0-alpha.77+stale");
-      makeBunCacheEntry(bunDir, "@elizaos+core@2.0.0-alpha.81+stale");
-      // Unrelated package with same pattern — should not be touched
-      makeBunCacheEntry(bunDir, "@elizaos+plugin-sql@2.0.0-alpha.77+stale");
-      makeBunCacheEntry(bunDir, "@elizaos+plugin-sql@2.0.0-alpha.81+stale");
+      mkdirSync(bunDir, { recursive: true });
+      makeBunCacheEntry(bunDir, "@elizaos+core@2.0.0-alpha.77+samehash");
+      makeBunCacheEntry(bunDir, "@elizaos+core@2.0.0-alpha.81+samehash");
+      writeFileSync(join(tmp, "package.json"), JSON.stringify({ version: "1.0.0" }), "utf8");
+      writeFileSync(join(bunDir, ".bust-cache-stamp"), "1.0.0", "utf8");
 
       const logs: string[] = [];
-      const removed = bustStaleBunCache(tmp, (msg: string) => logs.push(msg));
-      expect(removed).toBe(2); // Only the core entries
-      expect(existsSync(join(bunDir, "@elizaos+plugin-sql@2.0.0-alpha.77+stale"))).toBe(true);
-      expect(existsSync(join(bunDir, "@elizaos+plugin-sql@2.0.0-alpha.81+stale"))).toBe(true);
+      const count = bustStaleBunCache(tmp, (msg: string) => logs.push(msg));
+      expect(count).toBe(0); // Stamp matches, skip check
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("re-checks when package.json version changes", () => {
+    const tmp = makeTmp();
+    try {
+      const bunDir = join(tmp, "node_modules/.bun");
+      mkdirSync(bunDir, { recursive: true });
+      makeBunCacheEntry(bunDir, "@elizaos+core@2.0.0-alpha.77+samehash");
+      makeBunCacheEntry(bunDir, "@elizaos+core@2.0.0-alpha.81+samehash");
+      writeFileSync(join(tmp, "package.json"), JSON.stringify({ version: "2.0.0" }), "utf8");
+      writeFileSync(join(bunDir, ".bust-cache-stamp"), "1.0.0", "utf8");
+
+      const logs: string[] = [];
+      const count = bustStaleBunCache(tmp, (msg: string) => logs.push(msg));
+      expect(count).toBe(1);
+      // Stamp updated to new version
+      const stamp = readFileSync(join(bunDir, ".bust-cache-stamp"), "utf8").trim();
+      expect(stamp).toBe("2.0.0");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("ignores non-tracked package prefixes", () => {
+    const tmp = makeTmp();
+    try {
+      const bunDir = join(tmp, "node_modules/.bun");
+      makeBunCacheEntry(bunDir, "@elizaos+plugin-sql@2.0.0-alpha.77+samehash");
+      makeBunCacheEntry(bunDir, "@elizaos+plugin-sql@2.0.0-alpha.81+samehash");
+
+      const logs: string[] = [];
+      const count = bustStaleBunCache(tmp, (msg: string) => logs.push(msg));
+      expect(count).toBe(0);
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
