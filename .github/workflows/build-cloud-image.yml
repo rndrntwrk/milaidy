@@ -101,7 +101,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: deploy/Dockerfile.cloud-full-ui
+          file: ./deploy/Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name == 'push' || inputs.push == true }}
           tags: ${{ steps.meta.outputs.tags }}

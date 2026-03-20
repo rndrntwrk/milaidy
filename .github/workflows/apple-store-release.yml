@@ -145,7 +145,7 @@ jobs:
 
       - name: Sync Capacitor iOS
         working-directory: apps/app
-        run: npx cap sync ios
+        run: bun run cap:sync:ios
 
       - name: Update Xcode project version
         working-directory: apps/app/ios/App/App.xcodeproj
