@@ -8,10 +8,10 @@
  *   2. Write dist/package.json with {"type":"module"}
  *   3. Write build info
  *   4. Build all Capacitor plugins
- *   5. Vite build the app (renderer)
+ *   5. vite build the app (renderer)
  *
  * Usage:
- *   node scripts/build-win.mjs [--variant base|companion|full] [--skip-plugins] [--skip-install]
+ *   node scripts/build-win.mjs [--skip-plugins] [--skip-install]
  */
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -22,15 +22,11 @@ const appDir = join(rootDir, "apps", "app");
 
 // Parse args
 const args = process.argv.slice(2);
-let variant = "full";
 let skipPlugins = false;
 let skipInstall = false;
 
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === "--variant" && args[i + 1]) {
-    variant = args[i + 1];
-    i++;
-  } else if (args[i] === "--skip-plugins") {
+  if (args[i] === "--skip-plugins") {
     skipPlugins = true;
   } else if (args[i] === "--skip-install") {
     skipInstall = true;
@@ -87,15 +83,12 @@ try {
     console.log("\n=== Step 4/5: Skipping plugins (--skip-plugins) ===");
   }
 
-  // Step 5: Vite build
-  console.log(`\n=== Step 5/5: Vite build (variant=${variant}) ===`);
+  // Step 5: vite build
+  console.log("\n=== Step 5/5: vite build ===");
   if (!skipInstall) {
     run("bun install --ignore-scripts", { cwd: appDir });
   }
-  run(`npx vite build`, {
-    cwd: appDir,
-    env: { ...process.env, VITE_APP_VARIANT: variant },
-  });
+  run(`npx vite build`, { cwd: appDir });
 
   console.log("\n=== Build complete! ===");
 } catch (e) {

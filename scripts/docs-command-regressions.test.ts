@@ -32,6 +32,7 @@ describe("docs command regressions", () => {
     const installation = readDoc("docs/installation.mdx");
     const configuration = readDoc("docs/configuration.mdx");
     const architecture = readDoc("docs/architecture.mdx");
+    const cliOverview = readDoc("docs/cli/overview.md");
 
     expect(installation).toContain("npm install -g miladyai");
     expect(installation).not.toContain("npm install -g milaidy");
@@ -41,5 +42,10 @@ describe("docs command regressions", () => {
 
     expect(architecture).toContain("the `miladyai` npm package");
     expect(architecture).not.toContain("the `milaidy` npm package");
+
+    expect(cliOverview).toContain("bun install -g miladyai");
+    expect(cliOverview).toContain("bunx miladyai");
+    expect(cliOverview).not.toContain("bun install -g milaidy");
+    expect(cliOverview).not.toContain("bunx milaidy");
   });
 });

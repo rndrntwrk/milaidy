@@ -541,9 +541,9 @@ describe("CORS origin restrictions", () => {
     expect(status).toBe(200);
   });
 
-  it("allows capacitor-electron origin", async () => {
+  it("allows electrobun origin", async () => {
     const { status } = await req(port, "GET", "/api/status", undefined, {
-      origin: "capacitor-electron://-",
+      origin: "electrobun://-",
     });
     expect(status).toBe(200);
   });
@@ -882,6 +882,10 @@ describe("Auth + agent lifecycle", () => {
         name: "AuthTestAgent",
         bio: ["An auth test agent"],
         systemPrompt: "You are a test agent.",
+        connection: {
+          kind: "local-provider",
+          provider: "anthropic",
+        },
       },
       auth,
     );

@@ -18,6 +18,7 @@ const __dirname = path.dirname(__filename);
 
 const packageRoot = path.resolve(__dirname, "..");
 const outputPath = path.join(packageRoot, "plugins.json");
+const overridesPath = path.join(__dirname, "plugin-metadata-overrides.json");
 
 // Registry URL
 const GENERATED_REGISTRY_URL =
@@ -83,6 +84,37 @@ const CONNECTORS = new Set([
   "instagram",
 ]);
 
+const SOCIAL_CHAT_CONNECTORS = new Set([
+  "telegram",
+  "discord",
+  "slack",
+  "whatsapp",
+  "signal",
+  "imessage",
+  "bluebubbles",
+  "matrix",
+  "mattermost",
+  "msteams",
+  "google-chat",
+  "feishu",
+  "line",
+  "zalo",
+  "zalouser",
+  "tlon",
+  "nextcloud-talk",
+  "blooio",
+  "twilio",
+  "twitch",
+]);
+
+const SOCIAL_FEED_CONNECTORS = new Set([
+  "twitter",
+  "bluesky",
+  "farcaster",
+  "instagram",
+  "nostr",
+]);
+
 const DATABASES = new Set(["sql", "localdb", "inmemorydb"]);
 
 export const PLUGIN_SETUP_GUIDE_ROOT =
@@ -138,6 +170,44 @@ const SETUP_GUIDE_ANCHORS = {
 };
 
 const MILADY_REPO_ROOT = "https://github.com/milady-ai/milady";
+const TAG_STOPWORDS = new Set([
+  "plugin",
+  "plugins",
+  "eliza",
+  "elizaos",
+  "elizaos-plugin",
+  "elizaos-plugins",
+  "feature",
+]);
+const TAG_ALIASES = new Map([
+  ["ai", "llm"],
+  ["ai-agents", "agents"],
+  ["computer-vision", "vision"],
+  ["issue-tracking", "project-management"],
+  ["project-management", "project-management"],
+  ["text-to-speech", "text-to-speech"],
+  ["tts", "text-to-speech"],
+  ["voice-synthesis", "text-to-speech"],
+  ["speech-to-text", "speech-to-text"],
+  ["stt", "speech-to-text"],
+  ["file-storage", "storage"],
+  ["long-term-memory", "memory"],
+  ["short-term-memory", "memory"],
+  ["multi-agent", "orchestration"],
+  ["command-line", "developer-tools"],
+]);
+const CATEGORY_TAGS = {
+  "ai-provider": ["ai-provider", "llm"],
+  connector: ["connector"],
+  streaming: ["streaming", "broadcast"],
+  database: ["database", "storage"],
+  app: ["app", "interactive"],
+  feature: [],
+};
+
+const metadataOverrides = fs.existsSync(overridesPath)
+  ? JSON.parse(fs.readFileSync(overridesPath, "utf8"))
+  : {};
 
 export function categorize(id) {
   if (AI_PROVIDERS.has(id)) return "ai-provider";
@@ -172,7 +242,7 @@ export function normalizeRepositoryUrl(repository) {
 }
 
 function deriveMiladyRepositoryUrl(npmName, dirName) {
-  if (!npmName?.startsWith("@milady/")) return undefined;
+  if (!npmName?.startsWith("@miladyai/")) return undefined;
   if (!dirName?.startsWith("plugin-")) return undefined;
   return `${MILADY_REPO_ROOT}/tree/main/packages/${dirName}`;
 }
@@ -186,15 +256,126 @@ function readLocalPackageMetadata(dirName, npmName) {
   try {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
     return {
+      description: typeof pkg.description === "string" ? pkg.description : "",
       homepage: typeof pkg.homepage === "string" ? pkg.homepage : undefined,
       repository:
         normalizeRepositoryUrl(pkg.repository) ??
         deriveMiladyRepositoryUrl(npmName, dirName),
       icon: pkg.logoUrl ?? pkg.elizaos?.logoUrl ?? pkg.icon ?? undefined,
+      tags: normalizeTags(pkg.keywords ?? []),
     };
   } catch {
     return { repository: deriveMiladyRepositoryUrl(npmName, dirName) };
   }
+}
+
+function normalizeTag(tag) {
+  if (typeof tag !== "string") return null;
+  const normalized = tag
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!normalized || TAG_STOPWORDS.has(normalized)) return null;
+  return TAG_ALIASES.get(normalized) ?? normalized;
+}
+
+function normalizeTags(values) {
+  const tags = [];
+  const seen = new Set();
+  for (const value of values ?? []) {
+    const normalized = normalizeTag(value);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    tags.push(normalized);
+  }
+  return tags;
+}
+
+function idTags(id) {
+  const parts = id.split("-").filter(Boolean);
+  return normalizeTags([id, ...parts]);
+}
+
+function mergeTags(...sources) {
+  return normalizeTags(
+    sources.flatMap((source) => (Array.isArray(source) ? source : [])),
+  );
+}
+
+export function connectorTags(id) {
+  if (SOCIAL_CHAT_CONNECTORS.has(id)) {
+    return ["social", "social-chat", "messaging"];
+  }
+  if (SOCIAL_FEED_CONNECTORS.has(id)) {
+    return ["social", "social-feed"];
+  }
+  return ["integration"];
+}
+
+export function inferDescription(id, name, category) {
+  switch (category) {
+    case "ai-provider":
+      return `${name} model provider for chat and inference workloads.`;
+    case "connector":
+      if (SOCIAL_CHAT_CONNECTORS.has(id)) {
+        return `${name} connector for chatting with your agent.`;
+      }
+      if (SOCIAL_FEED_CONNECTORS.has(id)) {
+        return `${name} social connector for connecting your agent to ${name}.`;
+      }
+      return `${name} connector for integrating external workflows with Milady agents.`;
+    case "streaming":
+      return `${name} streaming destination for broadcasting live agent output.`;
+    case "database":
+      return `${name} database adapter for persistent agent state and memory.`;
+    case "app":
+      return `${name} interactive app for Milady agents.`;
+    default:
+      return `${name} plugin for ${id.replace(/-/g, " ")} workflows.`;
+  }
+}
+
+async function fetchNpmMetadata(packageName) {
+  if (!packageName) return { description: "", keywords: [] };
+  try {
+    const response = await fetch(
+      `https://registry.npmjs.org/${encodeURIComponent(packageName)}`,
+    );
+    if (!response.ok) return { description: "", keywords: [] };
+    const pkg = await response.json();
+    const tags = pkg["dist-tags"] ?? {};
+    const version =
+      pkg.versions?.[tags.latest] ??
+      pkg.versions?.[tags.next] ??
+      pkg.versions?.[Object.keys(pkg.versions ?? {}).pop()];
+    return {
+      description:
+        typeof version?.description === "string" ? version.description : "",
+      keywords: Array.isArray(version?.keywords) ? version.keywords : [],
+    };
+  } catch {
+    return { description: "", keywords: [] };
+  }
+}
+
+async function fetchNpmMetadataMap(packageNames) {
+  const uniqueNames = [...new Set(packageNames.filter(Boolean))];
+  const results = new Map();
+  let index = 0;
+  const workerCount = Math.min(8, uniqueNames.length);
+
+  async function worker() {
+    while (index < uniqueNames.length) {
+      const current = uniqueNames[index];
+      index += 1;
+      results.set(current, await fetchNpmMetadata(current));
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
 }
 
 function findEnvKey(configKeys) {
@@ -400,6 +581,16 @@ async function main() {
 
   // Registry format: { registry: { "@elizaos/plugin-xxx": { ... } } }
   const packages = registry.registry || {};
+  const npmMetadata = await fetchNpmMetadataMap(
+    Object.entries(packages)
+      .filter(
+        ([, pkgInfo]) =>
+          !pkgInfo.description ||
+          !Array.isArray(pkgInfo.topics) ||
+          !pkgInfo.topics.length,
+      )
+      .map(([npmName]) => npmName),
+  );
 
   for (const [npmName, pkgInfo] of Object.entries(packages)) {
     // Only process @elizaos/plugin-* packages
@@ -410,13 +601,17 @@ async function main() {
 
     const id = npmName.replace("@elizaos/plugin-", "");
     const dirName = `plugin-${id}`;
-    const description = pkgInfo.description || "";
     // Use v2 npm version (next/alpha)
     const version = pkgInfo.npm?.v2 || undefined;
 
     // Get existing entry to preserve hand-authored metadata
     const existingEntry = existingManifest.get(id);
     const localMeta = readLocalPackageMetadata(dirName, npmName);
+    const override = metadataOverrides[id] ?? {};
+    const npmMeta = npmMetadata.get(npmName) ?? {
+      description: "",
+      keywords: [],
+    };
 
     // Preserve existing category if the inferred one is just "feature" (default)
     const inferredCategory = categorize(id);
@@ -424,6 +619,24 @@ async function main() {
       inferredCategory === "feature" && existingEntry?.category
         ? existingEntry.category
         : inferredCategory;
+    const name = existingEntry?.name || formatName(id);
+    const description =
+      override.description ||
+      pkgInfo.description ||
+      localMeta.description ||
+      npmMeta.description ||
+      existingEntry?.description ||
+      inferDescription(id, name, category);
+    const tags = mergeTags(
+      override.tags,
+      localMeta.tags,
+      pkgInfo.topics,
+      npmMeta.keywords,
+      CATEGORY_TAGS[category] ?? [],
+      category === "connector" ? connectorTags(id) : [],
+      idTags(id),
+      existingEntry?.tags,
+    );
 
     // Preserve configKeys from existing manifest
     const configKeys = existingEntry?.configKeys || [];
@@ -441,9 +654,10 @@ async function main() {
     entries.push({
       id,
       dirName,
-      name: formatName(id),
+      name,
       npmName,
       description,
+      tags,
       category,
       envKey,
       configKeys,
@@ -482,6 +696,7 @@ async function main() {
     const dirName = existingEntry.dirName || `plugin-${id}`;
     const npmName = existingEntry.npmName;
     const localMeta = readLocalPackageMetadata(dirName, npmName);
+    const override = metadataOverrides[id] ?? {};
     const inferredCategory = categorize(id);
     const category =
       inferredCategory === "feature" && existingEntry?.category
@@ -492,11 +707,26 @@ async function main() {
     const homepage = existingEntry.homepage ?? localMeta.homepage ?? undefined;
     const setupGuideUrl =
       existingEntry.setupGuideUrl ?? resolveSetupGuideUrl(id) ?? undefined;
+    const tags = mergeTags(
+      override.tags,
+      localMeta.tags,
+      CATEGORY_TAGS[category] ?? [],
+      category === "connector" ? connectorTags(id) : [],
+      idTags(id),
+      existingEntry.tags,
+    );
+    const description =
+      override.description ||
+      existingEntry.description ||
+      localMeta.description ||
+      inferDescription(id, existingEntry.name || formatName(id), category);
 
     entries.push({
       ...existingEntry,
       id,
       dirName,
+      description,
+      tags,
       category,
       ...(repository ? { repository } : {}),
       ...(homepage ? { homepage } : {}),

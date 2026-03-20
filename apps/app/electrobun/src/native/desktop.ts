@@ -1,7 +1,7 @@
 /**
  * Desktop Native Module for Electrobun
  *
- * Ports the Electron DesktopManager to use Electrobun APIs:
+ * Implements the desktop manager on top of Electrobun APIs:
  * - System tray management (Tray)
  * - Global keyboard shortcuts (GlobalShortcut)
  * - Window management (BrowserWindow)
@@ -11,7 +11,7 @@
  * - App lifecycle (Utils.quit)
  * - Path resolution (Utils.paths)
  *
- * Key differences from Electron version:
+ * Key differences from the prior desktop runtime:
  * - No ipcMain — methods are called directly from rpc-handlers.ts
  * - Uses sendToWebview callback instead of mainWindow.webContents.send()
  * - No powerMonitor — power state read via platform CLI tools
@@ -85,8 +85,15 @@ interface ShowItemInFolderOptions {
   path: string;
 }
 
+type ElectrobunEventHandler = (...args: unknown[]) => void;
+
+interface ElectrobunEventTarget {
+  off?: (event: string, handler: ElectrobunEventHandler) => void;
+  removeListener?: (event: string, handler: ElectrobunEventHandler) => void;
+}
+
 // ============================================================================
-// Path name mapping: Electron path names → Utils.paths equivalents
+// Path name mapping: legacy desktop path names -> Utils.paths equivalents
 // ============================================================================
 
 const PATH_NAME_MAP: Record<string, string | (() => string)> = {
@@ -114,7 +121,7 @@ const PATH_NAME_MAP: Record<string, string | (() => string)> = {
 /**
  * Desktop Manager — handles all native desktop features for Electrobun.
  *
- * Unlike the Electron version, this does NOT register IPC handlers.
+ * This implementation does not register IPC handlers.
  * Methods are called directly from rpc-handlers.ts. Push events to the
  * webview are sent via the sendToWebview callback.
  */
@@ -129,8 +136,19 @@ export class DesktopManager {
   private _focusPoller: ReturnType<typeof setInterval> | null = null;
   private _appActive = false;
 
+  // Callback to open the settings window (set by index.ts)
+  private openSettingsCallback: (() => void) | null = null;
+
   // Track menu items for context-menu-clicked matching
   private trayMenuItems: Map<string, TrayMenuItem> = new Map();
+  private trayClickHandler: (() => void) | null = null;
+  private applicationMenuHandler:
+    | ((e: { data?: { action?: string } }) => void)
+    | null = null;
+  private contextMenuHandler: ((action: string) => void) | null = null;
+  private windowEventHandlers: Partial<
+    Record<"focus" | "blur" | "close" | "resize" | "move", () => void>
+  > = {};
 
   // MARK: - Configuration
 
@@ -138,6 +156,11 @@ export class DesktopManager {
    * Set the main BrowserWindow reference and wire up window events.
    */
   setMainWindow(window: BrowserWindow): void {
+    if (this.mainWindow === window) {
+      return;
+    }
+
+    this.teardownWindowEvents(this.mainWindow);
     this.mainWindow = window;
     this.setupWindowEvents();
   }
@@ -147,6 +170,20 @@ export class DesktopManager {
    */
   setSendToWebview(fn: SendToWebview): void {
     this.sendToWebview = fn;
+  }
+
+  /**
+   * Set the callback used to open the settings window from menus.
+   */
+  setOpenSettingsCallback(cb: () => void): void {
+    this.openSettingsCallback = cb;
+  }
+
+  /**
+   * Open the settings window via the registered callback.
+   */
+  openSettings(): void {
+    this.openSettingsCallback?.();
   }
 
   private getWindow(): BrowserWindow {
@@ -166,8 +203,7 @@ export class DesktopManager {
 
   async createTray(options: TrayOptions): Promise<void> {
     if (this.tray) {
-      this.tray.remove();
-      this.tray = null;
+      await this.destroyTray();
     }
 
     const iconPath = this.resolveIconPath(options.icon);
@@ -206,6 +242,7 @@ export class DesktopManager {
   }
 
   async destroyTray(): Promise<void> {
+    this.teardownTrayEvents();
     if (this.tray) {
       this.tray.remove();
       this.tray = null;
@@ -270,8 +307,10 @@ export class DesktopManager {
   private setupTrayEvents(): void {
     if (!this.tray) return;
 
+    this.teardownTrayEvents();
+
     // Electrobun tray click is simpler — no bounds/modifiers
-    this.tray.on("tray-clicked", () => {
+    this.trayClickHandler = () => {
       void this.showWindow().catch((err: unknown) => {
         console.warn("[Desktop] Failed to show window from tray click:", err);
       });
@@ -281,7 +320,8 @@ export class DesktopManager {
         button: "left",
         modifiers: { alt: false, shift: false, ctrl: false, meta: false },
       });
-    });
+    };
+    this.tray.on("tray-clicked", this.trayClickHandler);
 
     // Context menu item clicks come through the global event bus.
     // This single handler covers both native actions (show/quit) and
@@ -298,23 +338,30 @@ export class DesktopManager {
       });
     };
 
+    this.applicationMenuHandler = (e: { data?: { action?: string } }) => {
+      if (e?.data?.action === "show") {
+        void this.showWindow().catch((err: unknown) => {
+          console.warn(
+            "[Desktop] Failed to show window from application menu:",
+            err,
+          );
+        });
+      } else if (e?.data?.action === "restart-agent") {
+        triggerAgentRestart();
+      }
+    };
     Electrobun.events.on(
       "application-menu-clicked",
-      (e: { data: { action: string } }) => {
-        if (e?.data?.action === "show") {
-          void this.showWindow().catch((err: unknown) => {
-            console.warn(
-              "[Desktop] Failed to show window from application menu:",
-              err,
-            );
-          });
-        } else if (e?.data?.action === "restart-agent") {
-          triggerAgentRestart();
-        }
-      },
+      this.applicationMenuHandler,
     );
 
-    Electrobun.events.on("context-menu-clicked", (action: string) => {
+    // Tray menu item clicks fire "tray-clicked" on the global event bus
+    // (NOT "context-menu-clicked" — that's for right-click context menus).
+    // The event data shape is { data: { id, action, data? } }.
+    this.contextMenuHandler = (e: { data?: { action?: string } }) => {
+      const action = e?.data?.action;
+      if (!action) return;
+
       // Native actions
       if (action === "show") {
         void this.showWindow().catch((err: unknown) => {
@@ -324,6 +371,8 @@ export class DesktopManager {
         triggerAgentRestart();
       } else if (action === "quit") {
         Utils.quit();
+      } else if (action === "open-settings") {
+        this.openSettingsCallback?.();
       }
 
       // Renderer notification for all items
@@ -335,7 +384,44 @@ export class DesktopManager {
             menuItem.type === "checkbox" ? !menuItem.checked : menuItem.checked,
         });
       }
-    });
+    };
+    Electrobun.events.on("tray-clicked", this.contextMenuHandler);
+  }
+
+  private teardownTrayEvents(): void {
+    this.removeEventHandler(this.tray, "tray-clicked", this.trayClickHandler);
+    this.removeEventHandler(
+      Electrobun.events,
+      "application-menu-clicked",
+      this.applicationMenuHandler,
+    );
+    this.removeEventHandler(
+      Electrobun.events,
+      "tray-clicked",
+      this.contextMenuHandler,
+    );
+    this.trayClickHandler = null;
+    this.applicationMenuHandler = null;
+    this.contextMenuHandler = null;
+  }
+
+  private removeEventHandler(
+    target: ElectrobunEventTarget | null | undefined,
+    event: string,
+    handler: ElectrobunEventHandler | null | undefined,
+  ): void {
+    if (!target || !handler) {
+      return;
+    }
+
+    if (typeof target.off === "function") {
+      target.off(event, handler);
+      return;
+    }
+
+    if (typeof target.removeListener === "function") {
+      target.removeListener(event, handler);
+    }
   }
 
   // MARK: - Global Shortcuts
@@ -721,41 +807,52 @@ X-GNOME-Autostart-enabled=true
   }
 
   private setupWindowEvents(): void {
-    if (!this.mainWindow) return;
+    const win = this.mainWindow;
+    if (!win) return;
 
-    this.mainWindow.on("focus", () => {
+    const focusHandler = () => {
       this._windowFocused = true;
       this.send("desktopWindowFocus");
-    });
+    };
+    this.windowEventHandlers.focus = focusHandler;
+    win.on("focus", focusHandler);
 
     // Blur via native event (Electrobun may not surface this, but try it for free)
-    this.mainWindow.on("blur", () => {
+    const blurHandler = () => {
       this._windowFocused = false;
       this.send("desktopWindowBlur");
-    });
+    };
+    this.windowEventHandlers.blur = blurHandler;
+    win.on("blur", blurHandler);
 
-    this.mainWindow.on("close", () => {
+    const closeHandler = () => {
       this.send("desktopWindowClose");
-    });
+    };
+    this.windowEventHandlers.close = closeHandler;
+    win.on("close", closeHandler);
 
-    this.mainWindow.on("resize", () => {
+    const resizeHandler = () => {
       // Electrobun fires resize but doesn't distinguish maximize/unmaximize.
       // We detect state changes to emit the right event.
-      if (this.mainWindow?.isMaximized()) {
+      if (win.isMaximized()) {
         this.send("desktopWindowMaximize");
       }
-    });
+    };
+    this.windowEventHandlers.resize = resizeHandler;
+    win.on("resize", resizeHandler);
 
     let wasMaximized = false;
-    this.mainWindow.on("move", () => {
+    const moveHandler = () => {
       // Only emit desktopWindowUnmaximize when transitioning FROM maximized
       // to not-maximized, not on every move during a normal window drag.
-      const isMaximized = this.mainWindow?.isMaximized() ?? false;
+      const isMaximized = win.isMaximized();
       if (wasMaximized && !isMaximized) {
         this.send("desktopWindowUnmaximize");
       }
       wasMaximized = isMaximized;
-    });
+    };
+    this.windowEventHandlers.move = moveHandler;
+    win.on("move", moveHandler);
 
     // Blur fallback: poll [NSWindow isKeyWindow] at 2Hz on macOS.
     // Electrobun does not guarantee blur events, so this gives bounded
@@ -763,6 +860,19 @@ X-GNOME-Autostart-enabled=true
     if (process.platform === "darwin") {
       this._startFocusPoller();
     }
+  }
+
+  private teardownWindowEvents(window: BrowserWindow | null): void {
+    if (!window) {
+      return;
+    }
+
+    this.removeEventHandler(window, "focus", this.windowEventHandlers.focus);
+    this.removeEventHandler(window, "blur", this.windowEventHandlers.blur);
+    this.removeEventHandler(window, "close", this.windowEventHandlers.close);
+    this.removeEventHandler(window, "resize", this.windowEventHandlers.resize);
+    this.removeEventHandler(window, "move", this.windowEventHandlers.move);
+    this.windowEventHandlers = {};
   }
 
   private _startFocusPoller(): void {
@@ -1158,8 +1268,10 @@ X-GNOME-Autostart-enabled=true
       clearInterval(this._focusPoller);
       this._focusPoller = null;
     }
+    this.teardownWindowEvents(this.mainWindow);
+    this.mainWindow = null;
     this.unregisterAllShortcuts();
-    this.destroyTray();
+    void this.destroyTray();
     this.trayMenuItems.clear();
     this.sendToWebview = null;
   }

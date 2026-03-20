@@ -17,11 +17,15 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
+  unlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -29,6 +33,13 @@ const ROOT = resolve(__dirname, "..");
 const PUBLIC = join(ROOT, "apps", "app", "public");
 const VRMS_DIR = join(PUBLIC, "vrms");
 const ANIMATIONS_DIR = join(PUBLIC, "animations");
+const BUNDLED_VRM_SOURCE_IDS = [1, 4, 5, 9];
+const BUNDLED_BACKGROUND_SOURCE_IDS = [1, 4, 5, 9];
+const UNUSED_ANIMATION_PATHS = [
+  join("emotes", "idle.glb"),
+  join("emotes", "punch.glb"),
+  join("mixamo", "Crying.fbx"),
+];
 
 // milady-ai/avatars is an org-owned repo in the milady-ai GitHub organization.
 // Pinned to a specific commit for reproducible installs (supply-chain safety).
@@ -36,14 +47,15 @@ const AVATARS_REPO = "https://github.com/milady-ai/avatars.git";
 const AVATARS_COMMIT = "50f6bf0ad6db583581d4cbaeb377ca005b45195b";
 const TAG = "[ensure-avatars]";
 
-/** A VRM file is valid if it is > 1 KB (rules out LFS pointers & stubs). */
+/** A bundled VRM asset is valid if its compressed or raw file is > 1 KB. */
 export function hasValidVrm(dir) {
   if (!existsSync(dir)) return false;
   try {
-    const files = readdirSync(dir).filter((f) => f.endsWith(".vrm"));
+    const files = readdirSync(dir).filter(
+      (f) => f.endsWith(".vrm.gz") || f.endsWith(".vrm"),
+    );
     if (files.length === 0) return false;
-    const stat = statSync(join(dir, files[0]));
-    return stat.size > 1024;
+    return files.some((file) => statSync(join(dir, file)).size > 1024);
   } catch {
     return false;
   }
@@ -54,7 +66,9 @@ export function hasValidAnimations(dir) {
   const emotesDir = join(dir, "emotes");
   if (!existsSync(emotesDir)) return false;
   try {
-    const files = readdirSync(emotesDir).filter((f) => f.endsWith(".glb"));
+    const files = readdirSync(emotesDir).filter(
+      (f) => f.endsWith(".glb") || f.endsWith(".glb.gz"),
+    );
     if (files.length === 0) return false;
     const stat = statSync(join(emotesDir, files[0]));
     return stat.size > 1024;
@@ -80,6 +94,56 @@ function countFiles(dir, ext) {
   } catch {
     return 0;
   }
+}
+
+function copyPathIfExists(src, dest) {
+  if (!existsSync(src)) return false;
+  mkdirSync(dirname(dest), { recursive: true });
+  cpSync(src, dest, { recursive: true, force: true });
+  return true;
+}
+
+function listFilesRecursive(dir, baseDir = dir) {
+  const files = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listFilesRecursive(fullPath, baseDir));
+      continue;
+    }
+    files.push(fullPath.slice(baseDir.length + 1));
+  }
+  return files;
+}
+
+function writeBundledGzipVrms(vrmsDir) {
+  const rawVrmFiles = readdirSync(vrmsDir).filter((file) =>
+    file.endsWith(".vrm"),
+  );
+  let gzipCount = 0;
+  for (const rawFile of rawVrmFiles) {
+    const rawPath = join(vrmsDir, rawFile);
+    const gzipPath = `${rawPath}.gz`;
+    writeFileSync(gzipPath, gzipSync(readFileSync(rawPath), { level: 9 }));
+    unlinkSync(rawPath);
+    gzipCount += 1;
+  }
+  return gzipCount;
+}
+
+function writeBundledGzipAnimations(animationsDir) {
+  const rawAnimationFiles = listFilesRecursive(animationsDir).filter(
+    (file) => file.endsWith(".glb") || file.endsWith(".fbx"),
+  );
+  let gzipCount = 0;
+  for (const rawFile of rawAnimationFiles) {
+    const rawPath = join(animationsDir, rawFile);
+    const gzipPath = `${rawPath}.gz`;
+    writeFileSync(gzipPath, gzipSync(readFileSync(rawPath), { level: 9 }));
+    unlinkSync(rawPath);
+    gzipCount += 1;
+  }
+  return gzipCount;
 }
 
 export function runEnsureAvatars({
@@ -142,25 +206,64 @@ export function runEnsureAvatars({
       stdio: "inherit",
     });
 
-    // cpSync(src, dest, { recursive: true }) merges src contents INTO dest
-    // (like rsync -a src/ dest/), it does NOT create dest/basename(src).
-    // So vrms/milady-1.vrm → apps/app/public/vrms/milady-1.vrm (correct).
-
     const avatarVrms = join(tmpDir, "vrms");
     if (existsSync(avatarVrms)) {
+      rmSync(VRMS_DIR, { recursive: true, force: true });
       mkdirSync(VRMS_DIR, { recursive: true });
-      cpSync(avatarVrms, VRMS_DIR, { recursive: true, force: true });
-      const vrmCount = countFiles(VRMS_DIR, ".vrm");
-      log(`${TAG} Copied ${vrmCount} VRMs + previews and backgrounds`);
+      mkdirSync(join(VRMS_DIR, "previews"), { recursive: true });
+      mkdirSync(join(VRMS_DIR, "backgrounds"), { recursive: true });
+
+      for (const sourceId of BUNDLED_VRM_SOURCE_IDS) {
+        copyPathIfExists(
+          join(avatarVrms, `milady-${sourceId}.vrm`),
+          join(VRMS_DIR, `milady-${sourceId}.vrm`),
+        );
+        copyPathIfExists(
+          join(avatarVrms, "previews", `milady-${sourceId}.png`),
+          join(VRMS_DIR, "previews", `milady-${sourceId}.png`),
+        );
+      }
+
+      for (const sourceId of BUNDLED_BACKGROUND_SOURCE_IDS) {
+        copyPathIfExists(
+          join(avatarVrms, "backgrounds", `milady-${sourceId}.png`),
+          join(VRMS_DIR, "backgrounds", `milady-${sourceId}.png`),
+        );
+      }
+
+      const gzipCount = writeBundledGzipVrms(VRMS_DIR);
+      const previewCount = countFiles(join(VRMS_DIR, "previews"), ".png");
+      const backgroundCount = countFiles(join(VRMS_DIR, "backgrounds"), ".png");
+      log(
+        `${TAG} Copied ${gzipCount} bundled VRMs (.vrm.gz) + ${previewCount} previews + ${backgroundCount} backgrounds`,
+      );
     }
 
     const avatarAnims = join(tmpDir, "animations");
     if (existsSync(avatarAnims)) {
+      rmSync(ANIMATIONS_DIR, { recursive: true, force: true });
       mkdirSync(ANIMATIONS_DIR, { recursive: true });
-      cpSync(avatarAnims, ANIMATIONS_DIR, { recursive: true, force: true });
-      const glbCount = countFiles(join(ANIMATIONS_DIR, "emotes"), ".glb");
-      const fbxCount = countFiles(join(ANIMATIONS_DIR, "mixamo"), ".fbx");
-      log(`${TAG} Copied ${glbCount} emotes + ${fbxCount} mixamo animations`);
+      copyPathIfExists(
+        join(avatarAnims, "idle.glb"),
+        join(ANIMATIONS_DIR, "idle.glb"),
+      );
+      copyPathIfExists(
+        join(avatarAnims, "emotes"),
+        join(ANIMATIONS_DIR, "emotes"),
+      );
+      copyPathIfExists(
+        join(avatarAnims, "mixamo"),
+        join(ANIMATIONS_DIR, "mixamo"),
+      );
+      for (const relPath of UNUSED_ANIMATION_PATHS) {
+        rmSync(join(ANIMATIONS_DIR, relPath), { force: true });
+      }
+      const gzipCount = writeBundledGzipAnimations(ANIMATIONS_DIR);
+      const glbCount = countFiles(join(ANIMATIONS_DIR, "emotes"), ".glb.gz");
+      const fbxCount = countFiles(join(ANIMATIONS_DIR, "mixamo"), ".fbx.gz");
+      log(
+        `${TAG} Copied ${gzipCount} bundled animations as ${glbCount} emotes + ${fbxCount} mixamo files (.gz)`,
+      );
     }
 
     // Verify the copy produced valid assets (use injected validators for testability)

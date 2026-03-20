@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
 # Updated Homebrew formula for the main milady repo's homebrew/ directory.
-# Replace homebrew/milaidy.rb with this file.
+# Use this for the tap's Formula/milady.rb entry.
 #
 # Key fixes from the original:
-#   - npm package name is "miladyai" not "milaidy"
+#   - npm package name is "miladyai" instead of the legacy "milaidy"
 #   - URL points to correct npm registry path
 #   - Added livecheck block for auto-update detection
 #   - Added head for --HEAD installs from develop branch
 
-class Milaidy < Formula
+class Milady < Formula
   desc "Personal AI assistant — cute agents for the acceleration"
   homepage "https://github.com/milady-ai/milady"
   url "https://registry.npmjs.org/miladyai/-/miladyai-2.0.0-alpha.76.tgz"
@@ -31,12 +31,12 @@ class Milaidy < Formula
 
   def caveats
     <<~EOS
-      Milaidy requires Node.js 22+.
+      Milady requires Node.js 22+.
 
       Get started:
-        milaidy start        Start the agent runtime
-        milaidy setup        Run workspace setup
-        milaidy configure    Configuration guidance
+        milady start         Start the agent runtime
+        milady setup         Run workspace setup
+        milady configure     Configuration guidance
 
       Dashboard: http://localhost:2138
       Docs:      https://docs.milady.ai
@@ -44,6 +44,6 @@ class Milaidy < Formula
   end
 
   test do
-    assert_match version.to_s, shell_output("#{bin}/milaidy --version")
+    assert_match version.to_s, shell_output("#{bin}/milady --version")
   end
 end

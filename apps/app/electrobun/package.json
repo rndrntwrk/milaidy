@@ -1,11 +1,11 @@
 {
-  "name": "@milady/electrobun",
-  "version": "2.0.0-alpha.82",
+  "name": "@miladyai/electrobun",
+  "version": "2.0.0-alpha.87",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run build:preload && electrobun dev",
-    "build": "bun run build:preload && electrobun build",
+    "dev": "bun run build:preload && PATH=\"$PWD/scripts/bin:$PATH\" bunx electrobun dev",
+    "build": "bun run build:preload && PATH=\"$PWD/scripts/bin:$PATH\" bunx electrobun build",
     "typecheck": "tsc --noEmit",
     "test": "bunx vitest run --config vitest.config.ts",
     "lint": "bunx @biomejs/biome check src",
@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "bonjour-service": "1.3.0",
-    "electrobun": "^1.15.1"
+    "electrobun": "^1.16.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

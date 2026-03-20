@@ -30,36 +30,27 @@ describe("emoteAction", () => {
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
-  it("resolves emote id from message text when parameters are missing", async () => {
-    vi.mocked(fetch).mockResolvedValue(mockResponse({ ok: true }));
-
-    const result = await emoteAction.handler(
-      undefined,
-      { roomId: "room", content: { text: "please do dance-happy now" } },
-      undefined,
-      undefined,
+  it("describes PLAY_EMOTE as a chainable one-shot action", () => {
+    expect(emoteAction.description).toContain("one-shot emote animation");
+    expect(emoteAction.description).toContain(
+      "silent non-blocking visual side action",
     );
-
-    expect(result.success).toBe(true);
-    expect(result.data).toMatchObject({ emoteId: "dance-happy" });
-    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-      "http://localhost:2138/api/emote",
-      expect.objectContaining({ method: "POST" }),
-    );
+    expect(emoteAction.description).toContain("required emote parameter");
+    expect(emoteAction.description).toContain("before, after, or alongside");
+    expect(emoteAction.description).toContain("same turn");
   });
 
-  it("falls back to heuristic keyword matching for message text", async () => {
-    vi.mocked(fetch).mockResolvedValue(mockResponse({ ok: true }));
-
+  it("does not infer emotes from message text when parameters are missing", async () => {
     const result = await emoteAction.handler(
       undefined,
-      { roomId: "room", content: { text: "hello there!" } },
+      { roomId: "room", content: { text: "please wave now" } },
       undefined,
       undefined,
     );
 
-    expect(result.success).toBe(true);
-    expect(result.data).toMatchObject({ emoteId: "wave" });
+    expect(result.success).toBe(false);
+    expect(result.text).toBe("");
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
   it("rejects unknown emote IDs", async () => {
@@ -68,6 +59,32 @@ describe("emoteAction", () => {
       { roomId: "room", content: { text: "" } },
       undefined,
       { parameters: { emote: "does-not-exist" } },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.text).toBe("");
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it("rejects agent-disallowed emote IDs", async () => {
+    const result = await emoteAction.handler(
+      undefined,
+      { roomId: "room", content: { text: "" } },
+      undefined,
+      { parameters: { emote: "idle" } },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.text).toBe("");
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it("does not infer run or walk from message text", async () => {
+    const result = await emoteAction.handler(
+      undefined,
+      { roomId: "room", content: { text: "walk over there" } },
+      undefined,
+      undefined,
     );
 
     expect(result.success).toBe(false);
@@ -104,7 +121,7 @@ describe("emoteAction", () => {
     );
 
     expect(result.success).toBe(true);
-    expect(result.text).toBe("*waves*");
+    expect(result.text).toBe("");
     expect(result.data).toMatchObject({ emoteId: "wave" });
   });
 

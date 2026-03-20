@@ -36,6 +36,7 @@ BUILD_SKIP_CODESIGN="${ELECTROBUN_SKIP_CODESIGN:-}"
 BUILD_DEVELOPER_ID="${ELECTROBUN_DEVELOPER_ID:-}"
 ARTIFACTS_DIR_OVERRIDE="${ARTIFACTS_DIR:-}"
 SMOKE_DIAGNOSTICS_DIR="${SMOKE_DIAGNOSTICS_DIR:-}"
+EXPECTED_BUNDLE_IDENTIFIER="${EXPECTED_BUNDLE_IDENTIFIER:-com.miladyai.milady}"
 MOUNT_POINT=""
 LAUNCH_APP_BUNDLE=""
 STARTUP_LOG="$HOME/.config/Milady/milady-startup.log"
@@ -145,7 +146,7 @@ write_bundle_diagnostics() {
 
   {
     echo "Bundle: $LAUNCH_APP_BUNDLE"
-    echo "Launcher: $LAUNCHER_PATH"
+    echo "Launcher: ${LAUNCHER_PATH:-<unset>}"
     echo ""
 
     if [[ -d "$LAUNCH_APP_BUNDLE/Contents/MacOS" ]]; then
@@ -194,6 +195,8 @@ write_bundle_diagnostics() {
 
 dump_failure_diagnostics() {
   local reason="$1"
+  local launcher_stdout="${LAUNCHER_STDOUT:-}"
+  local launcher_stderr="${LAUNCHER_STDERR:-}"
   ensure_diagnostics_dir
   write_bundle_diagnostics
   collect_recent_crash_reports
@@ -211,10 +214,14 @@ dump_failure_diagnostics() {
     echo "Current packaged PID: $(find_live_packaged_pid)"
     echo ""
     echo "Launcher stdout:"
-    cat "$LAUNCHER_STDOUT" 2>/dev/null || true
+    if [[ -n "$launcher_stdout" && -f "$launcher_stdout" ]]; then
+      cat "$launcher_stdout" 2>/dev/null || true
+    fi
     echo ""
     echo "Launcher stderr:"
-    cat "$LAUNCHER_STDERR" 2>/dev/null || true
+    if [[ -n "$launcher_stderr" && -f "$launcher_stderr" ]]; then
+      cat "$launcher_stderr" 2>/dev/null || true
+    fi
     echo ""
     echo "Startup log tail:"
     tail -n 200 "$STARTUP_LOG" 2>/dev/null || true
@@ -237,7 +244,7 @@ kill_stale_processes() {
       kill "$pid" >/dev/null 2>&1 || true
     fi
   done < <(
-    pgrep -f '/(Applications|tmp|private/tmp|Volumes)/.*Milady[^/]*\.app/Contents/MacOS/launcher|milady-dist/(eliza|runtime/eliza)\.js' || true
+    pgrep -f '/(Applications|tmp|private/tmp|Volumes)/.*Milady[^/]*\.app/Contents/MacOS/launcher|milady-dist/entry\.js' || true
   )
 
   pid="$(lsof -nP -tiTCP:2138 -sTCP:LISTEN 2>/dev/null | head -1 || true)"
@@ -303,7 +310,119 @@ find_live_packaged_pid() {
 
   local bundle_regex=""
   bundle_regex="$(escape_regex "$LAUNCH_APP_BUNDLE")"
-  pgrep -f "${bundle_regex}/Contents/MacOS/launcher|${bundle_regex}/Contents/MacOS/bun|${bundle_regex}/Contents/Resources/main\\.js|${bundle_regex}/Contents/Resources/app/bun/index\\.js|${bundle_regex}/Contents/Resources/app/milady-dist/(eliza|runtime/eliza)\\.js" | head -1 || true
+  pgrep -f "${bundle_regex}/Contents/MacOS/launcher|${bundle_regex}/Contents/MacOS/bun|${bundle_regex}/Contents/Resources/main\\.js|${bundle_regex}/Contents/Resources/app/bun/index\\.js|${bundle_regex}/Contents/Resources/app/milady-dist/entry\\.js" | head -1 || true
+}
+
+assert_packaged_asset() {
+  local asset_path="$1"
+  local description="$2"
+  local min_size="${3:-1}"
+  local size_bytes=""
+
+  if [[ ! -f "$asset_path" ]]; then
+    echo "ERROR: Missing packaged ${description}: $asset_path"
+    dump_failure_diagnostics "missing packaged ${description}"
+    exit 1
+  fi
+
+  size_bytes="$(wc -c < "$asset_path" | tr -d ' ')"
+  if [[ -z "$size_bytes" || "$size_bytes" -lt "$min_size" ]]; then
+    echo "ERROR: Packaged ${description} looks truncated (${size_bytes:-0} bytes): $asset_path"
+    dump_failure_diagnostics "packaged ${description} failed size check"
+    exit 1
+  fi
+}
+
+assert_packaged_archive_asset() {
+  local archive_path="$1"
+  local archive_member="$2"
+  local description="$3"
+  local min_size="${4:-1}"
+  local size_bytes=""
+
+  if ! tar --zstd -tf "$archive_path" | grep -Fxq "$archive_member"; then
+    echo "ERROR: Missing packaged ${description} in wrapper archive: $archive_member"
+    dump_failure_diagnostics "missing packaged ${description} in wrapper archive"
+    exit 1
+  fi
+
+  size_bytes="$(
+    tar --zstd -xOf "$archive_path" "$archive_member" 2>/dev/null \
+      | wc -c \
+      | tr -d ' '
+  )"
+  if [[ -z "$size_bytes" || "$size_bytes" -lt "$min_size" ]]; then
+    echo "ERROR: Packaged ${description} in wrapper archive looks truncated (${size_bytes:-0} bytes): $archive_member"
+    dump_failure_diagnostics "packaged ${description} in wrapper archive failed size check"
+    exit 1
+  fi
+}
+
+verify_packaged_renderer_assets() {
+  local renderer_dir="$LAUNCH_APP_BUNDLE/Contents/Resources/app/renderer"
+  local archive_bundle_root=""
+
+  if [[ -d "$renderer_dir" ]]; then
+    assert_packaged_asset "$renderer_dir/index.html" "renderer entrypoint" 256
+    assert_packaged_asset "$renderer_dir/vrms/milady-1.vrm.gz" "default avatar VRM" 1024
+    assert_packaged_asset "$renderer_dir/vrms/backgrounds/milady-1.png" "default avatar background" 1024
+    assert_packaged_asset "$renderer_dir/animations/idle.glb.gz" "default idle animation" 1024
+
+    echo "Packaged renderer asset check PASSED (direct app bundle)."
+    return 0
+  fi
+
+  if [[ -n "${RUNTIME_ARCHIVE:-}" && -f "$RUNTIME_ARCHIVE" ]]; then
+    archive_bundle_root="$(basename "$LAUNCH_APP_BUNDLE")/Contents/Resources/app/renderer"
+    assert_packaged_archive_asset "$RUNTIME_ARCHIVE" "$archive_bundle_root/index.html" "renderer entrypoint" 256
+    assert_packaged_archive_asset "$RUNTIME_ARCHIVE" "$archive_bundle_root/vrms/milady-1.vrm.gz" "default avatar VRM" 1024
+    assert_packaged_archive_asset "$RUNTIME_ARCHIVE" "$archive_bundle_root/vrms/backgrounds/milady-1.png" "default avatar background" 1024
+    assert_packaged_archive_asset "$RUNTIME_ARCHIVE" "$archive_bundle_root/animations/idle.glb.gz" "default idle animation" 1024
+
+    echo "Packaged renderer asset check PASSED (wrapper archive)."
+    return 0
+  fi
+
+  echo "ERROR: Packaged renderer directory missing and no wrapper archive was available: $renderer_dir"
+  dump_failure_diagnostics "packaged renderer directory missing"
+  exit 1
+}
+
+assert_packaged_asset() {
+  local asset_path="$1"
+  local description="$2"
+  local min_size="${3:-1}"
+  local size_bytes=""
+
+  if [[ ! -f "$asset_path" ]]; then
+    echo "ERROR: Missing packaged ${description}: $asset_path"
+    dump_failure_diagnostics "missing packaged ${description}"
+    exit 1
+  fi
+
+  size_bytes="$(wc -c < "$asset_path" | tr -d ' ')"
+  if [[ -z "$size_bytes" || "$size_bytes" -lt "$min_size" ]]; then
+    echo "ERROR: Packaged ${description} looks truncated (${size_bytes:-0} bytes): $asset_path"
+    dump_failure_diagnostics "packaged ${description} failed size check"
+    exit 1
+  fi
+}
+
+verify_packaged_renderer_assets() {
+  local renderer_dir="$LAUNCH_APP_BUNDLE/Contents/Resources/app/renderer"
+
+  if [[ ! -d "$renderer_dir" ]]; then
+    echo "ERROR: Packaged renderer directory missing: $renderer_dir"
+    dump_failure_diagnostics "packaged renderer directory missing"
+    exit 1
+  fi
+
+  assert_packaged_asset "$renderer_dir/index.html" "renderer entrypoint" 256
+  assert_packaged_asset "$renderer_dir/vrms/milady-1.vrm.gz" "default avatar VRM" 1024
+  assert_packaged_asset "$renderer_dir/vrms/backgrounds/milady-1.png" "default avatar background" 1024
+  assert_packaged_asset "$renderer_dir/animations/idle.glb.gz" "default idle animation" 1024
+
+  echo "Packaged renderer asset check PASSED."
 }
 
 trap cleanup EXIT
@@ -425,6 +544,25 @@ if [[ "$(uname)" == "Darwin" && "$SKIP_SIGNATURE_CHECK" != "1" ]]; then
 
   SIGN_INFO="$(codesign -dv --verbose=4 "$APP_BUNDLE" 2>&1 || true)"
   echo "$SIGN_INFO"
+  if ! echo "$SIGN_INFO" | grep -q "Identifier=$EXPECTED_BUNDLE_IDENTIFIER"; then
+    echo "ERROR: App bundle identifier mismatch. Expected $EXPECTED_BUNDLE_IDENTIFIER"
+    exit 1
+  fi
+
+  for EXECUTABLE_PATH in \
+    "$APP_BUNDLE/Contents/MacOS/launcher" \
+    "$APP_BUNDLE/Contents/MacOS/bun"
+  do
+    if [[ ! -f "$EXECUTABLE_PATH" ]]; then
+      continue
+    fi
+
+    EXECUTABLE_SIGN_INFO="$(codesign -dv --verbose=4 "$EXECUTABLE_PATH" 2>&1 || true)"
+    if ! echo "$EXECUTABLE_SIGN_INFO" | grep -q "Identifier=$EXPECTED_BUNDLE_IDENTIFIER"; then
+      echo "ERROR: Executable identifier mismatch for $EXECUTABLE_PATH. Expected $EXPECTED_BUNDLE_IDENTIFIER"
+      exit 1
+    fi
+  done
 
   if echo "$SIGN_INFO" | grep -q "adhoc"; then
     echo "WARNING: App was signed ad-hoc (no Developer ID). Notarization check skipped."
@@ -451,6 +589,8 @@ if [[ -n "$MOUNT_POINT" ]]; then
 else
   LAUNCH_APP_BUNDLE="$APP_BUNDLE"
 fi
+LAUNCHER_PATH="$LAUNCH_APP_BUNDLE/Contents/MacOS/launcher"
+verify_packaged_renderer_assets
 
 kill_stale_processes
 
@@ -459,7 +599,6 @@ if [[ -f "$STARTUP_LOG" ]]; then
   LOG_OFFSET="$(wc -c < "$STARTUP_LOG" | tr -d ' ')"
 fi
 
-LAUNCHER_PATH="$LAUNCH_APP_BUNDLE/Contents/MacOS/launcher"
 if [[ ! -x "$LAUNCHER_PATH" ]]; then
   echo "ERROR: Packaged launcher not found or not executable: $LAUNCHER_PATH"
   exit 1
@@ -559,7 +698,7 @@ if ! curl -fsS "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null; then
 fi
 
 LOG_SLICE="$(tail -c +"$((LOG_OFFSET + 1))" "$STARTUP_LOG" 2>/dev/null || true)"
-STREAMING_FAILURE_REGEX='@elizaos/plugin-streaming-base|@elizaos/plugin-x-streaming|@milady/plugin-x-streaming|@milady/plugin-youtube-streaming|@milady/plugin-retake'
+STREAMING_FAILURE_REGEX='@elizaos/plugin-streaming-base|@elizaos/plugin-x-streaming|@elizaos/plugin-youtube-streaming|@elizaos/plugin-retake'
 if printf '%s\n' "$LOG_SLICE" | grep -Eq "Could not load plugin (${STREAMING_FAILURE_REGEX})"; then
   echo "ERROR: Streaming plugin resolution failed during packaged startup."
   printf '%s\n' "$LOG_SLICE" | grep -E "Could not load plugin|Failed plugins:" | tail -n 40
@@ -572,7 +711,7 @@ if printf '%s\n' "$LOG_SLICE" | grep -Eq "Failed plugins:.*(${STREAMING_FAILURE_
   dump_failure_diagnostics "streaming plugins reported failed"
   exit 1
 fi
-if printf '%s\n' "$LOG_SLICE" | grep -Eq "Plugin @milady/plugin-streaming-base did not export a valid Plugin object"; then
+if printf '%s\n' "$LOG_SLICE" | grep -Eq "Plugin @miladyai/plugin-streaming-base did not export a valid Plugin object"; then
   echo "ERROR: Streaming helper package was treated as a real plugin."
   printf '%s\n' "$LOG_SLICE" | grep -E "plugin-streaming-base|Plugin resolution complete|Failed plugins:" | tail -n 20
   dump_failure_diagnostics "streaming helper package treated as a plugin"

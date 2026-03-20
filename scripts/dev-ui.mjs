@@ -2,15 +2,15 @@
 /**
  * Development script that starts:
  * 1. The Milady dev server (runtime + API on port 31337) with restart support
- * 2. The Vite app dev server (port 2138, proxies /api and /ws to 31337)
+ * 2. The vite app dev server (port 2138, proxies /api and /ws to 31337)
  *
  * Automatically kills zombie processes on both ports before starting.
- * Waits for the API server to be ready before launching Vite so the proxy
+ * Waits for the API server to be ready before launching vite so the proxy
  * doesn't flood the terminal with ECONNREFUSED errors.
  *
  * Usage:
  *   node scripts/dev-ui.mjs            # starts both API + UI
- *   node scripts/dev-ui.mjs --ui-only  # starts only the Vite UI (API assumed running)
+ *   node scripts/dev-ui.mjs --ui-only  # starts only the vite UI (API assumed running)
  */
 import { execSync, spawn } from "node:child_process";
 import {
@@ -30,6 +30,7 @@ import {
   coerceBoolean,
   resolveOnchainPreference,
 } from "./lib/dev-ui-onchain.mjs";
+import { buildVisionDepsFailureMessage } from "./lib/dev-ui-vision.mjs";
 
 const API_PORT = 31337;
 const UI_PORT = 2138;
@@ -892,7 +893,7 @@ function killOrphanedWorkspaceProcesses() {
 
   try {
     // Kill orphaned node-pty spawn-helpers and any processes running inside
-    // .milaidy/workspaces (vite, esbuild, etc.) that survived a crash.
+    // .milady/workspaces (or legacy .milaidy/workspaces) that survived a crash.
     const out = execSync(
       `ps axo pid,command 2>/dev/null | grep -E '\\.mil(aidy|ady)/workspaces' | grep -v grep`,
       { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] },
@@ -940,9 +941,10 @@ killPort(UI_PORT);
 // Ensure vision dependencies are installed
 try {
   execSync("node scripts/ensure-vision-deps.mjs", { stdio: "inherit" });
-} catch (_err) {
+} catch (error) {
+  process.env.MILADY_VISION_DEPS_STATUS = "degraded";
   console.warn(
-    `\n  ${orange("[milady]")} ${dim("Failed to auto-install vision dependencies")}`,
+    buildVisionDepsFailureMessage(error, "node scripts/ensure-vision-deps.mjs"),
   );
 }
 
@@ -1021,7 +1023,7 @@ function startVite() {
   viteProcess.on("exit", (code) => {
     if (shuttingDown) return;
     if (code !== 0) {
-      console.error(`${green("[milady]")} Vite exited with code ${code}`);
+      console.error(`${green("[milady]")} vite exited with code ${code}`);
       cleanup(code ?? 1);
     }
   });

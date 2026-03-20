@@ -455,6 +455,54 @@ describe("TtsStreamBridge.speak()", () => {
     vi.unstubAllGlobals();
   });
 
+  it("filters stage directions before sending text to the TTS provider", async () => {
+    const writable = createMockWritable();
+    ttsStreamBridge.attach(writable);
+
+    const fakeMp3 = Buffer.alloc(100, 0xff);
+    const fakePcm = Buffer.alloc(2400, 0x42);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(fakeMp3.buffer),
+      }),
+    );
+
+    const mockStdout = new EventEmitter();
+    const mockStdin = { write: vi.fn(), end: vi.fn() };
+    const mockProc = Object.assign(new EventEmitter(), {
+      stdout: mockStdout,
+      stdin: mockStdin,
+    });
+    (spawn as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+      mockProc,
+    );
+
+    const speakPromise = ttsStreamBridge.speak(
+      "Hello there (quietly). *waves* Visit now.",
+      {
+        provider: "elevenlabs",
+        elevenlabs: { apiKey: "test-key", voiceId: "v1", modelId: "m1" },
+      },
+    );
+
+    await new Promise((r) => setTimeout(r, 10));
+    mockStdout.emit("data", fakePcm);
+    mockProc.emit("close", 0);
+
+    await speakPromise;
+
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(JSON.parse(fetchCall[1].body as string)).toMatchObject({
+      text: "Hello there. Visit now.",
+    });
+
+    vi.unstubAllGlobals();
+  });
+
   it("generates OpenAI TTS and queues PCM audio", async () => {
     const writable = createMockWritable();
     ttsStreamBridge.attach(writable);

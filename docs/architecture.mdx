@@ -4,14 +4,14 @@ sidebarTitle: Architecture
 description: High-level overview of the Milady AI system architecture, layers, plugin system, and cross-platform delivery.
 ---
 
-Milady is a cross-platform AI agent runtime built on top of [elizaOS](https://elizaos.ai). It delivers the same backend across CLI, web, desktop (Electron), and mobile (Capacitor) surfaces through a layered architecture. This page covers the full system from entry points through runtime lifecycle, plugin loading, API surface, and build tooling.
+Milady is a cross-platform AI agent runtime built on top of [elizaOS](https://elizaos.ai). It delivers the same backend across CLI, web, desktop (Electrobun), and mobile (Capacitor) through a layered architecture. This page covers the full system from entry points through runtime lifecycle, plugin loading, API surface, and build tooling.
 
 ## High-Level Diagram
 
 ```
 +---------------------------------------------------------------+
 |                        Frontend Layer                          |
-|  React SPA (Vite) + Capacitor (iOS/Android) + Electron (Desktop)|
+|  React SPA (Vite) + Capacitor (iOS/Android) + Electrobun (Desktop) |
 |  Tabs: Chat, Character, Wallets, Knowledge, Social, Apps,     |
 |         Settings, Advanced (Plugins, Skills, Triggers, DB, ...) |
 +----------------------------+----------------------------------+
@@ -84,7 +84,7 @@ The public API surface exported by the `miladyai` npm package. It re-exports:
 - **Config types** from `src/config/types.ts` -- the full `MiladyConfig` type and its nested schemas
 - **Restart infrastructure** -- `RESTART_EXIT_CODE`, `requestRestart()`, `setRestartHandler()`, and the `RestartHandler` type
 
-This allows other packages (e.g., the Electron app, the dev-server) to programmatically control the runtime without importing internal modules.
+This allows other packages (e.g., the Electrobun app, the dev-server) to programmatically control the runtime without importing internal modules.
 
 ### Dev-Server Entry (`src/runtime/dev-server.ts`)
 
@@ -165,7 +165,7 @@ Restart is pluggable via `setRestartHandler()`:
 |-------------|---------|----------|
 | CLI (default) | Exit with code 75 | The runner script (`scripts/run-node.mjs`) catches exit code 75, optionally rebuilds if sources changed, and relaunches |
 | Dev-server / API | Hot-swap | Stops the current runtime, reloads config from disk, creates a new `AgentRuntime`, and swaps the reference in the API server |
-| Electron | `AgentManager.restart()` | Uses the Electron app's native restart mechanism |
+| Electrobun | `AgentManager.restart()` | Uses the Electrobun app's native restart mechanism |
 
 ## elizaOS Integration Layer
 
@@ -182,7 +182,6 @@ The `createMiladyPlugin()` function (`src/runtime/milady-plugin.ts`) creates a s
 - `autonomousStateProvider` -- current autonomous agent state
 - `sessionKeyProvider` -- session bridge for cross-channel continuity
 - `uiCatalogProvider` -- available UI components the agent can render
-- `emoteProvider` -- available 3D avatar emote animations (gated by `DISABLE_EMOTES` setting)
 - `customActionsProvider` -- user-defined custom action descriptions
 
 **Actions** (agent-invokable operations):
@@ -196,6 +195,7 @@ The `createMiladyPlugin()` function (`src/runtime/milady-plugin.ts`) creates a s
 - Register trigger task workers
 - Start autonomous state tracking
 - Bind custom action runtime references
+- Remove `PLAY_EMOTE` action when `character.settings.DISABLE_EMOTES` is set
 
 ### Error Boundaries
 
@@ -224,7 +224,7 @@ Plugin resolution (`resolvePlugins()`) handles three tiers of plugins through a 
 2. Add plugins from the **allow list** (`config.plugins.allow`) -- these are additive, not exclusive
 3. Add **connector plugins** for any configured channels (Discord, Telegram, Slack, etc.) using the `CHANNEL_PLUGIN_MAP`
 4. Add **model-provider plugins** when their API key environment variables are detected (e.g., `ANTHROPIC_API_KEY` triggers `@elizaos/plugin-anthropic`)
-5. Handle **ElizaCloud mode** -- when cloud is active, remove direct AI provider plugins since the cloud plugin handles all model calls
+5. Handle **Eliza Cloud mode** -- when cloud is active, remove direct AI provider plugins since the cloud plugin handles all model calls
 6. Add plugins from **`config.plugins.entries`** with `enabled !== false`
 7. Add plugins from **feature flags** (`config.features`)
 8. Add **user-installed plugins** from `config.plugins.installs`
@@ -286,7 +286,7 @@ interface Provider {
 }
 ```
 
-Milady registers 8+ providers through the Milady plugin, plus any providers from loaded plugins.
+Milady registers 7+ providers through the Milady plugin, plus any providers from loaded plugins.
 
 ### Actions
 
@@ -357,7 +357,7 @@ Routes are organized into domain-specific handler modules:
 | `auth-routes.ts` | `/api/auth/*` | Token validation, onboarding tokens |
 | `autonomy-routes.ts` | `/api/autonomy/*` | Autonomous mode state |
 | `character-routes.ts` | `/api/character/*` | Character CRUD, AI-assisted generation |
-| `cloud-routes.ts` | `/api/cloud/*` | ElizaCloud integration |
+| `cloud-routes.ts` | `/api/cloud/*` | Eliza Cloud integration |
 | `knowledge-routes.ts` | `/api/knowledge/*` | Document upload, search, RAG management |
 | `models-routes.ts` | `/api/models/*` | Model provider discovery and selection |
 | `plugin-validation.ts` | `/api/plugins/*` | Plugin config validation |
@@ -481,7 +481,7 @@ Milady uses a Zod-validated JSON configuration file (`milady.json`):
     - `hooks` -- Webhook mappings, Gmail integration
     - `messages` -- TTS, queue, broadcast, response prefix
     - `database` -- Provider selection (PGLite/Postgres), connection config
-    - `cloud` -- ElizaCloud integration settings
+    - `cloud` -- Eliza Cloud integration settings
     - `models` -- Custom model providers, Bedrock discovery
     - `update` -- Release channel, check intervals
     - `embedding` -- Local embedding model, GPU layers, dimensions
@@ -535,7 +535,7 @@ The same backend serves all platforms:
 |----------|----------|-------|
 | CLI | `milady start` | Direct Node.js process, runner script handles restart exit codes |
 | Web | Browser at `http://localhost:2138` | Vite dev proxy in development |
-| Desktop | Electron wrapper | Bundles the API server + UI, uses `electron-updater` for native updates |
+| Desktop | Electrobun wrapper | Bundles the API server + UI, uses the Electrobun updater for native updates |
 | iOS | Capacitor | Connects to local/remote API |
 | Android | Capacitor | Connects to local/remote API |
 
@@ -565,14 +565,14 @@ The Gateway runs on port **18789** (default) and provides:
 
 ### Workspace Structure
 
-The monorepo uses npm workspaces:
+The monorepo uses Bun workspaces:
 
 ```
 milady/
   src/              # Core runtime, CLI, API, services
   apps/
     app/            # React SPA frontend (Vite)
-      electron/     # Electron desktop wrapper
+      electrobun/   # Electrobun desktop wrapper
       plugins/      # App-specific plugins
   plugins/
     plugin-*/       # Workspace plugins (development)
@@ -587,10 +587,10 @@ milady/
 
 ```bash
 # Full build: TypeScript + build info + frontend
-npm run build
+bun run build
 # → tsdown (src/ → dist/)
 # → scripts/write-build-info.ts (version metadata)
-# → cd apps/app && npm run build (Vite frontend)
+# → cd apps/app && bun run build (Vite frontend)
 ```
 
 The `scripts/rt.sh` helper resolves the best available runtime (bun or Node.js with tsx) for running TypeScript files directly during development.

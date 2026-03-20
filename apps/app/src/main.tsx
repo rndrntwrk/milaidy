@@ -5,7 +5,8 @@
  * features, and mounts the React application.
  */
 
-import "./styles.css";
+import "@miladyai/app-core/styles/styles.css";
+import "./native-plugin-entrypoints";
 
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
@@ -16,7 +17,7 @@ import {
   initializeCapacitorBridge,
   initializeStorageBridge,
   isElectrobunRuntime,
-} from "@milady/app-core/bridge";
+} from "@miladyai/app-core/bridge";
 import {
   AGENT_READY_EVENT,
   APP_PAUSE_EVENT,
@@ -24,17 +25,17 @@ import {
   COMMAND_PALETTE_EVENT,
   CONNECT_EVENT,
   dispatchMiladyEvent,
-  EMOTE_PICKER_EVENT,
   SHARE_TARGET_EVENT,
   TRAY_ACTION_EVENT,
-} from "@milady/app-core/events";
+} from "@miladyai/app-core/events";
+import { applyLaunchConnectionFromUrl } from "@miladyai/app-core/platform";
+import { AppProvider } from "@miladyai/app-core/state";
 // Import the agent plugin
-import { Agent } from "@milady/capacitor-agent";
-import { Desktop } from "@milady/capacitor-desktop";
+import { Agent } from "@miladyai/capacitor-agent";
+import { Desktop } from "@miladyai/capacitor-desktop";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import { AppProvider } from "./AppContext";
 
 /**
  * Platform detection utilities
@@ -44,8 +45,15 @@ const isNative = Capacitor.isNativePlatform();
 const isIOS = platform === "ios";
 const isAndroid = platform === "android";
 
-function isElectronPlatform(): boolean {
-  return platform === "electron" || isElectrobunRuntime();
+function isDesktopPlatform(): boolean {
+  return isElectrobunRuntime();
+}
+
+function isSettingsShell(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    new URLSearchParams(window.location.search).get("shell") === "settings"
+  );
 }
 
 function isWebPlatform(): boolean {
@@ -113,7 +121,7 @@ async function initializePlatform(): Promise<void> {
   initializeCapacitorBridge();
 
   if (isIOS || isAndroid) {
-    // Configure status bar for mobile platforms (not available on Electron)
+    // Configure status bar for mobile platforms (not available on desktop)
     await initializeStatusBar();
 
     // Configure keyboard behavior
@@ -123,11 +131,11 @@ async function initializePlatform(): Promise<void> {
     initializeAppLifecycle();
   }
 
-  if (isElectronPlatform()) {
-    // Electron-specific initialization
-    await initializeElectron();
+  if (isDesktopPlatform()) {
+    // Electrobun-specific initialization
+    await initializeDesktopShell();
   } else {
-    // On Electron the main process owns runtime startup; avoid an extra early
+    // On desktop the main process owns runtime startup; avoid an extra early
     // plugin status probe that can race backend boot and spam fetch errors.
     await initializeAgent();
   }
@@ -152,10 +160,7 @@ async function initializeStatusBar(): Promise<void> {
  */
 async function initializeKeyboard(): Promise<void> {
   if (isIOS) {
-    // Disable auto-scroll on iOS when keyboard appears
-    await Keyboard.setScroll({ isDisabled: true });
-
-    // Set keyboard accessory bar visibility
+    // Keep the accessory bar visible; shell mode now owns WebView scroll lock.
     await Keyboard.setAccessoryBarVisible({ isVisible: true });
   }
 
@@ -292,17 +297,17 @@ function handleDeepLink(url: string): void {
 }
 
 /**
- * Initialize Electron-specific features
+ * Initialize desktop shell-specific features
  */
-async function initializeElectron(): Promise<void> {
-  document.body.classList.add("electron");
+async function initializeDesktopShell(): Promise<void> {
+  document.body.classList.add("desktop");
 
   try {
     const version = await Desktop.getVersion();
     const desktopNativeReady =
-      typeof version.electron === "string" &&
-      version.electron !== "N/A" &&
-      version.electron !== "unknown";
+      typeof version.runtime === "string" &&
+      version.runtime !== "N/A" &&
+      version.runtime !== "unknown";
     if (!desktopNativeReady) {
       return;
     }
@@ -313,18 +318,9 @@ async function initializeElectron(): Promise<void> {
       accelerator: "CommandOrControl+K",
     });
 
-    // Emote picker shortcut
-    await Desktop.registerShortcut({
-      id: "emote-picker",
-      accelerator: "CommandOrControl+E",
-    });
-
     await Desktop.addListener("shortcutPressed", (event: { id: string }) => {
       if (event.id === "command-palette") {
         dispatchMiladyEvent(COMMAND_PALETTE_EVENT);
-      }
-      if (event.id === "emote-picker") {
-        dispatchMiladyEvent(EMOTE_PICKER_EVENT);
       }
     });
 
@@ -407,7 +403,7 @@ function isPopoutWindow(): boolean {
 
 /**
  * In popout mode, inject the API base from the URL query string so the
- * client can connect without the Electron main-process injection.
+ * client can connect without the desktop main-process injection.
  */
 function injectPopoutApiBase(): void {
   const params = new URLSearchParams(
@@ -415,14 +411,27 @@ function injectPopoutApiBase(): void {
   );
   const apiBase = params.get("apiBase");
   if (apiBase) {
-    // Validate apiBase is same-origin or localhost to prevent redirection attacks
+    // Allow secure remote backends and private-network development hosts.
     try {
       const parsed = new URL(apiBase);
       const host = parsed.hostname;
+      const allowPrivateHttp =
+        /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+        /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+        /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host) ||
+        /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(
+          host,
+        ) ||
+        host.endsWith(".local") ||
+        host.endsWith(".internal") ||
+        host.endsWith(".ts.net");
       if (
         host === "localhost" ||
         host === "127.0.0.1" ||
-        host === window.location.hostname
+        host === "::1" ||
+        host === window.location.hostname ||
+        parsed.protocol === "https:" ||
+        (parsed.protocol === "http:" && allowPrivateHttp)
       ) {
         window.__MILADY_API_BASE__ = apiBase;
       } else {
@@ -446,10 +455,44 @@ async function main(): Promise<void> {
   // Set up platform-specific styles first
   setupPlatformStyles();
 
+  try {
+    await applyLaunchConnectionFromUrl();
+  } catch (err) {
+    console.error(
+      "[Milady] Failed to apply managed cloud launch session:",
+      err instanceof Error ? err.message : err,
+    );
+  }
+
   if (isPopoutWindow()) {
     // Popout mode — skip platform init (agent lifecycle, Capacitor bridges,
     // shortcuts, tray). Just inject the API base and mount the React app.
     injectPopoutApiBase();
+    mountReactApp();
+    return;
+  }
+
+  if (isSettingsShell()) {
+    // Settings shell — inject the API base from URL params so the client
+    // connects to the same agent backend as the main window.
+    const settingsParams = new URLSearchParams(window.location.search);
+    const settingsApiBase = settingsParams.get("apiBase");
+    if (settingsApiBase) {
+      window.__MILADY_API_BASE__ = settingsApiBase;
+    }
+    // Apply stored theme (default to dark)
+    try {
+      const stored = localStorage.getItem("milady:ui-theme");
+      const theme = stored === "light" ? "light" : "dark";
+      document.documentElement.classList.toggle("dark", theme === "dark");
+      document.documentElement.setAttribute("data-theme", theme);
+    } catch {
+      document.documentElement.classList.add("dark");
+      document.documentElement.setAttribute("data-theme", "dark");
+    }
+    // Initialize storage and bridge so AppProvider can read cached auth state.
+    await initializeStorageBridge();
+    initializeCapacitorBridge();
     mountReactApp();
     return;
   }
@@ -470,10 +513,10 @@ if (document.readyState === "loading") {
 
 // Export platform utilities for use by other modules
 export {
-  platform,
-  isNative,
-  isIOS,
   isAndroid,
-  isElectronPlatform as isElectron,
+  isDesktopPlatform as isDesktop,
+  isIOS,
+  isNative,
   isWebPlatform as isWeb,
+  platform,
 };

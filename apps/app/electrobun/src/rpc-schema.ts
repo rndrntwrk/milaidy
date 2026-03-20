@@ -2,7 +2,7 @@
  * Milady RPC Schema for Electrobun
  *
  * Defines the typed RPC contract between the Bun main process and
- * the webview renderer. Replaces the stringly-typed Electron IPC channels
+ * the webview renderer. Replaces the stringly-typed legacy desktop channel surface
  * with compile-time safe typed RPC.
  *
  * Schema structure (from Electrobun's perspective):
@@ -17,15 +17,6 @@ import type { RPCSchema } from "electrobun/bun";
 // ============================================================================
 // Shared Types
 // ============================================================================
-
-// -- Agent --
-export interface AgentStatus {
-  state: "not_started" | "starting" | "running" | "stopped" | "error";
-  agentName: string | null;
-  port: number | null;
-  startedAt: number | null;
-  error: string | null;
-}
 
 // -- Desktop --
 export interface TrayMenuItem {
@@ -208,6 +199,17 @@ export interface CameraDevice {
   kind: string;
 }
 
+// -- Credentials Auto-Detection --
+export interface DetectedProvider {
+  id: string;
+  source: string;
+  apiKey?: string;
+  authMode?: string;
+  cliInstalled: boolean;
+  status: "valid" | "invalid" | "unchecked" | "error";
+  statusDetail?: string;
+}
+
 // -- Screencapture --
 export interface ScreenSource {
   id: string;
@@ -229,12 +231,6 @@ export interface TalkModeConfig {
   modelSize?: string;
   language?: string;
   voiceId?: string;
-}
-
-// -- LIFO (PiP) --
-export interface PipState {
-  enabled: boolean;
-  windowId?: string;
 }
 
 // -- File Dialog --
@@ -297,12 +293,6 @@ export interface MessageBoxResult {
 export type MiladyRPCSchema = {
   bun: RPCSchema<{
     requests: {
-      // ---- Agent ----
-      agentStart: { params: undefined; response: AgentStatus };
-      agentStop: { params: undefined; response: { ok: boolean } };
-      agentRestart: { params: undefined; response: AgentStatus };
-      agentStatus: { params: undefined; response: AgentStatus };
-
       // ---- Desktop: Tray ----
       desktopCreateTray: { params: TrayOptions; response: undefined };
       desktopUpdateTray: { params: Partial<TrayOptions>; response: undefined };
@@ -407,6 +397,7 @@ export type MiladyRPCSchema = {
         response: { path: string };
       };
       desktopBeep: { params: undefined; response: undefined };
+      desktopOpenSettingsWindow: { params: undefined; response: undefined };
 
       // ---- Desktop: Clipboard ----
       desktopWriteToClipboard: {
@@ -750,6 +741,16 @@ export type MiladyRPCSchema = {
         response: undefined;
       };
 
+      // ---- Credentials Auto-Detection ----
+      credentialsScanProviders: {
+        params: { context: "onboarding" | "tray-refresh" };
+        response: { providers: DetectedProvider[] };
+      };
+      credentialsScanAndValidate: {
+        params: { context: "onboarding" | "tray-refresh" };
+        response: { providers: DetectedProvider[] };
+      };
+
       // ---- GPU Window ----
       gpuWindowCreate: {
         params: {
@@ -817,10 +818,6 @@ export type MiladyRPCSchema = {
         params: undefined;
         response: { views: GpuViewInfo[] };
       };
-
-      // ---- LIFO (PiP) ----
-      lifoGetPipState: { params: undefined; response: PipState };
-      lifoSetPip: { params: PipState; response: undefined };
     };
     // biome-ignore lint/complexity/noBannedTypes: empty message schema placeholder for future audio streaming
     messages: {
@@ -835,9 +832,6 @@ export type MiladyRPCSchema = {
     };
     messages: {
       // Push events FROM bun TO webview
-
-      // Agent
-      agentStatusUpdate: AgentStatus;
 
       // Gateway
       gatewayDiscovery: {
@@ -877,6 +871,11 @@ export type MiladyRPCSchema = {
         text: string;
         segments: Array<{ text: string; start: number; end: number }>;
       };
+      talkmodeError: {
+        code: string;
+        message: string;
+        recoverable: boolean;
+      };
 
       // Swabble: Wake word detection
       swabbleWakeWord: {
@@ -885,6 +884,22 @@ export type MiladyRPCSchema = {
         transcript: string;
       };
       swabbleStateChanged: { listening: boolean };
+      swabbleTranscript: {
+        transcript: string;
+        segments: Array<{
+          text: string;
+          start: number;
+          duration: number;
+          isFinal: boolean;
+        }>;
+        isFinal: boolean;
+        confidence?: number;
+      };
+      swabbleError: {
+        code: string;
+        message: string;
+        recoverable: boolean;
+      };
       // Swabble: audio chunk fallback (whisper.cpp binary missing)
       swabbleAudioChunkPush: { data: string };
 
@@ -914,6 +929,15 @@ export type MiladyRPCSchema = {
 
       // GPU Window push events
       gpuWindowClosed: { id: string };
+
+      // WebGPU browser support status
+      webGpuBrowserStatus: {
+        available: boolean;
+        reason: string;
+        renderer: string;
+        chromeBetaPath: string | null;
+        downloadUrl: string | null;
+      };
     };
   }>;
 };
@@ -923,7 +947,7 @@ export type MiladyRPCSchema = {
 // ============================================================================
 
 /**
- * Maps Electron-style colon-separated IPC channel names to camelCase RPC
+ * Maps legacy colon-separated desktop channel names to camelCase RPC
  * method names. Used by the renderer bridge for backward compatibility.
  */
 export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
@@ -992,6 +1016,7 @@ export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
   "desktop:isPackaged": "desktopIsPackaged",
   "desktop:getPath": "desktopGetPath",
   "desktop:beep": "desktopBeep",
+  "desktop:openSettingsWindow": "desktopOpenSettingsWindow",
 
   // Desktop: Clipboard
   "desktop:writeToClipboard": "desktopWriteToClipboard",
@@ -1106,9 +1131,9 @@ export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
   "contextMenu:quoteInChat": "contextMenuQuoteInChat",
   "contextMenu:saveAsCommand": "contextMenuSaveAsCommand",
 
-  // LIFO
-  "lifo:getPipState": "lifoGetPipState",
-  "lifo:setPip": "lifoSetPip",
+  // Credentials
+  "credentials:scanProviders": "credentialsScanProviders",
+  "credentials:scanAndValidate": "credentialsScanAndValidate",
 
   // GPU Window
   "gpuWindow:create": "gpuWindowCreate",
@@ -1130,7 +1155,7 @@ export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
 };
 
 /**
- * Maps Electron-style push event channel names to RPC message names.
+ * Maps legacy desktop push channel names to RPC message names.
  * Used by the renderer bridge to subscribe to push events.
  */
 export const PUSH_CHANNEL_TO_RPC_MESSAGE: Record<string, string> = {
@@ -1150,8 +1175,11 @@ export const PUSH_CHANNEL_TO_RPC_MESSAGE: Record<string, string> = {
   "talkmode:stateChanged": "talkmodeStateChanged",
   "talkmode:speakComplete": "talkmodeSpeakComplete",
   "talkmode:transcript": "talkmodeTranscript",
+  "talkmode:error": "talkmodeError",
   "swabble:wakeWord": "swabbleWakeWord",
   "swabble:stateChange": "swabbleStateChanged",
+  "swabble:transcript": "swabbleTranscript",
+  "swabble:error": "swabbleError",
   "swabble:audioChunkPush": "swabbleAudioChunkPush",
   "contextMenu:askAgent": "contextMenuAskAgent",
   "contextMenu:createSkill": "contextMenuCreateSkill",
@@ -1165,10 +1193,13 @@ export const PUSH_CHANNEL_TO_RPC_MESSAGE: Record<string, string> = {
 
   // GPU Window push events
   "gpuWindow:closed": "gpuWindowClosed",
+
+  // WebGPU browser support
+  "webgpu:browserStatus": "webGpuBrowserStatus",
 };
 
 /**
- * Reverse mapping: RPC message name → Electron push channel name.
+ * Reverse mapping: RPC message name → legacy desktop push channel name.
  */
 export const RPC_MESSAGE_TO_PUSH_CHANNEL: Record<string, string> =
   Object.fromEntries(

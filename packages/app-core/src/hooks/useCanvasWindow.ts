@@ -6,15 +6,15 @@
  * appears to be "embedded" because it is always kept aligned with the div.
  *
  * Works in:
- *   - Electrobun — calls via window.electron.ipcRenderer (wired through
- *     electrobun-bridge.ts which maps channel → electroview RPC)
- *   - Electron — same window.electron.ipcRenderer path works directly
+ *   - Electrobun — calls via the preload-exposed renderer RPC
+ *   - Legacy desktop bridge compatibility — falls back to the historical bridge
  *
  * Falls back gracefully (isReady=false, no window created) when neither
  * runtime is detected (web / Capacitor / SSR).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { invokeDesktopBridgeRequest } from "../bridge";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,23 +42,6 @@ export interface UseCanvasWindowResult {
   show: () => void;
   /** Hide the canvas window. */
   hide: () => void;
-}
-
-// ---------------------------------------------------------------------------
-// IPC helper
-// ---------------------------------------------------------------------------
-
-function getIpc(): {
-  invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
-} | null {
-  // Both Electrobun (via electrobun-bridge.ts) and Electron expose this.
-  return (
-    ((window as Window & { electron?: { ipcRenderer?: unknown } }).electron
-      ?.ipcRenderer as
-      | { invoke: (channel: string, ...args: unknown[]) => Promise<unknown> }
-      | null
-      | undefined) ?? null
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -100,7 +83,7 @@ export function useCanvasWindow(
   const titleRef = useRef(title);
   titleRef.current = title;
 
-  // Track last-synced bounds to avoid redundant IPC calls.
+  // Track last-synced bounds to avoid redundant bridge calls.
   const lastBoundsRef = useRef<{
     x: number;
     y: number;
@@ -108,8 +91,9 @@ export function useCanvasWindow(
     height: number;
   } | null>(null);
 
-  // RAF handle for position-sync loop.
-  const rafRef = useRef<number | null>(null);
+  const syncFrameRef = useRef<number | null>(null);
+  const trackingFrameRef = useRef<number | null>(null);
+  const animationTrackerCountRef = useRef(0);
 
   // ---------------------------------------------------------------------------
   // Sync position/size to the placeholder div
@@ -118,8 +102,7 @@ export function useCanvasWindow(
   const syncBounds = useCallback(() => {
     const el = containerRef.current;
     const id = windowIdRef.current;
-    const ipc = getIpc();
-    if (!el || !id || !ipc) return;
+    if (!el || !id) return;
 
     const bounds = getScreenRect(el);
 
@@ -131,32 +114,49 @@ export function useCanvasWindow(
       last.width === bounds.width &&
       last.height === bounds.height
     ) {
-      return; // Nothing changed — skip the IPC call.
+      return; // Nothing changed — skip the bridge call.
     }
 
     lastBoundsRef.current = bounds;
 
-    ipc.invoke("canvas:setBounds", { id, ...bounds }).catch((err: unknown) => {
+    void invokeDesktopBridgeRequest({
+      rpcMethod: "canvasSetBounds",
+      ipcChannel: "canvas:setBounds",
+      params: { id, ...bounds },
+    }).catch((err: unknown) => {
       console.warn("[useCanvasWindow] canvas:setBounds failed", err);
     });
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // RAF loop — keeps the window aligned during scrolls/animations
-  // ---------------------------------------------------------------------------
-
-  const startRafLoop = useCallback(() => {
-    const loop = () => {
+  const scheduleSyncBounds = useCallback(() => {
+    if (trackingFrameRef.current !== null || syncFrameRef.current !== null) {
+      return;
+    }
+    syncFrameRef.current = requestAnimationFrame(() => {
+      syncFrameRef.current = null;
       syncBounds();
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
+    });
   }, [syncBounds]);
 
-  const stopRafLoop = useCallback(() => {
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
+  const startTrackingBounds = useCallback(() => {
+    if (trackingFrameRef.current !== null) {
+      return;
+    }
+    const loop = () => {
+      syncBounds();
+      trackingFrameRef.current = requestAnimationFrame(loop);
+    };
+    trackingFrameRef.current = requestAnimationFrame(loop);
+  }, [syncBounds]);
+
+  const stopTrackingBounds = useCallback(() => {
+    if (trackingFrameRef.current !== null) {
+      cancelAnimationFrame(trackingFrameRef.current);
+      trackingFrameRef.current = null;
+    }
+    if (syncFrameRef.current !== null) {
+      cancelAnimationFrame(syncFrameRef.current);
+      syncFrameRef.current = null;
     }
   }, []);
 
@@ -167,12 +167,6 @@ export function useCanvasWindow(
   useEffect(() => {
     if (!enabled) return;
 
-    const ipc = getIpc();
-    if (!ipc) {
-      // Not in a supported desktop runtime — stay in fallback state.
-      return;
-    }
-
     let destroyed = false;
     let createdId: string | null = null;
 
@@ -182,26 +176,36 @@ export function useCanvasWindow(
       ? getScreenRect(el)
       : { x: 100, y: 100, width: 800, height: 600 };
 
-    ipc
-      .invoke("canvas:createWindow", {
+    void invokeDesktopBridgeRequest<{ id?: string }>({
+      rpcMethod: "canvasCreateWindow",
+      ipcChannel: "canvas:createWindow",
+      params: {
         url: urlRef.current,
         title: titleRef.current ?? "Canvas",
         x: initial.x,
         y: initial.y,
         width: initial.width,
         height: initial.height,
-      })
+      },
+    })
       .then((result) => {
+        if (!result) {
+          return;
+        }
         if (destroyed) {
           // Component unmounted before the promise resolved — clean up.
-          const id = (result as { id?: string })?.id;
+          const id = result.id;
           if (id) {
-            ipc.invoke("canvas:destroyWindow", { id }).catch(() => {});
+            void invokeDesktopBridgeRequest({
+              rpcMethod: "canvasDestroyWindow",
+              ipcChannel: "canvas:destroyWindow",
+              params: { id },
+            }).catch(() => {});
           }
           return;
         }
 
-        const id = (result as { id?: string })?.id;
+        const id = result.id;
         if (!id) {
           console.warn("[useCanvasWindow] canvasCreateWindow returned no id");
           return;
@@ -212,25 +216,101 @@ export function useCanvasWindow(
         setWindowId(id);
         lastBoundsRef.current = null; // Force a setBounds on next sync.
         setIsReady(true);
-        startRafLoop();
+        scheduleSyncBounds();
       })
       .catch((err: unknown) => {
         console.warn("[useCanvasWindow] canvas:createWindow failed", err);
       });
 
+    const isTrackedTarget = (target: EventTarget | null) => {
+      const trackedElement = containerRef.current;
+      return (
+        trackedElement !== null &&
+        target instanceof Node &&
+        trackedElement.contains(target)
+      );
+    };
+    const handleViewportChange = () => {
+      scheduleSyncBounds();
+    };
+    const startAnimationTracking = (event: Event) => {
+      if (!isTrackedTarget(event.target)) {
+        return;
+      }
+      animationTrackerCountRef.current += 1;
+      startTrackingBounds();
+    };
+    const stopAnimationTracking = (event: Event) => {
+      if (!isTrackedTarget(event.target)) {
+        return;
+      }
+      animationTrackerCountRef.current = Math.max(
+        0,
+        animationTrackerCountRef.current - 1,
+      );
+      if (animationTrackerCountRef.current === 0) {
+        stopTrackingBounds();
+        scheduleSyncBounds();
+      }
+    };
+
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
+    window.addEventListener("transitionstart", startAnimationTracking, true);
+    window.addEventListener("transitionend", stopAnimationTracking, true);
+    window.addEventListener("transitioncancel", stopAnimationTracking, true);
+    window.addEventListener("animationstart", startAnimationTracking, true);
+    window.addEventListener("animationend", stopAnimationTracking, true);
+    window.addEventListener("animationcancel", stopAnimationTracking, true);
+    window.visualViewport?.addEventListener("resize", handleViewportChange);
+    window.visualViewport?.addEventListener("scroll", handleViewportChange);
+
     // ResizeObserver: pick up size changes from layout shifts.
     let ro: ResizeObserver | null = null;
     if (el && typeof ResizeObserver !== "undefined") {
       ro = new ResizeObserver(() => {
-        syncBounds();
+        scheduleSyncBounds();
       });
       ro.observe(el);
     }
 
     return () => {
       destroyed = true;
-      stopRafLoop();
+      animationTrackerCountRef.current = 0;
+      stopTrackingBounds();
       ro?.disconnect();
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+      window.removeEventListener(
+        "transitionstart",
+        startAnimationTracking,
+        true,
+      );
+      window.removeEventListener("transitionend", stopAnimationTracking, true);
+      window.removeEventListener(
+        "transitioncancel",
+        stopAnimationTracking,
+        true,
+      );
+      window.removeEventListener(
+        "animationstart",
+        startAnimationTracking,
+        true,
+      );
+      window.removeEventListener("animationend", stopAnimationTracking, true);
+      window.removeEventListener(
+        "animationcancel",
+        stopAnimationTracking,
+        true,
+      );
+      window.visualViewport?.removeEventListener(
+        "resize",
+        handleViewportChange,
+      );
+      window.visualViewport?.removeEventListener(
+        "scroll",
+        handleViewportChange,
+      );
 
       const id = createdId ?? windowIdRef.current;
       if (id) {
@@ -238,39 +318,52 @@ export function useCanvasWindow(
         setWindowId(null);
         setIsReady(false);
         lastBoundsRef.current = null;
-        ipc.invoke("canvas:destroyWindow", { id }).catch(() => {});
+        void invokeDesktopBridgeRequest({
+          rpcMethod: "canvasDestroyWindow",
+          ipcChannel: "canvas:destroyWindow",
+          params: { id },
+        }).catch(() => {});
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, startRafLoop, stopRafLoop, syncBounds]);
+  }, [enabled, scheduleSyncBounds, startTrackingBounds, stopTrackingBounds]);
 
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
 
   const navigate = useCallback((newUrl: string) => {
-    const ipc = getIpc();
     const id = windowIdRef.current;
-    if (!ipc || !id) return;
-    ipc.invoke("canvas:navigate", { id, url: newUrl }).catch((err: unknown) => {
+    if (!id) return;
+    void invokeDesktopBridgeRequest({
+      rpcMethod: "canvasNavigate",
+      ipcChannel: "canvas:navigate",
+      params: { id, url: newUrl },
+    }).catch((err: unknown) => {
       console.warn("[useCanvasWindow] canvas:navigate failed", err);
     });
   }, []);
 
   const show = useCallback(() => {
-    const ipc = getIpc();
     const id = windowIdRef.current;
-    if (!ipc || !id) return;
-    ipc.invoke("canvas:show", { id }).catch((err: unknown) => {
+    if (!id) return;
+    void invokeDesktopBridgeRequest({
+      rpcMethod: "canvasShow",
+      ipcChannel: "canvas:show",
+      params: { id },
+    }).catch((err: unknown) => {
       console.warn("[useCanvasWindow] canvas:show failed", err);
     });
   }, []);
 
   const hide = useCallback(() => {
-    const ipc = getIpc();
     const id = windowIdRef.current;
-    if (!ipc || !id) return;
-    ipc.invoke("canvas:hide", { id }).catch((err: unknown) => {
+    if (!id) return;
+    void invokeDesktopBridgeRequest({
+      rpcMethod: "canvasHide",
+      ipcChannel: "canvas:hide",
+      params: { id },
+    }).catch((err: unknown) => {
       console.warn("[useCanvasWindow] canvas:hide failed", err);
     });
   }, []);

@@ -1,7 +1,10 @@
-FROM node:22-bookworm
+# ==============================================================================
+# Stage 1: Builder — install all deps, resolve LFS assets, build
+# ==============================================================================
+FROM node:22-bookworm AS builder
 
 # Install Bun (primary package manager and build tool)
-RUN curl -fsSL https://bun.sh/install | bash
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.9"
 ENV PATH="/root/.bun/bin:${PATH}"
 
 WORKDIR /app
@@ -57,22 +60,33 @@ RUN set -e; \
         # LFS budget/quota can block fetch; continue so media.githubusercontent fallback can run.
         git lfs fetch origin "$REF" --include='apps/app/public/vrms' || true; \
         git lfs fetch origin "$REF" --include='apps/app/public/animations/mixamo' || true; \
+        git lfs fetch origin "$REF" --include='apps/app/public/animations/emotes' || true; \
         git lfs fetch origin "$REF" --include='apps/app/public/animations/idle.glb' || true; \
-        git lfs fetch origin "$REF" --include='apps/app/public/animations/Idle.fbx' || true; \
-        git lfs fetch origin "$REF" --include='apps/app/public/animations/BreathingIdle.fbx' || true; \
         git lfs checkout apps/app/public/vrms || true; \
         git lfs checkout apps/app/public/animations/mixamo || true; \
+        git lfs checkout apps/app/public/animations/emotes || true; \
         git lfs checkout apps/app/public/animations/idle.glb || true; \
-        git lfs checkout apps/app/public/animations/Idle.fbx || true; \
-        git lfs checkout apps/app/public/animations/BreathingIdle.fbx || true; \
         cd /app; \
         rm -rf apps/app/public/vrms apps/app/public/animations; \
-        mkdir -p apps/app/public/animations; \
-        cp -a /tmp/milady-lfs-src/apps/app/public/vrms apps/app/public/; \
+        mkdir -p apps/app/public/vrms/previews apps/app/public/vrms/backgrounds apps/app/public/animations; \
+        for vrm_id in 1 4 5 9; do \
+          if [ -f "/tmp/milady-lfs-src/apps/app/public/vrms/milady-${vrm_id}.vrm" ]; then \
+            gzip -c "/tmp/milady-lfs-src/apps/app/public/vrms/milady-${vrm_id}.vrm" > "apps/app/public/vrms/milady-${vrm_id}.vrm.gz"; \
+          fi; \
+          if [ -f "/tmp/milady-lfs-src/apps/app/public/vrms/previews/milady-${vrm_id}.png" ]; then \
+            cp -a "/tmp/milady-lfs-src/apps/app/public/vrms/previews/milady-${vrm_id}.png" apps/app/public/vrms/previews/; \
+          fi; \
+        done; \
+        for bg_id in 1 4 5 9; do \
+          if [ -f "/tmp/milady-lfs-src/apps/app/public/vrms/backgrounds/milady-${bg_id}.png" ]; then \
+            cp -a "/tmp/milady-lfs-src/apps/app/public/vrms/backgrounds/milady-${bg_id}.png" apps/app/public/vrms/backgrounds/; \
+          fi; \
+        done; \
         cp -a /tmp/milady-lfs-src/apps/app/public/animations/mixamo apps/app/public/animations/ || true; \
+        cp -a /tmp/milady-lfs-src/apps/app/public/animations/emotes apps/app/public/animations/ || true; \
         cp -a /tmp/milady-lfs-src/apps/app/public/animations/idle.glb apps/app/public/animations/ || true; \
-        cp -a /tmp/milady-lfs-src/apps/app/public/animations/Idle.fbx apps/app/public/animations/ || true; \
-        cp -a /tmp/milady-lfs-src/apps/app/public/animations/BreathingIdle.fbx apps/app/public/animations/ || true; \
+        rm -f apps/app/public/animations/emotes/idle.glb apps/app/public/animations/emotes/punch.glb apps/app/public/animations/mixamo/Crying.fbx; \
+        find apps/app/public/animations -type f \( -name '*.glb' -o -name '*.fbx' \) -exec sh -c 'gzip -c "$1" > "$1.gz" && rm -f "$1"' _ {} \; ; \
         rm -rf /tmp/milady-lfs-src; \
       else \
         echo '[build] WARNING: fallback clone failed; continuing with existing assets.'; \
@@ -111,6 +125,48 @@ RUN set -e; \
 RUN bun install --ignore-scripts
 RUN node ./scripts/link-browser-server.mjs && node ./scripts/patch-deps.mjs
 RUN bun run build
+
+# Re-install with production-only dependencies for the runtime image.
+RUN rm -rf node_modules && bun install --ignore-scripts --production
+
+# ==============================================================================
+# Stage 2: Runtime — lean production image without dev deps, source, or build tools
+# ==============================================================================
+FROM node:22-bookworm AS runtime
+
+# Install Bun (needed at runtime for bun-native modules)
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.9"
+ENV PATH="/root/.bun/bin:${PATH}"
+
+WORKDIR /app
+ENV NODE_LLAMA_CPP_SKIP_DOWNLOAD="true"
+
+ARG MILADY_DOCKER_APT_PACKAGES=""
+RUN if [ -n "$MILADY_DOCKER_APT_PACKAGES" ]; then \
+      apt-get update && \
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $MILADY_DOCKER_APT_PACKAGES && \
+      apt-get clean && \
+      rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
+    fi
+
+# Copy production node_modules (no devDependencies)
+COPY --from=builder /app/node_modules ./node_modules
+
+# Copy build outputs
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/apps/app/dist ./apps/app/dist
+
+# Copy entrypoint and runtime scripts
+COPY --from=builder /app/milady.mjs ./milady.mjs
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/scripts ./scripts
+
+# Copy resolved VRM/animation assets (from LFS or fallback)
+COPY --from=builder /app/apps/app/public ./apps/app/public
+
+# Copy workspace package.json files so Node module resolution works
+COPY --from=builder /app/apps/app/package.json ./apps/app/package.json
+COPY --from=builder /app/apps/app/node_modules ./apps/app/node_modules
 
 ENV NODE_ENV=production
 ENV MILADY_API_BIND="0.0.0.0"

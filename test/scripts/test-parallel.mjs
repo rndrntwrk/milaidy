@@ -1,26 +1,7 @@
 import { spawn } from "node:child_process";
-import { createRequire } from "node:module";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const projectRoot = path.resolve(__dirname, "../..");
-const appDir = path.join(projectRoot, "apps", "app");
-
-// Resolve Playwright CLI lazily — if @playwright/test isn't installed (e.g.
-// in CI unit-test jobs that don't install apps/app devDependencies), the
-// playwright test suite is simply skipped rather than crashing the runner.
-let playwrightCli = null;
-try {
-  const appRequire = createRequire(path.join(appDir, "index.js"));
-  const playwrightPkg = appRequire.resolve("@playwright/test/package.json");
-  playwrightCli = path.join(path.dirname(playwrightPkg), "cli.js");
-} catch {
-  // @playwright/test not available — playwright tests will be skipped
-}
-const shouldRunPlaywright =
-  Boolean(playwrightCli) && process.env.MILADY_RUN_PLAYWRIGHT === "1";
 
 /**
  * Each entry describes a test suite to run in parallel.
@@ -36,6 +17,7 @@ const runs = [
     name: "unit",
     args: ["vitest", "run", "--config", "vitest.unit.config.ts"],
     vitest: true,
+    reportFile: path.join(os.tmpdir(), "milady-vitest-unit-report.json"),
   },
   {
     name: "e2e",
@@ -44,22 +26,6 @@ const runs = [
     forceSerial: true,
     maxWorkers: 1,
   },
-  // Only include playwright tests if @playwright/test is installed
-  ...(shouldRunPlaywright
-    ? [
-        {
-          name: "e2e:playwright",
-          cmd: "node",
-          args: [
-            playwrightCli,
-            "test",
-            "--config",
-            "playwright.electron.config.ts",
-          ],
-          cwd: appDir,
-        },
-      ]
-    : []),
 ];
 
 const children = new Set();
@@ -94,13 +60,14 @@ const defaultParallelRuns = runs.filter((entry) => !entry.forceSerial);
 const defaultSerialRuns = runs.filter((entry) => entry.forceSerial);
 const parallelRuns = isWindowsCi ? [] : defaultParallelRuns;
 const serialRuns = isWindowsCi ? runs : defaultSerialRuns;
-const localWorkers = Math.max(4, Math.min(16, os.cpus().length));
+const localWorkers = 2;
 const parallelCount = Math.max(1, parallelRuns.length);
 const perRunWorkers = Math.max(1, Math.floor(localWorkers / parallelCount));
 const macCiWorkers = isCI && isMacOS ? 1 : perRunWorkers;
-// Keep worker counts predictable for local runs; trim macOS CI workers to avoid worker crashes/OOM.
-// In CI on linux/windows, prefer Vitest defaults to avoid cross-test interference from lower worker counts.
-const maxWorkers = resolvedOverride ?? (isCI && !isMacOS ? null : macCiWorkers);
+// Use Vitest defaults for local unit runs. Forcing low local worker counts can leave the
+// child Vitest process hanging after completion on macOS. Keep the explicit cap only for
+// CI, where we want deterministic resource usage and known crash avoidance behavior.
+const maxWorkers = resolvedOverride ?? (isCI ? macCiWorkers : null);
 
 const WARNING_SUPPRESSION_FLAGS = [
   "--disable-warning=ExperimentalWarning",
@@ -110,10 +77,25 @@ const WARNING_SUPPRESSION_FLAGS = [
 
 const runOnce = (entry, extraArgs = []) =>
   new Promise((resolve) => {
+    if (entry.reportFile) {
+      try {
+        fs.rmSync(entry.reportFile, { force: true });
+      } catch {
+        // Best-effort cleanup only.
+      }
+    }
     const entryWorkers =
       typeof entry.maxWorkers === "number" ? entry.maxWorkers : maxWorkers;
     const vitestExtras = entry.vitest
       ? [
+          ...(entry.reportFile
+            ? [
+                "--reporter",
+                "json",
+                "--outputFile",
+                entry.reportFile,
+              ]
+            : []),
           ...(entryWorkers ? ["--maxWorkers", String(entryWorkers)] : []),
           ...ciWorkerArgs,
         ]
@@ -136,9 +118,33 @@ const runOnce = (entry, extraArgs = []) =>
       shell: process.platform === "win32",
     });
     children.add(child);
+    let forcedCode = null;
+    let reportPoll = null;
+    let forceKillTimer = null;
+    if (entry.reportFile) {
+      reportPoll = setInterval(() => {
+        if (forcedCode !== null) return;
+        let report = null;
+        try {
+          report = JSON.parse(fs.readFileSync(entry.reportFile, "utf8"));
+        } catch {
+          return;
+        }
+        if (typeof report?.success !== "boolean") return;
+        forcedCode = report.success ? 0 : 1;
+        child.kill("SIGTERM");
+        forceKillTimer = setTimeout(() => {
+          child.kill("SIGKILL");
+        }, 2_000);
+        forceKillTimer.unref?.();
+      }, 2_000);
+      reportPoll.unref?.();
+    }
     child.on("exit", (code, signal) => {
       children.delete(child);
-      resolve(code ?? (signal ? 1 : 0));
+      if (reportPoll) clearInterval(reportPoll);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      resolve(forcedCode ?? code ?? (signal ? 1 : 0));
     });
   });
 

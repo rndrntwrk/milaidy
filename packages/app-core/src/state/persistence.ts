@@ -4,11 +4,107 @@ import {
   normalizeLanguage,
   type UiLanguage,
 } from "../i18n";
-import type { UiShellMode } from "./types";
+import type { Tab } from "../navigation";
+import type { OnboardingStep } from "./types";
+import type { UiShellMode, UiTheme } from "./ui-preferences";
 import { normalizeAvatarIndex } from "./vrm";
+
+/* ── Theme persistence ────────────────────────────────────────────────── */
+
+export type { UiTheme } from "./ui-preferences";
+
+const UI_THEME_STORAGE_KEY = "milady:ui-theme";
+
+function normalizeUiTheme(value: unknown): UiTheme {
+  return value === "light" ? "light" : "dark";
+}
+
+export { normalizeUiTheme };
+
+export function loadUiTheme(): UiTheme {
+  try {
+    return normalizeUiTheme(localStorage.getItem(UI_THEME_STORAGE_KEY));
+  } catch {
+    return "dark";
+  }
+}
+
+export function saveUiTheme(theme: UiTheme): void {
+  try {
+    localStorage.setItem(UI_THEME_STORAGE_KEY, normalizeUiTheme(theme));
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Apply the theme to the document root.
+ * Sets both `data-theme` attribute and `.dark` class so both CSS selectors
+ * in base.css (`[data-theme="dark"]` and `.dark`) are satisfied.
+ */
+export function applyUiTheme(theme: UiTheme): void {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (!root) return;
+  if (typeof root.setAttribute === "function") {
+    root.setAttribute("data-theme", theme);
+  } else if ("dataset" in root && root.dataset) {
+    root.dataset.theme = theme;
+  } else {
+    return;
+  }
+  if (!root.classList) return;
+  if (theme === "dark") {
+    root.classList.add("dark");
+  } else {
+    root.classList.remove("dark");
+  }
+}
 
 const UI_LANGUAGE_STORAGE_KEY = "milady:ui-language";
 const UI_SHELL_MODE_STORAGE_KEY = "milady:ui-shell-mode";
+const LAST_NATIVE_TAB_STORAGE_KEY = "milady:last-native-tab";
+const ONBOARDING_STEP_STORAGE_KEY = "milady:onboarding:step";
+
+function normalizeOnboardingStep(value: unknown): OnboardingStep | null {
+  switch (value) {
+    case "wakeUp":
+    case "identity":
+    case "connection":
+    case "rpc":
+    case "senses":
+    case "activate":
+      return value;
+    default:
+      return null;
+  }
+}
+
+export function loadPersistedOnboardingStep(): OnboardingStep | null {
+  try {
+    return normalizeOnboardingStep(
+      localStorage.getItem(ONBOARDING_STEP_STORAGE_KEY),
+    );
+  } catch {
+    return null;
+  }
+}
+
+export function saveOnboardingStep(step: OnboardingStep): void {
+  try {
+    localStorage.setItem(ONBOARDING_STEP_STORAGE_KEY, step);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearPersistedOnboardingStep(): void {
+  try {
+    localStorage.removeItem(ONBOARDING_STEP_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 export function loadUiLanguage(): UiLanguage {
   try {
@@ -30,6 +126,7 @@ export function saveUiLanguage(language: UiLanguage): void {
 function normalizeUiShellMode(mode: unknown): UiShellMode {
   return mode === "native" ? "native" : "companion";
 }
+
 export { normalizeUiShellMode };
 
 export function loadUiShellMode(): UiShellMode {
@@ -45,6 +142,53 @@ export function loadUiShellMode(): UiShellMode {
 export function saveUiShellMode(mode: UiShellMode): void {
   try {
     localStorage.setItem(UI_SHELL_MODE_STORAGE_KEY, normalizeUiShellMode(mode));
+  } catch {
+    // ignore
+  }
+}
+
+function normalizeLastNativeTab(tab: unknown): Tab {
+  switch (tab) {
+    case "chat":
+    case "stream":
+    case "apps":
+    case "wallets":
+    case "knowledge":
+    case "connectors":
+    case "triggers":
+    case "plugins":
+    case "skills":
+    case "actions":
+    case "advanced":
+    case "fine-tuning":
+    case "voice":
+    case "runtime":
+    case "database":
+    case "settings":
+    case "logs":
+    case "security":
+      return tab;
+    default:
+      return "chat";
+  }
+}
+
+export function loadLastNativeTab(): Tab {
+  try {
+    return normalizeLastNativeTab(
+      localStorage.getItem(LAST_NATIVE_TAB_STORAGE_KEY),
+    );
+  } catch {
+    return "chat";
+  }
+}
+
+export function saveLastNativeTab(tab: Tab): void {
+  try {
+    localStorage.setItem(
+      LAST_NATIVE_TAB_STORAGE_KEY,
+      normalizeLastNativeTab(tab),
+    );
   } catch {
     // ignore
   }
@@ -90,9 +234,9 @@ export function loadChatAvatarVisible(): boolean {
 export function loadChatVoiceMuted(): boolean {
   try {
     const stored = localStorage.getItem(CHAT_VOICE_MUTED_KEY);
-    return stored === null ? true : stored === "true";
+    return stored === null ? false : stored === "true";
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -114,6 +258,8 @@ export function saveChatVoiceMuted(value: boolean): void {
 
 /* ── Chat mode persistence ─────────────────────────────────────────────── */
 const CHAT_MODE_KEY = "milady:chat:mode";
+const ACTIVE_CONVERSATION_ID_KEY = "milady:chat:activeConversationId";
+const COMPANION_MESSAGE_CUTOFF_TS_KEY = "milady:chat:companionMessageCutoffTs";
 
 export function loadChatMode(): ConversationMode {
   try {
@@ -127,6 +273,48 @@ export function loadChatMode(): ConversationMode {
 export function saveChatMode(value: ConversationMode): void {
   try {
     localStorage.setItem(CHAT_MODE_KEY, value);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadActiveConversationId(): string | null {
+  try {
+    const stored = localStorage.getItem(ACTIVE_CONVERSATION_ID_KEY)?.trim();
+    return stored ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveActiveConversationId(value: string | null): void {
+  try {
+    if (value && value.trim()) {
+      localStorage.setItem(ACTIVE_CONVERSATION_ID_KEY, value);
+      return;
+    }
+    localStorage.removeItem(ACTIVE_CONVERSATION_ID_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadCompanionMessageCutoffTs(): number {
+  try {
+    const stored = localStorage.getItem(COMPANION_MESSAGE_CUTOFF_TS_KEY);
+    const parsed = stored ? Number.parseInt(stored, 10) : Number.NaN;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : Date.now();
+  } catch {
+    return Date.now();
+  }
+}
+
+export function saveCompanionMessageCutoffTs(value: number): void {
+  try {
+    localStorage.setItem(
+      COMPANION_MESSAGE_CUTOFF_TS_KEY,
+      String(Math.max(0, Math.trunc(value))),
+    );
   } catch {
     /* ignore */
   }

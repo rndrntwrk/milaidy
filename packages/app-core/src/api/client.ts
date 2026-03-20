@@ -20,10 +20,27 @@ import type {
   VideoProvider,
   VisionConfig,
   VisionProvider,
-} from "../../../../src/config/types.milady";
-import type { DropStatus, MintResult } from "../../../../src/contracts/drop";
-import type { StylePreset } from "../../../../src/contracts/onboarding";
-import type { VerificationResult } from "../../../../src/contracts/verification";
+} from "@miladyai/autonomous/contracts/config";
+import type { DropStatus, MintResult } from "@miladyai/autonomous/contracts/drop";
+import type { VerificationResult } from "@miladyai/autonomous/contracts/verification";
+import type {
+  CloudProviderOption,
+  ConnectorConfig,
+  InventoryProviderOption,
+  MessageExample,
+  MessageExampleContent,
+  ModelOption,
+  OnboardingConnection,
+  OnboardingData,
+  OnboardingOptions,
+  OpenRouterModelOption,
+  PiAiModelOption,
+  ProviderOption,
+  RpcProviderOption,
+  StylePreset,
+  SubscriptionProviderStatus,
+  SubscriptionStatusResponse,
+} from "@miladyai/autonomous/contracts/onboarding";
 import type {
   BscTradeExecuteRequest,
   BscTradeExecuteResponse,
@@ -41,68 +58,103 @@ import type {
   WalletAddresses,
   WalletBalancesResponse,
   WalletConfigStatus,
+  WalletConfigUpdateRequest,
   WalletNftsResponse,
+  WalletRpcChain,
+  WalletRpcCredentialKey,
+  WalletRpcSelections,
   TradePermissionMode as WalletTradePermissionMode,
   WalletTradingProfileResponse,
   WalletTradingProfileSourceFilter,
   WalletTradingProfileWindow,
-} from "../../../../src/contracts/wallet";
+} from "@miladyai/autonomous/contracts/wallet";
+import {
+  DEFAULT_WALLET_RPC_SELECTIONS,
+  normalizeWalletRpcProviderId,
+  normalizeWalletRpcSelections,
+  WALLET_RPC_PROVIDER_OPTIONS,
+} from "@miladyai/autonomous/contracts/wallet";
 import type {
   AllPermissionsState,
   PermissionState,
   PermissionStatus,
   SystemPermissionDefinition,
   SystemPermissionId,
-} from "../../../../src/permissions/types";
+} from "@miladyai/autonomous/contracts/permissions";
 import type { ConfigUiHint } from "../types";
+import { stripAssistantStageDirections } from "../utils/assistant-text";
+import { mergeStreamingText } from "../utils/streaming-text";
 
 export type {
+  AllPermissionsState,
   AudioGenConfig,
   AudioGenProvider,
-  CustomActionDef,
-  CustomActionHandler,
-  DatabaseProviderType,
-  ImageConfig,
-  ImageProvider,
-  MediaConfig,
-  MediaMode,
-  ReleaseChannel,
-  VideoConfig,
-  VideoProvider,
-  VisionConfig,
-  VisionProvider,
-};
-export type { StylePreset };
-export type {
   BscTradeExecuteRequest,
   BscTradeExecuteResponse,
-  BscTransferExecuteRequest,
-  BscTransferExecuteResponse,
   BscTradePreflightResponse,
   BscTradeQuoteRequest,
   BscTradeQuoteResponse,
   BscTradeTxStatusResponse,
+  BscTransferExecuteRequest,
+  BscTransferExecuteResponse,
+  CloudProviderOption,
+  ConnectorConfig,
+  CustomActionDef,
+  CustomActionHandler,
+  DatabaseProviderType,
+  DropStatus,
   EvmChainBalance,
   EvmNft,
   EvmTokenBalance,
+  ImageConfig,
+  ImageProvider,
+  InventoryProviderOption,
+  MediaConfig,
+  MediaMode,
+  MessageExample,
+  MessageExampleContent,
+  MintResult,
+  ModelOption,
+  OnboardingConnection,
+  OnboardingData,
+  OnboardingOptions,
+  OpenRouterModelOption,
+  PermissionState,
+  PermissionStatus,
+  PiAiModelOption,
+  ProviderOption,
+  RpcProviderOption,
+  ReleaseChannel,
   SolanaNft,
   SolanaTokenBalance,
+  StylePreset,
+  SubscriptionProviderStatus,
+  SubscriptionStatusResponse,
+  SystemPermissionDefinition as PermissionDefinition,
+  SystemPermissionId,
+  VerificationResult,
+  VideoConfig,
+  VideoProvider,
+  VisionConfig,
+  VisionProvider,
   WalletAddresses,
   WalletBalancesResponse,
   WalletConfigStatus,
+  WalletConfigUpdateRequest,
   WalletNftsResponse,
+  WalletRpcChain,
+  WalletRpcCredentialKey,
+  WalletRpcSelections,
   WalletTradingProfileResponse,
   WalletTradingProfileSourceFilter,
   WalletTradingProfileWindow,
 };
-export type { DropStatus, MintResult };
-export type { VerificationResult };
-export type {
-  AllPermissionsState,
-  PermissionState,
-  PermissionStatus,
-  SystemPermissionId,
-  SystemPermissionDefinition as PermissionDefinition,
+
+export {
+  DEFAULT_WALLET_RPC_SELECTIONS,
+  normalizeWalletRpcProviderId,
+  normalizeWalletRpcSelections,
+  WALLET_RPC_PROVIDER_OPTIONS,
 };
 
 // ---------------------------------------------------------------------------
@@ -178,7 +230,6 @@ export type AgentState =
   | "not_started"
   | "starting"
   | "running"
-  | "paused"
   | "stopped"
   | "restarting"
   | "error";
@@ -438,153 +489,6 @@ export interface UpdateTriggerRequest {
   cronExpression?: string;
   maxRuns?: number;
 }
-
-export interface MessageExample {
-  user: string;
-  content: { text: string };
-}
-
-export interface ProviderOption {
-  id: string;
-  name: string;
-  envKey: string | null;
-  pluginName: string;
-  keyPrefix: string | null;
-  description: string;
-}
-
-export interface CloudProviderOption {
-  id: string;
-  name: string;
-  description: string;
-}
-
-export interface ModelOption {
-  id: string;
-  name: string;
-  provider: string;
-  description: string;
-}
-
-export interface RpcProviderOption {
-  id: string;
-  name: string;
-  description: string;
-  envKey: string | null;
-  requiresKey: boolean;
-}
-
-export interface InventoryProviderOption {
-  id: string;
-  name: string;
-  description: string;
-  rpcProviders: RpcProviderOption[];
-}
-
-export interface OpenRouterModelOption {
-  id: string;
-  name: string;
-  description: string;
-}
-
-export interface PiAiModelOption {
-  id: string;
-  name: string;
-  provider: string;
-  isDefault: boolean;
-}
-
-export interface OnboardingOptions {
-  names: string[];
-  styles: StylePreset[];
-  providers: ProviderOption[];
-  cloudProviders: CloudProviderOption[];
-  models: {
-    small: ModelOption[];
-    large: ModelOption[];
-  };
-  openrouterModels?: OpenRouterModelOption[];
-  piAiModels?: PiAiModelOption[];
-  piAiDefaultModel?: string | null;
-  inventoryProviders: InventoryProviderOption[];
-  sharedStyleRules: string;
-  githubOAuthAvailable?: boolean;
-}
-
-/** Configuration for a single messaging connector. */
-export interface ConnectorConfig {
-  enabled?: boolean;
-  botToken?: string;
-  token?: string;
-  apiKey?: string;
-  [key: string]:
-    | string
-    | boolean
-    | number
-    | string[]
-    | Record<string, unknown>
-    | undefined;
-}
-
-export interface OnboardingData {
-  name: string;
-  runMode: "local" | "cloud";
-  /** Sandbox execution mode: "off" (rawdog), "light" (cloud), "standard" (local sandbox), "max". */
-  sandboxMode?: "off" | "light" | "standard" | "max";
-  bio: string[];
-  systemPrompt: string;
-  style?: {
-    all: string[];
-    chat: string[];
-    post: string[];
-  };
-  adjectives?: string[];
-  topics?: string[];
-  postExamples?: string[];
-  messageExamples?: MessageExample[][];
-  // Cloud-specific
-  cloudProvider?: string;
-  smallModel?: string;
-  largeModel?: string;
-  // Local-specific
-  provider?: string;
-  providerApiKey?: string;
-  /** Optional primary model override (provider/model), used by pi-ai mode. */
-  primaryModel?: string;
-  openrouterModel?: string;
-  subscriptionProvider?: string;
-  // Messaging channel setup
-  channels?: Record<string, unknown>;
-  // Inventory / wallet setup
-  inventoryProviders?: Array<{
-    chain: string;
-    rpcProvider: string;
-    rpcApiKey?: string;
-  }>;
-  // Connector setup (Telegram, Discord, etc.)
-  connectors?: Record<string, ConnectorConfig>;
-  telegramToken?: string;
-  discordToken?: string;
-  whatsappSessionPath?: string;
-  twilioAccountSid?: string;
-  twilioAuthToken?: string;
-  twilioPhoneNumber?: string;
-  blooioApiKey?: string;
-  blooioPhoneNumber?: string;
-  githubToken?: string;
-}
-
-export interface SubscriptionProviderStatus {
-  provider: string;
-  configured: boolean;
-  valid: boolean;
-  expiresAt: number | null;
-}
-
-export interface SubscriptionStatusResponse {
-  providers: SubscriptionProviderStatus[];
-}
-
 export interface SandboxPlatformStatus {
   platform: string;
   arch?: string;
@@ -658,6 +562,7 @@ export interface PluginInfo {
   id: string;
   name: string;
   description: string;
+  tags?: string[];
   enabled: boolean;
   configured: boolean;
   envKey: string | null;
@@ -715,6 +620,18 @@ export interface Conversation {
   roomId: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ConversationGreeting {
+  text: string;
+  agentName: string;
+  generated: boolean;
+  persisted?: boolean;
+}
+
+export interface CreateConversationOptions {
+  bootstrapGreeting?: boolean;
+  lang?: string;
 }
 
 // ── A2UI Content Blocks (Agent-to-UI) ────────────────────────────────
@@ -1120,6 +1037,14 @@ export interface RegistryPlugin {
   installedVersion: string | null;
   loaded: boolean;
   bundled: boolean;
+  compatibility?: {
+    releaseAvailability: "bundled" | "post-release";
+    installSurface: "runtime" | "app";
+    postReleaseInstallable: boolean;
+    requiresDesktopRuntime: boolean;
+    requiresLocalRuntime: boolean;
+    note?: string;
+  };
 }
 
 export interface RegistrySearchResult {
@@ -1183,6 +1108,106 @@ export interface CloudCredits {
   critical?: boolean;
   topUpUrl?: string;
 }
+export interface CloudBillingPaymentMethod {
+  id: string;
+  type: string;
+  label?: string;
+  brand?: string;
+  last4?: string;
+  expiryMonth?: number;
+  expiryYear?: number;
+  isDefault?: boolean;
+  walletAddress?: string;
+  network?: string;
+}
+export interface CloudBillingHistoryItem {
+  id: string;
+  kind?: string;
+  provider?: string;
+  status: string;
+  amount: number;
+  currency: string;
+  description?: string;
+  receiptUrl?: string;
+  createdAt: string;
+}
+export interface CloudBillingSummary {
+  balance: number | null;
+  currency?: string;
+  low?: boolean;
+  critical?: boolean;
+  topUpUrl?: string;
+  embeddedCheckoutEnabled?: boolean;
+  hostedCheckoutEnabled?: boolean;
+  cryptoEnabled?: boolean;
+  paymentMethods?: CloudBillingPaymentMethod[];
+  history?: CloudBillingHistoryItem[];
+  [key: string]: unknown;
+}
+export interface CloudBillingSettings {
+  success?: boolean;
+  message?: string;
+  error?: string;
+  settings?: {
+    autoTopUp?: {
+      enabled?: boolean;
+      amount?: number | null;
+      threshold?: number | null;
+      hasPaymentMethod?: boolean;
+    };
+    limits?: {
+      minAmount?: number;
+      maxAmount?: number;
+      minThreshold?: number;
+      maxThreshold?: number;
+    };
+  };
+  [key: string]: unknown;
+}
+export interface CloudBillingSettingsUpdateRequest {
+  autoTopUp?: {
+    enabled?: boolean;
+    amount?: number;
+    threshold?: number;
+  };
+}
+export interface CloudBillingCheckoutRequest {
+  amountUsd: number;
+  mode?: "embedded" | "hosted";
+}
+export interface CloudBillingCheckoutResponse {
+  success?: boolean;
+  provider?: string;
+  mode?: "embedded" | "hosted";
+  checkoutUrl?: string;
+  url?: string;
+  publishableKey?: string;
+  clientSecret?: string;
+  sessionId?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+export interface CloudBillingCryptoQuoteRequest {
+  amountUsd: number;
+  currency?: string;
+  network?: string;
+  walletAddress?: string;
+}
+export interface CloudBillingCryptoQuoteResponse {
+  success?: boolean;
+  provider?: string;
+  invoiceId?: string;
+  network?: string;
+  currency?: string;
+  amount?: string;
+  amountUsd?: number;
+  payToAddress?: string;
+  tokenAddress?: string;
+  paymentLinkUrl?: string;
+  expiresAt?: string;
+  memo?: string;
+  [key: string]: unknown;
+}
 export interface CloudLoginResponse {
   ok: boolean;
   sessionId: string;
@@ -1239,6 +1264,18 @@ export interface CloudCompatJob {
   state: string;
   created_on: string;
   completed_on: string | null;
+}
+
+export interface CloudCompatLaunchResult {
+  agentId: string;
+  agentName: string;
+  appUrl: string;
+  launchSessionId: string | null;
+  issuedAt: string;
+  connection: {
+    apiBase: string;
+    token: string;
+  };
 }
 
 // Skills Marketplace
@@ -1319,6 +1356,24 @@ export interface CodingAgentSession {
   toolDescription?: string;
   /** Latest activity text for the agent activity box. */
   lastActivity?: string;
+}
+
+export interface CodingAgentScratchWorkspace {
+  sessionId: string;
+  label: string;
+  path: string;
+  status: "pending_decision" | "kept" | "promoted";
+  createdAt: number;
+  terminalAt: number;
+  terminalEvent: "stopped" | "task_complete" | "error";
+  expiresAt?: number;
+}
+
+export interface AgentPreflightResult {
+  adapter?: string;
+  installed?: boolean;
+  installCommand?: string;
+  docsUrl?: string;
 }
 
 export interface CodingAgentStatus {
@@ -1406,7 +1461,7 @@ export interface CharacterData {
     post?: string[];
   };
   messageExamples?: Array<{
-    examples: Array<{ name: string; content: { text: string } }>;
+    examples: Array<{ name: string; content: MessageExampleContent }>;
   }>;
   postExamples?: string[];
 }
@@ -1443,6 +1498,11 @@ export interface AppViewerConfig {
   sandbox?: string;
   authMessage?: AppViewerAuthMessage;
 }
+
+export interface AppUiExtensionConfig {
+  detailPanelId: string;
+}
+
 export interface RegistryAppInfo {
   name: string;
   displayName: string;
@@ -1462,6 +1522,7 @@ export interface RegistryAppInfo {
     v1Version: string | null;
     v2Version: string | null;
   };
+  uiExtension?: AppUiExtensionConfig;
   viewer?: AppViewerConfig;
 }
 export interface InstalledAppInfo {
@@ -1899,6 +1960,8 @@ const GENERIC_NO_RESPONSE_TEXT =
   "Sorry, I couldn't generate a response right now. Please try again.";
 const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
+const SESSION_STORAGE_API_BASE_KEY = "milady_api_base";
+const SESSION_STORAGE_API_TOKEN_KEY = "milady_api_token";
 
 export class MiladyClient {
   private _baseUrl: string;
@@ -1931,15 +1994,14 @@ export class MiladyClient {
     this._uiLanguage = lang || null;
   }
 
-  private static resolveElectronLocalFallbackBase(): string {
+  private static resolveDesktopLocalFallbackBase(): string {
     if (typeof window === "undefined") return "";
     const proto = window.location.protocol;
-    // In capacitor-electron mode the main process injects the live API base
+    // In the desktop shell the main process injects the live API base
     // once the embedded agent has bound a port. Avoid eager localhost probes
     // to prevent noisy ERR_CONNECTION_REFUSED logs during startup.
-    if (proto === "capacitor-electron:") return "";
-    // Legacy Electron file:// mode fallback.
-    if (proto === "file:" && /\bElectron\b/i.test(window.navigator.userAgent)) {
+    if (proto === "electrobun:") return "";
+    if (proto === "file:") {
       return "http://localhost:2138";
     }
     return "";
@@ -1954,39 +2016,44 @@ export class MiladyClient {
   }
 
   constructor(baseUrl?: string, token?: string) {
-    this._explicitBase = baseUrl != null;
     this.clientId = MiladyClient.generateClientId();
     const stored =
       typeof window !== "undefined"
-        ? window.sessionStorage.getItem("milady_api_token")
+        ? window.sessionStorage.getItem(SESSION_STORAGE_API_TOKEN_KEY)
         : null;
+    const storedBase =
+      typeof window !== "undefined"
+        ? window.sessionStorage.getItem(SESSION_STORAGE_API_BASE_KEY)
+        : null;
+    this._explicitBase = baseUrl != null || Boolean(storedBase?.trim());
     this._token = token?.trim() || stored || null;
-    // Priority: explicit arg > Capacitor/Electron injected global > same origin (Vite proxy)
+    // Priority: explicit arg > desktop-injected global > same origin (Vite proxy)
     const injectedBase =
       typeof window !== "undefined" ? window.__MILADY_API_BASE__ : undefined;
     this._baseUrl =
       baseUrl ??
+      storedBase ??
       injectedBase ??
-      MiladyClient.resolveElectronLocalFallbackBase();
+      MiladyClient.resolveDesktopLocalFallbackBase();
   }
 
   /**
    * Resolve the API base URL lazily.
-   * In Electron the main process injects window.__MILADY_API_BASE__ after the
+   * In the desktop shell the main process injects window.__MILADY_API_BASE__ after the
    * page loads (once the agent runtime starts). Re-checking on every call
    * ensures we pick up the injected value even if it wasn't set at construction.
    */
   private get baseUrl(): string {
     if (!this._explicitBase && typeof window !== "undefined") {
       const injected = window.__MILADY_API_BASE__;
-      // In Electron the API base can be injected after initial render. Always
+      // In the desktop shell the API base can be injected after initial render. Always
       // prefer the injected value when present so the client can switch away
       // from the localhost fallback once the main process publishes the real
       // endpoint.
       if (injected && injected !== this._baseUrl) {
         this._baseUrl = injected;
       } else if (!this._baseUrl) {
-        this._baseUrl = MiladyClient.resolveElectronLocalFallbackBase();
+        this._baseUrl = MiladyClient.resolveDesktopLocalFallbackBase();
       }
     }
     return this._baseUrl;
@@ -2008,9 +2075,30 @@ export class MiladyClient {
     this._token = token?.trim() || null;
     if (typeof window !== "undefined") {
       if (this._token) {
-        window.sessionStorage.setItem("milady_api_token", this._token);
+        window.__MILADY_API_TOKEN__ = this._token;
+        window.sessionStorage.setItem(
+          SESSION_STORAGE_API_TOKEN_KEY,
+          this._token,
+        );
       } else {
-        window.sessionStorage.removeItem("milady_api_token");
+        delete window.__MILADY_API_TOKEN__;
+        window.sessionStorage.removeItem(SESSION_STORAGE_API_TOKEN_KEY);
+      }
+    }
+  }
+
+  setBaseUrl(baseUrl: string | null): void {
+    const normalized = baseUrl?.trim().replace(/\/+$/, "") || "";
+    this._explicitBase = normalized.length > 0;
+    this._baseUrl = normalized;
+    this.disconnectWs();
+    if (typeof window !== "undefined") {
+      if (normalized) {
+        window.__MILADY_API_BASE__ = normalized;
+        window.sessionStorage.setItem(SESSION_STORAGE_API_BASE_KEY, normalized);
+      } else {
+        delete window.__MILADY_API_BASE__;
+        window.sessionStorage.removeItem(SESSION_STORAGE_API_BASE_KEY);
       }
     }
   }
@@ -2040,36 +2128,69 @@ export class MiladyClient {
       });
     }
     const makeRequest = async (token: string | null): Promise<Response> => {
-      const timeoutController = new AbortController();
-      const timeoutId = setTimeout(() => {
-        timeoutController.abort();
-      }, DEFAULT_FETCH_TIMEOUT_MS);
-      const signal =
-        init?.signal && typeof AbortSignal.any === "function"
-          ? AbortSignal.any([init.signal, timeoutController.signal])
-          : (init?.signal ?? timeoutController.signal);
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      let abortListener: (() => void) | undefined;
+      const requestInit: RequestInit = {
+        ...init,
+        headers: {
+          "X-Milady-Client-Id": this.clientId,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(this._uiLanguage
+            ? { "X-Milady-UI-Language": this._uiLanguage }
+            : {}),
+          ...init?.headers,
+        },
+      };
+
+      const fetchPromise = fetch(`${this.baseUrl}${path}`, requestInit);
+      const pending: Promise<Response>[] = [fetchPromise];
+
+      pending.push(
+        new Promise<Response>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(
+              new ApiError({
+                kind: "timeout",
+                path,
+                message: `Request timed out after ${DEFAULT_FETCH_TIMEOUT_MS}ms`,
+              }),
+            );
+          }, DEFAULT_FETCH_TIMEOUT_MS);
+        }),
+      );
+
+      if (init?.signal) {
+        if (init.signal.aborted) {
+          throw new ApiError({
+            kind: "network",
+            path,
+            message: "Request aborted",
+          });
+        }
+
+        pending.push(
+          new Promise<Response>((_, reject) => {
+            abortListener = () => {
+              reject(
+                new ApiError({
+                  kind: "network",
+                  path,
+                  message: "Request aborted",
+                }),
+              );
+            };
+            init.signal?.addEventListener("abort", abortListener, {
+              once: true,
+            });
+          }),
+        );
+      }
 
       try {
-        return await fetch(`${this.baseUrl}${path}`, {
-          ...init,
-          signal,
-          headers: {
-            "X-Milady-Client-Id": this.clientId,
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            ...(this._uiLanguage
-              ? { "X-Milady-UI-Language": this._uiLanguage }
-              : {}),
-            ...init?.headers,
-          },
-        });
+        return await Promise.race(pending);
       } catch (err) {
-        if (timeoutController.signal.aborted) {
-          throw new ApiError({
-            kind: "timeout",
-            path,
-            message: `Request timed out after ${DEFAULT_FETCH_TIMEOUT_MS}ms`,
-            cause: err,
-          });
+        if (err instanceof ApiError) {
+          throw err;
         }
         throw new ApiError({
           kind: "network",
@@ -2081,7 +2202,12 @@ export class MiladyClient {
           cause: err,
         });
       } finally {
-        clearTimeout(timeoutId);
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+        }
+        if (init?.signal && abortListener) {
+          init.signal.removeEventListener("abort", abortListener);
+        }
       }
     };
 
@@ -2096,12 +2222,34 @@ export class MiladyClient {
     if (!res.ok && !options?.allowNonOk) {
       const body = (await res
         .json()
-        .catch(() => ({ error: res.statusText }))) as Record<string, string>;
+        .catch(() => ({ error: res.statusText }))) as Record<string, unknown>;
+      const validationErrors = Array.isArray(body.validationErrors)
+        ? body.validationErrors
+            .map((issue) => {
+              if (!issue || typeof issue !== "object") return null;
+              const record = issue as Record<string, unknown>;
+              const path =
+                typeof record.path === "string" && record.path.trim()
+                  ? record.path.trim()
+                  : "character";
+              const message =
+                typeof record.message === "string" && record.message.trim()
+                  ? record.message.trim()
+                  : null;
+              if (!message) return null;
+              return `${path}: ${message}`;
+            })
+            .filter((issue): issue is string => Boolean(issue))
+        : [];
       throw new ApiError({
         kind: "http",
         path,
         status: res.status,
-        message: body.error ?? `HTTP ${res.status}`,
+        message:
+          (typeof body.error === "string" ? body.error : null) ??
+          (validationErrors.length > 0
+            ? `Validation failed: ${validationErrors.join("; ")}`
+            : `HTTP ${res.status}`),
       });
     }
     return res;
@@ -2189,21 +2337,31 @@ export class MiladyClient {
     pairingEnabled: boolean;
     expiresAt: number | null;
   }> {
-    try {
-      return await this.fetch("/api/auth/status");
-    } catch (err: unknown) {
-      const status = (err as Error & { status?: number })?.status;
-      if (status === 401) {
-        // Server requires auth
-        return { required: true, pairingEnabled: false, expiresAt: null };
+    // Retry with exponential backoff — the server may not be ready during boot.
+    const maxRetries = 3;
+    const baseBackoffMs = 1000;
+    let lastErr: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.fetch("/api/auth/status");
+      } catch (err: unknown) {
+        const status = (err as Error & { status?: number })?.status;
+        if (status === 401) {
+          return { required: true, pairingEnabled: false, expiresAt: null };
+        }
+        if (status === 404) {
+          return { required: false, pairingEnabled: false, expiresAt: null };
+        }
+        lastErr = err;
+        const kind = (err as Error & { kind?: string })?.kind;
+        if (kind === "timeout" && attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, baseBackoffMs * 2 ** attempt));
+          continue;
+        }
+        if (attempt >= maxRetries) break;
       }
-      if (status === 404) {
-        // npm-installed server without auth routes — no auth required
-        return { required: false, pairingEnabled: false, expiresAt: null };
-      }
-      // Other errors (500, network) — re-throw so caller can handle
-      throw err;
     }
+    throw lastErr;
   }
 
   async pair(code: string): Promise<{ token: string }> {
@@ -3101,6 +3259,7 @@ export class MiladyClient {
       name?: string;
       system?: string;
       bio?: string;
+      topics?: string[];
       style?: { all?: string[]; chat?: string[]; post?: string[] };
       postExamples?: string[];
     },
@@ -3136,7 +3295,7 @@ export class MiladyClient {
     return this.fetch("/api/wallet/config");
   }
   async updateWalletConfig(
-    config: Record<string, string>,
+    config: WalletConfigUpdateRequest,
   ): Promise<{ ok: boolean }> {
     return this.fetch("/api/wallet/config", {
       method: "PUT",
@@ -3233,6 +3392,54 @@ export class MiladyClient {
   }
   async getCloudCredits(): Promise<CloudCredits> {
     return this.fetch("/api/cloud/credits");
+  }
+  async getCloudBillingSummary(): Promise<CloudBillingSummary> {
+    return this.fetch("/api/cloud/billing/summary");
+  }
+  async getCloudBillingSettings(): Promise<CloudBillingSettings> {
+    return this.fetch("/api/cloud/billing/settings");
+  }
+  async updateCloudBillingSettings(
+    request: CloudBillingSettingsUpdateRequest,
+  ): Promise<CloudBillingSettings> {
+    return this.fetch("/api/cloud/billing/settings", {
+      method: "PUT",
+      body: JSON.stringify(request),
+    });
+  }
+  async getCloudBillingPaymentMethods(): Promise<{
+    success?: boolean;
+    data?: CloudBillingPaymentMethod[];
+    items?: CloudBillingPaymentMethod[];
+    paymentMethods?: CloudBillingPaymentMethod[];
+    [key: string]: unknown;
+  }> {
+    return this.fetch("/api/cloud/billing/payment-methods");
+  }
+  async getCloudBillingHistory(): Promise<{
+    success?: boolean;
+    data?: CloudBillingHistoryItem[];
+    items?: CloudBillingHistoryItem[];
+    history?: CloudBillingHistoryItem[];
+    [key: string]: unknown;
+  }> {
+    return this.fetch("/api/cloud/billing/history");
+  }
+  async createCloudBillingCheckout(
+    request: CloudBillingCheckoutRequest,
+  ): Promise<CloudBillingCheckoutResponse> {
+    return this.fetch("/api/cloud/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+  }
+  async createCloudBillingCryptoQuote(
+    request: CloudBillingCryptoQuoteRequest,
+  ): Promise<CloudBillingCryptoQuoteResponse> {
+    return this.fetch("/api/cloud/billing/crypto/quote", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
   }
   async cloudLogin(): Promise<CloudLoginResponse> {
     return this.fetch("/api/cloud/login", { method: "POST" });
@@ -3348,6 +3555,17 @@ export class MiladyClient {
   }> {
     return this.fetch(
       `/api/cloud/compat/agents/${encodeURIComponent(agentId)}/resume`,
+      { method: "POST" },
+    );
+  }
+
+  /** Launch a managed cloud agent into the Milady app. */
+  async launchCloudCompatAgent(agentId: string): Promise<{
+    success: boolean;
+    data: CloudCompatLaunchResult;
+  }> {
+    return this.fetch(
+      `/api/cloud/compat/agents/${encodeURIComponent(agentId)}/launch`,
       { method: "POST" },
     );
   }
@@ -3899,7 +4117,7 @@ export class MiladyClient {
     if (this.baseUrl) {
       host = new URL(this.baseUrl).host;
     } else {
-      // In non-HTTP environments (Electron capacitor-electron://, file://, etc.)
+      // In non-HTTP environments (electrobun://, file://, etc.)
       // window.location.host may be empty or a non-routable placeholder like "-".
       const loc = window.location;
       if (loc.protocol !== "http:" && loc.protocol !== "https:") return;
@@ -4103,20 +4321,48 @@ export class MiladyClient {
   }
 
   private normalizeAssistantText(text: string): string {
-    const trimmed = text.trim();
-    if (trimmed.length === 0 || /^\(?no response\)?$/i.test(trimmed)) {
+    const stripped = stripAssistantStageDirections(text);
+    const trimmed = stripped.trim();
+    if (trimmed.length === 0) {
+      if (
+        text.trim().length === 0 ||
+        /^\(?no response\)?$/i.test(text.trim())
+      ) {
+        return GENERIC_NO_RESPONSE_TEXT;
+      }
+      return "";
+    }
+    if (/^\(?no response\)?$/i.test(trimmed)) {
       return GENERIC_NO_RESPONSE_TEXT;
     }
-    return text;
+    return trimmed;
+  }
+
+  private normalizeGreetingText(text: string): string {
+    const stripped = stripAssistantStageDirections(text);
+    const trimmed = stripped.trim();
+    if (trimmed.length === 0 || /^\(?no response\)?$/i.test(trimmed)) {
+      return "";
+    }
+    return trimmed;
+  }
+
+  private normalizeConversationMessage(
+    message: ConversationMessage,
+  ): ConversationMessage {
+    if (message.role !== "assistant") return message;
+    const text = this.normalizeAssistantText(message.text);
+    return text === message.text ? message : { ...message, text };
   }
 
   private async streamChatEndpoint(
     path: string,
     text: string,
-    onToken: (token: string) => void,
+    onToken: (token: string, accumulatedText?: string) => void,
     channelType: ConversationChannelType = "DM",
     signal?: AbortSignal,
     images?: ImageAttachment[],
+    conversationMode?: ConversationMode,
   ): Promise<{
     text: string;
     agentName: string;
@@ -4133,6 +4379,7 @@ export class MiladyClient {
         text,
         channelType,
         ...(images?.length ? { images } : {}),
+        ...(conversationMode ? { conversationMode } : {}),
       }),
       signal,
     });
@@ -4189,10 +4436,15 @@ export class MiladyClient {
 
       if (parsed.type === "token") {
         const chunk = parsed.text ?? "";
-        if (chunk) {
-          fullText += chunk;
-          onToken(chunk);
-        }
+        const nextFullText =
+          typeof parsed.fullText === "string"
+            ? parsed.fullText
+            : chunk
+              ? mergeStreamingText(fullText, chunk)
+              : fullText;
+        if (nextFullText === fullText) return;
+        fullText = nextFullText;
+        onToken(chunk, fullText);
         return;
       }
 
@@ -4219,22 +4471,23 @@ export class MiladyClient {
 
       // Backward compatibility with legacy stream payloads: { text: "..." }
       if (parsed.text) {
-        fullText += parsed.text;
-        onToken(parsed.text);
+        fullText = mergeStreamingText(fullText, parsed.text);
+        onToken(parsed.text, fullText);
       }
     };
 
     while (true) {
-      let readResult: ReadableStreamReadResult<Uint8Array>;
+      let done = false;
+      let value: Uint8Array | undefined;
       try {
-        readResult = await reader.read();
+        ({ done, value } = await reader.read());
       } catch (streamErr) {
         console.warn("[api-client] SSE stream interrupted:", streamErr);
         break;
       }
-      if (readResult.done) break;
+      if (done || !value) break;
 
-      buffer += decoder.decode(readResult.value, { stream: true });
+      buffer += decoder.decode(value, { stream: true });
       let eventBreak = findSseEventBreak(buffer);
       while (eventBreak) {
         const rawEvent = buffer.slice(0, eventBreak.index);
@@ -4269,12 +4522,17 @@ export class MiladyClient {
   async sendChatRest(
     text: string,
     channelType: ConversationChannelType = "DM",
+    conversationMode?: ConversationMode,
   ): Promise<{ text: string; agentName: string }> {
     const response = await this.fetch<{ text: string; agentName: string }>(
       "/api/chat",
       {
         method: "POST",
-        body: JSON.stringify({ text, channelType }),
+        body: JSON.stringify({
+          text,
+          channelType,
+          ...(conversationMode ? { conversationMode } : {}),
+        }),
       },
     );
     return {
@@ -4285,9 +4543,10 @@ export class MiladyClient {
 
   async sendChatStream(
     text: string,
-    onToken: (token: string) => void,
+    onToken: (token: string, accumulatedText?: string) => void,
     channelType: ConversationChannelType = "DM",
     signal?: AbortSignal,
+    conversationMode?: ConversationMode,
   ): Promise<{
     text: string;
     agentName: string;
@@ -4300,6 +4559,8 @@ export class MiladyClient {
       onToken,
       channelType,
       signal,
+      undefined,
+      conversationMode,
     );
   }
 
@@ -4311,17 +4572,63 @@ export class MiladyClient {
 
   async createConversation(
     title?: string,
-  ): Promise<{ conversation: Conversation }> {
-    return this.fetch("/api/conversations", {
+    options?: CreateConversationOptions,
+  ): Promise<{ conversation: Conversation; greeting?: ConversationGreeting }> {
+    const response = await this.fetch<{
+      conversation: Conversation;
+      greeting?: ConversationGreeting;
+    }>("/api/conversations", {
       method: "POST",
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({
+        title,
+        ...(options?.bootstrapGreeting === true
+          ? { bootstrapGreeting: true }
+          : {}),
+        ...(typeof options?.lang === "string" && options.lang.trim()
+          ? { lang: options.lang.trim() }
+          : {}),
+      }),
     });
+    if (!response.greeting) {
+      return response;
+    }
+    return {
+      ...response,
+      greeting: {
+        ...response.greeting,
+        text: this.normalizeGreetingText(response.greeting.text),
+      },
+    };
   }
 
   async getConversationMessages(
     id: string,
   ): Promise<{ messages: ConversationMessage[] }> {
-    return this.fetch(`/api/conversations/${encodeURIComponent(id)}/messages`);
+    const response = await this.fetch<{ messages: ConversationMessage[] }>(
+      `/api/conversations/${encodeURIComponent(id)}/messages`,
+    );
+    return {
+      messages: response.messages.map((message) =>
+        this.normalizeConversationMessage(message),
+      ),
+    };
+  }
+
+  async truncateConversationMessages(
+    id: string,
+    messageId: string,
+    options?: { inclusive?: boolean },
+  ): Promise<{ ok: boolean; deletedCount: number }> {
+    return this.fetch(
+      `/api/conversations/${encodeURIComponent(id)}/messages/truncate`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          messageId,
+          inclusive: options?.inclusive === true,
+        }),
+      },
+    );
   }
 
   async sendConversationMessage(
@@ -4329,6 +4636,7 @@ export class MiladyClient {
     text: string,
     channelType: ConversationChannelType = "DM",
     images?: ImageAttachment[],
+    conversationMode?: ConversationMode,
   ): Promise<{ text: string; agentName: string; blocks?: ContentBlock[] }> {
     const response = await this.fetch<{
       text: string;
@@ -4340,6 +4648,7 @@ export class MiladyClient {
         text,
         channelType,
         ...(images?.length ? { images } : {}),
+        ...(conversationMode ? { conversationMode } : {}),
       }),
     });
     return {
@@ -4351,10 +4660,11 @@ export class MiladyClient {
   async sendConversationMessageStream(
     id: string,
     text: string,
-    onToken: (token: string) => void,
+    onToken: (token: string, accumulatedText?: string) => void,
     channelType: ConversationChannelType = "DM",
     signal?: AbortSignal,
     images?: ImageAttachment[],
+    conversationMode?: ConversationMode,
   ): Promise<{
     text: string;
     agentName: string;
@@ -4368,20 +4678,32 @@ export class MiladyClient {
       channelType,
       signal,
       images,
+      conversationMode,
     );
   }
 
   async requestGreeting(
     id: string,
     lang?: string,
-  ): Promise<{ text: string; agentName: string; generated: boolean }> {
+  ): Promise<{
+    text: string;
+    agentName: string;
+    generated: boolean;
+    persisted?: boolean;
+  }> {
     const qs = lang ? `?lang=${encodeURIComponent(lang)}` : "";
-    return this.fetch(
-      `/api/conversations/${encodeURIComponent(id)}/greeting${qs}`,
-      {
-        method: "POST",
-      },
-    );
+    const response = await this.fetch<{
+      text: string;
+      agentName: string;
+      generated: boolean;
+      persisted?: boolean;
+    }>(`/api/conversations/${encodeURIComponent(id)}/greeting${qs}`, {
+      method: "POST",
+    });
+    return {
+      ...response,
+      text: this.normalizeGreetingText(response.text),
+    };
   }
 
   async renameConversation(
@@ -4955,6 +5277,64 @@ export class MiladyClient {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  async listCodingAgentScratchWorkspaces(): Promise<
+    CodingAgentScratchWorkspace[]
+  > {
+    try {
+      return await this.fetch<CodingAgentScratchWorkspace[]>(
+        "/api/coding-agents/scratch",
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  async keepCodingAgentScratchWorkspace(sessionId: string): Promise<boolean> {
+    try {
+      await this.fetch(
+        `/api/coding-agents/${encodeURIComponent(sessionId)}/scratch/keep`,
+        { method: "POST" },
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async deleteCodingAgentScratchWorkspace(sessionId: string): Promise<boolean> {
+    try {
+      // Keep POST for compatibility with plugin route handlers.
+      await this.fetch(
+        `/api/coding-agents/${encodeURIComponent(sessionId)}/scratch/delete`,
+        { method: "POST" },
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async promoteCodingAgentScratchWorkspace(
+    sessionId: string,
+    name?: string,
+  ): Promise<CodingAgentScratchWorkspace | null> {
+    try {
+      const response = await this.fetch<{
+        success: boolean;
+        scratch?: CodingAgentScratchWorkspace;
+      }>(
+        `/api/coding-agents/${encodeURIComponent(sessionId)}/scratch/promote`,
+        {
+          method: "POST",
+          body: JSON.stringify(name ? { name } : {}),
+        },
+      );
+      return response.scratch ?? null;
+    } catch {
+      return null;
     }
   }
 

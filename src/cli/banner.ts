@@ -17,7 +17,7 @@ export function formatCliBannerLine(
   const commit = options.commit ?? resolveCommitHash({ env: options.env });
   const commitLabel = commit ?? "unknown";
   const rich = options.richTty ?? isRich();
-  const title = "milAIdy";
+  const title = "Milady";
   if (rich) {
     return `${theme.heading(title)} ${theme.info(version)} ${theme.muted(`(${commitLabel})`)}`;
   }

@@ -66,8 +66,10 @@ import {
   CUSTOM_PLUGINS_DIRNAME,
   cleanStalePglitePid,
   collectPluginNames,
+  configureLocalEmbeddingPlugin,
   deduplicatePluginActions,
   findRuntimePluginExport,
+  getPgliteRecoveryAction,
   isEnvKeyAllowedForForwarding,
   isRecoverablePgliteInitError,
   mergeDropInPlugins,
@@ -75,9 +77,12 @@ import {
   resolveMiladyPluginImportSpecifier,
   resolvePackageEntry,
   resolvePrimaryModel,
+  resolveVisionModeSetting,
   scanDropInPlugins,
   shouldIgnoreMissingPluginExport,
+  shutdownRuntime,
 } from "./eliza";
+import { detectEmbeddingPreset } from "./embedding-presets";
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -120,6 +125,7 @@ describe("collectPluginNames", () => {
     "ELIZAOS_CLOUD_API_KEY",
     "ELIZAOS_CLOUD_ENABLED",
     "MILADY_USE_PI_AI",
+    "MILADY_DISABLE_LOCAL_EMBEDDINGS",
     "OBSIDIAN_VAULT_PATH",
     "OBSIDAN_VAULT_PATH",
   ];
@@ -164,8 +170,46 @@ describe("collectPluginNames", () => {
       // Verify local-embedding IS in the set for offline/zero-config setups
       expect(plugins.has("@elizaos/plugin-local-embedding")).toBe(true);
     });
+
+    it("should omit @elizaos/plugin-local-embedding when explicitly disabled via env", async () => {
+      process.env.MILADY_DISABLE_LOCAL_EMBEDDINGS = "1";
+
+      const plugins = collectPluginNames({} as MiladyConfig);
+
+      expect(plugins.has("@elizaos/plugin-local-embedding")).toBe(false);
+    });
   });
   afterEach(() => snap.restore());
+
+  it("uses the hardware-adaptive embedding preset defaults when no embedding config is set", () => {
+    const detectedPreset = detectEmbeddingPreset();
+
+    delete process.env.LOCAL_EMBEDDING_MODEL;
+    delete process.env.LOCAL_EMBEDDING_MODEL_REPO;
+    delete process.env.LOCAL_EMBEDDING_DIMENSIONS;
+    delete process.env.LOCAL_EMBEDDING_CONTEXT_SIZE;
+    delete process.env.LOCAL_EMBEDDING_GPU_LAYERS;
+    delete process.env.LOCAL_EMBEDDING_USE_MMAP;
+
+    configureLocalEmbeddingPlugin({} as Plugin, {} as MiladyConfig);
+
+    expect(process.env.LOCAL_EMBEDDING_MODEL).toBe(detectedPreset.model);
+    expect(process.env.LOCAL_EMBEDDING_MODEL_REPO).toBe(
+      detectedPreset.modelRepo,
+    );
+    expect(process.env.LOCAL_EMBEDDING_DIMENSIONS).toBe(
+      String(detectedPreset.dimensions),
+    );
+    expect(process.env.LOCAL_EMBEDDING_CONTEXT_SIZE).toBe(
+      String(detectedPreset.contextSize),
+    );
+    expect(process.env.LOCAL_EMBEDDING_GPU_LAYERS).toBe(
+      String(detectedPreset.gpuLayers),
+    );
+    expect(process.env.LOCAL_EMBEDDING_USE_MMAP).toBe(
+      detectedPreset.gpuLayers === "auto" ? "false" : "true",
+    );
+  });
 
   it("includes all core plugins for an empty config", () => {
     // Guard against accidental removal from CORE_PLUGINS array
@@ -631,6 +675,26 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-vision")).toBe(false);
   });
 
+  it("defaults runtime vision mode to OFF when vision is enabled but unset", () => {
+    const config = {
+      features: { vision: true },
+    } as unknown as MiladyConfig;
+    expect(resolveVisionModeSetting(config, {} as NodeJS.ProcessEnv)).toBe(
+      "OFF",
+    );
+  });
+
+  it("preserves an explicit VISION_MODE when vision is enabled", () => {
+    const config = {
+      features: { vision: true },
+    } as unknown as MiladyConfig;
+    expect(
+      resolveVisionModeSetting(config, {
+        VISION_MODE: "SCREEN",
+      } as NodeJS.ProcessEnv),
+    ).toBe("SCREEN");
+  });
+
   it("cloud plugin is loaded independently of vision toggle", () => {
     const config = {
       cloud: { enabled: true },
@@ -760,7 +824,9 @@ describe("applyConnectorSecretsToEnv", () => {
     "SLACK_BOT_TOKEN",
     "SLACK_APP_TOKEN",
     "SLACK_USER_TOKEN",
-    "SIGNAL_ACCOUNT",
+    "SIGNAL_ACCOUNT_NUMBER",
+    "SIGNAL_HTTP_URL",
+    "SIGNAL_CLI_PATH",
     "MSTEAMS_APP_ID",
     "MSTEAMS_APP_PASSWORD",
     "MATTERMOST_BOT_TOKEN",
@@ -846,6 +912,22 @@ describe("applyConnectorSecretsToEnv", () => {
     } as MiladyConfig;
     applyConnectorSecretsToEnv(config);
     expect(process.env.TELEGRAM_BOT_TOKEN).toBe("legacy-tg-tok");
+  });
+
+  it("copies Signal account, httpUrl, and cliPath from config to env", () => {
+    const config = {
+      connectors: {
+        signal: {
+          account: "+14155551234",
+          httpUrl: "http://localhost:8080",
+          cliPath: "/usr/bin/signal-cli",
+        },
+      },
+    } as MiladyConfig;
+    applyConnectorSecretsToEnv(config);
+    expect(process.env.SIGNAL_ACCOUNT_NUMBER).toBe("+14155551234");
+    expect(process.env.SIGNAL_HTTP_URL).toBe("http://localhost:8080");
+    expect(process.env.SIGNAL_CLI_PATH).toBe("/usr/bin/signal-cli");
   });
 });
 
@@ -1300,6 +1382,60 @@ describe("isRecoverablePgliteInitError", () => {
   });
 });
 
+describe("shutdownRuntime", () => {
+  it("stops the runtime and then closes the database adapter", async () => {
+    const calls: string[] = [];
+    const runtime = {
+      adapter: {
+        close: vi.fn(async () => {
+          calls.push("close");
+        }),
+      },
+      stop: vi.fn(async () => {
+        calls.push("stop");
+      }),
+    } as unknown as import("@elizaos/core").AgentRuntime;
+
+    await shutdownRuntime(runtime, "test");
+
+    expect(calls).toEqual(["stop", "close"]);
+  });
+
+  it("still closes the adapter when runtime.stop throws", async () => {
+    const stopError = new Error("stop failed");
+    const close = vi.fn(async () => {});
+    const runtime = {
+      adapter: { close },
+      stop: vi.fn(async () => {
+        throw stopError;
+      }),
+    } as unknown as import("@elizaos/core").AgentRuntime;
+
+    await expect(shutdownRuntime(runtime, "test")).rejects.toThrow(
+      "stop failed",
+    );
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates adapter close failures after attempting shutdown", async () => {
+    const closeError = new Error("close failed");
+    const stop = vi.fn(async () => {});
+    const runtime = {
+      adapter: {
+        close: vi.fn(async () => {
+          throw closeError;
+        }),
+      },
+      stop,
+    } as unknown as import("@elizaos/core").AgentRuntime;
+
+    await expect(shutdownRuntime(runtime, "test")).rejects.toThrow(
+      "close failed",
+    );
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // buildCharacterFromConfig
 // ---------------------------------------------------------------------------
@@ -1411,10 +1547,42 @@ describe("buildCharacterFromConfig", () => {
     const char = buildCharacterFromConfig(config);
 
     expect(char.name).toBe("Reimu");
-    // Bio and system use defaults with {{name}} placeholders
     expect(Array.isArray(char.bio)).toBe(true);
     expect((char.bio as string[])[0]).toContain("{{name}}");
     expect(char.system).toContain("{{name}}");
+    expect(char.postExamples.length).toBeGreaterThan(0);
+  });
+
+  it("backfills bundled preset posts for default named characters", () => {
+    const config = {
+      agents: { list: [{ id: "main", name: "Sakuya" }] },
+    } as MiladyConfig;
+    const char = buildCharacterFromConfig(config);
+
+    expect(char.name).toBe("Sakuya");
+    expect(char.postExamples.length).toBeGreaterThan(0);
+    expect(char.messageExamples.length).toBeGreaterThan(0);
+  });
+
+  it("hydrates username and topics from agent config", () => {
+    const config = {
+      agents: {
+        list: [
+          {
+            id: "main",
+            name: "Marisa",
+            username: "marisa-labs",
+            topics: ["magic", "research"],
+          },
+        ],
+      },
+    } as MiladyConfig;
+
+    const char = buildCharacterFromConfig(config);
+
+    expect(char.name).toBe("Marisa");
+    expect(char.username).toBe("marisa-labs");
+    expect(char.topics).toEqual(["magic", "research"]);
   });
 });
 
@@ -1896,7 +2064,7 @@ describe("resolveMiladyPluginImportSpecifier", () => {
     await fs.writeFile(pluginIndex, "export default {};\n");
 
     const specifier = resolveMiladyPluginImportSpecifier(
-      "@milady/plugin-retake",
+      "@miladyai/plugin-retake",
       pathToFileURL(path.join(runtimeDir, "eliza.ts")).href,
     );
 
@@ -1911,11 +2079,11 @@ describe("resolveMiladyPluginImportSpecifier", () => {
     await fs.mkdir(runtimeDir, { recursive: true });
 
     const specifier = resolveMiladyPluginImportSpecifier(
-      "@milady/plugin-x-streaming",
+      "@miladyai/plugin-x-streaming",
       pathToFileURL(path.join(runtimeDir, "eliza.ts")).href,
     );
 
-    expect(specifier).toBe("@milady/plugin-x-streaming");
+    expect(specifier).toBe("@miladyai/plugin-x-streaming");
 
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
@@ -2576,5 +2744,93 @@ describe("cleanStalePglitePid", () => {
       .then(() => true)
       .catch(() => false);
     expect(exists).toBe(false);
+  });
+});
+
+describe("getPgliteRecoveryAction", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pglite-recovery-test-"));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("retries without reset when a lock error comes from a stale pid file", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    await fs.writeFile(pidPath, "999999999\n/tmp/pglite\n5432\n");
+
+    const action = getPgliteRecoveryAction(
+      new Error("PGlite adapter crashed: database is locked"),
+      tmpDir,
+    );
+
+    const exists = await fs
+      .access(pidPath)
+      .then(() => true)
+      .catch(() => false);
+
+    expect(action).toBe("retry-without-reset");
+    expect(exists).toBe(false);
+  });
+
+  it("fails fast when a lock error points at a live owner process", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    await fs.writeFile(pidPath, `${process.pid}\n/tmp/pglite\n5432\n`);
+
+    const action = getPgliteRecoveryAction(
+      new Error("PGlite adapter crashed: lock file already exists"),
+      tmpDir,
+    );
+
+    expect(action).toBe("fail-active-lock");
+  });
+
+  it("fails fast when pid ownership cannot be confirmed", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    await fs.writeFile(pidPath, "12345\n/tmp/pglite\n5432\n");
+
+    const origKill = process.kill;
+    process.kill = ((pid: number, signal?: number) => {
+      if (signal === 0) {
+        const err = new Error("EPERM") as NodeJS.ErrnoException;
+        err.code = "EPERM";
+        throw err;
+      }
+      return origKill.call(process, pid, signal);
+    }) as typeof process.kill;
+
+    try {
+      const action = getPgliteRecoveryAction(
+        new Error("PGlite adapter crashed: database is locked"),
+        tmpDir,
+      );
+      expect(action).toBe("fail-active-lock");
+    } finally {
+      process.kill = origKill;
+    }
+  });
+
+  it("still resets for corruption errors even when a pid file exists", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    await fs.writeFile(pidPath, `${process.pid}\n/tmp/pglite\n5432\n`);
+
+    const action = getPgliteRecoveryAction(
+      new Error("PGlite adapter crashed: database disk image is malformed"),
+      tmpDir,
+    );
+
+    expect(action).toBe("reset-data-dir");
+  });
+
+  it("returns none for unrelated startup errors", () => {
+    const action = getPgliteRecoveryAction(
+      new Error("Connection refused"),
+      tmpDir,
+    );
+
+    expect(action).toBe("none");
   });
 });

@@ -6,6 +6,7 @@
  */
 
 import { useState } from "react";
+import { cn } from "../../lib/utils";
 import { Button } from "./button";
 import { Input } from "./input";
 
@@ -18,6 +19,12 @@ export interface TagEditorProps {
   addLabel?: string;
   /** Label for the remove button. Defaults to "×". */
   removeLabel?: string;
+  /** Optional class for the root container. */
+  className?: string;
+  /** Optional class for the input row. */
+  inputRowClassName?: string;
+  /** Optional class for the scrollable tag list. */
+  listClassName?: string;
 }
 
 export function TagEditor({
@@ -25,8 +32,11 @@ export function TagEditor({
   items,
   onChange,
   placeholder = "add item...",
-  addLabel = "Add",
+  addLabel = "+",
   removeLabel = "×",
+  className,
+  inputRowClassName,
+  listClassName,
 }: TagEditorProps) {
   const [inputValue, setInputValue] = useState("");
 
@@ -45,9 +55,9 @@ export function TagEditor({
   };
 
   return (
-    <div className="flex flex-col gap-1.5 h-[220px]">
+    <div className={cn("flex min-h-0 flex-col gap-1.5", className)}>
       <span className="font-semibold text-xs">{label}</span>
-      <div className="flex items-center gap-1.5">
+      <div className={cn("flex items-center gap-1.5", inputRowClassName)}>
         <Input
           type="text"
           value={inputValue}
@@ -62,25 +72,33 @@ export function TagEditor({
           className="h-7 px-2 border-border bg-card text-[11px] focus-visible:ring-1 focus-visible:ring-accent flex-1 min-w-0 shadow-sm"
         />
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="h-7 text-[10px] px-1.5 py-0.5 shadow-sm hover:border-accent hover:text-accent"
+          className="h-7 w-7 text-[14px] p-0 text-accent border-none hover:bg-transparent hover:text-accent/80 font-bold"
           onClick={addItem}
         >
           {addLabel}
         </Button>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto border border-border bg-bg-muted p-1.5 flex flex-wrap gap-1.5 content-start">
+      <div
+        className={cn(
+          "min-h-0 overflow-y-auto rounded-xl border border-border/40 bg-bg/50 p-2 backdrop-blur-sm",
+          "flex flex-wrap content-start items-start gap-x-1.5 gap-y-1",
+          listClassName,
+        )}
+      >
         {items.map((item, i) => (
           <span
             key={item}
-            className="inline-flex items-center gap-1 px-2 py-0.5 border border-border bg-card text-[11px] h-fit"
+            className="inline-flex items-center justify-between gap-1 px-2 py-0.5 border border-border/50 bg-black/10 rounded text-[11px] h-fit text-txt font-medium"
           >
-            {item}
+            <span className="truncate max-w-[200px]" title={item}>
+              {item}
+            </span>
             <Button
               variant="ghost"
               size="icon"
-              className="h-4 w-4 p-0 text-muted hover:text-danger hover:bg-transparent"
+              className="h-4 w-4 p-0 text-danger/80 hover:text-danger hover:bg-transparent"
               onClick={() => removeItem(i)}
             >
               {removeLabel}

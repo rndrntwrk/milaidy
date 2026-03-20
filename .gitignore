@@ -26,6 +26,7 @@ src/plugins/**/*.d.ts.map
 # Lock files (managed at repo root)
 package-lock.json
 bun.lockb
+pnpm-lock.yaml
 !deploy/cloud-agent-template/package-lock.json
 
 # Docker overrides
@@ -48,9 +49,10 @@ plugins/plugin-blooio/
 .git-workspace/
 IDENTITY.md
 USER.md
-.tgz
+*.tgz
 .eliza/
 .eliza.broken.*/
+.milady-repo-setup.lock
 .turbo/
 skills/*
 !skills/README.md
@@ -122,3 +124,17 @@ data/
 # Debug PTY captures from plugin-agent-orchestrator (PARALLAX_DEBUG_CAPTURE=1)
 .parallax/
 .worktrees/
+
+# Generated raw avatar/animation assets from local setup hooks (non-source)
+apps/app/public/animations/**/*.fbx
+apps/app/public/animations/**/*.glb
+apps/app/public/animations/*.fbx
+apps/app/public/animations/*.glb
+apps/app/public/vrms/**/*.vrm
+apps/app/public/vrms/*.vrm
+apps/app/public/vrms/imported-avatars.json
+apps/app/public/vrms/backgrounds/*.png
+apps/app/public/vrms/previews/*.png
+apps/app/public/vrms/backgrounds/*.jpg
+apps/app/public/vrms/previews/*.jpg
+apps/app/public/vrms/*.jpg

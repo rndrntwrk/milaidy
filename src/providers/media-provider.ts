@@ -1260,7 +1260,7 @@ export function createImageProvider(
     );
   }
   return new ElizaCloudImageProvider(
-    options.elizaCloudBaseUrl ?? "https://www.elizacloud.ai/api/v1",
+    options.elizaCloudBaseUrl ?? "https://elizacloud.ai/api/v1",
     options.elizaCloudApiKey,
   );
 }
@@ -1297,7 +1297,7 @@ export function createVideoProvider(
     );
   }
   return new ElizaCloudVideoProvider(
-    options.elizaCloudBaseUrl ?? "https://www.elizacloud.ai/api/v1",
+    options.elizaCloudBaseUrl ?? "https://elizacloud.ai/api/v1",
     options.elizaCloudApiKey,
   );
 }
@@ -1320,7 +1320,7 @@ export function createAudioProvider(
     );
   }
   return new ElizaCloudAudioProvider(
-    options.elizaCloudBaseUrl ?? "https://www.elizacloud.ai/api/v1",
+    options.elizaCloudBaseUrl ?? "https://elizacloud.ai/api/v1",
     options.elizaCloudApiKey,
   );
 }
@@ -1365,7 +1365,7 @@ export function createVisionProvider(
     );
   }
   return new ElizaCloudVisionProvider(
-    options.elizaCloudBaseUrl ?? "https://www.elizacloud.ai/api/v1",
+    options.elizaCloudBaseUrl ?? "https://elizacloud.ai/api/v1",
     options.elizaCloudApiKey,
   );
 }

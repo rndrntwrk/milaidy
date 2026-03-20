@@ -25,7 +25,6 @@ export function useWhatsAppPairing(accountId = "default") {
     error: null,
   });
 
-  // Fetch initial status on mount
   useEffect(() => {
     client
       .getWhatsAppStatus(accountId)
@@ -38,11 +37,10 @@ export function useWhatsAppPairing(accountId = "default") {
         }
       })
       .catch(() => {
-        // Non-fatal — just means we can't check initial status
+        // Non-fatal — just means we can't check initial status.
       });
   }, [accountId]);
 
-  // Listen for WebSocket events
   useEffect(() => {
     const unbindQr = client.onWsEvent(
       "whatsapp-qr",
@@ -65,7 +63,6 @@ export function useWhatsAppPairing(accountId = "default") {
           status: data.status as WhatsAppPairingStatus,
           phoneNumber: (data.phoneNumber as string) ?? prev.phoneNumber,
           error: (data.error as string) ?? null,
-          // Clear QR when connected
           qrDataUrl: data.status === "connected" ? null : prev.qrDataUrl,
         }));
       },

@@ -757,7 +757,7 @@ describe.skipIf(!isLive)("Live model calls (requires real API keys)", () => {
     const { createOpenAI } = await import("@ai-sdk/openai");
     const openai = createOpenAI({
       apiKey: cloudKey as string,
-      baseURL: "https://www.elizacloud.ai/api/v1",
+      baseURL: "https://elizacloud.ai/api/v1",
       compatibility: "compatible",
     });
     try {

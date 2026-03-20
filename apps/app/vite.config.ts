@@ -1,25 +1,25 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
-import react from "@vitejs/plugin-react";
+import react from "@vitejs/plugin-react-swc";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const miladyRoot = path.resolve(here, "../..");
-
 // The dev script sets MILADY_API_PORT; default to 31337 for standalone vite dev.
 const apiPort = Number(process.env.MILADY_API_PORT) || 31337;
+const enableAppSourceMaps = process.env.MILADY_APP_SOURCEMAP === "1";
 
 /**
- * Dev-only middleware that handles CORS for Electron's custom-scheme origin
- * (capacitor-electron://-). Vite's proxy doesn't reliably forward CORS headers
+ * Dev-only middleware that handles CORS for the desktop custom-scheme origin
+ * (electrobun://-). Vite's proxy doesn't reliably forward CORS headers
  * for non-http origins, so we intercept preflight OPTIONS requests and tag
  * every /api response with the correct headers before the proxy layer.
  */
-function electronCorsPlugin(): Plugin {
+function desktopCorsPlugin(): Plugin {
   return {
-    name: "electron-cors",
+    name: "desktop-cors",
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const origin = req.headers.origin;
@@ -47,41 +47,98 @@ function electronCorsPlugin(): Plugin {
   };
 }
 
+function sparkWasmDataUrlPlugin(): Plugin {
+  return {
+    name: "spark-wasm-data-url",
+    enforce: "pre",
+    transform(code, id) {
+      if (!id.includes("@sparkjsdev/spark/dist/spark.module.js")) return null;
+      const patched = code.replace(
+        /new URL\(("(?:data:application\/wasm;base64,[^"]+)"),\s*import\.meta\.url\)/g,
+        "$1",
+      );
+      if (patched === code) return null;
+      return {
+        code: patched,
+        map: null,
+      };
+    },
+  };
+}
+
 export default defineConfig({
   root: here,
   base: "./",
   publicDir: path.resolve(here, "public"),
-  plugins: [tailwindcss(), react(), electronCorsPlugin()],
+  plugins: [
+    sparkWasmDataUrlPlugin(),
+    tailwindcss(),
+    react(),
+    desktopCorsPlugin(),
+  ],
   resolve: {
-    dedupe: ["react", "react-dom"],
+    dedupe: ["react", "react-dom", "three", "@sparkjsdev/spark"],
     alias: [
       /**
-       * Map @milady/capacitor-* packages directly to their TS source.
+       * Map @miladyai/capacitor-* packages directly to their TS source.
        * This bypasses resolution issues with local workspace symlinks and
        * outdated bundle exports in the plugins' dist folders.
        */
       {
-        find: /^@milady\/capacitor-(.*)/,
+        find: /^@miladyai\/capacitor-(.*)/,
         replacement: path.resolve(here, "plugins/$1/src/index.ts"),
+      },
+      {
+        find: /^@miladyai\/autonomous$/,
+        replacement: path.resolve(
+          miladyRoot,
+          "packages/autonomous/src/index.ts",
+        ),
+      },
+      {
+        find: /^@miladyai\/autonomous\/(.*)$/,
+        replacement: path.resolve(miladyRoot, "packages/autonomous/src/$1"),
+      },
+      {
+        find: /^@miladyai\/app-core$/,
+        replacement: path.resolve(miladyRoot, "packages/app-core/src/index.ts"),
+      },
+      {
+        find: /^@miladyai\/app-core\/(.*)$/,
+        replacement: path.resolve(miladyRoot, "packages/app-core/src/$1"),
+      },
+      {
+        find: /^@miladyai\/ui$/,
+        replacement: path.resolve(miladyRoot, "packages/ui/src/index.ts"),
+      },
+      {
+        find: /^@miladyai\/ui\/(.*)$/,
+        replacement: path.resolve(miladyRoot, "packages/ui/src/$1"),
       },
       // Allow importing from the milady src (but NOT workspace packages)
       {
-        find: /^@milady(?!\/(capacitor-|app-core|ui))/,
+        find: /^@miladyai(?!\/(?:autonomous|capacitor-|app-core|ui))/,
         replacement: path.resolve(miladyRoot, "src"),
       },
     ],
   },
   optimizeDeps: {
-    include: ["react", "react-dom"],
+    include: ["react", "react-dom", "three"],
+    exclude: ["@sparkjsdev/spark"],
   },
   build: {
     outDir: path.resolve(here, "dist"),
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: enableAppSourceMaps,
     target: "es2022",
     rollupOptions: {
       input: {
         main: path.resolve(here, "index.html"),
+      },
+      output: {
+        manualChunks: {
+          "vendor-3d": ["three", "@pixiv/three-vrm", "@sparkjsdev/spark"],
+        },
       },
     },
     commonjsOptions: {
@@ -111,7 +168,8 @@ export default defineConfig({
       allow: [here, miladyRoot],
     },
     watch: {
-      usePolling: true,
+      // Polling is only needed in Docker/WSL where native fs events are unreliable
+      usePolling: process.env.MILADY_DEV_POLLING === "1",
     },
   },
 });

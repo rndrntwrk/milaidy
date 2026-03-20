@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 import {
   discoverAlwaysBundledPackages,
   extractBarePackageSpecifiers,
+  isRuntimePluginPackage,
   normalizePackageName,
+  shouldBundleDiscoveredPackage,
 } from "./runtime-package-manifest";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -31,7 +33,7 @@ describe("runtime-package-manifest", () => {
   it("extracts package names from static and dynamic imports", () => {
     const source = `
       import { logger } from "@elizaos/core";
-      export { thing } from "@milady/plugin-retake";
+      export { thing } from "@elizaos/plugin-retake";
       const chalk = require("chalk");
       await import("@scope/pkg/subpath.js");
       await import("./relative.js");
@@ -39,20 +41,57 @@ describe("runtime-package-manifest", () => {
 
     expect(extractBarePackageSpecifiers(source)).toEqual([
       "@elizaos/core",
-      "@milady/plugin-retake",
+      "@elizaos/plugin-retake",
       "@scope/pkg",
       "chalk",
     ]);
   });
 
+  it("recognizes scoped and unscoped runtime plugin packages", () => {
+    expect(isRuntimePluginPackage("@elizaos/plugin-openai")).toBe(true);
+    expect(isRuntimePluginPackage("@miladyai/plugin-custom-rtmp")).toBe(true);
+    expect(isRuntimePluginPackage("@homunculuslabs/plugin-zai")).toBe(true);
+    expect(isRuntimePluginPackage("plugin-local-only")).toBe(true);
+    expect(isRuntimePluginPackage("@elizaos/core")).toBe(false);
+    expect(isRuntimePluginPackage("chalk")).toBe(false);
+  });
+
   it("discovers always-bundled plugin scopes from package.json", () => {
-    expect(discoverAlwaysBundledPackages(repoPackageJson)).toEqual(
+    const bundled = discoverAlwaysBundledPackages(repoPackageJson);
+
+    expect(bundled).toEqual(
       expect.arrayContaining([
         "@elizaos/core",
         "@elizaos/plugin-agent-orchestrator",
-        "@elizaos/plugin-bnb-identity",
-        "@elizaos/plugin-streaming-base",
+        "@elizaos/plugin-openai",
+        "@elizaos/plugin-ollama",
       ]),
     );
+    expect(bundled).not.toContain("@elizaos/plugin-bnb-identity");
+    expect(bundled).not.toContain("@elizaos/plugin-streaming-base");
+  });
+
+  it("excludes discovered post-release plugin packages from the baseline bundle", () => {
+    const alwaysBundled = new Set([
+      "@elizaos/plugin-openai",
+      "@elizaos/plugin-ollama",
+    ]);
+
+    expect(
+      shouldBundleDiscoveredPackage("@elizaos/plugin-openai", alwaysBundled),
+    ).toBe(true);
+    expect(
+      shouldBundleDiscoveredPackage(
+        "@elizaos/plugin-twitch-streaming",
+        alwaysBundled,
+      ),
+    ).toBe(false);
+    expect(
+      shouldBundleDiscoveredPackage(
+        "@homunculuslabs/plugin-zai",
+        alwaysBundled,
+      ),
+    ).toBe(false);
+    expect(shouldBundleDiscoveredPackage("chalk", alwaysBundled)).toBe(true);
   });
 });

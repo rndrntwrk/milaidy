@@ -85,11 +85,6 @@ describe("CHANNEL_TO_RPC_METHOD mapping", () => {
     expect(CHANNEL_TO_RPC_METHOD["talkmode:getState"]).toBe("talkmodeGetState");
   });
 
-  it("maps all LIFO channels correctly", () => {
-    expect(CHANNEL_TO_RPC_METHOD["lifo:getPipState"]).toBe("lifoGetPipState");
-    expect(CHANNEL_TO_RPC_METHOD["lifo:setPip"]).toBe("lifoSetPip");
-  });
-
   it("maps all GPU window channels correctly", () => {
     expect(CHANNEL_TO_RPC_METHOD["gpuWindow:create"]).toBe("gpuWindowCreate");
     expect(CHANNEL_TO_RPC_METHOD["gpuWindow:destroy"]).toBe("gpuWindowDestroy");
@@ -175,6 +170,7 @@ describe("PUSH_CHANNEL_TO_RPC_MESSAGE mapping", () => {
     expect(PUSH_CHANNEL_TO_RPC_MESSAGE["talkmode:speakComplete"]).toBe(
       "talkmodeSpeakComplete",
     );
+    expect(PUSH_CHANNEL_TO_RPC_MESSAGE["talkmode:error"]).toBe("talkmodeError");
   });
 
   it("maps swabble push events", () => {
@@ -184,6 +180,10 @@ describe("PUSH_CHANNEL_TO_RPC_MESSAGE mapping", () => {
     expect(PUSH_CHANNEL_TO_RPC_MESSAGE["swabble:stateChange"]).toBe(
       "swabbleStateChanged",
     );
+    expect(PUSH_CHANNEL_TO_RPC_MESSAGE["swabble:transcript"]).toBe(
+      "swabbleTranscript",
+    );
+    expect(PUSH_CHANNEL_TO_RPC_MESSAGE["swabble:error"]).toBe("swabbleError");
   });
 
   it("maps GPU window push events", () => {
@@ -221,7 +221,7 @@ describe("RPC_MESSAGE_TO_PUSH_CHANNEL (reverse mapping)", () => {
 
 describe("params extraction logic (bridge invoke)", () => {
   // This tests the logic: args.length === 0 ? undefined : args.length === 1 ? args[0] : args
-  // The bridge translates Electron-style invoke args to RPC params.
+  // The bridge translates legacy desktop invoke args to RPC params.
 
   function extractParams(...args: unknown[]): unknown {
     return args.length === 0 ? undefined : args.length === 1 ? args[0] : args;

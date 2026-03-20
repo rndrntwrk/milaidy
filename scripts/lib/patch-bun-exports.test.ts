@@ -9,14 +9,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  applyAgentSkillsCatalogFetchPatch,
   applyExtensionlessJsExportAliases,
+  applyMissingLifecycleScriptPatch,
   applyNobleHashesCompat,
   applyPatchToPackageJson,
   applyProperLockfileSignalExitCompat,
   findPackageFilePaths,
   findPackageJsonPaths,
+  patchAgentSkillsCatalogFetch,
   patchBunExports,
   patchExtensionlessJsExports,
+  patchMissingLifecycleScript,
   patchNobleHashesCompat,
   patchProperLockfileSignalExitCompat,
 } from "./patch-bun-exports.mjs";
@@ -346,6 +350,197 @@ describe("patch-bun-exports", () => {
 
       const updated = JSON.parse(readFileSync(pkgPath, "utf8"));
       expect(updated.exports["./sha256"]).toBe("./sha256.js");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("applyMissingLifecycleScriptPatch removes broken postinstall hooks when the target file is missing", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "patch-bun-exports-test-"));
+    try {
+      const pkgDir = join(tmp, "node_modules", "@elizaos", "plugin-fake");
+      const pkgPath = join(pkgDir, "package.json");
+      mkdirSync(pkgDir, { recursive: true });
+      writeFileSync(
+        pkgPath,
+        JSON.stringify(
+          {
+            name: "@elizaos/plugin-fake",
+            scripts: {
+              postinstall: "node ./scripts/missing-hook.mjs",
+              build: "bun run build.ts",
+            },
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+
+      const patched = applyMissingLifecycleScriptPatch(
+        pkgPath,
+        "postinstall",
+        "./scripts/missing-hook.mjs",
+      );
+      expect(patched).toBe(true);
+
+      const updated = JSON.parse(readFileSync(pkgPath, "utf8"));
+      expect(updated.scripts.postinstall).toBeUndefined();
+      expect(updated.scripts.build).toBe("bun run build.ts");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("patchMissingLifecycleScript patches package copies and logs", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "patch-bun-exports-test-"));
+    try {
+      const pkgDir = join(tmp, "node_modules", "@elizaos", "plugin-fake");
+      const pkgPath = join(pkgDir, "package.json");
+      mkdirSync(pkgDir, { recursive: true });
+      writeFileSync(
+        pkgPath,
+        JSON.stringify(
+          {
+            name: "@elizaos/plugin-fake",
+            scripts: {
+              postinstall: "node ./scripts/missing-hook.mjs",
+            },
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+
+      const logs: string[] = [];
+      const patched = patchMissingLifecycleScript(
+        tmp,
+        "@elizaos/plugin-fake",
+        "postinstall",
+        "./scripts/missing-hook.mjs",
+        (msg) => logs.push(msg),
+      );
+      expect(patched).toBe(true);
+      expect(logs.some((l) => l.includes("missing-hook.mjs"))).toBe(true);
+
+      const updated = JSON.parse(readFileSync(pkgPath, "utf8"));
+      expect(updated.scripts).toBeUndefined();
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("applyAgentSkillsCatalogFetchPatch coalesces catalog fetches and softens 429 logs", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "patch-bun-exports-test-"));
+    try {
+      const filePath = join(
+        tmp,
+        "node_modules",
+        "@elizaos",
+        "plugin-agent-skills",
+        "dist",
+        "index.js",
+      );
+      mkdirSync(join(filePath, ".."), { recursive: true });
+      writeFileSync(
+        filePath,
+        `class AgentSkillsService {
+  // Tracks the last catalog fetch failure timestamp for backoff.
+  lastFetchErrorAt = 0;
+  async getCatalog(options = {}) {
+    const ttl = options.notOlderThan ?? CACHE_TTL.CATALOG;
+    if (!options.forceRefresh && this.catalogCache) {
+      const age = Date.now() - this.catalogCache.cachedAt;
+      if (age < ttl) {
+        return this.catalogCache.data;
+      }
+    }
+    const sinceLastError = Date.now() - this.lastFetchErrorAt;
+    if (this.lastFetchErrorAt > 0 && sinceLastError < FETCH_ERROR_COOLDOWN) {
+      return this.catalogCache?.data ?? [];
+    }
+    try {
+      throw new Error("Catalog fetch failed: 429");
+    } catch (error) {
+      this.lastFetchErrorAt = Date.now();
+      this.runtime.logger.warn(\`AgentSkills: Catalog fetch failed (will retry after cooldown): \${error}\`);
+      if (!this.catalogCache) {
+        this.catalogCache = { data: [], cachedAt: Date.now() };
+      }
+      return this.catalogCache.data;
+    }
+  }
+  /**
+   * Search ClawHub for skills.
+   */
+  async search() {}
+}
+`,
+        "utf8",
+      );
+
+      const patched = applyAgentSkillsCatalogFetchPatch(filePath);
+      expect(patched).toBe(true);
+
+      const updated = readFileSync(filePath, "utf8");
+      expect(updated).toContain("catalogFetchInFlight = null;");
+      expect(updated).toContain("catalogFetchCooldownUntil = 0;");
+      expect(updated).toContain(
+        'statusError.retryAfter = response.headers.get("retry-after");',
+      );
+      expect(updated).toContain("this.catalogFetchInFlight = (async () => {");
+      expect(updated).toContain("Catalog rate limited (429)");
+      expect(updated).not.toContain(
+        "const sinceLastError = Date.now() - this.lastFetchErrorAt;",
+      );
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("patchAgentSkillsCatalogFetch patches Bun-installed copies and logs", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "patch-bun-exports-test-"));
+    try {
+      const filePath = join(
+        tmp,
+        "node_modules",
+        ".bun",
+        "@elizaos+plugin-agent-skills@2.0.0-alpha.11",
+        "node_modules",
+        "@elizaos",
+        "plugin-agent-skills",
+        "dist",
+        "index.js",
+      );
+      mkdirSync(join(filePath, ".."), { recursive: true });
+      writeFileSync(
+        filePath,
+        `class AgentSkillsService {
+  // Tracks the last catalog fetch failure timestamp for backoff.
+  lastFetchErrorAt = 0;
+  async getCatalog(options = {}) {
+    return [];
+  }
+  /**
+   * Search ClawHub for skills.
+   */
+  async search() {}
+}
+`,
+        "utf8",
+      );
+
+      const logs: string[] = [];
+      const patched = patchAgentSkillsCatalogFetch(tmp, (msg) =>
+        logs.push(msg),
+      );
+      expect(patched).toBe(true);
+      expect(logs.some((l) => l.includes("plugin-agent-skills"))).toBe(true);
+
+      const updated = readFileSync(filePath, "utf8");
+      expect(updated).toContain("catalogFetchCooldownUntil = 0;");
+      expect(updated).toContain("Catalog rate limited (429)");
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }

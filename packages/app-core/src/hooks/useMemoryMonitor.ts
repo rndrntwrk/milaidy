@@ -93,7 +93,7 @@ export interface UseMemoryMonitorResult {
 const DEFAULT_OPTIONS: Required<
   Omit<UseMemoryMonitorOptions, "onLeakDetected">
 > = {
-  enabled: import.meta.env.DEV,
+  enabled: Boolean(import.meta.env.DEV),
   sampleInterval: 5000,
   maxSamples: 60,
   leakThresholdMbPerMin: 1.0,
@@ -299,7 +299,6 @@ export function startMemoryLeakDetector(options?: {
   const maxSamples = 30;
 
   const intervalId = setInterval(() => {
-    console.log(`[setInterval] fires at ${Date.now()}`);
     const memInfo = getMemoryInfo();
     if (!memInfo) return;
 

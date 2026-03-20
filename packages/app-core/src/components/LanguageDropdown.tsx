@@ -30,7 +30,10 @@ export interface LanguageDropdownProps {
   t?: TranslatorFn;
   /** Optional extra className on the root */
   className?: string;
+  /** Optional extra className on the trigger button */
+  triggerClassName?: string;
   variant?: "native" | "companion";
+  menuPlacement?: "bottom-end" | "top-end";
 }
 
 export function LanguageDropdown({
@@ -38,24 +41,35 @@ export function LanguageDropdown({
   setUiLanguage,
   t,
   className,
+  triggerClassName,
   variant = "native",
+  menuPlacement = "bottom-end",
 }: LanguageDropdownProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(
-    null,
-  );
+  const [menuPos, setMenuPos] = useState<{
+    top?: number;
+    bottom?: number;
+    right: number;
+  } | null>(null);
 
   // Compute dropdown position from trigger button rect (for companion portal)
   const updateMenuPos = useCallback(() => {
     if (variant !== "companion" || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
+    if (menuPlacement === "top-end") {
+      setMenuPos({
+        bottom: window.innerHeight - rect.top + 4,
+        right: window.innerWidth - rect.right,
+      });
+      return;
+    }
     setMenuPos({
       top: rect.bottom + 4,
       right: window.innerWidth - rect.right,
     });
-  }, [variant]);
+  }, [menuPlacement, variant]);
 
   // Close on outside click
   useEffect(() => {
@@ -64,7 +78,7 @@ export function LanguageDropdown({
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         // Also check if clicked inside the portaled menu
         const portalMenu = document.getElementById("lang-dropdown-portal");
-        if (portalMenu && portalMenu.contains(e.target as Node)) return;
+        if (portalMenu?.contains(e.target as Node)) return;
         setOpen(false);
       }
     };
@@ -88,27 +102,31 @@ export function LanguageDropdown({
   }, [open, updateMenuPos]);
 
   const current = LANGUAGES.find((l) => l.id === uiLanguage) ?? LANGUAGES[0];
-
-  const triggerClass =
-    variant === "companion"
-      ? `flex items-center gap-1.5 h-8 px-2.5 rounded-full bg-white/5 text-white/80 hover:text-white hover:bg-white/20 border border-transparent hover:border-white/30 transition-all text-xs font-medium cursor-pointer ${open ? "bg-white/20 text-white border-white/30 shadow-sm" : ""}`
-      : `inline-flex items-center gap-1.5 h-9 px-2 sm:px-3 border border-border bg-bg text-[11px] sm:text-xs font-medium cursor-pointer transition-colors duration-200 hover:border-accent hover:text-accent rounded-md ${open ? "border-accent text-accent bg-accent/5 backdrop-blur-sm" : ""}`;
+  const triggerClass = `inline-flex min-h-[44px] min-w-[44px] items-center gap-1.5 h-11 px-3 border border-border/50 bg-bg/50 backdrop-blur-md text-xs font-medium cursor-pointer transition-all duration-300 text-txt hover:border-accent hover:text-txt rounded-md shadow-sm ${open ? "border-accent text-txt bg-accent/5" : ""} ${triggerClassName ?? ""}`;
+  const optionClass = (selected: boolean) =>
+    `w-full flex items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-bg-hover cursor-pointer ${selected ? "text-txt bg-accent/5 font-medium" : "text-txt"}`;
+  const inlineMenuPositionClass =
+    menuPlacement === "top-end"
+      ? "absolute bottom-full right-0 mb-1 z-50"
+      : "absolute top-full right-0 mt-1 z-50";
 
   const menuContent = open && (
     <ul
       id="lang-dropdown-portal"
-      className={`w-36 rounded-lg shadow-xl overflow-hidden py-1 ${variant === "companion" ? "fixed" : "absolute top-full right-0 mt-1 bg-bg-elevated border border-border z-50"}`}
+      data-no-camera-drag="true"
+      className={`w-36 rounded-lg border border-border/50 bg-bg/50 shadow-xl overflow-hidden py-1 backdrop-blur-md ${variant === "companion" ? "fixed" : inlineMenuPositionClass}`}
       style={
         variant === "companion" && menuPos
           ? {
-              top: menuPos.top,
+              ...(menuPos.top !== undefined ? { top: menuPos.top } : {}),
+              ...(menuPos.bottom !== undefined
+                ? { bottom: menuPos.bottom }
+                : {}),
               right: menuPos.right,
               zIndex: 10001,
-              background: "rgba(18, 22, 32, 0.96)",
-              border: "1px solid rgba(240, 178, 50, 0.18)",
               backdropFilter: "blur(24px)",
-              boxShadow:
-                "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
+              WebkitBackdropFilter: "blur(24px)",
+              boxShadow: "var(--shadow-lg)",
             }
           : undefined
       }
@@ -120,26 +138,8 @@ export function LanguageDropdown({
             type="button"
             role="option"
             aria-selected={lang.id === uiLanguage}
-            className={
-              variant === "companion"
-                ? "w-full flex items-center justify-between px-3 py-2 text-sm transition-colors border-0 cursor-pointer"
-                : `w-full flex items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-bg-hover ${lang.id === uiLanguage ? "text-accent bg-accent/5 font-medium" : "text-txt"}`
-            }
-            style={
-              variant === "companion"
-                ? {
-                    background:
-                      lang.id === uiLanguage
-                        ? "rgba(240,178,50,0.1)"
-                        : "transparent",
-                    color:
-                      lang.id === uiLanguage
-                        ? "#f0b232"
-                        : "rgba(240,238,250,0.92)",
-                    fontWeight: lang.id === uiLanguage ? 500 : 400,
-                  }
-                : undefined
-            }
+            className={optionClass(lang.id === uiLanguage)}
+            onPointerDown={(event) => event.stopPropagation()}
             onClick={() => {
               setUiLanguage(lang.id);
               setOpen(false);
@@ -162,11 +162,13 @@ export function LanguageDropdown({
       ref={rootRef}
       className={`relative inline-flex shrink-0 ${className ?? ""}`}
       data-testid="language-dropdown"
+      data-no-camera-drag="true"
     >
       <button
         ref={triggerRef}
         type="button"
         className={triggerClass}
+        onPointerDown={(event) => event.stopPropagation()}
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}

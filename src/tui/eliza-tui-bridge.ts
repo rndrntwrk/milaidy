@@ -25,6 +25,7 @@ import {
 import {
   drainSseEvents,
   extractSseDataPayloads,
+  mergeStreamingText,
   parseConversationStreamPayload,
 } from "./sse-parser.js";
 import { miladyMarkdownTheme, tuiTheme } from "./theme.js";
@@ -709,8 +710,8 @@ export class ElizaTUIBridge {
         this.tui.clearEphemeralStatus();
         this.tui.getStatusBar().update({ isStreaming: true });
 
-        fullText += chunk;
-        this.streamedText += chunk;
+        fullText = mergeStreamingText(fullText, chunk);
+        this.streamedText = mergeStreamingText(this.streamedText, chunk);
         this.ensureAssistantComponent();
         this.scheduleAssistantUpdate();
         return;
@@ -732,8 +733,8 @@ export class ElizaTUIBridge {
         this.tui.clearEphemeralStatus();
         this.tui.getStatusBar().update({ isStreaming: true });
 
-        fullText += parsed.text;
-        this.streamedText += parsed.text;
+        fullText = mergeStreamingText(fullText, parsed.text);
+        this.streamedText = mergeStreamingText(this.streamedText, parsed.text);
         this.ensureAssistantComponent();
         this.scheduleAssistantUpdate();
       }

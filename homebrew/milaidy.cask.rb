@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
 # Updated Homebrew Cask for the main milady repo's homebrew/ directory.
-# Replace homebrew/milaidy.cask.rb with this file.
+# Use this for the tap's Casks/milady.cask.rb entry.
 #
 # Key fixes from the original:
 #   - URL matches actual release asset naming (canary-macos-{arch}-Milady-canary.dmg)
 #   - App identifier uses com.miladyai.milady (from actual metadata)
 #   - SHA256 placeholders for both architectures
 
-cask "milaidy" do
+cask "milady" do
   arch arm: "arm64", intel: "x64"
 
   version "2.0.0-alpha.84"
@@ -55,6 +55,6 @@ cask "milaidy" do
     - Choose your agent's name and personality
     - Connect an AI provider (Anthropic, OpenAI, Ollama, etc.)
 
-    The CLI is also available via: brew install milaidy (without --cask)
+    The CLI is also available via: brew install milady (without --cask)
   EOS
 end

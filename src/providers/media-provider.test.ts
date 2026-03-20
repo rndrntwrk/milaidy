@@ -746,7 +746,7 @@ describe("Audio Generation Providers", () => {
   };
 
   const defaultAudioOptions: AudioGenerationOptions = {
-    prompt: "An upbeat electronic dance track",
+    prompt: "An upbeat synth dance track",
     duration: 30,
     instrumental: true,
   };
@@ -756,7 +756,7 @@ describe("Audio Generation Providers", () => {
       fetchMock.mockResolvedValue(
         jsonResponse({
           audioUrl: "https://example.com/generated-audio.mp3",
-          title: "Electronic Vibes",
+          title: "Synth Vibes",
           duration: 30,
         }),
       );
@@ -770,7 +770,7 @@ describe("Audio Generation Providers", () => {
       expect(result.data?.audioUrl).toBe(
         "https://example.com/generated-audio.mp3",
       );
-      expect(result.data?.title).toBe("Electronic Vibes");
+      expect(result.data?.title).toBe("Synth Vibes");
     });
   });
 
@@ -947,7 +947,7 @@ describe("Configuration defaults", () => {
     await provider.analyze({ imageUrl: "https://example.com/image.jpg" });
 
     const [url] = fetchMock.mock.calls[0];
-    expect(url).toBe("https://www.elizacloud.ai/api/v1/media/vision/analyze");
+    expect(url).toBe("https://elizacloud.ai/api/v1/media/vision/analyze");
   });
 
   it("uses default OpenAI model when not specified", async () => {

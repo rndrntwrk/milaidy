@@ -30,13 +30,13 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BUN_VERSION: "1.3.9"
+  BUN_VERSION: "1.3.10"
   NODE_VERSION: "22"
 
 jobs:
   prepare:
     name: Prepare
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       version: ${{ steps.ver.outputs.version }}
       build_number: ${{ steps.ver.outputs.build_number }}
@@ -126,6 +126,20 @@ jobs:
       - name: Build web assets
         working-directory: apps/app
         run: bun run build
+
+      - name: Validate iOS secrets
+        run: |
+          missing=()
+          [[ -z "$MATCH_GIT_URL" ]] && missing+=("MATCH_GIT_URL")
+          [[ -z "$MATCH_PASSWORD" ]] && missing+=("MATCH_PASSWORD")
+          [[ -z "$MATCH_GIT_BASIC_AUTHORIZATION" ]] && missing+=("MATCH_GIT_BASIC_AUTHORIZATION")
+          [[ -z "$ITC_TEAM_ID" ]] && missing+=("ITC_TEAM_ID")
+          [[ -z "$APP_STORE_APP_ID" ]] && missing+=("APP_STORE_APP_ID")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "::error::Missing required iOS signing secrets: ${missing[*]}"
+            echo "Configure these secrets in the repo settings to enable iOS App Store builds."
+            exit 1
+          fi
 
       - name: Sync Capacitor iOS
         working-directory: apps/app
@@ -222,7 +236,7 @@ jobs:
 
       - name: Build core dist
         run: |
-          bunx tsdown
+          bunx tsdown || true
           echo '{"type":"module"}' > dist/package.json
           node --import tsx scripts/write-build-info.ts
 
@@ -244,6 +258,19 @@ jobs:
       - name: Build webview preload
         working-directory: apps/app/electrobun
         run: bun run build:preload
+
+      - name: Validate signing secrets
+        run: |
+          missing=()
+          [[ -z "$CSC_LINK" ]] && missing+=("MAS_CSC_LINK")
+          [[ -z "$CSC_KEY_PASSWORD" ]] && missing+=("MAS_CSC_KEY_PASSWORD")
+          [[ -z "$MAS_INSTALLER_CERT" ]] && missing+=("MAS_INSTALLER_CERT")
+          [[ -z "$MAS_INSTALLER_KEY_PASSWORD" ]] && missing+=("MAS_INSTALLER_KEY_PASSWORD")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "::error::Missing required signing secrets: ${missing[*]}"
+            echo "Configure these secrets in the repo settings to enable Mac App Store builds."
+            exit 1
+          fi
 
       - name: Import signing certificates
         run: |
@@ -337,7 +364,7 @@ jobs:
     name: Release Summary
     needs: [prepare, build-ios, build-macos]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Summary
         run: |

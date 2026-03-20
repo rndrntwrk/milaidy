@@ -6,6 +6,10 @@ import type {
   StreamEventEnvelope,
 } from "../api/client";
 import {
+  computeStreamingDelta as computeStreamingDeltaInternal,
+  mergeStreamingText,
+} from "../utils/streaming-text";
+import {
   AGENT_STATES,
   type ApiLikeError,
   type SlashCommandInput,
@@ -133,29 +137,13 @@ export function parseProactiveMessageEvent(
   return { conversationId, message };
 }
 
+export { mergeStreamingText };
+
 export function computeStreamingDelta(
   existing: string,
   incoming: string,
 ): string {
-  if (!incoming) return "";
-  if (!existing) return incoming;
-  if (incoming === existing) return "";
-  if (incoming.startsWith(existing)) return incoming.slice(existing.length);
-  if (existing.startsWith(incoming)) return "";
-
-  // Small chunks are usually raw token deltas; keep them even if they
-  // duplicate suffix characters (e.g., "l" + "l" in "Hello").
-  if (incoming.length <= 3) return incoming;
-
-  const maxOverlap = Math.min(existing.length, incoming.length);
-  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
-    if (existing.endsWith(incoming.slice(0, overlap))) {
-      const delta = incoming.slice(overlap);
-      if (!delta && overlap === incoming.length) return "";
-      return delta;
-    }
-  }
-  return incoming;
+  return computeStreamingDeltaInternal(existing, incoming);
 }
 
 export function normalizeStreamComparisonText(text: string): string {

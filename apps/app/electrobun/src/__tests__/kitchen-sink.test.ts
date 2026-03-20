@@ -8,7 +8,15 @@
  * Test environment: Vitest (Node), electrobun/bun is always vi.mocked().
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from "vitest";
 
 // ---------------------------------------------------------------------------
 // Top-level vi.mock calls — ALL hoisted before imports.
@@ -536,6 +544,16 @@ function setPlatform(p: string) {
   Object.defineProperty(process, "platform", { value: p, configurable: true });
 }
 
+type SendToWebview = (message: string, payload?: unknown) => void;
+type BrowserWindowOptionsArg = {
+  title?: string;
+  frame: { width: number; height: number };
+  sandbox?: boolean;
+};
+type MockBrowserWindowCtor = Mock<
+  (options: BrowserWindowOptionsArg) => unknown
+>;
+
 // ============================================================================
 // 1. Schema completeness
 // ============================================================================
@@ -984,11 +1002,6 @@ describe("Channel mapping — requests", () => {
     );
   });
 
-  it("lifo channels", () => {
-    expect(CHANNEL_TO_RPC_METHOD["lifo:getPipState"]).toBe("lifoGetPipState");
-    expect(CHANNEL_TO_RPC_METHOD["lifo:setPip"]).toBe("lifoSetPip");
-  });
-
   it("returns undefined for unknown channels", () => {
     expect(CHANNEL_TO_RPC_METHOD["unknown:channel"]).toBeUndefined();
     expect(CHANNEL_TO_RPC_METHOD[""]).toBeUndefined();
@@ -1070,6 +1083,7 @@ describe("Channel mapping — push events", () => {
     expect(PUSH_CHANNEL_TO_RPC_MESSAGE["talkmode:transcript"]).toBe(
       "talkmodeTranscript",
     );
+    expect(PUSH_CHANNEL_TO_RPC_MESSAGE["talkmode:error"]).toBe("talkmodeError");
   });
 
   it("swabble push events", () => {
@@ -1079,6 +1093,10 @@ describe("Channel mapping — push events", () => {
     expect(PUSH_CHANNEL_TO_RPC_MESSAGE["swabble:stateChange"]).toBe(
       "swabbleStateChanged",
     );
+    expect(PUSH_CHANNEL_TO_RPC_MESSAGE["swabble:transcript"]).toBe(
+      "swabbleTranscript",
+    );
+    expect(PUSH_CHANNEL_TO_RPC_MESSAGE["swabble:error"]).toBe("swabbleError");
     expect(PUSH_CHANNEL_TO_RPC_MESSAGE["swabble:audioChunkPush"]).toBe(
       "swabbleAudioChunkPush",
     );
@@ -1146,8 +1164,12 @@ describe("Reverse mapping consistency", () => {
     expect(RPC_MESSAGE_TO_PUSH_CHANNEL.desktopWindowFocus).toBe(
       "desktop:windowFocus",
     );
+    expect(RPC_MESSAGE_TO_PUSH_CHANNEL.talkmodeError).toBe("talkmode:error");
     expect(RPC_MESSAGE_TO_PUSH_CHANNEL.swabbleWakeWord).toBe(
       "swabble:wakeWord",
+    );
+    expect(RPC_MESSAGE_TO_PUSH_CHANNEL.swabbleTranscript).toBe(
+      "swabble:transcript",
     );
   });
 });
@@ -1158,7 +1180,7 @@ describe("Reverse mapping consistency", () => {
 
 describe("DesktopManager — tray", () => {
   let manager: DesktopManager;
-  let sendFn: ReturnType<typeof vi.fn>;
+  let sendFn: Mock<SendToWebview>;
   const MockTray = electrobunBun.Tray as unknown as ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -1234,7 +1256,7 @@ describe("DesktopManager — tray", () => {
 
 describe("DesktopManager — shortcuts", () => {
   let manager: DesktopManager;
-  let sendFn: ReturnType<typeof vi.fn>;
+  let sendFn: Mock<SendToWebview>;
   const mockGS =
     electrobunBun.GlobalShortcut as typeof electrobunBun.GlobalShortcut;
 
@@ -1304,7 +1326,7 @@ describe("DesktopManager — shortcuts", () => {
 
 describe("DesktopManager — window management", () => {
   let manager: DesktopManager;
-  let sendFn: ReturnType<typeof vi.fn>;
+  let sendFn: Mock<SendToWebview>;
   const mockMakeKeyAndOrderFront =
     macEffects.makeKeyAndOrderFront as ReturnType<typeof vi.fn>;
   const mockOrderOut = macEffects.orderOut as ReturnType<typeof vi.fn>;
@@ -1339,7 +1361,7 @@ describe("DesktopManager — window management", () => {
     sendFn = vi.fn();
     manager.setSendToWebview(sendFn);
     manager.setMainWindow(
-      fakeWindow as Parameters<DesktopManager["setMainWindow"]>[0],
+      fakeWindow as unknown as Parameters<DesktopManager["setMainWindow"]>[0],
     );
   });
 
@@ -1802,8 +1824,12 @@ describe("DesktopManager — app lifecycle", () => {
 
 describe("DesktopManager — auto launch", () => {
   let manager: DesktopManager;
-  const mockExistsSync = nodeFs.existsSync as ReturnType<typeof vi.fn>;
-  const mockReadFileSync = nodeFs.readFileSync as ReturnType<typeof vi.fn>;
+  const mockExistsSync = nodeFs.existsSync as unknown as Mock<
+    typeof nodeFs.existsSync
+  >;
+  const mockReadFileSync = nodeFs.readFileSync as unknown as Mock<
+    typeof nodeFs.readFileSync
+  >;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -2054,21 +2080,6 @@ describe("Push event integrity", () => {
 // ============================================================================
 
 describe("Schema types — shape validation", () => {
-  it("AgentStatus has all required fields", () => {
-    const status: import("../rpc-schema").AgentStatus = {
-      state: "not_started",
-      agentName: null,
-      port: null,
-      startedAt: null,
-      error: null,
-    };
-    expect(status.state).toBe("not_started");
-    expect(status.agentName).toBeNull();
-    expect(status.port).toBeNull();
-    expect(status.startedAt).toBeNull();
-    expect(status.error).toBeNull();
-  });
-
   it("WindowBounds has all numeric fields", () => {
     const bounds: import("../rpc-schema").WindowBounds = {
       x: 0,
@@ -2135,38 +2146,6 @@ describe("Schema types — shape validation", () => {
     expect(item.id).toBe("quit");
     expect(item.label).toBe("Quit");
     expect(item.type).toBe("normal");
-  });
-
-  it("AgentStatus state can be all valid states", () => {
-    const states: import("../rpc-schema").AgentStatus["state"][] = [
-      "not_started",
-      "starting",
-      "running",
-      "stopped",
-      "error",
-    ];
-    for (const state of states) {
-      const s: import("../rpc-schema").AgentStatus = {
-        state,
-        agentName: null,
-        port: null,
-        startedAt: null,
-        error: null,
-      };
-      expect(s.state).toBe(state);
-    }
-  });
-
-  it("PipState has enabled boolean and optional windowId", () => {
-    const pip: import("../rpc-schema").PipState = {
-      enabled: true,
-      windowId: "win-1",
-    };
-    expect(typeof pip.enabled).toBe("boolean");
-    expect(pip.windowId).toBe("win-1");
-
-    const pipOff: import("../rpc-schema").PipState = { enabled: false };
-    expect(pipOff.windowId).toBeUndefined();
   });
 });
 
@@ -2576,7 +2555,7 @@ describe("CanvasManager — window operations", () => {
 
   it("setSendToWebview() stores function for event forwarding", () => {
     const mgr = new CanvasManager();
-    const fn = vi.fn();
+    const fn: Mock<SendToWebview> = vi.fn();
     expect(() => mgr.setSendToWebview(fn)).not.toThrow();
   });
 });
@@ -2592,9 +2571,8 @@ describe("CanvasManager — window creation via BrowserWindow", () => {
   });
 
   it("createWindow() calls new BrowserWindow() with correct options", async () => {
-    const MockBrowserWindow = electrobunBun.BrowserWindow as ReturnType<
-      typeof vi.fn
-    >;
+    const MockBrowserWindow =
+      electrobunBun.BrowserWindow as unknown as MockBrowserWindowCtor;
     MockBrowserWindow.mockClear();
     const mgr = new CanvasManager();
     const result = await mgr.createWindow({
@@ -2614,9 +2592,8 @@ describe("CanvasManager — window creation via BrowserWindow", () => {
   });
 
   it("createWindow() uses defaults when options are minimal", async () => {
-    const MockBrowserWindow = electrobunBun.BrowserWindow as ReturnType<
-      typeof vi.fn
-    >;
+    const MockBrowserWindow =
+      electrobunBun.BrowserWindow as unknown as MockBrowserWindowCtor;
     MockBrowserWindow.mockClear();
     const mgr = new CanvasManager();
     await mgr.createWindow({});
@@ -2684,7 +2661,7 @@ describe("GatewayDiscovery — state and lifecycle", () => {
 
   it("setSendToWebview() stores the function without error", () => {
     const gd = new GatewayDiscovery();
-    const fn = vi.fn();
+    const fn: Mock<SendToWebview> = vi.fn();
     expect(() => gd.setSendToWebview(fn)).not.toThrow();
   });
 
@@ -2757,7 +2734,7 @@ describe("AgentManager — initial state", () => {
 
   it("setSendToWebview() stores the function without error", () => {
     const mgr = new AgentManager();
-    const fn = vi.fn();
+    const fn: Mock<SendToWebview> = vi.fn();
     expect(() => mgr.setSendToWebview(fn)).not.toThrow();
   });
 });
@@ -2879,7 +2856,7 @@ describe("PermissionManager — shell permission logic", () => {
 
   it("setShellEnabled() calls sendToWebview('permissionsChanged') with { id: 'shell' }", () => {
     const mgr = new PermissionManager();
-    const sendFn = vi.fn();
+    const sendFn: Mock<SendToWebview> = vi.fn();
     mgr.setSendToWebview(sendFn);
     mgr.setShellEnabled(false);
     expect(sendFn).toHaveBeenCalledWith("permissionsChanged", { id: "shell" });
@@ -3392,42 +3369,6 @@ describe("RPC handler delegation — context menu", () => {
   });
 });
 
-// ---- 33. LIFO / PiP ----
-
-describe("RPC handler delegation — LIFO/PiP state", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("lifoGetPipState → returns current pipState with { enabled: boolean }", async () => {
-    const { handlers } = await captureHandlers();
-    const r = await handlers.lifoGetPipState();
-    expect(r).toHaveProperty("enabled");
-    expect(typeof (r as { enabled: boolean }).enabled).toBe("boolean");
-  });
-
-  it("lifoSetPip({ enabled: true }) → does not throw (sets always-on-top)", async () => {
-    const { handlers } = await captureHandlers();
-    await expect(handlers.lifoSetPip({ enabled: true })).resolves.not.toThrow();
-  });
-
-  it("lifoSetPip({ enabled: false }) → does not throw (clears always-on-top)", async () => {
-    const { handlers } = await captureHandlers();
-    await expect(
-      handlers.lifoSetPip({ enabled: false }),
-    ).resolves.not.toThrow();
-  });
-
-  it("lifoGetPipState after lifoSetPip({enabled: true}) reflects updated state", async () => {
-    // lifoGetPipState reads from module-level pipState; lifoSetPip writes it
-    // Both handlers captured from the same registerRpcHandlers call share the closure
-    const { handlers } = await captureHandlers();
-    await handlers.lifoSetPip({ enabled: true });
-    const r = await handlers.lifoGetPipState();
-    expect((r as { enabled: boolean }).enabled).toBe(true);
-  });
-});
-
 // ============================================================================
 // 34. Push event routing — sendToWebview → RPC send proxy
 // ============================================================================
@@ -3436,7 +3377,7 @@ describe("Push event routing — sendToWebview dispatches to RPC send proxy", ()
   it("known push message (PUSH_CHANNEL_TO_RPC_MESSAGE key) routes to mapped RPC method", () => {
     // Build a sendToWebview function the same way wireRpcAndModules does it
     const agentStatusSend = vi.fn();
-    const mockRpcSend: Record<string, ReturnType<typeof vi.fn>> = {
+    const mockRpcSend: Record<string, Mock<(payload: unknown) => void>> = {
       agentStatusUpdate: agentStatusSend,
     };
 
@@ -3452,7 +3393,7 @@ describe("Push event routing — sendToWebview dispatches to RPC send proxy", ()
 
   it("direct RPC method name (no mapping needed) routes to that method", () => {
     const gatewayDiscoverySend = vi.fn();
-    const mockRpcSend: Record<string, ReturnType<typeof vi.fn>> = {
+    const mockRpcSend: Record<string, Mock<(payload: unknown) => void>> = {
       gatewayDiscovery: gatewayDiscoverySend,
     };
 
@@ -3474,7 +3415,7 @@ describe("Push event routing — sendToWebview dispatches to RPC send proxy", ()
 
   it("unknown message routes to itself and calls that RPC method if it exists", () => {
     const customSend = vi.fn();
-    const mockRpcSend: Record<string, ReturnType<typeof vi.fn>> = {
+    const mockRpcSend: Record<string, Mock<(payload: unknown) => void>> = {
       customEvent: customSend,
     };
 
@@ -3489,10 +3430,13 @@ describe("Push event routing — sendToWebview dispatches to RPC send proxy", ()
   });
 
   it("sendToWebview with no rpc method does not throw", () => {
+    const mockRpcSend: Record<string, Mock<(payload: unknown) => void>> = {};
     const sendToWebview = (message: string, payload?: unknown): void => {
       const rpcMessage = PUSH_CHANNEL_TO_RPC_MESSAGE[message] ?? message;
-      const sender = {}[rpcMessage as keyof typeof sender];
-      if (sender) (sender as (p: unknown) => void)(payload ?? null);
+      const sender = mockRpcSend[rpcMessage];
+      if (sender) {
+        sender(payload ?? null);
+      }
     };
 
     expect(() => sendToWebview("nonExistentMessage", { x: 1 })).not.toThrow();
@@ -3548,22 +3492,22 @@ describe("resolveExternalApiBase — priority order and validation", () => {
     const { resolveExternalApiBase } =
       await vi.importActual<typeof import("../api-base")>("../api-base");
     const result = resolveExternalApiBase({
-      MILADY_ELECTRON_TEST_API_BASE: "http://test.local:4000",
+      MILADY_DESKTOP_TEST_API_BASE: "http://test.local:4000",
       MILADY_API_BASE: "http://fallback.local:5000",
     });
     expect(result.base).toBe("http://test.local:4000");
-    expect(result.source).toBe("MILADY_ELECTRON_TEST_API_BASE");
+    expect(result.source).toBe("MILADY_DESKTOP_TEST_API_BASE");
   });
 
   it("skips invalid URLs and falls back to next key", async () => {
     const { resolveExternalApiBase } =
       await vi.importActual<typeof import("../api-base")>("../api-base");
     const result = resolveExternalApiBase({
-      MILADY_ELECTRON_TEST_API_BASE: "not-a-url",
+      MILADY_DESKTOP_TEST_API_BASE: "not-a-url",
       MILADY_API_BASE: "http://good.local:3000",
     });
     expect(result.base).toBe("http://good.local:3000");
-    expect(result.invalidSources).toContain("MILADY_ELECTRON_TEST_API_BASE");
+    expect(result.invalidSources).toContain("MILADY_DESKTOP_TEST_API_BASE");
   });
 
   it("rejects non-http protocols (file:, ftp:, etc.)", async () => {
@@ -3649,9 +3593,9 @@ describe("pushApiBaseToRenderer — injects API base into webview RPC", () => {
 describe("loadWindowState — window state persistence", () => {
   // loadWindowState is not exported, so we test it via the index.ts startup-bootstrap.
   // For direct logic testing, we exercise the branches manually here.
-  const mockFs = nodeFs as {
-    existsSync: ReturnType<typeof vi.fn>;
-    readFileSync: ReturnType<typeof vi.fn>;
+  const mockFs = nodeFs as unknown as {
+    existsSync: Mock<typeof nodeFs.existsSync>;
+    readFileSync: Mock<typeof nodeFs.readFileSync>;
   };
 
   beforeEach(() => {
@@ -4037,14 +3981,6 @@ describe.skip("INTERACTIVE: Context menu", () => {
   it.todo("Context menu appears at cursor position");
 });
 
-describe.skip("INTERACTIVE: PiP / Always-on-top (LIFO)", () => {
-  it.todo("Enabling PiP mode makes the companion window always-on-top");
-  it.todo("PiP window stays above other applications");
-  it.todo("Disabling PiP mode returns window to normal z-order");
-  it.todo("PiP state persists across agent restarts within the session");
-  it.todo("PiP mode is correctly reflected in lifoGetPipState return value");
-});
-
 describe.skip("INTERACTIVE: Global keyboard shortcuts", () => {
   it.todo(
     "Registering a global shortcut triggers callback when pressed from any app",
@@ -4056,7 +3992,7 @@ describe.skip("INTERACTIVE: Global keyboard shortcuts", () => {
   it.todo("unregisterAllShortcuts clears all registered shortcuts");
   it.todo("Shortcuts survive window focus changes");
   it.todo(
-    "Shortcut accelerator strings follow Electron format (CmdOrCtrl, Alt, Shift)",
+    "Shortcut accelerator strings follow the legacy desktop accelerator format (CmdOrCtrl, Alt, Shift)",
   );
 });
 

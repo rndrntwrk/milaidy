@@ -12,6 +12,8 @@
       "**",
       "!assets",
       "!dist",
+      "!apps/app/public/**",
+      "!apps/app/electrobun/build/**",
       "!**/tsc-out",
       "!**/dist-tsc",
       "!docs/_layouts",
@@ -71,5 +73,17 @@
     "parser": {
       "tailwindDirectives": true
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.css"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noDuplicateProperties": "off"
+          }
+        }
+      }
+    }
+  ]
 }

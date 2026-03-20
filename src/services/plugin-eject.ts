@@ -16,6 +16,12 @@ import {
 import { getPluginInfo } from "./registry-client";
 
 const execFileAsync = promisify(execFile);
+const UPSTREAM_SCHEMA = "milady-upstream-v1";
+const LEGACY_UPSTREAM_SCHEMA = "milaidy-upstream-v1";
+
+function isSupportedUpstreamSchema(value: string): boolean {
+  return value === UPSTREAM_SCHEMA || value === LEGACY_UPSTREAM_SCHEMA;
+}
 
 let ejectLock: Promise<void> = Promise.resolve();
 
@@ -29,7 +35,7 @@ function serialise<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 export interface UpstreamMetadata {
-  $schema: "milaidy-upstream-v1";
+  $schema: typeof UPSTREAM_SCHEMA;
   source: string;
   gitUrl: string;
   branch: string;
@@ -130,7 +136,8 @@ async function readUpstreamMetadata(
     const raw = await fs.readFile(upstreamFilePath(pluginDir), "utf-8");
     const parsed = JSON.parse(raw) as Partial<UpstreamMetadata>;
     if (
-      parsed.$schema !== "milaidy-upstream-v1" ||
+      typeof parsed.$schema !== "string" ||
+      !isSupportedUpstreamSchema(parsed.$schema) ||
       typeof parsed.gitUrl !== "string" ||
       typeof parsed.branch !== "string" ||
       typeof parsed.commitHash !== "string" ||
@@ -140,7 +147,7 @@ async function readUpstreamMetadata(
       return null;
     }
     return {
-      $schema: "milaidy-upstream-v1",
+      $schema: UPSTREAM_SCHEMA,
       source:
         typeof parsed.source === "string" ? parsed.source : parsed.npmPackage,
       gitUrl: parsed.gitUrl,
@@ -356,7 +363,7 @@ export function ejectPlugin(pluginId: string): Promise<EjectResult> {
       const commitHash = await gitStdout(["rev-parse", "HEAD"], targetDir);
 
       const metadata: UpstreamMetadata = {
-        $schema: "milaidy-upstream-v1",
+        $schema: UPSTREAM_SCHEMA,
         source: `github:${info.gitRepo}`,
         gitUrl,
         branch,

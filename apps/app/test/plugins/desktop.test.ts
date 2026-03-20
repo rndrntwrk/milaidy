@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
- * Tests for @milady/capacitor-desktop — web fallbacks, window ops, clipboard, events.
+ * Tests for @miladyai/capacitor-desktop — web fallbacks, window ops, clipboard, events.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DesktopWeb } from "../../plugins/desktop/src/web";
 
-describe("@milady/capacitor-desktop", () => {
+describe("@miladyai/capacitor-desktop", () => {
   let d: DesktopWeb;
 
   beforeEach(() => {
@@ -202,9 +202,9 @@ describe("@milady/capacitor-desktop", () => {
   // -- App info --
 
   describe("app info", () => {
-    it("getVersion has N/A for electron/node on web", async () => {
+    it("getVersion has N/A for runtime/node on web", async () => {
       const v = await d.getVersion();
-      expect(v.electron).toBe("N/A");
+      expect(v.runtime).toBe("N/A");
       expect(v.node).toBe("N/A");
     });
 

@@ -14,7 +14,7 @@
  *
  * NO MOCKS — all tests use real production code paths.
  */
-import { execFile, spawn } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -64,7 +64,7 @@ const packageManifest = JSON.parse(
   fs.readFileSync(path.join(packageRoot, "package.json"), "utf-8"),
 ) as RootPackageManifest;
 const cliEntryRelativePath =
-  packageManifest.bin?.miladyai ?? packageManifest.bin?.milady ?? "milaidy.mjs";
+  packageManifest.bin?.miladyai ?? packageManifest.bin?.milady ?? "milady.mjs";
 const cliEntryPath = path.join(packageRoot, cliEntryRelativePath);
 
 function fileExistsAny(candidates: string[]): boolean {
@@ -188,26 +188,21 @@ function http$(
   });
 }
 
-async function reserveFreePort(): Promise<number> {
-  return await new Promise<number>((resolve, reject) => {
-    const server = http.createServer();
-    server.on("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        server.close();
-        reject(new Error("Failed to reserve free port"));
-        return;
-      }
-      const { port } = address;
-      server.close((closeErr) => {
-        if (closeErr) {
-          reject(closeErr);
-          return;
-        }
-        resolve(port);
-      });
-    });
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
   });
 }
 
@@ -303,76 +298,6 @@ async function shouldSkipDueModelProviderUnavailable(
 // Subprocess helper
 // ---------------------------------------------------------------------------
 
-interface SubprocessResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-}
-
-function runSubprocess(
-  cmd: string,
-  args: string[],
-  opts: {
-    cwd?: string;
-    env?: Record<string, string>;
-    timeoutMs?: number;
-    stdinText?: string;
-    /** Kill after this string appears in combined stdout+stderr */
-    killAfter?: string;
-  } = {},
-): Promise<SubprocessResult> {
-  return new Promise((resolve) => {
-    const child = spawn(cmd, args, {
-      cwd: opts.cwd ?? packageRoot,
-      env: opts.env,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-
-    let stdout = "";
-    let stderr = "";
-    let resolved = false;
-
-    const finish = (code: number) => {
-      if (resolved) return;
-      resolved = true;
-      // Bun test can aggressively emit close before the stdout buffer has drained. Delay resolution briefly.
-      setTimeout(() => {
-        resolve({ stdout, stderr, exitCode: code });
-      }, 50);
-    };
-
-    child.stdout.on("data", (d: Buffer) => {
-      stdout += d.toString();
-      if (opts.killAfter && (stdout + stderr).includes(opts.killAfter)) {
-        if (opts.stdinText) child.stdin.write(opts.stdinText);
-        else child.kill("SIGTERM");
-      }
-    });
-    child.stderr.on("data", (d: Buffer) => {
-      stderr += d.toString();
-      if (opts.killAfter && (stdout + stderr).includes(opts.killAfter)) {
-        if (opts.stdinText) child.stdin.write(opts.stdinText);
-        else child.kill("SIGTERM");
-      }
-    });
-
-    child.on("close", (code) => finish(code ?? 1));
-    child.on("error", (err) => {
-      stderr += `\nspawn error: ${err.message}`;
-      finish(1);
-    });
-
-    // Safety timeout
-    const timeout = opts.timeoutMs ?? 120_000;
-    setTimeout(() => {
-      if (!resolved) {
-        child.kill("SIGKILL");
-        finish(-1);
-      }
-    }, timeout);
-  });
-}
-
 // ===================================================================
 //  1. FRESH INSTALL SIMULATION
 // ===================================================================
@@ -403,7 +328,7 @@ describe("Fresh Install Simulation", () => {
     try {
       await execFileAsync(
         "sh",
-        ["-c", `node ${cliEntryPath} --help > ${outPath} 2>&1`],
+        ["-c", `bun ${cliEntryPath} --help > ${outPath} 2>&1`],
         { timeout: 30_000 },
       );
     } catch {
@@ -440,6 +365,10 @@ describe("Fresh Install Simulation", () => {
           name: "FreshInstallAgent",
           bio: ["A freshly installed test agent"],
           systemPrompt: "You are a test agent for E2E validation.",
+          connection: {
+            kind: "local-provider",
+            provider: "anthropic",
+          },
         },
       );
       expect(status).toBe(200);
@@ -499,7 +428,7 @@ describe("CLI Entry Point (npx miladyai equivalent)", () => {
     try {
       await execFileAsync(
         "sh",
-        ["-c", `node ${cliEntryPath} --version > ${outPath} 2>&1`],
+        ["-c", `bun ${cliEntryPath} --version > ${outPath} 2>&1`],
         { timeout: 30_000 },
       );
     } catch {
@@ -514,64 +443,7 @@ describe("CLI Entry Point (npx miladyai equivalent)", () => {
     expect(output).toMatch(/\d+\.\d+\.\d+/);
   }, 45_000);
 
-  it.skipIf(!hasModelProvider)(
-    "startEliza() boots, shows chat prompt, exits on 'exit'",
-    async () => {
-      const subHome = fs.mkdtempSync(
-        path.join(os.tmpdir(), "milady-e2e-cli-boot-"),
-      );
-      const subPglite = path.join(subHome, "pglite");
-      const subConfigDir = path.join(subHome, ".milady");
-      fs.mkdirSync(subConfigDir, { recursive: true });
-
-      // Write config so onboarding is skipped
-      fs.writeFileSync(
-        path.join(subConfigDir, "milady.json"),
-        JSON.stringify({
-          agents: {
-            list: [{ id: "main", name: "CLIBootAgent", bio: ["cli test"] }],
-          },
-        }),
-      );
-
-      const env: Record<string, string> = {};
-      for (const [k, v] of Object.entries(process.env)) {
-        if (v !== undefined) env[k] = v;
-      }
-      env.HOME = subHome;
-      env.USERPROFILE = subHome;
-      env.PGLITE_DATA_DIR = subPglite;
-      env.LOG_LEVEL = "warn";
-      env.XDG_CONFIG_HOME = path.join(subHome, ".config");
-      env.XDG_DATA_HOME = path.join(subHome, ".local/share");
-      env.XDG_STATE_HOME = path.join(subHome, ".local/state");
-      env.XDG_CACHE_HOME = path.join(subHome, ".cache");
-      env.MILADY_PORT = String(await reserveFreePort());
-      delete env.VITEST;
-
-      const result = await runSubprocess(
-        "node",
-        ["--import", "tsx", "src/runtime/eliza.ts"],
-        {
-          env,
-          timeoutMs: 150_000,
-          killAfter: "Chat with",
-          stdinText: "exit\n",
-        },
-      );
-
-      const allOutput = result.stdout + result.stderr;
-      expect(allOutput).toContain("Chat with");
-
-      // Cleanup
-      try {
-        fs.rmSync(subHome, { recursive: true, force: true });
-      } catch {
-        /* ignore */
-      }
-    },
-    180_000,
-  );
+  it.skip("startEliza() boots, shows chat prompt, exits on 'exit' (covered by test/agent-runtime.e2e.test.ts)", () => {});
 });
 
 // ===================================================================
@@ -625,7 +497,7 @@ describe("Plugin Stress Test", () => {
     "@elizaos/plugin-discord",
     "@elizaos/plugin-telegram",
     "@elizaos/plugin-slack",
-    "@milady/plugin-whatsapp",
+    "@miladyai/plugin-whatsapp",
     "@elizaos/plugin-signal",
     "@elizaos/plugin-imessage",
     "@elizaos/plugin-bluebubbles",
@@ -1418,17 +1290,21 @@ describe("Runtime Integration (with model provider)", () => {
   afterAll(async () => {
     if (server) {
       try {
-        await server.close();
-      } catch {
-        /* ignore */
+        await withTimeout(server.close(), 30_000, "server.close()");
+      } catch (err) {
+        logger.warn(
+          `[e2e-validation] server.close cleanup failed: ${errorMessage(err)}`,
+        );
       }
     }
     if (runtime) {
       try {
         runtime.enableAutonomy = false;
-        await runtime.stop();
-      } catch {
-        /* ignore */
+        await withTimeout(runtime.stop(), 90_000, "runtime.stop()");
+      } catch (err) {
+        logger.warn(
+          `[e2e-validation] runtime.stop cleanup failed: ${errorMessage(err)}`,
+        );
       }
     }
     try {
@@ -1436,7 +1312,7 @@ describe("Runtime Integration (with model provider)", () => {
     } catch {
       /* ignore */
     }
-  }, 30_000);
+  }, 150_000);
 
   it.skipIf(!hasModelProvider)("runtime initializes with all plugins", () => {
     expect(initialized).toBe(true);

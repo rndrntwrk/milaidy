@@ -16,8 +16,10 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  patchAgentSkillsCatalogFetch,
   patchBunExports,
   patchExtensionlessJsExports,
+  patchMissingLifecycleScript,
   patchNobleHashesCompat,
   patchProperLockfileSignalExitCompat,
 } from "./lib/patch-bun-exports.mjs";
@@ -30,6 +32,13 @@ const root = resolve(__dirname, "..");
 // Logic lives in scripts/lib/patch-bun-exports.mjs (testable).
 // ---------------------------------------------------------------------------
 patchBunExports(root, "@elizaos/plugin-coding-agent");
+patchMissingLifecycleScript(
+  root,
+  "@elizaos/plugin-agent-orchestrator",
+  "postinstall",
+  "./scripts/ensure-node-pty.mjs",
+);
+patchAgentSkillsCatalogFetch(root);
 
 // @noble/curves and @noble/hashes publish ".js" subpath exports, while ethers
 // imports extensionless paths like "@noble/curves/secp256k1" and
@@ -42,6 +51,124 @@ patchExtensionlessJsExports(root, "@noble/curves");
 patchExtensionlessJsExports(root, "@noble/hashes");
 patchNobleHashesCompat(root);
 patchProperLockfileSignalExitCompat(root);
+
+/**
+ * Patch @elizaos/core synthetic action/reply chat messages.
+ *
+ * The published core runtime currently persists internal action bookkeeping as
+ * normal conversation memories, which shows up in Milady chat as:
+ *   - "Generated reply: ..."
+ *   - "Executed action: ..."
+ *
+ * Milady already surfaces the real assistant reply and the avatar side effects,
+ * so these extra messages duplicate the turn and clutter chat history. We keep
+ * the action results in runtime state/logs, but stop emitting them as
+ * user-facing chat memories.
+ */
+function findAllElizaCoreBundleFiles() {
+  const targets = [];
+  const relPaths = [
+    "dist/index.node.js",
+    "dist/index.browser.js",
+    "dist/index.js",
+    "dist/testing/index.js",
+    "dist/browser/index.browser.js",
+    "dist/node/index.node.js",
+  ];
+  const searchRoots = [root, resolve(root, "apps/app")];
+
+  for (const searchRoot of searchRoots) {
+    for (const relPath of relPaths) {
+      const npmTarget = resolve(
+        searchRoot,
+        `node_modules/@elizaos/core/${relPath}`,
+      );
+      if (existsSync(npmTarget) && !targets.includes(npmTarget)) {
+        targets.push(npmTarget);
+      }
+    }
+
+    const bunCacheDir = resolve(searchRoot, "node_modules/.bun");
+    if (!existsSync(bunCacheDir)) continue;
+
+    try {
+      const entries = readdirSync(bunCacheDir);
+      for (const entry of entries) {
+        if (!entry.startsWith("@elizaos+core@")) continue;
+        for (const relPath of relPaths) {
+          const bunTarget = resolve(
+            bunCacheDir,
+            entry,
+            `node_modules/@elizaos/core/${relPath}`,
+          );
+          if (existsSync(bunTarget) && !targets.includes(bunTarget)) {
+            targets.push(bunTarget);
+          }
+        }
+      }
+    } catch {
+      // Ignore bun cache traversal errors.
+    }
+  }
+
+  return targets;
+}
+
+const elizaCoreBundleTargets = findAllElizaCoreBundleFiles();
+const coreGeneratedReplyPattern =
+  /text:\s*`Generated reply: \${[$A-Za-z_][\w$]*\.text}`,/g;
+const coreActionMemoryPattern =
+  /const ([$A-Za-z_][\w$]*) = \{\s*id: ([$A-Za-z_][\w$]*),\s*entityId: this\.agentId,\s*roomId: ([$A-Za-z_][\w$]*)\.roomId,\s*worldId: \3\.worldId,\s*content: \{\s*text: ([$A-Za-z_][\w$]*)\?\.text \|\| `Executed action: \$\{([$A-Za-z_][\w$]*)\.name\}`,\s*source: "action"\s*\}\s*\};\s*await this\.createMemory\(\1, "messages"\);/g;
+
+if (elizaCoreBundleTargets.length === 0) {
+  console.log(
+    "[patch-deps] @elizaos/core bundle not found, skipping chat patch.",
+  );
+} else {
+  console.log(
+    `[patch-deps] Found ${elizaCoreBundleTargets.length} @elizaos/core bundle file(s) to patch.`,
+  );
+
+  for (const target of elizaCoreBundleTargets) {
+    console.log(`[patch-deps] Patching @elizaos/core chat bundle: ${target}`);
+    let src = readFileSync(target, "utf8");
+    const original = src;
+
+    src = src.replace(coreGeneratedReplyPattern, 'text: "",');
+    src = src.replace(
+      coreActionMemoryPattern,
+      (_match, memoryVar, actionIdVar, messageVar, actionResultVar) =>
+        [
+          `const actionText = typeof ${actionResultVar}?.text === "string" ? ${actionResultVar}.text.trim() : "";`,
+          "        if (actionText) {",
+          `          const ${memoryVar} = {`,
+          `            id: ${actionIdVar},`,
+          "            entityId: this.agentId,",
+          `            roomId: ${messageVar}.roomId,`,
+          `            worldId: ${messageVar}.worldId,`,
+          "            content: {",
+          "              text: actionText,",
+          '              source: "action"',
+          "            }",
+          "          };",
+          `          await this.createMemory(${memoryVar}, "messages");`,
+          "        }",
+        ].join("\n"),
+    );
+
+    if (src === original) {
+      console.log(
+        "  - @elizaos/core chat patch already present or signature changed.",
+      );
+      continue;
+    }
+
+    writeFileSync(target, src, "utf8");
+    console.log(
+      "  - Applied @elizaos/core chat patch (no synthetic action/reply messages).",
+    );
+  }
+}
 
 /**
  * Patch @pixiv/three-vrm node-material helpers for Three r168+.

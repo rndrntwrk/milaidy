@@ -27,13 +27,13 @@ vi.mock("node:fs", () => {
       existsSync: existsSyncFn,
       mkdirSync: vi.fn(),
       appendFileSync: vi.fn(),
-      readdirSync: vi.fn(() => ["server.js"]),
+      readdirSync: vi.fn(() => ["entry.js"]),
       rmSync: rmSyncFn,
     },
     existsSync: existsSyncFn,
     mkdirSync: vi.fn(),
     appendFileSync: vi.fn(),
-    readdirSync: vi.fn(() => ["server.js"]),
+    readdirSync: vi.fn(() => ["entry.js"]),
     rmSync: rmSyncFn,
   };
 });
@@ -103,7 +103,11 @@ function createMockProcess(
           c.close();
         },
       }),
-    kill: overrides.kill ?? vi.fn(),
+    kill:
+      overrides.kill ??
+      vi.fn(() => {
+        exitDeferred.resolve(0);
+      }),
     _exitDeferred: exitDeferred,
   };
 }
@@ -118,6 +122,13 @@ function makeReadableStream(text: string) {
   });
 }
 
+function makeHealthyResponse() {
+  return {
+    ok: true,
+    json: async () => ({ ready: true }),
+  };
+}
+
 /** Get the mocked fs.existsSync function to configure behavior per-test */
 async function getExistsSyncMock(): Promise<Mock> {
   const fs = await import("node:fs");
@@ -127,7 +138,11 @@ async function getExistsSyncMock(): Promise<Mock> {
 // ---------------------------------------------------------------------------
 // Import AFTER mocks
 // ---------------------------------------------------------------------------
-import { AgentManager, getMiladyDistFallbackCandidates } from "../native/agent";
+import {
+  AgentManager,
+  getHealthPollTimeoutMs,
+  getMiladyDistFallbackCandidates,
+} from "../native/agent";
 
 describe("AgentManager", () => {
   let manager: AgentManager;
@@ -142,7 +157,7 @@ describe("AgentManager", () => {
       configurable: true,
       value: ORIGINAL_PLATFORM,
     });
-    // Default: all filesystem checks return true (dist exists, server.js exists, etc.)
+    // Default: all filesystem checks return true (dist exists, entry.js exists, etc.)
     const existsSync = await getExistsSyncMock();
     existsSync.mockReturnValue(true);
     manager = new AgentManager();
@@ -202,7 +217,23 @@ describe("AgentManager", () => {
     });
   });
 
-  afterEach(() => {
+  describe("getHealthPollTimeoutMs()", () => {
+    it("defaults to a longer startup timeout on Windows", () => {
+      expect(getHealthPollTimeoutMs({}, "win32")).toBe(240_000);
+      expect(getHealthPollTimeoutMs({}, "darwin")).toBe(120_000);
+    });
+
+    it("honors MILADY_AGENT_HEALTH_TIMEOUT_MS when set", () => {
+      expect(
+        getHealthPollTimeoutMs(
+          { MILADY_AGENT_HEALTH_TIMEOUT_MS: "300000" },
+          "win32",
+        ),
+      ).toBe(300_000);
+    });
+  });
+
+  afterEach(async () => {
     vi.useRealTimers();
     Object.defineProperty(process, "execPath", {
       configurable: true,
@@ -212,7 +243,7 @@ describe("AgentManager", () => {
       configurable: true,
       value: ORIGINAL_PLATFORM,
     });
-    manager.dispose();
+    await manager.dispose();
   });
 
   describe("initial state", () => {
@@ -252,7 +283,7 @@ describe("AgentManager", () => {
       expect(states[0]).toBe("starting");
     });
 
-    it("transitions to error when no runnable eliza entry exists", async () => {
+    it("transitions to error when no runnable runtime entry exists", async () => {
       const existsSync = await getExistsSyncMock();
       existsSync.mockImplementation((p: string) => {
         if (typeof p === "string" && p === MOCK_DIST_PATH) return true;
@@ -261,7 +292,44 @@ describe("AgentManager", () => {
 
       const status = await manager.start();
       expect(status.state).toBe("error");
-      expect(status.error).toContain("No runnable eliza entry found");
+      expect(status.error).toContain("No runnable runtime entry found");
+      expect(status.error).toContain("checked entry.js");
+    });
+
+    it("rejects embedded startup in external mode", async () => {
+      const originalApiBase = process.env.MILADY_DESKTOP_API_BASE;
+      process.env.MILADY_DESKTOP_API_BASE = "https://api.milady.ai";
+
+      try {
+        await expect(manager.start()).rejects.toThrow(
+          /Embedded desktop runtime is disabled because MILADY_DESKTOP_API_BASE points at https:\/\/api\.milady\.ai/,
+        );
+        expect(mockSpawn).not.toHaveBeenCalled();
+      } finally {
+        if (originalApiBase === undefined) {
+          delete process.env.MILADY_DESKTOP_API_BASE;
+        } else {
+          process.env.MILADY_DESKTOP_API_BASE = originalApiBase;
+        }
+      }
+    });
+
+    it("rejects embedded startup in disabled mode", async () => {
+      const originalSkip = process.env.MILADY_DESKTOP_SKIP_EMBEDDED_AGENT;
+      process.env.MILADY_DESKTOP_SKIP_EMBEDDED_AGENT = "1";
+
+      try {
+        await expect(manager.start()).rejects.toThrow(
+          /Embedded desktop runtime is disabled by MILADY_DESKTOP_SKIP_EMBEDDED_AGENT=1/,
+        );
+        expect(mockSpawn).not.toHaveBeenCalled();
+      } finally {
+        if (originalSkip === undefined) {
+          delete process.env.MILADY_DESKTOP_SKIP_EMBEDDED_AGENT;
+        } else {
+          process.env.MILADY_DESKTOP_SKIP_EMBEDDED_AGENT = originalSkip;
+        }
+      }
     });
 
     it("is idempotent when already running", async () => {
@@ -269,7 +337,7 @@ describe("AgentManager", () => {
       mockSpawn.mockReturnValue(mockProc);
 
       // Health check to succeed
-      mockFetch.mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
       // Agent name fetch
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -285,11 +353,11 @@ describe("AgentManager", () => {
       expect(mockSpawn).toHaveBeenCalledTimes(1);
     });
 
-    it("spawns bun process with the root eliza entry when present", async () => {
+    it("spawns bun process with the canonical runtime entry when present", async () => {
       const mockProc = createMockProcess();
       mockSpawn.mockReturnValue(mockProc);
 
-      mockFetch.mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ agents: [{ name: "Milady" }] }),
@@ -305,38 +373,10 @@ describe("AgentManager", () => {
       expect(mockSpawn).toHaveBeenCalledTimes(1);
       const spawnArgs = mockSpawn.mock.calls[0];
       expect(spawnArgs[0][1]).toBe("run");
-      expect(spawnArgs[0][2]).toBe("/mock/milady-dist/eliza.js");
+      expect(spawnArgs[0][2]).toBe("/mock/milady-dist/entry.js");
+      expect(spawnArgs[0][3]).toBe("start");
       // cwd should be the dist path
       expect(spawnArgs[1].cwd).toBe(MOCK_DIST_PATH);
-    });
-
-    it("falls back to runtime/eliza.js for packaged layouts without a root entry", async () => {
-      const existsSync = await getExistsSyncMock();
-      existsSync.mockImplementation((p: string) => {
-        if (p === MOCK_DIST_PATH) return true;
-        if (typeof p === "string" && p.endsWith("/runtime/eliza.js"))
-          return true;
-        if (typeof p === "string" && p.endsWith("/eliza.js")) return false;
-        return false;
-      });
-
-      const mockProc = createMockProcess();
-      mockSpawn.mockReturnValue(mockProc);
-
-      mockFetch.mockResolvedValueOnce({ ok: true });
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ agents: [{ name: "Milady" }] }),
-      });
-
-      await manager.start();
-
-      expect(mockSpawn).toHaveBeenCalledWith(
-        [expect.any(String), "run", "/mock/milady-dist/runtime/eliza.js"],
-        expect.objectContaining({
-          cwd: MOCK_DIST_PATH,
-        }),
-      );
     });
 
     it("uses the bundled Bun executable for installed app launches", async () => {
@@ -348,7 +388,7 @@ describe("AgentManager", () => {
       const mockProc = createMockProcess();
       mockSpawn.mockReturnValue(mockProc);
 
-      mockFetch.mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ agents: [{ name: "Milady" }] }),
@@ -360,7 +400,8 @@ describe("AgentManager", () => {
         [
           "/Applications/Milady-canary.app/Contents/MacOS/bun",
           "run",
-          "/mock/milady-dist/eliza.js",
+          "/mock/milady-dist/entry.js",
+          "start",
         ],
         expect.objectContaining({
           cwd: MOCK_DIST_PATH,
@@ -390,7 +431,7 @@ describe("AgentManager", () => {
             return true;
           if (
             typeof candidate === "string" &&
-            candidate.endsWith("/eliza.js")
+            candidate.endsWith("/entry.js")
           ) {
             return true;
           }
@@ -400,7 +441,7 @@ describe("AgentManager", () => {
         const mockProc = createMockProcess();
         mockSpawn.mockReturnValue(mockProc);
 
-        mockFetch.mockResolvedValueOnce({ ok: true });
+        mockFetch.mockResolvedValueOnce(makeHealthyResponse());
         mockFetch.mockResolvedValueOnce({
           ok: true,
           json: async () => ({ agents: [{ name: "Milady" }] }),
@@ -412,7 +453,8 @@ describe("AgentManager", () => {
           [
             "/Users/test/AppData/Local/bun/bun.exe",
             "run",
-            "/mock/milady-dist/eliza.js",
+            "/mock/milady-dist/entry.js",
+            "start",
           ],
           expect.objectContaining({
             cwd: MOCK_DIST_PATH,
@@ -435,7 +477,7 @@ describe("AgentManager", () => {
         const mockProc = createMockProcess();
         mockSpawn.mockReturnValue(mockProc);
 
-        mockFetch.mockResolvedValueOnce({ ok: true });
+        mockFetch.mockResolvedValueOnce(makeHealthyResponse());
         mockFetch.mockResolvedValueOnce({
           ok: true,
           json: async () => ({ agents: [] }),
@@ -456,7 +498,7 @@ describe("AgentManager", () => {
       const mockProc = createMockProcess();
       mockSpawn.mockReturnValue(mockProc);
 
-      mockFetch.mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
       // Agent name fetch fails
       mockFetch.mockRejectedValueOnce(new Error("fetch failed"));
 
@@ -474,12 +516,12 @@ describe("AgentManager", () => {
       const mockProc2 = createMockProcess({ pid: 222 });
       mockSpawn.mockReturnValueOnce(mockProc1).mockReturnValueOnce(mockProc2);
 
-      mockFetch.mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ agents: [{ name: "Milady" }] }),
       });
-      mockFetch.mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ agents: [{ name: "Milady" }] }),
@@ -501,6 +543,33 @@ describe("AgentManager", () => {
 
       vi.useRealTimers();
     });
+
+    it("does not delete or restart when the PGLite data dir is actively locked", async () => {
+      const mockProc = createMockProcess({
+        pid: 111,
+        stderr: makeReadableStream(
+          "PGLite data dir is already in use at /mock/home/.milady/workspace/.eliza/.elizadb",
+        ),
+      });
+      mockSpawn.mockReturnValueOnce(mockProc);
+
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ agents: [{ name: "Milady" }] }),
+      });
+
+      const status = await manager.start();
+      expect(status.state).toBe("running");
+
+      mockProc._exitDeferred.resolve(1);
+      await Promise.resolve();
+
+      const fs = await import("node:fs");
+      expect(fs.default.rmSync).not.toHaveBeenCalled();
+      expect(mockSpawn).toHaveBeenCalledTimes(1);
+      expect(manager.getStatus().state).toBe("error");
+    });
   });
 
   describe("stop()", () => {
@@ -512,7 +581,7 @@ describe("AgentManager", () => {
     it("transitions from running to stopped", async () => {
       const mockProc = createMockProcess();
       mockSpawn.mockReturnValue(mockProc);
-      mockFetch.mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ agents: [{ name: "TestAgent" }] }),
@@ -534,7 +603,7 @@ describe("AgentManager", () => {
     it("sends SIGTERM to the child process", async () => {
       const mockProc = createMockProcess();
       mockSpawn.mockReturnValue(mockProc);
-      mockFetch.mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ agents: [] }),
@@ -552,7 +621,7 @@ describe("AgentManager", () => {
     it("is a no-op when already stopped", async () => {
       const mockProc = createMockProcess();
       mockSpawn.mockReturnValue(mockProc);
-      mockFetch.mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ agents: [] }),
@@ -576,7 +645,7 @@ describe("AgentManager", () => {
       mockSpawn.mockReturnValueOnce(mockProc1).mockReturnValueOnce(mockProc2);
 
       // First start
-      mockFetch.mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ agents: [{ name: "Agent1" }] }),
@@ -589,7 +658,7 @@ describe("AgentManager", () => {
       mockProc1._exitDeferred.resolve(0);
 
       // Restart: health check and agent name for new process
-      mockFetch.mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ agents: [{ name: "Agent2" }] }),
@@ -618,10 +687,10 @@ describe("AgentManager", () => {
         messages.push({ message, payload });
       });
 
-      // Make server.js not found for quick error path
+      // Make entry.js not found for quick error path
       const existsSync = await getExistsSyncMock();
       existsSync.mockImplementation((p: string) => {
-        if (typeof p === "string" && p.endsWith("server.js")) return false;
+        if (typeof p === "string" && p.endsWith("entry.js")) return false;
         if (p === MOCK_DIST_PATH) return true;
         return false;
       });
@@ -644,7 +713,7 @@ describe("AgentManager", () => {
 
       const existsSync = await getExistsSyncMock();
       existsSync.mockImplementation((p: string) => {
-        if (typeof p === "string" && p.endsWith("server.js")) return false;
+        if (typeof p === "string" && p.endsWith("entry.js")) return false;
         if (p === MOCK_DIST_PATH) return true;
         return false;
       });

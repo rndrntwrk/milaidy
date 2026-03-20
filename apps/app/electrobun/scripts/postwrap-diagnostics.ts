@@ -5,6 +5,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import electrobunConfig from "../electrobun.config";
+import {
+  shouldApplyLocalAdhocSigning,
+  signLocalAppBundle,
+} from "./local-adhoc-sign-macos";
+
 type BinaryReport = {
   exists: boolean;
   name: string;
@@ -245,16 +251,30 @@ function collectArchiveReports(resourcesDir: string): ArchiveReport[] {
     });
 }
 
-function main(): void {
-  const env = process.env;
+export function main(
+  args = process.argv.slice(2),
+  env: NodeJS.ProcessEnv = process.env,
+): void {
   const osName = env.ELECTROBUN_OS?.trim() || process.platform;
   const arch = env.ELECTROBUN_ARCH?.trim() || process.arch;
-  const wrapperBundlePath = resolveWrapperBundlePath([], env);
+  const wrapperBundlePath = resolveWrapperBundlePath(args, env);
   const { binaryDir, resourcesDir } = resolveBundleLayout(
     wrapperBundlePath,
     osName,
   );
   const outputPath = resolveDiagnosticsOutputPath(wrapperBundlePath, env);
+
+  if (shouldApplyLocalAdhocSigning(env)) {
+    signLocalAppBundle({
+      appBundlePath: wrapperBundlePath,
+      entitlements: electrobunConfig.build.mac.entitlements,
+      expectedIdentifier: electrobunConfig.app.identifier,
+    });
+    console.log(
+      `[postwrap-diagnostics] applied local ad-hoc signing for ${wrapperBundlePath}`,
+    );
+  }
+
   const binaryNames =
     osName === "macos"
       ? [

@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BSC_WBNB_FALLBACK,
   buildBscApproveUnsignedTx,
@@ -14,6 +14,16 @@ const WALLET = "0x1111111111111111111111111111111111111111";
 const TOKEN = "0x55d398326f99059fF775485246999027B3197955";
 const NODE_REAL = "https://bsc-mainnet.nodereal.io/v1/test-key";
 const QUICK_NODE = "https://example-bsc.quiknode.pro/test-key";
+const ENV_KEYS = [
+  "NODEREAL_BSC_RPC_URL",
+  "QUICKNODE_BSC_RPC_URL",
+  "BSC_RPC_URL",
+  "ELIZAOS_CLOUD_API_KEY",
+  "ELIZAOS_CLOUD_BASE_URL",
+] as const;
+const ORIGINAL_ENV = Object.fromEntries(
+  ENV_KEYS.map((key) => [key, process.env[key]]),
+) as Record<(typeof ENV_KEYS)[number], string | undefined>;
 
 const ROUTER_IFACE = new ethers.Interface([
   "function WETH() view returns (address)",
@@ -37,7 +47,21 @@ function decodeMethod(init: RequestInit | undefined): {
   };
 }
 
+beforeEach(() => {
+  for (const key of ENV_KEYS) {
+    delete process.env[key];
+  }
+});
+
 afterEach(() => {
+  for (const key of ENV_KEYS) {
+    const value = ORIGINAL_ENV[key];
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
   vi.restoreAllMocks();
 });
 
@@ -107,6 +131,103 @@ describe("bsc-trade preflight", () => {
     expect(result.rpcUrlHost).toContain("quiknode.pro");
     expect(result.chainId).toBe(56);
     expect(result.checks.gasReady).toBe(true);
+  });
+
+  it("uses cloud-managed fallback RPCs when no explicit BSC RPC is configured", async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const { method } = decodeMethod(init);
+        if (method === "eth_chainId") {
+          return new Response(
+            JSON.stringify({ jsonrpc: "2.0", id: 1, result: "0x38" }),
+          );
+        }
+        if (method === "eth_getBalance") {
+          return new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              result: `0x${ethers.parseEther("0.02").toString(16)}`,
+            }),
+          );
+        }
+        if (method === "eth_getCode") {
+          return new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              result: "0x60006000",
+            }),
+          );
+        }
+        return new Response(
+          JSON.stringify({ jsonrpc: "2.0", id: 1, result: "0x1" }),
+        );
+      },
+    );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const result = await buildBscTradePreflight({
+      walletAddress: WALLET,
+      tokenAddress: TOKEN,
+      cloudManagedAccess: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.checks.rpcReady).toBe(true);
+    expect(result.rpcUrlHost).toBe("bsc-dataseed1.binance.org");
+  });
+
+  it("prefers the cloud BSC RPC proxy when cloud credentials are available", async () => {
+    process.env.ELIZAOS_CLOUD_API_KEY = "ck-test";
+    process.env.ELIZAOS_CLOUD_BASE_URL = "https://cloud.example";
+
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const { method } = decodeMethod(init);
+        if (method === "eth_chainId") {
+          return new Response(
+            JSON.stringify({ jsonrpc: "2.0", id: 1, result: "0x38" }),
+          );
+        }
+        if (method === "eth_getBalance") {
+          return new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              result: `0x${ethers.parseEther("0.02").toString(16)}`,
+            }),
+          );
+        }
+        if (method === "eth_getCode") {
+          return new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              result: "0x60006000",
+            }),
+          );
+        }
+        return new Response(
+          JSON.stringify({ jsonrpc: "2.0", id: 1, result: "0x1" }),
+        );
+      },
+    );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const result = await buildBscTradePreflight({
+      walletAddress: WALLET,
+      tokenAddress: TOKEN,
+      cloudManagedAccess: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.checks.rpcReady).toBe(true);
+    expect(result.rpcUrlHost).toBe("cloud.example");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://cloud.example/api/v1/proxy/evm-rpc/bsc?api_key=ck-test",
+      expect.any(Object),
+    );
   });
 });
 

@@ -14,7 +14,7 @@
  * - SIGNAL_CLI_PATH: Path to signal-cli binary (alternative to HTTP API)
  * - MILADY_LIVE_TEST=1: Enable live tests (MILAIDY_LIVE_TEST also supported)
  *
- * @see https://github.com/milady-ai/milaidy/issues/148
+ * @see https://github.com/milady-ai/milady/issues/148
  */
 
 import { describe, expect, it } from "vitest";

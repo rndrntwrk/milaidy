@@ -3,7 +3,7 @@
  *
  * Maps each RPC request method from MiladyRPCSchema.bun.requests
  * to the corresponding native module method. This is the Bun-side
- * equivalent of Electron's ipcMain.handle() registration.
+ * equivalent of main-process request handler registration.
  *
  * Called once during app startup after the BrowserView is created.
  */
@@ -12,6 +12,10 @@ import { Updater } from "electrobun/bun";
 import { getAgentManager } from "./native/agent";
 import { getCameraManager } from "./native/camera";
 import { getCanvasManager } from "./native/canvas";
+import {
+  scanAndValidateProviderCredentials,
+  scanProviderCredentials,
+} from "./native/credentials";
 import { getDesktopManager } from "./native/desktop";
 import { getGatewayDiscovery } from "./native/gateway";
 import { getGpuWindowManager } from "./native/gpu-window";
@@ -20,10 +24,6 @@ import { getPermissionManager } from "./native/permissions";
 import { getScreenCaptureManager } from "./native/screencapture";
 import { getSwabbleManager } from "./native/swabble";
 import { getTalkModeManager } from "./native/talkmode";
-import type { PipState } from "./rpc-schema";
-
-// PiP state (simple in-memory store — no dedicated manager needed)
-let pipState: PipState = { enabled: false };
 
 /** Push current OS permission states to the agent REST API in-process. */
 async function syncPermissionsToRestApi(): Promise<void> {
@@ -176,6 +176,9 @@ export function registerRpcHandlers(
     desktopGetPath: async (params: Parameters<typeof desktop.getPath>[0]) =>
       desktop.getPath(params),
     desktopBeep: async () => desktop.beep(),
+    desktopOpenSettingsWindow: async () => {
+      desktop.openSettings();
+    },
 
     // ---- Desktop: Screen ----
     desktopGetPrimaryDisplay: async () => desktop.getPrimaryDisplay(),
@@ -348,8 +351,8 @@ export function registerRpcHandlers(
       params: Parameters<typeof screencapture.switchSource>[0],
     ) => screencapture.switchSource(params),
     screencaptureSetCaptureTarget: async (_params: unknown) => {
-      // Revert to main webview. Popout windows call setCaptureTarget(win.webview)
-      // directly on the Bun side when they open.
+      // Legacy compatibility hook. Native frame capture now targets the app
+      // window directly, so renderer-side capture target overrides are inert.
       screencapture.setCaptureTarget(null);
       return { available: true };
     },
@@ -401,15 +404,24 @@ export function registerRpcHandlers(
       sendToWebview("contextMenu:saveAsCommand", { text: params.text });
     },
 
-    // ---- LIFO (PiP) ----
-    lifoGetPipState: async () => pipState,
-    lifoSetPip: async (params: PipState) => {
-      pipState = params;
-      if (params.enabled) {
-        desktop.setAlwaysOnTop({ flag: true });
-      } else {
-        desktop.setAlwaysOnTop({ flag: false });
+    // ---- Credentials Auto-Detection ----
+    credentialsScanProviders: async (params?: { context?: string }) => {
+      if (
+        !params?.context ||
+        !["onboarding", "tray-refresh"].includes(params.context)
+      ) {
+        throw new Error("credentials:scanProviders requires a valid context");
       }
+      return { providers: await scanProviderCredentials() };
+    },
+    credentialsScanAndValidate: async (params?: { context?: string }) => {
+      if (
+        !params?.context ||
+        !["onboarding", "tray-refresh"].includes(params.context)
+      ) {
+        throw new Error("credentialsScanAndValidate requires a valid context");
+      }
+      return { providers: await scanAndValidateProviderCredentials() };
     },
 
     // ---- GPU Window ----

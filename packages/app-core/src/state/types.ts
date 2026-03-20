@@ -46,6 +46,7 @@ import type {
   WalletAddresses,
   WalletBalancesResponse,
   WalletConfigStatus,
+  WalletConfigUpdateRequest,
   WalletExportResult,
   WalletNftsResponse,
   WalletTradingProfileResponse,
@@ -56,16 +57,33 @@ import type {
 } from "../api/client";
 import type { UiLanguage } from "../i18n";
 import type { Tab } from "../navigation";
+import type { UiShellMode, UiTheme } from "./ui-preferences";
 
-export type UiShellMode = "companion" | "native";
+export type { UiShellMode } from "./ui-preferences";
+export type ShellView = "companion" | "character" | "desktop";
 
 export type OnboardingStep =
   | "wakeUp"
-  | "language"
   | "identity"
   | "connection"
+  | "rpc"
   | "senses"
   | "activate";
+
+export type StartupStatus =
+  | "loading"
+  | "onboarding"
+  | "ready"
+  | "auth-blocked"
+  | "recoverable-error";
+
+export type OnboardingMode = "basic" | "advanced";
+
+export type FlaminaGuideTopic =
+  | "provider"
+  | "rpc"
+  | "permissions"
+  | "voice";
 
 export interface OnboardingStepMeta {
   id: OnboardingStep;
@@ -74,16 +92,41 @@ export interface OnboardingStepMeta {
 }
 
 export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
-  { id: "wakeUp", name: "Initialize", subtitle: "System boot" },
-  { id: "language", name: "Language", subtitle: "Communication" },
-  { id: "identity", name: "Identity", subtitle: "Designation" },
-  { id: "connection", name: "Connect", subtitle: "Neural link" },
-  { id: "senses", name: "Access", subtitle: "System permissions" },
-  { id: "activate", name: "Launch", subtitle: "Ready" },
+  {
+    id: "wakeUp",
+    name: "onboarding.stepName.wakeUp",
+    subtitle: "onboarding.stepSub.wakeUp",
+  },
+  {
+    id: "identity",
+    name: "onboarding.stepName.identity",
+    subtitle: "onboarding.stepSub.identity",
+  },
+  {
+    id: "connection",
+    name: "onboarding.connect",
+    subtitle: "onboarding.stepSub.connection",
+  },
+  {
+    id: "rpc",
+    name: "onboarding.stepName.rpc",
+    subtitle: "onboarding.stepSub.rpc",
+  },
+  {
+    id: "senses",
+    name: "onboarding.stepName.senses",
+    subtitle: "onboarding.stepSub.senses",
+  },
+  {
+    id: "activate",
+    name: "onboarding.stepName.activate",
+    subtitle: "onboarding.readyTitle",
+  },
 ];
 
 export interface OnboardingNextOptions {
   allowPermissionBypass?: boolean;
+  skipTask?: FlaminaGuideTopic;
 }
 
 export const ONBOARDING_PERMISSION_LABELS: Record<SystemPermissionId, string> =
@@ -100,13 +143,7 @@ export interface ActionNotice {
   text: string;
 }
 
-export type LifecycleAction =
-  | "start"
-  | "stop"
-  | "pause"
-  | "resume"
-  | "restart"
-  | "reset";
+export type LifecycleAction = "start" | "stop" | "restart" | "reset";
 
 export const LIFECYCLE_MESSAGES: Record<
   LifecycleAction,
@@ -129,18 +166,7 @@ export const LIFECYCLE_MESSAGES: Record<
     success: "Agent stopped.",
     verb: "stop",
   },
-  pause: {
-    inProgress: "pausing",
-    progress: "Pausing agent...",
-    success: "Agent paused.",
-    verb: "pause",
-  },
-  resume: {
-    inProgress: "resuming",
-    progress: "Resuming agent...",
-    success: "Agent resumed.",
-    verb: "resume",
-  },
+
   restart: {
     inProgress: "restarting",
     progress: "Restarting agent...",
@@ -161,7 +187,6 @@ export const AGENT_STATES: ReadonlySet<AgentStatus["state"]> = new Set([
   "not_started",
   "starting",
   "running",
-  "paused",
   "stopped",
   "restarting",
   "error",
@@ -178,7 +203,8 @@ export type StartupErrorReason =
   | "backend-timeout"
   | "backend-unreachable"
   | "agent-timeout"
-  | "agent-error";
+  | "agent-error"
+  | "asset-missing";
 
 export interface StartupErrorState {
   reason: StartupErrorReason;
@@ -207,11 +233,13 @@ export interface AppState {
   tab: Tab;
   uiShellMode: UiShellMode;
   uiLanguage: UiLanguage;
+  uiTheme: UiTheme;
   connected: boolean;
   agentStatus: AgentStatus | null;
   onboardingComplete: boolean;
   onboardingLoading: boolean;
   startupPhase: StartupPhase;
+  startupStatus: StartupStatus;
   startupError: StartupErrorState | null;
   authRequired: boolean;
   actionNotice: ActionNotice | null;
@@ -253,9 +281,11 @@ export interface AppState {
   chatAvatarSpeaking: boolean;
   conversations: Conversation[];
   activeConversationId: string | null;
+  companionMessageCutoffTs: number;
   conversationMessages: ConversationMessage[];
   autonomousEvents: StreamEventEnvelope[];
   autonomousLatestEventId: string | null;
+  // biome-ignore lint/suspicious/noExplicitAny: app-core keeps this app-owned replay map structural without importing app-local types.
   autonomousRunHealthByRunId: Record<string, any>; // defined in autonomy-events.ts in app
   /** Active PTY coding agent sessions from the SwarmCoordinator. */
   ptySessions: CodingAgentSession[];
@@ -353,17 +383,18 @@ export interface AppState {
   customVrmUrl: string;
   customBackgroundUrl: string;
 
-  // Milady Cloud
-  miladyCloudEnabled: boolean;
-  miladyCloudConnected: boolean;
-  miladyCloudCredits: number | null;
-  miladyCloudCreditsLow: boolean;
-  miladyCloudCreditsCritical: boolean;
-  miladyCloudTopUpUrl: string;
-  miladyCloudUserId: string | null;
-  miladyCloudLoginBusy: boolean;
-  miladyCloudLoginError: string | null;
-  miladyCloudDisconnecting: boolean;
+  // Eliza Cloud
+  elizaCloudEnabled: boolean;
+  elizaCloudConnected: boolean;
+  elizaCloudCredits: number | null;
+  elizaCloudCreditsLow: boolean;
+  elizaCloudCreditsCritical: boolean;
+  elizaCloudTopUpUrl: string;
+  elizaCloudUserId: string | null;
+  cloudDashboardView: "billing" | "agents";
+  elizaCloudLoginBusy: boolean;
+  elizaCloudLoginError: string | null;
+  elizaCloudDisconnecting: boolean;
 
   // Updates
   updateStatus: UpdateStatus | null;
@@ -419,16 +450,32 @@ export interface AppState {
 
   // Onboarding
   onboardingStep: OnboardingStep;
+  onboardingMode: OnboardingMode;
+  onboardingActiveGuide: FlaminaGuideTopic | null;
+  onboardingDeferredTasks: FlaminaGuideTopic[];
+  postOnboardingChecklistDismissed: boolean;
   onboardingOptions: OnboardingOptions | null;
   onboardingName: string;
   onboardingOwnerName: string;
   onboardingStyle: string;
-  onboardingRunMode: "local-rawdog" | "local-sandbox" | "cloud" | "";
+  onboardingRunMode: "local" | "cloud" | "";
   onboardingCloudProvider: string;
   onboardingSmallModel: string;
   onboardingLargeModel: string;
   onboardingProvider: string;
   onboardingApiKey: string;
+  onboardingDetectedProviders: Array<{
+    id: string;
+    source: string;
+    apiKey?: string;
+    authMode?: string;
+    cliInstalled: boolean;
+  }>;
+  onboardingRemoteApiBase: string;
+  onboardingRemoteToken: string;
+  onboardingRemoteConnecting: boolean;
+  onboardingRemoteError: string | null;
+  onboardingRemoteConnected: boolean;
   onboardingOpenRouterModel: string;
   onboardingPrimaryModel: string;
   onboardingTelegramToken: string;
@@ -441,7 +488,7 @@ export interface AppState {
   onboardingBlooioPhoneNumber: string;
   onboardingGithubToken: string;
   onboardingSubscriptionTab: "token" | "oauth";
-  onboardingMiladyCloudTab: "login" | "apikey";
+  onboardingElizaCloudTab: "login" | "apikey";
   onboardingSelectedChains: Set<string>;
   onboardingRpcSelections: Record<string, string>;
   onboardingRpcKeys: Record<string, string>;
@@ -509,17 +556,22 @@ export interface AppActions {
   // Navigation
   setTab: (tab: Tab) => void;
   setUiShellMode: (mode: UiShellMode) => void;
+  switchUiShellMode: (mode: UiShellMode) => void;
+  switchShellView: (view: ShellView) => void;
   setUiLanguage: (language: UiLanguage) => void;
+  setUiTheme: (theme: UiTheme) => void;
 
   // Lifecycle
   handleStart: () => Promise<void>;
   handleStop: () => Promise<void>;
-  handlePauseResume: () => Promise<void>;
+
   handleRestart: () => Promise<void>;
   handleReset: () => Promise<void>;
   retryStartup: () => void;
   dismissRestartBanner: () => void;
+  showRestartBanner: () => void;
   triggerRestart: () => Promise<void>;
+  relaunchDesktop: () => Promise<void>;
   dismissBackendDisconnectedBanner: () => void;
   retryBackendConnection: () => void;
   restartBackend: () => Promise<void>;
@@ -529,7 +581,9 @@ export interface AppActions {
   handleChatSend: (channelType?: ConversationChannelType) => Promise<void>;
   handleChatStop: () => void;
   handleChatRetry: (assistantMsgId: string) => void;
+  handleChatEdit: (messageId: string, text: string) => Promise<boolean>;
   handleChatClear: () => Promise<void>;
+  handleStartDraftConversation: () => Promise<void>;
   handleNewConversation: (title?: string) => Promise<void>;
   setChatPendingImages: Dispatch<SetStateAction<ImageAttachment[]>>;
   handleSelectConversation: (id: string) => Promise<void>;
@@ -601,7 +655,7 @@ export interface AppActions {
     window?: WalletTradingProfileWindow,
     source?: WalletTradingProfileSourceFilter,
   ) => Promise<WalletTradingProfileResponse>;
-  handleWalletApiKeySave: (config: Record<string, string>) => Promise<void>;
+  handleWalletApiKeySave: (config: WalletConfigUpdateRequest) => Promise<void>;
   handleExportKeys: () => Promise<void>;
 
   // Registry / Drop
@@ -620,7 +674,7 @@ export interface AppActions {
     value: CharacterData[K],
   ) => void;
   handleCharacterArrayInput: (
-    field: "adjectives" | "topics" | "postExamples",
+    field: "adjectives" | "postExamples",
     value: string,
   ) => void;
   handleCharacterStyleInput: (
@@ -632,6 +686,8 @@ export interface AppActions {
   // Onboarding
   handleOnboardingNext: (options?: OnboardingNextOptions) => Promise<void>;
   handleOnboardingBack: () => void;
+  handleOnboardingRemoteConnect: () => Promise<void>;
+  handleOnboardingUseLocalBackend: () => void;
 
   // Cloud
   handleCloudLogin: () => Promise<void>;
@@ -669,6 +725,7 @@ export interface AppActions {
   copyToClipboard: (text: string) => Promise<void>;
 
   // Translations
+  // biome-ignore lint/suspicious/noExplicitAny: translation interpolation values are intentionally open-ended.
   t: (key: string, values?: Record<string, any>) => string;
 }
 

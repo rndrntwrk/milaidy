@@ -7,7 +7,7 @@
 -keep class com.getcapacitor.community.** { *; }
 
 # Milady custom plugins
--keep class ai.milaidy.plugins.** { *; }
+-keep class ai.milady.plugins.** { *; }
 -keep class ai.milady.app.** { *; }
 
 # WebView JavaScript interface

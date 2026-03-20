@@ -26,12 +26,32 @@ async function handleStopRoute(
   method: string,
   getService: (name: string) => unknown,
 ): Promise<RouteResult> {
+  const parseSessionId = (raw: string): string | null => {
+    let sessionId = "";
+    try {
+      sessionId = decodeURIComponent(raw);
+    } catch {
+      return null;
+    }
+    if (!sessionId || sessionId.includes("/") || sessionId.includes("..")) {
+      return null;
+    }
+    return sessionId;
+  };
+
   const stopMatch = pathname.match(/^\/api\/coding-agents\/([^/]+)\/stop$/);
   if (method !== "POST" || !stopMatch) {
     return { handled: false };
   }
 
-  const sessionId = decodeURIComponent(stopMatch[1]);
+  const sessionId = parseSessionId(stopMatch[1]);
+  if (!sessionId) {
+    return {
+      handled: true,
+      status: 400,
+      body: { error: "Invalid session ID" },
+    };
+  }
   const ptyService = getService("PTY_SERVICE") as PTYService | null;
 
   if (!ptyService?.stopSession) {
@@ -126,13 +146,18 @@ describe("POST /api/coding-agents/:sessionId/stop", () => {
     expect(result).toEqual({ handled: true, status: 200, body: { ok: true } });
   });
 
-  it("decodes URL-encoded session IDs", async () => {
-    await handleStopRoute(
+  it("rejects URL-encoded session IDs that decode to unsafe paths", async () => {
+    const result = await handleStopRoute(
       "/api/coding-agents/sess%201%2F2/stop",
       "POST",
       mockGetService,
     );
-    expect(mockStopSession).toHaveBeenCalledWith("sess 1/2");
+    expect(result).toEqual({
+      handled: true,
+      status: 400,
+      body: { error: "Invalid session ID" },
+    });
+    expect(mockStopSession).not.toHaveBeenCalled();
   });
 
   it("returns 500 when stopSession throws", async () => {

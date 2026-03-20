@@ -51,7 +51,7 @@ Version comparison uses the `compareSemver()` utility from `src/services/version
 - A positive number if the current version is newer
 - `null` if either version string is not valid semver
 
-Pre-release tags (e.g., `2.0.0-alpha.26`) are handled correctly per the semver specification.
+Pre-release tags (e.g., `2.0.0-alpha.87`) are handled correctly per the semver specification.
 
 ## Release Channels
 
@@ -250,14 +250,14 @@ Milady automatically detects how it was installed to determine the correct updat
 
 | Install Method | Detection Heuristic | Update Command |
 |---------------|--------------------|--------------------|
-| `npm-global` | Binary path contains `node_modules` | `npm install -g milaidy@<dist-tag>` |
-| `bun-global` | Binary path contains `/.bun/` | `bun install -g milaidy@<dist-tag>` |
+| `npm-global` | Binary path contains `node_modules` | `npm install -g miladyai@<dist-tag>` |
+| `bun-global` | Binary path contains `/.bun/` | `bun install -g miladyai@<dist-tag>` |
 | `homebrew` | Binary path contains `/Cellar/` or `/homebrew/` | `brew upgrade milady` |
 | `snap` | Binary path contains `/snap/` | `sudo snap refresh milady --channel=<channel>` |
 | `apt` | Binary path starts with `/usr/` (no `node_modules`) | `sudo apt-get update && sudo apt-get install --only-upgrade -y milady` |
 | `flatpak` | Binary path contains `/flatpak/` or `ai.milady.Milady` | `flatpak update ai.milady.Milady` |
 | `local-dev` | `devDependencies` found in root `package.json` | Not supported -- use `git pull` |
-| `unknown` | Fallback when no heuristic matches | `npm install -g milaidy@<dist-tag>` (fallback) |
+| `unknown` | Fallback when no heuristic matches | `npm install -g miladyai@<dist-tag>` (fallback) |
 
 If `which milady` returns nothing (binary not in PATH), the detection falls back to checking whether the current directory is a local development checkout (by looking for `devDependencies` in the root `package.json`).
 
@@ -278,9 +278,9 @@ For Snap installations, the channel mapping differs slightly: `nightly` maps to 
 The `buildUpdateCommand()` function takes the detected install method and target channel, then returns the appropriate shell command and arguments. For npm and bun installs, the version specifier uses the channel's dist-tag:
 
 ```
-milaidy@latest     (stable channel)
-milaidy@beta       (beta channel)
-milaidy@nightly    (nightly channel)
+miladyai@latest     (stable channel)
+miladyai@beta       (beta channel)
+miladyai@nightly    (nightly channel)
 ```
 
 For Homebrew, the command is simply `brew upgrade milady` (Homebrew manages version resolution internally). The `apt` case wraps the update in `sh -c` since it requires two sequential commands.
@@ -352,7 +352,7 @@ To pin Milady to a specific version and prevent automatic updates:
 
 ```bash
 # Install a specific version
-npm install -g milaidy@2.0.0-alpha.26
+npm install -g miladyai@2.0.0-alpha.26
 
 # Disable automatic update checks
 milady config set update.checkOnStart false
@@ -362,10 +362,10 @@ For package-manager-specific pinning:
 
 ```bash
 # npm: exact version
-npm install -g milaidy@2.0.0
+npm install -g miladyai@2.0.0
 
 # bun: exact version
-bun install -g milaidy@2.0.0
+bun install -g miladyai@2.0.0
 ```
 
 The `--force` flag on `milady update` bypasses the interval cache but still respects the configured channel. It does not bypass version pinning at the package manager level.
@@ -376,10 +376,10 @@ Milady does not have a built-in rollback command, but you can revert to a previo
 
 ```bash
 # npm: install a specific older version
-npm install -g milaidy@2.0.0-alpha.25
+npm install -g miladyai@2.0.0-alpha.25
 
 # bun: install a specific older version
-bun install -g milaidy@2.0.0-alpha.25
+bun install -g miladyai@2.0.0-alpha.25
 
 # Verify the rollback
 milady --version
@@ -448,7 +448,7 @@ To perform offline updates, download the package tarball on a connected machine 
 
 ```bash
 # On a connected machine
-npm pack milaidy@2.0.0
+npm pack miladyai@2.0.0
 
 # Transfer milady-2.0.0.tgz to the air-gapped machine, then:
 npm install -g ./milady-2.0.0.tgz
@@ -509,6 +509,6 @@ between @elizaos/core and your model provider plugins.
 
 This helps users understand that they may need to update their plugins alongside the CLI, or pin to a compatible version combination.
 
-## Electron Desktop Updates
+## Electrobun Desktop Updates
 
-The Electron desktop app (`apps/app/electron/`) uses `electron-updater` for native auto-update support, which is separate from the CLI update system. Desktop updates are delivered through platform-native mechanisms (DMG on macOS, NSIS on Windows, AppImage on Linux) and handled by the Electron shell rather than the npm registry.
+The Electrobun desktop app (`apps/app/electrobun/`) uses the Electrobun updater for native auto-update support, which is separate from the CLI update system. Desktop updates are delivered through platform-native mechanisms (DMG on macOS, NSIS on Windows, AppImage on Linux) and handled by the Electrobun shell rather than the npm registry.

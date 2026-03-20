@@ -97,7 +97,7 @@ export function StatCard({
   return (
     <div className="flex flex-col items-center justify-center p-3 border border-[var(--border)] bg-[var(--bg)] min-w-[80px]">
       <div
-        className={`text-lg font-bold tabular-nums ${accent ? "text-accent" : ""}`}
+        className={`text-lg font-bold tabular-nums ${accent ? "text-txt" : ""}`}
       >
         {value}
       </div>

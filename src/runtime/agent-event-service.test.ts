@@ -50,4 +50,49 @@ describe("createMiladyPlugin", () => {
 
     expect(plugin.services).toContain(AgentEventService);
   });
+
+  it("exposes emote IDs via the PLAY_EMOTE action parameter enum, not a provider", () => {
+    const plugin = createMiladyPlugin();
+
+    // Emote provider should no longer exist — IDs moved to action param enum
+    const emoteProvider = plugin.providers?.find(
+      (provider) => provider.name === "emotes",
+    );
+    expect(emoteProvider).toBeUndefined();
+
+    // PLAY_EMOTE action should have an enum with emote IDs
+    const emoteAction = plugin.actions?.find(
+      (action) => action.name === "PLAY_EMOTE",
+    );
+    expect(emoteAction).toBeDefined();
+
+    const emoteParam = emoteAction?.parameters?.find((p) => p.name === "emote");
+    expect(emoteParam).toBeDefined();
+
+    const schema = emoteParam?.schema as { type: string; enum?: string[] };
+    expect(schema.enum).toBeDefined();
+    expect(schema.enum).toContain("wave");
+    expect(schema.enum).toContain("dance-happy");
+    expect(schema.enum).not.toContain("idle");
+    expect(schema.enum).not.toContain("run");
+    expect(schema.enum).not.toContain("walk");
+  });
+
+  it("honours DISABLE_EMOTES by removing PLAY_EMOTE at init", async () => {
+    const plugin = createMiladyPlugin();
+    const runtime = {
+      character: { settings: { DISABLE_EMOTES: true } },
+      getService: vi.fn(() => null),
+      getTaskWorker: vi.fn(() => null),
+      registerTaskWorker: vi.fn(),
+    };
+
+    // Call init to trigger DISABLE_EMOTES check
+    await plugin.init?.({}, runtime as never);
+
+    const emoteAction = plugin.actions?.find(
+      (action) => action.name === "PLAY_EMOTE",
+    );
+    expect(emoteAction).toBeUndefined();
+  });
 });

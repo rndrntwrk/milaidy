@@ -1,6 +1,6 @@
 # Build and release (CI, desktop binaries)
 
-> Branch note: on `test/electrobun-cross-platform`, `.github/workflows/release-electrobun.yml` is the canonical tag-triggered desktop release workflow. `.github/workflows/release.yml` is kept as a manual legacy Electron fallback only.
+`.github/workflows/release-electrobun.yml` is the canonical desktop release workflow. `.github/workflows/release.yml` remains a manual legacy desktop fallback only.
 
 Why the release pipeline and desktop bundle work the way they do.
 
@@ -9,25 +9,24 @@ Why the release pipeline and desktop bundle work the way they do.
 We ship **separate** `Milady-arm64.dmg` and `Milady-x64.dmg` because:
 
 - **Native Node addons** (e.g. `onnxruntime-node`, `whisper-node`) ship prebuilt `.node` binaries per OS and arch. There is no single "universal" npm artifact that contains both arm64 and x64; the addon is built for the arch of the machine that ran `npm install` / `bun install`.
-- **CI runs on arm64** (macos-14). If we only ran `bun install` and `bun run build` in the host arch, `node_modules` would contain only arm64 `.node` files. The packaged app would then fail on Intel with "Cannot find module .../darwin/x64/onnxruntime_binding.node".
-- **So for the macos-x64 artifact** we run install and build under **Rosetta** (`arch -x86_64 bun install`, `arch -x86_64 electrobun build`, etc.). That makes the install and any native rebuilds produce x64 binaries, so the Intel DMG works.
-- **Both macOS builds run on the same runner (macos-14).** We do not use the deprecated `macos-15-intel` runner; the Intel artifact is built on the Apple Silicon runner under Rosetta.
+- **CI builds both macOS architectures separately.** The Apple Silicon artifact runs on `macos-14`, and the Intel artifact runs on the dedicated `macos-15-intel` runner.
+- **The Intel artifact still uses explicit x64 invocations** through the shared desktop builder (`MILADY_DESKTOP_COMMAND_PREFIX="arch -x86_64"`) so native modules and helper binaries are resolved consistently as x64 throughout the packaging path.
+- **Why this still matters on the Intel runner:** our workflow shares the same commands and staging logic across all jobs, and the explicit x64 path avoids accidental host/translation drift in the install and packaging steps.
 
-See `.github/workflows/release-electrobun.yml`: the "Install root dependencies", "Build core dist", "Build renderer", "Build native macOS effects dylib", "Build whisper", "Bundle backend node_modules", "Install electrobun CLI", and "Build Electrobun app" steps run under `arch -x86_64` when `matrix.platform.artifact-name === "macos-x64"`.
+See `.github/workflows/release-electrobun.yml`: the platform jobs run `arch -x86_64` for the macOS Intel leg during "Install root dependencies", `scripts/desktop-build.mjs stage`, and `scripts/desktop-build.mjs package`.
 
 ## Desktop bundle: why we copy plugins and deps
 
 The packaged app runs the agent from `milady-dist/` (bundled JS + `node_modules`). The main bundle is built by tsdown with dependencies inlined where possible, but:
 
 - **Plugins** (`@elizaos/plugin-*`) are loaded at runtime; their dist/ and any **runtime-only** dependencies (native addons, optional requires, etc.) must be present in `milady-dist/node_modules`.
-- **Why not rely on a single global node_modules at pack time?** The app is built into an ASAR (and unpacked dirs); resolution at runtime is from the app directory. So we copy the subset we need into `apps/app/electron/milady-dist/node_modules` before `electron-builder` runs.
+- **Why not rely on a single global node_modules at pack time?** The app is built into an ASAR (and unpacked dirs); resolution at runtime is from the app directory. So we copy the subset we need into `apps/app/electrobun/milady-dist/node_modules` before packaging runs.
 
 The packaging scripts derive that subset instead of keeping a hand-maintained allowlist:
 
-1. `scripts/copy-electron-plugins-and-deps.mjs` handles the legacy Electron build and copies the installed `@elizaos/*` set plus their transitive runtime deps into `apps/app/electron/milady-dist/node_modules`.
-2. `scripts/copy-runtime-node-modules.ts` handles the Electrobun build and scans the built `dist/` output for bare package imports, unions that with the installed `@elizaos/*` and `@milady/plugin-*` packages from the repo root, then recursively copies their runtime deps into `dist/node_modules`.
-3. Both approaches **walk package.json `dependencies` and `optionalDependencies` recursively**. **Why:** dynamic plugin loading and native optional deps change more often than the release workflow; deriving the closure from installed package metadata avoids shipping a stale allowlist.
-4. Known dev/renderer-only packages (for example `typescript`, `lucide-react`) are skipped to keep the packaged runtime smaller.
+1. `scripts/copy-runtime-node-modules.ts` handles the Electrobun build and scans the built `dist/` output for bare package imports, unions that with the installed `@elizaos/*` and `@miladyai/plugin-*` packages from the repo root, then recursively copies their runtime deps into `dist/node_modules`.
+2. The packaging flow **walks package.json `dependencies` and `optionalDependencies` recursively**. **Why:** dynamic plugin loading and native optional deps change more often than the release workflow; deriving the closure from installed package metadata avoids shipping a stale allowlist.
+3. Known dev/renderer-only packages (for example `typescript`, `lucide-react`) are skipped to keep the packaged runtime smaller.
 
 We do **not** try to exclude deps that might already be inlined by tsdown into plugin dist/, because plugins can `require()` at runtime; excluding them would risk "Cannot find module" in the packaged app.
 
@@ -37,10 +36,10 @@ The release workflow (`.github/workflows/release.yml`) is designed for **reprodu
 
 - **Strict shell (`bash -euo pipefail`)** — Applied at job default for `build-desktop` so every step exits on first error, undefined variable, or pipe failure. **Why:** Without it, a failing command in the middle of a script can be ignored and the step still "succeeds", producing broken artifacts or confusing later failures.
 - **Retry loops with final assertion** — `bun install` steps retry up to 3 times, then run the same install command once more after the loop. **Why:** If all retries failed, the loop exits without failing the step; the final run ensures the step fails with a clear install error instead of silently continuing.
-- **Crash dump uses `@electron/asar`** — When electron-builder crashes, we list ASAR contents with `npx @electron/asar list`, not the deprecated `asar` package. **Why:** The deprecated package can be missing or incompatible; `@electron/asar` is the maintained tool and works when the build fails.
+- **Crash dump uses the maintained ASAR CLI** — When packaging crashes, we list ASAR contents with the maintained ASAR CLI, not the deprecated `asar` package. **Why:** The deprecated package can be missing or incompatible; the maintained ASAR tooling works when the build fails.
 - **`find -print0` and `while IFS= read -r -d ''`** — Copying JS into `milady-dist` and removing node-gyp artifacts use null-delimited find + read. **Why:** Filenames with newlines or spaces would break `find | while read`; null-delimited iteration is safe for any path.
 - **DMG path via `find` + `stat -f`** — We pick the newest DMG with `find dist -name '*.dmg' -exec stat -f '%m\t%N' {} \; | sort -rn | head -1` instead of `ls -t dist/*.dmg`. **Why:** `ls -t` with a glob can fail or behave oddly when no DMG exists or paths have spaces; find + stat is robust and this step runs only on macOS where `stat -f` is available.
-- **Remove node-gyp build artifacts before packaging** — We delete `build-tmp*` and `node_gyp_bins` under `node_modules` (root and milady-dist). **Why:** @tensorflow/tfjs-node and other native addons leave symlinks to system Python there; electron-builder refuses to pack symlinks to paths outside the app (security), so the pack step would fail without removal.
+- **Remove node-gyp build artifacts before packaging** — We delete `build-tmp*` and `node_gyp_bins` under `node_modules` (root and milady-dist). **Why:** @tensorflow/tfjs-node and other native addons leave symlinks to system Python there; the packager refuses to pack symlinks to paths outside the app (security), so the pack step would fail without removal.
 - **Size report includes `milady-dist`** — We report sizes of both `app.asar.unpacked/node_modules` and `app.asar.unpacked/milady-dist` (and its node_modules when present). **Why:** Both regions contribute to artifact size; reporting both makes it obvious where bloat comes from.
 - **Size report `du | sort | head` pipelines** — We run each pipeline in a subshell and capture exit code with `( pipeline ) || r=$?`, then allow 0 or 141; we also redirect `sort` stderr to `/dev/null`. **Why:** Under `bash -euo pipefail`, when `head` closes the pipe after N lines, `sort` gets SIGPIPE and exits 141; the step would exit before `r=$?` ran. The subshell + `||` lets us treat 141 as success. Silencing `sort` avoids noisy "Broken pipe" in logs.
 - **Windows: plugin prepare script uses `npx -p typescript tsc`** — In `packages/plugin-bnb-identity/build.ts` we invoke `npx -p typescript tsc` instead of `npx tsc`. **Why:** On Windows (and some CI environments), `npx tsc` can resolve to the npm package `tsc` (a joke package that prints "This is not the tsc command you are looking for") instead of the TypeScript compiler. Explicitly using the `typescript` package avoids that and makes the release Windows build succeed.
@@ -51,7 +50,7 @@ The release workflow (`.github/workflows/release.yml`) is designed for **reprodu
 
 CI workflows that need Node (for node-gyp / native modules or npm registry) were timing out on Node download and install. We fixed this as follows.
 
-- **`useblacksmith/setup-node@v5` on Blacksmith runners** — In `test.yml`, jobs that run on `blacksmith-4vcpu-ubuntu-2404` (app-startup-e2e, electron-ui-e2e Linux) use `useblacksmith/setup-node` instead of `actions/setup-node`. **Why:** Blacksmith’s action uses their colocated cache (same DC as the runner), so Node binaries are served at ~400MB/s and we avoid slow or failing downloads from nodejs.org.
+- **`useblacksmith/setup-node@v5` on Blacksmith runners** — In `test.yml`, jobs that run on `blacksmith-4vcpu-ubuntu-2404` use `useblacksmith/setup-node` instead of `actions/setup-node`. **Why:** Blacksmith’s action uses their colocated cache (same DC as the runner), so Node binaries are served at ~400MB/s and we avoid slow or failing downloads from nodejs.org.
 - **`actions/setup-node@v3` (not v4) on GitHub-hosted runners** — Release, test (macOS legs), nightly, publish-npm, and other workflows pin to `@v3`. **Why:** v4 has a known slow post-action step and often triggers nodejs.org downloads that time out; v3 uses the runner toolcache when the version is present and avoids the regression.
 - **`check-latest: false`** — We set this explicitly on every `actions/setup-node` step (Blacksmith jobs use `useblacksmith/setup-node`, which has its own caching behavior). **Why:** With the default, the action can hit nodejs.org to check for a newer patch; that adds latency and can timeout. We want a fixed, cached Node version for reproducible CI.
 - **Bun global cache (`~/.bun/install/cache`)** — test.yml, release.yml, benchmark-tests.yml, publish-npm.yml, and nightly.yml all cache this path with `actions/cache@v4` keyed by `bun.lock`. **Why:** Bun install is fast, but re-downloading every package every run was still a major cost; caching the global cache avoids re-downloading tarballs while letting `bun install` do its fast hardlink/clonefile into `node_modules`. We do not cache `node_modules` itself — compression/upload cost exceeds the gain.
@@ -59,13 +58,13 @@ CI workflows that need Node (for node-gyp / native modules or npm registry) were
 
 ## Where this runs
 
-- **Electrobun release (current desktop path on this branch):** `.github/workflows/release-electrobun.yml` — on version tag push; builds macOS arm64 and macOS x64 (both on macos-14, Intel via Rosetta), Windows x64, and Linux x64 Electrobun artifacts plus update channel files.
-- **Legacy Electron compatibility stub:** `.github/workflows/release.yml` — manual workflow that only points maintainers at the Electrobun release path.
-- **Local desktop build:** From repo root, build core and app, then e.g. `cd apps/app/electron && bunx electron-builder build --mac --arm64 --publish never`. For a full signed/notarized local test, see `scripts/verify-build.sh` (macOS).
+- **Electrobun release:** `.github/workflows/release-electrobun.yml` — on version tag push; builds macOS arm64, macOS x64, Windows x64, and Linux x64 Electrobun artifacts plus update channel files.
+- **Legacy desktop compatibility stub:** `.github/workflows/release.yml` — manual workflow that only points maintainers at the Electrobun release path.
+- **Local desktop build:** From repo root, use the Electrobun path: `bun run build:desktop` for a local bundle build, then `bash apps/app/electrobun/scripts/smoke-test.sh` for packaged desktop verification.
 
 ## Electrobun update-channel naming
 
-Electrobun v1.15.x writes **platform-prefixed flat artifact names** into `apps/app/electrobun/artifacts/`, for example:
+Electrobun writes **platform-prefixed flat artifact names** into `apps/app/electrobun/artifacts/`, for example:
 
 - `canary-macos-arm64-Milady-canary.app.tar.zst`
 - `canary-macos-arm64-Milady-canary.dmg`
@@ -76,6 +75,19 @@ Why the workflow mirrors that shape directly to `https://milady.ai/releases/`:
 - The Electrobun updater resolves manifests at `${baseUrl}/${platformPrefix}-update.json`, not `${baseUrl}/${channel}/update.json`.
 - It also resolves tarballs at `${baseUrl}/${platformPrefix}-${tarballFileName}`.
 - Because of that, the release upload step must publish `*-update.json`, `*.tar.zst`, and optional `*.patch` files at the **flat release root**. Uploading only a generic `update.json` or nesting files under version folders breaks in-app updates.
+
+## CLI usage in this repo
+
+The official Electrobun docs expect the CLI to come from the project dependency and be invoked through npm scripts or `bunx`. Milady now uses the shared desktop builder to reach that package-local path:
+
+- `apps/app/electrobun/package.json` declares `electrobun` as a dependency.
+- `scripts/desktop-build.mjs stage` installs the Electrobun workspace package before packaging.
+- `scripts/desktop-build.mjs package` drives `bun run build -- --env=...` inside `apps/app/electrobun`, and that script invokes `bunx electrobun build` against the package-local dependency.
+
+We still keep two Windows-specific guards around that documented flow:
+
+- **Pre-extract the Electrobun CLI tarball:** `electrobun@1.16.0` still shells out to plain `tar -xzf ...` on Windows. On GitHub runners that can resolve to GNU tar and fail on `C:` paths, so the workflow downloads the official `electrobun-cli-win-x64.tar.gz`, verifies its SHA256 from the GitHub release metadata, and extracts it with `C:\\Windows\\System32\\tar.exe` before the build runs.
+- **Seed `rcedit` when needed:** the CLI still imports `rcedit` dynamically during Windows packaging, so the workflow ensures a known-good `rcedit-x64.exe` is present under the installed Electrobun package before invoking `bun run build`.
 
 ## Desktop WebGPU: browser + native
 
@@ -103,6 +115,6 @@ Why: the previous smoke test could pass while the launcher stayed open but the e
 
 ## See also
 
-- [Electron startup and exception handling](./electron-startup.md) — why the agent keeps the API server up on load failure.
-- [Plugin resolution and NODE_PATH](./plugin-resolution-and-node-path.md) — why dynamic plugin imports need `NODE_PATH` in dev/CLI/Electron.
+- [Electrobun startup and exception handling](./electrobun-startup.md) — why the agent keeps the API server up on load failure.
+- [Plugin resolution and NODE_PATH](./plugin-resolution-and-node-path.md) — why dynamic plugin imports need `NODE_PATH` in dev/CLI/Electrobun.
 - [CHANGELOG](../CHANGELOG.md) — concrete changes and WHYs per release.

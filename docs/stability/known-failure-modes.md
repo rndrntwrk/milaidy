@@ -1,6 +1,6 @@
 # Known Failure Modes
 
-This document catalogs known failure modes across the Milaidy system, organized by subsystem. Each entry describes the observable symptoms, underlying root cause, any current mitigation in place, and the remaining gap or risk.
+This document catalogs known failure modes across the Milady system, organized by subsystem. Each entry describes the observable symptoms, underlying root cause, any current mitigation in place, and the remaining gap or risk.
 
 ---
 
@@ -170,7 +170,7 @@ This document catalogs known failure modes across the Milaidy system, organized 
 
 | Field | Detail |
 |---|---|
-| **Status** | **Fixed** (plugin-agent-orchestrator 0.3.4, PR #7; milaidy PR #817) |
+| **Status** | **Fixed** (plugin-agent-orchestrator 0.3.4, PR #7; milady PR #817) |
 | **Symptoms** | The first task sent to a coding agent is not received. Subsequent tasks work normally. |
 | **Root cause** | The listener must be attached before `pushDefaultRules` executes, which includes a 1500ms sleep. If the listener attachment is delayed (e.g., under heavy system load), the task delivery window is missed. |
 | **Current mitigation** | Fixed ordering ensures the listener is attached before `pushDefaultRules` is called. A 30-second timeout fallback forces task delivery if `session_ready` is never received (covers edge cases where the ready detection pattern doesn't match a CLI update). |

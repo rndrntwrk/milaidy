@@ -6,7 +6,7 @@ import { defineConfig } from "vitest/config";
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const isWindows = process.platform === "win32";
-const localWorkers = Math.max(4, Math.min(16, os.cpus().length));
+const localWorkers = 2;
 const ciWorkers = isWindows ? 2 : 3;
 
 export default defineConfig({
@@ -17,7 +17,22 @@ export default defineConfig({
         replacement: path.join(repoRoot, "src", "plugin-sdk", "index.ts"),
       },
       {
-        find: "@milady/capacitor-gateway",
+        // Vite import analysis intermittently fails to resolve the published
+        // package metadata for @elizaos/core in test mode even though Bun/Node
+        // resolve it correctly. Pin tests to the published node bundle.
+        find: "@elizaos/core",
+        replacement: path.join(
+          repoRoot,
+          "node_modules",
+          "@elizaos",
+          "core",
+          "dist",
+          "node",
+          "index.node.js",
+        ),
+      },
+      {
+        find: "@miladyai/capacitor-gateway",
         replacement: path.join(
           repoRoot,
           "apps",
@@ -29,7 +44,7 @@ export default defineConfig({
         ),
       },
       {
-        find: "@milady/capacitor-swabble",
+        find: "@miladyai/capacitor-swabble",
         replacement: path.join(
           repoRoot,
           "apps",
@@ -41,7 +56,7 @@ export default defineConfig({
         ),
       },
       {
-        find: "@milady/capacitor-talkmode",
+        find: "@miladyai/capacitor-talkmode",
         replacement: path.join(
           repoRoot,
           "apps",
@@ -53,7 +68,7 @@ export default defineConfig({
         ),
       },
       {
-        find: "@milady/capacitor-camera",
+        find: "@miladyai/capacitor-camera",
         replacement: path.join(
           repoRoot,
           "apps",
@@ -65,7 +80,7 @@ export default defineConfig({
         ),
       },
       {
-        find: "@milady/capacitor-location",
+        find: "@miladyai/capacitor-location",
         replacement: path.join(
           repoRoot,
           "apps",
@@ -77,7 +92,7 @@ export default defineConfig({
         ),
       },
       {
-        find: "@milady/capacitor-screencapture",
+        find: "@miladyai/capacitor-screencapture",
         replacement: path.join(
           repoRoot,
           "apps",
@@ -89,7 +104,7 @@ export default defineConfig({
         ),
       },
       {
-        find: "@milady/capacitor-canvas",
+        find: "@miladyai/capacitor-canvas",
         replacement: path.join(
           repoRoot,
           "apps",
@@ -101,7 +116,7 @@ export default defineConfig({
         ),
       },
       {
-        find: "@milady/capacitor-desktop",
+        find: "@miladyai/capacitor-desktop",
         replacement: path.join(
           repoRoot,
           "apps",
@@ -113,7 +128,7 @@ export default defineConfig({
         ),
       },
       {
-        find: "@milady/capacitor-agent",
+        find: "@miladyai/capacitor-agent",
         replacement: path.join(
           repoRoot,
           "apps",
@@ -125,7 +140,7 @@ export default defineConfig({
         ),
       },
       {
-        find: "@milady/plugin-streaming-base",
+        find: "@miladyai/plugin-streaming-base",
         replacement: path.join(
           repoRoot,
           "packages",
@@ -136,8 +151,44 @@ export default defineConfig({
       },
       {
         // workspace plugin not built in CI (--ignore-scripts); resolve from
+        // source so dynamic imports don't fail on missing dist/.
+        find: "@miladyai/plugin-retake",
+        replacement: path.join(
+          repoRoot,
+          "packages",
+          "plugin-retake",
+          "src",
+          "index.ts",
+        ),
+      },
+      {
+        // workspace plugin not built in CI (--ignore-scripts); resolve from
+        // source so dynamic imports don't fail on missing dist/.
+        find: "@miladyai/plugin-twitch-streaming",
+        replacement: path.join(
+          repoRoot,
+          "packages",
+          "plugin-twitch",
+          "src",
+          "index.ts",
+        ),
+      },
+      {
+        // workspace plugin not built in CI (--ignore-scripts); resolve from
+        // source so dynamic imports don't fail on missing dist/.
+        find: "@miladyai/plugin-youtube-streaming",
+        replacement: path.join(
+          repoRoot,
+          "packages",
+          "plugin-youtube",
+          "src",
+          "index.ts",
+        ),
+      },
+      {
+        // workspace plugin not built in CI (--ignore-scripts); resolve from
         // source so vi.mock() and dynamic import() don't fail on missing dist/.
-        find: "@milady/plugin-bnb-identity",
+        find: "@miladyai/plugin-bnb-identity",
         replacement: path.join(
           repoRoot,
           "packages",
@@ -186,8 +237,10 @@ export default defineConfig({
         replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
       },
       {
-        find: "electron",
-        replacement: path.join(repoRoot, "test", "stubs", "electron-module.ts"),
+        // @elizaos/plugin-form currently publishes a broken entry that points
+        // at a missing nested @elizaos/core bundle. Stub it in tests.
+        find: "@elizaos/plugin-form",
+        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
       },
     ],
   },
@@ -200,11 +253,22 @@ export default defineConfig({
     // teardown, especially for jsdom-heavy test files.
     execArgv: ["--max-old-space-size=4096"],
     include: [
+      "packages/autonomous/src/**/*.test.ts",
+      "packages/autonomous/src/**/*.test.tsx",
+      "packages/autonomous/test/**/*.test.ts",
+      "packages/autonomous/test/**/*.test.tsx",
+      "packages/app-core/src/**/*.test.ts",
+      "packages/app-core/test/**/*.test.ts",
+      "packages/app-core/test/**/*.test.tsx",
+      "packages/plugin-retake/src/**/*.test.ts",
       "src/**/*.test.ts",
       "scripts/**/*.test.ts",
-      "apps/**/*.test.ts",
-      "apps/**/*.test.tsx",
-      "apps/app/test/app/lifecycle-lock.test.ts",
+      "apps/app/test/**/*.test.ts",
+      "apps/app/test/**/*.test.tsx",
+      "apps/app/electrobun/src/**/*.test.ts",
+      "apps/app/electrobun/src/**/*.test.tsx",
+      "apps/chrome-extension/**/*.test.ts",
+      "apps/chrome-extension/**/*.test.tsx",
       "apps/app/test/app/api-client-timeout.test.ts",
       "apps/app/test/app/startup-backend-missing.e2e.test.ts",
       "apps/app/test/app/startup-token-401.e2e.test.ts",
@@ -219,13 +283,7 @@ export default defineConfig({
       "test/health-endpoint.e2e.test.ts",
     ],
     setupFiles: ["test/setup.ts"],
-    exclude: [
-      "dist/**",
-      "**/node_modules/**",
-      "**/*.live.test.ts",
-      "apps/app/test/electron/**",
-      "apps/app/test/electron-ui/**",
-    ],
+    exclude: ["dist/**", "**/node_modules/**", "**/*.live.test.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],

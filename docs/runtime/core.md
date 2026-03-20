@@ -142,7 +142,7 @@ for (const [featureName, enabled] of Object.entries(config.features ?? {})) {
 ```
 
 <Note>
-**ElizaCloud plugin exclusion**: When ElizaCloud is effectively enabled (cloud API key is set and the cloud plugin is loaded), direct AI provider plugins (e.g., `@elizaos/plugin-anthropic`, `@elizaos/plugin-openai`) are removed from the load set. The cloud plugin proxies model requests through ElizaCloud, so loading individual provider plugins would be redundant and could cause routing conflicts.
+**Eliza Cloud plugin exclusion**: When Eliza Cloud is effectively enabled (cloud API key is set and the cloud plugin is loaded), direct AI provider plugins (e.g., `@elizaos/plugin-anthropic`, `@elizaos/plugin-openai`) are removed from the load set. The cloud plugin proxies model requests through Eliza Cloud, so loading individual provider plugins would be redundant and could cause routing conflicts.
 </Note>
 
 ## Channel to Plugin Mapping

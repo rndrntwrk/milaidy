@@ -164,6 +164,43 @@ export function applyNobleHashesCompat(pkgPath) {
 }
 
 /**
+ * Remove a lifecycle script when it references a file that is missing from the
+ * published package tarball. This is used for upstream packages that ship a
+ * broken postinstall hook.
+ */
+export function applyMissingLifecycleScriptPatch(
+  pkgPath,
+  scriptName,
+  relativeTarget,
+) {
+  if (!existsSync(pkgPath)) return false;
+
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+  const lifecycleScripts = pkg.scripts;
+  const lifecycleCommand = lifecycleScripts?.[scriptName];
+  if (
+    !lifecycleScripts ||
+    typeof lifecycleCommand !== "string" ||
+    !lifecycleCommand.includes(relativeTarget)
+  ) {
+    return false;
+  }
+
+  const dir = dirname(pkgPath);
+  if (existsSync(resolve(dir, relativeTarget))) {
+    return false;
+  }
+
+  delete lifecycleScripts[scriptName];
+  if (Object.keys(lifecycleScripts).length === 0) {
+    delete pkg.scripts;
+  }
+
+  writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
+  return true;
+}
+
+/**
  * Patch all copies of pkgName under root (node_modules and Bun cache).
  * Logs when a file is patched. Used by postinstall in patch-deps.mjs.
  */
@@ -210,6 +247,165 @@ export function patchNobleHashesCompat(root, log = console.log) {
       patched = true;
       log(
         "[patch-deps] Patched @noble/hashes exports: restored legacy ethers-compatible sha256/sha512/ripemd160 shims.",
+      );
+    }
+  }
+  return patched;
+}
+
+/**
+ * Patch all copies of pkgName so a broken lifecycle hook is removed when the
+ * referenced script file is missing from the installed package.
+ */
+export function patchMissingLifecycleScript(
+  root,
+  pkgName,
+  scriptName,
+  relativeTarget,
+  log = console.log,
+) {
+  const candidates = findPackageJsonPaths(root, pkgName);
+  let patched = false;
+  for (const pkgPath of candidates) {
+    if (applyMissingLifecycleScriptPatch(pkgPath, scriptName, relativeTarget)) {
+      patched = true;
+      log(
+        `[patch-deps] Patched ${pkgName} ${scriptName}: removed lifecycle hook referencing missing ${relativeTarget}.`,
+      );
+    }
+  }
+  return patched;
+}
+
+/**
+ * @elizaos/plugin-agent-skills alpha.11 logs duplicate catalog warnings when
+ * concurrent callers all hit the same upstream 429. Coalesce in-flight fetches
+ * and treat 429s as a soft backoff with Retry-After support.
+ */
+export function applyAgentSkillsCatalogFetchPatch(filePath) {
+  if (!existsSync(filePath)) return false;
+
+  const compatSource = readFileSync(filePath, "utf8");
+  if (compatSource.includes("catalogFetchCooldownUntil = 0;")) return false;
+
+  const originalFieldBlock =
+    "  // Tracks the last catalog fetch failure timestamp for backoff.\n  lastFetchErrorAt = 0;";
+  if (!compatSource.includes(originalFieldBlock)) return false;
+
+  let updatedSource = compatSource.replace(
+    originalFieldBlock,
+    `${originalFieldBlock}\n  // Coalesce concurrent catalog refreshes and track absolute cooldowns for 429s.\n  catalogFetchInFlight = null;\n  catalogFetchCooldownUntil = 0;`,
+  );
+
+  const catalogMethodPattern =
+    / {2}async getCatalog\(options = \{\}\) \{[\s\S]*?\n {2}\/\*\*\n {3}\* Search ClawHub for skills\.\n {3}\*\//;
+  if (!catalogMethodPattern.test(updatedSource)) return false;
+
+  const patchedCatalogMethod = `  async getCatalog(options = {}) {
+    const parseRetryAfterMs = (value) => {
+      if (typeof value !== "string" || value.trim().length === 0) return null;
+      const seconds = Number(value);
+      if (Number.isFinite(seconds) && seconds >= 0) {
+        return Math.ceil(seconds * 1e3);
+      }
+      const retryAt = Date.parse(value);
+      if (Number.isNaN(retryAt)) return null;
+      return Math.max(0, retryAt - Date.now());
+    };
+    const ttl = options.notOlderThan ?? CACHE_TTL.CATALOG;
+    if (!options.forceRefresh && this.catalogCache) {
+      const age = Date.now() - this.catalogCache.cachedAt;
+      if (age < ttl) {
+        return this.catalogCache.data;
+      }
+    }
+    if (this.catalogFetchCooldownUntil > Date.now()) {
+      return this.catalogCache?.data ?? [];
+    }
+    if (this.catalogFetchInFlight) {
+      return this.catalogFetchInFlight;
+    }
+    this.catalogFetchInFlight = (async () => {
+      try {
+        const entries = [];
+        let cursor;
+        do {
+          const url = \`\${this.apiBase}/api/v1/skills?limit=100\${cursor ? \`&cursor=\${cursor}\` : ""}\`;
+          const response = await fetch(url, {
+            headers: { Accept: "application/json" }
+          });
+          if (!response.ok) {
+            const statusError = new Error(\`Catalog fetch failed: \${response.status}\`);
+            statusError.status = response.status;
+            statusError.retryAfter = response.headers.get("retry-after");
+            throw statusError;
+          }
+          const data = await response.json();
+          entries.push(...data.items);
+          cursor = data.nextCursor;
+        } while (cursor);
+        this.catalogCache = { data: entries, cachedAt: Date.now() };
+        this.lastFetchErrorAt = 0;
+        this.catalogFetchCooldownUntil = 0;
+        if (this.storage.type === "filesystem") {
+          await this.saveCatalogToDisk();
+        }
+        return entries;
+      } catch (error) {
+        const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : null;
+        const retryAfter = typeof error === "object" && error !== null && "retryAfter" in error ? error.retryAfter : null;
+        const retryAfterMs = parseRetryAfterMs(retryAfter);
+        const cooldownMs = Math.max(FETCH_ERROR_COOLDOWN, retryAfterMs ?? 0);
+        this.lastFetchErrorAt = Date.now();
+        this.catalogFetchCooldownUntil = Date.now() + cooldownMs;
+        if (status === 429) {
+          const cachedCount = this.catalogCache?.data.length ?? 0;
+          const cacheSuffix = cachedCount > 0 ? \`; using \${cachedCount} cached skills\` : "";
+          this.runtime.logger.info(
+            \`AgentSkills: Catalog rate limited (429); backing off for \${Math.ceil(cooldownMs / 1e3)}s\${cacheSuffix}\`
+          );
+        } else {
+          this.runtime.logger.warn(\`AgentSkills: Catalog fetch failed (will retry after cooldown): \${error}\`);
+        }
+        if (!this.catalogCache) {
+          this.catalogCache = { data: [], cachedAt: Date.now() };
+        }
+        return this.catalogCache.data;
+      } finally {
+        this.catalogFetchInFlight = null;
+      }
+    })();
+    return this.catalogFetchInFlight;
+  }
+  /**
+   * Search ClawHub for skills.
+   */`;
+
+  updatedSource = updatedSource.replace(
+    catalogMethodPattern,
+    patchedCatalogMethod,
+  );
+
+  writeFileSync(filePath, updatedSource, "utf8");
+  return true;
+}
+
+/**
+ * Patch all copies of @elizaos/plugin-agent-skills so 429 responses back off
+ * cleanly without duplicate warnings from concurrent catalog fetches.
+ */
+export function patchAgentSkillsCatalogFetch(root, log = console.log) {
+  const candidates = findPackageFilePaths(
+    root,
+    "@elizaos/plugin-agent-skills",
+    "dist/index.js",
+  );
+  let patched = false;
+  for (const filePath of candidates) {
+    if (applyAgentSkillsCatalogFetchPatch(filePath)) {
+      patched = true;
+      log(
+        "[patch-deps] Patched @elizaos/plugin-agent-skills: coalesced catalog fetches and softened 429 rate-limit logging.",
       );
     }
   }

@@ -8,11 +8,9 @@ export default defineConfig({
   test: {
     // Use POSIX-style relative globs so test discovery works on Windows too.
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
-    exclude: ["test/electron/**", "test/electron-ui/**"],
     setupFiles: [path.join(here, "test/setup.ts")],
     environment: "node",
     alias: {
-      electron: path.join(here, "test/__mocks__/electron.ts"),
       "@elizaos/skills": path.join(here, "test/__mocks__/elizaos-skills.ts"),
       "@elizaos/plugin-pdf": path.join(
         here,
@@ -22,39 +20,42 @@ export default defineConfig({
         "stubs",
         "empty-module.mjs",
       ),
-      "@milady/capacitor-gateway": path.join(
+      "@miladyai/capacitor-gateway": path.join(
         here,
         "plugins/gateway/src/index.ts",
       ),
-      "@milady/capacitor-swabble": path.join(
+      "@miladyai/capacitor-swabble": path.join(
         here,
         "plugins/swabble/src/index.ts",
       ),
-      "@milady/capacitor-talkmode": path.join(
+      "@miladyai/capacitor-talkmode": path.join(
         here,
         "plugins/talkmode/src/index.ts",
       ),
-      "@milady/capacitor-camera": path.join(
+      "@miladyai/capacitor-camera": path.join(
         here,
         "plugins/camera/src/index.ts",
       ),
-      "@milady/capacitor-location": path.join(
+      "@miladyai/capacitor-location": path.join(
         here,
         "plugins/location/src/index.ts",
       ),
-      "@milady/capacitor-screencapture": path.join(
+      "@miladyai/capacitor-screencapture": path.join(
         here,
         "plugins/screencapture/src/index.ts",
       ),
-      "@milady/capacitor-canvas": path.join(
+      "@miladyai/capacitor-canvas": path.join(
         here,
         "plugins/canvas/src/index.ts",
       ),
-      "@milady/capacitor-desktop": path.join(
+      "@miladyai/capacitor-desktop": path.join(
         here,
         "plugins/desktop/src/index.ts",
       ),
-      "@milady/capacitor-agent": path.join(here, "plugins/agent/src/index.ts"),
+      "@miladyai/capacitor-agent": path.join(
+        here,
+        "plugins/agent/src/index.ts",
+      ),
     },
     testTimeout: 30000,
     globals: true,

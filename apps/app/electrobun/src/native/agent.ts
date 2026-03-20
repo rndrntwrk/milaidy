@@ -4,10 +4,10 @@
  * Embeds the Milady agent runtime (ElizaOS) as an isolated child process
  * using Bun.spawn() and exposes it to the webview via RPC messages.
  *
- * Key difference from Electron: Instead of dynamically importing eliza.js
- * into the main process (which requires fighting ASAR, CJS/ESM mismatch,
- * and NODE_PATH hacks), we spawn a separate Bun process that runs server.js
- * (which internally loads eliza.js). This gives us:
+ * Instead of dynamically importing the runtime into the main process
+ * (which requires fighting ASAR, CJS/ESM mismatch, and NODE_PATH hacks),
+ * we spawn a separate Bun process that runs the canonical CLI/server entry
+ * (`entry.js start`). This gives us:
  *   - Clean process isolation (native module crashes don't kill the UI)
  *   - No ESM/CJS import gymnastics
  *   - Simple lifecycle management via SIGTERM/SIGKILL
@@ -21,11 +21,19 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type { AgentStatus } from "../rpc-schema";
+import { resolveDesktopRuntimeMode } from "../api-base";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+interface AgentStatus {
+  state: "not_started" | "starting" | "running" | "stopped" | "error";
+  agentName: string | null;
+  port: number | null;
+  startedAt: number | null;
+  error: string | null;
+}
 
 type SendToWebview = (message: string, payload?: unknown) => void;
 
@@ -38,10 +46,25 @@ type BunSubprocess = ReturnType<typeof Bun.spawn>;
 
 const DEFAULT_PORT = 2138;
 const HEALTH_POLL_INTERVAL_MS = 500;
-// 120s: Windows first-run can be slow (PGLite WASM init + 100+ plugins)
-const HEALTH_POLL_TIMEOUT_MS = 120_000;
 const SIGTERM_GRACE_MS = 5_000;
 const WINDOWS_ABS_PATH_RE = /^[A-Za-z]:[\\/]/;
+
+export function getHealthPollTimeoutMs(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: string = process.platform,
+): number {
+  const raw = env.MILADY_AGENT_HEALTH_TIMEOUT_MS?.trim();
+  if (raw) {
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  // Windows packaged first-run startup can include PGLite initialization plus
+  // a GGUF embedding model download before /api/health comes online.
+  return platform === "win32" ? 240_000 : 120_000;
+}
 
 function isPosixAbsolutePath(value: string): boolean {
   return value.startsWith("/") && !WINDOWS_ABS_PATH_RE.test(value);
@@ -236,9 +259,9 @@ function resolveMiladyDistPath(): string {
     if (fs.existsSync(miladyDist)) {
       return miladyDist;
     }
-    // Dev monorepo: dist/ sibling containing eliza.js
+    // Dev monorepo: dist/ sibling containing the canonical CLI entrypoint
     const devDist = joinPortable(dir, "dist");
-    if (fs.existsSync(joinPortable(devDist, "eliza.js"))) {
+    if (fs.existsSync(joinPortable(devDist, "entry.js"))) {
       return devDist;
     }
     const parent = dirnamePortable(dir);
@@ -263,11 +286,8 @@ function resolveMiladyDistPath(): string {
   return fallback;
 }
 
-function resolveElizaEntryPath(miladyDistPath: string): string | null {
-  const candidates = [
-    joinPortable(miladyDistPath, "eliza.js"),
-    joinPortable(miladyDistPath, "runtime", "eliza.js"),
-  ];
+function resolveRuntimeEntryPath(miladyDistPath: string): string | null {
+  const candidates = [joinPortable(miladyDistPath, "entry.js")];
 
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) {
@@ -284,7 +304,7 @@ function resolveElizaEntryPath(miladyDistPath: string): string | null {
 
 async function waitForHealthy(
   getPort: () => number,
-  timeoutMs: number = HEALTH_POLL_TIMEOUT_MS,
+  timeoutMs: number = getHealthPollTimeoutMs(),
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
 
@@ -296,7 +316,24 @@ async function waitForHealthy(
         signal: AbortSignal.timeout(2_000),
       });
       if (response.ok) {
-        return true;
+        const health = (await response.json().catch(() => null)) as {
+          ready?: boolean;
+          agentState?: string;
+          startup?: { phase?: string };
+        } | null;
+        if (!health) {
+          return true;
+        }
+        if (typeof health.ready === "boolean") {
+          if (health.ready) {
+            return true;
+          }
+        } else if (
+          health.agentState !== "starting" &&
+          health.agentState !== "restarting"
+        ) {
+          return true;
+        }
       }
     } catch {
       // Server not ready yet
@@ -387,9 +424,21 @@ async function drainStderrToLog(
   }
 }
 
-// Any PGLite query failure is unrecoverable within the same process (stale WASM state).
-// Catch all "Failed query:" patterns so we auto-recover from any DB corruption.
-const PGLITE_MIGRATION_RE = /Failed query:|create schema if not exists/i;
+const PGLITE_LOCK_RE =
+  /pglite data dir is already in use|database is locked|lock file already exists/i;
+const PGLITE_RECOVERY_RE =
+  /failed query:\s*create schema if not exists|aborted\(\)\. build with -sassertions|database disk image is malformed|file is not a database|malformed database schema|checksum mismatch|checkpoint failed|wal file/i;
+
+function shouldAutoRecoverPgliteFailure(line: string): boolean {
+  if (PGLITE_LOCK_RE.test(line)) {
+    return false;
+  }
+
+  return (
+    PGLITE_RECOVERY_RE.test(line) ||
+    (/corrupt/i.test(line) && /pglite|sqlite/i.test(line))
+  );
+}
 
 function resolvePgliteDataDir(): string {
   return joinPortable(
@@ -460,12 +509,56 @@ export class AgentManager {
       return this.status;
     }
 
+    const runtimeMode = resolveDesktopRuntimeMode(
+      process.env as Record<string, string | undefined>,
+    );
+    if (runtimeMode.mode !== "local") {
+      const reason =
+        runtimeMode.mode === "external"
+          ? `Embedded desktop runtime is disabled because ${runtimeMode.externalApi.source} points at ${runtimeMode.externalApi.base}.`
+          : "Embedded desktop runtime is disabled by MILADY_DESKTOP_SKIP_EMBEDDED_AGENT=1.";
+      diagnosticLog(`[Agent] ${reason}`);
+      throw new Error(reason);
+    }
+
     // Reset per-startup flags
     this.pgliteRecoveryDone = false;
 
     // Clean up any stale process before starting
     if (this.childProcess) {
       await this.killChildProcess();
+    }
+
+    // Kill any stale bun process holding the target port from a previous
+    // crash or unclean shutdown.  Without this, the server falls back to a
+    // dynamic port and agent.ts may not detect the change.
+    const targetPort = Number(process.env.MILADY_PORT) || DEFAULT_PORT;
+    try {
+      const lsofResult = Bun.spawnSync(["lsof", "-ti", `tcp:${targetPort}`]);
+      const pids = new TextDecoder()
+        .decode(lsofResult.stdout)
+        .trim()
+        .split("\n")
+        .filter(Boolean);
+      for (const pid of pids) {
+        const numPid = parseInt(pid, 10);
+        if (!Number.isNaN(numPid) && numPid !== process.pid) {
+          diagnosticLog(
+            `[Agent] Killing stale process ${numPid} on port ${targetPort}`,
+          );
+          try {
+            process.kill(numPid, "SIGKILL");
+          } catch {
+            // Process may have already exited
+          }
+        }
+      }
+      if (pids.length > 0) {
+        // Brief pause for the OS to release the port
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    } catch {
+      // lsof not available or failed — proceed and let the port fallback handle it
     }
 
     this.status = {
@@ -484,8 +577,8 @@ export class AgentManager {
 
       // Packaged builds can expose the runnable entry either at the dist root
       // or under runtime/. Prefer the root file but accept both layouts.
-      const serverEntryPath = resolveElizaEntryPath(miladyDistPath);
-      if (!serverEntryPath) {
+      const runtimeEntryPath = resolveRuntimeEntryPath(miladyDistPath);
+      if (!runtimeEntryPath) {
         const distExists = fs.existsSync(miladyDistPath);
         let contents = "<directory missing>";
         if (distExists) {
@@ -495,7 +588,7 @@ export class AgentManager {
             contents = "<unreadable>";
           }
         }
-        const errMsg = `No runnable eliza entry found in ${miladyDistPath} (checked eliza.js and runtime/eliza.js; dist exists: ${distExists}, contents: ${contents})`;
+        const errMsg = `No runnable runtime entry found in ${miladyDistPath} (checked entry.js; dist exists: ${distExists}, contents: ${contents})`;
         diagnosticLog(`[Agent] ${errMsg}`);
         this.status = {
           state: "error",
@@ -508,7 +601,7 @@ export class AgentManager {
         return this.status;
       }
 
-      diagnosticLog(`[Agent] eliza entry: exists (${serverEntryPath})`);
+      diagnosticLog(`[Agent] runtime entry: exists (${runtimeEntryPath})`);
 
       // Resolve port
       let apiPort = Number(process.env.MILADY_PORT) || DEFAULT_PORT;
@@ -545,6 +638,12 @@ export class AgentManager {
         MILADY_PORT: String(apiPort),
       };
 
+      // node-llama-cpp crashes Bun on Windows during packaged startup.
+      // Disable local embeddings until upstream fix lands.
+      if (process.platform === "win32") {
+        childEnv.MILADY_DISABLE_LOCAL_EMBEDDINGS = "1";
+      }
+
       if (nodePaths.length > 0) {
         childEnv.NODE_PATH = nodePaths.join(path.delimiter);
         diagnosticLog(`[Agent] Child NODE_PATH: ${childEnv.NODE_PATH}`);
@@ -558,12 +657,15 @@ export class AgentManager {
 
       // Spawn the child process
       const spawnTime = Date.now();
-      const proc = Bun.spawn([bunExecutable, "run", serverEntryPath], {
-        cwd: miladyDistPath,
-        env: childEnv,
-        stdout: "pipe",
-        stderr: "pipe",
-      });
+      const proc = Bun.spawn(
+        [bunExecutable, "run", runtimeEntryPath, "start"],
+        {
+          cwd: miladyDistPath,
+          env: childEnv,
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
 
       this.childProcess = proc;
       diagnosticLog(
@@ -627,7 +729,7 @@ export class AgentManager {
       this.hasPgliteError = false;
       if (proc.stderr) {
         drainStderrToLog(proc.stderr, signal, (line) => {
-          if (PGLITE_MIGRATION_RE.test(line)) {
+          if (shouldAutoRecoverPgliteFailure(line)) {
             this.hasPgliteError = true;
           }
         }).catch(() => {
@@ -643,7 +745,8 @@ export class AgentManager {
       diagnosticLog(
         `[Agent] Waiting for health endpoint at http://127.0.0.1:${apiPort}/api/health ...`,
       );
-      const healthy = await waitForHealthy(() => apiPort);
+      const healthPollTimeoutMs = getHealthPollTimeoutMs();
+      const healthy = await waitForHealthy(() => apiPort, healthPollTimeoutMs);
 
       if (!healthy) {
         // Check if process already exited
@@ -664,7 +767,7 @@ export class AgentManager {
 
         const errMsg = detectedListening
           ? "Server reported listening but health check timed out"
-          : `Health check timed out after ${HEALTH_POLL_TIMEOUT_MS}ms`;
+          : `Health check timed out after ${healthPollTimeoutMs}ms`;
         diagnosticLog(`[Agent] ${errMsg}`);
         this.status = {
           state: "error",

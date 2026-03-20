@@ -4,8 +4,8 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
-  Bot,
   Brain,
+  Clock3,
   Gamepad2,
   MessageSquare,
   Radio,
@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 /** Apps are only enabled in dev mode; production builds hide this feature. */
-export const APPS_ENABLED = import.meta.env.DEV;
+export const APPS_ENABLED = false; // import.meta.env.DEV;
 
 /** Stream routes stay addressable; the nav hides the tab unless streaming is enabled. */
 export const STREAM_ENABLED = true;
@@ -45,10 +45,10 @@ export type Tab =
   | "advanced"
   | "fine-tuning"
   | "trajectories"
+  | "lifo"
   | "voice"
   | "runtime"
   | "database"
-  | "lifo"
   | "settings"
   | "logs"
   | "security";
@@ -74,12 +74,6 @@ export const ALL_TAB_GROUPS: TabGroup[] = [
     description: "Live streaming controls",
   },
   {
-    label: "Character",
-    tabs: ["character", "character-select"],
-    icon: Bot,
-    description: "AI personality and behavior",
-  },
-  {
     label: "Wallets",
     tabs: ["wallets"],
     icon: Wallet,
@@ -92,10 +86,10 @@ export const ALL_TAB_GROUPS: TabGroup[] = [
     description: "Documents and memory",
   },
   {
-    label: "Social",
+    label: "Connectors",
     tabs: ["connectors"],
     icon: Share2,
-    description: "Platform connections",
+    description: "Service and data source connections",
   },
   {
     label: "Apps",
@@ -109,6 +103,12 @@ export const ALL_TAB_GROUPS: TabGroup[] = [
     icon: Settings,
     description: "Configuration and preferences",
   },
+  {
+    label: "Heartbeats",
+    tabs: ["triggers"],
+    icon: Clock3,
+    description: "Scheduled autonomous automations",
+  },
 
   {
     label: "Advanced",
@@ -117,12 +117,11 @@ export const ALL_TAB_GROUPS: TabGroup[] = [
       "plugins",
       "skills",
       "actions",
-      "triggers",
       "fine-tuning",
       "trajectories",
+      "lifo",
       "runtime",
       "database",
-      "lifo",
       "logs",
       "security",
     ],
@@ -157,10 +156,10 @@ const TAB_PATHS: Record<Tab, string> = {
   advanced: "/advanced",
   "fine-tuning": "/fine-tuning",
   trajectories: "/trajectories",
+  lifo: "/lifo",
   voice: "/voice",
   runtime: "/runtime",
   database: "/database",
-  lifo: "/lifo",
   settings: "/settings",
   logs: "/logs",
   security: "/security",
@@ -242,13 +241,13 @@ export function titleForTab(tab: Tab): string {
     case "character-select":
       return "Character Select";
     case "triggers":
-      return "Triggers";
+      return "Heartbeats";
     case "wallets":
       return "Wallets";
     case "knowledge":
       return "Knowledge";
     case "connectors":
-      return "Social";
+      return "Connectors";
     case "plugins":
       return "Plugins";
     case "skills":
@@ -261,14 +260,14 @@ export function titleForTab(tab: Tab): string {
       return "Fine-Tuning";
     case "trajectories":
       return "Trajectories";
+    case "lifo":
+      return "Lifo";
     case "voice":
       return "Voice";
     case "runtime":
       return "Runtime";
     case "database":
       return "Databases";
-    case "lifo":
-      return "Lifo";
     case "settings":
       return "Settings";
     case "logs":

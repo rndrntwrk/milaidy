@@ -13,17 +13,21 @@ vi.mock("@elizaos/core", () => ({
   logger: { warn: vi.fn(), info: vi.fn() },
 }));
 
-vi.mock("../cloud/validate-url", () => ({
+vi.mock("@miladyai/autonomous/cloud/validate-url", () => ({
   validateCloudBaseUrl: vi.fn(() => Promise.resolve(null)),
 }));
 
-vi.mock("./http-helpers", () => ({
+vi.mock("@miladyai/autonomous/api/http-helpers", () => ({
   sendJson: vi.fn(),
   sendJsonError: vi.fn(),
 }));
 
-const { sendJson, sendJsonError } = await import("./http-helpers");
-const { validateCloudBaseUrl } = await import("../cloud/validate-url");
+const { sendJson, sendJsonError } = await import(
+  "@miladyai/autonomous/api/http-helpers"
+);
+const { validateCloudBaseUrl } = await import(
+  "@miladyai/autonomous/cloud/validate-url"
+);
 
 function makeState(
   overrides?: Partial<MiladyConfig["cloud"]>,
@@ -112,7 +116,7 @@ describe("cloud-compat-routes", () => {
       expect(result).toBe(true);
       expect(sendJsonError).toHaveBeenCalledWith(
         expect.anything(),
-        "Not connected to Milady Cloud. Please log in first.",
+        "Not connected to Eliza Cloud. Please log in first.",
         401,
       );
     });
@@ -233,7 +237,7 @@ describe("cloud-compat-routes", () => {
       expect(result).toBe(true);
       expect(sendJsonError).toHaveBeenCalledWith(
         expect.anything(),
-        "Milady Cloud request timed out",
+        "Eliza Cloud request timed out",
         504,
       );
     });
@@ -252,7 +256,7 @@ describe("cloud-compat-routes", () => {
       expect(result).toBe(true);
       expect(sendJsonError).toHaveBeenCalledWith(
         expect.anything(),
-        "Failed to reach Milady Cloud",
+        "Failed to reach Eliza Cloud",
         502,
       );
     });

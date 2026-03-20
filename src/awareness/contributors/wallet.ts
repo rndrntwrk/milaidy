@@ -4,6 +4,7 @@
  */
 import type { IAgentRuntime } from "@elizaos/core";
 import { getWalletAddresses } from "../../api/wallet.js";
+import { resolveWalletRpcReadiness } from "../../api/wallet-rpc.js";
 import { loadMiladyConfig } from "../../config/config.js";
 import type { AwarenessContributor } from "../../contracts/awareness.js";
 
@@ -46,11 +47,7 @@ export const walletContributor: AwarenessContributor = {
     const config = loadMiladyConfig();
     const tradeMode = resolveTradePermissionMode(config);
     const localSigner = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
-    const bscRpc = Boolean(
-      process.env.NODEREAL_BSC_RPC_URL?.trim() ||
-        process.env.QUICKNODE_BSC_RPC_URL?.trim() ||
-        process.env.BSC_RPC_URL?.trim(),
-    );
+    const bscRpc = resolveWalletRpcReadiness(config).managedBscRpcReady;
 
     const parts: string[] = [];
     if (hasEvm) parts.push(`EVM ${shorten(addrs.evmAddress)}`);
@@ -70,11 +67,7 @@ export const walletContributor: AwarenessContributor = {
     const config = loadMiladyConfig();
     const tradeMode = resolveTradePermissionMode(config);
     const localSigner = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
-    const bscRpc = Boolean(
-      process.env.NODEREAL_BSC_RPC_URL?.trim() ||
-        process.env.QUICKNODE_BSC_RPC_URL?.trim() ||
-        process.env.BSC_RPC_URL?.trim(),
-    );
+    const bscRpc = resolveWalletRpcReadiness(config).managedBscRpcReady;
     const canUserTrade = canUseLocalTradeExecution(tradeMode, false);
     const canAgentTrade = canUseLocalTradeExecution(tradeMode, true);
 
