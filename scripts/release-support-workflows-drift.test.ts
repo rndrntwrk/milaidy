@@ -9,6 +9,8 @@ const BUILD_CLOUD_IMAGE_WORKFLOW = path.join(
   ".github/workflows/build-cloud-image.yml",
 );
 const CLOUD_IMAGE_DOCKERFILE = path.join(ROOT, "deploy/Dockerfile");
+const DEBIAN_CONTROL = path.join(ROOT, "packaging/debian/control");
+const DEBIAN_COMPAT = path.join(ROOT, "packaging/debian/compat");
 const ANDROID_RELEASE_WORKFLOW = path.join(
   ROOT,
   ".github/workflows/android-release.yml",
@@ -35,7 +37,20 @@ describe("release support workflow drift", () => {
     const dockerfile = fs.readFileSync(CLOUD_IMAGE_DOCKERFILE, "utf8");
 
     expect(dockerfile).toContain("COPY package.json bun.lock* ./");
+    expect(dockerfile).toContain(
+      "COPY apps/app/electrobun/package.json ./apps/app/electrobun/package.json",
+    );
+    expect(dockerfile).toContain(
+      "COPY deploy/cloud-agent-template/package.json ./deploy/cloud-agent-template/package.json",
+    );
     expect(dockerfile).not.toContain("COPY package.json bun.lock* .npmrc ./");
+  });
+
+  it("declares the Debian debhelper compat level exactly once", () => {
+    const control = fs.readFileSync(DEBIAN_CONTROL, "utf8");
+
+    expect(control).toContain("debhelper-compat (= 13)");
+    expect(fs.existsSync(DEBIAN_COMPAT)).toBe(false);
   });
 
   it("syncs Android Capacitor via the repo-supported app script", () => {
