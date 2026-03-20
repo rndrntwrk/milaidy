@@ -123,6 +123,10 @@ function publicSrcPlugin(): Plugin {
 function characterOverridePlugin(): Plugin {
   const miladyRoster = path.resolve(here, "src/components/CharacterRoster.tsx");
   const miladyEditor = path.resolve(here, "src/components/CharacterEditor.tsx");
+  const miladyVoiceConfig = path.resolve(
+    here,
+    "src/components/VoiceConfigView.tsx",
+  );
   return {
     name: "milady-character-override",
     enforce: "pre",
@@ -132,6 +136,7 @@ function characterOverridePlugin(): Plugin {
         return;
       if (source === "./CharacterRoster") return miladyRoster;
       if (source === "./CharacterView") return miladyEditor;
+      if (source === "./VoiceConfigView") return miladyVoiceConfig;
     },
   };
 }
