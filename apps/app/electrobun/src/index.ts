@@ -33,7 +33,7 @@ import {
   CloudAuthWindowManager,
   readNavigationEventUrl,
 } from "./cloud-auth-window";
-import { ensureDesktopApiToken, getAgentManager } from "./native/agent";
+import { configureDesktopLocalApiAuth, getAgentManager } from "./native/agent";
 import { getDesktopManager } from "./native/desktop";
 import { disposeNativeModules, initializeNativeModules } from "./native/index";
 import {
@@ -124,7 +124,8 @@ function buildApiRequestHeaders(contentType?: string): Record<string, string> {
   if (contentType) {
     headers["Content-Type"] = contentType;
   }
-  const apiToken = process.env.MILADY_API_TOKEN?.trim();
+  const apiToken =
+    process.env.MILADY_API_TOKEN?.trim() ?? process.env.ELIZA_API_TOKEN?.trim();
   if (apiToken) {
     headers.Authorization = `Bearer ${apiToken}`;
   }
@@ -415,13 +416,20 @@ async function startRendererServer(): Promise<string> {
   const initialApiBase = resolveInitialApiBase(
     process.env as Record<string, string | undefined>,
   );
+  const initialApiToken =
+    resolveDesktopRuntimeMode(process.env as Record<string, string | undefined>)
+      .mode === "local"
+      ? configureDesktopLocalApiAuth()
+      : (process.env.MILADY_API_TOKEN?.trim() ??
+        process.env.ELIZA_API_TOKEN?.trim() ??
+        "");
 
   // Inject the API base into index.html so it's available before React mounts.
   function injectApiBaseIntoHtml(html: string): string {
     if (!initialApiBase) {
       return html;
     }
-    const script = `<script>window.__MILADY_API_BASE__=${JSON.stringify(initialApiBase)};</script>`;
+    const script = `<script>window.__MILADY_API_BASE__=${JSON.stringify(initialApiBase)};${initialApiToken ? `Object.defineProperty(window,"__MILADY_API_TOKEN__",{value:${JSON.stringify(initialApiToken)},configurable:true,writable:true,enumerable:false});` : ""}</script>`;
     // Inject before </head> if present, otherwise before <body>
     if (html.includes("</head>")) {
       return html.replace("</head>", `${script}</head>`);
@@ -924,7 +932,7 @@ function injectApiBase(win: BrowserWindow): void {
   const agent = getAgentManager();
   const port =
     agent.getPort() ?? (Number(process.env.MILADY_PORT) || DEFAULT_PORT);
-  const apiToken = ensureDesktopApiToken();
+  const apiToken = configureDesktopLocalApiAuth();
   pushApiBaseToRenderer(win, `http://127.0.0.1:${port}`, apiToken);
   setAgentReady(true);
 }
@@ -967,7 +975,7 @@ async function _startAgent(win: BrowserWindow): Promise<void> {
   }
 
   const agent = getAgentManager();
-  const apiToken = ensureDesktopApiToken();
+  const apiToken = configureDesktopLocalApiAuth();
 
   try {
     const status = await agent.start();

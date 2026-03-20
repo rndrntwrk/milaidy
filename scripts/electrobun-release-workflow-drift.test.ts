@@ -187,6 +187,22 @@ describe("Electrobun release workflow drift", () => {
     expect(workflow).not.toContain('bun install -g "rcedit@4.0.1"');
   });
 
+  it("treats auth-protected health probes as valid smoke-test success on every desktop platform", () => {
+    const windowsScript = fs.readFileSync(WINDOWS_SMOKE_PATH, "utf8");
+    const macScript = fs.readFileSync(MACOS_SMOKE_SCRIPT_PATH, "utf8");
+
+    expect(windowsScript).toContain("function Test-BackendProbeStatus");
+    expect(windowsScript).toContain(
+      "return $StatusCode -eq 200 -or $StatusCode -eq 401",
+    );
+    expect(windowsScript).toContain("-SkipHttpErrorCheck");
+
+    expect(macScript).toContain("backend_health_probe_satisfied()");
+    expect(macScript).toContain(
+      '[[ "$status" == "200" || "$status" == "401" ]]',
+    );
+  });
+
   it("stages the desktop bundle before restoring local electrobun caches", () => {
     const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
     const stageIndex = workflow.indexOf("name: Stage desktop bundle inputs");

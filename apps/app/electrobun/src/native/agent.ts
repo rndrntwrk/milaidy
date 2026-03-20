@@ -128,8 +128,7 @@ export function resolveConfigDir(opts?: {
 export function ensureDesktopApiToken(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  const existing =
-    env.MILADY_API_TOKEN?.trim() ?? env.ELIZA_API_TOKEN?.trim() ?? "";
+  const existing = getDesktopApiToken(env);
   if (existing) {
     env.MILADY_API_TOKEN = existing;
     env.ELIZA_API_TOKEN = existing;
@@ -143,6 +142,35 @@ export function ensureDesktopApiToken(
     "[Agent] Generated local API token for embedded desktop runtime",
   );
   return generated;
+}
+
+export function configureDesktopLocalApiAuth(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const token = ensureDesktopApiToken(env);
+  env.MILADY_PAIRING_DISABLED = "1";
+  env.ELIZA_PAIRING_DISABLED = "1";
+  return token;
+}
+
+function getDesktopApiToken(
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const token =
+    env.MILADY_API_TOKEN?.trim() ?? env.ELIZA_API_TOKEN?.trim() ?? "";
+  return token || null;
+}
+
+function getDesktopApiHeaders(
+  env: NodeJS.ProcessEnv = process.env,
+): Record<string, string> | undefined {
+  const token = getDesktopApiToken(env);
+  if (!token) return undefined;
+  return {
+    Authorization: `Bearer ${token}`,
+    "X-Api-Key": token,
+    "X-Api-Token": token,
+  };
 }
 
 let diagnosticLogPath: string | null = null;
@@ -328,12 +356,14 @@ async function waitForHealthy(
   timeoutMs: number = getHealthPollTimeoutMs(),
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
+  const headers = getDesktopApiHeaders();
 
   while (Date.now() < deadline) {
     const port = getPort();
     const url = `http://127.0.0.1:${port}/api/health`;
     try {
       const response = await fetch(url, {
+        headers,
         signal: AbortSignal.timeout(2_000),
       });
       if (response.ok) {
@@ -542,7 +572,7 @@ export class AgentManager {
       throw new Error(reason);
     }
 
-    ensureDesktopApiToken();
+    configureDesktopLocalApiAuth();
 
     // Reset per-startup flags
     this.pgliteRecoveryDone = false;
@@ -1036,7 +1066,9 @@ export class AgentManager {
    */
   private async fetchAgentName(port: number): Promise<string> {
     try {
+      const headers = getDesktopApiHeaders();
       const response = await fetch(`http://127.0.0.1:${port}/api/agents`, {
+        headers,
         signal: AbortSignal.timeout(5_000),
       });
       if (response.ok) {

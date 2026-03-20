@@ -10,6 +10,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  configureDesktopLocalApiAuth,
   ensureDesktopApiToken,
   getMiladyDistFallbackCandidates,
   resolveConfigDir,
@@ -144,5 +145,19 @@ describe("ensureDesktopApiToken", () => {
     expect(token).toMatch(/^[a-f0-9]{32}$/);
     expect(env.MILADY_API_TOKEN).toBe(token);
     expect(env.ELIZA_API_TOKEN).toBe(token);
+  });
+});
+
+describe("configureDesktopLocalApiAuth", () => {
+  it("disables pairing while keeping the mirrored desktop token aliases", () => {
+    const env: NodeJS.ProcessEnv = {
+      MILADY_API_TOKEN: "desktop-token",
+    };
+
+    expect(configureDesktopLocalApiAuth(env)).toBe("desktop-token");
+    expect(env.MILADY_API_TOKEN).toBe("desktop-token");
+    expect(env.ELIZA_API_TOKEN).toBe("desktop-token");
+    expect(env.MILADY_PAIRING_DISABLED).toBe("1");
+    expect(env.ELIZA_PAIRING_DISABLED).toBe("1");
   });
 });

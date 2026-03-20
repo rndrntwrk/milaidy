@@ -258,6 +258,11 @@ function Dump-PortDiagnostics([int]$Port) {
   Write-Host "--- end netstat ---"
 }
 
+function Test-BackendProbeStatus([int]$StatusCode) {
+  # A 401 still proves the packaged backend is running and enforcing auth.
+  return $StatusCode -eq 200 -or $StatusCode -eq 401
+}
+
 function Dump-ProcessDiagnostics() {
   Write-Host "--- Bun/launcher processes ---"
   try {
@@ -398,10 +403,11 @@ try {
         $client.Timeout = [TimeSpan]::FromSeconds(3)
         $task = $client.GetAsync($uri)
         $task.Wait()
-        if ($task.Result.IsSuccessStatusCode) {
+        $statusCode = [int]$task.Result.StatusCode
+        if (Test-BackendProbeStatus $statusCode) {
           $healthy = $true
           $healthCheckMethod = "HttpClient(no-proxy)"
-          Write-Host "Backend health check passed on port $port (via HttpClient, proxy bypassed)."
+          Write-Host "Backend health check passed on port $port (via HttpClient, proxy bypassed, HTTP $statusCode)."
           break
         }
       } catch {
@@ -418,10 +424,10 @@ try {
       if (-not $healthy) {
         try {
           $curlResult = & "$env:SystemRoot\System32\curl.exe" -s -o NUL -w "%{http_code}" $uri --connect-timeout 3 --noproxy "127.0.0.1" 2>$null
-          if ($curlResult -eq "200") {
+          if ($curlResult -eq "200" -or $curlResult -eq "401") {
             $healthy = $true
             $healthCheckMethod = "curl.exe"
-            Write-Host "Backend health check passed on port $port (via curl.exe)."
+            Write-Host "Backend health check passed on port $port (via curl.exe, HTTP $curlResult)."
             break
           }
         } catch {}
@@ -430,11 +436,11 @@ try {
       # Method 3: Invoke-WebRequest with -NoProxy (PowerShell 7+).
       if (-not $healthy) {
         try {
-          $response = Invoke-WebRequest -Uri $uri -UseBasicParsing -TimeoutSec 3 -NoProxy
-          if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) {
+          $response = Invoke-WebRequest -Uri $uri -UseBasicParsing -TimeoutSec 3 -NoProxy -SkipHttpErrorCheck
+          if (Test-BackendProbeStatus ([int]$response.StatusCode)) {
             $healthy = $true
             $healthCheckMethod = "Invoke-WebRequest(-NoProxy)"
-            Write-Host "Backend health check passed on port $port (via Invoke-WebRequest -NoProxy)."
+            Write-Host "Backend health check passed on port $port (via Invoke-WebRequest -NoProxy, HTTP $($response.StatusCode))."
             break
           }
         } catch {}
