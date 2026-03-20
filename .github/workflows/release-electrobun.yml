@@ -775,8 +775,25 @@ jobs:
             exit 1
           }
           New-Item -ItemType Directory -Force -Path $artifactsDir | Out-Null
+          $publicInstaller = Get-ChildItem -Path $artifactsDir -File -Filter "Milady-Setup-*.exe" -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
           foreach ($setupExecutable in $setupExecutables) {
-            Copy-Item $setupExecutable.FullName -Destination $artifactsDir -Force
+            $destinationPath = Join-Path $artifactsDir $setupExecutable.Name
+            if (
+              $publicInstaller -and
+              $publicInstaller.Name -eq $setupExecutable.Name -and
+              $publicInstaller.Length -ge 50MB -and
+              $setupExecutable.Length -lt $publicInstaller.Length
+            ) {
+              Write-Warning "Skipping build setup stub that would overwrite verified public installer: $($setupExecutable.FullName)"
+              continue
+            }
+            if (Test-Path $destinationPath) {
+              Write-Host "Skipping setup executable already present in artifacts: $destinationPath"
+              continue
+            }
+            Copy-Item $setupExecutable.FullName -Destination $destinationPath -Force
             Write-Host "Staged Windows setup executable: $($setupExecutable.Name)"
           }
 
@@ -819,6 +836,28 @@ jobs:
           if ($failed -gt 0) {
             exit 1
           }
+
+      - name: Re-verify Windows public installer before upload
+        if: matrix.platform.os == 'windows'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path "apps/app/electrobun/artifacts" -File -Filter "Milady-Setup-*.exe" -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+          if (-not $installer) {
+            Write-Error "No public Windows installer found in apps/app/electrobun/artifacts after staging/signing."
+            exit 1
+          }
+
+          $minimumBytes = 50MB
+          if ($installer.Length -lt $minimumBytes) {
+            Write-Error "Public Windows installer regressed below standalone size threshold: $($installer.FullName) ($($installer.Length) bytes)"
+            exit 1
+          }
+
+          Write-Host "Public installer still valid for release upload: $($installer.Name)"
+          Write-Host "Installer size: $([math]::Round($installer.Length / 1MB, 1)) MB"
 
       - name: Build MSIX package
         if: matrix.platform.os == 'windows'
