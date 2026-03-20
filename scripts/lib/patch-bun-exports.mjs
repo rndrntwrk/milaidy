@@ -34,7 +34,9 @@ export function findPackageJsonPaths(root, pkgName) {
  * cache). Exported so tests and other patch helpers share the same lookup.
  */
 export function findPackageFilePaths(root, pkgName, relativePath) {
-  const candidates = [resolve(root, "node_modules", pkgName, relativePath)];
+  const candidates = [];
+  const mainPath = resolve(root, "node_modules", pkgName, relativePath);
+  if (existsSync(mainPath)) candidates.push(mainPath);
   const bunCache = resolve(root, "node_modules/.bun");
   if (existsSync(bunCache)) {
     const safeNames = new Set([
@@ -65,6 +67,7 @@ function hasRequiredFiles(dirPath, relativePaths) {
 export function repairElizaCoreRuntimeDist(targetPkgDir, sourcePkgDir) {
   if (!targetPkgDir || !sourcePkgDir) return false;
   if (targetPkgDir === sourcePkgDir) return false;
+  if (!existsSync(targetPkgDir)) return false;
   if (!hasRequiredFiles(sourcePkgDir, ELIZA_CORE_RUNTIME_FILES)) return false;
   if (hasRequiredFiles(targetPkgDir, ELIZA_CORE_RUNTIME_FILES)) return false;
 
