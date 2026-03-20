@@ -30,6 +30,7 @@ import {
   saveUiShellMode,
   type UiShellMode,
 } from "@milady/app-core/state";
+import { resolveApiUrl } from "@milady/app-core/utils";
 import {
   type AgentStartupDiagnostics,
   type AgentStatus,
@@ -202,8 +203,7 @@ export function getVrmTitle(index: number): string {
   return `MILADY-${String(safeIndex).padStart(2, "0")}`;
 }
 
-const VRM_CDN_BASE =
-  "https://555stream-image-service.gl4sspr1sm.workers.dev/vrm-stage";
+const PRO_STREAMER_VRM_BASE = resolveApiUrl("/agent-show").replace(/\/$/, "");
 
 /**
  * Build a JSON-serialised VRM avatar identity payload for STREAM555_GO_LIVE.
@@ -215,9 +215,9 @@ function buildVrmAvatarIdentityParam(vrmIndex: number): string {
     vrmIndex === 1 ? DEFAULT_PRO_STREAMER_VRM_FILENAME : `${vrmIndex}.vrm`;
   return JSON.stringify({
     sourceType: "upstream",
-    sourceSystem: "milaidy",
+    sourceSystem: "555stream",
     assetType: "vrm",
-    assetRef: `${VRM_CDN_BASE}/vrms/${filename}`,
+    assetRef: `${PRO_STREAMER_VRM_BASE}/vrms/${filename}`,
     rendererStrategy: "direct_vrm",
     fallbackAllowed: true,
     displayName: "Alice",
