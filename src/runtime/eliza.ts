@@ -107,6 +107,13 @@ interface RuntimeAdapterAutonomyCompat {
   ) => Promise<unknown>;
 }
 
+interface RuntimeModelCompat {
+  useModel?: (
+    type: (typeof ModelType)[keyof typeof ModelType] | string,
+    params: { prompt: string },
+  ) => Promise<unknown>;
+}
+
 function syncBrandEnvAliases(): void {
   syncElizaEnvToMilady();
   syncMiladyEnvToEliza();
@@ -414,7 +421,12 @@ async function ensureTelegramBotPolling(runtime: AgentRuntime): Promise<void> {
               (m) => `${m.role === "user" ? "User" : char.name}: ${m.content}`,
             )
             .join("\n");
-          const response = await (runtime as any).useModel("TEXT_LARGE", {
+          const modelRuntime = runtime as AgentRuntime & RuntimeModelCompat;
+          if (typeof modelRuntime.useModel !== "function") {
+            logger.warn("[milady] Telegram runtime missing useModel");
+            return;
+          }
+          const response = await modelRuntime.useModel(ModelType.TEXT_LARGE, {
             prompt: `${systemPrompt}\n\nConversation:\n${conv}\n\n${char.name}:`,
           });
           const responseText =
