@@ -14,10 +14,6 @@ declare global {
 
 globalThis.React = React;
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-// Some inlined @elizaos/app-core source still evaluates JSX with the classic
-// React runtime in tests, so provide the global expected by those modules.
-(globalThis as typeof globalThis & { React?: typeof ReactRuntime }).React =
-  ReactRuntime;
 
 const originalConsoleError = console.error.bind(console);
 
