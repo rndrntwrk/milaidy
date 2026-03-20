@@ -580,6 +580,32 @@ function assertWindowsSmokeScriptHasLeadingParamBlock() {
   }
 }
 
+function assertInnoBuildScriptHasTimeoutAndHeartbeat() {
+  const script = readFileSync("packaging/inno/build-inno.ps1", "utf8");
+  const requiredSnippets = [
+    "$isccTimeout = [TimeSpan]::FromMinutes(25)",
+    "$isccHeartbeatInterval = [TimeSpan]::FromSeconds(30)",
+    "Write-Host \"Starting ISCC.exe: $isccPath $($isccArgumentDisplay -join ' ')\"",
+    "Start-Process -FilePath $isccPath",
+    'Write-Host "ISCC.exe still running after $([math]::Round($elapsed.TotalMinutes, 1)) minutes..."',
+    "Stop-Process -Id $isccProcess.Id -Force",
+    'throw "ISCC.exe timed out after $([int]$isccTimeout.TotalMinutes) minutes while building the Windows installer."',
+  ];
+  const missingSnippets = requiredSnippets.filter(
+    (snippet) => !script.includes(snippet),
+  );
+
+  if (missingSnippets.length > 0) {
+    console.error(
+      "release-check: build-inno.ps1 must supervise ISCC.exe with heartbeat logging and a hard timeout.",
+    );
+    for (const snippet of missingSnippets) {
+      console.error(`  - ${snippet}`);
+    }
+    process.exit(1);
+  }
+}
+
 function assertMacSmokeScriptLaunchesPackagedLauncherDirectly() {
   const script = readFileSync(
     "apps/app/electrobun/scripts/smoke-test.sh",
@@ -714,6 +740,7 @@ function main() {
   assertElectrobunConfigHasPostWrapSigner();
   assertMacArtifactStagerLooksCorrect();
   assertWindowsSmokeScriptHasLeadingParamBlock();
+  assertInnoBuildScriptHasTimeoutAndHeartbeat();
   assertMacSmokeScriptLaunchesPackagedLauncherDirectly();
   assertServerDynamicHyperscapeImport();
   assertStartApiServerCatchBlockSafety();

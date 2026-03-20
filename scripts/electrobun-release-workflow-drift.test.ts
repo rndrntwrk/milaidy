@@ -305,6 +305,26 @@ describe("Electrobun release workflow drift", () => {
     expect(script).toContain("Resolve-Path $sourceDir");
   });
 
+  it("bounds hung Inno compiler runs with heartbeat logging and a hard timeout", () => {
+    const script = fs.readFileSync(INNO_BUILD_SCRIPT_PATH, "utf8");
+
+    expect(script).toContain("$isccTimeout = [TimeSpan]::FromMinutes(25)");
+    expect(script).toContain(
+      "$isccHeartbeatInterval = [TimeSpan]::FromSeconds(30)",
+    );
+    expect(script).toContain(
+      "Write-Host \"Starting ISCC.exe: $isccPath $($isccArgumentDisplay -join ' ')\"",
+    );
+    expect(script).toContain("Start-Process -FilePath $isccPath");
+    expect(script).toContain(
+      'Write-Host "ISCC.exe still running after $([math]::Round($elapsed.TotalMinutes, 1)) minutes..."',
+    );
+    expect(script).toContain("Stop-Process -Id $isccProcess.Id -Force");
+    expect(script).toContain(
+      'throw "ISCC.exe timed out after $([int]$isccTimeout.TotalMinutes) minutes while building the Windows installer."',
+    );
+  });
+
   it("treats the staged macOS app as an intermediate signed bundle, not a notarized final artifact", () => {
     const stageScript = fs.readFileSync(MACOS_STAGE_SCRIPT_PATH, "utf8");
 
