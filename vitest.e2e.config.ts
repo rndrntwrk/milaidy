@@ -33,7 +33,7 @@ export default defineConfig({
       ...(autonomousSourceRoot
         ? [
             {
-              find: /^@elizaos\/autonomous\/(.*)/,
+              find: /^@elizaos\/agent\/(.*)/,
               replacement: path.join(autonomousSourceRoot, "$1"),
             },
             {
@@ -48,6 +48,14 @@ export default defineConfig({
         ? [
             {
               find: /^@elizaos\/app-core\/(.*)/,
+              replacement: path.join(appCoreSourceRoot, "$1"),
+            },
+            {
+              find: /^@miladyai\/app-core\/src\/(.*)/,
+              replacement: path.join(appCoreSourceRoot, "$1"),
+            },
+            {
+              find: /^@miladyai\/app-core\/(.*)/,
               replacement: path.join(appCoreSourceRoot, "$1"),
             },
             {

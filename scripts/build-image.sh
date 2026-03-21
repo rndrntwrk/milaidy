@@ -141,13 +141,13 @@ run() {
 #
 # The committed config has:
 #   elizaRoot = path.resolve(miladyRoot, "../eliza")  ← Shaw's local submodule
-#   "packages/autonomous/src/index.ts"               ← monorepo path
+#   "packages/agent/src/index.ts"               ← monorepo path
 #   "packages/app-core/src/index.ts"                 ← monorepo path
 #   "packages/ui/src/index.ts"                       ← monorepo path
 #
 # We patch to:
 #   elizaRoot = path.resolve(miladyRoot, "node_modules/@elizaos")
-#   "autonomous/src/index.ts"   (packages/ prefix removed)
+#   "agent/src/index.ts"   (packages/ prefix removed)
 #   "app-core/src/index.ts"     (packages/ prefix removed)
 #   "ui/dist/index.js"          (elizaos/ui ships compiled — use dist, not src)
 #   "ui/src/index.ts"           (miladyai/ui is local source — keep src)
@@ -167,12 +167,12 @@ patch_vite() {
   #    This is the root cause — Shaw's local eliza checkout path → npm installed path
   sed -i 's|path\.resolve(miladyRoot, "\.\./eliza")|path.resolve(miladyRoot, "node_modules/@elizaos")|g' "$file"
 
-  # 2. Remove "packages/" prefix from elizaos/autonomous paths
+  # 2. Remove "packages/" prefix from elizaos/agent paths
   #    Both the index and wildcard variants (multi-line and single-line)
-  sed -i 's|"packages/autonomous/src/index\.ts"|"autonomous/src/index.ts"|g' "$file"
-  sed -i 's|"packages/autonomous/src/\$1"|"autonomous/src/$1"|g' "$file"
+  sed -i 's|"packages/agent/src/index\.ts"|"agent/src/index.ts"|g' "$file"
+  sed -i 's|"packages/agent/src/\$1"|"agent/src/$1"|g' "$file"
   # Also handle if $1 appears without backslash (sed single-quotes make $ literal)
-  sed -i 's|packages/autonomous/src/\$1|autonomous/src/$1|g' "$file"
+  sed -i 's|packages/agent/src/\$1|agent/src/$1|g' "$file"
 
   # 3. Remove "packages/" prefix from elizaos/app-core paths
   sed -i 's|"packages/app-core/src/index\.ts"|"app-core/src/index.ts"|g' "$file"

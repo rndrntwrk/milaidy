@@ -136,7 +136,7 @@ describe("getElizaPackageLinks", () => {
         expect.arrayContaining([
           {
             linkPath: path.join(miladyRoot, "node_modules/@elizaos/agent"),
-            targetPath: path.join(elizaRoot, "packages/autonomous"),
+            targetPath: path.join(elizaRoot, "packages/agent"),
           },
           {
             linkPath: path.join(miladyRoot, "node_modules/@miladyai/app-core"),

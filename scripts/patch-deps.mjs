@@ -239,7 +239,7 @@ patchBrowserServerIndexExtension();
 function patchAutonomousResetAllowedSegments() {
   const serverJs = resolve(
     root,
-    "node_modules/@elizaos/agent/packages/autonomous/src/api/server.js",
+    "node_modules/@elizaos/agent/packages/agent/src/api/server.js",
   );
   if (!existsSync(serverJs)) {
     console.log(

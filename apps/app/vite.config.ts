@@ -115,34 +115,6 @@ function publicSrcPlugin(): Plugin {
   };
 }
 
-/**
- * Redirects the upstream @miladyai/app-core CharacterRoster to milady's
- * version so CharacterView picks up the correct preset meta (catchphrases,
- * avatar indices, character names).
- */
-function characterOverridePlugin(): Plugin {
-  const miladyRoster = path.resolve(here, "src/components/CharacterRoster.tsx");
-  const miladyEditor = path.resolve(here, "src/components/CharacterEditor.tsx");
-  const miladyVoiceConfig = path.resolve(
-    here,
-    "src/components/VoiceConfigView.tsx",
-  );
-  return {
-    name: "milady-character-override",
-    enforce: "pre",
-    resolveId(source, importer) {
-      if (!importer || !importer.includes("app-core")) return;
-      if (!importer.includes("components/") && !importer.includes("App.tsx"))
-        return;
-      if (source === "./CharacterRoster") return miladyRoster;
-      if (source === "./CharacterView") return miladyEditor;
-      if (source === "./VoiceConfigView" || source === "./VoiceConfigView.js") {
-        return miladyVoiceConfig;
-      }
-    },
-  };
-}
-
 function sparkWasmDataUrlPlugin(): Plugin {
   return {
     name: "spark-wasm-data-url",
@@ -167,7 +139,6 @@ export default defineConfig({
   base: "./",
   publicDir: path.resolve(here, "public"),
   plugins: [
-    characterOverridePlugin(),
     publicSrcPlugin(),
     sparkWasmDataUrlPlugin(),
     tailwindcss(),

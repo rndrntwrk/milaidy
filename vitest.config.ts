@@ -41,7 +41,7 @@ export default defineConfig({
       ...(autonomousSourceRoot
         ? [
             {
-              find: /^@elizaos\/autonomous\/(.*)/,
+              find: /^@elizaos\/agent\/(.*)/,
               replacement: path.join(autonomousSourceRoot, "$1"),
             },
             {
@@ -86,6 +86,14 @@ export default defineConfig({
               replacement: path.join(appCoreSourceRoot, "$1"),
             },
             {
+              find: /^@miladyai\/app-core\/src\/(.*)/,
+              replacement: path.join(appCoreSourceRoot, "$1"),
+            },
+            {
+              find: /^@miladyai\/app-core\/(.*)/,
+              replacement: path.join(appCoreSourceRoot, "$1"),
+            },
+            {
               find: "@miladyai/app-core",
               replacement: resolveModuleEntry(
                 path.join(appCoreSourceRoot, "index"),
@@ -117,10 +125,10 @@ export default defineConfig({
     // teardown, especially for jsdom-heavy test files.
     execArgv: ["--max-old-space-size=4096"],
     include: [
-      "packages/autonomous/src/**/*.test.ts",
-      "packages/autonomous/src/**/*.test.tsx",
-      "packages/autonomous/test/**/*.test.ts",
-      "packages/autonomous/test/**/*.test.tsx",
+      "packages/agent/src/**/*.test.ts",
+      "packages/agent/src/**/*.test.tsx",
+      "packages/agent/test/**/*.test.ts",
+      "packages/agent/test/**/*.test.tsx",
       "packages/app-core/src/**/*.test.ts",
       "packages/app-core/test/**/*.test.ts",
       "packages/app-core/test/**/*.test.tsx",

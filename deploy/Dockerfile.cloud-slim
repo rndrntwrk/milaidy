@@ -139,7 +139,7 @@ COPY --from=pruner --chown=agent:agent /build/milady.mjs ./milady.mjs
 COPY --from=pruner --chown=agent:agent /build/package.json ./package.json
 
 # Copy source code (needed because workspace packages have relative imports
-# back to src/ — e.g. packages/autonomous/src/runtime/eliza.ts imports
+# back to src/ — e.g. packages/agent/src/runtime/eliza.ts imports
 # from ../../../../src/runtime/milady-plugin.ts)
 COPY --from=pruner --chown=agent:agent /build/src ./src
 

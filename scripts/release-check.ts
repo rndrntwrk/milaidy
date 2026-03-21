@@ -22,12 +22,12 @@ const forbiddenPrefixes = ["dist/Milady.app/"];
 const orchestratorPackageName = "@elizaos/plugin-agent-orchestrator";
 const orchestratorBrokenLifecycleTarget = "./scripts/ensure-node-pty.mjs";
 const autonomousServerPathCandidates = [
-  "node_modules/@elizaos/agent/packages/autonomous/src/api/server.js",
-  "packages/autonomous/src/api/server.ts",
+  "node_modules/@elizaos/agent/packages/agent/src/api/server.js",
+  "packages/agent/src/api/server.ts",
 ] as const;
 const autonomousElizaPathCandidates = [
-  "node_modules/@elizaos/agent/packages/autonomous/src/runtime/eliza.js",
-  "packages/autonomous/src/runtime/eliza.ts",
+  "node_modules/@elizaos/agent/packages/agent/src/runtime/eliza.js",
+  "packages/agent/src/runtime/eliza.ts",
 ] as const;
 const requiredWorkflowSnippets = [
   'BUN_VERSION: "1.3.9"',

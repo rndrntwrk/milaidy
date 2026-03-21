@@ -1117,7 +1117,7 @@ const avatarIndex = meta?.avatarIndex ?? (index % 4) + 1;
       expect(
         logs.some((line) =>
           line.includes(
-            "@elizaos/agent packages/autonomous/src/onboarding-presets.js",
+            "@elizaos/agent packages/agent/src/onboarding-presets.js",
           ),
         ),
       ).toBe(true);

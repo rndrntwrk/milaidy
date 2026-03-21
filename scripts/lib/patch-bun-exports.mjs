@@ -804,7 +804,7 @@ export function patchAutonomousMiladyOnboardingPresets(
     ...findPackageFilePaths(
       root,
       "@elizaos/agent",
-      "packages/autonomous/src/onboarding-presets.js",
+      "packages/agent/src/onboarding-presets.js",
     ),
     ...findPackageFilePaths(
       root,
@@ -827,7 +827,7 @@ export function patchAutonomousMiladyOnboardingPresets(
     }
     patched = true;
     log(
-      "[patch-deps] Patched @elizaos/agent packages/autonomous/src/onboarding-presets.js: onboarding presets now derive from Milady.",
+      "[patch-deps] Patched @elizaos/agent packages/agent/src/onboarding-presets.js: onboarding presets now derive from Milady.",
     );
   }
 

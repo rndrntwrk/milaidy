@@ -16,7 +16,7 @@ function getSiblingElizaPackageRoot(
 
   const packageMap: Record<string, string> = {
     "@elizaos/core": path.join(elizaRoot, "packages", "typescript"),
-    "@elizaos/agent": path.join(elizaRoot, "packages", "autonomous"),
+    "@elizaos/agent": path.join(elizaRoot, "packages", "agent"),
     "@miladyai/app-core": path.join(elizaRoot, "packages", "app-core"),
   };
 
@@ -123,7 +123,7 @@ export function getAutonomousSourceRoot(repoRoot: string): string | undefined {
     return directSrc;
   }
 
-  return path.join(packageRoot, "packages", "autonomous", "src");
+  return path.join(packageRoot, "packages", "agent", "src");
 }
 
 export function getAppCoreSourceRoot(repoRoot: string): string | undefined {

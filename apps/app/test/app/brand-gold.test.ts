@@ -7,13 +7,13 @@ const APP_SRC_DIR = path.resolve(import.meta.dirname, "../../src");
 const APP_INDEX_PATH = path.resolve(import.meta.dirname, "../../index.html");
 const MAIN_PATH = path.join(APP_SRC_DIR, "main.tsx");
 const BRAND_CSS_PATH = path.join(APP_SRC_DIR, "brand-gold.css");
-const CHARACTER_EDITOR_CSS_PATH = path.join(
-  APP_SRC_DIR,
-  "components/CharacterEditor.css",
+const CHARACTER_EDITOR_CSS_PATH = path.resolve(
+  import.meta.dirname,
+  "../../../../packages/app-core/src/components/CharacterEditor.css",
 );
-const CHARACTER_ROSTER_PATH = path.join(
-  APP_SRC_DIR,
-  "components/CharacterRoster.tsx",
+const CHARACTER_ROSTER_PATH = path.resolve(
+  import.meta.dirname,
+  "../../../../packages/app-core/src/components/CharacterRoster.tsx",
 );
 const MAIN_WINDOW_RUNTIME_PATH = path.join(
   APP_SRC_DIR,
@@ -87,8 +87,7 @@ describe("brand gold theme overrides", () => {
     );
     expect(editorCss).not.toContain("#facc15");
     expect(editorCss).not.toContain("#fbbf24");
-    expect(rosterSource).toContain('className="ce-roster-card-glow"');
-    expect(rosterSource).not.toContain("bg-yellow-300/15");
+    expect(rosterSource).toContain("ce-roster-card-frame");
   });
 
   it("adds a renderer-side show-main navigation runtime for detached surface menus", () => {
