@@ -9,15 +9,11 @@ on:
     branches: [main, develop]
     paths:
       - "src/benchmark/**"
-      - "package.json"
-      - "vitest.config.ts"
       - ".github/workflows/benchmark-tests.yml"
   pull_request:
     branches: [main, develop]
     paths:
       - "src/benchmark/**"
-      - "package.json"
-      - "vitest.config.ts"
       - ".github/workflows/benchmark-tests.yml"
   workflow_dispatch:
 
@@ -74,9 +70,4 @@ jobs:
       - name: Run ${{ matrix.lane }} lane
         env:
           CI: "true"
-        run: |
-          if [ ! -d "src/benchmark" ]; then
-            echo "src/benchmark directory does not exist, skipping"
-            exit 0
-          fi
-          ${{ matrix.command }}
+        run: ${{ matrix.command }}

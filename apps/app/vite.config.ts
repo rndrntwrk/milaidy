@@ -200,61 +200,49 @@ export default defineConfig({
       // Force local @miladyai/app-core when workspace-linked (prevents stale
       // bun cache copies from overriding the symlinked local source).
       ...(() => {
-        const localSource = path.resolve(miladyRoot, "packages/app-core/src");
+        const appCorePkgPath = path.resolve(miladyRoot, "packages/app-core/package.json");
+        const appCorePkgDir = path.dirname(appCorePkgPath);
+        const appCorePkg = JSON.parse(fs.readFileSync(appCorePkgPath, 'utf8'));
+        
+        const generatedAliases = [];
+        
+        for (const [key, value] of Object.entries(appCorePkg.exports || {})) {
+          if (typeof value === "string") {
+            const aliasKey = key === "." ? "@miladyai/app-core" : `@miladyai/app-core/${key.replace(/^\.\//, '')}`;
+            // If the package exports something ending with .js instead of .ts, we check for .ts locally
+            // But the exports in app-core point directly to .ts, .tsx, .css, so we can just resolve it
+            let targetPath = path.resolve(appCorePkgDir, value);
+            
+            generatedAliases.push({
+              find: new RegExp(`^${aliasKey}$`),
+              replacement: targetPath
+            });
+            // Also map .js extension for users importing it as .js
+            if (!aliasKey.endsWith(".js") && !aliasKey.endsWith(".css")) {
+              generatedAliases.push({
+                find: new RegExp(`^${aliasKey}\\.js$`),
+                replacement: targetPath
+              });
+            }
+          }
+        }
+
         const uiSource = path.resolve(miladyRoot, "packages/ui/src");
-        const autonomousSource = path.resolve(
-          miladyRoot,
-          "node_modules/@elizaos/agent/packages/agent/src",
-        );
+        const autonomousSource = path.resolve(miladyRoot, "node_modules/@elizaos/agent/packages/agent/src");
+
         return [
-          {
-            find: /^@miladyai\/app-core$/,
-            replacement: path.join(localSource, "index.ts"),
-          },
-          {
-            find: /^@miladyai\/app-core\/(.*)$/,
-            replacement: "RUNTIME_RESOLVE_APP_CORE",
-            customResolver(source, importer, options) {
-              const subpath = source.replace(/^@miladyai\/app-core\//, "");
-              const fullPath = path.join(localSource, subpath);
-              if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
-                return path.join(fullPath, "index.ts");
-              }
-              // Allow Vite to add .ts/.tsx/.css etc
-              return fullPath;
-            },
-          },
+          ...generatedAliases,
           {
             find: /^@miladyai\/ui$/,
             replacement: path.join(uiSource, "index.ts"),
           },
           {
             find: /^@miladyai\/ui\/(.*)$/,
-            replacement: "RUNTIME_RESOLVE_UI",
-            customResolver(source) {
-              const subpath = source.replace(/^@miladyai\/ui\//, "");
-              const fullPath = path.join(uiSource, subpath);
-              if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
-                return path.join(fullPath, "index.ts");
-              }
-              return fullPath;
-            },
+            replacement: `${uiSource}/$1/index.ts`, // assumes subpaths are directories
           },
           {
             find: /^@elizaos\/agent$/,
             replacement: path.join(autonomousSource, "index.ts"),
-          },
-          {
-            find: /^@elizaos\/agent\/(.*)$/,
-            replacement: "RUNTIME_RESOLVE_AGENT",
-            customResolver(source) {
-              const subpath = source.replace(/^@elizaos\/agent\//, "");
-              const fullPath = path.join(autonomousSource, subpath);
-              if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
-                return path.join(fullPath, "index.ts");
-              }
-              return fullPath;
-            }
           },
         ];
       })(),
