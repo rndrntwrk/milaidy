@@ -80,7 +80,7 @@ describe("brand gold theme overrides", () => {
     );
     expect(editorCss).toContain(".ce-page-tab--active {");
     expect(editorCss).toMatch(
-      /linear-gradient\(\s*135deg,\s*var\(--ce-gold-shadow\) 0%,\s*var\(--ce-gold\) 58%,\s*var\(--ce-gold-highlight\) 100%\)/,
+      /linear-gradient\(\s*135deg,\s*var\(--ce-gold-shadow\) 0%,\s*var\(--ce-gold\) 58%,\s*var\(--ce-gold-highlight\) 100%\s*\)/,
     );
     expect(editorCss).not.toContain("#facc15");
     expect(editorCss).not.toContain("#fbbf24");

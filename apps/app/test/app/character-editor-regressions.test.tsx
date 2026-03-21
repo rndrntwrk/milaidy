@@ -255,7 +255,7 @@ describe("CharacterEditor regressions", () => {
       (node) =>
         node.type === "button" &&
         Array.isArray(node.children) &&
-        node.children.includes("charactereditor.CustomizeBtn"),
+        node.children.includes("Customize"),
     );
     await act(async () => {
       customizeBtn.props.onClick();
@@ -324,7 +324,7 @@ describe("CharacterEditor regressions", () => {
       (node) =>
         node.type === "button" &&
         Array.isArray(node.children) &&
-        node.children.includes("charactereditor.CustomizeBtn"),
+        node.children.includes("Customize"),
     );
     await act(async () => {
       customizeBtn.props.onClick();
