@@ -21,22 +21,22 @@ const {
   audioConstructorMock: vi.fn(),
 }));
 
-vi.mock("@elizaos/app-core/api", () => ({
+vi.mock("@miladyai/app-core/api", () => ({
   client: clientMock,
 }));
 
-vi.mock("@elizaos/app-core/events", () => ({
+vi.mock("@miladyai/app-core/events", () => ({
   APP_EMOTE_EVENT: "app:emote",
   VOICE_CONFIG_UPDATED_EVENT: "voice-config-updated",
   VRM_TELEPORT_COMPLETE_EVENT: "vrm:teleport-complete",
   dispatchWindowEvent: dispatchWindowEventMock,
 }));
 
-vi.mock("@elizaos/app-core/state", () => ({
+vi.mock("@miladyai/app-core/state", () => ({
   useApp: useAppMock,
 }));
 
-vi.mock("@elizaos/app-core/voice", () => ({
+vi.mock("@miladyai/app-core/voice", () => ({
   PREMADE_VOICES: [
     {
       id: "voice-preset-1",
@@ -49,7 +49,7 @@ vi.mock("@elizaos/app-core/voice", () => ({
   sanitizeApiKey: (value: string | undefined) => value?.trim() ?? "",
 }));
 
-vi.mock("@elizaos/ui", () => {
+vi.mock("@miladyai/ui", () => {
   const React = require("react") as typeof import("react");
 
   return {
@@ -93,7 +93,7 @@ vi.mock("@elizaos/ui", () => {
   };
 });
 
-vi.mock("../../src/components/CharacterRoster", () => {
+vi.mock("@miladyai/app-core/src/components/CharacterRoster", () => {
   const React = require("react") as typeof import("react");
 
   return {
@@ -118,7 +118,7 @@ vi.mock("../../src/components/CharacterRoster", () => {
   };
 });
 
-import { CharacterEditor } from "../../src/components/CharacterEditor";
+import { CharacterEditor } from "@miladyai/app-core/src/components/CharacterEditor";
 
 function createAppState() {
   return {

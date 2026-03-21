@@ -3,7 +3,7 @@
  * onboarding (selection-only) and the character editor (with customization).
  */
 
-import { getVrmPreviewUrl } from "@elizaos/app-core/state";
+import { getVrmPreviewUrl } from "@miladyai/app-core/state";
 
 /* ── Shared constants ─────────────────────────────────────────────────── */
 
@@ -12,7 +12,7 @@ export const SLANT_CLIP =
 export const INSET_CLIP =
   "polygon(0px 0, 100% 0, calc(100% - 4px) 100%, -8px 100%)";
 
-import { CHARACTER_PRESET_META } from "../../../../src/onboarding-presets";
+import { CHARACTER_PRESET_META } from "@miladyai/app-core/onboarding-presets";
 
 export { CHARACTER_PRESET_META };
 
@@ -24,6 +24,7 @@ export type CharacterRosterEntry = {
   avatarIndex: number;
   voicePresetId?: string;
   catchphrase: string;
+  greetingAnimation?: string;
   preset: Record<string, unknown>;
 };
 
@@ -41,6 +42,7 @@ export function resolveRosterEntries(
       avatarIndex: meta?.avatarIndex ?? (index % 8) + 1,
       voicePresetId: meta?.voicePresetId,
       catchphrase: meta?.catchphrase ?? preset.catchphrase ?? "",
+      greetingAnimation: meta?.greetingAnimation,
       preset,
     };
   });

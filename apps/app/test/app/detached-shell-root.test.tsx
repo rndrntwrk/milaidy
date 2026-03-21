@@ -7,15 +7,15 @@ const { useAppMock } = vi.hoisted(() => ({
   useAppMock: vi.fn(),
 }));
 
-vi.mock("@elizaos/app-core/state", () => ({
+vi.mock("@miladyai/app-core/state", () => ({
   useApp: useAppMock,
 }));
 
-vi.mock("../../src/BrowserSurfaceWindow", () => ({
+vi.mock("@miladyai/app-core/src/BrowserSurfaceWindow", () => ({
   BrowserSurfaceWindow: () => <div data-testid="browser-surface-window" />,
 }));
 
-vi.mock("@elizaos/app-core/components", () => ({
+vi.mock("@miladyai/app-core/components", () => ({
   ChatView: () => <div data-testid="chat-view" />,
   CloudDashboard: () => <div data-testid="cloud-dashboard" />,
   CodingAgentSettingsSection: () => (
@@ -44,7 +44,7 @@ vi.mock("@elizaos/app-core/components", () => ({
   VoiceConfigView: () => <div data-testid="voice-config-view" />,
 }));
 
-import { DetachedShellRoot } from "../../src/DetachedShellRoot";
+import { DetachedShellRoot } from "@miladyai/app-core/src/DetachedShellRoot";
 
 describe("DetachedShellRoot", () => {
   const retryStartup = vi.fn();

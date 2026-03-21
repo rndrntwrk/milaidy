@@ -10,12 +10,12 @@
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@elizaos/app-core/state", () => ({
+vi.mock("@miladyai/app-core/state", () => ({
   getVrmPreviewUrl: (index: number) => `/avatars/preview-${index}.png`,
 }));
 
 // Stub out the onboarding-presets to avoid pulling in the full preset data
-vi.mock("../../../../src/onboarding-presets", () => ({
+vi.mock("@miladyai/app-core/onboarding-presets", () => ({
   CHARACTER_PRESET_META: {
     chaotic: {
       name: "Chen",
@@ -35,7 +35,7 @@ vi.mock("../../../../src/onboarding-presets", () => ({
 import {
   CharacterRoster,
   type CharacterRosterEntry,
-} from "../../src/components/CharacterRoster";
+} from "@miladyai/app-core/src/components/CharacterRoster";
 
 const ENTRIES: CharacterRosterEntry[] = [
   {

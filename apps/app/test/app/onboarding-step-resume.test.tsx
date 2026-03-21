@@ -7,7 +7,7 @@ import {
   clearForceFreshOnboarding,
   enableForceFreshOnboarding,
   installForceFreshOnboardingClientPatch,
-} from "../../src/onboarding-reset";
+} from "@miladyai/app-core/src/onboarding-reset";
 
 const ONBOARDING_STEP_STORAGE_KEY = "eliza:onboarding:step";
 const { mockClient } = vi.hoisted(() => ({
@@ -97,27 +97,27 @@ const { mockClient } = vi.hoisted(() => ({
   },
 }));
 
-import { client } from "@elizaos/app-core/api/client";
+import { client } from "@miladyai/app-core/api/client";
 
 // We use vi.spyOn against the real client singleton instead of a module mock,
 // because AppContext imports client via a relative path that vi.mock might not intercept.
-vi.mock("@elizaos/app-core/api/client", async (importOriginal) => {
+vi.mock("@miladyai/app-core/api/client", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("@elizaos/app-core/api/client")>();
+    await importOriginal<typeof import("@miladyai/app-core/api/client")>();
   return {
     ...actual,
     SkillScanReportSummary: {},
   };
 });
 
-import type { OnboardingStep } from "@elizaos/app-core/state";
-import { AppProvider, useApp } from "@elizaos/app-core/state";
+import type { OnboardingStep } from "@miladyai/app-core/state";
+import { AppProvider, useApp } from "@miladyai/app-core/state";
 import {
   deriveOnboardingResumeConnection,
   deriveOnboardingResumeFields,
   inferOnboardingResumeStep,
-} from "@elizaos/app-core/state/internal";
-import { installLocalProviderCloudPreferencePatch } from "../../src/cloud-preference-patch";
+} from "@miladyai/app-core/state/internal";
+import { installLocalProviderCloudPreferencePatch } from "@miladyai/app-core/src/cloud-preference-patch";
 
 type ProbeApi = {
   getSnapshot: () => {

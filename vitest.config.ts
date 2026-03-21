@@ -45,7 +45,7 @@ export default defineConfig({
               replacement: path.join(autonomousSourceRoot, "$1"),
             },
             {
-              find: "@elizaos/autonomous",
+              find: "@elizaos/agent",
               replacement: resolveModuleEntry(
                 path.join(autonomousSourceRoot, "index"),
               ),
@@ -55,7 +55,7 @@ export default defineConfig({
       ...(appCoreSourceRoot
         ? [
             {
-              find: "@elizaos/app-core/bridge/electrobun-rpc",
+              find: "@miladyai/app-core/bridge/electrobun-rpc",
               replacement: path.join(
                 repoRoot,
                 "test",
@@ -64,7 +64,7 @@ export default defineConfig({
               ),
             },
             {
-              find: "@elizaos/app-core/bridge/electrobun-runtime",
+              find: "@miladyai/app-core/bridge/electrobun-runtime",
               replacement: path.join(
                 repoRoot,
                 "test",
@@ -73,7 +73,7 @@ export default defineConfig({
               ),
             },
             {
-              find: "@elizaos/app-core/bridge",
+              find: "@miladyai/app-core/bridge",
               replacement: path.join(
                 repoRoot,
                 "test",
@@ -86,7 +86,7 @@ export default defineConfig({
               replacement: path.join(appCoreSourceRoot, "$1"),
             },
             {
-              find: "@elizaos/app-core",
+              find: "@miladyai/app-core",
               replacement: resolveModuleEntry(
                 path.join(appCoreSourceRoot, "index"),
               ),
@@ -173,8 +173,8 @@ export default defineConfig({
       deps: {
         inline: [
           "@elizaos/core",
-          "@elizaos/autonomous",
-          "@elizaos/app-core",
+          "@elizaos/agent",
+          "@miladyai/app-core",
           /^@elizaos\/plugin-/,
           "zod",
         ],

@@ -1,12 +1,12 @@
-import { client } from "@elizaos/app-core/api";
-import { ConfigSaveFooter } from "@elizaos/app-core/components/ConfigSaveFooter";
+import { client } from "@miladyai/app-core/api";
+import { ConfigSaveFooter } from "@miladyai/app-core/components/ConfigSaveFooter";
 import {
   dispatchWindowEvent,
   VOICE_CONFIG_UPDATED_EVENT,
-} from "@elizaos/app-core/events";
-import { useApp } from "@elizaos/app-core/state";
-import { PREMADE_VOICES, sanitizeApiKey } from "@elizaos/app-core/voice";
-import { Button, Input } from "@elizaos/ui";
+} from "@miladyai/app-core/events";
+import { useApp } from "@miladyai/app-core/state";
+import { PREMADE_VOICES, sanitizeApiKey } from "@miladyai/app-core/voice";
+import { Button, Input } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ProviderId = "cloud" | "elevenlabs" | "edge";

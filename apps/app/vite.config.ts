@@ -116,7 +116,7 @@ function publicSrcPlugin(): Plugin {
 }
 
 /**
- * Redirects the upstream @elizaos/app-core CharacterRoster to milady's
+ * Redirects the upstream @miladyai/app-core CharacterRoster to milady's
  * version so CharacterView picks up the correct preset meta (catchphrases,
  * avatar indices, character names).
  */
@@ -186,7 +186,7 @@ export default defineConfig({
       "react-dom",
       "three",
       "@sparkjsdev/spark",
-      "@elizaos/app-core",
+      "@miladyai/app-core",
     ],
     alias: [
       // Capacitor plugins — resolve to local plugin sources
@@ -226,53 +226,41 @@ export default defineConfig({
         find: /^@miladyai\/capacitor-talkmode$/,
         replacement: path.resolve(here, "plugins/talkmode/src/index.ts"),
       },
-      // Force local @elizaos/app-core when workspace-linked (prevents stale
+      // Force local @miladyai/app-core when workspace-linked (prevents stale
       // bun cache copies from overriding the symlinked local source).
       ...(() => {
-        const localAppCore = path.resolve(
+        const localSource = path.resolve(miladyRoot, "packages/app-core/src");
+        const uiSource = path.resolve(miladyRoot, "packages/ui/src");
+        const autonomousSource = path.resolve(
           miladyRoot,
-          "node_modules/@elizaos/app-core",
+          "node_modules/@elizaos/agent/packages/agent/src",
         );
-        try {
-          const real = fs.realpathSync(localAppCore);
-          if (real.includes("/eliza/packages/app-core")) {
-            return [
-              {
-                find: "@elizaos/app-core/api",
-                replacement: path.join(real, "dist/api"),
-              },
-              {
-                find: "@elizaos/app-core/state",
-                replacement: path.join(real, "dist/state"),
-              },
-              {
-                find: "@elizaos/app-core/bridge",
-                replacement: path.join(real, "dist/bridge"),
-              },
-              {
-                find: "@elizaos/app-core/config",
-                replacement: path.join(real, "dist/config"),
-              },
-              {
-                find: "@elizaos/app-core/events",
-                replacement: path.join(real, "dist/events"),
-              },
-              {
-                find: "@elizaos/app-core/platform",
-                replacement: path.join(real, "dist/platform"),
-              },
-              {
-                find: "@elizaos/app-core/styles/styles.css",
-                replacement: path.join(real, "dist/styles/styles.css"),
-              },
-              {
-                find: "@elizaos/app-core",
-                replacement: path.join(real, "dist"),
-              },
-            ];
-          }
-        } catch {}
-        return [];
+        return [
+          {
+            find: /^@miladyai\/app-core$/,
+            replacement: path.join(localSource, "index.ts"),
+          },
+          {
+            find: /^@miladyai\/app-core\/(.*)$/,
+            replacement: `${localSource}/$1`,
+          },
+          {
+            find: /^@miladyai\/ui$/,
+            replacement: path.join(uiSource, "index.ts"),
+          },
+          {
+            find: /^@miladyai\/ui\/(.*)$/,
+            replacement: `${uiSource}/$1`,
+          },
+          {
+            find: /^@elizaos\/agent$/,
+            replacement: path.join(autonomousSource, "index.ts"),
+          },
+          {
+            find: /^@elizaos\/agent\/(.*)$/,
+            replacement: `${autonomousSource}/$1`,
+          },
+        ];
       })(),
     ],
   },

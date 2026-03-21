@@ -5,17 +5,17 @@
  * right panel has style rules + examples. Footer has voice + save + reset.
  */
 
-import { client } from "@elizaos/app-core/api";
+import { client } from "@miladyai/app-core/api";
 import {
   APP_EMOTE_EVENT,
   dispatchWindowEvent,
   VOICE_CONFIG_UPDATED_EVENT,
-} from "@elizaos/app-core/events";
-import { useApp } from "@elizaos/app-core/state";
-import { PREMADE_VOICES, sanitizeApiKey } from "@elizaos/app-core/voice";
-import { Button, Input, Textarea, ThemedSelect } from "@elizaos/ui";
-import { STYLE_PRESETS } from "../../../../src/onboarding-presets";
-import { normalizeCharacterMessageExamples } from "../../../../src/utils/character-message-examples";
+} from "@miladyai/app-core/events";
+import { STYLE_PRESETS } from "@miladyai/app-core/onboarding-presets";
+import { useApp } from "@miladyai/app-core/state";
+import { PREMADE_VOICES, sanitizeApiKey } from "@miladyai/app-core/voice";
+import { Button, Input, Textarea, ThemedSelect } from "@miladyai/ui";
+import { normalizeCharacterMessageExamples } from "@miladyai/app-core/utils/character-message-examples";
 import {
   CharacterRoster,
   type CharacterRosterEntry,
@@ -177,6 +177,7 @@ export function CharacterEditor({
     characterLoading,
     characterSaving,
     characterSaveSuccess,
+    chatAgentVoiceMuted,
     characterSaveError,
     handleCharacterFieldInput,
     handleCharacterArrayInput,
@@ -256,8 +257,11 @@ export function CharacterEditor({
   const [fieldsEdited, setFieldsEdited] = useState(false);
   /** Ref to suppress dirty-tracking during programmatic field updates. */
   const suppressDirtyRef = useRef(false);
-  /** Queued catchphrase to speak after VRM teleport-in dissolve finishes. */
-  const pendingWaveCatchphraseRef = useRef<string | null>(null);
+  /** Queued greeting to play after VRM teleport-in dissolve finishes. */
+  const pendingGreetingRef = useRef<{
+    catchphrase: string;
+    animationPath: string;
+  } | null>(null);
   const onboardingPresetStyles = useMemo(
     () => getOnboardingPresetStyles(onboardingOptions),
     [onboardingOptions],
@@ -457,9 +461,14 @@ export function CharacterEditor({
       if (applyDefaults) {
         applyCharacterDefaults(entry);
       }
-      // Queue wave + catchphrase to play after the VRM teleport-in dissolve finishes
+      // Queue greeting animation + catchphrase to play after the VRM teleport-in dissolve finishes
       if (isNewCharacter && entry.catchphrase) {
-        pendingWaveCatchphraseRef.current = entry.catchphrase;
+        pendingGreetingRef.current = {
+          catchphrase: entry.catchphrase,
+          animationPath:
+            entry.greetingAnimation ??
+            "animations/emotes/waving-both-hands.glb.gz",
+        };
       }
     },
     [
@@ -505,20 +514,20 @@ export function CharacterEditor({
     activeCharacterRosterEntry,
   ]);
 
-  /* ── Play wave + catchphrase when VRM teleport-in dissolve finishes ── */
+  /* ── Play greeting animation + catchphrase when VRM teleport-in dissolve finishes ── */
   useEffect(() => {
     const handler = () => {
-      const catchphrase = pendingWaveCatchphraseRef.current;
-      if (!catchphrase) return;
-      pendingWaveCatchphraseRef.current = null;
+      const greeting = pendingGreetingRef.current;
+      if (!greeting) return;
+      pendingGreetingRef.current = null;
       dispatchWindowEvent(APP_EMOTE_EVENT, {
-        emoteId: "wave",
-        path: "/animations/emotes/waving-both-hands.glb",
-        duration: 2.5,
+        emoteId: "greeting",
+        path: `/${greeting.animationPath}`,
+        duration: 3,
         loop: false,
         showOverlay: false,
       });
-      void client.streamVoiceSpeak(catchphrase).catch(() => {});
+      void client.streamVoiceSpeak(greeting.catchphrase).catch(() => {});
     };
     const eventName = "eliza:vrm-teleport-complete";
     window.addEventListener(eventName, handler);
@@ -781,6 +790,47 @@ export function CharacterEditor({
             }
             onSelect={handleSelectCharacter}
           />
+          {/* Sound toggle — lets users mute greeting voices */}
+          <button
+            type="button"
+            data-no-camera-drag="true"
+            className="ce-sound-toggle"
+            aria-label={chatAgentVoiceMuted ? "Sound off" : "Sound on"}
+            title={chatAgentVoiceMuted ? "Sound off" : "Sound on"}
+            onClick={() =>
+              setState("chatAgentVoiceMuted", !chatAgentVoiceMuted)
+            }
+          >
+            {chatAgentVoiceMuted ? (
+              <svg
+                {...svgBase}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <title>Mute</title>
+                <path d="M11 5 6 9H2v6h4l5 4V5Z" />
+                <line x1="23" y1="9" x2="17" y2="15" />
+                <line x1="17" y1="9" x2="23" y2="15" />
+              </svg>
+            ) : (
+              <svg
+                {...svgBase}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <title>Unmute</title>
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+            )}
+          </button>
         </div>
       )}
 

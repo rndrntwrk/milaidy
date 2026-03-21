@@ -36,7 +36,7 @@ console.error = (...args: unknown[]) => {
 };
 
 // ---------------------------------------------------------------------------
-// Mock @elizaos/app-core bridge modules — the real electrobun RPC module
+// Mock @miladyai/app-core bridge modules — the real electrobun RPC module
 // relies on native Electrobun bindings that are unavailable in the test
 // environment.
 // ---------------------------------------------------------------------------
@@ -56,7 +56,7 @@ function isInjectedElectrobunRuntime(): boolean {
   );
 }
 
-vi.mock("@elizaos/app-core/bridge/electrobun-rpc", () => {
+vi.mock("@miladyai/app-core/bridge/electrobun-rpc", () => {
   function getElectrobunRendererRpc() {
     if (typeof window === "undefined") return null;
     const w = window as unknown as Record<string, unknown>;
@@ -106,7 +106,7 @@ vi.mock("@elizaos/app-core/bridge/electrobun-rpc", () => {
   };
 });
 
-vi.mock("@elizaos/app-core/bridge", () => {
+vi.mock("@miladyai/app-core/bridge", () => {
   function getElectrobunRendererRpc() {
     if (typeof window === "undefined") return null;
     const w = window as unknown as Record<string, unknown>;

@@ -9,15 +9,15 @@ const { subscribeDesktopBridgeEventMock, useAppMock } = vi.hoisted(() => ({
   useAppMock: vi.fn(),
 }));
 
-vi.mock("@elizaos/app-core/bridge", () => ({
+vi.mock("@miladyai/app-core/bridge", () => ({
   subscribeDesktopBridgeEvent: subscribeDesktopBridgeEventMock,
 }));
 
-vi.mock("@elizaos/app-core/state", () => ({
+vi.mock("@miladyai/app-core/state", () => ({
   useApp: useAppMock,
 }));
 
-import { DesktopSurfaceNavigationRuntime } from "../../src/DesktopSurfaceNavigationRuntime";
+import { DesktopSurfaceNavigationRuntime } from "@miladyai/app-core/src/DesktopSurfaceNavigationRuntime";
 
 describe("DesktopSurfaceNavigationRuntime", () => {
   const setTab = vi.fn();

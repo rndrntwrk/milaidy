@@ -1,8 +1,8 @@
-import type { client as appClient } from "@elizaos/app-core/api";
 import {
   normalizeOnboardingProviderId,
   ONBOARDING_PROVIDER_CATALOG,
-} from "@elizaos/autonomous/contracts/onboarding";
+} from "@elizaos/agent/contracts/onboarding";
+import type { client as appClient } from "@miladyai/app-core/api";
 
 const PATCH_STATE = Symbol.for("milady.cloudPreferencePatch");
 
