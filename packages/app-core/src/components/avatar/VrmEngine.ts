@@ -188,7 +188,7 @@ const DEFAULT_CAMERA_ANIMATION: CameraAnimationConfig = {
 const CAMERA_PROFILE_TRANSITION_DURATION_SECONDS = 0.8;
 const AVATAR_SWITCH_CAMERA_TRANSITION_DURATION_SECONDS = 3;
 const COMPANION_WORLD_SCALE = 2.5;
-const COMPANION_DARK_WORLD_FLOOR_OFFSET_Y = -0.90;
+const COMPANION_DARK_WORLD_FLOOR_OFFSET_Y = -0.85;
 const COMPANION_LIGHT_WORLD_FLOOR_OFFSET_Y = -0.30;
 const COMPANION_WORLD_REVEAL_DURATION = 5.4;
 const COMPANION_WORLD_REVEAL_EDGE = 0.28;
@@ -196,11 +196,7 @@ const COMPANION_WORLD_REVEAL_EASE_EXPONENT = 2;
 const COMPANION_WORLD_REVEAL_START_OFFSET = 0.7;
 const TELEPORT_DISSOLVE_START_Y = -1.2;
 const TELEPORT_DISSOLVE_END_Y = 1.0;
-const TELEPORT_SPARKLE_PARTICLE_COUNT = 28;
-const TELEPORT_SPARKLE_RING_RADIUS = 0.52;
-const TELEPORT_SPARKLE_MIN_SIZE = 0.055;
-const TELEPORT_SPARKLE_MAX_SIZE = 0.13;
-const COMPANION_DOF_APERTURE_SIZE = 0.028;
+const COMPANION_DOF_APERTURE_SIZE = 0.012;
 const COMPANION_DOF_NEAR_ZOOM_APERTURE_FACTOR = 0.4;
 const COMPANION_ZOOM_NEAR_FACTOR = 0.25;
 const COMPANION_ZOOM_MIN_RADIUS = 1.2;
@@ -473,7 +469,7 @@ async function loadGltfAsset(
     const reader = response.body.getReader();
     let received = 0;
     const chunks: Uint8Array[] = [];
-    for (;;) {
+    for (; ;) {
       const { done, value } = await reader.read();
       if (done) break;
       if (value) {
@@ -774,10 +770,10 @@ export class VrmEngine {
     neckBone: THREE.Object3D | null;
     spineBone: THREE.Object3D | null;
   } = {
-    headBone: null,
-    neckBone: null,
-    spineBone: null,
-  };
+      headBone: null,
+      neckBone: null,
+      spineBone: null,
+    };
   private readonly tempCameraOrbitOffset = new THREE.Vector3();
   private readonly tempCameraSpherical = new THREE.Spherical();
   private readonly tempAvatarLookTarget = new THREE.Vector3();
@@ -805,9 +801,6 @@ export class VrmEngine {
   };
   private handleControlEnd = (): void => {
     if (!this.interactionEnabled) return;
-    if (this.camera) {
-      this.baseCameraPosition.copy(this.camera.position);
-    }
     if (this.controls) {
       this.lookAtTarget.copy(this.controls.target);
     }
@@ -871,6 +864,14 @@ export class VrmEngine {
     sparkRenderer.renderOrder = 9998;
     this.scene.add(sparkRenderer);
     this.sparkRenderer = sparkRenderer;
+
+    if (sparkRenderer.material && typeof sparkRenderer.material.vertexShader === 'string') {
+      sparkRenderer.material.vertexShader = sparkRenderer.material.vertexShader.replace(
+        'if (viewCenter.z >= 0.0) {',
+        'if (viewCenter.z > -6.0) {'
+      );
+      sparkRenderer.material.needsUpdate = true;
+    }
   }
 
   private updateSparkPerformanceProfile(): void {
@@ -884,9 +885,7 @@ export class VrmEngine {
       sparkRenderer.defaultView.sortDistance = SPARK_SORT_DISTANCE;
       return;
     }
-    const isCompanionProfile =
-      this.cameraProfile === "companion" ||
-      this.cameraProfile === "companion_close";
+    const isCompanionProfile = this.cameraProfile === "companion";
     const closeZoomFactor = isCompanionProfile
       ? THREE.MathUtils.smoothstep(this.companionZoomCurrent, 0.3, 1)
       : 0;
@@ -918,53 +917,33 @@ export class VrmEngine {
     );
   }
 
-  private createWorldRevealController(
+  private async createWorldRevealController(
     spark: typeof import("@sparkjsdev/spark"),
     mesh: SparkSplatMesh,
     reveal: { origin: THREE.Vector3; radius: number },
     mode: "reveal" | "hide",
-  ): WorldRevealController | null {
+  ): Promise<WorldRevealController | null> {
     const dyno = (
       "dyno" in spark ? Reflect.get(spark as object, "dyno") : undefined
-    ) as
-      | {
-          Gsplat: unknown;
-          dynoBlock: (
-            inTypes: Record<string, unknown>,
-            outTypes: Record<string, unknown>,
-            construct: (
-              inputs: Record<string, unknown>,
-            ) => Record<string, unknown>,
-          ) => unknown;
-          dynoFloat: (value?: number, key?: string) => { value: number };
-          dynoVec3: (
-            value?: THREE.Vector3,
-            key?: string,
-          ) => { value: THREE.Vector3 };
-          dynoConst: (type: string, value: number) => unknown;
-          splitGsplat: (gsplat: unknown) => {
-            outputs: {
-              center: unknown;
-              scales: unknown;
-              rgb: unknown;
-              opacity: unknown;
-            };
-          };
-          combineGsplat: (value: Record<string, unknown>) => unknown;
-          add: (a: unknown, b: unknown) => unknown;
-          sub: (a: unknown, b: unknown) => unknown;
-          mul: (a: unknown, b: unknown) => unknown;
-          div: (a: unknown, b: unknown) => unknown;
-          abs: (a: unknown) => unknown;
-          clamp: (a: unknown, min: unknown, max: unknown) => unknown;
-          max: (a: unknown, b: unknown) => unknown;
-          mix: (a: unknown, b: unknown, t: unknown) => unknown;
-          smoothstep: (edge0: unknown, edge1: unknown, x: unknown) => unknown;
-          pow: (a: unknown, b: unknown) => unknown;
-          length: (a: unknown) => unknown;
-          swizzle: (a: unknown, select: string) => unknown;
-        }
-      | undefined;
+    ) as any;
+
+    const tsl = (await import("three/tsl").catch(() => null)) as any;
+
+    const math = {
+      add: dyno?.add || tsl?.add,
+      sub: dyno?.sub || tsl?.sub,
+      mul: dyno?.mul || tsl?.mul,
+      div: dyno?.div || tsl?.div,
+      abs: dyno?.abs || tsl?.abs,
+      clamp: dyno?.clamp || tsl?.clamp,
+      max: dyno?.max || tsl?.max,
+      mix: dyno?.mix || tsl?.mix,
+      smoothstep: dyno?.smoothstep || tsl?.smoothstep,
+      pow: dyno?.pow || tsl?.pow,
+      length: dyno?.length || tsl?.length,
+      swizzle: dyno?.swizzle || ((a: any, s: string) => a[s] || a), // fallback to property access
+    };
+
     if (
       !dyno?.Gsplat ||
       !dyno.dynoBlock ||
@@ -973,30 +952,30 @@ export class VrmEngine {
       !dyno.dynoConst ||
       !dyno.splitGsplat ||
       !dyno.combineGsplat ||
-      !dyno.add ||
-      !dyno.sub ||
-      !dyno.mul ||
-      !dyno.div ||
-      !dyno.abs ||
-      !dyno.clamp ||
-      !dyno.max ||
-      !dyno.mix ||
-      !dyno.smoothstep ||
-      !dyno.pow ||
-      !dyno.length ||
-      !dyno.swizzle
+      !math.add ||
+      !math.sub ||
+      !math.mul ||
+      !math.div ||
+      !math.abs ||
+      !math.clamp ||
+      !math.max ||
+      !math.mix ||
+      !math.smoothstep ||
+      !math.pow ||
+      !math.length ||
+      !math.swizzle
     ) {
-      console.error("[VrmEngine] createWorldRevealController failed missing dyno props:", {
+      console.error("[VrmEngine] createWorldRevealController failed missing dyno/tsl props:", {
         Gsplat: !!dyno?.Gsplat, dynoBlock: !!dyno?.dynoBlock, dynoFloat: !!dyno?.dynoFloat,
         dynoVec3: !!dyno?.dynoVec3, dynoConst: !!dyno?.dynoConst, splitGsplat: !!dyno?.splitGsplat,
-        combineGsplat: !!dyno?.combineGsplat, add: !!dyno?.add, sub: !!dyno?.sub,
-        mul: !!dyno?.mul, div: !!dyno?.div, abs: !!dyno?.abs, clamp: !!dyno?.clamp,
-        max: !!dyno?.max, mix: !!dyno?.mix, smoothstep: !!dyno?.smoothstep,
-        pow: !!dyno?.pow, length: !!dyno?.length, swizzle: !!dyno?.swizzle
+        combineGsplat: !!dyno?.combineGsplat, add: !!math.add, sub: !!math.sub,
+        mul: !!math.mul, div: !!math.div, abs: !!math.abs, clamp: !!math.clamp,
+        max: !!math.max, mix: !!math.mix, smoothstep: !!math.smoothstep,
+        pow: !!math.pow, length: !!math.length, swizzle: !!math.swizzle
       });
       return null;
     }
-    console.log("[VrmEngine] createWorldRevealController SUCCESS, dyno checked ok");
+    console.log("[VrmEngine] createWorldRevealController SUCCESS, dyno/tsl checked ok");
 
     const originUniform = dyno.dynoVec3(reveal.origin, "uWorldRevealOrigin");
     const resolvedRadius = Math.max(
@@ -1026,52 +1005,52 @@ export class VrmEngine {
     const modifier = dyno.dynoBlock(
       { gsplat: dyno.Gsplat },
       { gsplat: dyno.Gsplat },
-      ({ gsplat }) => {
+      ({ gsplat }: any) => {
         if (!gsplat) {
           throw new Error("Missing gsplat input for world reveal");
         }
         const { center, scales, rgb, opacity } =
           dyno.splitGsplat(gsplat).outputs;
-        const radialDistance = dyno.length(
-          dyno.swizzle(dyno.sub(center, originUniform), "xz"),
+        const radialDistance = math.length(
+          math.swizzle(math.sub(center, originUniform), "xz"),
         );
-        const currentRadius = dyno.add(
-          dyno.mul(radiusUniform, progressUniform),
+        const currentRadius = math.add(
+          math.mul(radiusUniform, progressUniform),
           startOffset,
         );
-        const bodyMask = dyno.sub(
+        const bodyMask = math.sub(
           one,
-          dyno.smoothstep(
-            dyno.sub(currentRadius, edgeUniform),
-            dyno.add(currentRadius, edgeUniform),
+          math.smoothstep(
+            math.sub(currentRadius, edgeUniform),
+            math.add(currentRadius, edgeUniform),
             radialDistance,
           ),
         );
-        const ringDistance = dyno.abs(dyno.sub(radialDistance, currentRadius));
-        const ringMask = dyno.pow(
-          dyno.sub(
+        const ringDistance = math.abs(math.sub(radialDistance, currentRadius));
+        const ringMask = math.pow(
+          math.sub(
             one,
-            dyno.smoothstep(zero, dyno.mul(edgeUniform, two), ringDistance),
+            math.smoothstep(zero, math.mul(edgeUniform, two), ringDistance),
           ),
           two,
         );
         const visibleMask =
-          mode === "hide" ? dyno.sub(one, bodyMask) : bodyMask;
-        const wireFactor = dyno.clamp(
-          dyno.max(visibleMask, dyno.mul(ringMask, wireAlphaUniform)),
+          mode === "hide" ? math.sub(one, bodyMask) : bodyMask;
+        const wireFactor = math.clamp(
+          math.max(visibleMask, math.mul(ringMask, wireAlphaUniform)),
           zero,
           one,
         );
-        const brightenedRgb = dyno.mul(
+        const brightenedRgb = math.mul(
           rgb,
-          dyno.add(one, dyno.mul(ringMask, wireBoostUniform)),
+          math.add(one, math.mul(ringMask, wireBoostUniform)),
         );
         return {
           gsplat: dyno.combineGsplat({
             gsplat,
-            scales: dyno.mix(wireScaleUniform, scales, wireFactor),
-            rgb: dyno.mix(brightenedRgb, rgb, visibleMask),
-            opacity: dyno.mul(opacity, wireFactor),
+            scales: math.mix(wireScaleUniform, scales, wireFactor),
+            rgb: math.mix(brightenedRgb, rgb, visibleMask),
+            opacity: math.mul(opacity, wireFactor),
           }),
         };
       },
@@ -1212,9 +1191,7 @@ export class VrmEngine {
       0.5,
       camera.position.distanceTo(this.pointerParallaxLookAt),
     );
-    const isCompanionProfile =
-      this.cameraProfile === "companion" ||
-      this.cameraProfile === "companion_close";
+    const isCompanionProfile = this.cameraProfile === "companion";
     const closeZoomFactor = isCompanionProfile
       ? THREE.MathUtils.smoothstep(this.companionZoomCurrent, 0.3, 1)
       : 0;
@@ -1232,9 +1209,7 @@ export class VrmEngine {
     camera: THREE.PerspectiveCamera,
     stableDelta: number,
   ): void {
-    const isCompanionProfile =
-      this.cameraProfile === "companion" ||
-      this.cameraProfile === "companion_close";
+    const isCompanionProfile = this.cameraProfile === "companion";
     const follow = Math.min(1, stableDelta * 10);
     const targetZoom = isCompanionProfile ? this.companionZoomTarget : 0;
     this.companionZoomCurrent = THREE.MathUtils.lerp(
@@ -1456,10 +1431,10 @@ export class VrmEngine {
 
     const cameraRotation = this.camera
       ? new THREE.Vector3(
-          this.camera.rotation.x,
-          this.camera.rotation.y,
-          this.camera.rotation.z,
-        )
+        this.camera.rotation.x,
+        this.camera.rotation.y,
+        this.camera.rotation.z,
+      )
       : null;
     const lookAtTarget =
       this.toDebugVector3(this.lookAtTarget) ??
@@ -1570,11 +1545,11 @@ export class VrmEngine {
   ): void {
     if (!this.camera) return;
 
-    const startPos = new THREE.Vector3().copy(this.camera.position);
+    const startPos = new THREE.Vector3().copy(this.baseCameraPosition);
     const startLookAt = new THREE.Vector3().copy(this.lookAtTarget);
     const startFov = this.camera.fov;
     const targetLookAt = new THREE.Vector3();
-    const targetPos = new THREE.Vector3();
+    const defaultProfileTargetPos = new THREE.Vector3();
 
     const dummyCamera = this.camera.clone();
 
@@ -1584,10 +1559,19 @@ export class VrmEngine {
       this.controls,
       this.cameraProfile,
       targetLookAt,
-      targetPos,
+      defaultProfileTargetPos,
       (c) => this.cameraManager.applyInteractionMode(c, this.interactionMode),
       true, // skipControlUpdate
     );
+
+    // To prevent frame-based dynamic offsets (yaw, sway, zoom) from accumulating and causing camera spin,
+    // compute the pristine tracking offset from baseCameraPosition, which is unaffected by post-process
+    // modifiers in applyCameraMotion. We do NOT use OrbitControls' getDistance/getAzimuthalAngle because 
+    // OrbitControls reads from `camera.position` which has the temporary view shifts applied to it every frame.
+    const currentOffset = new THREE.Vector3();
+    currentOffset.copy(this.baseCameraPosition).sub(startLookAt);
+
+    const targetPos = new THREE.Vector3().copy(targetLookAt).add(currentOffset);
 
     this.startCameraTransition(
       startPos,
@@ -2023,7 +2007,7 @@ export class VrmEngine {
     const incomingRevealRadius = Math.max(
       worldRevealRadius * COMPANION_WORLD_SCALE,
       getRobustSplatRadialExtent(splat, worldCenterBottom) *
-        COMPANION_WORLD_SCALE,
+      COMPANION_WORLD_SCALE,
     );
     let outgoingAnchor: THREE.Vector3 | null = null;
     let sharedRevealRadius = incomingRevealRadius;
@@ -2032,11 +2016,11 @@ export class VrmEngine {
       sharedRevealRadius = Math.max(
         sharedRevealRadius,
         getRobustSplatRadialExtent(outgoingWorld, outgoingAnchor) *
-          COMPANION_WORLD_SCALE,
+        COMPANION_WORLD_SCALE,
       );
     }
 
-    const worldReveal = this.createWorldRevealController(
+    const worldReveal = await this.createWorldRevealController(
       spark,
       splat,
       {
@@ -2049,7 +2033,7 @@ export class VrmEngine {
     if (worldReveal) {
       let outgoingReveal: WorldRevealController | null = null;
       if (outgoingWorld && outgoingAnchor && !waitingForVrm) {
-        outgoingReveal = this.createWorldRevealController(
+        outgoingReveal = await this.createWorldRevealController(
           spark,
           outgoingWorld,
           {
@@ -2332,7 +2316,7 @@ export class VrmEngine {
             const nz = tsl.sin(tsl.positionWorld.z.mul(18.0).add(tsl.positionWorld.x.mul(10.0)));
             const noise = nx.add(ny).add(nz).div(3.0).add(1.0).mul(0.5);
             const ratio = diff.div(0.3).clamp(0.0, 1.0);
-            
+
             const baseAlpha = tsl.step(ratio, noise);
             const dissolveAlpha = isOutgoing ? tsl.float(1.0).sub(baseAlpha) : baseAlpha;
 
@@ -2385,7 +2369,7 @@ export class VrmEngine {
     if (typeof window !== "undefined") {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     }
-    
+
     if (this.loadingAborted || this.vrm !== vrm) return;
 
     this.revealStarted = true;
@@ -2662,6 +2646,14 @@ ${isOutgoing ? "if (teleportNoise >= teleportRatio) discard;" : "if (teleportNoi
     const scene = this.scene;
     const camera = this.camera;
     if (!renderer || !scene || !camera) return;
+
+    // Reset camera to the pristine tracking base before processing this frame's 
+    // motion and offsets. This ensures OrbitControls and transitions never see 
+    // the temporary frame-based dynamic offsets (zoom, yaw, parallax), 
+    // which prevents them from being doubled or accumulated into the state.
+    if (this.baseCameraPosition.lengthSq() > 1e-6) {
+      camera.position.copy(this.baseCameraPosition);
+    }
     const rawDelta = this.clock.getDelta();
     const stableDelta = Math.min(rawDelta, 1 / 30);
     this.elapsedTime += rawDelta;
@@ -2756,8 +2748,7 @@ ${isOutgoing ? "if (teleportNoise >= teleportRatio) discard;" : "if (teleportNoi
     if (
       !manualCameraActive &&
       this.cameraAnimation.enabled &&
-      this.baseCameraPosition.length() > 0 &&
-      !this.isCameraTransitioning
+      this.baseCameraPosition.length() > 0
     ) {
       this.cameraManager.applyCameraMotion(
         camera,
@@ -2850,6 +2841,8 @@ ${isOutgoing ? "if (teleportNoise >= teleportRatio) discard;" : "if (teleportNoi
       if (manualCameraActive && !this.isCameraTransitioning) {
         this.controls.update();
         this.lookAtTarget.copy(this.controls.target);
+        // Track the manual move in our clean base position
+        this.baseCameraPosition.copy(camera.position);
       } else if (!this.isCameraTransitioning) {
         this.controls.target.copy(this.lookAtTarget);
       }

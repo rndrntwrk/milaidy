@@ -33,6 +33,7 @@ import {
   ensureModel,
 } from "./embedding-manager-support.js";
 import { detectEmbeddingPreset } from "./embedding-presets.js";
+import { installDatabaseTrajectoryLogger } from "./trajectory-persistence.js";
 
 const AUTONOMY_WORLD_ID = stringToUuid("00000000-0000-0000-0000-000000000001");
 const AUTONOMY_ENTITY_ID = stringToUuid("00000000-0000-0000-0000-000000000002");
@@ -289,6 +290,8 @@ async function repairRuntimeAfterBoot(
 ): Promise<AgentRuntime> {
   await ensureRuntimeSqlCompatibility(runtime);
   await ensureAutonomyBootstrapContext(runtime);
+
+  installDatabaseTrajectoryLogger(runtime);
 
   if (!runtime.getService("AUTONOMY")) {
     try {

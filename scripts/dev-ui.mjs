@@ -1083,6 +1083,7 @@ function startVite() {
     cwd: path.join(cwd, appDir),
     env: {
       ...process.env,
+      NODE_ENV: "development",
       ELIZA_NAMESPACE: cliName,
       ELIZA_API_PORT: String(API_PORT),
       MILADY_API_PORT: String(API_PORT),
@@ -1223,6 +1224,7 @@ if (uiOnly) {
     cwd,
     env: {
       ...process.env,
+      NODE_ENV: "development",
       ...chainEnv,
       ELIZA_NAMESPACE: cliName,
       ELIZA_PORT: String(API_PORT),

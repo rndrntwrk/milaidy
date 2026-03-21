@@ -111,7 +111,7 @@ export function OnboardingWizard() {
           vrmPath={vrmPath}
           worldUrl={worldUrl}
           fallbackPreviewUrl={fallbackPreview}
-          cameraProfile="companion_close"
+          cameraProfile="companion"
           initialCompanionZoomNormalized={1}
           onRevealStart={() => setRevealStarted(true)}
           t={t}

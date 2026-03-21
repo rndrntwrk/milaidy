@@ -19,7 +19,7 @@ import {
   AdvancedPageView,
   AppsPageView,
   AvatarLoader,
-  CharacterView,
+  CharacterEditor,
   ChatView,
   CompanionShell,
   CompanionView,
@@ -127,7 +127,7 @@ function ViewRouter({
       case "character-select":
         return (
           <TabScrollView>
-            <CharacterView sceneOverlay={characterSceneVisible} />
+            <CharacterEditor sceneOverlay={characterSceneVisible} />
           </TabScrollView>
         );
       case "wallets":

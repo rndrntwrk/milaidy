@@ -95,9 +95,9 @@ export function isSupportedStreamUrl(value: string): boolean {
 
 /** Detect popout mode from URL. */
 export const IS_POPOUT = (() => {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined" || !window.location) return false;
   const params = new URLSearchParams(
-    window.location.search || window.location.hash.split("?")[1] || "",
+    window.location.search || window.location.hash?.split("?")[1] || "",
   );
   return params.has("popout");
 })();

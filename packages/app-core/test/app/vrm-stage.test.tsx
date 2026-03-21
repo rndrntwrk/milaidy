@@ -22,6 +22,7 @@ vi.mock("@miladyai/app-core/events", () => ({
 
 vi.mock("@miladyai/app-core/utils", () => ({
   resolveAppAssetUrl: (path: string) => path,
+  DESKTOP_WORKSPACE_SURFACES: [],
 }));
 
 vi.mock("@miladyai/app-core/components/avatar/VrmViewer", () => ({

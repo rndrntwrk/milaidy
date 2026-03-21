@@ -13,6 +13,7 @@ vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => ({
     t: (key: string) => key,
   }),
+  CUSTOM_ONBOARDING_STEPS: [],
 }));
 
 function blockFor(css: string, selector: string): string {

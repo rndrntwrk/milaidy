@@ -7,6 +7,7 @@
  */
 
 import { Button, Input } from "@miladyai/ui";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { client, type QueryResult } from "../api";
 import { useApp } from "../state";
@@ -156,7 +157,7 @@ function collectStrings(obj: unknown, out: Set<string>) {
   }
 }
 
-export function MediaGalleryView() {
+export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
   const { t } = useApp();
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -241,9 +242,11 @@ export function MediaGalleryView() {
   });
 
   return (
-    <div>
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+    <div className="flex flex-col h-full gap-4">
+      {/* Unified Toolbar */}
+      <div className="flex items-center gap-3 p-3 bg-card/60 backdrop-blur-xl border border-border/40 rounded-2xl shadow-sm flex-wrap">
+        {leftNav}
+        <div className="flex-1" />
         <Input
           type="text"
           placeholder={t("mediagalleryview.SearchMedia")}
@@ -268,12 +271,13 @@ export function MediaGalleryView() {
             </Button>
           ))}
         </div>
-        <span className="text-[11px] text-[var(--muted)] ml-auto">
+        <span className="text-[11px] text-[var(--muted)]">
           {filtered.length} {t("mediagalleryview.item")}
           {filtered.length !== 1 ? "s" : ""}
         </span>
       </div>
 
+      <div className="flex-1 min-h-0 overflow-auto">
       {error && (
         <div className="p-2.5 border border-[var(--danger)] text-[var(--danger)] text-xs mb-3">
           {error}
@@ -428,6 +432,7 @@ export function MediaGalleryView() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

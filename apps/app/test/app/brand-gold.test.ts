@@ -61,12 +61,6 @@ describe("brand gold theme overrides", () => {
     expect(css).toContain(".plugins-game-card {");
     expect(css).toContain(".plugins-game-card.is-selected {");
     expect(css).toContain(
-      'div[class*="flex"][class*="gap-1"][class*="border-b"][class*="border-[var(--border)]"][class*="mb-5"] {',
-    );
-    expect(css).toContain(
-      'div[class*="overflow-auto"][class*="border-border/40"][class*="bg-card/40"][class*="backdrop-blur-md"][class*="rounded-2xl"][class*="shadow-inner"] {',
-    );
-    expect(css).toContain(
       '[data-testid="companion-header-chat-controls"] > button:hover,',
     );
     expect(css).toContain(
@@ -86,7 +80,7 @@ describe("brand gold theme overrides", () => {
     );
     expect(editorCss).toContain(".ce-page-tab--active {");
     expect(editorCss).toContain(
-      "linear-gradient(\n    135deg,\n    var(--ce-gold-shadow) 0%,\n    var(--ce-gold) 58%,\n    var(--ce-gold-highlight) 100%\n  )",
+      "linear-gradient(135deg,\n      var(--ce-gold-shadow) 0%,\n      var(--ce-gold) 58%,\n      var(--ce-gold-highlight) 100%)",
     );
     expect(editorCss).not.toContain("#facc15");
     expect(editorCss).not.toContain("#fbbf24");

@@ -4,6 +4,7 @@ import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@miladyai/app-core/state", () => ({
+  CUSTOM_ONBOARDING_STEPS: [],
   useApp: () => ({
     uiLanguage: "en",
     t: (k: string) => {

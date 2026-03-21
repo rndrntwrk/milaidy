@@ -96,7 +96,12 @@ export default defineConfig({
   },
   test: {
     // Use POSIX-style relative globs so test discovery works on Windows too.
-    include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
+    include: [
+      "test/**/*.test.ts",
+      "test/**/*.test.tsx",
+      "../../packages/app-core/test/**/*.test.ts",
+      "../../packages/app-core/test/**/*.test.tsx",
+    ],
     setupFiles: [path.join(here, "test/setup.ts")],
     environment: "node",
     alias: {

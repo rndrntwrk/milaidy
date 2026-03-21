@@ -14,7 +14,7 @@ import {
 import { STYLE_PRESETS } from "@miladyai/app-core/onboarding-presets";
 import { useApp } from "@miladyai/app-core/state";
 import { normalizeCharacterMessageExamples } from "@miladyai/app-core/utils/character-message-examples";
-import { useChatAvatarVoiceBridge, useVoiceChat } from "@miladyai/app-core/hooks";
+import { useChatAvatarVoiceBridge, useVoiceChat } from "../hooks";
 import {
   EDGE_BACKUP_VOICES,
   PREMADE_VOICES,
@@ -26,6 +26,7 @@ import {
   type CharacterRosterEntry,
   resolveRosterEntries,
 } from "./CharacterRoster";
+import { AvatarSelector } from "./AvatarSelector";
 
 /* Inline SVG icon helpers – avoids adding lucide-react as a dependency. */
 const svgBase = {
@@ -189,7 +190,8 @@ export function CharacterEditor({
     loadCharacter,
     setState,
     onboardingOptions,
-    selectedVrmIndex: _selectedVrmIndex,
+    selectedVrmIndex,
+    customVrmUrl,
     t,
     registryStatus: _registryStatus,
     registryLoading: _registryLoading,
@@ -267,6 +269,7 @@ export function CharacterEditor({
   const suppressDirtyRef = useRef(false);
   /** Queued greeting to play after VRM teleport-in dissolve finishes. */
   const pendingGreetingRef = useRef<{
+    characterId: string;
     catchphrase: string;
     animationPath: string;
   } | null>(null);
@@ -317,6 +320,7 @@ export function CharacterEditor({
     string | null
   >(null);
   const [voiceSelectionLocked] = useState(false);
+  const activeCharacterIdRef = useRef<string | null>(null);
 
   /* ── Load roster ────────────────────────────────────────────────── */
   // Use static STYLE_PRESETS shipped in the frontend bundle — no API call
@@ -368,7 +372,7 @@ export function CharacterEditor({
         : "";
     const byName = characterRoster.find((e) => e.name === currentName);
     if (byName) return byName;
-    return characterRoster[0] ?? null;
+    return null;
   })();
 
   /* ── Seed savedCharacterId from server data on first load ────────── */
@@ -542,14 +546,27 @@ export function CharacterEditor({
       if (applyDefaults) {
         applyCharacterDefaults(entry);
       }
-      // Queue greeting animation + catchphrase to play after the VRM teleport-in dissolve finishes
+      
       if (isNewCharacter && entry.catchphrase) {
+        // Immediate cleanup of old character's speech
+        voice.stopSpeaking();
+        if (voiceTesting) {
+          if (voiceTestAudio) {
+            voiceTestAudio.pause();
+            voiceTestAudio.currentTime = 0;
+          }
+          setVoiceTesting(false);
+        }
+        
+        // Queue greeting animation to play after the VRM teleport-in dissolve finishes
         pendingGreetingRef.current = {
+          characterId: entry.id,
           catchphrase: entry.catchphrase,
           animationPath:
             entry.greetingAnimation ?? "animations/emotes/greeting.fbx",
         };
       }
+      activeCharacterIdRef.current = entry.id;
     },
     [
       applyCharacterDefaults,
@@ -558,6 +575,7 @@ export function CharacterEditor({
       setState,
       useElevenLabs,
       voiceSelectionLocked,
+      voice,
     ],
   );
 
@@ -579,11 +597,20 @@ export function CharacterEditor({
       !currentCharacter
     )
       return;
-    const entry = activeCharacterRosterEntry ?? characterRoster[0] ?? null;
+    // Only apply defaults from the roster entry if this character is completely empty.
+    // Otherwise, loading a custom character and falling back to a roster ID would wipe the custom data.
+    const isNamed = Boolean((currentCharacter as any).name?.trim());
+    const hasBioOrSystem = Boolean(
+      (currentCharacter as any).bio || (currentCharacter as any).system
+    );
+    const hasMeaningfulContent = isNamed || hasBioOrSystem;
+
+    const entry = activeCharacterRosterEntry ?? (!hasMeaningfulContent ? characterRoster[0] : null);
     if (!entry) return;
+
     // Suppress dirty-tracking during programmatic auto-select
     suppressDirtyRef.current = true;
-    commitCharacterSelection(entry, true);
+    commitCharacterSelection(entry, !hasMeaningfulContent);
     suppressDirtyRef.current = false;
     // Mark this auto-selection as the saved baseline (not a user change)
     setSavedCharacterId(entry.id);
@@ -611,6 +638,9 @@ export function CharacterEditor({
     const handler = () => {
       const greeting = pendingGreetingRef.current;
       if (!greeting) return;
+      // Do not play a queued greeting if the user has already switched away
+      if (greeting.characterId !== activeCharacterIdRef.current) return;
+
       pendingGreetingRef.current = null;
       // Delay the emote dispatch so the idle animation can fully settle
       // after the teleport dissolve before we cross-fade into the greeting.
@@ -619,6 +649,8 @@ export function CharacterEditor({
       }
       greetingTimerRef.current = window.setTimeout(() => {
         greetingTimerRef.current = null;
+        if (greeting.characterId !== activeCharacterIdRef.current) return;
+
         dispatchWindowEvent(APP_EMOTE_EVENT, {
           emoteId: "greeting",
           path: `/${greeting.animationPath}`,
@@ -638,7 +670,8 @@ export function CharacterEditor({
         greetingTimerRef.current = null;
       }
     };
-  }, [voice]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ── Sync customizing state with tab ─────────────────────────────── */
   /* Removed: previously auto-set customizing=true when tab==="character",
@@ -1061,6 +1094,27 @@ export function CharacterEditor({
                   </div>
                 </div>
               </div>
+            </section>
+            
+            {/* Avatar Selector */}
+            <section className="ce-section ce-section--avatar">
+              <div className="ce-section-header">
+                <span className="ce-label">{t("charactereditor.Avatar", { defaultValue: "Avatar" })}</span>
+              </div>
+              <AvatarSelector
+                selected={selectedVrmIndex}
+                onSelect={(index: number) => {
+                  setState("selectedVrmIndex", index);
+                  if (index > 0) {
+                    setState("customVrmUrl", "");
+                  }
+                }}
+                onUpload={(file: File) => {
+                  // The backend or state manager will handle the actual upload
+                  // and update customVrmUrl. For now we just set the index.
+                  setState("selectedVrmIndex", 0);
+                }}
+              />
             </section>
 
             {/* Bio / About Me */}

@@ -4,7 +4,7 @@ import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js
 
 const sizeScratch = new THREE.Vector3();
 
-export type CameraProfile = "chat" | "companion" | "companion_close";
+export type CameraProfile = "chat" | "companion";
 export type InteractionMode = "free" | "orbitZoom";
 
 export type CameraAnimationConfig = {
@@ -79,12 +79,7 @@ export class VrmCameraManager {
 
     const initialSize = initialBounds.getSize(this.tempBoundsSize);
     const avatarHeight = Math.max(initialSize.y, 1e-3);
-    const targetHeight =
-      cameraProfile === "chat"
-        ? 1.62
-        : cameraProfile === "companion_close"
-          ? 1.72
-          : 1.76;
+    const targetHeight = cameraProfile === "chat" ? 1.62 : 1.76;
     const normalizedScale = THREE.MathUtils.clamp(
       targetHeight / avatarHeight,
       0.75,
@@ -153,13 +148,9 @@ export class VrmCameraManager {
     let distance = fitDistance;
     let cameraY = neckY + Math.min(size.y * 0.08, 0.18);
 
-    if (cameraProfile === "companion_close") {
+    if (cameraProfile === "companion") {
       lookAtY = neckY;
-      distance = Math.max(2.4, fitDistance * 0.92);
-      cameraY = neckY + Math.min(size.y * 0.04, 0.08);
-    } else if (cameraProfile === "companion") {
-      lookAtY = neckY;
-      distance = Math.max(4.8, fitDistance * 1.35);
+      distance = Math.max(9.6, fitDistance * 1.35);
       cameraY = neckY + Math.min(size.y * 0.1, 0.18);
     } else {
       lookAtY = THREE.MathUtils.clamp(
@@ -167,7 +158,7 @@ export class VrmCameraManager {
         bounds.min.y + size.y * 0.38,
         bounds.max.y - size.y * 0.16,
       );
-      distance = Math.max(2.8, fitDistance * 1.02);
+      distance = Math.max(5.6, fitDistance * 1.02);
       cameraY = lookAtY + Math.min(size.y * 0.12, 0.24);
     }
 
@@ -175,11 +166,8 @@ export class VrmCameraManager {
     camera.position.set(center.x, cameraY, center.z + distance);
 
     if (controls) {
-      controls.minDistance =
-        cameraProfile === "companion_close"
-          ? Math.max(0.7, distance * 0.78)
-          : Math.max(1.4, distance * 0.7);
-      controls.maxDistance = Math.max(6.4, distance * 1.8);
+      controls.minDistance = Math.max(2.8, distance * 0.7);
+      controls.maxDistance = Math.max(12.8, distance * 1.8);
     }
   }
 
@@ -235,29 +223,11 @@ export class VrmCameraManager {
     controls: OrbitControls | null,
     cameraProfile: CameraProfile,
   ): void {
-    if (cameraProfile === "companion" || cameraProfile === "companion_close") {
-      camera.position.set(
-        0,
-        cameraProfile === "companion_close" ? 1.3 : 1.36,
-        cameraProfile === "companion_close" ? 2.5 : 5.2,
-      );
-      camera.fov = cameraProfile === "companion_close" ? 28 : 34;
-      if (controls) {
-        controls.minDistance = cameraProfile === "companion_close" ? 1.8 : 3.4;
-        controls.maxDistance = 12.0;
-        controls.minPolarAngle = Math.PI * 0.16;
-        controls.maxPolarAngle = Math.PI * 0.86;
-        controls.minAzimuthAngle = -Infinity;
-        controls.maxAzimuthAngle = Infinity;
-      }
-      return;
-    }
-
-    camera.position.set(0, 1.1, 3.6);
-    camera.fov = 34;
+    camera.fov = 12;
+    camera.near = 2.5;
     if (controls) {
-      controls.minDistance = 2.0;
-      controls.maxDistance = 8.0;
+      controls.minDistance = 4.0;
+      controls.maxDistance = 10.0;
       controls.minPolarAngle = Math.PI * 0.06;
       controls.maxPolarAngle = Math.PI * 0.94;
       controls.minAzimuthAngle = -Infinity;
@@ -302,13 +272,13 @@ export class VrmCameraManager {
 
     const yawRange = THREE.MathUtils.clamp(
       cameraAnimation.swayAmplitude * 4.2 +
-        cameraAnimation.rotationAmplitude * 3.8,
+      cameraAnimation.rotationAmplitude * 3.8,
       0.05,
       0.22,
     );
     const pitchRange = THREE.MathUtils.clamp(
       cameraAnimation.bobAmplitude * 1.8 +
-        cameraAnimation.rotationAmplitude * 1.4,
+      cameraAnimation.rotationAmplitude * 1.4,
       0.015,
       0.085,
     );

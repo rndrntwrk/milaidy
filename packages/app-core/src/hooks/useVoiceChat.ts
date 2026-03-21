@@ -169,6 +169,9 @@ const MAX_CACHED_SEGMENTS = 128;
 const TALKMODE_STOP_SETTLE_MS = 120;
 const REDACTED_SECRET = "[REDACTED]";
 const MOUTH_OPEN_STEP = 0.02;
+
+const globalAudioCache = new Map<string, Uint8Array>();
+
 function resolveElevenProxyEndpoint(): string {
   return resolveApiUrl("/api/tts/elevenlabs");
 }
@@ -455,7 +458,6 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
   const activeTaskFinishRef = useRef<(() => void) | null>(null);
   const activeFetchAbortRef = useRef<AbortController | null>(null);
   const assistantSpeechRef = useRef<AssistantSpeechState | null>(null);
-  const elevenCacheRef = useRef<Map<string, Uint8Array>>(new Map());
 
   const clearSpeechTimers = useCallback(() => {
     if (speechTimeoutRef.current) {
@@ -466,12 +468,11 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
 
   const rememberCachedSegment = useCallback(
     (key: string, bytes: Uint8Array) => {
-      const cache = elevenCacheRef.current;
-      cache.delete(key);
-      cache.set(key, bytes);
-      if (cache.size <= MAX_CACHED_SEGMENTS) return;
-      const oldest = cache.keys().next().value;
-      if (oldest) cache.delete(oldest);
+      globalAudioCache.delete(key);
+      globalAudioCache.set(key, bytes);
+      if (globalAudioCache.size <= MAX_CACHED_SEGMENTS) return;
+      const oldest = globalAudioCache.keys().next().value;
+      if (oldest) globalAudioCache.delete(oldest);
     },
     [],
   );
@@ -491,6 +492,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
       const speed =
         typeof config.speed === "number" ? config.speed.toFixed(2) : "1.00";
       return [
+        "elevenlabs",
         voiceId,
         modelId,
         stability,
@@ -530,10 +532,6 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
     // doesn't expose SpeechRecognition or getUserMedia.
     setSupported(shouldPreferNativeTalkMode() ? true : !!SpeechRecognitionAPI);
     synthRef.current = window.speechSynthesis ?? null;
-  }, []);
-
-  useEffect(() => {
-    elevenCacheRef.current.clear();
   }, []);
 
   // ── Mouth animation loop ──────────────────────────────────────────
@@ -957,13 +955,12 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
       const modelId = elConfig.modelId ?? DEFAULT_ELEVEN_MODEL;
 
       const cacheKey = task.cacheKey ?? makeElevenCacheKey(text, elConfig);
-      const cachedBytes = elevenCacheRef.current.get(cacheKey);
+      const cachedBytes = globalAudioCache.get(cacheKey);
       let audioBytes: Uint8Array | null = null;
       let cached = false;
 
       if (cachedBytes) {
-        elevenCacheRef.current.delete(cacheKey);
-        elevenCacheRef.current.set(cacheKey, cachedBytes);
+        rememberCachedSegment(cacheKey, cachedBytes);
         audioBytes = cachedBytes.slice();
         cached = true;
       }
@@ -1122,6 +1119,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
 
   const speakBrowser = useCallback(
     (text: string, task: SpeakTask, generation: number) => {
+      const config = voiceConfigRef.current;
       const synth = synthRef.current;
       const words = text.trim().split(/\s+/).length;
       const estimatedMs = Math.max(1200, (words / 3) * 1000);
@@ -1155,6 +1153,58 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
 
         const utterance = new SpeechSynthesisUtterance(text.trim());
         utteranceRef.current = utterance;
+
+        if (synth && synth.getVoices) {
+          const voices = synth.getVoices();
+          let selectedVoice: SpeechSynthesisVoice | undefined;
+
+          if (config?.provider === "edge" && config.edge?.voice) {
+            const edgeVoiceName = config.edge.voice;
+            selectedVoice = voices.find(
+              (v) => v.voiceURI === edgeVoiceName || v.name === edgeVoiceName
+            );
+
+            if (!selectedVoice) {
+              const isMale =
+                edgeVoiceName.toLowerCase().includes("guy") ||
+                edgeVoiceName.toLowerCase().includes("male");
+              selectedVoice = voices.find((v) => {
+                if (!v.lang.startsWith("en")) return false;
+                const nameLower = v.name.toLowerCase();
+                if (isMale) {
+                  return (
+                    nameLower.includes("male") ||
+                    nameLower.includes("alex") ||
+                    nameLower.includes("david") ||
+                    nameLower.includes("daniel")
+                  );
+                } else {
+                  return (
+                    nameLower.includes("female") ||
+                    nameLower.includes("samantha") ||
+                    nameLower.includes("victoria") ||
+                    nameLower.includes("zira") ||
+                    nameLower.includes("karen")
+                  );
+                }
+              });
+            }
+          }
+
+          if (!selectedVoice) {
+            selectedVoice = voices.find(
+              (v) =>
+                v.lang === "en-US" &&
+                !v.name.toLowerCase().includes("alex") &&
+                !v.name.toLowerCase().includes("david")
+            ) || voices.find((v) => v.lang.startsWith("en"));
+          }
+
+          if (selectedVoice) {
+            utterance.voice = selectedVoice;
+          }
+        }
+
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
         utterance.onstart = () => {

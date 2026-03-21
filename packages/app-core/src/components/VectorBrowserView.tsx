@@ -8,6 +8,7 @@
  */
 
 import { Button, Input } from "@miladyai/ui";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client, type QueryResult, type TableInfo } from "../api";
 import { useApp } from "../state";
@@ -1145,7 +1146,7 @@ function MemoryDetailModal({
 
 // ── Main component ─────────────────────────────────────────────────────
 
-export function VectorBrowserView() {
+export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
   const { t } = useApp();
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [selectedTable, setSelectedTable] = useState("");
@@ -1394,7 +1395,107 @@ export function VectorBrowserView() {
   const isConnectionError = error?.includes("agent is running");
 
   return (
-    <div>
+    <div className="flex flex-col h-full gap-4">
+      {/* Unified Toolbar */}
+      <div className="flex items-center gap-3 p-3 bg-card/60 backdrop-blur-xl border border-border/40 rounded-2xl shadow-sm flex-wrap">
+        {leftNav}
+        
+        <div className="flex-1" />
+
+        {/* Toolbar - hide when not connected */}
+        {!isConnectionError && (
+          <div className="flex flex-wrap items-center gap-3">
+            {viewMode === "list" && (
+              <div className="flex gap-1">
+                <Input
+                  type="text"
+                  placeholder={t("vectorbrowserview.SearchContent")}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  className="w-[220px] bg-card text-xs"
+                />
+                <Button variant="default" size="sm" onClick={handleSearch}>
+                  {t("vectorbrowserview.Search")}
+                </Button>
+              </div>
+            )}
+
+            {tables.length > 1 && (
+              <select
+                value={selectedTable}
+                onChange={(e) => {
+                  setSelectedTable(e.target.value);
+                  setPage(0);
+                  setSearch("");
+                  setSearchInput("");
+                }}
+                className="px-3 py-1.5 text-xs border border-border bg-card rounded-lg text-txt"
+              >
+                {tables.map((t) => (
+                  <option key={t.name} value={t.name}>
+                    {t.name} (
+                    {typeof t.rowCount === "object"
+                      ? JSON.stringify(t.rowCount)
+                      : t.rowCount}
+                    )
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {/* View mode toggle */}
+            <div className="flex gap-1 p-1 bg-bg/50 backdrop-blur-md border border-border/40 rounded-xl shadow-inner ml-auto">
+              <Button
+                variant={viewMode === "list" ? "default" : "ghost"}
+                size="sm"
+                className={`h-auto min-h-[1.75rem] px-4 py-1 whitespace-normal break-words text-left text-xs font-medium rounded-lg transition-all duration-300 ${
+                  viewMode === "list"
+                    ? "bg-accent text-accent-fg shadow-[0_0_15px_rgba(var(--accent),0.4)] border border-accent/50 scale-105"
+                    : "text-muted hover:text-txt hover:bg-bg-hover hover:border-border/50"
+                }`}
+                onClick={() => setViewMode("list")}
+              >
+                {t("vectorbrowserview.List")}
+              </Button>
+              <Button
+                variant={viewMode === "graph" ? "default" : "ghost"}
+                size="sm"
+                className={`h-auto min-h-[1.75rem] px-4 py-1 whitespace-normal break-words text-left text-xs font-medium rounded-lg transition-all duration-300 ${
+                  viewMode === "graph"
+                    ? "bg-accent text-accent-fg shadow-[0_0_15px_rgba(var(--accent),0.4)] border border-accent/50 scale-105"
+                    : "text-muted hover:text-txt hover:bg-bg-hover hover:border-border/50"
+                }`}
+                onClick={() => setViewMode("graph")}
+              >
+                {t("vectorbrowserview.2D", { defaultValue: "2D" })}
+              </Button>
+              <Button
+                variant={viewMode === "3d" ? "default" : "ghost"}
+                size="sm"
+                className={`h-auto min-h-[1.75rem] px-4 py-1 whitespace-normal break-words text-left text-xs font-medium rounded-lg transition-all duration-300 ${
+                  viewMode === "3d"
+                    ? "bg-accent text-accent-fg shadow-[0_0_15px_rgba(var(--accent),0.4)] border border-accent/50 scale-105"
+                    : "text-muted hover:text-txt hover:bg-bg-hover hover:border-border/50"
+                }`}
+                onClick={() => setViewMode("3d")}
+              >
+                {t("vectorbrowserview.3D", { defaultValue: "3D" })}
+              </Button>
+            </div>
+
+            {viewMode === "list" && (
+              <span className="text-[11px] text-[var(--muted)]">
+                {Number(totalCount) > 0
+                  ? `${page * PAGE_SIZE + 1}-${Math.min((page + 1) * PAGE_SIZE, Number(totalCount))} of ${Number(totalCount).toLocaleString()}`
+                  : ""}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-auto pr-2 custom-scrollbar">
       {/* Stats bar */}
       {stats && !isConnectionError && (
         <div className="flex items-center gap-4 mb-4 px-4 py-2.5 bg-card/60 backdrop-blur-xl border border-border/40 rounded-2xl">
@@ -1417,83 +1518,6 @@ export function VectorBrowserView() {
                 {t("vectorbrowserview.unique")}
               </span>
             </>
-          )}
-        </div>
-      )}
-
-      {/* Toolbar - hide when not connected */}
-      {!isConnectionError && (
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          {viewMode === "list" && (
-            <div className="flex gap-1">
-              <Input
-                type="text"
-                placeholder={t("vectorbrowserview.SearchContent")}
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="w-[220px] bg-card text-xs"
-              />
-              <Button variant="default" size="sm" onClick={handleSearch}>
-                {t("vectorbrowserview.Search")}
-              </Button>
-            </div>
-          )}
-
-          {tables.length > 1 && (
-            <select
-              value={selectedTable}
-              onChange={(e) => {
-                setSelectedTable(e.target.value);
-                setPage(0);
-                setSearch("");
-                setSearchInput("");
-              }}
-              className="px-3 py-1.5 text-xs border border-border bg-card rounded-lg text-txt"
-            >
-              {tables.map((t) => (
-                <option key={t.name} value={t.name}>
-                  {t.name} (
-                  {typeof t.rowCount === "object"
-                    ? JSON.stringify(t.rowCount)
-                    : t.rowCount}
-                  )
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* View mode toggle */}
-          <div className="flex gap-1 ml-auto">
-            <Button
-              variant={viewMode === "list" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("list")}
-            >
-              {t("vectorbrowserview.List")}
-            </Button>
-            <Button
-              variant={viewMode === "graph" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("graph")}
-            >
-              {t("vectorbrowserview.2D", { defaultValue: "2D" })}
-            </Button>
-            <Button
-              variant={viewMode === "3d" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("3d")}
-            >
-              {t("vectorbrowserview.3D", { defaultValue: "3D" })}
-            </Button>
-          </div>
-
-          {viewMode === "list" && (
-            <span className="text-[11px] text-[var(--muted)]">
-              {Number(totalCount) > 0
-                ? `${page * PAGE_SIZE + 1}-${Math.min((page + 1) * PAGE_SIZE, Number(totalCount))} of ${Number(totalCount).toLocaleString()}`
-                : ""}
-            </span>
           )}
         </div>
       )}
@@ -1647,6 +1671,7 @@ export function VectorBrowserView() {
           onClose={() => setSelectedMemory(null)}
         />
       )}
+      </div>
     </div>
   );
 }

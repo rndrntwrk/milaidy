@@ -5699,6 +5699,8 @@ export class MiladyClient {
 
 /** @deprecated Use MiladyClient directly. */
 export type ElizaClient = MiladyClient;
+/** @deprecated Use MiladyClient directly. */
+export const ElizaClient = MiladyClient;
 
 // Singleton
 export const client = new MiladyClient();

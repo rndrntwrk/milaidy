@@ -16,6 +16,7 @@ vi.mock("@miladyai/app-core/state", () => ({
     `/vrms/backgrounds/milady-${index}.png`,
   getVrmTitle: (index: number) => `MILADY-${index}`,
   VRM_COUNT: 24,
+  CUSTOM_ONBOARDING_STEPS: [],
 }));
 
 vi.mock("@miladyai/app-core/components/avatar/VrmViewer", () => ({
@@ -49,6 +50,7 @@ vi.mock("@miladyai/app-core/api", () => ({
 vi.mock("@miladyai/app-core/utils", () => ({
   resolveApiUrl: (p: string) => p,
   resolveAppAssetUrl: (p: string) => p,
+  DESKTOP_WORKSPACE_SURFACES: [],
 }));
 
 import { CompanionSceneHost } from "@miladyai/app-core/components/CompanionSceneHost";

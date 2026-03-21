@@ -12,6 +12,7 @@ vi.mock("@miladyai/app-core/state", () => ({
     setState: vi.fn(),
   }),
   getVrmPreviewUrl: () => null,
+  CUSTOM_ONBOARDING_STEPS: [],
 }));
 
 vi.mock("@miladyai/app-core/api", () => ({

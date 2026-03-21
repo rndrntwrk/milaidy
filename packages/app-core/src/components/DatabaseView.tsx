@@ -8,6 +8,7 @@
 
 import { Badge, Button, Input, Textarea } from "@miladyai/ui";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type ColumnInfo,
@@ -304,7 +305,7 @@ function PaginationBar({
 
 // ── Main component ────────────────────────────────────────────────────
 
-export function DatabaseView() {
+export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
   const { t } = useApp();
   const [dbStatus, setDbStatus] = useState<DatabaseStatus | null>(null);
   const [tables, setTables] = useState<TableInfo[]>([]);
@@ -483,7 +484,8 @@ export function DatabaseView() {
   return (
     <div className="flex flex-col h-full gap-4">
       {/* Top bar */}
-      <div className="flex items-center gap-3 p-3 bg-card/60 backdrop-blur-xl border border-border/40 rounded-2xl shadow-sm">
+      <div className="flex items-center gap-3 p-3 bg-card/60 backdrop-blur-xl border border-border/40 rounded-2xl shadow-sm flex-wrap">
+        {leftNav}
         <div className="flex items-center gap-2 text-xs text-muted font-medium bg-bg/50 px-3 py-1.5 rounded-lg border border-border/30">
           {dbStatus ? (
             <>
@@ -586,7 +588,7 @@ export function DatabaseView() {
                   className="w-full h-9 rounded-xl border-border/50 bg-bg/50 backdrop-blur-sm text-xs focus-visible:ring-accent/50 focus-visible:border-accent pr-8 shadow-inner"
                 />
               </div>
-              <div className="text-[10px] text-muted uppercase font-bold tracking-widest px-2 bg-black/10 py-1.5 rounded-lg border border-white/5 inline-flex items-center shadow-inner">
+              <div className="text-[10px] text-muted uppercase font-bold tracking-widest px-2 bg-bg/50 py-1.5 rounded-lg border border-border/30 inline-flex items-center shadow-inner">
                 {t("databaseview.Tables")} ({filteredTables.length})
               </div>
               {loading && tables.length === 0 ? (
@@ -611,7 +613,7 @@ export function DatabaseView() {
                       </span>
                       <Badge
                         variant="outline"
-                        className="text-[9px] px-1.5 py-0 h-4 border-white/10 bg-black/20 text-muted-foreground ml-2 tabular-nums"
+                        className="text-[9px] px-1.5 py-0 h-4 border-border/30 bg-bg/50 text-muted-foreground ml-2 tabular-nums"
                       >
                         {t.rowCount}
                       </Badge>
@@ -649,7 +651,7 @@ export function DatabaseView() {
           <div className="flex-1 min-w-0 flex flex-col bg-card/40 backdrop-blur-xl border border-border/40 rounded-2xl shadow-sm overflow-hidden p-2">
             {!selectedTable ? (
               <div className="flex-1 flex items-center justify-center">
-                <div className="text-center p-8 border border-white/5 bg-black/10 rounded-3xl shadow-inner backdrop-blur-md">
+                <div className="text-center p-8 border border-border/30 bg-bg/50 rounded-3xl shadow-inner backdrop-blur-md">
                   <div className="text-muted text-base font-medium mb-2 tracking-wide">
                     {t("databaseview.SelectATable")}
                   </div>
@@ -672,7 +674,7 @@ export function DatabaseView() {
                   {columnMeta.size > 0 && (
                     <Badge
                       variant="outline"
-                      className="text-[10px] text-muted border-white/10 bg-black/20 font-medium"
+                      className="text-[10px] text-muted border-border/30 bg-bg/50 font-medium"
                     >
                       {columnMeta.size} {t("databaseview.columns")}
                     </Badge>
@@ -683,7 +685,7 @@ export function DatabaseView() {
                 <div className="flex-1 min-h-0">
                   {tableData.rows.length === 0 ? (
                     <div className="flex items-center justify-center h-full border border-border/40 bg-card/40 rounded-t-2xl">
-                      <div className="text-muted text-sm p-6 bg-black/10 rounded-2xl border border-white/5 shadow-inner backdrop-blur-md font-medium tracking-wide">
+                      <div className="text-muted text-sm p-6 bg-bg/50 rounded-2xl border border-border/30 shadow-inner backdrop-blur-md font-medium tracking-wide">
                         {t("databaseview.TableIsEmpty")}
                       </div>
                     </div>
@@ -751,7 +753,7 @@ export function DatabaseView() {
                 {t("onboarding.enter")}
               </kbd>
               {queryResult && (
-                <div className="text-xs text-muted ml-auto bg-black/10 px-3 py-1.5 rounded-lg border border-white/5 font-medium shadow-inner tracking-wide">
+                <div className="text-xs text-muted ml-auto bg-bg/50 px-3 py-1.5 rounded-lg border border-border/30 font-medium shadow-inner tracking-wide">
                   <span className="text-txt">{queryResult.rowCount}</span>{" "}
                   {t("databaseview.row")}
                   {queryResult.rowCount !== 1 ? "s" : ""} ·{" "}
@@ -797,7 +799,7 @@ export function DatabaseView() {
 
           {queryResult && queryResult.rows.length === 0 && (
             <div className="flex items-center justify-center p-8 border border-border/40 bg-card/60 backdrop-blur-xl rounded-2xl shadow-sm text-muted text-sm tracking-wide font-medium">
-              <div className="px-6 py-4 bg-black/10 shadow-inner rounded-xl border border-white/5">
+              <div className="px-6 py-4 bg-bg/50 shadow-inner rounded-xl border border-border/30">
                 {t("databaseview.QueryReturnedNoRo")}
               </div>
             </div>

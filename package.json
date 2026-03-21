@@ -201,6 +201,8 @@
     "@types/react-test-renderer": "^19.1.0",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.1.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "react-test-renderer": "^19.2.4",
     "rimraf": "^5.0.10",
     "tsdown": "^0.20.3",

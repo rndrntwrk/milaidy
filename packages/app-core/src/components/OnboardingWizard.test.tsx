@@ -91,7 +91,7 @@ describe("OnboardingWizard", () => {
     expect(mockApplyUiTheme).toHaveBeenCalledWith("light");
     expect(mockVrmStage.mock.calls[0]?.[0]).toMatchObject({
       worldUrl: "worlds/companion-day.spz",
-      cameraProfile: "companion_close",
+      cameraProfile: "companion",
       initialCompanionZoomNormalized: 1,
     });
 

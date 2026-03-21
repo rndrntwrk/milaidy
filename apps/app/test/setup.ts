@@ -153,6 +153,37 @@ vi.mock("@miladyai/app-core/bridge", () => {
     initializeCapacitorBridge: () => {},
     initializeStorageBridge: async () => {},
     ElectrobunRendererRpc: {},
+    platform: "web",
+    isWeb: () => true,
+    isNative: false,
+    isIOS: false,
+    isAndroid: false,
+    isDesktop: () => false,
+    isMacOS: () => false,
+    getPluginCapabilities: () => ({
+      gateway: { available: true, websocket: true, discovery: false },
+      voiceWake: { available: false },
+      talkMode: { available: false, elevenlabs: true },
+      camera: { available: false },
+      location: { available: false, gps: false, background: false },
+      screenCapture: { available: false },
+      canvas: { available: true },
+      desktop: { available: false, tray: false, shortcuts: false, menu: false },
+    }),
+    isFeatureAvailable: (feature: string) => {
+      const map: Record<string, boolean> = {
+        gatewayDiscovery: false,
+        voiceWake: false,
+        talkMode: false,
+        elevenlabs: true,
+        camera: false,
+        location: false,
+        backgroundLocation: false,
+        screenCapture: false,
+        desktopTray: false,
+      };
+      return map[feature] ?? false;
+    },
   };
 });
 

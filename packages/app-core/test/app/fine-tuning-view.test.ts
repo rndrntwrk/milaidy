@@ -52,6 +52,7 @@ vi.mock("@miladyai/app-core/api", () => ({
 }));
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
+  CUSTOM_ONBOARDING_STEPS: [],
 }));
 
 import { FineTuningView } from "@miladyai/app-core/components/FineTuningView";

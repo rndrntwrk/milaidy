@@ -126,11 +126,6 @@ export async function loadEmoteClip(
         return null;
       }
       const retargeted = retargetMixamoFbxToVrm(fbx, sourceClip, vrm);
-      // Strip position tracks from emotes — they cause root motion (floating).
-      // Position tracks are only needed for the idle animation.
-      retargeted.tracks = retargeted.tracks.filter(
-        (t) => !t.name.endsWith(".position"),
-      );
       return retargeted;
     }
 
