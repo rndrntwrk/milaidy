@@ -403,6 +403,20 @@ function CompanionSceneSurface({
     };
   }, []);
 
+  /* ── Camera X-offset for CharacterEditor panel ──────────────────── */
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ offset: number }>).detail;
+      const offset = detail?.offset ?? 0;
+      for (const engine of stageEnginesRef.current) {
+        engine.setCameraXOffset(offset);
+      }
+    };
+    window.addEventListener("eliza:editor-camera-offset", handler);
+    return () =>
+      window.removeEventListener("eliza:editor-camera-offset", handler);
+  }, []);
+
   const safeSelectedVrmIndex = selectedVrmIndex > 0 ? selectedVrmIndex : 1;
   const vrmPath =
     selectedVrmIndex === 0 && customVrmUrl

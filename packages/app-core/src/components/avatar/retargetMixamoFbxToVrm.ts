@@ -48,6 +48,11 @@ export function retargetMixamoFbxToVrm(
   sourceScene.updateMatrixWorld(true);
   vrm.scene.updateMatrixWorld(true);
 
+  // ── Diagnostic logging for greeting arm-rotation debugging ──
+  const mapped: string[] = [];
+  const unmappedNames: string[] = [];
+  const unmappedNodes: string[] = [];
+
   const tracks: THREE.KeyframeTrack[] = [];
   const restRotationInverse = new THREE.Quaternion();
   const parentRestWorldRotation = new THREE.Quaternion();
@@ -74,7 +79,12 @@ export function retargetMixamoFbxToVrm(
     if (!rawRigName || !propertyName) continue;
     const normalizedRigName = normalizeMixamoRigName(rawRigName);
     const vrmBoneName = mixamoVRMRigMap[normalizedRigName];
-    if (!vrmBoneName) continue;
+    if (!vrmBoneName) {
+      if (!unmappedNames.includes(normalizedRigName)) {
+        unmappedNames.push(normalizedRigName);
+      }
+      continue;
+    }
 
     const vrmNode = vrm.humanoid?.getNormalizedBoneNode(
       vrmBoneName as VRMHumanBoneName,
@@ -82,7 +92,16 @@ export function retargetMixamoFbxToVrm(
     if (!vrmNode) continue;
 
     const mixamoRigNode = findNode(sourceScene, rawRigName, normalizedRigName);
-    if (!mixamoRigNode || !mixamoRigNode.parent) continue;
+    if (!mixamoRigNode || !mixamoRigNode.parent) {
+      if (!unmappedNodes.includes(normalizedRigName)) {
+        unmappedNodes.push(`${normalizedRigName}→${vrmBoneName}`);
+      }
+      continue;
+    }
+
+    if (!mapped.includes(vrmBoneName)) {
+      mapped.push(vrmBoneName);
+    }
 
     mixamoRigNode.getWorldQuaternion(restRotationInverse).invert();
     mixamoRigNode.parent.getWorldQuaternion(parentRestWorldRotation);
@@ -140,5 +159,21 @@ export function retargetMixamoFbxToVrm(
 
   const clip = new THREE.AnimationClip("idle", sourceClip.duration, tracks);
   clip.optimize();
+
+  // ── Diagnostic summary ──
+  const armBones = [
+    "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand",
+    "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand",
+  ];
+  const missingArms = armBones.filter((b) => !mapped.includes(b));
+  console.debug(
+    `[retargetMixamoFbx] clip="${sourceClip.name}" ` +
+    `tracks=${sourceClip.tracks.length}→${tracks.length} ` +
+    `mapped=${mapped.length} ` +
+    `unmappedNames=[${unmappedNames.join(",")}] ` +
+    `unmappedNodes=[${unmappedNodes.join(",")}] ` +
+    `missingArmBones=[${missingArms.join(",")}]`,
+  );
+
   return clip;
 }

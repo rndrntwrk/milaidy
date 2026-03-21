@@ -172,7 +172,7 @@ export function CustomActionsView() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <label className="px-3 py-1.5 text-sm border border-border bg-surface text-muted rounded cursor-pointer hover:bg-card transition-colors">
-            {t("knowledgeview.Import")}
+            {t("settings.import")}
             <input
               type="file"
               accept="application/json"
@@ -187,7 +187,7 @@ export function CustomActionsView() {
             disabled={actions.length === 0}
             className="px-3 py-1.5 h-8 text-sm text-muted bg-surface hover:bg-card shadow-sm disabled:opacity-50"
           >
-            {t("customactionsview.Export")}
+            {t("common.export")}
           </Button>
           <Button
             variant="default"

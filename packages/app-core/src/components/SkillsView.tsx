@@ -651,7 +651,7 @@ function CreateSkillForm({
         </div>
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="ghost" size="sm" onClick={onCancel}>
-            {t("onboarding.cancel")}
+            {t("common.cancel")}
           </Button>
           <Button
             variant="default"

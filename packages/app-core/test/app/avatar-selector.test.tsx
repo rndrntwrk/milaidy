@@ -2,7 +2,7 @@
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
-import { AvatarSelector } from "../../src/components/AvatarSelector";
+import { AvatarSelector } from "@miladyai/app-core/components/AvatarSelector";
 
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => ({ t: (k: string) => k }),

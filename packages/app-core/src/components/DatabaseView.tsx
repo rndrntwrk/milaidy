@@ -295,7 +295,7 @@ function PaginationBar({
           disabled={!hasNext}
           onClick={onNext}
         >
-          {t("databaseview.Next")}
+          {t("onboarding.next")}
         </Button>
       </div>
     </div>
@@ -497,7 +497,7 @@ export function DatabaseView() {
               </span>
             </>
           ) : (
-            <span>{t("databaseview.Connecting")}</span>
+            <span>{t("onboarding.connecting")}</span>
           )}
         </div>
 
@@ -542,7 +542,7 @@ export function DatabaseView() {
             }
           }}
         >
-          {t("databaseview.Refresh")}
+          {t("common.refresh")}
         </Button>
       </div>
 
@@ -748,7 +748,7 @@ export function DatabaseView() {
               </Button>
               <kbd className="text-[10px] text-muted font-mono bg-bg/50 px-2 py-1 rounded-md border border-border/30 shadow-inner tracking-wider">
                 {navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}{" "}
-                {t("databaseview.Enter")}
+                {t("onboarding.enter")}
               </kbd>
               {queryResult && (
                 <div className="text-xs text-muted ml-auto bg-black/10 px-3 py-1.5 rounded-lg border border-white/5 font-medium shadow-inner tracking-wide">

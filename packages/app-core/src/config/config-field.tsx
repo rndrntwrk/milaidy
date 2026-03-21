@@ -1857,7 +1857,7 @@ export function ConfigField({
           </span>
           {renderProps.required && !renderProps.isSet && (
             <span className="text-[10px] text-[var(--destructive)] font-semibold px-1.5 py-px bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] rounded-sm shrink-0">
-              {t("config-field.Required")}
+              {t("secretsview.Required")}
             </span>
           )}
           {renderProps.isSet && (

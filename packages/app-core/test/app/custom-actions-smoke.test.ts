@@ -38,11 +38,11 @@ vi.mock("@miladyai/app-core/hooks", async () => {
   };
 });
 
-vi.mock("../../src/components/ChatAvatar", () => ({
+vi.mock("@miladyai/app-core/components/ChatAvatar", () => ({
   ChatAvatar: () => null,
 }));
 
-vi.mock("../../src/components/MessageContent", () => ({
+vi.mock("@miladyai/app-core/components/MessageContent", () => ({
   MessageContent: ({ message }: { message: { text: string } }) =>
     React.createElement("span", null, message.text),
 }));
@@ -142,9 +142,9 @@ async function flush(): Promise<void> {
   });
 }
 
-import { ChatView } from "../../src/components/ChatView";
-import { CustomActionEditor } from "../../src/components/CustomActionEditor";
-import { CustomActionsPanel } from "../../src/components/CustomActionsPanel";
+import { ChatView } from "@miladyai/app-core/components/ChatView";
+import { CustomActionEditor } from "@miladyai/app-core/components/CustomActionEditor";
+import { CustomActionsPanel } from "@miladyai/app-core/components/CustomActionsPanel";
 
 function FlowHarness({
   onSaved,

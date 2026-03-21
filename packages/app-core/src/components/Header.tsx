@@ -51,6 +51,8 @@ export function Header({
     setUiLanguage,
     uiTheme,
     setUiTheme,
+    chatAgentVoiceMuted,
+    handleStartDraftConversation,
     t,
   } = useApp();
 
@@ -243,6 +245,10 @@ export function Header({
             showNavigationMenu ? "header-theme-toggle-desktop" : undefined
           }
           rightExtras={renderCloudCredits("desktop")}
+          showCompanionControls={activeShellView === "companion" || activeShellView === "character"}
+          chatAgentVoiceMuted={chatAgentVoiceMuted}
+          onToggleVoiceMute={() => setState("chatAgentVoiceMuted", !chatAgentVoiceMuted)}
+          onNewChat={() => void handleStartDraftConversation()}
           trailingExtras={
             showNavigationMenu ? (
               <button

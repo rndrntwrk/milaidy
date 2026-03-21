@@ -1502,7 +1502,7 @@ export function VectorBrowserView() {
         (error.includes("agent is running") ? (
           <div className="text-center py-16">
             <div className="text-[var(--muted)] text-sm mb-2">
-              {t("vectorbrowserview.DatabaseNotAvailab")}
+              {t("databaseview.DatabaseNotAvailab")}
             </div>
             <div className="text-[var(--muted)] text-xs mb-4">
               {t("vectorbrowserview.StartTheAgentToB")}

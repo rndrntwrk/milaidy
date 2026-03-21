@@ -287,7 +287,7 @@ export function StreamSettings({
         <div className="flex gap-1 px-4 py-2 border-b border-border flex-shrink-0">
           {navBtn("channel", t("streamsettings.NavChannel"))}
           {navBtn("overlays", t("streamsettings.NavOverlays"))}
-          {navBtn("source", t("streamsettings.NavSource"))}
+          {navBtn("source", t("trajectoriesview.Source"))}
         </div>
 
         {/* Content */}

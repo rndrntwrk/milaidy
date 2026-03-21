@@ -877,7 +877,7 @@ export function CloudDashboard() {
             <Zap className="w-4 h-4 mr-2" />
           )}
           {elizaCloudLoginBusy
-            ? t("elizaclouddashboard.Connecting")
+            ? t("onboarding.connecting")
             : t("elizaclouddashboard.ConnectElizaCloud")}
         </Button>
         <p className="mt-4 text-xs text-muted/60">
@@ -949,7 +949,7 @@ export function CloudDashboard() {
             <RefreshCw
               className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
             />
-            {t("elizaclouddashboard.Refresh")}
+            {t("common.refresh")}
           </Button>
           <Button
             variant="outline"
@@ -959,8 +959,8 @@ export function CloudDashboard() {
             disabled={cloudDisconnecting}
           >
             {cloudDisconnecting
-              ? t("elizaclouddashboard.Disconnecting")
-              : t("elizaclouddashboard.Disconnect")}
+              ? t("providerswitcher.disconnecting")
+              : t("providerswitcher.disconnect")}
           </Button>
         </div>
       </div>
@@ -1031,7 +1031,7 @@ export function CloudDashboard() {
                       </div>
                       <div className="mt-2 text-sm text-txt-strong">
                         {autoTopUpEnabled
-                          ? t("elizaclouddashboard.Enabled")
+                          ? t("customactionsview.Enabled")
                           : t("elizaclouddashboard.Disabled")}
                       </div>
                     </div>
@@ -1450,7 +1450,7 @@ export function CloudDashboard() {
                               onClick={() => setShowDeployForm(false)}
                               disabled={deploying}
                             >
-                              {t("onboarding.cancel")}
+                              {t("common.cancel")}
                             </Button>
                             <Button
                               variant="default"

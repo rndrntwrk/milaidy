@@ -892,7 +892,7 @@
 }
 
 .ob-identity-card-name {
-  padding: 3px 6px;
+  padding: 3px 36px 3px 10px;
   font-size: clamp(8px, 1.2vw, 11px);
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -1075,7 +1075,7 @@
 }
 
 .ce-roster-card-name {
-  padding: 3px 6px;
+  padding: 3px 36px 3px 10px;
   font-size: clamp(8px, 1.2vw, 11px);
   font-weight: 600;
   letter-spacing: 0.06em;

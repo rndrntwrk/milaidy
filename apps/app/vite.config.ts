@@ -5,7 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
-import { MILADY_CHARACTER_ASSETS } from "./src/character-catalog";
+import { MILADY_CHARACTER_ASSETS } from "@miladyai/app-core/character-catalog";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const miladyRoot = path.resolve(here, "../..");

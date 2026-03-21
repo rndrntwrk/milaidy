@@ -68,7 +68,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   },
 }));
 
-vi.mock("../../src/components/AvatarSelector", () => ({
+vi.mock("@miladyai/app-core/components/AvatarSelector", () => ({
   AvatarSelector: ({
     value,
     onChange,
@@ -93,7 +93,7 @@ vi.mock("@miladyai/app-core/config", () => ({
 }));
 
 import { client } from "@miladyai/app-core/api";
-import { CharacterView } from "../../src/components/CharacterView";
+import { CharacterView } from "@miladyai/app-core/components/CharacterView";
 
 // ---------------------------------------------------------------------------
 // Types

@@ -794,7 +794,7 @@ export function CustomActionEditor({
 
           {/* Name */}
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted">{t("triggersview.Name")}</span>
+            <span className="text-xs text-muted">{t("wallet.name")}</span>
             <input
               type="text"
               value={name}
@@ -1043,7 +1043,7 @@ export function CustomActionEditor({
                     className="cursor-pointer"
                   />
 
-                  {t("customactioneditor.Required")}
+                  {t("secretsview.Required")}
                 </span>
                 <button
                   type="button"
@@ -1131,7 +1131,7 @@ export function CustomActionEditor({
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={onClose}>
-            {t("onboarding.cancel")}
+            {t("common.cancel")}
           </Button>
           <Button
             variant="default"

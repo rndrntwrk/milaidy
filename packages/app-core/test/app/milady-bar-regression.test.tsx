@@ -47,7 +47,7 @@ vi.mock("@miladyai/app-core/platform", () => ({
 
 // ── Imports ────────────────────────────────────────────────────────────
 
-import { useMiladyBar } from "../../src/hooks/useMiladyBar";
+import { useMiladyBar } from "@miladyai/app-core/hooks/useMiladyBar";
 
 // ── Helpers ────────────────────────────────────────────────────────────
 

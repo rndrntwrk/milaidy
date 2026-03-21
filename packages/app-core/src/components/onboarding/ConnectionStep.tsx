@@ -380,7 +380,7 @@ export function ConnectionStep() {
             >
               <div style={{ flex: 1 }}>
                 <div className="onboarding-provider-name">
-                  {t("onboarding.hostingCloud")}
+                  {t("header.Cloud")}
                 </div>
                 <div className="onboarding-provider-desc">
                   {t("onboarding.hostingElizaCloudDesc")}
@@ -822,7 +822,7 @@ export function ConnectionStep() {
               setState("onboardingPrimaryModel", "");
             }}
           >
-            {t("onboarding.change")}
+            {t("settings.change")}
           </button>
         </span>
       </div>

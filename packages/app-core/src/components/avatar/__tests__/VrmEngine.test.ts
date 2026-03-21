@@ -1224,7 +1224,7 @@ describe("VrmEngine", () => {
       expect(engineAny.emoteAction).toBeNull();
     });
 
-    it("playEmote crossfades from the current emote instead of bouncing through idle", async () => {
+    it("playEmote fades out the current emote and idle instead of bouncing through idle", async () => {
       const engineAny = engine as unknown as {
         vrm: object | null;
         mixer: {
@@ -1256,12 +1256,11 @@ describe("VrmEngine", () => {
 
       await engine.playEmote("/mock/emote.glb", 2, false);
 
-      expect(nextEmoteAction.crossFadeFrom).toHaveBeenCalledWith(
-        currentEmoteAction,
-        0.4,
-        false,
-      );
-      expect(idleAction.fadeIn).not.toHaveBeenCalled();
+      // Previous emote and idle should both be faded out
+      expect(currentEmoteAction.fadeOut).toHaveBeenCalledWith(0.4);
+      expect(idleAction.fadeOut).toHaveBeenCalledWith(0.4);
+      // New emote should be faded in (not crossFadeFrom)
+      expect(nextEmoteAction.fadeIn).toHaveBeenCalledWith(0.4);
       expect(engineAny.emoteAction).toBe(nextEmoteAction);
     });
 

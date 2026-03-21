@@ -1,6 +1,5 @@
 import { useRenderGuard } from "@miladyai/app-core/hooks";
 import { useApp } from "@miladyai/app-core/state";
-import { MessageCircle, Volume2, VolumeX } from "lucide-react";
 import { memo, useCallback, useEffect } from "react";
 import { ChatModalView } from "./ChatModalView";
 import { CompanionHeader } from "./companion/CompanionHeader";
@@ -45,51 +44,11 @@ export const CompanionView = memo(function CompanionView() {
         uiTheme={uiTheme}
         setUiTheme={setUiTheme}
         t={t}
-      >
-        <div className="flex items-center justify-center">
-          <div
-            className="inline-flex items-center gap-2"
-            data-testid="companion-header-chat-controls"
-            data-no-camera-drag="true"
-          >
-            <button
-              type="button"
-              aria-label={
-                chatAgentVoiceMuted
-                  ? t("companion.agentVoiceOff")
-                  : t("companion.agentVoiceOn")
-              }
-              aria-pressed={!chatAgentVoiceMuted}
-              title={
-                chatAgentVoiceMuted
-                  ? t("companion.agentVoiceOff")
-                  : t("companion.agentVoiceOn")
-              }
-              className="inline-flex h-11 min-h-[44px] min-w-[44px] select-none items-center rounded-xl border border-border/50 bg-bg/50 px-4 text-sm font-medium text-txt shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:border-accent hover:text-txt hover:shadow-[0_0_15px_rgba(var(--accent),0.5)] active:scale-95 cursor-pointer"
-              onClick={() =>
-                setState("chatAgentVoiceMuted", !chatAgentVoiceMuted)
-              }
-            >
-              {chatAgentVoiceMuted ? (
-                <VolumeX className="mr-1.5 h-3.5 w-3.5" />
-              ) : (
-                <Volume2 className="mr-1.5 h-3.5 w-3.5" />
-              )}
-              {t("companion.voice")}
-            </button>
-            <button
-              type="button"
-              aria-label={t("companion.newChat")}
-              title={t("companion.newChat")}
-              className="hidden h-11 min-h-[44px] min-w-[44px] select-none items-center rounded-xl border border-border/50 bg-bg/50 px-4 text-sm font-medium text-txt shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:border-accent hover:text-txt hover:shadow-[0_0_15px_rgba(var(--accent),0.5)] active:scale-95 cursor-pointer sm:inline-flex"
-              onClick={() => void handleStartDraftConversation()}
-            >
-              <MessageCircle className="mr-1 h-3.5 w-3.5" />
-              {t("companion.newChat")}
-            </button>
-          </div>
-        </div>
-      </CompanionHeader>
+        showCompanionControls
+        chatAgentVoiceMuted={chatAgentVoiceMuted}
+        onToggleVoiceMute={() => setState("chatAgentVoiceMuted", !chatAgentVoiceMuted)}
+        onNewChat={() => void handleStartDraftConversation()}
+      />
 
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-3xl h-[45%] z-20 pointer-events-auto">
         <ChatModalView variant="companion-dock" />

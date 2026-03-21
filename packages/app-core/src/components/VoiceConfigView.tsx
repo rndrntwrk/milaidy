@@ -521,7 +521,7 @@ export function VoiceConfigView() {
           }`}
         >
           {isConfigured
-            ? t("mediasettingssection.Configured")
+            ? t("config-field.Configured")
             : t("mediasettingssection.NeedsSetup")}
         </span>
       </div>
@@ -585,7 +585,7 @@ export function VoiceConfigView() {
           {/* Voice presets */}
           <div className="flex flex-col gap-2">
             <div className="text-xs font-semibold">
-              {t("voiceconfigview.Voice")}
+              {t("settings.sections.voice.label")}
             </div>
             <div className="grid grid-cols-3 gap-1.5">
               {PREMADE_VOICES.map((preset) => {
@@ -640,7 +640,7 @@ export function VoiceConfigView() {
                     }
                   }}
                 >
-                  {t("voiceconfigview.Stop")}
+                  {t("game.stop")}
                 </Button>
               )}
             </div>

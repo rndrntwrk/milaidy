@@ -46,14 +46,14 @@ describe("PersistedConnectionMode persistence", () => {
 
   it("returns null when no connection mode is persisted", async () => {
     const { loadPersistedConnectionMode } = await import(
-      "../../src/state/persistence"
+      "@miladyai/app-core/state/persistence"
     );
     expect(loadPersistedConnectionMode()).toBeNull();
   });
 
   it("round-trips a local connection mode", async () => {
     const { loadPersistedConnectionMode, savePersistedConnectionMode } =
-      await import("../../src/state/persistence");
+      await import("@miladyai/app-core/state/persistence");
 
     savePersistedConnectionMode({ runMode: "local" });
     const loaded = loadPersistedConnectionMode();
@@ -62,7 +62,7 @@ describe("PersistedConnectionMode persistence", () => {
 
   it("round-trips a cloud connection mode with auth", async () => {
     const { loadPersistedConnectionMode, savePersistedConnectionMode } =
-      await import("../../src/state/persistence");
+      await import("@miladyai/app-core/state/persistence");
 
     savePersistedConnectionMode({
       runMode: "cloud",
@@ -79,7 +79,7 @@ describe("PersistedConnectionMode persistence", () => {
 
   it("round-trips a remote connection mode", async () => {
     const { loadPersistedConnectionMode, savePersistedConnectionMode } =
-      await import("../../src/state/persistence");
+      await import("@miladyai/app-core/state/persistence");
 
     savePersistedConnectionMode({
       runMode: "remote",
@@ -99,7 +99,7 @@ describe("PersistedConnectionMode persistence", () => {
       clearPersistedConnectionMode,
       loadPersistedConnectionMode,
       savePersistedConnectionMode,
-    } = await import("../../src/state/persistence");
+    } = await import("@miladyai/app-core/state/persistence");
 
     savePersistedConnectionMode({ runMode: "local" });
     expect(loadPersistedConnectionMode()).not.toBeNull();
@@ -110,7 +110,7 @@ describe("PersistedConnectionMode persistence", () => {
 
   it("returns null for corrupted JSON", async () => {
     const { loadPersistedConnectionMode } = await import(
-      "../../src/state/persistence"
+      "@miladyai/app-core/state/persistence"
     );
 
     localStorage.setItem("eliza:connection-mode", "not-json{{{");
@@ -119,7 +119,7 @@ describe("PersistedConnectionMode persistence", () => {
 
   it("returns null for invalid runMode value", async () => {
     const { loadPersistedConnectionMode } = await import(
-      "../../src/state/persistence"
+      "@miladyai/app-core/state/persistence"
     );
 
     localStorage.setItem(
@@ -131,7 +131,7 @@ describe("PersistedConnectionMode persistence", () => {
 
   it("returns null for non-object stored value", async () => {
     const { loadPersistedConnectionMode } = await import(
-      "../../src/state/persistence"
+      "@miladyai/app-core/state/persistence"
     );
 
     localStorage.setItem("eliza:connection-mode", JSON.stringify([1, 2, 3]));
@@ -210,7 +210,7 @@ describe("MiladyClient.provisionCloudSandbox", () => {
   });
 
   it("provisions a sandbox agent through create → provision → poll", async () => {
-    const { MiladyClient } = await import("../../src/api/client");
+    const { MiladyClient } = await import("@miladyai/app-core/api/client");
     const client = new MiladyClient("http://localhost:2138");
 
     const fetchMock = vi.fn();
@@ -266,7 +266,7 @@ describe("MiladyClient.provisionCloudSandbox", () => {
   });
 
   it("throws on provisioning failure", async () => {
-    const { MiladyClient } = await import("../../src/api/client");
+    const { MiladyClient } = await import("@miladyai/app-core/api/client");
     const client = new MiladyClient("http://localhost:2138");
 
     const fetchMock = vi.fn();
@@ -302,7 +302,7 @@ describe("MiladyClient.provisionCloudSandbox", () => {
   });
 
   it("throws on agent creation failure", async () => {
-    const { MiladyClient } = await import("../../src/api/client");
+    const { MiladyClient } = await import("@miladyai/app-core/api/client");
     const client = new MiladyClient("http://localhost:2138");
 
     globalThis.fetch = vi.fn().mockResolvedValueOnce({
@@ -328,7 +328,7 @@ describe("MiladyClient direct cloud auth", () => {
   });
 
   it("cloudLoginDirect calls the cloud API directly", async () => {
-    const { MiladyClient } = await import("../../src/api/client");
+    const { MiladyClient } = await import("@miladyai/app-core/api/client");
     const client = new MiladyClient("http://localhost:2138");
 
     globalThis.fetch = vi.fn().mockResolvedValueOnce({
@@ -352,7 +352,7 @@ describe("MiladyClient direct cloud auth", () => {
   });
 
   it("cloudLoginPollDirect polls the cloud API directly", async () => {
-    const { MiladyClient } = await import("../../src/api/client");
+    const { MiladyClient } = await import("@miladyai/app-core/api/client");
     const client = new MiladyClient("http://localhost:2138");
 
     globalThis.fetch = vi.fn().mockResolvedValueOnce({
@@ -377,7 +377,7 @@ describe("MiladyClient direct cloud auth", () => {
   });
 
   it("cloudLoginDirect returns error on failure", async () => {
-    const { MiladyClient } = await import("../../src/api/client");
+    const { MiladyClient } = await import("@miladyai/app-core/api/client");
     const client = new MiladyClient("http://localhost:2138");
 
     globalThis.fetch = vi.fn().mockResolvedValueOnce({
@@ -395,7 +395,7 @@ describe("MiladyClient direct cloud auth", () => {
 
 describe("MiladyClient.getBaseUrl", () => {
   it("returns the current base URL", async () => {
-    const { MiladyClient } = await import("../../src/api/client");
+    const { MiladyClient } = await import("@miladyai/app-core/api/client");
     const client = new MiladyClient("http://my-agent.example.com");
     expect(client.getBaseUrl()).toBe("http://my-agent.example.com");
   });
@@ -403,7 +403,7 @@ describe("MiladyClient.getBaseUrl", () => {
   it("returns empty string when no base URL is configured", async () => {
     // In jsdom with about:blank protocol, no injected base
     delete (window as Record<string, unknown>).__MILADY_API_BASE__;
-    const { MiladyClient } = await import("../../src/api/client");
+    const { MiladyClient } = await import("@miladyai/app-core/api/client");
     const client = new MiladyClient();
     // May return "" or a fallback depending on window.location.protocol
     expect(typeof client.getBaseUrl()).toBe("string");

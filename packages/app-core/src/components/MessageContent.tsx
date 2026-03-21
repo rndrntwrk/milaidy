@@ -631,7 +631,7 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
         <div className="flex items-center gap-2">
           {plugin.configured && (
             <span className="text-[10px] text-ok font-medium">
-              {t("messagecontent.Configured")}
+              {t("config-field.Configured")}
             </span>
           )}
           <span
@@ -698,7 +698,7 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
         )}
 
         {saved && (
-          <span className="text-xs text-ok">{t("messagecontent.Saved")}</span>
+          <span className="text-xs text-ok">{t("apikeyconfig.saved")}</span>
         )}
         {error && <span className="text-xs text-danger">{error}</span>}
       </div>

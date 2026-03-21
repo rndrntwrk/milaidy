@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import "./browser-surface.css";
+import "../styles/browser-surface.css";
 import {
   DEFAULT_BROWSER_HOME,
   normalizeBrowserAddressInput,

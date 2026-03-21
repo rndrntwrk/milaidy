@@ -1045,7 +1045,7 @@ function DesktopOnboardingPermissions({
           variant="default"
           onClick={() => onContinue({ allowPermissionBypass: true })}
         >
-          {translateWithFallback(t, "permissionssection.Continue", "Continue")}
+          {translateWithFallback(t, "onboarding.savedMyKeys", "Continue")}
         </Button>
       </div>
     );
@@ -1175,7 +1175,7 @@ function DesktopOnboardingPermissions({
           >
             {translateWithFallback(
               t,
-              "permissionssection.Continue",
+              "onboarding.savedMyKeys",
               "Continue",
             )}
           </Button>

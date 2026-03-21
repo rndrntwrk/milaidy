@@ -125,7 +125,13 @@ export async function loadEmoteClip(
         console.warn(`[VrmEngine] FBX has no animations: ${path}`);
         return null;
       }
-      return retargetMixamoFbxToVrm(fbx, sourceClip, vrm);
+      const retargeted = retargetMixamoFbxToVrm(fbx, sourceClip, vrm);
+      // Strip position tracks from emotes — they cause root motion (floating).
+      // Position tracks are only needed for the idle animation.
+      retargeted.tracks = retargeted.tracks.filter(
+        (t) => !t.name.endsWith(".position"),
+      );
+      return retargeted;
     }
 
     const { retargetMixamoGltfToVrm } = await import(

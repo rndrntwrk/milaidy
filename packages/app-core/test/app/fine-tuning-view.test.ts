@@ -54,7 +54,7 @@ vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
-import { FineTuningView } from "../../src/components/FineTuningView";
+import { FineTuningView } from "@miladyai/app-core/components/FineTuningView";
 
 function baseTrajectoryList(): TrainingTrajectoryList {
   return {

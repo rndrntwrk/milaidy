@@ -558,7 +558,7 @@ export function FineTuningView() {
               void loadTrajectories();
             }}
           >
-            {t("appsview.Refresh")}
+            {t("common.refresh")}
           </Button>
         </div>
         {!trajectoryList.available ? (

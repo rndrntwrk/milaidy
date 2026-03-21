@@ -380,7 +380,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   },
 }));
 
-vi.mock("../../src/components/shared/confirm-delete-control", () => ({
+vi.mock("@miladyai/app-core/components/shared/confirm-delete-control", () => ({
   ConfirmDeleteControl: ({
     onConfirm,
     children,
@@ -395,7 +395,7 @@ vi.mock("../../src/components/shared/confirm-delete-control", () => ({
     ),
 }));
 
-import { KnowledgeView } from "../../src/components/KnowledgeView";
+import { KnowledgeView } from "@miladyai/app-core/components/KnowledgeView";
 
 type KnowledgeState = {
   knowledgeStats: { documentCount: number; fragmentCount: number } | null;

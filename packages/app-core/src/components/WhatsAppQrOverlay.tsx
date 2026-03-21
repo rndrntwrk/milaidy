@@ -66,7 +66,7 @@ export function WhatsAppQrOverlay({
             style={{ border: "1px solid #ef4444", color: "#ef4444" }}
             onClick={() => void disconnect()}
           >
-            {t("whatsappqroverlay.Disconnect")}
+            {t("providerswitcher.disconnect")}
           </button>
         )}
       </div>
@@ -221,7 +221,7 @@ export function WhatsAppQrOverlay({
             }}
             onClick={() => void stopPairing()}
           >
-            {t("onboarding.cancel")}
+            {t("common.cancel")}
           </button>
         </div>
       </div>

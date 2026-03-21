@@ -5,10 +5,10 @@
  * features, and mounts the React application.
  */
 
-import { ErrorBoundary } from "./ErrorBoundary";
+import { ErrorBoundary } from "@miladyai/app-core/components";
 import "@miladyai/app-core/styles/styles.css";
-import "./brand-gold.css";
-import "./onboarding-overrides.css";
+import "@miladyai/app-core/styles/brand-gold.css";
+import "@miladyai/app-core/styles/onboarding-overrides.css";
 import "./native-plugin-entrypoints";
 
 import { App as CapacitorApp } from "@capacitor/app";
@@ -41,22 +41,22 @@ import { Agent } from "@miladyai/capacitor-agent";
 import { Desktop } from "@miladyai/capacitor-desktop";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { installLocalProviderCloudPreferencePatch } from "./cloud-preference-patch";
-import { CharacterEditor } from "./components/CharacterEditor";
-import { DesktopOnboardingRuntime } from "./DesktopOnboardingRuntime";
-import { DesktopSurfaceNavigationRuntime } from "./DesktopSurfaceNavigationRuntime";
-import { DetachedShellRoot } from "./DetachedShellRoot";
-import { installDesktopPermissionsClientPatch } from "./desktop-permissions-client";
+import { installLocalProviderCloudPreferencePatch } from "@miladyai/app-core/platform";
+import { CharacterEditor } from "@miladyai/app-core/components";
+import { DesktopOnboardingRuntime } from "@miladyai/app-core/shell";
+import { DesktopSurfaceNavigationRuntime } from "@miladyai/app-core/shell";
+import { DetachedShellRoot } from "@miladyai/app-core/shell";
+import { installDesktopPermissionsClientPatch } from "@miladyai/app-core/platform";
 import {
   applyForceFreshOnboardingReset,
   installForceFreshOnboardingClientPatch,
-} from "./onboarding-reset";
+} from "@miladyai/app-core/platform";
 import {
   isDetachedWindowShell,
   resolveWindowShellRoute,
   shouldInstallMainWindowOnboardingPatches,
   syncDetachedShellLocation,
-} from "./window-shell";
+} from "@miladyai/app-core/platform";
 
 const MILADY_BRANDING: Partial<BrandingConfig> = {
   appName: "Milady",

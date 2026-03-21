@@ -12,11 +12,11 @@ export function DatabasePageView() {
   const dbTabs = [
     {
       id: "tables" as const,
-      label: t("databasepageview.Tables"),
+      label: t("databaseview.Tables"),
     },
     {
       id: "media" as const,
-      label: t("databasepageview.Media"),
+      label: t("settings.sections.media.label"),
     },
     {
       id: "vectors" as const,

@@ -25,7 +25,7 @@ const APPROVAL_PRESETS: {
   },
   {
     value: "standard",
-    labelKey: "codingagentsettingssection.PresetStandard",
+    labelKey: "mediasettingssection.Standard",
     descKey: "codingagentsettingssection.PresetStandardDesc",
   },
   {

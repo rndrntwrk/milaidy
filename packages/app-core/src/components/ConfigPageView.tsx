@@ -209,7 +209,7 @@ function RpcConfigSection<T extends string>({
         containerClassName,
         (key: string) => {
           // hack to get t function without breaking hook rules
-          return key === "elizaclouddashboard.ElizaCloud" ? "Eliza Cloud" : key;
+          return key === "providerswitcher.elizaCloud" ? "Eliza Cloud" : key;
         },
       )}
 
@@ -263,7 +263,7 @@ function renderRpcProviderButtons<T extends string>(
           >
             <div className="leading-tight">
               {provider.id === "eliza-cloud" && tFallback
-                ? tFallback("elizaclouddashboard.ElizaCloud")
+                ? tFallback("providerswitcher.elizaCloud")
                 : provider.label}
             </div>
           </button>

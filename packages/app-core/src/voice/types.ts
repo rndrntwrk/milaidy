@@ -195,3 +195,27 @@ export const VOICE_PROVIDERS: Array<{
     needsKey: false,
   },
 ];
+
+/**
+ * Minimal backup voices for non-ElevenLabs providers (Edge TTS / OpenAI).
+ * Only a male and female option — keeps the UI uncluttered when premium
+ * voices aren't available.
+ */
+export const EDGE_BACKUP_VOICES: VoicePreset[] = [
+  {
+    id: "edge-female",
+    name: "Female",
+    voiceId: "en-US-AriaNeural",
+    gender: "female",
+    hint: "Clear, natural",
+    previewUrl: "",
+  },
+  {
+    id: "edge-male",
+    name: "Male",
+    voiceId: "en-US-GuyNeural",
+    gender: "male",
+    hint: "Deep, natural",
+    previewUrl: "",
+  },
+];

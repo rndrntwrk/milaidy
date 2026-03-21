@@ -14,7 +14,7 @@ import {
 import { STYLE_PRESETS } from "@miladyai/app-core/onboarding-presets";
 import { useApp } from "@miladyai/app-core/state";
 import { normalizeCharacterMessageExamples } from "@miladyai/app-core/utils/character-message-examples";
-import { PREMADE_VOICES, sanitizeApiKey } from "@miladyai/app-core/voice";
+import { EDGE_BACKUP_VOICES, PREMADE_VOICES, sanitizeApiKey } from "@miladyai/app-core/voice";
 import { Button, Input, Textarea, ThemedSelect } from "@miladyai/ui";
 import {
   CharacterRoster,
@@ -71,19 +71,15 @@ import "./CharacterEditor.css";
 /* ── Constants ─────────────────────────────────────────────────────── */
 
 const DEFAULT_ELEVEN_FAST_MODEL = "eleven_flash_v2_5";
-const STYLE_SECTION_KEYS = ["all", "chat", "post"] as const;
+const STYLE_SECTION_KEYS = ["all"] as const;
 const STYLE_SECTION_PLACEHOLDERS: Record<string, string> = {
-  all: "Add shared rule",
-  chat: "Add chat rule",
-  post: "Add post rule",
+  all: "Add a style rule",
 };
 const STYLE_SECTION_EMPTY_STATES: Record<string, string> = {
-  all: "No shared rules yet.",
-  chat: "No chat rules yet.",
-  post: "No post rules yet.",
+  all: "No style rules yet.",
 };
 
-const VOICE_SELECT_GROUPS = [
+const ELEVENLABS_VOICE_GROUPS = [
   {
     label: "Female",
     items: PREMADE_VOICES.filter((p) => p.gender === "female").map((p) => ({
@@ -101,6 +97,16 @@ const VOICE_SELECT_GROUPS = [
   {
     label: "Character",
     items: PREMADE_VOICES.filter((p) => p.gender === "character").map((p) => ({
+      id: p.id,
+      text: p.name,
+    })),
+  },
+];
+
+const EDGE_VOICE_GROUPS = [
+  {
+    label: "Backup Voices",
+    items: EDGE_BACKUP_VOICES.map((p) => ({
       id: p.id,
       text: p.name,
     })),
@@ -198,7 +204,12 @@ export function CharacterEditor({
     syncRegistryProfile: _syncRegistryProfile,
     loadDropStatus,
     walletConfig: _walletConfig,
+    elizaCloudConnected,
+    elizaCloudEnabled,
   } = useApp();
+
+  /** ElevenLabs voices are available when cloud is connected/enabled (provides API key). */
+  const useElevenLabs = elizaCloudConnected || elizaCloudEnabled;
 
   useEffect(() => {
     void loadCharacter();
@@ -227,17 +238,17 @@ export function CharacterEditor({
   /* ── Generation ─────────────────────────────────────────────────── */
   const [generating, setGenerating] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
-  const [mobilePage, setMobilePage] = useState<
+  const [activePage, setActivePage] = useState<
     "identity" | "style" | "examples"
   >("identity");
   const [rightTab, setRightTab] = useState<"style" | "examples">("style");
   const [customizing, setCustomizing] = useState(false);
 
-  // Sync rightTab with mobilePage on mobile
+  // Sync rightTab with activePage
   useEffect(() => {
-    if (mobilePage === "style") setRightTab("style");
-    else if (mobilePage === "examples") setRightTab("examples");
-  }, [mobilePage]);
+    if (activePage === "style") setRightTab("style");
+    else if (activePage === "examples") setRightTab("examples");
+  }, [activePage]);
 
   /* ── Style entry state ──────────────────────────────────────────── */
   const [pendingStyleEntries, setPendingStyleEntries] = useState<
@@ -313,9 +324,9 @@ export function CharacterEditor({
     "Agent";
   const normalizedMessageExamples = Array.isArray(d.messageExamples)
     ? normalizeCharacterMessageExamples(
-        d.messageExamples,
-        fallbackCharacterName,
-      )
+      d.messageExamples,
+      fallbackCharacterName,
+    )
     : [];
   const bioText =
     typeof d.bio === "string"
@@ -383,6 +394,9 @@ export function CharacterEditor({
   }, [d.messageExamples, fallbackCharacterName, handleFieldEdit]);
 
   /* ── Load voice config on mount ─────────────────────────────────── */
+  /* Load voice config from server — but don't overwrite a roster-derived
+     voice preset that was already applied by auto-select. */
+  const voicePresetAppliedRef = useRef(false);
   useEffect(() => {
     void (async () => {
       setVoiceLoading(true);
@@ -394,27 +408,39 @@ export function CharacterEditor({
         const tts = messages?.tts;
         if (tts) {
           setVoiceConfig(tts);
-          if (tts.elevenlabs?.voiceId) {
+          // Only set the voice preset from server if a roster entry hasn't
+          // already set one (roster voice takes precedence).
+          if (tts.elevenlabs?.voiceId && !voicePresetAppliedRef.current) {
             const preset = PREMADE_VOICES.find(
               (p) => p.voiceId === tts.elevenlabs?.voiceId,
             );
             setSelectedVoicePresetId(preset?.id ?? null);
           }
         }
-      } catch {}
+      } catch { }
       setVoiceLoading(false);
     })();
   }, []);
 
   /* ── Voice helpers ──────────────────────────────────────────────── */
   const handleSelectPreset = useCallback(
-    (preset: (typeof PREMADE_VOICES)[0]) => {
+    (preset: (typeof PREMADE_VOICES)[0] | (typeof EDGE_BACKUP_VOICES)[0]) => {
       setSelectedVoicePresetId(preset.id);
+      const isEdgeVoice = EDGE_BACKUP_VOICES.some((v) => v.id === preset.id);
       setVoiceConfig((prev) => {
+        if (isEdgeVoice) {
+          const existingEdge = (prev.edge ?? {}) as Record<string, string | undefined>;
+          return {
+            ...prev,
+            provider: "edge" as const,
+            edge: { ...existingEdge, voice: preset.voiceId },
+          };
+        }
         const existing =
           typeof prev.elevenlabs === "object" ? prev.elevenlabs : {};
         return {
           ...prev,
+          provider: "elevenlabs" as const,
           elevenlabs: { ...existing, voiceId: preset.voiceId },
         };
       });
@@ -426,12 +452,30 @@ export function CharacterEditor({
     (entry: CharacterRosterEntry) => {
       setVoiceSaveError(null);
       if (!entry.voicePresetId) return;
-      const voicePreset = PREMADE_VOICES.find(
-        (p) => p.id === entry.voicePresetId,
-      );
-      if (voicePreset) handleSelectPreset(voicePreset);
+      // When cloud provides ElevenLabs, use the ElevenLabs preset voice.
+      // Otherwise fall back to matching edge backup voice by gender.
+      if (useElevenLabs) {
+        const voicePreset = PREMADE_VOICES.find(
+          (p) => p.id === entry.voicePresetId,
+        );
+        if (voicePreset) {
+          handleSelectPreset(voicePreset);
+          voicePresetAppliedRef.current = true;
+        }
+      } else {
+        // Pick male/female edge voice based on the ElevenLabs preset gender
+        const elPreset = PREMADE_VOICES.find(
+          (p) => p.id === entry.voicePresetId,
+        );
+        const edgeGender = elPreset?.gender === "male" ? "edge-male" : "edge-female";
+        const edgeVoice = EDGE_BACKUP_VOICES.find((v) => v.id === edgeGender);
+        if (edgeVoice) {
+          handleSelectPreset(edgeVoice);
+          voicePresetAppliedRef.current = true;
+        }
+      }
     },
-    [handleSelectPreset],
+    [handleSelectPreset, useElevenLabs],
   );
 
   /* ── Character defaults ─────────────────────────────────────────── */
@@ -457,6 +501,21 @@ export function CharacterEditor({
       setState("selectedVrmIndex", entry.avatarIndex);
       if (!voiceSelectionLocked && isNewCharacter) {
         applyVoicePresetForEntry(entry);
+        // Persist voice config immediately so the server has the right TTS
+        // provider when streamVoiceSpeak is called for the catchphrase.
+        // We build a minimal payload inline to avoid referencing persistVoiceConfig
+        // (which is defined after this callback in the file).
+        const presetVoice = PREMADE_VOICES.find((p) => p.id === entry.voicePresetId);
+        if (presetVoice && useElevenLabs) {
+          void client.updateConfig({
+            messages: {
+              tts: {
+                provider: "elevenlabs",
+                elevenlabs: { voiceId: presetVoice.voiceId },
+              },
+            },
+          }).catch(() => {});
+        }
       }
       if (applyDefaults) {
         applyCharacterDefaults(entry);
@@ -467,7 +526,7 @@ export function CharacterEditor({
           catchphrase: entry.catchphrase,
           animationPath:
             entry.greetingAnimation ??
-            "animations/emotes/waving-both-hands.glb.gz",
+            "animations/emotes/greeting.fbx",
         };
       }
     },
@@ -476,6 +535,7 @@ export function CharacterEditor({
       applyVoicePresetForEntry,
       selectedCharacterId,
       setState,
+      useElevenLabs,
       voiceSelectionLocked,
     ],
   );
@@ -515,31 +575,71 @@ export function CharacterEditor({
   ]);
 
   /* ── Play greeting animation + catchphrase when VRM teleport-in dissolve finishes ── */
+  const greetingTimerRef = useRef<number | null>(null);
+
+  // Clear any stale greeting timer before queueing a new one on character change
+  useEffect(() => {
+    if (greetingTimerRef.current != null) {
+      window.clearTimeout(greetingTimerRef.current);
+      greetingTimerRef.current = null;
+    }
+  }, [selectedCharacterId]);
+
   useEffect(() => {
     const handler = () => {
       const greeting = pendingGreetingRef.current;
       if (!greeting) return;
       pendingGreetingRef.current = null;
-      dispatchWindowEvent(APP_EMOTE_EVENT, {
-        emoteId: "greeting",
-        path: `/${greeting.animationPath}`,
-        duration: 3,
-        loop: false,
-        showOverlay: false,
-      });
-      void client.streamVoiceSpeak(greeting.catchphrase).catch(() => {});
+      // Delay the emote dispatch so the idle animation can fully settle
+      // after the teleport dissolve before we cross-fade into the greeting.
+      if (greetingTimerRef.current != null) {
+        window.clearTimeout(greetingTimerRef.current);
+      }
+      greetingTimerRef.current = window.setTimeout(() => {
+        greetingTimerRef.current = null;
+        dispatchWindowEvent(APP_EMOTE_EVENT, {
+          emoteId: "greeting",
+          path: `/${greeting.animationPath}`,
+          duration: 3,
+          loop: false,
+          showOverlay: false,
+        });
+        void client.streamVoiceSpeak(greeting.catchphrase).catch(() => { });
+      }, 400);
     };
     const eventName = "eliza:vrm-teleport-complete";
     window.addEventListener(eventName, handler);
-    return () => window.removeEventListener(eventName, handler);
+    return () => {
+      window.removeEventListener(eventName, handler);
+      if (greetingTimerRef.current != null) {
+        window.clearTimeout(greetingTimerRef.current);
+        greetingTimerRef.current = null;
+      }
+    };
   }, []);
 
   /* ── Sync customizing state with tab ─────────────────────────────── */
+  /* Removed: previously auto-set customizing=true when tab==="character",
+     which prevented the roster from being the default view. Now the user
+     must explicitly click "Customize Character" to enter the editor. */
+
+  /* ── Dispatch camera offset for editor panel ─────────────────────── */
   useEffect(() => {
-    if (tab === "character") {
-      setCustomizing(true);
-    }
-  }, [tab]);
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia("(max-width: 768px)");
+    const dispatch = () => {
+      const offset = customizing && !mql.matches ? 0.5 : 0;
+      window.dispatchEvent(
+        new CustomEvent("eliza:editor-camera-offset", {
+          detail: { offset },
+        }),
+      );
+    };
+    dispatch();
+    const onChange = () => dispatch();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, [customizing]);
 
   /* ── Sync style entry drafts ────────────────────────────────────── */
   useEffect(() => {
@@ -563,23 +663,33 @@ export function CharacterEditor({
   /* ── Persist voice config ───────────────────────────────────────── */
   const persistVoiceConfig = useCallback(async () => {
     setVoiceSaveError(null);
-    const normalized: Record<string, string> = {
-      ...(voiceConfig.elevenlabs as Record<string, string> | undefined),
-      modelId:
-        (voiceConfig.elevenlabs as Record<string, string> | undefined)
-          ?.modelId ?? DEFAULT_ELEVEN_FAST_MODEL,
-    };
-    const sanitizedKey = sanitizeApiKey(normalized?.apiKey);
-    if (sanitizedKey) normalized.apiKey = sanitizedKey;
-    else delete normalized.apiKey;
-    const normalizedVoiceConfig = {
-      ...voiceConfig,
-      provider: voiceConfig.provider ?? "elevenlabs",
-      elevenlabs: normalized,
-    };
+    const provider = voiceConfig.provider ?? (useElevenLabs ? "elevenlabs" : "edge");
+    let normalizedVoiceConfig: Record<string, unknown>;
+    if (provider === "edge") {
+      normalizedVoiceConfig = {
+        ...voiceConfig,
+        provider: "edge",
+        edge: voiceConfig.edge ?? {},
+      };
+    } else {
+      const normalized: Record<string, string> = {
+        ...(voiceConfig.elevenlabs as Record<string, string> | undefined),
+        modelId:
+          (voiceConfig.elevenlabs as Record<string, string> | undefined)
+            ?.modelId ?? DEFAULT_ELEVEN_FAST_MODEL,
+      };
+      const sanitizedKey = sanitizeApiKey(normalized?.apiKey);
+      if (sanitizedKey) normalized.apiKey = sanitizedKey;
+      else delete normalized.apiKey;
+      normalizedVoiceConfig = {
+        ...voiceConfig,
+        provider: "elevenlabs",
+        elevenlabs: normalized,
+      };
+    }
     await client.updateConfig({ messages: { tts: normalizedVoiceConfig } });
     dispatchWindowEvent(VOICE_CONFIG_UPDATED_EVENT, normalizedVoiceConfig);
-  }, [voiceConfig]);
+  }, [voiceConfig, useElevenLabs]);
 
   /* ── Save all ───────────────────────────────────────────────────── */
   const handleSaveAll = useCallback(async () => {
@@ -666,7 +776,7 @@ export function CharacterEditor({
               if (parsed.chat) handleStyleEdit("chat", parsed.chat.join("\n"));
               if (parsed.post) handleStyleEdit("post", parsed.post.join("\n"));
             }
-          } catch {}
+          } catch { }
         } else if (field === "chatExamples") {
           const formatted = normalizeCharacterMessageExamples(
             generated,
@@ -688,7 +798,7 @@ export function CharacterEditor({
                 handleCharacterArrayInput("postExamples", parsed.join("\n"));
               }
             }
-          } catch {}
+          } catch { }
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Generation failed";
@@ -779,7 +889,7 @@ export function CharacterEditor({
 
   /* ── Render ─────────────────────────────────────────────────────── */
   return (
-    <div className="ce-root">
+    <div className={`ce-root${customizing ? " ce-root--editor-active" : ""}`}>
       {/* ── Character Roster (when NOT customizing) ────────────────── */}
       {!customizing && (
         <div className="ce-roster-wrap">
@@ -790,81 +900,59 @@ export function CharacterEditor({
             }
             onSelect={handleSelectCharacter}
           />
-          {/* Sound toggle — lets users mute greeting voices */}
-          <button
-            type="button"
-            data-no-camera-drag="true"
-            className="ce-sound-toggle"
-            aria-label={chatAgentVoiceMuted ? "Sound off" : "Sound on"}
-            title={chatAgentVoiceMuted ? "Sound off" : "Sound on"}
-            onClick={() =>
-              setState("chatAgentVoiceMuted", !chatAgentVoiceMuted)
-            }
-          >
-            {chatAgentVoiceMuted ? (
-              <svg
-                {...svgBase}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <title>Mute</title>
-                <path d="M11 5 6 9H2v6h4l5 4V5Z" />
-                <line x1="23" y1="9" x2="17" y2="15" />
-                <line x1="17" y1="9" x2="23" y2="15" />
-              </svg>
-            ) : (
-              <svg
-                {...svgBase}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <title>Unmute</title>
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-              </svg>
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* ── Mobile page tabs (when customizing) ────────────────────── */}
-      {/* Identity (left panel) always shows; these tabs toggle the right panel content */}
-      {customizing && (
-        <div className="ce-page-tabs">
-          <button
-            type="button"
-            className={`ce-page-tab ${rightTab === "style" ? "ce-page-tab--active" : ""}`}
-            onClick={() => {
-              setRightTab("style");
-              setMobilePage("style");
-            }}
-          >
-            Style Rules
-          </button>
-          <button
-            type="button"
-            className={`ce-page-tab ${rightTab === "examples" ? "ce-page-tab--active" : ""}`}
-            onClick={() => {
-              setRightTab("examples");
-              setMobilePage("examples");
-            }}
-          >
-            Examples
-          </button>
         </div>
       )}
 
       {customizing && (
-        <div className="ce-panels">
-          {/* ── LEFT PANEL ────────────────────────────────────────────── */}
-          <div className="ce-panel ce-panel-left">
+        <div className="ce-page-tabs-row">
+          <div className="ce-page-tabs">
+            <button
+              type="button"
+              className={`ce-page-tab ${activePage === "identity" ? "ce-page-tab--active" : ""}`}
+              onClick={() => setActivePage("identity")}
+            >
+              Character
+            </button>
+            <button
+              type="button"
+              className={`ce-page-tab ${activePage === "style" ? "ce-page-tab--active" : ""}`}
+              onClick={() => {
+                setRightTab("style");
+                setActivePage("style");
+              }}
+            >
+              Styles
+            </button>
+            <button
+              type="button"
+              className={`ce-page-tab ${activePage === "examples" ? "ce-page-tab--active" : ""}`}
+              onClick={() => {
+                setRightTab("examples");
+                setActivePage("examples");
+              }}
+            >
+              Examples
+            </button>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ce-reset-btn"
+            onClick={handleResetToDefaults}
+            disabled={!activeCharacterRosterEntry}
+            title="Reset to Defaults"
+          >
+            <RotateCcw className="h-4 w-4 mr-1" />
+            Reset
+          </Button>
+        </div>
+      )}
+
+      {customizing && (
+        <div className="ce-panels ce-panels--single">
+          {/* ── LEFT PANEL (Character identity) ───────────────────────── */}
+          <div className={`ce-panel ce-panel-left ${activePage !== "identity" ? "ce-panel--hidden" : ""}`}>
             {/* Name + Voice (50/50 split) */}
             <section className="ce-section">
               <div className="ce-name-voice-row">
@@ -889,9 +977,10 @@ export function CharacterEditor({
                   <div className="ce-voice-inline">
                     <ThemedSelect
                       value={voiceSelectValue}
-                      groups={VOICE_SELECT_GROUPS}
+                      groups={useElevenLabs ? ELEVENLABS_VOICE_GROUPS : EDGE_VOICE_GROUPS}
                       onChange={(id: string) => {
-                        const preset = PREMADE_VOICES.find((p) => p.id === id);
+                        const allVoices = useElevenLabs ? PREMADE_VOICES : EDGE_BACKUP_VOICES;
+                        const preset = allVoices.find((p) => p.id === id);
                         if (preset) handleSelectPreset(preset);
                       }}
                       placeholder="Select a voice"
@@ -995,46 +1084,7 @@ export function CharacterEditor({
           </div>
 
           {/* ── RIGHT PANEL ───────────────────────────────────────────── */}
-          <div className="ce-panel ce-panel-right">
-            {/* ── Toggle: Style Rules / Examples ───────────────────────── */}
-            <div className="ce-right-toggle-row">
-              <div className="ce-right-toggle">
-                <button
-                  type="button"
-                  className={`ce-right-toggle-btn ${rightTab === "style" ? "ce-right-toggle-btn--active" : ""}`}
-                  onClick={() => {
-                    setRightTab("style");
-                    setMobilePage("style");
-                  }}
-                >
-                  Style Rules
-                </button>
-                <button
-                  type="button"
-                  className={`ce-right-toggle-btn ${rightTab === "examples" ? "ce-right-toggle-btn--active" : ""}`}
-                  onClick={() => {
-                    setRightTab("examples");
-                    setMobilePage("examples");
-                  }}
-                >
-                  Examples
-                </button>
-              </div>
-              {customizing && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="ce-reset-btn"
-                  onClick={handleResetToDefaults}
-                  disabled={!activeCharacterRosterEntry}
-                  title="Reset to Defaults"
-                >
-                  <RotateCcw className="h-4 w-4 mr-1" />
-                  Reset
-                </Button>
-              )}
-            </div>
+          <div className={`ce-panel ce-panel-right ${activePage === "identity" ? "ce-panel--hidden" : ""}`}>
 
             {/* Style Rules */}
             <section
@@ -1042,7 +1092,6 @@ export function CharacterEditor({
               style={{ display: rightTab === "style" ? undefined : "none" }}
             >
               <div className="ce-section-header">
-                <span className="ce-label">Style Rules</span>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1062,12 +1111,6 @@ export function CharacterEditor({
                       className="ce-style-group"
                       data-testid={`style-section-${key}`}
                     >
-                      <div className="ce-style-group-header">
-                        <span className="ce-style-group-label">{key}</span>
-                        <span className="ce-style-group-count">
-                          {items.length} rule{items.length === 1 ? "" : "s"}
-                        </span>
-                      </div>
                       <div className="ce-style-entries">
                         {items.length > 0 ? (
                           items.map((item, index) => (
@@ -1353,37 +1396,24 @@ export function CharacterEditor({
             {characterSaving || voiceSaving ? "saving..." : "Save"}
           </Button>
 
-          {/* Back to roster — only in customize view */}
-          {customizing && (
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              className="ce-save-btn ce-save-btn--secondary"
-              onClick={() => {
+          {/* Toggle between Customize and Select — always present, just text changes */}
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            className="ce-save-btn ce-save-btn--secondary"
+            onClick={() => {
+              if (customizing) {
                 setCustomizing(false);
                 setTab("character-select");
-              }}
-            >
-              Select
-            </Button>
-          )}
-
-          {/* Customize Character — only in roster view, positioned right */}
-          {!customizing && (
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              className="ce-save-btn"
-              onClick={() => {
+              } else {
                 setCustomizing(true);
                 setTab("character");
-              }}
-            >
-              Customize Character
-            </Button>
-          )}
+              }
+            }}
+          >
+            {customizing ? "Select" : "Customize"}
+          </Button>
         </div>
       </div>
     </div>

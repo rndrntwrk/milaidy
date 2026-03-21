@@ -582,6 +582,8 @@ export class VrmEngine {
   private lastLoadError: string | null = null;
   private teleportProgress = 1.0;
   private loadingProgress = 0;
+  /** Timestamp (from elapsedTime) when the teleport dissolve finished. */
+  private teleportCompleteTime = -Infinity;
   private teleportProgressUniform: { value: number } | null = null;
   private teleportDissolvedMaterials: THREE.Material[] = [];
   private teleportFallbackShaders: TeleportFallbackShader[] = [];
@@ -625,6 +627,11 @@ export class VrmEngine {
   private dragOrbitCurrent = new THREE.Vector2();
   private companionZoomTarget = 0;
   private companionZoomCurrent = 0;
+  private cameraXOffsetTarget = 0;
+  private cameraXOffsetCurrent = 0;
+  /** Orbital yaw offset applied by the editor camera shift. */
+  private cameraYawOffsetTarget = 0;
+  private cameraYawOffsetCurrent = 0;
   private avatarLookTarget: THREE.Group | null = null;
   private headLookTarget = new THREE.Vector2();
   private headLookCurrent = new THREE.Vector2();
@@ -1908,6 +1915,13 @@ export class VrmEngine {
   setCompanionZoomNormalized(value: number): void {
     this.companionZoomTarget = THREE.MathUtils.clamp(value, 0, 1);
   }
+  setCameraXOffset(offset: number): void {
+    this.cameraXOffsetTarget = THREE.MathUtils.clamp(offset, -3, 3);
+    // Map the X offset to an orbital yaw offset (radians).
+    // Positive X offset → negative theta (orbit camera to the right so
+    // character appears on the left).
+    this.cameraYawOffsetTarget = -offset * 0.7;
+  }
 
   async setWorldUrl(url: string | null): Promise<void> {
     await this.whenReady();
@@ -2042,11 +2056,20 @@ export class VrmEngine {
     const vrm = this.vrm;
     const mixer = this.mixer;
     if (!vrm || !mixer) return;
+    // Don't start emotes while the teleport dissolve is still running or
+    // within a short cooldown afterwards — the idle animation needs time
+    // to settle into a stable pose before we can cross-fade from it.
+    const POST_TELEPORT_COOLDOWN = 0.3; // seconds
+    if (
+      this.teleportProgress < 1.0 ||
+      this.elapsedTime - this.teleportCompleteTime < POST_TELEPORT_COOLDOWN
+    ) {
+      return;
+    }
     this.clearPendingEmoteCompletion();
     this.emoteRequestId++;
     const requestId = this.emoteRequestId;
-    const currentAction = this.emoteAction;
-    const blendSource = currentAction ?? this.idleAction;
+    const currentEmote = this.emoteAction;
     const clip = await this.loadEmoteClipCached(path, vrm);
     if (!clip || this.vrm !== vrm || this.mixer !== mixer) return;
     if (this.emoteRequestId !== requestId) return;
@@ -2057,7 +2080,21 @@ export class VrmEngine {
     );
     action.clampWhenFinished = !loop;
     const fadeDuration = 0.4;
-    this.playActionWithBlend(action, blendSource, fadeDuration);
+    // Use explicit fadeOut + fadeIn instead of crossFadeFrom. crossFadeFrom
+    // only blends tracks that exist in BOTH clips — emotes exported with
+    // non-uniform keyframes (sparse Mixamo optimization) leave body/leg
+    // bones without tracks, so idle's tracks for those bones continue at
+    // full weight, creating visible overlap. Fading out the source
+    // explicitly ensures ALL its tracks fade away cleanly.
+    if (currentEmote && currentEmote !== action) {
+      currentEmote.fadeOut(fadeDuration);
+    }
+    if (this.idleAction && this.idleAction !== action) {
+      this.idleAction.fadeOut(fadeDuration);
+    }
+    action.reset();
+    this.activateAction(action);
+    action.fadeIn(fadeDuration);
     this.emoteAction = action;
     if (!loop) {
       const clipDuration =
@@ -2093,7 +2130,7 @@ export class VrmEngine {
 
   /** Play a one-shot wave greeting after the VRM becomes visible. */
   playWaveGreeting(): void {
-    this.playEmote("animations/emotes/waving-both-hands.glb.gz", 3, false);
+    this.playEmote("animations/emotes/greeting.fbx", 3, false);
   }
 
   async loadVrmFromUrl(url: string, name?: string): Promise<void> {
@@ -2604,6 +2641,7 @@ if (teleportNoise < teleportRatio) discard;
         if (this.teleportProgress >= 1.0) {
           this.cleanupTeleportDissolve();
           this.cleanupTeleportSparkles();
+          this.teleportCompleteTime = this.elapsedTime;
           // Notify the app that the teleport-in animation has finished
           if (typeof window !== "undefined") {
             window.dispatchEvent(
@@ -2699,6 +2737,37 @@ if (teleportNoise < teleportRatio) discard;
       }
     }
     this.applyCompanionZoom(camera, stableDelta);
+    // Smoothly lerp camera orbital yaw offset (used by CharacterEditor to
+    // rotate around the character so she appears on the left side).
+    const editorFollow = Math.min(1, stableDelta * 5);
+    this.cameraXOffsetCurrent = THREE.MathUtils.lerp(
+      this.cameraXOffsetCurrent,
+      this.cameraXOffsetTarget,
+      editorFollow,
+    );
+    this.cameraYawOffsetCurrent = THREE.MathUtils.lerp(
+      this.cameraYawOffsetCurrent,
+      this.cameraYawOffsetTarget,
+      editorFollow,
+    );
+    // Scale offset by inverse zoom: more shift when zoomed out, less when in
+    const zoomScale = 1 - this.companionZoomCurrent * 0.8;
+    if (Math.abs(this.cameraYawOffsetCurrent) > 1e-5) {
+      const orbitVec = this.tempCameraOrbitOffset
+        .copy(camera.position)
+        .sub(this.lookAtTarget);
+      if (orbitVec.lengthSq() > 1e-6) {
+        const sph = this.tempCameraSpherical.setFromVector3(orbitVec);
+        sph.theta += this.cameraYawOffsetCurrent * zoomScale;
+        orbitVec.setFromSpherical(sph);
+        camera.position.copy(this.lookAtTarget).add(orbitVec);
+      }
+    }
+    // Also translate camera on X for the positional shift
+    const scaledXOffset = this.cameraXOffsetCurrent * zoomScale;
+    if (Math.abs(scaledXOffset) > 1e-4) {
+      camera.position.x += scaledXOffset;
+    }
     this.updateSparkPerformanceProfile();
     if (this.pointerParallaxEnabled) {
       const follow = Math.min(1, stableDelta * 7.5);
@@ -2713,7 +2782,7 @@ if (teleportNoise < teleportRatio) discard;
         .copy(this.lookAtTarget)
         .add(
           new THREE.Vector3(
-            this.pointerParallaxCurrent.x * 0.08,
+            this.pointerParallaxCurrent.x * 0.08 + scaledXOffset,
             this.pointerParallaxCurrent.y * 0.05,
             0,
           ),
@@ -2721,6 +2790,9 @@ if (teleportNoise < teleportRatio) discard;
     } else {
       this.pointerParallaxCurrent.lerp(this.pointerParallaxTarget, 0.12);
       this.pointerParallaxLookAt.copy(this.lookAtTarget);
+      if (Math.abs(scaledXOffset) > 1e-4) {
+        this.pointerParallaxLookAt.x += scaledXOffset;
+      }
     }
     if (this.controls) {
       if (manualCameraActive && !this.isCameraTransitioning) {

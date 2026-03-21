@@ -57,7 +57,7 @@ export function AppsCatalogGrid({
           className="rounded-xl shadow-sm"
           onClick={onRefresh}
         >
-          {t("appsview.Refresh")}
+          {t("common.refresh")}
         </Button>
         <Button
           variant={showActiveOnly ? "default" : "outline"}

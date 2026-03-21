@@ -1,7 +1,7 @@
 import { LanguageDropdown, ThemeToggle } from "@miladyai/app-core/components";
 import type { UiLanguage } from "@miladyai/app-core/i18n";
 import type { ShellView, UiTheme } from "@miladyai/app-core/state";
-import { type LucideIcon, Monitor, PencilLine, Smartphone, UserRound } from "lucide-react";
+import { type LucideIcon, MessageCircle, Monitor, PencilLine, Smartphone, UserRound, Volume2, VolumeX } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
 export const HEADER_ICON_BUTTON_CLASSNAME =
@@ -64,6 +64,11 @@ interface ShellHeaderControlsProps {
   themeToggleClassName?: string;
   themeToggleWrapperClassName?: string;
   themeToggleWrapperTestId?: string;
+  /** Show Voice + New Chat buttons (companion & character editor views). */
+  showCompanionControls?: boolean;
+  chatAgentVoiceMuted?: boolean;
+  onToggleVoiceMute?: () => void;
+  onNewChat?: () => void;
 }
 
 export function ShellHeaderControls({
@@ -84,6 +89,10 @@ export function ShellHeaderControls({
   themeToggleClassName,
   themeToggleWrapperClassName,
   themeToggleWrapperTestId,
+  showCompanionControls,
+  chatAgentVoiceMuted = false,
+  onToggleVoiceMute,
+  onNewChat,
 }: ShellHeaderControlsProps) {
   const isMobileViewport = useIsMobileShellViewport();
   const shellOptions: Array<{
@@ -153,8 +162,54 @@ export function ShellHeaderControls({
         </fieldset>
       </div>
 
-      {/* Center: children (e.g. navigation) */}
-      <div className="flex-1 min-w-0">{children}</div>
+      {/* Center: children or companion controls */}
+      <div className="flex-1 min-w-0">
+        {showCompanionControls ? (
+          <div
+            className="flex items-center justify-center"
+            data-testid="companion-header-chat-controls"
+            data-no-camera-drag="true"
+          >
+            <div className="inline-flex items-center gap-2">
+              <button
+                type="button"
+                aria-label={
+                  chatAgentVoiceMuted
+                    ? t("companion.agentVoiceOff")
+                    : t("companion.agentVoiceOn")
+                }
+                aria-pressed={!chatAgentVoiceMuted}
+                title={
+                  chatAgentVoiceMuted
+                    ? t("companion.agentVoiceOff")
+                    : t("companion.agentVoiceOn")
+                }
+                className={`${HEADER_ICON_BUTTON_CLASSNAME} !w-auto gap-1.5 px-3.5`}
+                onClick={onToggleVoiceMute}
+              >
+                {chatAgentVoiceMuted ? (
+                  <VolumeX className="h-4 w-4 shrink-0" />
+                ) : (
+                  <Volume2 className="h-4 w-4 shrink-0" />
+                )}
+                Voice
+              </button>
+              <button
+                type="button"
+                aria-label={t("companion.newChat")}
+                title={t("companion.newChat")}
+                className={`hidden sm:inline-flex ${HEADER_ICON_BUTTON_CLASSNAME} !w-auto gap-1.5 px-3.5`}
+                onClick={onNewChat}
+              >
+                <MessageCircle className="h-4 w-4 shrink-0" />
+                New Chat
+              </button>
+            </div>
+          </div>
+        ) : (
+          children
+        )}
+      </div>
 
       {/* Right: controls */}
       <div

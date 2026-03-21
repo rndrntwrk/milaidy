@@ -542,7 +542,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
               setTab("plugins");
             }}
           >
-            {t("providerswitcher.plugins")}
+            {t("runtimeview.Plugins")}
           </Button>{" "}
           {t("providerswitcher.page")}
         </div>
@@ -632,7 +632,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                 {elizaCloudCredits !== null && (
                   <span>
                     <span className="text-[var(--muted)]">
-                      {t("providerswitcher.credits")}
+                      {t("configpageview.Credits")}
                     </span>{" "}
                     <span
                       className={
@@ -653,7 +653,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                       }}
                       className="ml-2 bg-transparent border-0 p-0 cursor-pointer text-[11px] text-[var(--text)] underline decoration-[var(--accent)] underline-offset-2 hover:opacity-80"
                     >
-                      {t("providerswitcher.topUp")}
+                      {t("configpageview.TopUp")}
                     </button>
                   </span>
                 )}
@@ -802,7 +802,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
             {t("providerswitcher.piSettings")}
           </div>
           <div className="text-[11px] text-[var(--muted)] mb-2">
-            {t("providerswitcher.usesLocalCredentials")}
+            {t("onboarding.piCredentialsHint")}
           </div>
           <label
             htmlFor="pi-ai-model-override"
@@ -881,8 +881,8 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
               disabled={piAiSaving}
             >
               {piAiSaving
-                ? t("providerswitcher.saveInProgress")
-                : t("providerswitcher.save")}
+                ? t("apikeyconfig.saving")
+                : t("apikeyconfig.save")}
             </Button>
           </div>
         </div>

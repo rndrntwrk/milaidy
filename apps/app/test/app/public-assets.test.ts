@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MILADY_CHARACTER_ASSETS } from "@miladyai/app-core/src/character-catalog";
+import { MILADY_CHARACTER_ASSETS } from "@miladyai/app-core/character-catalog";
 import { describe, expect, it } from "vitest";
 
 const TEST_DIR = fileURLToPath(new URL(".", import.meta.url));

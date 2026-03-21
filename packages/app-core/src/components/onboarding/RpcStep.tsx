@@ -235,7 +235,7 @@ export function RpcStep() {
             onClick={() => setMode("")}
             type="button"
           >
-            {t("onboarding.change")}
+            {t("settings.change")}
           </button>
           <button
             className="onboarding-confirm-btn"
@@ -268,7 +268,7 @@ export function RpcStep() {
           style={{ marginLeft: "0.5rem", fontSize: "0.75rem" }}
           onClick={() => setMode("")}
         >
-          {t("onboarding.change")}
+          {t("settings.change")}
         </button>
       </div>
       <div className="onboarding-divider">

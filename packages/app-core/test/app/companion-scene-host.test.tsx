@@ -21,7 +21,7 @@ vi.mock("@miladyai/app-core/utils", () => ({
   resolveAppAssetUrl: (value: string) => value,
 }));
 
-vi.mock("../../src/components/VrmStage.js", () => ({
+vi.mock("@miladyai/app-core/components/VrmStage", () => ({
   VrmStage: () =>
     React.createElement("div", { "data-testid": "companion-vrm-stage" }),
 }));

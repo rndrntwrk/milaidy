@@ -12,6 +12,10 @@ export interface CompanionHeaderProps {
   setUiTheme: (theme: UiTheme) => void;
   t: (key: string) => string;
   children?: ReactNode;
+  showCompanionControls?: boolean;
+  chatAgentVoiceMuted?: boolean;
+  onToggleVoiceMute?: () => void;
+  onNewChat?: () => void;
 }
 
 export const CompanionHeader = memo(function CompanionHeader(
@@ -26,6 +30,10 @@ export const CompanionHeader = memo(function CompanionHeader(
     setUiTheme,
     t,
     children,
+    showCompanionControls,
+    chatAgentVoiceMuted,
+    onToggleVoiceMute,
+    onNewChat,
   } = props;
 
   return (
@@ -42,6 +50,10 @@ export const CompanionHeader = memo(function CompanionHeader(
         setUiTheme={setUiTheme}
         t={t}
         className="pointer-events-auto px-3 py-2 sm:px-4 sm:py-3"
+        showCompanionControls={showCompanionControls}
+        chatAgentVoiceMuted={chatAgentVoiceMuted}
+        onToggleVoiceMute={onToggleVoiceMute}
+        onNewChat={onNewChat}
       >
         {children}
       </ShellHeaderControls>

@@ -10,7 +10,7 @@ vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
-import { InventoryView } from "../../src/components/InventoryView";
+import { InventoryView } from "@miladyai/app-core/components/InventoryView";
 
 function createWalletBalances(
   bnbBalance = "0.006",

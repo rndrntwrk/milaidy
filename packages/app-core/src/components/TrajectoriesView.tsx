@@ -425,7 +425,7 @@ export function TrajectoriesView({
                   {t("trajectoriesview.Calls")}
                 </th>
                 <th className="text-right px-2 py-1.5 font-medium">
-                  {t("trajectoriesview.Tokens1")}
+                  {t("wallet.tokens")}
                 </th>
                 <th className="text-right px-2 py-1.5 font-medium">
                   {t("trajectoriesview.Duration")}
@@ -518,7 +518,7 @@ export function TrajectoriesView({
               onClick={() => setPage((p) => p + 1)}
               disabled={page >= totalPages - 1}
             >
-              {t("databaseview.Next")}
+              {t("onboarding.next")}
             </Button>
           </div>
         </div>

@@ -66,7 +66,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   },
 }));
 
-import { ConversationsSidebar } from "../../src/components/ConversationsSidebar";
+import { ConversationsSidebar } from "@miladyai/app-core/components/ConversationsSidebar";
 
 function createContext(
   overrides?: Partial<SidebarContextStub>,

@@ -21,7 +21,7 @@ vi.mock("@miladyai/app-core/bridge/electrobun-rpc", () => ({
 
 // ── Imports ────────────────────────────────────────────────────────────
 
-import { MiladyBarSettings } from "../../src/components/MiladyBarSettings";
+import { MiladyBarSettings } from "@miladyai/app-core/components/MiladyBarSettings";
 
 // ── Helpers ────────────────────────────────────────────────────────────
 

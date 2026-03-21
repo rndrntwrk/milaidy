@@ -8,7 +8,7 @@ import {
   getElizaApiToken,
   setElizaApiBase,
   setElizaApiToken,
-} from "../../src/utils/eliza-globals";
+} from "@miladyai/app-core/utils/eliza-globals";
 
 declare global {
   interface Window {

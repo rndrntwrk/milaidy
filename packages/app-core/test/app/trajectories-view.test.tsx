@@ -91,7 +91,7 @@ import type {
   TrajectoryListResult,
   TrajectoryStats,
 } from "@miladyai/app-core/api";
-import { TrajectoriesView } from "../../src/components/TrajectoriesView";
+import { TrajectoriesView } from "@miladyai/app-core/components/TrajectoriesView";
 
 const { mockClient, mockConfirmDesktopAction, mockUseApp } = hoisted;
 

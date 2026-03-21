@@ -521,7 +521,7 @@ export function TradePanel({
                   className="h-7 px-3 py-1 text-[10px] font-mono text-muted border-border hover:border-danger hover:text-danger shadow-sm"
                   onClick={handleCancelExecute}
                 >
-                  {t("onboarding.cancel")}
+                  {t("common.cancel")}
                 </Button>
               </div>
             ) : (

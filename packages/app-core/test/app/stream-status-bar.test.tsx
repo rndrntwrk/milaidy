@@ -16,7 +16,7 @@ vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
-import { StatusBar } from "../../src/components/stream/StatusBar";
+import { StatusBar } from "@miladyai/app-core/components/stream/StatusBar";
 
 function renderStatusBar() {
   let tree: TestRenderer.ReactTestRenderer | null = null;

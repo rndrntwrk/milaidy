@@ -235,13 +235,13 @@ function localizedExecutionStatus(status: string, t: TranslateFn): string {
     case "success":
       return t("heartbeatsview.statusSuccess");
     case "completed":
-      return t("heartbeatsview.statusCompleted");
+      return t("trajectoriesview.Completed");
     case "skipped":
       return t("heartbeatsview.statusSkipped");
     case "queued":
       return t("heartbeatsview.statusQueued");
     case "error":
-      return t("heartbeatsview.statusError");
+      return t("logsview.Error");
     case "failed":
       return t("heartbeatsview.statusFailed");
     default:
@@ -381,7 +381,7 @@ export function HeartbeatsView() {
       title: t("heartbeatsview.deleteTitle"),
       message: t("heartbeatsview.deleteMessage", { name: form.displayName }),
       confirmLabel: t("triggersview.Delete"),
-      cancelLabel: t("onboarding.cancel"),
+      cancelLabel: t("common.cancel"),
       type: "warning",
     });
     if (!confirmed) return;
@@ -490,7 +490,7 @@ export function HeartbeatsView() {
                               <StatusBadge
                                 label={
                                   trigger.enabled
-                                    ? t("heartbeatsview.statusActive")
+                                    ? t("appsview.Active")
                                     : t("heartbeatsview.statusPaused")
                                 }
                                 tone={trigger.enabled ? "success" : "muted"}
@@ -635,13 +635,13 @@ export function HeartbeatsView() {
                                 className="h-8 px-3 text-xs"
                                 onClick={() => void loadTriggerRuns(trigger.id)}
                               >
-                                {t("heartbeatsview.refresh")}
+                                {t("common.refresh")}
                               </Button>
                             </div>
 
                             {!hasLoadedRuns ? (
                               <div className="py-2 text-sm text-muted">
-                                {t("heartbeatsview.loading")}
+                                {t("databaseview.Loading")}
                               </div>
                             ) : runs.length === 0 ? (
                               <div className="py-2 text-sm text-muted">
@@ -739,7 +739,7 @@ export function HeartbeatsView() {
                 className="h-8 px-3 text-xs"
                 onClick={closeEditor}
               >
-                {t("heartbeatsview.close")}
+                {t("bugreportmodal.Close")}
               </Button>
             </div>
 
@@ -753,7 +753,7 @@ export function HeartbeatsView() {
               <div className="grid gap-4">
                 <div>
                   <span className={FIELD_LABEL_CLASS}>
-                    {t("triggersview.Name")}
+                    {t("wallet.name")}
                   </span>
                   <Input
                     className={INPUT_CLASS}
@@ -945,7 +945,7 @@ export function HeartbeatsView() {
                 onClick={() => void onSubmit()}
               >
                 {triggersSaving
-                  ? t("heartbeatsview.saving")
+                  ? t("apikeyconfig.saving")
                   : editingId
                     ? t("heartbeatsview.saveChanges")
                     : t("heartbeatsview.createHeartbeat")}
@@ -957,7 +957,7 @@ export function HeartbeatsView() {
                 className="h-10 px-4 text-sm"
                 onClick={closeEditor}
               >
-                {t("onboarding.cancel")}
+                {t("common.cancel")}
               </Button>
 
               {editingId && (

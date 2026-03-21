@@ -4,7 +4,7 @@ import {
   deriveUiShellModeForTab,
   getTabForShellView,
   shouldStartAtCharacterSelectOnLaunch,
-} from "../../src/state/shell-routing";
+} from "@miladyai/app-core/state/shell-routing";
 
 describe("shell routing helpers", () => {
   it("derives companion mode only for the companion tab", () => {

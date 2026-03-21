@@ -1,4 +1,4 @@
-import catalog from "../characters/catalog.json";
+import catalog from "../../../apps/app/characters/catalog.json" with { type: "json" };
 
 type MiladyCharacterAssetCatalogEntry = {
   id: number;

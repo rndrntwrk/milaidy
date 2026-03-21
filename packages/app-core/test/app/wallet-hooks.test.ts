@@ -21,7 +21,7 @@ import {
   safeExplorerHref,
   type TranslatorFn,
   type WalletRecentTrade,
-} from "../../src/components/companion/walletUtils";
+} from "@miladyai/app-core/components/companion/walletUtils";
 
 // ---------------------------------------------------------------------------
 // Helpers

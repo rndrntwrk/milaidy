@@ -10,10 +10,10 @@ export function getLocalizedConversationTitle(
   if (
     !title ||
     title === "New Chat" ||
-    title === "conversations.newChatTitle"
+    title === "companion.newChat"
   ) {
-    const localized = t("conversations.newChatTitle");
-    return localized === "conversations.newChatTitle" ? "New Chat" : localized;
+    const localized = t("companion.newChat");
+    return localized === "companion.newChat" ? "New Chat" : localized;
   }
   return title;
 }

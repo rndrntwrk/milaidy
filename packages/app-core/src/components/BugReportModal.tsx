@@ -466,7 +466,7 @@ export function BugReportModal() {
             }}
             onClick={close}
           >
-            {t("onboarding.cancel")}
+            {t("common.cancel")}
           </button>
           <div className="flex items-center gap-2">
             <button

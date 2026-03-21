@@ -245,7 +245,7 @@ function UploadZone({
                 onClick={handleUrlSubmit}
                 disabled={!urlInput.trim() || uploading}
               >
-                {t("knowledgeview.Import")}
+                {t("settings.import")}
               </Button>
             </div>
           </div>
@@ -457,7 +457,7 @@ function DocumentDetailModal({
           {loading && (
             <div className="text-center py-12 text-muted font-bold tracking-wide animate-pulse">
               <span className="inline-block w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin mr-3 align-middle" />
-              {t("knowledgeview.Loading")}
+              {t("databaseview.Loading")}
             </div>
           )}
 

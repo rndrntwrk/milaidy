@@ -167,7 +167,7 @@ export function LogsView() {
           className="h-auto min-h-[2rem] whitespace-normal break-words text-left text-xs bg-card text-txt hover:text-txt shadow-sm ml-auto px-3 py-1.5"
           onClick={() => void loadLogs()}
         >
-          {t("appsview.Refresh")}
+          {t("common.refresh")}
         </Button>
       </div>
 

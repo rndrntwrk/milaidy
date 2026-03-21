@@ -70,15 +70,15 @@ vi.mock("@miladyai/app-core/components", () => {
 // Mock ALL child views of AdvancedPageView to avoid react-test-renderer
 // incompatibilities with Radix UI DOM methods and infinite useEffect loops.
 // ---------------------------------------------------------------------------
-vi.mock("../../src/components/CustomActionsView", () => {
+vi.mock("@miladyai/app-core/components/CustomActionsView", () => {
   const R = require("react");
   return { CustomActionsView: () => R.createElement("div", null, "stub") };
 });
-vi.mock("../../src/components/TriggersView", () => {
+vi.mock("@miladyai/app-core/components/TriggersView", () => {
   const R = require("react");
   return { TriggersView: () => R.createElement("div", null, "stub") };
 });
-vi.mock("../../src/components/FineTuningView", () => {
+vi.mock("@miladyai/app-core/components/FineTuningView", () => {
   const R = require("react");
   return {
     FineTuningView: () => R.createElement("div", null, "stub-fine-tuning"),
@@ -86,7 +86,7 @@ vi.mock("../../src/components/FineTuningView", () => {
 });
 
 // TrajectoriesView: render a clickable row so the test can trigger selection
-vi.mock("../../src/components/TrajectoriesView", () => {
+vi.mock("@miladyai/app-core/components/TrajectoriesView", () => {
   const R = require("react");
   return {
     TrajectoriesView: (props: { onSelectTrajectory?: (id: string) => void }) =>
@@ -110,7 +110,7 @@ vi.mock("../../src/components/TrajectoriesView", () => {
 });
 
 // TrajectoryDetailView: render the trajectory ID and a back button
-vi.mock("../../src/components/TrajectoryDetailView", () => {
+vi.mock("@miladyai/app-core/components/TrajectoryDetailView", () => {
   const R = require("react");
   return {
     TrajectoryDetailView: (props: {
@@ -144,7 +144,7 @@ vi.mock("@miladyai/ui", () => {
   );
 });
 
-import { AdvancedPageView } from "../../src/components/AdvancedPageView";
+import { AdvancedPageView } from "@miladyai/app-core/components/AdvancedPageView";
 
 const SHARED_TRAJECTORY_ID = "shared-traj-123456789";
 

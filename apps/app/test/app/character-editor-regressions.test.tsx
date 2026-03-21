@@ -118,7 +118,7 @@ vi.mock("@miladyai/app-core/src/components/CharacterRoster", () => {
   };
 });
 
-import { CharacterEditor } from "@miladyai/app-core/src/components/CharacterEditor";
+import { CharacterEditor } from "@miladyai/app-core/components";
 
 function createAppState() {
   return {

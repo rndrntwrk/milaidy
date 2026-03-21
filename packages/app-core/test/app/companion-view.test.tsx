@@ -25,7 +25,7 @@ vi.mock("@miladyai/app-core/components/avatar/VrmViewer", () => ({
   },
 }));
 
-vi.mock("../../src/components/ChatModalView.js", () => ({
+vi.mock("@miladyai/app-core/components/ChatModalView", () => ({
   ChatModalView: () =>
     React.createElement(
       "div",
@@ -52,7 +52,7 @@ vi.mock("@miladyai/app-core/utils", () => ({
 }));
 
 import { CompanionSceneHost } from "@miladyai/app-core/components/CompanionSceneHost";
-import { CompanionView } from "../../src/components/CompanionView";
+import { CompanionView } from "@miladyai/app-core/components/CompanionView";
 
 const COMPANION_ZOOM_STORAGE_KEY = "milady.companion.zoom.v1";
 
@@ -281,7 +281,8 @@ describe("CompanionView", () => {
     );
     const newChatButton = tree?.root.find(
       (node) =>
-        node.type === "button" && node.props["aria-label"] === "New Chat",
+        node.type === "button" &&
+        node.props["aria-label"] === "companion.newChat",
     );
 
     expect(controls).toBeDefined();

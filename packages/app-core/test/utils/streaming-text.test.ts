@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeStreamingDelta,
   mergeStreamingText,
-} from "../../src/utils/streaming-text";
+} from "@miladyai/app-core/utils/streaming-text";
 
 describe("mergeStreamingText", () => {
   it("returns incoming when it starts with existing (cumulative snapshot)", () => {

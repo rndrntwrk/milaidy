@@ -4,6 +4,8 @@
  */
 
 import type { StylePreset } from "@miladyai/app-core/api";
+import { CHARACTER_PRESET_META } from "@miladyai/app-core/onboarding-presets";
+export { CHARACTER_PRESET_META } from "@miladyai/app-core/onboarding-presets";
 import { getVrmPreviewUrl } from "@miladyai/app-core/state";
 
 /* ── Shared constants ─────────────────────────────────────────────────── */
@@ -13,20 +15,6 @@ export const SLANT_CLIP =
 export const INSET_CLIP =
   "polygon(0px 0, 100% 0, calc(100% - 4px) 100%, -8px 100%)";
 
-export const CHARACTER_PRESET_META: Record<
-  string,
-  { name: string; avatarIndex: number; voicePresetId?: string }
-> = {
-  "uwu~": { name: "Chen", avatarIndex: 1, voicePresetId: "sarah" },
-  "hell yeah": { name: "Jin", avatarIndex: 2, voicePresetId: "adam" },
-  "lol k": { name: "Kei", avatarIndex: 3, voicePresetId: "lily" },
-  "Noted.": { name: "Momo", avatarIndex: 4, voicePresetId: "alice" },
-  "hehe~": { name: "Rin", avatarIndex: 5, voicePresetId: "gigi" },
-  "...": { name: "Ryu", avatarIndex: 6, voicePresetId: "daniel" },
-  "lmao kms": { name: "Satoshi", avatarIndex: 7, voicePresetId: "callum" },
-  bruh: { name: "Yuki", avatarIndex: 8, voicePresetId: "echo" },
-};
-
 /* ── Types ────────────────────────────────────────────────────────────── */
 
 export type CharacterRosterEntry = {
@@ -34,6 +22,8 @@ export type CharacterRosterEntry = {
   name: string;
   avatarIndex: number;
   voicePresetId?: string;
+  catchphrase?: string;
+  greetingAnimation?: string;
   preset: StylePreset;
 };
 
@@ -50,6 +40,8 @@ export function resolveRosterEntries(
       name: meta?.name ?? fallbackName,
       avatarIndex: meta?.avatarIndex ?? (index % 4) + 1,
       voicePresetId: meta?.voicePresetId,
+      catchphrase: meta?.catchphrase ?? preset.catchphrase,
+      greetingAnimation: meta?.greetingAnimation,
       preset,
     };
   });

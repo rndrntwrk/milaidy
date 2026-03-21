@@ -3,7 +3,7 @@
 import React, { createRef } from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ChatComposer } from "../../src/components/ChatComposer";
+import { ChatComposer } from "@miladyai/app-core/components/ChatComposer";
 
 function createVoiceState(
   overrides?: Partial<React.ComponentProps<typeof ChatComposer>["voice"]>,

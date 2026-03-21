@@ -3,13 +3,13 @@ import {
   getKnowledgeUploadFilename,
   type KnowledgeUploadFile,
   shouldReadKnowledgeFileAsText,
-} from "../../src/components/KnowledgeView";
+} from "@miladyai/app-core/components/KnowledgeView";
 import {
   isKnowledgeImageFile,
   type KnowledgeImageCompressionPlatform,
   MAX_KNOWLEDGE_IMAGE_PROCESSING_BYTES,
   maybeCompressKnowledgeUploadImage,
-} from "../../src/components/knowledge-upload-image";
+} from "@miladyai/app-core/components/knowledge-upload-image";
 
 function makeUploadFile(
   name: string,

@@ -55,7 +55,7 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
   },
   {
     id: "cloud",
-    label: "elizaclouddashboard.ElizaCloud",
+    label: "providerswitcher.elizaCloud",
     icon: Cloud,
     description: "settings.sections.cloud.desc",
   },
@@ -458,7 +458,7 @@ function AdvancedSection() {
                 className="settings-button rounded-lg"
                 onClick={closeExportModal}
               >
-                {t("onboarding.cancel")}
+                {t("common.cancel")}
               </Button>
               <Button
                 variant="default"
@@ -468,7 +468,7 @@ function AdvancedSection() {
                 onClick={() => void handleAgentExport()}
               >
                 {exportBusy && <Loader2 className="w-4 h-4 animate-spin" />}
-                {t("settings.export")}
+                {t("common.export")}
               </Button>
             </div>
           </div>
@@ -551,7 +551,7 @@ function AdvancedSection() {
                 className="settings-button rounded-lg"
                 onClick={closeImportModal}
               >
-                {t("onboarding.cancel")}
+                {t("common.cancel")}
               </Button>
               <Button
                 variant="default"
@@ -694,8 +694,8 @@ export function SettingsView({
       {visibleSectionIds.has("ai-model") && (
         <SectionCard
           id="ai-model"
-          title={t("settings.aiModel")}
-          description={t("settings.aiModelDescription")}
+          title={t("settings.sections.aimodel.label")}
+          description={t("settings.sections.aimodel.desc")}
           className="p-4 sm:p-5 lg:p-6"
         >
           <ProviderSwitcher />
@@ -705,7 +705,7 @@ export function SettingsView({
       {visibleSectionIds.has("coding-agents") && (
         <SectionCard
           id="coding-agents"
-          title={t("settings.codingAgents")}
+          title={t("settings.sections.codingagents.label")}
           description={t("settings.codingAgentsDescription")}
           className="p-4 sm:p-5 lg:p-6"
         >
@@ -725,7 +725,7 @@ export function SettingsView({
       {visibleSectionIds.has("wallet-rpc") && (
         <SectionCard
           id="wallet-rpc"
-          title={t("settings.walletRpc")}
+          title={t("settings.sections.walletrpc.label")}
           description={t("settings.walletRpcDescription")}
           className="p-4 sm:p-5 lg:p-6"
         >
@@ -736,8 +736,8 @@ export function SettingsView({
       {visibleSectionIds.has("media") && (
         <SectionCard
           id="media"
-          title={t("settings.mediaGeneration")}
-          description={t("settings.mediaDescription")}
+          title={t("settings.sections.media.label")}
+          description={t("settings.sections.media.desc")}
           className="p-4 sm:p-5 lg:p-6"
         >
           <MediaSettingsSection />
@@ -747,8 +747,8 @@ export function SettingsView({
       {visibleSectionIds.has("voice") && (
         <SectionCard
           id="voice"
-          title={t("settings.speechInterface")}
-          description={t("settings.speechDescription")}
+          title={t("settings.sections.voice.label")}
+          description={t("settings.sections.voice.desc")}
           className="p-4 sm:p-5 lg:p-6"
         >
           <VoiceConfigView />
@@ -758,8 +758,8 @@ export function SettingsView({
       {visibleSectionIds.has("permissions") && (
         <SectionCard
           id="permissions"
-          title={t("settings.permissionsCapabilities")}
-          description={t("settings.permissionsDescription")}
+          title={t("settings.sections.permissions.label")}
+          description={t("settings.sections.permissions.desc")}
           className="p-4 sm:p-5 lg:p-6"
         >
           <PermissionsSection />
@@ -769,8 +769,8 @@ export function SettingsView({
       {visibleSectionIds.has("updates") && (
         <SectionCard
           id="updates"
-          title={t("settings.softwareUpdates")}
-          description={t("settings.updatesDescription")}
+          title={t("settings.sections.updates.label")}
+          description={t("settings.sections.updates.desc")}
           className="p-4 sm:p-5 lg:p-6"
         >
           <UpdatesSection />
@@ -780,8 +780,8 @@ export function SettingsView({
       {visibleSectionIds.has("advanced") && (
         <SectionCard
           id="advanced"
-          title={t("settings.advancedSettings")}
-          description={t("settings.advancedDescription")}
+          title={t("nav.advanced")}
+          description={t("settings.sections.advanced.desc")}
           className="p-4 sm:p-5 lg:p-6"
         >
           <AdvancedSection />

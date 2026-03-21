@@ -16,11 +16,11 @@ vi.mock("@miladyai/app-core/components", async () => {
   };
 });
 
-vi.mock("../../src/components/MemoryDebugPanel", () => ({
+vi.mock("@miladyai/app-core/components/MemoryDebugPanel", () => ({
   MemoryDebugPanel: () => React.createElement("div", null, "MemoryDebugPanel"),
 }));
 
-import { ShellOverlays } from "../../src/components/ShellOverlays";
+import { ShellOverlays } from "@miladyai/app-core/components/ShellOverlays";
 
 describe("ShellOverlays", () => {
   it("renders the shared overlay components once", () => {

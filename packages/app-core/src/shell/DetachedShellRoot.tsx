@@ -17,11 +17,11 @@ import {
 } from "@miladyai/app-core/components";
 import { useApp } from "@miladyai/app-core/state";
 import type { JSX } from "react";
-import { BrowserSurfaceWindow } from "./BrowserSurfaceWindow";
+import { BrowserSurfaceWindow } from "../components/BrowserSurfaceWindow";
 import {
   resolveDetachedShellTarget,
   type WindowShellRoute,
-} from "./window-shell";
+} from "../platform/window-shell";
 
 interface DetachedShellRootProps {
   route: Exclude<WindowShellRoute, { mode: "main" }>;

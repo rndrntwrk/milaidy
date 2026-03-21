@@ -87,8 +87,8 @@ export const CLOUD_ONBOARDING_STEPS: OnboardingStepMeta[] = [
   },
   {
     id: "cloudLogin",
-    name: "onboarding.stepName.cloudLogin",
-    subtitle: "onboarding.stepSub.cloudLogin",
+    name: "onboarding.connect",
+    subtitle: "providerswitcher.elizaCloud",
   },
 ];
 

@@ -166,7 +166,7 @@ export function ApiKeyConfig({
             }}
           >
             {selectedProvider.configured
-              ? t("mediasettingssection.Configured")
+              ? t("config-field.Configured")
               : t("mediasettingssection.NeedsSetup")}
           </span>
         </div>

@@ -22,7 +22,7 @@ type TranslateFn = (key: string) => string;
 const AVATAR_CHANGE_WAVE_DELAY_MS = 650;
 const AVATAR_CHANGE_WAVE_EMOTE: AppEmoteEventDetail = {
   emoteId: "wave",
-  path: "/animations/emotes/waving-both-hands.glb",
+  path: "/animations/emotes/greeting.fbx",
   duration: 2.5,
   loop: false,
   showOverlay: false,

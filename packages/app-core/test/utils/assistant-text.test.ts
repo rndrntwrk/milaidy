@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { stripAssistantStageDirections } from "../../src/utils/assistant-text";
+import { stripAssistantStageDirections } from "@miladyai/app-core/utils/assistant-text";
 
 describe("stripAssistantStageDirections", () => {
   it("strips asterisk-wrapped stage directions", () => {

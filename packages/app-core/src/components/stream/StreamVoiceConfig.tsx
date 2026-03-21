@@ -116,7 +116,7 @@ export function StreamVoiceConfig({ streamLive }: { streamLive: boolean }) {
         ) : (
           <VolumeX className="w-3.5 h-3.5" />
         )}
-        <span>{t("streamvoiceconfig.Voice")}</span>
+        <span>{t("settings.sections.voice.label")}</span>
       </Button>
 
       {/* Status indicators (when enabled) */}

@@ -35,7 +35,7 @@ vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
-import { TriggersView } from "../../src/components/TriggersView";
+import { TriggersView } from "@miladyai/app-core/components/TriggersView";
 
 interface TriggerViewContextShape {
   triggers: TriggerSummary[];

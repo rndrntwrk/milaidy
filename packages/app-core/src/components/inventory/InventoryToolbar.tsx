@@ -135,7 +135,7 @@ export function InventoryToolbar({
           inventoryView === "tokens" ? loadBalances() : loadNfts()
         }
       >
-        {t("appsview.Refresh")}
+        {t("common.refresh")}
       </Button>
     </div>
   );

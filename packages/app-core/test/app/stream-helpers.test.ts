@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { toggleAlwaysOnTop } from "../../src/components/stream/helpers";
+import { toggleAlwaysOnTop } from "@miladyai/app-core/components/stream/helpers";
 
 type TestWindow = Window & {
   __ELIZA_ELECTROBUN_RPC__?: {

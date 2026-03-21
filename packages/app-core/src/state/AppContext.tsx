@@ -264,7 +264,7 @@ import { buildWalletRpcUpdateRequest } from "../wallet-rpc";
 const GREETING_EMOTE_DELAY_MS = 1400;
 const GREETING_WAVE_EMOTE: AppEmoteEventDetail = {
   emoteId: "wave",
-  path: "/animations/emotes/waving-both-hands.glb",
+  path: "/animations/emotes/greeting.fbx",
   duration: 2.5,
   loop: false,
   showOverlay: false,
@@ -2810,7 +2810,24 @@ export function AppProvider({
           conversationId: convId,
         });
 
-        // Title was set during createConversation above
+        // Eagerly rename "New Chat" using a snippet of the first message
+        const activeConv = conversations.find((c) => c.id === convId);
+        if (
+          activeConv &&
+          (!activeConv.title ||
+            activeConv.title === "New Chat" ||
+            activeConv.title === "companion.newChat" ||
+            activeConv.title === "conversations.newChatTitle")
+        ) {
+          const fallbackTitle =
+            text.length > 30 ? `${text.slice(0, 30)}...` : text;
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === convId ? { ...c, title: fallbackTitle } : c,
+            ),
+          );
+          void client.renameConversation(convId, fallbackTitle).catch(() => {});
+        }
 
         const now = Date.now();
         const userMsgId = `temp-${now}`;
@@ -3017,7 +3034,7 @@ export function AppProvider({
             const actionTitle =
               trimmed.length > 50 ? `${trimmed.slice(0, 47)}...` : trimmed;
             const { conversation } = await client.createConversation(
-              actionTitle || t("conversations.newChatTitle"),
+              actionTitle || t("companion.newChat"),
             );
             const nextCutoffTs = Date.now();
             setConversations((prev) => [conversation, ...prev]);
@@ -3035,7 +3052,24 @@ export function AppProvider({
           conversationId: convId,
         });
 
-        // Title was set during createConversation above
+        // Eagerly rename "New Chat" using a snippet of the first message
+        const activeConv = conversations.find((c) => c.id === convId);
+        if (
+          activeConv &&
+          (!activeConv.title ||
+            activeConv.title === "New Chat" ||
+            activeConv.title === "companion.newChat" ||
+            activeConv.title === "conversations.newChatTitle")
+        ) {
+          const fallbackTitle =
+            trimmed.length > 30 ? `${trimmed.slice(0, 30)}...` : trimmed;
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === convId ? { ...c, title: fallbackTitle } : c,
+            ),
+          );
+          void client.renameConversation(convId, fallbackTitle).catch(() => {});
+        }
 
         const now = Date.now();
         const userMsgId = `temp-action-${now}`;

@@ -194,7 +194,7 @@ export function SaveCommandModal({
             }}
             onClick={onClose}
           >
-            {t("onboarding.cancel")}
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -202,7 +202,7 @@ export function SaveCommandModal({
             style={{ background: "#f0b232", border: "none", color: "#000" }}
             onClick={handleSubmit}
           >
-            {t("savecommandmodal.Save")}
+            {t("apikeyconfig.save")}
           </button>
         </div>
       </div>

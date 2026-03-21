@@ -133,8 +133,8 @@ vi.mock("@miladyai/app-core/api", () => ({
   SkillScanReportSummary: {},
 }));
 
-vi.mock("../../src/bridge", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/bridge")>();
+vi.mock("@miladyai/app-core/bridge", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@miladyai/app-core/bridge")>();
   return {
     ...actual,
     getBackendStartupTimeoutMs: () => 1000,

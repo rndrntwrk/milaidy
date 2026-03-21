@@ -39,7 +39,7 @@ const IMAGE_PROVIDERS: ProviderOption[] = [
   {
     id: "cloud",
     label: "Eliza Cloud",
-    hint: "mediasettingssection.ProviderHintNoSetup",
+    hint: "elizaclouddashboard.NoSetupNeeded",
   },
   {
     id: "fal",
@@ -49,7 +49,7 @@ const IMAGE_PROVIDERS: ProviderOption[] = [
   {
     id: "openai",
     label: "OpenAI",
-    hint: "mediasettingssection.ProviderHintOpenAIImage",
+    hint: "mediasettingssection.DALLE3",
   },
   {
     id: "google",
@@ -67,7 +67,7 @@ const VIDEO_PROVIDERS: ProviderOption[] = [
   {
     id: "cloud",
     label: "Eliza Cloud",
-    hint: "mediasettingssection.ProviderHintNoSetup",
+    hint: "elizaclouddashboard.NoSetupNeeded",
   },
   {
     id: "fal",
@@ -90,7 +90,7 @@ const AUDIO_PROVIDERS: ProviderOption[] = [
   {
     id: "cloud",
     label: "Eliza Cloud",
-    hint: "mediasettingssection.ProviderHintNoSetup",
+    hint: "elizaclouddashboard.NoSetupNeeded",
   },
   { id: "suno", label: "Suno", hint: "mediasettingssection.ProviderHintSuno" },
   {
@@ -104,7 +104,7 @@ const VISION_PROVIDERS: ProviderOption[] = [
   {
     id: "cloud",
     label: "Eliza Cloud",
-    hint: "mediasettingssection.ProviderHintNoSetup",
+    hint: "elizaclouddashboard.NoSetupNeeded",
   },
   {
     id: "openai",
@@ -187,7 +187,7 @@ function getApiKeyField(
       if (provider === "elevenlabs")
         return {
           path: "audio.elevenlabs.apiKey",
-          labelKey: "mediasettingssection.ElevenLabsApiKey",
+          labelKey: "voiceconfigview.ElevenLabsAPIKey",
         };
       break;
     case "vision":
@@ -427,7 +427,7 @@ export function MediaSettingsSection() {
           }`}
         >
           {configured
-            ? t("mediasettingssection.Configured")
+            ? t("config-field.Configured")
             : t("mediasettingssection.NeedsSetup")}
         </span>
       </div>
@@ -478,7 +478,7 @@ export function MediaSettingsSection() {
                   >
                     <div className="font-semibold">
                       {p.id === "cloud"
-                        ? t("elizaclouddashboard.ElizaCloud")
+                        ? t("providerswitcher.elizaCloud")
                         : p.label}
                     </div>
                     <div className="text-[10px] text-muted mt-0.5">

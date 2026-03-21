@@ -82,11 +82,11 @@ vi.mock("@miladyai/app-core/hooks", async () => {
   };
 });
 
-vi.mock("../../src/components/ChatAvatar", () => ({
+vi.mock("@miladyai/app-core/components/ChatAvatar", () => ({
   ChatAvatar: () => null,
 }));
 
-vi.mock("../../src/components/MessageContent", () => ({
+vi.mock("@miladyai/app-core/components/MessageContent", () => ({
   MessageContent: ({ message }: { message: { text: string } }) =>
     React.createElement("span", null, message.text),
 }));
@@ -95,7 +95,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   client: mockClient,
 }));
 
-import { ChatView } from "../../src/components/ChatView";
+import { ChatView } from "@miladyai/app-core/components/ChatView";
 
 function createContext(
   overrides?: Partial<ChatViewContextStub>,
@@ -374,7 +374,10 @@ describe("ChatView", () => {
     );
     const newChatButtons = tree?.root.findAll(
       (node) =>
-        node.type === "button" && node.props["aria-label"] === "+ New Chat",
+        node.type === "button" &&
+        (node.props["aria-label"] === "+ New Chat" ||
+          node.props["aria-label"] === "companion.newChat" ||
+          node.props["aria-label"] === "conversations.newChat"),
     );
 
     expect(voiceButtons?.length ?? 0).toBe(0);

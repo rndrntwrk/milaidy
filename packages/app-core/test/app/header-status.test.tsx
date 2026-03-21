@@ -54,7 +54,7 @@ vi.mock("lucide-react", () => ({
   X: () => React.createElement("span", null, "✕"),
 }));
 
-import { Header } from "../../src/components/Header";
+import { Header } from "@miladyai/app-core/components/Header";
 
 let baseAppState: Record<string, unknown>;
 

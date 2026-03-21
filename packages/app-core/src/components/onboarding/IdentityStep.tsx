@@ -99,7 +99,7 @@ export function IdentityStep() {
     return (
       <div className="flex flex-col items-center gap-3 w-full max-w-[400px]">
         <div className="onboarding-section-title">
-          {t("onboarding.importAgent")}
+          {t("settings.importAgent")}
         </div>
         <div className="onboarding-divider">
           <div className="onboarding-divider-diamond" />
@@ -151,7 +151,7 @@ export function IdentityStep() {
             }}
             type="button"
           >
-            {t("onboarding.cancel")}
+            {t("common.cancel")}
           </button>
           <button
             className="onboarding-confirm-btn"

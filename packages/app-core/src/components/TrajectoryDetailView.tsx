@@ -313,7 +313,7 @@ export function TrajectoryDetailView({
             className="text-xs px-2 py-1 border border-border bg-card hover:border-accent"
             onClick={onBack}
           >
-            {t("trajectorydetailview.Back")}
+            {t("onboarding.back")}
           </button>
         )}
         <h2 className="text-sm font-semibold">
@@ -334,7 +334,7 @@ export function TrajectoryDetailView({
         </div>
         <div>
           <span className="text-muted">
-            {t("trajectorydetailview.Source")}{" "}
+            {t("knowledgeview.Source")}{" "}
           </span>
           <span className="text-txt">{trajectory.source}</span>
         </div>
@@ -354,7 +354,7 @@ export function TrajectoryDetailView({
         </div>
         <div>
           <span className="text-muted">
-            {t("trajectorydetailview.Duration")}{" "}
+            {t("customactioneditor.Duration")}{" "}
           </span>
           <span>{formatTrajectoryDuration(trajectory.durationMs)}</span>
         </div>
