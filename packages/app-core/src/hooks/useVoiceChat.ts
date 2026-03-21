@@ -59,6 +59,8 @@ interface SpeechRecognitionResultList {
   };
 }
 
+let sharedAudioCtx: AudioContext | null = null;
+
 type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
 
 interface WindowWithSpeechRecognition extends Window {
@@ -935,10 +937,10 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
       task: SpeakTask,
       generation: number,
     ) => {
-      let ctx = audioCtxRef.current;
+      let ctx = sharedAudioCtx;
       if (!ctx) {
         ctx = new AudioContext();
-        audioCtxRef.current = ctx;
+        sharedAudioCtx = ctx;
       }
       if (ctx.state === "suspended") {
         try {
@@ -947,7 +949,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
           // Force a fresh context if resume fails
           ctx.close().catch(() => {});
           ctx = new AudioContext();
-          audioCtxRef.current = ctx;
+          sharedAudioCtx = ctx;
         }
       }
 

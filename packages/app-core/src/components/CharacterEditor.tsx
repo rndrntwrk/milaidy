@@ -626,7 +626,7 @@ export function CharacterEditor({
           loop: false,
           showOverlay: false,
         });
-        void client.streamVoiceSpeak(greeting.catchphrase).catch(() => {});
+        voice.speak(greeting.catchphrase);
       }, 400);
     };
     const eventName = "eliza:vrm-teleport-complete";
@@ -638,7 +638,7 @@ export function CharacterEditor({
         greetingTimerRef.current = null;
       }
     };
-  }, []);
+  }, [voice]);
 
   /* ── Sync customizing state with tab ─────────────────────────────── */
   /* Removed: previously auto-set customizing=true when tab==="character",

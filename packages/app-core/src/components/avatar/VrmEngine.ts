@@ -2302,9 +2302,7 @@ export class VrmEngine {
     }
 
     this.teleportProgress = 0.0;
-    this.revealStarted = true;
     this.cleanupTeleportDissolve();
-    this.startTeleportSparkles(vrm);
     let appliedNodeDissolve = false;
 
     try {
@@ -2381,6 +2379,17 @@ export class VrmEngine {
         this.applyTeleportFallbackDissolve(this.outgoingVrm, true);
       }
     }
+
+    // Force shader compilation by rendering invisible frames before displaying particles
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (typeof window !== "undefined") {
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+    
+    if (this.loadingAborted || this.vrm !== vrm) return;
+
+    this.revealStarted = true;
+    this.startTeleportSparkles(vrm);
   }
 
   private applyTeleportFallbackDissolve(vrm: VRM, isOutgoing: boolean): void {
