@@ -192,7 +192,7 @@ vi.stubGlobal("Bun", {
 
 import * as nodeFs from "node:fs";
 import * as electrobunBun from "electrobun/bun";
-import { DesktopManager } from "../desktop";
+import { DesktopManager, resetDesktopManagerForTesting } from "../desktop";
 import * as macEffects from "../mac-window-effects";
 
 const mockExistsSync = nodeFs.existsSync as ReturnType<typeof vi.fn>;
@@ -261,6 +261,7 @@ describe("DesktopManager", () => {
   let manager: DesktopManager;
 
   beforeEach(() => {
+    resetDesktopManagerForTesting();
     manager = new DesktopManager();
     vi.useRealTimers();
     mockExistsSync.mockReset().mockReturnValue(false);
@@ -297,6 +298,7 @@ describe("DesktopManager", () => {
   });
 
   afterEach(() => {
+    resetDesktopManagerForTesting();
     // Restore platform to darwin (test host)
     setPlatform("darwin");
     delete process.env.NODE_ENV;

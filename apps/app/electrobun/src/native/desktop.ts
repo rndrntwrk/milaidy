@@ -131,6 +131,11 @@ const RELEASE_NOTES_PARTITION = "persist:milady-release-notes";
 let activeDesktopManager: DesktopManager | null = null;
 let nativeContextMenuEventsInstalled = false;
 
+export function resetDesktopManagerForTesting(): void {
+  activeDesktopManager = null;
+  nativeContextMenuEventsInstalled = false;
+}
+
 // ============================================================================
 // DesktopManager
 // ============================================================================

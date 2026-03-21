@@ -1064,10 +1064,10 @@ describe("VrmEngine", () => {
       const nightPosition = nightSplat.position.set.mock.calls.at(-1) ?? [];
 
       expect(dayPosition[0]).toBeCloseTo(0, 5);
-      expect(dayPosition[1]).toBeCloseTo(-0.35, 5);
+      expect(dayPosition[1]).toBeCloseTo(-0.3, 5);
       expect(dayPosition[2]).toBeCloseTo(0, 5);
       expect(nightPosition[0]).toBeCloseTo(0, 5);
-      expect(nightPosition[1]).toBeCloseTo(-0.95, 5);
+      expect(nightPosition[1]).toBeCloseTo(-0.9, 5);
       expect(nightPosition[2]).toBeCloseTo(0, 5);
     });
 
@@ -1588,13 +1588,18 @@ describe("VrmEngine", () => {
       expect(engineAny.transitionDuration).toBe(0.8);
     });
 
-    it("smoothly transitions the camera when switching avatars", async () => {
+    it("preserves the outgoing avatar until the reveal path runs when switching avatars", async () => {
       const canvas = createMockCanvas();
       engine.setup(canvas, vi.fn());
       await waitForEngineReady(engine);
 
       const engineAny = engine as unknown as {
         vrm: {
+          scene: {
+            parent: { remove: ReturnType<typeof vi.fn> } | null;
+          };
+        } | null;
+        outgoingVrm: {
           scene: {
             parent: { remove: ReturnType<typeof vi.fn> } | null;
           };
@@ -1630,10 +1635,10 @@ describe("VrmEngine", () => {
 
       await engine.loadVrmFromUrl("http://example.com/model.vrm");
 
-      expect(previousParent.remove).toHaveBeenCalledTimes(1);
-      expect(engineAny.cameraManager.centerAndFrame).toHaveBeenCalledTimes(1);
-      expect(engineAny.isCameraTransitioning).toBe(true);
-      expect(engineAny.transitionDuration).toBe(3);
+      expect(previousParent.remove).not.toHaveBeenCalled();
+      expect(engineAny.outgoingVrm?.scene.parent).toBe(previousParent);
+      expect(engineAny.playTeleportReveal).toHaveBeenCalledTimes(1);
+      expect(engineAny.startPendingWorldReveal).toHaveBeenCalledWith(true);
     });
   });
 });
