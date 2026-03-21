@@ -3,7 +3,7 @@ import type { UiLanguage } from "@miladyai/app-core/i18n";
 import type { ShellView, UiTheme } from "@miladyai/app-core/state";
 import {
   type LucideIcon,
-  MessageCircle,
+  MessageCirclePlus,
   Monitor,
   PencilLine,
   Smartphone,
@@ -193,7 +193,7 @@ export function ShellHeaderControls({
                     ? t("companion.agentVoiceOff")
                     : t("companion.agentVoiceOn")
                 }
-                className={`${HEADER_ICON_BUTTON_CLASSNAME} !w-auto gap-1.5 px-3.5`}
+                className={`${HEADER_ICON_BUTTON_CLASSNAME} sm:!w-auto sm:gap-1.5 sm:px-3.5`}
                 onClick={onToggleVoiceMute}
               >
                 {chatAgentVoiceMuted ? (
@@ -201,17 +201,17 @@ export function ShellHeaderControls({
                 ) : (
                   <Volume2 className="h-4 w-4 shrink-0" />
                 )}
-                Voice
+                <span className="hidden sm:inline">{t("companion.voiceToggle")}</span>
               </button>
               <button
                 type="button"
                 aria-label={t("companion.newChat")}
                 title={t("companion.newChat")}
-                className={`hidden sm:inline-flex ${HEADER_ICON_BUTTON_CLASSNAME} !w-auto gap-1.5 px-3.5`}
+                className={`${HEADER_ICON_BUTTON_CLASSNAME} sm:!w-auto sm:gap-1.5 sm:px-3.5`}
                 onClick={onNewChat}
               >
-                <MessageCircle className="h-4 w-4 shrink-0" />
-                New Chat
+                <MessageCirclePlus className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">{t("companion.newChatButton")}</span>
               </button>
             </div>
           </div>

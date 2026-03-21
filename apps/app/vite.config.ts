@@ -137,6 +137,25 @@ function sparkWasmDataUrlPlugin(): Plugin {
   };
 }
 
+function watchWorkspacePackagesPlugin(): Plugin {
+  return {
+    name: "watch-workspace-packages",
+    configureServer(server) {
+      server.watcher.add(path.resolve(miladyRoot, "packages"));
+      server.watcher.on("change", (file) => {
+        if (file.includes("/packages/")) {
+          if (file.endsWith("package.json")) {
+            server.restart();
+          } else {
+            // Force a full reload on any other package file change (e.g. ts/tsx files)
+            server.ws.send({ type: "full-reload" });
+          }
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
   root: here,
   base: "./",
@@ -144,6 +163,7 @@ export default defineConfig({
   plugins: [
     publicSrcPlugin(),
     sparkWasmDataUrlPlugin(),
+    watchWorkspacePackagesPlugin(),
     tailwindcss(),
     react(),
     desktopCorsPlugin(),

@@ -59,6 +59,8 @@ interface SpeechRecognitionResultList {
   };
 }
 
+let sharedAudioCtx: AudioContext | null = null;
+
 type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
 
 interface WindowWithSpeechRecognition extends Window {
@@ -439,7 +441,6 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
   const interruptSpeechRef = useRef<() => void>(() => {});
 
   // ── ElevenLabs Web Audio refs ──────────────────────────────────────
-  const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const timeDomainDataRef = useRef<Float32Array<ArrayBuffer> | null>(null);
@@ -936,10 +937,10 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
       task: SpeakTask,
       generation: number,
     ) => {
-      let ctx = audioCtxRef.current;
+      let ctx = sharedAudioCtx;
       if (!ctx) {
         ctx = new AudioContext();
-        audioCtxRef.current = ctx;
+        sharedAudioCtx = ctx;
       }
       if (ctx.state === "suspended") {
         try {
@@ -948,7 +949,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
           // Force a fresh context if resume fails
           ctx.close().catch(() => {});
           ctx = new AudioContext();
-          audioCtxRef.current = ctx;
+          sharedAudioCtx = ctx;
         }
       }
 
@@ -1385,11 +1386,11 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
     }
 
     const warmAudioContext = () => {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new AudioContext();
+      if (!sharedAudioCtx) {
+        sharedAudioCtx = new AudioContext();
       }
 
-      void audioCtxRef.current.resume().catch(() => {
+      void sharedAudioCtx.resume().catch(() => {
         // Ignore until the next gesture or playback attempt.
       });
     };
@@ -1415,12 +1416,6 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
       void stopListening();
       void removeTalkModeListeners();
       stopSpeaking();
-      if (audioCtxRef.current) {
-        void audioCtxRef.current.close().catch(() => {
-          /* ignore */
-        });
-        audioCtxRef.current = null;
-      }
     };
   }, [removeTalkModeListeners, stopListening, stopSpeaking]);
 
