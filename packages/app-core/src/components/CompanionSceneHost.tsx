@@ -478,7 +478,7 @@ function CompanionSceneSurface({
             cameraProfile="companion"
             onEngineReady={handleStageEngineReady}
             onLayerEngineReady={handleStageLayerEngineReady}
-            playWaveOnAvatarChange
+            playWaveOnAvatarChange={false}
             t={t}
           />
         )}

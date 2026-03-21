@@ -2209,7 +2209,7 @@ export class VrmEngine {
         await this.playTeleportReveal(vrm);
         vrm.scene.visible = true;
         this.startPendingWorldReveal(true);
-        this.playWaveGreeting();
+        // Greeting animation is handled by CharacterEditor via vrm-teleport-complete event
       }
     } catch {
       if (!this.loadingAborted && this.vrm === vrm) {

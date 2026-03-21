@@ -365,9 +365,44 @@
   min-height: 0;
   overflow: hidden;
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
   width: 100%;
+  position: relative;
+}
+
+/* ── Sound toggle ──────────────────────────────────────────────── */
+
+.ce-sound-toggle {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  pointer-events: auto;
+}
+
+.ce-sound-toggle:hover {
+  border-color: var(--ce-gold);
+  color: var(--ce-gold);
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.ce-sound-toggle svg {
+  width: 1rem;
+  height: 1rem;
 }
 
 /* ── Roster ────────────────────────────────────────────────────── */

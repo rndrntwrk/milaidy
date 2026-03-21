@@ -1,9 +1,9 @@
 const DEFAULT_CLOUD_BASE =
   typeof window !== "undefined" &&
-  (window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1")
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1")
     ? "http://localhost:3000"
-    : "https://www.dev.elizacloud.ai";
+    : "https://www.elizacloud.ai";
 const DEFAULT_LOCAL_AGENT_BASE = "http://localhost:2138";
 const DEFAULT_SANDBOX_DISCOVERY_URL = "https://sandboxes.waifu.fun/agents";
 const DEFAULT_AGENT_UI_BASE_DOMAIN = "milady.ai";
