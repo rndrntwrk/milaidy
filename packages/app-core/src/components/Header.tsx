@@ -280,7 +280,7 @@ export function Header({
                   <button
                     type="button"
                     key={group.label}
-                    className={`inline-flex items-center justify-center gap-0 xl:gap-1.5 shrink-0 px-2.5 md:px-3 xl:px-4 py-2 text-[12px] bg-transparent border border-transparent cursor-pointer transition-all duration-300 rounded-full ${
+                    className={`inline-flex items-center justify-center gap-0 xl:gap-1.5 shrink-0 px-2.5 lg:px-3 xl:px-4 py-2 text-[12px] bg-transparent border border-transparent cursor-pointer transition-all duration-300 rounded-full ${
                       isActive
                         ? "text-accent font-bold bg-accent/15 shadow-[0_0_15px_rgba(var(--accent),0.18)] border-accent/40 ring-1 ring-inset ring-accent/20"
                         : "text-muted hover:text-txt hover:bg-bg-hover hover:border-border/50"
@@ -290,13 +290,13 @@ export function Header({
                   >
                     <span
                       data-testid={`header-nav-icon-${primaryTab}`}
-                      className="inline-flex md:hidden xl:inline-flex"
+                      className="inline-flex lg:hidden xl:inline-flex"
                     >
                       <Icon className="w-4 h-4" />
                     </span>
                     <span
                       data-testid={`header-nav-label-${primaryTab}`}
-                      className="hidden md:inline"
+                      className="hidden lg:inline"
                     >
                       {t(NAV_LABEL_I18N_KEY[group.label] ?? group.label)}
                     </span>

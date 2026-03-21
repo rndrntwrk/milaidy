@@ -137,11 +137,6 @@ export function retargetMixamoFbxToVrm(
         vrm.humanoid?.getNormalizedBoneNode("hips" as VRMHumanBoneName);
 
       const values = track.values.map((v, i) => {
-        // Disable root motion by zeroing out X (0) and Z (2) translation on the hips.
-        // We keep Y (1) translation so the character can bend their knees or jump.
-        if (isHips && (i % 3 === 0 || i % 3 === 2)) {
-          return 0;
-        }
         return (isVrm0(vrm) && i % 3 !== 1 ? -v : v) * hipsPositionScale;
       });
       tracks.push(

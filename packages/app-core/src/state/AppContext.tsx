@@ -2411,12 +2411,19 @@ export function AppProvider({
         setActiveConversationId(conversation.id);
         activeConversationIdRef.current = conversation.id;
         setCompanionMessageCutoffTs(nextCutoffTs);
-        const greetingText = greeting?.text?.trim() ?? "";
+        let greetingText = greeting?.text?.trim() || "";
+        if (!greetingText && characterData?.postExamples?.length) {
+          greetingText = characterData.postExamples[
+            Math.floor(Math.random() * characterData.postExamples.length)
+          ];
+        }
+        if (!greetingText) {
+          greetingText = "Hello! I'm here and ready to help.";
+        }
+        
         if (greetingText) {
           greetingFiredRef.current = true;
-          if (greeting?.persisted === true) {
-            scheduleGreetingWaveForCompanion();
-          }
+          scheduleGreetingWaveForCompanion();
           setConversationMessages([
             {
               id: `greeting-${Date.now()}`,
@@ -2450,6 +2457,7 @@ export function AppProvider({
       }
     },
     [
+      characterData,
       companionMessageCutoffTs,
       requestGreetingWhenRunning,
       resetConversationDraftState,
@@ -2788,12 +2796,9 @@ export function AppProvider({
           options?.conversationId ?? activeConversationId ?? "";
         if (!convId) {
           try {
-            // Use the first message as the conversation title
-            const convTitle =
-              text.length > 50 ? `${text.slice(0, 47)}...` : text;
-            const { conversation } = await client.createConversation(
-              convTitle || undefined,
-            );
+            const { conversation } = await client.createConversation(undefined, {
+              lang: uiLanguage,
+            });
             const nextCutoffTs = Date.now();
             setConversations((prev) => [conversation, ...prev]);
             setActiveConversationId(conversation.id);
@@ -2820,13 +2825,12 @@ export function AppProvider({
             activeConv.title === "conversations.newChatTitle")
         ) {
           const fallbackTitle =
-            text.length > 30 ? `${text.slice(0, 30)}...` : text;
+            text.length > 15 ? `${text.slice(0, 15)}...` : text;
           setConversations((prev) =>
             prev.map((c) =>
               c.id === convId ? { ...c, title: fallbackTitle } : c,
             ),
           );
-          void client.renameConversation(convId, fallbackTitle).catch(() => {});
         }
 
         const now = Date.now();
@@ -3062,13 +3066,12 @@ export function AppProvider({
             activeConv.title === "conversations.newChatTitle")
         ) {
           const fallbackTitle =
-            trimmed.length > 30 ? `${trimmed.slice(0, 30)}...` : trimmed;
+            trimmed.length > 15 ? `${trimmed.slice(0, 15)}...` : trimmed;
           setConversations((prev) =>
             prev.map((c) =>
               c.id === convId ? { ...c, title: fallbackTitle } : c,
             ),
           );
-          void client.renameConversation(convId, fallbackTitle).catch(() => {});
         }
 
         const now = Date.now();

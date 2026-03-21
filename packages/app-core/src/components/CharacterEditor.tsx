@@ -365,6 +365,9 @@ export function CharacterEditor({
       const found = characterRoster.find((e) => e.id === selectedCharacterId);
       if (found) return found;
     }
+    const byVrm = characterRoster.find((e) => e.avatarIndex === selectedVrmIndex);
+    if (byVrm) return byVrm;
+
     if (!currentCharacter) return null;
     const currentName =
       typeof currentCharacter.name === "string"
