@@ -259,7 +259,7 @@ describe("performUpdate", () => {
       throw new Error("unexpected");
     });
     vi.mocked(fs.realpathSync).mockReturnValueOnce(
-      "/usr/local/lib/node_modules/eliza/eliza.mjs",
+      "/usr/local/lib/node_modules/eliza/milady.mjs",
     );
 
     // Simulate npm install failing
@@ -291,7 +291,7 @@ describe("performUpdate", () => {
       throw new Error(`unexpected execSync call: ${cmd}`);
     });
     vi.mocked(fs.realpathSync).mockReturnValueOnce(
-      "/usr/local/lib/node_modules/eliza/eliza.mjs",
+      "/usr/local/lib/node_modules/eliza/milady.mjs",
     );
 
     // Simulate npm install succeeding

@@ -74,4 +74,9 @@ jobs:
       - name: Run ${{ matrix.lane }} lane
         env:
           CI: "true"
-        run: ${{ matrix.command }}
+        run: |
+          if [ ! -d "src/benchmark" ]; then
+            echo "src/benchmark directory does not exist, skipping"
+            exit 0
+          fi
+          ${{ matrix.command }}

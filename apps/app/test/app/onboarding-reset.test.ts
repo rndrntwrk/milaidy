@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest";
 import {
   applyForceFreshOnboardingReset,
   clearForceFreshOnboarding,
@@ -8,6 +7,7 @@ import {
   installForceFreshOnboardingClientPatch,
   isForceFreshOnboardingEnabled,
 } from "@miladyai/app-core/src/onboarding-reset";
+import { describe, expect, it, vi } from "vitest";
 
 describe("force fresh onboarding reset", () => {
   it("clears persisted onboarding state and strips the reset query param", () => {

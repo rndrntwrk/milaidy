@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
-import React, { useEffect } from "react";
-import TestRenderer, { act } from "react-test-renderer";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearForceFreshOnboarding,
   enableForceFreshOnboarding,
   installForceFreshOnboardingClientPatch,
 } from "@miladyai/app-core/src/onboarding-reset";
+import React, { useEffect } from "react";
+import TestRenderer, { act } from "react-test-renderer";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const ONBOARDING_STEP_STORAGE_KEY = "eliza:onboarding:step";
 const { mockClient } = vi.hoisted(() => ({
@@ -110,6 +110,7 @@ vi.mock("@miladyai/app-core/api/client", async (importOriginal) => {
   };
 });
 
+import { installLocalProviderCloudPreferencePatch } from "@miladyai/app-core/src/cloud-preference-patch";
 import type { OnboardingStep } from "@miladyai/app-core/state";
 import { AppProvider, useApp } from "@miladyai/app-core/state";
 import {
@@ -117,7 +118,6 @@ import {
   deriveOnboardingResumeFields,
   inferOnboardingResumeStep,
 } from "@miladyai/app-core/state/internal";
-import { installLocalProviderCloudPreferencePatch } from "@miladyai/app-core/src/cloud-preference-patch";
 
 type ProbeApi = {
   getSnapshot: () => {

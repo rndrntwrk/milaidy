@@ -13,9 +13,9 @@ import {
 } from "@miladyai/app-core/events";
 import { STYLE_PRESETS } from "@miladyai/app-core/onboarding-presets";
 import { useApp } from "@miladyai/app-core/state";
+import { normalizeCharacterMessageExamples } from "@miladyai/app-core/utils/character-message-examples";
 import { PREMADE_VOICES, sanitizeApiKey } from "@miladyai/app-core/voice";
 import { Button, Input, Textarea, ThemedSelect } from "@miladyai/ui";
-import { normalizeCharacterMessageExamples } from "@miladyai/app-core/utils/character-message-examples";
 import {
   CharacterRoster,
   type CharacterRosterEntry,

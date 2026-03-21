@@ -2,7 +2,7 @@
 /**
  * CLI entry point for Eliza.
  *
- * This file is built by tsdown into dist/entry.js and invoked by eliza.mjs.
+ * This file is built by tsdown into dist/entry.js and invoked by milady.mjs.
  * It bootstraps the CLI: normalizes env, applies profile settings,
  * and delegates to the Commander-based CLI.
  */

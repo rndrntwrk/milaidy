@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
 import {
   installLocalProviderCloudPreferencePatch,
   normalizeConfigForLocalProviderPreference,
   shouldMaskInactiveCloudStatus,
   shouldPreferLocalProviderConfig,
 } from "@miladyai/app-core/src/cloud-preference-patch";
+import { describe, expect, it, vi } from "vitest";
 
 describe("cloud preference patch", () => {
   it("normalizes inactive cloud config when a Claude subscription is already configured", () => {

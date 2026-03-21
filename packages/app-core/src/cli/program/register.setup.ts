@@ -163,10 +163,10 @@ export function saveConfig(
 }
 
 function resolveLaunchCommand(cwd = process.cwd()): string {
-  const localEntry = path.join(cwd, "eliza.mjs");
+  const localEntry = path.join(cwd, "milady.mjs");
   const localPackage = path.join(cwd, "package.json");
   return fs.existsSync(localEntry) && fs.existsSync(localPackage)
-    ? "node eliza.mjs start"
+    ? "node milady.mjs start"
     : "eliza start";
 }
 
@@ -347,7 +347,7 @@ export function registerSetupCommand(program: Command) {
             const envKey =
               providerEntry?.key ??
               opts.provider.toUpperCase().replace(/[^A-Z0-9]/g, "_") +
-                "_API_KEY";
+              "_API_KEY";
             const config = loadConfig(configPath);
             const envSection = getEnvSection(config);
             envSection[envKey] = keyValue;
