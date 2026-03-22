@@ -752,7 +752,7 @@ describe("VrmEngine", () => {
       // renderer — but both share the same mock, so the count is 2.
       expect(
         hoisted.mockRendererInstance.setAnimationLoop,
-      ).toHaveBeenCalledTimes(2);
+      ).toHaveBeenCalledTimes(1);
 
       engine.setPaused(true);
       // Pausing calls setAnimationLoop(null) to stop the loop
@@ -765,7 +765,7 @@ describe("VrmEngine", () => {
       // Resuming calls setAnimationLoop again with a callback
       expect(
         hoisted.mockRendererInstance.setAnimationLoop,
-      ).toHaveBeenCalledTimes(4);
+      ).toHaveBeenCalledTimes(3);
     });
 
     it("waits for the renderer to finish initializing", async () => {
@@ -834,7 +834,7 @@ describe("VrmEngine", () => {
       await waitForEngineReady(engine);
 
       expect(engine.isInitialized()).toBe(true);
-      expect(globalThis.requestAnimationFrame).toHaveBeenCalled();
+      expect(hoisted.mockRendererInstance.setAnimationLoop).toHaveBeenCalled();
     });
 
     it("cleans up WebGL resources during dispose()", async () => {

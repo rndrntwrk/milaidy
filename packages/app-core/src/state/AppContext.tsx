@@ -193,12 +193,6 @@ import {
   type UiTheme,
 } from "./internal";
 import {
-  computeAgentDeadlineExtensions,
-  getAgentReadyTimeoutMs,
-} from "./agent-startup-timing";
-import { completeResetLocalStateAfterServerWipe as runCompleteResetLocalStateAfterServerWipe } from "./complete-reset-local-state-after-wipe";
-import { handleResetAppliedFromMainCore } from "./handle-reset-applied-from-main";
-import {
   deriveDetectedProviderPrefill,
   detectExistingOnboardingConnection,
 } from "./onboarding-bootstrap";

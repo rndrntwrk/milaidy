@@ -58,7 +58,7 @@ function renderComposer(
       typeof button.props.onPointerUp === "function",
   );
   const speakerButton = buttons.find(
-    (button) => button.props["aria-label"] === "Agent voice on",
+    (button) => button.props["aria-label"] === "aria.agentVoiceOn",
   );
 
   if (!micButton) {

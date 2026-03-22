@@ -13,10 +13,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("Avatar VRM Utilities", () => {
   describe("getVrmUrl", () => {
-    it("returns correct path for base milady VRMs (1-8)", () => {
-      for (let i = 1; i <= 8; i++) {
-        expect(getVrmUrl(i)).toBe(`/vrms/milady-${i}.vrm.gz`);
-      }
+    it("returns correct path for bundled Milady VRMs (1-8)", () => {
+      const expectedSlugs = [
+        "milady-1",
+        "milady-2",
+        "milady-3",
+        "milady-4",
+        "milady-5",
+        "milady-6",
+        "milady-7",
+        "milady-8",
+      ];
+      expectedSlugs.forEach((slug, index) => {
+        expect(getVrmUrl(index + 1)).toBe(`/vrms/${slug}.vrm.gz`);
+      });
     });
 
     it("clamps out-of-range indices to avatar 1", () => {
@@ -29,10 +39,20 @@ describe("Avatar VRM Utilities", () => {
   });
 
   describe("getVrmPreviewUrl", () => {
-    it("returns correct preview path for base VRMs (1-8)", () => {
-      for (let i = 1; i <= 8; i++) {
-        expect(getVrmPreviewUrl(i)).toBe(`/vrms/previews/milady-${i}.png`);
-      }
+    it("returns correct preview path for bundled Milady VRMs (1-8)", () => {
+      const expectedSlugs = [
+        "milady-1",
+        "milady-2",
+        "milady-3",
+        "milady-4",
+        "milady-5",
+        "milady-6",
+        "milady-7",
+        "milady-8",
+      ];
+      expectedSlugs.forEach((slug, index) => {
+        expect(getVrmPreviewUrl(index + 1)).toBe(`/vrms/previews/${slug}.png`);
+      });
     });
 
     it("clamps out-of-range preview indices to avatar 1", () => {
@@ -44,7 +64,7 @@ describe("Avatar VRM Utilities", () => {
   });
 
   describe("getVrmTitle", () => {
-    it("returns title for base VRMs", () => {
+    it("returns roster titles for bundled Milady avatars", () => {
       expect(getVrmTitle(1)).toBe("Chen");
       expect(getVrmTitle(2)).toBe("Jin");
       expect(getVrmTitle(3)).toBe("Kei");
@@ -57,6 +77,10 @@ describe("Avatar VRM Utilities", () => {
 
     it("clamps out-of-range index to avatar 1", () => {
       expect(getVrmTitle(9)).toBe("Chen");
+    });
+
+    it("matches the bundled Milady avatar roster size", () => {
+      expect(VRM_COUNT).toBe(8);
     });
   });
 

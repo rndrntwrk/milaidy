@@ -630,6 +630,11 @@ export class VrmEngine {
   private speaking = false;
   private speakingStartTime = 0;
   private readonly blinkController = new VrmBlinkController();
+
+  private splatCache = new Map<
+    string,
+    { mesh: SparkSplatMesh; worldAnchor: THREE.Vector3; worldRevealRadius: number }
+  >();
   private readonly cameraManager = new VrmCameraManager();
   private emoteAction: THREE.AnimationAction | null = null;
   private emoteTimeout: ReturnType<typeof setTimeout> | null = null;
