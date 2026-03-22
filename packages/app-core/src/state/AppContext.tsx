@@ -157,7 +157,9 @@ import {
   loadCompanionMessageCutoffTs,
   loadLastNativeTab,
   loadPersistedConnectionMode,
+  loadPersistedOnboardingComplete,
   loadPersistedOnboardingStep,
+  savePersistedOnboardingComplete,
   loadUiLanguage,
   loadUiTheme,
   mergeStreamingText,
@@ -480,7 +482,13 @@ export function AppProvider({
   const [uiTheme, setUiThemeState] = useState<UiTheme>(loadUiTheme);
   const [connected, setConnected] = useState(false);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
-  const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [onboardingComplete, _setOnboardingCompleteRaw] = useState(
+    loadPersistedOnboardingComplete,
+  );
+  const setOnboardingComplete = useCallback((value: boolean) => {
+    _setOnboardingCompleteRaw(value);
+    savePersistedOnboardingComplete(value);
+  }, []);
   const [onboardingUiRevealNonce, setOnboardingUiRevealNonce] = useState(0);
   const [onboardingLoading, setOnboardingLoading] = useState(true);
   const [startupPhase, setStartupPhase] =
@@ -3294,7 +3302,10 @@ export function AppProvider({
           }
         }
       } finally {
-        if (controller == null && chatSendNonceRef.current === sendNonce) {
+        // Unconditionally clear the busy ref when the nonce matches —
+        // the inner finally may not run if an error is thrown between
+        // controller assignment and the inner try block.
+        if (chatSendNonceRef.current === sendNonce) {
           chatSendBusyRef.current = false;
         }
       }
@@ -6006,6 +6017,7 @@ export function AppProvider({
 
       void loadWorkbench();
       void loadPlugins(); // Hydrate plugin state early so Nav sees streaming-base toggle
+      void loadCharacter(); // Hydrate character data for chat UI agent name + responses
 
       // Hydrate coding agent sessions (also re-called on WS reconnect / server restart)
       const hydratePtySessions = () => {
@@ -6409,13 +6421,13 @@ export function AppProvider({
       // Cloud polling — always run the initial poll unconditionally so we can
       // discover a pre-existing API key / connection. If connected, start the
       // recurring interval too.
-      pollCloudCredits().then((connected) => {
-        if (connected) {
-          elizaCloudPollInterval.current = window.setInterval(
-            () => pollCloudCredits(),
-            60_000,
-          );
-        }
+      pollCloudCredits().then(() => {
+        // Always start the recurring poll — the initial check may fire before
+        // the runtime is ready, so subsequent polls catch the connected state.
+        elizaCloudPollInterval.current = window.setInterval(
+          () => pollCloudCredits(),
+          60_000,
+        );
       });
 
       // Load tab from URL — use hash in file:// mode (packaged desktop builds)

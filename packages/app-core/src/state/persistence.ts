@@ -116,6 +116,30 @@ export function clearPersistedOnboardingStep(): void {
   }
 }
 
+/* ── Onboarding completion persistence ────────────────────────────────── */
+
+const ONBOARDING_COMPLETE_STORAGE_KEY = "eliza:onboarding-complete";
+
+export function loadPersistedOnboardingComplete(): boolean {
+  try {
+    return localStorage.getItem(ONBOARDING_COMPLETE_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function savePersistedOnboardingComplete(complete: boolean): void {
+  try {
+    if (complete) {
+      localStorage.setItem(ONBOARDING_COMPLETE_STORAGE_KEY, "1");
+    } else {
+      localStorage.removeItem(ONBOARDING_COMPLETE_STORAGE_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export function loadUiLanguage(): UiLanguage {
   try {
     const stored = localStorage.getItem(UI_LANGUAGE_STORAGE_KEY);
