@@ -41,7 +41,6 @@ import {
 import { detectEmbeddingPreset } from "./embedding-presets.js";
 import { shouldWarmupLocalEmbeddingModel } from "./embedding-warmup-policy.js";
 import { updateMiladyStartupEmbeddingProgress } from "./milady-startup-overlay.js";
-import { installDatabaseTrajectoryLogger } from "./trajectory-persistence.js";
 
 const AUTONOMY_WORLD_ID = stringToUuid("00000000-0000-0000-0000-000000000001");
 const AUTONOMY_ENTITY_ID = stringToUuid("00000000-0000-0000-0000-000000000002");
@@ -395,8 +394,6 @@ async function repairRuntimeAfterBoot(
   await ensureRuntimeSqlCompatibility(runtime);
   await ensureMiladyTextToSpeechHandler(runtime);
   await ensureAutonomyBootstrapContext(runtime);
-
-  await installDatabaseTrajectoryLogger(runtime);
 
   if (!runtime.getService("AUTONOMY")) {
     try {

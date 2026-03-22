@@ -1307,20 +1307,6 @@ function SkillsFullView() {
 
   return (
     <div>
-      {/* Stats bar */}
-      <div className="flex items-center gap-4 mb-4 text-[11px] text-[var(--muted)]">
-        <span>
-          {totalCount} skill{totalCount !== 1 ? "s" : ""}
-        </span>
-        <span>{activeCount} active</span>
-        <span>{inactive.length} inactive</span>
-        {attention.length > 0 && (
-          <span className="text-[#f39c12]">
-            {attention.length} need{attention.length === 1 ? "s" : ""} attention
-          </span>
-        )}
-      </div>
-
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 mb-6 p-3 border border-border/40 bg-card/60 backdrop-blur-md rounded-2xl shadow-sm">
         <Input
