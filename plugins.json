@@ -5379,7 +5379,12 @@
           "sensitive": false
         }
       },
-      "setupGuideUrl": "https://docs.eliza.ai/plugin-setup-guide#telegram"
+      "configUiHints": {
+        "TELEGRAM_ALLOWED_CHATS": { "placeholder": "JSON array of chat IDs, e.g.:\n[\"0987654321\", \"1234567890\"]" },
+        "TELEGRAM_API_ROOT": { "advanced": true, "label": "API Root" },
+        "TELEGRAM_TEST_CHAT_ID": { "advanced": true, "label": "Test Chat ID" }
+      },
+      "setupGuideUrl": "https://docs.milady.ai/guides/tutorial-telegram-bot"
     },
     {
       "id": "tlon",

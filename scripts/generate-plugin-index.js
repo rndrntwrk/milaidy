@@ -132,7 +132,7 @@ const SETUP_GUIDE_ANCHORS = {
   "local-ai": "#local-ai",
   "vercel-ai-gateway": "#vercel-ai-gateway",
   discord: "#discord",
-  telegram: "#telegram",
+  telegram: "https://docs.milady.ai/guides/tutorial-telegram-bot",
   twitter: "#twitter--x",
   slack: "#slack",
   whatsapp: "#whatsapp",
@@ -222,7 +222,11 @@ export function categorize(id) {
 
 export function resolveSetupGuideUrl(id) {
   const anchor = SETUP_GUIDE_ANCHORS[id];
-  return anchor ? `${PLUGIN_SETUP_GUIDE_ROOT}${anchor}` : undefined;
+  if (!anchor) return undefined;
+  // Full URLs are used as-is; anchors are appended to the default root
+  return anchor.startsWith("http")
+    ? anchor
+    : `${PLUGIN_SETUP_GUIDE_ROOT}${anchor}`;
 }
 
 export function normalizeRepositoryUrl(repository) {

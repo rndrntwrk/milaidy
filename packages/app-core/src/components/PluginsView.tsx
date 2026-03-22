@@ -94,6 +94,7 @@ import type { ConfigUiHint } from "../types";
 import { openExternalUrl, resolveAppAssetUrl } from "../utils";
 import { autoLabel } from "./labels";
 import { SHOWCASE_PLUGIN } from "./plugins/showcase-data";
+import { Switch } from "./ui-switch";
 import { WhatsAppQrOverlay } from "./WhatsAppQrOverlay";
 
 /* ── Always-on plugins (hidden from all views) ────────────────────────── */
@@ -140,6 +141,9 @@ const ALWAYS_ON_PLUGIN_IDS = new Set([
   "vision",
   "computeruse",
 ]);
+
+/** Keys to hide when Telegram "Allow all chats" mode is active. */
+const TELEGRAM_ALLOW_ALL_HIDDEN = new Set(["TELEGRAM_ALLOWED_CHATS"]);
 
 /* ── Helpers ────────────────────────────────────────────────────────── */
 
@@ -495,9 +499,80 @@ export function paramsToSchema(
   };
 }
 
-/* ── PluginConfigForm bridge ─────────────────────────────────────────── */
+/* ── Telegram chat mode ─────────────────────────────────────────────── */
 
-function PluginConfigForm({
+/**
+ * Hook that manages the "allow all / specific chats" toggle state.
+ * Mode is explicit (not derived from field value) so clearing the field
+ * doesn't flip the toggle. Returns the mode, a toggle handler, and
+ * hiddenKeys for PluginConfigForm.
+ */
+function useTelegramChatMode(
+  plugin: PluginInfo,
+  pluginConfigs: Record<string, Record<string, string>>,
+  onParamChange: (pluginId: string, paramKey: string, value: string) => void,
+) {
+  const localValue = pluginConfigs.telegram?.TELEGRAM_ALLOWED_CHATS;
+  const serverValue =
+    plugin.parameters?.find((p) => p.key === "TELEGRAM_ALLOWED_CHATS")
+      ?.currentValue ?? "";
+  const currentValue = localValue ?? serverValue;
+
+  // Explicit mode state — initialized from current value, then user-controlled
+  const [allowAll, setAllowAll] = useState(() => !currentValue.trim());
+
+  // Stash the last non-empty value so toggling back restores it
+  const stashedChats = useRef(currentValue);
+  if (currentValue.trim()) {
+    stashedChats.current = currentValue;
+  }
+
+  const toggle = useCallback(
+    (next: boolean) => {
+      setAllowAll(next);
+      if (next) {
+        onParamChange("telegram", "TELEGRAM_ALLOWED_CHATS", "");
+      } else {
+        const restore = stashedChats.current?.trim() || "[]";
+        onParamChange("telegram", "TELEGRAM_ALLOWED_CHATS", restore);
+      }
+    },
+    [onParamChange],
+  );
+
+  return {
+    allowAll,
+    toggle,
+    hiddenKeys: allowAll ? TELEGRAM_ALLOW_ALL_HIDDEN : undefined,
+  };
+}
+
+function TelegramChatModeToggle({
+  allowAll,
+  onToggle,
+}: {
+  allowAll: boolean;
+  onToggle: (next: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--card,rgba(255,255,255,0.03))] px-4 py-3 mb-4">
+      <div className="flex flex-col gap-0.5">
+        <span className="text-[13px] font-semibold text-[var(--text)]">
+          {allowAll ? "Allow all chats" : "Allow only specific chats"}
+        </span>
+        <span className="text-[11px] text-[var(--muted)]">
+          {allowAll
+            ? "Bot will respond in any chat"
+            : "Bot will only respond in listed chat IDs"}
+        </span>
+      </div>
+      <Switch checked={allowAll} onChange={onToggle} />
+    </div>
+  );
+}
+
+/** Wraps PluginConfigForm with the Telegram chat mode toggle + hidden keys. */
+function TelegramPluginConfig({
   plugin,
   pluginConfigs,
   onParamChange,
@@ -505,6 +580,38 @@ function PluginConfigForm({
   plugin: PluginInfo;
   pluginConfigs: Record<string, Record<string, string>>;
   onParamChange: (pluginId: string, paramKey: string, value: string) => void;
+}) {
+  const { allowAll, toggle, hiddenKeys } = useTelegramChatMode(
+    plugin,
+    pluginConfigs,
+    onParamChange,
+  );
+
+  return (
+    <>
+      <TelegramChatModeToggle allowAll={allowAll} onToggle={toggle} />
+      <PluginConfigForm
+        plugin={plugin}
+        pluginConfigs={pluginConfigs}
+        onParamChange={onParamChange}
+        hiddenKeys={hiddenKeys}
+      />
+    </>
+  );
+}
+
+/* ── PluginConfigForm bridge ─────────────────────────────────────────── */
+
+function PluginConfigForm({
+  plugin,
+  pluginConfigs,
+  onParamChange,
+  hiddenKeys,
+}: {
+  plugin: PluginInfo;
+  pluginConfigs: Record<string, Record<string, string>>;
+  onParamChange: (pluginId: string, paramKey: string, value: string) => void;
+  hiddenKeys?: Set<string>;
 }) {
   const params = plugin.parameters ?? [];
   const { schema, hints: autoHints } = useMemo(
@@ -514,15 +621,22 @@ function PluginConfigForm({
 
   // Merge server-provided configUiHints over auto-generated hints.
   // Server hints take priority (override auto-generated ones).
+  // Also apply hiddenKeys from parent (e.g. Telegram chat mode toggle).
   const hints = useMemo(() => {
-    const serverHints = plugin.configUiHints;
-    if (!serverHints || Object.keys(serverHints).length === 0) return autoHints;
     const merged: Record<string, ConfigUiHint> = { ...autoHints };
-    for (const [key, serverHint] of Object.entries(serverHints)) {
-      merged[key] = { ...merged[key], ...serverHint };
+    const serverHints = plugin.configUiHints;
+    if (serverHints) {
+      for (const [key, serverHint] of Object.entries(serverHints)) {
+        merged[key] = { ...merged[key], ...serverHint };
+      }
+    }
+    if (hiddenKeys) {
+      for (const key of hiddenKeys) {
+        merged[key] = { ...merged[key], hidden: true };
+      }
     }
     return merged;
-  }, [autoHints, plugin.configUiHints]);
+  }, [autoHints, plugin.configUiHints, hiddenKeys]);
 
   // Build values from current config state + existing server values.
   // Array-typed fields need comma-separated strings parsed into arrays.
@@ -874,7 +988,12 @@ function subgroupForPlugin(plugin: PluginInfo): string {
 }
 
 type StatusFilter = "all" | "enabled" | "disabled";
-type PluginsViewMode = "all" | "connectors" | "streaming" | "social";
+type PluginsViewMode =
+  | "all"
+  | "all-social"
+  | "connectors"
+  | "streaming"
+  | "social";
 type SubgroupTag = { id: string; label: string; count: number };
 
 function comparePlugins(left: PluginInfo, right: PluginInfo): number {
@@ -1087,9 +1206,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const dragRef = useRef<string | null>(null);
-  const isSocialMode = mode === "social";
+  const isSocialMode = mode === "social" || mode === "all-social";
   const isConnectorLikeMode = mode === "connectors" || mode === "social";
-  const resultLabel = isSocialMode ? "connectors" : label.toLowerCase();
+  const resultLabel = mode === "social" ? "connectors" : label.toLowerCase();
   const searchPlaceholder = isSocialMode
     ? "Search..."
     : `Search ${label.toLowerCase()}...`;
@@ -1516,11 +1635,21 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
   const renderPluginCard = (p: PluginInfo) => {
     const hasParams = p.parameters && p.parameters.length > 0;
     const isOpen = pluginSettingsOpen.has(p.id);
+    const requiredParams = hasParams
+      ? p.parameters.filter((param: PluginParamDef) => param.required)
+      : [];
+    const requiredSetCount = requiredParams.filter(
+      (param: PluginParamDef) => param.isSet,
+    ).length;
     const setCount = hasParams
       ? p.parameters.filter((param: PluginParamDef) => param.isSet).length
       : 0;
     const totalCount = hasParams ? p.parameters.length : 0;
-    const allParamsSet = !hasParams || setCount === totalCount;
+    const allParamsSet =
+      !hasParams ||
+      (requiredParams.length > 0
+        ? requiredSetCount === requiredParams.length
+        : setCount === totalCount);
     const isShowcase = p.id === "__ui-showcase__";
     const categoryLabel = isShowcase
       ? "showcase"
@@ -2114,11 +2243,21 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                     plugin.id !== "__ui-showcase__";
                   const isExpanded = connectorExpandedIds.has(plugin.id);
                   const isSelected = connectorSelectedId === plugin.id;
+                  const requiredParams = hasParams
+                    ? plugin.parameters.filter((param) => param.required)
+                    : [];
+                  const requiredSetCount = requiredParams.filter(
+                    (param) => param.isSet,
+                  ).length;
                   const setCount = hasParams
                     ? plugin.parameters.filter((param) => param.isSet).length
                     : 0;
                   const totalCount = hasParams ? plugin.parameters.length : 0;
-                  const allParamsSet = !hasParams || setCount === totalCount;
+                  const allParamsSet =
+                    !hasParams ||
+                    (requiredParams.length > 0
+                      ? requiredSetCount === requiredParams.length
+                      : setCount === totalCount);
                   const isToggleBusy = togglingPlugins.has(plugin.id);
                   const toggleDisabled =
                     isToggleBusy || (hasPluginToggleInFlight && !isToggleBusy);
@@ -2338,11 +2477,19 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
 
                           {hasParams ? (
                             <div className="space-y-4">
-                              <PluginConfigForm
-                                plugin={plugin}
-                                pluginConfigs={pluginConfigs}
-                                onParamChange={handleParamChange}
-                              />
+                              {plugin.id === "telegram" ? (
+                                <TelegramPluginConfig
+                                  plugin={plugin}
+                                  pluginConfigs={pluginConfigs}
+                                  onParamChange={handleParamChange}
+                                />
+                              ) : (
+                                <PluginConfigForm
+                                  plugin={plugin}
+                                  pluginConfigs={pluginConfigs}
+                                  onParamChange={handleParamChange}
+                                />
+                              )}
                               {plugin.id === "whatsapp" && (
                                 <WhatsAppQrOverlay accountId="default" />
                               )}
@@ -2949,11 +3096,19 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                   )}
 
                   <div className="px-5 py-3">
-                    <PluginConfigForm
-                      plugin={p}
-                      pluginConfigs={pluginConfigs}
-                      onParamChange={handleParamChange}
-                    />
+                    {p.id === "telegram" ? (
+                      <TelegramPluginConfig
+                        plugin={p}
+                        pluginConfigs={pluginConfigs}
+                        onParamChange={handleParamChange}
+                      />
+                    ) : (
+                      <PluginConfigForm
+                        plugin={p}
+                        pluginConfigs={pluginConfigs}
+                        onParamChange={handleParamChange}
+                      />
+                    )}
                     {p.id === "whatsapp" && (
                       <WhatsAppQrOverlay accountId="default" />
                     )}
@@ -3149,6 +3304,8 @@ export function PluginsView({
         ? "Connectors"
         : mode === "streaming"
           ? "Streaming"
-          : "Plugins";
+          : mode === "all-social"
+            ? "Plugins"
+            : "Plugins";
   return <PluginListView label={label} mode={mode} inModal={inModal} />;
 }
