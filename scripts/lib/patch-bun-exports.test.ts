@@ -48,7 +48,7 @@ const MOCK_MILADY_CATALOG = {
   ],
   injectedCharacters: [
     {
-      catchphrase: "I'm ready to assist.",
+      catchphrase: "I can't wait!",
       name: "Rin",
       avatarAssetId: 1,
       voicePresetId: "alice",
@@ -60,7 +60,7 @@ const MOCK_MILADY_CATALOG = {
       },
     },
     {
-      catchphrase: "I'm here to help you.",
+      catchphrase: "Let's get to work!",
       name: "Ai",
       avatarAssetId: 2,
       voicePresetId: "sarah",
@@ -844,8 +844,8 @@ describe("patch-bun-exports", () => {
       writeFileSync(
         filePath,
         `const IDENTITY_PRESETS = {
-    "I'm ready to assist.": { name: "Rin", avatarIndex: 1 },
-    "I'm here to help you.": { name: "Ai", avatarIndex: 2 },
+    "I can't wait!": { name: "Rin", avatarIndex: 1 },
+    "Let's get to work!": { name: "Ai", avatarIndex: 2 },
 };
 styles.slice(0, 4);
 `,
@@ -885,7 +885,7 @@ styles.slice(0, 4);
       writeFileSync(
         filePath,
         `const CHARACTER_PRESET_META = {
-    "I'm ready to assist.": { name: "Rin", avatarIndex: 1, voicePresetId: "alice" },
+    "I can't wait!": { name: "Rin", avatarIndex: 1, voicePresetId: "alice" },
 };
 const visibleCharacterRoster = characterRoster.slice(0, 4);
 const avatarIndex = meta?.avatarIndex ?? (index % 4) + 1;
@@ -997,7 +997,7 @@ const avatarIndex = meta?.avatarIndex ?? (index % 4) + 1;
           "utf8",
         ),
       ).toContain(
-        `"I'm here to help you.": { name: "Ai", avatarIndex: 2, voicePresetId: "sarah" }`,
+        `"Let's get to work!": { name: "Ai", avatarIndex: 2, voicePresetId: "sarah" }`,
       );
       expect(
         readFileSync(

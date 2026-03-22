@@ -13,7 +13,7 @@ export function WelcomeStep() {
   const handleGetStarted = () => {
     // Default to Chen (blue-haired anime character) — character selection
     // happens after onboarding completes.
-    setState("onboardingStyle", "I'm here to help you.");
+    setState("onboardingStyle", "Let's get to work!");
     setState("onboardingName", "Chen");
     setState("selectedVrmIndex", 1);
     setState("onboardingStep", "connection");

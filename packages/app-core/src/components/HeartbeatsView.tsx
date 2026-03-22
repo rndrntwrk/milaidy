@@ -427,11 +427,11 @@ export function HeartbeatsView() {
     <div className="flex h-full w-full overflow-hidden bg-bg">
       {/* Sidebar */}
       <aside className="w-72 md:w-80 min-w-[250px] border-r border-border/60 bg-card/30 flex flex-col overflow-y-auto">
-        <div className="border-b border-border/50 sticky top-0 z-10">
+        <div className="sticky top-0 z-10 pt-2">
           <Button
-            variant="default"
+            variant="ghost"
             size="sm"
-            className="w-full h-10 px-4 text-sm shadow-sm"
+            className="w-full h-10 px-3 justify-start text-sm hover:bg-accent/5 font-medium border-l-2 border-transparent"
             onClick={() => {
               openCreateEditor();
               setSelectedTriggerId(null);
@@ -442,14 +442,14 @@ export function HeartbeatsView() {
           </Button>
         </div>
         
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto pb-4">
           {triggerError && (
-            <div className="mb-3 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+            <div className="mx-3 mt-3 mb-1 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
               {triggerError}
             </div>
           )}
           {triggers.length === 0 && !triggersLoading ? (
-            <div className="p-6 text-center text-sm text-muted">
+            <div className="p-4 text-center text-sm text-muted">
               {t("triggersview.NoTriggersConfigur")}
             </div>
           ) : (
@@ -464,7 +464,7 @@ export function HeartbeatsView() {
                     openEditEditor(trigger);
                     void loadTriggerRuns(trigger.id);
                   }}
-                  className={`w-full text-left p-3 border-l-2 transition-colors ${isActive ? "border-accent bg-transparent" : "border-transparent bg-transparent hover:bg-accent/5"}`}
+                  className={`w-full text-left px-3 py-2.5 transition-colors border-l-2 ${isActive ? "border-accent text-accent bg-transparent" : "border-transparent bg-transparent hover:bg-accent/5"}`}
                 >
                   <div className="flex flex-col gap-1.5 min-w-0">
                     <div className="flex items-center justify-between gap-1">
@@ -894,10 +894,10 @@ export function HeartbeatsView() {
               <Clock3 className="h-7 w-7 text-muted/80" />
             </div>
             <h2 className="text-xl font-medium text-txt mb-2">
-              Select a Heartbeat
+              {t("heartbeatsview.selectAHeartbeat")}
             </h2>
             <p className="text-sm text-muted max-w-sm leading-relaxed">
-              Use the sidebar to create a new heartbeat or select an existing one to view and edit its details.
+              {t("heartbeatsview.emptyStateDescription")}
             </p>
           </div>
         )}

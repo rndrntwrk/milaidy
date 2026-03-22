@@ -70,7 +70,6 @@
     "./shell": "./src/shell/index.ts",
     "./styles/browser-surface.css": "./src/styles/browser-surface.css",
     "./styles/brand-gold.css": "./src/styles/brand-gold.css",
-    "./styles/onboarding-overrides.css": "./src/styles/onboarding-overrides.css",
     "./character-catalog": "./src/character-catalog.ts"
   },
   "peerDependencies": {

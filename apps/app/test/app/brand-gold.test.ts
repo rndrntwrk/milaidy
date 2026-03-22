@@ -72,7 +72,7 @@ describe("brand gold theme overrides", () => {
     const editorCss = fs.readFileSync(CHARACTER_EDITOR_CSS_PATH, "utf8");
     const rosterSource = fs.readFileSync(CHARACTER_ROSTER_PATH, "utf8");
 
-    expect(editorCss).toContain("--ce-gold: var(--classic-gold, #cfaf5a);");
+    expect(editorCss).not.toContain("--ce-gold:");
     expect(editorCss).toContain(".ce-right-toggle {");
     expect(editorCss).toContain("background: var(--bg-elevated);");
     expect(editorCss).toContain(
@@ -80,7 +80,7 @@ describe("brand gold theme overrides", () => {
     );
     expect(editorCss).toContain(".ce-page-tab--active {");
     expect(editorCss).toMatch(
-      /linear-gradient\(\s*135deg,\s*var\(--ce-gold-shadow\) 0%,\s*var\(--ce-gold\) 58%,\s*var\(--ce-gold-highlight\) 100%\s*\)/,
+      /linear-gradient\(\s*135deg,\s*var\(--burnished-gold\) 0%,\s*var\(--classic-gold\) 58%,\s*var\(--highlight-gold\) 100%\s*\)/,
     );
     expect(editorCss).not.toContain("#facc15");
     expect(editorCss).not.toContain("#fbbf24");

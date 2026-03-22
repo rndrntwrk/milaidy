@@ -1388,7 +1388,10 @@ describe("chat send locking", () => {
         createdAt: "2026-02-02T00:00:00.000Z",
         updatedAt: "2026-02-02T00:00:00.000Z",
       },
-      greeting: undefined,
+      greeting: {
+        text: "Hello! I'm here and ready to help.",
+        persisted: false,
+      },
     });
     mockClient.requestGreeting.mockReturnValue(deferred.promise);
 
@@ -1419,39 +1422,15 @@ describe("chat send locking", () => {
       await api?.handleNewConversation();
     });
 
-    await vi.waitFor(() => {
-      expect(mockClient.requestGreeting).toHaveBeenCalledWith(
-        "conv-fresh",
-        "en",
-      );
-    });
-
     expect(api?.snapshot()).toEqual(
       expect.objectContaining({
         activeConversationId: "conv-fresh",
         chatSending: false,
         chatFirstTokenReceived: false,
-        conversationMessages: [],
-      }),
-    );
-
-    await act(async () => {
-      deferred.resolve({
-        text: "Hey there.",
-        agentName: "Eliza",
-        generated: true,
-        persisted: false,
-      });
-      await Promise.resolve();
-    });
-
-    expect(api?.snapshot()).toEqual(
-      expect.objectContaining({
-        chatSending: false,
         conversationMessages: [
           expect.objectContaining({
             role: "assistant",
-            text: "Hey there.",
+            text: "Hello! I'm here and ready to help.",
             source: "agent_greeting",
           }),
         ],

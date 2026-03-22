@@ -2422,20 +2422,14 @@ export function AppProvider({
         setActiveConversationId(conversation.id);
         activeConversationIdRef.current = conversation.id;
         setCompanionMessageCutoffTs(nextCutoffTs);
-        let greetingText = greeting?.text?.trim() || "";
-        if (!greetingText && characterData?.postExamples?.length) {
-          greetingText = characterData.postExamples[
-            Math.floor(Math.random() * characterData.postExamples.length)
-          ];
-        }
-        if (!greetingText) {
-          greetingText = "Hello! I'm here and ready to help.";
-        }
-        
+        const greetingText = greeting?.text?.trim() || "";
+
         if (greetingText) {
           greetingFiredRef.current = true;
-          scheduleGreetingWaveForCompanion();
-          setConversationMessages([
+          if (greeting?.persisted !== false) {
+            scheduleGreetingWaveForCompanion();
+          }
+          const initMessages: ConversationMessage[] = [
             {
               id: `greeting-${Date.now()}`,
               role: "assistant",
@@ -2443,11 +2437,13 @@ export function AppProvider({
               timestamp: Date.now(),
               source: "agent_greeting",
             },
-          ]);
+          ];
+          conversationMessagesRef.current = initMessages;
+          setConversationMessages(initMessages);
         } else {
           greetingFiredRef.current = false;
+          conversationMessagesRef.current = [];
           setConversationMessages([]);
-          void requestGreetingWhenRunning(conversation.id);
         }
         client.sendWsMessage({
           type: "active-conversation",

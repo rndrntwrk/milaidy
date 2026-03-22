@@ -8,7 +8,7 @@
 import { ErrorBoundary } from "@miladyai/app-core/components";
 import "@miladyai/app-core/styles/styles.css";
 import "@miladyai/app-core/styles/brand-gold.css";
-import "@miladyai/app-core/styles/onboarding-overrides.css";
+
 import "./native-plugin-entrypoints";
 
 import { App as CapacitorApp } from "@capacitor/app";

@@ -65,4 +65,19 @@ describe("stripAssistantStageDirections", () => {
     const result = stripAssistantStageDirections(input);
     expect(result).toContain("smiles");
   });
+
+  it("preserves Chinese characters bidirectionally (prevent stripping CJK inside or outside asterisks)", () => {
+    // Stage direction with adjacent CJK text
+    const result1 = stripAssistantStageDirections("*smiles* 你好我是来帮忙的");
+    expect(result1).not.toContain("smiles");
+    expect(result1).toContain("你好我是来帮忙的");
+
+    // Pure CJK wrapped in asterisks (should NOT be stripped because it contains non-ASCII characters)
+    const result2 = stripAssistantStageDirections("*我想写一句名言*");
+    expect(result2).toContain("我想写一句名言");
+    
+    // Mixed English stage direction with Chinese text inside it (should NOT be stripped)
+    const result3 = stripAssistantStageDirections("*smiles and says 你好*");
+    expect(result3).toContain("smiles and says 你好");
+  });
 });

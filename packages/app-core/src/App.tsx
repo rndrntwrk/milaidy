@@ -292,6 +292,7 @@ export function App() {
   // Keep hook order stable across onboarding/auth state transitions.
   // Otherwise React can throw when onboarding completes and the main shell mounts.
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const handler = () => setCustomActionsPanelOpen((v) => !v);
     window.addEventListener("toggle-custom-actions-panel", handler);
     return () =>

@@ -1029,5 +1029,7 @@
   "onboarding.evmPrivateKey": "이더리움 프라이빗 키",
   "onboarding.solanaAddress": "솔라나 주소",
   "onboarding.solanaPrivateKey": "솔라나 프라이빗 키",
-  "onboarding.customSetup": "커스텀"
+  "onboarding.customSetup": "커스텀",
+  "companion.voiceToggle": "음성",
+  "companion.newChatButton": "새 채팅"
 }

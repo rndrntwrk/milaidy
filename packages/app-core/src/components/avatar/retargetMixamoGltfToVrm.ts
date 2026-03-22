@@ -125,6 +125,8 @@ export function retargetMixamoGltfToVrm(
         vrmNode ===
         vrm.humanoid?.getNormalizedBoneNode("hips" as VRMHumanBoneName);
 
+      if (!isHips) continue;
+
       const values = track.values.map((v, i) => {
         return (isVrm0(vrm) && i % 3 !== 1 ? -v : v) * hipsPositionScale;
       });

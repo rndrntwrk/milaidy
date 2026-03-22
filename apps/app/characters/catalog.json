@@ -51,49 +51,49 @@
   ],
   "injectedCharacters": [
     {
-      "catchphrase": "I'm here to help you.",
+      "catchphrase": "Let's get to work!",
       "name": "Chen",
       "avatarAssetId": 1,
       "voicePresetId": "sarah"
     },
     {
-      "catchphrase": "I'm here to get things done.",
+      "catchphrase": "Anything you need, boss!",
       "name": "Jin",
       "avatarAssetId": 2,
       "voicePresetId": "adam"
     },
     {
-      "catchphrase": "I'm online and ready.",
+      "catchphrase": "Hey sure. Why not?",
       "name": "Kei",
       "avatarAssetId": 3,
       "voicePresetId": "josh"
     },
     {
-      "catchphrase": "I'm ready to assist.",
+      "catchphrase": "I can't wait!",
       "name": "Momo",
       "avatarAssetId": 4,
       "voicePresetId": "alice"
     },
     {
-      "catchphrase": "Let's build something fun.",
+      "catchphrase": "I won't let you down.",
       "name": "Rin",
       "avatarAssetId": 5,
       "voicePresetId": "matilda"
     },
     {
-      "catchphrase": "I am ready when you are.",
+      "catchphrase": "How bad could it be?",
       "name": "Ryu",
       "avatarAssetId": 6,
       "voicePresetId": "daniel"
     },
     {
-      "catchphrase": "Show me what we're building.",
+      "catchphrase": "I'll handle it.",
       "name": "Satoshi",
       "avatarAssetId": 7,
       "voicePresetId": "brian"
     },
     {
-      "catchphrase": "Let's figure this out together.",
+      "catchphrase": "Are you thinking what I'm thinking?",
       "name": "Yuki",
       "avatarAssetId": 8,
       "voicePresetId": "lily"

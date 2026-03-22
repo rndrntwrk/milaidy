@@ -1124,28 +1124,6 @@ export function CharacterEditor({
                 </div>
               </section>
 
-              {/* Avatar Selector */}
-              <section className="ce-section ce-section--avatar">
-                <div className="ce-section-header">
-                  <span className="ce-label">
-                    {t("charactereditor.Avatar", { defaultValue: "Avatar" })}
-                  </span>
-                </div>
-                <AvatarSelector
-                  selected={selectedVrmIndex}
-                  onSelect={(index: number) => {
-                    setState("selectedVrmIndex", index);
-                    if (index > 0) {
-                      setState("customVrmUrl", "");
-                    }
-                  }}
-                  onUpload={(file: File) => {
-                    // The backend or state manager will handle the actual upload
-                    // and update customVrmUrl. For now we just set the index.
-                    setState("selectedVrmIndex", 0);
-                  }}
-                />
-              </section>
 
               {/* Bio / About Me */}
               <section className="ce-section ce-section--grow">
@@ -1556,6 +1534,37 @@ export function CharacterEditor({
         )}
 
         <div className="ce-footer-actions">
+          <div className="ce-footer-actions-left">
+            {customizing && (
+              <>
+                <input
+                  type="file"
+                  id="ce-vrm-upload"
+                  accept=".vrm"
+                  className="hidden"
+                  style={{ display: "none" }}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setState("selectedVrmIndex", 0);
+                    }
+                    e.target.value = "";
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="ce-save-btn ce-save-btn--idle"
+                  onClick={() => document.getElementById("ce-vrm-upload")?.click()}
+                  title={t("charactereditor.UploadVRM", { defaultValue: "Upload VRM" })}
+                >
+                  {t("charactereditor.UploadVRM", { defaultValue: "Upload VRM" })}
+                </Button>
+              </>
+            )}
+          </div>
+
           {/* Save Character — centered; transparent when nothing to save */}
           <Button
             size="sm"
@@ -1568,28 +1577,30 @@ export function CharacterEditor({
               : t("charactereditor.Save", { defaultValue: "Save" })}
           </Button>
 
-          {/* Toggle between Customize and Select — always present, just text changes */}
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            className="ce-save-btn ce-save-btn--secondary"
-            onClick={() => {
-              if (customizing) {
-                setCustomizing(false);
-                setTab("character-select");
-              } else {
-                setCustomizing(true);
-                setTab("character");
-              }
-            }}
-          >
-            {customizing
-              ? t("charactereditor.SelectBtn", { defaultValue: "Select" })
-              : t("charactereditor.CustomizeBtn", {
-                  defaultValue: "Customize",
-                })}
-          </Button>
+          <div className="ce-footer-actions-right">
+            {/* Toggle between Customize and Select — always present, just text changes */}
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              className="ce-save-btn ce-save-btn--secondary"
+              onClick={() => {
+                if (customizing) {
+                  setCustomizing(false);
+                  setTab("character-select");
+                } else {
+                  setCustomizing(true);
+                  setTab("character");
+                }
+              }}
+            >
+              {customizing
+                ? t("charactereditor.SelectBtn", { defaultValue: "Select" })
+                : t("charactereditor.CustomizeBtn", {
+                    defaultValue: "Customize",
+                  })}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

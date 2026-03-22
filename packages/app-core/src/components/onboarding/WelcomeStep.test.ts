@@ -58,7 +58,7 @@ describe("WelcomeStep", () => {
     });
     expect(setState).toHaveBeenCalledWith(
       "onboardingStyle",
-      "I'm here to help you.",
+      "Let's get to work!",
     );
     expect(setState).toHaveBeenCalledWith("onboardingName", "Chen");
     expect(setState).toHaveBeenCalledWith("selectedVrmIndex", 1);

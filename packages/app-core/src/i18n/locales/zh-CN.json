@@ -684,7 +684,8 @@
   "heartbeatsview.heartbeatSingular": "心跳",
   "heartbeatsview.editTitle": "编辑：{{name}}",
   "heartbeatsview.newHeartbeat": "新建心跳",
-  "heartbeatsview.emptyStateDescription": "使用“新建心跳”按钮创建第一个循环或定时的自主任务。",
+  "heartbeatsview.selectAHeartbeat": "选择一个心跳",
+  "heartbeatsview.emptyStateDescription": "使用侧边栏创建一个新的心跳，或者选择一个现有的心跳来查看和编辑其详细信息。",
   "heartbeatsview.statusPaused": "暂停",
   "heartbeatsview.nextInline": "下次 {{time}}",
   "heartbeatsview.runCountSingle": "{{count}} 次运行",
@@ -1029,5 +1030,7 @@
   "onboarding.evmPrivateKey": "以太坊私钥",
   "onboarding.solanaAddress": "Solana 地址",
   "onboarding.solanaPrivateKey": "Solana 私钥",
-  "onboarding.customSetup": "自定义"
+  "onboarding.customSetup": "自定义",
+  "companion.voiceToggle": "语音",
+  "companion.newChatButton": "新聊天"
 }

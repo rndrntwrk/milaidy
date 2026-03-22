@@ -1029,5 +1029,7 @@
   "onboarding.evmPrivateKey": "Chave privada Ethereum",
   "onboarding.solanaAddress": "Endereço Solana",
   "onboarding.solanaPrivateKey": "Chave privada Solana",
-  "onboarding.customSetup": "personalizado"
+  "onboarding.customSetup": "personalizado",
+  "companion.voiceToggle": "Voz",
+  "companion.newChatButton": "Novo Chat"
 }

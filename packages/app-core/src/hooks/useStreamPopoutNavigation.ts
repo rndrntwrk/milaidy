@@ -10,8 +10,7 @@ export function useStreamPopoutNavigation<TTab extends string>(
   setTab: (tab: TTab) => void,
 ): void {
   useEffect(() => {
-    const target =
-      typeof window !== "undefined" ? window : (globalThis as EventTarget);
+    if (typeof window === "undefined") return;
     const handler = (event: Event) => {
       const nextTab = getNextTabForStreamPopoutEvent<TTab>(
         (event as CustomEvent).detail,
@@ -21,7 +20,7 @@ export function useStreamPopoutNavigation<TTab extends string>(
       }
     };
 
-    target.addEventListener("stream-popout", handler);
-    return () => target.removeEventListener("stream-popout", handler);
+    window.addEventListener("stream-popout", handler);
+    return () => window.removeEventListener("stream-popout", handler);
   }, [setTab]);
 }

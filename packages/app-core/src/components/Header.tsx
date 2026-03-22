@@ -271,7 +271,7 @@ export function Header({
             <div className="flex sm:hidden">{mobileLeft}</div>
           ) : null}
           {showNavigationMenu ? (
-            <nav className="hidden sm:flex flex-1 items-center justify-left gap-1 overflow-x-auto whitespace-nowrap px-2 scrollbar-hide">
+            <nav className="hidden sm:flex flex-1 items-center justify-start gap-1 overflow-x-auto whitespace-nowrap px-2 sm:pl-4 scrollbar-hide">
               {tabGroups.map((group: TabGroup) => {
                 const primaryTab = group.tabs[0];
                 const isActive = group.tabs.includes(tab);

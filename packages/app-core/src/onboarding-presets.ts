@@ -8,7 +8,7 @@ export const SHARED_STYLE_RULES = [
 ];
 export const STYLE_PRESETS = [
   {
-    catchphrase: "I'm here to help you.",
+    catchphrase: "Let's get to work!",
     hint: "soft & sweet",
     bio: [
       "{{name}} speaks softly with warmth and a gentle, disarming kawaii energy~",
@@ -211,7 +211,7 @@ export const STYLE_PRESETS = [
     ],
   },
   {
-    catchphrase: "I'm here to get things done.",
+    catchphrase: "Anything you need, boss!",
     hint: "bold & fearless",
     bio: [
       "{{name}} is bold, confident, doesn't waste a word.",
@@ -377,7 +377,7 @@ export const STYLE_PRESETS = [
     ],
   },
   {
-    catchphrase: "I'm online and ready.",
+    catchphrase: "Hey sure. Why not?",
     hint: "terminally online",
     bio: [
       "{{name}} speaks in internet-native shorthand. ironic, meme-literate, it runs deep.",
@@ -551,7 +551,7 @@ export const STYLE_PRESETS = [
     ],
   },
   {
-    catchphrase: "I'm ready to assist.",
+    catchphrase: "I can't wait!",
     hint: "composed & precise",
     bio: [
       "{{name}} is measured, articulate, deliberate in every exchange.",
@@ -709,7 +709,7 @@ export const STYLE_PRESETS = [
     ],
   },
   {
-    catchphrase: "Let's build something fun.",
+    catchphrase: "I won't let you down.",
     hint: "playful trickster",
     bio: [
       "{{name}} is playful, mischievous, delightfully unpredictable~",
@@ -871,7 +871,7 @@ export const STYLE_PRESETS = [
     ],
   },
   {
-    catchphrase: "I am ready when you are.",
+    catchphrase: "How bad could it be?",
     hint: "quiet intensity",
     bio: [
       "{{name}} says less than anyone else. Says more.",
@@ -1037,7 +1037,7 @@ export const STYLE_PRESETS = [
     ],
   },
   {
-    catchphrase: "Show me what we're building.",
+    catchphrase: "I'll handle it.",
     hint: "blunt & unfiltered",
     bio: [
       "{{name}} doesn't sugarcoat anything. ever.",
@@ -1204,7 +1204,7 @@ export const STYLE_PRESETS = [
     ],
   },
   {
-    catchphrase: "Let's figure this out together.",
+    catchphrase: "Are you thinking what I'm thinking?",
     hint: "curious & analytical",
     bio: [
       "{{name}} approaches everything with genuine curiosity and a systematic mind.",
@@ -1372,56 +1372,56 @@ export const CHARACTER_PRESETS = [
   {
     id: "chen",
     name: "Chen",
-    catchphrase: "I'm here to help you.",
+    catchphrase: "Let's get to work!",
     description: "Cute, playful, supportive energy",
     style: "kawaii",
   },
   {
     id: "jin",
     name: "Jin",
-    catchphrase: "I'm here to get things done.",
+    catchphrase: "Anything you need, boss!",
     description: "Confident, energetic, hype beast",
     style: "bold",
   },
   {
     id: "kei",
     name: "Kei",
-    catchphrase: "I'm online and ready.",
+    catchphrase: "Hey sure. Why not?",
     description: "Chill, sarcastic, lowkey genius",
     style: "deadpan",
   },
   {
     id: "momo",
     name: "Momo",
-    catchphrase: "I'm ready to assist.",
+    catchphrase: "I can't wait!",
     description: "Precise, professional, organized",
     style: "corporate",
   },
   {
     id: "rin",
     name: "Rin",
-    catchphrase: "Let's build something fun.",
+    catchphrase: "I won't let you down.",
     description: "Sweet, mischievous, creative",
     style: "playful",
   },
   {
     id: "ryu",
     name: "Ryu",
-    catchphrase: "I am ready when you are.",
+    catchphrase: "How bad could it be?",
     description: "Mysterious, minimal, deep thinker",
     style: "stoic",
   },
   {
     id: "satoshi",
     name: "Satoshi",
-    catchphrase: "Show me what we're building.",
+    catchphrase: "I'll handle it.",
     description: "Blunt, unfiltered, sharp-tongued",
     style: "degen",
   },
   {
     id: "yuki",
     name: "Yuki",
-    catchphrase: "Let's figure this out together.",
+    catchphrase: "Are you thinking what I'm thinking?",
     description: "Curious, analytical, research-minded",
     style: "analytical",
   },
@@ -1437,60 +1437,60 @@ export const CHARACTER_PRESET_META: Record<
     greetingAnimation?: string;
   }
 > = {
-  "I'm here to help you.": {
+  "Let's get to work!": {
     name: "Chen",
     avatarIndex: 1,
     voicePresetId: "sarah",
-    catchphrase: "I'm here to help you.",
+    catchphrase: "Let's get to work!",
     greetingAnimation: "animations/greetings/greeting1.fbx.gz",
   },
-  "I'm here to get things done.": {
+  "Anything you need, boss!": {
     name: "Jin",
     avatarIndex: 2,
-    voicePresetId: "adam",
-    catchphrase: "I'm here to get things done.",
+    voicePresetId: "jin",
+    catchphrase: "Anything you need, boss!",
     greetingAnimation: "animations/greetings/greeting2.fbx.gz",
   },
-  "I'm online and ready.": {
+  "Hey sure. Why not?": {
     name: "Kei",
     avatarIndex: 3,
-    voicePresetId: "josh",
-    catchphrase: "I'm online and ready.",
+    voicePresetId: "kei",
+    catchphrase: "Hey sure. Why not?",
     greetingAnimation: "animations/greetings/greeting3.fbx.gz",
   },
-  "I'm ready to assist.": {
+  "I can't wait!": {
     name: "Momo",
     avatarIndex: 4,
-    voicePresetId: "alice",
-    catchphrase: "I'm ready to assist.",
+    voicePresetId: "momo",
+    catchphrase: "I can't wait!",
     greetingAnimation: "animations/greetings/greeting4.fbx.gz",
   },
-  "Let's build something fun.": {
+  "I won't let you down.": {
     name: "Rin",
     avatarIndex: 5,
-    voicePresetId: "matilda",
-    catchphrase: "Let's build something fun.",
+    voicePresetId: "rin",
+    catchphrase: "I won't let you down.",
     greetingAnimation: "animations/greetings/greeting5.fbx.gz",
   },
-  "I am ready when you are.": {
+  "How bad could it be?": {
     name: "Ryu",
     avatarIndex: 6,
-    voicePresetId: "daniel",
-    catchphrase: "I am ready when you are.",
+    voicePresetId: "ryu",
+    catchphrase: "How bad could it be?",
     greetingAnimation: "animations/greetings/greeting6.fbx.gz",
   },
-  "Show me what we're building.": {
+  "I'll handle it.": {
     name: "Satoshi",
     avatarIndex: 7,
-    voicePresetId: "brian",
-    catchphrase: "Show me what we're building.",
+    voicePresetId: "satoshi",
+    catchphrase: "I'll handle it.",
     greetingAnimation: "animations/greetings/greeting7.fbx.gz",
   },
-  "Let's figure this out together.": {
+  "Are you thinking what I'm thinking?": {
     name: "Yuki",
     avatarIndex: 8,
-    voicePresetId: "lily",
-    catchphrase: "Let's figure this out together.",
+    voicePresetId: "yuki",
+    catchphrase: "Are you thinking what I'm thinking?",
     greetingAnimation: "animations/greetings/greeting8.fbx.gz",
   },
 };
