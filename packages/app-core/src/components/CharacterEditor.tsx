@@ -1283,7 +1283,7 @@ export function CharacterEditor({
                                   onClick={() =>
                                     handleRemoveStyleEntry(key, index)
                                   }
-                                  title="Remove"
+                                  title={t("common.remove")}
                                 >
                                   <svg
                                     width="10"

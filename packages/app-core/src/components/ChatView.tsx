@@ -722,7 +722,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
 
   return (
     <section
-      aria-label="Chat workspace"
+      aria-label={t("aria.chatWorkspace")}
       className={`flex flex-col flex-1 min-h-0 relative${isGameModal ? " overflow-visible px-2 sm:px-3 pointer-events-none" : ""}${imageDragOver ? " ring-2 ring-accent ring-inset" : ""}`}
       onDragOver={(e) => {
         e.preventDefault();
