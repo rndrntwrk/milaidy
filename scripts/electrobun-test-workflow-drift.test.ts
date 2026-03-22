@@ -42,6 +42,9 @@ describe("Electrobun test workflow drift", () => {
 
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain("branches: [main, develop]");
+    expect(workflow).toContain("permissions:");
+    expect(workflow).toContain("contents: write");
+    expect(workflow).toContain("packages: write");
     expect(workflow).toContain(
       "uses: ./.github/workflows/release-electrobun.yml",
     );

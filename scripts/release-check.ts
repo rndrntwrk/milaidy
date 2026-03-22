@@ -135,6 +135,9 @@ const forbiddenWorkflowSnippets = [
 const requiredElectrobunPrWorkflowSnippets = [
   "pull_request:",
   "branches: [main, develop]",
+  "permissions:",
+  "contents: write",
+  "packages: write",
   "uses: ./.github/workflows/release-electrobun.yml",
   "publish_release: false",
   "publish_docker: false",
