@@ -365,7 +365,9 @@ export function CharacterEditor({
       const found = characterRoster.find((e) => e.id === selectedCharacterId);
       if (found) return found;
     }
-    const byVrm = characterRoster.find((e) => e.avatarIndex === selectedVrmIndex);
+    const byVrm = characterRoster.find(
+      (e) => e.avatarIndex === selectedVrmIndex,
+    );
     if (byVrm) return byVrm;
 
     if (!currentCharacter) return null;
@@ -1124,7 +1126,6 @@ export function CharacterEditor({
                 </div>
               </section>
 
-
               {/* Bio / About Me */}
               <section className="ce-section ce-section--grow">
                 <div className="ce-section-header">
@@ -1556,10 +1557,16 @@ export function CharacterEditor({
                   variant="outline"
                   size="sm"
                   className="ce-save-btn ce-save-btn--idle"
-                  onClick={() => document.getElementById("ce-vrm-upload")?.click()}
-                  title={t("charactereditor.UploadVRM", { defaultValue: "Upload VRM" })}
+                  onClick={() =>
+                    document.getElementById("ce-vrm-upload")?.click()
+                  }
+                  title={t("charactereditor.UploadVRM", {
+                    defaultValue: "Upload VRM",
+                  })}
                 >
-                  {t("charactereditor.UploadVRM", { defaultValue: "Upload VRM" })}
+                  {t("charactereditor.UploadVRM", {
+                    defaultValue: "Upload VRM",
+                  })}
                 </Button>
               </>
             )}

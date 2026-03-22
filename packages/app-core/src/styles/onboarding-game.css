@@ -88,7 +88,6 @@
 }
 
 @keyframes onboarding-corner-breathe {
-
   0%,
   100% {
     opacity: 0.6;
@@ -109,7 +108,7 @@
   pointer-events: none;
 }
 
-.onboarding-ui-overlay>* {
+.onboarding-ui-overlay > * {
   pointer-events: auto;
 }
 
@@ -142,9 +141,11 @@
   top: 14px;
   width: 1px;
   height: 0;
-  background: linear-gradient(180deg,
-      rgba(240, 185, 11, 0.4),
-      rgba(240, 185, 11, 0.12));
+  background: linear-gradient(
+    180deg,
+    rgba(240, 185, 11, 0.4),
+    rgba(240, 185, 11, 0.12)
+  );
   transition: height 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   z-index: 0;
 }
@@ -206,7 +207,6 @@
 }
 
 @keyframes onboarding-dot-pulse {
-
   0%,
   100% {
     box-shadow: 0 0 12px rgba(240, 185, 11, 0.5);
@@ -255,6 +255,26 @@
   color: rgba(240, 185, 11, 0.8);
 }
 
+button.onboarding-step-item.onboarding-step-item--clickable {
+  cursor: pointer;
+  width: 100%;
+  border: none;
+  background: transparent;
+  margin: 0;
+  padding: 19px 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+}
+button.onboarding-step-item.onboarding-step-item--clickable:focus-visible {
+  outline: 2px solid rgba(240, 185, 11, 0.55);
+  outline-offset: 3px;
+}
+button.onboarding-step-item.onboarding-step-item--clickable:hover
+  .onboarding-step-name {
+  color: rgba(240, 238, 250, 0.85);
+}
+
 /* === RIGHT PANEL — Content === */
 .onboarding-right {
   display: flex;
@@ -279,7 +299,8 @@
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.25),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  animation: onboarding-panel-enter 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+  animation: onboarding-panel-enter 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)
+    both;
   max-height: calc(100vh - 80px);
   overflow-y: auto;
   overflow-x: hidden;
@@ -311,35 +332,35 @@
 }
 
 /* Staggered children animation */
-.onboarding-panel>* {
+.onboarding-panel > * {
   animation: onboarding-content-fade-in 0.5s ease both;
 }
 
-.onboarding-panel>*:nth-child(1) {
+.onboarding-panel > *:nth-child(1) {
   animation-delay: 0.15s;
 }
 
-.onboarding-panel>*:nth-child(2) {
+.onboarding-panel > *:nth-child(2) {
   animation-delay: 0.25s;
 }
 
-.onboarding-panel>*:nth-child(3) {
+.onboarding-panel > *:nth-child(3) {
   animation-delay: 0.35s;
 }
 
-.onboarding-panel>*:nth-child(4) {
+.onboarding-panel > *:nth-child(4) {
   animation-delay: 0.45s;
 }
 
-.onboarding-panel>*:nth-child(5) {
+.onboarding-panel > *:nth-child(5) {
   animation-delay: 0.55s;
 }
 
-.onboarding-panel>*:nth-child(6) {
+.onboarding-panel > *:nth-child(6) {
   animation-delay: 0.65s;
 }
 
-.onboarding-panel>*:nth-child(7) {
+.onboarding-panel > *:nth-child(7) {
   animation-delay: 0.75s;
 }
 
@@ -368,10 +389,12 @@
   content: "";
   flex: 1;
   height: 1px;
-  background: linear-gradient(90deg,
-      transparent,
-      rgba(255, 255, 255, 0.15),
-      transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.15),
+    transparent
+  );
 }
 
 .onboarding-divider-diamond {
@@ -710,7 +733,6 @@
 
 /* Identity typewriter cursor */
 @keyframes onboarding-cursor-blink {
-
   0%,
   100% {
     opacity: 1;
@@ -768,7 +790,8 @@
   border-radius: 8px;
 }
 
-.onboarding-panel.onboarding-panel .flex.items-center.gap-4.p-4.border:has(.text-\[var\(--ok\)\]) {
+.onboarding-panel.onboarding-panel
+  .flex.items-center.gap-4.p-4.border:has(.text-\[var\(--ok\)\]) {
   background: rgba(240, 185, 11, 0.12);
   border-color: rgba(240, 185, 11, 0.32);
 }
@@ -874,7 +897,8 @@
   width: 100%;
   max-width: 900px;
   padding: 0 0.5rem;
-  animation: ob-roster-slide-up 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.15s both;
+  animation: ob-roster-slide-up 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.15s
+    both;
 }
 
 @keyframes ob-roster-slide-up {
@@ -936,9 +960,11 @@
 }
 
 .ob-identity-card-frame--active {
-  background: linear-gradient(180deg,
-      rgba(240, 185, 11, 0.9),
-      rgba(240, 185, 11, 0.5));
+  background: linear-gradient(
+    180deg,
+    rgba(240, 185, 11, 0.9),
+    rgba(240, 185, 11, 0.5)
+  );
   box-shadow:
     0 0 24px rgba(240, 185, 11, 0.35),
     0 4px 16px rgba(0, 0, 0, 0.3);
@@ -1126,9 +1152,11 @@
 }
 
 .ce-roster-card-frame--active {
-  background: linear-gradient(180deg,
-      rgba(240, 185, 11, 0.9),
-      rgba(240, 185, 11, 0.5));
+  background: linear-gradient(
+    180deg,
+    rgba(240, 185, 11, 0.9),
+    rgba(240, 185, 11, 0.5)
+  );
   box-shadow:
     0 0 24px rgba(240, 185, 11, 0.35),
     0 4px 16px rgba(0, 0, 0, 0.3);

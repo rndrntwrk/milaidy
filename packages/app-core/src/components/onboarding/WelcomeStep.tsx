@@ -1,12 +1,17 @@
-import { useBranding } from "@miladyai/app-core/config";
+import {
+  appNameInterpolationVars,
+  useBranding,
+} from "@miladyai/app-core/config";
 import { useApp } from "@miladyai/app-core/state";
 
+/** First screen; enters the custom setup track at `connection`. */
 export function WelcomeStep() {
   const branding = useBranding();
   const {
     onboardingExistingInstallDetected,
     handleOnboardingUseLocalBackend,
     setState,
+    goToOnboardingStep,
     t,
   } = useApp();
 
@@ -16,7 +21,9 @@ export function WelcomeStep() {
     setState("onboardingStyle", "Let's get to work!");
     setState("onboardingName", "Chen");
     setState("selectedVrmIndex", 1);
-    setState("onboardingStep", "connection");
+    // WHY goToOnboardingStep: syncs Flamina guide in advanced mode; persisted
+    // step still goes through the same setter as the rest of onboarding.
+    goToOnboardingStep("connection");
   };
 
   const handleUseExistingSetup = () => {
@@ -26,7 +33,7 @@ export function WelcomeStep() {
   return (
     <>
       <div className="onboarding-section-title">
-        {t("onboarding.welcomeTitle", { name: branding.appName })}
+        {t("onboarding.welcomeTitle", appNameInterpolationVars(branding))}
       </div>
       <div className="onboarding-divider">
         <div className="onboarding-divider-diamond" />

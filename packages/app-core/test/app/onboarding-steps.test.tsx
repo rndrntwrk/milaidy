@@ -103,6 +103,8 @@ function baseContext(overrides?: Record<string, unknown>) {
     elizaCloudLoginError: "",
     handleOnboardingNext: vi.fn(async () => {}),
     handleOnboardingBack: vi.fn(),
+    handleOnboardingJumpToStep: vi.fn(),
+    goToOnboardingStep: vi.fn(),
     handleOnboardingRemoteConnect: vi.fn(async () => {}),
     handleOnboardingUseLocalBackend: vi.fn(),
     handleCloudLogin: vi.fn(async () => {}),
@@ -317,7 +319,7 @@ describe("ConnectionStep", () => {
     });
 
     const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
-    expect(text).toContain("header.Cloud");
+    expect(text).toContain("Eliza Cloud");
     expect(text).not.toContain("onboarding.hostingLocal");
     mockIsNativeFn.value = false;
   });

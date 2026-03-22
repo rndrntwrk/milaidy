@@ -859,10 +859,10 @@ styles.slice(0, 4);
       expect(patched).toBe(true);
       const updated = readFileSync(filePath, "utf8");
       expect(updated).toContain(
-        '"I\'m ready to assist.": { name: "Rin", avatarIndex: 1 }',
+        '"I can\'t wait!": { name: "Rin", avatarIndex: 1 }',
       );
       expect(updated).toContain(
-        '"I\'m here to help you.": { name: "Ai", avatarIndex: 2 }',
+        '"Let\'s get to work!": { name: "Ai", avatarIndex: 2 }',
       );
       expect(updated).toContain("styles.slice(0, 2);");
     } finally {
@@ -900,7 +900,7 @@ const avatarIndex = meta?.avatarIndex ?? (index % 4) + 1;
       expect(patched).toBe(true);
       const updated = readFileSync(filePath, "utf8");
       expect(updated).toContain(
-        '"I\'m here to help you.": { name: "Ai", avatarIndex: 2, voicePresetId: "sarah" }',
+        '"Let\'s get to work!": { name: "Ai", avatarIndex: 2, voicePresetId: "sarah" }',
       );
       expect(updated).toContain("characterRoster.slice(0, 2)");
       expect(updated).toContain("(index % 4) + 1");

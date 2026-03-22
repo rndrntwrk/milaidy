@@ -239,19 +239,19 @@ export const VOICE_PROVIDERS: Array<{
   hint: string;
   needsKey: boolean;
 }> = [
-    {
-      id: "elevenlabs",
-      label: "ElevenLabs",
-      hint: "High quality, realistic voices",
-      needsKey: true,
-    },
-    {
-      id: "edge",
-      label: "Microsoft Edge",
-      hint: "Free, Microsoft voices",
-      needsKey: false,
-    },
-  ];
+  {
+    id: "elevenlabs",
+    label: "ElevenLabs",
+    hint: "High quality, realistic voices",
+    needsKey: true,
+  },
+  {
+    id: "edge",
+    label: "Microsoft Edge",
+    hint: "Free, Microsoft voices",
+    needsKey: false,
+  },
+];
 
 /**
  * Minimal backup voices for non-ElevenLabs providers (Edge TTS / OpenAI).

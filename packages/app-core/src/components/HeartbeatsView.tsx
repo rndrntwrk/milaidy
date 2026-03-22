@@ -441,7 +441,7 @@ export function HeartbeatsView() {
             {t("heartbeatsview.newHeartbeat")}
           </Button>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto pb-4">
           {triggerError && (
             <div className="mx-3 mt-3 mb-1 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
@@ -455,7 +455,7 @@ export function HeartbeatsView() {
           ) : (
             triggers.map((trigger) => {
               const isActive = selectedTriggerId === trigger.id;
-              
+
               return (
                 <button
                   key={trigger.id}
@@ -469,7 +469,7 @@ export function HeartbeatsView() {
                   <div className="flex flex-col gap-1.5 min-w-0">
                     <div className="flex items-center justify-between gap-1">
                       <span className="font-semibold text-sm text-txt truncate">
-                         {trigger.displayName}
+                        {trigger.displayName}
                       </span>
                       <StatusBadge
                         label={
@@ -482,16 +482,18 @@ export function HeartbeatsView() {
                       />
                     </div>
                     <div className="text-[11px] text-muted flex items-center justify-between gap-2 mt-0.5">
-                       <span className="truncate">{scheduleLabel(trigger, t)}</span>
-                       {trigger.lastStatus && (
-                           <StatusBadge
-                             label={localizedExecutionStatus(
-                               trigger.lastStatus,
-                               t,
-                             )}
-                             tone={toneForLastStatus(trigger.lastStatus)}
-                           />
-                       )}
+                      <span className="truncate">
+                        {scheduleLabel(trigger, t)}
+                      </span>
+                      {trigger.lastStatus && (
+                        <StatusBadge
+                          label={localizedExecutionStatus(
+                            trigger.lastStatus,
+                            t,
+                          )}
+                          tone={toneForLastStatus(trigger.lastStatus)}
+                        />
+                      )}
                     </div>
                   </div>
                 </button>
@@ -512,9 +514,11 @@ export function HeartbeatsView() {
                     ? t("heartbeatsview.editHeartbeat")
                     : t("heartbeatsview.createHeartbeat")}
                 </div>
-                <h2 className="text-2xl font-semibold text-txt">{modalTitle}</h2>
+                <h2 className="text-2xl font-semibold text-txt">
+                  {modalTitle}
+                </h2>
               </div>
-              
+
               <div className="flex flex-wrap items-center gap-2">
                 {editingId && (
                   <>
@@ -758,21 +762,21 @@ export function HeartbeatsView() {
                   size="sm"
                   className="h-10 px-6 text-sm"
                   onClick={() => {
-                     if (editingId && selectedTriggerId === editingId) {
-                         const trigger = triggers.find(t => t.id === editingId);
-                         if (trigger) {
-                             setForm(formFromTrigger(trigger));
-                             setFormError(null);
-                         }
-                     } else {
-                         closeEditor();
-                     }
+                    if (editingId && selectedTriggerId === editingId) {
+                      const trigger = triggers.find((t) => t.id === editingId);
+                      if (trigger) {
+                        setForm(formFromTrigger(trigger));
+                        setFormError(null);
+                      }
+                    } else {
+                      closeEditor();
+                    }
                   }}
                 >
                   {editingId ? t("common.cancel") : t("common.cancel")}
                 </Button>
               </div>
-              
+
               {/* Detailed run info and metadata when editing */}
               {editingId && (
                 <div className="mt-12 pt-10 border-t border-border/40 grid gap-10">
@@ -783,8 +787,12 @@ export function HeartbeatsView() {
                       </dt>
                       <dd className="mt-1.5 text-txt font-medium">
                         {(() => {
-                           const trigger = triggers.find(t => t.id === editingId);
-                           return trigger?.maxRuns ? trigger.maxRuns : t("heartbeatsview.unlimited");
+                          const trigger = triggers.find(
+                            (t) => t.id === editingId,
+                          );
+                          return trigger?.maxRuns
+                            ? trigger.maxRuns
+                            : t("heartbeatsview.unlimited");
                         })()}
                       </dd>
                     </div>
@@ -794,10 +802,12 @@ export function HeartbeatsView() {
                       </dt>
                       <dd className="mt-1.5 text-txt font-medium">
                         {(() => {
-                           const trigger = triggers.find(t => t.id === editingId);
-                           return formatDateTime(trigger?.lastRunAtIso, {
-                             fallback: t("heartbeatsview.notYetRun"),
-                           });
+                          const trigger = triggers.find(
+                            (t) => t.id === editingId,
+                          );
+                          return formatDateTime(trigger?.lastRunAtIso, {
+                            fallback: t("heartbeatsview.notYetRun"),
+                          });
                         })()}
                       </dd>
                     </div>
@@ -807,15 +817,17 @@ export function HeartbeatsView() {
                       </dt>
                       <dd className="mt-1.5 text-txt font-medium">
                         {(() => {
-                           const trigger = triggers.find(t => t.id === editingId);
-                           return formatDateTime(trigger?.nextRunAtMs, {
-                             fallback: t("heartbeatsview.notScheduled"),
-                           });
+                          const trigger = triggers.find(
+                            (t) => t.id === editingId,
+                          );
+                          return formatDateTime(trigger?.nextRunAtMs, {
+                            fallback: t("heartbeatsview.notScheduled"),
+                          });
                         })()}
                       </dd>
                     </div>
                   </dl>
-                  
+
                   <div className="space-y-4">
                     <div className="flex items-center justify-between gap-3 border-b border-border/30 pb-3">
                       <h3 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
@@ -832,16 +844,28 @@ export function HeartbeatsView() {
                     </div>
 
                     {(() => {
-                      const hasLoadedRuns = Object.hasOwn(triggerRunsById, editingId);
+                      const hasLoadedRuns = Object.hasOwn(
+                        triggerRunsById,
+                        editingId,
+                      );
                       const runs = triggerRunsById[editingId] ?? [];
-                      
+
                       if (!hasLoadedRuns) {
-                        return <div className="py-6 text-sm text-muted/70 flex items-center gap-2"><div className="w-4 h-4 border-2 border-muted/30 border-t-muted/80 rounded-full animate-spin"></div> {t("databaseview.Loading")}</div>;
+                        return (
+                          <div className="py-6 text-sm text-muted/70 flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-muted/30 border-t-muted/80 rounded-full animate-spin"></div>{" "}
+                            {t("databaseview.Loading")}
+                          </div>
+                        );
                       }
                       if (runs.length === 0) {
-                        return <div className="py-6 text-sm text-muted/70 italic">{t("triggersview.NoRunsRecordedYet")}</div>;
+                        return (
+                          <div className="py-6 text-sm text-muted/70 italic">
+                            {t("triggersview.NoRunsRecordedYet")}
+                          </div>
+                        );
                       }
-                      
+
                       return (
                         <div className="space-y-3">
                           {runs
@@ -860,7 +884,10 @@ export function HeartbeatsView() {
                                   <div className="min-w-0 flex-1">
                                     <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                                       <span className="font-medium text-txt">
-                                        {localizedExecutionStatus(run.status, t)}
+                                        {localizedExecutionStatus(
+                                          run.status,
+                                          t,
+                                        )}
                                       </span>
                                       <span className="text-xs text-muted">
                                         {formatDateTime(run.finishedAt, {
@@ -869,7 +896,10 @@ export function HeartbeatsView() {
                                       </span>
                                     </div>
                                     <div className="text-[11px] text-muted/80">
-                                      {formatDurationMs(run.latencyMs)} &middot; <span className="font-mono text-muted/60 bg-bg/40 px-1 py-0.5 rounded">{run.source}</span>
+                                      {formatDurationMs(run.latencyMs)} &middot;{" "}
+                                      <span className="font-mono text-muted/60 bg-bg/40 px-1 py-0.5 rounded">
+                                        {run.source}
+                                      </span>
                                     </div>
                                     {run.error && (
                                       <div className="mt-2.5 text-xs text-danger/90 bg-danger/10 border border-danger/20 p-2.5 rounded-lg whitespace-pre-wrap font-mono leading-relaxed">

@@ -29,11 +29,8 @@ import {
   parseSettingsWindowAction,
 } from "./application-menu";
 import { showBackgroundNoticeOnce } from "./background-notice";
-import {
-  type CloudAuthWindowLike,
-  CloudAuthWindowManager,
-  readNavigationEventUrl,
-} from "./cloud-auth-window";
+import { isBrowserSurfaceEnabled } from "./browser-surface-flag";
+import { readNavigationEventUrl } from "./cloud-auth-window";
 import { configureDesktopLocalApiAuth, getAgentManager } from "./native/agent";
 import { getDesktopManager } from "./native/desktop";
 import { disposeNativeModules, initializeNativeModules } from "./native/index";
@@ -71,10 +68,12 @@ type HeartbeatMenuHealthResponse = {
 
 const HEARTBEAT_MENU_REFRESH_MS = 30_000;
 const CONFIG_EXPORT_FILE_NAME = "milady-config.json";
-// Browser surface stays off by default until the packaged WebGPU/browser path
-// is hardened across the supported desktop release targets.
-const BROWSER_SURFACE_ENABLED =
-  process.env.MILADY_ENABLE_BROWSER_SURFACE === "1";
+// Browser surface ships enabled by default. Set
+// MILADY_ENABLE_BROWSER_SURFACE=0 to force-disable it for local debugging or
+// release triage.
+const BROWSER_SURFACE_ENABLED = isBrowserSurfaceEnabled(
+  process.env as Record<string, string | undefined>,
+);
 let heartbeatMenuSnapshot: HeartbeatMenuSnapshot =
   EMPTY_HEARTBEAT_MENU_SNAPSHOT;
 let heartbeatMenuRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -244,14 +243,27 @@ function startHeartbeatMenuRefresh(): void {
 }
 
 // ============================================================================
-// macOS Native Window Effects (vibrancy, shadow, traffic lights, drag region)
+// macOS Native Window Effects (vibrancy, shadow, traffic lights, drag + resize)
 // ============================================================================
+// hiddenInset removes the title bar; WKWebView fills the client area. Native
+// NSViews above the web view handle move (top strip) and inner-edge resize
+// (right/bottom/BR). See docs/guides/electrobun-mac-window-chrome.md (WHYs).
 
 const MAC_TRAFFIC_LIGHTS_X = 14;
 const MAC_TRAFFIC_LIGHTS_Y = 12;
+/** Left inset of the drag strip so it clears the traffic lights. */
 const MAC_NATIVE_DRAG_REGION_X = 92;
-const MAC_NATIVE_DRAG_REGION_HEIGHT = 40;
+/**
+ * Top drag strip height == right/bottom/BR overlay thickness (points).
+ * `0` → native derives depth from `window.screen` (HiDPI / ultrawide); positive pins.
+ */
+const MAC_NATIVE_DRAG_REGION_HEIGHT = 0;
 
+/**
+ * Vibrancy, shadow, traffic lights, and native chrome layout. Re-calls native
+ * layout whenever the window or webview subtree may have reordered so the drag
+ * view stays above WKWebView.
+ */
 function applyMacOSWindowEffects(win: BrowserWindow): void {
   if (process.platform !== "darwin") return;
 
@@ -277,17 +289,29 @@ function applyMacOSWindowEffects(win: BrowserWindow): void {
       MAC_NATIVE_DRAG_REGION_HEIGHT,
     );
 
-  alignButtons();
-  alignDragRegion();
-  setTimeout(() => {
+  const alignChrome = () => {
     alignButtons();
     alignDragRegion();
-  }, 120);
+  };
 
-  win.on("resize", () => {
-    alignButtons();
-    alignDragRegion();
-  });
+  alignChrome();
+  setTimeout(alignChrome, 120);
+
+  win.on("resize", alignChrome);
+  // Display (NSScreen) changes without a resize edge case — depth uses window.screen.
+  win.on("move", alignChrome);
+
+  // WKWebView is often inserted or reordered after first layout; restack native
+  // views so drag/resize strips stay hit-testable above the page.
+  try {
+    win.webview.on("dom-ready", () => {
+      alignChrome();
+      setTimeout(alignChrome, 50);
+      setTimeout(alignChrome, 300);
+    });
+  } catch {
+    // webview may not accept listeners yet in some embed paths
+  }
 
   console.log("[MacEffects] Native macOS window effects applied");
 }
@@ -352,7 +376,6 @@ function scheduleStateSave(statePath: string, win: BrowserWindow): void {
 let currentWindow: BrowserWindow | null = null;
 let currentSendToWebview: SendToWebview | null = null;
 let surfaceWindowManager: SurfaceWindowManager | null = null;
-let cloudAuthWindowManager: CloudAuthWindowManager | null = null;
 let rendererUrlPromise: Promise<string> | null = null;
 let backgroundWindowPromise: Promise<void> | null = null;
 let isQuitting = false;
@@ -506,7 +529,9 @@ async function startRendererServer(): Promise<string> {
 }
 
 async function resolveRendererUrl(): Promise<string> {
-  // Resolve the renderer URL — prefer env override (dev HMR), then built-in static server
+  // Prefer MILADY_RENDERER_URL / VITE_DEV_SERVER_URL when set (e.g. dev-platform.mjs watch mode).
+  // Why: Vite HMR only works against the dev server; serving pre-built dist from this static
+  // server would force a full rebuild for every UI change.
   let rendererUrl =
     process.env.MILADY_RENDERER_URL ?? process.env.VITE_DEV_SERVER_URL ?? "";
 
@@ -1079,6 +1104,13 @@ async function setupUpdater(): Promise<void> {
           void refreshHeartbeatMenuSnapshot();
         } else if (action === "relaunch") {
           void getDesktopManager().relaunch();
+        } else if (action === "reset-milady") {
+          // Renderer runs handleReset() (confirm + POST /api/agent/reset + UI).
+          // WHY: main process has no MiladyClient; keeps parity with Settings reset.
+          void getDesktopManager().showWindow();
+          sendToActiveRenderer("desktopTrayMenuClick", {
+            itemId: "menu-reset-milady",
+          });
         } else if (
           action === "open-settings" ||
           action?.startsWith("open-settings-")
@@ -1272,14 +1304,6 @@ async function main(): Promise<void> {
     },
     onRegistryChanged: () => setupApplicationMenu(),
   });
-  cloudAuthWindowManager = new CloudAuthWindowManager({
-    createWindow: (options) =>
-      new BrowserWindow(options) as unknown as CloudAuthWindowLike,
-    onWindowFocused: (window) => {
-      lastFocusedWindow = window as unknown as ManagedWindowLike;
-    },
-  });
-
   // Set up app menu after the window (and its message loop) exists.
   setupApplicationMenu();
   startHeartbeatMenuRefresh();
@@ -1299,9 +1323,6 @@ async function main(): Promise<void> {
       return;
     }
     void surfaceWindowManager.openSurfaceWindow(surface);
-  });
-  getDesktopManager().setOpenExternalHandler((url) => {
-    return cloudAuthWindowManager?.open(url) ?? false;
   });
 
   // If launched with --hidden (e.g. auto-launch with openAsHidden), minimize immediately.

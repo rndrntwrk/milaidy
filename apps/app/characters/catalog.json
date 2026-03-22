@@ -60,43 +60,43 @@
       "catchphrase": "Anything you need, boss!",
       "name": "Jin",
       "avatarAssetId": 2,
-      "voicePresetId": "adam"
+      "voicePresetId": "jin"
     },
     {
       "catchphrase": "Hey sure. Why not?",
       "name": "Kei",
       "avatarAssetId": 3,
-      "voicePresetId": "josh"
+      "voicePresetId": "kei"
     },
     {
       "catchphrase": "I can't wait!",
       "name": "Momo",
       "avatarAssetId": 4,
-      "voicePresetId": "alice"
+      "voicePresetId": "momo"
     },
     {
       "catchphrase": "I won't let you down.",
       "name": "Rin",
       "avatarAssetId": 5,
-      "voicePresetId": "matilda"
+      "voicePresetId": "rin"
     },
     {
       "catchphrase": "How bad could it be?",
       "name": "Ryu",
       "avatarAssetId": 6,
-      "voicePresetId": "daniel"
+      "voicePresetId": "ryu"
     },
     {
       "catchphrase": "I'll handle it.",
       "name": "Satoshi",
       "avatarAssetId": 7,
-      "voicePresetId": "brian"
+      "voicePresetId": "satoshi"
     },
     {
       "catchphrase": "Are you thinking what I'm thinking?",
       "name": "Yuki",
       "avatarAssetId": 8,
-      "voicePresetId": "lily"
+      "voicePresetId": "yuki"
     }
   ]
 }

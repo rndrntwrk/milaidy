@@ -604,6 +604,8 @@ function setupMock(state: AppHarnessState) {
     },
     handleOnboardingNext,
     handleOnboardingBack,
+    handleOnboardingJumpToStep: vi.fn(),
+    goToOnboardingStep: vi.fn(),
     handleReset,
     handleCloudLogin: vi.fn(async () => {
       state.elizaCloudConnected = true;
@@ -692,6 +694,8 @@ describe("onboarding journey to avatar creator (e2e)", () => {
     const renderedText = textOf(tree.root);
     expect(renderedText).toContain("CharacterEditor");
     expect(renderedText).not.toContain("OnboardingWizard");
+
+    tree.unmount();
   });
 
   it("identity step selects an avatar and carries it through to completion", async () => {
@@ -721,6 +725,8 @@ describe("onboarding journey to avatar creator (e2e)", () => {
     // Avatar index should still be 2 after finishing onboarding
     expect(state.selectedVrmIndex).toBe(2);
     expect(state.onboardingComplete).toBe(true);
+
+    tree.unmount();
   });
 
   it("each onboarding step is visited in order", async () => {
@@ -772,6 +778,8 @@ describe("onboarding journey to avatar creator (e2e)", () => {
       "senses",
       "activate",
     ]);
+
+    tree.unmount();
   });
 
   it("navigating to character-select after onboarding shows CharacterView", async () => {
@@ -792,6 +800,8 @@ describe("onboarding journey to avatar creator (e2e)", () => {
     expect(renderedText).toContain("CharacterEditor");
     expect(renderedText).not.toContain("OnboardingWizard");
     expect(renderedText).not.toContain("CompanionView");
+
+    tree.unmount();
   });
 });
 
@@ -842,6 +852,8 @@ describe("agent reset and re-onboarding (e2e)", () => {
     const renderedText = textOf(tree.root);
     expect(renderedText).not.toContain("CharacterEditor");
     expect(renderedText).not.toContain("ChatView");
+
+    tree.unmount();
   });
 
   it("can complete a full onboarding after reset", async () => {
@@ -872,6 +884,8 @@ describe("agent reset and re-onboarding (e2e)", () => {
 
     const renderedText = textOf(tree.root);
     expect(renderedText).toContain("CharacterEditor");
+
+    tree.unmount();
   });
 
   it("reset preserves the ability to select a different avatar on re-onboarding", async () => {
@@ -901,6 +915,8 @@ describe("agent reset and re-onboarding (e2e)", () => {
     // Second pass: the identity step should show default avatar
     expect(state.onboardingStep).toBe("identity");
     expect(textOf(tree.root)).toContain("roster:avatar-1");
+
+    tree.unmount();
   });
 
   it("reset during mid-onboarding returns to the first step", async () => {
@@ -926,6 +942,8 @@ describe("agent reset and re-onboarding (e2e)", () => {
     expect(state.onboardingStep).toBe("identity");
     expect(state.onboardingComplete).toBe(false);
     expect(state.onboardingStyle).toBe("");
+
+    tree.unmount();
   });
 
   it("multiple resets do not corrupt state", async () => {

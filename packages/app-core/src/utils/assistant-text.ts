@@ -125,14 +125,14 @@ function collapseInlineWhitespace(input: string): string {
 function looksLikeStageDirection(input: string): boolean {
   const normalized = collapseInlineWhitespace(input).trim();
   if (!normalized || normalized.length > 100) return false;
-  
+
   if (/[^\x00-\x7F]/.test(normalized)) {
     return false;
   }
 
   const wordMatch = normalized.match(/^[^\w]*([A-Za-z]+)/);
   if (!wordMatch) return false;
-  
+
   const firstWord = wordMatch[1].toLowerCase();
   return STAGE_DIRECTION_FIRST_WORDS.has(firstWord);
 }
