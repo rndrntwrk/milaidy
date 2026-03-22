@@ -682,7 +682,8 @@ export interface BootElizaRuntimeOptionsExt extends BootElizaRuntimeOptions {
  * upstream collectPluginNames loads it. Required for the dashboard
  * "Install Plugin" button — upstream has it commented out of CORE_PLUGINS.
  */
-function ensurePluginManagerAllowed(): void {
+/** @internal Exported for testing. */
+export function ensurePluginManagerAllowed(): void {
   try {
     const config = loadElizaConfig();
     const entries =
@@ -690,6 +691,9 @@ function ensurePluginManagerAllowed(): void {
     const id = "plugin-manager";
     if (entries[id]?.enabled === false) return; // explicitly disabled by user
     if (entries[id]) return; // already present
+    // The upstream ElizaConfig type marks `plugins` as a complex branded type
+    // that doesn't allow direct property assignment. We know the runtime shape
+    // is a plain object with an `entries` record, so we cast through unknown.
     config.plugins ??= {} as unknown as typeof config.plugins;
     (config.plugins as Record<string, unknown>).entries = {
       ...entries,
@@ -719,6 +723,8 @@ export async function bootElizaRuntime(
       process.env.EMBEDDING_DIMENSION = "384";
     }
 
+    // Called in both bootElizaRuntime and startEliza because they are
+    // independent entry points — CLI uses startEliza, desktop uses boot.
     ensurePluginManagerAllowed();
 
     const runtime = await upstreamBootElizaRuntime(opts);
@@ -747,6 +753,7 @@ export async function startEliza(
       process.env.EMBEDDING_DIMENSION = "384";
     }
 
+    // See comment in bootElizaRuntime — both entry points need this call.
     ensurePluginManagerAllowed();
 
     if (options?.serverOnly) {
