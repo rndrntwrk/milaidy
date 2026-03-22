@@ -31,6 +31,7 @@ const autonomousElizaPathCandidates = [
 ] as const;
 const requiredWorkflowSnippets = [
   'BUN_VERSION: "1.3.9"',
+  "workflow_call:",
   "name: Validate Release Inputs",
   "bun-version: $" + "{{ env.BUN_VERSION }}",
   "name: Release readiness checks",
@@ -39,6 +40,10 @@ const requiredWorkflowSnippets = [
   `bun install failed on attempt \${attempt}; retrying in 15 seconds`,
   "name: Ensure avatar assets",
   "node scripts/ensure-avatars.mjs",
+  "name: Prepare Whisper model artifact",
+  "bash apps/app/electrobun/scripts/ensure-whisper-model.sh base.en",
+  "name: Upload Whisper model artifact",
+  "name: whisper-model-base-en",
   "Install quiet macOS packaging wrappers",
   "apps/app/electrobun/scripts/hdiutil-wrapper.sh",
   "apps/app/electrobun/scripts/xcrun-wrapper.sh",
@@ -46,6 +51,8 @@ const requiredWorkflowSnippets = [
   "ELECTROBUN_REAL_HDIUTIL: /usr/bin/hdiutil",
   "ELECTROBUN_REAL_XCRUN: /usr/bin/xcrun",
   "ELECTROBUN_REAL_ZIP: /usr/bin/zip",
+  "name: Download Whisper model artifact",
+  "name: Seed Whisper model cache",
   "Stage desktop bundle inputs",
   "node scripts/desktop-build.mjs stage --variant=base --build-whisper",
   "Inject version.json into bundle (Windows)",
@@ -124,6 +131,18 @@ const forbiddenWorkflowSnippets = [
     "{{ matrix.platform.artifact-name }}" +
     "-$" +
     "{{ hashFiles('bun.lock') }}",
+];
+const requiredElectrobunPrWorkflowSnippets = [
+  "pull_request:",
+  "branches: [main, develop]",
+  "permissions:",
+  "contents: write",
+  "packages: write",
+  "uses: ./.github/workflows/release-electrobun.yml",
+  "publish_release: false",
+  "publish_docker: false",
+  "draft: false",
+  "secrets: inherit",
 ];
 const requiredElectrobunConfigSnippets = [
   'postBuild: "scripts/postwrap-sign-runtime-macos.ts"',
@@ -504,6 +523,26 @@ function assertReleaseWorkflowHasNotaryWrapper() {
   }
 }
 
+function assertElectrobunPrWorkflowExists() {
+  const workflow = readFileSync(
+    ".github/workflows/test-electrobun-release.yml",
+    "utf8",
+  );
+  const missing = requiredElectrobunPrWorkflowSnippets.filter(
+    (snippet) => !workflow.includes(snippet),
+  );
+
+  if (missing.length > 0) {
+    console.error(
+      "release-check: Electrobun PR release workflow is missing reusable build-only wiring:",
+    );
+    for (const snippet of missing) {
+      console.error(`  - ${snippet}`);
+    }
+    process.exit(1);
+  }
+}
+
 function assertElectrobunConfigHasPostWrapSigner() {
   const config = readFileSync(
     "apps/app/electrobun/electrobun.config.ts",
@@ -825,8 +864,9 @@ function assertStartApiServerCatchBlockSafety() {
 }
 
 function main() {
-  assertReleaseWorkflowHasNotaryWrapper();
-  assertElectrobunConfigHasPostWrapSigner();
+assertReleaseWorkflowHasNotaryWrapper();
+assertElectrobunPrWorkflowExists();
+assertElectrobunConfigHasPostWrapSigner();
   assertMacArtifactStagerLooksCorrect();
   assertWindowsSmokeScriptHasLeadingParamBlock();
   assertWindowsInstallerProofScript();
