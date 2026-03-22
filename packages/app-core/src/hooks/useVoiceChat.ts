@@ -1236,7 +1236,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
     void (async () => {
       try {
         while (queueRef.current.length > 0) {
-          if (workerGeneration !== generationRef.current) return;
+          if (workerGeneration !== generationRef.current) break;
           const task = queueRef.current.shift();
           if (!task) break;
 
@@ -1260,7 +1260,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
                 workerGeneration !== generationRef.current ||
                 isAbortError(error)
               ) {
-                return;
+                break;
               }
               console.warn(
                 "[useVoiceChat] ElevenLabs TTS failed, falling back to browser:",

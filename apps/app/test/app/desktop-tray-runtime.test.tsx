@@ -20,7 +20,8 @@ const { openDesktopSettingsWindowMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@miladyai/app-core/bridge", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@miladyai/app-core/bridge")>();
+  const actual =
+    await importOriginal<typeof import("@miladyai/app-core/bridge")>();
   return {
     ...actual,
     invokeDesktopBridgeRequest: invokeDesktopBridgeRequestMock,

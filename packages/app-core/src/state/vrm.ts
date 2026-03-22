@@ -11,15 +11,19 @@ interface BundledVrmAsset {
 }
 
 /**
- * Default Eliza avatar roster (4 slots).
+ * Default Milady avatar roster (8 slots).
  * Apps can override this at startup by setting window.__APP_VRM_ASSETS__
  * before mounting the React tree.
  */
 const DEFAULT_ASSETS: BundledVrmAsset[] = [
-  { title: "ELIZA-01", slug: "eliza-1" },
-  { title: "ELIZA-04", slug: "eliza-4" },
-  { title: "ELIZA-05", slug: "eliza-5" },
-  { title: "ELIZA-09", slug: "eliza-9" },
+  { title: "Chen", slug: "milady-1" },
+  { title: "Jin", slug: "milady-2" },
+  { title: "Kei", slug: "milady-3" },
+  { title: "Momo", slug: "milady-4" },
+  { title: "Rin", slug: "milady-5" },
+  { title: "Ryu", slug: "milady-6" },
+  { title: "Satoshi", slug: "milady-7" },
+  { title: "Yuki", slug: "milady-8" },
 ];
 
 declare global {

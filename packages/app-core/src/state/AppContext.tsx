@@ -2698,9 +2698,7 @@ export function AppProvider({
 
         if (greetingText) {
           greetingFiredRef.current = true;
-          if (greeting?.persisted !== false) {
-            scheduleGreetingWaveForCompanion();
-          }
+          scheduleGreetingWaveForCompanion();
           const initMessages: ConversationMessage[] = [
             {
               id: `greeting-${Date.now()}`,

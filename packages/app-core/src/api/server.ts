@@ -2559,6 +2559,49 @@ async function handleMiladyCompatRoute(
     return false;
   }
 
+  // ── GET /api/onboarding/status — Check config and DB ─────────────────
+  if (method === "GET" && url.pathname === "/api/onboarding/status") {
+    if (!ensureCompatApiAuthorized(req, res)) {
+      return true;
+    }
+
+    const config = loadElizaConfig();
+    let complete = false;
+
+    // Approximate upstream hasPersistedOnboardingState
+    if ((config.meta as Record<string, unknown>)?.onboardingComplete === true) {
+      complete = true;
+    } else if (
+      Array.isArray(config.agents?.list) &&
+      config.agents.list.length > 0
+    ) {
+      complete = true;
+    } else if (
+      config.agents?.defaults?.workspace?.trim() ||
+      config.agents?.defaults?.adminEntityId?.trim()
+    ) {
+      complete = true;
+    }
+
+    // If config says incomplete, check the DB if available
+    if (!complete && state.current?.adapter?.db) {
+      try {
+        const { rows } = await executeRawSql(
+          state.current,
+          "SELECT count(*) as count FROM participants WHERE agent_id IS NOT NULL",
+        );
+        if (rows && rows.length > 0 && Number(rows[0].count) > 0) {
+          complete = true;
+        }
+      } catch (err) {
+        // Ignore DB query errors
+      }
+    }
+
+    sendJsonResponse(res, 200, { complete });
+    return true;
+  }
+
   if (method === "GET" && url.pathname === "/api/config") {
     if (!ensureCompatApiAuthorized(req, res)) {
       return true;

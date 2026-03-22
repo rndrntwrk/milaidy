@@ -1197,31 +1197,22 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
             type="button"
             onClick={() => setSubgroupFilter(tag.id)}
             aria-current={isActive ? "page" : undefined}
-            className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${
+            className={`group w-full flex items-center gap-2.5 text-left px-3 py-2 relative font-mono text-[11px] tracking-wide transition-all duration-150 ${
               isActive
-                ? "border-accent/40 bg-accent/12 text-txt shadow-[0_10px_30px_rgba(var(--accent),0.08)]"
-                : "border-transparent text-muted hover:border-border/60 hover:bg-card/55 hover:text-txt"
+                ? "text-txt bg-surface"
+                : "text-muted hover:text-txt hover:bg-surface/50"
             }`}
           >
+            {isActive && (
+              <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-accent" />
+            )}
+            <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? "text-accent" : ""}`} />
+            <span className="truncate min-w-0 flex-1">{tag.label}</span>
             <span
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
+              className={`rounded-full px-1.5 py-0.5 text-[10px] tabular-nums leading-none ${
                 isActive
-                  ? "border-accent/30 bg-accent/18 text-txt-strong"
-                  : "border-border/50 bg-bg-accent/80 text-muted"
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold leading-snug text-current">
-                {tag.label}
-              </span>
-            </span>
-            <span
-              className={`rounded-full border px-2 py-0.5 text-[10px] font-mono leading-none ${
-                isActive
-                  ? "border-accent/20 bg-accent/20 text-txt"
-                  : "border-border/50 bg-black/10 text-muted"
+                  ? "bg-accent/20 text-accent-fg"
+                  : "bg-black/10 text-muted"
               }`}
             >
               {tag.count}
@@ -1982,14 +1973,6 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
             className="flex w-[22rem] shrink-0 border-r border-border/50 bg-bg/35 backdrop-blur-xl"
           >
             <div className="flex min-h-full flex-1 flex-col sticky top-0 max-h-screen">
-              <div className="border-b border-border/40 px-5 py-5 text-center">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted/80">
-                  Connectors
-                </div>
-                <div className="mt-2 text-sm text-muted">
-                  {enabledCount} enabled of {categoryPlugins.length}
-                </div>
-              </div>
               <nav className="flex-1 space-y-2 overflow-y-auto px-4 py-4">
                 {visiblePlugins.map((plugin) => {
                   const isSelected = connectorSelectedId === plugin.id;
@@ -2698,18 +2681,24 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
   return (
     <div
       data-testid={mode === "social" ? "plugins-view-social" : undefined}
-      className={`relative min-h-0 ${showDesktopSubgroupSidebar ? "md:pl-[18rem]" : ""}`}
+      className={
+        showDesktopSubgroupSidebar
+          ? `relative flex min-h-full min-w-0 w-full flex-row items-start ${inModal ? "h-full min-h-0 bg-transparent overflow-y-auto" : "bg-bg"}`
+          : "relative min-h-0"
+      }
     >
       {showDesktopSubgroupSidebar && (
         <aside
-          className="hidden md:absolute md:left-0 md:top-0 md:block md:w-64"
+          className="hidden w-52 shrink-0 self-stretch border-r border-border bg-bg-accent md:sticky md:top-0 md:flex md:h-screen"
           data-testid="plugins-subgroup-sidebar"
         >
-          <div className="sticky top-0 rounded-[28px] border border-border/50 bg-bg/35 p-5 backdrop-blur-xl shadow-sm">
-            <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted/80">
-              Plugin Types
+          <div className="flex flex-1 flex-col overflow-y-auto">
+            <div className="px-4 py-4 border-b border-border">
+              <p className="font-mono text-[10px] font-medium text-txt tracking-[0.12em] uppercase">
+                PLUGIN TYPES
+              </p>
             </div>
-            <nav className="flex flex-col gap-2">
+            <nav className="flex flex-col flex-1 py-3 px-2 space-y-0.5">
               {subgroupTags.map((tag) =>
                 renderSubgroupFilterButton(tag, { sidebar: true }),
               )}
@@ -2718,7 +2707,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
         </aside>
       )}
 
-      <div className="min-w-0">
+      <div className={`flex-1 min-w-0 ${showDesktopSubgroupSidebar ? "px-5 py-6 sm:px-8 sm:py-8 lg:px-10" : ""}`}>
         {showToolbar && (
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <div className="relative flex-1 min-w-[220px]">

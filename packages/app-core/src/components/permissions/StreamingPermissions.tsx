@@ -382,16 +382,14 @@ export function StreamingPermissionsOnboardingView({
       </div>
 
       <div className="flex flex-wrap justify-center gap-3">
-        <Button
+        <button
           type="button"
-          variant="default"
-          size="sm"
           data-testid="permissions-onboarding-continue"
-          className="h-auto min-w-[8.5rem] bg-accent border-accent px-4 py-2 text-[11px] leading-tight text-accent-foreground"
+          className="onboarding-confirm-btn"
           onClick={() => onContinue()}
         >
           {translateWithFallback(t, "onboarding.savedMyKeys", "Continue")}
-        </Button>
+        </button>
       </div>
     </div>
   );

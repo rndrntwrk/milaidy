@@ -228,6 +228,11 @@ export function ConnectionProviderDetailScreen({
     handleOnboardingNext,
   });
 
+  const isConfirmDisabled =
+    onboardingProvider === "elizacloud" &&
+    ((onboardingElizaCloudTab === "login" && !elizaCloudConnected) ||
+      (onboardingElizaCloudTab === "apikey" && !onboardingApiKey.trim()));
+
   return (
     <>
       <div className="onboarding-section-title">
@@ -252,14 +257,6 @@ export function ConnectionProviderDetailScreen({
             />
           )}
           {selectedDisplay.name}
-          <button
-            type="button"
-            className="onboarding-back-link"
-            style={{ marginLeft: "0.5rem", fontSize: "0.75rem" }}
-            onClick={clearProvider}
-          >
-            {t("settings.change")}
-          </button>
         </span>
       </div>
       <div className="onboarding-divider">
@@ -984,6 +981,7 @@ export function ConnectionProviderDetailScreen({
         </button>
         <button
           className="onboarding-confirm-btn"
+          disabled={isConfirmDisabled}
           onClick={() => handleOnboardingNext()}
           type="button"
         >

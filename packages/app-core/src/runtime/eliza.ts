@@ -694,6 +694,13 @@ export async function bootElizaRuntime(
     // progress instead of the app silently stalling on first embedding call.
     await warmupEmbeddingModel(opts.onEmbeddingProgress);
 
+    // Cap embedding dimension to 384 — plugin-sql's DIMENSION_MAP only
+    // supports up to 3072, and the performance-tier E5-Mistral-7B model
+    // outputs 4096-dim vectors which would silently fall back to 384 anyway.
+    if (!process.env.EMBEDDING_DIMENSION) {
+      process.env.EMBEDDING_DIMENSION = "384";
+    }
+
     const runtime = await upstreamBootElizaRuntime(opts);
     return runtime ? await repairRuntimeAfterBoot(runtime) : runtime;
   } finally {
@@ -714,6 +721,11 @@ export async function startEliza(
   try {
     // Eagerly download the embedding model with progress reporting
     await warmupEmbeddingModel(options?.onEmbeddingProgress);
+
+    // Cap embedding dimension to 384 — see comment in bootElizaRuntime.
+    if (!process.env.EMBEDDING_DIMENSION) {
+      process.env.EMBEDDING_DIMENSION = "384";
+    }
 
     if (options?.serverOnly) {
       let currentRuntime =

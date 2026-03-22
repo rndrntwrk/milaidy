@@ -253,6 +253,7 @@ export interface AgentStatus {
   model: string | undefined;
   uptime: number | undefined;
   startedAt: number | undefined;
+  port?: number;
   pendingRestart?: boolean;
   pendingRestartReasons?: string[];
   startup?: AgentStartupDiagnostics;

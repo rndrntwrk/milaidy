@@ -47,7 +47,14 @@ export default defineConfig({
       {
         // Stub the broken @lookingglass/webxr ESM chain for tests
         find: /^@lookingglass\/.*/,
-        replacement: path.join(here, "..", "..", "test", "stubs", "lookingglass-webxr.ts"),
+        replacement: path.join(
+          here,
+          "..",
+          "..",
+          "test",
+          "stubs",
+          "lookingglass-webxr.ts",
+        ),
       },
       {
         find: "react",

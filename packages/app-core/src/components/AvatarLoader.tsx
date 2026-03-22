@@ -1,4 +1,25 @@
+import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+
+function useLinearProgress(durationMs: number) {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    const start = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - start;
+      const pct = Math.min(elapsed / durationMs, 1) * 100;
+      setProgress(pct);
+      if (pct < 100) {
+        requestAnimationFrame(tick);
+      }
+    };
+    const raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [durationMs]);
+
+  return Math.round(progress);
+}
 
 interface AvatarLoaderProps {
   /** Sub-label text below the progress bar */
@@ -7,7 +28,7 @@ interface AvatarLoaderProps {
   fullScreen?: boolean;
   /** When true, fades the loader out (use before unmounting) */
   fadingOut?: boolean;
-  /** Optional progress value from 0 to 100. If provided, overrides the infinite loading animation. */
+  /** Optional progress value from 0 to 100. If provided, overrides the default linear loading animation. */
   progress?: number;
 }
 
@@ -17,6 +38,8 @@ export function AvatarLoader({
   fadingOut = false,
   progress,
 }: AvatarLoaderProps) {
+  const linearProgress = useLinearProgress(3000);
+
   return (
     <div
       style={{
@@ -81,16 +104,13 @@ export function AvatarLoader({
               width:
                 typeof progress === "number"
                   ? `${Math.max(0, Math.min(100, progress))}%`
-                  : "60%",
+                  : `${linearProgress}%`,
               height: "100%",
               background: "var(--text-strong)",
               boxShadow: "0 0 8px rgba(255, 255, 255, 0.3)",
               transition:
-                typeof progress === "number" ? "width 0.3s ease-out" : "none",
-              animation:
-                typeof progress === "number"
-                  ? "none"
-                  : "avatar-loader-progress 2s ease-in-out infinite",
+                typeof progress === "number" ? "width 0.3s ease-out" : "width 0.1s linear",
+              animation: "none",
             }}
           />
         </div>

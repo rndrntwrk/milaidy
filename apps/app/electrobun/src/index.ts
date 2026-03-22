@@ -23,11 +23,6 @@ import {
   resolveInitialApiBase,
 } from "./api-base";
 import {
-  buildMainMenuResetApiCandidates,
-  pickReachableMenuResetApiBase,
-  runMainMenuResetAfterApiBaseResolved,
-} from "./menu-reset-from-main";
-import {
   buildApplicationMenu,
   EMPTY_HEARTBEAT_MENU_SNAPSHOT,
   type HeartbeatMenuSnapshot,
@@ -36,6 +31,11 @@ import {
 import { showBackgroundNoticeOnce } from "./background-notice";
 import { isBrowserSurfaceEnabled } from "./browser-surface-flag";
 import { readNavigationEventUrl } from "./cloud-auth-window";
+import {
+  buildMainMenuResetApiCandidates,
+  pickReachableMenuResetApiBase,
+  runMainMenuResetAfterApiBaseResolved,
+} from "./menu-reset-from-main";
 import { configureDesktopLocalApiAuth, getAgentManager } from "./native/agent";
 import { getDesktopManager } from "./native/desktop";
 import { disposeNativeModules, initializeNativeModules } from "./native/index";
@@ -202,12 +202,14 @@ async function resetMiladyFromApplicationMenu(): Promise<void> {
   console.info(
     "[Main][reset] App menu: Reset Milady — confirm + POST /api/agent/reset + restart (main process)",
   );
-  await getDesktopManager().showWindow().catch((err: unknown) => {
-    console.warn(
-      "[Main][reset] showWindow failed (continuing):",
-      err instanceof Error ? err.message : err,
-    );
-  });
+  await getDesktopManager()
+    .showWindow()
+    .catch((err: unknown) => {
+      console.warn(
+        "[Main][reset] showWindow failed (continuing):",
+        err instanceof Error ? err.message : err,
+      );
+    });
 
   const box = await Utils.showMessageBox({
     type: "warning",
@@ -536,7 +538,11 @@ function sendToActiveRenderer(message: string, payload?: unknown): void {
   if (!currentSendToWebview) {
     const level =
       message === "desktopTrayMenuClick" ? console.warn : console.debug;
-    level.call(console, "[Main] Dropped renderer message (no window):", message);
+    level.call(
+      console,
+      "[Main] Dropped renderer message (no window):",
+      message,
+    );
   }
 }
 

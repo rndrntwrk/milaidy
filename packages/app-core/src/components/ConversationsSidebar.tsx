@@ -25,7 +25,7 @@ export function ConversationsSidebar({
     conversations,
     activeConversationId,
     unreadConversations,
-    handleStartDraftConversation,
+    handleNewConversation,
     handleSelectConversation,
     handleDeleteConversation,
     handleRenameConversation,
@@ -219,7 +219,7 @@ export function ConversationsSidebar({
               : "w-full px-3 py-1.5 border border-accent rounded-md bg-transparent text-txt text-[12px] font-medium cursor-pointer transition-colors hover:bg-accent hover:text-accent-fg"
           }
           onClick={() => {
-            void handleStartDraftConversation();
+            handleNewConversation();
             onClose?.();
           }}
         >

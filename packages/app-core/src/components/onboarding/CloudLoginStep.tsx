@@ -19,7 +19,7 @@ export function CloudLoginStep() {
   useEffect(() => {
     if (
       elizaCloudConnected &&
-      onboardingStep === "cloudLogin" &&
+      onboardingStep === "providers" &&
       !advancedRef.current
     ) {
       advancedRef.current = true;

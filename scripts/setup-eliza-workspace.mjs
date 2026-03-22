@@ -35,7 +35,6 @@ export const ELIZA_BUILD_STEPS = [
     args: ["run", "build"],
     label: "@elizaos/skills",
   },
-
 ];
 
 function toDisplayPath(targetPath) {

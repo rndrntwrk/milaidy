@@ -275,7 +275,15 @@ function useChatVoiceController(options: {
 
   // Track when isGameModal transitions from false→true so we can suppress
   // the stale "latest assistant message" speech that would otherwise replay.
+  // NOTE: Do NOT suppress on the initial mount — only on actual mode switches.
+  const hasSetInitialGameModalRef = useRef(false);
   useEffect(() => {
+    if (!hasSetInitialGameModalRef.current) {
+      // First render — just record the initial value without suppressing.
+      hasSetInitialGameModalRef.current = true;
+      prevIsGameModalRef.current = isGameModal;
+      return;
+    }
     if (isGameModal && !prevIsGameModalRef.current) {
       gameModalJustActivatedRef.current = true;
     }
@@ -423,7 +431,9 @@ function useGameModalMessages(options: {
     previousGameModalVisibleMsgsRef.current = [];
     previousCompanionCutoffTsRef.current = companionMessageCutoffTs;
     setCompanionCarryover(null);
-    stopSpeaking();
+    // NOTE: intentionally no stopSpeaking() here — the auto-speak effect's
+    // queueAssistantSpeech already cancels old speech before queuing new.
+    // Calling stopSpeaking() races with greeting speech and kills it.
   }, [
     activeConversationId,
     companionMessageCutoffTs,

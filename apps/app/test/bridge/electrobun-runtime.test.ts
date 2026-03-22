@@ -1,12 +1,13 @@
 // Import bridge entrypoints directly (not `bridge/index`): loading the barrel
 // pulls `capacitor-bridge` first and Vitest can end up with inconsistent module
 // instances so `getElectrobunRendererRpc()` and `isElectrobunRuntime()` disagree.
+
+import { afterEach, describe, expect, it } from "vitest";
+import { getElectrobunRendererRpc } from "../../../../packages/app-core/src/bridge/electrobun-rpc";
 import {
   getBackendStartupTimeoutMs,
   isElectrobunRuntime,
 } from "../../../../packages/app-core/src/bridge/electrobun-runtime";
-import { getElectrobunRendererRpc } from "../../../../packages/app-core/src/bridge/electrobun-rpc";
-import { afterEach, describe, expect, it } from "vitest";
 
 const originalWindow = globalThis.window;
 
