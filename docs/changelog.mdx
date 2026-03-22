@@ -3,6 +3,34 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-03-22" description="Desktop reset reliability, tests, disclosures" tags={["Update", "Fix", "Docs"]}>
+## Main-process menu reset + renderer sync (Electrobun)
+
+**Reset Milady…** now runs **confirm + `POST /api/agent/reset` + restart + status poll** in the **main process**, then pushes **`desktopTrayMenuClick`** with **`menu-reset-milady-applied`** so the renderer runs the same **local UI wipe** as after Settings reset (`completeResetLocalStateAfterServerWipe`). **Why:** native dialogs on WKWebView could leave the webview not processing `fetch`/RPC on the same turn, so reset appeared to hang after confirm.
+
+- **Reachable API base:** main probes candidates (embedded loopback port first, then configured base) with **`GET /api/status`** and only accepts **`res.ok`**—not arbitrary HTTP status—so a 403/500 URL is not chosen for reset. **Why:** external dev API and embedded agent can disagree on port; blind env URL POSTs failed silently.
+- **Testable core** lives in **`menu-reset-from-main.ts`** with Vitest coverage; **`handleResetAppliedFromMainCore`** and **`completeResetLocalStateAfterServerWipe`** are extracted for renderer unit tests. **Why:** 100+ lines of critical logic cannot rely on “string contained in `index.ts`” alone.
+
+Guide: [Desktop main-process reset](/apps/desktop-main-process-reset).
+
+## Edge TTS disclosure (`MILADY_DISABLE_EDGE_TTS`)
+
+`@elizaos/plugin-edge-tts` (via `node-edge-tts`) contacts **Microsoft’s Edge TTS cloud** when loaded; Milady **auto-loads** it with **`@elizaos/plugin-agent-orchestrator`** for swarm `TEXT_TO_SPEECH`. **Why document:** no API key does not mean “no network.” Opt-out: **`MILADY_DISABLE_EDGE_TTS=1`** (alias **`ELIZA_DISABLE_EDGE_TTS`**) or `plugins.entries["edge-tts"].enabled: false`; mirrored in **`brand-env.ts`**. Registry **`plugins.json`** description and env table updated.
+
+Docs: [Environment variables](/cli/environment#runtime-behavior), [TTS plugin](/plugin-registry/tts).
+
+## Vitest: `packages/app-core/test/**` and `*.test.tsx` under `src/`
+
+Root **`vitest.config.ts`** now includes **`packages/app-core/test/**/*.test.ts(x)`** and **`packages/app-core/src/**/*.test.tsx`**, and excludes **`packages/app-core/test/**/*.e2e.test.*`** from the default unit job (e2e still uses **`vitest.e2e.config.ts`**). **Why:** harness tests under `test/state`, `test/runtime`, etc. were skipped; a single explicit `OnboardingWizard.test.tsx` path was brittle for future colocated TSX tests.
+
+See [Contributing — Testing](/guides/contributing) (subsection *`packages/app-core` in the root Vitest config*).
+
+## Desktop tray: RPC wait timeout cleanup
+
+**`DesktopTrayRuntime`** stores the 10s “RPC not ready” timer and clears it on effect teardown and when attach succeeds. **Why:** avoid post-unmount `clearInterval` / warn after fast navigation.
+
+</Update>
+
 <Update label="2026-03-21" description="App onboarding architecture" tags={["Update"]}>
 ## Data-driven onboarding UI (app-core)
 
@@ -51,8 +79,8 @@ After browser/OAuth login succeeds on the **Login** tab (pre-provider and provid
 
 ## Desktop: Reset Milady (app menu) + reliable post-reset onboarding
 
-- **Milady** application menu includes **Reset Milady…** (`reset-milady`). The main process shows the window and pushes **`desktopTrayMenuClick`** with **`menu-reset-milady`**; the renderer runs **`handleReset()`**, which already confirms and calls **`POST /api/agent/reset`**. **Why push to the renderer:** reset needs the same `MiladyClient`, confirmation dialog, and state teardown as Settings—not a duplicate main-process API client.
-- **`handleReset`** now clears **persisted connection mode**, resets **API base/token** toward the embedded agent, and clears **Eliza Cloud** UI flags. **Why:** otherwise the UI could stay pointed at cloud/remote after the server wiped config, so onboarding looked “stuck” or never appeared.
+- **Milady** application menu includes **Reset Milady…** (`reset-milady`). An early iteration pushed **`menu-reset-milady`** to the renderer so **`handleReset()`** owned confirm + API—**why:** one `MiladyClient` and the same teardown as Settings. **Update (changelog **2026-03-22**):** confirm + **`POST /api/agent/reset`** + restart now run in the **main process** (WKWebView could stall renderer `fetch` after native dialogs); the renderer syncs via **`menu-reset-milady-applied`**. Deep dive: [Desktop main-process reset](/apps/desktop-main-process-reset).
+- **`handleReset`** / **`completeResetLocalStateAfterServerWipe`** clear **persisted connection mode**, **API base/token**, and **Eliza Cloud** UI flags after a server wipe. **Why:** otherwise the UI stayed pointed at cloud/remote after config reset, so onboarding looked “stuck.”
 - **`App` shell:** onboarding is no longer blocked by **`agentStatus === "starting"`**. **Why:** right after a reset the agent often returns to `starting`; the old gate kept the main shell (or loader) visible instead of **`OnboardingWizard`**, so reset looked like it did nothing after confirm.
 
 Docs: [Desktop app](/apps/desktop) (application menu), [Onboarding UI flow](/guides/onboarding-ui-flow).

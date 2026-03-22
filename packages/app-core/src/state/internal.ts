@@ -23,6 +23,7 @@ export {
   normalizeStreamComparisonText,
   parseAgentStartupDiagnostics,
   parseAgentStatusEvent,
+  parseAgentStatusFromMainMenuResetPayload,
   parseConversationMessageEvent,
   parseCustomActionParams,
   parseProactiveMessageEvent,

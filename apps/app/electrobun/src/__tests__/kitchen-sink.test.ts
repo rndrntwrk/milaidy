@@ -4552,7 +4552,7 @@ describe("Application menu (automated)", () => {
     expect(indexSource).toContain('"check-for-updates"');
   });
 
-  it("reset-milady menu action runs main-process reset then pushes applied payload", async () => {
+  it("reset-milady menu action wires main-process reset and applied payload (see menu-reset-from-main.test.ts for behavior)", async () => {
     const fs = await vi.importActual<typeof import("node:fs")>("node:fs");
     const path = await vi.importActual<typeof import("node:path")>("node:path");
     const indexSource = fs.readFileSync(
@@ -4561,6 +4561,7 @@ describe("Application menu (automated)", () => {
     );
     expect(indexSource).toContain('"reset-milady"');
     expect(indexSource).toContain("resetMiladyFromApplicationMenu");
+    expect(indexSource).toContain("runMainMenuResetAfterApiBaseResolved");
     expect(indexSource).toContain("menu-reset-milady-applied");
   });
 

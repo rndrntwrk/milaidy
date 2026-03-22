@@ -80,9 +80,9 @@ The OS menu bar template is built in **`apps/app/electrobun/src/application-menu
 
 | Item (example) | Action id | Behavior |
 |----------------|-----------|----------|
-| **Reset Milady…** | `reset-milady` | Focuses the main window and sends **`desktopTrayMenuClick`** with **`itemId: "menu-reset-milady"`** to the renderer. **Why not reset only in the main process:** the renderer already owns **`handleReset`** — native confirm + **`POST /api/agent/reset`**, onboarding state, and persistence — so the menu reuses one implementation and stays consistent with Settings. |
+| **Reset Milady…** | `reset-milady` | **Main process:** shows the window, native confirm, then **`POST /api/agent/reset`**, embedded restart or **`POST /api/agent/restart`**, poll **`/api/status`**, and pushes **`desktopTrayMenuClick`** with **`itemId: "menu-reset-milady-applied"`** + **`agentStatus`**. **Renderer:** **`handleResetAppliedFromMain`** runs the same **local UI wipe** as the end of Settings **`handleReset`** (`completeResetLocalStateAfterServerWipe`). **Why main owns HTTP:** after native dialogs, WKWebView can defer renderer **`fetch`/bridge** work, so reset looked hung; **why renderer still wipes UI:** one place for onboarding, `MiladyClient` base URL, cloud flags, and conversation lists so the menu cannot drift from Settings. |
 
-Confirmation and API reset run in **`AppProvider`** (`handleReset`); the menu does not bypass that flow.
+**Settings** still uses **`handleReset`** (webview confirm + full flow). **Legacy:** tray may still emit **`menu-reset-milady`** for older paths; see [Desktop main-process reset](./desktop-main-process-reset.md) for sequence, probes, and tests.
 
 ### Agent Status States
 

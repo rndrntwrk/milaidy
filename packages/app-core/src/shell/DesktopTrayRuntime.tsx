@@ -165,6 +165,7 @@ export function DesktopTrayRuntime() {
     let cancelled = false;
     let unsubscribe: (() => void) | null = null;
     let intervalId: ReturnType<typeof setInterval> | null = null;
+    let rpcBridgeWaitTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const attach = (): boolean => {
       if (cancelled || !getElectrobunRendererRpc()) {
@@ -209,9 +210,14 @@ export function DesktopTrayRuntime() {
         if (attach() && intervalId) {
           clearInterval(intervalId);
           intervalId = null;
+          if (rpcBridgeWaitTimeoutId) {
+            clearTimeout(rpcBridgeWaitTimeoutId);
+            rpcBridgeWaitTimeoutId = null;
+          }
         }
       }, 100);
-      setTimeout(() => {
+      rpcBridgeWaitTimeoutId = setTimeout(() => {
+        rpcBridgeWaitTimeoutId = null;
         if (intervalId) {
           clearInterval(intervalId);
           intervalId = null;
@@ -227,6 +233,7 @@ export function DesktopTrayRuntime() {
     return () => {
       cancelled = true;
       if (intervalId) clearInterval(intervalId);
+      if (rpcBridgeWaitTimeoutId) clearTimeout(rpcBridgeWaitTimeoutId);
       unsubscribe?.();
     };
   }, [handleReset, handleResetAppliedFromMain]);

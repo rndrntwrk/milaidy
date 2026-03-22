@@ -1009,7 +1009,7 @@ export type MiladyRPCSchema = {
         itemId: string;
         checked?: boolean;
         /** Present when `itemId === "menu-reset-milady-applied"` (main-process reset). */
-        agentStatus?: unknown;
+        agentStatus?: Record<string, unknown> | null;
       };
       desktopTrayClick: TrayClickEvent;
 

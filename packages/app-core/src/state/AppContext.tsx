@@ -162,6 +162,7 @@ import {
   type OnboardingNextOptions,
   type OnboardingStep,
   parseAgentStatusEvent,
+  parseAgentStatusFromMainMenuResetPayload,
   parseCustomActionParams,
   parseProactiveMessageEvent,
   parseSlashCommandInput,
@@ -189,6 +190,10 @@ import {
   computeAgentDeadlineExtensions,
   getAgentReadyTimeoutMs,
 } from "./agent-startup-timing";
+import {
+  completeResetLocalStateAfterServerWipe as runCompleteResetLocalStateAfterServerWipe,
+} from "./complete-reset-local-state-after-wipe";
+import { handleResetAppliedFromMainCore } from "./handle-reset-applied-from-main";
 import {
   deriveUiShellModeForTab,
   getTabForShellView,
@@ -246,6 +251,7 @@ export {
   type OnboardingStep,
   parseAgentStartupDiagnostics,
   parseAgentStatusEvent,
+  parseAgentStatusFromMainMenuResetPayload,
   parseConversationMessageEvent,
   parseCustomActionParams,
   parseProactiveMessageEvent,
@@ -2393,47 +2399,44 @@ export function AppProvider({
    */
   const completeResetLocalStateAfterServerWipe = useCallback(
     async (postResetAgentStatus: AgentStatus | null): Promise<void> => {
-      setAgentStatus(postResetAgentStatus);
-      logResetDebug("resetLocalState: client.resetConnection()");
-      client.resetConnection();
-
-      clearPersistedConnectionMode();
-      client.setBaseUrl(null);
-      client.setToken(null);
-      setElizaCloudEnabled(false);
-      setElizaCloudConnected(false);
-      setElizaCloudCredits(null);
-      setElizaCloudCreditsLow(false);
-      setElizaCloudCreditsCritical(false);
-      setElizaCloudTopUpUrl("/cloud/billing");
-      setElizaCloudUserId(null);
-      setElizaCloudLoginError(null);
-      onboardingCompletionCommittedRef.current = false;
-      setOnboardingUiRevealNonce((n) => n + 1);
-      setOnboardingLoading(false);
-      setOnboardingComplete(false);
-      onboardingResumeConnectionRef.current = null;
-      setOnboardingStep("welcome");
-      setConversationMessages([]);
-      setActiveConversationId(null);
-      activeConversationIdRef.current = null;
-      setConversations([]);
-      setPlugins([]);
-      setSkills([]);
-      setLogs([]);
-      try {
-        logResetDebug("resetLocalState: fetching onboarding options after reset");
-        const options = await client.getOnboardingOptions();
-        setOnboardingOptions(options);
-        logResetDebug("resetLocalState: onboarding options loaded", {
-          styleCount: options.styles?.length ?? 0,
-        });
-      } catch (optErr) {
-        logResetWarn(
-          "resetLocalState: getOnboardingOptions failed after reset",
-          optErr,
-        );
-      }
+      await runCompleteResetLocalStateAfterServerWipe(postResetAgentStatus, {
+        setAgentStatus,
+        resetClientConnection: () => client.resetConnection(),
+        clearPersistedConnectionMode,
+        setClientBaseUrl: (url) => client.setBaseUrl(url),
+        setClientToken: (token) => client.setToken(token),
+        clearElizaCloudSessionUi: () => {
+          setElizaCloudEnabled(false);
+          setElizaCloudConnected(false);
+          setElizaCloudCredits(null);
+          setElizaCloudCreditsLow(false);
+          setElizaCloudCreditsCritical(false);
+          setElizaCloudTopUpUrl("/cloud/billing");
+          setElizaCloudUserId(null);
+          setElizaCloudLoginError(null);
+        },
+        markOnboardingReset: () => {
+          onboardingCompletionCommittedRef.current = false;
+          setOnboardingUiRevealNonce((n) => n + 1);
+          setOnboardingLoading(false);
+          setOnboardingComplete(false);
+          onboardingResumeConnectionRef.current = null;
+          setOnboardingStep("welcome");
+        },
+        clearConversationLists: () => {
+          setConversationMessages([]);
+          setActiveConversationId(null);
+          activeConversationIdRef.current = null;
+          setConversations([]);
+          setPlugins([]);
+          setSkills([]);
+          setLogs([]);
+        },
+        fetchOnboardingOptions: () => client.getOnboardingOptions(),
+        setOnboardingOptions,
+        logResetDebug,
+        logResetWarn,
+      });
     },
     [
       setAgentStatus,
@@ -2461,73 +2464,20 @@ export function AppProvider({
 
   const handleResetAppliedFromMain = useCallback(
     async (payload: unknown) => {
-      logResetInfo(
-        "handleResetAppliedFromMain: main process finished reset — syncing renderer state",
-      );
-      if (lifecycleBusyRef.current) {
-        const activeAction =
-          lifecycleActionRef.current ?? lifecycleAction ?? "reset";
-        logResetInfo("handleResetAppliedFromMain: skipped — lifecycle busy", {
-          activeAction,
-        });
-        setActionNotice(
-          `Agent action already in progress (${LIFECYCLE_MESSAGES[activeAction].inProgress}). Please wait.`,
-          "info",
-          2800,
-        );
-        return;
-      }
-      if (!beginLifecycleAction("reset")) {
-        setActionNotice(
-          "Another agent operation is still running. Wait for it to finish, then try Reset again.",
-          "info",
-          4200,
-        );
-        return;
-      }
-      setActionNotice(
-        LIFECYCLE_MESSAGES.reset.progress,
-        "info",
-        120_000,
-        false,
-        true,
-      );
-      const resetStartedAt = performance.now();
-      try {
-        let parsedStatus: AgentStatus | null = null;
-        if (
-          payload &&
-          typeof payload === "object" &&
-          !Array.isArray(payload) &&
-          "agentStatus" in payload
-        ) {
-          const as = (payload as { agentStatus?: unknown }).agentStatus;
-          if (as && typeof as === "object" && !Array.isArray(as)) {
-            parsedStatus = parseAgentStatusEvent(as as Record<string, unknown>);
-          }
-        }
-        await completeResetLocalStateAfterServerWipe(parsedStatus);
-        setActionNotice(LIFECYCLE_MESSAGES.reset.success, "success", 3200);
-      } catch (err) {
-        logResetWarn(
-          "handleResetAppliedFromMain: failed while syncing local UI",
-          err,
-        );
-        setActionNotice(
-          `Failed to ${LIFECYCLE_MESSAGES.reset.verb} agent: ${
-            err instanceof Error ? err.message : "unknown error"
-          }`,
-          "error",
-          4200,
-        );
-        await alertDesktopMessage({
-          title: "Reset Failed",
-          message: "Reset ran in the desktop shell but the UI could not refresh.",
-          type: "error",
-        });
-      } finally {
-        finishLifecycleAction();
-      }
+      await handleResetAppliedFromMainCore(payload, {
+        performanceNow: () => performance.now(),
+        isLifecycleBusy: () => lifecycleBusyRef.current,
+        getActiveLifecycleAction: () =>
+          lifecycleActionRef.current ?? lifecycleAction ?? "reset",
+        beginLifecycleAction,
+        finishLifecycleAction,
+        setActionNotice,
+        parseTrayResetPayload: parseAgentStatusFromMainMenuResetPayload,
+        completeResetLocalState: completeResetLocalStateAfterServerWipe,
+        alertDesktopMessage,
+        logResetInfo,
+        logResetWarn,
+      });
     },
     [
       lifecycleAction,

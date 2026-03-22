@@ -23,6 +23,11 @@ import {
   resolveInitialApiBase,
 } from "./api-base";
 import {
+  buildMainMenuResetApiCandidates,
+  pickReachableMenuResetApiBase,
+  runMainMenuResetAfterApiBaseResolved,
+} from "./menu-reset-from-main";
+import {
   buildApplicationMenu,
   EMPTY_HEARTBEAT_MENU_SNAPSHOT,
   type HeartbeatMenuSnapshot,
@@ -148,8 +153,6 @@ function resolveHeartbeatMenuApiBase(): string | null {
   return resolveInitialApiBase(process.env);
 }
 
-const MAIN_RESET_API_PROBE_TIMEOUT_MS = 4000;
-
 /**
  * Picks a loopback API base the main process can actually reach.
  *
@@ -159,85 +162,41 @@ const MAIN_RESET_API_PROBE_TIMEOUT_MS = 4000;
  * port, menu Reset must not blindly POST to the dead env URL.
  */
 async function resolveReachableApiBaseForMainReset(): Promise<string | null> {
-  const candidates: string[] = [];
-  const embeddedPort = getAgentManager().getStatus().port;
-  if (typeof embeddedPort === "number" && embeddedPort > 0) {
-    candidates.push(`http://127.0.0.1:${embeddedPort}`);
-  }
-  const configured = resolveInitialApiBase(process.env);
-  if (configured && !candidates.includes(configured)) {
-    candidates.push(configured);
-  }
+  const candidates = buildMainMenuResetApiCandidates({
+    embeddedPort: getAgentManager().getStatus().port,
+    configuredBase: resolveInitialApiBase(process.env),
+  });
   if (candidates.length === 0) {
     return null;
   }
-
-  for (const base of candidates) {
-    try {
-      const res = await fetch(`${base}/api/status`, {
-        method: "GET",
-        headers: buildApiRequestHeaders(),
-        signal: AbortSignal.timeout(MAIN_RESET_API_PROBE_TIMEOUT_MS),
-      });
-      if (res.status > 0) {
-        console.info("[Main][reset] Using reachable API base", {
-          base,
-          statusHttp: res.status,
-          tried: candidates,
-        });
-        return base;
-      }
-    } catch {
-      /* try next candidate */
-    }
-  }
-
-  console.warn("[Main][reset] No reachable API base among candidates", {
-    tried: candidates,
+  const base = await pickReachableMenuResetApiBase({
+    candidates,
+    fetchImpl: fetch,
+    buildHeaders: buildApiRequestHeaders,
   });
-  return null;
-}
-
-const MENU_RESET_STATUS_POLL_MS = 1000;
-const MENU_RESET_STATUS_MAX_MS = 120_000;
-
-async function pollStatusJsonAfterMenuReset(
-  apiBase: string,
-): Promise<Record<string, unknown>> {
-  const deadline = Date.now() + MENU_RESET_STATUS_MAX_MS;
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(`${apiBase}/api/status`, {
-        headers: buildApiRequestHeaders(),
-      });
-      if (res.ok) {
-        const data = (await res.json()) as Record<string, unknown>;
-        if (data.state === "running") {
-          return data;
-        }
-      }
-    } catch {
-      /* agent may still be binding */
-    }
-    await new Promise((r) => setTimeout(r, MENU_RESET_STATUS_POLL_MS));
-  }
-  try {
-    const res = await fetch(`${apiBase}/api/status`, {
-      headers: buildApiRequestHeaders(),
+  if (base) {
+    console.info("[Main][reset] Using reachable API base", {
+      base,
+      tried: candidates,
     });
-    if (res.ok) {
-      return (await res.json()) as Record<string, unknown>;
-    }
-  } catch {
-    /* fall through */
+  } else {
+    console.warn("[Main][reset] No reachable API base among candidates", {
+      tried: candidates,
+    });
   }
-  return { state: "error", agentName: "Milady" };
+  return base;
 }
 
 /**
- * App menu "Reset Milady…" — runs entirely in the main process so the webview
- * cannot stall after the native confirm dialog (Electrobun/WKWebView quirk).
- * Pushes `menu-reset-milady-applied` so the renderer only clears local UI state.
+ * App menu "Reset Milady…" — confirm + HTTP reset + restart in the **main process**.
+ *
+ * **WHY not renderer `fetch`:** after native `showMessageBox`, WKWebView may not run
+ * network/bridge work on the same turn, so reset appeared hung. **WHY push
+ * `menu-reset-milady-applied`:** renderer must still run the same local wipe as
+ * Settings (`completeResetLocalStateAfterServerWipe`); main only supplies a fresh
+ * `/api/status` snapshot as `agentStatus`. Orchestration core: `menu-reset-from-main.ts`.
+ *
+ * @see `docs/apps/desktop-main-process-reset.md`
  */
 async function resetMiladyFromApplicationMenu(): Promise<void> {
   console.info(
@@ -282,45 +241,42 @@ async function resetMiladyFromApplicationMenu(): Promise<void> {
   }
 
   try {
-    const resetRes = await fetch(`${apiBase}/api/agent/reset`, {
-      method: "POST",
-      headers: buildApiRequestHeaders(),
-    });
-    if (!resetRes.ok) {
-      throw new Error(`Reset API failed (${resetRes.status})`);
-    }
-
     const runtimeMode = resolveDesktopRuntimeMode(
       process.env as Record<string, string | undefined>,
     );
 
-    if (runtimeMode.mode === "local") {
-      const status = await getAgentManager().restartClearingLocalDb();
-      const apiToken = configureDesktopLocalApiAuth();
-      if (currentWindow && status.port) {
-        pushApiBaseToRenderer(
-          currentWindow,
-          `http://127.0.0.1:${status.port}`,
-          apiToken,
-        );
-      }
-    } else {
-      try {
-        await fetch(`${apiBase}/api/agent/restart`, {
-          method: "POST",
-          headers: buildApiRequestHeaders(),
-        });
-      } catch {
-        /* 409 / race while restarting — poll below */
-      }
-    }
-
-    const apiBaseAfter = resolveHeartbeatMenuApiBase() ?? apiBase;
-    const statusPayload = await pollStatusJsonAfterMenuReset(apiBaseAfter);
-
-    sendToActiveRenderer("desktopTrayMenuClick", {
-      itemId: "menu-reset-milady-applied",
-      agentStatus: statusPayload,
+    await runMainMenuResetAfterApiBaseResolved({
+      apiBase,
+      fetchImpl: fetch,
+      buildHeaders: buildApiRequestHeaders,
+      useEmbeddedRestart: runtimeMode.mode === "local",
+      restartEmbeddedClearingLocalDb: () =>
+        getAgentManager().restartClearingLocalDb(),
+      pushEmbeddedApiBaseToRenderer: (port, apiToken) => {
+        if (currentWindow) {
+          pushApiBaseToRenderer(
+            currentWindow,
+            `http://127.0.0.1:${port}`,
+            apiToken,
+          );
+        }
+      },
+      getLocalApiAuthToken: () => configureDesktopLocalApiAuth(),
+      postExternalAgentRestart: async () => {
+        try {
+          await fetch(`${apiBase}/api/agent/restart`, {
+            method: "POST",
+            headers: buildApiRequestHeaders(),
+          });
+        } catch {
+          /* 409 / race while restarting — poll below */
+        }
+      },
+      resolveApiBaseForStatusPoll: () =>
+        resolveHeartbeatMenuApiBase() ?? apiBase,
+      sendMenuResetAppliedToRenderer: (payload) => {
+        sendToActiveRenderer("desktopTrayMenuClick", payload);
+      },
     });
     console.info(
       "[Main][reset] Pushed menu-reset-milady-applied to renderer with /api/status snapshot",

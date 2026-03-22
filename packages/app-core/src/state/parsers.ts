@@ -46,6 +46,29 @@ export function parseAgentStatusEvent(
   };
 }
 
+/**
+ * Parses `agentStatus` from a `desktopTrayMenuClick` payload when the main
+ * process finishes menu reset (`itemId === "menu-reset-milady-applied"`).
+ */
+export function parseAgentStatusFromMainMenuResetPayload(
+  payload: unknown,
+): AgentStatus | null {
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    Array.isArray(payload) ||
+    !("agentStatus" in payload)
+  ) {
+    return null;
+  }
+  const as = (payload as { agentStatus?: Record<string, unknown> | null })
+    .agentStatus;
+  if (!as || typeof as !== "object" || Array.isArray(as)) {
+    return null;
+  }
+  return parseAgentStatusEvent(as);
+}
+
 export function parseAgentStartupDiagnostics(
   value: unknown,
 ): AgentStartupDiagnostics | undefined {

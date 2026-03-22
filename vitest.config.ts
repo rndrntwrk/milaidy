@@ -30,7 +30,12 @@ export default defineConfig({
         // Stub all @lookingglass/* imports so tests that transitively import
         // VrmEngine.ts don't fail at module resolution time.
         find: /^@lookingglass\/.*/,
-        replacement: path.join(repoRoot, "test", "stubs", "lookingglass-webxr.ts"),
+        replacement: path.join(
+          repoRoot,
+          "test",
+          "stubs",
+          "lookingglass-webxr.ts",
+        ),
       },
       {
         find: "milady/plugin-sdk",
@@ -147,8 +152,14 @@ export default defineConfig({
       "packages/agent/src/**/*.test.tsx",
       "packages/agent/test/**/*.test.ts",
       "packages/agent/test/**/*.test.tsx",
+      // app-core: globs (not single files) so colocated *.test.tsx and harness
+      // suites under packages/app-core/test/{state,runtime,...} run in CI.
+      // WHY: omitting test/** silently dropped new suites; listing one TSX path
+      // rotted when files moved. E2E under app-core/test is excluded below.
       "packages/app-core/src/**/*.test.ts",
-      "packages/app-core/src/components/OnboardingWizard.test.tsx",
+      "packages/app-core/src/**/*.test.tsx",
+      "packages/app-core/test/**/*.test.ts",
+      "packages/app-core/test/**/*.test.tsx",
       "packages/plugin-retake/src/**/*.test.ts",
       "src/**/*.test.ts",
       "scripts/**/*.test.ts",
@@ -169,7 +180,14 @@ export default defineConfig({
       "test/telegram-connector.e2e.test.ts",
     ],
     setupFiles: ["test/setup.ts"],
-    exclude: ["dist/**", "**/node_modules/**", "**/*.live.test.ts"],
+    exclude: [
+      "dist/**",
+      "**/node_modules/**",
+      "**/*.live.test.ts",
+      // App-core e2e lives under test/ too; run it via vitest.e2e.config.ts, not unit.
+      "packages/app-core/test/**/*.e2e.test.ts",
+      "packages/app-core/test/**/*.e2e.test.tsx",
+    ],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
