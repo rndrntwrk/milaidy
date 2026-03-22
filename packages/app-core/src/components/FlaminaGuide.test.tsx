@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { act } from "react";
-import TestRenderer from "react-test-renderer";
+import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it } from "vitest";
 import { FlaminaGuideCard } from "./FlaminaGuide";
 

@@ -133,16 +133,32 @@ const forbiddenWorkflowSnippets = [
     "{{ hashFiles('bun.lock') }}",
 ];
 const requiredElectrobunPrWorkflowSnippets = [
+  "name: Validate Electrobun Release Workflow",
   "pull_request:",
   "branches: [main, develop]",
+  "workflow_dispatch:",
   "permissions:",
-  "contents: write",
-  "packages: write",
+  "contents: read",
+  'BUN_VERSION: "1.3.9"',
+  "name: Release Workflow Contract",
+  "bun install --frozen-lockfile --ignore-scripts",
+  "bun run postinstall",
+  "bunx vitest run",
+  "scripts/electrobun-release-workflow-drift.test.ts",
+  "scripts/electrobun-test-workflow-drift.test.ts",
+  "scripts/whisper-build-script-drift.test.ts",
+  "scripts/release-check.test.ts",
+  "bunx tsdown",
+  "node --import tsx scripts/write-build-info.ts",
+  "bun run release:check",
+];
+const forbiddenElectrobunPrWorkflowSnippets = [
   "uses: ./.github/workflows/release-electrobun.yml",
   "publish_release: false",
   "publish_docker: false",
   "draft: false",
   "secrets: inherit",
+  "packages: write",
 ];
 const requiredElectrobunConfigSnippets = [
   'postBuild: "scripts/postwrap-sign-runtime-macos.ts"',
@@ -534,9 +550,23 @@ function assertElectrobunPrWorkflowExists() {
 
   if (missing.length > 0) {
     console.error(
-      "release-check: Electrobun PR release workflow is missing reusable build-only wiring:",
+      "release-check: Electrobun PR workflow is missing lightweight release-contract validation:",
     );
     for (const snippet of missing) {
+      console.error(`  - ${snippet}`);
+    }
+    process.exit(1);
+  }
+
+  const forbidden = forbiddenElectrobunPrWorkflowSnippets.filter((snippet) =>
+    workflow.includes(snippet),
+  );
+
+  if (forbidden.length > 0) {
+    console.error(
+      "release-check: Electrobun PR workflow still invokes the full reusable release pipeline:",
+    );
+    for (const snippet of forbidden) {
       console.error(`  - ${snippet}`);
     }
     process.exit(1);
@@ -734,6 +764,36 @@ function assertInnoBuildScriptHasTimeoutAndHeartbeat() {
   }
 }
 
+function assertInnoTemplateTargetsBundledLauncher() {
+  const template = readFileSync("packaging/inno/Milady.iss", "utf8");
+  const requiredSnippets = [
+    '#define MyAppExeName "bin\\launcher.exe"',
+    "UninstallDisplayIcon={app}\\{#MyAppExeName}",
+    'Name: "{autoprograms}\\{#MyDefaultGroupName}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"',
+    'Name: "{autodesktop}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"; Tasks: desktopicon',
+  ];
+  const missingSnippets = requiredSnippets.filter(
+    (snippet) => !template.includes(snippet),
+  );
+
+  if (missingSnippets.length > 0) {
+    console.error(
+      "release-check: Milady.iss must point Windows shortcuts and uninstall metadata at bin\\launcher.exe.",
+    );
+    for (const snippet of missingSnippets) {
+      console.error(`  - ${snippet}`);
+    }
+    process.exit(1);
+  }
+
+  if (template.includes('#define MyAppExeName "launcher.exe"')) {
+    console.error(
+      "release-check: Milady.iss must not point Windows shortcuts at {app}\\launcher.exe; the bundled launcher lives under bin\\.",
+    );
+    process.exit(1);
+  }
+}
+
 function assertMacSmokeScriptLaunchesPackagedLauncherDirectly() {
   const script = readFileSync(
     "apps/app/electrobun/scripts/smoke-test.sh",
@@ -864,13 +924,14 @@ function assertStartApiServerCatchBlockSafety() {
 }
 
 function main() {
-assertReleaseWorkflowHasNotaryWrapper();
-assertElectrobunPrWorkflowExists();
-assertElectrobunConfigHasPostWrapSigner();
+  assertReleaseWorkflowHasNotaryWrapper();
+  assertElectrobunPrWorkflowExists();
+  assertElectrobunConfigHasPostWrapSigner();
   assertMacArtifactStagerLooksCorrect();
   assertWindowsSmokeScriptHasLeadingParamBlock();
   assertWindowsInstallerProofScript();
   assertInnoBuildScriptHasTimeoutAndHeartbeat();
+  assertInnoTemplateTargetsBundledLauncher();
   assertMacSmokeScriptLaunchesPackagedLauncherDirectly();
   assertServerDynamicHyperscapeImport();
   assertStartApiServerCatchBlockSafety();

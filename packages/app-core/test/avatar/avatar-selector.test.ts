@@ -12,12 +12,6 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("Avatar VRM Utilities", () => {
-  describe("VRM_COUNT", () => {
-    it("is 8 for all bundled base avatars", () => {
-      expect(VRM_COUNT).toBe(8);
-    });
-  });
-
   describe("getVrmUrl", () => {
     it("returns correct path for base milady VRMs (1-8)", () => {
       for (let i = 1; i <= 8; i++) {

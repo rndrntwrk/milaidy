@@ -5,6 +5,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserSurfaceWindow } from "./BrowserSurfaceWindow";
 
+vi.mock("../state", () => ({
+  useApp: () => ({
+    t: (key: string) => key,
+  }),
+}));
+
 class FakeElectrobunWebview extends HTMLElement {
   static latest: FakeElectrobunWebview | null = null;
 
@@ -81,7 +87,7 @@ describe("BrowserSurfaceWindow", () => {
       });
 
       const input = host.querySelector(
-        'input[aria-label="Browser address"]',
+        'input[aria-label="aria.browserAddress"]',
       ) as HTMLInputElement | null;
       const form = host.querySelector("form");
 

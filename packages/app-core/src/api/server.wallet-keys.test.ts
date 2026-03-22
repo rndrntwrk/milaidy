@@ -153,8 +153,6 @@ describe("GET /api/wallet/keys", () => {
 
     const server = await startApiServer({ port: 0, runtime: RUNTIME_STUB });
     try {
-      // Sensitive routes require an API token even for loopback requests.
-      // Without ELIZA_API_TOKEN / MILADY_API_TOKEN the server returns 403.
       const { status } = await req(server.port, "GET", "/api/wallet/keys");
       expect(status).toBe(403);
     } finally {
@@ -174,7 +172,6 @@ describe("GET /api/wallet/keys", () => {
 
     const server = await startApiServer({ port: 0, runtime: RUNTIME_STUB });
     try {
-      // In development mode, sensitive endpoints are accessible without a token.
       const { status } = await req(server.port, "GET", "/api/wallet/keys");
       expect(status).toBe(200);
     } finally {
