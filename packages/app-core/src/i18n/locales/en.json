@@ -796,6 +796,8 @@
   "settings.sections.walletrpc.desc": "Chain RPC providers and API keys",
   "settings.sections.media.label": "Media",
   "settings.sections.media.desc": "Image, video, and vision providers",
+  "settings.sections.mediavoice.label": "Media & Voice",
+  "settings.sections.mediavoice.desc": "Image, video, audio generation and voice configuration",
   "settings.sections.voice.label": "Voice",
   "settings.sections.voice.desc": "Text-to-speech and transcription",
   "settings.sections.permissions.label": "Permissions",

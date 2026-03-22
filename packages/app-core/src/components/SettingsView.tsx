@@ -18,7 +18,6 @@ import {
   Download,
   Image,
   Loader2,
-  Mic,
   Monitor,
   RefreshCw,
   Search,
@@ -81,16 +80,10 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     description: "Native window, clipboard, dialog, and detached surface tools",
   },
   {
-    id: "media",
-    label: "settings.sections.media.label",
+    id: "media-voice",
+    label: "settings.sections.mediavoice.label",
     icon: Image,
-    description: "settings.sections.media.desc",
-  },
-  {
-    id: "voice",
-    label: "settings.sections.voice.label",
-    icon: Mic,
-    description: "settings.sections.voice.desc",
+    description: "settings.sections.mediavoice.desc",
   },
   {
     id: "permissions",
@@ -709,25 +702,13 @@ export function SettingsView({
         </SectionCard>
       )}
 
-      {visibleSectionIds.has("media") && (
-        <SectionCard
-          id="media"
-          title={t("settings.sections.media.label")}
-          description={t("settings.sections.media.desc")}
-          className="p-4 sm:p-5 lg:p-6"
-        >
+      {visibleSectionIds.has("media-voice") && (
+        <SectionCard id="media-voice" title={t("settings.sections.mediavoice.label")} description={t("settings.sections.mediavoice.desc")}>
           <MediaSettingsSection />
-        </SectionCard>
-      )}
-
-      {visibleSectionIds.has("voice") && (
-        <SectionCard
-          id="voice"
-          title={t("settings.sections.voice.label")}
-          description={t("settings.sections.voice.desc")}
-          className="p-4 sm:p-5 lg:p-6"
-        >
-          <VoiceConfigView />
+          <div className="mt-6 pt-6 border-t border-border/40">
+            <h3 className="text-sm font-semibold text-txt mb-4">{t("settings.sections.voice.label")}</h3>
+            <VoiceConfigView />
+          </div>
         </SectionCard>
       )}
 
