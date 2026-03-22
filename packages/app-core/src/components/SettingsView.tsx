@@ -18,7 +18,6 @@ import {
   Download,
   Image,
   Loader2,
-  Monitor,
   RefreshCw,
   Search,
   Shield,
@@ -30,6 +29,7 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isElectrobunRuntime } from "../bridge";
 import { useApp } from "../state";
 import { CodingAgentSettingsSection } from "./CodingAgentSettingsSection";
 import { ConfigPageView } from "./ConfigPageView";
@@ -72,12 +72,6 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     label: "settings.sections.walletrpc.label",
     icon: Wallet,
     description: "settings.sections.walletrpc.desc",
-  },
-  {
-    id: "desktop",
-    label: "Desktop Workspace",
-    icon: Monitor,
-    description: "Native window, clipboard, dialog, and detached surface tools",
   },
   {
     id: "media-voice",
@@ -691,18 +685,7 @@ export function SettingsView({
         </SectionCard>
       )}
 
-      {visibleSectionIds.has("desktop") && (
-        <SectionCard
-          id="desktop"
-          title="Desktop Workspace"
-          description="Native runtime diagnostics, detached windows, file dialogs, clipboard, and shell controls."
-          className="p-4 sm:p-5 lg:p-6"
-        >
-          <DesktopWorkspaceSection />
-        </SectionCard>
-      )}
-
-      {visibleSectionIds.has("media-voice") && (
+{visibleSectionIds.has("media-voice") && (
         <SectionCard id="media-voice" title={t("settings.sections.mediavoice.label")} description={t("settings.sections.mediavoice.desc")}>
           <MediaSettingsSection />
           <div className="mt-6 pt-6 border-t border-border/40">
@@ -741,6 +724,12 @@ export function SettingsView({
           description={t("settings.sections.advanced.desc")}
           className="p-4 sm:p-5 lg:p-6"
         >
+          {isElectrobunRuntime() && (
+            <div className="mb-6 pb-6 border-b border-border/40">
+              <h3 className="text-sm font-semibold text-txt mb-4">{t("settings.sections.desktop.label")}</h3>
+              <DesktopWorkspaceSection />
+            </div>
+          )}
           <AdvancedSection />
         </SectionCard>
       )}

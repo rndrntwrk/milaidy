@@ -805,6 +805,8 @@
   "settings.sections.updates.label": "Updates",
   "settings.sections.updates.desc": "Software update settings",
   "settings.sections.advanced.desc": "Export, import, and dangerous actions",
+  "settings.sections.desktop.label": "Desktop Workspace",
+  "settings.sections.desktop.desc": "Native window, clipboard, dialog, and detached surface tools",
   "settings.change": "Change",
   "settings.browse": "Browse",
   "settings.codingAgentsDescription": "Configure AI coding agents for multi-agent task execution.",
