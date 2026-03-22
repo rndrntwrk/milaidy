@@ -119,7 +119,7 @@ export function formatDurationMs(
   options: DurationFormatOptions = {},
 ): string {
   const { fallback = "—" } = options;
-  if (!ms || ms <= 0) return fallback;
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return fallback;
   if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
   if (ms < 86_400_000) {

@@ -94,6 +94,83 @@ describe("useVoiceChat streaming text helpers", () => {
   it("returns empty text when only stage directions remain", () => {
     expect(toSpeakableText("*waves* (quietly) [off mic]")).toBe("");
   });
+
+  it("extracts <text> content from <response> wrapper for speech", () => {
+    expect(
+      toSpeakableText(
+        "<response><thought>internal</thought><text>Hello world!</text></response>",
+      ),
+    ).toBe("Hello world!");
+  });
+
+  it("extracts partial <text> content when closing tag is missing (streaming)", () => {
+    expect(
+      toSpeakableText("<response><thought>internal</thought><text>Hello wor"),
+    ).toBe("Hello wor");
+  });
+
+  it("returns empty when <response> present but <text> has not started", () => {
+    expect(toSpeakableText("<response><thought>internal</thought>")).toBe("");
+  });
+
+  it("strips partial XML tags at end of streaming chunk from speech", () => {
+    expect(toSpeakableText("Hello world<thi")).toBe("Hello world");
+  });
+
+  it("strips partial closing tags from speech", () => {
+    expect(toSpeakableText("Hello world</respon")).toBe("Hello world");
+  });
+
+  it("does not garble text when stream ends mid-tag", () => {
+    const result = toSpeakableText("Say this exact phrase.<acti");
+    expect(result).toBe("Say this exact phrase.");
+    expect(result).not.toContain("<");
+  });
+
+  it("strips unclosed <think> block content during streaming", () => {
+    const result = toSpeakableText(
+      "Hello. <think>internal reasoning about the query",
+    );
+    expect(result).toBe("Hello.");
+    expect(result).not.toContain("internal");
+    expect(result).not.toContain("reasoning");
+  });
+
+  it("strips closed <think> block and speaks surrounding text", () => {
+    const result = toSpeakableText(
+      "<think>planning my response</think>Hello there!",
+    );
+    expect(result).toBe("Hello there!");
+    expect(result).not.toContain("planning");
+  });
+
+  it("strips unclosed <analysis> block during streaming", () => {
+    const result = toSpeakableText(
+      "Sure! <analysis>checking the user intent for",
+    );
+    expect(result).toBe("Sure!");
+    expect(result).not.toContain("checking");
+  });
+
+  it("strips <actions> blocks even when unclosed during streaming", () => {
+    const result = toSpeakableText(
+      'Here is your answer. <actions><action name="DO_THING"><params>{"key',
+    );
+    expect(result).toBe("Here is your answer.");
+    expect(result).not.toContain("actions");
+    expect(result).not.toContain("DO_THING");
+  });
+
+  it("produces exact phrase without any XML artifacts", () => {
+    const exactPhrase = "The quick brown fox jumps over the lazy dog.";
+    expect(toSpeakableText(exactPhrase)).toBe(exactPhrase);
+  });
+
+  it("produces exact phrase from wrapped response", () => {
+    const exactPhrase = "The quick brown fox jumps over the lazy dog.";
+    const wrapped = `<response><thought>user wants a test</thought><text>${exactPhrase}</text></response>`;
+    expect(toSpeakableText(wrapped)).toBe(exactPhrase);
+  });
 });
 
 describe("splitFirstSentence edge cases", () => {

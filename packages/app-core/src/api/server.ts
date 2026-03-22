@@ -65,7 +65,9 @@ import {
   syncElizaEnvToMilady,
   syncMiladyEnvToEliza,
 } from "../config/brand-env.js";
-import { ensureMiladyTextToSpeechHandler } from "../runtime/eliza.js";
+// Lazy-imported to avoid circular dependency with runtime/eliza.ts
+const lazyEnsureTTS = () =>
+  import("../runtime/eliza.js").then((m) => m.ensureMiladyTextToSpeechHandler);
 import { getMiladyStartupEmbeddingAugmentation } from "../runtime/milady-startup-overlay.js";
 import { getCloudSecret } from "./cloud-secrets";
 
@@ -1572,9 +1574,10 @@ export function persistCompatOnboardingDefaults(
   const adminEntityId = stringToUuid(`${name}-admin-entity`);
   agents.defaults.adminEntityId = adminEntityId;
 
-  // Persist name/bio/system directly into agents.list[0] — the upstream
-  // body replay is not reliable in Bun so we write these fields here as a
-  // fallback to ensure the agent knows its own name after a restart.
+  // Persist all character fields into agents.list[0] — the upstream body
+  // replay via req.push() is not reliable in Bun so we write every field
+  // here to ensure the full character survives a restart even when upstream
+  // never processes the replayed body.
   if (!Array.isArray(agents.list) || agents.list.length === 0) {
     (agents as Record<string, unknown>).list = [{ id: "main", default: true }];
   }
@@ -1585,6 +1588,21 @@ export function persistCompatOnboardingDefaults(
   }
   if (typeof body.systemPrompt === "string" && body.systemPrompt.trim()) {
     agentEntry.system = body.systemPrompt.trim();
+  }
+  if (body.style && typeof body.style === "object") {
+    agentEntry.style = body.style;
+  }
+  if (Array.isArray(body.adjectives)) {
+    agentEntry.adjectives = body.adjectives;
+  }
+  if (Array.isArray(body.topics)) {
+    agentEntry.topics = body.topics;
+  }
+  if (Array.isArray(body.postExamples)) {
+    agentEntry.postExamples = body.postExamples;
+  }
+  if (Array.isArray(body.messageExamples)) {
+    agentEntry.messageExamples = body.messageExamples;
   }
 
   saveElizaConfig(config);
@@ -3695,7 +3713,7 @@ export async function startApiServer(
   try {
     if (compatState.current) {
       await ensureRuntimeSqlCompatibility(compatState.current);
-      await ensureMiladyTextToSpeechHandler(compatState.current);
+      await (await lazyEnsureTTS())(compatState.current);
     }
 
     const server = await upstreamStartApiServer(...args);
@@ -3706,7 +3724,7 @@ export async function startApiServer(
     server.updateRuntime = (runtime: AgentRuntime) => {
       compatState.current = runtime;
       void ensureRuntimeSqlCompatibility(runtime);
-      void ensureMiladyTextToSpeechHandler(runtime);
+      void lazyEnsureTTS().then((fn) => fn(runtime));
       originalUpdateRuntime(runtime);
     };
 

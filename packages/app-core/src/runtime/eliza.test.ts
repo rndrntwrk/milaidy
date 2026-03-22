@@ -1651,6 +1651,63 @@ describe("buildCharacterFromConfig", () => {
     expect(char.username).toBe("marisa-labs");
     expect(char.topics).toEqual(["magic", "research"]);
   });
+
+  it("backfills bundled preset style and adjectives for name-only config", () => {
+    const config = {
+      agents: { list: [{ id: "main", name: "Chen" }] },
+    } as ElizaConfig;
+    const char = buildCharacterFromConfig(config);
+
+    expect(char.name).toBe("Chen");
+    expect(char.style).toBeTruthy();
+    expect(char.style?.all?.length).toBeGreaterThan(0);
+    expect(char.style?.chat?.length).toBeGreaterThan(0);
+    expect(char.style?.post?.length).toBeGreaterThan(0);
+    expect(char.adjectives).toBeTruthy();
+    expect(char.adjectives?.length).toBeGreaterThan(0);
+    expect(char.adjectives).toContain("warm");
+  });
+
+  it("backfills bundled preset topics when agent config has none", () => {
+    const config = {
+      agents: { list: [{ id: "main", name: "Chen" }] },
+    } as ElizaConfig;
+    const char = buildCharacterFromConfig(config);
+
+    expect(char.name).toBe("Chen");
+    expect(Array.isArray(char.topics)).toBe(true);
+    expect((char.topics as string[]).length).toBeGreaterThan(0);
+  });
+
+  it("preserves agent config fields over bundled preset fallback", () => {
+    const config = {
+      agents: {
+        list: [
+          {
+            id: "main",
+            name: "Chen",
+            style: { all: ["custom rule"], chat: [], post: [] },
+            adjectives: ["custom-adj"],
+            topics: ["custom-topic"],
+          },
+        ],
+      },
+    } as ElizaConfig;
+    const char = buildCharacterFromConfig(config);
+
+    expect(char.style?.all).toContain("custom rule");
+    expect(char.adjectives).toContain("custom-adj");
+    expect(char.topics).toEqual(["custom-topic"]);
+  });
+
+  it("does not backfill style/adjectives for non-preset characters", () => {
+    const config = {
+      agents: { list: [{ id: "main", name: "CustomBot" }] },
+    } as ElizaConfig;
+    const char = buildCharacterFromConfig(config);
+
+    expect(char.topics ?? []).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------

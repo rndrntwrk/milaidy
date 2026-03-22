@@ -279,6 +279,32 @@ export function buildCharacterFromConfig(
     );
   }
   if (bundledPreset) {
+    // The upstream buildCharacterFromConfig may use its own preset data
+    // which can differ from the Milady presets. Backfill all Milady preset
+    // fields so character data is complete even when the Bun body replay
+    // drops fields during onboarding.
+    if (!agentEntry?.style && !character.style && bundledPreset.style) {
+      character.style = {
+        all: [...bundledPreset.style.all],
+        chat: [...bundledPreset.style.chat],
+        post: [...bundledPreset.style.post],
+      } as typeof character.style;
+    }
+    if (
+      !agentEntry?.adjectives &&
+      (!character.adjectives || character.adjectives.length === 0) &&
+      bundledPreset.adjectives.length > 0
+    ) {
+      character.adjectives = [...bundledPreset.adjectives];
+    }
+    if (
+      !agentEntry?.topics &&
+      (!Array.isArray(character.topics) || character.topics.length === 0) &&
+      Array.isArray(bundledPreset.topics) &&
+      bundledPreset.topics.length > 0
+    ) {
+      character.topics = [...bundledPreset.topics];
+    }
     if (
       !agentEntry?.postExamples &&
       (character.postExamples?.length ?? 0) === 0

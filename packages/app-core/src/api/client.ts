@@ -2334,7 +2334,6 @@ export class MiladyClient {
     pairingEnabled: boolean;
     expiresAt: number | null;
   }> {
-    console.log("🚨🚨🚨 REAL CLIENT GET_AUTH_STATUS CALLED! 🚨🚨🚨");
     // Retry with exponential backoff — the server may not be ready during boot.
     const maxRetries = 3;
     const baseBackoffMs = 1000;

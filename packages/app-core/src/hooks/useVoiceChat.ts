@@ -219,8 +219,57 @@ function capSpeechLength(input: string): string {
   return `${body.trim()}...`;
 }
 
+/**
+ * Hidden XML block tags whose content should never be spoken.  During
+ * streaming the closing tag may not have arrived yet, so we strip from
+ * the opening tag to end-of-string (matching the display path's
+ * `HIDDEN_XML_BLOCK_RE` which uses `(?:</tag>|$)`).
+ *
+ * The upstream `sanitizeSpeechText` only strips *closed* `<think>` blocks,
+ * so an in-progress `<think>reasoning so far` leaks "reasoning so far"
+ * into the voice output.  We handle it here before sanitization.
+ */
+const HIDDEN_VOICE_BLOCK_RE =
+  /<(think|thought|analysis|reasoning|scratchpad|tool_calls?|tools?)\b[^>]*>[\s\S]*?(?:<\/\1>|$)/gi;
+
+function extractVoiceText(input: string): string {
+  let text = input;
+
+  // Extract <text> content from <response> wrappers the same way the display
+  // path does — otherwise the voice may try to speak tag names like "response".
+  if (text.includes("<response>")) {
+    const openTag = "<text>";
+    const closeTag = "</text>";
+    const start = text.indexOf(openTag);
+    if (start >= 0) {
+      const contentStart = start + openTag.length;
+      const end = text.indexOf(closeTag, contentStart);
+      text = end >= 0 ? text.slice(contentStart, end) : text.slice(contentStart);
+    } else {
+      // <response> present but no <text> yet — nothing speakable.
+      return "";
+    }
+  }
+
+  // Strip hidden blocks (think, thought, analysis, etc.) even when unclosed
+  // during streaming — prevents the voice from speaking internal LLM reasoning.
+  text = text.replace(HIDDEN_VOICE_BLOCK_RE, " ");
+
+  // Strip ElizaOS action/params blocks.
+  text = text.replace(/\s*<actions>[\s\S]*?(?:<\/actions>|$)\s*/g, " ");
+  text = text.replace(/\s*<params>[\s\S]*?(?:<\/params>|$)\s*/g, " ");
+
+  // Strip incomplete XML tags at the end of a streaming chunk (e.g. "<thi",
+  // "</respon") so partial tags don't become spoken words.
+  text = text.replace(/<\/?[a-zA-Z][^>]*$|<\/?$/s, "");
+
+  return text;
+}
+
 function toSpeakableText(input: string): string {
-  const normalized = sanitizeSpeechText(input);
+  const extracted = extractVoiceText(input);
+  if (!extracted) return "";
+  const normalized = sanitizeSpeechText(extracted);
   if (!normalized) return "";
   return capSpeechLength(normalized);
 }

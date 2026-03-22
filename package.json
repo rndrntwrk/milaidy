@@ -39,6 +39,7 @@
     "packages/app-core",
     "packages/plugin-wechat",
     "packages/ui",
+    "packages/agent",
     "deploy/cloud-agent-template"
   ],
   "type": "module",

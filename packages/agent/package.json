@@ -218,7 +218,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.0.0",
-    "@elizaos/core": "workspace:*",
+    "@elizaos/core": "alpha",
     "@elizaos/plugin-agent-orchestrator": "0.3.15",
     "@elizaos/plugin-agent-skills": "alpha",
     "@elizaos/plugin-anthropic": "alpha",
@@ -227,6 +227,7 @@
     "@elizaos/plugin-elizacloud": "alpha",
     "@elizaos/plugin-experience": "alpha",
     "@elizaos/plugin-form": "alpha",
+    "@elizaos/plugin-groq": "^1.0.4",
     "@elizaos/plugin-knowledge": "alpha",
     "@elizaos/plugin-local-embedding": "alpha",
     "@elizaos/plugin-ollama": "alpha",
