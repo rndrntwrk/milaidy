@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const WORKFLOW_PATH = path.join(ROOT, ".github/workflows/test.yml");
+const PR_RELEASE_WORKFLOW_PATH = path.join(
+  ROOT,
+  ".github/workflows/test-electrobun-release.yml",
+);
 
 describe("Electrobun test workflow drift", () => {
   // Desktop build/packaging validation (preload bridge, diagnostics, DMG
@@ -31,5 +35,22 @@ describe("Electrobun test workflow drift", () => {
     expect(workflow).toContain(
       'name: Run repository postinstall patches\n        run: bun run postinstall\n        env:\n          SKIP_AVATAR_CLONE: "1"\n          MILADY_NO_VISION_DEPS: "1"',
     );
+  });
+
+  it("runs the canonical Electrobun release build graph on pull requests without publishing", () => {
+    const workflow = fs.readFileSync(PR_RELEASE_WORKFLOW_PATH, "utf8");
+
+    expect(workflow).toContain("pull_request:");
+    expect(workflow).toContain("branches: [main, develop]");
+    expect(workflow).toContain("permissions:");
+    expect(workflow).toContain("contents: write");
+    expect(workflow).toContain("packages: write");
+    expect(workflow).toContain(
+      "uses: ./.github/workflows/release-electrobun.yml",
+    );
+    expect(workflow).toContain("draft: false");
+    expect(workflow).toContain("publish_release: false");
+    expect(workflow).toContain("publish_docker: false");
+    expect(workflow).toContain("secrets: inherit");
   });
 });

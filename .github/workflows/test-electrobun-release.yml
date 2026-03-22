@@ -1,0 +1,23 @@
+name: Test Electrobun Release
+
+on:
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: test-electrobun-release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  electrobun-release:
+    uses: ./.github/workflows/release-electrobun.yml
+    with:
+      draft: false
+      publish_release: false
+      publish_docker: false
+    secrets: inherit
