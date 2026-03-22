@@ -469,7 +469,9 @@ export function AppProvider({
   const [lastNativeTab, setLastNativeTabState] =
     useState<Tab>(loadLastNativeTab);
   // --- Core state ---
-  const [tab, _setTabRawInner] = useState<Tab>("chat");
+  const [tab, _setTabRawInner] = useState<Tab>(
+    COMPANION_ENABLED ? "companion" : "chat",
+  );
   const initialTabSetRef = useRef(false);
   const setTabRaw = useCallback((t: Tab) => {
     _setTabRawInner(t);
