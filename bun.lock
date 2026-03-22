@@ -12,9 +12,9 @@
         "@bufbuild/protobuf": "^2.11.0",
         "@clack/prompts": "^1.1.0",
         "@electric-sql/pglite": "^0.3.16",
-        "@elizaos/agent": "^2.0.0-alpha.91",
+        "@elizaos/agent": "^2.0.0-alpha.92",
         "@elizaos/app-hyperscape": "1.0.0",
-        "@elizaos/core": "^2.0.0-alpha.91",
+        "@elizaos/core": "^2.0.0-alpha.93",
         "@elizaos/plugin-agent-orchestrator": "0.3.14",
         "@elizaos/plugin-agent-skills": "^2.0.0-alpha.70",
         "@elizaos/plugin-anthropic": "^2.0.0-alpha.9",
@@ -41,8 +41,8 @@
         "@elizaos/plugin-todo": "^2.0.0-alpha.13",
         "@elizaos/plugin-trajectory-logger": "^2.0.0-alpha.20",
         "@elizaos/plugin-trust": "^1.2.2",
-        "@elizaos/prompts": "^2.0.0-alpha.91",
-        "@elizaos/skills": "^2.0.0-alpha.91",
+        "@elizaos/prompts": "^2.0.0-alpha.93",
+        "@elizaos/skills": "^2.0.0-alpha.93",
         "@hapi/boom": "^10.0.1",
         "@lunchtable/plugin-ltcg": "^0.1.0",
         "@miladyai/app-core": "workspace:*",
@@ -622,11 +622,11 @@
 
     "@electric-sql/pglite": ["@electric-sql/pglite@0.3.16", "", {}, "sha512-mZkZfOd9OqTMHsK+1cje8OSzfAQcpD7JmILXTl5ahdempjUDdmg4euf1biDex5/LfQIDJ3gvCu6qDgdnDxfJmA=="],
 
-    "@elizaos/agent": ["@elizaos/agent@2.0.0-alpha.91", "", { "dependencies": { "@clack/prompts": "^1.0.0", "@elizaos/core": "^2.0.0-alpha.91", "@elizaos/plugin-agent-orchestrator": "0.3.15", "@elizaos/plugin-agent-skills": "alpha", "@elizaos/plugin-anthropic": "alpha", "@elizaos/plugin-coding-agent": "0.1.0-next.1", "@elizaos/plugin-cron": "alpha", "@elizaos/plugin-elizacloud": "alpha", "@elizaos/plugin-experience": "alpha", "@elizaos/plugin-form": "alpha", "@elizaos/plugin-knowledge": "alpha", "@elizaos/plugin-local-embedding": "alpha", "@elizaos/plugin-ollama": "alpha", "@elizaos/plugin-openai": "alpha", "@elizaos/plugin-pdf": "alpha", "@elizaos/plugin-personality": "alpha", "@elizaos/plugin-pi-ai": "alpha", "@elizaos/plugin-plugin-manager": "alpha", "@elizaos/plugin-rolodex": "alpha", "@elizaos/plugin-secrets-manager": "alpha", "@elizaos/plugin-shell": "alpha", "@elizaos/plugin-sql": "alpha", "@elizaos/plugin-todo": "alpha", "@elizaos/plugin-trajectory-logger": "alpha", "@elizaos/plugin-trust": "alpha", "@hapi/boom": "^10.0.1", "@lunchtable/plugin-ltcg": "^0.1.0", "@mariozechner/pi-ai": "0.52.12", "@noble/curves": "^2.0.1", "@whiskeysockets/baileys": "7.0.0-rc.9", "dotenv": "^17.2.3", "drizzle-orm": "0.45.1", "ethers": "^6.16.0", "git-workspace-service": "0.4.4", "json5": "^2.2.3", "pg": "^8.16.3", "pino": "^10.3.1", "pty-manager": "1.9.8", "puppeteer-core": "^24.37.5", "qrcode": "^1.5.4", "ws": "^8.19.0", "zod": "^4.3.6" }, "peerDependencies": { "@elizaos/signal-native": "*" }, "optionalPeers": ["@elizaos/signal-native"], "bin": { "eliza-autonomous": "packages/agent/src/bin.js" } }, "sha512-BocAL3PNt7eTvTVKbCoceP1AXIxvlKxib9j5wvyQ3cPXlkaK+Aj3yM/RqzkcPZp0clGQz85qJaWWBWfw63uQaQ=="],
+    "@elizaos/agent": ["@elizaos/agent@2.0.0-alpha.92", "", { "dependencies": { "@clack/prompts": "^1.0.0", "@elizaos/core": "^2.0.0-alpha.92", "@elizaos/plugin-agent-orchestrator": "0.3.15", "@elizaos/plugin-agent-skills": "alpha", "@elizaos/plugin-anthropic": "alpha", "@elizaos/plugin-coding-agent": "0.1.0-next.1", "@elizaos/plugin-cron": "alpha", "@elizaos/plugin-elizacloud": "alpha", "@elizaos/plugin-experience": "alpha", "@elizaos/plugin-form": "alpha", "@elizaos/plugin-knowledge": "alpha", "@elizaos/plugin-local-embedding": "alpha", "@elizaos/plugin-ollama": "alpha", "@elizaos/plugin-openai": "alpha", "@elizaos/plugin-pdf": "alpha", "@elizaos/plugin-personality": "alpha", "@elizaos/plugin-pi-ai": "alpha", "@elizaos/plugin-plugin-manager": "alpha", "@elizaos/plugin-rolodex": "alpha", "@elizaos/plugin-secrets-manager": "alpha", "@elizaos/plugin-shell": "alpha", "@elizaos/plugin-sql": "alpha", "@elizaos/plugin-todo": "alpha", "@elizaos/plugin-trajectory-logger": "alpha", "@elizaos/plugin-trust": "alpha", "@hapi/boom": "^10.0.1", "@lunchtable/plugin-ltcg": "^0.1.0", "@mariozechner/pi-ai": "0.52.12", "@noble/curves": "^2.0.1", "@whiskeysockets/baileys": "7.0.0-rc.9", "dotenv": "^17.2.3", "drizzle-orm": "0.45.1", "ethers": "^6.16.0", "git-workspace-service": "0.4.4", "json5": "^2.2.3", "pg": "^8.16.3", "pino": "^10.3.1", "pty-manager": "1.9.8", "puppeteer-core": "^24.37.5", "qrcode": "^1.5.4", "ws": "^8.19.0", "zod": "^4.3.6" }, "peerDependencies": { "@elizaos/signal-native": "*" }, "optionalPeers": ["@elizaos/signal-native"], "bin": { "eliza-autonomous": "packages/agent/src/bin.js" } }, "sha512-3dLW9DopLrK8i9oKDmrs0xfii3x3QKaUSZbpaId9Pj1Dvx6WnuZILUhI8/qdWeL5EEBQygvwkaZ3oj0fQW4T7A=="],
 
     "@elizaos/app-hyperscape": ["@elizaos/app-hyperscape@1.0.0", "", { "dependencies": { "@elizaos/core": "^2.0.0-alpha.2" } }, "sha512-OMBrGrNGUCEczY+BLrqv69jQfZcNSDTlkc28CCz2etAfZPYU4dyFsH2hPkMx9bhOx6MBHyDReL+J3qMrz+b4tw=="],
 
-    "@elizaos/core": ["@elizaos/core@2.0.0-alpha.91", "", { "dependencies": { "@anthropic-ai/sdk": "^0.32.1", "@bufbuild/protobuf": "^2.11.0", "@langchain/core": "^1.1.12", "@langchain/textsplitters": "^1.0.1", "adze": "^2.2.5", "crypto-browserify": "^3.12.0", "dedent": "^1.7.1", "dotenv": "^17.2.3", "drizzle-orm": "^0.45.1", "fast-redact": "^3.5.0", "file-type": "^21.3.0", "glob": "^13.0.0", "handlebars": "^4.7.8", "json5": "^2.2.3", "markdown-it": "^14.1.0", "pdfjs-dist": "^5.4.530", "undici": "^7.0.0", "unique-names-generator": "^4.7.1", "uuid": "^13.0.0", "yaml": "^2.7.0", "zod": "^4.3.6" } }, "sha512-tsq3K5CnLsN8ZdfgMKLWUkcn5xzxoGxH7X5PelvA1HTROKoES6jCaRoqie94Y5OgOzsfLnjrrjxeXkGfLxFzSw=="],
+    "@elizaos/core": ["@elizaos/core@2.0.0-alpha.93", "", { "dependencies": { "@anthropic-ai/sdk": "^0.32.1", "@bufbuild/protobuf": "^2.11.0", "@langchain/core": "^1.1.12", "@langchain/textsplitters": "^1.0.1", "adze": "^2.2.5", "crypto-browserify": "^3.12.0", "dedent": "^1.7.1", "dotenv": "^17.2.3", "drizzle-orm": "^0.45.1", "fast-redact": "^3.5.0", "file-type": "^21.3.0", "glob": "^13.0.0", "handlebars": "^4.7.8", "json5": "^2.2.3", "markdown-it": "^14.1.0", "pdfjs-dist": "^5.4.530", "undici": "^7.0.0", "unique-names-generator": "^4.7.1", "uuid": "^13.0.0", "yaml": "^2.7.0", "zod": "^4.3.6" } }, "sha512-Lu/aSneNOli+uqsOah561JRcnPRzmBwuc/GCkJ4YSqjDUtTfF5XtzycSWrzimupUyRC2M94kSQDDfaYIDqqyTg=="],
 
     "@elizaos/plugin-agent-orchestrator": ["@elizaos/plugin-agent-orchestrator@0.3.14", "", { "dependencies": { "coding-agent-adapters": "0.12.0", "pty-console": "0.3.1" }, "peerDependencies": { "@elizaos/core": ">=2.0.0-alpha.0", "git-workspace-service": "0.4.4", "pty-manager": "1.10.0" } }, "sha512-Qq/XWiW+8dPKaPDZaZi85vW8Ors5T6phPODGsekHDiCZRNulQ0vf+v1rFHwVOfvFOsDsRtfIAjtQy4OMFkD1ZA=="],
 
@@ -686,9 +686,9 @@
 
     "@elizaos/plugin-trust": ["@elizaos/plugin-trust@1.2.2", "", { "dependencies": { "@elizaos/core": "next", "dedent": "^1.6.0", "drizzle-orm": "^0.44.2" } }, "sha512-t1WwAlC2ernlpY6y3DrtZ9Rtowzv+LOzICjZozBbGjcKF7RgCsoFf92mjoc100Vy6e728ErM3Yg5jcW8ATKwNA=="],
 
-    "@elizaos/prompts": ["@elizaos/prompts@2.0.0-alpha.91", "", {}, "sha512-vM4GY8Caj9wwP8/PKAtyK7bemaj1gfnD5r/AqShRF3CeoP7y9UXVEaY0/MpVZZpuY/ZjVnfoRw7nMRe3WdbBNQ=="],
+    "@elizaos/prompts": ["@elizaos/prompts@2.0.0-alpha.93", "", {}, "sha512-58JUy0Uh85gX3rUSiReRMZ9YxLcHEQuDkME8CBXDyJRFLGukzfVhhvdxsnICbY6gPOpL8vXkUEcPL2BhWci4eA=="],
 
-    "@elizaos/skills": ["@elizaos/skills@2.0.0-alpha.91", "", { "dependencies": { "yaml": "^2.8.2" } }, "sha512-4JCVOXFCImG9ZzG7HhdKgXbjsiUpSCrmXYHZdoz9C+cwwx1r+rLx0J7Zlat+BH0N2yw5nshAhYJAl4vl4VXLkw=="],
+    "@elizaos/skills": ["@elizaos/skills@2.0.0-alpha.93", "", { "dependencies": { "yaml": "^2.8.2" } }, "sha512-wUeLuJJ/0nYcOYvaoFfDKVJrryWf9yxzn7aGo91uzr8nj2oFBjdL/OsmfHkhLbph91BiTsAw/xxO+mIJjY14Qg=="],
 
     "@emnapi/core": ["@emnapi/core@1.9.1", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.0", "tslib": "^2.4.0" } }, "sha512-mukuNALVsoix/w1BJwFzwXBN/dHeejQtuVzcDsfOEsdpCumXb/E9j8w11h5S54tT1xhifGfbbSm/ICrObRb3KA=="],
 
