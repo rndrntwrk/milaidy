@@ -1027,13 +1027,14 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
       {loadError && !isServiceLoading && (
         <div className="flex items-center justify-between mb-4 px-3 py-2 rounded border border-[var(--danger)] bg-[var(--danger)]/10 text-sm text-[var(--danger)]">
           <span>{loadError}</span>
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-3 px-2 py-1 text-xs border-[var(--danger)] text-[var(--danger)] hover:bg-[var(--danger)]/20"
             onClick={() => loadData()}
-            className="ml-3 px-2 py-1 text-xs border border-[var(--danger)] rounded hover:bg-[var(--danger)]/20 transition-colors"
           >
             {t("common.retry")}
-          </button>
+          </Button>
         </div>
       )}
 

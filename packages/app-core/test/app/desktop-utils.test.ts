@@ -74,6 +74,51 @@ describe("desktop dialog and clipboard helpers", () => {
     expect(confirmSpy).not.toHaveBeenCalled();
   });
 
+  it("treats bare numeric 0 from the message-box RPC as confirm (not falsy `if (response)`)", async () => {
+    const request = vi.fn().mockResolvedValue(0);
+    (window as TestWindow).__MILADY_ELECTROBUN_RPC__ = {
+      request: { desktopShowMessageBox: request },
+      onMessage: vi.fn(),
+      offMessage: vi.fn(),
+    };
+    const confirmSpy = vi.spyOn(window, "confirm");
+
+    await expect(
+      confirmDesktopAction({
+        title: "Disconnect",
+        message: "OK?",
+      }),
+    ).resolves.toBe(true);
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+  });
+
+  it("parses nested RPC envelopes (data / result / payload)", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { response: 0 } })
+      .mockResolvedValueOnce({ result: { response: 1 } })
+      .mockResolvedValueOnce({ payload: { response: 0 } });
+    (window as TestWindow).__MILADY_ELECTROBUN_RPC__ = {
+      request: { desktopShowMessageBox: request },
+      onMessage: vi.fn(),
+      offMessage: vi.fn(),
+    };
+    const confirmSpy = vi.spyOn(window, "confirm");
+
+    await expect(
+      confirmDesktopAction({ title: "A", message: "m" }),
+    ).resolves.toBe(true);
+    await expect(
+      confirmDesktopAction({ title: "B", message: "m" }),
+    ).resolves.toBe(false);
+    await expect(
+      confirmDesktopAction({ title: "C", message: "m" }),
+    ).resolves.toBe(true);
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+  });
+
   it("falls back to window.confirm on web", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
 

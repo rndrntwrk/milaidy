@@ -4,14 +4,14 @@
  * Pure functions for character CRUD and draft management.
  */
 
-import type { CharacterData, ElizaClient } from "../api/client";
+import type { CharacterData, MiladyApiClient } from "../api/client";
 
 type MessageExampleGroup = {
   examples: Array<{ name: string; content: { text: string } }>;
 };
 
 export interface CharacterActionContext {
-  client: ElizaClient;
+  client: MiladyApiClient;
   setCharacterData: (data: CharacterData | null) => void;
   setCharacterDraft: (
     fn: CharacterData | ((prev: CharacterData) => CharacterData),

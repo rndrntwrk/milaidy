@@ -47,6 +47,12 @@ vi.mock("node:os", () => ({
   tmpdir: vi.fn(() => "/tmp"),
 }));
 
+vi.mock("../native/loopback-port", () => ({
+  findFirstAvailableLoopbackPort: vi.fn((preferred: number) =>
+    Promise.resolve(preferred),
+  ),
+}));
+
 // Mock Bun globals
 const mockSpawn = vi.fn();
 const mockSleep = vi.fn(() => Promise.resolve());

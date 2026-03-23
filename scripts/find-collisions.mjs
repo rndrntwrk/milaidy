@@ -12,7 +12,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, extname, relative, resolve } from "node:path";
-import { globSync } from "node:fs";
 
 // Use Bun's glob or fallback
 let glob;
@@ -55,12 +54,17 @@ function extractExports(content) {
   // export function/const/let/var/class/type/interface/enum Name
   const declRe =
     /export\s+(?:default\s+)?(?:async\s+)?(?:function\*?\s+|const\s+|let\s+|var\s+|class\s+|type\s+|interface\s+|enum\s+)(\w+)/g;
-  let m;
-  while ((m = declRe.exec(content))) names.add(m[1]);
+  for (;;) {
+    const m = declRe.exec(content);
+    if (!m) break;
+    names.add(m[1]);
+  }
 
   // export { Foo, Bar as Baz }
   const braceRe = /export\s*\{([^}]+)\}/g;
-  while ((m = braceRe.exec(content))) {
+  for (;;) {
+    const m = braceRe.exec(content);
+    if (!m) break;
     for (const item of m[1].split(",")) {
       const trimmed = item.trim();
       if (!trimmed) continue;

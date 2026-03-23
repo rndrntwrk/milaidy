@@ -61,6 +61,7 @@ export function getBackendStartupTimeoutMs(): number {
 
 export async function invokeDesktopBridgeRequest<T = unknown>(options: {
   rpcMethod: string;
+  ipcChannel?: string;
   params?: unknown;
 }): Promise<T | null> {
   const request = getElectrobunRendererRpc()?.request?.[options.rpcMethod];
@@ -69,6 +70,55 @@ export async function invokeDesktopBridgeRequest<T = unknown>(options: {
   }
 
   return (await request(options.params)) as T;
+}
+
+export type DesktopBridgeTimeoutResult<T> =
+  | { status: "ok"; value: T }
+  | { status: "missing" }
+  | { status: "timeout" }
+  | { status: "rejected"; error: unknown };
+
+/** Mirrors `packages/app-core/src/bridge/electrobun-rpc.ts` for Vitest alias. */
+export async function invokeDesktopBridgeRequestWithTimeout<T>(options: {
+  rpcMethod: string;
+  ipcChannel?: string;
+  params?: unknown;
+  timeoutMs: number;
+}): Promise<DesktopBridgeTimeoutResult<T>> {
+  const request = getElectrobunRendererRpc()?.request?.[options.rpcMethod];
+  if (!request) {
+    return { status: "missing" };
+  }
+
+  const call = request(options.params) as Promise<T>;
+  let tid: ReturnType<typeof setTimeout> | undefined;
+  type RaceWinner =
+    | { tag: "done"; value: T }
+    | { tag: "reject"; error: unknown }
+    | { tag: "timeout" };
+  const timeoutPromise = new Promise<RaceWinner>((resolve) => {
+    tid = setTimeout(() => resolve({ tag: "timeout" }), options.timeoutMs);
+  });
+  const settledPromise: Promise<RaceWinner> = call.then(
+    (value) => ({ tag: "done" as const, value: value as T }),
+    (error: unknown) => ({ tag: "reject" as const, error }),
+  );
+
+  try {
+    const winner = await Promise.race<RaceWinner>([
+      settledPromise,
+      timeoutPromise,
+    ]);
+    if (tid !== undefined) clearTimeout(tid);
+    if (winner.tag === "timeout") return { status: "timeout" };
+    if (winner.tag === "reject") {
+      return { status: "rejected", error: winner.error };
+    }
+    return { status: "ok", value: winner.value };
+  } catch (error) {
+    if (tid !== undefined) clearTimeout(tid);
+    return { status: "rejected", error };
+  }
 }
 
 export function subscribeDesktopBridgeEvent(options: {

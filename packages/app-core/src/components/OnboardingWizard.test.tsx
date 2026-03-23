@@ -96,6 +96,9 @@ describe("OnboardingWizard", () => {
       setState: vi.fn(),
       t: (key: string) => key,
       onboardingUiRevealNonce: 0,
+      companionVrmPowerMode: "balanced",
+      companionHalfFramerateMode: "when_saving_power",
+      companionAnimateWhenHidden: false,
     });
 
     let tree: ReactTestRenderer | undefined;
@@ -108,6 +111,9 @@ describe("OnboardingWizard", () => {
       worldUrl: "worlds/companion-day.spz",
       cameraProfile: "companion",
       initialCompanionZoomNormalized: 1,
+      companionVrmPowerMode: "balanced",
+      companionHalfFramerateMode: "when_saving_power",
+      companionAnimateWhenHidden: false,
     });
 
     await act(async () => {
@@ -136,6 +142,9 @@ describe("OnboardingWizard", () => {
         setState: vi.fn(),
         t: (key: string) => key,
         onboardingUiRevealNonce: 0,
+        companionVrmPowerMode: "balanced",
+        companionHalfFramerateMode: "when_saving_power",
+        companionAnimateWhenHidden: false,
       });
 
       let tree: ReactTestRenderer | undefined;
@@ -169,6 +178,9 @@ describe("OnboardingWizard", () => {
         setState: vi.fn(),
         t: (key: string) => key,
         onboardingUiRevealNonce: 1,
+        companionVrmPowerMode: "balanced",
+        companionHalfFramerateMode: "when_saving_power",
+        companionAnimateWhenHidden: false,
       });
 
       let tree: ReactTestRenderer | undefined;

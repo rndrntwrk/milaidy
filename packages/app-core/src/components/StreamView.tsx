@@ -14,6 +14,7 @@
 import { client, isApiError } from "@miladyai/app-core/api";
 import { isElectrobunRuntime } from "@miladyai/app-core/bridge";
 import { getBootConfig } from "@miladyai/app-core/config";
+import { useDocumentVisibility } from "@miladyai/app-core/hooks";
 import { useApp } from "@miladyai/app-core/state";
 import {
   type CSSProperties,
@@ -67,6 +68,7 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
   const [streamLive, setStreamLive] = useState(false);
   const [streamLoading, setStreamLoading] = useState(false);
   const loadingRef = useRef(false);
+  const docVisible = useDocumentVisibility();
 
   const [streamAvailable, setStreamAvailable] = useState(true);
 
@@ -118,14 +120,14 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
         // Other errors — API not yet available, leave as offline
       }
     };
-    if (!streamAvailable) return;
+    if (!streamAvailable || !docVisible) return;
     poll();
     const id = setInterval(poll, 5_000);
     return () => {
       mounted = false;
       clearInterval(id);
     };
-  }, [streamAvailable]);
+  }, [streamAvailable, docVisible]);
 
   // ── Auto-detect game source ─────────────────────────────────────────
   useEffect(() => {

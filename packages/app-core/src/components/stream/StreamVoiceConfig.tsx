@@ -6,11 +6,14 @@
  */
 
 import { client } from "@miladyai/app-core/api";
-import { useTimeout } from "@miladyai/app-core/hooks";
+import {
+  useIntervalWhenDocumentVisible,
+  useTimeout,
+} from "@miladyai/app-core/hooks";
 import { useApp } from "@miladyai/app-core/state";
 import { Button } from "@miladyai/ui";
 import { Volume2, VolumeX } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface VoiceStatus {
   enabled: boolean;
@@ -29,28 +32,38 @@ export function StreamVoiceConfig({ streamLive }: { streamLive: boolean }) {
   const [status, setStatus] = useState<VoiceStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const mountedRef = useRef(true);
 
-  // Poll voice status
   useEffect(() => {
-    let mounted = true;
-    const poll = async () => {
-      try {
-        const res = await client.getStreamVoice();
-        if (mounted && res.ok) {
-          setStatus(res);
-          setSpeaking(res.isSpeaking);
-        }
-      } catch {
-        // API may not be available yet
-      }
-    };
-    poll();
-    const id = setInterval(poll, 5_000);
+    mountedRef.current = true;
     return () => {
-      mounted = false;
-      clearInterval(id);
+      mountedRef.current = false;
     };
   }, []);
+
+  const poll = useCallback(async () => {
+    try {
+      const res = await client.getStreamVoice();
+      if (mountedRef.current && res.ok) {
+        setStatus(res);
+        setSpeaking(res.isSpeaking);
+      }
+    } catch {
+      // API may not be available yet
+    }
+  }, []);
+
+  useEffect(() => {
+    void poll();
+  }, [poll]);
+
+  useIntervalWhenDocumentVisible(
+    () => {
+      void poll();
+    },
+    5_000,
+    true,
+  );
 
   const toggleEnabled = useCallback(async () => {
     if (!status || loading) return;

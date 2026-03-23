@@ -380,7 +380,7 @@ describe("ChatView game-modal variant", () => {
     );
   });
 
-  it("defaults companion voice back on when the shared chat state is muted", async () => {
+  it("does not override persisted agent voice mute when mounting game-modal", async () => {
     const setState = vi.fn();
     mockUseApp.mockReturnValue(
       createContext({
@@ -395,7 +395,7 @@ describe("ChatView game-modal variant", () => {
       );
     });
 
-    expect(setState).toHaveBeenCalledWith("chatAgentVoiceMuted", false);
+    expect(setState).not.toHaveBeenCalledWith("chatAgentVoiceMuted", false);
   });
 
   it("disables composer controls while agent is starting", async () => {

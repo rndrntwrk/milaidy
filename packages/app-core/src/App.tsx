@@ -198,13 +198,13 @@ function ViewRouter({
         );
       case "voice":
         return (
-          <TabScrollView className="settings-scroll-region">
+          <TabScrollView className="[scrollbar-gutter:stable] [scroll-padding-top:7rem]">
             <SettingsView key="settings-media" initialSection="media" />
           </TabScrollView>
         );
       case "settings":
         return (
-          <TabScrollView className="settings-scroll-region">
+          <TabScrollView className="[scrollbar-gutter:stable] [scroll-padding-top:7rem]">
             <SettingsView key="settings-root" />
           </TabScrollView>
         );

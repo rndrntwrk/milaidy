@@ -6,6 +6,10 @@
  */
 
 import { useEffect, useEffectEvent, useRef } from "react";
+import type {
+  CompanionHalfFramerateMode,
+  CompanionVrmPowerMode,
+} from "../../state/types";
 import { getVrmCount, getVrmUrl } from "../../state/vrm";
 import {
   type CameraProfile,
@@ -14,6 +18,10 @@ import {
   type VrmEngineDebugInfo,
   type VrmEngineState,
 } from "./VrmEngine";
+import {
+  refreshVrmDesktopBatteryPixelPolicy,
+  VRM_DESKTOP_BATTERY_POLL_MS,
+} from "./vrm-desktop-energy";
 
 const DEFAULT_VRM_PATH = getVrmUrl(1);
 
@@ -33,6 +41,15 @@ export type VrmViewerProps = {
   interactiveMode?: InteractionMode;
   /** Optional Gaussian splat world behind the avatar */
   worldUrl?: string;
+  /** User Settings: quality / balanced / efficiency for VRM power policy. */
+  companionVrmPowerMode?: CompanionVrmPowerMode;
+  /** When to apply ~half display FPS (independent of DPR/shadows/Spark). */
+  companionHalfFramerateMode?: CompanionHalfFramerateMode;
+  /**
+   * When true and the document is hidden, keep the loop running and hide only
+   * the splat world + Spark backdrop (see `VrmEngine.setMinimalBackgroundMode`).
+   */
+  companionAnimateWhenHidden?: boolean;
   /** Enable springy drag/touch camera offset instead of orbit controls */
   pointerParallax?: boolean;
   onEngineState?: (state: VrmEngineState) => void;
@@ -169,6 +186,15 @@ export function VrmViewer(props: VrmViewerProps) {
   const onEngineReadyRef = useRef(props.onEngineReady);
   const onEngineStateRef = useRef(props.onEngineState);
   const onRevealStartRef = useRef(props.onRevealStart);
+  const companionVrmPowerModeRef = useRef<CompanionVrmPowerMode>(
+    props.companionVrmPowerMode ?? "balanced",
+  );
+  const companionAnimateWhenHiddenRef = useRef<boolean>(
+    props.companionAnimateWhenHidden ?? false,
+  );
+  const companionHalfFramerateModeRef = useRef<CompanionHalfFramerateMode>(
+    props.companionHalfFramerateMode ?? "when_saving_power",
+  );
   const revealStartedRef = useRef(false);
   const debugRegistryIdRef = useRef(
     `vrm-viewer-${Math.random().toString(36).slice(2, 10)}`,
@@ -186,6 +212,33 @@ export function VrmViewer(props: VrmViewerProps) {
   onEngineReadyRef.current = props.onEngineReady;
   onEngineStateRef.current = props.onEngineState;
   onRevealStartRef.current = props.onRevealStart;
+  companionVrmPowerModeRef.current =
+    props.companionVrmPowerMode ?? "balanced";
+  companionAnimateWhenHiddenRef.current =
+    props.companionAnimateWhenHidden ?? false;
+  companionHalfFramerateModeRef.current =
+    props.companionHalfFramerateMode ?? "when_saving_power";
+
+  const applyVisibilityAndBackgroundPolicy = useEffectEvent(() => {
+    const engine = engineRef.current;
+    if (!engine || rendererInitFailedRef.current) return;
+    const docVisible =
+      typeof document === "undefined" ||
+      document.visibilityState === "visible";
+    const active = activeRef.current;
+    const animateHidden = companionAnimateWhenHiddenRef.current;
+    const shouldPause = !active || (!docVisible && !animateHidden);
+    const minimalWhileRunning =
+      Boolean(animateHidden) && !docVisible && active;
+    engine.setPaused(shouldPause);
+    engine.setMinimalBackgroundMode(minimalWhileRunning);
+    if (docVisible) {
+      void refreshVrmDesktopBatteryPixelPolicy(engine, {
+        companionVrmPowerMode: companionVrmPowerModeRef.current,
+        companionHalfFramerateMode: companionHalfFramerateModeRef.current,
+      });
+    }
+  });
 
   const reportRendererInitFailure = useEffectEvent((error: unknown) => {
     rendererInitFailedRef.current = true;
@@ -255,6 +308,17 @@ export function VrmViewer(props: VrmViewerProps) {
       engineRef.current = engine;
     }
 
+    const applyDesktopBatteryPolicy = () => {
+      void refreshVrmDesktopBatteryPixelPolicy(engineRef.current, {
+        companionVrmPowerMode: companionVrmPowerModeRef.current,
+        companionHalfFramerateMode: companionHalfFramerateModeRef.current,
+      });
+    };
+
+    const syncPauseForVisibilityAndActive = () => {
+      applyVisibilityAndBackgroundPolicy();
+    };
+
     engine.setup(
       canvas,
       () => {
@@ -278,7 +342,19 @@ export function VrmViewer(props: VrmViewerProps) {
         sparkOptimized: prefersWorldRendererRef.current,
       },
     );
-    engine.setPaused(!activeRef.current);
+    syncPauseForVisibilityAndActive();
+
+    if (typeof document !== "undefined") {
+      document.addEventListener(
+        "visibilitychange",
+        syncPauseForVisibilityAndActive,
+      );
+    }
+
+    const batteryTimer = window.setInterval(() => {
+      applyDesktopBatteryPolicy();
+    }, VRM_DESKTOP_BATTERY_POLL_MS);
+    applyDesktopBatteryPolicy();
 
     // One-time initial camera/control setup (subsequent changes handled by effects).
     engine.setCameraProfile(cameraProfileRef.current);
@@ -302,6 +378,8 @@ export function VrmViewer(props: VrmViewerProps) {
       () => {
         if (!mountedRef.current) return;
         resize();
+        applyDesktopBatteryPolicy();
+        applyVisibilityAndBackgroundPolicy();
         syncDebugRegistry();
         onEngineReadyRef.current?.(engine);
       },
@@ -314,6 +392,13 @@ export function VrmViewer(props: VrmViewerProps) {
 
     return () => {
       mountedRef.current = false;
+      if (typeof document !== "undefined") {
+        document.removeEventListener(
+          "visibilitychange",
+          syncPauseForVisibilityAndActive,
+        );
+      }
+      window.clearInterval(batteryTimer);
       window.removeEventListener("resize", resize);
       resizeObserver?.disconnect();
 
@@ -326,14 +411,22 @@ export function VrmViewer(props: VrmViewerProps) {
   }, []);
 
   useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    void refreshVrmDesktopBatteryPixelPolicy(engine, {
+      companionVrmPowerMode: props.companionVrmPowerMode ?? "balanced",
+      companionHalfFramerateMode:
+        props.companionHalfFramerateMode ?? "when_saving_power",
+    });
+  }, [props.companionVrmPowerMode, props.companionHalfFramerateMode]);
+
+  useEffect(() => {
     syncDebugRegistry();
   });
 
   useEffect(() => {
-    const engine = engineRef.current;
-    if (!engine || rendererInitFailedRef.current) return;
-    engine.setPaused(!(props.active ?? true));
-  }, [props.active]);
+    applyVisibilityAndBackgroundPolicy();
+  }, [props.active, props.companionAnimateWhenHidden]);
 
   useEffect(() => {
     const engine = engineRef.current;

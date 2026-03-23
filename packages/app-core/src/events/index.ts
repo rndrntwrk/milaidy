@@ -99,5 +99,5 @@ export type AppWindowEventName = ElizaWindowEventName;
 export type AppEventName = ElizaEventName;
 
 /** Dispatch a typed custom event on `document`. */
-export const dispatchAppEvent = dispatchElizaEvent;
+export const dispatchAppEvent = dispatchMiladyEvent;
 

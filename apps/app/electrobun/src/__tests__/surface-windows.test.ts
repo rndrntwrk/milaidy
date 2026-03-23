@@ -151,4 +151,13 @@ describe("buildSurfaceShellQuery", () => {
     );
     expect(buildSurfaceShellQuery("cloud")).toBe("?shell=surface&tab=cloud");
   });
+
+  it("appends browse for browser surface only", () => {
+    expect(
+      buildSurfaceShellQuery("browser", undefined, "https://elizacloud.ai"),
+    ).toBe("?shell=surface&tab=browser&browse=https%3A%2F%2Felizacloud.ai");
+    expect(buildSurfaceShellQuery("chat", undefined, "https://evil.test")).toBe(
+      "?shell=surface&tab=chat",
+    );
+  });
 });

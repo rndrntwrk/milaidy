@@ -581,7 +581,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
           <Button
             variant="link"
             size="sm"
-            className="settings-compact-button text-txt underline p-0 h-auto"
+            className="min-h-[auto] px-0 text-txt underline p-0 h-auto"
             onClick={() => {
               setTab("plugins");
             }}
@@ -658,6 +658,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                   </span>
                 </div>
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   className="!mt-0"

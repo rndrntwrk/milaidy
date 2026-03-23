@@ -80,8 +80,10 @@ function dispatchMessage(messageName: string, payload: unknown): void {
   }
 }
 
+// Electrobun defaults outgoing RPC timeout to 1s; native dialogs need much longer.
 // biome-ignore lint/suspicious/noExplicitAny: schema types live on the Bun side and can't be imported in a browser bundle
 const rpc = Electroview.defineRPC<any>({
+  maxRequestTime: 600_000,
   handlers: {
     requests: {},
     messages: {

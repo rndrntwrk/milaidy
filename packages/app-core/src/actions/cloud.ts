@@ -4,7 +4,7 @@
  * Pure functions for Eliza Cloud status polling and credit management.
  */
 
-import type { ElizaClient } from "../api/client";
+import type { MiladyApiClient } from "../api/client";
 
 export interface CloudStatusResult {
   enabled: boolean;
@@ -17,7 +17,7 @@ export interface CloudStatusResult {
 }
 
 export async function pollCloudStatus(
-  client: ElizaClient,
+  client: MiladyApiClient,
 ): Promise<CloudStatusResult> {
   const cloudStatus = await client.getCloudStatus().catch(() => null);
   if (!cloudStatus) {

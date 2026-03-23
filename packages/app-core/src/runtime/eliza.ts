@@ -280,11 +280,13 @@ export function buildCharacterFromConfig(
     // fields so character data is complete even when the Bun body replay
     // drops fields during onboarding.
     if (!agentEntry?.style && !character.style && bundledPreset.style) {
+      // Plain style arrays match runtime usage; upstream `StyleGuides` is a protobuf
+      // shape with `$typeName` that we do not construct here.
       character.style = {
         all: [...bundledPreset.style.all],
         chat: [...bundledPreset.style.chat],
         post: [...bundledPreset.style.post],
-      } as any;
+      } as unknown as NonNullable<(typeof character)["style"]>;
     }
     if (
       !agentEntry?.adjectives &&
@@ -789,6 +791,14 @@ export async function startEliza(
           return currentRuntime ?? null;
         },
       });
+
+      // WHY: `startApiServer` may bind a different port than requested (busy
+      // socket, upstream policy). Shells, scripts, and follow-up code reading
+      // env must match the real listener or health checks and user-facing URLs
+      // disagree with `GET /api/health`.
+      process.env.MILADY_PORT = String(actualApiPort);
+      process.env.MILADY_API_PORT = String(actualApiPort);
+      process.env.ELIZA_PORT = String(actualApiPort);
 
       logger.info(
         `[milady] API server listening on http://localhost:${actualApiPort}`,

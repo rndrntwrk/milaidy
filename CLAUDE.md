@@ -8,9 +8,11 @@ Milady is a local-first AI assistant built on [elizaOS](https://github.com/eliza
 
 ```bash
 bun install          # runs postinstall hooks automatically
-bun run dev          # API on :31337, UI on :2138 with hot reload
+bun run dev          # API on :31337, UI on :2138 with hot reload (defaults; busy ports → next free + env sync)
 bun run dev:desktop  # Electrobun; skips vite build when apps/app/dist is up to date
-bun run dev:desktop:watch  # Vite **dev** server + Electrobun `MILADY_RENDERER_URL` (HMR). Rollup watch: also set MILADY_DESKTOP_VITE_BUILD_WATCH=1
+bun run dev:desktop:watch  # Vite **dev** server + Electrobun `MILADY_RENDERER_URL` (HMR). Orchestrator pre-picks free API/UI loopback ports when defaults are in use so proxy + env match. Rollup watch: also set MILADY_DESKTOP_VITE_BUILD_WATCH=1
+
+Desktop dev observability (agents cannot see the native window; Cursor does not auto-poll localhost): `GET /api/dev/stack` on the API; `bun run desktop:stack-status -- --json`; default-on aggregated log (`.milady/desktop-dev-console.log`) + `GET /api/dev/console-log` (loopback tail); default-on screenshot proxy `GET /api/dev/cursor-screenshot` (loopback, full-screen OS capture). Opt-out: `MILADY_DESKTOP_SCREENSHOT_SERVER=0`, `MILADY_DESKTOP_DEV_LOG=0`. See `docs/apps/desktop-local-development.md` and `.cursor/rules/milady-desktop-dev-observability.mdc`.
 ```
 
 Desktop dev rationale (signals, Quit, `detached` children): `docs/apps/desktop-local-development.md`.

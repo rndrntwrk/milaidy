@@ -81,8 +81,6 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
   // ── Derived data (hook) ───────────────────────────────────────────
   const {
     chainFocus,
-    bnbBalance,
-    bscHasError,
     allNfts,
     focusedChainError,
     focusedChainName,
@@ -152,7 +150,7 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
         cfg?.heliusKeySet ||
         cloudManagedAccess),
   );
-  const tradeReady = bnbBalance >= BSC_GAS_THRESHOLD;
+  const tradeReady = true;
   const addresses = [
     evmAddr ? { label: "EVM", address: evmAddr } : null,
     solAddr ? { label: "Solana", address: solAddr } : null,
@@ -310,6 +308,8 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
         chainFocus={chainFocus}
         walletBalances={walletBalances}
         walletNfts={walletNfts}
+        addresses={addresses}
+        onCopyAddress={handleCopyAddress}
         setState={setState}
         onChainChange={(chain) => setState("inventoryChainFocus", chain)}
         loadBalances={loadBalances}
@@ -353,7 +353,7 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
           </div>
         )}
 
-        {chainFocus === "bsc" && evmAddr && !bscHasError && (
+        {chainFocus === "bsc" && evmAddr && (
           <TradePanel
             tradeReady={tradeReady}
             bnbBalance={bnbBalance}
@@ -375,8 +375,6 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
             visibleRows={visibleRows}
             visibleChainErrors={visibleChainErrors}
             inventoryChainFocus={inventoryChainFocus ?? "all"}
-            addresses={addresses}
-            onCopyAddress={handleCopyAddress}
             handleUntrackToken={handleUntrackToken}
           />
         ) : (

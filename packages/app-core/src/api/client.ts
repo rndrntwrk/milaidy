@@ -1110,6 +1110,9 @@ export interface CloudStatus {
 export interface CloudCredits {
   connected: boolean;
   balance: number | null;
+  /** True when the cloud API rejected the stored API key (same as chat 401). */
+  authRejected?: boolean;
+  error?: string;
   low?: boolean;
   critical?: boolean;
   topUpUrl?: string;
@@ -2058,6 +2061,15 @@ export class MiladyClient {
     return Boolean(this.apiToken);
   }
 
+  /**
+   * Bearer token sent on Milady REST requests (compat API). Used when the
+   * Electrobun main process relays HTTP so it can match the renderer-injected
+   * token in external-desktop / Vite-proxy setups.
+   */
+  getRestAuthToken(): string | null {
+    return this.apiToken;
+  }
+
   setToken(token: string | null): void {
     this._token = token?.trim() || null;
     // Update boot config so other consumers see the new token.
@@ -2310,6 +2322,29 @@ export class MiladyClient {
     solanaAddress: string;
   }> {
     return this.fetch("/api/wallet/keys");
+  }
+
+  async getWalletOsStoreStatus(): Promise<{
+    backend: string;
+    available: boolean;
+    readEnabled: boolean;
+    vaultId: string;
+  }> {
+    return this.fetch("/api/wallet/os-store");
+  }
+
+  async postWalletOsStoreAction(
+    action: "migrate" | "delete",
+  ): Promise<{
+    ok: boolean;
+    migrated?: string[];
+    failed?: string[];
+    error?: string;
+  }> {
+    return this.fetch("/api/wallet/os-store", {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    });
   }
 
   async getAuthStatus(): Promise<{
@@ -4488,6 +4523,9 @@ export class MiladyClient {
             model: parsed.usage.model,
           };
         }
+        // Terminal event: stop reading immediately instead of waiting for the
+        // server to close the body (some stacks leave the stream open briefly).
+        void reader.cancel("milady-sse-terminal-done").catch(() => {});
         return;
       }
 
@@ -4496,6 +4534,10 @@ export class MiladyClient {
       }
     };
 
+    // Contract: the API must emit `data: {"type":"done",...}` or
+    // `data: {"type":"error",...}` and then end the response. If it stops
+    // mid-stream without either, the UI stays in "sending" until the user
+    // aborts — fix belongs in the conversation stream handler (@elizaos/agent).
     while (true) {
       let done = false;
       let value: Uint8Array | undefined;

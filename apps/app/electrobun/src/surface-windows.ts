@@ -108,6 +108,7 @@ function normalizeSettingsTabHint(tabHint?: string): string | undefined {
 export function buildSurfaceShellQuery(
   surface: ManagedSurface,
   tabHint?: string,
+  browse?: string,
 ): string {
   if (surface === "settings") {
     const normalizedTab = normalizeSettingsTabHint(tabHint);
@@ -115,7 +116,11 @@ export function buildSurfaceShellQuery(
       ? `?shell=settings&tab=${encodeURIComponent(normalizedTab)}`
       : "?shell=settings";
   }
-  return `?shell=surface&tab=${encodeURIComponent(surface)}`;
+  const base = `?shell=surface&tab=${encodeURIComponent(surface)}`;
+  if (surface === "browser" && browse?.trim()) {
+    return `${base}&browse=${encodeURIComponent(browse.trim())}`;
+  }
+  return base;
 }
 
 export class SurfaceWindowManager {
@@ -170,8 +175,10 @@ export class SurfaceWindowManager {
 
   async openSurfaceWindow(
     surface: DetachedSurface,
+    browse?: string,
   ): Promise<ManagedWindowSnapshot> {
-    return this.createManagedWindow(surface, undefined, false);
+    const seed = surface === "browser" ? browse : undefined;
+    return this.createManagedWindow(surface, undefined, false, seed);
   }
 
   focusWindow(id: string): boolean {
@@ -180,6 +187,17 @@ export class SurfaceWindowManager {
     existing.window.focus();
     this.notifyRegistryChanged();
     return true;
+  }
+
+  /**
+   * Invoke `fn` for every open managed window (settings + detached surfaces).
+   * WHY: when the embedded API port changes, `injectApiBase` must reach each
+   * webview—not only `BrowserWindow`—so RPC and `fetch` targets stay consistent.
+   */
+  forEachWindow(fn: (window: ManagedWindowLike) => void): void {
+    for (const { window } of this.windows.values()) {
+      fn(window);
+    }
   }
 
   private toSnapshot(entry: ManagedWindowRecord): ManagedWindowSnapshot {
@@ -195,6 +213,7 @@ export class SurfaceWindowManager {
     surface: ManagedSurface,
     tabHint: string | undefined,
     singleton: boolean,
+    browse?: string,
   ): Promise<ManagedWindowSnapshot> {
     if (!isManagedSurface(surface)) {
       throw new Error(`Unsupported surface: ${surface}`);
@@ -206,7 +225,7 @@ export class SurfaceWindowManager {
     const title = singleton
       ? ordinalTitle(surface, 1)
       : ordinalTitle(surface, existingCount + 1);
-    const query = buildSurfaceShellQuery(surface, tabHint);
+    const query = buildSurfaceShellQuery(surface, tabHint, browse);
     const id = `${surface}_${++this.counter}`;
 
     const window = this.createWindowFn({

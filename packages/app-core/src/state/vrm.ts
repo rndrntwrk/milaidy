@@ -82,18 +82,3 @@ export function getVrmTitle(index: number): string {
   return assets[safe - 1]?.title ?? assets[0].title;
 }
 
-/**
- * Whether a bundled index points to the official Eliza avatar set.
- * @deprecated Stub -- always returns false. Retained for API compatibility.
- */
-export function isOfficialVrmIndex(_index: number): boolean {
-  return false;
-}
-
-/**
- * Whether a VRM index requires an explicit 180-degree face-camera flip instead of auto-detection.
- * @deprecated Stub -- always returns false. Retained for API compatibility.
- */
-export function getVrmNeedsFlip(_index: number): boolean {
-  return false;
-}

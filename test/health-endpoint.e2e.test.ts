@@ -30,6 +30,52 @@ afterAll(async () => {
   }
 }, 15_000);
 
+describe("GET /api/dev/stack", () => {
+  it("returns schema, live listen port, and desktop fields from env", async () => {
+    const { status, data } = await req(port, "GET", "/api/dev/stack");
+    expect(status).toBe(200);
+    expect(data.schema).toBe("milady.dev.stack/v1");
+    expect(data.api).toEqual({
+      listenPort: port,
+      baseUrl: `http://127.0.0.1:${port}`,
+    });
+    expect(data.desktop).toMatchObject({
+      rendererUrl: null,
+      uiPort: null,
+      desktopApiBase: null,
+    });
+    expect(data.cursorScreenshot).toEqual({
+      available: false,
+      path: null,
+    });
+    expect(data.desktopDevLog).toEqual({
+      filePath: null,
+      apiTailPath: null,
+    });
+    expect(Array.isArray(data.hints)).toBe(true);
+  });
+});
+
+describe("GET /api/dev/console-log", () => {
+  it("returns 404 when log path env is not set", async () => {
+    const { status, data } = await req(port, "GET", "/api/dev/console-log");
+    expect(status).toBe(404);
+    expect(data).toMatchObject({ error: expect.any(String) });
+  });
+});
+
+describe("GET /api/dev/cursor-screenshot", () => {
+  it("returns 404 when Electrobun screenshot upstream is not configured", async () => {
+    const { status, data } = await req(
+      port,
+      "GET",
+      "/api/dev/cursor-screenshot",
+    );
+    expect(status).toBe(404);
+    expect(data).toMatchObject({ error: expect.any(String) });
+  });
+});
+
 describe("GET /api/health", () => {
   it("returns structured status", async () => {
     const { status, data } = await req(port, "GET", "/api/health");

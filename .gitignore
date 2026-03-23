@@ -58,6 +58,7 @@ USER.md
 .eliza/
 .eliza.broken.*/
 .milady-repo-setup.lock
+.milady/desktop-dev-console.log
 .turbo/
 skills/*
 !skills/README.md

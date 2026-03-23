@@ -14,7 +14,7 @@
  * Key differences from the prior desktop runtime:
  * - No ipcMain — methods are called directly from rpc-handlers.ts
  * - Uses sendToWebview callback instead of mainWindow.webContents.send()
- * - No powerMonitor — power state read via platform CLI tools
+ * - No powerMonitor — power state via `pmset` (macOS), sysfs (Linux), or WinForms power line (Windows)
  * - No nativeImage — tray icons use file paths directly
  * - No setOpacity on BrowserWindow — no-op
  * - No hide() on BrowserWindow — uses minimize() as fallback
@@ -67,6 +67,10 @@ import {
   makeKeyAndOrderFront,
   orderOut,
 } from "./mac-window-effects";
+import {
+  linuxSysfsOnBattery,
+  parseWindowsPowerLineOutput,
+} from "./power-state";
 import { checkWebGpuSupport } from "./webgpu-browser-support";
 
 // ============================================================================
@@ -172,6 +176,7 @@ export class DesktopManager {
           | "plugins"
           | "connectors"
           | "cloud",
+        browse?: string,
       ) => void)
     | null = null;
   private openExternalHandler:
@@ -233,6 +238,7 @@ export class DesktopManager {
         | "plugins"
         | "connectors"
         | "cloud",
+      browse?: string,
     ) => void,
   ): void {
     this.openSurfaceWindowCallback = cb;
@@ -266,8 +272,9 @@ export class DesktopManager {
       | "plugins"
       | "connectors"
       | "cloud",
+    browse?: string,
   ): void {
-    this.openSurfaceWindowCallback?.(surface);
+    this.openSurfaceWindowCallback?.(surface, browse);
   }
 
   private getWindow(): BrowserWindow {
@@ -1057,35 +1064,33 @@ X-GNOME-Autostart-enabled=true
         return { onBattery, idleState: "unknown", idleTime: 0 };
       }
       if (process.platform === "linux") {
-        const batteryDir = "/sys/class/power_supply";
-        const entries = fs.readdirSync(batteryDir);
-        const bat = entries.find((e) => e.startsWith("BAT"));
-        if (bat) {
-          const statusText = fs
-            .readFileSync(path.join(batteryDir, bat, "status"), "utf8")
-            .trim();
-          return {
-            onBattery: statusText === "Discharging",
-            idleState: "unknown",
-            idleTime: 0,
-          };
-        }
+        return {
+          onBattery: linuxSysfsOnBattery(),
+          idleState: "unknown",
+          idleTime: 0,
+        };
       }
       if (process.platform === "win32") {
         const proc = Bun.spawn(
           [
             "powershell",
             "-NoProfile",
+            "-NoLogo",
             "-Command",
-            "(Get-WmiObject -Class Win32_Battery).BatteryStatus",
+            "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SystemInformation]::PowerStatus.PowerLineStatus.ToString()",
           ],
           { stdout: "pipe", stderr: "ignore" },
         );
         const text = await new Response(proc.stdout).text();
         await proc.exited;
-        // BatteryStatus 1 = Discharging (on battery), 2 = AC, 6 = Charging
-        const status = Number.parseInt(text.trim(), 10);
-        return { onBattery: status === 1, idleState: "unknown", idleTime: 0 };
+        const parsed = parseWindowsPowerLineOutput(text);
+        if (parsed.known) {
+          return {
+            onBattery: parsed.onBattery,
+            idleState: "unknown",
+            idleTime: 0,
+          };
+        }
       }
     } catch {
       // Fall through to stub below

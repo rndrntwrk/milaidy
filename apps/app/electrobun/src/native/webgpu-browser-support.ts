@@ -9,6 +9,12 @@
  * On Linux and Windows, CEF needs `--enable-unsafe-webgpu` and
  * potentially Vulkan flags, which require upstream Electrobun support.
  * As a fallback, Chrome Beta can be used for WebGPU testing.
+ *
+ * **WHY `getMacOSMajorVersion` exists:** `os.release()` reports **Darwin**, not the
+ * macOS marketing major. Through Sequoia, `Darwin − 9` matched 11–15; on Tahoe,
+ * macOS **26** runs Darwin **25**, so a single `− 9` rule yields **16** and breaks
+ * both log text and the “≥ 26” WKWebView gate. See repo doc
+ * `docs/apps/electrobun-darwin-macos-webgpu-version.md`.
  */
 
 import * as fs from "node:fs";
@@ -144,24 +150,40 @@ export function getWebGpuChromiumFlags(): string[] {
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the macOS major version (e.g. 26 for macOS 26 Tahoe).
- * Returns null if not on macOS or version cannot be determined.
+ * Returns the macOS **marketing** major (11, 12, … 26, 27, …), derived from
+ * `os.release()`’s Darwin major (same as `uname -r`).
+ *
+ * **Documented mapping** (Darwin release history; e.g. Wikipedia
+ * “Darwin (operating system)” § Darwin 20 onwards, checked 2026-03):
+ *
+ * | Darwin | macOS |
+ * |-------:|------:|
+ * | 20 | 11 Big Sur |
+ * | 21 | 12 Monterey |
+ * | 22 | 13 Ventura |
+ * | 23 | 14 Sonoma |
+ * | 24 | 15 Sequoia |
+ * | 25 | 26 Tahoe |
+ *
+ * For Darwin 20–24: `macOS = Darwin − 9`. From Tahoe onward the product major
+ * is **Darwin + 1** (build numbers still start with Darwin); see
+ * https://derflounder.wordpress.com/2025/12/24/why-macos-26-build-numbers-begin-with-25/
+ * — so Darwin 26 → macOS 27 when that ships, etc.
+ *
+ * Darwin majors below 20 (macOS 10.x and earlier): returns `null` (not needed for WebGPU).
  */
 export function getMacOSMajorVersion(): number | null {
   if (process.platform !== "darwin") return null;
   try {
-    const release = os.release(); // e.g. "25.0.0" for macOS 26
+    const release = os.release(); // e.g. "25.0.0" on macOS 26 (Darwin 25)
     const darwinMajor = Number.parseInt(release.split(".")[0], 10);
     if (Number.isNaN(darwinMajor)) return null;
-    // Darwin kernel version = macOS version + 9 (approximately)
-    // Darwin 25 = macOS 26 (Tahoe), Darwin 24 = macOS 15 (Sequoia wait that's wrong)
-    // Actually: Darwin 20 = macOS 11, Darwin 21 = macOS 12, Darwin 22 = macOS 13,
-    //           Darwin 23 = macOS 14, Darwin 24 = macOS 15, Darwin 25 = macOS 26
-    // The offset is darwinMajor - 9 for macOS 11+
+    if (darwinMajor >= 25) {
+      return darwinMajor + 1;
+    }
     if (darwinMajor >= 20) {
       return darwinMajor - 9;
     }
-    // Older versions aren't relevant for WebGPU
     return null;
   } catch {
     return null;
@@ -199,10 +221,10 @@ export function checkWebGpuSupport(
       };
     }
 
-    // macOS < 26 — WKWebView doesn't support WebGPU
+    // macOS < 26 — WKWebView doesn't expose WebGPU (Milady still runs; UI uses WebGL).
     return {
       available: false,
-      reason: `macOS ${macVersion ?? "unknown"} does not support WebGPU in WKWebView. macOS 26+ (Tahoe) is required.`,
+      reason: `WKWebView does not expose WebGPU on macOS ${macVersion ?? "unknown"} (native navigator.gpu needs macOS 26+ Tahoe). Milady still runs; companion and avatar use WebGL when WebGPU is missing. Chrome Beta is optional for separate Chromium WebGPU experiments.`,
       renderer: "native",
       chromeBetaPath: chromeBeta.path,
       downloadUrl: chromeBeta.downloadUrl,
@@ -218,7 +240,7 @@ export function checkWebGpuSupport(
 
     return {
       available: false,
-      reason: `CEF renderer requires WebGPU flags (${flagList}) which need upstream Electrobun support. ${chromeBeta.found ? "Chrome Beta is available as a fallback." : "Chrome Beta is not installed."}`,
+      reason: `CEF needs WebGPU-related Chromium flags (${flagList}); injecting them from Milady is pending upstream Electrobun support. ${chromeBeta.found ? "Chrome Beta is installed for optional WebGPU testing." : "Chrome Beta is not installed."} The Milady UI still runs on WebGL when the renderer has no WebGPU.`,
       renderer: "cef",
       chromeBetaPath: chromeBeta.path,
       downloadUrl: chromeBeta.found ? null : chromeBeta.downloadUrl,
@@ -228,7 +250,8 @@ export function checkWebGpuSupport(
   // Unknown / fallback
   return {
     available: false,
-    reason: "Unable to determine WebGPU support for this configuration.",
+    reason:
+      "Unable to determine WebGPU support for this configuration. Milady still runs; the UI uses WebGL when WebGPU is unavailable.",
     renderer: "unknown",
     chromeBetaPath: chromeBeta.path,
     downloadUrl: chromeBeta.downloadUrl,

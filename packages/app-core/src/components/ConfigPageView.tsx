@@ -119,7 +119,7 @@ function CloudRpcStatus({
       </div>
       <button
         type="button"
-        className="btn text-xs py-[3px] px-3 !mt-0 font-bold"
+        className="inline-flex items-center justify-center border border-accent bg-accent text-accent-fg cursor-pointer text-[13px] font-[inherit] no-underline whitespace-nowrap rounded-lg transition-opacity duration-100 hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed text-xs py-[3px] px-3 !mt-0 font-bold"
         onClick={() => void onLogin()}
         disabled={loginBusy}
       >
@@ -461,6 +461,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
     elizaCloudCredits,
     elizaCloudCreditsLow,
     elizaCloudCreditsCritical,
+    elizaCloudAuthRejected,
     elizaCloudTopUpUrl,
     elizaCloudLoginBusy,
     walletConfig,
@@ -726,24 +727,32 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
           {elizaCloudConnected ? (
             <>
               <div className="flex items-center gap-2.5 mb-4 p-3 rounded-lg bg-accent/5 border border-accent/15">
-                <span className="w-2 h-2 rounded-full bg-ok shrink-0" />
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${elizaCloudAuthRejected ? "bg-danger" : "bg-ok"}`}
+                />
                 <span className="text-[13px] font-semibold text-txt">
-                  Connected to Eliza Cloud
+                  {elizaCloudAuthRejected
+                    ? "Eliza Cloud key invalid"
+                    : "Connected to Eliza Cloud"}
                 </span>
-                {elizaCloudCredits !== null && (
+                {(elizaCloudCredits !== null || elizaCloudAuthRejected) && (
                   <span className="text-xs text-muted ml-auto flex items-center gap-1.5">
                     <span
                       className={
-                        elizaCloudCreditsCritical
+                        elizaCloudAuthRejected || elizaCloudCreditsCritical
                           ? "text-danger font-bold"
                           : elizaCloudCreditsLow
                             ? "text-warn font-bold"
                             : "text-txt font-semibold"
                       }
                     >
-                      ${elizaCloudCredits.toFixed(2)}
+                      {elizaCloudAuthRejected
+                        ? "Fix in Cloud settings"
+                        : elizaCloudCredits !== null
+                          ? `$${elizaCloudCredits.toFixed(2)}`
+                          : ""}
                     </span>
-                    {elizaCloudTopUpUrl && (
+                    {elizaCloudTopUpUrl && !elizaCloudAuthRejected && (
                       <a
                         href={elizaCloudTopUpUrl}
                         target="_blank"
@@ -808,7 +817,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
               </div>
               <button
                 type="button"
-                className="btn text-xs py-2 px-5 font-bold"
+                className="inline-flex items-center justify-center border border-accent bg-accent text-accent-fg cursor-pointer text-[13px] font-[inherit] no-underline whitespace-nowrap rounded-lg transition-opacity duration-100 hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed text-xs py-2 px-5 font-bold"
                 onClick={() => void handleCloudLogin()}
                 disabled={elizaCloudLoginBusy}
               >
@@ -822,7 +831,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
           <div className="flex justify-end mt-4">
             <button
               type="button"
-              className="btn text-[11px] py-1 px-3.5 !mt-0"
+              className="inline-flex items-center justify-center border border-accent bg-accent text-accent-fg cursor-pointer text-[13px] font-[inherit] no-underline whitespace-nowrap rounded-lg transition-opacity duration-100 hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed text-[11px] py-1 px-3.5 !mt-0"
               onClick={handleWalletSaveAll}
               disabled={walletApiKeySaving}
             >
@@ -841,7 +850,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
             <div className="font-bold text-sm">Custom RPC Providers</div>
             <button
               type="button"
-              className="settings-button flex items-center gap-1.5 text-[12px] text-muted hover:text-txt bg-transparent border border-border rounded-lg cursor-pointer transition-colors hover:border-accent"
+              className="min-h-[2.625rem] px-4 rounded-[calc(var(--radius-lg)+2px)] flex items-center gap-1.5 text-[12px] text-muted hover:text-txt bg-transparent border border-border cursor-pointer transition-colors hover:border-accent"
               onClick={() => setSecretsOpen(true)}
             >
               <svg
@@ -930,7 +939,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
           <div className="flex justify-end mt-4">
             <button
               type="button"
-              className="btn text-[11px] py-1 px-3.5 !mt-0"
+              className="inline-flex items-center justify-center border border-accent bg-accent text-accent-fg cursor-pointer text-[13px] font-[inherit] no-underline whitespace-nowrap rounded-lg transition-opacity duration-100 hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed text-[11px] py-1 px-3.5 !mt-0"
               onClick={handleWalletSaveAll}
               disabled={walletApiKeySaving}
             >

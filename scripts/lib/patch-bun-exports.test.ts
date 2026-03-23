@@ -24,6 +24,8 @@ import {
   patchAutonomousMiladyOnboardingPresets,
   patchBrokenElizaCoreRuntimeDists,
   patchBunExports,
+  patchElizaCoreStreamingRetryPlaceholder,
+  patchElizaCoreStreamingTtsHandlerGuard,
   patchExtensionlessJsExports,
   patchMissingLifecycleScript,
   patchNobleHashesCompat,
@@ -478,6 +480,94 @@ describe("patch-bun-exports", () => {
           "utf8",
         ),
       ).toBe("// node");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("patchElizaCoreStreamingTtsHandlerGuard rewrites TEXT_TO_SPEECH calls when handler may be missing", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "patch-bun-exports-test-"));
+    try {
+      const pkgDir = join(tmp, "node_modules", "@elizaos", "core");
+      const nodePath = join(pkgDir, "dist", "node", "index.node.js");
+      mkdirSync(join(pkgDir, "dist", "node"), { recursive: true });
+      writeFileSync(join(pkgDir, "package.json"), "{}", "utf8");
+      writeFileSync(
+        nodePath,
+        [
+          "const result2 = await runtime2.useModel(ModelType.TEXT_TO_SPEECH, params);",
+          "other();",
+          "const result2 = await runtime2.useModel(ModelType.TEXT_TO_SPEECH, params);",
+          'runtime2.logger.error({ error }, "Error generating voice for remaining text")',
+        ].join("\n"),
+        "utf8",
+      );
+
+      const logs: string[] = [];
+      const patched = patchElizaCoreStreamingTtsHandlerGuard(tmp, (msg) =>
+        logs.push(msg),
+      );
+
+      expect(patched).toBe(true);
+      const out = readFileSync(nodePath, "utf8");
+      expect(out).not.toContain(
+        "const result2 = await runtime2.useModel(ModelType.TEXT_TO_SPEECH, params);",
+      );
+      expect(out).toContain(
+        "runtime2.getModel(ModelType.TEXT_TO_SPEECH) ? await runtime2.useModel(ModelType.TEXT_TO_SPEECH, params) : void 0",
+      );
+      expect(logs.some((line) => line.includes("streaming TTS guard"))).toBe(
+        true,
+      );
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("patchElizaCoreStreamingRetryPlaceholder removes retry onChunk placeholder", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "patch-bun-exports-test-"));
+    try {
+      const pkgDir = join(tmp, "node_modules", "@elizaos", "core");
+      const nodePath = join(pkgDir, "dist", "node", "index.node.js");
+      const browserPath = join(pkgDir, "dist", "browser", "index.browser.js");
+      mkdirSync(join(pkgDir, "dist", "node"), { recursive: true });
+      mkdirSync(join(pkgDir, "dist", "browser"), { recursive: true });
+      writeFileSync(join(pkgDir, "package.json"), "{}", "utf8");
+      writeFileSync(
+        nodePath,
+        [
+          "signalRetry(retryCount) {",
+          '    this.state = "retrying";',
+          "    if (!this.config.hasRichConsumer) {",
+          "      this.config.onChunk(`",
+          "-- that's not right, let me start again:",
+          "`);",
+          "    }",
+          '    this.emitEvent({ eventType: "retry_start" });',
+          "  }",
+        ].join("\n"),
+        "utf8",
+      );
+      writeFileSync(
+        browserPath,
+        'signalRetry($){if(this.state="retrying",!this.config.hasRichConsumer)this.config.onChunk(`\n-- that\'s not right, let me start again:\n`);return this.emitEvent({});}',
+        "utf8",
+      );
+
+      const logs: string[] = [];
+      const patched = patchElizaCoreStreamingRetryPlaceholder(tmp, (msg) =>
+        logs.push(msg),
+      );
+
+      expect(patched).toBe(true);
+      expect(readFileSync(nodePath, "utf8")).not.toContain("not right");
+      expect(readFileSync(browserPath, "utf8")).not.toContain("not right");
+      expect(readFileSync(browserPath, "utf8")).toContain(
+        'this.state="retrying"',
+      );
+      expect(
+        logs.some((line) => line.includes("streaming retry placeholder")),
+      ).toBe(true);
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }

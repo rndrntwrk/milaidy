@@ -62,6 +62,7 @@ function createContext(overrides: Record<string, unknown> = {}) {
     handleSelectConversation: vi.fn(async () => {}),
     handleDeleteConversation: vi.fn(async () => {}),
     handleRenameConversation: vi.fn(async () => {}),
+    suggestConversationTitle: vi.fn(async () => null),
     uiLanguage: "en",
     ...overrides,
   };

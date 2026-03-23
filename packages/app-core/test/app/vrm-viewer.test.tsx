@@ -24,6 +24,9 @@ vi.mock("@miladyai/app-core/components/avatar/VrmEngine", () => {
     setCameraProfile = vi.fn();
     setInteractionMode = vi.fn();
     setPaused = vi.fn();
+    setMinimalBackgroundMode = vi.fn();
+    setLowPowerRenderMode = vi.fn();
+    setHalfFramerateMode = vi.fn();
     setPointerParallaxEnabled = vi.fn();
     setPointerParallaxTarget = vi.fn();
     resetPointerParallax = vi.fn();
@@ -97,6 +100,8 @@ describe("VrmViewer", () => {
     const mockWindow = {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
+      setInterval: vi.fn(() => 42),
+      clearInterval: vi.fn(),
     } as unknown as Window & typeof globalThis;
     globalThis.window = mockWindow;
 

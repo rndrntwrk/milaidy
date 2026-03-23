@@ -17,6 +17,7 @@ import { isRoutineCodingAgentMessage } from "@miladyai/app-core/chat";
 import { VOICE_CONFIG_UPDATED_EVENT } from "@miladyai/app-core/events";
 import {
   useChatAvatarVoiceBridge,
+  useDocumentVisibility,
   useTimeout,
   useVoiceChat,
   type VoiceCaptureMode,
@@ -355,29 +356,23 @@ function useChatVoiceController(options: {
 
 function useGameModalMessages(options: {
   activeConversationId: string | null;
-  agentVoiceMuted: boolean;
   companionMessageCutoffTs: number;
   isGameModal: boolean;
-  setState: ReturnType<typeof useApp>["setState"];
-  stopSpeaking: () => void;
   visibleMsgs: ConversationMessage[];
 }) {
   const {
     activeConversationId,
-    agentVoiceMuted,
     companionMessageCutoffTs,
     isGameModal,
-    setState,
-    stopSpeaking,
     visibleMsgs,
   } = options;
   const previousCompanionCutoffTsRef = useRef(companionMessageCutoffTs);
   const previousGameModalVisibleMsgsRef = useRef<ConversationMessage[]>([]);
   const previousActiveConversationIdRef = useRef(activeConversationId);
-  const companionVoiceInitializedRef = useRef(false);
   const [companionNowMs, setCompanionNowMs] = useState(() => Date.now());
   const [companionCarryover, setCompanionCarryover] =
     useState<CompanionCarryoverState | null>(null);
+  const docVisible = useDocumentVisibility();
 
   const gameModalRecentMsgs = useMemo(
     () =>
@@ -407,19 +402,6 @@ function useGameModalMessages(options: {
   useEffect(() => {
     if (!isGameModal) {
       previousActiveConversationIdRef.current = activeConversationId;
-      companionVoiceInitializedRef.current = false;
-      return;
-    }
-    if (companionVoiceInitializedRef.current) return;
-    companionVoiceInitializedRef.current = true;
-    if (agentVoiceMuted) {
-      setState("chatAgentVoiceMuted", false);
-    }
-  }, [activeConversationId, agentVoiceMuted, isGameModal, setState]);
-
-  useEffect(() => {
-    if (!isGameModal) {
-      previousActiveConversationIdRef.current = activeConversationId;
       return;
     }
 
@@ -434,12 +416,7 @@ function useGameModalMessages(options: {
     // NOTE: intentionally no stopSpeaking() here — the auto-speak effect's
     // queueAssistantSpeech already cancels old speech before queuing new.
     // Calling stopSpeaking() races with greeting speech and kills it.
-  }, [
-    activeConversationId,
-    companionMessageCutoffTs,
-    isGameModal,
-    stopSpeaking,
-  ]);
+  }, [activeConversationId, companionMessageCutoffTs, isGameModal]);
 
   useEffect(() => {
     if (!isGameModal) {
@@ -477,9 +454,11 @@ function useGameModalMessages(options: {
     const tick = () => setCompanionNowMs(Date.now());
     tick();
 
+    if (!docVisible) return () => {};
+
     const intervalId = window.setInterval(tick, 250);
     return () => window.clearInterval(intervalId);
-  }, [companionCarryover]);
+  }, [companionCarryover, docVisible]);
 
   useEffect(() => {
     if (!companionCarryover) return;
@@ -594,11 +573,8 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
     gameModalVisibleMsgs,
   } = useGameModalMessages({
     activeConversationId,
-    agentVoiceMuted: agentVoiceMuted,
     companionMessageCutoffTs,
     isGameModal,
-    setState,
-    stopSpeaking,
     visibleMsgs,
   });
   const agentAvatarSrc =

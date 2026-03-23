@@ -75,6 +75,14 @@
 - `src/hooks/{loader,registry,hooks,discovery}.test.ts`
 - `src/runtime/service-init-order.test.ts`
 
+### Pass 3 — More req() extraction + no-op mock removal:
+- **Extracted req() from 9 more files** in `packages/app-core/test/app/` — same pattern, ~340 lines removed
+- **Extracted req() from 10 more files** in `packages/app-core/src/api/` (server.*.test.ts) — ~400 lines removed
+- **Removed 6 no-op `vi.mock("node:path")` calls** from electrobun test files — these imported the actual module and returned it unchanged (pure no-op)
+- **Deleted `kitchen-sink.test.ts.bak`** — leftover backup file
+
+### Total across all passes: ~1,500+ lines of duplicated mock/helper code removed across 70+ files
+
 ---
 
 ## Agent: Test Suite Cleanup (Dead/Larp/Stub Test Removal)

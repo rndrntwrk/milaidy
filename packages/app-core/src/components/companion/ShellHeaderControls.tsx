@@ -133,7 +133,7 @@ export function ShellHeaderControls({
 
   return (
     <div
-      className={`flex min-w-0 items-center w-full ${className ?? ""}`}
+      className={`flex min-w-0 items-center w-full overflow-visible ${className ?? ""}`}
       data-no-camera-drag="true"
     >
       {/* Left: shell view toggle */}
@@ -234,7 +234,7 @@ export function ShellHeaderControls({
 
       {/* Right: controls */}
       <div
-        className="flex shrink-0 items-center justify-end gap-2"
+        className="flex shrink-0 items-center justify-end gap-2 overflow-visible"
         data-testid="shell-header-right-controls"
         data-no-camera-drag="true"
       >

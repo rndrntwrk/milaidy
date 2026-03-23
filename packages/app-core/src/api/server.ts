@@ -8,6 +8,7 @@ import { type AgentRuntime, logger } from "@elizaos/core";
 import { StewardApiError, type PolicyResult } from "@stwd/sdk";
 
 
+import { handleCloudCompatRoute } from "@elizaos/agent/api/cloud-compat-routes";
 // Override the wallet export rejection function with the hardened version
 // that adds rate limiting, audit logging, and a forced confirmation delay.
 import {
@@ -31,6 +32,11 @@ import {
   buildBscTradeQuote,
   resolvePrimaryBscRpcUrl,
 } from "./bsc-trade";
+import {
+  isAllowedDevConsoleLogPath,
+  readDevConsoleLogTail,
+} from "./dev-console-log";
+import { resolveDevStackFromEnv } from "./dev-stack";
 import {
   getStewardBridgeStatus,
   signTransactionWithOptionalSteward,
@@ -61,6 +67,16 @@ function syncElizaEnvToMilady(): void {
 const lazyEnsureTTS = () =>
   import("../runtime/eliza.js").then((m) => m.ensureMiladyTextToSpeechHandler);
 import { getMiladyStartupEmbeddingAugmentation } from "../runtime/milady-startup-overlay.js";
+import { deriveAgentVaultId } from "../security/agent-vault-id";
+import { hydrateWalletKeysFromNodePlatformSecureStore } from "../security/hydrate-wallet-keys-from-platform-store";
+import {
+  createNodePlatformSecureStore,
+  isWalletOsStoreReadEnabled,
+} from "../security/platform-secure-store-node";
+import {
+  deleteWalletSecretsFromOsStore,
+  migrateWalletPrivateKeysToOsStore,
+} from "../security/wallet-os-store-actions";
 import { getCloudSecret } from "./cloud-secrets";
 
 
@@ -1663,51 +1679,6 @@ async function handleDatabaseRowsCompatRoute(
   return true;
 }
 
-type TradePermissionMode = "user-sign-only" | "manual-local-key" | "agent-auto";
-
-const AGENT_AUTOMATION_HEADER = "x-milady-agent-action";
-
-function isAgentAutomationRequest(
-  req: Pick<http.IncomingMessage, "headers">,
-): boolean {
-  const raw = req.headers[AGENT_AUTOMATION_HEADER];
-  return typeof raw === "string" && /^(1|true|yes|agent)$/i.test(raw.trim());
-}
-
-interface LocalSignedTransactionResult {
-  hash: string;
-  nonce: number;
-  gasLimit: string;
-}
-
-async function sendLocalWalletTransaction(
-  rpcUrl: string,
-  tx: {
-    to: string;
-    data?: string;
-    value: bigint;
-    chainId: number;
-    nonce?: number;
-  },
-): Promise<LocalSignedTransactionResult> {
-  const evmKey = process.env.EVM_PRIVATE_KEY ?? "";
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
-
-  try {
-    const wallet = new ethers.Wallet(
-      evmKey.startsWith("0x") ? evmKey : `0x${evmKey}`,
-      provider,
-    );
-    const txResponse = await wallet.sendTransaction(tx);
-    return {
-      hash: txResponse.hash,
-      nonce: txResponse.nonce,
-      gasLimit: txResponse.gasLimit?.toString() ?? "0",
-    };
-  } finally {
-    provider.destroy();
-  }
-}
 
 type TradePermissionMode = "user-sign-only" | "manual-local-key" | "agent-auto";
 
@@ -1790,6 +1761,124 @@ async function handleMiladyCompatRoute(
   const method = (req.method ?? "GET").toUpperCase();
   const url = new URL(req.url ?? "/", "http://localhost");
 
+
+  // Eliza Cloud thin-client proxy (compat agents, jobs, …) — was missing from the
+  // compat wrapper, so the dashboard saw 404 on `/api/cloud/compat/agents`.
+  if (url.pathname.startsWith("/api/cloud/compat/")) {
+    if (!ensureCompatApiAuthorized(req, res)) {
+      return true;
+    }
+    return handleCloudCompatRoute(req, res, url.pathname, method, {
+      config: loadElizaConfig(),
+    });
+  }
+
+  // Milady dev observability routes (loopback where noted). WHY: agents cannot see the Electrobun
+  // window; these endpoints mirror orchestrator state (stack JSON), proxied screenshot, and log
+  // tail — see docs/apps/desktop-local-development.md and dev-stack.ts / dev-console-log.ts.
+  if (method === "GET" && url.pathname === "/api/dev/stack") {
+    const payload = resolveDevStackFromEnv();
+    const localPort = (req.socket as { localPort?: number } | null)?.localPort;
+    if (typeof localPort === "number" && localPort > 0) {
+      payload.api.listenPort = localPort;
+      payload.api.baseUrl = `http://127.0.0.1:${localPort}`;
+    }
+    sendJsonResponse(res, 200, payload);
+    return true;
+  }
+
+  // Proxies Electrobun dev screenshot server (full-screen PNG via OS capture tools).
+  if (method === "GET" && url.pathname === "/api/dev/cursor-screenshot") {
+    const ra = req.socket.remoteAddress;
+    const loopback =
+      ra === "127.0.0.1" || ra === "::1" || ra === "::ffff:127.0.0.1";
+    if (!loopback) {
+      sendJsonErrorResponse(res, 403, "loopback only");
+      return true;
+    }
+    const upstream = process.env.MILADY_ELECTROBUN_SCREENSHOT_URL?.trim();
+    if (!upstream) {
+      sendJsonResponse(res, 404, {
+        error: "desktop screenshot server not enabled",
+        hint: "Desktop dev enables the screenshot server by default; use dev-platform or set MILADY_ELECTROBUN_SCREENSHOT_URL. Disable with MILADY_DESKTOP_SCREENSHOT_SERVER=0.",
+      });
+      return true;
+    }
+    const token = process.env.MILADY_SCREENSHOT_SERVER_TOKEN?.trim() ?? "";
+    const base = upstream.replace(/\/$/, "");
+    const target = `${base}/cursor-screenshot.png`;
+    try {
+      const r = await fetch(target, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!r.ok) {
+        const text = await r.text().catch(() => "");
+        sendJsonResponse(
+          res,
+          r.status === 401 || r.status === 403 ? r.status : 502,
+          {
+            error: "upstream screenshot failed",
+            status: r.status,
+            detail: text.slice(0, 200),
+          },
+        );
+        return true;
+      }
+      const buf = Buffer.from(await r.arrayBuffer());
+      res.writeHead(200, {
+        "Content-Type": "image/png",
+        "Cache-Control": "no-store",
+      });
+      res.end(buf);
+      return true;
+    } catch (err) {
+      sendJsonResponse(res, 502, {
+        error: "screenshot proxy error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+      return true;
+    }
+  }
+
+  // Tail of desktop dev orchestrator log (vite / api / electrobun), loopback only.
+  if (method === "GET" && url.pathname === "/api/dev/console-log") {
+    const ra = req.socket.remoteAddress;
+    const loopback =
+      ra === "127.0.0.1" || ra === "::1" || ra === "::ffff:127.0.0.1";
+    if (!loopback) {
+      sendJsonErrorResponse(res, 403, "loopback only");
+      return true;
+    }
+    const logPath = process.env.MILADY_DESKTOP_DEV_LOG_PATH?.trim();
+    if (!logPath || !isAllowedDevConsoleLogPath(logPath)) {
+      sendJsonResponse(res, 404, {
+        error: "desktop dev log not configured",
+        hint: "Run via dev-platform (dev:desktop); disable file with MILADY_DESKTOP_DEV_LOG=0.",
+      });
+      return true;
+    }
+    const maxLinesRaw = url.searchParams.get("maxLines");
+    const maxBytesRaw = url.searchParams.get("maxBytes");
+    const maxLines = maxLinesRaw ? Number(maxLinesRaw) : undefined;
+    const maxBytes = maxBytesRaw ? Number(maxBytesRaw) : undefined;
+    const result = readDevConsoleLogTail(logPath, {
+      maxLines: Number.isFinite(maxLines) ? maxLines : undefined,
+      maxBytes: Number.isFinite(maxBytes) ? maxBytes : undefined,
+    });
+    if (!result.ok) {
+      sendJsonResponse(res, 404, { error: result.error });
+      return true;
+    }
+    res.writeHead(200, {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+    res.end(result.body);
+    return true;
+  }
+
+  // Cloud-provisioned containers skip onboarding — the platform handles setup.
+  // Return { complete: true } so the frontend goes directly to chat.
   if (method === "GET" && url.pathname === "/api/onboarding/status") {
     if (_isCloudProvisioned()) {
       sendJsonResponse(res, 200, { complete: true });
@@ -1947,6 +2036,13 @@ async function handleMiladyCompatRoute(
         delete (config.cloud as Record<string, unknown>).apiKey;
       }
       saveElizaConfig(config);
+      try {
+        await deleteWalletSecretsFromOsStore();
+      } catch (osErr) {
+        logger.warn(
+          `[milady][reset] OS wallet store cleanup: ${osErr instanceof Error ? osErr.message : String(osErr)}`,
+        );
+      }
       logger.info(
         "[milady][reset] POST /api/agent/reset: eliza.json saved — renderer should restart API process if embedded/external dev",
       );
@@ -1961,6 +2057,88 @@ async function handleMiladyCompatRoute(
     }
     return true;
   }
+
+  // ── GET/POST /api/wallet/os-store (Keychain / Secret Service) ───────
+  if (method === "GET" && url.pathname === "/api/wallet/os-store") {
+    if (!ensureCompatApiAuthorized(req, res)) {
+      return true;
+    }
+
+    try {
+      const store = createNodePlatformSecureStore();
+      const available = await store.isAvailable();
+      sendJsonResponse(res, 200, {
+        backend: store.backend,
+        available,
+        readEnabled: isWalletOsStoreReadEnabled(),
+        vaultId: deriveAgentVaultId(),
+      });
+    } catch (err) {
+      logger.warn(
+        `[wallet][os-store] GET status failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      sendJsonResponse(res, 500, { error: "os-store status failed" });
+    }
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/api/wallet/os-store") {
+    if (!ensureCompatSensitiveRouteAuthorized(req, res)) {
+      return true;
+    }
+
+    const body = await readCompatJsonBody(req, res);
+    if (!body) {
+      return true;
+    }
+
+    const action = typeof body.action === "string" ? body.action.trim() : "";
+
+    try {
+      if (action === "migrate") {
+        const result = await migrateWalletPrivateKeysToOsStore();
+        if (result.unavailable) {
+          sendJsonResponse(res, 503, {
+            ok: false,
+            error: "OS secret store unavailable on this host",
+          });
+          return true;
+        }
+        sendJsonResponse(res, 200, {
+          ok: true,
+          migrated: result.migrated,
+          failed: result.failed,
+        });
+        return true;
+      }
+      if (action === "delete") {
+        await deleteWalletSecretsFromOsStore();
+        sendJsonResponse(res, 200, { ok: true });
+        return true;
+      }
+    } catch (err) {
+      logger.warn(
+        `[wallet][os-store] POST failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      sendJsonResponse(res, 500, {
+        error: err instanceof Error ? err.message : "os-store action failed",
+      });
+      return true;
+    }
+
+    sendJsonResponse(res, 400, { error: "Unknown action" });
+    return true;
+  }
+
+  // ── GET /api/wallet/keys (onboarding only) ──────────────────────────
+  // Security note: this compat route exists only for the embedded desktop
+  // onboarding flow, where the renderer needs to display the keys already
+  // generated inside the local runtime. Electrobun injects a loopback
+  // `http://127.0.0.1:<port>` API base plus a generated API token before the
+  // renderer mounts, and ensureCompatSensitiveRouteAuthorized fails closed if
+  // that token is missing. The route is also permanently disabled once
+  // onboardingComplete flips true so the backup screen cannot be reopened as a
+  // general-purpose key export endpoint.
 
   if (method === "GET" && url.pathname === "/api/wallet/keys") {
     if (!ensureCompatSensitiveRouteAuthorized(req, res)) {
@@ -2169,6 +2347,10 @@ async function handleMiladyCompatRoute(
             value: unsignedApprovalTx.valueWei,
             chainId: unsignedApprovalTx.chainId,
           },
+          fallback: async () => await sendLocalWalletTransaction(
+             rpcUrl ?? "https://bsc-dataseed1.binance.org/",
+             { to: unsignedApprovalTx.to, data: unsignedApprovalTx.data, value: BigInt(unsignedApprovalTx.valueWei), chainId: unsignedApprovalTx.chainId }
+          )
         });
 
         if (
@@ -2213,6 +2395,10 @@ async function handleMiladyCompatRoute(
           value: unsignedTx.valueWei,
           chainId: unsignedTx.chainId,
         },
+        fallback: async () => await sendLocalWalletTransaction(
+          rpcUrl ?? "https://bsc-dataseed1.binance.org/",
+          { to: unsignedTx.to, data: unsignedTx.data, value: BigInt(unsignedTx.valueWei), chainId: unsignedTx.chainId }
+        )
       });
 
       if (
@@ -2450,6 +2636,10 @@ async function handleMiladyCompatRoute(
           value: unsignedTx.valueWei,
           chainId: unsignedTx.chainId,
         },
+        fallback: async () => await sendLocalWalletTransaction(
+          rpcUrl ?? "https://bsc-dataseed1.binance.org/",
+          { to: unsignedTx.to, data: unsignedTx.data, value: BigInt(unsignedTx.valueWei), chainId: unsignedTx.chainId }
+        )
       });
 
       if (
@@ -2869,9 +3059,43 @@ export function patchHttpCreateServerForMiladyCompat(
         patchCompatStatusResponse(req, res, state);
       }
 
-      const origin = req.headers.origin ?? "";
-      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
-        res.setHeader("Access-Control-Allow-Origin", origin);
+      // CORS: allow local renderer servers (Vite, static loopback, WKWebView).
+      // WKWebView sometimes omits `Origin` on cross-port fetches; allow Referer
+      // only when Origin is absent so we never reflect an arbitrary Origin.
+      const originHeader = req.headers.origin ?? "";
+      const allowOrigin = (() => {
+        if (
+          /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(
+            originHeader,
+          )
+        ) {
+          return originHeader;
+        }
+        if (originHeader !== "") {
+          return null;
+        }
+        const ref = req.headers.referer;
+        if (!ref) return null;
+        try {
+          const u = new URL(ref);
+          if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+          const h = u.hostname.toLowerCase();
+          if (
+            h === "localhost" ||
+            h === "127.0.0.1" ||
+            h === "[::1]" ||
+            h === "::1"
+          ) {
+            return u.origin;
+          }
+        } catch {
+          return null;
+        }
+        return null;
+      })();
+
+      if (allowOrigin) {
+        res.setHeader("Access-Control-Allow-Origin", allowOrigin);
         res.setHeader(
           "Access-Control-Allow-Methods",
           "GET, POST, PUT, DELETE, OPTIONS",
@@ -2941,6 +3165,7 @@ export async function startApiServer(
 ): Promise<Awaited<ReturnType<typeof upstreamStartApiServer>>> {
   syncMiladyEnvToEliza();
   syncElizaEnvToMilady();
+  await hydrateWalletKeysFromNodePlatformSecureStore();
   const compatState: CompatRuntimeState = {
     current: (args[0]?.runtime as AgentRuntime | null) ?? null,
     pendingAgentName: null,
@@ -2960,9 +3185,19 @@ export async function startApiServer(
 
     server.updateRuntime = (runtime: AgentRuntime) => {
       compatState.current = runtime;
-      void ensureRuntimeSqlCompatibility(runtime);
-      void lazyEnsureTTS().then((fn) => fn(runtime));
-      originalUpdateRuntime(runtime);
+      // Run SQL repair + Edge TTS registration before the upstream handler sets
+      // `state.runtime` and accepts chat. Previously these were fire-and-forget
+      // (`void`), so the first streamed reply could call `useModel(TEXT_TO_SPEECH)`
+      // before `ensureMiladyTextToSpeechHandler` finished — logging "No handler"
+      // even though TTS works moments later (or via the separate client voice path).
+      void (async () => {
+        try {
+          await ensureRuntimeSqlCompatibility(runtime);
+          await (await lazyEnsureTTS())(runtime);
+        } finally {
+          originalUpdateRuntime(runtime);
+        }
+      })();
     };
 
     syncElizaEnvToMilady();

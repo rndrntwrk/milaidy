@@ -131,7 +131,16 @@ function CompanionSceneSurface({
   children?: ReactNode;
 }) {
   useRenderGuard("CompanionSceneHost");
-  const { selectedVrmIndex, customVrmUrl, uiTheme, t, tab } = useApp();
+  const {
+    selectedVrmIndex,
+    customVrmUrl,
+    uiTheme,
+    t,
+    tab,
+    companionVrmPowerMode,
+    companionHalfFramerateMode,
+    companionAnimateWhenHidden,
+  } = useApp();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stageEnginesRef = useRef(new Set<VrmEngine>());
   const companionZoomRef = useRef(DEFAULT_COMPANION_ZOOM);
@@ -503,8 +512,10 @@ function CompanionSceneSurface({
             vrmPath={vrmPath}
             worldUrl={worldUrl}
             fallbackPreviewUrl={fallbackPreviewUrl}
-            preloadAvatars={preloadAvatars}
             cameraProfile="companion"
+            companionVrmPowerMode={companionVrmPowerMode}
+            companionHalfFramerateMode={companionHalfFramerateMode}
+            companionAnimateWhenHidden={companionAnimateWhenHidden}
             onEngineReady={handleStageEngineReady}
             onLayerEngineReady={handleStageLayerEngineReady}
             playWaveOnAvatarChange={false}

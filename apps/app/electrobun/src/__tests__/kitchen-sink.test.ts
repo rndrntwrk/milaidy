@@ -4014,4 +4014,39 @@ describe("RPC handler delegation — desktop", () => {
     ).resolves.toBeUndefined();
     expect(manager?.openSurfaceWindow).not.toHaveBeenCalled();
   });
+
+  it("desktopOpenSurfaceWindow forwards browse for the browser surface", async () => {
+    const desktopModule = await import("../native/desktop");
+    const getDesktopManagerMock = desktopModule.getDesktopManager as Mock;
+
+    getDesktopManagerMock.mockClear();
+    const { handlers } = await captureHandlers();
+    const manager = getDesktopManagerMock.mock.results.at(-1)?.value;
+
+    expect(manager).toBeDefined();
+    await handlers.desktopOpenSurfaceWindow?.({
+      surface: "browser",
+      browse: "https://elizacloud.ai",
+    });
+    expect(manager?.openSurfaceWindow).toHaveBeenCalledWith(
+      "browser",
+      "https://elizacloud.ai",
+    );
+  });
+
+  it("desktopOpenSurfaceWindow drops browse for non-browser surfaces", async () => {
+    const desktopModule = await import("../native/desktop");
+    const getDesktopManagerMock = desktopModule.getDesktopManager as Mock;
+
+    getDesktopManagerMock.mockClear();
+    const { handlers } = await captureHandlers();
+    const manager = getDesktopManagerMock.mock.results.at(-1)?.value;
+
+    expect(manager).toBeDefined();
+    await handlers.desktopOpenSurfaceWindow?.({
+      surface: "chat",
+      browse: "https://evil.test",
+    });
+    expect(manager?.openSurfaceWindow).toHaveBeenCalledWith("chat", undefined);
+  });
 });

@@ -5,7 +5,11 @@ import {
   type UiLanguage,
 } from "../i18n";
 import type { Tab } from "../navigation";
-import type { OnboardingStep } from "./types";
+import type {
+  CompanionHalfFramerateMode,
+  CompanionVrmPowerMode,
+  OnboardingStep,
+} from "./types";
 import type { UiShellMode, UiTheme } from "./ui-preferences";
 import { normalizeAvatarIndex } from "./vrm";
 
@@ -43,6 +47,126 @@ export function saveUiTheme(theme: UiTheme): void {
   tryLocalStorage(() => {
     localStorage.setItem(UI_THEME_STORAGE_KEY, normalizeUiTheme(theme));
   }, undefined);
+}
+
+const COMPANION_VRM_POWER_STORAGE_KEY = "eliza:companion-vrm-power";
+/** Legacy; migrated into `eliza:companion-vrm-power` on first read. */
+const LEGACY_COMPANION_EFFICIENCY_KEY = "eliza:companion-efficiency";
+/** Legacy; migrated into `eliza:companion-vrm-power` on first read. */
+const LEGACY_COMPANION_QUALITY_ON_BATTERY_KEY =
+  "eliza:companion-quality-on-battery";
+
+export function normalizeCompanionVrmPowerMode(
+  value: unknown,
+): CompanionVrmPowerMode {
+  return value === "quality" || value === "efficiency" ? value : "balanced";
+}
+
+/**
+ * Persisted 3D companion power preference. Migrates legacy boolean keys once.
+ */
+export function loadCompanionVrmPowerMode(): CompanionVrmPowerMode {
+  try {
+    const raw = localStorage.getItem(COMPANION_VRM_POWER_STORAGE_KEY);
+    if (raw === "quality" || raw === "balanced" || raw === "efficiency") {
+      return raw;
+    }
+    const legacyEffPresent =
+      localStorage.getItem(LEGACY_COMPANION_EFFICIENCY_KEY) != null;
+    const legacyQobPresent =
+      localStorage.getItem(LEGACY_COMPANION_QUALITY_ON_BATTERY_KEY) != null;
+    if (legacyEffPresent || legacyQobPresent) {
+      const effOn =
+        localStorage.getItem(LEGACY_COMPANION_EFFICIENCY_KEY) === "1";
+      const qobOn =
+        localStorage.getItem(LEGACY_COMPANION_QUALITY_ON_BATTERY_KEY) === "1";
+      const migrated: CompanionVrmPowerMode = effOn
+        ? "efficiency"
+        : qobOn
+          ? "quality"
+          : "balanced";
+      saveCompanionVrmPowerMode(migrated);
+      localStorage.removeItem(LEGACY_COMPANION_EFFICIENCY_KEY);
+      localStorage.removeItem(LEGACY_COMPANION_QUALITY_ON_BATTERY_KEY);
+      return migrated;
+    }
+    if (raw != null && raw !== "") {
+      saveCompanionVrmPowerMode("balanced");
+    }
+    return "balanced";
+  } catch {
+    return "balanced";
+  }
+}
+
+export function saveCompanionVrmPowerMode(mode: CompanionVrmPowerMode): void {
+  try {
+    const next = normalizeCompanionVrmPowerMode(mode);
+    localStorage.setItem(COMPANION_VRM_POWER_STORAGE_KEY, next);
+    localStorage.removeItem(LEGACY_COMPANION_EFFICIENCY_KEY);
+    localStorage.removeItem(LEGACY_COMPANION_QUALITY_ON_BATTERY_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+const COMPANION_ANIMATE_WHEN_HIDDEN_KEY = "eliza:companion-animate-when-hidden";
+
+/** When true, keep the VRM loop running when the document is hidden; world/splat is dropped. */
+export function loadCompanionAnimateWhenHidden(): boolean {
+  try {
+    return localStorage.getItem(COMPANION_ANIMATE_WHEN_HIDDEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveCompanionAnimateWhenHidden(enabled: boolean): void {
+  try {
+    localStorage.setItem(COMPANION_ANIMATE_WHEN_HIDDEN_KEY, enabled ? "1" : "0");
+  } catch {
+    // ignore
+  }
+}
+
+const COMPANION_HALF_FRAMERATE_STORAGE_KEY = "eliza:companion-half-framerate";
+
+const COMPANION_HALF_FRAMERATE_VALUES = new Set<CompanionHalfFramerateMode>([
+  "off",
+  "when_saving_power",
+  "always",
+]);
+
+export function normalizeCompanionHalfFramerateMode(
+  raw: string | null | undefined,
+): CompanionHalfFramerateMode {
+  if (raw && COMPANION_HALF_FRAMERATE_VALUES.has(raw as CompanionHalfFramerateMode)) {
+    return raw as CompanionHalfFramerateMode;
+  }
+  return "when_saving_power";
+}
+
+export function loadCompanionHalfFramerateMode(): CompanionHalfFramerateMode {
+  try {
+    return normalizeCompanionHalfFramerateMode(
+      localStorage.getItem(COMPANION_HALF_FRAMERATE_STORAGE_KEY),
+    );
+  } catch {
+    return "when_saving_power";
+  }
+}
+
+export function saveCompanionHalfFramerateMode(
+  mode: CompanionHalfFramerateMode,
+): void {
+  try {
+    localStorage.setItem(
+      COMPANION_HALF_FRAMERATE_STORAGE_KEY,
+      normalizeCompanionHalfFramerateMode(mode),
+    );
+  } catch {
+    // ignore
+  }
 }
 
 /**

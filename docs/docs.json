@@ -80,6 +80,7 @@
             "pages": [
               "apps/overview",
               "apps/desktop",
+              "apps/electrobun-darwin-macos-webgpu-version",
               "apps/desktop-local-development",
               "apps/desktop/native-modules",
               "apps/desktop/deep-linking",
@@ -125,7 +126,7 @@
           },
           {
             "group": "Wallets",
-            "pages": ["guides/wallet"]
+            "pages": ["guides/wallet", "guides/platform-secure-store"]
           },
           {
             "group": "Knowledge",

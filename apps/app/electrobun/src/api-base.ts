@@ -102,6 +102,50 @@ export function resolveInitialApiBase(
   return `http://127.0.0.1:${agentPort}`;
 }
 
+/** True when the hostname is a loopback we treat as same-trust as 127.0.0.1. */
+function isLoopbackHttpHostname(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "[::1]";
+}
+
+/**
+ * When the desktop loads the UI from a local http(s) dev server (Vite), the
+ * renderer must call `/api` on **that origin** so requests stay same-origin and
+ * the Vite proxy reaches the embedded agent. Pushing `http://127.0.0.1:<apiPort>`
+ * instead breaks WKWebView (cross-origin + missing/weird `Origin`).
+ *
+ * Returns `null` when no dev URL is set or it is not a loopback http(s) origin.
+ */
+export function resolveHttpLoopbackRendererOriginForApiClient(
+  env: Record<string, string | undefined>,
+): string | null {
+  const raw =
+    env.MILADY_RENDERER_URL?.trim() || env.VITE_DEV_SERVER_URL?.trim() || "";
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    if (!isLoopbackHttpHostname(u.hostname)) return null;
+    return u.origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Base URL the **renderer** should use for `MiladyClient` (REST + relative `/api`).
+ * Prefer the Vite/dev-server origin when `MILADY_RENDERER_URL` points at loopback;
+ * otherwise the real API listen port on 127.0.0.1.
+ */
+export function resolveRendererFacingApiBase(
+  env: Record<string, string | undefined>,
+  apiListenPort: number,
+): string {
+  const fromDevServer = resolveHttpLoopbackRendererOriginForApiClient(env);
+  if (fromDevServer) return fromDevServer;
+  return `http://127.0.0.1:${apiListenPort}`;
+}
+
 /**
  * Push the API base URL (and optional token) to the renderer via typed
  * RPC message instead of evaluating arbitrary JS (CSP-safe).

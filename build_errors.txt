@@ -9,19 +9,20 @@ $ node scripts/run-production-build.mjs
 [plugin:talkmode] building...
 [plugin:agent] building...
 $ bun run clean && tsc && rollup -c rollup.config.mjs
-$ bun run clean && tsc && rollup -c rollup.config.mjs
 [34mℹ[39m tsdown [2mv0.20.3[22m powered by rolldown [2mv1.0.0-rc.3[22m
 $ bun run clean && tsc && rollup -c rollup.config.mjs
 $ bun run clean && tsc && rollup -c rollup.config.mjs
 $ bun run clean && tsc && rollup -c rollup.config.mjs
+$ bun run clean && tsc && rollup -c rollup.config.mjs
 [34mℹ[39m config file: [4m/Users/shawwalters/eliza-workspace/milady/tsdown.config.ts[24m 
-[34mℹ[39m entry: [34mpackages/app-core/src/index.ts[39m
-[34mℹ[39m target: [34mnode22.0.0[39m
-[34mℹ[39m tsconfig: [34mtsconfig.json[39m
+$ bun run clean && tsc && rollup -c rollup.config.mjs
 [34mℹ[39m entry: [34mpackages/app-core/src/entry.ts[39m
 [34mℹ[39m target: [34mnode22.0.0[39m
 [34mℹ[39m tsconfig: [34mtsconfig.json[39m
 [34mℹ[39m entry: [34mpackages/app-core/src/runtime/eliza.ts[39m
+[34mℹ[39m target: [34mnode22.0.0[39m
+[34mℹ[39m tsconfig: [34mtsconfig.json[39m
+[34mℹ[39m entry: [34mpackages/app-core/src/index.ts[39m
 [34mℹ[39m target: [34mnode22.0.0[39m
 [34mℹ[39m tsconfig: [34mtsconfig.json[39m
 [34mℹ[39m entry: [34mpackages/app-core/src/api/server.ts[39m
@@ -29,32 +30,28 @@ $ bun run clean && tsc && rollup -c rollup.config.mjs
 [34mℹ[39m tsconfig: [34mtsconfig.json[39m
 [34mℹ[39m Build start
 $ bun run clean && tsc && rollup -c rollup.config.mjs
-$ bun run clean && tsc && rollup -c rollup.config.mjs
 
-[41m ERROR [49m Error: Build failed with 2 errors:
+[41m ERROR [49m Error: Build failed with 1 error:
 
-[31m[PARSE_ERROR] Error:[0m Identifier `TradePermissionMode` has already been declared
-      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m packages/app-core/src/api/server.ts:1655:6 [38;5;246m][0m
+[31m[PARSE_ERROR] Error:[0m Encountered diff marker
+      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m packages/app-core/src/api/server.ts:1764:1 [38;5;246m][0m
       [38;5;246m│[0m
- [38;5;246m1655 │[0m [38;5;249mt[0m[38;5;249my[0m[38;5;249mp[0m[38;5;249me[0m[38;5;249m [0mTradePermissionMode[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249mu[0m[38;5;249ms[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249m-[0m[38;5;249ms[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249mn[0m[38;5;249m-[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249ml[0m[38;5;249my[0m[38;5;249m"[0m[38;5;249m [0m[38;5;249m|[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249mm[0m[38;5;249ma[0m[38;5;249mn[0m[38;5;249mu[0m[38;5;249ma[0m[38;5;249ml[0m[38;5;249m-[0m[38;5;249ml[0m[38;5;249mo[0m[38;5;249mc[0m[38;5;249ma[0m[38;5;249ml[0m[38;5;249m-[0m[38;5;249mk[0m[38;5;249me[0m[38;5;249my[0m[38;5;249m"[0m[38;5;249m [0m[38;5;249m|[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249ma[0m[38;5;249mg[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249m-[0m[38;5;249ma[0m[38;5;249mu[0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249m"[0m[38;5;249m;[0m
- [38;5;240m     │[0m      ─────────┬─────────  
- [38;5;240m     │[0m               ╰─────────── `TradePermissionMode` has already been declared here
+ [38;5;246m1764 │[0m <<<<<<<[38;5;249m [0m[38;5;249mH[0m[38;5;249mE[0m[38;5;249mA[0m[38;5;249mD[0m
+ [38;5;240m     │[0m ───┬───  
+ [38;5;240m     │[0m    ╰───── between this marker and `=======` is the code that we're merging into
+ [38;5;246m1765 │[0m =======
+ [38;5;240m     │[0m ───┬───  
+ [38;5;240m     │[0m    ╰───── between this marker and `>>>>>>>` is the incoming code
  [38;5;240m     │[0m 
- [38;5;246m1701 │[0m [38;5;249mt[0m[38;5;249my[0m[38;5;249mp[0m[38;5;249me[0m[38;5;249m [0mTradePermissionMode[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249mu[0m[38;5;249ms[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249m-[0m[38;5;249ms[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249mn[0m[38;5;249m-[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249ml[0m[38;5;249my[0m[38;5;249m"[0m[38;5;249m [0m[38;5;249m|[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249mm[0m[38;5;249ma[0m[38;5;249mn[0m[38;5;249mu[0m[38;5;249ma[0m[38;5;249ml[0m[38;5;249m-[0m[38;5;249ml[0m[38;5;249mo[0m[38;5;249mc[0m[38;5;249ma[0m[38;5;249ml[0m[38;5;249m-[0m[38;5;249mk[0m[38;5;249me[0m[38;5;249my[0m[38;5;249m"[0m[38;5;249m [0m[38;5;249m|[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249ma[0m[38;5;249mg[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249m-[0m[38;5;249ma[0m[38;5;249mu[0m[38;5;249mt[0m[38;5;249mo[0m[38;5;249m"[0m[38;5;249m;[0m
- [38;5;240m     │[0m      ─────────┬─────────  
- [38;5;240m     │[0m               ╰─────────── It can not be redeclared here
-[38;5;246m──────╯[0m
-
-[31m[PARSE_ERROR] Error:[0m Identifier `AGENT_AUTOMATION_HEADER` has already been declared
-      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m packages/app-core/src/api/server.ts:1657:7 [38;5;246m][0m
-      [38;5;246m│[0m
- [38;5;246m1657 │[0m [38;5;249mc[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249m [0mAGENT_AUTOMATION_HEADER[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249mx[0m[38;5;249m-[0m[38;5;249mm[0m[38;5;249mi[0m[38;5;249ml[0m[38;5;249ma[0m[38;5;249md[0m[38;5;249my[0m[38;5;249m-[0m[38;5;249ma[0m[38;5;249mg[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249m-[0m[38;5;249ma[0m[38;5;249mc[0m[38;5;249mt[0m[38;5;249mi[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249m"[0m[38;5;249m;[0m
- [38;5;240m     │[0m       ───────────┬───────────  
- [38;5;240m     │[0m                  ╰───────────── `AGENT_AUTOMATION_HEADER` has already been declared here
+ [38;5;246m2146 │[0m >>>>>>>[38;5;249m [0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249m/[0m[38;5;249mo[0m[38;5;249md[0m[38;5;249mi[0m[38;5;249m-[0m[38;5;249mn[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mp[0m[38;5;249mc[0m
+ [38;5;240m     │[0m ───┬───  
+ [38;5;240m     │[0m    ╰───── this marker concludes the conflict region
  [38;5;240m     │[0m 
- [38;5;246m1703 │[0m [38;5;249mc[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249m [0mAGENT_AUTOMATION_HEADER[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249mx[0m[38;5;249m-[0m[38;5;249mm[0m[38;5;249mi[0m[38;5;249ml[0m[38;5;249ma[0m[38;5;249md[0m[38;5;249my[0m[38;5;249m-[0m[38;5;249ma[0m[38;5;249mg[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249m-[0m[38;5;249ma[0m[38;5;249mc[0m[38;5;249mt[0m[38;5;249mi[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249m"[0m[38;5;249m;[0m
- [38;5;240m     │[0m       ───────────┬───────────  
- [38;5;240m     │[0m                  ╰───────────── It can not be redeclared here
+ [38;5;240m     │[0m [38;5;115mHelp[0m: Conflict markers indicate that a merge was started but could not be completed due to merge conflicts.
+ [38;5;240m     │[0m       To resolve a conflict, keep only the code you want and then delete the lines containing conflict markers.
+ [38;5;240m     │[0m       If you're having merge conflicts after pulling new code, the top section is the code you already had and the bottom section is the remote code.
+ [38;5;240m     │[0m       If you're in the middle of a rebase, the top section is the code being rebased onto and the bottom section is the code coming from the current commit being rebased.
+ [38;5;240m     │[0m       If you have nested conflicts, resolve the outermost conflict first.
 [38;5;246m──────╯[0m
 
     at aggregateBindingErrorsIntoJsError (file:///Users/shawwalters/eliza-workspace/milady/node_modules/.bun/rolldown@1.0.0-rc.3/node_modules/rolldown/dist/shared/bindingify-input-options-CorDub0q.mjs:628:18)
@@ -68,6 +65,7 @@ $ bun run clean && tsc && rollup -c rollup.config.mjs
     at async CAC.<anonymous> (file:///Users/shawwalters/eliza-workspace/milady/node_modules/.bun/tsdown@0.20.3+1fb4c65d43e298b9/node_modules/tsdown/dist/run.mjs:23:2)
     at async runCLI (file:///Users/shawwalters/eliza-workspace/milady/node_modules/.bun/tsdown@0.20.3+1fb4c65d43e298b9/node_modules/tsdown/dist/run.mjs:47:3)
 
+$ bun run clean && tsc && rollup -c rollup.config.mjs
 file:///Users/shawwalters/eliza-workspace/milady/scripts/run-production-build.mjs:65
         reject(new Error(`process exited with code ${code ?? 1}`));
                ^
@@ -78,18 +76,17 @@ Error: process exited with code 1
     at ChildProcess._handle.onexit (node:internal/child_process:293:12)
 
 Node.js v22.20.0
+$ rimraf ./dist
+$ rimraf ./dist
+$ rimraf ./dist
+$ rimraf ./dist
+$ rimraf ./dist
 error: script "build" exited with code 1
 $ bun run clean && tsc && rollup -c rollup.config.mjs
 $ rimraf ./dist
 $ rimraf ./dist
 $ rimraf ./dist
 $ rimraf ./dist
-$ rimraf ./dist
-$ bun run clean && tsc && rollup -c rollup.config.mjs
-$ rimraf ./dist
-$ rimraf ./dist
-$ rimraf ./dist
-$ rimraf ./dist
 [36m
 [1mdist/esm/index.js[22m → [1mdist/plugin.js, dist/plugin.cjs.js[22m...[39m
 [36m
@@ -102,27 +99,27 @@ $ rimraf ./dist
 [1mdist/esm/index.js[22m → [1mdist/plugin.js, dist/plugin.cjs.js[22m...[39m
 [36m
 [1mdist/esm/index.js[22m → [1mdist/plugin.js, dist/plugin.cjs.js[22m...[39m
-[32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m39ms[22m[39m
-[plugin:agent] done
 [36m
 [1mdist/esm/index.js[22m → [1mdist/plugin.js, dist/plugin.cjs.js[22m...[39m
-[32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m56ms[22m[39m
-[plugin:talkmode] done
-[32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m45ms[22m[39m
+[32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m50ms[22m[39m
+[32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m54ms[22m[39m
 [32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m51ms[22m[39m
-[32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m62ms[22m[39m
-[plugin:gateway] done
-[plugin:desktop] done
+[plugin:agent] done
+[plugin:talkmode] done
 [plugin:location] done
 [32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m56ms[22m[39m
+[plugin:gateway] done
+[32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m85ms[22m[39m
+[plugin:desktop] done
+[32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m97ms[22m[39m
 [plugin:screencapture] done
-[32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m54ms[22m[39m
-[36m
-[1mdist/esm/index.js[22m → [1mdist/plugin.js, dist/plugin.cjs.js[22m...[39m
+[32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m78ms[22m[39m
 [plugin:swabble] done
 [36m
 [1mdist/esm/index.js[22m → [1mdist/plugin.js, dist/plugin.cjs.js[22m...[39m
-[32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m44ms[22m[39m
+[36m
+[1mdist/esm/index.js[22m → [1mdist/plugin.js, dist/plugin.cjs.js[22m...[39m
+[32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m73ms[22m[39m
+[32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m80ms[22m[39m
 [plugin:camera] done
-[32mcreated [1mdist/plugin.js, dist/plugin.cjs.js[22m in [1m62ms[22m[39m
 [plugin:canvas] done

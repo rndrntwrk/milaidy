@@ -13,7 +13,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client, type LogEntry } from "../api";
 import { invokeDesktopBridgeRequest, isElectrobunRuntime } from "../bridge";
 import { useBranding } from "../config/branding";
-import { useRetakeCapture, useTimeout } from "../hooks";
+import {
+  useDocumentVisibility,
+  useIntervalWhenDocumentVisible,
+  useRetakeCapture,
+  useTimeout,
+} from "../hooks";
 import { useApp } from "../state";
 import { openExternalUrl } from "../utils";
 import type { DesktopClickAuditItem } from "../utils/desktop-workspace";
@@ -399,6 +404,7 @@ export function GameView() {
   const isElectrobun = isElectrobunRuntime();
   const [stopping, setStopping] = useState(false);
   const [showLogsPanel, setShowLogsPanel] = useState(false);
+  const docVisible = useDocumentVisibility();
   const [connectionStatus, setConnectionStatus] = useState<
     "connecting" | "connected" | "disconnected"
   >("connecting");
@@ -410,7 +416,6 @@ export function GameView() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const authSentRef = useRef(false);
   const viewerSessionRef = useRef<string>("");
-  const logsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Stream iframe frames to retake.tv when capture is active
   useRetakeCapture(iframeRef, retakeCapture);
@@ -488,24 +493,19 @@ export function GameView() {
     });
   }, [activeGameApp, logs]);
 
-  // Auto-refresh logs when panel is open
+  // Auto-refresh logs when panel is open and tab is visible (catch-up on focus).
   useEffect(() => {
-    if (!showLogsPanel) {
-      if (logsIntervalRef.current) {
-        clearInterval(logsIntervalRef.current);
-        logsIntervalRef.current = null;
-      }
-      return;
-    }
+    if (!showLogsPanel || !docVisible) return;
     void loadLogs();
-    logsIntervalRef.current = setInterval(() => void loadLogs(), 3000);
-    return () => {
-      if (logsIntervalRef.current) {
-        clearInterval(logsIntervalRef.current);
-        logsIntervalRef.current = null;
-      }
-    };
-  }, [showLogsPanel, loadLogs]);
+  }, [showLogsPanel, docVisible, loadLogs]);
+
+  useIntervalWhenDocumentVisible(
+    () => {
+      void loadLogs();
+    },
+    3000,
+    showLogsPanel,
+  );
 
   // Open the game URL in an isolated Electrobun BrowserWindow.
   // Runs whenever the viewer URL or game title changes and we're inside the desktop app.

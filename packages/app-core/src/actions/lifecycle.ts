@@ -6,7 +6,7 @@
  * called from any provider implementation.
  */
 
-import type { ElizaClient } from "../api/client";
+import type { MiladyClient as ElizaClient } from "../api/client";
 
 export type LifecycleAction = "start" | "stop" | "restart" | "reset";
 

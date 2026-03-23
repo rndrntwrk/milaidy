@@ -331,6 +331,12 @@ async function main() {
     state: "starting",
   });
   const apiReady = Date.now();
+  // WHY sync API vars only: under `dev:desktop`, dev-platform sets MILADY_PORT to
+  // the **Vite** listen port for `/api/dev/stack` + static HTML hints, while
+  // MILADY_API_PORT is the **Milady API**. Overwriting MILADY_PORT here would
+  // collapse UI vs API in observability JSON and confuse tools that read env.
+  process.env.MILADY_API_PORT = String(actualPort);
+  process.env.ELIZA_PORT = String(actualPort);
   // Use console.log for startup timing to bypass logger filtering
   console.log(
     `${getLogPrefix()} API server ready on port ${actualPort} (${apiReady - apiStart}ms)`,

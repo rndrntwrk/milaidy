@@ -107,32 +107,39 @@ export function DesktopTalkModePanel() {
 
     setLoading(true);
     setError(null);
-    const [state, enabled, speaking, whisperInfo] = await Promise.all([
-      invokeDesktopBridgeRequest<{ state: string }>({
-        rpcMethod: "talkmodeGetState",
-        ipcChannel: "talkmode:getState",
-      }),
-      invokeDesktopBridgeRequest<{ enabled: boolean }>({
-        rpcMethod: "talkmodeIsEnabled",
-        ipcChannel: "talkmode:isEnabled",
-      }),
-      invokeDesktopBridgeRequest<{ speaking: boolean }>({
-        rpcMethod: "talkmodeIsSpeaking",
-        ipcChannel: "talkmode:isSpeaking",
-      }),
-      invokeDesktopBridgeRequest<{ available: boolean; modelSize?: string }>({
-        rpcMethod: "talkmodeGetWhisperInfo",
-        ipcChannel: "talkmode:getWhisperInfo",
-      }),
-    ]);
-    setPanelState({
-      state: state?.state ?? "idle",
-      enabled: enabled?.enabled ?? false,
-      speaking: speaking?.speaking ?? false,
-      whisperAvailable: whisperInfo?.available ?? false,
-      whisperModel: whisperInfo?.modelSize,
-    });
-    setLoading(false);
+    try {
+      const [state, enabled, speaking, whisperInfo] = await Promise.all([
+        invokeDesktopBridgeRequest<{ state: string }>({
+          rpcMethod: "talkmodeGetState",
+          ipcChannel: "talkmode:getState",
+        }),
+        invokeDesktopBridgeRequest<{ enabled: boolean }>({
+          rpcMethod: "talkmodeIsEnabled",
+          ipcChannel: "talkmode:isEnabled",
+        }),
+        invokeDesktopBridgeRequest<{ speaking: boolean }>({
+          rpcMethod: "talkmodeIsSpeaking",
+          ipcChannel: "talkmode:isSpeaking",
+        }),
+        invokeDesktopBridgeRequest<{ available: boolean; modelSize?: string }>({
+          rpcMethod: "talkmodeGetWhisperInfo",
+          ipcChannel: "talkmode:getWhisperInfo",
+        }),
+      ]);
+      setPanelState({
+        state: state?.state ?? "idle",
+        enabled: enabled?.enabled ?? false,
+        speaking: speaking?.speaking ?? false,
+        whisperAvailable: whisperInfo?.available ?? false,
+        whisperModel: whisperInfo?.modelSize,
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Talk mode status unavailable.",
+      );
+    } finally {
+      setLoading(false);
+    }
   }, [desktopRuntime]);
 
   useEffect(() => {
@@ -501,7 +508,7 @@ function WakeWordSection({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="settings-compact-button settings-icon-button leading-none hover:bg-transparent hover:opacity-70 cursor-pointer h-4 w-4 ml-1"
+                  className="min-h-[auto] px-0 leading-none hover:bg-transparent hover:opacity-70 cursor-pointer h-4 w-4 ml-1"
                   onClick={() => removeTrigger(t)}
                   aria-label={`Remove trigger "${t}"`}
                 >

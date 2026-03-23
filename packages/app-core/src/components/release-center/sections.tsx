@@ -508,6 +508,12 @@ export function WgpuSurfaceSection({
           <div className="mb-3 text-xs font-semibold text-txt">
             Browser WebGPU Status
           </div>
+          <p className="mb-3 text-xs text-muted">
+            This reports whether the desktop webview is expected to expose
+            WebGPU for the WGPU preview above. It is not overall app health:
+            companion and avatar already fall back to WebGL when WebGPU is
+            missing.
+          </p>
           <DefinitionRow
             label="Inline surface ready"
             value={String(wgpuReady)}
