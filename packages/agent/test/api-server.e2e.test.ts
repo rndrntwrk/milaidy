@@ -1095,6 +1095,107 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
+    it("POST /api/chat skips knowledge lookup for ordinary prompts", async () => {
+      let knowledgeLookups = 0;
+      const runtime = createRuntimeForChatSseTests({
+        getService: (serviceType) =>
+          serviceType === "knowledge"
+            ? {
+                getKnowledge: async () => {
+                  knowledgeLookups += 1;
+                  return [];
+                },
+              }
+            : null,
+        handleMessage: async (_runtime, _message, onResponse) => {
+          await onResponse({ text: "4" } as Content);
+          return {
+            responseContent: {
+              text: "4",
+            },
+          };
+        },
+      });
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, data } = await req(
+          streamServer.port,
+          "POST",
+          "/api/chat",
+          {
+            text: "what is 2+2? answer with only the number 4",
+            mode: "simple",
+          },
+        );
+
+        expect(status).toBe(200);
+        expect(String(data.text ?? "")).toBe("4");
+        expect(knowledgeLookups).toBe(0);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/chat falls back when knowledge lookup hangs", async () => {
+      let handledMessageText = "";
+      const previousTimeout = process.env.CHAT_KNOWLEDGE_TIMEOUT_MS;
+      process.env.CHAT_KNOWLEDGE_TIMEOUT_MS = "1";
+
+      const runtime = createRuntimeForChatSseTests({
+        getService: (serviceType) =>
+          serviceType === "knowledge"
+            ? {
+                getKnowledge: async () =>
+                  await new Promise<never>(() => {
+                    // Intentionally unresolved to verify timeout fallback.
+                  }),
+              }
+            : null,
+        handleMessage: async (_runtime, message, onResponse) => {
+          handledMessageText = String(
+            (
+              message as {
+                content?: { text?: string };
+              }
+            ).content?.text ?? "",
+          );
+          await onResponse({ text: "fallback reply" } as Content);
+          return {
+            responseContent: {
+              text: "fallback reply",
+            },
+          };
+        },
+      });
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, data } = await req(
+          streamServer.port,
+          "POST",
+          "/api/chat",
+          {
+            text: "what is the qa codeword from the uploaded file?",
+            mode: "simple",
+          },
+        );
+
+        expect(status).toBe(200);
+        expect(String(data.text ?? "")).toBe("fallback reply");
+        expect(handledMessageText).toBe(
+          "what is the qa codeword from the uploaded file?",
+        );
+      } finally {
+        if (previousTimeout === undefined) {
+          delete process.env.CHAT_KNOWLEDGE_TIMEOUT_MS;
+        } else {
+          process.env.CHAT_KNOWLEDGE_TIMEOUT_MS = previousTimeout;
+        }
+        await streamServer.close();
+      }
+    });
+
     it("POST /api/chat does not use deprecated direct trajectory fallback when hooks do not set a step id", async () => {
       const starts: Array<{ stepId: string; source?: string }> = [];
       const ends: Array<{ stepId: string; status?: string }> = [];
