@@ -16,7 +16,6 @@ export const repoSetupSteps = [
   "scripts/ensure-avatars.mjs",
   "scripts/link-browser-server.mjs",
   "scripts/ensure-vision-deps.mjs",
-  "scripts/patch-deps.mjs",
 ];
 
 const STALE_LOCK_MS = 10 * 60 * 1000;

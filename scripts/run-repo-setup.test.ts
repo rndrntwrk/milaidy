@@ -19,7 +19,6 @@ describe("repoSetupSteps", () => {
       "scripts/ensure-avatars.mjs",
       "scripts/link-browser-server.mjs",
       "scripts/ensure-vision-deps.mjs",
-      "scripts/patch-deps.mjs",
     ]);
   });
 });

@@ -10,6 +10,7 @@
 
 import type { PluginListenerHandle } from "@capacitor/core";
 import { Capacitor } from "@capacitor/core";
+import { sanitizeSpeechText } from "@miladyai/shared/spoken-text";
 import {
   useCallback,
   useEffect,
@@ -28,7 +29,6 @@ import {
 } from "../bridge/native-plugins";
 import { resolveApiUrl } from "../utils";
 import { getElizaApiToken } from "../utils/eliza-globals";
-import { sanitizeSpeechText } from "@miladyai/shared/spoken-text";
 import { mergeStreamingText } from "../utils/streaming-text";
 
 // ── Speech Recognition types ──────────────────────────────────────────

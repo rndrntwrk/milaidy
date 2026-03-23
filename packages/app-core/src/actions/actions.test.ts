@@ -7,6 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 vi.mock("@elizaos/core", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
@@ -24,6 +25,7 @@ vi.mock("node:dns/promises", () => ({
   lookup: vi.fn().mockResolvedValue([{ address: "93.184.216.34", family: 4 }]),
 }));
 
+import type { IAgentRuntime } from "@elizaos/core";
 import { loadElizaConfig } from "@miladyai/agent/config/config";
 import {
   __setPinnedFetchImplForTests,
@@ -32,7 +34,6 @@ import {
   registerCustomActionLive,
   setCustomActionsRuntime,
 } from "@miladyai/agent/runtime/custom-actions";
-import type { IAgentRuntime } from "@elizaos/core";
 import type { CustomActionDef, ElizaConfig } from "../config/types.eliza";
 
 // ---------------------------------------------------------------------------

@@ -438,7 +438,7 @@ vi.mock(
   },
 );
 
-import { App } from "@miladyai/app-core/src/App";
+import { App } from "@miladyai/app-core/App";
 import { ActivateStep } from "@miladyai/app-core/src/components/onboarding/ActivateStep";
 import { ConnectionStep } from "@miladyai/app-core/src/components/onboarding/ConnectionStep";
 import { IdentityStep } from "@miladyai/app-core/src/components/onboarding/IdentityStep";

@@ -555,7 +555,7 @@ for (const file of files) {
   try {
     const entries = extractTypes(file);
     allEntries.push(...entries);
-  } catch (err) {
+  } catch (_err) {
     // Skip files that can't be parsed
   }
   processed++;

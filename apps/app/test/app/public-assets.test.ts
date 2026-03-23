@@ -2,7 +2,9 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getMiladyCharacterAssets } from "@miladyai/app-core/character-catalog";
+import { setBootConfig } from "@miladyai/app-core/config";
 import { describe, expect, it } from "vitest";
+import { MILADY_CHARACTER_CATALOG } from "../../src/character-catalog";
 
 const TEST_DIR = fileURLToPath(new URL(".", import.meta.url));
 const APP_DIR = join(TEST_DIR, "../..");
@@ -46,6 +48,9 @@ function listFiles(dir: string): string[] {
 
   return files.sort();
 }
+
+// Initialize boot config so getMiladyCharacterAssets() returns real catalog data
+setBootConfig({ branding: {}, characterCatalog: MILADY_CHARACTER_CATALOG });
 
 describe("app public bundle assets", () => {
   it("only keeps the runtime allowlist in apps/app/public", () => {

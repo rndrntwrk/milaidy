@@ -12,9 +12,6 @@ import { getScreenCaptureManager } from "./screencapture";
 import { getSwabbleManager } from "./swabble";
 import { getTalkModeManager } from "./talkmode";
 
-/**
- * Initialize all native modules with the main window and sendToWebview callback.
- */
 export function initializeNativeModules(
   mainWindow: BrowserWindow,
   sendToWebview: SendToWebview,

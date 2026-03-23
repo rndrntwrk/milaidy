@@ -14,9 +14,7 @@ const requiredPaths = [
   "dist/build-info.json",
   "scripts/run-repo-setup.mjs",
   "scripts/setup-eliza-workspace.mjs",
-  "scripts/patch-deps.mjs",
   "scripts/ensure-vision-deps.mjs",
-  "scripts/lib/patch-bun-exports.mjs",
 ];
 const forbiddenPrefixes = ["dist/Milady.app/"];
 const orchestratorPackageName = "@elizaos/plugin-agent-orchestrator";
@@ -471,7 +469,7 @@ function assertBundledAgentOrchestratorInstallFix() {
     )
   ) {
     console.error(
-      "release-check: @elizaos/plugin-agent-orchestrator still references missing scripts/ensure-node-pty.mjs. Run `node scripts/patch-deps.mjs` or `bun run postinstall` before publishing.",
+      "release-check: @elizaos/plugin-agent-orchestrator still references missing scripts/ensure-node-pty.mjs. The pnpm patch should remove this postinstall script.",
     );
     process.exit(1);
   }

@@ -1,4 +1,5 @@
 import { Electroview } from "electrobun/view";
+import type { RpcMessageListener } from "../types.js";
 
 /**
  * Maps legacy desktop push channels to RPC message names.

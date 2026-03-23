@@ -136,7 +136,7 @@ vi.mock(
   },
 );
 
-import { App } from "@miladyai/app-core/src/App";
+import { App } from "@miladyai/app-core/App";
 
 const ORIGINAL_INNER_WIDTH = window.innerWidth;
 

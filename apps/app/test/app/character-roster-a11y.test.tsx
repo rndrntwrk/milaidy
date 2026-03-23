@@ -16,7 +16,7 @@ vi.mock("@miladyai/app-core/state", () => ({
 }));
 
 // Stub out the onboarding-presets to avoid pulling in the full preset data
-vi.mock("@miladyai/app-core/onboarding-presets", () => ({
+vi.mock("@miladyai/agent/onboarding-presets", () => ({
   CHARACTER_PRESET_META: {
     chaotic: {
       name: "Chen",

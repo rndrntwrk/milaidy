@@ -1517,11 +1517,11 @@ describe("Fresh Machine Validation (non-Docker)", () => {
       return;
     }
 
-    // autonomous builds to dist/packages/agent/src/ via tsc
+    // agent builds to dist/packages/agent/src/ via tsc
     expect(
       fileExistsAny([
-        path.join(distDir, "packages", "autonomous", "src", "index.js"),
-        path.join(distDir, "packages", "autonomous", "src", "bin.js"),
+        path.join(distDir, "packages", "agent", "src", "index.js"),
+        path.join(distDir, "packages", "agent", "src", "bin.js"),
       ]),
     ).toBe(true);
   });

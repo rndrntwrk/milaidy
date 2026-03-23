@@ -92,6 +92,22 @@ function createBridgeMock(extraExports: Record<string, unknown> = {}) {
       }
       return () => {};
     },
+    invokeDesktopBridgeRequestWithTimeout: async (options: {
+      rpcMethod: string;
+      ipcChannel?: string;
+      params?: unknown;
+      timeoutMs: number;
+    }) => {
+      const rpc = getElectrobunRendererRpc() as Record<string, unknown> | null;
+      const request = (rpc?.request as RpcRequestMap)?.[options.rpcMethod];
+      if (!request) return { status: "missing" as const };
+      try {
+        const value = await request(options.params);
+        return { status: "ok" as const, value };
+      } catch (error: unknown) {
+        return { status: "rejected" as const, error };
+      }
+    },
     initializeCapacitorBridge: () => {},
     initializeStorageBridge: async () => {},
     ElectrobunRendererRpc: {},

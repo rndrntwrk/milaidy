@@ -64,7 +64,7 @@ describe("release-check package guards", () => {
       ]),
     ).toBe(true);
     expect(
-      isPackPathCoveredByFilesList("scripts/lib/patch-bun-exports.mjs", [
+      isPackPathCoveredByFilesList("scripts/lib/some-other-script.mjs", [
         "dist",
         "scripts/run-repo-setup.mjs",
       ]),

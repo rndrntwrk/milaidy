@@ -37,6 +37,10 @@ export default defineConfig({
               replacement: path.join(autonomousSourceRoot, "$1"),
             },
             {
+              find: /^@miladyai\/agent\/(.*)/,
+              replacement: path.join(autonomousSourceRoot, "$1"),
+            },
+            {
               find: "@miladyai/agent",
               replacement: resolveModuleEntry(
                 path.join(autonomousSourceRoot, "index"),
@@ -166,6 +170,10 @@ export default defineConfig({
         find: "electron",
         replacement: path.join(repoRoot, "test", "stubs", "electron-module.ts"),
       },
+      {
+        find: /^@lookingglass\/webxr/,
+        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
+      },
     ],
   },
   test: {
@@ -184,7 +192,11 @@ export default defineConfig({
       concurrent: false,
       shuffle: false,
     },
-    include: ["test/**/*.e2e.test.ts"],
+    include: [
+      "test/**/*.e2e.test.ts",
+      "packages/agent/test/**/*.e2e.test.ts",
+      "packages/app-core/test/**/*.e2e.test.ts",
+    ],
     setupFiles: ["test/setup.ts"],
     exclude: [
       "dist/**",

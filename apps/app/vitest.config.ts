@@ -3,10 +3,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
-import { getAppCoreSourceRoot } from "../../test/eliza-package-paths";
+import {
+  getAppCoreSourceRoot,
+  getAutonomousSourceRoot,
+} from "../../test/eliza-package-paths";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appCorePackageRoot = getAppCoreSourceRoot(here);
+const agentSourceRoot = getAutonomousSourceRoot(here);
 
 const bridgeStubPath = path.join(
   here,
@@ -101,8 +105,28 @@ export default defineConfig({
                 }
               }
             }
+            // Catch-all: resolve any @miladyai/app-core sub-path imports
+            // not explicitly listed in the exports map directly to the
+            // source tree (e.g. components/Header → src/components/Header).
+            generatedAliases.push({
+              find: /^@miladyai\/app-core\/src\/(.*)/,
+              replacement: path.join(appCorePackageRoot, "$1"),
+            });
+            generatedAliases.push({
+              find: /^@miladyai\/app-core\/(.*)/,
+              replacement: path.join(appCorePackageRoot, "$1"),
+            });
             return generatedAliases;
           })()
+        : []),
+      // Resolve @miladyai/agent sub-path imports to the source tree
+      ...(agentSourceRoot
+        ? [
+            {
+              find: /^@miladyai\/agent\/(.*)/,
+              replacement: path.join(agentSourceRoot, "$1"),
+            },
+          ]
         : []),
     ],
   },

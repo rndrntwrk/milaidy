@@ -46,7 +46,6 @@ describe("auth", () => {
     setToken("test-api-key");
     expect(isAuthenticated()).toBe(true);
   });
-
 });
 
 describe("fetchWithAuth", () => {

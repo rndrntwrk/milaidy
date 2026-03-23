@@ -319,7 +319,7 @@ vi.mock("@miladyai/app-core/hooks", async () => {
   };
 });
 
-import { App } from "@miladyai/app-core/src/App";
+import { App } from "@miladyai/app-core/App";
 
 /* ── Harness state ────────────────────────────────────────────────── */
 

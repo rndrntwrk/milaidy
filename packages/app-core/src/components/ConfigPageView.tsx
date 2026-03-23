@@ -10,6 +10,7 @@ import {
   WALLET_RPC_PROVIDER_OPTIONS,
   type WalletRpcSelections,
 } from "@miladyai/shared/contracts/wallet";
+import { Button, Switch } from "@miladyai/ui";
 import { useCallback, useEffect, useState } from "react";
 import { client } from "../api";
 import {
@@ -24,7 +25,6 @@ import {
   resolveInitialWalletRpcSelections,
 } from "../wallet-rpc";
 import { SecretsView } from "./SecretsView";
-import { Button, Switch } from "@miladyai/ui";
 
 type RpcProviderOption<T extends string> = {
   id: T;

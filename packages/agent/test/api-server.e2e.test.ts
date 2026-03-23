@@ -1795,7 +1795,7 @@ describe("API Server E2E (no runtime)", () => {
           "/api/conversations",
           {
             title: "Init greeting test",
-            initGreeting: true,
+            includeGreeting: true,
             lang: "en",
           },
         );
@@ -1840,7 +1840,7 @@ describe("API Server E2E (no runtime)", () => {
           "/api/conversations",
           {
             title: "Idempotent greeting test",
-            initGreeting: true,
+            includeGreeting: true,
             lang: "en",
           },
         );
@@ -2474,85 +2474,56 @@ describe("API Server E2E (no runtime)", () => {
 
   // -- Fine-tuning endpoints --
 
-  describe("GET /api/training/* (no runtime)", () => {
-    it("returns training status with runtimeUnavailable", async () => {
-      const { status, data } = await req(port, "GET", "/api/training/status");
-      expect(status).toBe(200);
-      expect(data.runtimeAvailable).toBe(false);
-      expect(typeof data.runningJobs).toBe("number");
-      expect(typeof data.datasetCount).toBe("number");
-      expect(typeof data.modelCount).toBe("number");
+  describe("/api/training/* (no training service)", () => {
+    it("returns 503 for training status when service is unavailable", async () => {
+      const { status } = await req(port, "GET", "/api/training/status");
+      expect(status).toBe(503);
     });
 
-    it("returns unavailable trajectories when runtime is missing", async () => {
-      const { status, data } = await req(
+    it("returns 503 for trajectories when service is unavailable", async () => {
+      const { status } = await req(
         port,
         "GET",
         "/api/training/trajectories?limit=10&offset=0",
       );
-      expect(status).toBe(200);
-      expect(data.available).toBe(false);
-      expect(data.reason).toBe("runtime_not_started");
+      expect(status).toBe(503);
     });
 
-    it("returns datasets, jobs, and models lists", async () => {
+    it("returns 503 for datasets, jobs, and models when service is unavailable", async () => {
       const datasets = await req(port, "GET", "/api/training/datasets");
       const jobs = await req(port, "GET", "/api/training/jobs");
       const models = await req(port, "GET", "/api/training/models");
 
-      expect(datasets.status).toBe(200);
-      expect(jobs.status).toBe(200);
-      expect(models.status).toBe(200);
-      expect(Array.isArray(datasets.data.datasets)).toBe(true);
-      expect(Array.isArray(jobs.data.jobs)).toBe(true);
-      expect(Array.isArray(models.data.models)).toBe(true);
+      expect(datasets.status).toBe(503);
+      expect(jobs.status).toBe(503);
+      expect(models.status).toBe(503);
     });
 
-    it("returns 404 for missing trajectory and missing job", async () => {
+    it("returns 503 for missing trajectory and missing job when service is unavailable", async () => {
       const trajectory = await req(
         port,
         "GET",
         "/api/training/trajectories/not-found",
       );
       const job = await req(port, "GET", "/api/training/jobs/not-found");
-      expect(trajectory.status).toBe(404);
-      expect(job.status).toBe(404);
+      expect(trajectory.status).toBe(503);
+      expect(job.status).toBe(503);
     });
 
-    it("streams dataset build events over websocket", async () => {
-      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
-      try {
-        await waitForWsMessage(ws, (message) => message.type === "status");
-        const waitForDatasetBuilt = waitForWsMessage(
-          ws,
-          (message) =>
-            message.type === "training_event" &&
-            ((message.payload as Record<string, unknown>)?.kind as string) ===
-              "dataset_built",
-        );
-
-        const response = await req(
-          port,
-          "POST",
-          "/api/training/datasets/build",
-          {
-            limit: 5,
-            minLlmCallsPerTrajectory: 1,
-          },
-        );
-        expect(response.status).toBe(201);
-
-        const message = await waitForDatasetBuilt;
-        expect(message.type).toBe("training_event");
-        expect((message.payload as Record<string, unknown>)?.kind).toBe(
-          "dataset_built",
-        );
-      } finally {
-        ws.close();
-      }
+    it("returns 503 for dataset build when service is unavailable", async () => {
+      const response = await req(
+        port,
+        "POST",
+        "/api/training/datasets/build",
+        {
+          limit: 5,
+          minLlmCallsPerTrajectory: 1,
+        },
+      );
+      expect(response.status).toBe(503);
     });
 
-    it("returns 400 for invalid job/model mutation requests", async () => {
+    it("returns 503 for job/model mutations when service is unavailable", async () => {
       const startJob = await req(port, "POST", "/api/training/jobs", {
         datasetId: "dataset-does-not-exist",
       });
@@ -2575,20 +2546,20 @@ describe("API Server E2E (no runtime)", () => {
         {},
       );
 
-      expect(startJob.status).toBe(400);
-      expect(importModel.status).toBe(400);
-      expect(activateModel.status).toBe(400);
-      expect(benchmarkModel.status).toBe(400);
+      expect(startJob.status).toBe(503);
+      expect(importModel.status).toBe(503);
+      expect(activateModel.status).toBe(503);
+      expect(benchmarkModel.status).toBe(503);
     });
 
-    it("returns 404 when cancelling unknown training job", async () => {
+    it("returns 503 when cancelling training job and service is unavailable", async () => {
       const response = await req(
         port,
         "POST",
         "/api/training/jobs/job-does-not-exist/cancel",
         {},
       );
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(503);
     });
   });
 

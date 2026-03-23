@@ -34,10 +34,6 @@ import { GpuWindow, WGPUView } from "electrobun/bun";
 import type { GpuViewInfo, GpuWindowInfo, WindowBounds } from "../rpc-schema";
 import type { SendToWebview } from "../types.js";
 
-// ============================================================================
-// GpuWindowManager
-// ============================================================================
-
 export class GpuWindowManager {
   private sendToWebview: SendToWebview | null = null;
   private gpuWindows: Map<string, GpuWindow> = new Map();

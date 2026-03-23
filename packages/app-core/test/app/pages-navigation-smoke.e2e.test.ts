@@ -280,7 +280,7 @@ vi.mock("@miladyai/app-core/hooks", async () => {
 });
 
 import { textOf } from "../../../../test/helpers/react-test";
-import { App } from "@miladyai/app-core/src/App";
+import { App } from "@miladyai/app-core/App";
 
 type HarnessState = {
   onboardingLoading: boolean;

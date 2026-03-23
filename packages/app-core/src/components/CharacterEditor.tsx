@@ -5,14 +5,16 @@
  * right panel has style rules + examples. Footer has voice + save + reset.
  */
 
+import type { StylePreset } from "@miladyai/shared/contracts/onboarding";
+import { STYLE_PRESETS } from "@miladyai/shared/onboarding-presets";
+import { Button, Input, Textarea, ThemedSelect } from "@miladyai/ui";
 import { client } from "../api/client";
 import {
   APP_EMOTE_EVENT,
   dispatchWindowEvent,
   VOICE_CONFIG_UPDATED_EVENT,
 } from "../events/index";
-import type { StylePreset } from "@miladyai/shared/contracts/onboarding";
-import { STYLE_PRESETS } from "@miladyai/shared/onboarding-presets";
+import { useChatAvatarVoiceBridge, useVoiceChat } from "../hooks";
 import { useApp } from "../state/useApp";
 import { normalizeCharacterMessageExamples } from "../utils/character-message-examples";
 import {
@@ -21,8 +23,6 @@ import {
   sanitizeApiKey,
   type VoicePreset,
 } from "../voice/types";
-import { Button, Input, Textarea, ThemedSelect } from "@miladyai/ui";
-import { useChatAvatarVoiceBridge, useVoiceChat } from "../hooks";
 import { AvatarSelector } from "./AvatarSelector";
 import {
   CharacterRoster,
@@ -74,6 +74,7 @@ import {
   useRef,
   useState,
 } from "react";
+
 /* ── Shared gold gradient styles ─────────────────────────────────── */
 const goldGradientStyle = {
   background:

@@ -385,7 +385,7 @@ vi.mock(
   },
 );
 
-import { App } from "@miladyai/app-core/src/App";
+import { App } from "@miladyai/app-core/App";
 
 function onboardingOptions() {
   return {

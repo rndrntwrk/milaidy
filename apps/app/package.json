@@ -27,10 +27,8 @@
     "@capacitor/android": "^8.0.2",
     "@capacitor/app": "^8.0.1",
     "@capacitor/core": "8.2.0",
-    "@capacitor/haptics": "8.0.0",
     "@capacitor/ios": "^8.0.2",
     "@capacitor/keyboard": "8.0.0",
-    "@capacitor/preferences": "^8.0.1",
     "@capacitor/status-bar": "^8.0.1",
     "@miladyai/app-core": "workspace:*",
     "@miladyai/capacitor-agent": "workspace:*",
@@ -43,7 +41,6 @@
     "@miladyai/capacitor-swabble": "workspace:*",
     "@miladyai/capacitor-talkmode": "workspace:*",
     "@miladyai/ui": "workspace:*",
-    "@noble/curves": "^2.0.1",
     "@pixiv/three-vrm": "^3.4.5",
     "@sparkjsdev/spark": "^0.1.10",
     "react": "^19.0.0",
@@ -64,6 +61,7 @@
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
     "vite": "^5.4.21",
+    "vite-plugin-node-polyfills": "^0.25.0",
     "vitest": "^2.1.9"
   }
 }

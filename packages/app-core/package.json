@@ -76,7 +76,6 @@
     "@capacitor/haptics": "8.0.0",
     "@capacitor/keyboard": "8.0.0",
     "@capacitor/preferences": "^8.0.1",
-    "@miladyai/agent": "workspace:*",
     "@miladyai/plugin-wechat": "workspace:*",
     "@lookingglass/webxr": "^0.6.0",
     "@miladyai/ui": "alpha",
@@ -84,7 +83,8 @@
     "@sparkjsdev/spark": "^0.1.10",
     "lucide-react": "^0.575.0",
     "three": "^0.182.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@miladyai/shared": "workspace:*"
   },
   "publishConfig": {
     "access": "public",

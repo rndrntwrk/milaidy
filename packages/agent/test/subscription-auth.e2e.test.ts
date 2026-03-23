@@ -11,7 +11,7 @@ import {
   vi,
 } from "vitest";
 import { startApiServer } from "@miladyai/agent/api/server";
-import type { OAuthCredentials } from "@miladyai/agent/auth/types";
+import type { OAuthCredentials } from "@miladyai/agent/auth";
 import { req } from "../../../test/helpers/http";
 import { saveEnv } from "../../../test/helpers/test-utils";
 
