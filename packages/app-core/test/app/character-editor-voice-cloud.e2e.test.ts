@@ -107,13 +107,15 @@ vi.mock("../../src/hooks", async () => {
   };
 });
 
-vi.mock("@miladyai/ui", () => {
+vi.mock("@miladyai/ui", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@miladyai/ui")>();
   const passthrough = ({
     children,
     ...props
   }: React.PropsWithChildren<Record<string, unknown>>) =>
     React.createElement("div", props, children);
   return {
+    ...actual,
     Button: ({
       children,
       ...props

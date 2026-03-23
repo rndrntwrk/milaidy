@@ -138,17 +138,21 @@ export default defineConfig({
       "../../packages/app-core/test/**/*.test.ts",
       "../../packages/app-core/test/**/*.test.tsx",
     ],
-    // Live QA/browser checks are opt-in and should not run as part of the
+    // Live/real QA browser checks are opt-in and should not run as part of the
     // default app suite, even if the developer shell exports live-test env.
     exclude: [
       "test/**/*.live.test.ts",
       "test/**/*.live.test.tsx",
       "test/**/*.live.e2e.test.ts",
       "test/**/*.live.e2e.test.tsx",
+      "test/**/*.real.e2e.test.ts",
+      "test/**/*.real.e2e.test.tsx",
       "../../packages/app-core/test/**/*.live.test.ts",
       "../../packages/app-core/test/**/*.live.test.tsx",
       "../../packages/app-core/test/**/*.live.e2e.test.ts",
       "../../packages/app-core/test/**/*.live.e2e.test.tsx",
+      "../../packages/app-core/test/**/*.real.e2e.test.ts",
+      "../../packages/app-core/test/**/*.real.e2e.test.tsx",
     ],
     setupFiles: [path.join(here, "test/setup.ts")],
     environment: "node",
