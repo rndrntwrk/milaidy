@@ -1,4 +1,4 @@
-import { isPlainObject } from "./object-utils";
+import { isPlainObject } from "@miladyai/agent/config";
 
 type PathNode = Record<string, unknown>;
 

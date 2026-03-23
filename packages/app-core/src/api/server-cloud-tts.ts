@@ -7,7 +7,7 @@
  */
 import type http from "node:http";
 import { loadElizaConfig } from "../config/config";
-import { sanitizeSpeechText } from "../utils/spoken-text";
+import { sanitizeSpeechText } from "@miladyai/agent";
 import { getCloudSecret } from "./cloud-secrets";
 
 // ---------------------------------------------------------------------------

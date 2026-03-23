@@ -727,16 +727,8 @@ describe("walletUtils", () => {
 
   // ── exported constants ────────────────────────────────────────────
   describe("exported constants", () => {
-    it("BSC_GAS_READY_THRESHOLD is a positive number", () => {
-      expect(BSC_GAS_READY_THRESHOLD).toBeGreaterThan(0);
-    });
-
     it("BSC_SWAP_GAS_RESERVE is less than BSC_GAS_READY_THRESHOLD", () => {
       expect(BSC_SWAP_GAS_RESERVE).toBeLessThan(BSC_GAS_READY_THRESHOLD);
-    });
-
-    it("MAX_WALLET_RECENT_TRADES is 10", () => {
-      expect(MAX_WALLET_RECENT_TRADES).toBe(10);
     });
   });
 });

@@ -12,8 +12,8 @@ import {
   getTtsProviderStatus,
   resolveTtsConfig,
   ttsStreamBridge,
-} from "../services/tts-stream-bridge";
-import { sanitizeSpeechText } from "../utils/spoken-text";
+} from "@miladyai/agent/services/tts-stream-bridge";
+import { sanitizeSpeechText } from "@miladyai/agent";
 import { readStreamSettings, writeStreamSettings } from "./stream-persistence";
 import type { StreamRouteState } from "./stream-route-state";
 

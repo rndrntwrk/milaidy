@@ -5,10 +5,10 @@
  * @module eliza
  */
 
-export * from "./config/types";
-export type { RestartHandler } from "./runtime/restart";
+export * from "@miladyai/agent/config";
+export type { RestartHandler } from "@miladyai/agent/runtime";
 export {
   RESTART_EXIT_CODE,
   requestRestart,
   setRestartHandler,
-} from "./runtime/restart";
+} from "@miladyai/agent/runtime";

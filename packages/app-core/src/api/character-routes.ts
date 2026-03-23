@@ -3,9 +3,9 @@ import {
   type CharacterRouteState as AutonomousCharacterRouteState,
   handleCharacterRoutes as handleAutonomousCharacterRoutes,
 } from "@miladyai/agent/api/character-routes";
-import type { ElizaConfig } from "../config/types";
-import { CharacterSchema } from "../config/zod-schema";
-import type { RouteRequestContext } from "./route-helpers";
+import type { ElizaConfig } from "@miladyai/agent/config";
+import { CharacterSchema } from "@miladyai/agent/config";
+import type { RouteRequestContext } from "@miladyai/agent/api";
 
 export interface CharacterRouteState extends AutonomousCharacterRouteState {
   config?: ElizaConfig;

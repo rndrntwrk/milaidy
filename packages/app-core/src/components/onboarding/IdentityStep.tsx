@@ -1,6 +1,6 @@
-import { STYLE_PRESETS } from "../../onboarding-presets";
+import { STYLE_PRESETS } from "@miladyai/agent/onboarding-presets";
 import { getVrmPreviewUrl, useApp } from "@miladyai/app-core/state";
-import { Button } from "@miladyai/ui";
+import { Button, Input } from "@miladyai/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CharacterRoster,
@@ -118,7 +118,7 @@ export function IdentityStep() {
           className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)] text-[13px] text-left"
         />
 
-        <input
+        <Input
           type="password"
           placeholder={t("onboarding.decryptionPasswordPlaceholder")}
           value={importPassword}

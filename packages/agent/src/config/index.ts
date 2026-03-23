@@ -5,6 +5,8 @@ export * from "./includes";
 export * from "./object-utils";
 export * from "./paths";
 export * from "./plugin-auto-enable";
+export * from "./schema";
+export * from "./telegram-custom-commands";
 export * from "./types";
 export * from "./types.agent-defaults";
 export * from "./types.agents";

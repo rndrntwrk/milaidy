@@ -8,7 +8,7 @@ import {
   detectBestEngine,
   type ISandboxEngine,
   type SandboxEngineType,
-} from "./sandbox-engine";
+} from "@miladyai/agent/services";
 
 export type {
   SandboxMode,

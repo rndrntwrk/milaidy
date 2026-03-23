@@ -11,7 +11,8 @@ import {
   dispatchWindowEvent,
   VOICE_CONFIG_UPDATED_EVENT,
 } from "../events/index";
-import { type MiladyStylePreset, STYLE_PRESETS } from "../onboarding-presets";
+import type { StylePreset } from "@miladyai/agent/contracts/onboarding";
+import { STYLE_PRESETS } from "@miladyai/agent/onboarding-presets";
 import { useApp } from "../state/useApp";
 import { normalizeCharacterMessageExamples } from "../utils/character-message-examples";
 import {
@@ -139,7 +140,7 @@ const EDGE_VOICE_GROUPS = [
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
 
-type OnboardingPreset = MiladyStylePreset;
+type OnboardingPreset = StylePreset;
 
 function getOnboardingPresetStyles(
   options: unknown,
@@ -371,7 +372,7 @@ export function CharacterEditor({
           avatarIndex: localMeta?.avatarIndex,
           voicePresetId: localMeta?.voicePresetId,
           greetingAnimation: localMeta?.greetingAnimation,
-        } as unknown as MiladyStylePreset;
+        } as unknown as StylePreset;
       });
       setRosterStyles(merged);
     } else {
@@ -1047,51 +1048,49 @@ export function CharacterEditor({
 
         {customizing && (
           <div
-            className={`ce-tabbed-editor-group ce-tabbed-editor-group--${activePage}`}
+            className="flex flex-col flex-1 min-h-0 gap-2 overflow-hidden"
             role="region"
             aria-label={t("charactereditor.TabbedEditorGroupLabel", {
               defaultValue: "Character editor — tabbed sections",
             })}
           >
-            <div className="ce-page-tabs-row">
-              <div className="ce-page-tabs">
-                <Button
-                  variant="ghost"
-                  className={`ce-page-tab ${activePage === "identity" ? "ce-page-tab--active" : ""}`}
-                  onClick={() => setActivePage("identity")}
-                >
-                  {t("charactereditor.TabCharacter", {
-                    defaultValue: "Character",
-                  })}
-                </Button>
-                <Button
-                  variant="ghost"
-                  className={`ce-page-tab ${activePage === "style" ? "ce-page-tab--active" : ""}`}
-                  onClick={() => {
-                    setRightTab("style");
-                    setActivePage("style");
-                  }}
-                >
-                  {t("charactereditor.TabStyles", { defaultValue: "Styles" })}
-                </Button>
-                <Button
-                  variant="ghost"
-                  className={`ce-page-tab ${activePage === "examples" ? "ce-page-tab--active" : ""}`}
-                  onClick={() => {
-                    setRightTab("examples");
-                    setActivePage("examples");
-                  }}
-                >
-                  {t("charactereditor.TabExamples", {
-                    defaultValue: "Examples",
-                  })}
-                </Button>
+            <div className="flex items-center justify-between gap-3 shrink-0">
+              <div
+                className="flex gap-1 p-1 rounded-lg bg-elevated border border-border items-center shrink-0"
+                style={{ boxShadow: pageTabsBoxShadow }}
+              >
+                {(["identity", "style", "examples"] as const).map((page) => (
+                  <button
+                    key={page}
+                    type="button"
+                    className="flex-initial px-[0.6rem] py-1.5 rounded-md border border-transparent bg-transparent text-txt text-[10px] font-bold uppercase tracking-[0.1em] cursor-pointer transition-[background,border-color,color,box-shadow] duration-150 text-center hover:text-txt-strong hover:bg-bg-hover hover:border-border"
+                    style={activePage === page ? goldGradientStyle : undefined}
+                    onClick={() => {
+                      setActivePage(page);
+                      if (page === "style" || page === "examples")
+                        setRightTab(page);
+                    }}
+                  >
+                    {page === "identity"
+                      ? t("charactereditor.TabCharacter", {
+                          defaultValue: "Character",
+                        })
+                      : page === "style"
+                        ? t("charactereditor.TabStyles", {
+                            defaultValue: "Styles",
+                          })
+                        : t("charactereditor.TabExamples", {
+                            defaultValue: "Examples",
+                          })}
+                  </button>
+                ))}
               </div>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="ce-reset-btn"
+                className="h-9 rounded-xl px-2.5 text-[11px] font-semibold disabled:opacity-40"
+                style={goldGradientStyle}
                 onClick={handleResetToDefaults}
                 disabled={!activeCharacterRosterEntry}
                 title={t("charactereditor.ResetToDefaults", {
@@ -1103,12 +1102,8 @@ export function CharacterEditor({
               </Button>
             </div>
 
-            <div
-              key={activePage}
-              className={`ce-page-context ce-page-context--${activePage}`}
-              aria-live="polite"
-            >
-              <div className="ce-page-context-title">
+            <div key={activePage} aria-live="polite">
+              <div className="text-sm font-semibold text-txt">
                 {activePage === "identity"
                   ? t("charactereditor.PageContextTitle.identity", {
                       defaultValue: "Profile & directions",
@@ -1121,7 +1116,7 @@ export function CharacterEditor({
                         defaultValue: "Sample chats & posts",
                       })}
               </div>
-              <p className="ce-page-context-desc">
+              <p className="text-xs text-muted mt-0.5">
                 {activePage === "identity"
                   ? t("charactereditor.PageContextDesc.identity", {
                       defaultValue:
@@ -1139,13 +1134,11 @@ export function CharacterEditor({
               </p>
             </div>
 
-            <div
-              className={`ce-panels ce-panels--single ce-panels--page-${activePage}`}
-            >
+            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
               {/* ── LEFT PANEL (Character identity) ───────────────────────── */}
               <div
                 ref={leftPanelRef}
-                className={`ce-panel ce-panel-left ${activePage !== "identity" ? "ce-panel--hidden" : ""}`}
+                className={`flex flex-col flex-1 gap-3 min-h-0 overflow-y-auto pr-1 [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-sm${activePage !== "identity" ? " hidden" : ""}`}
               >
                 {/* Name + Voice (50/50 split) */}
                 <section className="flex flex-col gap-2 p-3 border border-border rounded-xl bg-card">
@@ -1322,7 +1315,7 @@ export function CharacterEditor({
               {/* ── RIGHT PANEL ───────────────────────────────────────────── */}
               <div
                 ref={rightPanelRef}
-                className={`ce-panel ce-panel-right ${activePage === "identity" ? "ce-panel--hidden" : ""}`}
+                className={`flex flex-col flex-1 gap-3 min-h-0 overflow-y-auto pr-1 [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-sm${activePage === "identity" ? " hidden" : ""}`}
               >
                 {/* Style Rules */}
                 <section
@@ -1531,8 +1524,7 @@ export function CharacterEditor({
                               >
                                 {msg.name === "{{user1}}" ? "user" : "agent"}
                               </span>
-                              <input
-                                type="text"
+                              <Input
                                 value={msg.content?.text ?? ""}
                                 onChange={(e) => {
                                   const updated = [
@@ -1599,8 +1591,7 @@ export function CharacterEditor({
                         key={`post-${pi}`}
                         className="flex items-center gap-1.5"
                       >
-                        <input
-                          type="text"
+                        <Input
                           value={post}
                           onChange={(e) => {
                             const updated = [...(d.postExamples ?? [])];

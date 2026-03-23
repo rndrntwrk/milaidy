@@ -7,11 +7,13 @@ import { useApp } from "@miladyai/app-core/state";
 import {
   Button,
   Checkbox,
+  Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Textarea,
 } from "@miladyai/ui";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -769,7 +771,7 @@ export function CustomActionEditor({
                 {t("customactioneditor.DescribeWhatYouWa")}
               </span>
               <div className="flex gap-2">
-                <input
+                <Input
                   type="text"
                   value={aiPrompt}
                   onChange={(e) => {
@@ -803,7 +805,7 @@ export function CustomActionEditor({
           {/* Name */}
           <div className="flex flex-col gap-1">
             <span className="text-xs text-muted">{t("wallet.name")}</span>
-            <input
+            <Input
               type="text"
               value={name}
               onChange={(e) => setNormalizedName(e.target.value)}
@@ -817,7 +819,7 @@ export function CustomActionEditor({
             <span className="text-xs text-muted">
               {t("skillsview.Description")}
             </span>
-            <textarea
+            <Textarea
               value={description}
               onChange={(e) => setDescriptionValue(e.target.value)}
               placeholder={t("customactioneditor.WhatDoesThisActio")}
@@ -831,7 +833,7 @@ export function CustomActionEditor({
             <span className="text-xs text-muted">
               {t("customactioneditor.AliasesOptional")}
             </span>
-            <input
+            <Input
               type="text"
               value={similesInput}
               onChange={(e) => {
@@ -896,7 +898,7 @@ export function CustomActionEditor({
                     ))}
                   </SelectContent>
                 </Select>
-                <input
+                <Input
                   type="text"
                   value={httpUrl}
                   onChange={(e) => {
@@ -927,14 +929,14 @@ export function CustomActionEditor({
                     key={`${header.key}:${header.value}`}
                     className="flex gap-2"
                   >
-                    <input
+                    <Input
                       type="text"
                       value={header.key}
                       onChange={(e) => updateHeader(i, "key", e.target.value)}
                       placeholder={t("customactioneditor.HeaderName")}
                       className="flex-1 bg-surface border border-border px-2 py-1.5 text-sm text-txt placeholder:text-muted/50 outline-none focus:border-accent"
                     />
-                    <input
+                    <Input
                       type="text"
                       value={header.value}
                       onChange={(e) => updateHeader(i, "value", e.target.value)}
@@ -957,7 +959,7 @@ export function CustomActionEditor({
                 <span className="text-xs text-muted">
                   {t("customactioneditor.BodyTemplateOptio")}
                 </span>
-                <textarea
+                <Textarea
                   value={httpBody}
                   onChange={(e) => {
                     setHttpBody(e.target.value);
@@ -976,7 +978,7 @@ export function CustomActionEditor({
               <span className="text-xs text-muted">
                 {t("customactioneditor.CommandTemplate")}
               </span>
-              <textarea
+              <Textarea
                 value={shellCommand}
                 onChange={(e) => {
                   setShellCommand(e.target.value);
@@ -998,7 +1000,7 @@ export function CustomActionEditor({
               <span className="text-xs text-muted">
                 {t("customactioneditor.JavaScriptCode")}
               </span>
-              <textarea
+              <Textarea
                 value={code}
                 onChange={(e) => {
                   setCode(e.target.value);
@@ -1031,7 +1033,7 @@ export function CustomActionEditor({
                 key={`${param.name}-${param.description ?? ""}`}
                 className="flex gap-2 items-start"
               >
-                <input
+                <Input
                   type="text"
                   value={param.name}
                   onChange={(e) =>
@@ -1040,7 +1042,7 @@ export function CustomActionEditor({
                   placeholder={t("customactioneditor.paramName")}
                   className="w-32 bg-surface border border-border px-2 py-1.5 text-sm text-txt placeholder:text-muted/50 outline-none focus:border-accent"
                 />
-                <input
+                <Input
                   type="text"
                   value={param.description}
                   onChange={(e) =>
@@ -1094,7 +1096,7 @@ export function CustomActionEditor({
                   .map((param) => (
                     <div key={param.name} className="flex flex-col gap-1">
                       <span className="text-xs text-muted">{param.name}</span>
-                      <input
+                      <Input
                         type="text"
                         value={testParams[param.name] || ""}
                         onChange={(e) =>

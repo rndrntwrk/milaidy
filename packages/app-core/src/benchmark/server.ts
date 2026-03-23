@@ -10,8 +10,8 @@ import {
   stringToUuid,
 } from "@elizaos/core";
 import dotenv from "dotenv";
-import { CORE_PLUGINS } from "../runtime/core-plugins";
-import { createElizaPlugin } from "../runtime/eliza-plugin";
+import { CORE_PLUGINS } from "@miladyai/agent/runtime";
+import { createElizaPlugin } from "@miladyai/agent/runtime";
 import {
   clearCapturedAction,
   createBenchmarkPlugin,

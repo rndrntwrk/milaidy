@@ -9,7 +9,7 @@
  */
 
 import type { Command } from "commander";
-import type { ReleaseChannel } from "../../config/types.eliza";
+import type { ReleaseChannel } from "@miladyai/agent/config";
 import { theme } from "../../terminal/theme";
 import { CLI_VERSION } from "../version";
 

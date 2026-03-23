@@ -9,7 +9,7 @@ import {
   WhatsAppPairingSession,
   whatsappAuthExists,
   whatsappLogout,
-} from "../services/whatsapp-pairing";
+} from "@miladyai/agent/services/whatsapp-pairing";
 
 export type { WhatsAppRouteState } from "@miladyai/agent/api/whatsapp-routes";
 export { MAX_PAIRING_SESSIONS };

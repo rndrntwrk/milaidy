@@ -14,4 +14,4 @@ export type {
   Platform,
   SystemPermissionDefinition,
   SystemPermissionId,
-} from "../contracts/permissions.js";
+} from "@miladyai/agent/contracts";

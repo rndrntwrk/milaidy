@@ -12,6 +12,7 @@
 
 import {
   Button,
+  Checkbox,
   Select,
   SelectContent,
   SelectItem,
@@ -614,14 +615,13 @@ const CheckboxComponent: ComponentFn = (props, _children, ctx) => {
     ctx,
   );
   return (
-    <span className="flex items-center gap-2 text-xs cursor-pointer">
-      <input
-        type="checkbox"
+    <label className="flex items-center gap-2 text-xs cursor-pointer">
+      <Checkbox
         checked={!!value}
-        onChange={(e) => setValue(e.target.checked)}
+        onCheckedChange={(checked) => setValue(!!checked)}
       />
       <span className="font-semibold">{String(props.label ?? "")}</span>
-    </span>
+    </label>
   );
 };
 

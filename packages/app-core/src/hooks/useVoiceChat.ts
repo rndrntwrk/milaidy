@@ -28,7 +28,7 @@ import {
 } from "../bridge/native-plugins";
 import { resolveApiUrl } from "../utils";
 import { getElizaApiToken } from "../utils/eliza-globals";
-import { sanitizeSpeechText } from "../utils/spoken-text";
+import { sanitizeSpeechText } from "@miladyai/agent";
 import { mergeStreamingText } from "../utils/streaming-text";
 
 // ── Speech Recognition types ──────────────────────────────────────────

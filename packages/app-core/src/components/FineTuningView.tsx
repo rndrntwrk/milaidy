@@ -22,6 +22,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Textarea,
 } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -652,7 +653,7 @@ export function FineTuningView() {
                       </span>{" "}
                       {selectedTrajectory.totalReward ?? "n/a"}
                     </div>
-                    <textarea
+                    <Textarea
                       readOnly
                       value={selectedTrajectory.stepsJson}
                       className="w-full min-h-56 px-2 py-1 border border-border bg-bg text-[11px] font-mono"
@@ -898,7 +899,7 @@ export function FineTuningView() {
                   </span>{" "}
                   <span className="font-mono">{selectedJob.datasetId}</span>
                 </div>
-                <textarea
+                <Textarea
                   readOnly
                   value={selectedJob.logs.join("\n")}
                   className="w-full min-h-56 px-2 py-1 border border-border bg-bg text-[11px] font-mono"
@@ -1055,7 +1056,7 @@ export function FineTuningView() {
                   </Button>
                 </div>
                 {smokeResult && (
-                  <textarea
+                  <Textarea
                     readOnly
                     value={smokeResult}
                     className="w-full min-h-24 px-2 py-1 border border-border bg-bg text-[11px] font-mono"

@@ -1,5 +1,5 @@
 import { useApp } from "@miladyai/app-core/state";
-import { Button } from "@miladyai/ui";
+import { Button, Input } from "@miladyai/ui";
 import { useState } from "react";
 
 type RpcMode = "" | "cloud" | "byok";
@@ -361,7 +361,7 @@ export function RpcStep() {
           >
             Covers Ethereum, Base, Arbitrum, Optimism, Polygon, BSC
           </p>
-          <input
+          <Input
             id="rpc-alchemy"
             type="password"
             className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
@@ -391,7 +391,7 @@ export function RpcStep() {
           >
             Solana mainnet RPC &amp; token data
           </p>
-          <input
+          <Input
             id="rpc-helius"
             type="password"
             className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
@@ -415,7 +415,7 @@ export function RpcStep() {
           >
             {t("onboarding.rpcBirdeyeKey")}
           </label>
-          <input
+          <Input
             id="rpc-birdeye"
             type="password"
             className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"

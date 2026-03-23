@@ -1,5 +1,5 @@
 import type { Action, HandlerOptions } from "@elizaos/core";
-import { requestRestart } from "../runtime/restart";
+import { requestRestart } from "@miladyai/agent/runtime";
 import { reinjectPlugin } from "../services/plugin-eject";
 
 export const reinjectPluginAction: Action = {

@@ -6,7 +6,7 @@ import type { Command } from "commander";
 import type {
   InstallProgressLike,
   PluginManagerLike,
-} from "../services/plugin-manager-types";
+} from "@miladyai/agent/services/plugin-manager-types";
 import { parseClampedInteger } from "../utils/number-parsing";
 
 /** Validate that a resolved plugin path is within allowed boundaries. */

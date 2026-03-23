@@ -4,7 +4,7 @@ import {
 } from "@miladyai/agent/api/permissions-routes";
 import type { AgentRuntime } from "@elizaos/core";
 import type { ElizaConfig } from "../config/config";
-import type { RouteRequestContext } from "./route-helpers";
+import type { RouteRequestContext } from "@miladyai/agent/api";
 
 export interface PermissionState {
   id: string;

@@ -1,11 +1,11 @@
 import { lookup as dnsLookup } from "node:dns/promises";
 import net from "node:net";
 import { logger } from "@elizaos/core";
-import type { RegistryEndpoint } from "../config/types.eliza.js";
+import type { RegistryEndpoint } from "@miladyai/agent/config";
 import {
   isBlockedPrivateOrLinkLocalIp,
   normalizeHostLike,
-} from "../security/network-policy.js";
+} from "@miladyai/agent";
 import type { RegistryPluginInfo } from "./registry-client-types.js";
 
 const BLOCKED_REGISTRY_HOST_LITERALS = new Set([

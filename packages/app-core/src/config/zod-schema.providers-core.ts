@@ -3,7 +3,7 @@ import {
   normalizeTelegramCommandDescription,
   normalizeTelegramCommandName,
   resolveTelegramCustomCommands,
-} from "./telegram-custom-commands";
+} from "@miladyai/agent/config";
 import { ToolPolicySchema } from "./zod-schema.agent-runtime";
 import {
   BlockStreamingChunkSchema,

@@ -7,7 +7,7 @@
  * - Explicit load order metadata
  */
 
-import { Button } from "@miladyai/ui";
+import { Button, Input } from "@miladyai/ui";
 import { useCallback, useEffect, useState } from "react";
 import {
   client,
@@ -288,7 +288,7 @@ export function RuntimeView() {
       <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 bg-card/60 backdrop-blur-xl border border-border/40 rounded-2xl">
         <label className="text-[11px] text-muted flex items-center gap-1">
           {t("runtimeview.depth")}
-          <input
+          <Input
             type="number"
             min={1}
             max={24}
@@ -301,7 +301,7 @@ export function RuntimeView() {
         </label>
         <label className="text-[11px] text-muted flex items-center gap-1">
           {t("runtimeview.arrayCap")}
-          <input
+          <Input
             type="number"
             min={1}
             max={5000}
@@ -316,7 +316,7 @@ export function RuntimeView() {
         </label>
         <label className="text-[11px] text-muted flex items-center gap-1">
           {t("runtimeview.objectCap")}
-          <input
+          <Input
             type="number"
             min={1}
             max={5000}

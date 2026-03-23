@@ -10,8 +10,8 @@
  */
 
 import type { Action, HandlerOptions } from "@elizaos/core";
-import type { AwarenessRegistry } from "../awareness/registry";
-import { getGlobalAwarenessRegistry } from "../awareness/registry";
+import type { AwarenessRegistry } from "@miladyai/agent/awareness/registry";
+import { getGlobalAwarenessRegistry } from "@miladyai/agent/awareness/registry";
 
 const VALID_MODULES = [
   "all",

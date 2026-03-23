@@ -13,6 +13,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Input,
 } from "@miladyai/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -153,7 +154,7 @@ export function PromptModal({
             {message}
           </DialogDescription>
         </DialogHeader>
-        <input
+        <Input
           ref={inputRef}
           type="text"
           value={value}

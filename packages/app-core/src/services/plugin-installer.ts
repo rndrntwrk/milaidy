@@ -30,7 +30,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { logger } from "@elizaos/core";
 import { loadElizaConfig, saveElizaConfig } from "../config/config";
-import { requestRestart } from "../runtime/restart";
+import { requestRestart } from "@miladyai/agent/runtime";
 import { createSerialise } from "../utils/serialise";
 import { getPluginInfo, type RegistryPluginInfo } from "./registry-client";
 

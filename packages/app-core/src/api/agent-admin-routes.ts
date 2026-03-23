@@ -3,7 +3,7 @@ import {
   handleAgentAdminRoutes as handleAutonomousAgentAdminRoutes,
 } from "@miladyai/agent/api/agent-admin-routes";
 import type { ElizaConfig } from "../config/config";
-import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
+import type { RouteHelpers, RouteRequestMeta } from "@miladyai/agent/api";
 
 export type { AgentAdminRouteState };
 

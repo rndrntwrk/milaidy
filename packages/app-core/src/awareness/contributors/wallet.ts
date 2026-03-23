@@ -6,7 +6,7 @@ import type { IAgentRuntime } from "@elizaos/core";
 import { getWalletAddresses } from "../../api/wallet.js";
 import { resolveWalletRpcReadiness } from "../../api/wallet-rpc.js";
 import { loadElizaConfig } from "../../config/config.js";
-import type { AwarenessContributor } from "../../contracts/awareness.js";
+import type { AwarenessContributor } from "@miladyai/agent/contracts";
 import {
   canUseLocalTradeExecution,
   resolveTradePermissionMode,

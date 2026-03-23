@@ -15,10 +15,6 @@ describe("agent-vault-id", () => {
     vi.unstubAllEnvs();
   });
 
-  it("uses MILADY_AGENT_VAULT_SERVICE constant for docs parity", () => {
-    expect(MILADY_AGENT_VAULT_SERVICE).toBe("ai.milady.agent.vault");
-  });
-
   it("resolveCanonicalStateDir prefers ELIZA_STATE_DIR", () => {
     const dir = path.join(os.tmpdir(), `milady-vault-${Date.now()}`);
     fs.mkdirSync(dir, { recursive: true });

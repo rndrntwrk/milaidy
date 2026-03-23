@@ -5,7 +5,7 @@
 import type { ConversationMessage } from "@miladyai/app-core/api";
 import { useTimeout } from "@miladyai/app-core/hooks";
 import { getVrmPreviewUrl, useApp } from "@miladyai/app-core/state";
-import { Button } from "@miladyai/ui";
+import { Button, Textarea } from "@miladyai/ui";
 import { Check, Copy, Pencil, Trash2, Volume2 } from "lucide-react";
 import {
   type KeyboardEvent,
@@ -217,7 +217,7 @@ export const ChatMessage = memo(function ChatMessage({
         >
           {isEditing ? (
             <div className="space-y-3">
-              <textarea
+              <Textarea
                 ref={editTextareaRef}
                 value={draftText}
                 onChange={(event) => setDraftText(event.target.value)}

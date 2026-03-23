@@ -1,4 +1,4 @@
-import type { AwarenessContributor } from "../../contracts/awareness";
+import type { AwarenessContributor } from "@miladyai/agent/contracts";
 // opinion contributor deferred to feat/bsc-opinion-markets PR
 import { cloudContributor } from "./cloud";
 import { connectorsContributor } from "./connectors";

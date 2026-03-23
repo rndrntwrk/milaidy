@@ -1,8 +1,8 @@
 import { handleTrainingRoutes as handleAutonomousTrainingRoutes } from "@miladyai/agent/api/training-routes";
 import type { AgentRuntime } from "@elizaos/core";
-import { isLoopbackHost } from "../security/network-policy";
-import type { RouteHelpers, RouteRequestContext } from "./route-helpers";
-import type { TrainingServiceLike } from "./training-service-like";
+import { isLoopbackHost } from "@miladyai/agent";
+import type { RouteHelpers, RouteRequestContext } from "@miladyai/agent/api";
+import type { TrainingServiceLike } from "@miladyai/agent/api";
 
 export type TrainingRouteHelpers = RouteHelpers;
 

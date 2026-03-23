@@ -17,7 +17,7 @@ import type { Action, HandlerOptions } from "@elizaos/core";
 import type {
   EvmChainBalance,
   WalletBalancesResponse,
-} from "../contracts/wallet.js";
+} from "@miladyai/agent/contracts";
 import {
   buildAuthHeaders,
   WALLET_ACTION_API_PORT,

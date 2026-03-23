@@ -3,7 +3,7 @@
  */
 
 import type { IAgentRuntime } from "@elizaos/core";
-import type { AwarenessContributor } from "../../contracts/awareness";
+import type { AwarenessContributor } from "@miladyai/agent/contracts";
 
 export const pluginHealthContributor: AwarenessContributor = {
   id: "pluginHealth",

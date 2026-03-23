@@ -218,7 +218,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ["react", "react-dom", "three"],
-    exclude: ["@sparkjsdev/spark"],
+    exclude: ["@sparkjsdev/spark", "node-llama-cpp", "@node-llama-cpp/mac-arm64-metal"],
   },
   build: {
     outDir: path.resolve(here, "dist"),

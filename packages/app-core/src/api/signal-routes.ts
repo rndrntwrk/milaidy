@@ -9,7 +9,7 @@ import {
   sanitizeAccountId,
   signalAuthExists,
   signalLogout,
-} from "../services/signal-pairing";
+} from "@miladyai/agent/services/signal-pairing";
 
 export type { SignalRouteState } from "@miladyai/agent/api/signal-routes";
 export { MAX_PAIRING_SESSIONS };

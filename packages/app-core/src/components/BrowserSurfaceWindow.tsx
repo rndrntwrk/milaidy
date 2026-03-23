@@ -1,4 +1,4 @@
-import { Button } from "@miladyai/ui";
+import { Button, Input } from "@miladyai/ui";
 import type { WebviewTagElement } from "electrobun/view";
 import {
   createElement,
@@ -228,7 +228,7 @@ export function BrowserSurfaceWindow() {
           className="flex min-w-0 flex-1 items-center gap-2"
           onSubmit={handleSubmit}
         >
-          <input
+          <Input
             aria-label={t("aria.browserAddress")}
             autoCapitalize="none"
             autoCorrect="off"

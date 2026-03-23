@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import type { ElizaConfig } from "../../config/types.eliza";
+import type { ElizaConfig } from "@miladyai/agent/config";
 import { theme } from "../../terminal/theme";
 import { getLogPrefix } from "../../utils/log-prefix";
 

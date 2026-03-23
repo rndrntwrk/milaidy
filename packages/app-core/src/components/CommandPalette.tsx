@@ -1,4 +1,4 @@
-import { Button, Dialog, DialogContent } from "@miladyai/ui";
+import { Button, Dialog, DialogContent, Input } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { isElectrobunRuntime } from "../bridge";
 import {
@@ -224,7 +224,7 @@ export function CommandPalette() {
       }}
     >
       <DialogContent className="w-[520px] max-w-[520px] max-h-[420px] p-0 flex flex-col rounded-xl top-[30%] translate-y-0">
-        <input
+        <Input
           ref={inputRef}
           type="text"
           className="w-full px-4 py-3.5 bg-transparent text-[15px] outline-none font-body"

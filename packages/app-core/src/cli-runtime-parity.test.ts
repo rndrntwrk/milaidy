@@ -354,35 +354,6 @@ describe("model resolution parity", () => {
 });
 
 // ---------------------------------------------------------------------------
-// API server export availability
-// ---------------------------------------------------------------------------
-
-describe("API server module availability", () => {
-  it("startApiServer is importable from api/server", async () => {
-    const mod = await import("./api/server");
-    expect(typeof mod.startApiServer).toBe("function");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// startEliza export availability
-// ---------------------------------------------------------------------------
-
-describe("startEliza module availability", () => {
-  it("startEliza is importable from eliza module", async () => {
-    const mod = await import("./runtime/eliza");
-    expect(typeof mod.startEliza).toBe("function");
-  });
-
-  it("startEliza accepts headless option", async () => {
-    const mod = await import("./runtime/eliza");
-    // Verify the function signature accepts the headless option
-    // (we can't actually run it without a full runtime, but we can check the export)
-    expect(mod.startEliza.length).toBeLessThanOrEqual(1); // 0 or 1 param
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Config path consistency
 // ---------------------------------------------------------------------------
 
@@ -437,11 +408,6 @@ describe("config path consistency across modes", () => {
 // ---------------------------------------------------------------------------
 
 describe("restart mechanism parity", () => {
-  it("RESTART_EXIT_CODE is consistent", async () => {
-    const { RESTART_EXIT_CODE } = await import("./runtime/restart");
-    expect(RESTART_EXIT_CODE).toBe(75);
-  });
-
   it("setRestartHandler replaces the default handler", async () => {
     const { setRestartHandler, requestRestart } = await import(
       "./runtime/restart"

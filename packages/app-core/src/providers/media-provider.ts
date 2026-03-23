@@ -18,7 +18,7 @@ import type {
   MediaConfig,
   VideoConfig,
   VisionConfig,
-} from "../config/types.eliza";
+} from "@miladyai/agent/config";
 
 // ============================================================================
 // Fetch Utilities

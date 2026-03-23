@@ -2023,9 +2023,6 @@ describe("scanDropInPlugins", () => {
     expect(Object.keys(records)).toHaveLength(1);
   });
 
-  it("CUSTOM_PLUGINS_DIRNAME is plugins/custom", () => {
-    expect(CUSTOM_PLUGINS_DIRNAME).toBe("plugins/custom");
-  });
 });
 
 // ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Textarea,
 } from "@miladyai/ui";
 import { Monitor, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -760,7 +761,7 @@ export function DesktopWorkspaceSection() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <textarea
+            <Textarea
               value={clipboardDraft}
               onChange={(event) => setClipboardDraft(event.target.value)}
               className="min-h-24 w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm text-txt outline-none"

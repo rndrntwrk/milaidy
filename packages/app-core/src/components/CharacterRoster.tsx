@@ -3,7 +3,7 @@
  * onboarding (selection-only) and the character editor (with customization).
  */
 
-import type { MiladyStylePreset } from "../onboarding-presets";
+import type { StylePreset } from "@miladyai/agent/contracts/onboarding";
 import { getVrmPreviewUrl } from "@miladyai/app-core/state";
 import { Button } from "@miladyai/ui";
 
@@ -23,13 +23,13 @@ export type CharacterRosterEntry = {
   voicePresetId?: string;
   catchphrase?: string;
   greetingAnimation?: string;
-  preset: MiladyStylePreset;
+  preset: StylePreset;
 };
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
 export function resolveRosterEntries(
-  styles: readonly MiladyStylePreset[],
+  styles: readonly StylePreset[],
 ): CharacterRosterEntry[] {
   return styles.map((preset, index) => {
     const fallbackName = `Character ${index + 1}`;

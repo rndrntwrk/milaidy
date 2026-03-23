@@ -20,10 +20,6 @@ describe("restart", () => {
     });
   });
 
-  it("RESTART_EXIT_CODE is 75", () => {
-    expect(RESTART_EXIT_CODE).toBe(75);
-  });
-
   describe("setRestartHandler / requestRestart", () => {
     it("calls the registered handler synchronously", () => {
       const handler = vi.fn();

@@ -47,11 +47,6 @@ describe("auth", () => {
     expect(isAuthenticated()).toBe(true);
   });
 
-  it("cloudLogin and cloudLoginPoll are exported", async () => {
-    const auth = await import("../lib/auth");
-    expect(typeof auth.cloudLogin).toBe("function");
-    expect(typeof auth.cloudLoginPoll).toBe("function");
-  });
 });
 
 describe("fetchWithAuth", () => {

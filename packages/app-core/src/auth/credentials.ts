@@ -8,14 +8,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { logger } from "@elizaos/core";
-import { refreshAnthropicToken } from "./anthropic";
-import { refreshCodexToken } from "./openai-codex";
+import { refreshAnthropicToken } from "@miladyai/agent/auth";
+import { refreshCodexToken } from "@miladyai/agent/auth";
 import {
   type OAuthCredentials,
   type StoredCredentials,
   SUBSCRIPTION_PROVIDER_MAP,
   type SubscriptionProvider,
-} from "./types";
+} from "@miladyai/agent/auth";
 
 const AUTH_DIR = path.join(
   process.env.ELIZA_HOME || path.join(os.homedir(), ".eliza"),
@@ -150,7 +150,7 @@ export async function applySubscriptionCredentials(config?: {
       "[auth] Applied Anthropic subscription credentials to environment",
     );
     try {
-      const { applyClaudeCodeStealth } = await import("./apply-stealth");
+      const { applyClaudeCodeStealth } = await import("@miladyai/agent/auth");
       applyClaudeCodeStealth();
     } catch (err) {
       logger.warn(

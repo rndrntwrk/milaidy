@@ -5,7 +5,7 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
-import type { AwarenessRegistry } from "../awareness/registry";
+import type { AwarenessRegistry } from "@miladyai/agent/awareness/registry";
 
 export function createSelfStatusProvider(
   registry: AwarenessRegistry,

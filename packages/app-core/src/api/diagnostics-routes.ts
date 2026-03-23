@@ -11,7 +11,7 @@ import {
   getAuditFeedSize,
   queryAuditFeed,
   subscribeAuditFeed,
-} from "../security/audit-log";
+} from "@miladyai/agent";
 
 type DiagnosticsRouteContext = Omit<
   AutonomousDiagnosticsRouteContext,

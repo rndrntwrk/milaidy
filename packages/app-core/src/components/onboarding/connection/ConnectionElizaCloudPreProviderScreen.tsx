@@ -1,4 +1,4 @@
-import { Button } from "@miladyai/ui";
+import { Button, Input } from "@miladyai/ui";
 import type { ChangeEvent } from "react";
 import type { ConnectionEvent } from "../../../onboarding/connection-flow";
 import { useApp } from "../../../state";
@@ -224,7 +224,7 @@ export function ConnectionElizaCloudPreProviderScreen({
             >
               {t("onboarding.apiKey")}
             </label>
-            <input
+            <Input
               id="elizacloud-apikey-pre"
               type="password"
               className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"

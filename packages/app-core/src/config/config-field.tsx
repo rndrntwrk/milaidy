@@ -11,15 +11,16 @@
 
 import {
   Button,
+  Checkbox,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Switch,
 } from "@miladyai/ui";
 import { ChevronDown, X } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
-import { Switch } from "@miladyai/ui";
 import { useApp } from "../state";
 import type { DynamicValue } from "../types";
 import type { FieldRenderer, FieldRenderProps } from "./config-catalog";
@@ -853,14 +854,10 @@ function MultiselectFieldInner({ fp: props }: { fp: FieldRenderProps }) {
             key={opt.value}
             className="flex items-center gap-2 cursor-pointer text-[13px]"
           >
-            <input
-              type="checkbox"
-              value={opt.value}
+            <Checkbox
               checked={selected.has(opt.value)}
               disabled={props.readonly}
-              onChange={() => toggle(opt.value)}
-              onClick={() => fireAction(props, "click")}
-              onBlur={() => fireAction(props, "blur")}
+              onCheckedChange={() => { toggle(opt.value); fireAction(props, "click"); }}
             />
             <span>{opt.label}</span>
           </label>
@@ -1636,12 +1633,11 @@ function CheckboxGroupInner(props: FieldRenderProps) {
               : ""
           } ${opt.disabled ? "opacity-50 pointer-events-none" : ""}`}
         >
-          <input
-            type="checkbox"
+          <Checkbox
             checked={selected.has(opt.value)}
             disabled={props.readonly || opt.disabled}
-            onChange={() => toggle(opt.value)}
-            className="mt-0.5 accent-[var(--accent)]"
+            onCheckedChange={() => toggle(opt.value)}
+            className="mt-0.5"
           />
           <div className="flex flex-col">
             <span className="text-[13px]">{opt.label}</span>

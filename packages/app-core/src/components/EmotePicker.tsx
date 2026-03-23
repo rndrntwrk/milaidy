@@ -1,4 +1,4 @@
-import { Button } from "@miladyai/ui";
+import { Button, Input } from "@miladyai/ui";
 import { Menu, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client } from "../api";
@@ -447,7 +447,7 @@ export function EmotePicker() {
         className="px-3 py-2"
         style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
       >
-        <input
+        <Input
           ref={inputRef}
           type="text"
           value={search}

@@ -2739,7 +2739,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                         >
                           {param.key}
                         </label>
-                        <input
+                        <Input
                           id={`input-${param.key}`}
                           type={param.sensitive ? "password" : "text"}
                           className="w-full px-2 py-1 text-[12px]"

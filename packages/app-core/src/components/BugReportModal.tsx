@@ -6,6 +6,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Textarea,
 } from "@miladyai/ui";
 import { ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -344,7 +345,7 @@ export function BugReportModal() {
           <label className={labelClass} style={labelStyle}>
             {t("skillsview.Description")}{" "}
             <span style={{ color: "#ef4444" }}>*</span>
-            <textarea
+            <Textarea
               ref={descRef}
               className={textareaClass}
               style={textareaStyle}
@@ -358,7 +359,7 @@ export function BugReportModal() {
           <label className={labelClass} style={labelStyle}>
             {t("bugreportmodal.StepsToReproduce")}{" "}
             <span style={{ color: "#ef4444" }}>*</span>
-            <textarea
+            <Textarea
               className={textareaClass}
               style={textareaStyle}
               placeholder={t("bugreportmodal.stepsPlaceholder")}
@@ -370,7 +371,7 @@ export function BugReportModal() {
 
           <label className={labelClass} style={labelStyle}>
             {t("bugreportmodal.ExpectedBehavior")}
-            <textarea
+            <Textarea
               className={textareaClass}
               style={textareaStyle}
               placeholder={t("bugreportmodal.DescribeTheExpecte")}
@@ -382,7 +383,7 @@ export function BugReportModal() {
 
           <label className={labelClass} style={labelStyle}>
             {t("bugreportmodal.ActualBehavior")}
-            <textarea
+            <Textarea
               className={textareaClass}
               style={textareaStyle}
               placeholder={t("bugreportmodal.DescribeTheActual")}
@@ -457,7 +458,7 @@ export function BugReportModal() {
               {t("bugreportmodal.Logs")}
             </Button>
             {showLogs && (
-              <textarea
+              <Textarea
                 className={`${textareaClass} mt-1 font-mono text-xs`}
                 style={textareaStyle}
                 placeholder={t("bugreportmodal.PasteRelevantError")}

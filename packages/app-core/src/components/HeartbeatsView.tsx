@@ -9,6 +9,7 @@ import {
   StatusBadge,
   StatusDot,
   Switch,
+  Textarea,
 } from "@miladyai/ui";
 import { ChevronDown, Clock3, PencilLine, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -591,7 +592,7 @@ export function HeartbeatsView() {
                   <span className={FIELD_LABEL_CLASS}>
                     {t("triggersview.Instructions")}
                   </span>
-                  <textarea
+                  <Textarea
                     className={TEXTAREA_CLASS}
                     value={form.instructions}
                     onChange={(event) =>

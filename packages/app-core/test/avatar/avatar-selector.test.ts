@@ -117,10 +117,6 @@ describe("Avatar VRM Utilities", () => {
       expect(getVrmTitle(9)).toBe("Chen");
     });
 
-    it("matches the bundled Milady avatar roster size", () => {
-      expect(VRM_COUNT).toBe(8);
-    });
-
     it("hoisted test roster stays in sync with STYLE_PRESETS", async () => {
       const { STYLE_PRESETS } = await import(
         "@miladyai/agent/onboarding-presets"

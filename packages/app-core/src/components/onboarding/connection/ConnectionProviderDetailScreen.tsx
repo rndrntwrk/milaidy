@@ -1,6 +1,7 @@
 import { ONBOARDING_PROVIDER_CATALOG } from "@miladyai/agent/contracts/onboarding";
 import {
   Button,
+  Input,
   Select,
   SelectContent,
   SelectItem,
@@ -437,7 +438,7 @@ export function ConnectionProviderDetailScreen({
               >
                 {t("onboarding.apiKey")}
               </label>
-              <input
+              <Input
                 id="elizacloud-apikey-detail"
                 type="password"
                 className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
@@ -534,7 +535,7 @@ export function ConnectionProviderDetailScreen({
               >
                 {t("onboarding.enterSetupToken")}
               </span>
-              <input
+              <Input
                 type="password"
                 className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
                 value={onboardingApiKey}
@@ -661,7 +662,7 @@ export function ConnectionProviderDetailScreen({
                     </span>
                   ))}
               </p>
-              <input
+              <Input
                 type="text"
                 className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
                 placeholder={t("onboarding.pasteAuthCode")}
@@ -828,7 +829,7 @@ export function ConnectionProviderDetailScreen({
                   {t("onboarding.copyEntireUrl")}
                 </p>
               </div>
-              <input
+              <Input
                 type="text"
                 className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
                 placeholder="http://localhost:1455/..."
@@ -907,7 +908,7 @@ export function ConnectionProviderDetailScreen({
             >
               {t("onboarding.apiKey")}
             </span>
-            <input
+            <Input
               type="password"
               className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
               value={onboardingApiKey}
@@ -983,7 +984,7 @@ export function ConnectionProviderDetailScreen({
                 </SelectContent>
               </Select>
               {piAiSelectValue === "__custom__" && (
-                <input
+                <Input
                   type="text"
                   className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
                   value={onboardingPrimaryModel}
@@ -996,7 +997,7 @@ export function ConnectionProviderDetailScreen({
               )}
             </>
           ) : (
-            <input
+            <Input
               type="text"
               className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
               value={onboardingPrimaryModel}
