@@ -6,7 +6,7 @@
  */
 
 import { Button, Input } from "@miladyai/ui";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client, type OnboardingOptions, type PluginParamDef } from "../api";
 import {
   ConfigRenderer,
@@ -290,23 +290,30 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
   }, [subscriptionStatus]);
 
   /* ── Derived ──────────────────────────────────────────────────── */
-  const allAiProviders = [
-    ...plugins.filter((p) => p.category === "ai-provider"),
-  ].sort((left, right) => {
-    const leftCatalog = getOnboardingProviderOption(
-      normalizeAiProviderPluginId(left.id),
-    );
-    const rightCatalog = getOnboardingProviderOption(
-      normalizeAiProviderPluginId(right.id),
-    );
-    if (leftCatalog && rightCatalog) {
-      return leftCatalog.order - rightCatalog.order;
-    }
-    if (leftCatalog) return -1;
-    if (rightCatalog) return 1;
-    return left.name.localeCompare(right.name);
-  });
-  const enabledAiProviders = allAiProviders.filter((p) => p.enabled);
+  const allAiProviders = useMemo(
+    () =>
+      [...plugins.filter((p) => p.category === "ai-provider")].sort(
+        (left, right) => {
+          const leftCatalog = getOnboardingProviderOption(
+            normalizeAiProviderPluginId(left.id),
+          );
+          const rightCatalog = getOnboardingProviderOption(
+            normalizeAiProviderPluginId(right.id),
+          );
+          if (leftCatalog && rightCatalog) {
+            return leftCatalog.order - rightCatalog.order;
+          }
+          if (leftCatalog) return -1;
+          if (rightCatalog) return 1;
+          return left.name.localeCompare(right.name);
+        },
+      ),
+    [plugins],
+  );
+  const enabledAiProviders = useMemo(
+    () => allAiProviders.filter((p) => p.enabled),
+    [allAiProviders],
+  );
 
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(
     () => (elizaCloudEnabled ? "__cloud__" : null),
@@ -326,32 +333,46 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
     }
   }, [cloudHandlesInference, piAiEnabled, selectedProviderId]);
 
-  const resolvedSelectedId =
-    selectedProviderId === "__cloud__"
-      ? "__cloud__"
-      : selectedProviderId === "pi-ai"
-        ? "pi-ai"
-        : selectedProviderId &&
-            (allAiProviders.some((p) => p.id === selectedProviderId) ||
-              isSubscriptionProviderSelectionId(selectedProviderId))
-          ? selectedProviderId
-          : cloudHandlesInference
-            ? "__cloud__"
-            : piAiEnabled
-              ? "pi-ai"
-              : anthropicConnected
-                ? "anthropic-subscription"
-                : openaiConnected
-                  ? "openai-subscription"
-                  : (enabledAiProviders[0]?.id ?? null);
+  const resolvedSelectedId = useMemo(
+    () =>
+      selectedProviderId === "__cloud__"
+        ? "__cloud__"
+        : selectedProviderId === "pi-ai"
+          ? "pi-ai"
+          : selectedProviderId &&
+              (allAiProviders.some((p) => p.id === selectedProviderId) ||
+                isSubscriptionProviderSelectionId(selectedProviderId))
+            ? selectedProviderId
+            : cloudHandlesInference
+              ? "__cloud__"
+              : piAiEnabled
+                ? "pi-ai"
+                : anthropicConnected
+                  ? "anthropic-subscription"
+                  : openaiConnected
+                    ? "openai-subscription"
+                    : (enabledAiProviders[0]?.id ?? null),
+    [
+      allAiProviders,
+      anthropicConnected,
+      cloudHandlesInference,
+      enabledAiProviders,
+      openaiConnected,
+      piAiEnabled,
+      selectedProviderId,
+    ],
+  );
 
-  const selectedProvider =
-    resolvedSelectedId &&
-    resolvedSelectedId !== "__cloud__" &&
-    resolvedSelectedId !== "pi-ai" &&
-    !isSubscriptionProviderSelectionId(resolvedSelectedId)
-      ? (allAiProviders.find((p) => p.id === resolvedSelectedId) ?? null)
-      : null;
+  const selectedProvider = useMemo(
+    () =>
+      resolvedSelectedId &&
+      resolvedSelectedId !== "__cloud__" &&
+      resolvedSelectedId !== "pi-ai" &&
+      !isSubscriptionProviderSelectionId(resolvedSelectedId)
+        ? (allAiProviders.find((p) => p.id === resolvedSelectedId) ?? null)
+        : null,
+    [allAiProviders, resolvedSelectedId],
+  );
 
   /* ── Handlers ─────────────────────────────────────────────────── */
   const handleSwitchProvider = useCallback(

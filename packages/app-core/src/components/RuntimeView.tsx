@@ -25,13 +25,16 @@ type RuntimeSectionKey =
   | "services"
   | "evaluators";
 
-const SECTION_TABS: Array<{ key: RuntimeSectionKey; label: string }> = [
-  { key: "runtime", label: "Runtime" },
-  { key: "actions", label: "Actions" },
-  { key: "providers", label: "Providers" },
-  { key: "plugins", label: "Plugins" },
-  { key: "services", label: "Services" },
-  { key: "evaluators", label: "Evaluators" },
+const SECTION_TAB_KEYS: Array<{
+  key: RuntimeSectionKey;
+  i18nKey: string;
+}> = [
+  { key: "runtime", i18nKey: "runtimeview.tabRuntime" },
+  { key: "actions", i18nKey: "runtimeview.tabActions" },
+  { key: "providers", i18nKey: "runtimeview.tabProviders" },
+  { key: "plugins", i18nKey: "runtimeview.tabPlugins" },
+  { key: "services", i18nKey: "runtimeview.tabServices" },
+  { key: "evaluators", i18nKey: "runtimeview.tabEvaluators" },
 ];
 
 function nodeSummary(value: unknown): string {
@@ -329,7 +332,7 @@ export function RuntimeView() {
           disabled={loading}
           className="px-3 py-1.5 text-xs rounded-lg border border-border bg-bg hover:bg-card disabled:opacity-60"
         >
-          {loading ? "Refreshing..." : "Refresh"}
+          {loading ? t("runtimeview.Refreshing") : t("common.refresh")}
         </button>
         <button
           type="button"
@@ -349,8 +352,8 @@ export function RuntimeView() {
         </button>
         <div className="text-[11px] text-muted ml-auto">
           {snapshot
-            ? `Last updated: ${formatDateTime(snapshot.generatedAt, { fallback: "n/a" })}`
-            : "No snapshot loaded"}
+            ? `${t("runtimeview.lastUpdated")} ${formatDateTime(snapshot.generatedAt, { fallback: "n/a" })}`
+            : t("runtimeview.noSnapshotLoaded")}
         </div>
       </div>
 
@@ -380,7 +383,9 @@ export function RuntimeView() {
             <div className="text-[11px] font-mono leading-5">
               <div>
                 {t("runtimeview.runtime")}{" "}
-                {snapshot.runtimeAvailable ? "available" : "offline"}
+                {snapshot.runtimeAvailable
+                  ? t("runtimeview.available")
+                  : t("runtimeview.offline")}
               </div>
               <div>
                 {t("runtimeview.agent")} {snapshot.meta.agentName}
@@ -412,7 +417,7 @@ export function RuntimeView() {
       )}
 
       <div className="flex gap-1 border-b border-border">
-        {SECTION_TABS.map((tab) => {
+        {SECTION_TAB_KEYS.map((tab) => {
           const active = tab.key === activeSection;
           return (
             <button
@@ -425,7 +430,7 @@ export function RuntimeView() {
                   : "border-transparent text-muted hover:text-txt hover:border-border"
               }`}
             >
-              {tab.label}
+              {t(tab.i18nKey)}
             </button>
           );
         })}
@@ -439,8 +444,8 @@ export function RuntimeView() {
         ) : !snapshot ? (
           <div className="border border-border/30 bg-card/20 rounded-xl p-8 text-center text-xs text-muted m-2">
             {loading
-              ? "Loading runtime snapshot..."
-              : "No runtime snapshot available."}
+              ? t("runtimeview.loadingSnapshot")
+              : t("runtimeview.noSnapshotAvailable")}
           </div>
         ) : !snapshot.runtimeAvailable ? (
           <div className="border border-border/30 bg-card/20 rounded-xl p-8 text-center text-xs text-muted m-2">

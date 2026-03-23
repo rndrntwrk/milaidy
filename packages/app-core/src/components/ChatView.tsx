@@ -504,6 +504,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
     chatInput,
     chatSending,
     chatFirstTokenReceived,
+    chatAwaitingGreeting,
     companionMessageCutoffTs,
     conversationMessages,
     handleChatSend,
@@ -775,9 +776,9 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
         {visibleMsgs.length === 0 && !chatSending ? (
           isGameModal ? (
             <div className="flex min-h-full items-end px-1 py-4" />
-          ) : (
+          ) : chatAwaitingGreeting ? (
             <TypingIndicator agentName={agentName} />
-          )
+          ) : null
         ) : isGameModal ? (
           <div className="flex min-h-full w-full flex-col justify-end gap-4 px-1 py-4">
             {companionCarryover?.messages.map((msg) => {

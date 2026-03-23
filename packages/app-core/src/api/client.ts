@@ -636,7 +636,7 @@ export interface ConversationGreeting {
 }
 
 export interface CreateConversationOptions {
-  bootstrapGreeting?: boolean;
+  includeGreeting?: boolean;
   lang?: string;
 }
 
@@ -4625,9 +4625,7 @@ export class MiladyClient {
       method: "POST",
       body: JSON.stringify({
         title,
-        ...(options?.bootstrapGreeting === true
-          ? { bootstrapGreeting: true }
-          : {}),
+        ...(options?.includeGreeting === true ? { includeGreeting: true } : {}),
         ...(typeof options?.lang === "string" && options.lang.trim()
           ? { lang: options.lang.trim() }
           : {}),

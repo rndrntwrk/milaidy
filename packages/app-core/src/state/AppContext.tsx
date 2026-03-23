@@ -97,12 +97,8 @@ import {
 import { mapServerTasksToSessions } from "../coding";
 import { BrandingContext, DEFAULT_BRANDING } from "../config/branding";
 import { type AppEmoteEventDetail, dispatchAppEmoteEvent } from "../events";
-import {
-  createTranslator,
-  normalizeLanguage,
-  t as translateText,
-  type UiLanguage,
-} from "../i18n";
+import type { UiLanguage } from "../i18n";
+import { TranslationProvider, useTranslation } from "./TranslationContext";
 import {
   COMPANION_ENABLED,
   pathForTab,
@@ -474,7 +470,8 @@ export function AppProvider({
   const setTabRaw = useCallback((t: Tab) => {
     _setTabRawInner(t);
   }, []);
-  const [uiLanguage, setUiLanguageState] = useState<UiLanguage>(loadUiLanguage);
+  // uiLanguage + t live in TranslationContext; consumed via useTranslation()
+  const { t, uiLanguage, setUiLanguage } = useTranslation();
   const [uiTheme, setUiThemeState] = useState<UiTheme>(loadUiTheme);
   const [connected, setConnected] = useState(false);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
@@ -532,6 +529,7 @@ export function AppProvider({
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const [chatFirstTokenReceived, setChatFirstTokenReceived] = useState(false);
+  const [chatAwaitingGreeting, setChatAwaitingGreeting] = useState(false);
   const [chatLastUsage, setChatLastUsage] = useState<ChatTurnUsage | null>(
     null,
   );
@@ -1168,34 +1166,7 @@ export function AppProvider({
     await copyTextToClipboard(text);
   }, []);
 
-  // ── Language ────────────────────────────────────────────────────────
-
-  const setUiLanguage = useCallback(
-    (language: UiLanguage) => {
-      const nextLanguage = normalizeLanguage(language);
-      setUiLanguageState(nextLanguage);
-      void client.updateConfig({ ui: { language: nextLanguage } }).catch(() => {
-        setActionNotice(
-          translateText(nextLanguage, "settings.languageSyncFailed"),
-          "error",
-          3200,
-        );
-      });
-    },
-    [setActionNotice],
-  );
-
-  useEffect(() => {
-    saveUiLanguage(uiLanguage);
-    if (
-      typeof (client as unknown as { setUiLanguage?: unknown })
-        .setUiLanguage === "function"
-    ) {
-      (
-        client as unknown as { setUiLanguage: (lang: string) => void }
-      ).setUiLanguage(uiLanguage);
-    }
-  }, [uiLanguage]);
+  // Language is managed by TranslationProvider (see useTranslation() above)
 
   useEffect(() => {
     saveUiShellMode(uiShellMode);
@@ -2082,6 +2053,7 @@ export function AppProvider({
     setChatPendingImages([]);
     setChatSending(false);
     setChatFirstTokenReceived(false);
+    setChatAwaitingGreeting(false);
     conversationMessagesRef.current = [];
     setConversationMessages([]);
     setActiveConversationId(null);
@@ -2692,7 +2664,7 @@ export function AppProvider({
         const { conversation, greeting } = await client.createConversation(
           title,
           {
-            bootstrapGreeting: true,
+            includeGreeting: true,
             lang: uiLanguage,
           },
         );
@@ -2721,6 +2693,9 @@ export function AppProvider({
           greetingFiredRef.current = false;
           conversationMessagesRef.current = [];
           setConversationMessages([]);
+          // Fallback: if inline greeting wasn't returned (e.g. old server),
+          // request one via the dedicated /greeting endpoint.
+          void fetchGreeting(conversation.id);
         }
         client.sendWsMessage({
           type: "active-conversation",
@@ -2743,6 +2718,7 @@ export function AppProvider({
     [
       characterData,
       companionMessageCutoffTs,
+      fetchGreeting,
       requestGreetingWhenRunning,
       resetConversationDraftState,
       scheduleGreetingWaveForCompanion,
@@ -6609,6 +6585,7 @@ export function AppProvider({
     chatInput,
     chatSending,
     chatFirstTokenReceived,
+    chatAwaitingGreeting,
     chatLastUsage,
     chatAvatarVisible,
     chatAgentVoiceMuted,
