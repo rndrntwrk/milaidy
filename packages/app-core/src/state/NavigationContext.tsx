@@ -69,8 +69,6 @@ export function NavigationProvider({
   const [tab, _setTabRawInner] = useState<Tab>(
     COMPANION_ENABLED ? "companion" : "chat",
   );
-  const initialTabSetRef = useRef(false);
-
   const setTabRaw = useCallback((t: Tab) => {
     _setTabRawInner(t);
   }, []);

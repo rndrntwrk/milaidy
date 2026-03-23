@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-
 /**
  * css-coverage.mjs
  *
@@ -9,9 +8,9 @@
  * Usage: node scripts/css-coverage.mjs [--json]
  */
 
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { resolve, relative } from "node:path";
 import { execSync } from "node:child_process";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { relative, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
 
@@ -46,7 +45,8 @@ function extractSelectors(content) {
 
   // Extract class selectors
   const classRe = /\.([a-zA-Z_][\w-]*)/g;
-  for (const m of content.matchAll(classRe)) {
+  let m;
+  while ((m = classRe.exec(content))) {
     const cls = m[1];
     // Skip Tailwind directives, CSS functions, and very short generic names
     if (
@@ -61,13 +61,13 @@ function extractSelectors(content) {
 
   // Extract CSS custom properties (--var-name) defined in :root or selectors
   const varDefRe = /(--[\w-]+)\s*:/g;
-  for (const m of content.matchAll(varDefRe)) {
+  while ((m = varDefRe.exec(content))) {
     selectors.add(m[1]);
   }
 
   // Extract @keyframes names
   const keyframesRe = /@keyframes\s+([\w-]+)/g;
-  for (const m of content.matchAll(keyframesRe)) {
+  while ((m = keyframesRe.exec(content))) {
     selectors.add(`@keyframes:${m[1]}`);
   }
 
@@ -142,12 +142,7 @@ for (const cssFile of CSS_FILES) {
   for (const sel of selectors) {
     // Skip checking usage for CSS custom properties defined in theme files
     // They are used via var() in Tailwind and may not appear as direct string matches
-    if (
-      sel.startsWith("--") &&
-      (cssFile.includes("base.css") ||
-        cssFile.includes("theme.css") ||
-        cssFile.includes("brand-gold.css"))
-    ) {
+    if (sel.startsWith("--") && (cssFile.includes("base.css") || cssFile.includes("theme.css") || cssFile.includes("brand-gold.css"))) {
       fileReport.used.push(sel);
       continue;
     }
@@ -191,7 +186,9 @@ if (jsonFlag) {
 
   for (const fileReport of report.files) {
     const pct = fileReport.totalSelectors
-      ? Math.round((fileReport.used.length / fileReport.totalSelectors) * 100)
+      ? Math.round(
+          (fileReport.used.length / fileReport.totalSelectors) * 100,
+        )
       : 100;
     console.log(
       `${fileReport.file}: ${fileReport.lines} lines, ${fileReport.totalSelectors} selectors, ${pct}% used`,
@@ -207,9 +204,7 @@ if (jsonFlag) {
     }
   }
 
-  console.log(
-    "\n=== DUPLICATE SELECTORS (defined in multiple CSS files) ===\n",
-  );
+  console.log("\n=== DUPLICATE SELECTORS (defined in multiple CSS files) ===\n");
   const dupes = report.duplicateSelectors.filter(
     (d) => !d.selector.startsWith("--"),
   );

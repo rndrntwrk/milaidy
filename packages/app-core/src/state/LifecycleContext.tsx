@@ -16,6 +16,7 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -159,6 +160,16 @@ export function LifecycleProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  // Clean up timer on unmount
+  // biome-ignore lint/correctness/useExhaustiveDependencies: cleanup only
+  useEffect(() => {
+    return () => {
+      if (actionNoticeTimer.current != null) {
+        window.clearTimeout(actionNoticeTimer.current);
+      }
+    };
+  }, []);
 
   // Derived
   const startupStatus = useMemo<AppState["startupStatus"]>(() => {
