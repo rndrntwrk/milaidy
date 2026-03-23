@@ -9,7 +9,7 @@ import {
   RESTART_EXIT_CODE,
   requestRestart,
   setRestartHandler,
-} from "./restart";
+} from "@miladyai/agent/runtime/restart";
 
 describe("restart", () => {
   // Replace the default process.exit handler before each test to avoid

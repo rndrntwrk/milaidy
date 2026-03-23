@@ -4,7 +4,7 @@ import {
   applyWalletRpcConfigUpdate,
   getInventoryProviderOptions,
   resolveWalletRpcReadiness,
-} from "./wallet-rpc";
+} from "@miladyai/agent/api/wallet-rpc";
 
 const ENV_KEYS = [
   "ALCHEMY_API_KEY",

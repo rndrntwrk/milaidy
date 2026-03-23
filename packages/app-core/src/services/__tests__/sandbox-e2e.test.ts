@@ -19,7 +19,7 @@ import {
   type SignerBackend,
 } from "../remote-signing-service";
 import { SandboxManager } from "../sandbox-manager";
-import { createDefaultPolicy } from "../signing-policy";
+import { createDefaultPolicy } from "@miladyai/agent/services/signing-policy";
 
 /**
  * Minimal in-test token manager so this suite is self-contained in CI.

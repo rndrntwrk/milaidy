@@ -10,7 +10,7 @@ import {
   recordWalletTradeLedgerEntry,
   resolveWalletTradingProfileFilePath,
   updateWalletTradeLedgerEntryStatus,
-} from "./wallet-trading-profile.js";
+} from "@miladyai/agent/api/wallet-trading-profile";
 
 const TMP_PREFIX = "eliza-wallet-profile-";
 

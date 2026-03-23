@@ -32,7 +32,7 @@ import { logger } from "@elizaos/core";
 import { loadElizaConfig, saveElizaConfig } from "../config/config";
 import { requestRestart } from "@miladyai/agent/runtime";
 import { createSerialise } from "../utils/serialise";
-import { getPluginInfo, type RegistryPluginInfo } from "./registry-client";
+import { getPluginInfo, type RegistryPluginInfo } from "@miladyai/agent/services/registry-client";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);

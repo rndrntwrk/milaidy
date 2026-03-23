@@ -20,7 +20,7 @@ import {
   type SigningPolicy,
   SigningPolicyEvaluator,
   type SigningRequest,
-} from "./signing-policy";
+} from "@miladyai/agent/services/signing-policy";
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 

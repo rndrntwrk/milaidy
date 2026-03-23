@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type WhatsAppPairingSession,
   whatsappLogout,
-} from "../../services/whatsapp-pairing";
+} from "@miladyai/agent/services/whatsapp-pairing";
 import {
   applyWhatsAppQrOverride,
   handleWhatsAppRoute,
@@ -34,7 +34,7 @@ vi.mock("node:fs", () => ({
   rmSync: vi.fn(),
 }));
 
-vi.mock("../../services/whatsapp-pairing", () => ({
+vi.mock("@miladyai/agent/services/whatsapp-pairing", () => ({
   sanitizeAccountId: (id: string) => {
     const cleaned = id.replace(/[^a-zA-Z0-9_-]/g, "");
     if (!cleaned || cleaned !== id) throw new Error("Invalid accountId");

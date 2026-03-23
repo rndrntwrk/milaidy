@@ -30,9 +30,9 @@ export function OnboardingPanel({ step, children }: OnboardingPanelProps) {
   }, [step]);
 
   return (
-    <div className="flex flex-col justify-center py-10 pr-14 pl-0 relative z-10 max-md:p-4">
+    <div className="flex flex-col justify-center py-10 pr-14 pl-0 relative z-10 max-md:p-4 max-md:pt-0">
       <div
-        className="bg-[rgba(10,14,20,0.16)] backdrop-blur-[40px] backdrop-saturate-[1.4] border border-[rgba(255,255,255,0.18)] rounded-[10px] py-[36px] px-[32px] flex flex-col gap-0 shadow-[0_8px_32px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.08)] max-h-[calc(100vh-80px)] overflow-y-auto overflow-x-hidden animate-[onboarding-panel-enter_0.6s_cubic-bezier(0.25,0.46,0.45,0.94)_both]"
+        className="bg-[rgba(10,14,20,0.16)] backdrop-blur-[40px] backdrop-saturate-[1.4] border border-[rgba(255,255,255,0.18)] rounded-[10px] py-[36px] px-[32px] flex flex-col gap-0 shadow-[0_8px_32px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.08)] max-h-[calc(100vh-80px)] overflow-y-auto overflow-x-hidden animate-[onboarding-panel-enter_0.6s_cubic-bezier(0.25,0.46,0.45,0.94)_both] max-md:max-h-[50vh] max-md:py-6 max-md:px-5"
         ref={panelRef}
       >
         {children}

@@ -3,7 +3,7 @@ import {
   createDefaultPolicy,
   SigningPolicyEvaluator,
   type SigningRequest,
-} from "../signing-policy";
+} from "@miladyai/agent/services/signing-policy";
 
 function makeRequest(overrides: Partial<SigningRequest> = {}): SigningRequest {
   return {

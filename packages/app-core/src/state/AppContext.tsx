@@ -193,6 +193,7 @@ import {
   getTabForShellView,
   shouldStartAtCharacterSelectOnLaunch,
 } from "./shell-routing";
+import { CompanionSceneConfigCtx } from "./CompanionSceneConfigContext";
 import { TranslationProvider, useTranslation } from "./TranslationContext";
 import { useChatState } from "./useChatState";
 import { useLifecycleState } from "./useLifecycleState";
@@ -5540,12 +5541,22 @@ function AppProviderInner({
               "success",
               6000,
             );
-            if (!useDirectAuth) {
-              void loadWalletConfig();
-              // Delay the credit fetch slightly so the backend has time to
-              // persist the API key before we query cloud status / credits.
-              setTimeout(() => void pollCloudCredits(), 2000);
+            if (useDirectAuth && poll.token) {
+              // Direct auth bypasses the backend's login/status handler, so
+              // the API key was never persisted server-side. Send it now so
+              // billing/compat routes can authenticate with Eliza Cloud.
+              void fetch("/api/cloud/login/persist", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ apiKey: poll.token }),
+              }).catch(() => {
+                // Non-fatal: credits/billing will fail but core chat works
+              });
             }
+            void loadWalletConfig();
+            // Delay the credit fetch slightly so the backend has time to
+            // persist the API key before we query cloud status / credits.
+            setTimeout(() => void pollCloudCredits(), 2000);
           } else if (poll.status === "expired" || poll.status === "error") {
             stopCloudLoginPolling(
               poll.error ?? "Login session expired. Please try again.",
@@ -7148,6 +7159,27 @@ function AppProviderInner({
     }
   }, [elizaCloudAuthRejected, setActionNotice, t]);
 
+  const companionSceneConfig = useMemo(
+    () => ({
+      selectedVrmIndex,
+      customVrmUrl,
+      uiTheme,
+      tab,
+      companionVrmPowerMode,
+      companionHalfFramerateMode,
+      companionAnimateWhenHidden,
+    }),
+    [
+      selectedVrmIndex,
+      customVrmUrl,
+      uiTheme,
+      tab,
+      companionVrmPowerMode,
+      companionHalfFramerateMode,
+      companionAnimateWhenHidden,
+    ],
+  );
+
   const value: AppContextValue = {
     // Translations
     t,
@@ -7513,11 +7545,13 @@ function AppProviderInner({
 
   return (
     <BrandingContext.Provider value={mergedBranding}>
-      <AppContext.Provider value={value}>
-        {children}
-        <ConfirmDialog {...modalProps} />
-        <PromptDialog {...promptModalProps} />
-      </AppContext.Provider>
+      <CompanionSceneConfigCtx.Provider value={companionSceneConfig}>
+        <AppContext.Provider value={value}>
+          {children}
+          <ConfirmDialog {...modalProps} />
+          <PromptDialog {...promptModalProps} />
+        </AppContext.Provider>
+      </CompanionSceneConfigCtx.Provider>
     </BrandingContext.Provider>
   );
 }

@@ -135,19 +135,7 @@ function SettingsSidebar({
 
   return (
     <aside className="hidden lg:sticky lg:top-0 lg:flex lg:flex-col lg:h-screen lg:overflow-y-auto">
-      {/* Search */}
       <div className="px-3 py-3 border-b border-border">
-        <div className="flex items-center gap-2 px-2.5 py-1.5 border border-border bg-bg">
-          <Search className="h-3 w-3 shrink-0 text-muted" aria-hidden />
-          <Input
-            type="text"
-            placeholder={t("settings.searchPlaceholder") || "Search..."}
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="h-6 min-w-0 flex-1 border-0 bg-transparent py-0 pr-0 pl-0 text-[11px] font-mono shadow-none placeholder:text-muted/60 focus-visible:ring-0 focus-visible:ring-offset-0"
-          />
-        </div>
-
         {/* Navigation */}
         <nav className="py-4 px-3">
           <div className="space-y-1.5">
@@ -164,10 +152,9 @@ function SettingsSidebar({
                   aria-current={isActive ? "page" : undefined}
                   className={`group w-full flex items-center gap-3 text-left px-3 py-2.5 rounded-lg transition-all duration-150
                     text-sm h-auto
-                    ${
-                      isActive
-                        ? "text-txt font-semibold bg-surface"
-                        : "text-muted hover:text-txt hover:bg-surface/50"
+                    ${isActive
+                      ? "text-txt font-semibold bg-surface"
+                      : "text-muted hover:text-txt hover:bg-surface/50"
                     }`}
                 >
                   <Icon
@@ -725,7 +712,7 @@ export function SettingsView({
   return (
     <div
       ref={shellRef}
-      className="settings-shell plugins-game-modal plugins-game-modal--inline !h-auto grid grid-cols-[220px_1fr] gap-4 items-stretch"
+      className="settings-shell plugins-game-modal plugins-game-modal--inline !h-auto grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-4 items-stretch"
     >
       <div className="hidden lg:block rounded-xl border border-border bg-card shadow-sm">
         <SettingsSidebar

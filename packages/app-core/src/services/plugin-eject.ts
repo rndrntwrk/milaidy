@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { logger } from "@elizaos/core";
-import { resolveStateDir } from "../config/paths";
+import { resolveStateDir } from "@miladyai/agent/config/paths";
 import { createSerialise } from "../utils/serialise";
 import {
   assertValidGitUrl,
@@ -14,7 +14,7 @@ import {
   VALID_GIT_URL,
   VALID_PACKAGE_NAME,
 } from "./plugin-installer";
-import { getPluginInfo } from "./registry-client";
+import { getPluginInfo } from "@miladyai/agent/services/registry-client";
 
 const execFileAsync = promisify(execFile);
 const UPSTREAM_SCHEMA = "eliza-upstream-v1";

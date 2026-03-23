@@ -16,7 +16,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { STYLE_PRESETS } from "../../onboarding-presets";
+import { STYLE_PRESETS } from "@miladyai/shared/onboarding-presets";
 
 let savedConfig: Record<string, unknown> = {};
 

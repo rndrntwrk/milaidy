@@ -3,7 +3,7 @@ import {
   type WirableState,
   type WireCoordinatorOpts,
   wireCoordinatorBridgesWhenReady,
-} from "./coordinator-wiring";
+} from "@miladyai/agent/api/coordinator-wiring";
 
 function makeMockState(
   overrides?: Partial<WirableState> & {

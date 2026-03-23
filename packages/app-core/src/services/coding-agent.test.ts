@@ -13,7 +13,7 @@
  *   - Workspace provider coding agent enrichment
  */
 import { describe, expect, it } from "vitest";
-import type { WorkspaceBootstrapFile } from "../providers/workspace";
+import type { WorkspaceBootstrapFile } from "@miladyai/agent/providers/workspace";
 import {
   buildCodingAgentSummary,
   buildContext,

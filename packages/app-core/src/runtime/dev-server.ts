@@ -21,7 +21,7 @@ import type { AgentRuntime } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import { startApiServer } from "../api/server";
 import { shutdownRuntime, startEliza } from "./eliza";
-import { setRestartHandler } from "./restart";
+import { setRestartHandler } from "@miladyai/agent/runtime/restart";
 
 console.log(
   `${getLogPrefix()} Imports complete (${Date.now() - SCRIPT_START}ms)`,

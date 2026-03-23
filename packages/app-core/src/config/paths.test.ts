@@ -8,7 +8,7 @@ import {
   resolveOAuthPath,
   resolveStateDir,
   resolveUserPath,
-} from "./paths";
+} from "@miladyai/agent/config/paths";
 
 describe("oauth paths", () => {
   it("prefers ELIZA_OAUTH_DIR over ELIZA_STATE_DIR", () => {

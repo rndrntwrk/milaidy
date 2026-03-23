@@ -7,7 +7,7 @@ import {
   detectBestEngine,
   getAllEngineInfo,
   getPlatformSetupNotes,
-} from "../sandbox-engine";
+} from "@miladyai/agent/services/sandbox-engine";
 
 describe("SandboxEngine", () => {
   describe("DockerEngine", () => {

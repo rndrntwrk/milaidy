@@ -6,7 +6,11 @@
  */
 
 import { logger } from "@elizaos/core";
-import { loadElizaConfig, saveElizaConfig } from "../config/config.js";
+import {
+  type ElizaConfig,
+  loadElizaConfig,
+  saveElizaConfig,
+} from "@miladyai/agent/config/config";
 
 let _checked = false;
 

@@ -5,7 +5,7 @@ import {
   createMockHttpResponse,
   createMockJsonRequest,
 } from "../test-support/test-helpers";
-import { handleDatabaseRoute } from "./database";
+import { handleDatabaseRoute } from "@miladyai/agent/api/database";
 
 interface DbExecuteResult {
   rows: Array<Record<string, unknown>>;

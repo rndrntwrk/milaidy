@@ -8,7 +8,7 @@ import {
   buildBscTradePreflight,
   buildBscTradeQuote,
   PANCAKE_SWAP_V2_ROUTER,
-} from "./bsc-trade.js";
+} from "@miladyai/agent/api/bsc-trade";
 
 const WALLET = "0x1111111111111111111111111111111111111111";
 const TOKEN = "0x55d398326f99059fF775485246999027B3197955";

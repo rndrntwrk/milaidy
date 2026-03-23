@@ -1,7 +1,7 @@
 import type { AgentRuntime } from "@elizaos/core";
 import { ModelType } from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
-import { handleSwarmSynthesis } from "./server";
+import { handleSwarmSynthesis } from "@miladyai/agent/api/server";
 
 function makePayload(
   overrides?: Partial<Parameters<typeof handleSwarmSynthesis>[1]>,

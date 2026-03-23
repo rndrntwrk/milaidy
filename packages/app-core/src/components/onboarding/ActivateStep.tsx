@@ -51,16 +51,18 @@ export function ActivateStep() {
           className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[rgba(240,185,11,0.18)] border border-[rgba(240,185,11,0.35)] rounded-[6px] text-[rgba(240,238,250,0.94)] text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[rgba(240,185,11,0.28)] hover:border-[rgba(240,185,11,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ textShadow: "0 1px 6px rgba(3,5,10,0.55)" }}
           onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const circle = document.createElement("span");
-            const diameter = Math.max(rect.width, rect.height);
-            circle.style.width = circle.style.height = `${diameter}px`;
-            circle.style.left = `${e.clientX - rect.left - diameter / 2}px`;
-            circle.style.top = `${e.clientY - rect.top - diameter / 2}px`;
-            circle.className =
-              "absolute rounded-full bg-[rgba(240,185,11,0.3)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
-            e.currentTarget.appendChild(circle);
-            setTimeout(() => circle.remove(), 600);
+            if (e?.currentTarget) {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const circle = document.createElement("span");
+              const diameter = Math.max(rect.width, rect.height);
+              circle.style.width = circle.style.height = `${diameter}px`;
+              circle.style.left = `${e.clientX - rect.left - diameter / 2}px`;
+              circle.style.top = `${e.clientY - rect.top - diameter / 2}px`;
+              circle.className =
+                "absolute rounded-full bg-[rgba(240,185,11,0.3)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
+              e.currentTarget.appendChild(circle);
+              setTimeout(() => circle.remove(), 600);
+            }
             handleOnboardingNext();
           }}
           type="button"

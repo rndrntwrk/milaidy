@@ -322,7 +322,7 @@ export function registerSetupCommand(program: Command) {
         await runCommandWithRuntime(defaultRuntime, async () => {
           const { loadElizaConfig } = await import("../../config/config");
           const { ensureAgentWorkspace, resolveDefaultAgentWorkspaceDir } =
-            await import("../../providers/workspace");
+            await import("@miladyai/agent/providers/workspace");
 
           const configPath = resolveConfigPath();
           const keyFromStdin = opts.keyStdin ? await readStdinValue() : "";

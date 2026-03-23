@@ -2887,17 +2887,11 @@ function findRecentInsufficientCreditsLog(
 
 function resolveNoResponseFallback(
   logBuffer: LogEntry[],
-  runtime?: AgentRuntime | null,
-  lang = "en",
+  _runtime?: AgentRuntime | null,
+  _lang = "en",
 ): string {
   if (findRecentInsufficientCreditsLog(logBuffer)) {
     return pickInsufficientCreditsChatReply();
-  }
-  const characterDefault = runtime
-    ? resolveConversationGreetingText(runtime, lang).trim()
-    : "";
-  if (characterDefault) {
-    return characterDefault;
   }
   return GENERIC_NO_RESPONSE_CHAT_REPLY;
 }

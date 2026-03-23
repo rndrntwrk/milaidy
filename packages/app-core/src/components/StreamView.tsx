@@ -469,7 +469,7 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
           />
 
           {/* VRM avatar — picture-in-picture overlay */}
-          <AvatarPip isSpeaking={chatAvatarSpeaking} />
+          <AvatarPip />
 
           {/* Stream settings panel */}
           {showSettings && streamAvailable && (

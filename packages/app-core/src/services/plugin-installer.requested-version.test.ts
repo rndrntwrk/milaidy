@@ -83,11 +83,11 @@ vi.mock("node:child_process", () => {
   };
 });
 
-vi.mock("./registry-client", () => ({
+vi.mock("@miladyai/agent/services/registry-client", () => ({
   getPluginInfo: vi.fn(),
 }));
 
-vi.mock("../runtime/restart", () => ({
+vi.mock("@miladyai/agent/runtime/restart", () => ({
   requestRestart: vi.fn(),
 }));
 
@@ -138,7 +138,7 @@ describe("plugin-installer (requestedVersion)", () => {
   it("installs the requested version when provided", async () => {
     const requestedVersion = "1.2.23-alpha.0";
 
-    const { getPluginInfo } = await import("./registry-client");
+    const { getPluginInfo } = await import("@miladyai/agent/services/registry-client");
     vi.mocked(getPluginInfo).mockResolvedValue({
       name: "@elizaos/plugin-test",
       gitRepo: "elizaos-plugins/plugin-test",
@@ -193,7 +193,7 @@ describe("plugin-installer (requestedVersion)", () => {
   it("prefers the alpha dist-tag for @elizaos plugins on the alpha channel", async () => {
     process.env.ELIZA_PLUGIN_RELEASE_CHANNEL = "alpha";
 
-    const { getPluginInfo } = await import("./registry-client");
+    const { getPluginInfo } = await import("@miladyai/agent/services/registry-client");
     vi.mocked(getPluginInfo).mockResolvedValue({
       name: "@elizaos/plugin-test",
       gitRepo: "elizaos-plugins/plugin-test",

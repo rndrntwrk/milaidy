@@ -61,7 +61,7 @@ import {
   WhatsAppPairingSession,
   whatsappAuthExists,
   whatsappLogout,
-} from "../whatsapp-pairing";
+} from "@miladyai/agent/services/whatsapp-pairing";
 
 // ---------------------------------------------------------------------------
 // sanitizeAccountId()

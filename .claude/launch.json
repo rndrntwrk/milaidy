@@ -5,7 +5,8 @@
       "name": "dev",
       "runtimeExecutable": "/opt/homebrew/bin/npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 2138
+      "port": 2138,
+      "autoPort": true
     },
     {
       "name": "dev-ui-only",

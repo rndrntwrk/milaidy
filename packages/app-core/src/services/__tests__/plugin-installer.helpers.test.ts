@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { RegistryPluginInfo } from "../registry-client";
+import type { RegistryPluginInfo } from "@miladyai/agent/services/registry-client";
 
 const execFileMock = vi.fn();
 

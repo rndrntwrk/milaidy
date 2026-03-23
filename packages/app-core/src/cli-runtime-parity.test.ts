@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { envSnapshot } from "../../../test/helpers/test-utils";
 import type { ElizaConfig } from "./config/config";
 // Shared presets used by both CLI and API server
-import { SHARED_STYLE_RULES, STYLE_PRESETS } from "./onboarding-presets";
+import { SHARED_STYLE_RULES, STYLE_PRESETS } from "@miladyai/shared/onboarding-presets";
 import {
   applyCloudConfigToEnv,
   applyConnectorSecretsToEnv,
@@ -360,7 +360,7 @@ describe("model resolution parity", () => {
 describe("config path consistency across modes", () => {
   it("resolveConfigPath uses same default path in all modes", async () => {
     const { resolveConfigPath, resolveStateDir } = await import(
-      "./config/paths"
+      "@miladyai/agent/config/paths"
     );
 
     // With no env overrides, all modes resolve the same path
@@ -383,7 +383,7 @@ describe("config path consistency across modes", () => {
 
   it("state dir override env var is respected consistently", async () => {
     const { resolveConfigPath, resolveStateDir } = await import(
-      "./config/paths"
+      "@miladyai/agent/config/paths"
     );
 
     // The upstream autonomous package checks ELIZA_STATE_DIR; the eliza
@@ -410,7 +410,7 @@ describe("config path consistency across modes", () => {
 describe("restart mechanism parity", () => {
   it("setRestartHandler replaces the default handler", async () => {
     const { setRestartHandler, requestRestart } = await import(
-      "./runtime/restart"
+      "@miladyai/agent/runtime/restart"
     );
 
     let called = false;

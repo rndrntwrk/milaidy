@@ -157,15 +157,29 @@ export function resolveCloudApiBaseUrl(rawBaseUrl?: string): string {
 
 export function resolveCloudApiKey(
   config: Pick<ElizaConfig, "cloud"> | Record<string, unknown>,
+  runtime?: { character?: { secrets?: Record<string, unknown> } } | null,
 ): string | undefined {
+  // 1. Config file (disk)
   const configApiKey = normalizeSecret(
     (config as { cloud?: { apiKey?: string } }).cloud?.apiKey,
   );
-  if (configApiKey) {
-    return configApiKey;
-  }
+  if (configApiKey) return configApiKey;
 
-  return normalizeSecret(getCloudSecret("ELIZAOS_CLOUD_API_KEY"));
+  // 2. Sealed in-process secret store
+  const sealedKey = normalizeSecret(getCloudSecret("ELIZAOS_CLOUD_API_KEY"));
+  if (sealedKey) return sealedKey;
+
+  // 3. Process environment (may not be scrubbed yet)
+  const envKey = normalizeSecret(process.env.ELIZAOS_CLOUD_API_KEY);
+  if (envKey) return envKey;
+
+  // 4. Runtime character secrets (persisted in database, survives restarts)
+  const runtimeKey = normalizeSecret(
+    runtime?.character?.secrets?.ELIZAOS_CLOUD_API_KEY as string | undefined,
+  );
+  if (runtimeKey) return runtimeKey;
+
+  return undefined;
 }
 
 export function resolveCloudConnectionSnapshot(
@@ -191,7 +205,7 @@ export function resolveCloudConnectionSnapshot(
       getCloudSecret("ELIZAOS_CLOUD_ENABLED") === "true" ||
       provider === "elizacloud" ||
       inferenceMode === "cloud");
-  const apiKey = resolveCloudApiKey(config);
+  const apiKey = resolveCloudApiKey(config, runtime);
   const cloudAuth = getCloudAuth(runtime);
   const authConnected = Boolean(cloudAuth?.isAuthenticated?.());
   const hasApiKey = Boolean(apiKey);

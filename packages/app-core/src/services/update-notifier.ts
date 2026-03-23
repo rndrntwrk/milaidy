@@ -5,7 +5,7 @@
 
 import { loadElizaConfig } from "../config/config";
 import { theme } from "../terminal/theme";
-import { checkForUpdate, resolveChannel } from "./update-checker";
+import { checkForUpdate, resolveChannel } from "@miladyai/agent/services/update-checker";
 
 let notified = false;
 

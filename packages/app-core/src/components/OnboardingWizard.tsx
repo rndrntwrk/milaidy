@@ -250,7 +250,7 @@ export function OnboardingWizard() {
         </div>
 
         {/* ── Standard overlaid UI — step nav + content panel ── */}
-        <div className="absolute inset-0 z-20 flex justify-between pointer-events-none [&>*]:pointer-events-auto max-md:flex-col">
+        <div className="absolute inset-0 z-20 flex justify-between pointer-events-none [&>*]:pointer-events-auto max-md:flex-col max-md:justify-end max-md:gap-0">
           <OnboardingStepNav />
           <OnboardingPanel step={onboardingStep}>
             {renderStep()}

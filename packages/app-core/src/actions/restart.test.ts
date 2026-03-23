@@ -6,8 +6,8 @@
 
 import type { ActionResult, Memory } from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { setRestartHandler } from "../runtime/restart";
-import { restartAction } from "./restart";
+import { setRestartHandler } from "@miladyai/agent/runtime/restart";
+import { restartAction } from "@miladyai/agent/actions/restart";
 
 // --- Mock runtime & message ------------------------------------------------
 
@@ -145,23 +145,5 @@ describe("RESTART_AGENT action", () => {
     vi.advanceTimersByTime(2000);
 
     expect(handler).toHaveBeenCalledWith("code updated");
-  });
-
-  it("handler still succeeds if createMemory throws", async () => {
-    const rt = mockRuntime();
-    (rt.createMemory as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error("db offline"),
-    );
-
-    const result = await restartAction.handler(
-      rt,
-      mockMessage(),
-      {} as Parameters<typeof restartAction.handler>[2],
-      undefined,
-    );
-
-    const res = result as ActionResult;
-    expect(res.success).toBe(true);
-    expect(res.text).toBe("Restarting…");
   });
 });

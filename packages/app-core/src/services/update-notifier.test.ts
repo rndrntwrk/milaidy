@@ -16,7 +16,7 @@ vi.mock("../config/config", () => ({
   loadElizaConfig: vi.fn(() => ({})),
 }));
 
-vi.mock("./update-checker", () => ({
+vi.mock("@miladyai/agent/services/update-checker", () => ({
   checkForUpdate: vi.fn(),
   resolveChannel: vi.fn(() => "stable"),
 }));
@@ -50,7 +50,7 @@ async function importFreshNotifier() {
   vi.doMock("../config/config", () => ({
     loadElizaConfig: vi.fn(() => ({})),
   }));
-  vi.doMock("./update-checker", () => ({
+  vi.doMock("@miladyai/agent/services/update-checker", () => ({
     checkForUpdate: vi.fn(),
     resolveChannel: vi.fn(() => "stable"),
   }));
@@ -58,7 +58,7 @@ async function importFreshNotifier() {
 
   const mod = await import("./update-notifier");
   const config = await import("../config/config");
-  const checker = await import("./update-checker");
+  const checker = await import("@miladyai/agent/services/update-checker");
   return {
     scheduleUpdateNotification: mod.scheduleUpdateNotification,
     config,

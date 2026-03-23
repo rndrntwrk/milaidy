@@ -153,6 +153,32 @@ export async function handleCloudRoute(
     return true;
   }
 
+  // Direct-auth persistence: the frontend authenticated directly with Eliza
+  // Cloud (bypassing the backend's login/status handler) and needs to push
+  // the API key to the backend so billing/compat routes can authenticate.
+  if (method === "POST" && pathname === "/api/cloud/login/persist") {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    }
+    try {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+        apiKey?: unknown;
+      };
+      if (typeof body.apiKey !== "string" || !body.apiKey.trim()) {
+        sendJson(res, 400, { ok: false, error: "apiKey is required" });
+        return true;
+      }
+      await persistCloudLoginStatus({ apiKey: body.apiKey.trim(), state });
+      sendJson(res, 200, { ok: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`[cloud/login/persist] Failed: ${msg}`);
+      sendJson(res, 500, { ok: false, error: msg });
+    }
+    return true;
+  }
+
   if (method === "GET" && pathname.startsWith("/api/cloud/login/status")) {
     const url = new URL(
       req.url ?? "/",

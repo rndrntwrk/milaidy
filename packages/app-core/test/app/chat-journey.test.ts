@@ -853,6 +853,51 @@ describe("chat journey", () => {
       });
     });
 
+    it("falls back to requestGreeting when inline greeting is missing", async () => {
+      mockClient.createConversation.mockResolvedValueOnce({
+        conversation: {
+          id: "conv-no-greeting",
+          title: "New Chat",
+          roomId: "room-no-greeting",
+          createdAt: "2026-02-01T00:00:00.000Z",
+          updatedAt: "2026-02-01T00:00:00.000Z",
+        },
+        // No greeting field — simulates older server or agent not running
+      });
+      mockClient.requestGreeting.mockResolvedValueOnce({
+        text: "hey there!",
+        agentName: "Milady",
+        generated: true,
+        persisted: false,
+      });
+
+      let api: ProbeApi | null = null;
+      let tree: TestRenderer.ReactTestRenderer;
+
+      await act(async () => {
+        tree = TestRenderer.create(
+          React.createElement(
+            AppProvider,
+            null,
+            React.createElement(Probe, {
+              onReady: (nextApi) => {
+                api = nextApi;
+              },
+            }),
+          ),
+        );
+      });
+
+      expect(api).not.toBeNull();
+
+      // Select a conversation first so handleNewConversation has something to transition from.
+      await act(async () => {
+        await api!.handleSelectConversation("conv-1");
+      });
+
+      await act(async () => {
+        await api!.handleNewConversation();
+      });
 
       // The fallback should have called requestGreeting since inline was missing
       expect(mockClient.requestGreeting).toHaveBeenCalledWith(
@@ -881,7 +926,10 @@ describe("chat journey", () => {
     });
 
     it("switches conversations and loads messages for selected conversation", async () => {
-      // First call returns conv-1 messages with a user message (prevents deletion)
+      // Use current timestamps so shouldStartFreshCompanionConversation does not
+      // treat these as "stale" conversations (which would trigger a new-conversation
+      // refresh and overwrite the active conversation ID).
+      const now = Date.now();
       mockClient.getConversationMessages
         .mockResolvedValueOnce({
           messages: [
@@ -889,13 +937,13 @@ describe("chat journey", () => {
               id: "msg-u1",
               role: "user",
               text: "user said something",
-              timestamp: 1,
+              timestamp: now - 1000,
             },
             {
               id: "msg-1",
               role: "assistant",
               text: "hello from conv-1",
-              timestamp: 2,
+              timestamp: now - 500,
             },
           ],
         })
@@ -905,7 +953,7 @@ describe("chat journey", () => {
               id: "msg-2",
               role: "assistant",
               text: "hello from conv-2",
-              timestamp: 3,
+              timestamp: now - 200,
             },
           ],
         });
@@ -928,20 +976,9 @@ describe("chat journey", () => {
 
       expect(api).not.toBeNull();
 
-      // Debug: check state after mount
-      const mountSnapshot = api!.snapshot();
-      console.log('[DEBUG] after mount - activeConversationId:', mountSnapshot.activeConversationId);
-      console.log('[DEBUG] after mount - createConversation calls:', mockClient.createConversation.mock.calls.length);
-
       await act(async () => {
         await api!.handleSelectConversation("conv-1");
       });
-
-      const selectSnapshot = api!.snapshot();
-      console.log('[DEBUG] after select - activeConversationId:', selectSnapshot.activeConversationId);
-      console.log('[DEBUG] after select - createConversation calls:', mockClient.createConversation.mock.calls.length);
-      console.log('[DEBUG] after select - messages:', selectSnapshot.conversationMessages.map(m => m.text));
-      console.log('[DEBUG] getConversationMessages calls:', mockClient.getConversationMessages.mock.calls);
 
       expect(api!.snapshot().activeConversationId).toBe("conv-1");
       expect(api!.snapshot().conversationMessages[0].text).toBe(

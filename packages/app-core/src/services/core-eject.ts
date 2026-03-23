@@ -4,14 +4,14 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { promisify } from "node:util";
 import { logger } from "@elizaos/core";
-import { resolveStateDir } from "../config/paths";
+import { resolveStateDir } from "@miladyai/agent/config/paths";
 import { createSerialise } from "../utils/serialise";
 import {
   assertValidGitUrl,
   VALID_BRANCH,
   VALID_GIT_URL,
 } from "./plugin-installer";
-import { getPluginInfo } from "./registry-client";
+import { getPluginInfo } from "@miladyai/agent/services/registry-client";
 
 const execFileAsync = promisify(execFile);
 

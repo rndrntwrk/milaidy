@@ -3,8 +3,8 @@
  * signer mode, and trade permissions. Never exposes private keys.
  */
 import type { IAgentRuntime } from "@elizaos/core";
-import { getWalletAddresses } from "../../api/wallet.js";
-import { resolveWalletRpcReadiness } from "../../api/wallet-rpc.js";
+import { getWalletAddresses } from "@miladyai/agent/api/wallet";
+import { resolveWalletRpcReadiness } from "@miladyai/agent/api/wallet-rpc";
 import { loadElizaConfig } from "../../config/config.js";
 import type { AwarenessContributor } from "@miladyai/agent/contracts";
 import {

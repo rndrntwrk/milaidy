@@ -6,7 +6,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CHANNEL_DIST_TAGS } from "./update-checker";
+import { CHANNEL_DIST_TAGS } from "@miladyai/agent/services/update-checker";
 
 // The type is inlined to avoid resolving types.eliza vs types.eliza
 // depending on the workspace layout.

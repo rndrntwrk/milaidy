@@ -15,7 +15,7 @@ import {
   type WhatsAppPairingEvent,
   WhatsAppPairingSession,
   whatsappAuthExists,
-} from "./whatsapp-pairing";
+} from "@miladyai/agent/services/whatsapp-pairing";
 
 // ═════════════════════════════════════════════════════════════════════════
 describe("whatsapp-pairing", () => {

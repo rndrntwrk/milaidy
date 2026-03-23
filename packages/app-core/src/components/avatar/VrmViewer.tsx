@@ -6,6 +6,10 @@
  */
 
 import { useEffect, useEffectEvent, useRef } from "react";
+import {
+  CHAT_AVATAR_VOICE_EVENT,
+  type ChatAvatarVoiceEventDetail,
+} from "../../events";
 import type {
   CompanionHalfFramerateMode,
   CompanionVrmPowerMode,
@@ -30,9 +34,6 @@ export type VrmViewerProps = {
   active?: boolean;
   /** Path to the VRM file to load (default: bundled Miwaifus #1) */
   vrmPath?: string;
-  mouthOpen: number;
-  /** When true the engine generates mouth animation internally */
-  isSpeaking?: boolean;
   /** Enable drag-rotate + wheel/pinch zoom camera controls */
   interactive?: boolean;
   /** Camera profile preset (chat default, companion for hero-stage framing) */
@@ -155,9 +156,9 @@ if (typeof window !== "undefined") {
 export function VrmViewer(props: VrmViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<VrmEngine | null>(null);
-  const mouthOpenRef = useRef<number>(props.mouthOpen);
+  const mouthOpenRef = useRef<number>(0);
   const activeRef = useRef<boolean>(props.active ?? true);
-  const isSpeakingRef = useRef<boolean>(props.isSpeaking ?? false);
+  const isSpeakingRef = useRef<boolean>(false);
   const interactiveRef = useRef<boolean>(props.interactive ?? false);
   const cameraProfileRef = useRef<CameraProfile>(props.cameraProfile ?? "chat");
   const interactionModeRef = useRef<InteractionMode>(
@@ -200,9 +201,7 @@ export function VrmViewer(props: VrmViewerProps) {
     `vrm-viewer-${Math.random().toString(36).slice(2, 10)}`,
   );
 
-  mouthOpenRef.current = props.mouthOpen;
   activeRef.current = props.active ?? true;
-  isSpeakingRef.current = props.isSpeaking ?? false;
   interactiveRef.current = props.interactive ?? false;
   cameraProfileRef.current = props.cameraProfile ?? "chat";
   interactionModeRef.current = props.interactiveMode ?? "free";
@@ -387,8 +386,19 @@ export function VrmViewer(props: VrmViewerProps) {
       },
     );
 
+    // Listen for voice events imperatively — updates refs without React re-renders.
+    const handleVoiceEvent = (event: Event) => {
+      const detail = (event as CustomEvent<ChatAvatarVoiceEventDetail>).detail;
+      if (detail) {
+        mouthOpenRef.current = detail.mouthOpen ?? 0;
+        isSpeakingRef.current = detail.isSpeaking ?? false;
+      }
+    };
+    window.addEventListener(CHAT_AVATAR_VOICE_EVENT, handleVoiceEvent);
+
     return () => {
       mountedRef.current = false;
+      window.removeEventListener(CHAT_AVATAR_VOICE_EVENT, handleVoiceEvent);
       if (typeof document !== "undefined") {
         document.removeEventListener(
           "visibilitychange",

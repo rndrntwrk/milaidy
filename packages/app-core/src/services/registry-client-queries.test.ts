@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { RegistryAppMeta, RegistryPluginInfo } from "./registry-client.js";
+import type { RegistryAppMeta, RegistryPluginInfo } from "@miladyai/agent/services/registry-client";
 import {
   getPluginInfoFromRegistry,
   normalizePluginLookupAlias,

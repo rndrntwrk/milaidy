@@ -14,7 +14,14 @@ import { resolveCompanionInferenceNotice } from "./companion/resolve-companion-i
 // don't re-hide the chat after the avatar already loaded once.
 let _vrmTeleportCompletedOnce = false;
 
-export const CompanionView = memo(function CompanionView() {
+/**
+ * Inner overlay that subscribes to useApp() for frequently-changing data
+ * (conversationMessages, chatLastUsage, etc.). Extracted so that
+ * CompanionView itself doesn't subscribe — keeping the children prop
+ * passed to CompanionSceneHost referentially stable and avoiding
+ * cascading re-renders into the 3D scene.
+ */
+const CompanionViewOverlay = memo(function CompanionViewOverlay() {
   useRenderGuard("CompanionView");
   const {
     uiLanguage,
@@ -35,7 +42,6 @@ export const CompanionView = memo(function CompanionView() {
     switchShellView,
     t,
   } = useApp();
-  const hasSharedCompanionScene = useSharedCompanionScene();
 
   // Gate chat + header behind avatar load — don't show chat or play
   // greeting speech until the VRM finishes its teleport-in animation.
@@ -112,7 +118,7 @@ export const CompanionView = memo(function CompanionView() {
     />
   ) : null;
 
-  const overlay = (
+  return (
     <div className="absolute inset-0 z-10 flex flex-col pointer-events-none">
       <div
         style={{
@@ -153,10 +159,21 @@ export const CompanionView = memo(function CompanionView() {
       </div>
     </div>
   );
+});
+
+/**
+ * CompanionView — thin shell that composes CompanionSceneHost + overlay.
+ * Does NOT subscribe to useApp() so CompanionSceneHost receives stable
+ * children and avoids re-rendering the 3D scene on unrelated state changes.
+ */
+export const CompanionView = memo(function CompanionView() {
+  const hasSharedCompanionScene = useSharedCompanionScene();
 
   return hasSharedCompanionScene ? (
-    overlay
+    <CompanionViewOverlay />
   ) : (
-    <CompanionSceneHost active>{overlay}</CompanionSceneHost>
+    <CompanionSceneHost active>
+      <CompanionViewOverlay />
+    </CompanionSceneHost>
   );
 });

@@ -49,13 +49,13 @@ async function updateAction(opts: {
   force?: boolean;
 }): Promise<void> {
   const { loadElizaConfig, saveElizaConfig } = await import(
-    "../../config/config"
+    "@miladyai/agent/config/config"
   );
   const { checkForUpdate, resolveChannel } = await import(
-    "../../services/update-checker"
+    "@miladyai/agent/services/update-checker"
   );
   const { detectInstallMethod, performUpdate } = await import(
-    "../../services/self-updater"
+    "@miladyai/agent/services/self-updater"
   );
   const config = loadElizaConfig();
   let newChannel: ReleaseChannel | undefined;
@@ -169,11 +169,11 @@ async function updateAction(opts: {
 }
 
 async function statusAction(): Promise<void> {
-  const { loadElizaConfig } = await import("../../config/config");
+  const { loadElizaConfig } = await import("@miladyai/agent/config/config");
   const { resolveChannel, fetchAllChannelVersions } = await import(
-    "../../services/update-checker"
+    "@miladyai/agent/services/update-checker"
   );
-  const { detectInstallMethod } = await import("../../services/self-updater");
+  const { detectInstallMethod } = await import("@miladyai/agent/services/self-updater");
   console.log(`\n${theme.heading("Version Status")}\n`);
 
   const config = loadElizaConfig();
@@ -204,9 +204,9 @@ async function statusAction(): Promise<void> {
 
 async function channelAction(channelArg: string | undefined): Promise<void> {
   const { loadElizaConfig, saveElizaConfig } = await import(
-    "../../config/config"
+    "@miladyai/agent/config/config"
   );
-  const { resolveChannel } = await import("../../services/update-checker");
+  const { resolveChannel } = await import("@miladyai/agent/services/update-checker");
   const config = loadElizaConfig();
   const current = resolveChannel(config.update);
 

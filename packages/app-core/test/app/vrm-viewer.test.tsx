@@ -126,7 +126,7 @@ describe("VrmViewer", () => {
     await act(async () => {
       renderer = TestRenderer.create(
         <StrictMode>
-          <VrmViewer vrmPath="/vrms/eliza-1.vrm.gz" mouthOpen={0} />
+          <VrmViewer vrmPath="/vrms/eliza-1.vrm.gz" />
         </StrictMode>,
         {
           createNodeMock: (element) => {
@@ -186,8 +186,7 @@ describe("VrmViewer", () => {
         <VrmViewer
           vrmPath="/vrms/eliza-1.vrm.gz"
           worldUrl="/worlds/companion-day.spz"
-          mouthOpen={0}
-        />,
+                  />,
         {
           createNodeMock: (element) => {
             if (element.type === "canvas") {
@@ -247,8 +246,7 @@ describe("VrmViewer", () => {
         <VrmViewer
           vrmPath="/vrms/eliza-1.vrm.gz"
           worldUrl="/worlds/companion-day.spz"
-          mouthOpen={0}
-        />,
+                  />,
         {
           createNodeMock: (element) => {
             if (element.type === "canvas") {
@@ -291,8 +289,7 @@ describe("VrmViewer", () => {
         <VrmViewer
           vrmPath="/vrms/eliza-1.vrm.gz"
           worldUrl="/worlds/companion-night.spz"
-          mouthOpen={0}
-        />,
+                  />,
       );
       await Promise.resolve();
       await Promise.resolve();
@@ -318,8 +315,7 @@ describe("VrmViewer", () => {
         <VrmViewer
           vrmPath="/vrms/eliza-1.vrm.gz"
           worldUrl="/worlds/companion-day.spz"
-          mouthOpen={0}
-          onEngineState={onEngineState}
+                    onEngineState={onEngineState}
         />,
         {
           createNodeMock: (element) => {

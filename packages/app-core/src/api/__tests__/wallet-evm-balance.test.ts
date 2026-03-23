@@ -10,7 +10,7 @@ import {
   fetchEvmBalances,
   fetchEvmNfts,
   resolveEvmProviderKeys,
-} from "../wallet-evm-balance";
+} from "@miladyai/agent/api/wallet-evm-balance";
 
 // ── Mocks ────────────────────────────────────────────────────────────────
 

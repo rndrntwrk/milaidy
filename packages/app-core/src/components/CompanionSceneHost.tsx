@@ -2,7 +2,8 @@ import { useRenderGuard } from "@miladyai/app-core/hooks";
 import {
   getVrmPreviewUrl,
   getVrmUrl,
-  useApp,
+  useCompanionSceneConfig,
+  useTranslation,
   VRM_COUNT,
 } from "@miladyai/app-core/state";
 import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
@@ -138,12 +139,12 @@ function CompanionSceneSurface({
     selectedVrmIndex,
     customVrmUrl,
     uiTheme,
-    t,
     tab,
     companionVrmPowerMode,
     companionHalfFramerateMode,
     companionAnimateWhenHidden,
-  } = useApp();
+  } = useCompanionSceneConfig();
+  const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stageEnginesRef = useRef(new Set<VrmEngine>());
   const companionZoomRef = useRef(DEFAULT_COMPANION_ZOOM);

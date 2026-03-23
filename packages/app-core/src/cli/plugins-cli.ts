@@ -388,7 +388,7 @@ export function registerPluginsCli(program: Command): void {
           console.log(
             chalk.dim("Agent is restarting to load the new plugin..."),
           );
-          const { requestRestart } = await import("../runtime/restart");
+          const { requestRestart } = await import("@miladyai/agent/runtime/restart");
           await Promise.resolve(
             requestRestart(`Plugin ${result.pluginName} installed`),
           );
@@ -470,7 +470,7 @@ export function registerPluginsCli(program: Command): void {
       const { pathToFileURL } = await import("node:url");
       const fsPromises = await import("node:fs/promises");
       const { resolveStateDir, resolveUserPath } = await import(
-        "../config/paths"
+        "@miladyai/agent/config/paths"
       );
       const { loadElizaConfig } = await import("../config/config");
       const { CUSTOM_PLUGINS_DIRNAME, scanDropInPlugins, resolvePackageEntry } =
@@ -614,7 +614,7 @@ export function registerPluginsCli(program: Command): void {
     .action(async (rawPath: string) => {
       const _nodePath = await import("node:path");
       const nodeFs = await import("node:fs");
-      const { resolveUserPath } = await import("../config/paths");
+      const { resolveUserPath } = await import("@miladyai/agent/config/paths");
       const { loadElizaConfig, saveElizaConfig } = await import(
         "../config/config"
       );
@@ -670,7 +670,7 @@ export function registerPluginsCli(program: Command): void {
     .action(async () => {
       const nodePath = await import("node:path");
       const { resolveStateDir, resolveUserPath } = await import(
-        "../config/paths"
+        "@miladyai/agent/config/paths"
       );
       const { loadElizaConfig } = await import("../config/config");
       const { CUSTOM_PLUGINS_DIRNAME, scanDropInPlugins } = await import(
@@ -924,7 +924,7 @@ export function registerPluginsCli(program: Command): void {
       const nodeFs = await import("node:fs");
       const { spawnSync } = await import("node:child_process");
       const { resolveStateDir, resolveUserPath } = await import(
-        "../config/paths"
+        "@miladyai/agent/config/paths"
       );
       const { CUSTOM_PLUGINS_DIRNAME, scanDropInPlugins } = await import(
         "../runtime/eliza"

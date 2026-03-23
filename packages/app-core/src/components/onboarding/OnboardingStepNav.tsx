@@ -31,7 +31,7 @@ export function OnboardingStepNav() {
           } as React.CSSProperties
         }
         {...{
-          className: `flex flex-col relative before:hidden after:absolute after:left-[6px] after:top-[14px] after:w-[1px] after:bg-gradient-to-b after:from-[rgba(240,185,11,0.4)] after:to-[rgba(240,185,11,0.12)] after:transition-all after:duration-[800ms] after:ease-[cubic-bezier(0.25,0.46,0.45,0.94)] after:z-0 after:h-[var(--tw-after-height)]`,
+          className: `flex flex-col max-md:flex-row relative before:hidden after:absolute after:left-[6px] after:top-[14px] after:w-[1px] after:bg-gradient-to-b after:from-[rgba(240,185,11,0.4)] after:to-[rgba(240,185,11,0.12)] after:transition-all after:duration-[800ms] after:ease-[cubic-bezier(0.25,0.46,0.45,0.94)] after:z-0 after:h-[var(--tw-after-height)] max-md:after:hidden`,
         }}
       >
         {activeSteps.map((step, i) => {
@@ -39,7 +39,7 @@ export function OnboardingStepNav() {
           const isActive = i === currentIndex;
           const isClickable = isDone;
 
-          const rowClass = `flex items-center gap-[20px] py-[19px] relative group ${isClickable ? "cursor-pointer w-full border-none bg-transparent m-0 text-left text-inherit focus-visible:outline-2 focus-visible:outline-[rgba(240,185,11,0.55)] focus-visible:outline-offset-3" : ""}`;
+          const rowClass = `flex items-center gap-[20px] py-[19px] max-md:py-2 relative group ${isClickable ? "cursor-pointer w-full border-none bg-transparent m-0 text-left text-inherit focus-visible:outline-2 focus-visible:outline-[rgba(240,185,11,0.55)] focus-visible:outline-offset-3" : ""}`;
 
           // Dot classes
           let dotClass =
@@ -83,7 +83,7 @@ export function OnboardingStepNav() {
                 onClick={() => handleOnboardingJumpToStep(step.id)}
               >
                 <div className={dotClass} />
-                <div className="flex flex-col gap-0.5">
+                <div className="flex flex-col gap-0.5 max-md:hidden">
                   <span className={nameClass}>{t(step.name)}</span>
                   <span className={subClass}>{t(step.subtitle)}</span>
                 </div>
@@ -98,7 +98,7 @@ export function OnboardingStepNav() {
               {...(isActive ? { "aria-current": "step" as const } : {})}
             >
               <div className={dotClass} />
-              <div className="flex flex-col gap-0.5">
+              <div className="flex flex-col gap-0.5 max-md:hidden">
                 <span className={nameClass}>{t(step.name)}</span>
                 <span className={subClass}>{t(step.subtitle)}</span>
               </div>

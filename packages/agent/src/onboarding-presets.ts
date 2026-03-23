@@ -1422,6 +1422,13 @@ export const CHARACTER_PRESETS = [
     description: "Edgy, self-deprecating, crypto degen",
     style: "degen",
   },
+  {
+    id: "yuki",
+    name: "Yuki",
+    catchphrase: "Are you thinking what I'm thinking?",
+    description: "Curious, analytical, methodical",
+    style: "analytical",
+  },
 ] as const;
 
 export const CHARACTER_PRESET_META: Record<
@@ -1474,6 +1481,12 @@ export const CHARACTER_PRESET_META: Record<
     avatarIndex: 7,
     voicePresetId: "callum",
     catchphrase: "Show me what we're building.",
+  },
+  "Are you thinking what I'm thinking?": {
+    name: "Yuki",
+    avatarIndex: 8,
+    voicePresetId: "yuki",
+    catchphrase: "Are you thinking what I'm thinking?",
   },
 };
 

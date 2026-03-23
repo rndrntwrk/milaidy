@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import type { RegistryAppMeta } from "./registry-client.js";
+import type { RegistryAppMeta } from "@miladyai/agent/services/registry-client";
 import {
   LOCAL_APP_DEFAULT_SANDBOX,
   mergeAppMeta,

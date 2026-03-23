@@ -7,7 +7,7 @@
 
 import type { HandlerOptions } from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
-import { AwarenessRegistry } from "../awareness/registry";
+import { AwarenessRegistry } from "@miladyai/shared/awareness";
 import { getSelfStatusAction } from "./get-self-status";
 
 function mockRuntime(registry: AwarenessRegistry) {

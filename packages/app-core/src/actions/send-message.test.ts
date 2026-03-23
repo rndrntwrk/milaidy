@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { sendMessageAction } from "./send-message";
+import { sendMessageAction } from "@miladyai/agent/actions/send-message";
 
 function mockRuntime(service: unknown) {
   return {

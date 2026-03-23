@@ -25,10 +25,8 @@ export class AgentWeb extends WebPlugin implements AgentPlugin {
         ? (window as MiladyWindow).__MILADY_API_BASE__
         : undefined;
     if (typeof global === "string" && global.trim().length > 0) return global;
-
-    throw new Error(
-      "No API base URL provided for Agent services. Ensure __MILADY_API_BASE__ is set.",
-    );
+    // No explicit base — use relative URLs (works on http/https origins).
+    return "";
   }
 
   private apiToken(): string | null {
@@ -49,8 +47,11 @@ export class AgentWeb extends WebPlugin implements AgentPlugin {
 
   /** True when we can reach the API via HTTP. */
   private canReachApi(): boolean {
-    const base = this.apiBase();
-    if (base) return true;
+    const global =
+      typeof window !== "undefined"
+        ? (window as MiladyWindow).__MILADY_API_BASE__
+        : undefined;
+    if (typeof global === "string" && global.trim().length > 0) return true;
     // No explicit base — relative fetches only work on http(s) origins.
     if (typeof window === "undefined") return false;
     const proto = window.location.protocol;

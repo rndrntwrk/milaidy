@@ -3,10 +3,7 @@ import {
   type AppEmoteEventDetail,
   STOP_EMOTE_EVENT,
 } from "@miladyai/app-core/events";
-import {
-  useChatAvatarVoiceState,
-  useRenderGuard,
-} from "@miladyai/app-core/hooks";
+import { useRenderGuard } from "@miladyai/app-core/hooks";
 import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type {
@@ -84,8 +81,6 @@ export const VrmStage = memo(function VrmStage({
   const loaderFadingStartedRef = useRef(false);
   /** After the first successful VRM load, suppress the loader on subsequent swaps. */
   const hasLoadedFirstVrmRef = useRef(false);
-
-  const chatAvatarVoice = useChatAvatarVoiceState();
 
   /* ── Greeting wave ──────────────────────────────────────────────── */
 
@@ -270,8 +265,6 @@ export const VrmStage = memo(function VrmStage({
           active={active}
           vrmPath={vrmPath}
           worldUrl={worldUrl}
-          mouthOpen={chatAvatarVoice.mouthOpen}
-          isSpeaking={chatAvatarVoice.isSpeaking}
           cameraProfile={cameraProfile}
           companionVrmPowerMode={companionVrmPowerMode}
           companionHalfFramerateMode={companionHalfFramerateMode}

@@ -1228,6 +1228,18 @@ export function isEnvKeyAllowedForForwarding(key: string): boolean {
     return false;
   if (/(ACCESS_TOKEN|REFRESH_TOKEN|SESSION_TOKEN|AUTH_TOKEN)$/i.test(key))
     return false;
+  // Block elizaCloud connection keys — these must only come from config.cloud
+  // via applyCloudConfigToEnv(). Forwarding them from config.env.vars into
+  // runtime.settings would let a stale env-var shadow the live cloud key that
+  // the app sets when the user connects through the UI.
+  if (
+    upper === "ELIZAOS_CLOUD_API_KEY" ||
+    upper === "ELIZAOS_CLOUD_ENABLED" ||
+    upper === "ELIZAOS_CLOUD_BASE_URL" ||
+    upper === "ELIZAOS_CLOUD_SMALL_MODEL" ||
+    upper === "ELIZAOS_CLOUD_LARGE_MODEL"
+  )
+    return false;
   return true;
 }
 

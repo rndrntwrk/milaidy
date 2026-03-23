@@ -61,7 +61,7 @@ import {
   validatePrivateKey,
   validateSolanaPrivateKey,
   type WalletKeys,
-} from "./wallet";
+} from "@miladyai/agent/api/wallet";
 
 // ---------------------------------------------------------------------------
 // Known test vectors

@@ -47,7 +47,7 @@ const mockEngine = {
   healthCheck: vi.fn().mockResolvedValue(true),
 };
 
-vi.mock("./sandbox-engine", () => ({
+vi.mock("@miladyai/agent/services/sandbox-engine", () => ({
   createEngine: () => mockEngine,
   detectBestEngine: () => mockEngine,
 }));

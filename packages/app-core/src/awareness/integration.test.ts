@@ -1,7 +1,7 @@
 import type { IAgentRuntime, Memory, State } from "@elizaos/core";
 import { describe, expect, it } from "vitest";
 import { getSelfStatusAction } from "../actions/get-self-status";
-import { SUMMARY_TOTAL_CHAR_LIMIT } from "../contracts/awareness";
+import { SUMMARY_TOTAL_CHAR_LIMIT } from "@miladyai/shared/contracts/awareness";
 import { createSelfStatusProvider } from "../providers/self-status";
 import { builtinContributors } from "./contributors";
 import {

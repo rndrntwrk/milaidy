@@ -19,7 +19,7 @@ vi.mock("node:child_process", () => ({
 }));
 
 import { execFileSync } from "node:child_process";
-import { AppleContainerEngine, DockerEngine } from "./sandbox-engine";
+import { AppleContainerEngine, DockerEngine } from "@miladyai/agent/services/sandbox-engine";
 
 function mockError(
   message: string,

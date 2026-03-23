@@ -37,7 +37,7 @@ import {
   buildUpdateCommand,
   detectInstallMethod,
   performUpdate,
-} from "./self-updater";
+} from "@miladyai/agent/services/self-updater";
 
 // ============================================================================
 // 1. Installation method detection

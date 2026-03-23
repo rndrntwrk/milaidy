@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyRegistryPluginRelease,
   getBundledRuntimePackages,
-} from "./release-plugin-policy";
+} from "@miladyai/agent/runtime/release-plugin-policy";
 
 describe("release-plugin-policy", () => {
   it("returns the curated baseline runtime bundle", () => {

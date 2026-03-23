@@ -16,17 +16,9 @@ import { AvatarLoader } from "./AvatarLoader";
 import type { VrmEngine, VrmEngineState } from "./avatar/VrmEngine";
 import { VrmViewer } from "./avatar/VrmViewer";
 
-export interface ChatAvatarProps {
-  /** Mouth openness value (0-1) for lip sync animation */
-  mouthOpen?: number;
-  /** Whether the agent is currently speaking (drives engine-side mouth anim) */
-  isSpeaking?: boolean;
-}
+export interface ChatAvatarProps {}
 
-export function ChatAvatar({
-  mouthOpen = 0,
-  isSpeaking = false,
-}: ChatAvatarProps) {
+export function ChatAvatar(_props: ChatAvatarProps) {
   const {
     selectedVrmIndex,
     customVrmUrl,
@@ -128,8 +120,6 @@ export function ChatAvatar({
           >
             <VrmViewer
               vrmPath={vrmPath}
-              mouthOpen={mouthOpen}
-              isSpeaking={isSpeaking}
               interactive
               interactiveMode="orbitZoom"
               companionVrmPowerMode={companionVrmPowerMode}

@@ -15,12 +15,12 @@ vi.mock("@elizaos/core", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock("./registry-client", () => ({
+vi.mock("@miladyai/agent/services/registry-client", () => ({
   getPluginInfo: vi.fn(),
 }));
 
-vi.mock("../config/paths", async () => {
-  const actual = await import("../config/paths");
+vi.mock("@miladyai/agent/config/paths", async () => {
+  const actual = await import("@miladyai/agent/config/paths");
   return {
     ...actual,
     resolveStateDir: vi.fn(() => mockedStateDir),
@@ -133,7 +133,7 @@ beforeEach(async () => {
 
   process.chdir(repoDir);
 
-  const { getPluginInfo } = await import("./registry-client");
+  const { getPluginInfo } = await import("@miladyai/agent/services/registry-client");
   // biome-ignore lint/suspicious/noExplicitAny: mocking
   vi.mocked(getPluginInfo).mockResolvedValue({
     name: "@elizaos/core",
