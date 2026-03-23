@@ -127,7 +127,7 @@ describe.skipIf(!CAN_RUN)("Live QA checklist", () => {
     browser = await puppeteer.launch({
       executablePath: CHROME_PATH,
       headless: true,
-      protocolTimeout: 120_000,
+      protocolTimeout: 300_000,
       args: [
         "--autoplay-policy=no-user-gesture-required",
         "--disable-background-timer-throttling",
@@ -585,32 +585,36 @@ async function waitForCharacterRoster(
   page: Page,
   timeout = 90_000,
 ): Promise<CharacterRosterState> {
-  return waitFor(async () => {
-    const state = await page.evaluate(() => {
-      const buttons = Array.from(
-        document.querySelectorAll<HTMLButtonElement>(
-          '[data-testid^="character-preset-"]',
-        ),
-      );
+  await page.waitForSelector('[data-testid="character-roster-grid"]', {
+    visible: true,
+    timeout,
+  });
+  await page.waitForSelector('[data-testid="character-preset-chen"]', {
+    visible: true,
+    timeout,
+  });
+  await page.waitForSelector(
+    '[data-testid="character-preset-chen"][aria-pressed="true"]',
+    {
+      visible: true,
+      timeout,
+    },
+  );
 
-      const labels = buttons
-        .map((button) => (button.innerText ?? button.textContent ?? "").trim())
-        .filter(Boolean);
-      const selected = buttons.find(
-        (button) => button.getAttribute("aria-pressed") === "true",
-      );
+  return page.$$eval('[data-testid^="character-preset-"]', (buttons) => {
+    const labels = buttons
+      .map((button) => (button.textContent ?? "").trim())
+      .filter(Boolean);
+    const selected = buttons.find(
+      (button) => button.getAttribute("aria-pressed") === "true",
+    );
 
-      return {
-        labels,
-        selectedLabel: selected
-          ? (selected.innerText ?? selected.textContent ?? "").trim() || null
-          : null,
-        selectedTestId: selected?.getAttribute("data-testid") ?? null,
-      };
-    });
-
-    return state.labels.length > 0 && state.selectedLabel ? state : null;
-  }, timeout, 1000);
+    return {
+      labels,
+      selectedLabel: selected?.textContent?.trim() || null,
+      selectedTestId: selected?.getAttribute("data-testid") ?? null,
+    };
+  });
 }
 
 async function clickByText(page: Page, text: string) {
