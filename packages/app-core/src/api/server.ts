@@ -2710,6 +2710,7 @@ async function handleMiladyCompatRoute(
     const rawBody = Buffer.concat(chunks);
 
     let replayBody = rawBody;
+    let capturedCloudApiKey: string | undefined;
 
     try {
       const body = JSON.parse(rawBody.toString("utf8")) as Record<
@@ -2780,6 +2781,9 @@ async function handleMiladyCompatRoute(
             );
           }
 
+          // Capture for deferred re-save after upstream clobbers config
+          capturedCloudApiKey = resolvedCloudApiKey;
+
           if (body.smallModel) {
             if (!config.models) {
               (config as Record<string, unknown>).models = {};
@@ -2821,6 +2825,32 @@ async function handleMiladyCompatRoute(
     }
 
     sendJsonResponse(res, 200, { ok: true });
+
+    // Schedule a deferred re-save AFTER the upstream handler has had a chance
+    // to clobber the config. The upstream uses state.config (stale, loaded at
+    // startup before OAuth) and calls saveElizaConfig which overwrites our
+    // apiKey on disk. We wait, then re-read and re-inject.
+    if (capturedCloudApiKey) {
+      const keyToRestore = capturedCloudApiKey;
+      setTimeout(() => {
+        try {
+          const freshConfig = loadElizaConfig();
+          if (!freshConfig.cloud?.apiKey) {
+            if (!freshConfig.cloud) {
+              (freshConfig as Record<string, unknown>).cloud = {};
+            }
+            (freshConfig.cloud as Record<string, unknown>).apiKey = keyToRestore;
+            (freshConfig.cloud as Record<string, unknown>).enabled = true;
+            saveElizaConfig(freshConfig);
+            logger.info(
+              "[milady-api] Re-saved cloud.apiKey after upstream handler clobbered it",
+            );
+          }
+        } catch {
+          // Non-fatal
+        }
+      }, 3000);
+    }
 
     req.push(replayBody);
     req.push(null);
