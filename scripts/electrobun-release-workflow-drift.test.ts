@@ -3,35 +3,39 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const SERVER_TS_PATH = fs.existsSync(
-  path.join(
-    ROOT,
-    "node_modules/@miladyai/agent/packages/agent/src/api/server.ts",
-  ),
-)
-  ? path.join(
-      ROOT,
-      "node_modules/@miladyai/agent/packages/agent/src/api/server.ts",
-    )
-  : path.join(
-      ROOT,
-      "node_modules/@miladyai/agent/packages/agent/src/api/server.js",
-    );
 
-const ELIZA_TS_PATH = fs.existsSync(
-  path.join(
-    ROOT,
-    "node_modules/@miladyai/agent/packages/agent/src/runtime/eliza.ts",
-  ),
-)
-  ? path.join(
+function resolveAgentFile(relativePath: string): string {
+  const candidates = [
+    // Workspace: direct source
+    path.join(ROOT, "packages/agent/src", relativePath),
+    // Workspace symlink with nested structure (local dev)
+    path.join(
       ROOT,
-      "node_modules/@miladyai/agent/packages/agent/src/runtime/eliza.ts",
-    )
-  : path.join(
+      "node_modules/@miladyai/agent/packages/agent/src",
+      relativePath,
+    ),
+    // Workspace symlink (CI)
+    path.join(ROOT, "node_modules/@miladyai/agent/src", relativePath),
+    // Published package (JS)
+    path.join(
       ROOT,
-      "node_modules/@miladyai/agent/packages/agent/src/runtime/eliza.js",
-    );
+      "node_modules/@miladyai/agent/packages/agent/src",
+      relativePath.replace(/\.ts$/, ".js"),
+    ),
+    path.join(
+      ROOT,
+      "node_modules/@miladyai/agent/src",
+      relativePath.replace(/\.ts$/, ".js"),
+    ),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return candidates[0]; // fallback — test will fail with useful error
+}
+
+const SERVER_TS_PATH = resolveAgentFile("api/server.ts");
+const ELIZA_TS_PATH = resolveAgentFile("runtime/eliza.ts");
 const WORKFLOW_PATH = path.join(
   ROOT,
   ".github/workflows/release-electrobun.yml",

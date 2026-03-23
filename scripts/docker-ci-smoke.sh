@@ -18,7 +18,7 @@ set -euo pipefail
 #   SMOKE_TIMEOUT_SEC    Max wait for boot probe (default: 180)
 #   DOCKER_IMAGE         Override image tag completely
 
-BUN_VERSION="${BUN_VERSION:-1.3.9}"
+BUN_VERSION="${BUN_VERSION:-1.3.10}"
 SMOKE_PORT="${SMOKE_PORT:-32138}"
 SMOKE_TIMEOUT_SEC="${SMOKE_TIMEOUT_SEC:-180}"
 SKIP_SMOKE=false

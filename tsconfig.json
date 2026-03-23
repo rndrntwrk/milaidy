@@ -30,11 +30,15 @@
       ],
       "@miladyai/agent/*": [
         "./packages/agent/src/*"
+      ],
+      "@elizaos/core": [
+        "./node_modules/@elizaos/core"
       ]
     }
   },
   "include": [
-    "packages/app-core/src/**/*"
+    "packages/app-core/src/**/*",
+    "packages/agent/src/external-modules.d.ts"
   ],
   "exclude": [
     "node_modules",
