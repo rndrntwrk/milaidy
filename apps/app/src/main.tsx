@@ -141,7 +141,7 @@ installDesktopPermissionsClientPatch(client as never);
 // Register custom character editor for app-core's ViewRouter to pick up
 window.__MILADY_CHARACTER_EDITOR__ = CharacterEditor;
 
-import { STYLE_PRESETS } from "@miladyai/app-core/onboarding-presets";
+import { STYLE_PRESETS } from "@miladyai/agent/onboarding-presets";
 
 // Derive VRM roster from STYLE_PRESETS so character names stay in one place.
 const MILADY_VRM_ASSETS = STYLE_PRESETS.slice()

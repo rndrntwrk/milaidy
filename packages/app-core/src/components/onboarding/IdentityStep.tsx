@@ -1,4 +1,4 @@
-import { STYLE_PRESETS } from "@miladyai/app-core/onboarding-presets";
+import { STYLE_PRESETS } from "../../onboarding-presets";
 import { getVrmPreviewUrl, useApp } from "@miladyai/app-core/state";
 import { Button } from "@miladyai/ui";
 import { useCallback, useEffect, useRef, useState } from "react";

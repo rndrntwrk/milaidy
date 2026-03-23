@@ -3,7 +3,7 @@
  * onboarding (selection-only) and the character editor (with customization).
  */
 
-import type { MiladyStylePreset } from "@miladyai/app-core/onboarding-presets";
+import type { MiladyStylePreset } from "../onboarding-presets";
 import { getVrmPreviewUrl } from "@miladyai/app-core/state";
 import { Button } from "@miladyai/ui";
 

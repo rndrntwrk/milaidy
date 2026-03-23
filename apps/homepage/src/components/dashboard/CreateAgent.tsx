@@ -1,4 +1,4 @@
-import { STYLE_PRESETS } from "@miladyai/app-core/onboarding-presets";
+import { STYLE_PRESETS } from "@miladyai/agent/onboarding-presets";
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AgentProvider, useAgents } from "../../lib/AgentProvider";
