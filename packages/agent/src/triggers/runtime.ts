@@ -155,7 +155,12 @@ async function dispatchInstruction(
   taskId: UUID,
   trigger: TriggerConfig,
 ): Promise<void> {
-  // Resolve the autonomy service to find the target room
+  // Resolve the autonomy service to find the target room.
+  // Retry up to 5 times (500ms, 1s, 1.5s, 2s backoff) because the
+  // service may still be registering after a runtime restart or SQL
+  // compatibility repair. Worst case: adds ~5s latency to a trigger
+  // dispatch that would have failed anyway. The retry is bounded and
+  // does not block the event loop (uses setTimeout).
   let autonomyService: AutonomyServiceLike | null = null;
   for (let attempt = 0; attempt < 5; attempt++) {
     autonomyService =
@@ -214,32 +219,10 @@ async function dispatchInstruction(
     "messages",
   );
 
-  // If wakeMode is inject_now, also nudge the runtime to process
-  if (trigger.wakeMode === "inject_now") {
-    try {
-      await runtime.processActions(
-        {
-          entityId: runtime.agentId,
-          roomId,
-          content: {
-            text: instructionText,
-            source: "trigger-runtime",
-          },
-        },
-        [],
-        await runtime.composeState({
-          entityId: runtime.agentId,
-          roomId,
-          content: { text: instructionText },
-        }),
-      );
-    } catch (err) {
-      runtime.logger.warn?.(
-        `[trigger-runtime] processActions failed for trigger ${trigger.triggerId}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      // Non-fatal — the memory was created, the autonomy loop will pick it up
-    }
-  }
+  // For inject_now: the memory is already in the autonomy room. The
+  // AutonomyService loop will pick it up on its next cycle. We don't
+  // call processActions here to avoid double-dispatch — the loop is
+  // the single execution path for all autonomous instructions.
 }
 
 export async function executeTriggerTask(

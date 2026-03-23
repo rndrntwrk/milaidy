@@ -89,6 +89,8 @@ describe("trigger runtime", () => {
     runtime = runtimePartial as IAgentRuntime;
   });
 
+  // Verifies dispatch happened (createMemory called) and task updated.
+  // Payload-level assertions are in trigger-runtime.e2e.test.ts.
   test("executes interval trigger and persists updates", async () => {
     const task = tasks[0];
     const result = await executeTriggerTask(runtime, task, {
