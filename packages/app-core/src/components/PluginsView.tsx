@@ -4,7 +4,15 @@
  * Renders a unified plugin list with searchable/filterable cards and per-plugin settings.
  */
 
-import { Button, Input } from "@miladyai/ui";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+} from "@miladyai/ui";
 import type { LucideIcon } from "lucide-react";
 import {
   Binary,
@@ -2986,24 +2994,11 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
               ? "ai provider"
               : p.category;
           return (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6 animate-in fade-in duration-200"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) toggleSettings(p.id);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  toggleSettings(p.id);
-                }
-              }}
-              role="dialog"
-              aria-modal="true"
-            >
-              <div className="w-full max-w-2xl max-h-[85vh] border border-border/50 bg-card/90 shadow-2xl flex flex-col overflow-hidden rounded-2xl backdrop-blur-xl">
+            <Dialog open onOpenChange={(v) => { if (!v) toggleSettings(p.id); }}>
+              <DialogContent className="max-w-2xl max-h-[85vh] p-0 flex flex-col overflow-hidden rounded-2xl">
                 {/* Dialog header */}
-                <div className="flex items-center gap-3 px-5 py-4 border-b border-border/30 bg-black/10 shrink-0">
-                  <span className="font-bold text-base flex items-center gap-2 flex-1 min-w-0 tracking-wide text-txt">
+                <DialogHeader className="flex items-center gap-3 px-5 py-4 border-b border-border/30 bg-black/10 shrink-0 flex-row">
+                  <DialogTitle className="font-bold text-base flex items-center gap-2 flex-1 min-w-0 tracking-wide text-txt">
                     {(() => {
                       const icon = resolveIcon(p);
                       if (!icon) return null;
@@ -3028,7 +3023,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                       return <IconComponent className="w-6 h-6 text-txt" />;
                     })()}
                     {p.name}
-                  </span>
+                  </DialogTitle>
                   <span className="text-[10px] px-2 py-0.5 rounded-full border border-border/40 bg-black/20 text-muted lowercase tracking-widest font-bold">
                     {categoryLabel}
                   </span>
@@ -3042,15 +3037,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                       {t("pluginsview.DEMO")}
                     </span>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted hover:bg-white/10 hover:text-txt rounded-full transition-all shrink-0 ml-2"
-                    onClick={() => toggleSettings(p.id)}
-                  >
-                    ✕
-                  </Button>
-                </div>
+                </DialogHeader>
 
                 {/* Dialog body — scrollable */}
                 <div className="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
@@ -3204,89 +3191,59 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                     </Button>
                   </div>
                 )}
-              </div>
-            </div>
+              </DialogContent>
+            </Dialog>
           );
         })()}
 
       {/* Add from directory modal */}
-      {addDirOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6 duration-200 animate-in fade-in"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setAddDirOpen(false);
-              setAddDirPath("");
-            }
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setAddDirOpen(false);
-              setAddDirPath("");
-            }
-          }}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-md border border-border/50 bg-card/90 backdrop-blur-xl p-6 rounded-2xl shadow-2xl">
-            <div className="flex items-center justify-between mb-5">
-              <div className="font-bold text-base tracking-wide text-txt">
-                {t("pluginsview.AddPlugin1")}
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted hover:bg-white/10 hover:text-txt rounded-full transition-all shrink-0 ml-2"
-                onClick={() => {
-                  setAddDirOpen(false);
-                  setAddDirPath("");
-                }}
-              >
-                ✕
-              </Button>
-            </div>
+      <Dialog open={addDirOpen} onOpenChange={(v) => { if (!v) { setAddDirOpen(false); setAddDirPath(""); } }}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader className="mb-5">
+            <DialogTitle className="font-bold text-base tracking-wide text-txt">
+              {t("pluginsview.AddPlugin1")}
+            </DialogTitle>
+          </DialogHeader>
 
-            <p className="text-sm font-medium tracking-wide text-muted mb-4">
-              {t("pluginsview.EnterThePathToA")}
-            </p>
+          <p className="text-sm font-medium tracking-wide text-muted mb-4">
+            {t("pluginsview.EnterThePathToA")}
+          </p>
 
-            <Input
-              type="text"
-              className="w-full h-10 px-3 border border-border/40 bg-black/20 text-txt text-[13px] font-mono transition-all duration-150 focus-visible:ring-accent rounded-xl shadow-inner placeholder:text-muted/50"
-              placeholder={t("pluginsview.PathToPluginOrP")}
-              value={addDirPath}
-              onChange={(e) => setAddDirPath(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void handleAddFromDirectory();
+          <Input
+            type="text"
+            className="w-full h-10 px-3 border border-border/40 bg-black/20 text-txt text-[13px] font-mono transition-all duration-150 focus-visible:ring-accent rounded-xl shadow-inner placeholder:text-muted/50"
+            placeholder={t("pluginsview.PathToPluginOrP")}
+            value={addDirPath}
+            onChange={(e) => setAddDirPath(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void handleAddFromDirectory();
+            }}
+          />
+
+          <DialogFooter className="flex justify-end gap-3 mt-6">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-4 text-[12px] font-bold text-muted hover:text-txt transition-all"
+              onClick={() => {
+                setAddDirOpen(false);
+                setAddDirPath("");
               }}
-            />
-
-            <div className="flex justify-end gap-3 mt-6">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-4 text-[12px] font-bold text-muted hover:text-txt transition-all"
-                onClick={() => {
-                  setAddDirOpen(false);
-                  setAddDirPath("");
-                }}
-              >
-                {t("pluginsview.Cancel")}
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                className="h-8 px-6 text-[12px] font-bold tracking-wide shadow-sm"
-                onClick={handleAddFromDirectory}
-                disabled={addDirLoading || !addDirPath.trim()}
-              >
-                {addDirLoading ? "Adding..." : "Add"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+            >
+              {t("pluginsview.Cancel")}
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              className="h-8 px-6 text-[12px] font-bold tracking-wide shadow-sm"
+              onClick={handleAddFromDirectory}
+              disabled={addDirLoading || !addDirPath.trim()}
+            >
+              {addDirLoading ? "Adding..." : "Add"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

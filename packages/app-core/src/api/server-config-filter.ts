@@ -1,9 +1,4 @@
-/**
- * Config/env filtering — strip sensitive keys from API responses.
- *
- * Extracted from `server.ts` for maintainability.  Re-exported from
- * `server.ts` so existing imports remain valid.
- */
+/** Config/env filtering — strip sensitive keys from API responses. */
 
 /**
  * Env keys that must never be returned in GET /api/config responses.

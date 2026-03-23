@@ -1,8 +1,4 @@
-/**
- * Chat helpers — streaming delta computation, formatting, and common patterns.
- *
- * Extracted from AppContext to be reusable across providers.
- */
+/** Chat helpers — streaming delta computation, formatting, and common patterns. */
 
 import {
   computeStreamingDelta as computeStreamingDeltaInternal,
@@ -36,11 +32,7 @@ export function shouldApplyFinalStreamText(
   return final !== streamed;
 }
 
-/**
- * Format a search result section with a label and bullet items.
- * NOTE: A plain-text variant exists in `../state/parsers.ts` (uses `- ` bullets,
- * no bold). This version uses markdown bold + `•` bullets for chat display.
- */
+/** Format a search result section with a label and bullet items (markdown). */
 export function formatSearchBullet(label: string, items: string[]): string {
   if (items.length === 0) return `**${label}**: (none)`;
   return `**${label}**:\n${items.map((item) => `• ${item}`).join("\n")}`;

@@ -229,6 +229,7 @@ vi.mock("../../src/bridge/index", async (importOriginal) => {
   };
 });
 
+import { flush } from "../../../../test/helpers/react-test";
 import { AppProvider, useApp } from "@miladyai/app-core/state";
 
 type ProbeApi = {
@@ -287,12 +288,6 @@ function emitWs(type: string, payload: Record<string, unknown>): void {
   if (handler) {
     handler(payload);
   }
-}
-
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-  });
 }
 
 async function waitFor(assertion: () => void): Promise<void> {

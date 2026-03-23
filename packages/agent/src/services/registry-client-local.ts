@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { logger } from "@elizaos/core";
 import {
   mergeAppMeta,
   resolveAppOverride,
@@ -268,7 +269,8 @@ async function discoverLocalWorkspaceApps(): Promise<
     let entries: Array<import("node:fs").Dirent>;
     try {
       entries = await fs.readdir(pluginsDir, { withFileTypes: true });
-    } catch {
+    } catch (err) {
+      logger.debug(`[registry] could not read plugins dir ${pluginsDir}: ${err}`);
       continue;
     }
 
@@ -321,14 +323,15 @@ async function discoverLocalWorkspaceApps(): Promise<
               for (const se of scopeEntries) {
                 pkgDirs.push(path.join(scopeDir, se.name));
               }
-            } catch {
-              // skip
+            } catch (err) {
+              logger.debug(`[registry] could not read scope dir ${scopeDir}: ${err}`);
             }
           } else if (nm.isDirectory() || nm.isSymbolicLink()) {
             pkgDirs.push(path.join(nmDir, nm.name));
           }
         }
-      } catch {
+      } catch (err) {
+        logger.debug(`[registry] could not read node_modules dir ${nmDir}: ${err}`);
         continue;
       }
 
@@ -367,7 +370,8 @@ async function discoverNodeModulePlugins(): Promise<
     let entries: Array<import("node:fs").Dirent>;
     try {
       entries = await fs.readdir(elizaosDir, { withFileTypes: true });
-    } catch {
+    } catch (err) {
+      logger.debug(`[registry] could not read @elizaos dir ${elizaosDir}: ${err}`);
       continue;
     }
 

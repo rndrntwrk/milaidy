@@ -18,7 +18,15 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { getCloudSecret } from "../../api/cloud-secrets";
-import { resolveConfigPath } from "../program/register.setup.js";
+// Inlined to avoid circular dependency with register.setup.ts
+function resolveConfigPath(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  if (env.ELIZA_CONFIG_PATH?.trim()) return env.ELIZA_CONFIG_PATH;
+  const stateDir =
+    env.ELIZA_STATE_DIR?.trim() || path.join(os.homedir(), ".eliza");
+  return path.join(stateDir, "eliza.json");
+}
 
 export type CheckStatus = "pass" | "fail" | "warn" | "skip";
 export type CheckCategory = "system" | "config" | "network" | "storage";

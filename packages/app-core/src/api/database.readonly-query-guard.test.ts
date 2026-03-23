@@ -7,6 +7,23 @@ import {
 } from "../test-support/test-helpers";
 import { handleDatabaseRoute } from "./database";
 
+interface DbExecuteResult {
+  rows: Array<Record<string, unknown>>;
+  fields?: Array<{ name: string }>;
+}
+
+function makeRuntime(executeResult: DbExecuteResult) {
+  const execute = vi.fn().mockResolvedValue(executeResult);
+  const runtime = {
+    adapter: {
+      db: {
+        execute,
+      },
+    },
+  } as unknown as AgentRuntime;
+  return { runtime, execute };
+}
+
 describe("database read-only query guard", () => {
   let runtime: AgentRuntime;
   let cleanup: () => Promise<void>;

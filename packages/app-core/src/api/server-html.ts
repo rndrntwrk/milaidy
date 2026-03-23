@@ -1,9 +1,4 @@
-/**
- * HTML injection — inject API base URL into served HTML pages.
- *
- * Extracted from `server.ts` for maintainability.  Re-exported from
- * `server.ts` so existing imports remain valid.
- */
+/** HTML injection — inject API base URL into served HTML pages. */
 import { injectApiBaseIntoHtml as upstreamInjectApiBaseIntoHtml } from "@elizaos/agent/api/server";
 
 export function injectApiBaseIntoHtml(

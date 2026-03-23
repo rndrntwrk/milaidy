@@ -1,7 +1,7 @@
 /**
  * Signal Connector E2E Tests
  *
- * Tests for @elizaos/plugin-signal as outlined in GitHub Issue #148.
+ * Tests for @elizaos/plugin-signal.
  *
  * Prerequisites:
  * - signal-cli installed and configured

@@ -13,6 +13,7 @@
  */
 
 import { Electroview } from "electrobun/view";
+import { ensureElectrobunGlobal } from "./electrobun-stub";
 import type { RpcMessageListener } from "../types.js";
 
 type RendererRequestHandler = (params: unknown) => Promise<unknown>;
@@ -25,19 +26,7 @@ const listenersByRpcMessage: Record<string, Set<RpcMessageListener>> = {};
 // Electrobun's native layer sets these globals before preloads run.
 // __electrobun must exist before Electroview.init() tries to write to it.
 // If the built-in preload hasn't fired yet (rare edge case), stub it.
-if (typeof window.__electrobun === "undefined") {
-  (
-    window as {
-      __electrobun: {
-        receiveMessageFromBun: (m: unknown) => void;
-        receiveInternalMessageFromBun: (m: unknown) => void;
-      };
-    }
-  ).__electrobun = {
-    receiveMessageFromBun: (_m: unknown) => {},
-    receiveInternalMessageFromBun: (_m: unknown) => {},
-  };
-}
+ensureElectrobunGlobal();
 
 function dispatchMessage(messageName: string, payload: unknown): void {
   if (messageName === "apiBaseUpdate") {

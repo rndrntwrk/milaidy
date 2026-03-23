@@ -1,48 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAgents } from "../../lib/AgentProvider";
+import {
+  type BillingSettingsResponse,
+  type CreditsSummaryResponse,
+  formatMoney,
+} from "../../lib/billing-types";
 import { CloudClient, type CreditBalance } from "../../lib/cloud-api";
 import { useAuth } from "../../lib/useAuth";
-
-interface BillingSettingsResponse {
-  success?: boolean;
-  settings?: {
-    autoTopUp?: {
-      enabled?: boolean;
-      amount?: number;
-      threshold?: number;
-      hasPaymentMethod?: boolean;
-    };
-    limits?: {
-      minAmount?: number;
-      maxAmount?: number;
-      minThreshold?: number;
-      maxThreshold?: number;
-    };
-  };
-}
-
-interface CreditsSummaryResponse {
-  success?: boolean;
-  organization?: {
-    creditBalance?: number;
-    autoTopUpEnabled?: boolean;
-    autoTopUpThreshold?: number | null;
-    autoTopUpAmount?: number | null;
-    hasPaymentMethod?: boolean;
-  };
-  agentsSummary?: {
-    total?: number;
-    withBudget?: number;
-    paused?: number;
-    totalAllocated?: number;
-    totalSpent?: number;
-    totalAvailable?: number;
-  };
-  pricing?: {
-    creditsPerDollar?: number;
-    minimumTopUp?: number;
-  };
-}
 
 export function CreditsPanel() {
   const { isAuthenticated: authed, token } = useAuth();
@@ -357,9 +321,4 @@ function MiniDataCell({ label, value }: { label: string; value?: number }) {
       </p>
     </div>
   );
-}
-
-function formatMoney(value?: number | null): string {
-  if (value == null || Number.isNaN(value)) return "—";
-  return `$${value.toFixed(2)}`;
 }

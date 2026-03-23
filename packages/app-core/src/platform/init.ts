@@ -1,8 +1,4 @@
-/**
- * Platform detection and initialization utilities.
- *
- * Extracted from apps/app/src/main.tsx to be reusable across app shells.
- */
+/** Platform detection and initialization utilities. */
 
 import { isElectrobunRuntime } from "../bridge";
 import { getBootConfig, setBootConfig } from "../config/boot-config";

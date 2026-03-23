@@ -29,7 +29,7 @@ function createRuntimeStub(): AgentRuntime {
   return {
     character,
     useModel: vi.fn(async () => "generated output"),
-  } as unknown as unknown as AgentRuntime;
+  } as unknown as AgentRuntime;
 }
 
 describe("character routes", () => {

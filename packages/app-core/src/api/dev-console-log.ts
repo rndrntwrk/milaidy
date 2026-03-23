@@ -10,9 +10,17 @@
 import fs from "node:fs";
 import path from "node:path";
 
-/** Limits which file the API may tail (env is untrusted even on loopback). */
+/**
+ * Limits which file the API may tail (env is untrusted even on loopback).
+ * Requires both the correct basename AND a `.milady` parent directory to
+ * prevent reading arbitrary files named `desktop-dev-console.log`.
+ */
 export function isAllowedDevConsoleLogPath(absPath: string): boolean {
-  return path.basename(absPath) === "desktop-dev-console.log";
+  if (path.basename(absPath) !== "desktop-dev-console.log") return false;
+  // Require the file to live under a `.milady` directory
+  const normalized = path.resolve(absPath);
+  const parts = normalized.split(path.sep);
+  return parts.some((part) => part === ".milady");
 }
 
 export type ReadDevConsoleLogResult =

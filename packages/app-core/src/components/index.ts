@@ -22,6 +22,7 @@ export * from "./CloudSourceControls";
 export * from "./CodingAgentSettingsSection";
 export * from "./CommandPalette";
 export * from "./CompanionSceneHost";
+export * from "./confirm-delete-control";
 export * from "./CompanionShell";
 export * from "./CompanionView";
 export * from "./ConfigPageView";
@@ -45,7 +46,7 @@ export * from "./CustomActionsPanel";
 export * from "./CustomActionsView";
 export * from "./chainConfig";
 export * from "./companion-shell-styles";
-export * from "./confirm-delete-control";
+
 export * from "./conversations/ConversationListItem";
 export * from "./conversations/conversation-utils";
 export * from "./DatabasePageView";

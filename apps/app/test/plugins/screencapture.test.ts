@@ -25,8 +25,7 @@ describe("@miladyai/capacitor-screencapture", () => {
     });
     // Stub AudioContext for system_audio feature detection
     if (typeof globalThis.AudioContext === "undefined") {
-      (globalThis as unknown as Record<string, unknown>).AudioContext =
-        class {};
+      Object.assign(globalThis, { AudioContext: class {} });
     }
     sc = new ScreenCaptureWeb();
   });

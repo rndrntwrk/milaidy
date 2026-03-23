@@ -51,36 +51,40 @@ describe("@miladyai/capacitor-desktop", () => {
     };
     gainNode.connect.mockReturnValue(gainNode);
     const dest = {};
-    (globalThis as unknown as Record<string, unknown>).AudioContext = class {
-      createOscillator() {
-        const osc = {
-          type: "sine",
-          frequency: { value: 0, setValueAtTime: vi.fn() },
-          connect: vi.fn().mockReturnValue(gainNode),
-          start: vi.fn(),
-          stop: vi.fn(),
-        };
-        return osc;
-      }
-      createGain() {
-        return gainNode;
-      }
-      get destination() {
-        return dest;
-      }
-      get currentTime() {
-        return 0;
-      }
-    };
+    Object.assign(globalThis, {
+      AudioContext: class {
+        createOscillator() {
+          const osc = {
+            type: "sine",
+            frequency: { value: 0, setValueAtTime: vi.fn() },
+            connect: vi.fn().mockReturnValue(gainNode),
+            start: vi.fn(),
+            stop: vi.fn(),
+          };
+          return osc;
+        }
+        createGain() {
+          return gainNode;
+        }
+        get destination() {
+          return dest;
+        }
+        get currentTime() {
+          return 0;
+        }
+      },
+    });
 
     // jsdom location.reload is read-only; replace location entirely
-    (window as unknown as Record<string, unknown>).location = new URL(
-      "http://localhost/",
-    ) as Location;
-    (window as unknown as Record<string, unknown>).location = {
-      ...(window as unknown as Record<string, unknown>).location,
-      reload: vi.fn(),
-    };
+    Object.assign(window, {
+      location: new URL("http://localhost/") as Location,
+    });
+    Object.assign(window, {
+      location: {
+        ...window.location,
+        reload: vi.fn(),
+      },
+    });
 
     d = new DesktopWeb();
   });

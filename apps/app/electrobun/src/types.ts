@@ -5,7 +5,11 @@
 /** Callback to send a JSON‑serialisable message to the renderer webview. */
 export type SendToWebview = (message: string, payload?: unknown) => void;
 
-/** Minimal subset of the electrobun RPC that exposes JS evaluation on a webview. */
+/**
+ * Structural type for accessing evaluateJavascriptWithResponse via requestProxy.
+ * `requestProxy` is present at runtime on every createRPC result but is not
+ * reflected in the base RPCWithTransport interface exported by electrobun.
+ */
 export type WebviewEvalRpc = {
   requestProxy?: {
     evaluateJavascriptWithResponse?: (params: {

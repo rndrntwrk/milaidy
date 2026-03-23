@@ -1,12 +1,6 @@
-/**
- * Lifecycle action helpers — extracted from AppContext.
- *
- * Provides pure-logic functions for agent lifecycle operations
- * (start, stop, restart, reset) that can be
- * called from any provider implementation.
- */
+/** Lifecycle action helpers — agent start, stop, restart, reset. */
 
-import type { MiladyClient as ElizaClient } from "../api/client";
+import type { MiladyClient } from "../api/client";
 
 export type LifecycleAction = "start" | "stop" | "restart" | "reset";
 
@@ -49,7 +43,7 @@ export const LIFECYCLE_I18N_KEYS: Record<
 
 
 export interface LifecycleActionContext {
-  client: ElizaClient;
+  client: MiladyClient;
   isBusy: () => boolean;
   setBusy: (busy: boolean) => void;
   setNotice: (message: string, type: string, duration?: number) => void;
@@ -58,7 +52,7 @@ export interface LifecycleActionContext {
 export async function executeLifecycleAction(
   action: LifecycleAction,
   ctx: LifecycleActionContext,
-): Promise<ReturnType<ElizaClient["getStatus"]> | null> {
+): Promise<ReturnType<MiladyClient["getStatus"]> | null> {
   if (ctx.isBusy()) {
     ctx.setNotice(
       `Agent action already in progress. Please wait.`,
@@ -68,12 +62,10 @@ export async function executeLifecycleAction(
     return null;
   }
   ctx.setBusy(true);
-  // Using LIFECYCLE_I18N_KEYS[action].progress for backward compatibility
-  // UI layer often expects standard string notices rather than translation keys here natively
   ctx.setNotice(LIFECYCLE_I18N_KEYS[action].progress, "info", 3000);
 
   try {
-    let result: Awaited<ReturnType<ElizaClient["getStatus"]>>;
+    let result: Awaited<ReturnType<MiladyClient["getStatus"]>>;
     switch (action) {
       case "start":
         result = await ctx.client.startAgent();
@@ -133,11 +125,7 @@ export interface StartupErrorState {
   path?: string;
 }
 
-/**
- * Simple error-to-string formatter (handles Error, string, and fallback JSON).
- * NOTE: An API-error-aware variant exists in `../state/parsers.ts` that also
- * extracts structured fields (path, status) from API-like error objects.
- */
+/** Simple error-to-string formatter (handles Error, string, and fallback JSON). */
 export function formatStartupErrorDetail(err: unknown): string {
   if (!err) return "";
   if (err instanceof Error) return err.message;

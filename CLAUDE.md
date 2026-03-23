@@ -104,6 +104,12 @@ All `@elizaos/*` packages use the `alpha` dist-tag. When developing locally, `bu
 | Home Dashboard | 2142 | `MILADY_HOME_PORT` |
 | WeChat Webhook | 18790 | `MILADY_WECHAT_WEBHOOK_PORT` |
 
+## Git Workflow
+
+- **Never stash, switch branches, or create worktrees** unless the user explicitly asks for it.
+- When asked to merge, merge **onto the current branch** (e.g., `git merge <source>` while staying on the current branch).
+- Do not create worktrees unless the user specifically requests one.
+
 ## Common Pitfalls
 
 - **`bun install` fails on native deps**: TensorFlow, canvas, whisper-node require native build tools. On macOS install Xcode CLI tools (`xcode-select --install`). On Linux install `build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev`. Set `MILADY_NO_VISION_DEPS=1` to skip optional vision deps (camera, etc.).

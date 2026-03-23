@@ -1,4 +1,4 @@
-import { ApiError, ElizaClient } from "@miladyai/app-core/api";
+import { ApiError, MiladyClient } from "@miladyai/app-core/api";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 function buildSseResponse(chunks: string[]): Response {
@@ -56,7 +56,7 @@ function buildJsonResponse(payload: unknown, status = 200): Response {
   });
 }
 
-describe("ElizaClient streaming chat endpoints", () => {
+describe("MiladyClient streaming chat endpoints", () => {
   const originalFetch = globalThis.fetch;
   let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -78,7 +78,7 @@ describe("ElizaClient streaming chat endpoints", () => {
       ]),
     );
 
-    const client = new ElizaClient("http://localhost:2138", "token");
+    const client = new MiladyClient("http://localhost:2138", "token");
     const tokens: string[] = [];
     const fullTexts: string[] = [];
     const result = await client.sendConversationMessageStream(
@@ -127,7 +127,7 @@ describe("ElizaClient streaming chat endpoints", () => {
       buildSseResponse(['data: {"text":"A"}\n\n', 'data: {"text":"B"}\n\n']),
     );
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     const tokens: string[] = [];
     const fullTexts: string[] = [];
     const result = await client.sendChatStream(
@@ -158,7 +158,7 @@ describe("ElizaClient streaming chat endpoints", () => {
       ]),
     );
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     const tokens: string[] = [];
     const result = await client.sendChatStream("legacy", (token) => {
       tokens.push(token);
@@ -180,7 +180,7 @@ describe("ElizaClient streaming chat endpoints", () => {
       ]),
     );
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     const fullTexts: string[] = [];
     const result = await client.sendChatStream(
       "legacy",
@@ -206,7 +206,7 @@ describe("ElizaClient streaming chat endpoints", () => {
       ]),
     );
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     const tokens: string[] = [];
     const result = await client.sendChatStream("legacy", (token) => {
       tokens.push(token);
@@ -229,7 +229,7 @@ describe("ElizaClient streaming chat endpoints", () => {
       ]),
     );
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     const fullTexts: string[] = [];
     const result = await client.sendChatStream(
       "legacy",
@@ -255,7 +255,7 @@ describe("ElizaClient streaming chat endpoints", () => {
       ]),
     );
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     const fullTexts: string[] = [];
     const result = await client.sendChatStream(
       "legacy",
@@ -281,7 +281,7 @@ describe("ElizaClient streaming chat endpoints", () => {
     );
     fetchMock.mockResolvedValue(controlled.response);
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     const tokens: string[] = [];
 
     const pending = client.sendConversationMessageStream(
@@ -316,7 +316,7 @@ describe("ElizaClient streaming chat endpoints", () => {
       ]),
     );
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     const tokens: string[] = [];
     const result = await client.sendConversationMessageStream(
       "conv-emote",
@@ -341,7 +341,7 @@ describe("ElizaClient streaming chat endpoints", () => {
       ]),
     );
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     await expect(
       client.sendChatStream("boom", () => {}, "DM", undefined, "simple"),
     ).rejects.toThrow("stream failed");
@@ -355,7 +355,7 @@ describe("ElizaClient streaming chat endpoints", () => {
       }),
     );
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     const request = client.sendChatStream(
       "boom",
       () => {},
@@ -380,7 +380,7 @@ describe("ElizaClient streaming chat endpoints", () => {
       }),
     );
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     await expect(client.requestGreeting("conv-empty")).resolves.toEqual({
       text: "",
       agentName: "Eliza",

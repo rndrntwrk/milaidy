@@ -135,41 +135,10 @@ describe("steward bridge", () => {
     expect(mockGetAgent).toHaveBeenCalledWith("agent-1");
   });
 
-  it("falls back to local signing when Steward is unavailable", async () => {
+  it("throws when Steward is unavailable (no fallback)", async () => {
     const { StewardApiError } = await import("@stwd/sdk");
-    mockSignTransaction.mockRejectedValueOnce(
-      new StewardApiError("Steward offline", 503),
-    );
-    const fallback = vi.fn().mockResolvedValue({ hash: "0xlocal-hash" });
-
-    const result = await signTransactionWithOptionalSteward({
-      env: {
-        STEWARD_API_URL: "https://steward.example",
-        STEWARD_AGENT_ID: "agent-1",
-      } as NodeJS.ProcessEnv,
-      evmAddress: "0x123",
-      tx: {
-        to: "0x000000000000000000000000000000000000dead",
-        value: "0",
-        chainId: 56,
-      },
-      fallback,
-    });
-
-    expect(result).toMatchObject({
-      mode: "local",
-      fallbackUsed: true,
-      stewardError: "Steward offline",
-      result: { hash: "0xlocal-hash" },
-    });
-    expect(fallback).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not fall back on policy rejection (403)", async () => {
-    const { StewardApiError } = await import("@stwd/sdk");
-    const policyError = new StewardApiError("Policy rejected", 403);
-    mockSignTransaction.mockRejectedValueOnce(policyError);
-    const fallback = vi.fn().mockResolvedValue({ hash: "0xlocal-hash" });
+    const err = new StewardApiError("Steward offline", 503);
+    mockSignTransaction.mockRejectedValueOnce(err);
 
     await expect(
       signTransactionWithOptionalSteward({
@@ -183,41 +152,50 @@ describe("steward bridge", () => {
           value: "0",
           chainId: 56,
         },
-        fallback,
       }),
-    ).rejects.toBe(policyError);
-
-    expect(fallback).not.toHaveBeenCalled();
+    ).rejects.toBe(err);
   });
 
-  it("still falls back on non-policy Steward errors", async () => {
+  it("throws on policy rejection (403)", async () => {
     const { StewardApiError } = await import("@stwd/sdk");
-    mockSignTransaction.mockRejectedValueOnce(
-      new StewardApiError("Unknown agent", 404),
-    );
-    const fallback = vi.fn().mockResolvedValue({ hash: "0xlocal-hash" });
+    const policyError = new StewardApiError("Policy rejected", 403);
+    mockSignTransaction.mockRejectedValueOnce(policyError);
 
-    const result = await signTransactionWithOptionalSteward({
-      env: {
-        STEWARD_API_URL: "https://steward.example",
-        STEWARD_AGENT_ID: "agent-1",
-      } as NodeJS.ProcessEnv,
-      evmAddress: "0x123",
-      tx: {
-        to: "0x000000000000000000000000000000000000dead",
-        value: "0",
-        chainId: 56,
-      },
-      fallback,
-    });
+    await expect(
+      signTransactionWithOptionalSteward({
+        env: {
+          STEWARD_API_URL: "https://steward.example",
+          STEWARD_AGENT_ID: "agent-1",
+        } as NodeJS.ProcessEnv,
+        evmAddress: "0x123",
+        tx: {
+          to: "0x000000000000000000000000000000000000dead",
+          value: "0",
+          chainId: 56,
+        },
+      }),
+    ).rejects.toBe(policyError);
+  });
 
-    expect(result).toMatchObject({
-      mode: "local",
-      fallbackUsed: true,
-      stewardError: "Unknown agent",
-      result: { hash: "0xlocal-hash" },
-    });
-    expect(fallback).toHaveBeenCalledTimes(1);
+  it("throws on non-policy Steward errors (404)", async () => {
+    const { StewardApiError } = await import("@stwd/sdk");
+    const err = new StewardApiError("Unknown agent", 404);
+    mockSignTransaction.mockRejectedValueOnce(err);
+
+    await expect(
+      signTransactionWithOptionalSteward({
+        env: {
+          STEWARD_API_URL: "https://steward.example",
+          STEWARD_AGENT_ID: "agent-1",
+        } as NodeJS.ProcessEnv,
+        evmAddress: "0x123",
+        tx: {
+          to: "0x000000000000000000000000000000000000dead",
+          value: "0",
+          chainId: 56,
+        },
+      }),
+    ).rejects.toBe(err);
   });
 
   it("serves the steward status endpoint", async () => {
@@ -288,30 +266,23 @@ describe("steward bridge", () => {
     ).toBeUndefined();
   });
 
-  it("logs a warning when falling back to local signing", async () => {
+  it("throws on connection refused (status 0)", async () => {
     const { StewardApiError } = await import("@stwd/sdk");
-    mockSignTransaction.mockRejectedValueOnce(
-      new StewardApiError("Connection refused", 0),
-    );
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const fallback = vi.fn().mockResolvedValue({ hash: "0xlocal" });
+    const err = new StewardApiError("Connection refused", 0);
+    mockSignTransaction.mockRejectedValueOnce(err);
 
-    await signTransactionWithOptionalSteward({
-      env: {
-        STEWARD_API_URL: "https://steward.example",
-        STEWARD_AGENT_ID: "agent-1",
-      } as NodeJS.ProcessEnv,
-      tx: {
-        to: "0x000000000000000000000000000000000000dead",
-        value: "0",
-        chainId: 1,
-      },
-      fallback,
-    });
-
-    expect(warnSpy).toHaveBeenCalledWith(
-      "[steward-bridge] Steward unreachable, falling back to local signing",
-    );
-    warnSpy.mockRestore();
+    await expect(
+      signTransactionWithOptionalSteward({
+        env: {
+          STEWARD_API_URL: "https://steward.example",
+          STEWARD_AGENT_ID: "agent-1",
+        } as NodeJS.ProcessEnv,
+        tx: {
+          to: "0x000000000000000000000000000000000000dead",
+          value: "0",
+          chainId: 1,
+        },
+      }),
+    ).rejects.toBe(err);
   });
 });

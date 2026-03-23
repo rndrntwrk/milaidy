@@ -12,7 +12,7 @@ function createRuntime(name = "Eliza"): AgentRuntime {
     character: { name },
     plugins: [{ name: "openai-main" }],
     stop: vi.fn(async () => undefined),
-  } as unknown as unknown as AgentRuntime;
+  } as unknown as AgentRuntime;
 }
 
 describe("agent admin routes", () => {

@@ -1,8 +1,4 @@
-/**
- * Character action helpers — extracted from AppContext.
- *
- * Pure functions for character CRUD and draft management.
- */
+/** Character action helpers — CRUD and draft management. */
 
 import type { CharacterData, MiladyClient } from "../api/client";
 

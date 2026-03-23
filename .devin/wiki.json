@@ -10,7 +10,7 @@
       "purpose": "Introduce Milady AI, its purpose as a personal AI assistant powered by elizaOS, and provide a high-level overview of the system architecture, supported platforms, and core capabilities",
       "page_notes": [
         {
-          "content": "Cover: what Milady is (elizaOS-powered personal AI), privacy-first local execution, supported platforms (Desktop, Mobile, Chrome Extension, Web, TUI, CLI), key capabilities (chat, plugins, wallet, knowledge, autonomy, connectors). Include a system architecture diagram showing: CLI/Desktop/Web → API Server (port 2138) → elizaOS AgentRuntime → Plugins/Providers/Connectors. Mention the tech stack: TypeScript, Bun, Electron, Capacitor, React/Vite for UI."
+          "content": "Cover: what Milady is (elizaOS-powered personal AI), privacy-first local execution, supported platforms (Desktop, Mobile, Chrome Extension, Web, CLI), key capabilities (chat, plugins, wallet, knowledge, autonomy, connectors). Include a system architecture diagram showing: CLI/Desktop/Web → API Server (port 2138) → elizaOS AgentRuntime → Plugins/Providers/Connectors. Mention the tech stack: TypeScript, Bun, Electron, Capacitor, React/Vite for UI."
         }
       ]
     },
@@ -73,12 +73,12 @@
       ]
     },
     {
-      "title": "Terminal UI & CLI Reference",
-      "purpose": "Using the terminal-based UI and complete reference for all CLI commands, flags, and usage patterns",
+      "title": "CLI Reference",
+      "purpose": "Complete reference for all CLI commands, flags, and usage patterns",
       "parent": "User Guide",
       "page_notes": [
         {
-          "content": "TUI: `milady tui` command, live activity feed, keyboard shortcuts/hotkeys, terminal styling, bridge to elizaOS TUI. Reference `src/tui/` and `src/terminal/`. CLI commands from `src/cli/`: `milady start` (aliases: `milady`), `milady setup`, `milady configure`, `milady config get/set`, `milady models`, `milady plugins list/add/remove`, `milady dashboard`, `milady doctor`, `milady tui`. For each: syntax, flags, examples, common use cases."
+          "content": "CLI commands from `src/cli/`: `milady start` (aliases: `milady`), `milady setup`, `milady configure`, `milady config get/set`, `milady models`, `milady plugins list/add/remove`, `milady dashboard`, `milady doctor`. For each: syntax, flags, examples, common use cases."
         }
       ]
     },

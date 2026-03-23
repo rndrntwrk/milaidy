@@ -11,6 +11,7 @@ import {
   type TrajectoryLlmCall,
 } from "@miladyai/app-core/api";
 import { useApp } from "@miladyai/app-core/state";
+import { Button } from "@miladyai/ui";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -82,9 +83,9 @@ function CodeBlock({ content, label }: { content: string; label: string }) {
             {lines} {t("trajectorydetailview.lines")}
           </span>
           {lines > 20 && (
-            <button
-              type="button"
-              className="text-[10px] text-txt hover:underline"
+            <Button
+              variant="link"
+              className="h-auto p-0 text-[10px] text-txt"
               onClick={() => setExpanded(!expanded)}
             >
               {expanded
@@ -92,18 +93,18 @@ function CodeBlock({ content, label }: { content: string; label: string }) {
                     defaultValue: "Collapse",
                   })
                 : t("trajectorydetailview.Expand", { defaultValue: "Expand" })}
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            className="text-[10px] text-muted hover:text-txt"
+          <Button
+            variant="ghost"
+            className="h-auto p-0 text-[10px] text-muted hover:text-txt"
             onClick={() => {
               void copyToClipboard(content);
             }}
             title={t("trajectorydetailview.CopyToClipboard")}
           >
             {t("trajectorydetailview.Copy")}
-          </button>
+          </Button>
         </div>
       </div>
       <pre className="text-xs p-2 overflow-x-auto whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto">
@@ -176,9 +177,9 @@ function LlmCallCard({
       {/* System prompt toggle */}
       {call.systemPrompt && (
         <div className="border-b border-border">
-          <button
-            type="button"
-            className="w-full text-left px-3 py-1.5 text-[10px] text-muted hover:bg-muted/5"
+          <Button
+            variant="ghost"
+            className="w-full justify-start px-3 py-1.5 h-auto text-[10px] text-muted rounded-none"
             onClick={() => setShowSystem(!showSystem)}
           >
             {showSystem ? (
@@ -189,7 +190,7 @@ function LlmCallCard({
             {t("trajectorydetailview.SystemPrompt")}
             {call.systemPrompt.length.toLocaleString()}{" "}
             {t("trajectorydetailview.chars")}
-          </button>
+          </Button>
           {showSystem && (
             <div className="p-2">
               <CodeBlock
@@ -266,13 +267,14 @@ export function TrajectoryDetailView({
       <div className="flex flex-col items-center justify-center h-full gap-3">
         <div className="text-danger text-sm">{error}</div>
         {onBack && (
-          <button
-            type="button"
-            className="text-xs px-3 py-1.5 border border-border bg-card hover:border-accent"
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs"
             onClick={onBack}
           >
             {t("trajectorydetailview.GoBack")}
-          </button>
+          </Button>
         )}
       </div>
     );
@@ -285,13 +287,14 @@ export function TrajectoryDetailView({
           {t("trajectorydetailview.TrajectoryNotFound")}
         </div>
         {onBack && (
-          <button
-            type="button"
-            className="text-xs px-3 py-1.5 border border-border bg-card hover:border-accent"
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs"
             onClick={onBack}
           >
             {t("trajectorydetailview.GoBack")}
-          </button>
+          </Button>
         )}
       </div>
     );
@@ -312,13 +315,14 @@ export function TrajectoryDetailView({
       {/* Header */}
       <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-border mb-3">
         {onBack && (
-          <button
-            type="button"
-            className="text-xs px-2 py-1 border border-border bg-card hover:border-accent"
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs px-2"
             onClick={onBack}
           >
             {t("onboarding.back")}
-          </button>
+          </Button>
         )}
         <h2 className="text-sm font-semibold">
           {t("trajectorydetailview.TrajectoryDetail")}

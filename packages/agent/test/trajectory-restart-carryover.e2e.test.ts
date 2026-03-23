@@ -2,6 +2,7 @@ import type { AgentRuntime } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startApiServer } from "../src/api/server";
 import { req } from "../../../test/helpers/http";
+import { type RawSqlQuery, sqlText, splitSqlTuple, parseSqlScalar } from "../../../test/helpers/sql";
 
 type JsonValue =
   | string
@@ -14,56 +15,6 @@ type JsonValue =
     };
 
 type JsonObject = Record<string, JsonValue>;
-
-type RawSqlQuery = {
-  queryChunks?: Array<{
-    value?: string[];
-  }>;
-};
-
-function sqlText(query: RawSqlQuery): string {
-  const chunks = query.queryChunks ?? [];
-  return chunks
-    .map((chunk) => (Array.isArray(chunk.value) ? chunk.value.join("") : ""))
-    .join("")
-    .trim();
-}
-
-function splitSqlTuple(valueList: string): string[] {
-  const values: string[] = [];
-  let current = "";
-  let inString = false;
-  for (let i = 0; i < valueList.length; i += 1) {
-    const char = valueList[i];
-    if (char === "'") {
-      current += char;
-      if (inString && valueList[i + 1] === "'") {
-        current += "'";
-        i += 1;
-        continue;
-      }
-      inString = !inString;
-      continue;
-    }
-    if (char === "," && !inString) {
-      values.push(current.trim());
-      current = "";
-      continue;
-    }
-    current += char;
-  }
-  if (current.trim().length > 0) values.push(current.trim());
-  return values;
-}
-
-function parseSqlScalar(token: string): string | number | null {
-  if (token.toUpperCase() === "NULL") return null;
-  if (token.startsWith("'") && token.endsWith("'")) {
-    return token.slice(1, -1).replace(/''/g, "'");
-  }
-  const asNumber = Number(token);
-  return Number.isFinite(asNumber) ? asNumber : token;
-}
 
 class InMemoryTrajectoryDb {
   private rows = new Map<string, Record<string, unknown>>();

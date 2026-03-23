@@ -55,7 +55,6 @@ try {
   // React not available — skip deduplication patch (e.g. CI without react)
 }
 
-// Ensure Vitest environment is properly set
 process.env.VITEST = "true";
 // Keep test output focused on failures; individual tests can override.
 process.env.LOG_LEVEL ??= "error";
@@ -102,7 +101,7 @@ const sharedSessionStorage = ensureStorage(
 installCanvasMocks();
 
 if (typeof globalThis.window !== "undefined") {
-  const win = globalThis.window as unknown as Record<string, unknown>;
+  const win = globalThis.window as Record<string, unknown>;
   ensureStorage(win, "localStorage", sharedLocalStorage);
   ensureStorage(win, "sessionStorage", sharedSessionStorage);
 }

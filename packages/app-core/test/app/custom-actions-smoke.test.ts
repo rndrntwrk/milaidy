@@ -4,6 +4,7 @@ import type { CustomActionDef } from "@miladyai/app-core/api";
 import React, { useEffect, useState } from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { text, findButtonByText, flush } from "../../../../test/helpers/react-test";
 
 const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
   mockClient: {
@@ -98,29 +99,6 @@ function createContext(
   };
 }
 
-function text(node: TestRenderer.ReactTestInstance): string {
-  return node.children
-    .map((child: TestRenderer.ReactTestInstance | string) =>
-      typeof child === "string"
-        ? child
-        : text(child as TestRenderer.ReactTestInstance),
-    )
-    .join("")
-    .trim();
-}
-
-function findButtonByText(
-  root: TestRenderer.ReactTestRenderer,
-  label: string,
-): TestRenderer.ReactTestInstance {
-  const found = root.root.findAll(
-    (n: TestRenderer.ReactTestInstance) =>
-      n.type === "button" && text(n) === label,
-  );
-  expect(found.length).toBeGreaterThan(0);
-  return found[0];
-}
-
 function findInputByPlaceholder(
   root: TestRenderer.ReactTestRenderer,
   placeholder: string,
@@ -133,13 +111,6 @@ function findInputByPlaceholder(
   );
   expect(found.length).toBeGreaterThan(0);
   return found[0];
-}
-
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-  });
 }
 
 import { ChatView } from "@miladyai/app-core/components/ChatView";
@@ -305,7 +276,7 @@ describe("custom actions smoke flow", () => {
     expect(title.length).toBe(1);
 
     const createButton = findButtonByText(
-      tree,
+      tree.root,
       "customactionspanel.NewCustomAction",
     );
     await act(async () => {
@@ -330,7 +301,7 @@ describe("custom actions smoke flow", () => {
     });
     await flush();
 
-    const generateButton = findButtonByText(tree, "Generate");
+    const generateButton = findButtonByText(tree.root, "Generate");
     await act(async () => {
       generateButton.props.onClick();
     });
@@ -353,7 +324,7 @@ describe("custom actions smoke flow", () => {
     )[0];
     expect(descriptionArea.props.value).toBe("Checks if a URL responds.");
 
-    const saveButton = findButtonByText(tree, "Save");
+    const saveButton = findButtonByText(tree.root, "Save");
     await act(async () => {
       saveButton.props.onClick();
     });

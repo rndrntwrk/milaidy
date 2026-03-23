@@ -1,10 +1,6 @@
-/**
- * SubscriptionStatus — Anthropic and OpenAI subscription connection panels.
- *
- * Extracted from SettingsView.tsx for decomposition (P2 §10).
- */
+/** SubscriptionStatus — Anthropic and OpenAI subscription connection panels. */
 
-import { Button, Input } from "@miladyai/ui";
+import { Button, Input, Label } from "@miladyai/ui";
 import { useCallback, useRef, useState } from "react";
 import { client } from "../api";
 import { useTimeout } from "../hooks";
@@ -394,12 +390,12 @@ export function SubscriptionStatus({
 
           {subscriptionTab === "token" ? (
             <div>
-              <label
+              <Label
                 htmlFor="subscription-setup-token-input"
                 className="text-xs font-semibold mb-1.5 block"
               >
                 {t("onboarding.setupToken")}
-              </label>
+              </Label>
               <Input
                 id="subscription-setup-token-input"
                 type="password"

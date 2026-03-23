@@ -1,7 +1,5 @@
 /**
  * Shared HTTP helper for e2e tests.
- *
- * Replaces the `req()` function that was copy-pasted across 24+ e2e test files.
  */
 
 import http from "node:http";
@@ -14,9 +12,6 @@ export type HttpResponse = {
 
 /**
  * Make an HTTP request to a local test server.
- *
- * Superset of all the `req()` variants that were duplicated across e2e tests.
- * Supports optional body (object or string), custom headers, and content type.
  */
 export function req(
   port: number,

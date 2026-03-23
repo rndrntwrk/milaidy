@@ -2,22 +2,14 @@ import {
   normalizeOnboardingProviderId,
   ONBOARDING_PROVIDER_CATALOG,
 } from "@elizaos/agent/contracts/onboarding";
-import type { client as appClient } from "@miladyai/app-core/api";
+import type {
+  CloudPreferenceClientLike as ClientLike,
+  CloudPreferencePatchState as PatchState,
+} from "./types";
 
 const PATCH_STATE = Symbol.for("milady.cloudPreferencePatch");
 
-type ClientLike = Pick<typeof appClient, "getCloudStatus" | "getConfig"> & {
-  getCloudCredits?: typeof appClient.getCloudCredits;
-  [key: string | symbol]: unknown;
-};
-
 type StorageConfig = Record<string, unknown>;
-
-type PatchState = {
-  getConfig: ClientLike["getConfig"];
-  getCloudStatus: ClientLike["getCloudStatus"];
-  getCloudCredits?: ClientLike["getCloudCredits"];
-};
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)

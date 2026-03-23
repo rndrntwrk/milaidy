@@ -100,12 +100,9 @@ export interface WalletState {
   mintResult: MintResult | null;
   mintError: string | null;
   mintShiny: boolean;
-  // Whitelist (dead state — setters unused, but kept for type compat)
+  // Whitelist
   whitelistStatus: WhitelistStatus | null;
   whitelistLoading: boolean;
-  twitterVerifyMessage: string | null;
-  twitterVerifyUrl: string;
-  twitterVerifying: boolean;
 }
 
 const INITIAL_WALLET: WalletState = {
@@ -134,9 +131,6 @@ const INITIAL_WALLET: WalletState = {
   mintShiny: false,
   whitelistStatus: null,
   whitelistLoading: false,
-  twitterVerifyMessage: null,
-  twitterVerifyUrl: "",
-  twitterVerifying: false,
 };
 
 export function useWalletState() {

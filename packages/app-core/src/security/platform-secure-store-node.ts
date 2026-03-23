@@ -1,6 +1,9 @@
 import { execFile, spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import { promisify } from "node:util";
 
+import { isEnvDisabled } from "../utils/env";
 import {
   keychainAccountForSecretKind,
   MILADY_AGENT_VAULT_SERVICE,
@@ -55,17 +58,24 @@ function secretToolStoreWithStdin(
   });
 }
 
+/**
+ * Check if `secret-tool` is available on PATH without spawning a shell.
+ * Iterates PATH entries directly and checks for the executable.
+ */
 async function secretToolOnPath(): Promise<boolean> {
   if (process.platform === "win32") return false;
-  try {
-    await execFileAsync("sh", [
-      "-c",
-      "command -v secret-tool >/dev/null 2>&1",
-    ]);
-    return true;
-  } catch {
-    return false;
+  const pathEnv = process.env.PATH ?? "";
+  for (const dir of pathEnv.split(path.delimiter)) {
+    if (!dir) continue;
+    const candidate = path.join(dir, "secret-tool");
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return true;
+    } catch {
+      // not in this dir
+    }
   }
+  return false;
 }
 
 function macErrReason(stderr: string, code: number | null): SecureStoreGetResult {
@@ -134,6 +144,13 @@ class MacOSKeychainPlatformSecureStore implements PlatformSecureStore {
   ): Promise<SecureStoreSetResult> {
     const account = keychainAccountForSecretKind(vaultId, kind);
     try {
+      // KNOWN LIMITATION: macOS `security add-generic-password` only accepts the
+      // password via `-w <value>` argv — briefly visible to same-user processes
+      // via `ps`. The Linux path uses stdin (secretToolStoreWithStdin). This is
+      // still a net improvement over plaintext keys in ~/.eliza/eliza.json.
+      //
+      // TODO: Replace with Security.framework via Bun FFI or a Swift helper
+      // binary to eliminate argv exposure entirely. Track: milady-ai/milady#TBD
       await execFileAsync(
         "security",
         [
@@ -292,14 +309,13 @@ export function createNodePlatformSecureStore(): PlatformSecureStore {
   return new NonePlatformSecureStore();
 }
 
-/** Opt out: `MILADY_WALLET_OS_STORE=0` / `false` / `off`. */
+/**
+ * Opt in: `MILADY_WALLET_OS_STORE=1` / `true` / `on` / `yes`.
+ *
+ * Defaults to **off** until the macOS argv exposure is resolved via
+ * Security.framework / Bun FFI. Users who accept the risk can enable
+ * explicitly.
+ */
 export function isWalletOsStoreReadEnabled(): boolean {
-  const raw = process.env.MILADY_WALLET_OS_STORE?.trim().toLowerCase();
-  if (!raw) return true;
-  return !(
-    raw === "0" ||
-    raw === "false" ||
-    raw === "off" ||
-    raw === "no"
-  );
+  return !isEnvDisabled(process.env.MILADY_WALLET_OS_STORE);
 }

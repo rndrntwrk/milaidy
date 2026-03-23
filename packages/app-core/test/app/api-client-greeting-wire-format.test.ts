@@ -1,4 +1,4 @@
-import { ElizaClient } from "@miladyai/app-core/api";
+import { MiladyClient } from "@miladyai/app-core/api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 describe("createConversation greeting wire format", () => {
@@ -39,7 +39,7 @@ describe("createConversation greeting wire format", () => {
       configurable: true,
     });
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     await client.createConversation(undefined, {
       includeGreeting: true,
       lang: "en",
@@ -75,7 +75,7 @@ describe("createConversation greeting wire format", () => {
       configurable: true,
     });
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     await client.createConversation("My Chat");
 
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -113,7 +113,7 @@ describe("createConversation greeting wire format", () => {
       configurable: true,
     });
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     const result = await client.createConversation(undefined, {
       includeGreeting: true,
     });

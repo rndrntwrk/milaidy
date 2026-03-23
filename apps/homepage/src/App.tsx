@@ -1,9 +1,6 @@
-import { Comparison } from "./components/Comparison";
 import { DownloadIcons } from "./components/DownloadIcons";
-import { Features } from "./components/Features";
 import { Footer } from "./components/Footer";
 import { HeroBackground, HeroInstallDock } from "./components/Hero";
-import { Privacy } from "./components/Privacy";
 
 export function Homepage() {
   return (
@@ -33,13 +30,6 @@ export function Homepage() {
             </div>
           </div>
         </section>
-
-        <main className="relative z-30 pointer-events-auto bg-dark">
-          <Privacy />
-          <Features />
-          <Comparison />
-        </main>
-
         <footer className="relative z-30 pointer-events-auto bg-dark">
           <Footer />
         </footer>

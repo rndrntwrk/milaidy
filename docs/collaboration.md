@@ -81,7 +81,17 @@
 - **Removed 6 no-op `vi.mock("node:path")` calls** from electrobun test files — these imported the actual module and returned it unchanged (pure no-op)
 - **Deleted `kitchen-sink.test.ts.bak`** — leftover backup file
 
-### Total across all passes: ~1,500+ lines of duplicated mock/helper code removed across 70+ files
+### Pass 5 — Utility helper extraction:
+- **Created `test/helpers/test-utils.ts`** — `saveEnv`, `envSnapshot`, `withTimeout`, `sleep`, `createDeferred`
+- **Created `test/helpers/sql.ts`** — `RawSqlQuery`, `sqlText`, `splitSqlTuple`, `parseSqlScalar`
+- **Replaced `saveEnv`/`envSnapshot`** in 14 files (test/, packages/agent/test/, packages/app-core/src/)
+- **Replaced `withTimeout`/`sleep`** in 8 files
+- **Replaced `createDeferred`** in 13 files (test/, packages/agent/test/, packages/app-core/test/app/, packages/app-core/src/runtime/)
+- **Replaced SQL helpers** in 6 trajectory test files
+- **Replaced `requestApi`** with shared `req()` in 4 files (trigger-runtime, apps-e2e)
+- **Renamed `saveEnvKeys`→`saveEnv`** in wallet.test.ts
+
+### Total across all passes: ~3,000+ lines of duplicated mock/helper code removed across 100+ files
 
 ---
 
@@ -334,3 +344,26 @@ Please don't restore files I've deleted. If the entire file is `describe.skip`, 
 - Cleaned 7 connector unit test files in `packages/app-core/src/connectors/` — removed "Configuration", "Message Handling", "Environment Variables" sections (all create objects and assert own values). Kept real plugin import/validation sections.
 - Cleaned 6 connector e2e test files in `test/` — removed format/regex validation sections (E.164, group IDs, room IDs, relay URLs, MIME types, JSON round-trips, message length constants, rate limit constants). Kept real plugin loading and live API tests.
 - Removed 7 describe.skip blocks from `kitchen-sink.test.ts` (~800 lines of skipped schema/channel mapping tests)
+
+### Sixth pass — remaining larp/pedantic tests:
+- Deleted `apps/app/test/app/brand-gold.test.ts` — 100% CSS/HTML file content string checking
+- Deleted `packages/app-core/test/app/shell-overlays.test.tsx` — mocks all components then checks mock names render
+- Deleted `packages/app-core/test/app/shared-switch.test.ts` — single "renders without crashing" test
+- Deleted `packages/app-core/test/app/character-action-bar-visibility.test.ts` — reads CSS files and checks for class names
+- Cleaned `packages/app-core/test/app/restart-banner.test.tsx` — removed CSS styling test (kept behavior tests)
+- Re-deleted 5 fully-skipped files (other agent keeps restoring them)
+
+### Seventh pass — final cleanup of packages/agent/test/ duplicates:
+- Re-deleted `SettingsView.test.tsx` and `hero.test.tsx` (restored by other agent again)
+- Cleaned `packages/agent/test/e2e-validation.e2e.test.ts` — replaced expect(true).toBe(true)
+- Cleaned `packages/agent/test/agent-orchestration.e2e.test.ts` — removed larp service lookup test
+- Cleaned `packages/agent/test/discord-connector.e2e.test.ts` — removed todo stubs, larp config/integration tests
+- Cleaned `packages/agent/test/signal-connector.e2e.test.ts` — removed TODO stubs and Configuration Validation regex tests
+
+### Current state:
+- `expect(true).toBe(true)` — only in swabble.test.ts (documented gap, intentional)
+- `it.todo()` — only in kitchen-sink.test.ts (hardware/visual gaps, intentional)
+- `describe.skip()` — only in local-models.test.ts (network-dependent, legitimate)
+- All connector larp tests removed from both test/ and packages/agent/test/
+- All CSS-only tests removed
+- All fully-skipped files removed

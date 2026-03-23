@@ -190,7 +190,6 @@
     "./services/app-manager": "./src/services/app-manager.ts",
     "./services/browser-capture": "./src/services/browser-capture.ts",
     "./services/coding-agent-context": "./src/services/coding-agent-context.ts",
-    "./services/fallback-training-service": "./src/services/fallback-training-service.ts",
     "./services/mcp-marketplace": "./src/services/mcp-marketplace.ts",
     "./services/plugin-manager-types": "./src/services/plugin-manager-types.ts",
     "./services/privy-wallets": "./src/services/privy-wallets.ts",

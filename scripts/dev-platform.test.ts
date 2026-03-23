@@ -10,8 +10,9 @@ describe("dev-platform.mjs", () => {
     const script = fs.readFileSync(SCRIPT_PATH, "utf8");
 
     expect(script).toContain(
-      "const apiPort = String(process.env.MILADY_API_PORT || 31337);",
+      "const preferredApi = Number(process.env.MILADY_API_PORT) || 31337;",
     );
+    expect(script).toContain("const apiPort = String(resolvedApiPort);");
     expect(script).toContain(
       "MILADY_DESKTOP_API_BASE: `http://127.0.0.1:$" + "{apiPort}`",
     );

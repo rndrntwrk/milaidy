@@ -28,6 +28,7 @@ import { AGENT_NAME_POOL } from "@miladyai/app-core/src/runtime/onboarding-names
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { req } from "./helpers/http";
+import { createDeferred } from "./helpers/test-utils";
 
 vi.mock("@miladyai/app-core/src/services/mcp-marketplace", () => ({
   searchMcpMarketplace: vi
@@ -207,13 +208,6 @@ function waitForWsMessage(
   });
 }
 
-function createDeferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  const promise = new Promise<T>((res) => {
-    resolve = res;
-  });
-  return { promise, resolve };
-}
 
 type TestAgentEvent = {
   runId: string;
@@ -1183,7 +1177,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat no longer proxies trajectory logger routing through deprecated fallback", async () => {
+    it("POST /api/chat does not proxy trajectory logger routing through deprecated fallback", async () => {
       const starts: Array<{ stepId: string }> = [];
       const ends: Array<{ stepId: string; status?: string }> = [];
       const persistentLlmCalls: Array<{ stepId: string; model?: string }> = [];
@@ -1519,7 +1513,7 @@ describe("API Server E2E (no runtime)", () => {
           query.count === 1 ? ([{ createdAt: restoredAt }] as never[]) : [],
         getCache: async () => null,
         setCache: async () => {},
-      } as unknown as unknown as AgentRuntime;
+      } as unknown as AgentRuntime;
 
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
@@ -1570,7 +1564,7 @@ describe("API Server E2E (no runtime)", () => {
           query.count === 1 ? ([{ createdAt: restoredAt }] as never[]) : [],
         getCache: async () => null,
         setCache: async () => {},
-      } as unknown as unknown as AgentRuntime;
+      } as unknown as AgentRuntime;
 
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
@@ -1872,7 +1866,7 @@ describe("API Server E2E (no runtime)", () => {
           "/api/conversations",
           {
             title: "Idempotent greeting test",
-            bootstrapGreeting: true,
+            includeGreeting: true,
             lang: "en",
           },
         );
@@ -3016,7 +3010,7 @@ describe("API Server E2E (no runtime)", () => {
         createTask: async () => crypto.randomUUID() as UUID,
         updateTask: async () => {},
         deleteTask: async () => {},
-      } as unknown as unknown as AgentRuntime;
+      } as unknown as AgentRuntime;
 
       const streamServer = await startApiServer({ port: 0, runtime });
       const streamPort = streamServer.port;

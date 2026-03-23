@@ -308,10 +308,7 @@ export function parseCustomActionParams(
   return { params, missingRequired };
 }
 
-/**
- * Plain-text variant of formatSearchBullet (uses `- ` bullets, no bold).
- * NOTE: A markdown variant exists in `../actions/chat-helpers.ts` (uses bold + `•` bullets).
- */
+/** Plain-text variant of formatSearchBullet (uses `- ` bullets, no bold). */
 export function formatSearchBullet(label: string, items: string[]): string {
   if (items.length === 0) return `${label}: none`;
   return `${label}:\n${items.map((item) => `- ${item}`).join("\n")}`;
@@ -336,10 +333,7 @@ export function asApiLikeError(err: unknown): ApiLikeError | null {
   };
 }
 
-/**
- * API-error-aware variant that extracts path/status/message from structured errors.
- * NOTE: A simpler variant exists in `../actions/lifecycle.ts` (handles plain Error/string only).
- */
+/** API-error-aware variant that extracts path/status/message from structured errors. */
 export function formatStartupErrorDetail(err: unknown): string | undefined {
   const apiErr = asApiLikeError(err);
   if (apiErr) {

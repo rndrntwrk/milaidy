@@ -1,6 +1,7 @@
 import { LanguageDropdown, ThemeToggle } from "@miladyai/app-core/components";
 import type { UiLanguage } from "@miladyai/app-core/i18n";
 import type { ShellView, UiTheme } from "@miladyai/app-core/state";
+import { Button } from "@miladyai/ui";
 import {
   type LucideIcon,
   MessageCirclePlus,
@@ -154,12 +155,12 @@ export function ShellHeaderControls({
                   ? "rounded-l-none rounded-r-xl"
                   : "rounded-none";
             return (
-              <button
+              <Button
                 key={view}
-                type="button"
+                size="icon"
                 onClick={() => onShellViewChange(view)}
                 onPointerDown={(event) => event.stopPropagation()}
-                className={`inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center px-3 transition-all duration-200 ${edgeClass} ${
+                className={`h-11 min-h-[44px] min-w-[44px] px-3 transition-all duration-200 ${edgeClass} ${
                   selected
                     ? "border border-[#d8a108]/30 bg-bg/55 text-[#8a6500] shadow-sm dark:border-accent/25 dark:bg-bg/85 dark:text-[#f0b232]"
                     : "border border-transparent bg-transparent text-muted-strong hover:border-border/70 hover:bg-bg/85 hover:text-txt dark:text-muted dark:hover:border-border/60 dark:hover:bg-bg-hover/80 dark:hover:text-txt"
@@ -171,7 +172,7 @@ export function ShellHeaderControls({
                 data-testid={`ui-shell-toggle-${view}`}
               >
                 <Icon className="pointer-events-none h-4 w-4" />
-              </button>
+              </Button>
             );
           })}
         </fieldset>
@@ -186,8 +187,9 @@ export function ShellHeaderControls({
             data-no-camera-drag="true"
           >
             <div className="inline-flex items-center gap-2">
-              <button
-                type="button"
+              <Button
+                size="icon"
+                variant="outline"
                 aria-label={
                   chatAgentVoiceMuted
                     ? t("companion.agentVoiceOff")
@@ -199,7 +201,7 @@ export function ShellHeaderControls({
                     ? t("companion.agentVoiceOff")
                     : t("companion.agentVoiceOn")
                 }
-                className={`${HEADER_ICON_BUTTON_CLASSNAME} sm:!w-auto sm:gap-1.5 sm:px-3.5`}
+                className="w-11 h-11 min-w-[44px] min-h-[44px] border-border/50 bg-bg/50 backdrop-blur-md text-sm leading-none hover:border-accent hover:text-txt font-medium hover:-translate-y-0.5 transition-all duration-300 hover:shadow-[0_0_15px_rgba(var(--accent),0.5)] active:scale-95 rounded-xl text-txt shadow-sm sm:!w-auto sm:gap-1.5 sm:px-3.5"
                 onClick={onToggleVoiceMute}
                 style={HEADER_BUTTON_STYLE}
               >
@@ -211,12 +213,13 @@ export function ShellHeaderControls({
                 <span className="pointer-events-none hidden sm:inline">
                   {t("companion.voiceToggle")}
                 </span>
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
                 aria-label={t("companion.newChat")}
                 title={t("companion.newChat")}
-                className={`${HEADER_ICON_BUTTON_CLASSNAME} sm:!w-auto sm:gap-1.5 sm:px-3.5`}
+                className="w-11 h-11 min-w-[44px] min-h-[44px] border-border/50 bg-bg/50 backdrop-blur-md text-sm leading-none hover:border-accent hover:text-txt font-medium hover:-translate-y-0.5 transition-all duration-300 hover:shadow-[0_0_15px_rgba(var(--accent),0.5)] active:scale-95 rounded-xl text-txt shadow-sm sm:!w-auto sm:gap-1.5 sm:px-3.5"
                 onClick={onNewChat}
                 style={HEADER_BUTTON_STYLE}
               >
@@ -224,7 +227,7 @@ export function ShellHeaderControls({
                 <span className="pointer-events-none hidden sm:inline">
                   {t("companion.newChatButton")}
                 </span>
-              </button>
+              </Button>
             </div>
           </div>
         ) : (

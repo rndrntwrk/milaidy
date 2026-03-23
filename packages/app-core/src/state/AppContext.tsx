@@ -670,7 +670,7 @@ function AppProviderInner({
     autonomousReplayInFlightRef,
   } = chatState;
   // Compat: old code sometimes used a separate chatAwaitingGreeting state
-  const [chatAwaitingGreeting, _setChatAwaitingGreeting] = useState(false);
+  const [chatAwaitingGreeting, setChatAwaitingGreeting] = useState(false);
   // addUnread / removeUnread wrappers for old setUnreadConversations patterns
   const setUnreadConversations = useCallback(
     (v: Set<string> | ((prev: Set<string>) => Set<string>)) => {
@@ -2093,9 +2093,9 @@ function AppProviderInner({
       setElizaCloudCreditsError(null);
     }
     lastElizaCloudPollConnectedRef.current = isConnected;
-    // Ensure the recurring poll interval is running whenever cloud is connected.
-    // This covers the case where cloud login happens after the initial mount poll
-    // (e.g. during onboarding) — without this the interval would never start.
+    // Self-manage the recurring poll interval: start when connected, stop when not.
+    // This covers login during onboarding (interval wasn't started at mount) and
+    // disconnect (interval should stop to avoid useless API calls).
     if (isConnected && !elizaCloudPollInterval.current) {
       elizaCloudPollInterval.current = window.setInterval(() => {
         if (
@@ -2106,6 +2106,9 @@ function AppProviderInner({
         }
         void pollCloudCredits();
       }, 60_000);
+    } else if (!isConnected && elizaCloudPollInterval.current) {
+      clearInterval(elizaCloudPollInterval.current);
+      elizaCloudPollInterval.current = null;
     }
     return isConnected;
   }, []);
@@ -2128,6 +2131,7 @@ function AppProviderInner({
         return false;
       }
       greetingInFlightConversationRef.current = convId;
+      setChatAwaitingGreeting(true);
       try {
         const data = await client.requestGreeting(convId, uiLanguage);
         if (data.text) {
@@ -2166,6 +2170,7 @@ function AppProviderInner({
         greetingFiredRef.current = false;
         /* greeting failed silently — user can still chat */
       } finally {
+        setChatAwaitingGreeting(false);
         if (greetingInFlightConversationRef.current === convId) {
           greetingInFlightConversationRef.current = null;
         }

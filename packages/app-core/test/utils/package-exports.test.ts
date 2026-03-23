@@ -42,7 +42,6 @@ describe("@miladyai/app-core package exports", () => {
     "./components",
     "./styles/base.css",
     "./styles/xterm.css",
-    "./styles/anime.css",
     "./styles/onboarding-game.css",
     "./styles/styles.css",
   ];

@@ -1,3 +1,4 @@
+import { Button } from "@miladyai/ui";
 import { useBranding } from "../config/branding";
 import type { StartupErrorState } from "../state";
 import { useApp } from "../state";
@@ -40,22 +41,15 @@ export function StartupFailureView({
         </pre>
       )}
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="px-4 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover"
-          onClick={onRetry}
-        >
+        <Button variant="default" size="sm" onClick={onRetry}>
           {t("startupfailureview.RetryStartup")}
-        </button>
+        </Button>
         {isBackendUnreachable && (
-          <a
-            href={branding.appUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="px-4 py-2 border border-border bg-card text-txt text-sm hover:border-accent hover:text-txt"
-          >
-            {t("startupfailureview.OpenApp")}
-          </a>
+          <Button variant="outline" size="sm" asChild>
+            <a href={branding.appUrl} target="_blank" rel="noreferrer">
+              {t("startupfailureview.OpenApp")}
+            </a>
+          </Button>
         )}
       </div>
     </div>

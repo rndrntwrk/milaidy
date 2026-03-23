@@ -1,8 +1,8 @@
 /**
- * E2E tests for restored OAuth flow modules.
+ * E2E tests for OAuth flow modules.
  *
  * Verifies that the auth modules import correctly and export
- * the expected functions/types after restoration from git history.
+ * the expected functions/types.
  */
 
 import { describe, expect, it } from "vitest";

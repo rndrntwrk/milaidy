@@ -1,5 +1,5 @@
 /**
- * Feishu Connector Validation Tests — GitHub Issue #155
+ * Feishu Connector Validation Tests
  *
  * Comprehensive E2E tests for validating the Feishu/Lark connector (@elizaos/plugin-feishu).
  *

@@ -23,7 +23,7 @@ import {
 } from "@miladyai/app-core/components";
 import { useApp } from "@miladyai/app-core/state";
 import { confirmDesktopAction } from "@miladyai/app-core/utils";
-import { Button, Checkbox, Input } from "@miladyai/ui";
+import { Button, Checkbox, Dialog, DialogContent, DialogHeader, DialogTitle, Input } from "@miladyai/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   isKnowledgeImageFile,
@@ -433,22 +433,14 @@ function DocumentDetailModal({
   }, [documentId]);
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-6 animate-in fade-in duration-200">
-      <div className="bg-card/90 border border-border/50 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden backdrop-blur-xl">
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-4xl max-h-[85vh] p-0 flex flex-col overflow-hidden rounded-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-border/30 bg-bg/20">
-          <h2 className="text-lg font-bold text-txt tracking-wide">
+        <DialogHeader className="p-5 border-b border-border/30 bg-bg/20">
+          <DialogTitle className="text-lg font-bold text-txt tracking-wide">
             {loading ? "Loading..." : doc?.filename || "Document"}
-          </h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="h-8 w-8 text-muted hover:bg-white/10 hover:text-txt rounded-full transition-all"
-          >
-            ✕
-          </Button>
-        </div>
+          </DialogTitle>
+        </DialogHeader>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
@@ -559,8 +551,8 @@ function DocumentDetailModal({
             </>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

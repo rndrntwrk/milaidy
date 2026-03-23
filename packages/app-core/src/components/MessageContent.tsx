@@ -79,7 +79,7 @@ const FENCED_JSON_RE = /```(?:json)?\s*\n([\s\S]*?)```/g;
  * metadata, not user-facing content.
  */
 const ACTION_XML_RE =
-  /\s*<actions>[\s\S]*?<\/actions>\s*|\s*<params>[\s\S]*?<\/params>\s*/g;
+  /\s*<actions>[\s\S]*?(?:<\/actions>|$)\s*|\s*<params>[\s\S]*?(?:<\/params>|$)\s*/g;
 const HIDDEN_XML_BLOCK_RE =
   /<(think|analysis|reasoning|scratchpad|tool_calls?|tools?)\b[^>]*>[\s\S]*?(?:<\/\1>|$)/gi;
 

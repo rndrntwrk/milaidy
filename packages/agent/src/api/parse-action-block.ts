@@ -1,8 +1,8 @@
 /**
  * Local stub for CoordinationLLMResponse — removed from
- * @elizaos/plugin-agent-orchestrator 2.x.  Matches the shape this file needs.
+ * @elizaos/plugin-agent-orchestrator 2.x.
  */
-interface CoordinationLLMResponse {
+export interface CoordinationLLMResponse {
   action: string;
   reasoning: string;
   response?: string;

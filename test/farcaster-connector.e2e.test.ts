@@ -1,5 +1,5 @@
 /**
- * Farcaster Connector Validation Tests — GitHub Issue #146
+ * Farcaster Connector Validation Tests
  *
  * Comprehensive E2E tests for validating the Farcaster connector (@elizaos/plugin-farcaster).
  *

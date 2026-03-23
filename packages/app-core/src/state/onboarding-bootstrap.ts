@@ -1,3 +1,4 @@
+import { asRecord, readString } from "./config-readers";
 import { deriveOnboardingResumeConnection } from "./onboarding-resume";
 import type { PersistedConnectionMode } from "./persistence";
 
@@ -18,24 +19,6 @@ export interface DetectedProviderCandidate {
 }
 
 const LOCAL_CONNECTION: PersistedConnectionMode = { runMode: "local" };
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function readString(
-  source: Record<string, unknown> | null | undefined,
-  key: string,
-): string | null {
-  const value = source?.[key];
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
 
 function hasPersistedExistingInstallConfig(
   config: Record<string, unknown> | null | undefined,

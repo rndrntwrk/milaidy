@@ -15,19 +15,7 @@
 import { startApiServer } from "@miladyai/app-core/src/api/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { req } from "./helpers/http";
-
-function saveEnv(...keys: string[]): { restore: () => void } {
-  const prev = new Map<string, string | undefined>();
-  for (const key of keys) prev.set(key, process.env[key]);
-  return {
-    restore: () => {
-      for (const [key, value] of prev) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-      }
-    },
-  };
-}
+import { saveEnv } from "./helpers/test-utils";
 
 // ---------------------------------------------------------------------------
 // Test suite

@@ -8,7 +8,7 @@
  *   - Test functionality
  */
 
-import { Button, Input } from "@miladyai/ui";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@miladyai/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   client,
@@ -177,25 +177,28 @@ export function DesktopTalkModePanel() {
 
   if (!desktopRuntime) {
     return (
-      <div className="rounded-xl border border-border bg-bg-muted px-3 py-3 text-xs text-muted">
-        Desktop talk mode controls are only available inside the Electrobun
-        runtime.
-      </div>
+      <Card className="bg-bg-muted">
+        <CardContent className="px-3 py-3 text-xs text-muted">
+          Desktop talk mode controls are only available inside the Electrobun
+          runtime.
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border bg-bg-muted px-3 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-xs font-semibold text-txt">
-            Desktop Talk Mode
+    <Card className="bg-bg-muted">
+      <CardHeader className="px-3 py-3 pb-0">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-xs">
+              Desktop Talk Mode
+            </CardTitle>
+            <CardDescription className="text-[10px]">
+              Native voice loop controls, speech output, and whisper diagnostics.
+            </CardDescription>
           </div>
-          <div className="text-[10px] text-muted">
-            Native voice loop controls, speech output, and whisper diagnostics.
-          </div>
-        </div>
-        <Button
+          <Button
           variant="outline"
           size="sm"
           onClick={() =>
@@ -209,8 +212,10 @@ export function DesktopTalkModePanel() {
         >
           Refresh
         </Button>
-      </div>
+        </div>
+      </CardHeader>
 
+      <CardContent className="flex flex-col gap-3 px-3 pb-3">
       {(error || message) && (
         <div
           className={`rounded-lg border px-2.5 py-2 text-[11px] ${
@@ -224,30 +229,38 @@ export function DesktopTalkModePanel() {
       )}
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-border bg-card px-2.5 py-2 text-[11px]">
-          <div className="text-[10px] text-muted">State</div>
-          <div className="font-semibold text-txt">{panelState.state}</div>
-        </div>
-        <div className="rounded-lg border border-border bg-card px-2.5 py-2 text-[11px]">
-          <div className="text-[10px] text-muted">Enabled</div>
-          <div className="font-semibold text-txt">
-            {panelState.enabled ? "Yes" : "No"}
-          </div>
-        </div>
-        <div className="rounded-lg border border-border bg-card px-2.5 py-2 text-[11px]">
-          <div className="text-[10px] text-muted">Speaking</div>
-          <div className="font-semibold text-txt">
-            {panelState.speaking ? "Yes" : "No"}
-          </div>
-        </div>
-        <div className="rounded-lg border border-border bg-card px-2.5 py-2 text-[11px]">
-          <div className="text-[10px] text-muted">Whisper</div>
-          <div className="font-semibold text-txt">
-            {panelState.whisperAvailable
-              ? panelState.whisperModel || "Available"
-              : "Unavailable"}
-          </div>
-        </div>
+        <Card className="shadow-none">
+          <CardContent className="px-2.5 py-2 text-[11px]">
+            <div className="text-[10px] text-muted">State</div>
+            <div className="font-semibold text-txt">{panelState.state}</div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-none">
+          <CardContent className="px-2.5 py-2 text-[11px]">
+            <div className="text-[10px] text-muted">Enabled</div>
+            <div className="font-semibold text-txt">
+              {panelState.enabled ? "Yes" : "No"}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-none">
+          <CardContent className="px-2.5 py-2 text-[11px]">
+            <div className="text-[10px] text-muted">Speaking</div>
+            <div className="font-semibold text-txt">
+              {panelState.speaking ? "Yes" : "No"}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-none">
+          <CardContent className="px-2.5 py-2 text-[11px]">
+            <div className="text-[10px] text-muted">Whisper</div>
+            <div className="font-semibold text-txt">
+              {panelState.whisperAvailable
+                ? panelState.whisperModel || "Available"
+                : "Unavailable"}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Input
@@ -333,7 +346,8 @@ export function DesktopTalkModePanel() {
           Stop Speaking
         </Button>
       </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 

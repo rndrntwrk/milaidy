@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import type { ManagedAgent } from "../../lib/AgentProvider";
 import type { AgentStatus } from "../../lib/cloud-api";
+import { formatUptime as formatUptimeShared } from "../../lib/format";
 import { openWebUI } from "../../lib/open-web-ui";
 import { ExportPanel } from "./ExportPanel";
 import { LogsPanel } from "./LogsPanel";
@@ -17,14 +18,7 @@ interface AgentDetailProps {
 }
 
 function formatUptime(seconds?: number): string {
-  if (!seconds) return "—";
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (d > 0) return `${d}d ${h}h ${m}m`;
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  return `${m}m ${s}s`;
+  return formatUptimeShared(seconds, true);
 }
 
 function formatDate(dateStr?: string): string {

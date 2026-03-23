@@ -90,7 +90,14 @@ export function CharacterRoster({
           <button
             key={entry.id}
             type="button"
-            className={`relative flex-[1_1_0] max-w-36 min-w-0 text-center transition-all duration-300 ease-out cursor-pointer border-none bg-none p-0 mx-[-5rem] opacity-[0.85] hover:opacity-100 max-[600px]:!mx-[-0.85rem] max-[600px]:!max-w-none max-[600px]:opacity-[0.65]${isSelected ? " opacity-100 z-10 max-[600px]:opacity-100" : ""}`}
+            className={`relative max-w-36 min-w-0 text-center transition-all duration-300 ease-out cursor-pointer appearance-none opacity-[0.85] hover:opacity-100 max-[600px]:!max-w-none max-[600px]:opacity-[0.65]${isSelected ? " opacity-100 z-10 max-[600px]:opacity-100" : ""}`}
+            style={{
+              flex: "1 1 0",
+              border: "none",
+              background: "none",
+              padding: 0,
+              margin: "0 -5rem",
+            }}
             onClick={() => onSelect(entry)}
             data-testid={`${testIdPrefix}-preset-${entry.id}`}
             aria-label={`${entry.name}${entry.catchphrase ? ` — ${entry.catchphrase}` : ""}`}

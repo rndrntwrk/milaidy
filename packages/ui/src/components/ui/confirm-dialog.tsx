@@ -2,13 +2,10 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { cn } from "../../lib/utils";
 
-/* ── Helpers ─────────────────────────────────────────────────────────── */
-
 function canPortalToBody(): boolean {
   return (
     typeof document !== "undefined" &&
     !!document.body &&
-    typeof document.body.appendChild === "function" &&
     !(globalThis as Record<string, unknown>).__TEST_RENDERER__
   );
 }
@@ -19,8 +16,6 @@ function renderModalPortal(content: React.ReactNode) {
   }
   return content;
 }
-
-/* ── ConfirmDialog ───────────────────────────────────────────────────── */
 
 export type ConfirmTone = "danger" | "warn" | "default";
 
@@ -114,8 +109,6 @@ export function ConfirmDialog({
 
   return renderModalPortal(content);
 }
-
-/* ── PromptDialog ────────────────────────────────────────────────────── */
 
 export interface PromptDialogProps {
   open: boolean;
@@ -218,8 +211,6 @@ export function PromptDialog({
   return renderModalPortal(content);
 }
 
-/* ── useConfirm hook ─────────────────────────────────────────────────── */
-
 export interface ConfirmOptions {
   title?: string;
   message: string;
@@ -264,8 +255,6 @@ export function useConfirm() {
 
   return { confirm, modalProps };
 }
-
-/* ── usePrompt hook ──────────────────────────────────────────────────── */
 
 export interface PromptOptions {
   title?: string;

@@ -2,50 +2,9 @@ import type { AgentRuntime } from "@elizaos/core";
 import { parsePositiveInteger } from "../utils/number-parsing";
 import type { RouteHelpers, RouteRequestContext } from "./route-helpers";
 import { detectAvailableBackends } from "./training-backend-check";
+import type { TrainingServiceLike } from "./training-service-like";
 
 export type TrainingRouteHelpers = RouteHelpers;
-
-interface TrainingServiceLike {
-  getStatus(): Record<string, unknown>;
-  listTrajectories(options: {
-    limit?: number;
-    offset?: number;
-  }): Promise<Record<string, unknown>>;
-  getTrajectoryById(
-    trajectoryId: string,
-  ): Promise<Record<string, unknown> | null>;
-  listDatasets(): Record<string, unknown>[];
-  buildDataset(options: {
-    limit?: number;
-    minLlmCallsPerTrajectory?: number;
-  }): Promise<Record<string, unknown>>;
-  listJobs(): Record<string, unknown>[];
-  startTrainingJob(options: {
-    datasetId?: string;
-    maxTrajectories?: number;
-    backend?: "mlx" | "cuda" | "cpu";
-    model?: string;
-    iterations?: number;
-    batchSize?: number;
-    learningRate?: number;
-  }): Promise<Record<string, unknown>>;
-  getJob(jobId: string): Record<string, unknown> | null;
-  cancelJob(jobId: string): Promise<Record<string, unknown>>;
-  listModels(): Record<string, unknown>[];
-  importModelToOllama(
-    modelId: string,
-    body: {
-      modelName?: string;
-      baseModel?: string;
-      ollamaUrl?: string;
-    },
-  ): Promise<Record<string, unknown>>;
-  activateModel(
-    modelId: string,
-    providerModel?: string,
-  ): Promise<Record<string, unknown>>;
-  benchmarkModel(modelId: string): Promise<Record<string, unknown>>;
-}
 
 export interface TrainingRouteContext extends RouteRequestContext {
   runtime: AgentRuntime | null;
@@ -202,7 +161,7 @@ export async function handleTrainingRoutes(
       });
       json(res, { job }, 201);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = String(err);
       error(res, message, 400);
     }
     return true;
@@ -227,7 +186,7 @@ export async function handleTrainingRoutes(
       const job = await trainingService.cancelJob(jobId);
       json(res, { job });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = String(err);
       error(res, message, 404);
     }
     return true;
@@ -269,7 +228,7 @@ export async function handleTrainingRoutes(
       const model = await trainingService.importModelToOllama(modelId, body);
       json(res, { model });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = String(err);
       error(res, message, 400);
     }
     return true;
@@ -289,7 +248,7 @@ export async function handleTrainingRoutes(
       );
       json(res, result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = String(err);
       error(res, message, 400);
     }
     return true;
@@ -304,7 +263,7 @@ export async function handleTrainingRoutes(
       const result = await trainingService.benchmarkModel(modelId);
       json(res, result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = String(err);
       error(res, message, 400);
     }
     return true;

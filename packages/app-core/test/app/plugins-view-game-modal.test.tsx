@@ -4,6 +4,7 @@ import type { PluginInfo } from "@miladyai/app-core/api";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { textOf as text } from "../../../../test/helpers/react-test";
 
 const mockUseApp = vi.fn();
 const mockOnWsEvent = vi.fn(() => () => {});
@@ -85,12 +86,6 @@ function hasClass(
 ): boolean {
   if (typeof node.props.className !== "string") return false;
   return node.props.className.split(/\s+/).includes(className);
-}
-
-function text(node: TestRenderer.ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : text(child)))
-    .join("");
 }
 
 function createPlugin(

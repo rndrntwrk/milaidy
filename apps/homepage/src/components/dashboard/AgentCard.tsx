@@ -1,5 +1,6 @@
 import type { AgentSource } from "../../lib/AgentProvider";
 import type { AgentStatus } from "../../lib/cloud-api";
+import { formatUptime } from "../../lib/format";
 
 interface AgentCardProps {
   agent: AgentStatus;
@@ -76,19 +77,10 @@ function getInitials(name: string): string {
 }
 
 const SOURCE_ICON: Record<string, string> = {
-  cloud: "☁",
-  local: "◉",
-  remote: "⬡",
+  cloud: "\u2601",
+  local: "\u25C9",
+  remote: "\u2B21",
 };
-
-function formatUptime(seconds?: number): string {
-  if (seconds == null) return "—";
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (d > 0) return `${d}d ${h}h`;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
 
 function formatRelativeTime(isoString?: string): string {
   if (!isoString) return "";
@@ -143,7 +135,7 @@ export function AgentCard({
           onSelect();
         }
       }}
-      className={`group relative cursor-pointer transition-all duration-200 
+      className={`group relative cursor-pointer transition-all duration-200
         ${
           selected ? "ring-1 ring-brand/50" : "hover:ring-1 hover:ring-border"
         }`}
@@ -211,18 +203,18 @@ export function AgentCard({
           <StatCell label="UPTIME" value={formatUptime(agent.uptime)} />
           <StatCell
             label="MEMORY"
-            value={agent.memories !== undefined ? String(agent.memories) : "—"}
+            value={agent.memories !== undefined ? String(agent.memories) : "\u2014"}
           />
           <StatCell
             label="HEARTBEAT"
-            value={formatRelativeTime(lastHeartbeat) || "—"}
+            value={formatRelativeTime(lastHeartbeat) || "\u2014"}
           />
           <StatCell
             label="COST"
             value={
               billing?.costPerHour !== undefined
                 ? `$${billing.costPerHour.toFixed(2)}`
-                : "—"
+                : "\u2014"
             }
             accent
           />
@@ -236,7 +228,7 @@ export function AgentCard({
               <ActionBtn
                 onClick={stopProp(onPlay)}
                 variant="success"
-                icon="▶"
+                icon="\u25B6"
                 label="Start"
               />
             )}
@@ -244,7 +236,7 @@ export function AgentCard({
               <ActionBtn
                 onClick={stopProp(onResume)}
                 variant="success"
-                icon="▶"
+                icon="\u25B6"
                 label="Resume"
               />
             )}
@@ -252,7 +244,7 @@ export function AgentCard({
               <ActionBtn
                 onClick={stopProp(onPause)}
                 variant="warn"
-                icon="⏸"
+                icon="\u23F8"
                 label="Pause"
               />
             )}
@@ -262,13 +254,13 @@ export function AgentCard({
                 <ActionBtn
                   onClick={stopProp(onStop)}
                   variant="danger"
-                  icon="■"
+                  icon="\u25A0"
                   label="Stop"
                 />
               )}
             {agent.state === "provisioning" && (
               <span className="text-[11px] font-mono text-brand animate-pulse px-2">
-                Starting…
+                Starting\u2026
               </span>
             )}
           </div>
@@ -284,7 +276,7 @@ export function AgentCard({
                   window.open(uiUrl, "_blank", "noopener,noreferrer");
                 }
               })}
-              className="flex items-center gap-1.5 px-3 py-1.5 
+              className="flex items-center gap-1.5 px-3 py-1.5
                 bg-brand text-dark font-mono text-[11px] font-semibold tracking-wide
                 hover:bg-brand-hover transition-colors"
             >
@@ -370,8 +362,8 @@ function ActionBtn({
       type="button"
       onClick={onClick}
       title={label}
-      className={`flex items-center gap-1.5 px-2.5 py-1.5 
-        font-mono text-[11px] font-medium border transition-all duration-150 
+      className={`flex items-center gap-1.5 px-2.5 py-1.5
+        font-mono text-[11px] font-medium border transition-all duration-150
         ${colors[variant]}`}
     >
       <span className="text-xs">{icon}</span>

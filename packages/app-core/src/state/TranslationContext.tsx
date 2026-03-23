@@ -61,12 +61,10 @@ export function TranslationProvider({
   useEffect(() => {
     saveUiLanguage(uiLanguage);
     if (
-      typeof (client as unknown as { setUiLanguage?: unknown })
-        .setUiLanguage === "function"
+      "setUiLanguage" in client &&
+      typeof client.setUiLanguage === "function"
     ) {
-      (
-        client as unknown as { setUiLanguage: (lang: string) => void }
-      ).setUiLanguage(uiLanguage);
+      (client.setUiLanguage as (lang: string) => void)(uiLanguage);
     }
   }, [uiLanguage]);
 

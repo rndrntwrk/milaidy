@@ -23,7 +23,7 @@ function runtimeWithCloudAuth(cloudAuth: unknown): AgentRuntime {
     getService: vi.fn((name: string) =>
       name === "CLOUD_AUTH" ? cloudAuth : null,
     ),
-  } as unknown as unknown as AgentRuntime;
+  } as unknown as AgentRuntime;
 }
 
 async function invoke(args: {

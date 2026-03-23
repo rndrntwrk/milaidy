@@ -392,9 +392,10 @@ export interface AppState {
   mintError: string | null;
   mintShiny: boolean;
 
-  // Whitelist
   whitelistStatus: WhitelistStatus | null;
   whitelistLoading: boolean;
+
+  // Twitter verification
   twitterVerifyMessage: string | null;
   twitterVerifyUrl: string;
   twitterVerifying: boolean;

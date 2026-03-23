@@ -44,10 +44,10 @@ describe("Runtime init debug", () => {
     });
 
     // Instrument key methods
-    const wrap = (obj: any, method: string, label: string) => {
+    const wrap = (obj: Record<string, ((...a: unknown[]) => unknown) | undefined>, method: string, label: string) => {
       const orig = obj[method]?.bind(obj);
       if (!orig) return;
-      obj[method] = async (...args: any[]) => {
+      obj[method] = async (...args: unknown[]) => {
         console.log(`[${elapsed()}] >>> ${label}`);
         const result = await orig(...args);
         console.log(`[${elapsed()}] <<< ${label}`);
@@ -79,8 +79,8 @@ describe("Runtime init debug", () => {
     try {
       await Promise.race([initPromise, timeoutPromise]);
       console.log(`[${elapsed()}] initialize() complete!`);
-    } catch (e: any) {
-      console.log(`[${elapsed()}] ERROR: ${e.message}`);
+    } catch (e: unknown) {
+      console.log(`[${elapsed()}] ERROR: ${(e as Error).message}`);
       throw e;
     }
 

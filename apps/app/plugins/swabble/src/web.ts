@@ -43,6 +43,11 @@ interface SpeechRecognitionResultList {
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
 
+interface SpeechRecognitionWindow {
+  SpeechRecognition?: SpeechRecognitionCtor;
+  webkitSpeechRecognition?: SpeechRecognitionCtor;
+}
+
 type ElectrobunRequestHandler = (params?: unknown) => Promise<unknown>;
 type ElectrobunMessageListener = (payload: unknown) => void;
 
@@ -103,10 +108,8 @@ function subscribeDesktopBridgeEvent(options: {
 }
 
 const getSpeechRecognition = (): SpeechRecognitionCtor | null =>
-  ((window as unknown as Record<string, unknown>)
-    .SpeechRecognition as SpeechRecognitionCtor) ||
-  ((window as unknown as Record<string, unknown>)
-    .webkitSpeechRecognition as SpeechRecognitionCtor) ||
+  (window as SpeechRecognitionWindow).SpeechRecognition ||
+  (window as SpeechRecognitionWindow).webkitSpeechRecognition ||
   null;
 
 /**

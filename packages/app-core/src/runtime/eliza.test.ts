@@ -48,6 +48,7 @@ vi.mock("@elizaos/plugin-trust", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
 vi.mock("@miladyai/plugin-wechat", () => ({ default: {} }));
 
+import { envSnapshot } from "../../../../test/helpers/test-utils";
 import { findPluginExport } from "../cli/plugins-cli";
 import type { ElizaConfig } from "../config/config";
 import { CONNECTOR_PLUGINS } from "../config/plugin-auto-enable";
@@ -90,34 +91,11 @@ const resolvePluginImportSpecifier:
   | ((name: string, url?: string) => string)
   | undefined =
   // biome-ignore lint/suspicious/noExplicitAny: dynamic export name
-  ((_elizaExports as any).resolveElizaPluginImportSpecifier ??
+  ((_elizaExports as Record<string, unknown>).resolveElizaPluginImportSpecifier ??
     // biome-ignore lint/suspicious/noExplicitAny: dynamic export name
-    (_elizaExports as any).resolveElizaPluginImportSpecifier) as
+    (_elizaExports as Record<string, unknown>).resolveElizaPluginImportSpecifier) as
     | ((name: string, url?: string) => string)
     | undefined;
-
-// ---------------------------------------------------------------------------
-// helpers
-// ---------------------------------------------------------------------------
-
-/** Save and restore a set of env keys around each test. */
-function envSnapshot(keys: string[]): {
-  save: () => void;
-  restore: () => void;
-} {
-  const saved = new Map<string, string | undefined>();
-  return {
-    save() {
-      for (const k of keys) saved.set(k, process.env[k]);
-    },
-    restore() {
-      for (const [k, v] of saved) {
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
-      }
-    },
-  };
-}
 
 // ---------------------------------------------------------------------------
 // collectPluginNames

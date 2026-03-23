@@ -1,35 +1,20 @@
 import type { AgentRuntime } from "@elizaos/core";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { ElizaConfig } from "../config/types";
-import { FallbackTrainingService } from "../services/fallback-training-service";
+import type { TrainingServiceLike } from "./training-service-like";
 import { createRouteInvoker } from "../test-support/route-test-helpers";
 import { handleTrainingRoutes } from "./training-routes";
 
-describe("training routes", () => {
-  let runtime: AgentRuntime | null;
-  let trainingService: FallbackTrainingService;
-
-  beforeEach(() => {
-    runtime = {
-      character: { name: "Eliza" },
-    } as unknown as unknown as AgentRuntime;
-
-    const config = {} as ElizaConfig;
-    trainingService = new FallbackTrainingService({
-      getRuntime: () => runtime,
-      getConfig: () => config,
-      setConfig: () => undefined,
-    });
-
-    vi.spyOn(trainingService, "getStatus").mockReturnValue({
+function createMockTrainingService(): TrainingServiceLike {
+  return {
+    getStatus: vi.fn().mockReturnValue({
       runningJobs: 0,
       queuedJobs: 0,
       completedJobs: 0,
       failedJobs: 0,
       modelCount: 0,
       datasetCount: 0,
-    });
-    vi.spyOn(trainingService, "listTrajectories").mockResolvedValue({
+    }),
+    listTrajectories: vi.fn().mockResolvedValue({
       available: true,
       total: 1,
       trajectories: [
@@ -46,8 +31,8 @@ describe("training routes", () => {
           llmCallCount: 2,
         },
       ],
-    });
-    vi.spyOn(trainingService, "getTrajectoryById").mockResolvedValue({
+    }),
+    getTrajectoryById: vi.fn().mockResolvedValue({
       id: "traj-row-1",
       trajectoryId: "trajectory-1",
       agentId: "agent-1",
@@ -60,8 +45,8 @@ describe("training routes", () => {
       llmCallCount: 2,
       stepsJson: "[]",
       aiJudgeReasoning: null,
-    });
-    vi.spyOn(trainingService, "buildDataset").mockResolvedValue({
+    }),
+    buildDataset: vi.fn().mockResolvedValue({
       id: "dataset-1",
       createdAt: new Date(0).toISOString(),
       jsonlPath: "/tmp/training-data.jsonl",
@@ -69,9 +54,9 @@ describe("training routes", () => {
       metadataPath: "/tmp/metadata.json",
       sampleCount: 10,
       trajectoryCount: 3,
-    });
-    vi.spyOn(trainingService, "listDatasets").mockReturnValue([]);
-    vi.spyOn(trainingService, "startTrainingJob").mockResolvedValue({
+    }),
+    listDatasets: vi.fn().mockReturnValue([]),
+    startTrainingJob: vi.fn().mockResolvedValue({
       id: "job-1",
       createdAt: new Date(0).toISOString(),
       startedAt: new Date(0).toISOString(),
@@ -92,14 +77,12 @@ describe("training routes", () => {
       adapterPath: null,
       modelId: null,
       logs: [],
-    });
-    vi.spyOn(trainingService, "listJobs").mockReturnValue([]);
-    vi.spyOn(trainingService, "getJob").mockReturnValue(null);
-    vi.spyOn(trainingService, "cancelJob").mockRejectedValue(
-      new Error("not found"),
-    );
-    vi.spyOn(trainingService, "listModels").mockReturnValue([]);
-    vi.spyOn(trainingService, "importModelToOllama").mockResolvedValue({
+    }),
+    listJobs: vi.fn().mockReturnValue([]),
+    getJob: vi.fn().mockReturnValue(null),
+    cancelJob: vi.fn().mockRejectedValue(new Error("not found")),
+    listModels: vi.fn().mockReturnValue([]),
+    importModelToOllama: vi.fn().mockResolvedValue({
       id: "model-1",
       createdAt: new Date(0).toISOString(),
       jobId: "job-1",
@@ -111,16 +94,29 @@ describe("training routes", () => {
       ollamaModel: "eliza-ft-model",
       active: false,
       benchmark: { status: "not_run", lastRunAt: null, output: null },
-    });
-    vi.spyOn(trainingService, "activateModel").mockResolvedValue({
+    }),
+    activateModel: vi.fn().mockResolvedValue({
       modelId: "model-1",
       providerModel: "ollama/eliza-ft-model",
       needsRestart: true,
-    });
-    vi.spyOn(trainingService, "benchmarkModel").mockResolvedValue({
+    }),
+    benchmarkModel: vi.fn().mockResolvedValue({
       status: "passed",
       output: "ok",
-    });
+    }),
+  };
+}
+
+describe("training routes", () => {
+  let runtime: AgentRuntime | null;
+  let trainingService: TrainingServiceLike;
+
+  beforeEach(() => {
+    runtime = {
+      character: { name: "Eliza" },
+    } as unknown as AgentRuntime;
+
+    trainingService = createMockTrainingService();
   });
 
   const invoke = createRouteInvoker<
@@ -179,7 +175,7 @@ describe("training routes", () => {
   });
 
   test("returns 404 when trajectory is missing", async () => {
-    vi.spyOn(trainingService, "getTrajectoryById").mockResolvedValueOnce(null);
+    vi.mocked(trainingService.getTrajectoryById).mockResolvedValueOnce(null);
     const result = await invoke({
       method: "GET",
       pathname: "/api/training/trajectories/trajectory-404",
@@ -224,7 +220,7 @@ describe("training routes", () => {
   });
 
   test("returns 400 when training job start fails", async () => {
-    vi.spyOn(trainingService, "startTrainingJob").mockRejectedValueOnce(
+    vi.mocked(trainingService.startTrainingJob).mockRejectedValueOnce(
       new Error("bad request"),
     );
     const result = await invoke({

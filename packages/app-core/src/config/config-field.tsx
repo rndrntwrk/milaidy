@@ -375,7 +375,7 @@ export function RenderSelectField(props: FieldRenderProps) {
       defaultValue={effectiveValue}
       disabled={props.readonly}
       onValueChange={(value) => {
-        props.onChange(value);
+        props.onChange(value === "__none__" ? "" : value);
         fireAction(props, "change");
         fireAction(props, "blur");
       }}
@@ -388,7 +388,7 @@ export function RenderSelectField(props: FieldRenderProps) {
       </SelectTrigger>
       <SelectContent>
         {!props.required && (
-          <SelectItem value="">
+          <SelectItem value="__none__">
             {t("config-field.None", { defaultValue: "None" })}
           </SelectItem>
         )}

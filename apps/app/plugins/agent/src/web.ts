@@ -1,6 +1,11 @@
 import { WebPlugin } from "@capacitor/core";
 import type { AgentPlugin, AgentStatus, ChatResult } from "./definitions";
 
+interface MiladyWindow extends Window {
+  __MILADY_API_BASE__?: string;
+  __MILADY_API_TOKEN__?: string;
+}
+
 /**
  * Web fallback implementation.
  *
@@ -17,7 +22,7 @@ export class AgentWeb extends WebPlugin implements AgentPlugin {
   private apiBase(): string {
     const global =
       typeof window !== "undefined"
-        ? (window as unknown as Record<string, unknown>).__MILADY_API_BASE__
+        ? (window as MiladyWindow).__MILADY_API_BASE__
         : undefined;
     if (typeof global === "string" && global.trim().length > 0) return global;
 
@@ -29,7 +34,7 @@ export class AgentWeb extends WebPlugin implements AgentPlugin {
   private apiToken(): string | null {
     const global =
       typeof window !== "undefined"
-        ? (window as unknown as Record<string, unknown>).__MILADY_API_TOKEN__
+        ? (window as MiladyWindow).__MILADY_API_TOKEN__
         : undefined;
     if (typeof global === "string" && global.trim()) return global.trim();
     if (typeof window === "undefined") return null;

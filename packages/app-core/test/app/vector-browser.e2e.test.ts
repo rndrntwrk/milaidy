@@ -367,6 +367,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   },
 }));
 
+import { flush } from "../../../../test/helpers/react-test";
 import { client } from "@miladyai/app-core/api";
 import { VectorBrowserView } from "@miladyai/app-core/components/VectorBrowserView";
 
@@ -387,15 +388,6 @@ function findButtonByText(
     (node) => node.type === "button" && nodeText(node) === label,
   );
   return matches[0] ?? null;
-}
-
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-  });
-  await act(async () => {
-    await Promise.resolve();
-  });
 }
 
 describe("VectorBrowserView Component", () => {

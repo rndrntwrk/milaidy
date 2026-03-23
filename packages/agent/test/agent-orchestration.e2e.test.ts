@@ -1474,13 +1474,6 @@ describe.skipIf(!hasModelProvider)(
       }
     }, 30_000);
 
-    it("orchestrator service is available on runtime", () => {
-      const _service = runtime?.getService("CODE_TASK");
-      // Service may or may not be available depending on plugin configuration
-      // This test verifies no crash during service lookup
-      expect(true).toBe(true);
-    });
-
     it("can create and track task through runtime", async () => {
       const service = runtime?.getService(
         "CODE_TASK",

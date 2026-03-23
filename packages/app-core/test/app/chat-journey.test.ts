@@ -121,16 +121,7 @@ vi.mock("@miladyai/app-core/api", () => ({
 }));
 
 import { AppProvider, useApp } from "@miladyai/app-core/state";
-
-function createDeferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
+import { createDeferred } from "../../../../test/helpers/test-utils";
 
 type ProbeApi = {
   setChatInput: (text: string) => void;
@@ -862,47 +853,62 @@ describe("chat journey", () => {
       });
     });
 
-    // TODO: init flow race condition — handleNewConversation from startup
-    // overrides explicit handleSelectConversation calls. Fix the init flow
-    // to not create a conversation when one is already being selected.
-    it.skip("switches conversations and loads messages for selected conversation", async () => {
-      // Return conversation-specific messages based on ID argument
-      mockClient.getConversationMessages.mockImplementation(
-        async (convId: string) => {
-          if (convId === "conv-1") {
-            return {
-              messages: [
-                {
-                  id: "msg-u1",
-                  role: "user",
-                  text: "user said something",
-                  timestamp: 1,
-                },
-                {
-                  id: "msg-1",
-                  role: "assistant",
-                  text: "hello from conv-1",
-                  timestamp: 2,
-                },
-              ],
-            };
-          }
-          if (convId === "conv-2") {
-            return {
-              messages: [
-                {
-                  id: "msg-2",
-                  role: "assistant",
-                  text: "hello from conv-2",
-                  timestamp: 3,
-                },
-              ],
-            };
-          }
-          return { messages: [] };
-        },
+
+      // The fallback should have called requestGreeting since inline was missing
+      expect(mockClient.requestGreeting).toHaveBeenCalledWith(
+        "conv-no-greeting",
+        "en",
       );
 
+      // Wait for the async fallback to populate messages
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const snapshot = api!.snapshot();
+      expect(snapshot.activeConversationId).toBe("conv-no-greeting");
+      expect(snapshot.conversationMessages).toEqual([
+        expect.objectContaining({
+          role: "assistant",
+          text: "hey there!",
+          source: "agent_greeting",
+        }),
+      ]);
+
+      await act(async () => {
+        tree!.unmount();
+      });
+    });
+
+    it("switches conversations and loads messages for selected conversation", async () => {
+      // First call returns conv-1 messages with a user message (prevents deletion)
+      mockClient.getConversationMessages
+        .mockResolvedValueOnce({
+          messages: [
+            {
+              id: "msg-u1",
+              role: "user",
+              text: "user said something",
+              timestamp: 1,
+            },
+            {
+              id: "msg-1",
+              role: "assistant",
+              text: "hello from conv-1",
+              timestamp: 2,
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          messages: [
+            {
+              id: "msg-2",
+              role: "assistant",
+              text: "hello from conv-2",
+              timestamp: 3,
+            },
+          ],
+        });
       let api: ProbeApi | null = null;
       let tree: TestRenderer.ReactTestRenderer;
 
@@ -922,37 +928,24 @@ describe("chat journey", () => {
 
       expect(api).not.toBeNull();
 
-      // Wait for any init-time async effects to settle
-      for (let i = 0; i < 5; i++) {
-        await act(async () => {
-          await Promise.resolve();
-        });
-      }
-
-      // Select conv-1 explicitly
       await act(async () => {
         await api!.handleSelectConversation("conv-1");
       });
 
-      // Allow post-select effects to flush
-      for (let i = 0; i < 5; i++) {
-        await act(async () => {
-          await Promise.resolve();
-        });
-      }
+      expect(api!.snapshot().activeConversationId).toBe("conv-1");
+      expect(api!.snapshot().conversationMessages[0].text).toBe(
+        "user said something",
+      );
 
-      // Verify conv-1 was loaded at some point
-      expect(mockClient.getConversationMessages).toHaveBeenCalledWith("conv-1");
-
-      // Now switch to conv-2
       await act(async () => {
         await api!.handleSelectConversation("conv-2");
       });
 
+      expect(api!.snapshot().activeConversationId).toBe("conv-2");
       expect(mockClient.getConversationMessages).toHaveBeenCalledWith("conv-2");
-      const snap2 = api!.snapshot();
-      expect(snap2.activeConversationId).toBe("conv-2");
-      expect(snap2.conversationMessages[0].text).toBe("hello from conv-2");
+      expect(api!.snapshot().conversationMessages[0].text).toBe(
+        "hello from conv-2",
+      );
 
       await act(async () => {
         tree!.unmount();

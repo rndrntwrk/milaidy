@@ -2,9 +2,6 @@
  * Security / auth helpers — WebSocket upgrade rejection, terminal run
  * rejection, MCP terminal authorization, API token binding, and
  * Hyperscape authorization header resolution.
- *
- * Extracted from `server.ts` for maintainability.  Re-exported from
- * `server.ts` so existing imports remain valid.
  */
 import type http from "node:http";
 import {

@@ -77,24 +77,15 @@ source ~/.zshrc
 Or set them inline when running Milady:
 
 ```bash
-ANTHROPIC_API_KEY="sk-ant-..." milady tui
+ANTHROPIC_API_KEY="sk-ant-..." milady start
 ```
 
 ## Selecting a Model at Runtime
 
-Use the `--model` flag with `milady tui` to override the active model for a session:
-
-```bash
-milady tui --model anthropic/claude-sonnet-4-20250514
-milady tui --model openai/gpt-4o
-milady tui --model google/gemini-2.0-flash
-```
-
-Inside the TUI, use the `/model` slash command or press `Ctrl+P` to open the model selector overlay.
+Use the `/model` slash command in the dashboard to switch models during a session.
 
 ## Related
 
 - [milady configure](/cli/configure) -- print provider key guidance to the terminal
-- [milady tui](/cli/tui) -- start the TUI with a model override flag
 - [Environment Variables](/cli/environment) -- complete environment variable reference
 - [Model Providers](/model-providers) -- detailed provider configuration and model IDs

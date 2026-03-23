@@ -1,19 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { startApiServer } from "../src/api/server";
 import { req } from "../../../test/helpers/http";
-
-function saveEnv(...keys: string[]): { restore: () => void } {
-  const prev = new Map<string, string | undefined>();
-  for (const key of keys) prev.set(key, process.env[key]);
-  return {
-    restore: () => {
-      for (const [key, value] of prev) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-      }
-    },
-  };
-}
+import { saveEnv } from "../../../test/helpers/test-utils";
 
 describe("Terminal run validation and limit guards", () => {
   const TEST_CLIENT_ID = "terminal-run-limits-e2e";

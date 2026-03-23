@@ -1,7 +1,7 @@
-import { ElizaClient } from "@miladyai/app-core/api";
+import { MiladyClient } from "@miladyai/app-core/api";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-describe("ElizaClient training endpoints", () => {
+describe("MiladyClient training endpoints", () => {
   const originalFetch = globalThis.fetch;
   let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -31,7 +31,7 @@ describe("ElizaClient training endpoints", () => {
   });
 
   test("calls training status and list endpoints", async () => {
-    const client = new ElizaClient("http://localhost:2138", "token");
+    const client = new MiladyClient("http://localhost:2138", "token");
 
     await client.getTrainingStatus();
     await client.listTrainingTrajectories({ limit: 25, offset: 10 });
@@ -50,7 +50,7 @@ describe("ElizaClient training endpoints", () => {
   });
 
   test("calls training mutation endpoints with expected methods and paths", async () => {
-    const client = new ElizaClient("http://localhost:2138", "token");
+    const client = new MiladyClient("http://localhost:2138", "token");
 
     await client.buildTrainingDataset({
       limit: 120,

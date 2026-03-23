@@ -382,32 +382,8 @@ export async function startBenchmarkServer() {
     }
   }
 
-  // const rawOllamaBaseUrl =
-  //   process.env.OLLAMA_BASE_URL?.trim() ??
-  //   process.env.OLLAMA_API_ENDPOINT?.trim();
-  // if (rawOllamaBaseUrl) {
-  //   const normalizedOllamaBaseUrl = rawOllamaBaseUrl.replace(/\/api\/?$/, "");
-  //   process.env.OLLAMA_BASE_URL = normalizedOllamaBaseUrl;
-  //   process.env.OLLAMA_API_ENDPOINT =
-  //     process.env.OLLAMA_API_ENDPOINT ??
-  //     `${normalizedOllamaBaseUrl.replace(/\/$/, "")}/api`;
-  //   try {
-  //     const { default: ollamaPlugin } = await import("@elizaos/plugin-ollama");
-  //     plugins.push(toPlugin(ollamaPlugin, "@elizaos/plugin-ollama"));
-  //     elizaLogger.info("[bench] Loaded LLM plugin: @elizaos/plugin-ollama");
-  //   } catch (error: unknown) {
-  //     elizaLogger.warn(
-  //       `[bench] Ollama plugin not available: ${formatUnknownError(error)}`,
-  //     );
-  //   }
-  // }
-
   const openAiApiKey = process.env.OPENAI_API_KEY?.trim();
-  if (
-    openAiApiKey &&
-    !openAiApiKey.startsWith("gsk_")
-    // && !rawOllamaBaseUrl
-  ) {
+  if (openAiApiKey && !openAiApiKey.startsWith("gsk_")) {
     process.env.OPENAI_API_KEY = openAiApiKey;
     try {
       const { default: openaiPlugin } = await import("@elizaos/plugin-openai");
@@ -758,7 +734,7 @@ export async function startBenchmarkServer() {
             }),
           );
         } catch (err: unknown) {
-          const errorMessage = err instanceof Error ? err.message : String(err);
+          const errorMessage = String(err);
           elizaLogger.error(`[bench] Reset error: ${formatUnknownError(err)}`);
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: errorMessage }));

@@ -26,38 +26,15 @@ export class ErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            height: "100vh",
-            backgroundColor: "#0a0a0a",
-            color: "#e0e0e0",
-            fontFamily: "system-ui, -apple-system, sans-serif",
-            textAlign: "center",
-            padding: "2rem",
-          }}
-        >
-          <h1 style={{ fontSize: "1.5rem", marginBottom: "1rem" }}>
-            Something went wrong
-          </h1>
-          <p style={{ color: "#888", marginBottom: "1.5rem" }}>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-dark text-text-light font-sans text-center p-8">
+          <h1 className="text-2xl mb-4">Something went wrong</h1>
+          <p className="text-text-muted mb-6">
             An unexpected error occurred. Please reload the page.
           </p>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            style={{
-              padding: "0.6rem 1.5rem",
-              backgroundColor: "#1a1a1a",
-              color: "#e0e0e0",
-              border: "1px solid #333",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontSize: "0.95rem",
-            }}
+            className="px-6 py-2.5 bg-[#1a1a1a] text-text-light border border-[#333] rounded-md cursor-pointer text-sm hover:opacity-80 transition-opacity"
           >
             Reload
           </button>

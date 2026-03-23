@@ -1,4 +1,4 @@
-import { Button } from "@miladyai/ui";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@miladyai/ui";
 import { Monitor, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invokeDesktopBridgeRequest, isElectrobunRuntime } from "../bridge";
@@ -305,10 +305,12 @@ export function DesktopWorkspaceSection() {
 
   if (!desktopRuntime) {
     return (
-      <div className="rounded-2xl border border-border bg-card px-4 py-4 text-sm text-muted">
-        Desktop workspace tools are only available inside the Electrobun desktop
-        runtime.
-      </div>
+      <Card className="text-sm text-muted">
+        <CardContent className="pt-6">
+          Desktop workspace tools are only available inside the Electrobun desktop
+          runtime.
+        </CardContent>
+      </Card>
     );
   }
 
@@ -357,30 +359,33 @@ export function DesktopWorkspaceSection() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="space-y-3 rounded-2xl border border-border bg-card px-4 py-4">
-          <div>
-            <h3 className="text-sm font-semibold text-txt">Diagnostics</h3>
-            <p className="text-xs text-muted">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Diagnostics</CardTitle>
+            <CardDescription>
               Version, window, display, clipboard, and path state from the
               desktop shell.
-            </p>
-          </div>
-          <pre className="overflow-x-auto rounded-xl border border-border bg-bg px-3 py-3 text-[11px] leading-5 text-txt">
-            {diagnosticsText}
-          </pre>
-        </div>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <pre className="overflow-x-auto rounded-xl border border-border bg-bg px-3 py-3 text-[11px] leading-5 text-txt">
+              {diagnosticsText}
+            </pre>
+          </CardContent>
+        </Card>
 
-        <div className="space-y-3 rounded-2xl border border-border bg-card px-4 py-4">
-          <div>
-            <h3 className="text-sm font-semibold text-txt">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">
               Detached Surfaces
-            </h3>
-            <p className="text-xs text-muted">
+            </CardTitle>
+            <CardDescription>
               Launch the native Electrobun surfaces without navigating away from
               the main shell.
-            </p>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 sm:grid-cols-2">
             {DESKTOP_WORKSPACE_SURFACES.map((surface) => (
               <Button
                 key={surface.id}
@@ -400,18 +405,20 @@ export function DesktopWorkspaceSection() {
                 {surface.label}
               </Button>
             ))}
-          </div>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="space-y-3 rounded-2xl border border-border bg-card px-4 py-4">
-          <div>
-            <h3 className="text-sm font-semibold text-txt">Window Controls</h3>
-            <p className="text-xs text-muted">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Window Controls</CardTitle>
+            <CardDescription>
               Control the main desktop window directly from settings.
-            </p>
-          </div>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
@@ -505,16 +512,18 @@ export function DesktopWorkspaceSection() {
                 : "Maximize Window"}
             </Button>
           </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        <div className="space-y-3 rounded-2xl border border-border bg-card px-4 py-4">
-          <div>
-            <h3 className="text-sm font-semibold text-txt">Lifecycle</h3>
-            <p className="text-xs text-muted">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Lifecycle</CardTitle>
+            <CardDescription>
               Restart the backend, relaunch the app, or toggle auto-launch
               behavior.
-            </p>
-          </div>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
@@ -615,27 +624,29 @@ export function DesktopWorkspaceSection() {
                 : "Launch Hidden on Login"}
             </Button>
           </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="space-y-3 rounded-2xl border border-border bg-card px-4 py-4">
-          <div>
-            <h3 className="text-sm font-semibold text-txt">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">
               Native File Dialogs
-            </h3>
-            <p className="text-xs text-muted">
+            </CardTitle>
+            <CardDescription>
               Test file, folder, and save dialogs and inspect the returned
               paths.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction(
-                  "desktop-open-file-dialog",
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction(
+                    "desktop-open-file-dialog",
                   async () => {
                     const result = await invokeDesktopBridgeRequest<{
                       canceled: boolean;
@@ -733,19 +744,21 @@ export function DesktopWorkspaceSection() {
               {renderPathList(savePaths)}
             </div>
           </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        <div className="space-y-3 rounded-2xl border border-border bg-card px-4 py-4">
-          <div>
-            <h3 className="text-sm font-semibold text-txt">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">
               Clipboard + Paths
-            </h3>
-            <p className="text-xs text-muted">
+            </CardTitle>
+            <CardDescription>
               Read, clear, and write clipboard text, then open or reveal saved
               paths.
-            </p>
-          </div>
-          <textarea
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <textarea
             value={clipboardDraft}
             onChange={(event) => setClipboardDraft(event.target.value)}
             className="min-h-24 w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm text-txt outline-none"
@@ -845,22 +858,23 @@ export function DesktopWorkspaceSection() {
               </>
             )}
           </div>
-          <div className="rounded-xl border border-border bg-bg px-3 py-3 text-xs text-muted">
-            {snapshot?.clipboard ? (
-              <>
-                <div className="font-semibold text-txt">
-                  Formats:{" "}
-                  {snapshot.clipboard.formats.join(", ") || "plain-text"}
-                </div>
-                <div className="mt-1 break-all">
-                  {snapshot.clipboard.text || "Clipboard text unavailable."}
-                </div>
-              </>
-            ) : (
-              "Clipboard details unavailable."
-            )}
-          </div>
-        </div>
+            <div className="rounded-xl border border-border bg-bg px-3 py-3 text-xs text-muted">
+              {snapshot?.clipboard ? (
+                <>
+                  <div className="font-semibold text-txt">
+                    Formats:{" "}
+                    {snapshot.clipboard.formats.join(", ") || "plain-text"}
+                  </div>
+                  <div className="mt-1 break-all">
+                    {snapshot.clipboard.text || "Clipboard text unavailable."}
+                  </div>
+                </>
+              ) : (
+                "Clipboard details unavailable."
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -1,9 +1,4 @@
-/**
- * Trigger action helpers — extracted from AppContext.
- *
- * Pure functions for trigger CRUD operations that can be used
- * by any provider implementation.
- */
+/** Trigger action helpers — CRUD operations for triggers. */
 
 import type {
   CreateTriggerRequest,

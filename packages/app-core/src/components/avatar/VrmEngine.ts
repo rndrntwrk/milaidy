@@ -12,6 +12,11 @@ import type {
   SplatMesh as SparkSplatMesh,
 } from "@sparkjsdev/spark";
 import * as THREE from "three";
+import type {
+  TeleportFallbackShader,
+  TeleportSparkleParticle,
+  TeleportSparkleSystem,
+} from "./VrmTeleportEffect";
 
 /**
  * TSL node for MeshStandardMaterial - not in public @types/three.
@@ -29,6 +34,15 @@ interface MeshStandardMaterialWithNodeProps {
 }
 
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import type { Vector3 } from "three";
+import { resolveVisionModeSetting } from "../../runtime/eliza";
+
+// biome-ignore lint/suspicious/noExplicitAny: Three.js TSL shader nodes are opaque chainable objects with no exported types.
+type TslNode = any;
+type TslMathFn = (...args: TslNode[]) => TslNode;
+type TslMathLib = Record<string, TslMathFn | undefined>;
+
+const RENDERER_FALLBACK_POLL_INTERVAL = 1000;
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -139,15 +153,10 @@ type RendererLike = Pick<
   toneMappingExposure?: number;
   xr?: THREE.WebGLRenderer["xr"];
   setAnimationLoop?: (
-    callback: ((time: number, frame?: any) => void) | null,
+    callback: ((time: number, frame?: XRFrame) => void) | null,
   ) => void;
 };
 
-type TeleportFallbackShader = {
-  uniforms: {
-    uTeleportProgress: { value: number };
-  };
-};
 
 type WorldRevealController = {
   mesh: SparkSplatMesh;
@@ -166,24 +175,6 @@ type WorldRevealState = {
   syncToTeleport: boolean;
 };
 
-type TeleportSparkleParticle = {
-  sprite: THREE.Sprite;
-  material: THREE.SpriteMaterial;
-  baseAngle: number;
-  baseRadius: number;
-  height: number;
-  start: number;
-  duration: number;
-  spin: number;
-  wobble: number;
-  wobbleSpeed: number;
-  baseSize: number;
-};
-
-type TeleportSparkleSystem = {
-  group: THREE.Group;
-  particles: TeleportSparkleParticle[];
-};
 
 const DEFAULT_CAMERA_ANIMATION: CameraAnimationConfig = {
   enabled: false,
@@ -1069,9 +1060,9 @@ export class VrmEngine {
   ): Promise<WorldRevealController | null> {
     const dyno = (
       "dyno" in spark ? Reflect.get(spark as object, "dyno") : undefined
-    ) as any;
+    ) as TslMathLib | undefined;
 
-    const tsl = (await import("three/tsl").catch(() => null)) as any;
+    const tsl = (await import("three/tsl").catch(() => null)) as TslMathLib | null;
 
     const math = {
       add: dyno?.add || tsl?.add,
@@ -1085,7 +1076,7 @@ export class VrmEngine {
       smoothstep: dyno?.smoothstep || tsl?.smoothstep,
       pow: dyno?.pow || tsl?.pow,
       length: dyno?.length || tsl?.length,
-      swizzle: dyno?.swizzle || ((a: any, s: string) => a[s] || a), // fallback to property access
+      swizzle: dyno?.swizzle || ((a: Record<string, unknown>, s: string) => a[s] || a), // fallback to property access
     };
 
     if (
@@ -1139,6 +1130,8 @@ export class VrmEngine {
       "[VrmEngine] createWorldRevealController SUCCESS, dyno/tsl checked ok",
     );
 
+    const validatedMath = math as Record<keyof typeof math, TslMathFn>;
+
     const originUniform = dyno.dynoVec3(reveal.origin, "uWorldRevealOrigin");
     const resolvedRadius = Math.max(
       reveal.radius,
@@ -1167,52 +1160,52 @@ export class VrmEngine {
     const modifier = dyno.dynoBlock(
       { gsplat: dyno.Gsplat },
       { gsplat: dyno.Gsplat },
-      ({ gsplat }: any) => {
+      ({ gsplat }: { gsplat: unknown }) => {
         if (!gsplat) {
           throw new Error("Missing gsplat input for world reveal");
         }
         const { center, scales, rgb, opacity } =
-          dyno.splitGsplat(gsplat).outputs;
-        const radialDistance = math.length(
-          math.swizzle(math.sub(center, originUniform), "xz"),
+          dyno!.splitGsplat!(gsplat).outputs;
+        const radialDistance = validatedMath.length(
+          validatedMath.swizzle(validatedMath.sub(center, originUniform), "xz"),
         );
-        const currentRadius = math.add(
-          math.mul(radiusUniform, progressUniform),
+        const currentRadius = validatedMath.add(
+          validatedMath.mul(radiusUniform, progressUniform),
           startOffset,
         );
-        const bodyMask = math.sub(
+        const bodyMask = validatedMath.sub(
           one,
-          math.smoothstep(
-            math.sub(currentRadius, edgeUniform),
-            math.add(currentRadius, edgeUniform),
+          validatedMath.smoothstep(
+            validatedMath.sub(currentRadius, edgeUniform),
+            validatedMath.add(currentRadius, edgeUniform),
             radialDistance,
           ),
         );
-        const ringDistance = math.abs(math.sub(radialDistance, currentRadius));
-        const ringMask = math.pow(
-          math.sub(
+        const ringDistance = validatedMath.abs(validatedMath.sub(radialDistance, currentRadius));
+        const ringMask = validatedMath.pow(
+          validatedMath.sub(
             one,
-            math.smoothstep(zero, math.mul(edgeUniform, two), ringDistance),
+            validatedMath.smoothstep(zero, validatedMath.mul(edgeUniform, two), ringDistance),
           ),
           two,
         );
         const visibleMask =
-          mode === "hide" ? math.sub(one, bodyMask) : bodyMask;
-        const wireFactor = math.clamp(
-          math.max(visibleMask, math.mul(ringMask, wireAlphaUniform)),
+          mode === "hide" ? validatedMath.sub(one, bodyMask) : bodyMask;
+        const wireFactor = validatedMath.clamp(
+          validatedMath.max(visibleMask, validatedMath.mul(ringMask, wireAlphaUniform)),
           zero,
           one,
         );
-        const brightenedRgb = math.mul(
+        const brightenedRgb = validatedMath.mul(
           rgb,
-          math.add(one, math.mul(ringMask, wireBoostUniform)),
+          validatedMath.add(one, validatedMath.mul(ringMask, wireBoostUniform)),
         );
         return {
-          gsplat: dyno.combineGsplat({
+          gsplat: dyno!.combineGsplat!({
             gsplat,
-            scales: math.mix(wireScaleUniform, scales, wireFactor),
-            rgb: math.mix(brightenedRgb, rgb, visibleMask),
-            opacity: math.mul(opacity, wireFactor),
+            scales: validatedMath.mix(wireScaleUniform, scales, wireFactor),
+            rgb: validatedMath.mix(brightenedRgb, rgb, visibleMask),
+            opacity: validatedMath.mul(opacity, wireFactor),
           }),
         };
       },
@@ -2755,15 +2748,17 @@ export class VrmEngine {
               glowIntensity.mul(10.0).mul(glowActive).mul(dissolveAlpha),
             );
 
-            const origOpacity = mat.opacityNode as any;
+            const origOpacity = mat.opacityNode as TslNode;
             mat.opacityNode = origOpacity
-              ? ((origOpacity.mul(dissolveAlpha) as any) ?? dissolveAlpha)
+              ? (origOpacity.mul(dissolveAlpha) ?? dissolveAlpha)
               : dissolveAlpha;
 
-            const matWithEmissive = mat as any;
-            const origEmissive = matWithEmissive.emissiveNode as any;
+            const matWithEmissive = mat as THREE.Material & {
+              emissiveNode?: TslNode;
+            };
+            const origEmissive = matWithEmissive.emissiveNode;
             matWithEmissive.emissiveNode = origEmissive
-              ? (origEmissive.add(emissiveBoost) as any)
+              ? origEmissive.add(emissiveBoost)
               : emissiveBoost;
 
             mat.alphaTest = 0.01;

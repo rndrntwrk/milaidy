@@ -53,7 +53,7 @@ function http$(
 describe("Plugin Management E2E", () => {
   let server: { port: number; close: () => Promise<void> };
   // biome-ignore lint/suspicious/noExplicitAny: mock type
-  let mockPluginManager: any;
+  let mockPluginManager: Record<string, unknown>;
 
   beforeAll(async () => {
     // Create a mock plugin manager
@@ -151,7 +151,7 @@ describe("Plugin Management E2E", () => {
 
     // Start server with mock runtime
     // biome-ignore lint/suspicious/noExplicitAny: mock type
-    server = await startApiServer({ port: 0, runtime: mockRuntime as any });
+    server = await startApiServer({ port: 0, runtime: mockRuntime as never });
   }, 30_000);
 
   afterAll(async () => {

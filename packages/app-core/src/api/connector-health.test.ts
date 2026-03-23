@@ -9,7 +9,7 @@ function makeRuntime(
   return {
     getService: (name: string) => services[name] ?? null,
     clients,
-  } as unknown as unknown as AgentRuntime;
+  } as unknown as AgentRuntime;
 }
 
 describe("ConnectorHealthMonitor", () => {
@@ -133,7 +133,7 @@ describe("ConnectorHealthMonitor", () => {
       getService: (name: string) =>
         name === "discord" && hasDiscord ? {} : null,
       clients: {},
-    } as unknown as unknown as AgentRuntime;
+    } as unknown as AgentRuntime;
 
     const monitor = new ConnectorHealthMonitor({
       runtime,

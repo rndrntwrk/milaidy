@@ -197,17 +197,6 @@ These variables configure limits for terminal command execution via the API.
 
 ---
 
-## TUI Debug
-
-These variables enable debug output in the TUI.
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MILADY_TUI_SHOW_THINKING` | When set to `1`, shows model thinking/reasoning steps in the TUI chat display. | (unset) |
-| `MILADY_TUI_SHOW_STRUCTURED_RESPONSE` | When set to `1`, shows raw structured response data in the TUI chat display. | (unset) |
-
----
-
 ## Skills and Marketplace
 
 These variables configure the skills registry and marketplace integration.

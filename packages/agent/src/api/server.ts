@@ -13945,7 +13945,7 @@ async function handleRequest(
     const body = await readJsonBody<{
       title?: string;
       includeGreeting?: boolean;
-      bootstrapGreeting?: boolean;
+      includeGreeting?: boolean;
       lang?: string;
     }>(req, res);
     if (!body) return;
@@ -13977,7 +13977,7 @@ async function handleRequest(
       try {
         await ensureConversationRoom(conv);
         await syncConversationRoomTitle(conv);
-        if (body.includeGreeting === true || body.bootstrapGreeting === true) {
+        if (body.includeGreeting === true || body.includeGreeting === true) {
           const storedGreeting = await ensureConversationGreetingStored(
             conv,
             typeof body.lang === "string" ? body.lang : "en",

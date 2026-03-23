@@ -61,7 +61,7 @@ describe("knowledge routes", () => {
       getService: (name: string) =>
         name === "knowledge" ? knowledgeService : null,
       getServiceLoadPromise: async () => undefined,
-    } as unknown as unknown as AgentRuntime;
+    } as unknown as AgentRuntime;
   });
 
   afterEach(() => {

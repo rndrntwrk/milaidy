@@ -6,14 +6,28 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type AgentRuntime, logger } from "@elizaos/core";
 import { StewardApiError, type PolicyResult } from "@stwd/sdk";
+import {
+  ensureCompatApiAuthorized,
+  ensureCompatSensitiveRouteAuthorized,
+  extractHeaderValue,
+  getCompatApiToken,
+  getProvidedApiToken,
+  isDevEnvironment,
+  tokenMatches,
+} from "./auth";
+import { sendJson as sendJsonResponse, sendJsonError as sendJsonErrorResponse } from "./response";
 
 
+import { handleCloudBillingRoute } from "@miladyai/agent/api/cloud-billing-routes";
 import { handleCloudCompatRoute } from "@miladyai/agent/api/cloud-compat-routes";
 // Override the wallet export rejection function with the hardened version
 // that adds rate limiting, audit logging, and a forced confirmation delay.
 import {
+  discoverInstalledPlugins,
+  discoverPluginsFromManifest,
   startApiServer as upstreamStartApiServer,
 } from "@elizaos/agent/api/server";
+export { discoverInstalledPlugins, discoverPluginsFromManifest };
 import { loadElizaConfig, saveElizaConfig } from "../config/config";
 import {
   ensureRuntimeSqlCompatibility,
@@ -203,20 +217,7 @@ const CAPABILITY_FEATURE_IDS = new Set([
 // Internal helpers used by the monkey-patch handler (stay in server.ts)
 // ---------------------------------------------------------------------------
 
-function extractHeaderValue(
-  value: string | string[] | undefined,
-): string | null {
-  if (typeof value === "string") {
-    return value;
-  }
-  return Array.isArray(value) && typeof value[0] === "string" ? value[0] : null;
-}
-
-function getCompatApiToken(): string | null {
-  const token =
-    process.env.MILADY_API_TOKEN?.trim() ?? process.env.ELIZA_API_TOKEN?.trim();
-  return token ? token : null;
-}
+// extractHeaderValue, getCompatApiToken — now imported from ./auth
 
 const PAIRING_TTL_MS = 10 * 60 * 1000;
 const PAIRING_WINDOW_MS = 10 * 60 * 1000;
@@ -227,14 +228,7 @@ let pairingCode: string | null = null;
 let pairingExpiresAt = 0;
 const pairingAttempts = new Map<string, { count: number; resetAt: number }>();
 
-function tokenMatches(expected: string, provided: string): boolean {
-  const a = Buffer.from(expected, "utf8");
-  const b = Buffer.from(provided, "utf8");
-  if (a.length !== b.length) {
-    return false;
-  }
-  return crypto.timingSafeEqual(a, b);
-}
+// tokenMatches — now imported from ./auth
 
 function pairingEnabled(): boolean {
   return (
@@ -292,68 +286,8 @@ function rateLimitPairing(ip: string | null): boolean {
   return true;
 }
 
-function getProvidedApiToken(
-  req: Pick<http.IncomingMessage, "headers">,
-): string | null {
-  const authHeader = extractHeaderValue(req.headers.authorization)?.trim();
-  if (authHeader) {
-    const match = /^Bearer\s+(.+)$/i.exec(authHeader);
-    if (match?.[1]) {
-      return match[1].trim();
-    }
-  }
-
-  const headerToken =
-    extractHeaderValue(req.headers["x-eliza-token"]) ??
-    extractHeaderValue(req.headers["x-milady-token"]) ??
-    extractHeaderValue(req.headers["x-milaidy-token"]) ??
-    extractHeaderValue(req.headers["x-api-key"]) ??
-    extractHeaderValue(req.headers["x-api-token"]);
-
-  return headerToken?.trim() || null;
-}
-
-function ensureCompatApiAuthorized(
-  req: Pick<http.IncomingMessage, "headers">,
-  res: http.ServerResponse,
-): boolean {
-  const expectedToken = getCompatApiToken();
-  if (!expectedToken) {
-    return true;
-  }
-
-  const providedToken = getProvidedApiToken(req);
-  if (providedToken && tokenMatches(expectedToken, providedToken)) {
-    return true;
-  }
-
-  sendJsonErrorResponse(res, 401, "Unauthorized");
-  return false;
-}
-
-function isDevEnvironment(): boolean {
-  const env = process.env.NODE_ENV?.trim().toLowerCase();
-  return env === "development" || env === "dev";
-}
-
-function ensureCompatSensitiveRouteAuthorized(
-  req: Pick<http.IncomingMessage, "headers">,
-  res: http.ServerResponse,
-): boolean {
-  if (!getCompatApiToken()) {
-    if (isDevEnvironment()) {
-      return true;
-    }
-    sendJsonErrorResponse(
-      res,
-      403,
-      "Sensitive endpoint requires API token authentication",
-    );
-    return false;
-  }
-
-  return ensureCompatApiAuthorized(req, res);
-}
+// getProvidedApiToken, ensureCompatApiAuthorized, isDevEnvironment,
+// ensureCompatSensitiveRouteAuthorized — now imported from ./auth
 
 const MAX_BODY_BYTES = 1_048_576;
 async function readCompatJsonBody(
@@ -445,24 +379,7 @@ function maskValue(value: string): string {
   return `${value.slice(0, 4)}...${value.slice(-4)}`;
 }
 
-function sendJsonResponse(
-  res: http.ServerResponse,
-  status: number,
-  body: unknown,
-): void {
-  if (res.headersSent) return;
-  res.statusCode = status;
-  res.setHeader("content-type", "application/json; charset=utf-8");
-  res.end(JSON.stringify(body));
-}
-
-function sendJsonErrorResponse(
-  res: http.ServerResponse,
-  status: number,
-  message: string,
-): void {
-  sendJsonResponse(res, status, { error: message });
-}
+// sendJsonResponse, sendJsonErrorResponse — now imported from ./response
 
 function getStewardPolicyResults(error: StewardApiError): PolicyResult[] {
   if (
@@ -1773,6 +1690,18 @@ async function handleMiladyCompatRoute(
     });
   }
 
+  // Cloud billing routes — handle with fresh config from disk so a cloud
+  // API key persisted during login is always available, even if the
+  // upstream's in-memory state.config hasn't been refreshed.
+  if (url.pathname.startsWith("/api/cloud/billing/")) {
+    if (!ensureCompatApiAuthorized(req, res)) {
+      return true;
+    }
+    return handleCloudBillingRoute(req, res, url.pathname, method, {
+      config: loadElizaConfig(),
+    });
+  }
+
   // Milady dev observability routes (loopback where noted). WHY: agents cannot see the Electrobun
   // window; these endpoints mirror orchestrator state (stack JSON), proxied screenshot, and log
   // tail — see docs/apps/desktop-local-development.md and dev-stack.ts / dev-console-log.ts.
@@ -1804,12 +1733,25 @@ async function handleMiladyCompatRoute(
       });
       return true;
     }
+    // SSRF guard: reject non-loopback upstream URLs to prevent env-injection SSRF.
+    try {
+      const upstreamUrl = new URL(upstream);
+      const h = upstreamUrl.hostname.toLowerCase();
+      if (h !== "127.0.0.1" && h !== "localhost" && h !== "[::1]" && h !== "::1") {
+        sendJsonErrorResponse(res, 403, "screenshot upstream must be loopback");
+        return true;
+      }
+    } catch {
+      sendJsonErrorResponse(res, 400, "invalid screenshot upstream URL");
+      return true;
+    }
     const token = process.env.MILADY_SCREENSHOT_SERVER_TOKEN?.trim() ?? "";
     const base = upstream.replace(/\/$/, "");
     const target = `${base}/cursor-screenshot.png`;
     try {
       const r = await fetch(target, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
+        redirect: "error",
       });
       if (!r.ok) {
         const text = await r.text().catch(() => "");
@@ -1976,12 +1918,17 @@ async function handleMiladyCompatRoute(
     return true;
   }
 
-  const cloudConfigPath =
-    url.pathname === "/api/cloud/status" ||
-    url.pathname === "/api/cloud/credits" ||
-    url.pathname === "/api/cloud/disconnect";
+  // Handle all /api/cloud/* routes (except compat and billing which have
+  // their own handlers above) through Milady's handleCloudRoute. This is
+  // critical for cloud login — persistCloudLoginStatus saves the API key
+  // to disk and scrubs it from env. Without this, login/status falls
+  // through to the upstream handler whose config save can be clobbered.
+  const isCloudRoute =
+    url.pathname.startsWith("/api/cloud/") &&
+    !url.pathname.startsWith("/api/cloud/compat/") &&
+    !url.pathname.startsWith("/api/cloud/billing/");
 
-  if (cloudConfigPath) {
+  if (isCloudRoute) {
     if (!ensureCompatApiAuthorized(req, res)) {
       return true;
     }
@@ -2498,7 +2445,7 @@ async function handleMiladyCompatRoute(
       sendJsonErrorResponse(
         res,
         500,
-        `Trade execution failed: ${(err as unknown) instanceof Error ? (err as Error).message : "unknown error"}`,
+        `Trade execution failed: ${err instanceof Error ? err.message : "unknown error"}`,
       );
     }
     return true;
@@ -2691,7 +2638,7 @@ async function handleMiladyCompatRoute(
       sendJsonErrorResponse(
         res,
         500,
-        `Transfer failed: ${(err as unknown) instanceof Error ? (err as Error).message : "unknown error"}`,
+        `Transfer failed: ${err instanceof Error ? err.message : "unknown error"}`,
       );
     }
     return true;
@@ -2704,7 +2651,7 @@ async function handleMiladyCompatRoute(
 
     const pluginResponse = buildPluginListResponse(state.current);
     const manifestPath = resolvePluginManifestPath();
-    console.log(
+    logger.debug(
       `[api/plugins] manifest=${manifestPath ?? "NOT_FOUND"} total=${pluginResponse.plugins.length} runtime=${state.current ? "active" : "null"}`,
     );
     sendJsonResponse(res, 200, pluginResponse);

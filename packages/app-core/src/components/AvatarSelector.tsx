@@ -12,6 +12,7 @@ import {
   useApp,
   VRM_COUNT,
 } from "@miladyai/app-core/state";
+import { Spinner } from "@miladyai/ui";
 import { alertDesktopMessage } from "@miladyai/app-core/utils";
 import { useCallback, useRef, useState } from "react";
 
@@ -159,7 +160,7 @@ export function AvatarSelector({
             />
             {loading && selected === i && (
               <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <Spinner size={24} className="text-white" />
               </div>
             )}
           </button>

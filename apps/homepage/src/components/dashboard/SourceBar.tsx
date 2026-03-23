@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useAgents } from "../../lib/AgentProvider";
+import { useAgents, type SourceFilter } from "../../lib/AgentProvider";
 import { useAuth } from "../../lib/useAuth";
 import { ConnectionModal } from "./ConnectionModal";
 

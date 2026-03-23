@@ -3,6 +3,7 @@ import { validateCloudBaseUrl } from "@miladyai/agent/cloud/validate-url";
 import type { AgentRuntime } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import type { ElizaConfig } from "../config/config";
+import { normalizeEnvValue } from "../utils/env";
 import {
   clearCloudSecrets,
   getCloudSecret,
@@ -65,7 +66,7 @@ export type CloudAuthLike = {
   >
 >;
 
-type RuntimeCloudLike = AgentRuntime & {
+export type RuntimeCloudLike = AgentRuntime & {
   agentId: string;
   character: {
     secrets?: Record<string, string | number | boolean>;
@@ -129,9 +130,8 @@ function cloudCreditsHttpErrorMessage(
   return `HTTP ${status}`;
 }
 
-function normalizeSecret(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
+/** @deprecated Use `normalizeEnvValue` from `../utils/env` — kept as alias. */
+const normalizeSecret = normalizeEnvValue;
 
 function asRuntimeCloud(runtime: AgentRuntime | null): RuntimeCloudLike | null {
   return runtime as RuntimeCloudLike | null;

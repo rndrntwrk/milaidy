@@ -40,27 +40,30 @@ export function normalizeAvatarIndex(index: number): number {
 /** Resolve a bundled VRM index (1–N) to its public asset URL. */
 export function getVrmUrl(index: number): string {
   const assets = getAssets();
+  if (assets.length === 0) return resolveAppAssetUrl("vrms/default.vrm.gz");
   const n = normalizeAvatarIndex(index);
   const safe = n > 0 ? n : 1;
-  const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? `avatar-${safe}`;
+  const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? "default";
   return resolveAppAssetUrl(`vrms/${slug}.vrm.gz`);
 }
 
 /** Resolve a bundled VRM index (1–N) to its preview thumbnail URL. */
 export function getVrmPreviewUrl(index: number): string {
   const assets = getAssets();
+  if (assets.length === 0) return resolveAppAssetUrl("vrms/previews/default.png");
   const n = normalizeAvatarIndex(index);
   const safe = n > 0 ? n : 1;
-  const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? `avatar-${safe}`;
+  const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? "default";
   return resolveAppAssetUrl(`vrms/previews/${slug}.png`);
 }
 
 /** Resolve a bundled VRM index (1-N) to its custom background URL. */
 export function getVrmBackgroundUrl(index: number): string {
   const assets = getAssets();
+  if (assets.length === 0) return resolveAppAssetUrl("vrms/backgrounds/default.png");
   const n = normalizeAvatarIndex(index);
   const safe = n > 0 ? n : 1;
-  const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? `avatar-${safe}`;
+  const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? "default";
   return resolveAppAssetUrl(`vrms/backgrounds/${slug}.png`);
 }
 
@@ -77,9 +80,10 @@ export function getCompanionBackgroundUrl(theme: UiTheme): string {
 /** Human-readable roster title for bundled avatars. */
 export function getVrmTitle(index: number): string {
   const assets = getAssets();
+  if (assets.length === 0) return "Avatar";
   const n = normalizeAvatarIndex(index);
   const safe = n > 0 ? n : 1;
-  return assets[safe - 1]?.title ?? assets[0].title;
+  return assets[safe - 1]?.title ?? assets[0]?.title ?? "Avatar";
 }
 
 /** @deprecated Stub — always returns false. Retained for API compatibility. */
@@ -91,4 +95,3 @@ export function isOfficialVrmIndex(_index: number): boolean {
 export function getVrmNeedsFlip(_index: number): boolean {
   return false;
 }
-

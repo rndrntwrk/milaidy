@@ -1,5 +1,5 @@
 /**
- * End-to-End Tests for Agent Orchestration — GitHub Issue #6 Follow-up
+ * End-to-End Tests for Agent Orchestration
  *
  * Comprehensive E2E tests covering agent orchestration functionality:
  *
@@ -382,7 +382,7 @@ describe("Task Lifecycle via API", () => {
 
 describe("Task Management Operations", () => {
   let server: { port: number; close: () => Promise<void> } | null = null;
-  let _createdTaskId: string | null = null;
+
 
   beforeAll(async () => {
     server = await startApiServer({ port: 0 });
@@ -450,7 +450,7 @@ describe("Task Management Operations", () => {
     const taskId =
       (createRes.data.task as { id: string })?.id ||
       (createRes.data.id as string);
-    _createdTaskId = taskId;
+
 
     // Cancel the task
     const cancelRes = await http$(

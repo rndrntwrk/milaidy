@@ -13,6 +13,7 @@ import {
   vi,
 } from "vitest";
 import { req } from "./helpers/http";
+import { saveEnv } from "./helpers/test-utils";
 
 const authMocks = vi.hoisted(() => ({
   getSubscriptionStatus: vi.fn(() => [{ id: "openai-codex" }]),
@@ -48,21 +49,6 @@ const {
   applySubscriptionCredentials,
   deleteCredentials,
 } = authMocks;
-
-function saveEnv(...keys: string[]): { restore: () => void } {
-  const saved: Record<string, string | undefined> = {};
-  for (const key of keys) {
-    saved[key] = process.env[key];
-  }
-  return {
-    restore() {
-      for (const key of keys) {
-        if (saved[key] === undefined) delete process.env[key];
-        else process.env[key] = saved[key];
-      }
-    },
-  };
-}
 
 function makeCredentials(expires = Date.now() + 60_000): OAuthCredentials {
   return {

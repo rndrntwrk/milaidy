@@ -183,8 +183,7 @@ describe("AppProvider onboarding step resume", () => {
     });
     Object.assign(document.documentElement, { setAttribute: vi.fn() });
     localStorage.clear();
-    (window as unknown as Record<string, unknown>).__MILADY_API_BASE__ =
-      "https://api.elizacloud.ai";
+    Object.assign(window, { __MILADY_API_BASE__: "https://api.elizacloud.ai" });
     sessionStorage.setItem("eliza:api_base", "https://api.elizacloud.ai");
 
     for (const fn of Object.values(mockClient)) {

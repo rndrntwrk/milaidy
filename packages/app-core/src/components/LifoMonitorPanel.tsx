@@ -1,4 +1,4 @@
-import { Button } from "@miladyai/ui";
+import { Button, Card, CardContent, CardFooter, CardHeader, CardTitle } from "@miladyai/ui";
 import type { SandboxBrowserEndpoints, SandboxWindowInfo } from "../api/client";
 import { useApp } from "../state";
 
@@ -40,12 +40,12 @@ export function LifoMonitorPanel({
   const { t } = useApp();
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-3">
-      <div className="rounded-xl border border-border overflow-hidden bg-panel min-h-[320px]">
-        <div className="px-3 py-2 border-b border-border flex items-center justify-between gap-2">
+      <Card className="overflow-hidden bg-panel min-h-[320px]">
+        <CardHeader className="px-3 py-2 flex-row items-center justify-between gap-2 space-y-0 border-b border-border">
           <div>
-            <div className="text-xs font-semibold text-txt">
+            <CardTitle className="text-xs">
               {t("lifomonitorpanel.LifoComputerUseSu")}
-            </div>
+            </CardTitle>
             <div className="text-[11px] text-muted">
               {t("lifomonitorpanel.WatchOnlyDesktopM")}
             </div>
@@ -71,7 +71,7 @@ export function LifoMonitorPanel({
               {t("common.refresh")}
             </Button>
           </div>
-        </div>
+        </CardHeader>
 
         <div className="h-[320px] bg-black/90 flex items-center justify-center overflow-hidden">
           {noVncActive && safeNoVncEndpoint ? (
@@ -105,24 +105,24 @@ export function LifoMonitorPanel({
           )}
         </div>
 
-        <div className="px-3 py-2 border-t border-border text-[11px] text-muted">
+        <CardFooter className="px-3 py-2 border-t border-border text-[11px] text-muted">
           {monitorUpdatedAt
             ? `Last frame: ${new Date(monitorUpdatedAt).toLocaleTimeString()}`
             : "No frames captured yet"}
-        </div>
-      </div>
+        </CardFooter>
+      </Card>
 
-      <div className="rounded-xl border border-border overflow-hidden bg-panel min-h-[320px]">
-        <div className="px-3 py-2 border-b border-border">
-          <div className="text-xs font-semibold text-txt">
+      <Card className="overflow-hidden bg-panel min-h-[320px]">
+        <CardHeader className="px-3 py-2 border-b border-border space-y-0">
+          <CardTitle className="text-xs">
             {t("lifomonitorpanel.BrowserSandboxCo")}
-          </div>
+          </CardTitle>
           <div className="text-[11px] text-muted">
             {t("lifomonitorpanel.AgentControlsBrows")}
           </div>
-        </div>
+        </CardHeader>
 
-        <div className="p-3 space-y-3 text-[11px]">
+        <CardContent className="p-3 space-y-3 text-[11px]">
           <div>
             <div className="text-muted uppercase tracking-wide text-[10px]">
               {t("lifomonitorpanel.LiveSurface")}
@@ -189,8 +189,8 @@ export function LifoMonitorPanel({
               {monitorError}
             </div>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

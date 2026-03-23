@@ -1,11 +1,8 @@
 /**
  * Onboarding compat helpers — API key persistence, onboarding defaults,
  * cloud-mode detection, and cloud-provisioned container detection.
- *
- * Extracted from `server.ts` for maintainability.  Re-exported from
- * `server.ts` so existing imports remain valid.
  */
-import { stringToUuid } from "@elizaos/core";
+import { logger, stringToUuid } from "@elizaos/core";
 import { loadElizaConfig, saveElizaConfig } from "../config/config";
 
 // ---------------------------------------------------------------------------
@@ -69,7 +66,7 @@ export function extractAndPersistOnboardingApiKey(
     connection.provider;
   saveElizaConfig(config);
   process.env[envKey] = connection.apiKey as string;
-  console.log(`[onboarding] Persisted ${envKey} from connection.apiKey`);
+  logger.info(`[onboarding] Persisted ${envKey} from connection.apiKey`);
   return envKey;
 }
 

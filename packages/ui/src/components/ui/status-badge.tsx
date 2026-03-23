@@ -30,8 +30,6 @@ export function statusToneForBoolean(
   return condition ? onTone : offTone;
 }
 
-/* ── StatusBadge ─────────────────────────────────────────────────────── */
-
 export interface StatusBadgeProps
   extends React.HTMLAttributes<HTMLSpanElement> {
   label: string;
@@ -62,20 +60,22 @@ export const StatusBadge = React.forwardRef<HTMLSpanElement, StatusBadgeProps>(
 );
 StatusBadge.displayName = "StatusBadge";
 
-/* ── StatusDot ───────────────────────────────────────────────────────── */
-
 export interface StatusDotProps extends React.HTMLAttributes<HTMLSpanElement> {
-  status: string;
+  /** Semantic status string — mapped to a tone internally. */
+  status?: string;
+  /** Direct tone override — when provided, `status` is ignored. */
+  tone?: StatusTone;
 }
 
 export const StatusDot = React.forwardRef<HTMLSpanElement, StatusDotProps>(
-  ({ status, className, ...props }, ref) => {
+  ({ status, tone: toneProp, className, ...props }, ref) => {
     const tone: StatusTone =
-      status === "success" || status === "completed" || status === "connected"
+      toneProp ??
+      (status === "success" || status === "completed" || status === "connected"
         ? "success"
         : status === "error" || status === "failed" || status === "denied"
           ? "danger"
-          : "muted";
+          : "muted");
 
     const styles = STATUS_TONE_STYLES[tone];
     return (
@@ -92,8 +92,6 @@ export const StatusDot = React.forwardRef<HTMLSpanElement, StatusDotProps>(
   },
 );
 StatusDot.displayName = "StatusDot";
-
-/* ── StatCard ────────────────────────────────────────────────────────── */
 
 export interface StatCardProps extends React.HTMLAttributes<HTMLDivElement> {
   label: string;

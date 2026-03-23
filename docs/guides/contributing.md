@@ -99,7 +99,7 @@ milady/
 │   ├── skills/              # Skills system and bundled skills
 │   ├── docs/                # Documentation site (Mintlify)
 │   ├── schemas/             # Protobuf schemas
-│   └── tui/                 # Terminal UI
+│   └── tui/                 # Terminal UI (disabled)
 ├── plugins/                 # Official plugins (100+)
 │   ├── plugin-anthropic/    # Anthropic model provider
 │   ├── plugin-telegram/     # Telegram connector
@@ -191,9 +191,6 @@ bun run dev:ui
 
 # Desktop app development
 bun run dev:desktop
-
-# Terminal UI
-bun run tui
 ```
 
 ### Testing

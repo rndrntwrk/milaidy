@@ -59,6 +59,8 @@ type DesktopEventPayloads = {
   powerOnBattery: undefined;
 };
 
+import type { EventCallback } from "../../../shared-types.js";
+
 type DesktopEventName = keyof DesktopEventPayloads;
 type DesktopEventData = DesktopEventPayloads[DesktopEventName];
 

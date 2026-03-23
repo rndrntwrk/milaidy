@@ -558,9 +558,9 @@ const SelectComponent: ComponentFn = (props, _children, ctx, el) => {
         <span className="text-xs font-semibold">{String(props.label)}</span>
       ) : null}
       <Select
-        value={String(value ?? "")}
+        value={String(value ?? "") || "__none__"}
         onValueChange={(v) => {
-          handleChange(v);
+          handleChange(v === "__none__" ? "" : v);
           handleBlur();
         }}
       >
@@ -569,7 +569,7 @@ const SelectComponent: ComponentFn = (props, _children, ctx, el) => {
         </SelectTrigger>
         <SelectContent>
           {props.placeholder ? (
-            <SelectItem value="">{String(props.placeholder)}</SelectItem>
+            <SelectItem value="__none__">{String(props.placeholder)}</SelectItem>
           ) : null}
           {options.map((o) => (
             <SelectItem key={o.value} value={o.value}>

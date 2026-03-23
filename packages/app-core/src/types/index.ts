@@ -1,3 +1,15 @@
+/**
+ * A translation function accepted by UI components.
+ *
+ * The second parameter is intentionally `Record<string, unknown>` so that
+ * callers passing narrower variable maps (e.g. `Record<string, string>`) or
+ * no second argument at all remain compatible.
+ */
+export type TranslateFn = (
+  key: string,
+  options?: Record<string, unknown>,
+) => string;
+
 export type ChannelsStatusSnapshot = {
   ts: number;
   channelOrder: string[];

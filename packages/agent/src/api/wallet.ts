@@ -1,6 +1,6 @@
 /**
  * Wallet key generation, address derivation, and balance/NFT fetching.
- * Uses Node crypto primitives (no viem/@solana/web3.js dependency).
+ * Uses Node crypto primitives + ethers (keccak-256 / checksum).
  * Balance data from Alchemy/Ankr (EVM), NodeReal/QuickNode (BSC RPC),
  * and Helius (Solana) REST APIs.
  *
@@ -10,6 +10,7 @@
 import crypto from "node:crypto";
 import { logger } from "@elizaos/core";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
+import { ethers } from "ethers";
 import type {
   KeyValidationResult,
   SolanaTokenBalance,
@@ -102,120 +103,9 @@ export function deriveEvmAddress(privateKeyHex: string): string {
   const pubKey = secp256k1.getPublicKey(Buffer.from(cleaned, "hex"), false); // uncompressed (65 bytes)
   const pubNoPrefix = pubKey.subarray(1); // drop the 04 prefix
   // Ethereum address = last 20 bytes of keccak-256(pubkey).
-  const hash = keccak256(pubNoPrefix);
-  return toChecksumAddress(`0x${hash.subarray(12).toString("hex")}`);
-}
-
-// ── Keccak-256 (minimal sponge implementation) ───────────────────────
-
-const RC = [
-  0x0000000000000001n,
-  0x0000000000008082n,
-  0x800000000000808an,
-  0x8000000080008000n,
-  0x000000000000808bn,
-  0x0000000080000001n,
-  0x8000000080008081n,
-  0x8000000000008009n,
-  0x000000000000008an,
-  0x0000000000000088n,
-  0x0000000080008009n,
-  0x000000008000000an,
-  0x000000008000808bn,
-  0x800000000000008bn,
-  0x8000000000008089n,
-  0x8000000000008003n,
-  0x8000000000008002n,
-  0x8000000000000080n,
-  0x000000000000800an,
-  0x800000008000000an,
-  0x8000000080008081n,
-  0x8000000000008080n,
-  0x0000000080000001n,
-  0x8000000080008008n,
-];
-
-const ROT = [
-  [0, 36, 3, 41, 18],
-  [1, 44, 10, 45, 2],
-  [62, 6, 43, 15, 61],
-  [28, 55, 25, 21, 56],
-  [27, 20, 39, 8, 14],
-];
-
-function keccak256(data: Buffer | Uint8Array): Buffer {
-  const rate = 136; // 1088 bits
-  const state: bigint[][] = Array.from({ length: 5 }, () =>
-    Array.from({ length: 5 }, () => 0n),
-  );
-
-  // Keccak padding (0x01, NOT SHA-3's 0x06)
-  const q = rate - (data.length % rate);
-  const padded = Buffer.alloc(data.length + q);
-  padded.set(data);
-  padded[data.length] = 0x01;
-  padded[padded.length - 1] |= 0x80;
-
-  // Absorb
-  for (let off = 0; off < padded.length; off += rate) {
-    for (let i = 0; i < rate / 8; i++) {
-      let w = 0n;
-      for (let b = 0; b < 8; b++)
-        w |= BigInt(padded[off + i * 8 + b]) << BigInt(b * 8);
-      state[i % 5][Math.floor(i / 5)] ^= w;
-    }
-    keccakF1600(state);
-  }
-
-  // Squeeze (32 bytes)
-  const out = Buffer.alloc(32);
-  for (let i = 0; i < 4; i++) {
-    const v = state[i % 5][Math.floor(i / 5)];
-    for (let b = 0; b < 8; b++)
-      out[i * 8 + b] = Number((v >> BigInt(b * 8)) & 0xffn);
-  }
-  return out;
-}
-
-function keccakF1600(state: bigint[][]): void {
-  const M = (1n << 64n) - 1n;
-  const rot = (v: bigint, s: number) =>
-    s === 0 ? v : ((v << BigInt(s)) | (v >> BigInt(64 - s))) & M;
-
-  for (let round = 0; round < 24; round++) {
-    // theta
-    const c: bigint[] = [];
-    for (let x = 0; x < 5; x++)
-      c[x] =
-        state[x][0] ^ state[x][1] ^ state[x][2] ^ state[x][3] ^ state[x][4];
-    for (let x = 0; x < 5; x++) {
-      const d = c[(x + 4) % 5] ^ rot(c[(x + 1) % 5], 1);
-      for (let y = 0; y < 5; y++) state[x][y] = (state[x][y] ^ d) & M;
-    }
-    // rho + pi
-    const b: bigint[][] = Array.from({ length: 5 }, () =>
-      Array.from({ length: 5 }, () => 0n),
-    );
-    for (let x = 0; x < 5; x++)
-      for (let y = 0; y < 5; y++)
-        b[y][(2 * x + 3 * y) % 5] = rot(state[x][y], ROT[x][y]);
-    // chi
-    for (let x = 0; x < 5; x++)
-      for (let y = 0; y < 5; y++)
-        state[x][y] =
-          (b[x][y] ^ (~b[(x + 1) % 5][y] & M & b[(x + 2) % 5][y])) & M;
-    // iota
-    state[0][0] = (state[0][0] ^ RC[round]) & M;
-  }
-}
-
-function toChecksumAddress(address: string): string {
-  const addr = address.toLowerCase().replace("0x", "");
-  const hash = keccak256(Buffer.from(addr, "utf8")).toString("hex");
-  let out = "0x";
-  for (let i = 0; i < 40; i++)
-    out += Number.parseInt(hash[i], 16) >= 8 ? addr[i].toUpperCase() : addr[i];
-  return out;
+  const hash = ethers.keccak256(pubNoPrefix);
+  const raw = hash.slice(26); // drop '0x' + first 24 hex chars (12 bytes)
+  return ethers.getAddress(`0x${raw}`);
 }
 
 // ── Solana key derivation (Ed25519 via Node crypto) ───────────────────
@@ -350,7 +240,7 @@ export function validateEvmPrivateKey(key: string): KeyValidationResult {
       valid: false,
       chain: "evm",
       address: null,
-      error: `Derivation failed: ${err instanceof Error ? err.message : err}`,
+      error: `Derivation failed: ${String(err)}`,
     };
   }
 }
@@ -377,7 +267,7 @@ export function validateSolanaPrivateKey(key: string): KeyValidationResult {
       valid: false,
       chain: "solana",
       address: null,
-      error: `Invalid key: ${err instanceof Error ? err.message : err}`,
+      error: `Invalid key: ${String(err)}`,
     };
   }
 }
@@ -590,7 +480,7 @@ export async function fetchSolanaBalances(
     solBalance = ((data.result?.value ?? 0) / 1e9).toFixed(9);
   } catch (err) {
     logger.warn(
-      `SOL balance fetch failed: ${err instanceof Error ? err.message : err}`,
+      `SOL balance fetch failed: ${String(err)}`,
     );
   }
 
@@ -639,7 +529,7 @@ export async function fetchSolanaBalances(
     }
   } catch (err) {
     logger.warn(
-      `Solana token fetch failed: ${err instanceof Error ? err.message : err}`,
+      `Solana token fetch failed: ${String(err)}`,
     );
   }
 
@@ -680,7 +570,7 @@ export async function fetchSolanaNativeBalanceViaRpc(
       const solBalance = ((data.result?.value ?? 0) / 1e9).toFixed(9);
       return { solBalance, solValueUsd: "0", tokens: [] };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = String(err);
       errors.push(`${describeRpcEndpoint(rpcUrl)}: ${msg}`);
     }
   }

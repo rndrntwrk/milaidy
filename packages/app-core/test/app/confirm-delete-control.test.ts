@@ -1,12 +1,12 @@
-import { ConfirmDeleteControl } from "@miladyai/app-core/components";
+import { ConfirmDelete } from "@miladyai/ui";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
 function createSubject(
-  overrides: Partial<React.ComponentProps<typeof ConfirmDeleteControl>> = {},
+  overrides: Partial<React.ComponentProps<typeof ConfirmDelete>> = {},
 ) {
-  return React.createElement(ConfirmDeleteControl, {
+  return React.createElement(ConfirmDelete, {
     onConfirm: () => {},
     triggerClassName: "trigger",
     confirmClassName: "confirm",
@@ -15,7 +15,7 @@ function createSubject(
   });
 }
 
-describe("ConfirmDeleteControl", () => {
+describe("ConfirmDelete", () => {
   it("shows trigger first and then confirm/cancel state", () => {
     let tree!: TestRenderer.ReactTestRenderer;
     act(() => {

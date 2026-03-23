@@ -341,20 +341,24 @@ vi.mock("@miladyai/app-core/api", () => ({
   },
 }));
 
-vi.mock("@miladyai/app-core/components/shared/confirm-delete-control", () => ({
-  ConfirmDeleteControl: ({
-    onConfirm,
-    children,
-  }: {
-    onConfirm: () => void;
-    children: React.ReactNode;
-  }) =>
-    React.createElement(
-      "button",
-      { type: "button", onClick: onConfirm, "data-testid": "delete-btn" },
+vi.mock("@miladyai/ui", async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    ConfirmDelete: ({
+      onConfirm,
       children,
-    ),
-}));
+    }: {
+      onConfirm: () => void;
+      children: React.ReactNode;
+    }) =>
+      React.createElement(
+        "button",
+        { type: "button", onClick: onConfirm, "data-testid": "delete-btn" },
+        children,
+      ),
+  };
+});
 
 import { KnowledgeView } from "@miladyai/app-core/components/KnowledgeView";
 

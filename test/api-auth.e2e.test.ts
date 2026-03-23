@@ -20,6 +20,7 @@ import { startApiServer } from "@miladyai/app-core/src/api/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { req } from "./helpers/http";
+import { saveEnv } from "./helpers/test-utils";
 
 type WsConnectResult = { kind: "open" } | { kind: "rejected"; status?: number };
 
@@ -58,23 +59,6 @@ function connectWs(
       finish({ kind: "rejected", status });
     });
   });
-}
-
-// ---------------------------------------------------------------------------
-// Env save/restore helper
-// ---------------------------------------------------------------------------
-
-function saveEnv(...keys: string[]): { restore: () => void } {
-  const saved: Record<string, string | undefined> = {};
-  for (const key of keys) saved[key] = process.env[key];
-  return {
-    restore() {
-      for (const key of keys) {
-        if (saved[key] === undefined) delete process.env[key];
-        else process.env[key] = saved[key];
-      }
-    },
-  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

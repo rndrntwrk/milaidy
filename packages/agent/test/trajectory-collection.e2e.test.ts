@@ -4,6 +4,7 @@ import trajectoryLoggerPlugin from "@elizaos/plugin-trajectory-logger";
 import { describe, expect, it } from "vitest";
 import { startApiServer } from "../src/api/server";
 import { req } from "../../../test/helpers/http";
+import { type RawSqlQuery, sqlText } from "../../../test/helpers/sql";
 
 type TrajectoryStatus = "active" | "completed" | "error" | "timeout";
 
@@ -49,20 +50,6 @@ type StoredTrajectory = {
   steps: StoredStep[];
   metadata: Record<string, unknown>;
 };
-
-interface RawSqlQuery {
-  queryChunks?: Array<{
-    value?: string[];
-  }>;
-}
-
-function sqlText(query: RawSqlQuery): string {
-  const chunks = query.queryChunks ?? [];
-  return chunks
-    .map((chunk) => (Array.isArray(chunk.value) ? chunk.value.join("") : ""))
-    .join("")
-    .trim();
-}
 
 function parseLimitOffset(query: string): { limit: number; offset: number } {
   const limitMatch = /limit\s+(\d+)/i.exec(query);

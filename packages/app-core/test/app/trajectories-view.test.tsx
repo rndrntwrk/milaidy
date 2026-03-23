@@ -91,6 +91,7 @@ import type {
   TrajectoryListResult,
   TrajectoryStats,
 } from "@miladyai/app-core/api";
+import { flush } from "../../../../test/helpers/react-test";
 import { TrajectoriesView } from "@miladyai/app-core/components/TrajectoriesView";
 
 const { mockClient, mockConfirmDesktopAction, mockUseApp } = hoisted;
@@ -112,15 +113,6 @@ const trajectoryStats: TrajectoryStats = {
   bySource: {},
   byModel: {},
 };
-
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-  });
-  await act(async () => {
-    await Promise.resolve();
-  });
-}
 
 function collectText(node: TestRenderer.ReactTestInstance): string {
   return node.children

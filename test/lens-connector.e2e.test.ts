@@ -1,5 +1,5 @@
 /**
- * Lens Protocol Connector Validation Tests — GitHub Issue #151
+ * Lens Protocol Connector Validation Tests
  *
  * Comprehensive E2E tests for validating the Lens Protocol connector (@elizaos/plugin-lens).
  *
@@ -339,7 +339,7 @@ async function lensWaitForPost(
   return {
     id: data.post.id,
     content: data.post.metadata?.content ?? "",
-    commentOn: data.post.commentOn ?? undefined,
+    commentOn: data.post.commentOn,
     isDeleted: data.post.isDeleted,
   };
 }

@@ -105,6 +105,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   SkillScanReportSummary: {},
 }));
 
+import { flush } from "../../../../test/helpers/react-test";
 import { AppProvider, useApp } from "@miladyai/app-core/state";
 
 type StartupSnapshot = {
@@ -141,12 +142,6 @@ function createDeferred<T>() {
     resolve = res;
   });
   return { promise, resolve };
-}
-
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-  });
 }
 
 async function waitFor(assertion: () => void): Promise<void> {

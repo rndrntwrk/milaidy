@@ -1,4 +1,4 @@
-import { ElizaClient } from "@miladyai/app-core/api";
+import { MiladyClient } from "@miladyai/app-core/api";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 function buildSseResponse(chunks: string[]): Response {
@@ -41,12 +41,12 @@ function buildErroringSseResponse(chunks: string[]): Response {
 describe("SSE stream interruption detection", () => {
   const originalFetch = globalThis.fetch;
   let fetchMock: ReturnType<typeof vi.fn>;
-  let client: ElizaClient;
+  let client: MiladyClient;
 
   beforeEach(() => {
     fetchMock = vi.fn();
     globalThis.fetch = fetchMock as typeof globalThis.fetch;
-    client = new ElizaClient("http://localhost:2138", "token");
+    client = new MiladyClient("http://localhost:2138", "token");
   });
 
   afterEach(() => {

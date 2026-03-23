@@ -86,3 +86,21 @@ export async function fetchWithAuth(
   }
   return res;
 }
+
+/**
+ * Extracts the API token from the URL (e.g. ?token=...) and stores it,
+ * then strips it from the URL to prevent leaking in screenshots/sharing.
+ */
+export function consumeUrlToken(): void {
+  try {
+    const currentUrl = new URL(window.location.href);
+    const tokenParam = currentUrl.searchParams.get("token");
+    if (tokenParam) {
+      setToken(tokenParam);
+      currentUrl.searchParams.delete("token");
+      window.history.replaceState({}, "", currentUrl.toString());
+    }
+  } catch {
+    // ignore URL parsing errors
+  }
+}

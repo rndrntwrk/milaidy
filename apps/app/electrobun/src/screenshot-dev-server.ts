@@ -12,7 +12,7 @@
  *
  * Enable with MILADY_DESKTOP_SCREENSHOT_SERVER=`1` / `true` / `yes` (dev-platform sets `1` by default
  * for `dev:desktop:*`). Port: MILADY_SCREENSHOT_SERVER_PORT (default 31339). Auth: MILADY_SCREENSHOT_SERVER_TOKEN
- * as Bearer or ?token=.
+ * as Bearer header only (query params not supported to avoid token leakage in logs/Referer).
  */
 
 import http from "node:http";
@@ -57,10 +57,10 @@ export function startScreenshotDevServer(): (() => void) | undefined {
       }
 
       if (token) {
+        // Bearer-only — query param `?token=` intentionally not supported
+        // to avoid token leakage in server logs and Referer headers.
         const auth = req.headers.authorization;
-        const q = u.searchParams.get("token");
-        const ok = auth === `Bearer ${token}` || (q != null && q === token);
-        if (!ok) {
+        if (auth !== `Bearer ${token}`) {
           res.writeHead(401, { "Content-Type": "text/plain; charset=utf-8" });
           res.end("unauthorized");
           return;
@@ -95,6 +95,12 @@ export function startScreenshotDevServer(): (() => void) | undefined {
       res.end("error");
     }
   });
+
+  if (!token) {
+    console.warn(
+      "[ScreenshotDev] No MILADY_SCREENSHOT_SERVER_TOKEN set — screenshot endpoint is unprotected on loopback",
+    );
+  }
 
   server.on("error", (err: NodeJS.ErrnoException) => {
     const inUse = err.code === "EADDRINUSE";

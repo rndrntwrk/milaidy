@@ -13,7 +13,7 @@ function createRuntimeStub(
     enableAutonomy: true,
     plugins,
     getService: vi.fn(() => null),
-  } as unknown as unknown as AgentRuntime;
+  } as unknown as AgentRuntime;
 }
 
 describe("agent lifecycle routes", () => {

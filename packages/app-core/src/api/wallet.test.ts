@@ -48,6 +48,7 @@ vi.mock("@elizaos/plugin-trust", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
 vi.mock("@miladyai/plugin-wechat", () => ({ default: {} }));
 
+import { saveEnv } from "../../../../test/helpers/test-utils";
 import {
   DEFAULT_EVM_CHAINS,
   deriveEvmAddress,
@@ -70,29 +71,6 @@ import {
 const HARDHAT_PRIVATE_KEY =
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 const HARDHAT_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Save and restore env vars around tests that mutate process.env. */
-function saveEnvKeys(...keys: string[]): { restore: () => void } {
-  const saved: Record<string, string | undefined> = {};
-  for (const key of keys) {
-    saved[key] = process.env[key];
-  }
-  return {
-    restore() {
-      for (const key of keys) {
-        if (saved[key] === undefined) {
-          delete process.env[key];
-        } else {
-          process.env[key] = saved[key];
-        }
-      }
-    },
-  };
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // EVM Key Generation & Address Derivation
@@ -361,7 +339,7 @@ describe("Wallet import", () => {
   let envBackup: { restore: () => void };
 
   beforeEach(() => {
-    envBackup = saveEnvKeys("EVM_PRIVATE_KEY", "SOLANA_PRIVATE_KEY");
+    envBackup = saveEnv("EVM_PRIVATE_KEY", "SOLANA_PRIVATE_KEY");
     delete process.env.EVM_PRIVATE_KEY;
     delete process.env.SOLANA_PRIVATE_KEY;
   });
@@ -424,7 +402,7 @@ describe("Secure key storage", () => {
   let envBackup: { restore: () => void };
 
   beforeEach(() => {
-    envBackup = saveEnvKeys("EVM_PRIVATE_KEY", "SOLANA_PRIVATE_KEY");
+    envBackup = saveEnv("EVM_PRIVATE_KEY", "SOLANA_PRIVATE_KEY");
   });
 
   afterEach(() => {
@@ -495,7 +473,7 @@ describe("Wallet availability for plugins", () => {
   let envBackup: { restore: () => void };
 
   beforeEach(() => {
-    envBackup = saveEnvKeys(
+    envBackup = saveEnv(
       "EVM_PRIVATE_KEY",
       "SOLANA_PRIVATE_KEY",
       "ALCHEMY_API_KEY",
@@ -559,7 +537,7 @@ describe("getWalletAddresses — edge cases", () => {
   let envBackup: { restore: () => void };
 
   beforeEach(() => {
-    envBackup = saveEnvKeys("EVM_PRIVATE_KEY", "SOLANA_PRIVATE_KEY");
+    envBackup = saveEnv("EVM_PRIVATE_KEY", "SOLANA_PRIVATE_KEY");
   });
 
   afterEach(() => {
@@ -670,7 +648,7 @@ describe("importWallet — edge cases", () => {
   let envBackup: { restore: () => void };
 
   beforeEach(() => {
-    envBackup = saveEnvKeys("EVM_PRIVATE_KEY", "SOLANA_PRIVATE_KEY");
+    envBackup = saveEnv("EVM_PRIVATE_KEY", "SOLANA_PRIVATE_KEY");
     delete process.env.EVM_PRIVATE_KEY;
     delete process.env.SOLANA_PRIVATE_KEY;
   });

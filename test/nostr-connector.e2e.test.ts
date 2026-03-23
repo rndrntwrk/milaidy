@@ -1,5 +1,5 @@
 /**
- * Nostr Connector Validation Tests — GitHub Issue #157
+ * Nostr Connector Validation Tests
  *
  * Comprehensive E2E tests for validating the Nostr connector (@elizaos/plugin-nostr).
  *
@@ -33,6 +33,7 @@ import {
 } from "@miladyai/app-core/src/test-support/test-helpers";
 import dotenv from "dotenv";
 import { describe, expect, it } from "vitest";
+import { sleep } from "./helpers/test-utils";
 
 // ---------------------------------------------------------------------------
 // Environment Setup
@@ -77,9 +78,6 @@ const LIVE_WRITE_TIMEOUT = 120_000;
 // Utilities
 // ---------------------------------------------------------------------------
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /** Parse relay URLs from comma-separated string */
 function parseRelays(relayStr: string): string[] {
@@ -313,14 +311,9 @@ describe("Nostr Connector - Integration", () => {
   });
 
   it("Nostr is mapped in CHANNEL_PLUGIN_MAP", async () => {
-    let mod: { CHANNEL_PLUGIN_MAP: Record<string, string> } | null;
-    try {
-      mod = await tryWorkspaceImport<{
-        CHANNEL_PLUGIN_MAP: Record<string, string>;
-      }>("@miladyai/app-core/src/runtime/eliza");
-    } catch {
-      mod = null;
-    }
+    const mod = await tryWorkspaceImport<{
+      CHANNEL_PLUGIN_MAP: Record<string, string>;
+    }>("@miladyai/app-core/src/runtime/eliza");
     if (!mod) {
       logger.warn("[nostr-connector] Workspace not built — skipping");
       return;

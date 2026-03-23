@@ -1,5 +1,5 @@
 /**
- * Matrix Connector Validation Tests — GitHub Issue #156
+ * Matrix Connector Validation Tests
  *
  * Comprehensive E2E tests for validating the Matrix connector (@elizaos/plugin-matrix).
  *
@@ -37,6 +37,7 @@ import {
 } from "@miladyai/app-core/src/test-support/test-helpers";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { sleep } from "./helpers/test-utils";
 
 // ---------------------------------------------------------------------------
 // Environment Setup
@@ -79,9 +80,6 @@ const LIVE_WRITE_TIMEOUT = 60_000;
 // Utilities
 // ---------------------------------------------------------------------------
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /** Parse room IDs from comma-separated string */
 function parseRooms(roomStr: string): string[] {

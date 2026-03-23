@@ -1,33 +1,15 @@
 import type { client as appClient } from "@miladyai/app-core/api";
 import { invokeDesktopBridgeRequest } from "@miladyai/app-core/bridge";
+import type {
+  PermissionsClientLike as ClientLike,
+  PermissionsPatchState as PatchState,
+} from "./types";
 
 const PATCH_STATE = Symbol.for("milady.desktopPermissionsPatch");
 
 type SystemPermissionId = Parameters<typeof appClient.getPermission>[0];
 type PermissionState = Awaited<ReturnType<typeof appClient.getPermission>>;
 type AllPermissionsState = Awaited<ReturnType<typeof appClient.getPermissions>>;
-
-type ClientLike = Pick<
-  typeof appClient,
-  | "getPermissions"
-  | "getPermission"
-  | "requestPermission"
-  | "openPermissionSettings"
-  | "refreshPermissions"
-  | "setShellEnabled"
-  | "isShellEnabled"
-> &
-  Record<string | symbol, unknown>;
-
-type PatchState = {
-  getPermissions: ClientLike["getPermissions"];
-  getPermission: ClientLike["getPermission"];
-  requestPermission: ClientLike["requestPermission"];
-  openPermissionSettings: ClientLike["openPermissionSettings"];
-  refreshPermissions: ClientLike["refreshPermissions"];
-  setShellEnabled: ClientLike["setShellEnabled"];
-  isShellEnabled: ClientLike["isShellEnabled"];
-};
 
 export function installDesktopPermissionsClientPatch(
   client: ClientLike,

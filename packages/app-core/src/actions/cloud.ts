@@ -1,8 +1,4 @@
-/**
- * Cloud action helpers — extracted from AppContext.
- *
- * Pure functions for Eliza Cloud status polling and credit management.
- */
+/** Cloud action helpers — Eliza Cloud status polling and credit management. */
 
 import type { MiladyClient } from "../api/client";
 

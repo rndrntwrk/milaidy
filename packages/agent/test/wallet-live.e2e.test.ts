@@ -46,46 +46,6 @@ const hasHelius = Boolean(process.env.HELIUS_API_KEY?.trim());
 const canRun = hasEvmKey && hasSolKey && hasAlchemy && hasHelius;
 const WALLET_EXPORT_TOKEN = `wallet-live-export-token-${Date.now()}`;
 
-function req(
-  port: number,
-  method: string,
-  p: string,
-  body?: Record<string, unknown>,
-): Promise<{ status: number; data: Record<string, unknown> }> {
-  return new Promise((resolve, reject) => {
-    const b = body ? JSON.stringify(body) : undefined;
-    const r = http.request(
-      {
-        hostname: "127.0.0.1",
-        port,
-        path: p,
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          ...(b ? { "Content-Length": Buffer.byteLength(b) } : {}),
-        },
-      },
-      (res) => {
-        const ch: Buffer[] = [];
-        res.on("data", (c: Buffer) => ch.push(c));
-        res.on("end", () => {
-          const raw = Buffer.concat(ch).toString("utf-8");
-          let data: Record<string, unknown> = {};
-          try {
-            data = JSON.parse(raw) as Record<string, unknown>;
-          } catch {
-            data = { _raw: raw };
-          }
-          resolve({ status: res.statusCode ?? 0, data });
-        });
-      },
-    );
-    r.on("error", reject);
-    if (b) r.write(b);
-    r.end();
-  });
-}
-
 describe.skipIf(!canRun)("Wallet live E2E — real keys, real APIs", () => {
   let port: number;
   let close: () => Promise<void>;

@@ -1,3 +1,4 @@
+import { Button } from "@miladyai/ui";
 import { useApp } from "../state";
 import type { AppState, FlaminaGuideTopic } from "../state/types";
 
@@ -166,13 +167,14 @@ export function DeferredSetupChecklist({
             completed any time.
           </p>
         </div>
-        <button
-          type="button"
-          className="rounded-full border border-border/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted transition-colors hover:text-txt"
+        <Button
+          variant="ghost"
+          size="sm"
+          className="rounded-full text-[11px] font-semibold uppercase tracking-[0.12em] text-muted"
           onClick={() => setState("postOnboardingChecklistDismissed", true)}
         >
           Dismiss
-        </button>
+        </Button>
       </div>
 
       <div className="space-y-2">
@@ -188,20 +190,22 @@ export function DeferredSetupChecklist({
               <p className="text-xs text-muted">{TASK_DESCRIPTIONS[task]}</p>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-txt"
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full border-accent/30 bg-accent/10 text-[11px] font-semibold uppercase tracking-[0.12em]"
                 onClick={() => onOpenTask?.(task)}
               >
                 Open
-              </button>
-              <button
-                type="button"
-                className="rounded-full border border-border/60 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted transition-colors hover:text-txt"
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded-full text-[11px] font-semibold uppercase tracking-[0.12em] text-muted"
                 onClick={() => markDone(task as FlaminaGuideTopic)}
               >
                 Done
-              </button>
+              </Button>
             </div>
           </div>
         ))}

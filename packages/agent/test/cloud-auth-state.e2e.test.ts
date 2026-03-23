@@ -4,24 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startApiServer } from "../src/api/server";
 import { req } from "../../../test/helpers/http";
-
-function saveEnv(...keys: string[]): { restore: () => void } {
-  const saved: Record<string, string | undefined> = {};
-  for (const key of keys) {
-    saved[key] = process.env[key];
-  }
-  return {
-    restore() {
-      for (const key of keys) {
-        if (saved[key] === undefined) {
-          delete process.env[key];
-        } else {
-          process.env[key] = saved[key];
-        }
-      }
-    },
-  };
-}
+import { saveEnv } from "../../../test/helpers/test-utils";
 
 describe("Cloud auth status persistence", () => {
   let port = 0;

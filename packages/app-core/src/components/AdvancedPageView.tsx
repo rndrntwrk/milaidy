@@ -264,7 +264,7 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
             <button
               key={subTab.id}
               type="button"
-              className={`advanced-subtab-btn settings-icon-btn ${currentSubTab === subTab.id ? "is-active" : ""}`}
+              className={`select-none [&_*]:select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] focus:outline-none focus-visible:outline-none settings-icon-btn ${currentSubTab === subTab.id ? "is-active" : ""}`}
               onClick={() => handleSubTabChange(subTab.id)}
               title={subTab.description}
             >
@@ -282,7 +282,7 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
                 <button
                   type="button"
                   key={subTab.id}
-                  className={`advanced-subtab-btn px-4 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
+                  className={`select-none [&_*]:select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] focus:outline-none focus-visible:outline-none px-4 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
                     isActive
                       ? "border-accent text-txt"
                       : "border-transparent text-muted hover:text-txt hover:border-border"

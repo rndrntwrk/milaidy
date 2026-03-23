@@ -1,5 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { releaseData } from "../generated/release-data";
+import { matchAsset } from "../lib/release-helpers";
 
 const REPO = "milady-ai/milady";
 
@@ -140,18 +141,6 @@ const installMethods: { id: InstallMethod; label: string; prefix: string }[] = [
   { id: "powershell", label: "PowerShell", prefix: "PS>" },
   { id: "brew", label: "Brew", prefix: "$" },
 ];
-
-export function matchAsset(name: string): string | null {
-  const n = name.toLowerCase();
-  if (/macos.*arm64.*\.dmg$/.test(n)) return "macos-arm64";
-  if (/macos.*x64.*\.dmg$/.test(n)) return "macos-x64";
-  if (/setup.*\.exe$/.test(n) || /win.*\.exe$/.test(n)) return "windows-x64";
-  if (/win.*setup.*\.zip$/.test(n)) return "windows-x64";
-  if (/linux.*\.deb$/.test(n)) return "linux-deb";
-  if (/linux.*\.appimage$/.test(n)) return "linux-x64";
-  if (/linux.*\.tar\.gz$/.test(n)) return "linux-x64";
-  return null;
-}
 
 function buildStaticUrls(): Record<string, string> {
   const urls: Record<string, string> = {};

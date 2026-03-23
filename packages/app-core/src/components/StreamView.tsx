@@ -141,7 +141,9 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
             setStreamSource({ type: "game", url: activeGameViewerUrl });
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.warn("[stream] Failed to set game source:", err);
+        });
     } else if (!activeGameViewerUrl.trim() && streamSource.type === "game") {
       client
         .setStreamSource("stream-tab")
@@ -150,7 +152,9 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
             setStreamSource({ type: "stream-tab" });
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.warn("[stream] Failed to reset stream source:", err);
+        });
     }
     return () => {
       cancelled = true;
@@ -190,7 +194,8 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
           );
         }
       }
-    } catch {
+    } catch (err) {
+      console.warn("[stream] Failed to toggle stream:", err);
       try {
         const status = await client.streamStatus();
         setStreamLive(status.running && status.ffmpegAlive);
@@ -211,19 +216,25 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
       .then((res) => {
         if (res.ok) setDestinations(res.destinations);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn("[stream] Failed to fetch destinations:", err);
+      });
   }, [streamAvailable]);
 
   // ── Volume / mute / destination handlers ────────────────────────────
   const handleVolumeChange = useCallback((vol: number) => {
     setVolume(vol);
-    client.setStreamVolume(vol).catch(() => {});
+    client.setStreamVolume(vol).catch((err) => {
+      console.warn("[stream] Failed to set volume:", err);
+    });
   }, []);
 
   const handleToggleMute = useCallback(() => {
     const next = !muted;
     setMuted(next);
-    (next ? client.muteStream() : client.unmuteStream()).catch(() => {});
+    (next ? client.muteStream() : client.unmuteStream()).catch((err) => {
+      console.warn("[stream] Failed to toggle mute:", err);
+    });
   }, [muted]);
 
   const handleDestinationChange = useCallback((id: string) => {
@@ -232,7 +243,9 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
       .then((res) => {
         if (res.ok && res.destination) setActiveDestination(res.destination);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn("[stream] Failed to set destination:", err);
+      });
   }, []);
 
   const handleSourceChange = useCallback(
@@ -244,8 +257,8 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
             result.source as { type: StreamSourceType; url?: string },
           );
         }
-      } catch {
-        // Non-fatal — UI will show stale state
+      } catch (err) {
+        console.warn("[stream] Failed to change source:", err);
       }
     },
     [],

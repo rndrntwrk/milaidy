@@ -111,6 +111,19 @@ vi.mock("@miladyai/ui", async () => {
       ...props
     }: React.ComponentProps<"button">) =>
       React.createElement("button", { ...props, onClick }, children),
+    TooltipProvider: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    Tooltip: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    TooltipTrigger: ({
+      children,
+      asChild,
+      ...props
+    }: { children?: React.ReactNode; asChild?: boolean } & Record<string, unknown>) =>
+      asChild
+        ? (children as React.ReactElement)
+        : React.createElement("span", props, children),
+    TooltipContent: () => null,
   };
 });
 
@@ -121,6 +134,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   },
 }));
 
+import { textOf } from "../../../../test/helpers/react-test";
 import { ConversationsSidebar } from "@miladyai/app-core/components/ConversationsSidebar";
 
 function createContext(
@@ -156,12 +170,6 @@ function createContext(
     uiLanguage: "en",
     ...overrides,
   };
-}
-
-function textOf(node: TestRenderer.ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : textOf(child)))
-    .join("");
 }
 
 describe("ConversationsSidebar game-modal variant", () => {

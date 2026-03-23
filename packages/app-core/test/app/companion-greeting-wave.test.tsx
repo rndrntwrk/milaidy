@@ -127,6 +127,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   SkillScanReportSummary: {},
 }));
 
+import { flush } from "../../../../test/helpers/react-test";
 import { AppProvider, useApp } from "@miladyai/app-core/state";
 
 type ProbeApi = {
@@ -160,12 +161,6 @@ function Probe(props: {
   }, [app.tab, app.uiShellMode, props]);
 
   return null;
-}
-
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-  });
 }
 
 async function waitFor(assertion: () => void): Promise<void> {

@@ -38,9 +38,7 @@ bunx miladyai
   Start the elizaOS agent runtime in headless server-only mode.
 </Card>
 
-<Card title="tui" icon="terminal" href="/cli/tui">
-  Launch the interactive terminal UI with chat, model selection, and slash commands (default command).
-</Card>
+
 
 <Card title="setup" icon="gear" href="/cli/setup">
   Initialize the config file and bootstrap the agent workspace directory.
@@ -79,14 +77,11 @@ bunx miladyai
 ## Quick Reference
 
 ```bash
-# Start the interactive TUI (default command)
+# Start the agent
 milady
 
 # Start agent in headless server mode
 milady start
-
-# Launch TUI with a specific model
-milady tui -m anthropic/claude-sonnet-4-20250514
 
 # Run setup
 milady setup

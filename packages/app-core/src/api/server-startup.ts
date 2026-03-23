@@ -1,12 +1,6 @@
 /**
  * Server startup helpers — safe state dir check, package root resolution,
  * and CORS origin resolution.
- *
- * Extracted from `server.ts` for maintainability.  Re-exported from
- * `server.ts` so existing imports remain valid.
- *
- * Note: `startApiServer` remains in `server.ts` because it is tightly
- * coupled to `patchHttpCreateServerForMiladyCompat` and module-level state.
  */
 import fs from "node:fs";
 import path from "node:path";

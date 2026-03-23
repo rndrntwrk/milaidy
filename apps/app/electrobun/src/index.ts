@@ -1,10 +1,3 @@
-/**
- * Milady Desktop App — Electrobun Main Entry
- *
- * Creates the main BrowserWindow, wires up RPC handlers,
- * sets up system tray, application menu, and starts the agent.
- */
-
 import fs from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import os from "node:os";
@@ -83,10 +76,6 @@ let heartbeatMenuSnapshot: HeartbeatMenuSnapshot =
   EMPTY_HEARTBEAT_MENU_SNAPSHOT;
 let heartbeatMenuRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
-// ============================================================================
-// App Menu
-// ============================================================================
-
 import {
   isAgentReady,
   onAgentReadyChange,
@@ -108,7 +97,6 @@ function setupApplicationMenu(): void {
   );
 }
 
-// Refresh the application menu whenever agent readiness changes.
 onAgentReadyChange(() => setupApplicationMenu());
 
 function summarizeDesktopActionError(error: unknown, fallback: string): string {
@@ -397,13 +385,6 @@ function startHeartbeatMenuRefresh(): void {
   }, HEARTBEAT_MENU_REFRESH_MS);
 }
 
-// ============================================================================
-// macOS Native Window Effects (vibrancy, shadow, traffic lights, drag + resize)
-// ============================================================================
-// hiddenInset removes the title bar; WKWebView fills the client area. Native
-// NSViews above the web view handle move (top strip) and inner-edge resize
-// (right/bottom/BR). See docs/guides/electrobun-mac-window-chrome.md (WHYs).
-
 const MAC_TRAFFIC_LIGHTS_X = 14;
 const MAC_TRAFFIC_LIGHTS_Y = 12;
 /** Left inset of the drag strip so it clears the traffic lights. */
@@ -467,13 +448,7 @@ function applyMacOSWindowEffects(win: BrowserWindow): void {
   } catch {
     // webview may not accept listeners yet in some embed paths
   }
-
-  console.log("[MacEffects] Native macOS window effects applied");
 }
-
-// ============================================================================
-// Window State Persistence
-// ============================================================================
 
 interface WindowState {
   x: number;
@@ -504,9 +479,7 @@ function loadWindowState(statePath: string): WindowState {
         return state;
       }
     }
-  } catch {
-    // Ignore parse/read errors — return default
-  }
+  } catch {}
   return DEFAULT_WINDOW_STATE;
 }
 
@@ -529,15 +502,9 @@ function scheduleStateSave(statePath: string, win: BrowserWindow): void {
         JSON.stringify({ x, y, width, height }),
         "utf8",
       );
-    } catch {
-      // Ignore save errors
-    }
+    } catch {}
   }, 500);
 }
-
-// ============================================================================
-// Main Window
-// ============================================================================
 
 let currentWindow: BrowserWindow | null = null;
 let currentSendToWebview: SendToWebview | null = null;
@@ -559,10 +526,6 @@ function sendToActiveRenderer(message: string, payload?: unknown): void {
     );
   }
 }
-
-// ============================================================================
-// Renderer Static Server
-// ============================================================================
 
 /**
  * Serve the renderer dist over HTTP so WKWebView can load it without
@@ -838,7 +801,7 @@ async function ensureBackgroundWindow(): Promise<void> {
     const replacementWindow = attachMainWindow(await createMainWindow());
     try {
       replacementWindow.minimize();
-      console.log("[Main] Recreated minimized window after close");
+      console.log("[Main] Recreated minimized background window");
       showBackgroundRunNoticeOnce();
     } catch (err) {
       console.warn("[Main] Failed to minimize background window:", err);
@@ -864,10 +827,6 @@ function showBackgroundRunNoticeOnce(): void {
     console.warn("[Main] Failed to persist background notice marker:", error);
   }
 }
-
-// ============================================================================
-// Settings Window
-// ============================================================================
 
 async function createSettingsWindow(tabHint?: string): Promise<void> {
   if (!surfaceWindowManager) return;
@@ -1018,11 +977,6 @@ function toggleFocusedWindowDevTools(): void {
   });
 }
 
-// ============================================================================
-// RPC + Native Module Wiring
-// ============================================================================
-
-// Type alias for the untyped rpc send proxy (used at runtime for push messages)
 type RpcSendProxy = Record<string, ((payload: unknown) => void) | undefined>;
 
 /**
@@ -1045,11 +999,8 @@ type ElectrobunRpcInstance = {
 function wireRpcAndModules(
   win: BrowserWindow,
 ): (message: string, payload?: unknown) => void {
-  // Access the rpc instance from the webview (set during window creation)
   const rpc = win.webview.rpc as ElectrobunRpcInstance | undefined;
 
-  // Create the sendToWebview callback that native modules use to push events.
-  // Uses typed RPC push messages instead of JS evaluation.
   const sendToWebview = (message: string, payload?: unknown): void => {
     if (rpc?.send) {
       const sender = rpc?.send?.[message];
@@ -1061,10 +1012,7 @@ function wireRpcAndModules(
     console.warn(`[sendToWebview] No RPC method for message: ${message}`);
   };
 
-  // Initialize native modules with window + sendToWebview
   initializeNativeModules(win, sendToWebview);
-
-  // Register RPC handlers
   registerRpcHandlers(rpc, sendToWebview);
 
   return sendToWebview;
@@ -1095,10 +1043,6 @@ function wireSettingsRpc(win: BrowserWindow): void {
   // handler registry but does not touch native module singletons.
   registerRpcHandlers(rpc, sendToWebview);
 }
-
-// ============================================================================
-// API Base Injection
-// ============================================================================
 
 function injectApiBase(win: BrowserWindow): void {
   const runtimeResolution = resolveDesktopRuntimeMode(
@@ -1138,10 +1082,6 @@ function injectApiBase(win: BrowserWindow): void {
   );
   setAgentReady(true);
 }
-
-// ============================================================================
-// Agent Startup
-// ============================================================================
 
 /**
  * Push real OS permission states into the agent REST API so the renderer's
@@ -1202,10 +1142,6 @@ async function _startAgent(win: BrowserWindow): Promise<void> {
     console.error("[Main] Agent start failed:", err);
   }
 }
-
-// ============================================================================
-// Auto-Updater
-// ============================================================================
 
 async function setupUpdater(): Promise<void> {
   const runUpdateCheck = async (notifyOnNoUpdate = false): Promise<void> => {
@@ -1351,21 +1287,11 @@ async function setupUpdater(): Promise<void> {
   }
 }
 
-// ============================================================================
-// Deep Link Handling
-// ============================================================================
-
 function setupDeepLinks(): void {
-  // Electrobun handles urlSchemes from config automatically.
-  // Listen for open-url events to route deep links to the renderer.
   Electrobun.events.on("open-url", (url: string) => {
     sendToActiveRenderer("shareTargetReceived", { url });
   });
 }
-
-// ============================================================================
-// Shutdown
-// ============================================================================
 
 function setupShutdown(cleanupFns: Array<() => void>): void {
   Electrobun.events.on("before-quit", () => {
@@ -1377,10 +1303,6 @@ function setupShutdown(cleanupFns: Array<() => void>): void {
     disposeNativeModules();
   });
 }
-
-// ============================================================================
-// Bootstrap
-// ============================================================================
 
 /**
  * Load repo-root and ~/.eliza/.env into `process.env` (non-destructive) so the
@@ -1483,7 +1405,7 @@ function checkWebGpuBrowserSupport(): void {
 
 async function main(): Promise<void> {
   await loadMiladyEnvFilesForMain();
-  console.log("[Main] Starting Milady (Electrobun)...");
+  console.log("[Main] Starting Milady (Electrobun)");
   const normalizedModuleDir = import.meta.dir.replaceAll("\\", "/");
   const runtimeResolution = resolveDesktopRuntimeMode(
     process.env as Record<string, string | undefined>,
@@ -1621,10 +1543,8 @@ async function main(): Promise<void> {
     }
   }
 
-  // Set up deep link handling
   setupDeepLinks();
 
-  // Set up system tray with default icon
   const desktop = getDesktopManager();
   try {
     await desktop.createTray({
@@ -1707,13 +1627,8 @@ async function main(): Promise<void> {
     }
   }
 
-  // Check for updates
   void setupUpdater();
-
-  // Set up clean shutdown
   setupShutdown(cleanupFns);
-
-  console.log("[Main] Milady started successfully");
 }
 
 main().catch((err) => {

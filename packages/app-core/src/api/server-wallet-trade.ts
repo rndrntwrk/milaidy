@@ -1,9 +1,6 @@
 /**
  * Wallet / trade compat helpers — trade permission modes, local execution
  * guards, and wallet export rejection wrappers.
- *
- * Extracted from `server.ts` for maintainability.  Re-exported from
- * `server.ts` so existing imports remain valid.
  */
 import type http from "node:http";
 import { resolveWalletExportRejection as upstreamResolveWalletExportRejection } from "@miladyai/agent/api/server";

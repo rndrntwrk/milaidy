@@ -1,4 +1,4 @@
-import { ElizaClient } from "@miladyai/app-core/api";
+import { MiladyClient } from "@miladyai/app-core/api";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 function buildSseDoneResponse(): Response {
@@ -19,7 +19,7 @@ function buildSseDoneResponse(): Response {
   });
 }
 
-describe("ElizaClient language header propagation", () => {
+describe("MiladyClient language header propagation", () => {
   const originalFetch = globalThis.fetch;
   let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -40,7 +40,7 @@ describe("ElizaClient language header propagation", () => {
       }),
     );
 
-    const client = new ElizaClient("http://localhost:2138", "token");
+    const client = new MiladyClient("http://localhost:2138", "token");
     client.setUiLanguage("zh-CN");
     await client.sendChatRest("hello");
 
@@ -52,7 +52,7 @@ describe("ElizaClient language header propagation", () => {
   it("adds X-Milady-UI-Language to streaming chat requests", async () => {
     fetchMock.mockResolvedValueOnce(buildSseDoneResponse());
 
-    const client = new ElizaClient("http://localhost:2138");
+    const client = new MiladyClient("http://localhost:2138");
     client.setUiLanguage("zh-CN");
     await client.sendConversationMessageStream("conv-1", "hello", () => {});
 

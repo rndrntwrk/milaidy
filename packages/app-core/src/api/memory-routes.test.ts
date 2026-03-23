@@ -48,7 +48,7 @@ describe("memory routes", () => {
             }
           : null,
       getServiceLoadPromise: async () => undefined,
-    } as unknown as unknown as AgentRuntime;
+    } as unknown as AgentRuntime;
   });
 
   const invoke = createRouteInvoker<

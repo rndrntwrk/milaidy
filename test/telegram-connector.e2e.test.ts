@@ -1,5 +1,5 @@
 /**
- * Telegram Connector Validation Tests — GitHub Issue #142
+ * Telegram Connector Validation Tests
  *
  * Comprehensive E2E tests for validating the Telegram connector (@elizaos/plugin-telegram).
  *

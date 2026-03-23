@@ -1,6 +1,7 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { textOf as text } from "../../../../test/helpers/react-test";
 
 const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
@@ -295,12 +296,6 @@ function createContext(
   });
 
   return ctx;
-}
-
-function text(node: TestRenderer.ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : text(child)))
-    .join("");
 }
 
 async function flushAsync() {

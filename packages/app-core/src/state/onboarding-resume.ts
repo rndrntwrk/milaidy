@@ -5,30 +5,13 @@ import {
   type OnboardingLocalProviderId,
 } from "@miladyai/agent/contracts/onboarding";
 import type { BuildOnboardingConnectionArgs } from "../onboarding-config";
+import { asRecord, readString } from "./config-readers";
 import type { OnboardingStep } from "./types";
 
 const REDACTED_SECRET = "[REDACTED]";
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 function hasConfigValue(value: unknown): boolean {
   return typeof value === "string" ? value.trim().length > 0 : value === true;
-}
-
-function readString(
-  source: Record<string, unknown> | null | undefined,
-  key: string,
-): string | null {
-  const value = source?.[key];
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 
 function readNonRedactedString(

@@ -1,19 +1,7 @@
 import { startApiServer } from "@miladyai/app-core/src/api/server";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { req } from "./helpers/http";
-
-function saveEnv(...keys: string[]): { restore: () => void } {
-  const prev = new Map<string, string | undefined>();
-  for (const key of keys) prev.set(key, process.env[key]);
-  return {
-    restore: () => {
-      for (const [key, value] of prev) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-      }
-    },
-  };
-}
+import { saveEnv } from "./helpers/test-utils";
 
 describe("Terminal run validation and limit guards", () => {
   const TEST_CLIENT_ID = "terminal-run-limits-e2e";
@@ -35,10 +23,6 @@ describe("Terminal run validation and limit guards", () => {
 
   beforeEach(async () => {
     await req(port, "PUT", "/api/permissions/shell", { enabled: true });
-    delete process.env.MILADY_TERMINAL_MAX_CONCURRENT;
-    delete process.env.ELIZA_TERMINAL_MAX_CONCURRENT;
-    delete process.env.MILADY_TERMINAL_MAX_DURATION_MS;
-    delete process.env.ELIZA_TERMINAL_MAX_DURATION_MS;
     delete process.env.MILADY_TERMINAL_MAX_CONCURRENT;
     delete process.env.ELIZA_TERMINAL_MAX_CONCURRENT;
     delete process.env.MILADY_TERMINAL_MAX_DURATION_MS;

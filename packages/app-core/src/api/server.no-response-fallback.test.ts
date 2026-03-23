@@ -35,7 +35,7 @@ describe("conversation no-response fallback", () => {
       debug: vi.fn(),
     },
     adapter: {},
-  } as unknown as unknown as AgentRuntime;
+  } as unknown as AgentRuntime;
 
   beforeAll(async () => {
     const server = await startApiServer({ port: 0 });

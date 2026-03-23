@@ -264,8 +264,7 @@ async function createPage(
         window.localStorage.setItem("milady:ui-theme", "dark");
         window.localStorage.setItem("milady:ui-shell-mode", "native");
         window.sessionStorage.setItem("milady_api_base", init.apiBaseUrl);
-        (window as unknown as Record<string, unknown>).__MILADY_API_BASE__ =
-          init.apiBaseUrl;
+        Object.assign(window, { __MILADY_API_BASE__: init.apiBaseUrl });
       } catch {
         // Ignore storage setup failures on intermediate documents
       }

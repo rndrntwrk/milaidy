@@ -3,6 +3,7 @@ import { createUniqueUuid } from "@elizaos/core";
 import { startApiServer } from "@miladyai/app-core/src/api/server";
 import { describe, expect, it } from "vitest";
 import { req } from "./helpers/http";
+import { type RawSqlQuery, sqlText } from "./helpers/sql";
 
 let trajectoryLoggerPlugin: { name: string; actions?: unknown[] } | null = null;
 try {
@@ -56,20 +57,6 @@ type StoredTrajectory = {
   steps: StoredStep[];
   metadata: Record<string, unknown>;
 };
-
-interface RawSqlQuery {
-  queryChunks?: Array<{
-    value?: string[];
-  }>;
-}
-
-function sqlText(query: RawSqlQuery): string {
-  const chunks = query.queryChunks ?? [];
-  return chunks
-    .map((chunk) => (Array.isArray(chunk.value) ? chunk.value.join("") : ""))
-    .join("")
-    .trim();
-}
 
 function parseLimitOffset(query: string): { limit: number; offset: number } {
   const limitMatch = /limit\s+(\d+)/i.exec(query);

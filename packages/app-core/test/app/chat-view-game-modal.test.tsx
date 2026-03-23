@@ -74,6 +74,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   client: mockClient,
 }));
 
+import { textOf } from "../../../../test/helpers/react-test";
 import { ChatView } from "@miladyai/app-core/components/ChatView";
 
 function createContext(
@@ -105,12 +106,6 @@ function createContext(
     t: (k: string) => k,
     ...overrides,
   };
-}
-
-function textOf(node: TestRenderer.ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : textOf(child)))
-    .join("");
 }
 
 describe("ChatView game-modal variant", () => {

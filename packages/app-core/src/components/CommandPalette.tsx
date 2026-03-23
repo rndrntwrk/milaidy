@@ -1,3 +1,4 @@
+import { Dialog, DialogContent } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { isElectrobunRuntime } from "../bridge";
 import {
@@ -215,41 +216,9 @@ export function CommandPalette() {
     }
   }, [commandQuery, setState]);
 
-  if (!commandPaletteOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-start justify-center pt-30"
-      style={{
-        background: "color-mix(in srgb, var(--bg) 50%, transparent)",
-        backdropFilter: "blur(4px)",
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          closeCommandPalette();
-        }
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          closeCommandPalette();
-        }
-      }}
-      role="dialog"
-      aria-modal="true"
-      tabIndex={-1}
-    >
-      <div
-        className="w-[520px] max-h-[420px] flex flex-col rounded-xl"
-        style={{
-          background: "color-mix(in srgb, var(--bg) 96%, transparent)",
-          border:
-            "1px solid color-mix(in srgb, var(--accent) 18%, transparent)",
-          borderRadius: "16px",
-          boxShadow: "var(--shadow-lg)",
-        }}
-        role="document"
-      >
+    <Dialog open={commandPaletteOpen} onOpenChange={(v) => { if (!v) closeCommandPalette(); }}>
+      <DialogContent className="w-[520px] max-w-[520px] max-h-[420px] p-0 flex flex-col rounded-xl top-[30%] translate-y-0">
         <input
           ref={inputRef}
           type="text"
@@ -299,7 +268,7 @@ export function CommandPalette() {
             ))
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

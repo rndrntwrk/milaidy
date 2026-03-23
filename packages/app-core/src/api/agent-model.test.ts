@@ -6,7 +6,7 @@ function makeRuntime(overrides: Partial<AgentRuntime>): AgentRuntime {
   return {
     plugins: [],
     ...overrides,
-  } as unknown as unknown as AgentRuntime;
+  } as unknown as AgentRuntime;
 }
 
 describe("detectRuntimeModel", () => {
