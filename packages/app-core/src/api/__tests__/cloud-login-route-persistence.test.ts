@@ -8,7 +8,6 @@
  * - /api/cloud/billing/* used stale in-memory config without the API key
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type http from "node:http";
 import {
   createMockHttpResponse,
   createMockIncomingMessage,

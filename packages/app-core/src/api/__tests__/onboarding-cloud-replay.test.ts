@@ -28,11 +28,10 @@ vi.mock("@miladyai/agent/cloud/validate-url", () => ({
   validateCloudBaseUrl: vi.fn(() => Promise.resolve(null)),
 }));
 
-import { loadElizaConfig, saveElizaConfig } from "../../config/config";
+import { loadElizaConfig } from "../../config/config";
 import { deriveCompatOnboardingReplayBody } from "../server-onboarding-compat";
 
 const loadMock = loadElizaConfig as ReturnType<typeof vi.fn>;
-const saveMock = saveElizaConfig as ReturnType<typeof vi.fn>;
 
 describe("deriveCompatOnboardingReplayBody", () => {
   beforeEach(() => {
@@ -44,16 +43,14 @@ describe("deriveCompatOnboardingReplayBody", () => {
       name: "Agent",
       connection: { kind: "cloud-managed" },
     };
-    const { isCloudMode, replayBody } =
-      deriveCompatOnboardingReplayBody(body);
+    const { isCloudMode, replayBody } = deriveCompatOnboardingReplayBody(body);
     expect(isCloudMode).toBe(true);
     expect(replayBody).toHaveProperty("runMode", "cloud");
   });
 
   it("detects cloud mode from runMode === 'cloud'", () => {
     const body = { name: "Agent", runMode: "cloud" };
-    const { isCloudMode, replayBody } =
-      deriveCompatOnboardingReplayBody(body);
+    const { isCloudMode, replayBody } = deriveCompatOnboardingReplayBody(body);
     expect(isCloudMode).toBe(true);
     // runMode already "cloud", so replayBody === body
     expect(replayBody.runMode).toBe("cloud");
