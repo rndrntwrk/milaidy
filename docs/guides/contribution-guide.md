@@ -60,9 +60,6 @@ bun run dev:ui
 # Desktop app (Electrobun) development
 bun run dev:desktop
 
-# Terminal UI
-bun run tui
-
 # Run the CLI directly
 bun run milady start
 ```
@@ -334,7 +331,7 @@ milady/
 │   ├── security/            # Security utilities
 │   ├── services/            # Background services
 │   ├── triggers/            # Trigger system
-│   ├── tui/                 # Terminal UI
+│   ├── tui/                 # Terminal UI (disabled)
 │   └── utils/               # Helper utilities
 ├── test/                    # Test setup, helpers, e2e scripts
 ├── AGENTS.md                # Repository guidelines for agents

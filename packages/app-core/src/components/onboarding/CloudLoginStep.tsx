@@ -1,4 +1,5 @@
 import { useApp } from "@miladyai/app-core/state";
+import { Spinner } from "@miladyai/ui";
 import { useEffect, useRef } from "react";
 
 export function CloudLoginStep() {
@@ -43,7 +44,7 @@ export function CloudLoginStep() {
         </p>
       ) : elizaCloudLoginBusy ? (
         <div className="flex items-center gap-2 text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3" style={{ textShadow: '0 2px 10px rgba(3,5,10,0.45)' }}>
-          <span className="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full" />
+          <Spinner size={16} className="text-current" />
           {t("onboarding.cloudLoginBusy")}
         </div>
       ) : (

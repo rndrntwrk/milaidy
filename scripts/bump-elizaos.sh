@@ -19,7 +19,7 @@
 # What this does:
 #   1. Normalises the version to 2.0.0-alpha.{N}
 #   2. Updates package.json: pins @elizaos/agent, @elizaos/core,
-#      @miladyai/app-core, @miladyai/ui, @elizaos/prompts, @elizaos/tui,
+#      @miladyai/app-core, @miladyai/ui, @elizaos/prompts,
 #      @elizaos/sweagent-root to the target version
 #   3. Checks if @elizaos/core at that version ships dist/node/index.node.js
 #      (the native node binding needed for production)
@@ -111,7 +111,6 @@ ELIZAOS_PACKAGES=(
   "@miladyai/app-core"
   "@miladyai/ui"
   "@elizaos/prompts"
-  "@elizaos/tui"
   "@elizaos/sweagent-root"
 )
 

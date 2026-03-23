@@ -1768,8 +1768,11 @@ async function handleMiladyCompatRoute(
     if (!ensureCompatApiAuthorized(req, res)) {
       return true;
     }
+    const _dbgConfig = loadElizaConfig();
+    const _dbgKey = (_dbgConfig.cloud as Record<string, unknown> | undefined)?.apiKey;
+    console.log(`[DEBUG cloud/compat] apiKey present: ${!!_dbgKey}, type: ${typeof _dbgKey}, cloud keys: ${JSON.stringify(Object.keys((_dbgConfig.cloud as Record<string, unknown>) ?? {}))}`);
     return handleCloudCompatRoute(req, res, url.pathname, method, {
-      config: loadElizaConfig(),
+      config: _dbgConfig,
     });
   }
 
@@ -1987,6 +1990,10 @@ async function handleMiladyCompatRoute(
     }
 
     const config = loadElizaConfig();
+    if (url.pathname === "/api/cloud/status") {
+      const _ck = (config.cloud as Record<string, unknown> | undefined)?.apiKey;
+      console.log(`[DEBUG cloud/status] apiKey present: ${!!_ck}, cloud keys: ${JSON.stringify(Object.keys((config.cloud as Record<string, unknown>) ?? {}))}`);
+    }
 
     if (
       url.pathname === "/api/cloud/status" ||
@@ -2743,7 +2750,27 @@ async function handleMiladyCompatRoute(
       const { isCloudMode, replayBody: replayBodyRecord } =
         _deriveCompatOnboardingReplayBody(body);
 
-      if (isCloudMode && body.runMode !== "cloud") {
+      if (isCloudMode) {
+        // Ensure the cloud API key is included in the replayed body so the
+        // upstream handler sets it on state.config.  Without this, the
+        // upstream's stale in-memory config won't contain the key and cloud
+        // billing / compat routes return 401.
+        if (
+          !replayBodyRecord.providerApiKey ||
+          typeof replayBodyRecord.providerApiKey !== "string"
+        ) {
+          const { getCloudSecret: getSecret } = await import(
+            "./cloud-secrets"
+          );
+          const sealedKey = getSecret("ELIZAOS_CLOUD_API_KEY");
+          const diskConfig = loadElizaConfig();
+          const apiKey =
+            sealedKey ||
+            (diskConfig.cloud as Record<string, unknown> | undefined)?.apiKey;
+          if (typeof apiKey === "string" && apiKey.trim()) {
+            replayBodyRecord.providerApiKey = apiKey;
+          }
+        }
         replayBody = Buffer.from(JSON.stringify(replayBodyRecord), "utf8");
       }
 
@@ -2782,6 +2809,8 @@ async function handleMiladyCompatRoute(
               (body.largeModel as string) || "";
           }
         }
+        const _finalCloudKey = (config.cloud as Record<string, unknown> | undefined)?.apiKey;
+        console.log(`[DEBUG onboarding-save] cloud.apiKey present: ${!!_finalCloudKey}, isCloudMode: ${isCloudMode}, cloud keys: ${JSON.stringify(Object.keys((config.cloud as Record<string, unknown>) ?? {}))}`);
         saveElizaConfig(config);
       } catch (err) {
         logger.warn(

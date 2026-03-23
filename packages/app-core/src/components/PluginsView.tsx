@@ -2181,43 +2181,6 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="sticky top-0 z-20 border-b border-border/50 bg-bg/85 px-4 py-4 shadow-[0_12px_30px_rgba(0,0,0,0.14)] backdrop-blur-xl sm:px-6 lg:px-8">
-            <div className="mx-auto max-w-5xl">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <Input
-                  type="text"
-                  className="h-11 w-full rounded-xl border-border/60 bg-card/70 text-sm shadow-sm"
-                  placeholder="Search connectors..."
-                  value={pluginSearch}
-                  onChange={(e) => setState("pluginSearch", e.target.value)}
-                />
-                <div className="flex shrink-0 gap-1.5 rounded-xl border border-white/5 bg-black/10 p-1">
-                  {(["all", "enabled"] as const).map((status) => (
-                    <Button
-                      key={status}
-                      variant={
-                        effectiveStatusFilter === status ? "default" : "ghost"
-                      }
-                      size="sm"
-                      className={`h-8 px-3 text-[11px] font-bold tracking-wide transition-all ${
-                        effectiveStatusFilter === status
-                          ? "shadow-sm"
-                          : "text-muted hover:bg-white/5 hover:text-txt"
-                      }`}
-                      onClick={() =>
-                        setState("pluginStatusFilter", status as StatusFilter)
-                      }
-                    >
-                      {status === "all"
-                        ? `All (${categoryPlugins.length})`
-                        : `Enabled (${enabledCount})`}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div className="mx-auto max-w-5xl px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
             {hasPluginToggleInFlight && (
               <div className="mb-4 rounded-2xl border border-accent bg-accent-subtle px-4 py-3 text-[11px] text-txt">
@@ -2866,53 +2829,6 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
       >
         {showToolbar && (
           <div className="flex items-center gap-3 mb-4 flex-wrap">
-            <div className="relative flex-1 min-w-[220px]">
-              <Input
-                type="text"
-                name="plugin-search"
-                autoComplete="off"
-                data-1p-ignore
-                data-lpignore="true"
-                className="w-full bg-card/60 backdrop-blur-md shadow-inner pr-8 h-9 rounded-xl focus-visible:ring-accent border-border/40"
-                placeholder={searchPlaceholder}
-                value={pluginSearch}
-                onChange={(e) => setState("pluginSearch", e.target.value)}
-              />
-              {pluginSearch && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 text-muted hover:text-txt rounded-full"
-                  onClick={() => setState("pluginSearch", "")}
-                  title={t("pluginsview.ClearSearch")}
-                >
-                  ✕
-                </Button>
-              )}
-            </div>
-
-            <div className="flex gap-1.5 shrink-0 bg-black/10 p-1 rounded-xl border border-white/5">
-              {(["all", "enabled"] as const).map((s) => (
-                <Button
-                  key={s}
-                  variant={pluginStatusFilter === s ? "default" : "ghost"}
-                  size="sm"
-                  className={`h-7 px-3 text-[11px] font-bold tracking-wide rounded-lg transition-all ${
-                    pluginStatusFilter === s
-                      ? "shadow-sm"
-                      : "text-muted hover:text-txt hover:bg-white/5"
-                  }`}
-                  onClick={() =>
-                    setState("pluginStatusFilter", s as StatusFilter)
-                  }
-                >
-                  {s === "all"
-                    ? `All (${categoryPlugins.length})`
-                    : `Enabled (${enabledCount})`}
-                </Button>
-              ))}
-            </div>
-
             {allowCustomOrder && pluginOrder.length > 0 && (
               <Button
                 variant="outline"

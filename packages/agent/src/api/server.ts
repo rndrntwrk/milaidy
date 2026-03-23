@@ -85,7 +85,6 @@ import {
   importAgent,
 } from "../services/agent-export.js";
 import { AppManager } from "../services/app-manager.js";
-import { FallbackTrainingService } from "../services/fallback-training-service.js";
 import {
   getMcpServerDetails,
   searchMcpMarketplace,
@@ -196,7 +195,10 @@ import { buildWhitelistTree, generateProof } from "./merkle-tree.js";
 import { handleModelsRoutes } from "./models-routes.js";
 import { handleNfaRoutes } from "./nfa-routes.js";
 
-import type { PTYService } from "./parse-action-block.js";
+import type {
+  CoordinationLLMResponse,
+  PTYService,
+} from "./parse-action-block.js";
 import { handlePermissionRoutes } from "./permissions-routes.js";
 import {
   type PluginParamInfo,
@@ -247,13 +249,6 @@ import {
 type SwarmEvent = Record<string, any>;
 // biome-ignore lint/suspicious/noExplicitAny: legacy coordinator task context
 type TaskContext = Record<string, any>;
-interface CoordinationLLMResponse {
-  action: string;
-  reasoning: string;
-  response?: string;
-  useKeys?: boolean;
-  keys?: string[];
-}
 interface TaskCompletionSummary {
   sessionId: string;
   label: string;
@@ -16631,9 +16626,8 @@ export async function startApiServer(opts?: {
     state.trainingService = new trainingServiceCtor(trainingServiceOptions);
   } else {
     logger.warn(
-      "[eliza-api] Training service package unavailable; using fallback in-memory implementation",
+      "[eliza-api] Training service package unavailable; training routes will return 503",
     );
-    state.trainingService = new FallbackTrainingService(trainingServiceOptions);
   }
   // Register immediately so /api/training routes are available without a startup race.
   const configuredAdminEntityId = config.agents?.defaults?.adminEntityId;

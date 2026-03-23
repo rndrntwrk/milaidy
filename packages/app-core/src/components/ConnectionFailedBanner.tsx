@@ -1,3 +1,4 @@
+import { Button, Spinner } from "@miladyai/ui";
 import { isElectrobunRuntime } from "../bridge";
 import { useApp } from "../state";
 
@@ -23,27 +24,7 @@ export function ConnectionFailedBanner() {
         className="fixed left-0 right-0 z-[9999] flex items-center gap-3 bg-amber-500 px-4 py-2 text-[13px] font-medium text-white shadow-lg"
         style={{ top: bannerTop }}
       >
-        <svg
-          className="h-4 w-4 shrink-0 animate-spin"
-          viewBox="0 0 24 24"
-          fill="none"
-          aria-label={t("aria.reconnecting")}
-          role="img"
-        >
-          <circle
-            className="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            strokeWidth="4"
-          />
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-          />
-        </svg>
+        <Spinner size={16} className="shrink-0 text-white" aria-label={t("aria.reconnecting")} />
         <span className="truncate">
           {t("connectionfailedbanner.ReconnectingAtt")}{" "}
           {backendConnection.reconnectAttempt}/
@@ -68,20 +49,22 @@ export function ConnectionFailedBanner() {
           {t("connectionfailedbanner.attemptsRealTime")}
         </span>
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={dismissBackendDisconnectedBanner}
-            className="rounded px-3 py-1 text-[12px] text-red-100 hover:bg-red-700 transition-colors cursor-pointer"
+            className="rounded px-3 py-1 text-[12px] text-red-100 hover:bg-red-700 hover:text-white"
           >
             {t("skillsview.Dismiss")}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={retryBackendConnection}
-            className="rounded bg-white px-3 py-1 text-[12px] font-semibold text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+            className="rounded bg-white px-3 py-1 text-[12px] font-semibold text-red-700 hover:bg-red-50 border-transparent"
           >
             {t("vectorbrowserview.RetryConnection")}
-          </button>
+          </Button>
         </div>
       </div>
     );

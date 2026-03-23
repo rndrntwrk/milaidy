@@ -4,7 +4,7 @@ sidebarTitle: "start"
 description: "Start the Milady agent runtime in server-only mode."
 ---
 
-Start the elizaOS agent runtime without an interactive terminal UI. The runtime boots in `serverOnly` mode, which means the API server and agent loop start but no TUI or interactive chat interface is launched. The `run` command is a direct alias for `start`.
+Start the elizaOS agent runtime in headless server mode. The runtime boots in `serverOnly` mode, which means the API server and agent loop start but no interactive chat interface is launched. The `run` command is a direct alias for `start`.
 
 ## Usage
 
@@ -52,7 +52,7 @@ When you run `milady start`:
 1. The CLI calls `startEliza({ serverOnly: true })` from the elizaOS runtime.
 2. The API server starts on port `2138` by default (override with `MILADY_PORT`).
 3. The agent loop begins processing messages from connected clients and messaging platforms.
-4. No interactive terminal UI is launched -- the process runs headlessly.
+4. No interactive interface is launched -- the process runs headlessly.
 
 The `run` command is a direct alias that calls the exact same `startEliza({ serverOnly: true })` function.
 
@@ -90,7 +90,6 @@ The API server supports hot-restart via `POST /api/agent/restart` when `commands
 
 ## Related
 
-- [milady tui](/cli/tui) -- start with the interactive terminal UI
 - [milady setup](/cli/setup) -- initialize the config and workspace before starting
 - [Environment Variables](/cli/environment) -- all environment variables
 - [Configuration](/configuration) -- full config file reference

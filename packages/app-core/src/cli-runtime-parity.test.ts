@@ -10,7 +10,7 @@
  *   - Config env vars are applied identically
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { envSnapshot } from "../../../../test/helpers/test-utils";
+import { envSnapshot } from "../../../test/helpers/test-utils";
 import type { ElizaConfig } from "./config/config";
 // Shared presets used by both CLI and API server
 import { SHARED_STYLE_RULES, STYLE_PRESETS } from "./onboarding-presets";

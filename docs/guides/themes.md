@@ -303,29 +303,6 @@ Button base classes (`.btn` and `.theme-btn`) are defined in `styles.css` and au
 - `.btn` uses `--accent` for background and border, `--accent-foreground` for text.
 - `.theme-btn` uses `--bg` for background and `--border` for the border, switching to `--accent` for the active state.
 
-### CLI and TUI Theming
-
-The CLI and TUI have their own separate color palettes, independent of the dashboard themes.
-
-**CLI palette** (defined in `src/terminal/palette.ts`):
-
-| Token | Hex | Purpose |
-|-------|-----|---------|
-| `accent` | `#FF5A2D` | Primary CLI accent |
-| `accentBright` | `#FF7A3D` | Bright accent (commands) |
-| `accentDim` | `#D14A22` | Dim accent |
-| `info` | `#FF8A5B` | Informational |
-| `success` | `#2FBF71` | Success messages |
-| `warn` | `#FFB020` | Warnings |
-| `error` | `#E23D2D` | Errors |
-| `muted` | `#8B7F77` | De-emphasized text |
-
-The CLI respects `NO_COLOR` and `FORCE_COLOR` environment variables for color output control.
-
-**TUI palette** (defined in `src/tui/theme.ts`):
-
-The TUI uses a separate set of brand colors: accent `#E879F9`, dim accent `#A855F7`, muted `#6B7280`, success `#34D399`, error `#F87171`, warning `#FBBF24`, info `#60A5FA`. These drive the select list, editor, and markdown rendering themes within the terminal UI.
-
 ## VRM 3D Avatars
 
 ### What Are VRM Avatars?

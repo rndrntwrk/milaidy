@@ -61,47 +61,7 @@ describe("AppManager initialization", () => {
 });
 
 // ============================================================================
-//  2. FallbackTrainingService — callback-based dependencies
-// ============================================================================
-
-describe("FallbackTrainingService initialization", () => {
-  let FallbackTrainingService: typeof import("../services/fallback-training-service").FallbackTrainingService;
-
-  beforeEach(async () => {
-    vi.resetModules();
-    const mod = await import("../services/fallback-training-service");
-    FallbackTrainingService = mod.FallbackTrainingService;
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("instantiates with callback options (runtime not needed at init)", () => {
-    const svc = new FallbackTrainingService({
-      getRuntime: () => null,
-      getConfig: () => ({}),
-      setConfig: vi.fn(),
-    });
-    expect(svc).toBeDefined();
-  });
-
-  it("handles null runtime gracefully when listing trajectories", async () => {
-    const svc = new FallbackTrainingService({
-      getRuntime: () => null,
-      getConfig: () => ({}),
-      setConfig: vi.fn(),
-    });
-    // Method should not throw even without runtime
-    if (typeof svc.listTrajectories === "function") {
-      const result = await svc.listTrajectories().catch(() => []);
-      expect(Array.isArray(result)).toBe(true);
-    }
-  });
-});
-
-// ============================================================================
-//  3. Config loading — startup dependency
+//  2. Config loading — startup dependency
 // ============================================================================
 
 describe("Config loading at startup", () => {

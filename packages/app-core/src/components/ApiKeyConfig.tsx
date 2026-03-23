@@ -1,5 +1,6 @@
 /** ApiKeyConfig — Local AI provider settings (API key input forms). */
 
+import { Button } from "@miladyai/ui";
 import { useCallback, useState } from "react";
 import { client, type PluginParamDef } from "../api";
 import {
@@ -182,16 +183,16 @@ export function ApiKeyConfig({
 
       <div className="flex justify-between items-center mt-3">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex items-center justify-center border border-accent bg-accent text-accent-fg cursor-pointer text-[13px] font-[inherit] no-underline whitespace-nowrap rounded-lg transition-opacity duration-100 hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed text-xs py-[5px] px-3.5 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)] hover:!text-[var(--text)] hover:!border-[var(--accent)]"
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => void handleFetchModels(selectedProvider.id)}
             disabled={modelsFetching}
           >
             {modelsFetching
               ? t("apikeyconfig.fetching")
               : t("apikeyconfig.fetchModels")}
-          </button>
+          </Button>
           {modelsFetchResult && (
             <span
               className={`text-[11px] ${modelsFetchResult.tone === "error" ? "text-[var(--danger)]" : "text-[var(--ok)]"}`}
@@ -200,18 +201,19 @@ export function ApiKeyConfig({
             </span>
           )}
         </div>
-        <button
-          type="button"
-          className={`inline-flex items-center justify-center border border-accent bg-accent text-accent-fg cursor-pointer text-[13px] font-[inherit] no-underline whitespace-nowrap rounded-lg transition-opacity duration-100 hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed text-xs py-[5px] px-4 !mt-0 ${saveSuccess ? "!bg-[var(--ok)] !border-[var(--ok)]" : ""}`}
+        <Button
+          variant="default"
+          size="sm"
           onClick={() => handlePluginSave(selectedProvider.id)}
           disabled={isSaving}
+          className={saveSuccess ? "bg-[var(--ok)] border-[var(--ok)]" : ""}
         >
           {isSaving
             ? t("apikeyconfig.saving")
             : saveSuccess
               ? t("apikeyconfig.saved")
               : t("apikeyconfig.save")}
-        </button>
+        </Button>
       </div>
     </div>
   );

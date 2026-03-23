@@ -135,19 +135,7 @@ function SettingsSidebar({
 
   return (
     <aside className="hidden w-[16rem] shrink-0 self-stretch lg:sticky lg:top-0 lg:flex lg:h-screen">
-      {/* Search */}
       <div className="px-3 py-3 border-b border-border">
-        <div className="flex items-center gap-2 px-2.5 py-1.5 border border-border bg-bg">
-          <Search className="h-3 w-3 shrink-0 text-muted" aria-hidden />
-          <Input
-            type="text"
-            placeholder={t("settings.searchPlaceholder") || "Search..."}
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="h-6 min-w-0 flex-1 border-0 bg-transparent py-0 pr-0 pl-0 text-[11px] font-mono shadow-none placeholder:text-muted/60 focus-visible:ring-0 focus-visible:ring-offset-0"
-          />
-        </div>
-
         {/* Navigation */}
         <nav className="flex-1 py-4 px-3">
           <div className="space-y-1.5">
@@ -508,7 +496,7 @@ export function SettingsView({
 } = {}) {
   const { t, loadPlugins, setTab } = useApp();
   const [activeSection, setActiveSection] = useState(
-    initialSection ?? "ai-model",
+    initialSection ?? "advanced",
   );
   const [searchQuery, setSearchQuery] = useState("");
   const shellRef = useRef<HTMLDivElement>(null);

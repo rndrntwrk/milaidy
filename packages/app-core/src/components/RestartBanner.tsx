@@ -1,3 +1,4 @@
+import { Button } from "@miladyai/ui";
 import { useCallback, useState } from "react";
 import { isElectrobunRuntime } from "../bridge";
 import { useApp } from "../state";
@@ -47,29 +48,24 @@ export function RestartBanner() {
     >
       <span className="truncate">{text}</span>
       <div className="flex items-center gap-2 shrink-0">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={dismissRestartBanner}
-          className="rounded px-3 py-1 text-[12px] transition-colors"
-          style={{ color: "var(--muted)" }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--bg-hover)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent";
-          }}
+          className="rounded px-3 py-1 text-[12px] text-muted hover:bg-[var(--bg-hover)]"
         >
           {t("restartbanner.Later")}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={handleRestart}
           disabled={restarting}
-          className="rounded px-3 py-1 text-[12px] font-semibold transition-colors disabled:opacity-60"
+          className="rounded px-3 py-1 text-[12px] font-semibold border-transparent"
           style={{ background: "#f0b232", color: "#000" }}
         >
           {restarting ? "Restarting..." : "Restart Now"}
-        </button>
+        </Button>
       </div>
     </div>
   );

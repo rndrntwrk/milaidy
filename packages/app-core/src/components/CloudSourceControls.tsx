@@ -16,12 +16,12 @@ export function CloudSourceModeToggle({
 }) {
   const resolvedCloudLabel = cloudLabel;
   return (
-    <div className="inline-flex overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--card)] shadow-sm">
+    <div className="inline-flex overflow-hidden rounded-lg bg-[var(--bg-muted)] shadow-sm">
       <Button
         type="button"
         variant="ghost"
         size="sm"
-        className={`first:rounded-l-lg first:rounded-r-none last:rounded-l-none last:rounded-r-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
           mode === "cloud"
             ? "bg-[var(--accent)] text-[var(--accent-foreground)] hover:bg-[var(--accent)]/90 hover:text-[var(--accent-foreground)]"
             : "bg-transparent text-[var(--muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
@@ -34,7 +34,7 @@ export function CloudSourceModeToggle({
         type="button"
         variant="ghost"
         size="sm"
-        className={`first:rounded-l-lg first:rounded-r-none last:rounded-l-none last:rounded-r-lg border-l border-[var(--border)] px-3 py-1.5 text-xs font-semibold transition-colors ${
+        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
           mode === "own-key"
             ? "bg-[var(--accent)] text-[var(--accent-foreground)] hover:bg-[var(--accent)]/90 hover:text-[var(--accent-foreground)]"
             : "bg-transparent text-[var(--muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"

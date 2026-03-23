@@ -24,7 +24,6 @@ Outcome: you can install Milady and run a basic conversation loop.
 
 - `/configuration`
 - `/model-providers`
-- `/apps/tui`
 - `/apps/dashboard/settings`
 
 Outcome: you can tune model/provider behavior and navigate day-to-day controls.

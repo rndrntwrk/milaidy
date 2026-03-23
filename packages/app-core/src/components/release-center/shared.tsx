@@ -1,3 +1,4 @@
+import { StatusBadge, type StatusTone } from "@miladyai/ui";
 import { formatDateTime } from "../format";
 
 export function summarizeError(error: unknown): string {
@@ -21,6 +22,12 @@ export function formatTimestamp(timestamp?: number | null): string {
   return formatDateTime(timestamp, { fallback: "Not yet" });
 }
 
+const PILL_TONE_MAP: Record<string, StatusTone> = {
+  good: "success",
+  warning: "warning",
+  neutral: "muted",
+};
+
 export function StatusPill({
   label,
   tone,
@@ -28,19 +35,12 @@ export function StatusPill({
   label: string;
   tone: "neutral" | "good" | "warning";
 }) {
-  const className =
-    tone === "good"
-      ? "border-ok/40 bg-ok/10 text-ok"
-      : tone === "warning"
-        ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-        : "border-border bg-bg-accent text-muted";
-
   return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${className}`}
-    >
-      {label}
-    </span>
+    <StatusBadge
+      label={label}
+      tone={PILL_TONE_MAP[tone] ?? "muted"}
+      className="rounded-full px-2.5 py-1 text-[11px] font-medium normal-case"
+    />
   );
 }
 

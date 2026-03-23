@@ -117,7 +117,9 @@ async function persistCloudLoginStatus(args: {
 
   try {
     saveElizaConfig(args.state.config);
-  } catch {
+    console.log(`[DEBUG persistCloudLoginStatus] SAVED config with apiKey (${typeof args.apiKey}, len=${args.apiKey.length}), cloud keys after save: ${JSON.stringify(Object.keys(cloud))}`);
+  } catch (saveErr) {
+    console.error(`[DEBUG persistCloudLoginStatus] SAVE FAILED:`, saveErr);
     // Non-fatal: the authenticated account still lives in sealed secrets/runtime.
   }
 

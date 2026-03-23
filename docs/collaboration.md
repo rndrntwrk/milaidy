@@ -81,7 +81,17 @@
 - **Removed 6 no-op `vi.mock("node:path")` calls** from electrobun test files — these imported the actual module and returned it unchanged (pure no-op)
 - **Deleted `kitchen-sink.test.ts.bak`** — leftover backup file
 
-### Total across all passes: ~1,500+ lines of duplicated mock/helper code removed across 70+ files
+### Pass 5 — Utility helper extraction:
+- **Created `test/helpers/test-utils.ts`** — `saveEnv`, `envSnapshot`, `withTimeout`, `sleep`, `createDeferred`
+- **Created `test/helpers/sql.ts`** — `RawSqlQuery`, `sqlText`, `splitSqlTuple`, `parseSqlScalar`
+- **Replaced `saveEnv`/`envSnapshot`** in 14 files (test/, packages/agent/test/, packages/app-core/src/)
+- **Replaced `withTimeout`/`sleep`** in 8 files
+- **Replaced `createDeferred`** in 13 files (test/, packages/agent/test/, packages/app-core/test/app/, packages/app-core/src/runtime/)
+- **Replaced SQL helpers** in 6 trajectory test files
+- **Replaced `requestApi`** with shared `req()` in 4 files (trigger-runtime, apps-e2e)
+- **Renamed `saveEnvKeys`→`saveEnv`** in wallet.test.ts
+
+### Total across all passes: ~3,000+ lines of duplicated mock/helper code removed across 100+ files
 
 ---
 

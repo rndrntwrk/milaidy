@@ -2,6 +2,7 @@
  * Pairing view component — simple pairing screen for authentication.
  */
 
+import { Button, Input, Label } from "@miladyai/ui";
 import { appNameInterpolationVars, useBranding } from "../config/branding";
 import { useApp } from "../state";
 
@@ -49,31 +50,27 @@ export function PairingView() {
       {pairingEnabled ? (
         <form onSubmit={handleSubmit}>
           <div>
-            <label
-              htmlFor="pairing-code"
-              className="text-sm text-txt-strong block mb-2"
-            >
+            <Label htmlFor="pairing-code" className="mb-2">
               {t("pairingview.PairingCode")}
-            </label>
-            <input
+            </Label>
+            <Input
               id="pairing-code"
               type="text"
               value={pairingCodeInput}
               onChange={handleCodeChange}
               placeholder={t("pairingview.EnterPairingCode")}
               disabled={pairingBusy}
-              className="w-full px-3 py-2.5 rounded-lg border border-border bg-bg-muted text-txt text-sm focus:border-accent focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>
 
           <div className="mt-3 flex gap-2.5">
-            <button
+            <Button
               type="submit"
-              className="px-6 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
+              variant="default"
               disabled={pairingBusy || !pairingCodeInput.trim()}
             >
               {pairingBusy ? "Pairing..." : "Submit"}
-            </button>
+            </Button>
           </div>
 
           {pairingError && (

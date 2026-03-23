@@ -312,7 +312,6 @@ export function warnStaleBunCache(root, log = console.log) {
     "@elizaos+app-core@",
     "@elizaos+prompts@",
     "@elizaos+skills@",
-    "@elizaos+tui@",
   ];
   let staleCount = 0;
 

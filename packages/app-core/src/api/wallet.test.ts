@@ -49,7 +49,7 @@ vi.mock("@elizaos/plugin-trust", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
 vi.mock("@miladyai/plugin-wechat", () => ({ default: {} }));
 
-import { saveEnv } from "../../../../../test/helpers/test-utils";
+import { saveEnv } from "../../../../test/helpers/test-utils";
 import {
   DEFAULT_EVM_CHAINS,
   deriveEvmAddress,

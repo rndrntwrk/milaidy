@@ -23,7 +23,7 @@ import {
 } from "@miladyai/app-core/components";
 import { useApp } from "@miladyai/app-core/state";
 import { confirmDesktopAction } from "@miladyai/app-core/utils";
-import { Button, Checkbox, Input } from "@miladyai/ui";
+import { Button, Checkbox, Input, Spinner } from "@miladyai/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   isKnowledgeImageFile,
@@ -454,7 +454,7 @@ function DocumentDetailModal({
         <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
           {loading && (
             <div className="text-center py-12 text-muted font-bold tracking-wide animate-pulse">
-              <span className="inline-block w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin mr-3 align-middle" />
+              <Spinner size={16} className="inline-block mr-3 align-middle text-accent" />
               {t("databaseview.Loading")}
             </div>
           )}
@@ -1018,7 +1018,7 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
     <div className={inModal ? "h-full w-full overflow-y-auto pb-8" : "w-full"}>
       {isServiceLoading && (
         <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded border border-[var(--border)] bg-[var(--card)] text-sm text-[var(--muted)]">
-          <span className="w-4 h-4 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
+          <Spinner size={16} className="text-accent" />
 
           {t("knowledgeview.KnowledgeServiceIs")}
         </div>

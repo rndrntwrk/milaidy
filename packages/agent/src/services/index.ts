@@ -1,7 +1,6 @@
 export * from "./agent-export";
 export * from "./app-manager";
 export * from "./browser-capture";
-export * from "./fallback-training-service";
 export * from "./privy-wallets";
 export * from "./registry-client";
 export * from "./remote-signing-service";

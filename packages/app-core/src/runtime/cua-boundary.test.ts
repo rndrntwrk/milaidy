@@ -50,7 +50,7 @@ vi.mock("@elizaos/plugin-trust", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
 vi.mock("@miladyai/plugin-wechat", () => ({ default: {} }));
 
-import { envSnapshot } from "../../../../../test/helpers/test-utils";
+import { envSnapshot } from "../../../../test/helpers/test-utils";
 import { collectPluginNames } from "./eliza";
 
 const EMPTY_CONFIG: ElizaConfig = {} as ElizaConfig;

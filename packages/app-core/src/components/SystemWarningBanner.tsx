@@ -1,3 +1,4 @@
+import { Button } from "@miladyai/ui";
 import { useEffect, useRef } from "react";
 import { useApp } from "../state";
 
@@ -57,13 +58,14 @@ export function SystemWarningBanner() {
           style={{ top: `${baseTop + index * 36}px` }}
         >
           <span className="truncate">{message}</span>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => dismissSystemWarning(message)}
-            className="rounded px-2 py-0.5 text-[12px] text-amber-100 hover:bg-amber-600 transition-colors cursor-pointer shrink-0"
+            className="rounded px-2 py-0.5 text-[12px] text-amber-100 hover:bg-amber-600 shrink-0"
           >
             x
-          </button>
+          </Button>
         </div>
       ))}
     </>

@@ -27,7 +27,7 @@ You can use it for:
 
 Main interfaces:
 
-- `milady` command (CLI/TUI)
+- `milady` command (CLI)
 - Dashboard in browser
 - Desktop/mobile app builds (platform dependent)
 
@@ -123,7 +123,7 @@ If these work, your base install is healthy.
 
 ```bash
 milady                    # start interactive mode (default)
-milady start              # run server-only, no TUI
+milady start              # run server-only, headless
 milady dashboard          # open dashboard in browser
 milady configure          # configuration guidance
 milady config get <key>   # read config value
@@ -140,7 +140,7 @@ Tip: Use `milady <command> --help` any time you feel stuck.
 ### Interactive mode (`milady`)
 
 - Good for active local usage
-- Includes terminal UI (status, activity, quick controls)
+- Includes status display and quick controls
 
 ### Service mode (`milady start`)
 
@@ -265,7 +265,7 @@ Good routine:
 
 - **Provider**: the LLM backend (Anthropic/OpenAI/Ollama/etc.)
 - **Plugin**: adds capabilities/integrations
-- **Headless**: no interactive terminal UI; service-style runtime
+- **Headless**: no interactive UI; service-style runtime
 - **Workspace**: local files Milady uses for agent context and tasks
 - **Gateway**: service layer used by dashboard and interfaces
 
@@ -286,7 +286,6 @@ Use this staged path so you do not get overwhelmed.
    - `/model-providers`
 3. **Everyday commands and interfaces**
    - `/chat-commands`
-   - `/apps/tui`
    - `/apps/dashboard`
 4. **Safety basics**
    - `/guides/sandbox`

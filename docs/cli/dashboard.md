@@ -91,5 +91,4 @@ The web UI communicates with the agent API server at `http://localhost:2138` (or
 ## Related
 
 - [milady start](/cli/start) -- start the agent API server that the dashboard connects to
-- [milady tui](/cli/tui) -- terminal UI alternative to the web dashboard
 - [Environment Variables](/cli/environment) -- `MILADY_PORT` and other server configuration
