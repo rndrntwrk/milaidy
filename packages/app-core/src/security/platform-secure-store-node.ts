@@ -325,16 +325,5 @@ export function createNodePlatformSecureStore(): PlatformSecureStore {
  * explicitly.
  */
 export function isWalletOsStoreReadEnabled(): boolean {
-<<<<<<< Updated upstream
   return !isEnvDisabled(process.env.MILADY_WALLET_OS_STORE);
-=======
-  const raw = process.env.MILADY_WALLET_OS_STORE?.trim().toLowerCase();
-  if (!raw) return false;
-  return (
-    raw === "1" ||
-    raw === "true" ||
-    raw === "on" ||
-    raw === "yes"
-  );
->>>>>>> Stashed changes
 }
