@@ -1035,6 +1035,66 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
+    it("POST /api/chat injects uploaded knowledge snippets into generation", async () => {
+      let handledMessageText = "";
+      const knowledgeService = {
+        getKnowledge: async () => [
+          {
+            id: crypto.randomUUID() as UUID,
+            content: {
+              text: "The QA codeword is VELVET-MOON-4821. Answer with only the codeword.",
+            },
+            similarity: 0.91,
+          },
+        ],
+      };
+
+      const runtime = createRuntimeForChatSseTests({
+        getService: (serviceType) =>
+          serviceType === "knowledge" ? knowledgeService : null,
+        handleMessage: async (_runtime, message, onResponse) => {
+          handledMessageText = String(
+            (
+              message as {
+                content?: { text?: string };
+              }
+            ).content?.text ?? "",
+          );
+          await onResponse({ text: "VELVET-MOON-4821" } as Content);
+          return {
+            responseContent: {
+              text: "VELVET-MOON-4821",
+            },
+          };
+        },
+      });
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, data } = await req(
+          streamServer.port,
+          "POST",
+          "/api/chat",
+          {
+            text: "what is the qa codeword from the uploaded file?",
+            mode: "simple",
+          },
+        );
+
+        expect(status).toBe(200);
+        expect(String(data.text ?? "")).toBe("VELVET-MOON-4821");
+        expect(handledMessageText).toContain(
+          "Relevant uploaded knowledge snippets:",
+        );
+        expect(handledMessageText).toContain("VELVET-MOON-4821");
+        expect(handledMessageText).toContain(
+          "User message: what is the qa codeword from the uploaded file?",
+        );
+      } finally {
+        await streamServer.close();
+      }
+    });
+
     it("POST /api/chat does not use deprecated direct trajectory fallback when hooks do not set a step id", async () => {
       const starts: Array<{ stepId: string; source?: string }> = [];
       const ends: Array<{ stepId: string; status?: string }> = [];
@@ -2107,6 +2167,142 @@ describe("API Server E2E (no runtime)", () => {
         expect(llmCalls[0]?.response).toBe("fallback response");
         expect(llmCalls[0]?.promptTokens).toBe(12);
         expect(llmCalls[0]?.completionTokens).toBe(18);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("GET /api/trajectories/:id backfills chat prompt and response from conversation memory when detail is synthetic", async () => {
+      const trajectoryId = "trajectory-conversation-backfill";
+      const roomId = "room-conversation-backfill";
+      const startTime = Date.now() - 2_000;
+      const endTime = startTime + 1_100;
+      const userPrompt = "what is the qa codeword from the uploaded file?";
+      const assistantReply = "VELVET-MOON-4821";
+
+      const trajectoryLogger = {
+        isEnabled: () => true,
+        setEnabled: () => {},
+        listTrajectories: async () => ({
+          trajectories: [
+            {
+              id: trajectoryId,
+              agentId: "chat-stream-agent",
+              source: "client_chat",
+              status: "completed",
+              startTime,
+              endTime,
+              durationMs: endTime - startTime,
+              stepCount: 1,
+              llmCallCount: 1,
+              totalPromptTokens: 0,
+              totalCompletionTokens: 0,
+              totalReward: 0,
+              scenarioId: null,
+              batchId: null,
+              createdAt: new Date(startTime).toISOString(),
+            },
+          ],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        }),
+        getTrajectoryDetail: async () => ({
+          trajectoryId,
+          agentId: "chat-stream-agent",
+          startTime,
+          endTime,
+          durationMs: endTime - startTime,
+          steps: [
+            {
+              stepId: "step-synthetic",
+              timestamp: startTime + 100,
+              llmCalls: [
+                {
+                  callId: "call-synthetic",
+                  timestamp: startTime + 100,
+                  model: "milady/synthetic-trajectory-fallback",
+                  systemPrompt:
+                    "[synthetic] inserted by trajectory logger because no LLM calls were captured",
+                  userPrompt:
+                    "[synthetic] this trajectory completed without recorded model activity",
+                  response:
+                    "[synthetic] placeholder call inserted to enforce minimum llm_call_count=1",
+                  purpose: "other",
+                  actionType: "TRAJECTORY_FALLBACK",
+                },
+              ],
+              providerAccesses: [],
+            },
+          ],
+          metrics: {
+            finalStatus: "completed",
+          },
+          metadata: {
+            source: "client_chat",
+            roomId,
+          },
+        }),
+        getStats: async () => ({
+          totalTrajectories: 1,
+          totalSteps: 1,
+          totalLlmCalls: 1,
+          totalPromptTokens: 0,
+          totalCompletionTokens: 0,
+          averageDurationMs: endTime - startTime,
+          averageReward: 0,
+          bySource: { client_chat: 1 },
+          byStatus: { completed: 1 },
+          byScenario: {},
+        }),
+        deleteTrajectories: async () => 0,
+        clearAllTrajectories: async () => 0,
+        exportTrajectories: async () => ({
+          data: "[]",
+          filename: "trajectories.json",
+          mimeType: "application/json",
+        }),
+      };
+
+      const runtime = createRuntimeForChatSseTests({
+        getService: (serviceType) =>
+          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+        getServicesByType: (serviceType) =>
+          serviceType === "trajectory_logger" ? [trajectoryLogger] : [],
+      }) as AgentRuntime & { adapter?: unknown };
+      runtime.adapter = {};
+      runtime.getMemories = async () =>
+        [
+          {
+            id: crypto.randomUUID(),
+            roomId,
+            entityId: "user-entity",
+            content: { text: userPrompt },
+            createdAt: startTime + 50,
+          },
+          {
+            id: crypto.randomUUID(),
+            roomId,
+            entityId: runtime.agentId,
+            content: { text: assistantReply },
+            createdAt: startTime + 600,
+          },
+        ] as Awaited<ReturnType<AgentRuntime["getMemories"]>>;
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const detail = await req(
+          streamServer.port,
+          "GET",
+          `/api/trajectories/${encodeURIComponent(trajectoryId)}`,
+        );
+        expect(detail.status).toBe(200);
+        const llmCalls = detail.data.llmCalls as Array<Record<string, unknown>>;
+        expect(Array.isArray(llmCalls)).toBe(true);
+        expect(llmCalls).toHaveLength(1);
+        expect(llmCalls[0]?.model).toBe("milady/conversation-memory-backfill");
+        expect(llmCalls[0]?.userPrompt).toBe(userPrompt);
+        expect(llmCalls[0]?.response).toBe(assistantReply);
       } finally {
         await streamServer.close();
       }

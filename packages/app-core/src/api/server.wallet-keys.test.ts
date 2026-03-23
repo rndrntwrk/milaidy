@@ -24,6 +24,16 @@ async function cleanupTempDir(dir: string): Promise<void> {
   }
 }
 
+function resolveFetchCallUrl(input: Parameters<typeof fetch>[0]): URL {
+  if (typeof input === "string") {
+    return new URL(input);
+  }
+  if (input instanceof URL) {
+    return input;
+  }
+  return new URL(input.url);
+}
+
 const RUNTIME_STUB = {
   character: { name: "Eliza" },
   plugins: [],
@@ -370,6 +380,112 @@ describe("POST /api/agent/reset", () => {
           ?.OPENAI_API_KEY,
       ).toBeUndefined();
       await expect(fs.access(dbDir)).rejects.toThrow();
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("clears live conversations, knowledge docs, and trajectories before wiping onboarding state", async () => {
+    const workspaceDir = path.join(tempDir, "workspace");
+    const dbDir = path.join(workspaceDir, ".eliza", ".elizadb");
+    await fs.mkdir(dbDir, { recursive: true });
+    await fs.writeFile(
+      path.join(tempDir, "eliza.json"),
+      JSON.stringify({
+        meta: { onboardingComplete: true },
+        agents: {
+          defaults: {
+            workspace: workspaceDir,
+          },
+          list: [{ name: "Chen" }],
+        },
+        logging: { level: "error" },
+      }),
+    );
+    process.env.ELIZA_API_TOKEN = "reset-token";
+    process.env.MILADY_API_TOKEN = "reset-token";
+    const server = await startApiServer({ port: 0, runtime: RUNTIME_STUB });
+    try {
+      const originalFetch = globalThis.fetch;
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(async (input, init) => {
+          const url = resolveFetchCallUrl(input);
+          const method = (init?.method ?? "GET").toUpperCase();
+
+          if (url.port !== String(server.port)) {
+            return originalFetch(input, init);
+          }
+
+          if (method === "GET" && url.pathname === "/api/conversations") {
+            return new Response(
+              JSON.stringify({ conversations: [{ id: "conversation-1" }] }),
+              { status: 200 },
+            );
+          }
+          if (
+            method === "DELETE" &&
+            url.pathname === "/api/conversations/conversation-1"
+          ) {
+            return new Response(JSON.stringify({ ok: true }), { status: 200 });
+          }
+          if (method === "GET" && url.pathname === "/api/knowledge/documents") {
+            return new Response(
+              JSON.stringify({ documents: [{ id: "document-1" }] }),
+              { status: 200 },
+            );
+          }
+          if (
+            method === "DELETE" &&
+            url.pathname === "/api/knowledge/documents/document-1"
+          ) {
+            return new Response(JSON.stringify({ ok: true }), { status: 200 });
+          }
+          if (method === "DELETE" && url.pathname === "/api/trajectories") {
+            return new Response(JSON.stringify({ ok: true }), { status: 200 });
+          }
+
+          throw new Error(
+            `Unexpected loopback reset fetch: ${method} ${url.pathname}`,
+          );
+        });
+      try {
+        const { status, data } = await req(
+          server.port,
+          "POST",
+          "/api/agent/reset",
+          undefined,
+          { "x-eliza-token": "reset-token" },
+        );
+        expect(status).toBe(200);
+        expect(data).toMatchObject({ ok: true });
+
+        const loopbackCalls = fetchSpy.mock.calls
+          .map(([input, init]) => ({
+            pathname: resolveFetchCallUrl(input).pathname,
+            method: (init?.method ?? "GET").toUpperCase(),
+          }))
+          .filter(({ pathname }) => pathname.startsWith("/api/"));
+
+        expect(loopbackCalls).toEqual(
+          expect.arrayContaining([
+            { pathname: "/api/conversations", method: "GET" },
+            {
+              pathname: "/api/conversations/conversation-1",
+              method: "DELETE",
+            },
+            { pathname: "/api/knowledge/documents", method: "GET" },
+            {
+              pathname: "/api/knowledge/documents/document-1",
+              method: "DELETE",
+            },
+            { pathname: "/api/trajectories", method: "DELETE" },
+          ]),
+        );
+        await expect(fs.access(dbDir)).rejects.toThrow();
+      } finally {
+        fetchSpy.mockRestore();
+      }
     } finally {
       await server.close();
     }

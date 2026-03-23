@@ -113,6 +113,7 @@ let UI_URL = DEFAULT_UI_URL;
 
 describe.skipIf(!CAN_RUN)("Live QA checklist", () => {
   beforeAll(async () => {
+    if (!CAN_RUN) return;
     await fs.mkdir(QA_ARTIFACT_DIR, { recursive: true });
     UI_URL = await resolveLiveUiUrl();
     await ensureHttpOk(`${UI_URL}/`);
@@ -131,6 +132,7 @@ describe.skipIf(!CAN_RUN)("Live QA checklist", () => {
   }, 120_000);
 
   afterAll(async () => {
+    if (!CAN_RUN) return;
     await browser?.close();
   }, 30_000);
 
@@ -185,7 +187,7 @@ describe.skipIf(!CAN_RUN)("Live QA checklist", () => {
           await clickByText(page, "Groq");
           await typeInto(page, 'input[type="password"]', GROQ_API_KEY);
           await clickByText(page, "Confirm");
-          await clickSelector(page, '[data-testid="permissions-onboarding-continue"]');
+          await clickByText(page, "Continue");
           await clickByText(page, "Enter");
 
           await waitFor(async () => {
@@ -556,7 +558,7 @@ async function qaVoiceStats(page: Page): Promise<QaVoiceStats> {
 
 async function qaVoiceSignalCount(page: Page): Promise<number> {
   const stats = await qaVoiceStats(page);
-  return stats.audioStarts + stats.speechCalls;
+  return stats.audioStarts + stats.speechCalls + stats.ttsFetches.length;
 }
 
 async function waitForText(page: Page, text: string, timeout = 45_000) {

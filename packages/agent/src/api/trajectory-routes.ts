@@ -454,6 +454,154 @@ function trajectoryToUIDetail(traj: Trajectory): UITrajectoryDetailResult {
   return { trajectory, llmCalls, providerAccesses };
 }
 
+function isSyntheticTrajectoryCall(call: TrajectoryLlmCall): boolean {
+  const model = String(call.model ?? "").toLowerCase();
+  const systemPrompt = String(call.systemPrompt ?? "").toLowerCase();
+  const response = String(call.response ?? "").toLowerCase();
+
+  return (
+    model.includes("synthetic") ||
+    systemPrompt.includes("[synthetic]") ||
+    response.includes("placeholder call inserted")
+  );
+}
+
+function needsConversationBackfill(traj: Trajectory): boolean {
+  const calls = (traj.steps ?? []).flatMap((step) => step.llmCalls ?? []);
+  if (calls.length === 0) {
+    return true;
+  }
+  return calls.every((call) => isSyntheticTrajectoryCall(call));
+}
+
+function extractMessageText(memory: unknown): string {
+  if (!memory || typeof memory !== "object") return "";
+  const content = (memory as { content?: { text?: unknown } }).content;
+  return typeof content?.text === "string" ? content.text.trim() : "";
+}
+
+async function maybeBackfillTrajectoryFromConversationMemory(
+  runtime: AgentRuntime,
+  traj: Trajectory,
+): Promise<Trajectory> {
+  if (!needsConversationBackfill(traj)) {
+    return traj;
+  }
+
+  const metadata = (traj.metadata ?? {}) as Record<string, unknown>;
+  const roomId = toNullableString(metadata.roomId);
+  if (!roomId) {
+    return traj;
+  }
+
+  try {
+    const memories = await runtime.getMemories({
+      roomId,
+      tableName: "messages",
+      count: 100,
+    });
+    if (!Array.isArray(memories) || memories.length === 0) {
+      return traj;
+    }
+
+    const sortedMemories = [...memories].sort(
+      (a, b) => Number(a.createdAt ?? 0) - Number(b.createdAt ?? 0),
+    );
+    const endTime =
+      typeof traj.endTime === "number" ? traj.endTime : traj.startTime + 120_000;
+
+    const userMemory = [...sortedMemories]
+      .reverse()
+      .find((memory) => {
+        const createdAt = Number(memory.createdAt ?? 0);
+        if (!Number.isFinite(createdAt)) return false;
+        if (createdAt < traj.startTime - 60_000 || createdAt > endTime + 5_000) {
+          return false;
+        }
+        return (
+          memory.entityId !== runtime.agentId &&
+          extractMessageText(memory).length > 0
+        );
+      });
+    if (!userMemory) {
+      return traj;
+    }
+
+    const userCreatedAt = Number(userMemory.createdAt ?? traj.startTime);
+    const assistantMemory = sortedMemories.find((memory) => {
+      const createdAt = Number(memory.createdAt ?? 0);
+      if (!Number.isFinite(createdAt)) return false;
+      if (createdAt < userCreatedAt || createdAt > endTime + 30_000) {
+        return false;
+      }
+      return (
+        memory.entityId === runtime.agentId &&
+        extractMessageText(memory).length > 0
+      );
+    });
+    if (!assistantMemory) {
+      return traj;
+    }
+
+    const userPrompt = extractMessageText(userMemory);
+    const response = extractMessageText(assistantMemory);
+    if (!userPrompt || !response) {
+      return traj;
+    }
+
+    const baseSteps =
+      traj.steps && traj.steps.length > 0
+        ? traj.steps.map((step) => ({
+            ...step,
+            llmCalls: [],
+          }))
+        : [
+            {
+              stepId: traj.trajectoryId,
+              timestamp: traj.startTime,
+              llmCalls: [],
+              providerAccesses: [],
+            },
+          ];
+
+    baseSteps[0] = {
+      ...baseSteps[0],
+      timestamp:
+        typeof baseSteps[0].timestamp === "number"
+          ? baseSteps[0].timestamp
+          : userCreatedAt,
+      llmCalls: [
+        {
+          callId: `${traj.trajectoryId}-conversation-memory`,
+          timestamp: userCreatedAt,
+          model: "milady/conversation-memory-backfill",
+          systemPrompt:
+            "[backfilled from conversation memory because the trajectory logger did not capture the live LLM call]",
+          userPrompt,
+          response,
+          purpose: "chat",
+          actionType: "conversation-memory-backfill",
+          latencyMs: Math.max(
+            0,
+            Number(assistantMemory.createdAt ?? endTime) - userCreatedAt,
+          ),
+        },
+      ],
+    };
+
+    return {
+      ...traj,
+      steps: baseSteps,
+      metadata: {
+        ...metadata,
+        llmCallBackfillSource: "conversation-memory",
+      },
+    };
+  } catch {
+    return traj;
+  }
+}
+
 // ============================================================================
 // Handlers
 // ============================================================================
@@ -527,7 +675,9 @@ async function handleGetTrajectoryDetail(
     return;
   }
 
-  const uiDetail = trajectoryToUIDetail(trajectory);
+  const uiDetail = trajectoryToUIDetail(
+    await maybeBackfillTrajectoryFromConversationMemory(runtime, trajectory),
+  );
   sendJson(res, uiDetail);
 }
 

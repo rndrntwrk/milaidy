@@ -212,16 +212,39 @@ export function configureLocalEmbeddingPlugin(
   config?: ElizaConfig,
 ): void {
   const detectedPreset = detectEmbeddingPreset();
+  const SQL_COMPATIBLE_EMBEDDING_DIMENSIONS = new Set([
+    384,
+    512,
+    768,
+    1024,
+    1536,
+    3072,
+  ]);
+
+  const normalizeEmbeddingDimensions = (
+    rawValue: string | undefined,
+  ): string | undefined => {
+    if (!rawValue) return undefined;
+    const parsed = Number.parseInt(rawValue, 10);
+    if (!Number.isInteger(parsed) || parsed <= 0) return undefined;
+    return SQL_COMPATIBLE_EMBEDDING_DIMENSIONS.has(parsed)
+      ? String(parsed)
+      : "384";
+  };
 
   const embeddingConfig = config?.embedding;
   const configuredModel = embeddingConfig?.model?.trim();
   const configuredRepo = embeddingConfig?.modelRepo?.trim();
-  const configuredDimensions =
+  const configuredDimensions = normalizeEmbeddingDimensions(
     typeof embeddingConfig?.dimensions === "number" &&
     Number.isInteger(embeddingConfig.dimensions) &&
     embeddingConfig.dimensions > 0
       ? String(embeddingConfig.dimensions)
-      : undefined;
+      : undefined,
+  );
+  const detectedDimensions = normalizeEmbeddingDimensions(
+    String(detectedPreset.dimensions),
+  );
   const configuredContextSize =
     typeof embeddingConfig?.contextSize === "number" &&
     Number.isInteger(embeddingConfig.contextSize) &&
@@ -267,7 +290,7 @@ export function configureLocalEmbeddingPlugin(
   } else if (!configuredModel) {
     setEnvIfMissing(
       "LOCAL_EMBEDDING_DIMENSIONS",
-      String(detectedPreset.dimensions),
+      detectedDimensions,
     );
   }
   if (configuredContextSize) {

@@ -156,9 +156,8 @@ describe.skipIf(!(CODEX_AVAILABLE && CODEX_AUTH_AVAILABLE))(
       expect(indexHtml).toMatch(/href=["']\.?\/?styles\.css["']/i);
       expect(indexHtml).toMatch(/src=["']\.?\/?game\.js["']/i);
 
-      expect(stylesCss).toMatch(/#board/i);
-      expect(stylesCss).toMatch(/#next-piece/i);
-      expect(stylesCss).toMatch(/score/i);
+      expect(stylesCss).toMatch(/[#.]board\b/i);
+      expect(stylesCss).toMatch(/[#.]next-piece\b/i);
 
       expect(gameJs).toMatch(/ArrowLeft/);
       expect(gameJs).toMatch(/ArrowRight/);

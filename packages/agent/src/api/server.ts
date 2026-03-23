@@ -182,6 +182,7 @@ import {
   sendJson,
   sendJsonError,
 } from "./http-helpers.js";
+import { getKnowledgeService } from "./knowledge-service-loader.js";
 import { handleKnowledgeRoutes } from "./knowledge-routes.js";
 import {
   evictOldestConversation,
@@ -3126,6 +3127,88 @@ function writeSseJson(
   writeSseData(res, JSON.stringify(payload), event);
 }
 
+const CHAT_KNOWLEDGE_MIN_SIMILARITY = 0.2;
+const CHAT_KNOWLEDGE_MAX_SNIPPETS = 3;
+const CHAT_KNOWLEDGE_MAX_CHARS = 900;
+
+function normalizeChatKnowledgeSnippet(text: string): string {
+  return text.replace(/\s+/g, " ").trim().slice(0, CHAT_KNOWLEDGE_MAX_CHARS);
+}
+
+function buildChatKnowledgePrompt(
+  userPrompt: string,
+  snippets: string[],
+): string {
+  return [
+    "Relevant uploaded knowledge snippets:",
+    ...snippets.map((snippet, index) => `[K${index + 1}] ${snippet}`),
+    "",
+    "Use the uploaded knowledge when it is relevant to the user's request. Ignore it when it is not relevant.",
+    "",
+    `User message: ${userPrompt}`,
+  ].join("\n");
+}
+
+async function maybeAugmentChatMessageWithKnowledge(
+  runtime: AgentRuntime,
+  message: ReturnType<typeof createMessageMemory>,
+): Promise<ReturnType<typeof createMessageMemory>> {
+  const userPrompt = extractCompatTextContent(message.content)?.trim();
+  if (!userPrompt || !runtime.agentId) {
+    return message;
+  }
+
+  try {
+    const knowledge = await getKnowledgeService(runtime);
+    if (!knowledge.service) {
+      return message;
+    }
+
+    const searchMessage = {
+      ...message,
+      id: crypto.randomUUID() as UUID,
+      agentId: runtime.agentId,
+      entityId: runtime.agentId,
+      roomId: runtime.agentId,
+      content: { text: userPrompt },
+      createdAt: Date.now(),
+    } as ReturnType<typeof createMessageMemory>;
+
+    const snippets = (await knowledge.service.getKnowledge(searchMessage, {
+      roomId: runtime.agentId,
+    }))
+      .filter(
+        (match) => (match.similarity ?? 0) >= CHAT_KNOWLEDGE_MIN_SIMILARITY,
+      )
+      .slice(0, CHAT_KNOWLEDGE_MAX_SNIPPETS)
+      .map((match) => normalizeChatKnowledgeSnippet(match.content?.text ?? ""))
+      .filter((snippet) => snippet.length > 0);
+
+    if (snippets.length === 0) {
+      return message;
+    }
+
+    return {
+      ...message,
+      content: {
+        ...message.content,
+        text: buildChatKnowledgePrompt(userPrompt, snippets),
+      },
+    };
+  } catch (err) {
+    runtime.logger?.warn(
+      {
+        err,
+        src: "eliza-api",
+        messageId: message.id,
+        roomId: message.roomId,
+      },
+      "Failed to augment chat message with uploaded knowledge",
+    );
+    return message;
+  }
+}
+
 async function generateChatResponse(
   runtime: AgentRuntime,
   message: ReturnType<typeof createMessageMemory>,
@@ -3200,9 +3283,13 @@ async function generateChatResponse(
     | undefined;
   let _handlerError: unknown = null;
   try {
-    result = await runtime.messageService?.handleMessage(
+    const generationMessage = await maybeAugmentChatMessageWithKnowledge(
       runtime,
       message,
+    );
+    result = await runtime.messageService?.handleMessage(
+      runtime,
+      generationMessage,
       async (content: Content) => {
         if (opts?.isAborted?.()) {
           throw new Error("client_disconnected");

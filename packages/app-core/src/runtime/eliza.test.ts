@@ -182,6 +182,10 @@ describe("collectPluginNames", () => {
 
   it("uses the hardware-adaptive embedding preset defaults when no embedding config is set", () => {
     const detectedPreset = detectEmbeddingPreset();
+    const expectedDimensions =
+      detectedPreset.dimensions === 4096
+        ? "384"
+        : String(detectedPreset.dimensions);
 
     delete process.env.LOCAL_EMBEDDING_MODEL;
     delete process.env.LOCAL_EMBEDDING_MODEL_REPO;
@@ -196,9 +200,7 @@ describe("collectPluginNames", () => {
     expect(process.env.LOCAL_EMBEDDING_MODEL_REPO).toBe(
       detectedPreset.modelRepo,
     );
-    expect(process.env.LOCAL_EMBEDDING_DIMENSIONS).toBe(
-      String(detectedPreset.dimensions),
-    );
+    expect(process.env.LOCAL_EMBEDDING_DIMENSIONS).toBe(expectedDimensions);
     expect(process.env.LOCAL_EMBEDDING_CONTEXT_SIZE).toBe(
       String(detectedPreset.contextSize),
     );
@@ -208,6 +210,21 @@ describe("collectPluginNames", () => {
     expect(process.env.LOCAL_EMBEDDING_USE_MMAP).toBe(
       detectedPreset.gpuLayers === "auto" ? "false" : "true",
     );
+  });
+
+  it("normalizes unsupported local embedding dimensions to SQL-compatible storage", () => {
+    delete process.env.LOCAL_EMBEDDING_DIMENSIONS;
+
+    configureLocalEmbeddingPlugin(
+      {} as Plugin,
+      {
+        embedding: {
+          dimensions: 4096,
+        },
+      } as ElizaConfig,
+    );
+
+    expect(process.env.LOCAL_EMBEDDING_DIMENSIONS).toBe("384");
   });
 
   it("includes all core plugins for an empty config", () => {

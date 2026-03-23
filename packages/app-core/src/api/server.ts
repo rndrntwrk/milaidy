@@ -457,6 +457,117 @@ function resolveCompatPgliteDataDir(config: ElizaConfig): string {
   return path.join(resolveUserPath(workspaceDir), ".eliza", ".elizadb");
 }
 
+function resolveCompatLoopbackApiBase(
+  req: Pick<http.IncomingMessage, "headers">,
+): string {
+  const host = req.headers.host?.trim() || "127.0.0.1:31337";
+  return `http://${host}`;
+}
+
+function buildCompatLoopbackHeaders(
+  req: Pick<http.IncomingMessage, "headers">,
+  init?: RequestInit,
+): Headers {
+  const headers = new Headers(init?.headers ?? {});
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/json");
+  }
+  if (!headers.has("Content-Type") && init?.body) {
+    headers.set("Content-Type", "application/json");
+  }
+  const apiToken = getCompatApiToken();
+  if (apiToken && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${apiToken}`);
+  }
+  return headers;
+}
+
+async function compatLoopbackFetchJson<T>(
+  req: Pick<http.IncomingMessage, "headers">,
+  pathname: string,
+  init?: RequestInit,
+): Promise<T> {
+  const response = await fetch(new URL(pathname, resolveCompatLoopbackApiBase(req)), {
+    ...init,
+    headers: buildCompatLoopbackHeaders(req, init),
+  });
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}: ${pathname}`);
+  }
+  return (await response.json()) as T;
+}
+
+async function compatLoopbackRequest(
+  req: Pick<http.IncomingMessage, "headers">,
+  pathname: string,
+  init?: RequestInit,
+): Promise<void> {
+  const response = await fetch(new URL(pathname, resolveCompatLoopbackApiBase(req)), {
+    ...init,
+    headers: buildCompatLoopbackHeaders(req, init),
+  });
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}: ${pathname}`);
+  }
+}
+
+async function clearCompatRuntimeStateViaApi(
+  req: Pick<http.IncomingMessage, "headers">,
+): Promise<void> {
+  try {
+    const conversations = await compatLoopbackFetchJson<{
+      conversations?: Array<{ id: string }>;
+    }>(req, "/api/conversations");
+    for (const conversation of conversations.conversations ?? []) {
+      if (!conversation?.id) continue;
+      await compatLoopbackRequest(
+        req,
+        `/api/conversations/${encodeURIComponent(conversation.id)}`,
+        { method: "DELETE" },
+      );
+    }
+  } catch (err) {
+    logger.warn(
+      `[milady][reset] Failed to clear conversations before reset: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+
+  try {
+    const knowledge = await compatLoopbackFetchJson<{
+      documents?: Array<{ id: string }>;
+    }>(req, "/api/knowledge/documents");
+    for (const document of knowledge.documents ?? []) {
+      if (!document?.id) continue;
+      await compatLoopbackRequest(
+        req,
+        `/api/knowledge/documents/${encodeURIComponent(document.id)}`,
+        { method: "DELETE" },
+      );
+    }
+  } catch (err) {
+    logger.warn(
+      `[milady][reset] Failed to clear knowledge documents before reset: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+
+  try {
+    await compatLoopbackRequest(req, "/api/trajectories", {
+      method: "DELETE",
+      body: JSON.stringify({ all: true }),
+    });
+  } catch (err) {
+    logger.warn(
+      `[milady][reset] Failed to clear trajectories before reset: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+}
+
 async function clearCompatPgliteDataDir(
   runtime: AgentRuntime | null,
   config: ElizaConfig,
@@ -2157,6 +2268,7 @@ async function handleMiladyCompatRoute(
         "[milady][reset] POST /api/agent/reset: loading config, will clear onboarding state, persisted provider config, and cloud keys (GGUF / MODELS_DIR untouched)",
       );
       const config = loadElizaConfig();
+      await clearCompatRuntimeStateViaApi(req);
       await clearCompatPgliteDataDir(state.current, config);
       state.current = null;
       clearPersistedOnboardingConfig(config);

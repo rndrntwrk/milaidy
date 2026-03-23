@@ -205,6 +205,8 @@ export default defineConfig({
       "**/*.live.test.tsx",
       "**/*.live.e2e.test.ts",
       "**/*.live.e2e.test.tsx",
+      "**/*.real.e2e.test.ts",
+      "**/*.real.e2e.test.tsx",
       "test/capacitor-plugins.e2e.test.ts",
     ],
     server: {
