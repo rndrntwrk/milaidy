@@ -135,10 +135,10 @@ function SettingsSidebar({
   const { t } = useApp();
 
   return (
-    <aside className="hidden w-[16rem] shrink-0 self-stretch lg:sticky lg:top-0 lg:flex lg:h-screen">
-      <div className="px-3 py-3 border-b border-border">
+    <aside className="hidden lg:sticky lg:top-0 lg:flex lg:flex-col lg:h-screen lg:overflow-y-auto">
+      <div className="px-3 py-3">
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-3">
+        <nav className="py-4 px-3">
           <div className="space-y-1.5">
             {sections.map((section) => {
               const Icon = section.icon;
@@ -497,7 +497,7 @@ export function SettingsView({
 } = {}) {
   const { t, loadPlugins, setTab } = useApp();
   const [activeSection, setActiveSection] = useState(
-    initialSection ?? "advanced",
+    initialSection ?? "cloud",
   );
   const [searchQuery, setSearchQuery] = useState("");
   const shellRef = useRef<HTMLDivElement>(null);
@@ -720,7 +720,7 @@ export function SettingsView({
   return (
     <div
       ref={shellRef}
-      className="settings-shell plugins-game-modal plugins-game-modal--inline"
+      className="settings-shell plugins-game-modal plugins-game-modal--inline !h-auto"
     >
       <div className="plugins-game-list-panel">
         <SettingsSidebar
@@ -734,7 +734,7 @@ export function SettingsView({
       </div>
 
       <div
-        className={`settings-page-content flex-1 min-w-0 scroll-smoothpx-4 py-4`}
+        className="settings-page-content flex-1 min-w-0 scroll-smooth px-4 py-4"
       >
         <div className="space-y-6 pb-20 sm:space-y-8">{sectionsContent}</div>
       </div>

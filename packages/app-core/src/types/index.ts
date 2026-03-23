@@ -294,6 +294,7 @@ export type ConfigSnapshot = {
 // ── Simple showIf (legacy, still supported) ─────────────────────────
 
 export type { ShowIfCondition } from "@miladyai/agent/config/schema";
+import type { ShowIfCondition } from "@miladyai/agent/config/schema";
 
 // ── Dynamic values (Phase 2) ─────────────────────────────────────────
 

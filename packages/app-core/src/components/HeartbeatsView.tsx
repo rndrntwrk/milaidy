@@ -15,14 +15,13 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   CreateTriggerRequest,
   TriggerSummary,
+  TriggerType,
+  TriggerWakeMode,
   UpdateTriggerRequest,
 } from "../api/client";
 import { useApp } from "../state";
 import { confirmDesktopAction } from "../utils";
 import { formatDateTime, formatDurationMs } from "./format";
-
-type TriggerType = "interval" | "once" | "cron";
-type TriggerWakeMode = "inject_now" | "next_autonomy_cycle";
 type TranslateFn = (
   key: string,
   vars?: Record<string, string | number | boolean | null | undefined>,
