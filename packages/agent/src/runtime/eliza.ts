@@ -843,7 +843,13 @@ export function collectPluginNames(config: ElizaConfig): Set<string> {
 
   // Connector plugins — load when connector has config entries
   // Prefer config.connectors, fall back to config.channels for backward compatibility
-  const connectors = config.connectors ?? config.channels ?? {};
+  const connectors =
+    config.connectors ??
+    ((config as Record<string, unknown>).channels as Record<
+      string,
+      unknown
+    >) ??
+    {};
   for (const [channelName, channelConfig] of Object.entries(connectors)) {
     if (channelConfig && typeof channelConfig === "object") {
       const pluginName = CHANNEL_PLUGIN_MAP[channelName];
@@ -1799,7 +1805,8 @@ export async function resolvePackageEntry(pkgRoot: string): Promise<string> {
 /** @internal Exported for testing. */
 export function applyConnectorSecretsToEnv(config: ElizaConfig): void {
   // Prefer config.connectors, fall back to config.channels for backward compatibility
-  const connectors = config.connectors ?? config.channels ?? {};
+  const connectors =
+    config.connectors ?? (config as Record<string, unknown>).channels ?? {};
 
   for (const [channelName, channelConfig] of Object.entries(connectors)) {
     if (!channelConfig || typeof channelConfig !== "object") continue;

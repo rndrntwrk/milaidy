@@ -737,7 +737,7 @@ export function FineTuningView() {
               <SelectValue placeholder={t("finetuningview.AutoBuildDatasetF")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">{t("finetuningview.AutoBuildDatasetF")}</SelectItem>
+              <SelectItem value="__auto__">{t("finetuningview.AutoBuildDatasetF")}</SelectItem>
               {datasets.map((dataset) => (
                 <SelectItem key={dataset.id} value={dataset.id}>
                   {dataset.id}

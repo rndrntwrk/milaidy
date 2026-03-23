@@ -134,7 +134,7 @@ function SettingsSidebar({
   const { t } = useApp();
 
   return (
-    <aside className="hidden w-[16rem] shrink-0 self-stretch lg:sticky lg:top-0 lg:flex lg:h-screen">
+    <aside className="sticky top-0 flex flex-col h-screen overflow-y-auto">
       {/* Search */}
       <div className="px-3 py-3 border-b border-border">
         <div className="flex items-center gap-2 px-2.5 py-1.5 border border-border bg-bg">
@@ -508,7 +508,7 @@ export function SettingsView({
 } = {}) {
   const { t, loadPlugins, setTab } = useApp();
   const [activeSection, setActiveSection] = useState(
-    initialSection ?? "ai-model",
+    initialSection ?? "cloud",
   );
   const [searchQuery, setSearchQuery] = useState("");
   const shellRef = useRef<HTMLDivElement>(null);
@@ -731,9 +731,9 @@ export function SettingsView({
   return (
     <div
       ref={shellRef}
-      className="settings-shell plugins-game-modal plugins-game-modal--inline"
+      className="grid grid-cols-[220px_1fr] gap-4 items-stretch"
     >
-      <div className="plugins-game-list-panel">
+      <div className="hidden lg:block rounded-xl border border-border bg-card shadow-sm">
         <SettingsSidebar
           sections={visibleSections}
           activeSection={activeSection}
@@ -744,9 +744,7 @@ export function SettingsView({
         />
       </div>
 
-      <div
-        className={`settings-page-content flex-1 min-w-0 scroll-smoothpx-4 py-4`}
-      >
+      <div className="flex-1 min-w-0 scroll-smooth px-4 py-4">
         <div className="space-y-6 pb-20 sm:space-y-8">{sectionsContent}</div>
       </div>
     </div>

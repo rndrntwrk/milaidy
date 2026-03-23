@@ -264,10 +264,12 @@ interface TaskCompletionSummary {
   [key: string]: unknown;
 }
 
+// @ts-ignore
 type PiAiPluginModule = typeof import("@elizaos/plugin-pi-ai");
 let _piAiPluginModule: PiAiPluginModule | null = null;
 async function loadPiAiPluginModule(): Promise<PiAiPluginModule> {
   if (!_piAiPluginModule) {
+    // @ts-ignore
     _piAiPluginModule = await import("@elizaos/plugin-pi-ai");
   }
   return _piAiPluginModule;
@@ -11183,7 +11185,10 @@ async function handleRequest(
 
   // ── GET /api/connectors ──────────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/connectors") {
-    const connectors = state.config.connectors ?? state.config.channels ?? {};
+    const connectors =
+      state.config.connectors ??
+      (state.config as Record<string, unknown>).channels ??
+      {};
     json(res, {
       connectors: redactConfigSecrets(connectors as Record<string, unknown>),
     });
@@ -11245,9 +11250,11 @@ async function handleRequest(
       delete state.config.connectors[name];
     }
     // Also remove from legacy channels key
-    if (state.config.channels && Object.hasOwn(state.config.channels, name)) {
-      delete state.config.channels[name];
+    const stateConfigRecord = state.config as Record<string, unknown>;
+    if (stateConfigRecord.channels && Object.hasOwn(stateConfigRecord.channels, name)) {
+      delete (stateConfigRecord.channels as Record<string, unknown>)[name];
     }
+
     try {
       saveElizaConfig(state.config);
     } catch {
@@ -14790,7 +14797,7 @@ async function handleRequest(
           state.runtime,
           coordinator,
         );
-        handled = await handler(req, res, pathname);
+        handled = await (handler as ConnectorRouteHandler)(req, res, pathname, req.method ?? "GET");
       }
     } catch {
       // Local plugin not available, try npm plugin

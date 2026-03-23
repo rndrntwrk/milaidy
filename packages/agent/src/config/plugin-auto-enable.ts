@@ -273,8 +273,8 @@ export function applyPluginAutoEnable(
   pluginsConfig.allow = pluginsConfig.allow ?? [];
   pluginsConfig.entries = pluginsConfig.entries ?? {};
 
-  // Connectors (also check legacy `channels` key for backward compat)
-  const connectors = updatedConfig.connectors ?? updatedConfig.channels;
+  const connectors =
+    updatedConfig.connectors ?? (updatedConfig as Record<string, unknown>).channels;
   if (connectors) {
     for (const [connectorName, connectorConfig] of Object.entries(connectors)) {
       const pluginName = CONNECTOR_PLUGINS[connectorName];

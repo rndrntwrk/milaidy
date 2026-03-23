@@ -80,7 +80,7 @@ export async function loadIdleClip(
   vrm.scene.updateMatrixWorld(true);
   const clip = retargetMixamoGltfToVrm(
     { scene: gltf.scene, animations: gltf.animations },
-    vrm,
+    vrm as any,
   );
 
   if (!clip) {

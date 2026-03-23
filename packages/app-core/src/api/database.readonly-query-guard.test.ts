@@ -1,38 +1,39 @@
 import type { AgentRuntime } from "@elizaos/core";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { createTestRuntime } from "../../../../test/helpers/pglite-runtime";
 import {
   createMockHttpResponse,
   createMockJsonRequest,
 } from "../test-support/test-helpers";
 import { handleDatabaseRoute } from "./database";
 
-interface DbExecuteResult {
-  rows: Array<Record<string, unknown>>;
-  fields?: Array<{ name: string }>;
-}
-
-function makeRuntime(executeResult: DbExecuteResult) {
-  const execute = vi.fn().mockResolvedValue(executeResult);
-  const runtime = {
-    adapter: {
-      db: {
-        execute,
-      },
-    },
-  } as unknown as unknown as AgentRuntime;
-  return { runtime, execute };
-}
-
 describe("database read-only query guard", () => {
+  let runtime: AgentRuntime;
+  let cleanup: () => Promise<void>;
+
+  beforeAll(async () => {
+    ({ runtime, cleanup } = await createTestRuntime({
+      characterName: "QueryGuardTestAgent",
+    }));
+  }, 180_000);
+
+  afterAll(async () => {
+    await cleanup();
+  });
+
+  /** Spy on the real adapter's execute method to verify the guard's behavior. */
+  function spyOnExecute() {
+    const execute = vi.spyOn(
+      runtime.adapter.db as Record<string, unknown>,
+      "execute",
+    );
+    return execute;
+  }
+
   it("rejects COPY statements in read-only mode", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [{ name: "table_name" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
-      {
-        sql: "COPY users TO '/tmp/users.csv'",
-      },
+      { sql: "COPY users TO '/tmp/users.csv'" },
       { method: "POST", url: "/api/database/query" },
     );
     const { res, getStatus, getJson } = createMockHttpResponse<{
@@ -53,14 +54,9 @@ describe("database read-only query guard", () => {
   });
 
   it("rejects DO blocks in read-only mode", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [{ name: "table_name" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
-      {
-        sql: "DO $$ BEGIN PERFORM pg_sleep(0); END $$;",
-      },
+      { sql: "DO $$ BEGIN PERFORM pg_sleep(0); END $$;" },
       { method: "POST", url: "/api/database/query" },
     );
     const { res, getStatus, getJson } = createMockHttpResponse<{
@@ -81,14 +77,9 @@ describe("database read-only query guard", () => {
   });
 
   it("rejects SELECT INTO statements in read-only mode", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [{ name: "table_name" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
-      {
-        sql: "SELECT id INTO users_backup FROM users",
-      },
+      { sql: "SELECT id INTO users_backup FROM users" },
       { method: "POST", url: "/api/database/query" },
     );
     const { res, getStatus, getJson } = createMockHttpResponse<{
@@ -109,14 +100,9 @@ describe("database read-only query guard", () => {
   });
 
   it("rejects nextval() in read-only mode", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [{ name: "value" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
-      {
-        sql: "SELECT nextval('users_id_seq')",
-      },
+      { sql: "SELECT nextval('users_id_seq')" },
       { method: "POST", url: "/api/database/query" },
     );
     const { res, getStatus, getJson } = createMockHttpResponse<{
@@ -137,14 +123,9 @@ describe("database read-only query guard", () => {
   });
 
   it("rejects setval() in read-only mode", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [{ name: "value" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
-      {
-        sql: "SELECT setval('users_id_seq', 42)",
-      },
+      { sql: "SELECT setval('users_id_seq', 42)" },
       { method: "POST", url: "/api/database/query" },
     );
     const { res, getStatus, getJson } = createMockHttpResponse<{
@@ -165,15 +146,11 @@ describe("database read-only query guard", () => {
   });
 
   it("allows COPY when readOnly is explicitly false", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [],
-    });
+    // Mock execute to return a result since COPY won't work on PGLite —
+    // we only care that the guard let the query through.
+    const execute = spyOnExecute().mockResolvedValue({ rows: [], fields: [] });
     const req = createMockJsonRequest(
-      {
-        sql: "COPY users TO '/tmp/users.csv'",
-        readOnly: false,
-      },
+      { sql: "COPY users TO '/tmp/users.csv'", readOnly: false },
       { method: "POST", url: "/api/database/query" },
     );
     const { res, getStatus } = createMockHttpResponse();
@@ -193,10 +170,7 @@ describe("database read-only query guard", () => {
   // ── Dangerous functions (file I/O, DoS, backend control) ──────────────
 
   it("rejects lo_import() — arbitrary file read on DB server", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [{ name: "oid" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "SELECT lo_import('/etc/passwd')" },
       { method: "POST", url: "/api/database/query" },
@@ -219,10 +193,7 @@ describe("database read-only query guard", () => {
   });
 
   it("rejects lo_export() — arbitrary file write on DB server", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [{ name: "result" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "SELECT lo_export(12345, '/tmp/evil.so')" },
       { method: "POST", url: "/api/database/query" },
@@ -245,10 +216,7 @@ describe("database read-only query guard", () => {
   });
 
   it("rejects pg_read_file() — server file read (superuser)", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [{ name: "content" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "SELECT pg_read_file('/etc/passwd')" },
       { method: "POST", url: "/api/database/query" },
@@ -271,10 +239,7 @@ describe("database read-only query guard", () => {
   });
 
   it("rejects pg_sleep() — denial of service", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [{ name: "pg_sleep" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "SELECT pg_sleep(999999)" },
       { method: "POST", url: "/api/database/query" },
@@ -297,10 +262,7 @@ describe("database read-only query guard", () => {
   });
 
   it("rejects pg_terminate_backend() — kill other connections", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [{ name: "result" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "SELECT pg_terminate_backend(42)" },
       { method: "POST", url: "/api/database/query" },
@@ -323,10 +285,7 @@ describe("database read-only query guard", () => {
   });
 
   it("rejects set_config() — SET equivalent as function form", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [{ name: "set_config" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "SELECT set_config('role', 'superuser', false)" },
       { method: "POST", url: "/api/database/query" },
@@ -349,10 +308,7 @@ describe("database read-only query guard", () => {
   });
 
   it("rejects pg_advisory_lock() — can deadlock other connections", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [{ name: "pg_advisory_lock" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "SELECT pg_advisory_lock(1)" },
       { method: "POST", url: "/api/database/query" },
@@ -377,10 +333,7 @@ describe("database read-only query guard", () => {
   // ── Newly blocked keywords ────────────────────────────────────────────
 
   it("rejects SET ROLE — privilege escalation", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "SET ROLE superuser" },
       { method: "POST", url: "/api/database/query" },
@@ -403,10 +356,7 @@ describe("database read-only query guard", () => {
   });
 
   it("rejects NOTIFY — async side-effect", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "NOTIFY mychannel, 'payload'" },
       { method: "POST", url: "/api/database/query" },
@@ -431,9 +381,7 @@ describe("database read-only query guard", () => {
   // ── Multi-statement semicolon guard ──────────────────────────────────
 
   it("rejects multi-statement queries with mid-query semicolons", async () => {
-    const { runtime, execute } = makeRuntime({ rows: [], fields: [] });
-    // Both statements are pure SELECT — no mutation keywords — so only the
-    // multi-statement semicolon guard can catch this.
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "SELECT 1; SELECT 2" },
       { method: "POST", url: "/api/database/query" },
@@ -450,10 +398,7 @@ describe("database read-only query guard", () => {
   });
 
   it("allows trailing semicolons (single-statement)", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [{ n: 1 }],
-      fields: [{ name: "n" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "SELECT 1;" },
       { method: "POST", url: "/api/database/query" },
@@ -469,8 +414,7 @@ describe("database read-only query guard", () => {
   // ── Comment-stripping bypass prevention ─────────────────────────────
 
   it("rejects mutation keyword hidden inside block comment removal", async () => {
-    const { runtime, execute } = makeRuntime({ rows: [], fields: [] });
-    // DE/* */LETE → after comment strip becomes DELETE (no space replacement)
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "DE/* */LETE FROM users" },
       { method: "POST", url: "/api/database/query" },
@@ -487,11 +431,7 @@ describe("database read-only query guard", () => {
   });
 
   it("allows safe keyword inside block comment", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [{ n: 1 }],
-      fields: [{ name: "n" }],
-    });
-    // DELETE is inside the comment, not in the actual query
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "SELECT /* DELETE */ 1" },
       { method: "POST", url: "/api/database/query" },
@@ -505,10 +445,7 @@ describe("database read-only query guard", () => {
   });
 
   it("allows safe keyword after line comment", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [{ n: 1 }],
-      fields: [{ name: "n" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "SELECT 1 -- DELETE FROM users" },
       { method: "POST", url: "/api/database/query" },
@@ -524,10 +461,7 @@ describe("database read-only query guard", () => {
   // ── Dollar-quoted and double-quoted string stripping ────────────────
 
   it("allows mutation keyword inside dollar-quoted string", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [{ s: "DELETE" }],
-      fields: [{ name: "s" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "SELECT $$DELETE FROM users$$" },
       { method: "POST", url: "/api/database/query" },
@@ -541,10 +475,7 @@ describe("database read-only query guard", () => {
   });
 
   it("allows mutation keyword inside tagged dollar-quoted string", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [{ s: "DROP TABLE" }],
-      fields: [{ name: "s" }],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "SELECT $tag$DROP TABLE users$tag$" },
       { method: "POST", url: "/api/database/query" },
@@ -558,7 +489,8 @@ describe("database read-only query guard", () => {
   });
 
   it("allows mutation keyword inside double-quoted identifier", async () => {
-    const { runtime, execute } = makeRuntime({
+    // Mock execute since my_table doesn't exist — we only care the guard let it through.
+    const execute = spyOnExecute().mockResolvedValue({
       rows: [{ delete: 1 }],
       fields: [{ name: "delete" }],
     });
@@ -601,7 +533,7 @@ describe("database read-only query guard", () => {
     { sql: "REFRESH MATERIALIZED VIEW mv", keyword: "REFRESH" },
     { sql: "DISCARD ALL", keyword: "DISCARD" },
   ])("rejects $keyword mutation keyword", async ({ sql, keyword }) => {
-    const { runtime, execute } = makeRuntime({ rows: [], fields: [] });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql },
       { method: "POST", url: "/api/database/query" },
@@ -633,7 +565,7 @@ describe("database read-only query guard", () => {
     { sql: "SELECT pg_stat_file('/etc/passwd')", fn: "PG_STAT_FILE" },
     { sql: "SELECT pg_rotate_logfile()", fn: "PG_ROTATE_LOGFILE" },
   ])("rejects dangerous function $fn", async ({ sql, fn }) => {
-    const { runtime, execute } = makeRuntime({ rows: [], fields: [] });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql },
       { method: "POST", url: "/api/database/query" },
@@ -665,7 +597,7 @@ describe("database read-only query guard", () => {
     "SELECT pg_ls_tmpdir()",
     "SELECT pg_ls_archive_statusdir()",
   ])("rejects prefix-colliding dangerous function: %s", async (sql) => {
-    const { runtime, execute } = makeRuntime({ rows: [], fields: [] });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql },
       { method: "POST", url: "/api/database/query" },
@@ -682,10 +614,7 @@ describe("database read-only query guard", () => {
   });
 
   it("rejects LOCK — can deadlock tables", async () => {
-    const { runtime, execute } = makeRuntime({
-      rows: [],
-      fields: [],
-    });
+    const execute = spyOnExecute();
     const req = createMockJsonRequest(
       { sql: "LOCK TABLE users IN EXCLUSIVE MODE" },
       { method: "POST", url: "/api/database/query" },
