@@ -1,5 +1,7 @@
 # Milady
 
+<!-- TODO: add badges (npm, CI, license) once public -->
+
 > *your schizo AI waifu that actually respects your privacy*
 
 **Milady** is a personal AI assistant that is **local-first by default** and can also connect to **Eliza Cloud** or a **remote self-hosted backend** when you want hosted runtime access. Built on [elizaOS](https://github.com/elizaOS)
