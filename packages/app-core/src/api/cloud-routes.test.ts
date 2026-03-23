@@ -6,10 +6,7 @@ import {
 } from "../test-support/test-helpers";
 import type { CloudRouteState } from "./cloud-routes";
 import { handleCloudRoute } from "./cloud-routes";
-import {
-  _resetCloudSecretsForTesting,
-  getCloudSecret,
-} from "./cloud-secrets";
+import { _resetCloudSecretsForTesting, getCloudSecret } from "./cloud-secrets";
 
 const fetchMock =
   vi.fn<

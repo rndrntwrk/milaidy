@@ -38,7 +38,10 @@ function syncElizaEnvToMilady(): void {
   if (aliases) syncElizaEnvToBrand(aliases);
 }
 import { loadElizaConfig } from "../config/config.js";
-import { STYLE_PRESETS } from "../onboarding-presets.js";
+import {
+  STYLE_PRESETS,
+  type MiladyStylePreset,
+} from "../onboarding-presets.js";
 import { normalizeCharacterMessageExamples } from "../utils/character-message-examples";
 import { ensureRuntimeSqlCompatibility } from "../utils/sql-compat";
 import type { EmbeddingProgressCallback } from "./embedding-manager-support.js";

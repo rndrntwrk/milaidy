@@ -508,9 +508,7 @@ export function SettingsView({
   initialSection?: string;
 } = {}) {
   const { t, loadPlugins, setTab } = useApp();
-  const [activeSection, setActiveSection] = useState(
-    initialSection ?? "cloud",
-  );
+  const [activeSection, setActiveSection] = useState(initialSection ?? "cloud");
   const [searchQuery, setSearchQuery] = useState("");
   const shellRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
@@ -745,9 +743,7 @@ export function SettingsView({
         />
       </div>
 
-      <div
-        className="settings-page-content flex-1 min-w-0 scroll-smooth px-4 py-4"
-      >
+      <div className="settings-page-content flex-1 min-w-0 scroll-smooth px-4 py-4">
         <div className="space-y-6 pb-20 sm:space-y-8">{sectionsContent}</div>
       </div>
     </div>

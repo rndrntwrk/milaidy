@@ -85,7 +85,6 @@ import {
   importAgent,
 } from "../services/agent-export.js";
 import { AppManager } from "../services/app-manager.js";
-import { FallbackTrainingService } from "../services/fallback-training-service.js";
 import {
   getMcpServerDetails,
   searchMcpMarketplace,
@@ -13945,7 +13944,6 @@ async function handleRequest(
     const body = await readJsonBody<{
       title?: string;
       includeGreeting?: boolean;
-      includeGreeting?: boolean;
       lang?: string;
     }>(req, res);
     if (!body) return;
@@ -13977,7 +13975,7 @@ async function handleRequest(
       try {
         await ensureConversationRoom(conv);
         await syncConversationRoomTitle(conv);
-        if (body.includeGreeting === true || body.includeGreeting === true) {
+        if (body.includeGreeting === true) {
           const storedGreeting = await ensureConversationGreetingStored(
             conv,
             typeof body.lang === "string" ? body.lang : "en",
@@ -16637,9 +16635,8 @@ export async function startApiServer(opts?: {
     state.trainingService = new trainingServiceCtor(trainingServiceOptions);
   } else {
     logger.warn(
-      "[eliza-api] Training service package unavailable; using fallback in-memory implementation",
+      "[eliza-api] Training service package unavailable; training routes will be disabled",
     );
-    state.trainingService = new FallbackTrainingService(trainingServiceOptions);
   }
   // Register immediately so /api/training routes are available without a startup race.
   const configuredAdminEntityId = config.agents?.defaults?.adminEntityId;

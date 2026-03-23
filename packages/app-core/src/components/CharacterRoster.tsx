@@ -96,7 +96,7 @@ export function CharacterRoster({
               border: "none",
               background: "none",
               padding: 0,
-              margin: "0 -5rem",
+              margin: "0 -0.75rem",
             }}
             onClick={() => onSelect(entry)}
             data-testid={`${testIdPrefix}-preset-${entry.id}`}
@@ -139,8 +139,7 @@ export function CharacterRoster({
                       clipPath: INSET_CLIP,
                       ...(isSelected
                         ? {
-                            boxShadow:
-                              "inset 0 1px 0 rgba(255,255,255,0.08)",
+                            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
                           }
                         : {}),
                     }}

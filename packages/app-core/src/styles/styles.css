@@ -1,10 +1,8 @@
 @import "tailwindcss";
 @import "./base.css";
-@import "./xterm.css";
 @import "./electrobun-mac-window-drag.css";
 
 @source "..";
-@source "../../../apps/app/src";
 
 /*
  * Map the existing theme CSS custom properties to Tailwind theme tokens.
@@ -106,6 +104,7 @@
 /* ── Typing indicator animation ─────────────────────────────────────── */
 
 @keyframes typing-bounce {
+
   0%,
   60%,
   100% {
@@ -139,12 +138,15 @@
   0% {
     content: "";
   }
+
   25% {
     content: ".";
   }
+
   50% {
     content: "..";
   }
+
   75% {
     content: "...";
   }
@@ -156,10 +158,12 @@
     width: 20%;
     opacity: 0.6;
   }
+
   50% {
     width: 70%;
     opacity: 1;
   }
+
   100% {
     width: 20%;
     opacity: 0.6;
@@ -222,24 +226,20 @@
 }
 
 .chat-native-scrollbar::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 225, 150, 0.9) 0%,
-    rgba(240, 178, 50, 0.72) 55%,
-    rgba(201, 128, 24, 0.78) 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(255, 225, 150, 0.9) 0%,
+      rgba(240, 178, 50, 0.72) 55%,
+      rgba(201, 128, 24, 0.78) 100%);
   border-radius: 9999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 .chat-native-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 232, 170, 0.95) 0%,
-    rgba(240, 178, 50, 0.82) 55%,
-    rgba(201, 128, 24, 0.88) 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(255, 232, 170, 0.95) 0%,
+      rgba(240, 178, 50, 0.82) 55%,
+      rgba(201, 128, 24, 0.88) 100%);
 }
 
 /* Keyboard shortcuts styling */
@@ -286,6 +286,7 @@ kbd {
 
 /* Reduced motion - !important is intentional for accessibility override */
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {

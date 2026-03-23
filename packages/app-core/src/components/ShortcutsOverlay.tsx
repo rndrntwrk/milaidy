@@ -1,9 +1,4 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@miladyai/ui";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@miladyai/ui";
 import { useEffect, useState } from "react";
 import { COMMON_SHORTCUTS } from "../hooks";
 import { useApp } from "../state";

@@ -29,9 +29,9 @@ describe("dev-console-log", () => {
 
     // Invalid: wrong basename
     expect(isAllowedDevConsoleLogPath("/etc/passwd")).toBe(false);
-    expect(
-      isAllowedDevConsoleLogPath("/repo/.milady/other-file.log"),
-    ).toBe(false);
+    expect(isAllowedDevConsoleLogPath("/repo/.milady/other-file.log")).toBe(
+      false,
+    );
   });
 
   it("readDevConsoleLogTail returns last lines within byte budget", () => {

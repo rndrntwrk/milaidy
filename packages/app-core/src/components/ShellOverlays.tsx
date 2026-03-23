@@ -32,11 +32,7 @@ export function ShellOverlays({
           aria-busy={actionNotice.busy ? true : undefined}
         >
           {actionNotice.busy ? (
-            <Spinner
-              size={16}
-              className="shrink-0 opacity-95"
-              aria-hidden
-            />
+            <Spinner size={16} className="shrink-0 opacity-95" aria-hidden />
           ) : null}
           <span className="text-left leading-snug">{actionNotice.text}</span>
         </div>

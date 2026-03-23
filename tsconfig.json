@@ -29,7 +29,7 @@
         "./packages/ui/src/*"
       ],
       "@miladyai/agent/*": [
-        "./node_modules/@miladyai/agent/packages/agent/src/*"
+        "./packages/agent/src/*"
       ]
     }
   },

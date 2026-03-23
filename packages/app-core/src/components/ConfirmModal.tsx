@@ -65,7 +65,12 @@ export function ConfirmModal({
         : { background: "#f0b232", color: "#000" };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onCancel(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) onCancel();
+      }}
+    >
       <DialogContent className="max-w-md rounded-xl p-6">
         <DialogHeader>
           <DialogTitle className="text-base font-bold mb-3">
@@ -129,7 +134,12 @@ export function PromptModal({
   }, [onConfirm, value]);
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onCancel(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) onCancel();
+      }}
+    >
       <DialogContent
         className="max-w-md rounded-xl p-6"
         onKeyDown={(e) => {

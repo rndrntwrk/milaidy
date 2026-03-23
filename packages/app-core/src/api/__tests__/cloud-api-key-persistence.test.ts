@@ -32,7 +32,7 @@ vi.mock("@elizaos/core", () => ({
   stringToUuid: (s: string) => `uuid-${s}`,
 }));
 
-vi.mock("@elizaos/agent/cloud/validate-url", () => ({
+vi.mock("@miladyai/agent/cloud/validate-url", () => ({
   validateCloudBaseUrl: vi.fn(() => Promise.resolve(null)),
 }));
 

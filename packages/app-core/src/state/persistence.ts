@@ -123,7 +123,10 @@ export function loadCompanionAnimateWhenHidden(): boolean {
 
 export function saveCompanionAnimateWhenHidden(enabled: boolean): void {
   try {
-    localStorage.setItem(COMPANION_ANIMATE_WHEN_HIDDEN_KEY, enabled ? "1" : "0");
+    localStorage.setItem(
+      COMPANION_ANIMATE_WHEN_HIDDEN_KEY,
+      enabled ? "1" : "0",
+    );
   } catch {
     // ignore
   }
@@ -140,7 +143,10 @@ const COMPANION_HALF_FRAMERATE_VALUES = new Set<CompanionHalfFramerateMode>([
 export function normalizeCompanionHalfFramerateMode(
   raw: string | null | undefined,
 ): CompanionHalfFramerateMode {
-  if (raw && COMPANION_HALF_FRAMERATE_VALUES.has(raw as CompanionHalfFramerateMode)) {
+  if (
+    raw &&
+    COMPANION_HALF_FRAMERATE_VALUES.has(raw as CompanionHalfFramerateMode)
+  ) {
     return raw as CompanionHalfFramerateMode;
   }
   return "when_saving_power";
@@ -289,10 +295,7 @@ export { normalizeUiShellMode };
 
 export function loadUiShellMode(): UiShellMode {
   return tryLocalStorage(
-    () =>
-      normalizeUiShellMode(
-        localStorage.getItem(UI_SHELL_MODE_STORAGE_KEY),
-      ),
+    () => normalizeUiShellMode(localStorage.getItem(UI_SHELL_MODE_STORAGE_KEY)),
     "companion",
   );
 }
@@ -332,9 +335,7 @@ function normalizeLastNativeTab(tab: unknown): Tab {
 export function loadLastNativeTab(): Tab {
   return tryLocalStorage(
     () =>
-      normalizeLastNativeTab(
-        localStorage.getItem(LAST_NATIVE_TAB_STORAGE_KEY),
-      ),
+      normalizeLastNativeTab(localStorage.getItem(LAST_NATIVE_TAB_STORAGE_KEY)),
     "chat",
   );
 }

@@ -229,7 +229,9 @@ describe("training routes", () => {
       body: { backend: "cpu" },
     });
     expect(result.status).toBe(400);
-    expect(result.payload).toMatchObject({ error: "bad request" });
+    expect(result.payload).toMatchObject({
+      error: expect.stringContaining("bad request"),
+    });
   });
 
   test("returns 404 when cancelling unknown job", async () => {

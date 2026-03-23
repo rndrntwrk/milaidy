@@ -17,9 +17,7 @@ export function extractHeaderValue(
   value: string | string[] | undefined,
 ): string | null {
   if (typeof value === "string") return value;
-  return Array.isArray(value) && typeof value[0] === "string"
-    ? value[0]
-    : null;
+  return Array.isArray(value) && typeof value[0] === "string" ? value[0] : null;
 }
 
 /**
@@ -28,8 +26,7 @@ export function extractHeaderValue(
  */
 export function getCompatApiToken(): string | null {
   const token =
-    process.env.MILADY_API_TOKEN?.trim() ??
-    process.env.ELIZA_API_TOKEN?.trim();
+    process.env.MILADY_API_TOKEN?.trim() ?? process.env.ELIZA_API_TOKEN?.trim();
   return token || null;
 }
 

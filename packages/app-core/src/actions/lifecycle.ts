@@ -41,7 +41,6 @@ export const LIFECYCLE_I18N_KEYS: Record<
   },
 };
 
-
 export interface LifecycleActionContext {
   client: MiladyClient;
   isBusy: () => boolean;

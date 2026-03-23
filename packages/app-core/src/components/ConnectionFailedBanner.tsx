@@ -24,7 +24,11 @@ export function ConnectionFailedBanner() {
         className="fixed left-0 right-0 z-[9999] flex items-center gap-3 bg-amber-500 px-4 py-2 text-[13px] font-medium text-white shadow-lg"
         style={{ top: bannerTop }}
       >
-        <Spinner size={16} className="shrink-0 text-white" aria-label={t("aria.reconnecting")} />
+        <Spinner
+          size={16}
+          className="shrink-0 text-white"
+          aria-label={t("aria.reconnecting")}
+        />
         <span className="truncate">
           {t("connectionfailedbanner.ReconnectingAtt")}{" "}
           {backendConnection.reconnectAttempt}/

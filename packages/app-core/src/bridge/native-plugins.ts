@@ -2,7 +2,6 @@ import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 
 type NativePlugin = Record<string, unknown>;
 
-
 /** Window may have Capacitor injected at runtime (Electron/native shells). */
 interface WindowWithCapacitor extends Window {
   Capacitor?: { Plugins?: Record<string, unknown> };

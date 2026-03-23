@@ -2,6 +2,45 @@
  * Tests for avatar selection logic — VRM index management, path resolution, localStorage persistence.
  */
 
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// Build the VRM asset roster from STYLE_PRESETS inside vi.hoisted so it's
+// available when vi.mock runs (both are hoisted above normal imports).
+const { TEST_VRM_ASSETS } = vi.hoisted(() => {
+  // Inline the preset names/avatarIndex here because vi.hoisted can't access
+  // module imports. This list MUST match STYLE_PRESETS in onboarding-presets.ts.
+  // If a preset is added/removed/reordered, this test will fail and signal
+  // that this list needs updating.
+  const presets = [
+    { name: "Chen", avatarIndex: 1 },
+    { name: "Jin", avatarIndex: 2 },
+    { name: "Kei", avatarIndex: 3 },
+    { name: "Momo", avatarIndex: 4 },
+    { name: "Rin", avatarIndex: 5 },
+    { name: "Ryu", avatarIndex: 6 },
+    { name: "Satoshi", avatarIndex: 7 },
+    { name: "Yuki", avatarIndex: 8 },
+  ];
+  return {
+    TEST_VRM_ASSETS: presets
+      .sort((a, b) => a.avatarIndex - b.avatarIndex)
+      .map((p) => ({ title: p.name, slug: `milady-${p.avatarIndex}` })),
+  };
+});
+
+// Mock boot config so VRM helpers resolve the standard Milady roster.
+vi.mock("../../src/config/boot-config", async (importOriginal) => {
+  const mod = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...mod,
+    getBootConfig: () => ({
+      branding: {},
+      cloudApiBase: "https://www.elizacloud.ai",
+      vrmAssets: TEST_VRM_ASSETS,
+    }),
+  };
+});
+
 import {
   getCompanionBackgroundUrl,
   getVrmPreviewUrl,
@@ -9,7 +48,6 @@ import {
   getVrmUrl,
   VRM_COUNT,
 } from "@miladyai/app-core/state";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("Avatar VRM Utilities", () => {
   describe("getVrmUrl", () => {
@@ -81,6 +119,22 @@ describe("Avatar VRM Utilities", () => {
 
     it("matches the bundled Milady avatar roster size", () => {
       expect(VRM_COUNT).toBe(8);
+    });
+
+    it("hoisted test roster stays in sync with STYLE_PRESETS", async () => {
+      const { STYLE_PRESETS } = await import(
+        "@miladyai/agent/onboarding-presets"
+      );
+      const expected = STYLE_PRESETS.slice()
+        .sort(
+          (a: { avatarIndex: number }, b: { avatarIndex: number }) =>
+            a.avatarIndex - b.avatarIndex,
+        )
+        .map((p: { name: string; avatarIndex: number }) => ({
+          title: p.name,
+          slug: `milady-${p.avatarIndex}`,
+        }));
+      expect(TEST_VRM_ASSETS).toEqual(expected);
     });
   });
 

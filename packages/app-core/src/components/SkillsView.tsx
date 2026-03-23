@@ -350,7 +350,12 @@ function InstallModal({
   const [tab, setTab] = useState<InstallTab>("search");
 
   return (
-    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(v) => {
+        if (!v) onClose();
+      }}
+    >
       <DialogContent className="max-w-2xl max-h-[80vh] p-0 flex flex-col overflow-hidden rounded-2xl">
         {/* Header */}
         <DialogHeader
@@ -703,7 +708,12 @@ function EditSkillModal({
   };
 
   return (
-    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(v) => {
+        if (!v) onClose();
+      }}
+    >
       <DialogContent className="max-w-4xl h-[85vh] p-0 flex flex-col overflow-hidden rounded-xl">
         {/* Header */}
         <DialogHeader

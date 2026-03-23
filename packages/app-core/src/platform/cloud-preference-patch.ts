@@ -1,7 +1,7 @@
 import {
   normalizeOnboardingProviderId,
   ONBOARDING_PROVIDER_CATALOG,
-} from "@elizaos/agent/contracts/onboarding";
+} from "@miladyai/agent/contracts/onboarding";
 import type {
   CloudPreferenceClientLike as ClientLike,
   CloudPreferencePatchState as PatchState,

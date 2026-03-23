@@ -1240,7 +1240,7 @@ function DesktopOnboardingPermissions({
         {onBack ? (
           <button
             className="text-[10px] text-[rgba(240,238,250,0.62)] tracking-[0.15em] uppercase cursor-pointer no-underline bg-none border-none font-inherit transition-colors duration-300 p-0 hover:text-[rgba(240,238,250,0.9)]"
-            style={{ textShadow: '0 1px 8px rgba(3,5,10,0.45)' }}
+            style={{ textShadow: "0 1px 8px rgba(3,5,10,0.45)" }}
             onClick={() => onBack()}
             type="button"
           >

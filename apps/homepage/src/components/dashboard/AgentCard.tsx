@@ -203,7 +203,9 @@ export function AgentCard({
           <StatCell label="UPTIME" value={formatUptime(agent.uptime)} />
           <StatCell
             label="MEMORY"
-            value={agent.memories !== undefined ? String(agent.memories) : "\u2014"}
+            value={
+              agent.memories !== undefined ? String(agent.memories) : "\u2014"
+            }
           />
           <StatCell
             label="HEARTBEAT"

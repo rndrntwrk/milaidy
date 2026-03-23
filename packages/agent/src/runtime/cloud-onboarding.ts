@@ -14,6 +14,7 @@ import {
   type CloudAgentCreateParams,
   ElizaCloudClient,
 } from "../cloud/bridge-client";
+import type { StylePreset } from "../contracts/onboarding";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,19 +22,6 @@ import {
 
 /** Lazy-loaded @clack/prompts module type (matches eliza.ts pattern). */
 type ClackModule = typeof import("@clack/prompts");
-
-/** Style preset from onboarding-presets.ts. */
-interface StylePreset {
-  catchphrase: string;
-  hint?: string;
-  bio?: string[];
-  system?: string;
-  style?: { all?: string[]; chat?: string[]; post?: string[] };
-  adjectives?: string[];
-  topics?: string[];
-  postExamples?: string[];
-  messageExamples?: Array<Array<{ user: string; content: { text: string } }>>;
-}
 
 /** Result of a successful cloud onboarding flow. */
 export interface CloudOnboardingResult {

@@ -217,7 +217,12 @@ export function CommandPalette() {
   }, [commandQuery, setState]);
 
   return (
-    <Dialog open={commandPaletteOpen} onOpenChange={(v) => { if (!v) closeCommandPalette(); }}>
+    <Dialog
+      open={commandPaletteOpen}
+      onOpenChange={(v) => {
+        if (!v) closeCommandPalette();
+      }}
+    >
       <DialogContent className="w-[520px] max-w-[520px] max-h-[420px] p-0 flex flex-col rounded-xl top-[30%] translate-y-0">
         <input
           ref={inputRef}

@@ -1,4 +1,11 @@
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@miladyai/ui";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@miladyai/ui";
 import { Monitor, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invokeDesktopBridgeRequest, isElectrobunRuntime } from "../bridge";
@@ -307,8 +314,8 @@ export function DesktopWorkspaceSection() {
     return (
       <Card className="text-sm text-muted">
         <CardContent className="pt-6">
-          Desktop workspace tools are only available inside the Electrobun desktop
-          runtime.
+          Desktop workspace tools are only available inside the Electrobun
+          desktop runtime.
         </CardContent>
       </Card>
     );
@@ -376,9 +383,7 @@ export function DesktopWorkspaceSection() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">
-              Detached Surfaces
-            </CardTitle>
+            <CardTitle className="text-sm">Detached Surfaces</CardTitle>
             <CardDescription>
               Launch the native Electrobun surfaces without navigating away from
               the main shell.
@@ -386,25 +391,25 @@ export function DesktopWorkspaceSection() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-2 sm:grid-cols-2">
-            {DESKTOP_WORKSPACE_SURFACES.map((surface) => (
-              <Button
-                key={surface.id}
-                variant="outline"
-                size="sm"
-                className="justify-start whitespace-normal text-left"
-                onClick={() =>
-                  void runAction(
-                    `desktop-surface-${surface.id}`,
-                    async () => openDesktopSurfaceWindow(surface.id),
-                    `Opened ${surface.label.toLowerCase()}.`,
-                    false,
-                  )
-                }
-                disabled={busyAction === `desktop-surface-${surface.id}`}
-              >
-                {surface.label}
-              </Button>
-            ))}
+              {DESKTOP_WORKSPACE_SURFACES.map((surface) => (
+                <Button
+                  key={surface.id}
+                  variant="outline"
+                  size="sm"
+                  className="justify-start whitespace-normal text-left"
+                  onClick={() =>
+                    void runAction(
+                      `desktop-surface-${surface.id}`,
+                      async () => openDesktopSurfaceWindow(surface.id),
+                      `Opened ${surface.label.toLowerCase()}.`,
+                      false,
+                    )
+                  }
+                  disabled={busyAction === `desktop-surface-${surface.id}`}
+                >
+                  {surface.label}
+                </Button>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -419,99 +424,99 @@ export function DesktopWorkspaceSection() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction("desktop-show-window", async () => {
-                  await invokeDesktopBridgeRequest<void>({
-                    rpcMethod: "desktopShowWindow",
-                    ipcChannel: "desktop:showWindow",
-                  });
-                })
-              }
-              disabled={busyAction === "desktop-show-window"}
-            >
-              Show Window
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction("desktop-hide-window", async () => {
-                  await invokeDesktopBridgeRequest<void>({
-                    rpcMethod: "desktopHideWindow",
-                    ipcChannel: "desktop:hideWindow",
-                  });
-                })
-              }
-              disabled={busyAction === "desktop-hide-window"}
-            >
-              Hide Window
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction("desktop-focus-window", async () => {
-                  await invokeDesktopBridgeRequest<void>({
-                    rpcMethod: "desktopFocusWindow",
-                    ipcChannel: "desktop:focusWindow",
-                  });
-                })
-              }
-              disabled={busyAction === "desktop-focus-window"}
-            >
-              Focus Window
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction("desktop-minimize-window", async () => {
-                  const method = snapshot?.window.minimized
-                    ? "desktopUnminimizeWindow"
-                    : "desktopMinimizeWindow";
-                  const channel = snapshot?.window.minimized
-                    ? "desktop:unminimizeWindow"
-                    : "desktop:minimizeWindow";
-                  await invokeDesktopBridgeRequest<void>({
-                    rpcMethod: method,
-                    ipcChannel: channel,
-                  });
-                })
-              }
-              disabled={busyAction === "desktop-minimize-window"}
-            >
-              {snapshot?.window.minimized
-                ? "Restore Window"
-                : "Minimize Window"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction("desktop-maximize-toggle", async () => {
-                  const method = snapshot?.window.maximized
-                    ? "desktopUnmaximizeWindow"
-                    : "desktopMaximizeWindow";
-                  const channel = snapshot?.window.maximized
-                    ? "desktop:unmaximizeWindow"
-                    : "desktop:maximizeWindow";
-                  await invokeDesktopBridgeRequest<void>({
-                    rpcMethod: method,
-                    ipcChannel: channel,
-                  });
-                })
-              }
-              disabled={busyAction === "desktop-maximize-toggle"}
-            >
-              {snapshot?.window.maximized
-                ? "Unmaximize Window"
-                : "Maximize Window"}
-            </Button>
-          </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction("desktop-show-window", async () => {
+                    await invokeDesktopBridgeRequest<void>({
+                      rpcMethod: "desktopShowWindow",
+                      ipcChannel: "desktop:showWindow",
+                    });
+                  })
+                }
+                disabled={busyAction === "desktop-show-window"}
+              >
+                Show Window
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction("desktop-hide-window", async () => {
+                    await invokeDesktopBridgeRequest<void>({
+                      rpcMethod: "desktopHideWindow",
+                      ipcChannel: "desktop:hideWindow",
+                    });
+                  })
+                }
+                disabled={busyAction === "desktop-hide-window"}
+              >
+                Hide Window
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction("desktop-focus-window", async () => {
+                    await invokeDesktopBridgeRequest<void>({
+                      rpcMethod: "desktopFocusWindow",
+                      ipcChannel: "desktop:focusWindow",
+                    });
+                  })
+                }
+                disabled={busyAction === "desktop-focus-window"}
+              >
+                Focus Window
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction("desktop-minimize-window", async () => {
+                    const method = snapshot?.window.minimized
+                      ? "desktopUnminimizeWindow"
+                      : "desktopMinimizeWindow";
+                    const channel = snapshot?.window.minimized
+                      ? "desktop:unminimizeWindow"
+                      : "desktop:minimizeWindow";
+                    await invokeDesktopBridgeRequest<void>({
+                      rpcMethod: method,
+                      ipcChannel: channel,
+                    });
+                  })
+                }
+                disabled={busyAction === "desktop-minimize-window"}
+              >
+                {snapshot?.window.minimized
+                  ? "Restore Window"
+                  : "Minimize Window"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction("desktop-maximize-toggle", async () => {
+                    const method = snapshot?.window.maximized
+                      ? "desktopUnmaximizeWindow"
+                      : "desktopMaximizeWindow";
+                    const channel = snapshot?.window.maximized
+                      ? "desktop:unmaximizeWindow"
+                      : "desktop:maximizeWindow";
+                    await invokeDesktopBridgeRequest<void>({
+                      rpcMethod: method,
+                      ipcChannel: channel,
+                    });
+                  })
+                }
+                disabled={busyAction === "desktop-maximize-toggle"}
+              >
+                {snapshot?.window.maximized
+                  ? "Unmaximize Window"
+                  : "Maximize Window"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -524,106 +529,107 @@ export function DesktopWorkspaceSection() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction(
-                  "desktop-notify",
-                  async () => {
-                    await invokeDesktopBridgeRequest<{ id: string }>({
-                      rpcMethod: "desktopShowNotification",
-                      ipcChannel: "desktop:showNotification",
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction(
+                    "desktop-notify",
+                    async () => {
+                      await invokeDesktopBridgeRequest<{ id: string }>({
+                        rpcMethod: "desktopShowNotification",
+                        ipcChannel: "desktop:showNotification",
+                        params: {
+                          title: "Desktop",
+                          body: "Desktop workspace notification test.",
+                          urgency: "normal",
+                        },
+                      });
+                    },
+                    "Notification sent.",
+                    false,
+                  )
+                }
+                disabled={busyAction === "desktop-notify"}
+              >
+                Send Test Notification
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction(
+                    "desktop-restart-agent",
+                    async () => restartBackend(),
+                    "Agent restart requested.",
+                  )
+                }
+                disabled={busyAction === "desktop-restart-agent"}
+              >
+                Restart Agent
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction(
+                    "desktop-relaunch-app",
+                    async () => relaunchDesktop(),
+                    "Desktop relaunch requested.",
+                    false,
+                  )
+                }
+                disabled={busyAction === "desktop-relaunch-app"}
+              >
+                Relaunch
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction("desktop-toggle-auto-launch", async () => {
+                    await invokeDesktopBridgeRequest<void>({
+                      rpcMethod: "desktopSetAutoLaunch",
+                      ipcChannel: "desktop:setAutoLaunch",
                       params: {
-                        title: "Desktop",
-                        body: "Desktop workspace notification test.",
-                        urgency: "normal",
+                        enabled: !(snapshot?.autoLaunch?.enabled ?? false),
+                        openAsHidden:
+                          snapshot?.autoLaunch?.openAsHidden ?? false,
                       },
                     });
-                  },
-                  "Notification sent.",
-                  false,
-                )
-              }
-              disabled={busyAction === "desktop-notify"}
-            >
-              Send Test Notification
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction(
-                  "desktop-restart-agent",
-                  async () => restartBackend(),
-                  "Agent restart requested.",
-                )
-              }
-              disabled={busyAction === "desktop-restart-agent"}
-            >
-              Restart Agent
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction(
-                  "desktop-relaunch-app",
-                  async () => relaunchDesktop(),
-                  "Desktop relaunch requested.",
-                  false,
-                )
-              }
-              disabled={busyAction === "desktop-relaunch-app"}
-            >
-              Relaunch
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction("desktop-toggle-auto-launch", async () => {
-                  await invokeDesktopBridgeRequest<void>({
-                    rpcMethod: "desktopSetAutoLaunch",
-                    ipcChannel: "desktop:setAutoLaunch",
-                    params: {
-                      enabled: !(snapshot?.autoLaunch?.enabled ?? false),
-                      openAsHidden: snapshot?.autoLaunch?.openAsHidden ?? false,
-                    },
-                  });
-                })
-              }
-              disabled={busyAction === "desktop-toggle-auto-launch"}
-            >
-              {snapshot?.autoLaunch?.enabled
-                ? "Disable Auto-launch"
-                : "Enable Auto-launch"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction("desktop-toggle-hidden-launch", async () => {
-                  await invokeDesktopBridgeRequest<void>({
-                    rpcMethod: "desktopSetAutoLaunch",
-                    ipcChannel: "desktop:setAutoLaunch",
-                    params: {
-                      enabled: snapshot?.autoLaunch?.enabled ?? false,
-                      openAsHidden: !(
-                        snapshot?.autoLaunch?.openAsHidden ?? false
-                      ),
-                    },
-                  });
-                })
-              }
-              disabled={busyAction === "desktop-toggle-hidden-launch"}
-            >
-              {snapshot?.autoLaunch?.openAsHidden
-                ? "Launch Visible on Login"
-                : "Launch Hidden on Login"}
-            </Button>
-          </div>
+                  })
+                }
+                disabled={busyAction === "desktop-toggle-auto-launch"}
+              >
+                {snapshot?.autoLaunch?.enabled
+                  ? "Disable Auto-launch"
+                  : "Enable Auto-launch"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction("desktop-toggle-hidden-launch", async () => {
+                    await invokeDesktopBridgeRequest<void>({
+                      rpcMethod: "desktopSetAutoLaunch",
+                      ipcChannel: "desktop:setAutoLaunch",
+                      params: {
+                        enabled: snapshot?.autoLaunch?.enabled ?? false,
+                        openAsHidden: !(
+                          snapshot?.autoLaunch?.openAsHidden ?? false
+                        ),
+                      },
+                    });
+                  })
+                }
+                disabled={busyAction === "desktop-toggle-hidden-launch"}
+              >
+                {snapshot?.autoLaunch?.openAsHidden
+                  ? "Launch Visible on Login"
+                  : "Launch Hidden on Login"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -631,9 +637,7 @@ export function DesktopWorkspaceSection() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">
-              Native File Dialogs
-            </CardTitle>
+            <CardTitle className="text-sm">Native File Dialogs</CardTitle>
             <CardDescription>
               Test file, folder, and save dialogs and inspect the returned
               paths.
@@ -647,111 +651,109 @@ export function DesktopWorkspaceSection() {
                 onClick={() =>
                   void runAction(
                     "desktop-open-file-dialog",
-                  async () => {
-                    const result = await invokeDesktopBridgeRequest<{
-                      canceled: boolean;
-                      filePaths: string[];
-                    }>({
-                      rpcMethod: "desktopShowOpenDialog",
-                      ipcChannel: "desktop:showOpenDialog",
-                      params: {
-                        title: "Select files",
-                        defaultPath: snapshot?.paths.downloads,
-                        canChooseFiles: true,
-                        allowsMultipleSelection: true,
-                      },
-                    });
-                    setOpenPaths(result?.filePaths ?? []);
-                  },
-                  "File dialog completed.",
-                  false,
-                )
-              }
-              disabled={busyAction === "desktop-open-file-dialog"}
-            >
-              Open Files Dialog
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction(
-                  "desktop-open-folder-dialog",
-                  async () => {
-                    const result = await invokeDesktopBridgeRequest<{
-                      canceled: boolean;
-                      filePaths: string[];
-                    }>({
-                      rpcMethod: "desktopShowOpenDialog",
-                      ipcChannel: "desktop:showOpenDialog",
-                      params: {
-                        title: "Select folder",
-                        defaultPath: snapshot?.paths.home,
-                        canChooseDirectory: true,
-                      },
-                    });
-                    setOpenPaths(result?.filePaths ?? []);
-                  },
-                  "Folder dialog completed.",
-                  false,
-                )
-              }
-              disabled={busyAction === "desktop-open-folder-dialog"}
-            >
-              Open Folder Dialog
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction(
-                  "desktop-save-dialog",
-                  async () => {
-                    const result = await invokeDesktopBridgeRequest<{
-                      canceled: boolean;
-                      filePaths: string[];
-                    }>({
-                      rpcMethod: "desktopShowSaveDialog",
-                      ipcChannel: "desktop:showSaveDialog",
-                      params: {
-                        title: "Save file",
-                        defaultPath: snapshot?.paths.documents,
-                        allowedFileTypes: "txt,md,json",
-                      },
-                    });
-                    setSavePaths(result?.filePaths ?? []);
-                  },
-                  "Save dialog completed.",
-                  false,
-                )
-              }
-              disabled={busyAction === "desktop-save-dialog"}
-            >
-              Save File Dialog
-            </Button>
-          </div>
-          <div className="space-y-2 rounded-xl border border-border bg-bg px-3 py-3 text-xs text-muted">
-            <div>
-              <div className="mb-1 font-semibold text-txt">
-                Open dialog result
-              </div>
-              {renderPathList(openPaths)}
+                    async () => {
+                      const result = await invokeDesktopBridgeRequest<{
+                        canceled: boolean;
+                        filePaths: string[];
+                      }>({
+                        rpcMethod: "desktopShowOpenDialog",
+                        ipcChannel: "desktop:showOpenDialog",
+                        params: {
+                          title: "Select files",
+                          defaultPath: snapshot?.paths.downloads,
+                          canChooseFiles: true,
+                          allowsMultipleSelection: true,
+                        },
+                      });
+                      setOpenPaths(result?.filePaths ?? []);
+                    },
+                    "File dialog completed.",
+                    false,
+                  )
+                }
+                disabled={busyAction === "desktop-open-file-dialog"}
+              >
+                Open Files Dialog
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction(
+                    "desktop-open-folder-dialog",
+                    async () => {
+                      const result = await invokeDesktopBridgeRequest<{
+                        canceled: boolean;
+                        filePaths: string[];
+                      }>({
+                        rpcMethod: "desktopShowOpenDialog",
+                        ipcChannel: "desktop:showOpenDialog",
+                        params: {
+                          title: "Select folder",
+                          defaultPath: snapshot?.paths.home,
+                          canChooseDirectory: true,
+                        },
+                      });
+                      setOpenPaths(result?.filePaths ?? []);
+                    },
+                    "Folder dialog completed.",
+                    false,
+                  )
+                }
+                disabled={busyAction === "desktop-open-folder-dialog"}
+              >
+                Open Folder Dialog
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction(
+                    "desktop-save-dialog",
+                    async () => {
+                      const result = await invokeDesktopBridgeRequest<{
+                        canceled: boolean;
+                        filePaths: string[];
+                      }>({
+                        rpcMethod: "desktopShowSaveDialog",
+                        ipcChannel: "desktop:showSaveDialog",
+                        params: {
+                          title: "Save file",
+                          defaultPath: snapshot?.paths.documents,
+                          allowedFileTypes: "txt,md,json",
+                        },
+                      });
+                      setSavePaths(result?.filePaths ?? []);
+                    },
+                    "Save dialog completed.",
+                    false,
+                  )
+                }
+                disabled={busyAction === "desktop-save-dialog"}
+              >
+                Save File Dialog
+              </Button>
             </div>
-            <div>
-              <div className="mb-1 font-semibold text-txt">
-                Save dialog result
+            <div className="space-y-2 rounded-xl border border-border bg-bg px-3 py-3 text-xs text-muted">
+              <div>
+                <div className="mb-1 font-semibold text-txt">
+                  Open dialog result
+                </div>
+                {renderPathList(openPaths)}
               </div>
-              {renderPathList(savePaths)}
+              <div>
+                <div className="mb-1 font-semibold text-txt">
+                  Save dialog result
+                </div>
+                {renderPathList(savePaths)}
+              </div>
             </div>
-          </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">
-              Clipboard + Paths
-            </CardTitle>
+            <CardTitle className="text-sm">Clipboard + Paths</CardTitle>
             <CardDescription>
               Read, clear, and write clipboard text, then open or reveal saved
               paths.
@@ -759,105 +761,105 @@ export function DesktopWorkspaceSection() {
           </CardHeader>
           <CardContent className="space-y-3">
             <textarea
-            value={clipboardDraft}
-            onChange={(event) => setClipboardDraft(event.target.value)}
-            className="min-h-24 w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm text-txt outline-none"
-            placeholder="Clipboard draft"
-          />
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction("desktop-clipboard-read", async () => {
-                  const result = await invokeDesktopBridgeRequest<{
-                    text?: string;
-                  }>({
-                    rpcMethod: "desktopReadFromClipboard",
-                    ipcChannel: "desktop:readFromClipboard",
-                  });
-                  setClipboardDraft(result?.text ?? "");
-                })
-              }
-              disabled={busyAction === "desktop-clipboard-read"}
-            >
-              Read Clipboard
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction("desktop-clipboard-copy", async () => {
-                  await copyTextToClipboard(clipboardDraft);
-                })
-              }
-              disabled={busyAction === "desktop-clipboard-copy"}
-            >
-              Copy Draft
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void runAction("desktop-clipboard-clear", async () => {
-                  await invokeDesktopBridgeRequest<void>({
-                    rpcMethod: "desktopClearClipboard",
-                    ipcChannel: "desktop:clearClipboard",
-                  });
-                  setClipboardDraft("");
-                })
-              }
-              disabled={busyAction === "desktop-clipboard-clear"}
-            >
-              Clear Clipboard
-            </Button>
-            {savePaths[0] && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    void runAction(
-                      "desktop-open-path",
-                      async () => {
-                        await invokeDesktopBridgeRequest<void>({
-                          rpcMethod: "desktopOpenPath",
-                          ipcChannel: "desktop:openPath",
-                          params: { path: savePaths[0] },
-                        });
-                      },
-                      "Opened saved path.",
-                      false,
-                    )
-                  }
-                  disabled={busyAction === "desktop-open-path"}
-                >
-                  Open Saved Path
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    void runAction(
-                      "desktop-reveal-path",
-                      async () => {
-                        await invokeDesktopBridgeRequest<void>({
-                          rpcMethod: "desktopShowItemInFolder",
-                          ipcChannel: "desktop:showItemInFolder",
-                          params: { path: savePaths[0] },
-                        });
-                      },
-                      "Revealed saved path.",
-                      false,
-                    )
-                  }
-                  disabled={busyAction === "desktop-reveal-path"}
-                >
-                  Reveal Saved Path
-                </Button>
-              </>
-            )}
-          </div>
+              value={clipboardDraft}
+              onChange={(event) => setClipboardDraft(event.target.value)}
+              className="min-h-24 w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm text-txt outline-none"
+              placeholder="Clipboard draft"
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction("desktop-clipboard-read", async () => {
+                    const result = await invokeDesktopBridgeRequest<{
+                      text?: string;
+                    }>({
+                      rpcMethod: "desktopReadFromClipboard",
+                      ipcChannel: "desktop:readFromClipboard",
+                    });
+                    setClipboardDraft(result?.text ?? "");
+                  })
+                }
+                disabled={busyAction === "desktop-clipboard-read"}
+              >
+                Read Clipboard
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction("desktop-clipboard-copy", async () => {
+                    await copyTextToClipboard(clipboardDraft);
+                  })
+                }
+                disabled={busyAction === "desktop-clipboard-copy"}
+              >
+                Copy Draft
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void runAction("desktop-clipboard-clear", async () => {
+                    await invokeDesktopBridgeRequest<void>({
+                      rpcMethod: "desktopClearClipboard",
+                      ipcChannel: "desktop:clearClipboard",
+                    });
+                    setClipboardDraft("");
+                  })
+                }
+                disabled={busyAction === "desktop-clipboard-clear"}
+              >
+                Clear Clipboard
+              </Button>
+              {savePaths[0] && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      void runAction(
+                        "desktop-open-path",
+                        async () => {
+                          await invokeDesktopBridgeRequest<void>({
+                            rpcMethod: "desktopOpenPath",
+                            ipcChannel: "desktop:openPath",
+                            params: { path: savePaths[0] },
+                          });
+                        },
+                        "Opened saved path.",
+                        false,
+                      )
+                    }
+                    disabled={busyAction === "desktop-open-path"}
+                  >
+                    Open Saved Path
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      void runAction(
+                        "desktop-reveal-path",
+                        async () => {
+                          await invokeDesktopBridgeRequest<void>({
+                            rpcMethod: "desktopShowItemInFolder",
+                            ipcChannel: "desktop:showItemInFolder",
+                            params: { path: savePaths[0] },
+                          });
+                        },
+                        "Revealed saved path.",
+                        false,
+                      )
+                    }
+                    disabled={busyAction === "desktop-reveal-path"}
+                  >
+                    Reveal Saved Path
+                  </Button>
+                </>
+              )}
+            </div>
             <div className="rounded-xl border border-border bg-bg px-3 py-3 text-xs text-muted">
               {snapshot?.clipboard ? (
                 <>

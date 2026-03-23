@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/version-resolver";
+export * from "@miladyai/agent/version-resolver";

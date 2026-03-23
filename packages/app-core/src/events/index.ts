@@ -78,7 +78,6 @@ export function dispatchMiladyEvent(
   document.dispatchEvent(new CustomEvent(name, { detail }));
 }
 
-
 /** Dispatch a typed custom event on `window`. */
 export function dispatchWindowEvent(
   name: ElizaWindowEventName,
@@ -100,4 +99,3 @@ export type AppEventName = ElizaEventName;
 
 /** Dispatch a typed custom event on `document`. */
 export const dispatchAppEvent = dispatchMiladyEvent;
-

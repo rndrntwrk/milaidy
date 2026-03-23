@@ -1,4 +1,12 @@
-import { Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@miladyai/ui";
+import {
+  Button,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@miladyai/ui";
 import { ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { client } from "../api";
@@ -142,7 +150,10 @@ export function BugReportModal() {
           await copyToClipboard(formatMarkdown());
           ok = true;
         } catch (err) {
-          console.warn("[BugReportModal] Failed to copy bug report to clipboard:", err);
+          console.warn(
+            "[BugReportModal] Failed to copy bug report to clipboard:",
+            err,
+          );
           ok = false;
         }
         setCopied(ok);
@@ -163,7 +174,10 @@ export function BugReportModal() {
       await copyToClipboard(formatMarkdown());
       ok = true;
     } catch (err) {
-      console.warn("[BugReportModal] Failed to copy bug report to clipboard:", err);
+      console.warn(
+        "[BugReportModal] Failed to copy bug report to clipboard:",
+        err,
+      );
       ok = false;
     }
     setCopied(ok);
@@ -273,11 +287,7 @@ export function BugReportModal() {
             className="flex justify-end px-5 py-3"
             style={{ borderTop: "1px solid var(--border)" }}
           >
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={close}
-            >
+            <Button variant="outline" size="sm" onClick={close}>
               {t("bugreportmodal.Close")}
             </Button>
           </div>
@@ -462,11 +472,7 @@ export function BugReportModal() {
           className="flex items-center justify-between gap-2 px-5 py-3 shrink-0"
           style={{ borderTop: "1px solid var(--border)" }}
         >
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={close}
-          >
+          <Button variant="outline" size="sm" onClick={close}>
             {t("common.cancel")}
           </Button>
           <div className="flex items-center gap-2">
@@ -476,7 +482,9 @@ export function BugReportModal() {
               onClick={handleCopyAndOpen}
               disabled={!canSubmit}
             >
-              {copied ? t("bugreportmodal.copied") : t("bugreportmodal.copyAndOpenGitHub")}
+              {copied
+                ? t("bugreportmodal.copied")
+                : t("bugreportmodal.copyAndOpenGitHub")}
             </Button>
             <Button
               variant="default"
@@ -484,7 +492,9 @@ export function BugReportModal() {
               onClick={handleSubmit}
               disabled={!canSubmit}
             >
-              {submitting ? t("bugreportmodal.submitting") : t("bugreportmodal.submit")}
+              {submitting
+                ? t("bugreportmodal.submitting")
+                : t("bugreportmodal.submit")}
             </Button>
           </div>
         </div>

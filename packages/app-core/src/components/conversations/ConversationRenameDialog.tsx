@@ -27,11 +27,7 @@ export function ConversationRenameDialog({
   initialTitle,
   onClose,
 }: ConversationRenameDialogProps) {
-  const {
-    handleRenameConversation,
-    suggestConversationTitle,
-    t,
-  } = useApp();
+  const { handleRenameConversation, suggestConversationTitle, t } = useApp();
   const inputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState(initialTitle);
   const [suggesting, setSuggesting] = useState(false);
@@ -140,10 +136,7 @@ export function ConversationRenameDialog({
               data-testid="conv-rename-save"
               onClick={() => void handleSave()}
               disabled={
-                !conversationId ||
-                !draft.trim() ||
-                saving ||
-                suggesting
+                !conversationId || !draft.trim() || saving || suggesting
               }
             >
               {saving

@@ -41,14 +41,24 @@ export function RpcStep() {
   if (!mode) {
     return (
       <>
-        <div className="text-xs tracking-[0.3em] uppercase text-[rgba(240,238,250,0.62)] font-semibold text-center mb-0" style={{ textShadow: '0 2px 10px rgba(3,5,10,0.55)' }}>
+        <div
+          className="text-xs tracking-[0.3em] uppercase text-[rgba(240,238,250,0.62)] font-semibold text-center mb-0"
+          style={{ textShadow: "0 2px 10px rgba(3,5,10,0.55)" }}
+        >
           {t("onboarding.rpcTitle")}
         </div>
         <div className="flex items-center gap-[12px] my-[16px] before:content-[''] before:flex-1 before:h-[1px] before:bg-gradient-to-r before:from-transparent before:via-[rgba(255,255,255,0.15)] before:to-transparent after:content-[''] after:flex-1 after:h-[1px] after:bg-gradient-to-r after:from-transparent after:via-[rgba(255,255,255,0.15)] after:to-transparent">
           <div className="w-1.5 h-1.5 bg-[rgba(240,185,11,0.4)] rotate-45 shrink-0" />
         </div>
-        <div className="text-xl font-light leading-[1.4] text-[rgba(240,238,250,0.95)] text-center mb-[18px]" style={{ textShadow: '0 2px 10px rgba(3,5,10,0.55)' }}>{t("onboarding.rpcQuestion")}</div>
-        <p className="text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3">{t("onboarding.rpcDesc")}</p>
+        <div
+          className="text-xl font-light leading-[1.4] text-[rgba(240,238,250,0.95)] text-center mb-[18px]"
+          style={{ textShadow: "0 2px 10px rgba(3,5,10,0.55)" }}
+        >
+          {t("onboarding.rpcQuestion")}
+        </div>
+        <p className="text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3">
+          {t("onboarding.rpcDesc")}
+        </p>
 
         <div
           style={{
@@ -80,10 +90,16 @@ export function RpcStep() {
             style={{ justifyContent: "center" }}
           >
             <div>
-              <div className="text-xs text-[rgba(240,238,250,0.88)] leading-[1.3]" style={{ textShadow: '0 1px 8px rgba(3,5,10,0.6)' }}>
+              <div
+                className="text-xs text-[rgba(240,238,250,0.88)] leading-[1.3]"
+                style={{ textShadow: "0 1px 8px rgba(3,5,10,0.6)" }}
+              >
                 {t("onboarding.rpcElizaCloud")}
               </div>
-              <div className="text-[10px] text-[rgba(240,238,250,0.58)] leading-[1.3] line-clamp-2" style={{ textShadow: '0 1px 8px rgba(3,5,10,0.5)' }}>
+              <div
+                className="text-[10px] text-[rgba(240,238,250,0.58)] leading-[1.3] line-clamp-2"
+                style={{ textShadow: "0 1px 8px rgba(3,5,10,0.5)" }}
+              >
                 {t("onboarding.rpcElizaCloudDesc")}
               </div>
             </div>
@@ -97,10 +113,16 @@ export function RpcStep() {
             style={{ justifyContent: "center" }}
           >
             <div>
-              <div className="text-xs text-[rgba(240,238,250,0.88)] leading-[1.3]" style={{ textShadow: '0 1px 8px rgba(3,5,10,0.6)' }}>
+              <div
+                className="text-xs text-[rgba(240,238,250,0.88)] leading-[1.3]"
+                style={{ textShadow: "0 1px 8px rgba(3,5,10,0.6)" }}
+              >
                 {t("onboarding.rpcBringKeys")}
               </div>
-              <div className="text-[10px] text-[rgba(240,238,250,0.58)] leading-[1.3] line-clamp-2" style={{ textShadow: '0 1px 8px rgba(3,5,10,0.5)' }}>
+              <div
+                className="text-[10px] text-[rgba(240,238,250,0.58)] leading-[1.3] line-clamp-2"
+                style={{ textShadow: "0 1px 8px rgba(3,5,10,0.5)" }}
+              >
                 Alchemy, QuickNode, Helius
               </div>
             </div>
@@ -110,7 +132,7 @@ export function RpcStep() {
         <div className="flex justify-between items-center gap-6 mt-[18px] pt-3.5 border-t border-white/[0.08]">
           <button
             className="text-[10px] text-[rgba(240,238,250,0.62)] tracking-[0.15em] uppercase cursor-pointer no-underline bg-none border-none font-inherit transition-colors duration-300 p-0 hover:text-[rgba(240,238,250,0.9)]"
-            style={{ textShadow: '0 1px 8px rgba(3,5,10,0.45)' }}
+            style={{ textShadow: "0 1px 8px rgba(3,5,10,0.45)" }}
             onClick={handleOnboardingBack}
             type="button"
           >
@@ -118,7 +140,7 @@ export function RpcStep() {
           </button>
           <button
             className="text-[10px] text-[rgba(240,238,250,0.62)] tracking-[0.15em] uppercase cursor-pointer no-underline bg-none border-none font-inherit transition-colors duration-300 p-0 hover:text-[rgba(240,238,250,0.9)]"
-            style={{ textShadow: '0 1px 8px rgba(3,5,10,0.45)' }}
+            style={{ textShadow: "0 1px 8px rgba(3,5,10,0.45)" }}
             onClick={handleSkip}
             type="button"
           >
@@ -133,7 +155,10 @@ export function RpcStep() {
   if (mode === "cloud") {
     return (
       <>
-        <div className="text-xs tracking-[0.3em] uppercase text-[rgba(240,238,250,0.62)] font-semibold text-center mb-0" style={{ textShadow: '0 2px 10px rgba(3,5,10,0.55)' }}>
+        <div
+          className="text-xs tracking-[0.3em] uppercase text-[rgba(240,238,250,0.62)] font-semibold text-center mb-0"
+          style={{ textShadow: "0 2px 10px rgba(3,5,10,0.55)" }}
+        >
           {t("onboarding.rpcTitle")}
         </div>
         <div className="flex items-center gap-[12px] my-[16px] before:content-[''] before:flex-1 before:h-[1px] before:bg-gradient-to-r before:from-transparent before:via-[rgba(255,255,255,0.15)] before:to-transparent after:content-[''] after:flex-1 after:h-[1px] after:bg-gradient-to-r after:from-transparent after:via-[rgba(255,255,255,0.15)] after:to-transparent">
@@ -176,7 +201,7 @@ export function RpcStep() {
               <button
                 type="button"
                 className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[rgba(240,185,11,0.18)] border border-[rgba(240,185,11,0.35)] rounded-[6px] text-[rgba(240,238,250,0.94)] text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[rgba(240,185,11,0.28)] hover:border-[rgba(240,185,11,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ textShadow: '0 1px 6px rgba(3,5,10,0.55)' }}
+                style={{ textShadow: "0 1px 6px rgba(3,5,10,0.55)" }}
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   const circle = document.createElement("span");
@@ -184,7 +209,8 @@ export function RpcStep() {
                   circle.style.width = circle.style.height = `${diameter}px`;
                   circle.style.left = `${e.clientX - rect.left - diameter / 2}px`;
                   circle.style.top = `${e.clientY - rect.top - diameter / 2}px`;
-                  circle.className = "absolute rounded-full bg-[rgba(240,185,11,0.3)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
+                  circle.className =
+                    "absolute rounded-full bg-[rgba(240,185,11,0.3)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
                   e.currentTarget.appendChild(circle);
                   setTimeout(() => circle.remove(), 600);
                   handleCloudLogin();
@@ -238,7 +264,9 @@ export function RpcStep() {
                     </p>
                   );
                 })()}
-              <p className="text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3">{t("onboarding.freeCredits")}</p>
+              <p className="text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3">
+                {t("onboarding.freeCredits")}
+              </p>
             </>
           )}
         </div>
@@ -246,7 +274,7 @@ export function RpcStep() {
         <div className="flex justify-between items-center gap-6 mt-[18px] pt-3.5 border-t border-white/[0.08]">
           <button
             className="text-[10px] text-[rgba(240,238,250,0.62)] tracking-[0.15em] uppercase cursor-pointer no-underline bg-none border-none font-inherit transition-colors duration-300 p-0 hover:text-[rgba(240,238,250,0.9)]"
-            style={{ textShadow: '0 1px 8px rgba(3,5,10,0.45)' }}
+            style={{ textShadow: "0 1px 8px rgba(3,5,10,0.45)" }}
             onClick={() => setMode("")}
             type="button"
           >
@@ -254,7 +282,7 @@ export function RpcStep() {
           </button>
           <button
             className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[rgba(240,185,11,0.18)] border border-[rgba(240,185,11,0.35)] rounded-[6px] text-[rgba(240,238,250,0.94)] text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[rgba(240,185,11,0.28)] hover:border-[rgba(240,185,11,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ textShadow: '0 1px 6px rgba(3,5,10,0.55)' }}
+            style={{ textShadow: "0 1px 6px rgba(3,5,10,0.55)" }}
             onClick={() => {
               setState("onboardingRpcSelections", {
                 evm: "eliza-cloud",
@@ -276,12 +304,19 @@ export function RpcStep() {
   // ── BYOK mode ───────────────────────────────────────────────────────
   return (
     <>
-      <div className="text-xs tracking-[0.3em] uppercase text-[rgba(240,238,250,0.62)] font-semibold text-center mb-0" style={{ textShadow: '0 2px 10px rgba(3,5,10,0.55)' }}>
+      <div
+        className="text-xs tracking-[0.3em] uppercase text-[rgba(240,238,250,0.62)] font-semibold text-center mb-0"
+        style={{ textShadow: "0 2px 10px rgba(3,5,10,0.55)" }}
+      >
         {t("onboarding.rpcTitle")}
         <button
           type="button"
           className="text-[10px] text-[rgba(240,238,250,0.62)] tracking-[0.15em] uppercase cursor-pointer no-underline bg-none border-none font-inherit transition-colors duration-300 p-0 hover:text-[rgba(240,238,250,0.9)]"
-          style={{ textShadow: '0 1px 8px rgba(3,5,10,0.45)', marginLeft: "0.5rem", fontSize: "0.75rem" }}
+          style={{
+            textShadow: "0 1px 8px rgba(3,5,10,0.45)",
+            marginLeft: "0.5rem",
+            fontSize: "0.75rem",
+          }}
           onClick={() => setMode("")}
         >
           {t("settings.change")}
@@ -388,7 +423,7 @@ export function RpcStep() {
       <div className="flex justify-between items-center gap-6 mt-[18px] pt-3.5 border-t border-white/[0.08]">
         <button
           className="text-[10px] text-[rgba(240,238,250,0.62)] tracking-[0.15em] uppercase cursor-pointer no-underline bg-none border-none font-inherit transition-colors duration-300 p-0 hover:text-[rgba(240,238,250,0.9)]"
-          style={{ textShadow: '0 1px 8px rgba(3,5,10,0.45)' }}
+          style={{ textShadow: "0 1px 8px rgba(3,5,10,0.45)" }}
           onClick={() => setMode("")}
           type="button"
         >
@@ -396,7 +431,7 @@ export function RpcStep() {
         </button>
         <button
           className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[rgba(240,185,11,0.18)] border border-[rgba(240,185,11,0.35)] rounded-[6px] text-[rgba(240,238,250,0.94)] text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[rgba(240,185,11,0.28)] hover:border-[rgba(240,185,11,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ textShadow: '0 1px 6px rgba(3,5,10,0.55)' }}
+          style={{ textShadow: "0 1px 6px rgba(3,5,10,0.55)" }}
           onClick={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
             const circle = document.createElement("span");
@@ -404,10 +439,11 @@ export function RpcStep() {
             circle.style.width = circle.style.height = `${diameter}px`;
             circle.style.left = `${e.clientX - rect.left - diameter / 2}px`;
             circle.style.top = `${e.clientY - rect.top - diameter / 2}px`;
-            circle.className = "absolute rounded-full bg-[rgba(240,185,11,0.3)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
+            circle.className =
+              "absolute rounded-full bg-[rgba(240,185,11,0.3)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
             e.currentTarget.appendChild(circle);
             setTimeout(() => circle.remove(), 600);
-            
+
             // Build RPC selections based on what keys were entered
             const selections: Record<string, string> = {};
             if (rpcKeys.ALCHEMY_API_KEY) {

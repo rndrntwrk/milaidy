@@ -11,10 +11,7 @@ import {
   dispatchWindowEvent,
   VOICE_CONFIG_UPDATED_EVENT,
 } from "../events/index";
-import {
-  type MiladyStylePreset,
-  STYLE_PRESETS,
-} from "../onboarding-presets";
+import { type MiladyStylePreset, STYLE_PRESETS } from "../onboarding-presets";
 import { useApp } from "../state/useApp";
 import { normalizeCharacterMessageExamples } from "../utils/character-message-examples";
 import {
@@ -78,20 +75,23 @@ import {
 } from "react";
 /* ── Shared gold gradient styles ─────────────────────────────────── */
 const goldGradientStyle = {
-  background: "linear-gradient(135deg, var(--burnished-gold) 0%, var(--classic-gold) 58%, var(--highlight-gold) 100%)",
+  background:
+    "linear-gradient(135deg, var(--burnished-gold) 0%, var(--classic-gold) 58%, var(--highlight-gold) 100%)",
   color: "#1a1a1a",
   borderColor: "rgba(232, 217, 168, 0.55)",
   boxShadow: "0 0 18px var(--gold-glow), inset 0 1px 0 var(--soft-white-glow)",
 } as const;
 
 const idleSaveBtnStyle = {
-  background: "linear-gradient(135deg, rgba(122,90,31,0.25) 0%, rgba(207,175,90,0.2) 58%, rgba(242,210,122,0.15) 100%)",
+  background:
+    "linear-gradient(135deg, rgba(122,90,31,0.25) 0%, rgba(207,175,90,0.2) 58%, rgba(242,210,122,0.15) 100%)",
   color: "rgba(232, 217, 168, 0.5)",
   borderColor: "rgba(207, 175, 90, 0.2)",
   boxShadow: "none",
 } as const;
 
-const pageTabsBoxShadow = "0 10px 26px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.05)";
+const pageTabsBoxShadow =
+  "0 10px 26px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.05)";
 /* ── Constants ─────────────────────────────────────────────────────── */
 
 const DEFAULT_ELEVEN_FAST_MODEL = "eleven_flash_v2_5";
@@ -167,15 +167,19 @@ function buildCharacterDraftFromPreset(entry: CharacterRosterEntry) {
       chat: [...p.style.chat],
       post: [...p.style.post],
     },
-    messageExamples: p.messageExamples.map((convo) => ({
-      examples: convo.map((msg) => ({
-        name:
-          msg.user === "{{agentName}}"
-            ? name
-            : replaceCharacterToken(msg.user, name),
-        content: { text: replaceCharacterToken(msg.content.text, name) },
-      })),
-    })),
+    messageExamples: p.messageExamples.map(
+      (convo: Array<{ user: string; content: { text: string } }>) => ({
+        examples: convo.map(
+          (msg: { user: string; content: { text: string } }) => ({
+            name:
+              msg.user === "{{agentName}}"
+                ? name
+                : replaceCharacterToken(msg.user, name),
+            content: { text: replaceCharacterToken(msg.content.text, name) },
+          }),
+        ),
+      }),
+    ),
     postExamples: p.postExamples.map((ex: string) =>
       replaceCharacterToken(ex, name),
     ),
@@ -405,25 +409,31 @@ export function CharacterEditor({
     : characterData;
 
   /* ── Resolve active roster entry ────────────────────────────────── */
-  const activeCharacterRosterEntry: CharacterRosterEntry | null = useMemo(() => {
-    if (selectedCharacterId) {
-      const found = characterRoster.find((e) => e.id === selectedCharacterId);
-      if (found) return found;
-    }
-    const byVrm = characterRoster.find(
-      (e) => e.avatarIndex === selectedVrmIndex,
-    );
-    if (byVrm) return byVrm;
+  const activeCharacterRosterEntry: CharacterRosterEntry | null =
+    useMemo(() => {
+      if (selectedCharacterId) {
+        const found = characterRoster.find((e) => e.id === selectedCharacterId);
+        if (found) return found;
+      }
+      const byVrm = characterRoster.find(
+        (e) => e.avatarIndex === selectedVrmIndex,
+      );
+      if (byVrm) return byVrm;
 
-    if (!currentCharacter) return null;
-    const currentName =
-      typeof currentCharacter.name === "string"
-        ? currentCharacter.name.trim()
-        : "";
-    const byName = characterRoster.find((e) => e.name === currentName);
-    if (byName) return byName;
-    return null;
-  }, [characterRoster, currentCharacter, selectedCharacterId, selectedVrmIndex]);
+      if (!currentCharacter) return null;
+      const currentName =
+        typeof currentCharacter.name === "string"
+          ? currentCharacter.name.trim()
+          : "";
+      const byName = characterRoster.find((e) => e.name === currentName);
+      if (byName) return byName;
+      return null;
+    }, [
+      characterRoster,
+      currentCharacter,
+      selectedCharacterId,
+      selectedVrmIndex,
+    ]);
 
   /* ── Seed savedCharacterId from server data on first load ────────── */
   useEffect(() => {
@@ -1015,8 +1025,13 @@ export function CharacterEditor({
 
   /* ── Render ─────────────────────────────────────────────────────── */
   return (
-    <div className="absolute inset-0 z-10 flex flex-col pointer-events-none pt-[4.5rem] px-6 pb-3 max-md:px-3 max-md:pb-2 max-md:pt-[4.5rem] [&>*]:pointer-events-auto" onWheel={(e) => e.stopPropagation()}>
-      <div className={`relative flex flex-col justify-end w-full flex-1 gap-2 overflow-hidden select-none transition-[width,margin-left] duration-[400ms] ease-in-out [-webkit-tap-highlight-color:transparent] max-[600px]:overflow-visible [&_input]:select-text [&_textarea]:select-text [&_*:focus-visible:not(input):not(textarea)]:outline-none [&_*:focus-visible:not(input):not(textarea)]:shadow-none [&_button:focus-visible]:outline-none [&_button:focus-visible]:shadow-none${customizing ? " md:w-[40%] md:ml-auto" : ""}`}>
+    <div
+      className="absolute inset-0 z-10 flex flex-col pointer-events-none pt-[4.5rem] px-6 pb-3 max-md:px-3 max-md:pb-2 max-md:pt-[4.5rem] [&>*]:pointer-events-auto"
+      onWheel={(e) => e.stopPropagation()}
+    >
+      <div
+        className={`relative flex flex-col justify-end w-full flex-1 gap-2 overflow-hidden select-none transition-[width,margin-left] duration-[400ms] ease-in-out [-webkit-tap-highlight-color:transparent] max-[600px]:overflow-visible [&_input]:select-text [&_textarea]:select-text [&_*:focus-visible:not(input):not(textarea)]:outline-none [&_*:focus-visible:not(input):not(textarea)]:shadow-none [&_button:focus-visible]:outline-none [&_button:focus-visible]:shadow-none${customizing ? " md:w-[40%] md:ml-auto" : ""}`}
+      >
         {/* ── Character Roster (when NOT customizing) ────────────────── */}
         {!customizing && (
           <div className="shrink min-h-0 overflow-hidden flex flex-col items-center justify-end w-full relative max-[600px]:!overflow-visible pointer-events-auto">
@@ -1067,7 +1082,9 @@ export function CharacterEditor({
                     setActivePage("examples");
                   }}
                 >
-                  {t("charactereditor.TabExamples", { defaultValue: "Examples" })}
+                  {t("charactereditor.TabExamples", {
+                    defaultValue: "Examples",
+                  })}
                 </button>
               </div>
               <Button
@@ -1125,349 +1142,481 @@ export function CharacterEditor({
             <div
               className={`ce-panels ce-panels--single ce-panels--page-${activePage}`}
             >
-            {/* ── LEFT PANEL (Character identity) ───────────────────────── */}
-            <div
-              ref={leftPanelRef}
-              className={`ce-panel ce-panel-left ${activePage !== "identity" ? "ce-panel--hidden" : ""}`}
-            >
-              {/* Name + Voice (50/50 split) */}
-              <section className="flex flex-col gap-2 p-3 border border-border rounded-xl bg-card">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-2 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                        {t("charactereditor.Name", { defaultValue: "Name" })}
-                      </span>
-                    </div>
-                    <Input
-                      type="text"
-                      value={d.name ?? ""}
-                      placeholder={t("charactereditor.AgentNamePlaceholder", {
-                        defaultValue: "Agent name",
-                      })}
-                      onChange={(
-                        e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-                      ) => handleFieldEdit("name", e.target.value)}
-                      className="h-8 rounded-lg border-border bg-white/[0.04] text-[13px] text-txt"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                        {t("charactereditor.Voice", { defaultValue: "Voice" })}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <ThemedSelect
-                        value={voiceSelectValue}
-                        groups={
-                          useElevenLabs
-                            ? ELEVENLABS_VOICE_GROUPS
-                            : EDGE_VOICE_GROUPS
-                        }
-                        onChange={(id: string) => {
-                          const allVoices = useElevenLabs
-                            ? PREMADE_VOICES
-                            : EDGE_BACKUP_VOICES;
-                          const preset = allVoices.find((p) => p.id === id);
-                          if (preset) handleSelectPreset(preset);
-                        }}
-                        placeholder={t("charactereditor.SelectAVoice", {
-                          defaultValue: "Select a voice",
-                        })}
-                        menuPlacement="bottom"
-                        className="flex-1 min-w-0"
-                        triggerClassName="h-8 rounded-md border-border/50 bg-bg/65 px-3 py-0 text-[11px] shadow-inner backdrop-blur-sm"
-                        menuClassName="border-border/60 bg-bg/92 shadow-2xl backdrop-blur-md"
-                      />
-                      <Button
-                        type="button"
-                        variant={voiceTesting ? "destructive" : "outline"}
-                        size="icon"
-                        className="h-8 w-8 rounded-full border-transparent bg-transparent p-0 shadow-none text-muted shrink-0 hover:text-txt hover:bg-white/10"
-                        onClick={() => {
-                          if (voiceTesting) {
-                            handleStopTest();
-                          } else if (activeVoicePreset?.previewUrl) {
-                            setVoiceTesting(true);
-                            const audio = new Audio(
-                              activeVoicePreset.previewUrl,
-                            );
-                            audio.onended = () => {
-                              setVoiceTesting(false);
-                              setVoiceTestAudio(null);
-                            };
-                            audio.onerror = () => {
-                              setVoiceTesting(false);
-                              setVoiceTestAudio(null);
-                            };
-                            setVoiceTestAudio(audio);
-                            audio.play().catch(() => {
-                              setVoiceTesting(false);
-                              setVoiceTestAudio(null);
-                            });
-                          }
-                        }}
-                        aria-label={
-                          voiceTesting ? "Stop voice preview" : "Preview voice"
-                        }
-                        disabled={!activeVoicePreset || voiceLoading}
-                      >
-                        {voiceTesting ? (
-                          <VolumeX className="h-3.5 w-3.5" />
-                        ) : (
-                          <Volume2 className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Bio / About Me */}
-              <section className="flex flex-col gap-2 p-3 border border-border rounded-xl bg-card flex-1 min-h-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                    {t("charactereditor.AboutMe", { defaultValue: "About Me" })}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-[10px] font-bold text-[color:var(--champagne-gold)]"
-                    onClick={() => void handleGenerate("bio")}
-                    disabled={generating === "bio"}
-                  >
-                    {generating === "bio"
-                      ? t("charactereditor.Generating", {
-                          defaultValue: "generating...",
-                        })
-                      : t("charactereditor.Regenerate", {
-                          defaultValue: "regenerate",
-                        })}
-                  </Button>
-                </div>
-                <Textarea
-                  value={bioText}
-                  rows={4}
-                  placeholder={t("charactereditor.AboutMePlaceholder", {
-                    defaultValue: "Describe who your agent is...",
-                  })}
-                  onChange={(
-                    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-                  ) => handleFieldEdit("bio", e.target.value)}
-                  className="rounded-lg border-border bg-white/[0.04] font-mono text-xs leading-relaxed text-txt px-3 py-2 resize-none flex-1 min-h-12 overflow-y-auto"
-                />
-              </section>
-
-              {/* System Prompt / Directions */}
-              <section className="flex flex-col gap-2 p-3 border border-border rounded-xl bg-card flex-1 min-h-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                    {t("charactereditor.SystemPrompt", {
-                      defaultValue: "System Prompt",
-                    })}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-[10px] font-bold text-[color:var(--champagne-gold)]"
-                    onClick={() => void handleGenerate("system")}
-                    disabled={generating === "system"}
-                  >
-                    {generating === "system"
-                      ? t("charactereditor.Generating")
-                      : t("charactereditor.Regenerate")}
-                  </Button>
-                </div>
-                <Textarea
-                  value={d.system ?? ""}
-                  rows={4}
-                  maxLength={10000}
-                  placeholder={t("charactereditor.SystemPromptPlaceholder", {
-                    defaultValue: "Write in first person...",
-                  })}
-                  onChange={(
-                    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-                  ) => handleFieldEdit("system", e.target.value)}
-                  className="rounded-lg border-border bg-white/[0.04] font-mono text-xs leading-relaxed text-txt px-3 py-2 resize-none flex-1 min-h-12 overflow-y-auto"
-                />
-              </section>
-            </div>
-
-            {/* ── RIGHT PANEL ───────────────────────────────────────────── */}
-            <div
-              ref={rightPanelRef}
-              className={`ce-panel ce-panel-right ${activePage === "identity" ? "ce-panel--hidden" : ""}`}
-            >
-              {/* Style Rules */}
-              <section
-                className="flex flex-col gap-2 p-3 border border-border rounded-xl bg-card flex-1 min-h-0"
-                style={{ display: rightTab === "style" ? undefined : "none" }}
+              {/* ── LEFT PANEL (Character identity) ───────────────────────── */}
+              <div
+                ref={leftPanelRef}
+                className={`ce-panel ce-panel-left ${activePage !== "identity" ? "ce-panel--hidden" : ""}`}
               >
-                <div className="flex items-center justify-between">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-[10px] font-bold text-[color:var(--champagne-gold)]"
-                    onClick={() => void handleGenerate("style", "replace")}
-                    disabled={generating === "style"}
-                  >
-                    {generating === "style"
-                      ? t("charactereditor.Generating")
-                      : t("charactereditor.Regenerate")}
-                  </Button>
-                </div>
-                <div className="flex flex-col gap-3 min-h-0">
-                  {STYLE_SECTION_KEYS.map((key) => {
-                    const items = d.style?.[key] ?? [];
-                    return (
-                      <div
-                        key={key}
-                        className="flex flex-col gap-1.5"
-                        data-testid={`style-section-${key}`}
-                      >
-                        <div className="flex flex-col gap-1">
-                          {items.length > 0 ? (
-                            items.map((item, index) => (
-                              <div
-                                key={`${key}:${item}`}
-                                className="group flex items-start gap-2 px-2.5 py-1.5 rounded-md border border-border bg-white/[0.02]"
-                              >
-                                <span className="mt-0.5 shrink-0 text-[10px] font-bold text-accent">
-                                  {index + 1}
-                                </span>
-                                <Textarea
-                                  value={styleEntryDrafts[key]?.[index] ?? item}
-                                  rows={1}
-                                  onChange={(
-                                    e: ChangeEvent<
-                                      HTMLInputElement | HTMLTextAreaElement
-                                    >,
-                                  ) =>
-                                    handleStyleEntryDraftChange(
-                                      key,
-                                      index,
-                                      e.target.value,
-                                    )
-                                  }
-                                  onBlur={() =>
-                                    handleCommitStyleEntry(key, index)
-                                  }
-                                  className="min-w-0 flex-1 resize-none border-none bg-transparent p-0 font-mono text-xs leading-normal text-txt [field-sizing:content] min-h-[1.5em] focus-visible:outline-none focus-visible:shadow-none"
-                                />
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="mt-0.5 shrink-0 text-muted opacity-0 transition-opacity duration-150 p-0 h-auto w-auto hover:text-red-500 group-hover:opacity-100"
-                                  onClick={() =>
-                                    handleRemoveStyleEntry(key, index)
-                                  }
-                                  title={t("common.remove")}
-                                >
-                                  <svg
-                                    width="10"
-                                    height="10"
-                                    viewBox="0 0 10 10"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="1.5"
-                                    strokeLinecap="round"
-                                    aria-hidden="true"
-                                  >
-                                    <path d="M2 2l6 6M8 2l-6 6" />
-                                  </svg>
-                                </Button>
-                              </div>
-                            ))
-                          ) : (
-                            <div className="rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted">
-                              {STYLE_SECTION_EMPTY_STATES[key]}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="text"
-                            value={pendingStyleEntries[key]}
-                            placeholder={STYLE_SECTION_PLACEHOLDERS[key]}
-                            onChange={(
-                              e: ChangeEvent<
-                                HTMLInputElement | HTMLTextAreaElement
-                              >,
-                            ) =>
-                              handlePendingStyleEntryChange(key, e.target.value)
+                {/* Name + Voice (50/50 split) */}
+                <section className="flex flex-col gap-2 p-3 border border-border rounded-xl bg-card">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-2 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                          {t("charactereditor.Name", { defaultValue: "Name" })}
+                        </span>
+                      </div>
+                      <Input
+                        type="text"
+                        value={d.name ?? ""}
+                        placeholder={t("charactereditor.AgentNamePlaceholder", {
+                          defaultValue: "Agent name",
+                        })}
+                        onChange={(
+                          e: ChangeEvent<
+                            HTMLInputElement | HTMLTextAreaElement
+                          >,
+                        ) => handleFieldEdit("name", e.target.value)}
+                        className="h-8 rounded-lg border-border bg-white/[0.04] text-[13px] text-txt"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                          {t("charactereditor.Voice", {
+                            defaultValue: "Voice",
+                          })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <ThemedSelect
+                          value={voiceSelectValue}
+                          groups={
+                            useElevenLabs
+                              ? ELEVENLABS_VOICE_GROUPS
+                              : EDGE_VOICE_GROUPS
+                          }
+                          onChange={(id: string) => {
+                            const allVoices = useElevenLabs
+                              ? PREMADE_VOICES
+                              : EDGE_BACKUP_VOICES;
+                            const preset = allVoices.find((p) => p.id === id);
+                            if (preset) handleSelectPreset(preset);
+                          }}
+                          placeholder={t("charactereditor.SelectAVoice", {
+                            defaultValue: "Select a voice",
+                          })}
+                          menuPlacement="bottom"
+                          className="flex-1 min-w-0"
+                          triggerClassName="h-8 rounded-md border-border/50 bg-bg/65 px-3 py-0 text-[11px] shadow-inner backdrop-blur-sm"
+                          menuClassName="border-border/60 bg-bg/92 shadow-2xl backdrop-blur-md"
+                        />
+                        <Button
+                          type="button"
+                          variant={voiceTesting ? "destructive" : "outline"}
+                          size="icon"
+                          className="h-8 w-8 rounded-full border-transparent bg-transparent p-0 shadow-none text-muted shrink-0 hover:text-txt hover:bg-white/10"
+                          onClick={() => {
+                            if (voiceTesting) {
+                              handleStopTest();
+                            } else if (activeVoicePreset?.previewUrl) {
+                              setVoiceTesting(true);
+                              const audio = new Audio(
+                                activeVoicePreset.previewUrl,
+                              );
+                              audio.onended = () => {
+                                setVoiceTesting(false);
+                                setVoiceTestAudio(null);
+                              };
+                              audio.onerror = () => {
+                                setVoiceTesting(false);
+                                setVoiceTestAudio(null);
+                              };
+                              setVoiceTestAudio(audio);
+                              audio.play().catch(() => {
+                                setVoiceTesting(false);
+                                setVoiceTestAudio(null);
+                              });
                             }
-                            onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleAddStyleEntry(key);
+                          }}
+                          aria-label={
+                            voiceTesting
+                              ? "Stop voice preview"
+                              : "Preview voice"
+                          }
+                          disabled={!activeVoicePreset || voiceLoading}
+                        >
+                          {voiceTesting ? (
+                            <VolumeX className="h-3.5 w-3.5" />
+                          ) : (
+                            <Volume2 className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Bio / About Me */}
+                <section className="flex flex-col gap-2 p-3 border border-border rounded-xl bg-card flex-1 min-h-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                      {t("charactereditor.AboutMe", {
+                        defaultValue: "About Me",
+                      })}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[10px] font-bold text-[color:var(--champagne-gold)]"
+                      onClick={() => void handleGenerate("bio")}
+                      disabled={generating === "bio"}
+                    >
+                      {generating === "bio"
+                        ? t("charactereditor.Generating", {
+                            defaultValue: "generating...",
+                          })
+                        : t("charactereditor.Regenerate", {
+                            defaultValue: "regenerate",
+                          })}
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={bioText}
+                    rows={4}
+                    placeholder={t("charactereditor.AboutMePlaceholder", {
+                      defaultValue: "Describe who your agent is...",
+                    })}
+                    onChange={(
+                      e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+                    ) => handleFieldEdit("bio", e.target.value)}
+                    className="rounded-lg border-border bg-white/[0.04] font-mono text-xs leading-relaxed text-txt px-3 py-2 resize-none flex-1 min-h-12 overflow-y-auto"
+                  />
+                </section>
+
+                {/* System Prompt / Directions */}
+                <section className="flex flex-col gap-2 p-3 border border-border rounded-xl bg-card flex-1 min-h-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                      {t("charactereditor.SystemPrompt", {
+                        defaultValue: "System Prompt",
+                      })}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[10px] font-bold text-[color:var(--champagne-gold)]"
+                      onClick={() => void handleGenerate("system")}
+                      disabled={generating === "system"}
+                    >
+                      {generating === "system"
+                        ? t("charactereditor.Generating")
+                        : t("charactereditor.Regenerate")}
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={d.system ?? ""}
+                    rows={4}
+                    maxLength={10000}
+                    placeholder={t("charactereditor.SystemPromptPlaceholder", {
+                      defaultValue: "Write in first person...",
+                    })}
+                    onChange={(
+                      e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+                    ) => handleFieldEdit("system", e.target.value)}
+                    className="rounded-lg border-border bg-white/[0.04] font-mono text-xs leading-relaxed text-txt px-3 py-2 resize-none flex-1 min-h-12 overflow-y-auto"
+                  />
+                </section>
+              </div>
+
+              {/* ── RIGHT PANEL ───────────────────────────────────────────── */}
+              <div
+                ref={rightPanelRef}
+                className={`ce-panel ce-panel-right ${activePage === "identity" ? "ce-panel--hidden" : ""}`}
+              >
+                {/* Style Rules */}
+                <section
+                  className="flex flex-col gap-2 p-3 border border-border rounded-xl bg-card flex-1 min-h-0"
+                  style={{ display: rightTab === "style" ? undefined : "none" }}
+                >
+                  <div className="flex items-center justify-between">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[10px] font-bold text-[color:var(--champagne-gold)]"
+                      onClick={() => void handleGenerate("style", "replace")}
+                      disabled={generating === "style"}
+                    >
+                      {generating === "style"
+                        ? t("charactereditor.Generating")
+                        : t("charactereditor.Regenerate")}
+                    </Button>
+                  </div>
+                  <div className="flex flex-col gap-3 min-h-0">
+                    {STYLE_SECTION_KEYS.map((key) => {
+                      const items = d.style?.[key] ?? [];
+                      return (
+                        <div
+                          key={key}
+                          className="flex flex-col gap-1.5"
+                          data-testid={`style-section-${key}`}
+                        >
+                          <div className="flex flex-col gap-1">
+                            {items.length > 0 ? (
+                              items.map((item, index) => (
+                                <div
+                                  key={`${key}:${item}`}
+                                  className="group flex items-start gap-2 px-2.5 py-1.5 rounded-md border border-border bg-white/[0.02]"
+                                >
+                                  <span className="mt-0.5 shrink-0 text-[10px] font-bold text-accent">
+                                    {index + 1}
+                                  </span>
+                                  <Textarea
+                                    value={
+                                      styleEntryDrafts[key]?.[index] ?? item
+                                    }
+                                    rows={1}
+                                    onChange={(
+                                      e: ChangeEvent<
+                                        HTMLInputElement | HTMLTextAreaElement
+                                      >,
+                                    ) =>
+                                      handleStyleEntryDraftChange(
+                                        key,
+                                        index,
+                                        e.target.value,
+                                      )
+                                    }
+                                    onBlur={() =>
+                                      handleCommitStyleEntry(key, index)
+                                    }
+                                    className="min-w-0 flex-1 resize-none border-none bg-transparent p-0 font-mono text-xs leading-normal text-txt [field-sizing:content] min-h-[1.5em] focus-visible:outline-none focus-visible:shadow-none"
+                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="mt-0.5 shrink-0 text-muted opacity-0 transition-opacity duration-150 p-0 h-auto w-auto hover:text-red-500 group-hover:opacity-100"
+                                    onClick={() =>
+                                      handleRemoveStyleEntry(key, index)
+                                    }
+                                    title={t("common.remove")}
+                                  >
+                                    <svg
+                                      width="10"
+                                      height="10"
+                                      viewBox="0 0 10 10"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="1.5"
+                                      strokeLinecap="round"
+                                      aria-hidden="true"
+                                    >
+                                      <path d="M2 2l6 6M8 2l-6 6" />
+                                    </svg>
+                                  </Button>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted">
+                                {STYLE_SECTION_EMPTY_STATES[key]}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="text"
+                              value={pendingStyleEntries[key]}
+                              placeholder={STYLE_SECTION_PLACEHOLDERS[key]}
+                              onChange={(
+                                e: ChangeEvent<
+                                  HTMLInputElement | HTMLTextAreaElement
+                                >,
+                              ) =>
+                                handlePendingStyleEntryChange(
+                                  key,
+                                  e.target.value,
+                                )
                               }
-                            }}
-                            className="h-7 text-xs flex-1 min-w-0 rounded-lg border-border bg-white/[0.04] text-[13px] text-txt"
-                          />
+                              onKeyDown={(
+                                e: KeyboardEvent<HTMLInputElement>,
+                              ) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleAddStyleEntry(key);
+                                }
+                              }}
+                              className="h-7 text-xs flex-1 min-w-0 rounded-lg border-border bg-white/[0.04] text-[13px] text-txt"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-[10px] font-bold text-[color:var(--champagne-gold)]"
+                              onClick={() => handleAddStyleEntry(key)}
+                              disabled={!pendingStyleEntries[key].trim()}
+                            >
+                              + add
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {/* Chat Examples */}
+                <section
+                  className="flex flex-col gap-2 p-3 border border-border rounded-xl bg-card flex-1 min-h-0"
+                  style={{
+                    display: rightTab === "examples" ? undefined : "none",
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                      {t("charactereditor.ChatExamples", {
+                        defaultValue: "Chat Examples",
+                      })}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[10px] font-bold text-[color:var(--champagne-gold)]"
+                      onClick={() =>
+                        void handleGenerate("chatExamples", "replace")
+                      }
+                      disabled={generating === "chatExamples"}
+                    >
+                      {generating === "chatExamples"
+                        ? t("charactereditor.Generating")
+                        : t("charactereditor.Generate", {
+                            defaultValue: "generate",
+                          })}
+                    </Button>
+                  </div>
+                  <div className="flex flex-col gap-1.5 overflow-y-auto min-h-0">
+                    {normalizedMessageExamples.map((convo, ci) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: order is static in designer
+                      <div
+                        key={`convo-${ci}`}
+                        className="rounded-lg border border-border p-2.5"
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-muted">
+                            {t("charactereditor.ConversationN", {
+                              defaultValue: `Conversation ${ci + 1}`,
+                            }).replace("{n}", String(ci + 1))}
+                          </span>
                           <Button
                             variant="ghost"
-                            size="sm"
-                            className="h-6 px-2 text-[10px] font-bold text-[color:var(--champagne-gold)]"
-                            onClick={() => handleAddStyleEntry(key)}
-                            disabled={!pendingStyleEntries[key].trim()}
+                            size="icon"
+                            className="mt-0.5 shrink-0 text-muted opacity-0 transition-opacity duration-150 p-0 h-auto w-auto hover:text-red-500 group-hover:opacity-100"
+                            onClick={() => {
+                              const updated = [...normalizedMessageExamples];
+                              updated.splice(ci, 1);
+                              handleFieldEdit("messageExamples", updated);
+                            }}
                           >
-                            + add
+                            <svg
+                              width="10"
+                              height="10"
+                              viewBox="0 0 10 10"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              aria-hidden="true"
+                            >
+                              <path d="M2 2l6 6M8 2l-6 6" />
+                            </svg>
                           </Button>
                         </div>
+                        <div className="flex flex-col gap-1">
+                          {convo.examples.map((msg, mi) => (
+                            // biome-ignore lint/suspicious/noArrayIndexKey: order is static in designer
+                            <div
+                              key={`msg-${ci}-${mi}`}
+                              className="flex items-center gap-2"
+                            >
+                              <span
+                                className={`w-10 shrink-0 text-right text-[9px] font-bold uppercase tracking-[0.1em] text-muted${msg.name === "{{user1}}" ? "" : " text-accent"}`}
+                              >
+                                {msg.name === "{{user1}}" ? "user" : "agent"}
+                              </span>
+                              <input
+                                type="text"
+                                value={msg.content?.text ?? ""}
+                                onChange={(e) => {
+                                  const updated = [
+                                    ...normalizedMessageExamples,
+                                  ];
+                                  const convoClone = {
+                                    examples: [...updated[ci].examples],
+                                  };
+                                  convoClone.examples[mi] = {
+                                    ...convoClone.examples[mi],
+                                    content: { text: e.target.value },
+                                  };
+                                  updated[ci] = convoClone;
+                                  handleFieldEdit("messageExamples", updated);
+                                }}
+                                className="h-7 flex-1 rounded-md border border-border bg-white/[0.03] px-2 font-mono text-[11px] text-txt outline-none focus:border-accent"
+                              />
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </section>
-
-              {/* Chat Examples */}
-              <section
-                className="flex flex-col gap-2 p-3 border border-border rounded-xl bg-card flex-1 min-h-0"
-                style={{
-                  display: rightTab === "examples" ? undefined : "none",
-                }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                    {t("charactereditor.ChatExamples", {
-                      defaultValue: "Chat Examples",
-                    })}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-[10px] font-bold text-[color:var(--champagne-gold)]"
-                    onClick={() =>
-                      void handleGenerate("chatExamples", "replace")
-                    }
-                    disabled={generating === "chatExamples"}
-                  >
-                    {generating === "chatExamples"
-                      ? t("charactereditor.Generating")
-                      : t("charactereditor.Generate", {
-                          defaultValue: "generate",
+                    ))}
+                    {normalizedMessageExamples.length === 0 && (
+                      <div className="rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted">
+                        {t("charactereditor.NoChatExamples", {
+                          defaultValue: "No chat examples yet.",
                         })}
-                  </Button>
-                </div>
-                <div className="flex flex-col gap-1.5 overflow-y-auto min-h-0">
-                  {normalizedMessageExamples.map((convo, ci) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: order is static in designer
-                    <div key={`convo-${ci}`} className="rounded-lg border border-border p-2.5">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-muted">
-                          {t("charactereditor.ConversationN", {
-                            defaultValue: `Conversation ${ci + 1}`,
-                          }).replace("{n}", String(ci + 1))}
-                        </span>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                {/* Post Examples */}
+                <section
+                  className="flex flex-col gap-2 p-3 border border-border rounded-xl bg-card flex-1 min-h-0"
+                  style={{
+                    display: rightTab === "examples" ? undefined : "none",
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                      {t("charactereditor.PostExamples", {
+                        defaultValue: "Post Examples",
+                      })}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[10px] font-bold text-[color:var(--champagne-gold)]"
+                      onClick={() =>
+                        void handleGenerate("postExamples", "replace")
+                      }
+                      disabled={generating === "postExamples"}
+                    >
+                      {generating === "postExamples"
+                        ? t("charactereditor.Generating")
+                        : t("charactereditor.Generate")}
+                    </Button>
+                  </div>
+                  <div className="flex flex-col gap-1.5 overflow-y-auto min-h-0">
+                    {(d.postExamples ?? []).map((post, pi) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: order is static in designer
+                      <div
+                        key={`post-${pi}`}
+                        className="flex items-center gap-1.5"
+                      >
+                        <input
+                          type="text"
+                          value={post}
+                          onChange={(e) => {
+                            const updated = [...(d.postExamples ?? [])];
+                            updated[pi] = e.target.value;
+                            handleFieldEdit("postExamples", updated);
+                          }}
+                          className="h-7 flex-1 rounded-md border border-border bg-white/[0.03] px-2 font-mono text-[11px] text-txt outline-none focus:border-accent"
+                        />
                         <Button
                           variant="ghost"
                           size="icon"
                           className="mt-0.5 shrink-0 text-muted opacity-0 transition-opacity duration-150 p-0 h-auto w-auto hover:text-red-500 group-hover:opacity-100"
                           onClick={() => {
-                            const updated = [...normalizedMessageExamples];
-                            updated.splice(ci, 1);
-                            handleFieldEdit("messageExamples", updated);
+                            const updated = [...(d.postExamples ?? [])];
+                            updated.splice(pi, 1);
+                            handleFieldEdit("postExamples", updated);
                           }}
                         >
                           <svg
@@ -1484,138 +1633,31 @@ export function CharacterEditor({
                           </svg>
                         </Button>
                       </div>
-                      <div className="flex flex-col gap-1">
-                        {convo.examples.map((msg, mi) => (
-                          // biome-ignore lint/suspicious/noArrayIndexKey: order is static in designer
-                          <div
-                            key={`msg-${ci}-${mi}`}
-                            className="flex items-center gap-2"
-                          >
-                            <span
-                              className={`w-10 shrink-0 text-right text-[9px] font-bold uppercase tracking-[0.1em] text-muted${msg.name === "{{user1}}" ? "" : " text-accent"}`}
-                            >
-                              {msg.name === "{{user1}}" ? "user" : "agent"}
-                            </span>
-                            <input
-                              type="text"
-                              value={msg.content?.text ?? ""}
-                              onChange={(e) => {
-                                const updated = [...normalizedMessageExamples];
-                                const convoClone = {
-                                  examples: [...updated[ci].examples],
-                                };
-                                convoClone.examples[mi] = {
-                                  ...convoClone.examples[mi],
-                                  content: { text: e.target.value },
-                                };
-                                updated[ci] = convoClone;
-                                handleFieldEdit("messageExamples", updated);
-                              }}
-                              className="h-7 flex-1 rounded-md border border-border bg-white/[0.03] px-2 font-mono text-[11px] text-txt outline-none focus:border-accent"
-                            />
-                          </div>
-                        ))}
+                    ))}
+                    {(d.postExamples ?? []).length === 0 && (
+                      <div className="rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted">
+                        {t("charactereditor.NoPostExamples", {
+                          defaultValue: "No post examples yet.",
+                        })}
                       </div>
-                    </div>
-                  ))}
-                  {normalizedMessageExamples.length === 0 && (
-                    <div className="rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted">
-                      {t("charactereditor.NoChatExamples", {
-                        defaultValue: "No chat examples yet.",
+                    )}
+                    <Button
+                      variant="ghost"
+                      className="text-[10px] font-bold text-accent p-0 h-auto py-1 text-left hover:underline"
+                      onClick={() => {
+                        const updated = [...(d.postExamples ?? []), ""];
+                        handleFieldEdit("postExamples", updated);
+                      }}
+                    >
+                      +{" "}
+                      {t("charactereditor.AddPost", {
+                        defaultValue: "Add Post",
                       })}
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              {/* Post Examples */}
-              <section
-                className="flex flex-col gap-2 p-3 border border-border rounded-xl bg-card flex-1 min-h-0"
-                style={{
-                  display: rightTab === "examples" ? undefined : "none",
-                }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                    {t("charactereditor.PostExamples", {
-                      defaultValue: "Post Examples",
-                    })}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-[10px] font-bold text-[color:var(--champagne-gold)]"
-                    onClick={() =>
-                      void handleGenerate("postExamples", "replace")
-                    }
-                    disabled={generating === "postExamples"}
-                  >
-                    {generating === "postExamples"
-                      ? t("charactereditor.Generating")
-                      : t("charactereditor.Generate")}
-                  </Button>
-                </div>
-                <div className="flex flex-col gap-1.5 overflow-y-auto min-h-0">
-                  {(d.postExamples ?? []).map((post, pi) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: order is static in designer
-                    <div key={`post-${pi}`} className="flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        value={post}
-                        onChange={(e) => {
-                          const updated = [...(d.postExamples ?? [])];
-                          updated[pi] = e.target.value;
-                          handleFieldEdit("postExamples", updated);
-                        }}
-                        className="h-7 flex-1 rounded-md border border-border bg-white/[0.03] px-2 font-mono text-[11px] text-txt outline-none focus:border-accent"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="mt-0.5 shrink-0 text-muted opacity-0 transition-opacity duration-150 p-0 h-auto w-auto hover:text-red-500 group-hover:opacity-100"
-                        onClick={() => {
-                          const updated = [...(d.postExamples ?? [])];
-                          updated.splice(pi, 1);
-                          handleFieldEdit("postExamples", updated);
-                        }}
-                      >
-                        <svg
-                          width="10"
-                          height="10"
-                          viewBox="0 0 10 10"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          aria-hidden="true"
-                        >
-                          <path d="M2 2l6 6M8 2l-6 6" />
-                        </svg>
-                      </Button>
-                    </div>
-                  ))}
-                  {(d.postExamples ?? []).length === 0 && (
-                    <div className="rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted">
-                      {t("charactereditor.NoPostExamples", {
-                        defaultValue: "No post examples yet.",
-                      })}
-                    </div>
-                  )}
-                  <Button
-                    variant="ghost"
-                    className="text-[10px] font-bold text-accent p-0 h-auto py-1 text-left hover:underline"
-                    onClick={() => {
-                      const updated = [...(d.postExamples ?? []), ""];
-                      handleFieldEdit("postExamples", updated);
-                    }}
-                  >
-                    +{" "}
-                    {t("charactereditor.AddPost", { defaultValue: "Add Post" })}
-                  </Button>
-                </div>
-              </section>
+                    </Button>
+                  </div>
+                </section>
+              </div>
             </div>
-          </div>
           </div>
         )}
       </div>
@@ -1626,13 +1668,19 @@ export function CharacterEditor({
         {(characterSaveSuccess || combinedSaveError || generateError) && (
           <div className="flex flex-wrap items-center justify-center gap-2">
             {characterSaveSuccess && (
-              <span className="rounded-lg border border-green-400/20 bg-green-400/10 px-3 py-1 text-xs font-bold text-green-400">{characterSaveSuccess}</span>
+              <span className="rounded-lg border border-green-400/20 bg-green-400/10 px-3 py-1 text-xs font-bold text-green-400">
+                {characterSaveSuccess}
+              </span>
             )}
             {combinedSaveError && (
-              <span className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-500">{combinedSaveError}</span>
+              <span className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-500">
+                {combinedSaveError}
+              </span>
             )}
             {generateError && (
-              <span className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-500">{generateError}</span>
+              <span className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-500">
+                {generateError}
+              </span>
             )}
           </div>
         )}

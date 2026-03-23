@@ -101,8 +101,6 @@
   color-scheme: light;
 }
 
-
-
 [data-theme="dark"],
 .dark {
   --bg: hsl(220 16% 12%);

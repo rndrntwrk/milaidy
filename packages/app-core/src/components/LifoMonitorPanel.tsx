@@ -1,4 +1,11 @@
-import { Button, Card, CardContent, CardFooter, CardHeader, CardTitle } from "@miladyai/ui";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@miladyai/ui";
 import type { SandboxBrowserEndpoints, SandboxWindowInfo } from "../api/client";
 import { useApp } from "../state";
 

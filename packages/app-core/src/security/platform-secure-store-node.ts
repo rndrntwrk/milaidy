@@ -46,10 +46,13 @@ function secretToolStoreWithStdin(
         return;
       }
       reject(
-        Object.assign(new Error(stderr.trim() || `secret-tool exited ${code}`), {
-          stderr,
-          code,
-        }),
+        Object.assign(
+          new Error(stderr.trim() || `secret-tool exited ${code}`),
+          {
+            stderr,
+            code,
+          },
+        ),
       );
     });
     const line = secretLine.endsWith("\n") ? secretLine : `${secretLine}\n`;
@@ -78,7 +81,10 @@ async function secretToolOnPath(): Promise<boolean> {
   return false;
 }
 
-function macErrReason(stderr: string, code: number | null): SecureStoreGetResult {
+function macErrReason(
+  stderr: string,
+  code: number | null,
+): SecureStoreGetResult {
   const s = stderr.toLowerCase();
   if (
     s.includes("could not be found") ||
@@ -256,7 +262,9 @@ class LinuxSecretToolPlatformSecureStore implements PlatformSecureStore {
       return {
         ok: false,
         reason: "error",
-        message: String(e.stderr ?? err).trim().slice(0, 300),
+        message: String(e.stderr ?? err)
+          .trim()
+          .slice(0, 300),
       };
     }
   }

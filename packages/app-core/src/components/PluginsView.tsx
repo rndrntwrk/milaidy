@@ -2994,7 +2994,12 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
               ? "ai provider"
               : p.category;
           return (
-            <Dialog open onOpenChange={(v) => { if (!v) toggleSettings(p.id); }}>
+            <Dialog
+              open
+              onOpenChange={(v) => {
+                if (!v) toggleSettings(p.id);
+              }}
+            >
               <DialogContent className="max-w-2xl max-h-[85vh] p-0 flex flex-col overflow-hidden rounded-2xl">
                 {/* Dialog header */}
                 <DialogHeader className="flex items-center gap-3 px-5 py-4 border-b border-border/30 bg-black/10 shrink-0 flex-row">
@@ -3197,7 +3202,15 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
         })()}
 
       {/* Add from directory modal */}
-      <Dialog open={addDirOpen} onOpenChange={(v) => { if (!v) { setAddDirOpen(false); setAddDirPath(""); } }}>
+      <Dialog
+        open={addDirOpen}
+        onOpenChange={(v) => {
+          if (!v) {
+            setAddDirOpen(false);
+            setAddDirPath("");
+          }
+        }}
+      >
         <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader className="mb-5">
             <DialogTitle className="font-bold text-base tracking-wide text-txt">

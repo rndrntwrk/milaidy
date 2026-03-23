@@ -143,16 +143,10 @@ window.__MILADY_CHARACTER_EDITOR__ = CharacterEditor;
 
 import { STYLE_PRESETS } from "@miladyai/app-core/onboarding-presets";
 
-const MILADY_VRM_ASSETS = [
-  { title: "Chen", slug: "milady-1" },
-  { title: "Jin", slug: "milady-2" },
-  { title: "Kei", slug: "milady-3" },
-  { title: "Momo", slug: "milady-4" },
-  { title: "Rin", slug: "milady-5" },
-  { title: "Ryu", slug: "milady-6" },
-  { title: "Satoshi", slug: "milady-7" },
-  { title: "Yuki", slug: "milady-8" },
-];
+// Derive VRM roster from STYLE_PRESETS so character names stay in one place.
+const MILADY_VRM_ASSETS = STYLE_PRESETS.slice()
+  .sort((a, b) => a.avatarIndex - b.avatarIndex)
+  .map((p) => ({ title: p.name, slug: `milady-${p.avatarIndex}` }));
 
 const miladyBootConfig: AppBootConfig = {
   branding: MILADY_BRANDING,

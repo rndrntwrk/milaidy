@@ -2834,7 +2834,7 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
     const presetCatchphrase = presetByName[name.trim()];
     if (!presetCatchphrase) return undefined;
     return getStylePresets().find(
-      (preset) => preset.catchphrase === presetCatchphrase,
+      (preset: MiladyStylePreset) => preset.catchphrase === presetCatchphrase,
     );
   })();
 
@@ -3009,7 +3009,7 @@ import { pickRandomNames } from "./onboarding-names";
 // Style presets — shared between CLI and GUI onboarding
 // ---------------------------------------------------------------------------
 
-import { getPresetNameMap, getStylePresets } from "../onboarding-presets";
+import { type MiladyStylePreset, getPresetNameMap, getStylePresets } from "../onboarding-presets";
 
 /**
  * Detect whether this is the first run (no agent name configured)
@@ -3072,7 +3072,7 @@ async function runFirstTimeSetup(config: ElizaConfig): Promise<ElizaConfig> {
   // ── Step 3: Catchphrase / writing style ────────────────────────────────
   const styleChoice = await clack.select({
     message: `${name}: Now... how do I like to talk again?`,
-    options: getStylePresets().map((preset) => ({
+    options: getStylePresets().map((preset: MiladyStylePreset) => ({
       value: preset.catchphrase,
       label: preset.catchphrase,
       hint: preset.hint,
@@ -3082,7 +3082,7 @@ async function runFirstTimeSetup(config: ElizaConfig): Promise<ElizaConfig> {
   if (clack.isCancel(styleChoice)) cancelOnboarding();
 
   const chosenTemplate = getStylePresets().find(
-    (p) => p.catchphrase === styleChoice,
+    (p: MiladyStylePreset) => p.catchphrase === styleChoice,
   );
 
   // ── Step 3.5: Runtime selection (Cloud vs Local) ───────────────────────

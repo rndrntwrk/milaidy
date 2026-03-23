@@ -15,8 +15,10 @@ import {
   isDevEnvironment,
   tokenMatches,
 } from "./auth";
-import { sendJson as sendJsonResponse, sendJsonError as sendJsonErrorResponse } from "./response";
-
+import {
+  sendJson as sendJsonResponse,
+  sendJsonError as sendJsonErrorResponse,
+} from "./response";
 
 import { handleCloudBillingRoute } from "@miladyai/agent/api/cloud-billing-routes";
 import { handleCloudCompatRoute } from "@miladyai/agent/api/cloud-compat-routes";
@@ -26,7 +28,7 @@ import {
   discoverInstalledPlugins,
   discoverPluginsFromManifest,
   startApiServer as upstreamStartApiServer,
-} from "@elizaos/agent/api/server";
+} from "@miladyai/agent/api/server";
 export { discoverInstalledPlugins, discoverPluginsFromManifest };
 import { loadElizaConfig, saveElizaConfig } from "../config/config";
 import {
@@ -93,7 +95,6 @@ import {
 } from "../security/wallet-os-store-actions";
 import { getCloudSecret } from "./cloud-secrets";
 
-
 // ---------------------------------------------------------------------------
 // Import from extracted modules for use within this file
 // ---------------------------------------------------------------------------
@@ -116,11 +117,7 @@ import {
 // Module-level constants and types that stay in server.ts
 // ---------------------------------------------------------------------------
 
-const PACKAGE_ROOT_NAMES = new Set([
-  "eliza",
-  "elizaai",
-  "elizaos",
-]);
+const PACKAGE_ROOT_NAMES = new Set(["eliza", "elizaai", "elizaos"]);
 
 type PluginCategory =
   | "ai-provider"
@@ -1596,7 +1593,6 @@ async function handleDatabaseRowsCompatRoute(
   return true;
 }
 
-
 type TradePermissionMode = "user-sign-only" | "manual-local-key" | "agent-auto";
 
 const AGENT_AUTOMATION_HEADER = "x-milady-agent-action";
@@ -1678,7 +1674,6 @@ async function handleMiladyCompatRoute(
   const method = (req.method ?? "GET").toUpperCase();
   const url = new URL(req.url ?? "/", "http://localhost");
 
-
   // Eliza Cloud thin-client proxy (compat agents, jobs, …) — was missing from the
   // compat wrapper, so the dashboard saw 404 on `/api/cloud/compat/agents`.
   if (url.pathname.startsWith("/api/cloud/compat/")) {
@@ -1737,7 +1732,12 @@ async function handleMiladyCompatRoute(
     try {
       const upstreamUrl = new URL(upstream);
       const h = upstreamUrl.hostname.toLowerCase();
-      if (h !== "127.0.0.1" && h !== "localhost" && h !== "[::1]" && h !== "::1") {
+      if (
+        h !== "127.0.0.1" &&
+        h !== "localhost" &&
+        h !== "[::1]" &&
+        h !== "::1"
+      ) {
         sendJsonErrorResponse(res, 403, "screenshot upstream must be loopback");
         return true;
       }
@@ -2363,7 +2363,8 @@ async function handleMiladyCompatRoute(
         return true;
       }
 
-      const finalHash = "txHash" in executionResult ? executionResult.txHash : "";
+      const finalHash =
+        "txHash" in executionResult ? executionResult.txHash : "";
       const finalNonce = null;
       const finalGasLimit = "0";
       const finalMode = executionResult.mode;
@@ -2595,7 +2596,8 @@ async function handleMiladyCompatRoute(
         return true;
       }
 
-      const finalHash = "txHash" in executionResult ? executionResult.txHash : "";
+      const finalHash =
+        "txHash" in executionResult ? executionResult.txHash : "";
       const finalNonce = null;
       const finalGasLimit = "0";
 
@@ -2794,9 +2796,7 @@ async function handleMiladyCompatRoute(
     sendJsonResponse(
       res,
       200,
-      _filterConfigEnvForResponse(
-        loadElizaConfig() as Record<string, unknown>,
-      ),
+      _filterConfigEnvForResponse(loadElizaConfig() as Record<string, unknown>),
     );
     return true;
   }

@@ -420,8 +420,16 @@ export interface RuntimeDebugSnapshot {
   };
 }
 
-export type { TriggerType, TriggerWakeMode, TriggerLastStatus } from "@miladyai/agent/triggers/types";
-import type { TriggerType, TriggerWakeMode, TriggerLastStatus } from "@miladyai/agent/triggers/types";
+export type {
+  TriggerType,
+  TriggerWakeMode,
+  TriggerLastStatus,
+} from "@miladyai/agent/triggers/types";
+import type {
+  TriggerType,
+  TriggerWakeMode,
+  TriggerLastStatus,
+} from "@miladyai/agent/triggers/types";
 
 export interface TriggerSummary {
   id: string;
@@ -1955,8 +1963,7 @@ export interface VerificationMessageResponse {
 import { getBootConfig, setBootConfig } from "../config/boot-config";
 
 declare global {
-  interface Window {
-  }
+  interface Window {}
 }
 
 // ---------------------------------------------------------------------------
@@ -2001,7 +2008,6 @@ export class MiladyClient {
     this._uiLanguage = lang || null;
   }
 
-
   private static generateClientId(): string {
     const random =
       typeof globalThis.crypto?.randomUUID === "function"
@@ -2024,11 +2030,7 @@ export class MiladyClient {
     this._token = token?.trim() || stored || null;
     // Priority: explicit arg > session storage > boot config > same origin (Vite proxy)
     const bootBase = getBootConfig().apiBase;
-    this._baseUrl =
-      baseUrl ??
-      storedBase ??
-      bootBase ??
-      "";
+    this._baseUrl = baseUrl ?? storedBase ?? bootBase ?? "";
   }
 
   /**
@@ -2051,7 +2053,8 @@ export class MiladyClient {
   private get apiToken(): string | null {
     if (this._token) return this._token;
     const bootToken = getBootConfig().apiToken;
-    if (typeof bootToken === "string" && bootToken.trim()) return bootToken.trim();
+    if (typeof bootToken === "string" && bootToken.trim())
+      return bootToken.trim();
     return null;
   }
 
@@ -2331,9 +2334,7 @@ export class MiladyClient {
     return this.fetch("/api/wallet/os-store");
   }
 
-  async postWalletOsStoreAction(
-    action: "migrate" | "delete",
-  ): Promise<{
+  async postWalletOsStoreAction(action: "migrate" | "delete"): Promise<{
     ok: boolean;
     migrated?: string[];
     failed?: string[];
@@ -4641,9 +4642,7 @@ export class MiladyClient {
       method: "POST",
       body: JSON.stringify({
         title,
-        ...(options?.includeGreeting === true
-          ? { includeGreeting: true }
-          : {}),
+        ...(options?.includeGreeting === true ? { includeGreeting: true } : {}),
         ...(typeof options?.lang === "string" && options.lang.trim()
           ? { lang: options.lang.trim() }
           : {}),

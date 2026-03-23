@@ -18,8 +18,6 @@ import {
 import { clearCloudSecrets, scrubCloudSecretsFromEnv } from "./cloud-secrets";
 import { sendJson, sendJsonError } from "./response";
 
-
-
 export interface CloudRouteState {
   config: ElizaConfig;
   cloudManager: CloudManager | null;

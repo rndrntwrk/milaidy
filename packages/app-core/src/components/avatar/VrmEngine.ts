@@ -157,7 +157,6 @@ type RendererLike = Pick<
   ) => void;
 };
 
-
 type WorldRevealController = {
   mesh: SparkSplatMesh;
   progressUniform: { value: number };
@@ -174,7 +173,6 @@ type WorldRevealState = {
   waitingForVrm: boolean;
   syncToTeleport: boolean;
 };
-
 
 const DEFAULT_CAMERA_ANIMATION: CameraAnimationConfig = {
   enabled: false,
@@ -1062,7 +1060,9 @@ export class VrmEngine {
       "dyno" in spark ? Reflect.get(spark as object, "dyno") : undefined
     ) as TslMathLib | undefined;
 
-    const tsl = (await import("three/tsl").catch(() => null)) as TslMathLib | null;
+    const tsl = (await import("three/tsl").catch(
+      () => null,
+    )) as TslMathLib | null;
 
     const math = {
       add: dyno?.add || tsl?.add,
@@ -1076,7 +1076,8 @@ export class VrmEngine {
       smoothstep: dyno?.smoothstep || tsl?.smoothstep,
       pow: dyno?.pow || tsl?.pow,
       length: dyno?.length || tsl?.length,
-      swizzle: dyno?.swizzle || ((a: Record<string, unknown>, s: string) => a[s] || a), // fallback to property access
+      swizzle:
+        dyno?.swizzle || ((a: Record<string, unknown>, s: string) => a[s] || a), // fallback to property access
     };
 
     if (
@@ -1181,18 +1182,27 @@ export class VrmEngine {
             radialDistance,
           ),
         );
-        const ringDistance = validatedMath.abs(validatedMath.sub(radialDistance, currentRadius));
+        const ringDistance = validatedMath.abs(
+          validatedMath.sub(radialDistance, currentRadius),
+        );
         const ringMask = validatedMath.pow(
           validatedMath.sub(
             one,
-            validatedMath.smoothstep(zero, validatedMath.mul(edgeUniform, two), ringDistance),
+            validatedMath.smoothstep(
+              zero,
+              validatedMath.mul(edgeUniform, two),
+              ringDistance,
+            ),
           ),
           two,
         );
         const visibleMask =
           mode === "hide" ? validatedMath.sub(one, bodyMask) : bodyMask;
         const wireFactor = validatedMath.clamp(
-          validatedMath.max(visibleMask, validatedMath.mul(ringMask, wireAlphaUniform)),
+          validatedMath.max(
+            visibleMask,
+            validatedMath.mul(ringMask, wireAlphaUniform),
+          ),
           zero,
           one,
         );
@@ -2104,7 +2114,8 @@ export class VrmEngine {
   setMinimalBackgroundMode(enabled: boolean): void {
     if (this.minimalBackgroundMode === enabled) return;
     if (enabled) {
-      this.worldVisibleBeforeMinimalBackground = this.worldMesh?.visible ?? false;
+      this.worldVisibleBeforeMinimalBackground =
+        this.worldMesh?.visible ?? false;
       this.sparkVisibleBeforeMinimalBackground =
         this.sparkRenderer?.visible ?? true;
       if (this.worldMesh) this.worldMesh.visible = false;

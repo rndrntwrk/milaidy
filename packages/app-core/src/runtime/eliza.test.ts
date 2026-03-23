@@ -91,9 +91,11 @@ const resolvePluginImportSpecifier:
   | ((name: string, url?: string) => string)
   | undefined =
   // biome-ignore lint/suspicious/noExplicitAny: dynamic export name
-  ((_elizaExports as Record<string, unknown>).resolveElizaPluginImportSpecifier ??
+  ((_elizaExports as Record<string, unknown>)
+    .resolveElizaPluginImportSpecifier ??
     // biome-ignore lint/suspicious/noExplicitAny: dynamic export name
-    (_elizaExports as Record<string, unknown>).resolveElizaPluginImportSpecifier) as
+    (_elizaExports as Record<string, unknown>)
+      .resolveElizaPluginImportSpecifier) as
     | ((name: string, url?: string) => string)
     | undefined;
 
@@ -909,8 +911,6 @@ describe("applyConnectorSecretsToEnv", () => {
     } as Partial<ElizaConfig> as ElizaConfig;
     expect(() => applyConnectorSecretsToEnv(config)).not.toThrow();
   });
-
-
 
   it("copies Signal account, httpUrl, and cliPath from config to env", () => {
     const config = {

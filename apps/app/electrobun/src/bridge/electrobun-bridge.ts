@@ -1,228 +1,5 @@
 import { Electroview } from "electrobun/view";
 
-// ============================================================================
-// Channel → RPC Method Mapping
-// ============================================================================
-
-/**
- * Maps legacy colon-separated desktop channel names to camelCase RPC
- * method names. Duplicated from rpc-schema.ts since we can't import
- * server-side code in the renderer context.
- */
-const CHANNEL_TO_RPC: Record<string, string> = {
-  // Agent
-  "agent:start": "agentStart",
-  "agent:stop": "agentStop",
-  "agent:restart": "agentRestart",
-  "agent:restartClearLocalDb": "agentRestartClearLocalDb",
-  "agent:status": "agentStatus",
-
-  // Desktop: Tray
-  "desktop:createTray": "desktopCreateTray",
-  "desktop:updateTray": "desktopUpdateTray",
-  "desktop:destroyTray": "desktopDestroyTray",
-  "desktop:setTrayMenu": "desktopSetTrayMenu",
-
-  // Desktop: Shortcuts
-  "desktop:registerShortcut": "desktopRegisterShortcut",
-  "desktop:unregisterShortcut": "desktopUnregisterShortcut",
-  "desktop:unregisterAllShortcuts": "desktopUnregisterAllShortcuts",
-  "desktop:isShortcutRegistered": "desktopIsShortcutRegistered",
-
-  // Desktop: Auto Launch
-  "desktop:setAutoLaunch": "desktopSetAutoLaunch",
-  "desktop:getAutoLaunchStatus": "desktopGetAutoLaunchStatus",
-
-  // Desktop: Window
-  "desktop:setWindowOptions": "desktopSetWindowOptions",
-  "desktop:getWindowBounds": "desktopGetWindowBounds",
-  "desktop:setWindowBounds": "desktopSetWindowBounds",
-  "desktop:minimizeWindow": "desktopMinimizeWindow",
-  "desktop:unminimizeWindow": "desktopUnminimizeWindow",
-  "desktop:maximizeWindow": "desktopMaximizeWindow",
-  "desktop:unmaximizeWindow": "desktopUnmaximizeWindow",
-  "desktop:closeWindow": "desktopCloseWindow",
-  "desktop:showWindow": "desktopShowWindow",
-  "desktop:hideWindow": "desktopHideWindow",
-  "desktop:focusWindow": "desktopFocusWindow",
-  "desktop:isWindowMaximized": "desktopIsWindowMaximized",
-  "desktop:isWindowMinimized": "desktopIsWindowMinimized",
-  "desktop:isWindowVisible": "desktopIsWindowVisible",
-  "desktop:isWindowFocused": "desktopIsWindowFocused",
-  "desktop:setAlwaysOnTop": "desktopSetAlwaysOnTop",
-  "desktop:setFullscreen": "desktopSetFullscreen",
-  "desktop:setOpacity": "desktopSetOpacity",
-
-  // Desktop: Notifications
-  "desktop:showNotification": "desktopShowNotification",
-  "desktop:closeNotification": "desktopCloseNotification",
-  "desktop:showBackgroundNotice": "desktopShowBackgroundNotice",
-
-  // Desktop: Power
-  "desktop:getPowerState": "desktopGetPowerState",
-
-  // Desktop: App
-  "desktop:quit": "desktopQuit",
-  "desktop:relaunch": "desktopRelaunch",
-  "desktop:checkForUpdates": "desktopCheckForUpdates",
-  "desktop:getUpdaterState": "desktopGetUpdaterState",
-  "desktop:getVersion": "desktopGetVersion",
-  "desktop:getBuildInfo": "desktopGetBuildInfo",
-  "desktop:isPackaged": "desktopIsPackaged",
-  "desktop:getDockIconVisibility": "desktopGetDockIconVisibility",
-  "desktop:setDockIconVisibility": "desktopSetDockIconVisibility",
-  "desktop:getPath": "desktopGetPath",
-  "desktop:beep": "desktopBeep",
-  "desktop:showSelectionContextMenu": "desktopShowSelectionContextMenu",
-  "desktop:getSessionSnapshot": "desktopGetSessionSnapshot",
-  "desktop:clearSessionData": "desktopClearSessionData",
-  "desktop:getWebGpuBrowserStatus": "desktopGetWebGpuBrowserStatus",
-  "desktop:openReleaseNotesWindow": "desktopOpenReleaseNotesWindow",
-  "desktop:openSettingsWindow": "desktopOpenSettingsWindow",
-  "desktop:openSurfaceWindow": "desktopOpenSurfaceWindow",
-
-  // Desktop: Screen
-  "desktop:getPrimaryDisplay": "desktopGetPrimaryDisplay",
-  "desktop:getAllDisplays": "desktopGetAllDisplays",
-  "desktop:getCursorPosition": "desktopGetCursorPosition",
-
-  // Desktop: Message Box
-  "desktop:showMessageBox": "desktopShowMessageBox",
-
-  // Desktop: Clipboard
-  "desktop:writeToClipboard": "desktopWriteToClipboard",
-  "desktop:readFromClipboard": "desktopReadFromClipboard",
-  "desktop:clearClipboard": "desktopClearClipboard",
-  "desktop:clipboardAvailableFormats": "desktopClipboardAvailableFormats",
-
-  // Desktop: Shell
-  "desktop:openExternal": "desktopOpenExternal",
-  "desktop:showItemInFolder": "desktopShowItemInFolder",
-  "desktop:openPath": "desktopOpenPath",
-
-  // Desktop: File Dialogs
-  "desktop:showOpenDialog": "desktopShowOpenDialog",
-  "desktop:showSaveDialog": "desktopShowSaveDialog",
-
-  // Gateway
-  "gateway:startDiscovery": "gatewayStartDiscovery",
-  "gateway:stopDiscovery": "gatewayStopDiscovery",
-  "gateway:isDiscovering": "gatewayIsDiscovering",
-  "gateway:getDiscoveredGateways": "gatewayGetDiscoveredGateways",
-
-  // Permissions
-  "permissions:check": "permissionsCheck",
-  "permissions:checkFeature": "permissionsCheckFeature",
-  "permissions:request": "permissionsRequest",
-  "permissions:getAll": "permissionsGetAll",
-  "permissions:getPlatform": "permissionsGetPlatform",
-  "permissions:isShellEnabled": "permissionsIsShellEnabled",
-  "permissions:setShellEnabled": "permissionsSetShellEnabled",
-  "permissions:clearCache": "permissionsClearCache",
-  "permissions:openSettings": "permissionsOpenSettings",
-
-  // Location
-  "location:getCurrentPosition": "locationGetCurrentPosition",
-  "location:watchPosition": "locationWatchPosition",
-  "location:clearWatch": "locationClearWatch",
-  "location:getLastKnownLocation": "locationGetLastKnownLocation",
-
-  // Camera
-  "camera:getDevices": "cameraGetDevices",
-  "camera:startPreview": "cameraStartPreview",
-  "camera:stopPreview": "cameraStopPreview",
-  "camera:switchCamera": "cameraSwitchCamera",
-  "camera:capturePhoto": "cameraCapturePhoto",
-  "camera:startRecording": "cameraStartRecording",
-  "camera:stopRecording": "cameraStopRecording",
-  "camera:getRecordingState": "cameraGetRecordingState",
-  "camera:checkPermissions": "cameraCheckPermissions",
-  "camera:requestPermissions": "cameraRequestPermissions",
-
-  // Canvas
-  "canvas:createWindow": "canvasCreateWindow",
-  "canvas:destroyWindow": "canvasDestroyWindow",
-  "canvas:navigate": "canvasNavigate",
-  "canvas:eval": "canvasEval",
-  "canvas:snapshot": "canvasSnapshot",
-  "canvas:a2uiPush": "canvasA2uiPush",
-  "canvas:a2uiReset": "canvasA2uiReset",
-  "canvas:show": "canvasShow",
-  "canvas:hide": "canvasHide",
-  "canvas:resize": "canvasResize",
-  "canvas:focus": "canvasFocus",
-  "canvas:getBounds": "canvasGetBounds",
-  "canvas:setBounds": "canvasSetBounds",
-  "canvas:listWindows": "canvasListWindows",
-
-  // Game
-  "game:openWindow": "gameOpenWindow",
-
-  // Screencapture
-  "screencapture:getSources": "screencaptureGetSources",
-  "screencapture:takeScreenshot": "screencaptureTakeScreenshot",
-  "screencapture:captureWindow": "screencaptureCaptureWindow",
-  "screencapture:startRecording": "screencaptureStartRecording",
-  "screencapture:stopRecording": "screencaptureStopRecording",
-  "screencapture:pauseRecording": "screencapturePauseRecording",
-  "screencapture:resumeRecording": "screencaptureResumeRecording",
-  "screencapture:getRecordingState": "screencaptureGetRecordingState",
-  "screencapture:startFrameCapture": "screencaptureStartFrameCapture",
-  "screencapture:stopFrameCapture": "screencaptureStopFrameCapture",
-  "screencapture:isFrameCaptureActive": "screencaptureIsFrameCaptureActive",
-  "screencapture:saveScreenshot": "screencaptureSaveScreenshot",
-  "screencapture:switchSource": "screencaptureSwitchSource",
-  "screencapture:setCaptureTarget": "screencaptureSetCaptureTarget",
-
-  // Swabble
-  "swabble:start": "swabbleStart",
-  "swabble:stop": "swabbleStop",
-  "swabble:isListening": "swabbleIsListening",
-  "swabble:getConfig": "swabbleGetConfig",
-  "swabble:updateConfig": "swabbleUpdateConfig",
-  "swabble:isWhisperAvailable": "swabbleIsWhisperAvailable",
-  "swabble:audioChunk": "swabbleAudioChunk",
-
-  // TalkMode
-  "talkmode:start": "talkmodeStart",
-  "talkmode:stop": "talkmodeStop",
-  "talkmode:speak": "talkmodeSpeak",
-  "talkmode:stopSpeaking": "talkmodeStopSpeaking",
-  "talkmode:getState": "talkmodeGetState",
-  "talkmode:isEnabled": "talkmodeIsEnabled",
-  "talkmode:isSpeaking": "talkmodeIsSpeaking",
-  "talkmode:getWhisperInfo": "talkmodeGetWhisperInfo",
-  "talkmode:isWhisperAvailable": "talkmodeIsWhisperAvailable",
-  "talkmode:updateConfig": "talkmodeUpdateConfig",
-  "talkmode:audioChunk": "talkmodeAudioChunk",
-
-  // Context Menu
-  "contextMenu:askAgent": "contextMenuAskAgent",
-  "contextMenu:createSkill": "contextMenuCreateSkill",
-  "contextMenu:quoteInChat": "contextMenuQuoteInChat",
-  "contextMenu:saveAsCommand": "contextMenuSaveAsCommand",
-  apiBaseUpdate: "apiBaseUpdate",
-  shareTargetReceived: "shareTargetReceived",
-
-  // GPU Window
-  "gpuWindow:create": "gpuWindowCreate",
-  "gpuWindow:destroy": "gpuWindowDestroy",
-  "gpuWindow:show": "gpuWindowShow",
-  "gpuWindow:hide": "gpuWindowHide",
-  "gpuWindow:setBounds": "gpuWindowSetBounds",
-  "gpuWindow:getInfo": "gpuWindowGetInfo",
-  "gpuWindow:list": "gpuWindowList",
-
-  // GPU View
-  "gpuView:create": "gpuViewCreate",
-  "gpuView:destroy": "gpuViewDestroy",
-  "gpuView:setFrame": "gpuViewSetFrame",
-  "gpuView:setTransparent": "gpuViewSetTransparent",
-  "gpuView:setHidden": "gpuViewSetHidden",
-  "gpuView:getNativeHandle": "gpuViewGetNativeHandle",
-  "gpuView:list": "gpuViewList",
-};
-
 /**
  * Maps legacy desktop push channels to RPC message names.
  * These are messages that flow Bun → webview.
@@ -319,7 +96,6 @@ function dispatchMessage(messageName: string, payload: unknown): void {
 }
 
 // Electrobun defaults outgoing RPC timeout to 1s; native dialogs need much longer.
-// biome-ignore lint/suspicious/noExplicitAny: schema types live on the Bun side and can't be imported in a browser bundle
 const rpc = Electroview.defineRPC<unknown>({
   maxRequestTime: 600_000,
   handlers: {
@@ -329,7 +105,6 @@ const rpc = Electroview.defineRPC<unknown>({
         if (typeof messageName === "string") {
           dispatchMessage(messageName, payload);
         }
-        // biome-ignore lint/suspicious/noExplicitAny: required for Electroview wildcard signature
       }) as unknown,
     },
   },
@@ -337,7 +112,6 @@ const rpc = Electroview.defineRPC<unknown>({
 
 new Electroview({ rpc });
 
-// biome-ignore lint/suspicious/noExplicitAny: request proxy is dynamically typed, schema only available on Bun side
 const rpcRequest = (rpc as Record<string, unknown>).request as Record<
   string,
   (params: unknown) => Promise<unknown>

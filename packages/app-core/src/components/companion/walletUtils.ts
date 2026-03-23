@@ -275,4 +275,3 @@ export async function fetchTokenMetadata(
     clearTimeout(timeout);
   }
 }
-

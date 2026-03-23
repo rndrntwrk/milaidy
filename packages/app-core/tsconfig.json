@@ -21,7 +21,13 @@
         "./packages/ui/src/*"
       ],
       "@miladyai/agent/*": [
-        "./node_modules/@miladyai/agent/packages/agent/src/*"
+        "./packages/agent/src/*"
+      ],
+      "@elizaos/core": [
+        "./node_modules/@elizaos/core"
+      ],
+      "@elizaos/*": [
+        "./node_modules/@elizaos/*"
       ]
     }
   },

@@ -8,7 +8,15 @@
  *   - Test functionality
  */
 
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@miladyai/ui";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+} from "@miladyai/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   client,
@@ -191,161 +199,162 @@ export function DesktopTalkModePanel() {
       <CardHeader className="px-3 py-3 pb-0">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle className="text-xs">
-              Desktop Talk Mode
-            </CardTitle>
+            <CardTitle className="text-xs">Desktop Talk Mode</CardTitle>
             <CardDescription className="text-[10px]">
-              Native voice loop controls, speech output, and whisper diagnostics.
+              Native voice loop controls, speech output, and whisper
+              diagnostics.
             </CardDescription>
           </div>
           <Button
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            void runAction(
-              "voice-talkmode-refresh",
-              async () => {},
-              "Talk mode state refreshed.",
-            )
-          }
-          disabled={loading || busyAction === "voice-talkmode-refresh"}
-        >
-          Refresh
-        </Button>
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              void runAction(
+                "voice-talkmode-refresh",
+                async () => {},
+                "Talk mode state refreshed.",
+              )
+            }
+            disabled={loading || busyAction === "voice-talkmode-refresh"}
+          >
+            Refresh
+          </Button>
         </div>
       </CardHeader>
 
       <CardContent className="flex flex-col gap-3 px-3 pb-3">
-      {(error || message) && (
-        <div
-          className={`rounded-lg border px-2.5 py-2 text-[11px] ${
-            error
-              ? "border-danger/40 bg-danger/10 text-danger"
-              : "border-ok/40 bg-ok/10 text-ok"
-          }`}
-        >
-          {error ?? message}
+        {(error || message) && (
+          <div
+            className={`rounded-lg border px-2.5 py-2 text-[11px] ${
+              error
+                ? "border-danger/40 bg-danger/10 text-danger"
+                : "border-ok/40 bg-ok/10 text-ok"
+            }`}
+          >
+            {error ?? message}
+          </div>
+        )}
+
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="shadow-none">
+            <CardContent className="px-2.5 py-2 text-[11px]">
+              <div className="text-[10px] text-muted">State</div>
+              <div className="font-semibold text-txt">{panelState.state}</div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-none">
+            <CardContent className="px-2.5 py-2 text-[11px]">
+              <div className="text-[10px] text-muted">Enabled</div>
+              <div className="font-semibold text-txt">
+                {panelState.enabled ? "Yes" : "No"}
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-none">
+            <CardContent className="px-2.5 py-2 text-[11px]">
+              <div className="text-[10px] text-muted">Speaking</div>
+              <div className="font-semibold text-txt">
+                {panelState.speaking ? "Yes" : "No"}
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-none">
+            <CardContent className="px-2.5 py-2 text-[11px]">
+              <div className="text-[10px] text-muted">Whisper</div>
+              <div className="font-semibold text-txt">
+                {panelState.whisperAvailable
+                  ? panelState.whisperModel || "Available"
+                  : "Unavailable"}
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      )}
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="shadow-none">
-          <CardContent className="px-2.5 py-2 text-[11px]">
-            <div className="text-[10px] text-muted">State</div>
-            <div className="font-semibold text-txt">{panelState.state}</div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-none">
-          <CardContent className="px-2.5 py-2 text-[11px]">
-            <div className="text-[10px] text-muted">Enabled</div>
-            <div className="font-semibold text-txt">
-              {panelState.enabled ? "Yes" : "No"}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-none">
-          <CardContent className="px-2.5 py-2 text-[11px]">
-            <div className="text-[10px] text-muted">Speaking</div>
-            <div className="font-semibold text-txt">
-              {panelState.speaking ? "Yes" : "No"}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-none">
-          <CardContent className="px-2.5 py-2 text-[11px]">
-            <div className="text-[10px] text-muted">Whisper</div>
-            <div className="font-semibold text-txt">
-              {panelState.whisperAvailable
-                ? panelState.whisperModel || "Available"
-                : "Unavailable"}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        <Input
+          type="text"
+          className="bg-card text-xs"
+          value={phrase}
+          onChange={(event) => setPhrase(event.target.value)}
+          placeholder="Speech test phrase"
+        />
 
-      <Input
-        type="text"
-        className="bg-card text-xs"
-        value={phrase}
-        onChange={(event) => setPhrase(event.target.value)}
-        placeholder="Speech test phrase"
-      />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              void runAction(
+                "voice-talkmode-start-stop",
+                async () => {
+                  if (panelState.enabled) {
+                    await invokeDesktopBridgeRequest<void>({
+                      rpcMethod: "talkmodeStop",
+                      ipcChannel: "talkmode:stop",
+                    });
+                    return;
+                  }
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            void runAction(
-              "voice-talkmode-start-stop",
-              async () => {
-                if (panelState.enabled) {
-                  await invokeDesktopBridgeRequest<void>({
-                    rpcMethod: "talkmodeStop",
-                    ipcChannel: "talkmode:stop",
+                  const result = await invokeDesktopBridgeRequest<{
+                    available: boolean;
+                    reason?: string;
+                  }>({
+                    rpcMethod: "talkmodeStart",
+                    ipcChannel: "talkmode:start",
                   });
-                  return;
-                }
-
-                const result = await invokeDesktopBridgeRequest<{
-                  available: boolean;
-                  reason?: string;
-                }>({
-                  rpcMethod: "talkmodeStart",
-                  ipcChannel: "talkmode:start",
-                });
-                if (result?.available === false) {
-                  throw new Error(result.reason || "Talk mode unavailable.");
-                }
-              },
-              panelState.enabled ? "Talk mode stopped." : "Talk mode started.",
-            )
-          }
-          disabled={busyAction === "voice-talkmode-start-stop" || loading}
-        >
-          {panelState.enabled ? "Stop Talk Mode" : "Start Talk Mode"}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            void runAction(
-              "voice-talkmode-speak",
-              async () => {
-                await invokeDesktopBridgeRequest<void>({
-                  rpcMethod: "talkmodeSpeak",
-                  ipcChannel: "talkmode:speak",
-                  params: { text: phrase },
-                });
-              },
-              "Speech requested.",
-              false,
-            )
-          }
-          disabled={!phrase.trim() || busyAction === "voice-talkmode-speak"}
-        >
-          Speak Test Phrase
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            void runAction(
-              "voice-talkmode-stop-speaking",
-              async () => {
-                await invokeDesktopBridgeRequest<void>({
-                  rpcMethod: "talkmodeStopSpeaking",
-                  ipcChannel: "talkmode:stopSpeaking",
-                });
-              },
-              "Stopped current speech output.",
-            )
-          }
-          disabled={busyAction === "voice-talkmode-stop-speaking"}
-        >
-          Stop Speaking
-        </Button>
-      </div>
+                  if (result?.available === false) {
+                    throw new Error(result.reason || "Talk mode unavailable.");
+                  }
+                },
+                panelState.enabled
+                  ? "Talk mode stopped."
+                  : "Talk mode started.",
+              )
+            }
+            disabled={busyAction === "voice-talkmode-start-stop" || loading}
+          >
+            {panelState.enabled ? "Stop Talk Mode" : "Start Talk Mode"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              void runAction(
+                "voice-talkmode-speak",
+                async () => {
+                  await invokeDesktopBridgeRequest<void>({
+                    rpcMethod: "talkmodeSpeak",
+                    ipcChannel: "talkmode:speak",
+                    params: { text: phrase },
+                  });
+                },
+                "Speech requested.",
+                false,
+              )
+            }
+            disabled={!phrase.trim() || busyAction === "voice-talkmode-speak"}
+          >
+            Speak Test Phrase
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              void runAction(
+                "voice-talkmode-stop-speaking",
+                async () => {
+                  await invokeDesktopBridgeRequest<void>({
+                    rpcMethod: "talkmodeStopSpeaking",
+                    ipcChannel: "talkmode:stopSpeaking",
+                  });
+                },
+                "Stopped current speech output.",
+              )
+            }
+            disabled={busyAction === "voice-talkmode-stop-speaking"}
+          >
+            Stop Speaking
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -595,7 +604,9 @@ function WakeWordSection({
               >
                 <div className="font-semibold">{m.id}</div>
                 {m.hintKey && (
-                  <div className="text-[10px] opacity-70 mt-0.5">{t(m.hintKey)}</div>
+                  <div className="text-[10px] opacity-70 mt-0.5">
+                    {t(m.hintKey)}
+                  </div>
                 )}
               </Button>
             );

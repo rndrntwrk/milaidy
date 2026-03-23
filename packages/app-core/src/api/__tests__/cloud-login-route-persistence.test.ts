@@ -28,11 +28,11 @@ vi.mock("@elizaos/core", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock("@elizaos/agent/cloud/validate-url", () => ({
+vi.mock("@miladyai/agent/cloud/validate-url", () => ({
   validateCloudBaseUrl: vi.fn(() => Promise.resolve(null)),
 }));
 
-vi.mock("@elizaos/agent/cloud/base-url", () => ({
+vi.mock("@miladyai/agent/cloud/base-url", () => ({
   normalizeCloudSiteUrl: vi.fn(
     (url?: string) => url ?? "https://cloud.example.com",
   ),
@@ -76,9 +76,10 @@ function makeConfig(cloudOverrides?: Record<string, unknown>) {
 // ── Tests: Cloud login persistence ─────────────────────────────────────────
 
 describe("cloud login route persistence", () => {
-  const fetchMock = vi.fn<
-    (input: string | URL | Request, init?: RequestInit) => Promise<Response>
-  >();
+  const fetchMock =
+    vi.fn<
+      (input: string | URL | Request, init?: RequestInit) => Promise<Response>
+    >();
 
   beforeEach(() => {
     vi.clearAllMocks();
