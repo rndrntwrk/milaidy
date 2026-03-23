@@ -6,9 +6,9 @@ import {
 import { normalizeCloudSiteUrl } from "@miladyai/agent/cloud/base-url";
 import type { CloudManager } from "@miladyai/agent/cloud/cloud-manager";
 import { validateCloudBaseUrl } from "@miladyai/agent/cloud/validate-url";
-import type { AgentRuntime } from "@elizaos/core";
-import type { ElizaConfig } from "../config/config";
-import { saveElizaConfig } from "../config/config";
+import { logger, type AgentRuntime } from "@elizaos/core";
+import type { ElizaConfig } from "@miladyai/agent/config/config";
+import { saveElizaConfig } from "@miladyai/agent/config/config";
 import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability";
 import { isTimeoutError } from "../utils/errors";
 import {
@@ -82,8 +82,9 @@ async function persistCloudLoginStatus(args: {
 
   try {
     saveElizaConfig(args.state.config);
-  } catch {
-    // Non-fatal: the authenticated account still lives in sealed secrets/runtime.
+    logger.info("[cloud-login] Saved cloud API key to config file");
+  } catch (saveErr) {
+    logger.error(`[cloud-login] Failed to save cloud API key to config: ${saveErr instanceof Error ? saveErr.message : String(saveErr)}`);
   }
 
   clearCloudSecrets();

@@ -30,7 +30,7 @@ import {
   startApiServer as upstreamStartApiServer,
 } from "@miladyai/agent/api/server";
 export { discoverInstalledPlugins, discoverPluginsFromManifest };
-import { loadElizaConfig, saveElizaConfig } from "../config/config";
+import { type ElizaConfig, loadElizaConfig, saveElizaConfig } from "@miladyai/agent/config/config";
 import {
   ensureRuntimeSqlCompatibility,
   executeRawSql,
@@ -47,7 +47,7 @@ import {
   buildBscSellUnsignedTx,
   buildBscTradeQuote,
   resolvePrimaryBscRpcUrl,
-} from "./bsc-trade";
+} from "@miladyai/agent/api/bsc-trade";
 import {
   isAllowedDevConsoleLogPath,
   readDevConsoleLogTail,
@@ -57,10 +57,10 @@ import {
   getStewardBridgeStatus,
   signTransactionWithOptionalSteward,
 } from "./steward-bridge";
-import { getWalletAddresses } from "./wallet";
-import { fetchEvmNfts } from "./wallet-evm-balance";
-import { resolveWalletRpcReadiness } from "./wallet-rpc";
-import { recordWalletTradeLedgerEntry } from "./wallet-trading-profile";
+import { getWalletAddresses } from "@miladyai/agent/api/wallet";
+import { fetchEvmNfts } from "@miladyai/agent/api/wallet-evm-balance";
+import { resolveWalletRpcReadiness } from "@miladyai/agent/api/wallet-rpc";
+import { recordWalletTradeLedgerEntry } from "@miladyai/agent/api/wallet-trading-profile";
 
 const require = createRequire(import.meta.url);
 
@@ -1666,6 +1666,33 @@ async function sendLocalWalletTransaction(
   }
 }
 
+/**
+ * Load config from disk and backfill cloud.apiKey from sealed secrets
+ * if it's missing. This handles the case where the API key was persisted
+ * to the sealed secret store (via login) but a subsequent config save
+ * (e.g. onboarding) overwrote the file without the key.
+ */
+function resolveCloudConfig(): ElizaConfig {
+  const config = loadElizaConfig();
+  if (config.cloud?.enabled && !config.cloud?.apiKey) {
+    const sealedKey = getCloudSecret("ELIZAOS_CLOUD_API_KEY");
+    if (sealedKey) {
+      if (!config.cloud) {
+        (config as Record<string, unknown>).cloud = {};
+      }
+      (config.cloud as Record<string, unknown>).apiKey = sealedKey;
+      // Persist the backfilled key so future reads find it on disk
+      try {
+        saveElizaConfig(config);
+        logger.info("[cloud] Backfilled missing cloud.apiKey from sealed secrets to config file");
+      } catch {
+        // Non-fatal: the key is still available from sealed secrets for this request
+      }
+    }
+  }
+  return config;
+}
+
 async function handleMiladyCompatRoute(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -1681,7 +1708,7 @@ async function handleMiladyCompatRoute(
       return true;
     }
     return handleCloudCompatRoute(req, res, url.pathname, method, {
-      config: loadElizaConfig(),
+      config: resolveCloudConfig(),
     });
   }
 
@@ -1693,7 +1720,7 @@ async function handleMiladyCompatRoute(
       return true;
     }
     return handleCloudBillingRoute(req, res, url.pathname, method, {
-      config: loadElizaConfig(),
+      config: resolveCloudConfig(),
     });
   }
 
@@ -1933,7 +1960,7 @@ async function handleMiladyCompatRoute(
       return true;
     }
 
-    const config = loadElizaConfig();
+    const config = resolveCloudConfig();
 
     if (
       url.pathname === "/api/cloud/status" ||
