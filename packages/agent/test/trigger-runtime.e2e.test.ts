@@ -140,7 +140,7 @@ describe("Trigger runtime E2E", () => {
     expect(harness.createMemoryMock).toHaveBeenCalledTimes(1);
     // Verify the memory payload contains the trigger instruction
     const memoryCall = harness.createMemoryMock.mock.calls[0];
-    expect(memoryCall[0].content.text).toContain("Check BTC price");
+    expect(memoryCall[0].content.text).toContain("Send a runtime heartbeat update");
     expect(memoryCall[0].content.source).toBe("trigger-runtime");
     expect(memoryCall[0].content.metadata.isAutonomousInstruction).toBe(true);
 
