@@ -1,0 +1,15 @@
+diff --git a/Users/shawwalters/eliza-workspace/milady/node_modules/@elizaos/plugin-agent-orchestrator/.bun-tag-1ff49c0ac069b183 b/.bun-tag-1ff49c0ac069b183
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/package.json b/package.json
+index cd29c3e02f8c321d823f0db35138cd2eee70851f..baff8594f63c547f60318fb9656b1bbf6e18c525 100644
+--- a/package.json
++++ b/package.json
+@@ -21,7 +21,6 @@
+     "package.json"
+   ],
+   "scripts": {
+-    "postinstall": "node ./scripts/ensure-node-pty.mjs",
+     "build": "bun run build.ts",
+     "test": "bun test",
+     "test:watch": "bun test --watch",

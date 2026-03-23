@@ -1,0 +1,26 @@
+diff --git a/dist/browser/index.browser.js b/dist/browser/index.browser.js
+index d2a9b42534b2aac933a0c5842849b21ae2488e41..ed77b775df2ebcbd4d40151e382d5535636ef932 100644
+--- a/dist/browser/index.browser.js
++++ b/dist/browser/index.browser.js
+@@ -3688,7 +3688,7 @@ class BaseDrizzleAdapter extends DatabaseAdapter {
+     return [String(names)];
+   }
+   isValidUUID(value) {
+-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
++    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+   }
+   normalizeWorldData(world) {
+     const worldData = {
+diff --git a/dist/node/index.node.js b/dist/node/index.node.js
+index c231d59de7256f318174b602923538346d4c61b6..a0deeea8485c78f313cdcad711bc627d08bd6229 100644
+--- a/dist/node/index.node.js
++++ b/dist/node/index.node.js
+@@ -3782,7 +3782,7 @@ class BaseDrizzleAdapter extends DatabaseAdapter {
+     return [String(names)];
+   }
+   isValidUUID(value) {
+-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
++    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+   }
+   normalizeWorldData(world) {
+     const worldData = {
