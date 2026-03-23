@@ -373,6 +373,98 @@ describe("chat send locking", () => {
     });
   });
 
+  it("queues a second chat turn until the current stream finishes", async () => {
+    const first = createDeferred<{ text: string; agentName: string }>();
+    const second = createDeferred<{ text: string; agentName: string }>();
+    const sentTexts: string[] = [];
+
+    mockClient.sendConversationMessageStream.mockImplementation(
+      async (_conversationId: string, text: string) => {
+        sentTexts.push(text);
+        return sentTexts.length === 1 ? first.promise : second.promise;
+      },
+    );
+
+    let api: ProbeApi | null = null;
+    let tree: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          AppProvider,
+          null,
+          React.createElement(Probe, {
+            onReady: (nextApi) => {
+              api = nextApi;
+            },
+          }),
+        ),
+      );
+    });
+
+    expect(api).not.toBeNull();
+
+    await act(async () => {
+      await api?.handleSelectConversation("conv-1");
+      api?.setChatInput("first");
+    });
+
+    let firstSend: Promise<void> | undefined;
+    await act(async () => {
+      firstSend = api?.handleChatSend();
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(mockClient.sendConversationMessageStream).toHaveBeenCalledTimes(1);
+      expect(sentTexts).toEqual(["first"]);
+      expect(api?.snapshot().chatSending).toBe(true);
+    });
+
+    await act(async () => {
+      api?.setChatInput("second");
+    });
+
+    let secondSend: Promise<void> | undefined;
+    await act(async () => {
+      secondSend = api?.handleChatSend();
+      await Promise.resolve();
+    });
+
+    expect(mockClient.sendConversationMessageStream).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      first.resolve({ text: "first reply", agentName: "Eliza" });
+      await firstSend;
+    });
+
+    await vi.waitFor(() => {
+      expect(mockClient.sendConversationMessageStream).toHaveBeenCalledTimes(2);
+      expect(sentTexts).toEqual(["first", "second"]);
+    });
+
+    await act(async () => {
+      second.resolve({ text: "second reply", agentName: "Eliza" });
+      await secondSend;
+    });
+
+    expect(api?.snapshot()).toEqual(
+      expect.objectContaining({
+        chatSending: false,
+        conversationMessages: expect.arrayContaining([
+          expect.objectContaining({ role: "user", text: "first" }),
+          expect.objectContaining({ role: "assistant", text: "first reply" }),
+          expect.objectContaining({ role: "user", text: "second" }),
+          expect.objectContaining({ role: "assistant", text: "second reply" }),
+        ]),
+      }),
+    );
+
+    await act(async () => {
+      tree?.unmount();
+    });
+  });
+
   it("sends image-only chat messages with a fallback prompt", async () => {
     let api: ProbeApi | null = null;
     let tree: TestRenderer.ReactTestRenderer;

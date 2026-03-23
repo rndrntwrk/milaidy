@@ -709,6 +709,12 @@ export type ElizaConfig = {
       /** Assistant avatar (emoji, short text, or image URL/data URI). */
       avatar?: string;
     };
+    /** Selected built-in avatar index (0 means custom upload). */
+    avatarIndex?: number;
+    /** Selected UI / character language. */
+    language?: string;
+    /** Selected built-in character preset id. */
+    presetId?: string;
   };
   knowledge?: KnowledgeConfig;
   skills?: SkillsConfig;

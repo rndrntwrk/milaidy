@@ -262,7 +262,7 @@ vi.mock("@miladyai/app-core/src/components/KnowledgeView", () => ({
     React.createElement("section", null, "KnowledgeView Ready"),
 }));
 
-vi.mock("@miladyai/app-core/components/AvatarLoader", () => ({
+vi.mock("../../src/components/AvatarLoader", () => ({
   AvatarLoader: () => React.createElement("div", null, "AvatarLoader"),
 }));
 

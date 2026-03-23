@@ -396,7 +396,7 @@ vi.mock("@miladyai/app-core/src/components/PairingView", () => ({
 vi.mock("@miladyai/app-core/src/components/ChatView", () => ({
   ChatView: () => React.createElement("div", null, "ChatView"),
 }));
-vi.mock("@miladyai/app-core/components/AvatarLoader", () => ({
+vi.mock("../../src/components/AvatarLoader", () => ({
   AvatarLoader: () => React.createElement("div", null, "AvatarLoader"),
 }));
 vi.mock("@miladyai/app-core/src/components/CompanionView", () => ({

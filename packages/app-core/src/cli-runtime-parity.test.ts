@@ -309,10 +309,8 @@ describe("character building parity", () => {
       } as Partial<ElizaConfig> as ElizaConfig).name,
     ).toBe("Reimu");
 
-    // Default fallback — upstream uses "Milady"
-    expect(["Milady", "Eliza"]).toContain(
-      buildCharacterFromConfig({} as ElizaConfig).name,
-    );
+    // Default fallback should resolve to the default bundled preset.
+    expect(buildCharacterFromConfig({} as ElizaConfig).name).toBe("Chen");
   });
 
   it("secrets from env are included in character in all modes", () => {

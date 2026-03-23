@@ -33,6 +33,7 @@ export {
 } from "./parsers";
 export {
   applyUiTheme,
+  clearAvatarIndex,
   clearPersistedConnectionMode,
   clearPersistedOnboardingStep,
   loadActiveConversationId,

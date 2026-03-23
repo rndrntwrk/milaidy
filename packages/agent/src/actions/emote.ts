@@ -57,14 +57,18 @@ export const emoteAction: Action = {
     if (!emote) return { text: "", success: false };
 
     // POST to the local API server to trigger the emote.
-    const response = await fetch(`http://localhost:${API_PORT}/api/emote`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ emoteId: emote.id }),
-    });
+    try {
+      const response = await fetch(`http://localhost:${API_PORT}/api/emote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoteId: emote.id }),
+      });
 
-    if (!response.ok) {
-      throw new Error(`Request to /api/emote failed with HTTP ${response.status}`);
+      if (!response.ok) {
+        return { text: "", success: false };
+      }
+    } catch {
+      return { text: "", success: false };
     }
 
     return {

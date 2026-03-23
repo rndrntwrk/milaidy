@@ -19,7 +19,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { VoiceConfig } from "../api/client";
+import type { VoiceConfig, VoiceMode } from "../api/client";
 import { getElectrobunRendererRpc } from "../bridge/electrobun-rpc";
 import {
   getTalkModePlugin,
@@ -30,6 +30,7 @@ import {
 import { resolveApiUrl } from "../utils";
 import { getElizaApiToken } from "../utils/eliza-globals";
 import { mergeStreamingText } from "../utils/streaming-text";
+import { hasConfiguredApiKey } from "../voice";
 
 // ── Speech Recognition types ──────────────────────────────────────────
 
@@ -103,7 +104,7 @@ export interface VoiceChatOptions {
   ) => void;
   /** Called when playback of a speech segment starts */
   onPlaybackStart?: (event: VoicePlaybackStartEvent) => void;
-  /** True when the user is authenticated to Eliza Cloud */
+  /** True when Eliza Cloud-managed voice access is available */
   cloudConnected?: boolean;
   /** Whether user speech should immediately interrupt assistant playback */
   interruptOnSpeech?: boolean;
@@ -174,8 +175,20 @@ const MOUTH_OPEN_STEP = 0.02;
 
 const globalAudioCache = new Map<string, Uint8Array>();
 
-function resolveElevenProxyEndpoint(): string {
-  return resolveApiUrl("/api/tts/elevenlabs");
+function resolveVoiceMode(
+  mode: VoiceMode | undefined,
+  cloudConnected: boolean,
+  apiKey?: string | null,
+): VoiceMode {
+  if (mode) return mode;
+  if (cloudConnected && !hasConfiguredApiKey(apiKey)) return "cloud";
+  return "own-key";
+}
+
+function resolveVoiceProxyEndpoint(mode: VoiceMode): string {
+  return resolveApiUrl(
+    mode === "cloud" ? "/api/tts/cloud" : "/api/tts/elevenlabs",
+  );
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -458,8 +471,12 @@ function resolveEffectiveVoiceConfig(
     return { ...base, provider };
   }
 
-  const mode = base.mode ?? (cloudConnected ? "cloud" : "own-key");
   const currentElevenLabs = base.elevenlabs ?? {};
+  const mode = resolveVoiceMode(
+    base.mode,
+    cloudConnected,
+    currentElevenLabs.apiKey,
+  );
   const elevenlabs: NonNullable<VoiceConfig["elevenlabs"]> = {
     ...currentElevenLabs,
     voiceId: currentElevenLabs.voiceId ?? DEFAULT_ELEVEN_VOICE,
@@ -501,6 +518,8 @@ export const __voiceChatInternals = {
   remainderAfter,
   queueableSpeechPrefix,
   resolveEffectiveVoiceConfig,
+  resolveVoiceMode,
+  resolveVoiceProxyEndpoint,
   toSpeakableText,
 };
 
@@ -1108,21 +1127,26 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
         const apiToken = getElizaApiToken()?.trim() ?? "";
 
         const fetchViaProxy = async () => {
-          return fetch(resolveElevenProxyEndpoint(), {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Accept: "audio/mpeg",
-              ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
+          return fetch(
+            resolveVoiceProxyEndpoint(
+              voiceConfigRef.current?.mode ?? "own-key",
+            ),
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "audio/mpeg",
+                ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
+              },
+              body: JSON.stringify({
+                ...requestBody,
+                voiceId,
+                modelId,
+                outputFormat: "mp3_44100_128",
+              }),
+              signal: controller.signal,
             },
-            body: JSON.stringify({
-              ...requestBody,
-              voiceId,
-              modelId,
-              outputFormat: "mp3_44100_128",
-            }),
-            signal: controller.signal,
-          });
+          );
         };
 
         const trimmedApiKey =

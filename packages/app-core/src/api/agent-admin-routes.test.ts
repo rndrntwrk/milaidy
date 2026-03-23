@@ -1,4 +1,5 @@
 import type { AgentRuntime, UUID } from "@elizaos/core";
+import { getDefaultStylePreset } from "@miladyai/shared/onboarding-presets";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { ElizaConfig } from "../config/config";
 import { createRouteInvoker } from "../test-support/route-test-helpers";
@@ -178,7 +179,7 @@ describe("agent admin routes", () => {
     expect(result.payload).toMatchObject({ ok: true });
     expect(state.runtime).toBeNull();
     expect(state.agentState).toBe("stopped");
-    expect(["Eliza", "Eliza"]).toContain(state.agentName);
+    expect(state.agentName).toBe(getDefaultStylePreset().name);
     expect(state.model).toBeUndefined();
     expect(state.startedAt).toBeUndefined();
     expect(state.chatRoomId).toBeNull();

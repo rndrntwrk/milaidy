@@ -31,7 +31,12 @@ import { dispatchWindowEvent, VOICE_CONFIG_UPDATED_EVENT } from "../events";
 import { useTimeout } from "../hooks";
 import { useApp } from "../state";
 import type { DesktopClickAuditItem } from "../utils";
-import { PREMADE_VOICES, sanitizeApiKey, VOICE_PROVIDERS } from "../voice";
+import {
+  hasConfiguredApiKey,
+  PREMADE_VOICES,
+  sanitizeApiKey,
+  VOICE_PROVIDERS,
+} from "../voice";
 import {
   CloudConnectionStatus,
   CloudSourceModeToggle,
@@ -633,8 +638,7 @@ function WakeWordSection({
 export function VoiceConfigView() {
   const { setTimeout } = useTimeout();
 
-  const { t } = useApp();
-  const { elizaCloudConnected } = useApp();
+  const { t, elizaCloudConnected, elizaCloudEnabled } = useApp();
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig>({});
   const [swabbleServerConfig, setSwabbleServerConfig] =
     useState<Partial<SwabbleConfig> | null>(null);
@@ -681,11 +685,20 @@ export function VoiceConfigView() {
   }, []);
 
   const currentProvider = voiceConfig.provider ?? "elevenlabs";
-  const currentMode: VoiceMode = voiceConfig.mode ?? "own-key";
+  const cloudVoiceAvailable = elizaCloudConnected || elizaCloudEnabled;
+  const hasElevenLabsApiKey = hasConfiguredApiKey(
+    voiceConfig.elevenlabs?.apiKey,
+  );
+  const defaultVoiceMode: VoiceMode = cloudVoiceAvailable
+    ? hasElevenLabsApiKey
+      ? "own-key"
+      : "cloud"
+    : "own-key";
+  const currentMode: VoiceMode = voiceConfig.mode ?? defaultVoiceMode;
   const providerInfo = VOICE_PROVIDERS.find((p) => p.id === currentProvider);
   const isConfigured =
     currentMode === "cloud"
-      ? elizaCloudConnected
+      ? cloudVoiceAvailable
       : currentProvider !== "elevenlabs"
         ? true
         : Boolean(voiceConfig.elevenlabs?.apiKey);
@@ -752,10 +765,7 @@ export function VoiceConfigView() {
       const normalizedVoiceConfig: VoiceConfig = {
         ...voiceConfig,
         provider,
-        mode:
-          provider === "elevenlabs"
-            ? (voiceConfig.mode ?? "own-key")
-            : undefined,
+        mode: provider === "elevenlabs" ? currentMode : undefined,
         elevenlabs: normalizedElevenLabs,
       };
       // Also persist swabble (wake word) config — fall back to server config
@@ -786,7 +796,7 @@ export function VoiceConfigView() {
       setSaveError(err instanceof Error ? err.message : "Failed to save");
     }
     setSaving(false);
-  }, [swabbleServerConfig, voiceConfig, setTimeout]);
+  }, [currentMode, swabbleServerConfig, voiceConfig, setTimeout]);
 
   if (loading) {
     return (
@@ -864,7 +874,7 @@ export function VoiceConfigView() {
           {/* Cloud mode status */}
           {currentMode === "cloud" && (
             <CloudConnectionStatus
-              connected={elizaCloudConnected}
+              connected={cloudVoiceAvailable}
               disconnectedText={t("elizaclouddashboard.ElizaCloudNotConnected")}
             />
           )}

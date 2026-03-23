@@ -44,7 +44,7 @@ vi.mock("@miladyai/app-core/state", () => ({
 }));
 
 import { flush } from "../../../../test/helpers/react-test";
-import { GameView } from "@miladyai/app-core/components/GameView";
+import { GameView } from "../../src/components/GameView";
 
 function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
   return {

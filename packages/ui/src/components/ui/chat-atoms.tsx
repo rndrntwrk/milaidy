@@ -31,18 +31,9 @@ export function TypingIndicator({
         </div>
         <div className="px-4 py-3 bg-bg-accent border border-border rounded-2xl rounded-bl-md">
           <div className="flex gap-1">
-            <span
-              className="w-2 h-2 rounded-full bg-muted-strong animate-[typing-bounce_1.2s_ease-in-out_infinite]"
-              style={{ animationDelay: "0ms" }}
-            />
-            <span
-              className="w-2 h-2 rounded-full bg-muted-strong animate-[typing-bounce_1.2s_ease-in-out_infinite]"
-              style={{ animationDelay: "200ms" }}
-            />
-            <span
-              className="w-2 h-2 rounded-full bg-muted-strong animate-[typing-bounce_1.2s_ease-in-out_infinite]"
-              style={{ animationDelay: "400ms" }}
-            />
+            <span className="h-2 w-2 rounded-full bg-muted-strong [animation-delay:0ms] animate-[typing-bounce_1.2s_ease-in-out_infinite]" />
+            <span className="h-2 w-2 rounded-full bg-muted-strong [animation-delay:200ms] animate-[typing-bounce_1.2s_ease-in-out_infinite]" />
+            <span className="h-2 w-2 rounded-full bg-muted-strong [animation-delay:400ms] animate-[typing-bounce_1.2s_ease-in-out_infinite]" />
           </div>
         </div>
       </div>
@@ -92,10 +83,7 @@ export function ChatEmptyState({
       <h3 className="text-lg font-semibold text-txt-strong mb-2">
         {labels.startConversation ?? "Start a Conversation"}
       </h3>
-      <p
-        className="text-sm text-muted max-w-sm mb-6"
-        style={{ fontFamily: "var(--font-chat)" }}
-      >
+      <p className="mb-6 max-w-sm text-sm text-muted font-[var(--font-chat)]">
         {labels.sendMessageTo ?? "Send a message to"} {agentName}{" "}
         {labels.toBeginChatting ?? "to begin chatting."}
       </p>

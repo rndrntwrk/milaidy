@@ -44,6 +44,26 @@ vi.mock("@miladyai/app-core/config", () => ({
   defaultRegistry: {},
 }));
 
+vi.mock("@miladyai/ui", async () => {
+  const actual = await vi.importActual<typeof import("@miladyai/ui")>("@miladyai/ui");
+  return {
+    ...actual,
+    Select: ({ value, onValueChange, children }: any) => (
+      <select value={value} onChange={e => onValueChange(e.target.value)}>
+        {children}
+      </select>
+    ),
+    SelectTrigger: ({ children }: any) => <>{children}</>,
+    SelectValue: () => null,
+    SelectContent: ({ children }: any) => <>{children}</>,
+    SelectItem: ({ value, disabled, children }: any) => (
+      <option value={value} disabled={disabled}>
+        {children}
+      </option>
+    ),
+  };
+});
+
 import { ProviderSwitcher } from "@miladyai/app-core/components";
 
 // ---------------------------------------------------------------------------

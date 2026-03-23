@@ -39,9 +39,15 @@ function syncElizaEnvToMilady(): void {
 }
 
 import { loadElizaConfig } from "@miladyai/agent/config/config";
-import { STYLE_PRESETS } from "@miladyai/agent/onboarding-presets";
-import { normalizeCharacterMessageExamples } from "../utils/character-message-examples";
-import { ensureRuntimeSqlCompatibility } from "../utils/sql-compat";
+import {
+  getDefaultStylePreset,
+  normalizeCharacterLanguage,
+  resolveStylePresetByAvatarIndex,
+  resolveStylePresetById,
+  resolveStylePresetByName,
+} from "@miladyai/shared/onboarding-presets";
+import { normalizeCharacterMessageExamples } from "../utils/character-message-examples.js";
+import { ensureRuntimeSqlCompatibility } from "../utils/sql-compat.js";
 import type { EmbeddingProgressCallback } from "./embedding-manager-support.js";
 import {
   DEFAULT_MODELS_DIR,
@@ -154,11 +160,26 @@ function syncBrandEnvAliases(): void {
   syncMiladyEnvToEliza();
 }
 
-function resolveMiladyPresetByName(name: string | undefined) {
-  if (!name) return undefined;
-  return STYLE_PRESETS.find(
-    (preset) => preset.name.toLowerCase() === name.toLowerCase(),
-  );
+function resolveMiladyPreset(
+  config: Parameters<typeof upstreamBuildCharacterFromConfig>[0],
+  name: string | undefined,
+) {
+  const uiConfig = (config.ui ?? {}) as {
+    presetId?: string;
+    avatarIndex?: number;
+    language?: unknown;
+  };
+  const language = normalizeCharacterLanguage(uiConfig.language);
+  const matchedPreset =
+    (typeof uiConfig.presetId === "string" && uiConfig.presetId
+      ? resolveStylePresetById(uiConfig.presetId, language)
+      : undefined) ??
+    resolveStylePresetByAvatarIndex(uiConfig.avatarIndex, language) ??
+    resolveStylePresetByName(name, language);
+  if (matchedPreset) {
+    return matchedPreset;
+  }
+  return name ? undefined : getDefaultStylePreset(language);
 }
 
 export function collectPluginNames(
@@ -268,7 +289,7 @@ export function buildCharacterFromConfig(
   syncBrandEnvAliases();
 
   const agentEntry = config.agents?.list?.[0];
-  const bundledPreset = resolveMiladyPresetByName(character.name);
+  const bundledPreset = resolveMiladyPreset(config, character.name);
   if ((character.messageExamples?.length ?? 0) > 0) {
     character.messageExamples = normalizeCharacterMessageExamples(
       character.messageExamples,

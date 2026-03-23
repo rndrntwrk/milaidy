@@ -24,8 +24,9 @@ describe("extractAndPersistOnboardingApiKey", () => {
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
       GROQ_API_KEY: process.env.GROQ_API_KEY,
     };
+    mockLoadElizaConfig.mockReset();
+    mockSaveElizaConfig.mockReset();
     mockLoadElizaConfig.mockReturnValue({ env: {} });
-    mockSaveElizaConfig.mockClear();
   });
 
   afterEach(() => {
@@ -38,11 +39,11 @@ describe("extractAndPersistOnboardingApiKey", () => {
     }
   });
 
-  it("persists Anthropic API key from connection.apiKey to config and process.env", () => {
+  it("persists Anthropic API key from connection.apiKey to config and process.env", async () => {
     const config = { env: {} } as Record<string, unknown>;
     mockLoadElizaConfig.mockReturnValue(config);
 
-    const result = extractAndPersistOnboardingApiKey({
+    const result = await extractAndPersistOnboardingApiKey({
       name: "TestAgent",
       connection: {
         kind: "local-provider",
@@ -56,16 +57,20 @@ describe("extractAndPersistOnboardingApiKey", () => {
 
     const savedConfig = mockSaveElizaConfig.mock.calls[0][0];
     expect(savedConfig.env.ANTHROPIC_API_KEY).toBe("sk-ant-test-key-123");
-    expect(savedConfig.subscriptionProvider).toBe("anthropic");
+    expect(savedConfig.cloud).toEqual({
+      enabled: false,
+      runtime: "local",
+    });
     expect(process.env.ANTHROPIC_API_KEY).toBe("sk-ant-test-key-123");
   });
 
-  it("persists OpenAI API key", () => {
+  it("persists OpenAI API key", async () => {
     const config = { env: {} } as Record<string, unknown>;
     mockLoadElizaConfig.mockReturnValue(config);
 
-    const result = extractAndPersistOnboardingApiKey({
+    const result = await extractAndPersistOnboardingApiKey({
       connection: {
+        kind: "local-provider",
         provider: "openai",
         apiKey: "sk-openai-test-key",
       },
@@ -74,11 +79,10 @@ describe("extractAndPersistOnboardingApiKey", () => {
     expect(result).toBe("OPENAI_API_KEY");
     const savedConfig = mockSaveElizaConfig.mock.calls[0][0];
     expect(savedConfig.env.OPENAI_API_KEY).toBe("sk-openai-test-key");
-    expect(savedConfig.subscriptionProvider).toBe("openai");
   });
 
-  it("returns null when connection field is missing", () => {
-    const result = extractAndPersistOnboardingApiKey({
+  it("returns null when connection field is missing", async () => {
+    const result = await extractAndPersistOnboardingApiKey({
       name: "TestAgent",
     });
 
@@ -86,9 +90,10 @@ describe("extractAndPersistOnboardingApiKey", () => {
     expect(mockSaveElizaConfig).not.toHaveBeenCalled();
   });
 
-  it("returns null when apiKey is empty", () => {
-    const result = extractAndPersistOnboardingApiKey({
+  it("returns null when apiKey is empty", async () => {
+    const result = await extractAndPersistOnboardingApiKey({
       connection: {
+        kind: "local-provider",
         provider: "anthropic",
         apiKey: "   ",
       },
@@ -98,9 +103,10 @@ describe("extractAndPersistOnboardingApiKey", () => {
     expect(mockSaveElizaConfig).not.toHaveBeenCalled();
   });
 
-  it("returns null when apiKey is missing", () => {
-    const result = extractAndPersistOnboardingApiKey({
+  it("returns null when apiKey is missing", async () => {
+    const result = await extractAndPersistOnboardingApiKey({
       connection: {
+        kind: "local-provider",
         provider: "anthropic",
       },
     });
@@ -109,9 +115,10 @@ describe("extractAndPersistOnboardingApiKey", () => {
     expect(mockSaveElizaConfig).not.toHaveBeenCalled();
   });
 
-  it("returns null for unknown provider", () => {
-    const result = extractAndPersistOnboardingApiKey({
+  it("returns null for unknown provider", async () => {
+    const result = await extractAndPersistOnboardingApiKey({
       connection: {
+        kind: "local-provider",
         provider: "unknown-provider",
         apiKey: "some-key",
       },
@@ -121,12 +128,13 @@ describe("extractAndPersistOnboardingApiKey", () => {
     expect(mockSaveElizaConfig).not.toHaveBeenCalled();
   });
 
-  it("creates env object on config if missing", () => {
+  it("creates env object on config if missing", async () => {
     const config = {} as Record<string, unknown>;
     mockLoadElizaConfig.mockReturnValue(config);
 
-    const result = extractAndPersistOnboardingApiKey({
+    const result = await extractAndPersistOnboardingApiKey({
       connection: {
+        kind: "local-provider",
         provider: "groq",
         apiKey: "gsk-groq-test",
       },
@@ -137,12 +145,13 @@ describe("extractAndPersistOnboardingApiKey", () => {
     expect(savedConfig.env.GROQ_API_KEY).toBe("gsk-groq-test");
   });
 
-  it("handles google-genai provider", () => {
+  it("handles google-genai provider", async () => {
     const config = { env: {} } as Record<string, unknown>;
     mockLoadElizaConfig.mockReturnValue(config);
 
-    const result = extractAndPersistOnboardingApiKey({
+    const result = await extractAndPersistOnboardingApiKey({
       connection: {
+        kind: "local-provider",
         provider: "google-genai",
         apiKey: "AIza-google-key",
       },
@@ -151,23 +160,31 @@ describe("extractAndPersistOnboardingApiKey", () => {
     expect(result).toBe("GOOGLE_GENERATIVE_AI_API_KEY");
   });
 
-  it("handles gemini provider ID (catalog uses gemini, not google-genai)", () => {
+  it("handles gemini provider ID (catalog uses gemini, not google-genai)", async () => {
     const config = { env: {} } as Record<string, unknown>;
     mockLoadElizaConfig.mockReturnValue(config);
 
-    const result = extractAndPersistOnboardingApiKey({
-      connection: { provider: "gemini", apiKey: "AIza-gemini-key" },
+    const result = await extractAndPersistOnboardingApiKey({
+      connection: {
+        kind: "local-provider",
+        provider: "gemini",
+        apiKey: "AIza-gemini-key",
+      },
     });
 
     expect(result).toBe("GOOGLE_GENERATIVE_AI_API_KEY");
   });
 
-  it("handles grok provider ID (catalog uses grok, not xai)", () => {
+  it("handles grok provider ID (catalog uses grok, not xai)", async () => {
     const config = { env: {} } as Record<string, unknown>;
     mockLoadElizaConfig.mockReturnValue(config);
 
-    const result = extractAndPersistOnboardingApiKey({
-      connection: { provider: "grok", apiKey: "xai-grok-key" },
+    const result = await extractAndPersistOnboardingApiKey({
+      connection: {
+        kind: "local-provider",
+        provider: "grok",
+        apiKey: "xai-grok-key",
+      },
     });
 
     expect(result).toBe("XAI_API_KEY");
@@ -178,19 +195,24 @@ describe("extractAndPersistOnboardingApiKey", () => {
     ["mistral", "MISTRAL_API_KEY"],
     ["together", "TOGETHER_API_KEY"],
     ["zai", "ZAI_API_KEY"],
-  ])("handles %s provider", (provider, expectedEnvKey) => {
+  ])("handles %s provider", async (provider, expectedEnvKey) => {
     const config = { env: {} } as Record<string, unknown>;
     mockLoadElizaConfig.mockReturnValue(config);
 
-    const result = extractAndPersistOnboardingApiKey({
-      connection: { provider, apiKey: `test-key-${provider}` },
+    const result = await extractAndPersistOnboardingApiKey({
+      connection: {
+        kind: "local-provider",
+        provider,
+        apiKey: `test-key-${provider}`,
+      },
     });
 
     expect(result).toBe(expectedEnvKey);
   });
-  it("returns null when provider is not a string", () => {
-    const result = extractAndPersistOnboardingApiKey({
+  it("returns null when provider is not a string", async () => {
+    const result = await extractAndPersistOnboardingApiKey({
       connection: {
+        kind: "local-provider",
         provider: 123,
         apiKey: "some-key",
       },
@@ -336,16 +358,21 @@ describe("deriveCompatOnboardingReplayBody", () => {
   it("leaves non-cloud onboarding payloads unchanged", () => {
     const body = {
       name: "Milady",
-      runMode: "local",
       connection: {
         kind: "local-provider",
         provider: "openai",
+        apiKey: "sk-test-openai",
       },
     } as Record<string, unknown>;
 
     const result = deriveCompatOnboardingReplayBody(body);
 
     expect(result.isCloudMode).toBe(false);
-    expect(result.replayBody).toBe(body);
+    expect(result.replayBody).toMatchObject({
+      name: "Milady",
+      runMode: "local",
+      provider: "openai",
+      providerApiKey: "sk-test-openai",
+    });
   });
 });

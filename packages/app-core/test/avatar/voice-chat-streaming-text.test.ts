@@ -6,6 +6,8 @@ const {
   remainderAfter,
   queueableSpeechPrefix,
   resolveEffectiveVoiceConfig,
+  resolveVoiceMode,
+  resolveVoiceProxyEndpoint,
   toSpeakableText,
 } = __voiceChatInternals;
 
@@ -66,6 +68,20 @@ describe("useVoiceChat streaming text helpers", () => {
         speed: 1,
       },
     });
+  });
+
+  it("defaults the saved voice mode to cloud when Cloud auth is present", () => {
+    expect(resolveVoiceMode(undefined, true)).toBe("cloud");
+    expect(resolveVoiceMode(undefined, true, "")).toBe("cloud");
+    expect(resolveVoiceMode(undefined, true, "sk-test")).toBe("own-key");
+    expect(resolveVoiceMode(undefined, true, "[REDACTED]")).toBe("own-key");
+    expect(resolveVoiceMode(undefined, false)).toBe("own-key");
+    expect(resolveVoiceMode("own-key", true, "")).toBe("own-key");
+  });
+
+  it("uses the cloud TTS proxy when ElevenLabs is in cloud mode", () => {
+    expect(resolveVoiceProxyEndpoint("cloud")).toBe("/api/tts/cloud");
+    expect(resolveVoiceProxyEndpoint("own-key")).toBe("/api/tts/elevenlabs");
   });
 
   it("keeps explicit non-ElevenLabs providers intact", () => {
@@ -175,14 +191,18 @@ describe("useVoiceChat streaming text helpers", () => {
 
 describe("splitFirstSentence edge cases", () => {
   it("does not split on abbreviation periods", () => {
-    const result = splitFirstSentence("Dr. Smith went to the store. He bought milk.");
+    const result = splitFirstSentence(
+      "Dr. Smith went to the store. He bought milk.",
+    );
     expect(result.firstSentence).toBe("Dr. Smith went to the store.");
     expect(result.remainder).toBe("He bought milk.");
     expect(result.complete).toBe(true);
   });
 
   it("does not split on decimal numbers", () => {
-    const result = splitFirstSentence("The price is 3.14 dollars. That is cheap.");
+    const result = splitFirstSentence(
+      "The price is 3.14 dollars. That is cheap.",
+    );
     expect(result.firstSentence).toBe("The price is 3.14 dollars.");
     expect(result.remainder).toBe("That is cheap.");
     expect(result.complete).toBe(true);
@@ -196,7 +216,9 @@ describe("splitFirstSentence edge cases", () => {
   });
 
   it("does not split on URLs", () => {
-    const result = splitFirstSentence("Visit https://example.com for details. It is free.");
+    const result = splitFirstSentence(
+      "Visit https://example.com for details. It is free.",
+    );
     expect(result.firstSentence).toBe("Visit https://example.com for details.");
     expect(result.remainder).toBe("It is free.");
     expect(result.complete).toBe(true);

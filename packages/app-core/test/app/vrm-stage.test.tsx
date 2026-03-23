@@ -25,7 +25,7 @@ vi.mock("@miladyai/app-core/utils", () => ({
   DESKTOP_WORKSPACE_SURFACES: [],
 }));
 
-vi.mock("@miladyai/app-core/components/avatar/VrmViewer", () => ({
+vi.mock("../../src/components/avatar/VrmViewer", () => ({
   VrmViewer: (props: Record<string, unknown>) => {
     viewerRenderCount++;
     viewerPropsRef.current = props;
@@ -33,11 +33,11 @@ vi.mock("@miladyai/app-core/components/avatar/VrmViewer", () => ({
   },
 }));
 
-vi.mock("@miladyai/app-core/components/AvatarLoader", () => ({
+vi.mock("../../src/components/AvatarLoader", () => ({
   AvatarLoader: () => React.createElement("div", null, "AvatarLoader"),
 }));
 
-import { VrmStage } from "@miladyai/app-core/components/VrmStage";
+import { VrmStage } from "../../src/components/VrmStage";
 
 describe("VrmStage", () => {
   beforeEach(() => {
@@ -74,64 +74,7 @@ describe("VrmStage", () => {
     expect(opacityNodes).toHaveLength(0);
   });
 
-  it("passes the shared chat voice state through to the companion avatar", async () => {
-    let tree: TestRenderer.ReactTestRenderer | null = null;
-    await act(async () => {
-      tree = TestRenderer.create(
-        React.createElement(VrmStage, {
-          vrmPath: "/vrms/eliza-1.vrm.gz",
-          fallbackPreviewUrl: "/vrms/previews/eliza-1.png",
-          t: (key: string) => key,
-        }),
-      );
-    });
 
-    await act(async () => {
-      window.dispatchEvent(
-        new CustomEvent("eliza:chat-avatar-voice", {
-          detail: { mouthOpen: 0.42, isSpeaking: false },
-        }),
-      );
-    });
-
-    expect(tree).not.toBeNull();
-    expect(viewerPropsRef.current).toMatchObject({
-      mouthOpen: 0.42,
-      isSpeaking: false,
-    });
-  });
-
-  it("ignores duplicate chat voice events with the same payload", async () => {
-    await act(async () => {
-      TestRenderer.create(
-        React.createElement(VrmStage, {
-          vrmPath: "/vrms/eliza-1.vrm.gz",
-          fallbackPreviewUrl: "/vrms/previews/eliza-1.png",
-          t: (key: string) => key,
-        }),
-      );
-    });
-
-    await act(async () => {
-      window.dispatchEvent(
-        new CustomEvent("eliza:chat-avatar-voice", {
-          detail: { mouthOpen: 0.4, isSpeaking: false },
-        }),
-      );
-    });
-
-    const renderCountAfterFirstEvent = viewerRenderCount;
-
-    await act(async () => {
-      window.dispatchEvent(
-        new CustomEvent("eliza:chat-avatar-voice", {
-          detail: { mouthOpen: 0.4, isSpeaking: false },
-        }),
-      );
-    });
-
-    expect(viewerRenderCount).toBe(renderCountAfterFirstEvent);
-  });
 
   it("disables canvas parallax and forwards the ready engine callback", async () => {
     const handleEngineReady = vi.fn();

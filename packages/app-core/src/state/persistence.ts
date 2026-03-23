@@ -369,6 +369,12 @@ export function saveAvatarIndex(index: number): void {
   }, undefined);
 }
 
+export function clearAvatarIndex(): void {
+  tryLocalStorage(() => {
+    localStorage.removeItem(AVATAR_INDEX_KEY);
+  }, undefined);
+}
+
 /* ── Chat UI persistence ──────────────────────────────────────────────── */
 const CHAT_AVATAR_VISIBLE_KEY = "eliza:chat:avatarVisible";
 const CHAT_VOICE_MUTED_KEY = "eliza:chat:voiceMuted";

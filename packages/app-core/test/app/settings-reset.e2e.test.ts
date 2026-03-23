@@ -278,38 +278,38 @@ vi.mock("@miladyai/app-core/components", async () => {
   };
 });
 
-vi.mock("@miladyai/app-core/components/ConfigPageView", () => ({
+vi.mock("../../src/components/ConfigPageView", () => ({
   ConfigPageView: () => React.createElement("div", null, "ConfigPageView"),
 }));
 
-vi.mock("@miladyai/app-core/components/CodingAgentSettingsSection", () => ({
+vi.mock("../../src/components/CodingAgentSettingsSection", () => ({
   CodingAgentSettingsSection: () =>
     React.createElement("div", null, "CodingAgentSettingsSection"),
 }));
 
-vi.mock("@miladyai/app-core/components/MediaSettingsSection", () => ({
+vi.mock("../../src/components/MediaSettingsSection", () => ({
   MediaSettingsSection: () =>
     React.createElement("div", null, "MediaSettingsSection"),
 }));
 
-vi.mock("@miladyai/app-core/components/ElizaCloudDashboard", () => ({
+vi.mock("../../src/components/ElizaCloudDashboard", () => ({
   CloudDashboard: () => React.createElement("div", null, "ElizaCloudDashboard"),
 }));
 
-vi.mock("@miladyai/app-core/components/PermissionsSection", () => ({
+vi.mock("../../src/components/PermissionsSection", () => ({
   PermissionsSection: () =>
     React.createElement("div", null, "PermissionsSection"),
 }));
 
-vi.mock("@miladyai/app-core/components/ProviderSwitcher", () => ({
+vi.mock("../../src/components/ProviderSwitcher", () => ({
   ProviderSwitcher: () => React.createElement("div", null, "ProviderSwitcher"),
 }));
 
-vi.mock("@miladyai/app-core/components/VoiceConfigView", () => ({
+vi.mock("../../src/components/VoiceConfigView", () => ({
   VoiceConfigView: () => React.createElement("div", null, "VoiceConfigView"),
 }));
 
-import { SettingsView } from "@miladyai/app-core/components/SettingsView";
+import { SettingsView } from "../../src/components/SettingsView";
 
 function createUIHarnessState(): AppHarnessState {
   return {

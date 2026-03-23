@@ -83,7 +83,7 @@ export function TagEditor({
         {items.map((item, i) => (
           <span
             key={item}
-            className="inline-flex items-center justify-between gap-1 px-2 py-0.5 border border-border/50 bg-black/10 rounded text-[11px] h-fit text-txt font-medium"
+            className="inline-flex h-fit items-center justify-between gap-1 rounded border border-border/50 bg-bg-accent px-2 py-0.5 text-[11px] font-medium text-txt"
           >
             <span className="truncate max-w-[200px]" title={item}>
               {item}

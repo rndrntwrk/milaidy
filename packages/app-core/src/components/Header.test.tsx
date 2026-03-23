@@ -74,6 +74,8 @@ describe("Header", () => {
       elizaCloudCredits: null,
       elizaCloudCreditsCritical: false,
       elizaCloudCreditsLow: false,
+      elizaCloudAuthRejected: false,
+      elizaCloudCreditsError: null,
       elizaCloudTopUpUrl: "",
       lifecycleBusy: false,
       lifecycleAction: null,
@@ -128,6 +130,8 @@ describe("Header", () => {
       elizaCloudCredits: 12.34,
       elizaCloudCreditsCritical: false,
       elizaCloudCreditsLow: false,
+      elizaCloudAuthRejected: false,
+      elizaCloudCreditsError: null,
       elizaCloudTopUpUrl: "https://example.com/topup",
       lifecycleBusy: false,
       lifecycleAction: null,
@@ -171,9 +175,9 @@ describe("Header", () => {
       ),
     ).toHaveLength(0);
     expect(
-      (testRenderer as ReactTestRenderer).root.findAll(
-        (node) => node.props.title === "header.CloudCreditsBalanc",
-      ),
+      (testRenderer as ReactTestRenderer).root.findAllByProps({
+        "data-testid": "header-cloud-status",
+      }),
     ).toHaveLength(0);
   });
 
@@ -186,6 +190,8 @@ describe("Header", () => {
       elizaCloudCredits: null,
       elizaCloudCreditsCritical: false,
       elizaCloudCreditsLow: false,
+      elizaCloudAuthRejected: false,
+      elizaCloudCreditsError: null,
       elizaCloudTopUpUrl: "",
       lifecycleBusy: false,
       lifecycleAction: null,
@@ -230,6 +236,53 @@ describe("Header", () => {
     ).toHaveLength(0);
   });
 
+  it("shows nothing when cloud is disconnected", async () => {
+    const mockUseApp = {
+      t: (k: string) => k,
+      agentStatus: { state: "running", agentName: "Eliza" },
+      elizaCloudEnabled: false,
+      elizaCloudConnected: false,
+      elizaCloudCredits: null,
+      elizaCloudCreditsCritical: false,
+      elizaCloudCreditsLow: false,
+      elizaCloudAuthRejected: false,
+      elizaCloudCreditsError: null,
+      elizaCloudTopUpUrl: "",
+      lifecycleBusy: false,
+      lifecycleAction: null,
+      handleRestart: vi.fn(),
+      handleStart: vi.fn(),
+      loadDropStatus: vi.fn().mockResolvedValue(undefined),
+      tab: "chat",
+      setTab: vi.fn(),
+      setState: vi.fn(),
+      plugins: [],
+      uiLanguage: "en",
+      setUiLanguage: vi.fn(),
+      uiTheme: "dark",
+      setUiTheme: vi.fn(),
+      uiShellMode: "native",
+      switchShellView: vi.fn(),
+    };
+
+    // @ts-expect-error - test uses a narrowed subset of the full app context type.
+    vi.spyOn(AppContext, "useApp").mockReturnValue(mockUseApp);
+
+    let testRenderer: ReactTestRenderer | null = null;
+    await act(async () => {
+      testRenderer = create(<Header />);
+    });
+    if (!testRenderer) {
+      throw new Error("Failed to render Header");
+    }
+
+    expect(
+      (testRenderer as ReactTestRenderer).root.findAllByProps({
+        "data-testid": "header-cloud-status",
+      }),
+    ).toHaveLength(0);
+  });
+
   it("routes cloud credits to settings billing instead of an external link", async () => {
     const setTab = vi.fn();
     const setState = vi.fn();
@@ -241,6 +294,8 @@ describe("Header", () => {
       elizaCloudCredits: 12.34,
       elizaCloudCreditsCritical: false,
       elizaCloudCreditsLow: false,
+      elizaCloudAuthRejected: false,
+      elizaCloudCreditsError: null,
       elizaCloudTopUpUrl: "https://example.com/topup",
       lifecycleBusy: false,
       lifecycleAction: null,
@@ -270,11 +325,9 @@ describe("Header", () => {
       throw new Error("Failed to render Header");
     }
 
-    const creditButton = (testRenderer as ReactTestRenderer).root.find(
-      (node) =>
-        node.type === "button" &&
-        node.props.title === "header.CloudCreditsBalanc",
-    );
+    const creditButton = (testRenderer as ReactTestRenderer).root.findByProps({
+      "data-testid": "header-cloud-status",
+    });
 
     await act(async () => {
       creditButton.props.onClick();
@@ -284,9 +337,7 @@ describe("Header", () => {
     expect(setTab).toHaveBeenCalledWith("settings");
   });
 
-  it("keeps cloud credits in the mobile menu instead of the small header", async () => {
-    const setTab = vi.fn();
-    const setState = vi.fn();
+  it("renders a compact balance pill in the main header", async () => {
     const mockUseApp = {
       t: (k: string) => k,
       agentStatus: { state: "running", agentName: "Eliza" },
@@ -295,6 +346,8 @@ describe("Header", () => {
       elizaCloudCredits: 12.34,
       elizaCloudCreditsCritical: false,
       elizaCloudCreditsLow: false,
+      elizaCloudAuthRejected: false,
+      elizaCloudCreditsError: null,
       elizaCloudTopUpUrl: "https://example.com/topup",
       lifecycleBusy: false,
       lifecycleAction: null,
@@ -302,8 +355,8 @@ describe("Header", () => {
       handleStart: vi.fn(),
       loadDropStatus: vi.fn().mockResolvedValue(undefined),
       tab: "chat",
-      setTab,
-      setState,
+      setTab: vi.fn(),
+      setState: vi.fn(),
       plugins: [],
       uiLanguage: "en",
       setUiLanguage: vi.fn(),
@@ -325,34 +378,100 @@ describe("Header", () => {
     }
 
     const root = (testRenderer as ReactTestRenderer).root;
-
-    const menuButton = root.findByProps({
-      "aria-label": "aria.openNavMenu",
+    const cloudStatus = root.findByProps({
+      "data-testid": "header-cloud-status",
     });
+    expect(cloudStatus.props["data-status"]).toBe("regular-credits");
+    expect(
+      cloudStatus.findAll(
+        (node) =>
+          typeof node.children?.[0] === "string" &&
+          node.children[0] === "$12.3",
+      ),
+    ).toHaveLength(1);
+  });
 
+  it("uses warning and error labels instead of connected copy", async () => {
+    const warningAppState = {
+      t: (k: string) => k,
+      agentStatus: { state: "running", agentName: "Eliza" },
+      elizaCloudEnabled: true,
+      elizaCloudConnected: true,
+      elizaCloudCredits: null,
+      elizaCloudCreditsCritical: false,
+      elizaCloudCreditsLow: false,
+      elizaCloudAuthRejected: false,
+      elizaCloudCreditsError: "Upstream timeout",
+      elizaCloudTopUpUrl: "https://example.com/topup",
+      lifecycleBusy: false,
+      lifecycleAction: null,
+      handleRestart: vi.fn(),
+      handleStart: vi.fn(),
+      loadDropStatus: vi.fn().mockResolvedValue(undefined),
+      tab: "chat",
+      setTab: vi.fn(),
+      setState: vi.fn(),
+      plugins: [],
+      uiLanguage: "en",
+      setUiLanguage: vi.fn(),
+      uiTheme: "dark",
+      setUiTheme: vi.fn(),
+      uiShellMode: "native",
+      switchShellView: vi.fn(),
+    };
+
+    // @ts-expect-error - test uses a narrowed subset of the full app context type.
+    vi.spyOn(AppContext, "useApp").mockReturnValue(warningAppState);
+
+    let warningRenderer: ReactTestRenderer | null = null;
     await act(async () => {
-      menuButton.props.onClick();
+      warningRenderer = create(<Header />);
     });
+    if (!warningRenderer) {
+      throw new Error("Failed to render Header");
+    }
 
-    const mobileCreditButton = root.findByProps({
-      "data-testid": "header-cloud-credits-mobile",
+    const warningBadge = (
+      warningRenderer as ReactTestRenderer
+    ).root.findByProps({
+      "data-testid": "header-cloud-status",
     });
-    expect(mobileCreditButton.props.title).toBe("header.CloudCreditsBalanc");
+    expect(warningBadge.props["data-status"]).toBe("warning");
     expect(
-      root.findByProps({ "data-testid": "header-language-dropdown-mobile" }),
-    ).toBeDefined();
-    expect(
-      root.findByProps({ "data-testid": "header-theme-toggle-mobile" }),
-    ).toBeDefined();
+      warningBadge.findAll(
+        (node) =>
+          typeof node.children?.[0] === "string" &&
+          node.children[0] === "logsview.Warn",
+      ),
+    ).toHaveLength(1);
 
+    const errorAppState = {
+      ...warningAppState,
+      elizaCloudCreditsError: null,
+      elizaCloudAuthRejected: true,
+    };
+
+    // @ts-expect-error - test uses a narrowed subset of the full app context type.
+    vi.spyOn(AppContext, "useApp").mockReturnValue(errorAppState);
+
+    let errorRenderer: ReactTestRenderer | null = null;
     await act(async () => {
-      mobileCreditButton.props.onClick();
+      errorRenderer = create(<Header />);
     });
+    if (!errorRenderer) {
+      throw new Error("Failed to render Header");
+    }
 
-    expect(setState).toHaveBeenCalledWith("cloudDashboardView", "billing");
-    expect(setTab).toHaveBeenCalledWith("settings");
+    const errorBadge = (errorRenderer as ReactTestRenderer).root.findByProps({
+      "data-testid": "header-cloud-status",
+    });
+    expect(errorBadge.props["data-status"]).toBe("error");
     expect(
-      root.findAll((node) => node.props["aria-label"] === "Navigation menu"),
-    ).toHaveLength(0);
+      errorBadge.findAll(
+        (node) =>
+          typeof node.children?.[0] === "string" &&
+          node.children[0] === "logsview.Error",
+      ),
+    ).toHaveLength(1);
   });
 });

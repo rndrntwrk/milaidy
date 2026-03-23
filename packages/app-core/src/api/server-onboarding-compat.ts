@@ -3,7 +3,17 @@
  * cloud-mode detection, and cloud-provisioned container detection.
  */
 import { logger, stringToUuid } from "@elizaos/core";
+import type {
+  OnboardingConnection,
+  OnboardingLocalProviderId,
+} from "@miladyai/agent/contracts/onboarding";
+import { normalizeOnboardingProviderId } from "@miladyai/agent/contracts/onboarding";
 import { loadElizaConfig, saveElizaConfig } from "../config/config";
+import {
+  applyOnboardingConnectionConfig,
+  mergeOnboardingConnectionWithExisting,
+  resolveExistingOnboardingConnection,
+} from "./provider-switch-config";
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -35,37 +45,117 @@ const ONBOARDING_PROVIDER_ENV_KEYS: Record<string, string> = {
   zai: "ZAI_API_KEY",
 };
 
-/**
- * Extract `connection.apiKey` from an onboarding request body and persist it
- * to eliza.json + process.env. Returns the env key name if persisted, or null.
- */
-export function extractAndPersistOnboardingApiKey(
+function trimToUndefined(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeOnboardingConnection(
   body: Record<string, unknown>,
-): string | null {
-  const connection = body.connection as Record<string, unknown> | undefined;
-  if (
-    !connection ||
-    typeof connection.provider !== "string" ||
-    typeof connection.apiKey !== "string" ||
-    connection.apiKey.trim().length === 0
-  ) {
+): OnboardingConnection | null {
+  const connection =
+    body.connection && typeof body.connection === "object"
+      ? (body.connection as Record<string, unknown>)
+      : null;
+  if (!connection) {
     return null;
   }
 
-  const envKey = ONBOARDING_PROVIDER_ENV_KEYS[connection.provider];
-  if (!envKey) {
+  if (connection.kind === "cloud-managed") {
+    return {
+      kind: "cloud-managed",
+      cloudProvider: "elizacloud",
+      apiKey: trimToUndefined(connection.apiKey),
+      smallModel: trimToUndefined(connection.smallModel),
+      largeModel: trimToUndefined(connection.largeModel),
+    };
+  }
+
+  if (connection.kind === "local-provider") {
+    const provider = normalizeOnboardingProviderId(connection.provider);
+    if (!provider || provider === "elizacloud") {
+      return null;
+    }
+    return {
+      kind: "local-provider",
+      provider: provider as OnboardingLocalProviderId,
+      apiKey: trimToUndefined(connection.apiKey),
+      primaryModel: trimToUndefined(connection.primaryModel),
+    };
+  }
+
+  if (connection.kind === "remote-provider") {
+    const remoteApiBase = trimToUndefined(connection.remoteApiBase);
+    const provider = normalizeOnboardingProviderId(connection.provider);
+    if (!remoteApiBase) {
+      return null;
+    }
+    return {
+      kind: "remote-provider",
+      remoteApiBase,
+      remoteAccessToken: trimToUndefined(connection.remoteAccessToken),
+      provider: provider && provider !== "elizacloud" ? provider : undefined,
+      apiKey: trimToUndefined(connection.apiKey),
+      primaryModel: trimToUndefined(connection.primaryModel),
+    };
+  }
+
+  return null;
+}
+
+function resolvePersistedOnboardingConnection(
+  body: Record<string, unknown>,
+): OnboardingConnection | null {
+  const nextConnection = normalizeOnboardingConnection(body);
+  if (!nextConnection) {
     return null;
   }
 
   const config = loadElizaConfig();
-  if (!config.env || typeof config.env !== "object") {
-    (config as Record<string, unknown>).env = {};
+  const existingConnection = resolveExistingOnboardingConnection(
+    config as Record<string, unknown>,
+  );
+  return mergeOnboardingConnectionWithExisting(
+    nextConnection,
+    existingConnection,
+  );
+}
+
+/**
+ * Extract `connection.apiKey` from an onboarding request body and persist it
+ * to eliza.json + process.env. Returns the env key name if persisted, or null.
+ */
+export async function extractAndPersistOnboardingApiKey(
+  body: Record<string, unknown>,
+): Promise<string | null> {
+  const persistedConnection = resolvePersistedOnboardingConnection(body);
+  if (!persistedConnection) {
+    return null;
   }
-  (config.env as Record<string, string>)[envKey] = connection.apiKey as string;
-  (config as Record<string, unknown>).subscriptionProvider =
-    connection.provider;
+
+  if (persistedConnection.kind === "local-provider") {
+    const envKey = ONBOARDING_PROVIDER_ENV_KEYS[persistedConnection.provider];
+    if (envKey && !persistedConnection.apiKey) {
+      return null;
+    }
+  }
+
+  const config = loadElizaConfig();
+  await applyOnboardingConnectionConfig(config, persistedConnection);
   saveElizaConfig(config);
-  process.env[envKey] = connection.apiKey as string;
+
+  if (persistedConnection.kind !== "local-provider") {
+    return null;
+  }
+
+  const envKey = ONBOARDING_PROVIDER_ENV_KEYS[persistedConnection.provider];
+  if (!envKey || !persistedConnection.apiKey) {
+    return null;
+  }
+
   logger.info(`[onboarding] Persisted ${envKey} from connection.apiKey`);
   return envKey;
 }
@@ -129,12 +219,38 @@ export function deriveCompatOnboardingReplayBody(
     | (Record<string, unknown> & { runMode: "cloud" })
     | Record<string, unknown>;
 } {
-  const connection = body.connection as Record<string, unknown> | undefined;
+  const connection = resolvePersistedOnboardingConnection(body);
   const isCloudMode =
-    body.runMode === "cloud" ||
-    (connection !== null &&
-      typeof connection === "object" &&
-      connection.kind === "cloud-managed");
+    body.runMode === "cloud" || connection?.kind === "cloud-managed";
+
+  if (connection?.kind === "cloud-managed") {
+    return {
+      isCloudMode: true,
+      replayBody: {
+        ...body,
+        runMode: "cloud",
+        cloudProvider: "elizacloud",
+        ...(connection.apiKey ? { providerApiKey: connection.apiKey } : {}),
+        ...(connection.smallModel ? { smallModel: connection.smallModel } : {}),
+        ...(connection.largeModel ? { largeModel: connection.largeModel } : {}),
+      },
+    };
+  }
+
+  if (connection?.kind === "local-provider") {
+    return {
+      isCloudMode: false,
+      replayBody: {
+        ...body,
+        runMode: "local",
+        provider: connection.provider,
+        ...(connection.apiKey ? { providerApiKey: connection.apiKey } : {}),
+        ...(connection.primaryModel
+          ? { primaryModel: connection.primaryModel }
+          : {}),
+      },
+    };
+  }
 
   return {
     isCloudMode,

@@ -159,15 +159,27 @@ export async function handleCloudRoute(
       timeoutMs: CLOUD_LOGIN_CREATE_TIMEOUT_MS,
     });
 
-    const createRes = await fetchWithTimeout(
-      `${baseUrl}/api/auth/cli-session`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId }),
-      },
-      CLOUD_LOGIN_CREATE_TIMEOUT_MS,
-    );
+    let createRes: Response;
+    try {
+      createRes = await fetchWithTimeout(
+        `${baseUrl}/api/auth/cli-session`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId }),
+        },
+        CLOUD_LOGIN_CREATE_TIMEOUT_MS,
+      );
+    } catch (err) {
+      if (isTimeoutError(err)) {
+        loginCreateSpan.failure({ error: err, statusCode: 504 });
+        sendJsonError(res, "Eliza Cloud login request timed out", 504);
+        return true;
+      }
+      loginCreateSpan.failure({ error: err, statusCode: 502 });
+      sendJsonError(res, "Failed to reach Eliza Cloud", 502);
+      return true;
+    }
 
     if (isRedirectResponse(createRes)) {
       loginCreateSpan.failure({
@@ -222,11 +234,37 @@ export async function handleCloudRoute(
       operation: "login_poll_status",
       timeoutMs: CLOUD_LOGIN_POLL_TIMEOUT_MS,
     });
-    const pollRes = await fetchWithTimeout(
-      `${baseUrl}/api/auth/cli-session/${encodeURIComponent(sessionId)}`,
-      {},
-      CLOUD_LOGIN_POLL_TIMEOUT_MS,
-    );
+    let pollRes: Response;
+    try {
+      pollRes = await fetchWithTimeout(
+        `${baseUrl}/api/auth/cli-session/${encodeURIComponent(sessionId)}`,
+        {},
+        CLOUD_LOGIN_POLL_TIMEOUT_MS,
+      );
+    } catch (err) {
+      if (isTimeoutError(err)) {
+        loginPollSpan.failure({ error: err, statusCode: 504 });
+        sendJson(
+          res,
+          {
+            status: "error",
+            error: "Eliza Cloud status request timed out",
+          },
+          504,
+        );
+        return true;
+      }
+      loginPollSpan.failure({ error: err, statusCode: 502 });
+      sendJson(
+        res,
+        {
+          status: "error",
+          error: "Failed to reach Eliza Cloud",
+        },
+        502,
+      );
+      return true;
+    }
 
     if (isRedirectResponse(pollRes)) {
       loginPollSpan.failure({
@@ -286,7 +324,10 @@ export async function handleCloudRoute(
         if (!state.runtime.character.secrets) {
           state.runtime.character.secrets = {};
         }
-        const secrets = state.runtime.character.secrets as Record<string, string>;
+        const secrets = state.runtime.character.secrets as Record<
+          string,
+          string
+        >;
         secrets.ELIZAOS_CLOUD_API_KEY = data.apiKey;
         secrets.ELIZAOS_CLOUD_ENABLED = "true";
 
@@ -435,7 +476,10 @@ export async function handleCloudRoute(
       if (!state.runtime.character.secrets) {
         state.runtime.character.secrets = {};
       }
-      const secrets = state.runtime.character.secrets as Record<string, string | number | boolean>;
+      const secrets = state.runtime.character.secrets as Record<
+        string,
+        string | number | boolean
+      >;
       delete secrets.ELIZAOS_CLOUD_API_KEY;
       delete secrets.ELIZAOS_CLOUD_ENABLED;
       await state.runtime.updateAgent(state.runtime.agentId, {

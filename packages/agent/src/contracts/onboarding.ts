@@ -4,7 +4,20 @@
 
 import type { WalletConfigUpdateRequest } from "./wallet";
 
+export const CHARACTER_LANGUAGES = [
+  "en",
+  "zh-CN",
+  "ko",
+  "es",
+  "pt",
+  "vi",
+  "tl",
+] as const;
+
+export type CharacterLanguage = (typeof CHARACTER_LANGUAGES)[number];
+
 export interface StylePreset {
+  id: string;
   name: string;
   avatarIndex: number;
   voicePresetId: string;
@@ -436,6 +449,9 @@ export interface OnboardingOptions {
 
 export interface OnboardingData {
   name: string;
+  avatarIndex?: number;
+  language?: CharacterLanguage;
+  presetId?: string;
   sandboxMode?: "off" | "light" | "standard" | "max";
   bio: string[];
   systemPrompt: string;

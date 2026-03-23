@@ -49,7 +49,7 @@ vi.mock("@miladyai/app-core/state", () => ({
 import {
   AppsView,
   shouldShowAppInAppsView,
-} from "@miladyai/app-core/components/AppsView";
+} from "../../src/components/AppsView";
 
 function createApp(
   name: string,

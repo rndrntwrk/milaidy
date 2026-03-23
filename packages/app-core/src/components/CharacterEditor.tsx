@@ -6,7 +6,7 @@
  */
 
 import type { StylePreset } from "@miladyai/shared/contracts/onboarding";
-import { STYLE_PRESETS } from "@miladyai/shared/onboarding-presets";
+import { getStylePresets } from "@miladyai/shared/onboarding-presets";
 import { Button, Input, Textarea, ThemedSelect } from "@miladyai/ui";
 import { client } from "../api/client";
 import {
@@ -19,6 +19,7 @@ import { useApp } from "../state/useApp";
 import { normalizeCharacterMessageExamples } from "../utils/character-message-examples";
 import {
   EDGE_BACKUP_VOICES,
+  hasConfiguredApiKey,
   PREMADE_VOICES,
   sanitizeApiKey,
 } from "../voice/types";
@@ -215,6 +216,7 @@ export function CharacterEditor({
     selectedVrmIndex,
     customVrmUrl: _customVrmUrl,
     t,
+    uiLanguage,
     registryStatus: _registryStatus,
     registryLoading: _registryLoading,
     registryRegistering: _registryRegistering,
@@ -326,7 +328,7 @@ export function CharacterEditor({
   );
 
   const voice = useVoiceChat({
-    cloudConnected: elizaCloudConnected,
+    cloudConnected: useElevenLabs,
     interruptOnSpeech: false,
     lang: "en-US",
     // biome-ignore lint/suspicious/noExplicitAny: complex type
@@ -357,13 +359,18 @@ export function CharacterEditor({
   // Use static STYLE_PRESETS shipped in the frontend bundle — no API call
   // needed. If the server provides styles via onboardingOptions, prefer those.
   useEffect(() => {
+    const localizedPresets = getStylePresets(uiLanguage);
     if (onboardingPresetStyles.length) {
       const merged = onboardingPresetStyles.map((serverPreset) => {
-        const localMeta = STYLE_PRESETS.find(
-          (p) => p.catchphrase === serverPreset.catchphrase,
+        const localMeta = localizedPresets.find(
+          (p) =>
+            p.id === serverPreset.id ||
+            p.name === serverPreset.name ||
+            p.avatarIndex === serverPreset.avatarIndex,
         );
         return {
           ...serverPreset,
+          id: localMeta?.id ?? serverPreset.id,
           name:
             localMeta?.name ??
             ("name" in serverPreset
@@ -376,9 +383,9 @@ export function CharacterEditor({
       });
       setRosterStyles(merged);
     } else {
-      setRosterStyles([...STYLE_PRESETS]);
+      setRosterStyles(localizedPresets);
     }
-  }, [onboardingPresetStyles]);
+  }, [onboardingPresetStyles, uiLanguage]);
 
   const characterRoster = useMemo(
     () => resolveRosterEntries(rosterStyles),
@@ -807,6 +814,15 @@ export function CharacterEditor({
         edge: voiceConfig.edge ?? {},
       };
     } else {
+      const hasElevenLabsApiKey = hasConfiguredApiKey(
+        (voiceConfig.elevenlabs as Record<string, string> | undefined)?.apiKey,
+      );
+      const defaultVoiceMode =
+        typeof voiceConfig.mode === "string"
+          ? voiceConfig.mode
+          : useElevenLabs && !hasElevenLabsApiKey
+            ? "cloud"
+            : "own-key";
       const normalized: Record<string, string> = {
         ...(voiceConfig.elevenlabs as Record<string, string> | undefined),
         modelId:
@@ -819,6 +835,7 @@ export function CharacterEditor({
       normalizedVoiceConfig = {
         ...voiceConfig,
         provider: "elevenlabs",
+        mode: defaultVoiceMode,
         elevenlabs: normalized,
       };
     }

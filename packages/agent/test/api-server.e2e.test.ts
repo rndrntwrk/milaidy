@@ -703,6 +703,28 @@ function createRuntimeForCreditErrorTests(): AgentRuntime {
   return runtimeSubset as unknown as AgentRuntime;
 }
 
+function createRuntimeForProviderErrorTests(): AgentRuntime {
+  const runtimeSubset = {
+    agentId: "provider-error-agent",
+    character: { name: "ProviderErrorAgent" } as AgentRuntime["character"],
+    messageService: {
+      handleMessage: async () => {
+        throw new Error("provider unavailable");
+      },
+    } as AgentRuntime["messageService"],
+    ensureConnection: async () => {},
+    getWorld: async () => null,
+    updateWorld: async () => {},
+    getService: () => null,
+    getRoomsByWorld: async () => [],
+    getMemories: async () => [],
+    getCache: async () => null,
+    setCache: async () => {},
+  };
+
+  return runtimeSubset as unknown as AgentRuntime;
+}
+
 // ---------------------------------------------------------------------------
 // Test isolation — redirect all state to a temp directory so tests never
 // touch the real ~/.eliza config, database, or plugins.
@@ -2269,8 +2291,8 @@ describe("API Server E2E (no runtime)", () => {
 
   });
 
-  describe("insufficient credits fallback", () => {
-    it("POST /api/chat replaces '(no response)' with a top-up message", async () => {
+  describe("provider issue fallback", () => {
+    it("POST /api/chat replaces '(no response)' with the provider issue message", async () => {
       const runtime = createRuntimeForCreditNoResponseTests();
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
@@ -2284,14 +2306,14 @@ describe("API Server E2E (no runtime)", () => {
           },
         );
         expect(status).toBe(200);
-        expect(String(data.text)).toMatch(/top up your credits/i);
+        expect(String(data.text)).toBe("Sorry, I'm having a provider issue");
         expect(String(data.text)).not.toBe("(no response)");
       } finally {
         await streamServer.close();
       }
     });
 
-    it("POST /api/chat/stream emits a done event with top-up text", async () => {
+    it("POST /api/chat/stream emits a done event with the provider issue message", async () => {
       const runtime = createRuntimeForCreditNoResponseTests();
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
@@ -2303,15 +2325,35 @@ describe("API Server E2E (no runtime)", () => {
         expect(status).toBe(200);
         const doneEvent = events.find((event) => event.type === "done");
         expect(doneEvent).toBeDefined();
-        expect(String(doneEvent?.fullText ?? "")).toMatch(
-          /top up your credits/i,
+        expect(String(doneEvent?.fullText ?? "")).toBe(
+          "Sorry, I'm having a provider issue",
         );
       } finally {
         await streamServer.close();
       }
     });
 
-    it("POST /api/chat returns a top-up message when the provider throws insufficient credits", async () => {
+    it("POST /api/chat returns the provider issue message when generation throws", async () => {
+      const runtime = createRuntimeForProviderErrorTests();
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, data } = await req(
+          streamServer.port,
+          "POST",
+          "/api/chat",
+          {
+            text: "hello",
+            mode: "power",
+          },
+        );
+        expect(status).toBe(200);
+        expect(String(data.text)).toBe("Sorry, I'm having a provider issue");
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/chat returns the provider issue message when the provider throws insufficient credits", async () => {
       const runtime = createRuntimeForCreditErrorTests();
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
@@ -2325,13 +2367,13 @@ describe("API Server E2E (no runtime)", () => {
           },
         );
         expect(status).toBe(200);
-        expect(String(data.text)).toMatch(/top up your credits/i);
+        expect(String(data.text)).toBe("Sorry, I'm having a provider issue");
       } finally {
         await streamServer.close();
       }
     });
 
-    it("POST /api/chat replaces literal '(no response)' payloads with a top-up message", async () => {
+    it("POST /api/chat replaces literal '(no response)' payloads with the provider issue message", async () => {
       const runtime = createRuntimeForCreditLiteralNoResponseTests();
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
@@ -2345,8 +2387,72 @@ describe("API Server E2E (no runtime)", () => {
           },
         );
         expect(status).toBe(200);
-        expect(String(data.text)).toMatch(/top up your credits/i);
+        expect(String(data.text)).toBe("Sorry, I'm having a provider issue");
         expect(String(data.text)).not.toBe("(no response)");
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/conversations/:id/messages returns the provider issue message when generation throws", async () => {
+      const runtime = createRuntimeForChatSseTests({
+        handleMessage: async () => {
+          throw new Error("provider unavailable");
+        },
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const create = await req(streamServer.port, "POST", "/api/conversations", {
+          title: "Provider issue conversation",
+        });
+        expect(create.status).toBe(200);
+        const conversation = create.data.conversation as { id?: string };
+        const conversationId = conversation.id ?? "";
+        expect(conversationId.length).toBeGreaterThan(0);
+
+        const { status, data } = await req(
+          streamServer.port,
+          "POST",
+          `/api/conversations/${conversationId}/messages`,
+          {
+            text: "hello",
+            mode: "power",
+          },
+        );
+        expect(status).toBe(200);
+        expect(String(data.text)).toBe("Sorry, I'm having a provider issue");
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/conversations/:id/messages/stream emits a done event with the provider issue message when generation throws", async () => {
+      const runtime = createRuntimeForChatSseTests({
+        handleMessage: async () => {
+          throw new Error("provider unavailable");
+        },
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const create = await req(streamServer.port, "POST", "/api/conversations", {
+          title: "Provider issue stream conversation",
+        });
+        expect(create.status).toBe(200);
+        const conversation = create.data.conversation as { id?: string };
+        const conversationId = conversation.id ?? "";
+        expect(conversationId.length).toBeGreaterThan(0);
+
+        const { status, events } = await reqSse(
+          streamServer.port,
+          `/api/conversations/${conversationId}/messages/stream`,
+          {
+            text: "hello",
+            mode: "power",
+          },
+        );
+        expect(status).toBe(200);
+        const doneEvent = events.find((event) => event.type === "done");
+        expect(doneEvent?.fullText).toBe("Sorry, I'm having a provider issue");
       } finally {
         await streamServer.close();
       }

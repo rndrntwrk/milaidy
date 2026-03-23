@@ -211,6 +211,8 @@ export interface ChatStateHook {
 
   // Refs (for synchronous access in callbacks)
   activeConversationIdRef: React.RefObject<string | null>;
+  chatInputRef: React.RefObject<string>;
+  chatPendingImagesRef: React.RefObject<ImageAttachment[]>;
   conversationMessagesRef: React.RefObject<ConversationMessage[]>;
   conversationsRef: React.RefObject<Conversation[]>;
   conversationHydrationEpochRef: React.MutableRefObject<number>;
@@ -239,6 +241,8 @@ export function useChatState(): ChatStateHook {
 
   // ── Refs for synchronous access ──
   const activeConversationIdRef = useRef<string | null>(null);
+  const chatInputRef = useRef("");
+  const chatPendingImagesRef = useRef<ImageAttachment[]>([]);
   const conversationMessagesRef = useRef<ConversationMessage[]>([]);
   const conversationsRef = useRef<Conversation[]>([]);
   const conversationHydrationEpochRef = useRef(0);
@@ -264,10 +268,10 @@ export function useChatState(): ChatStateHook {
 
   // ── Persistence-aware setters ──
 
-  const setChatInput = useCallback(
-    (v: string) => dispatch({ type: "SET_CHAT_INPUT", value: v }),
-    [],
-  );
+  const setChatInput = useCallback((v: string) => {
+    chatInputRef.current = v;
+    dispatch({ type: "SET_CHAT_INPUT", value: v });
+  }, []);
   const setChatSending = useCallback(
     (v: boolean) => dispatch({ type: "SET_CHAT_SENDING", value: v }),
     [],
@@ -381,12 +385,10 @@ export function useChatState(): ChatStateHook {
     (
       v: ImageAttachment[] | ((prev: ImageAttachment[]) => ImageAttachment[]),
     ) => {
-      if (typeof v === "function") {
-        // We need to read current state; use dispatch with a function-based update
-        dispatch({ type: "SET_FIELD", field: "chatPendingImages", value: v });
-      } else {
-        dispatch({ type: "SET_PENDING_IMAGES", value: v });
-      }
+      const next =
+        typeof v === "function" ? v(chatPendingImagesRef.current) : v;
+      chatPendingImagesRef.current = next;
+      dispatch({ type: "SET_PENDING_IMAGES", value: next });
     },
     [],
   ) as React.Dispatch<React.SetStateAction<ImageAttachment[]>>;
@@ -395,6 +397,8 @@ export function useChatState(): ChatStateHook {
     conversationHydrationEpochRef.current += 1;
     greetingFiredRef.current = false;
     greetingInFlightConversationRef.current = null;
+    chatInputRef.current = "";
+    chatPendingImagesRef.current = [];
     conversationMessagesRef.current = [];
     activeConversationIdRef.current = null;
     dispatch({ type: "RESET_DRAFT" });
@@ -424,6 +428,8 @@ export function useChatState(): ChatStateHook {
     setChatPendingImages,
     resetDraftState,
     activeConversationIdRef,
+    chatInputRef,
+    chatPendingImagesRef,
     conversationMessagesRef,
     conversationsRef,
     conversationHydrationEpochRef,

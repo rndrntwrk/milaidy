@@ -116,6 +116,10 @@ function error(res: ServerResponse, message: string, status: number): void {
   sendJsonError(res, message, status);
 }
 
+function formatErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 function resolveRouteTtsConfig(
   config: unknown,
 ): Record<string, unknown> | null {
@@ -610,7 +614,7 @@ export async function handleStreamRoute(
         destination: dest.id,
       });
     } catch (err) {
-      error(res, String(err), 500);
+      error(res, formatErrorMessage(err), 500);
     }
     return true;
   }
@@ -639,11 +643,7 @@ export async function handleStreamRoute(
       }
       json(res, { ok: true, live: false });
     } catch (err) {
-      error(
-        res,
-        String(err),
-        500,
-      );
+      error(res, String(err), 500);
     }
     return true;
   }
@@ -712,11 +712,7 @@ export async function handleStreamRoute(
 
       json(res, { ok: true, message: "Stream started" });
     } catch (err) {
-      error(
-        res,
-        String(err),
-        500,
-      );
+      error(res, String(err), 500);
     }
     return true;
   }
@@ -727,11 +723,7 @@ export async function handleStreamRoute(
       const result = await state.streamManager.stop();
       json(res, { ok: true, ...result });
     } catch (err) {
-      error(
-        res,
-        String(err),
-        500,
-      );
+      error(res, formatErrorMessage(err), 500);
     }
     return true;
   }
@@ -769,11 +761,7 @@ export async function handleStreamRoute(
         muted: state.streamManager.isMuted(),
       });
     } catch (err) {
-      error(
-        res,
-        String(err),
-        500,
-      );
+      error(res, String(err), 500);
     }
     return true;
   }
@@ -788,7 +776,7 @@ export async function handleStreamRoute(
         volume: state.streamManager.getVolume(),
       });
     } catch (err) {
-      error(res, String(err), 500);
+      error(res, formatErrorMessage(err), 500);
     }
     return true;
   }
@@ -803,7 +791,7 @@ export async function handleStreamRoute(
         volume: state.streamManager.getVolume(),
       });
     } catch (err) {
-      error(res, String(err), 500);
+      error(res, formatErrorMessage(err), 500);
     }
     return true;
   }
@@ -842,11 +830,7 @@ export async function handleStreamRoute(
         error(res, `Unknown destination: ${destinationId}`, 404);
       }
     } catch (err) {
-      error(
-        res,
-        String(err),
-        500,
-      );
+      error(res, formatErrorMessage(err), 500);
     }
     return true;
   }
@@ -859,11 +843,7 @@ export async function handleStreamRoute(
       const layout = readOverlayLayout(destId, getActiveDestination(state));
       json(res, { ok: true, layout, destinationId: destId ?? null });
     } catch (err) {
-      error(
-        res,
-        String(err),
-        500,
-      );
+      error(res, String(err), 500);
     }
     return true;
   }
@@ -887,11 +867,7 @@ export async function handleStreamRoute(
       writeOverlayLayout(layout, destId);
       json(res, { ok: true, layout, destinationId: destId ?? null });
     } catch (err) {
-      error(
-        res,
-        String(err),
-        500,
-      );
+      error(res, String(err), 500);
     }
     return true;
   }
@@ -902,11 +878,7 @@ export async function handleStreamRoute(
       const settings = readStreamSettings();
       json(res, { ok: true, settings });
     } catch (err) {
-      error(
-        res,
-        String(err),
-        500,
-      );
+      error(res, String(err), 500);
     }
     return true;
   }
@@ -928,11 +900,7 @@ export async function handleStreamRoute(
       writeStreamSettings(merged);
       json(res, { ok: true, settings: merged });
     } catch (err) {
-      error(
-        res,
-        String(err),
-        500,
-      );
+      error(res, String(err), 500);
     }
     return true;
   }
@@ -1012,11 +980,7 @@ export async function handleStreamRoute(
 
       json(res, { ok: true, source: state.activeStreamSource });
     } catch (err) {
-      error(
-        res,
-        String(err),
-        500,
-      );
+      error(res, String(err), 500);
     }
     return true;
   }

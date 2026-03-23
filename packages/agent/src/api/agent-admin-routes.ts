@@ -1,4 +1,5 @@
 import type { AgentRuntime, UUID } from "@elizaos/core";
+import { getDefaultStylePreset, normalizeCharacterLanguage } from "../onboarding-presets.js";
 import { detectRuntimeModel } from "./agent-model";
 import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
 
@@ -13,6 +14,11 @@ type AgentStateStatus =
 
 interface AutonomousConfigLike {
   [key: string]: unknown;
+}
+
+function resolveDefaultAgentName(config: AutonomousConfigLike): string {
+  const ui = config.ui as { language?: unknown } | undefined;
+  return getDefaultStylePreset(normalizeCharacterLanguage(ui?.language)).name;
 }
 
 export interface AgentAdminRouteState {
@@ -89,7 +95,8 @@ export async function handleAgentAdminRoutes(
         state.chatConnectionReady = null;
         state.chatConnectionPromise = null;
         state.agentState = "running";
-        state.agentName = newRuntime.character.name ?? "Eliza";
+        state.agentName =
+          newRuntime.character.name ?? resolveDefaultAgentName(state.config);
         state.model = detectRuntimeModel(newRuntime);
         state.startedAt = Date.now();
         state.pendingRestartReasons = [];
@@ -148,7 +155,7 @@ export async function handleAgentAdminRoutes(
       }
 
       state.agentState = "stopped";
-      state.agentName = "Eliza";
+      state.agentName = getDefaultStylePreset().name;
       state.model = undefined;
       state.startedAt = undefined;
       state.config = {};

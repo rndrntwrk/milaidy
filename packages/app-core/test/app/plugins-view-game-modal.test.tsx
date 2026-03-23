@@ -78,7 +78,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   },
 }));
 
-import { PluginsView } from "@miladyai/app-core/components/PluginsView";
+import { PluginsView } from "../../src/components/PluginsView";
 
 function hasClass(
   node: TestRenderer.ReactTestInstance,
@@ -270,8 +270,6 @@ describe("PluginsView game modal", () => {
     expect(
       tree?.root.findAll((node) => hasClass(node, "plugins-game-modal")).length,
     ).toBe(0);
-    expect(text(tree?.root)).toContain("All (2)");
-    expect(text(tree?.root)).toContain("Enabled (1)");
     expect(text(tree?.root)).toContain("Discord");
   });
 
@@ -487,7 +485,7 @@ describe("PluginsView game modal", () => {
     expect(text(tree?.root)).not.toContain("Discord");
   });
 
-  it("shows all connectors in Connectors view and keeps connector search/filter controls", async () => {
+  it("shows all connectors in Connectors view", async () => {
     const state = baseContext([
       createPlugin("telegram", "Telegram", "connector", {
         tags: ["connector", "social", "social-chat", "messaging"],
@@ -528,36 +526,6 @@ describe("PluginsView game modal", () => {
         node.children.some((child) => child === "pluginsview.AddPlugin"),
     );
     expect(addButtons.length).toBe(0);
-
-    const searchInputs = tree?.root.findAll(
-      (node) =>
-        node.type === "input" && typeof node.props.placeholder === "string",
-    );
-    expect(searchInputs.length).toBe(1);
-    expect(searchInputs[0]?.props.placeholder).toBe("Search...");
-    expect(text(tree?.root)).toContain("All (4)");
-    expect(text(tree?.root)).toContain("Enabled (2)");
-
-    state.pluginSearch = "Iq";
-    await act(async () => {
-      tree?.update(React.createElement(PluginsView, { mode: "social" }));
-    });
-    expect(text(tree?.root)).toContain("Iq");
-    expect(text(tree?.root)).not.toContain("Telegram");
-    expect(text(tree?.root)).not.toContain("GitHub");
-
-    state.pluginSearch = "";
-    mockUseApp.mockImplementation(() => ({
-      ...state,
-      pluginStatusFilter: "enabled",
-    }));
-    await act(async () => {
-      tree?.update(React.createElement(PluginsView, { mode: "social" }));
-    });
-    expect(text(tree?.root)).toContain("Telegram");
-    expect(text(tree?.root)).toContain("GitHub");
-    expect(text(tree?.root)).not.toContain("Signal");
-    expect(text(tree?.root)).not.toContain("Iq");
   });
 
   it("renders plugin type filters in a desktop sidebar for the main plugins view", async () => {

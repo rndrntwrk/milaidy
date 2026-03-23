@@ -47,6 +47,33 @@ function createContext(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function createCompanionRootMock() {
+  const listeners = new Map<string, EventListener>();
+  const node = {
+    addEventListener: vi.fn(
+      (type: string, listener: EventListenerOrEventListenerObject) => {
+        if (typeof listener === "function") {
+          listeners.set(type, listener);
+        }
+      },
+    ),
+    removeEventListener: vi.fn(
+      (type: string, listener: EventListenerOrEventListenerObject) => {
+        if (listeners.get(type) === listener) {
+          listeners.delete(type);
+        }
+      },
+    ),
+  };
+
+  return {
+    node,
+    getListener(type: string) {
+      return listeners.get(type) as ((event: Event) => void) | undefined;
+    },
+  };
+}
+
 describe("CompanionSceneHost scroll guard", () => {
   const originalFetch = globalThis.fetch;
   const originalLocalStorage = globalThis.localStorage;
@@ -99,26 +126,31 @@ describe("CompanionSceneHost scroll guard", () => {
     });
   });
 
-  function renderSceneHost(): ReactTestRenderer {
+  function renderSceneHost(
+    rootMock: ReturnType<typeof createCompanionRootMock>,
+  ): ReactTestRenderer {
     return TestRenderer.create(
       React.createElement(
         CompanionSceneHost,
         { active: true },
         React.createElement("div", { "data-testid": "chat-overlay" }),
       ),
+      {
+        createNodeMock: (element) =>
+          element.props?.["data-testid"] === "companion-root"
+            ? rootMock.node
+            : null,
+      },
     );
   }
 
   it("ignores wheel zoom from scrollable transcript targets", async () => {
-    let tree: ReactTestRenderer;
+    const rootMock = createCompanionRootMock();
     await act(async () => {
-      tree = renderSceneHost();
+      renderSceneHost(rootMock);
     });
 
-    const root = tree?.root.findByProps({ "data-testid": "companion-root" });
-    const onWheelCapture = root.props.onWheelCapture as (
-      event: React.WheelEvent<HTMLDivElement>,
-    ) => void;
+    const wheelListener = rootMock.getListener("wheel");
 
     const scrollRegion = document.createElement("div");
     scrollRegion.setAttribute("data-no-camera-zoom", "true");
@@ -126,39 +158,34 @@ describe("CompanionSceneHost scroll guard", () => {
     scrollRegion.appendChild(nestedTarget);
     const preventDefault = vi.fn();
 
-    onWheelCapture({
+    wheelListener?.({
       ctrlKey: false,
-      currentTarget: { clientHeight: 900, clientWidth: 1440 },
       deltaMode: 0,
       deltaY: 120,
       preventDefault,
       target: nestedTarget,
-    } as React.WheelEvent<HTMLDivElement>);
+    } as WheelEvent);
 
     expect(globalThis.localStorage.setItem).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
   it("persists zoom when wheel input comes from the scene surface", async () => {
-    let tree: ReactTestRenderer;
+    const rootMock = createCompanionRootMock();
     await act(async () => {
-      tree = renderSceneHost();
+      renderSceneHost(rootMock);
     });
 
-    const root = tree?.root.findByProps({ "data-testid": "companion-root" });
-    const onWheelCapture = root.props.onWheelCapture as (
-      event: React.WheelEvent<HTMLDivElement>,
-    ) => void;
+    const wheelListener = rootMock.getListener("wheel");
     const preventDefault = vi.fn();
 
-    onWheelCapture({
+    wheelListener?.({
       ctrlKey: false,
-      currentTarget: { clientHeight: 900, clientWidth: 1440 },
       deltaMode: 0,
       deltaY: 120,
       preventDefault,
       target: document.createElement("div"),
-    } as React.WheelEvent<HTMLDivElement>);
+    } as WheelEvent);
 
     expect(globalThis.localStorage.setItem).toHaveBeenCalledWith(
       COMPANION_ZOOM_STORAGE_KEY,

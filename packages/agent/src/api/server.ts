@@ -169,7 +169,6 @@ import {
 import { ConnectorHealthMonitor } from "./connector-health.js";
 import { wireCoordinatorBridgesWhenReady } from "./coordinator-wiring.js";
 import {
-  isInsufficientCreditsError,
   isInsufficientCreditsMessage,
 } from "./credit-detection.js";
 import { handleDatabaseRoute } from "./database.js";
@@ -421,18 +420,9 @@ function hasPersistedOnboardingState(config: ElizaConfig): boolean {
 
 function resolveConversationGreetingText(
   runtime: AgentRuntime,
-  lang: string,
+  _lang: string,
 ): string {
-  const localizedExamples =
-    lang === "zh-CN"
-      ? ((runtime.character as Record<string, unknown>).postExamples_zhCN as
-          | string[]
-          | undefined)
-      : undefined;
-  const postExamples =
-    localizedExamples && localizedExamples.length > 0
-      ? localizedExamples
-      : (runtime.character.postExamples ?? []);
+  const postExamples = runtime.character.postExamples ?? [];
   return postExamples[Math.floor(Math.random() * postExamples.length)] ?? "";
 }
 
@@ -2846,16 +2836,8 @@ interface ChatGenerateOptions {
   resolveNoResponseText?: () => string;
 }
 
-const INSUFFICIENT_CREDITS_CHAT_REPLIES = [
-  "Sorry, we're out of credits right now. Please top up your credits and try again.",
-  "No model credits left in the tank. Time to top up your credits.",
-  "I can't answer on zero credits. Top up your credits and ping me again.",
-  "Credit meter is empty. Please top up your credits so I can keep going.",
-  "Out of credits, boss. Top up your credits and I am back online.",
-] as const;
-
-const GENERIC_NO_RESPONSE_CHAT_REPLY =
-  "Sorry, I couldn't generate a response right now. Please try again.";
+const PROVIDER_ISSUE_CHAT_REPLY = "Sorry, I'm having a provider issue";
+const GENERIC_NO_RESPONSE_CHAT_REPLY = PROVIDER_ISSUE_CHAT_REPLY;
 
 function getErrorMessage(err: unknown, fallback = "generation failed"): string {
   if (err instanceof Error) return err.message;
@@ -2864,10 +2846,7 @@ function getErrorMessage(err: unknown, fallback = "generation failed"): string {
 }
 
 function pickInsufficientCreditsChatReply(): string {
-  const idx = Math.floor(
-    Math.random() * INSUFFICIENT_CREDITS_CHAT_REPLIES.length,
-  );
-  return INSUFFICIENT_CREDITS_CHAT_REPLIES[idx];
+  return PROVIDER_ISSUE_CHAT_REPLY;
 }
 
 function findRecentInsufficientCreditsLog(
@@ -2896,10 +2875,8 @@ function resolveNoResponseFallback(
   return GENERIC_NO_RESPONSE_CHAT_REPLY;
 }
 
-function getInsufficientCreditsReplyFromError(err: unknown): string | null {
-  return isInsufficientCreditsError(err)
-    ? pickInsufficientCreditsChatReply()
-    : null;
+function getProviderIssueChatReply(): string {
+  return PROVIDER_ISSUE_CHAT_REPLY;
 }
 
 const STAGE_DIRECTION_FIRST_WORDS = new Set([
@@ -4268,9 +4245,47 @@ export async function resolveMcpServersRejection(
 // ---------------------------------------------------------------------------
 
 // Use shared presets for full parity between CLI and GUI onboarding.
-import { getStylePresets } from "../onboarding-presets.js";
+import {
+  getDefaultStylePreset,
+  getStylePresets,
+  normalizeCharacterLanguage,
+} from "../onboarding-presets.js";
 
 import { pickRandomNames } from "../runtime/onboarding-names.js";
+
+function readUiLanguageHeader(
+  req: http.IncomingMessage | undefined,
+): string | undefined {
+  if (!req) {
+    return undefined;
+  }
+  const header =
+    req.headers["x-milady-ui-language"] ?? req.headers["x-eliza-ui-language"];
+  if (Array.isArray(header)) {
+    return header.find((value) => value.trim())?.trim();
+  }
+  return typeof header === "string" && header.trim() ? header.trim() : undefined;
+}
+
+function resolveConfiguredCharacterLanguage(
+  config?: ElizaConfig,
+  req?: http.IncomingMessage,
+) {
+  const uiLanguage =
+    readUiLanguageHeader(req) ??
+    ((config?.ui as { language?: unknown } | undefined)?.language as
+      | string
+      | undefined);
+  return normalizeCharacterLanguage(uiLanguage);
+}
+
+function resolveDefaultAgentName(
+  config?: ElizaConfig,
+  req?: http.IncomingMessage,
+): string {
+  return getDefaultStylePreset(resolveConfiguredCharacterLanguage(config, req))
+    .name;
+}
 
 function getProviderOptions(): Array<{
   id: string;
@@ -6586,9 +6601,25 @@ function getCoordinatorFromRuntime(runtime: AgentRuntime): {
   ) => void;
 } | null {
   const coordinator = runtime.getService("SWARM_COORDINATOR");
-  if (coordinator)
+  if (coordinator) {
     return coordinator as ReturnType<typeof getCoordinatorFromRuntime>;
+  }
+  const ptyService = runtime.getService("PTY_SERVICE") as
+    | (PTYService & { coordinator?: unknown })
+    | null;
+  if (ptyService?.coordinator) {
+    return ptyService.coordinator as ReturnType<
+      typeof getCoordinatorFromRuntime
+    >;
+  }
   return null;
+}
+
+function wireCodingAgentBridgesNow(st: ServerState): void {
+  wireCodingAgentChatBridge(st);
+  wireCodingAgentWsBridge(st);
+  wireCoordinatorEventRouting(st);
+  wireCodingAgentSwarmSynthesis(st);
 }
 
 /**
@@ -8131,7 +8162,7 @@ async function handleRequest(
 
     json(res, {
       names: pickRandomNames(5),
-      styles: getStylePresets(),
+      styles: getStylePresets(resolveConfiguredCharacterLanguage(state.config, req)),
       providers: getProviderOptions(),
       cloudProviders: getCloudProviderOptions(),
       models: getModelOptions(),
@@ -8161,6 +8192,9 @@ async function handleRequest(
     }
 
     const config = state.config;
+    const configuredLanguage = normalizeCharacterLanguage(
+      body.language ?? readUiLanguageHeader(req) ?? config.ui?.language,
+    );
 
     if (!config.agents) config.agents = {};
     if (!config.agents.defaults) config.agents.defaults = {};
@@ -8181,6 +8215,11 @@ async function handleRequest(
     const agent = config.agents.list[0];
     agent.name = (body.name as string).trim();
     agent.workspace = resolveDefaultAgentWorkspaceDir();
+    let normalizedMessageExamples:
+      | Array<{
+          examples: { name: string; content: { text: string } }[];
+        }>
+      | undefined;
     if (body.bio) agent.bio = body.bio as string[];
     if (body.systemPrompt) agent.system = body.systemPrompt as string;
     if (body.style)
@@ -8197,7 +8236,7 @@ async function handleRequest(
     if (body.messageExamples) {
       // Normalise to the {examples: [{name, content}]} format that @elizaos/core expects.
       const raw = body.messageExamples as unknown[];
-      agent.messageExamples = raw.map((item) => {
+      normalizedMessageExamples = raw.map((item) => {
         if (
           item &&
           typeof item === "object" &&
@@ -8219,7 +8258,24 @@ async function handleRequest(
             content: m.content,
           })),
         };
-      }) as unknown as typeof agent.messageExamples;
+      });
+      agent.messageExamples =
+        normalizedMessageExamples as unknown as typeof agent.messageExamples;
+    }
+
+    if (!config.ui) {
+      config.ui = {};
+    }
+    config.ui.assistant = {
+      ...(config.ui.assistant ?? {}),
+      name: agent.name,
+    };
+    if (typeof body.avatarIndex === "number" && Number.isFinite(body.avatarIndex)) {
+      config.ui.avatarIndex = Number(body.avatarIndex);
+    }
+    config.ui.language = configuredLanguage;
+    if (typeof body.presetId === "string" && body.presetId.trim()) {
+      config.ui.presetId = body.presetId.trim();
     }
 
     // ── Theme preference ──────────────────────────────────────────────────
@@ -8491,6 +8547,62 @@ async function handleRequest(
       config.meta = {};
     }
     config.meta.onboardingComplete = true;
+
+    if (state.runtime) {
+      const runtimeCharacter = state.runtime.character;
+      const agentTopics = (agent as { topics?: string[] }).topics;
+      runtimeCharacter.name = agent.name ?? runtimeCharacter.name;
+      if (Array.isArray(agent.bio)) {
+        runtimeCharacter.bio = [...agent.bio];
+      }
+      if (typeof agent.system === "string" && agent.system) {
+        runtimeCharacter.system = agent.system;
+      }
+      if (Array.isArray(agent.adjectives)) {
+        runtimeCharacter.adjectives = [...agent.adjectives];
+      }
+      if (Array.isArray(agentTopics)) {
+        (runtimeCharacter as { topics?: string[] }).topics = [...agentTopics];
+      }
+      if (agent.style) {
+        runtimeCharacter.style = JSON.parse(
+          JSON.stringify(agent.style),
+        ) as NonNullable<typeof runtimeCharacter.style>;
+      }
+      if (normalizedMessageExamples) {
+        runtimeCharacter.messageExamples = normalizedMessageExamples as NonNullable<
+          typeof runtimeCharacter.messageExamples
+        >;
+      }
+      if (Array.isArray(agent.postExamples)) {
+        runtimeCharacter.postExamples = [...agent.postExamples];
+      }
+
+      try {
+        await state.runtime.updateAgent(state.runtime.agentId, {
+          name: runtimeCharacter.name,
+          metadata: {
+            ...(
+              runtimeCharacter as { metadata?: Record<string, unknown> }
+            ).metadata,
+            character: {
+              name: runtimeCharacter.name,
+              bio: runtimeCharacter.bio,
+              system: runtimeCharacter.system,
+              adjectives: runtimeCharacter.adjectives,
+              topics: (runtimeCharacter as { topics?: string[] }).topics,
+              style: runtimeCharacter.style,
+              messageExamples: runtimeCharacter.messageExamples,
+              postExamples: runtimeCharacter.postExamples,
+            },
+          },
+        });
+      } catch (err) {
+        logger.warn(
+          `[character-db] Failed to persist onboarding character to DB: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
 
     state.config = config;
     state.agentName = (body.name as string) ?? state.agentName;
@@ -14205,33 +14317,26 @@ async function handleRequest(
         // Fire-and-forget background title generation has been removed in favor
         // of explicit frontend triggers via the PATCH endpoint with `generate: true`
       }
-    } catch (err) {
+    } catch {
       if (!aborted) {
-        const creditReply = getInsufficientCreditsReplyFromError(err);
-        if (creditReply) {
-          try {
-            await persistAssistantConversationMemory(
-              runtime,
-              conv.roomId,
-              creditReply,
-              channelType,
-            );
-            conv.updatedAt = new Date().toISOString();
-            writeSse(res, {
-              type: "done",
-              fullText: creditReply,
-              agentName: state.agentName,
-            });
-          } catch (persistErr) {
-            writeSse(res, {
-              type: "error",
-              message: getErrorMessage(persistErr),
-            });
-          }
-        } else {
+        const providerIssueReply = getProviderIssueChatReply();
+        try {
+          await persistAssistantConversationMemory(
+            runtime,
+            conv.roomId,
+            providerIssueReply,
+            channelType,
+          );
+          conv.updatedAt = new Date().toISOString();
+          writeSse(res, {
+            type: "done",
+            fullText: providerIssueReply,
+            agentName: state.agentName,
+          });
+        } catch (persistErr) {
           writeSse(res, {
             type: "error",
-            message: getErrorMessage(err),
+            message: getErrorMessage(persistErr),
           });
         }
       }
@@ -14322,25 +14427,21 @@ async function handleRequest(
       logger.warn(
         `[conversations] POST /messages failed: ${err instanceof Error ? err.message : String(err)}`,
       );
-      const creditReply = getInsufficientCreditsReplyFromError(err);
-      if (creditReply) {
-        try {
-          await persistAssistantConversationMemory(
-            runtime,
-            conv.roomId,
-            creditReply,
-            channelType,
-          );
-          conv.updatedAt = new Date().toISOString();
-          json(res, {
-            text: creditReply,
-            agentName: state.agentName,
-          });
-        } catch (persistErr) {
-          error(res, getErrorMessage(persistErr), 500);
-        }
-      } else {
-        error(res, getErrorMessage(err), 500);
+      const providerIssueReply = getProviderIssueChatReply();
+      try {
+        await persistAssistantConversationMemory(
+          runtime,
+          conv.roomId,
+          providerIssueReply,
+          channelType,
+        );
+        conv.updatedAt = new Date().toISOString();
+        json(res, {
+          text: providerIssueReply,
+          agentName: state.agentName,
+        });
+      } catch (persistErr) {
+        error(res, getErrorMessage(persistErr), 500);
       }
     }
     return;
@@ -14569,21 +14670,13 @@ async function handleRequest(
           ...(result.usage ? { estimatedUsage: result.usage } : {}),
         });
       }
-    } catch (err) {
+    } catch {
       if (!aborted) {
-        const creditReply = getInsufficientCreditsReplyFromError(err);
-        if (creditReply) {
-          writeSse(res, {
-            type: "done",
-            fullText: creditReply,
-            agentName: state.agentName,
-          });
-        } else {
-          writeSse(res, {
-            type: "error",
-            message: getErrorMessage(err),
-          });
-        }
+        writeSse(res, {
+          type: "done",
+          fullText: getProviderIssueChatReply(),
+          agentName: state.agentName,
+        });
       }
     } finally {
       // Resume coordinator after user message processed
@@ -14666,16 +14759,11 @@ async function handleRequest(
         text: result.text,
         agentName: result.agentName,
       });
-    } catch (err) {
-      const creditReply = getInsufficientCreditsReplyFromError(err);
-      if (creditReply) {
-        json(res, {
-          text: creditReply,
-          agentName: state.agentName,
-        });
-      } else {
-        error(res, getErrorMessage(err), 500);
-      }
+    } catch {
+      json(res, {
+        text: getProviderIssueChatReply(),
+        agentName: state.agentName,
+      });
     } finally {
       // Resume coordinator after user message processed
       if (chatDidPause) {
@@ -14743,6 +14831,11 @@ async function handleRequest(
       pathname.startsWith("/api/workspace") ||
       pathname.startsWith("/api/issues"))
   ) {
+    const isCoordinatorStatusRoute =
+      method === "GET" && pathname === "/api/coding-agents/coordinator/status";
+    const isPreflightRoute =
+      method === "GET" && pathname === "/api/coding-agents/preflight";
+
     // Try to dynamically load the route handler from the local plugin first
     let handled = false;
 
@@ -14757,25 +14850,53 @@ async function handleRequest(
     ) {
       try {
         await state.runtime.getServiceLoadPromise("PTY_SERVICE");
+        wireCodingAgentBridgesNow(state);
       } catch {
         // Service start failed — fall through to graceful fallback
       }
     }
 
-    // Try @elizaos/plugin-coding-agent first (local workspace plugin)
-    try {
-      const codingAgentPlugin = await import("@elizaos/plugin-coding-agent");
-      if (codingAgentPlugin.createCodingAgentRouteHandler) {
-        const coordinator = codingAgentPlugin.getCoordinator?.(state.runtime);
-        const handler = codingAgentPlugin.createCodingAgentRouteHandler(
-          state.runtime,
-          coordinator,
-        );
-        handled = await (handler as ConnectorRouteHandler)(req, res, pathname, req.method ?? "GET");
-      }
-    } catch {
-      // Local plugin not available, try npm plugin
+    const ptyService = state.runtime.getService(
+      "PTY_SERVICE",
+    ) as PTYService | null;
+    const coordinator = getCoordinatorFromRuntime(state.runtime);
+
+    // The settings UI and startup hydration poll these routes early. When the
+    // PTY/coordinator services are not ready yet, prefer the built-in graceful
+    // fallback response over the plugin's hard 503.
+    if (
+      (isCoordinatorStatusRoute && !coordinator) ||
+      (isPreflightRoute && !ptyService)
+    ) {
+      handled = await handleCodingAgentsFallback(
+        state.runtime,
+        pathname,
+        method,
+        req,
+        res,
+      );
     }
+
+    // Try @elizaos/plugin-coding-agent first (local workspace plugin)
+    if (!handled)
+      try {
+        const codingAgentPlugin = await import("@elizaos/plugin-coding-agent");
+        if (codingAgentPlugin.createCodingAgentRouteHandler) {
+          const coordinator = codingAgentPlugin.getCoordinator?.(state.runtime);
+          const handler = codingAgentPlugin.createCodingAgentRouteHandler(
+            state.runtime,
+            coordinator,
+          );
+          handled = await (handler as ConnectorRouteHandler)(
+            req,
+            res,
+            pathname,
+            req.method ?? "GET",
+          );
+        }
+      } catch {
+        // Local plugin not available, try npm plugin
+      }
 
     // Fallback to @elizaos/plugin-agent-orchestrator (npm)
     if (!handled) {
@@ -16536,8 +16657,10 @@ export async function startApiServer(opts?: {
         ? { phase: "starting", attempt: 0 }
         : { phase: "idle", attempt: 0 };
   const agentName = hasRuntime
-    ? (opts.runtime?.character.name ?? "Eliza")
-    : (config.agents?.list?.[0]?.name ?? config.ui?.assistant?.name ?? "Eliza");
+    ? (opts.runtime?.character.name ?? resolveDefaultAgentName(config))
+    : (config.agents?.list?.[0]?.name ??
+      config.ui?.assistant?.name ??
+      resolveDefaultAgentName(config));
 
   const deletedConversationIds = readDeletedConversationIdsFromState();
 
@@ -17667,7 +17790,7 @@ export async function startApiServer(opts?: {
     bindRuntimeStreams(rt);
     // AppManager doesn't need a runtime reference
     state.agentState = "running";
-    state.agentName = rt.character.name ?? "Eliza";
+    state.agentName = rt.character.name ?? resolveDefaultAgentName(state.config);
     state.model = detectRuntimeModel(rt, state.config);
     state.startedAt = Date.now();
     state.startup = {

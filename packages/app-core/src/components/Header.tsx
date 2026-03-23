@@ -2,9 +2,10 @@ import { LanguageDropdown, ThemeToggle } from "@miladyai/app-core/components";
 import { getTabGroups, type TabGroup } from "@miladyai/app-core/navigation";
 import { useApp } from "@miladyai/app-core/state";
 import { Button } from "@miladyai/ui";
-import { CircleDollarSign, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CloudStatusBadge } from "./CloudStatusBadge";
 import { InferenceCloudAlertButton } from "./companion/InferenceCloudAlertButton";
 import { resolveCompanionInferenceNotice } from "./companion/resolve-companion-inference-notice";
 import {
@@ -104,14 +105,6 @@ export function Header({
     [streamingEnabled],
   );
 
-  const creditColor = elizaCloudAuthRejected
-    ? "border-danger text-danger bg-danger/10"
-    : elizaCloudCreditsCritical
-      ? "border-danger text-danger bg-danger/10"
-      : elizaCloudCreditsLow
-        ? "border-warn text-warn bg-warn/10"
-        : "border-ok text-ok bg-ok/10";
-
   const shellMode =
     tab === "character" || tab === "character-select"
       ? "native"
@@ -124,13 +117,7 @@ export function Header({
         : "desktop";
   const useMinimalHeaderChrome = transparent || activeShellView !== "desktop";
   const showNavigationMenu = activeShellView === "desktop";
-  const showCloudCredits = activeShellView === "desktop" && !hideCloudCredits;
-  const showCloudCreditsStatus = showCloudCredits && elizaCloudConnected;
-  const cloudCreditsDisplay = elizaCloudAuthRejected
-    ? t("header.elizaCloudAuthRejected")
-    : elizaCloudCredits === null
-      ? t("header.elizaCloudConnected")
-      : `$${elizaCloudCredits.toFixed(2)}`;
+  const showCloudStatus = activeShellView === "desktop" && !hideCloudCredits;
 
   const handleShellViewChange = (
     view: "companion" | "character" | "desktop",
@@ -176,54 +163,6 @@ export function Header({
     setTab("settings");
     setMobileMenuOpen(false);
   }, [chatInferenceNotice, setState, setTab]);
-
-  const renderCloudCredits = (placement: "desktop" | "mobile-menu") => {
-    if (!showCloudCreditsStatus) return null;
-
-    if (elizaCloudConnected) {
-      if (placement === "desktop") {
-        return (
-          <Button
-            variant="outline"
-            data-testid="header-cloud-credits-desktop"
-            className={`hidden shrink-0 gap-1.5 px-2.5 py-1.5 h-11 font-mono text-[11px] sm:text-xs no-underline transition-all duration-200 hover:border-accent hover:text-txt hover:shadow-sm sm:inline-flex ${elizaCloudCredits === null ? "border-muted text-muted" : creditColor}`}
-            title={t("header.CloudCreditsBalanc")}
-            onClick={openCloudBilling}
-            style={HEADER_BUTTON_STYLE}
-          >
-            <CircleDollarSign className="pointer-events-none w-3.5 h-3.5" />
-            {cloudCreditsDisplay}
-          </Button>
-        );
-      }
-
-      return (
-        <Button
-          variant="outline"
-          data-testid="header-cloud-credits-mobile"
-          className={`flex w-full justify-between gap-3 px-3 py-3 rounded-xl text-left no-underline transition-all duration-200 hover:border-accent hover:text-txt ${elizaCloudCredits === null ? "border-muted text-muted" : creditColor}`}
-          title={t("header.CloudCreditsBalanc")}
-          onClick={openCloudBilling}
-          style={HEADER_BUTTON_STYLE}
-        >
-          <span className="flex min-w-0 items-center gap-3">
-            <CircleDollarSign className="h-4 w-4 shrink-0" />
-            <span className="flex min-w-0 flex-col">
-              <span className="truncate text-sm font-medium font-sans text-txt">
-                {t("header.Cloud")}
-              </span>
-              <span className="truncate text-xs font-sans text-muted">
-                {t("header.CloudCreditsBalanc")}
-              </span>
-            </span>
-          </span>
-          <span className="shrink-0 font-mono text-sm">
-            {cloudCreditsDisplay}
-          </span>
-        </Button>
-      );
-    }
-  };
 
   const renderMobileMenuThemeToggle = () => (
     <div
@@ -299,7 +238,19 @@ export function Header({
                   onClick={handleChatInferenceAlertClick}
                 />
               ) : null}
-              {renderCloudCredits("desktop")}
+              {showCloudStatus ? (
+                <CloudStatusBadge
+                  connected={elizaCloudConnected}
+                  credits={elizaCloudCredits}
+                  creditsLow={elizaCloudCreditsLow}
+                  creditsCritical={elizaCloudCreditsCritical}
+                  authRejected={elizaCloudAuthRejected}
+                  creditsError={elizaCloudCreditsError}
+                  t={t}
+                  onClick={openCloudBilling}
+                  dataTestId="header-cloud-status"
+                />
+              ) : null}
             </>
           }
           showCompanionControls={
@@ -438,7 +389,6 @@ export function Header({
                 </div>
               </div>
               <div className="mt-3 flex flex-col gap-3 border-t border-border/50 pt-3">
-                {renderCloudCredits("mobile-menu")}
                 <div className="flex items-center justify-end gap-2">
                   {renderMobileMenuLanguageDropdown()}
                   {renderMobileMenuThemeToggle()}

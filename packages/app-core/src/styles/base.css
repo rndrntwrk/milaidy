@@ -129,9 +129,9 @@
   --accent-hover: #d8a108;
   --accent-muted: #d8a108;
   --accent-subtle: rgba(240, 185, 11, 0.12);
-  --accent-foreground: hsl(40 10% 94%);
+  --accent-foreground: #1a1f26;
   --primary: #f0b90b;
-  --primary-foreground: hsl(40 10% 94%);
+  --primary-foreground: #1a1f26;
 
   --ok: hsl(142 76% 36%);
   --ok-muted: hsla(142 76% 36% / 0.7);

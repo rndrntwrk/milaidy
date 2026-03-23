@@ -44,12 +44,14 @@ const { mockUseBugReport, mockClient } = vi.hoisted(() => ({
   },
 }));
 
+const mockSetTimeout = (fn: () => void, ms: number) => globalThis.setTimeout(fn, ms);
+const mockClearTimeout = (id: ReturnType<typeof globalThis.setTimeout>) => globalThis.clearTimeout(id);
+
 vi.mock("@miladyai/app-core/hooks", () => ({
   useBugReport: () => mockUseBugReport(),
   useTimeout: () => ({
-    setTimeout: (fn: () => void, ms: number) => globalThis.setTimeout(fn, ms),
-    clearTimeout: (id: ReturnType<typeof globalThis.setTimeout>) =>
-      globalThis.clearTimeout(id),
+    setTimeout: mockSetTimeout,
+    clearTimeout: mockClearTimeout,
   }),
 }));
 
@@ -58,7 +60,7 @@ vi.mock("@miladyai/app-core/api", () => ({
 }));
 
 vi.mock("@miladyai/app-core/state", () => ({
-  useApp: () => ({ t: (key: string) => key }),
+  useApp: () => ({ t: (key: string) => key, copyToClipboard: vi.fn() }),
 }));
 
 vi.mock("@miladyai/app-core/config/branding", () => ({
@@ -69,7 +71,7 @@ vi.mock("@miladyai/app-core/utils", () => ({
   openExternalUrl: vi.fn(),
 }));
 
-import { BugReportModal } from "@miladyai/app-core/components/BugReportModal";
+import { BugReportModal } from "../../src/components/BugReportModal";
 
 // --- helpers ----------------------------------------------------------------
 
@@ -117,11 +119,9 @@ describe("BugReportModal", () => {
     mockUseBugReport.mockReset();
     mockClient.checkBugReportInfo.mockReset().mockResolvedValue({});
     mockClient.submitBugReport.mockReset().mockResolvedValue({});
-    vi.useFakeTimers();
   });
 
   afterEach(() => {
-    vi.useRealTimers();
   });
 
   // --- rendering ---
@@ -140,7 +140,7 @@ describe("BugReportModal", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(BugReportModal));
-      await vi.runAllTimersAsync();
+      await new Promise(r => globalThis.setTimeout(r, 60));
     });
     expect(getText(tree?.root)).toContain("bugreportmodal.ReportABug");
   });
@@ -150,7 +150,7 @@ describe("BugReportModal", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(BugReportModal));
-      await vi.runAllTimersAsync();
+      await new Promise(r => globalThis.setTimeout(r, 60));
     });
     const labels = tree?.root.findAllByType("label" as React.ElementType);
     const requiredLabels = labels?.filter((l) =>
@@ -167,7 +167,7 @@ describe("BugReportModal", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(BugReportModal));
-      await vi.runAllTimersAsync();
+      await new Promise(r => globalThis.setTimeout(r, 60));
     });
     // Description, Steps to Reproduce, Expected Behavior, Actual Behavior
     expect(getTextareas(tree?.root).length).toBeGreaterThanOrEqual(4);
@@ -186,7 +186,7 @@ describe("BugReportModal", () => {
     setupMock(true);
     await act(async () => {
       TestRenderer.create(React.createElement(BugReportModal));
-      await vi.runAllTimersAsync();
+      await new Promise(r => globalThis.setTimeout(r, 60));
     });
     expect(mockClient.checkBugReportInfo).toHaveBeenCalledOnce();
   });
@@ -198,9 +198,9 @@ describe("BugReportModal", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(BugReportModal));
-      await vi.runAllTimersAsync();
+      await new Promise(r => globalThis.setTimeout(r, 60));
     });
-    const submitBtn = findButton(tree?.root, "Submit");
+    const submitBtn = findButton(tree?.root, "bugreportmodal.submit");
     expect(submitBtn?.props.disabled).toBe(true);
   });
 
@@ -209,10 +209,10 @@ describe("BugReportModal", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(BugReportModal));
-      await vi.runAllTimersAsync();
+      await new Promise(r => globalThis.setTimeout(r, 60));
     });
 
-    const submitBtn = findButton(tree?.root, "Submit");
+    const submitBtn = findButton(tree?.root, "bugreportmodal.submit");
     await act(async () => {
       submitBtn?.props.onClick();
     });
@@ -233,12 +233,12 @@ describe("BugReportModal", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(BugReportModal));
-      await vi.runAllTimersAsync();
+      await new Promise(r => globalThis.setTimeout(r, 60));
     });
 
     await fillRequired(tree?.root);
 
-    const submitBtn = findButton(tree?.root, "Submit");
+    const submitBtn = findButton(tree?.root, "bugreportmodal.submit");
     await act(async () => {
       submitBtn?.props.onClick();
     });
@@ -259,12 +259,12 @@ describe("BugReportModal", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(BugReportModal));
-      await vi.runAllTimersAsync();
+      await new Promise(r => globalThis.setTimeout(r, 60));
     });
 
     await fillRequired(tree?.root);
 
-    const submitBtn = findButton(tree?.root, "Submit");
+    const submitBtn = findButton(tree?.root, "bugreportmodal.submit");
     await act(async () => {
       submitBtn?.props.onClick();
     });
@@ -280,12 +280,12 @@ describe("BugReportModal", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(BugReportModal));
-      await vi.runAllTimersAsync();
+      await new Promise(r => globalThis.setTimeout(r, 60));
     });
 
     await fillRequired(tree?.root);
 
-    const submitBtn = findButton(tree?.root, "Submit");
+    const submitBtn = findButton(tree?.root, "bugreportmodal.submit");
     await act(async () => {
       submitBtn?.props.onClick();
     });
@@ -301,12 +301,12 @@ describe("BugReportModal", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(BugReportModal));
-      await vi.runAllTimersAsync();
+      await new Promise(r => globalThis.setTimeout(r, 60));
     });
 
     await fillRequired(tree?.root);
 
-    const submitBtn = findButton(tree?.root, "Submit");
+    const submitBtn = findButton(tree?.root, "bugreportmodal.submit");
     await act(async () => {
       submitBtn?.props.onClick();
     });
@@ -332,12 +332,12 @@ describe("BugReportModal", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(BugReportModal));
-      await vi.runAllTimersAsync();
+      await new Promise(r => globalThis.setTimeout(r, 60));
     });
 
     await fillRequired(tree?.root);
 
-    const submitBtn = findButton(tree?.root, "Submit");
+    const submitBtn = findButton(tree?.root, "bugreportmodal.submit");
     await act(async () => {
       submitBtn?.props.onClick();
     });
@@ -357,7 +357,7 @@ describe("BugReportModal", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(BugReportModal));
-      await vi.runAllTimersAsync();
+      await new Promise(r => globalThis.setTimeout(r, 60));
     });
 
     const cancelBtn = findButton(tree?.root, "common.cancel");
@@ -375,7 +375,7 @@ describe("BugReportModal", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(BugReportModal));
-      await vi.runAllTimersAsync();
+      await new Promise(r => globalThis.setTimeout(r, 60));
     });
 
     const before = getTextareas(tree?.root).length;

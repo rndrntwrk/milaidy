@@ -65,15 +65,17 @@ describe("cloud API key persistence through onboarding", () => {
     delete process.env.ELIZAOS_CLOUD_ENABLED;
   });
 
-  describe("extractAndPersistOnboardingApiKey preserves cloud.apiKey", () => {
-    it("does not remove cloud.apiKey when saving a local provider key", () => {
+  describe("extractAndPersistOnboardingApiKey normalizes connection state", () => {
+    it("clears stale cloud state when saving a local provider key", async () => {
       const config = makeConfig({
         enabled: true,
         apiKey: "cloud-key-abc",
+        inferenceMode: "cloud",
+        runtime: "cloud",
       });
       loadElizaConfigMock.mockReturnValue(config);
 
-      extractAndPersistOnboardingApiKey({
+      await extractAndPersistOnboardingApiKey({
         name: "TestAgent",
         connection: {
           kind: "local-provider",
@@ -84,21 +86,34 @@ describe("cloud API key persistence through onboarding", () => {
 
       expect(saveElizaConfigMock).toHaveBeenCalledTimes(1);
       const saved = saveElizaConfigMock.mock.calls[0][0];
-      expect(saved.cloud.apiKey).toBe("cloud-key-abc");
+      expect(saved.cloud).toEqual({
+        enabled: false,
+        runtime: "local",
+      });
       expect(saved.env.ANTHROPIC_API_KEY).toBe("sk-ant-test-key-123");
     });
 
-    it("returns null for cloud-managed connections (no local provider key)", () => {
-      const config = makeConfig({ enabled: true, apiKey: "cloud-key-abc" });
+    it("persists cloud-managed connections while still returning null", async () => {
+      const config = makeConfig();
       loadElizaConfigMock.mockReturnValue(config);
 
-      const result = extractAndPersistOnboardingApiKey({
+      const result = await extractAndPersistOnboardingApiKey({
         name: "TestAgent",
-        connection: { kind: "cloud-managed" },
+        connection: {
+          kind: "cloud-managed",
+          apiKey: "cloud-key-abc",
+          smallModel: "openai/gpt-5-mini",
+          largeModel: "moonshotai/kimi-k2-0905",
+        },
       });
 
       expect(result).toBeNull();
-      expect(saveElizaConfigMock).not.toHaveBeenCalled();
+      expect(saveElizaConfigMock).toHaveBeenCalledTimes(1);
+      const saved = saveElizaConfigMock.mock.calls[0][0];
+      expect(saved.cloud.apiKey).toBe("cloud-key-abc");
+      expect(saved.cloud.enabled).toBe(true);
+      expect(saved.models.small).toBe("openai/gpt-5-mini");
+      expect(saved.models.large).toBe("moonshotai/kimi-k2-0905");
     });
   });
 
@@ -126,7 +141,7 @@ describe("cloud API key persistence through onboarding", () => {
   });
 
   describe("full onboarding sequence preserves cloud.apiKey", () => {
-    it("cloud key survives extractApiKey → persistDefaults sequence", () => {
+    it("cloud key survives extractApiKey → persistDefaults sequence", async () => {
       // Simulate: cloud login saved apiKey, then onboarding runs both functions
       const configWithKey = makeConfig({
         enabled: true,
@@ -138,10 +153,14 @@ describe("cloud API key persistence through onboarding", () => {
       loadElizaConfigMock.mockReturnValue(configWithKey);
 
       // 1. extractAndPersistOnboardingApiKey — no-op for cloud mode
-      const result = extractAndPersistOnboardingApiKey({
+      const result = await extractAndPersistOnboardingApiKey({
         name: "Chen",
-        runMode: "cloud",
-        // No connection.apiKey for cloud mode
+        connection: {
+          kind: "cloud-managed",
+          apiKey: "cloud-key-persisted",
+          smallModel: "openai/gpt-5-mini",
+          largeModel: "moonshotai/kimi-k2-0905",
+        },
       });
       expect(result).toBeNull();
 
@@ -151,12 +170,12 @@ describe("cloud API key persistence through onboarding", () => {
         bio: ["An agent."],
       });
 
-      expect(saveElizaConfigMock).toHaveBeenCalledTimes(1);
-      const saved = saveElizaConfigMock.mock.calls[0][0];
+      expect(saveElizaConfigMock).toHaveBeenCalledTimes(2);
+      const saved = saveElizaConfigMock.mock.calls[1][0];
       expect(saved.cloud.apiKey).toBe("cloud-key-persisted");
     });
 
-    it("cloud key survives when local provider is also set", () => {
+    it("switching to a local provider clears the prior cloud key", async () => {
       const config = makeConfig({
         enabled: true,
         apiKey: "cloud-key-dual",
@@ -164,7 +183,7 @@ describe("cloud API key persistence through onboarding", () => {
       loadElizaConfigMock.mockReturnValue(config);
 
       // extractAndPersistOnboardingApiKey with a local provider key
-      extractAndPersistOnboardingApiKey({
+      await extractAndPersistOnboardingApiKey({
         name: "Agent",
         connection: {
           kind: "local-provider",
@@ -174,7 +193,10 @@ describe("cloud API key persistence through onboarding", () => {
       });
 
       const saved1 = saveElizaConfigMock.mock.calls[0][0];
-      expect(saved1.cloud.apiKey).toBe("cloud-key-dual");
+      expect(saved1.cloud).toEqual({
+        enabled: false,
+        runtime: "local",
+      });
       expect(saved1.env.OPENAI_API_KEY).toBe("sk-openai-test");
 
       // persistCompatOnboardingDefaults
@@ -182,7 +204,10 @@ describe("cloud API key persistence through onboarding", () => {
       persistCompatOnboardingDefaults({ name: "Agent" });
 
       const saved2 = saveElizaConfigMock.mock.calls[1][0];
-      expect(saved2.cloud.apiKey).toBe("cloud-key-dual");
+      expect(saved2.cloud).toEqual({
+        enabled: false,
+        runtime: "local",
+      });
     });
   });
 });

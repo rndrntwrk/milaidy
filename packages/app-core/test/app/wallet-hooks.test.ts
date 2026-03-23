@@ -20,7 +20,7 @@ import {
   safeExplorerHref,
   type TranslatorFn,
   type WalletRecentTrade,
-} from "@miladyai/app-core/components/companion/walletUtils";
+} from "../../src/components/companion/walletUtils";
 import { describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------

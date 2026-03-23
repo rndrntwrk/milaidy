@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import type { AnthropicFlow, CodexFlow } from "@miladyai/agent/auth";
 import type { ElizaConfig } from "../config/config";
 import { createRouteInvoker } from "../test-support/route-test-helpers";
 import {
@@ -6,7 +7,14 @@ import {
   type SubscriptionRouteState,
 } from "./subscription-routes";
 
-const getSubscriptionStatus = vi.fn(() => [{ id: "openai-codex" }]);
+const getSubscriptionStatus = vi.fn(() => [
+  {
+    provider: "openai-codex",
+    configured: false,
+    valid: false,
+    expiresAt: null,
+  },
+]);
 const startAnthropicLogin = vi.fn(async () => ({
   authUrl: "https://auth.example/anthropic",
   submitCode: vi.fn(),
@@ -23,7 +31,7 @@ const saveCredentials = vi.fn();
 const applySubscriptionCredentials = vi.fn(async () => undefined);
 const deleteCredentials = vi.fn();
 
-vi.mock("../auth/index", () => ({
+vi.mock("@miladyai/agent/auth", () => ({
   getSubscriptionStatus,
   startAnthropicLogin,
   startCodexLogin,
@@ -82,9 +90,13 @@ describe("subscription routes", () => {
 
     expect(result.handled).toBe(true);
     expect(result.status).toBe(200);
-    expect(result.payload).toMatchObject({
-      providers: [{ id: "openai-codex" }],
-    });
+    expect(result.payload).toEqual(
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({ provider: "openai-codex" }),
+        ]),
+      }),
+    );
     expect(getSubscriptionStatus).toHaveBeenCalledTimes(1);
   });
 
@@ -169,7 +181,7 @@ describe("subscription routes", () => {
       authUrl: "https://auth.example/anthropic",
       submitCode,
       credentials: Promise.resolve({ expires: Date.now() + 60000 }),
-    } as import("../auth/index").AnthropicFlow;
+    } as AnthropicFlow;
 
     const result = await invoke({
       method: "POST",
@@ -189,7 +201,7 @@ describe("subscription routes", () => {
       submitCode,
       close: vi.fn(),
       credentials: Promise.resolve({ expires: Date.now() + 60000 }),
-    } as import("../auth/index").CodexFlow;
+    } as CodexFlow;
 
     const result = await invoke({
       method: "POST",

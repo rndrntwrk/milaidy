@@ -20,6 +20,7 @@ import {
   loadTrackedTokens,
   removeTrackedBscToken,
   saveTrackedTokens,
+  BSC_GAS_READY_THRESHOLD,
   type TrackedToken,
 } from "./inventory";
 import { InventoryToolbar } from "./inventory/InventoryToolbar";
@@ -151,8 +152,9 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
         cfg?.heliusKeySet ||
         cloudManagedAccess),
   );
-  const tradeReady = true;
   const bnbBalance = Number.parseFloat(focusedNativeBalance ?? "0") || 0;
+  const tradeReady =
+    chainFocus === "bsc" ? bnbBalance >= BSC_GAS_READY_THRESHOLD : true;
   const addresses = [
     evmAddr ? { label: "EVM", address: evmAddr } : null,
     solAddr ? { label: "Solana", address: solAddr } : null,

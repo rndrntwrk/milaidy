@@ -77,8 +77,8 @@ function useChatVoiceController(options: {
   chatFirstTokenReceived: boolean;
   chatInput: string;
   chatSending: boolean;
+  cloudVoiceAvailable: boolean;
   conversationMessages: ConversationMessage[];
-  elizaCloudConnected: boolean;
   handleChatEdit: (messageId: string, text: string) => Promise<boolean>;
   handleChatSend: (channelType?: ConversationChannelType) => Promise<void>;
   isComposerLocked: boolean;
@@ -92,8 +92,8 @@ function useChatVoiceController(options: {
     chatFirstTokenReceived,
     chatInput,
     chatSending,
+    cloudVoiceAvailable,
     conversationMessages,
-    elizaCloudConnected,
     handleChatEdit,
     handleChatSend,
     isComposerLocked,
@@ -215,7 +215,7 @@ function useChatVoiceController(options: {
   );
 
   const voice = useVoiceChat({
-    cloudConnected: elizaCloudConnected,
+    cloudConnected: cloudVoiceAvailable,
     interruptOnSpeech: isGameModal,
     lang: uiLanguage === "zh-CN" ? "zh-CN" : "en-US",
     onPlaybackStart: handleVoicePlaybackStart,
@@ -491,6 +491,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
     handleChatSend,
     handleChatStop,
     handleChatEdit,
+    elizaCloudEnabled,
     elizaCloudConnected,
     setState,
     droppedFiles,
@@ -512,7 +513,8 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
   // ── Derived composer state ──────────────────────────────────────
   const isAgentStarting =
     agentStatus?.state === "starting" || agentStatus?.state === "restarting";
-  const isComposerLocked = chatSending || isAgentStarting;
+  const isComposerLocked = isAgentStarting;
+  const cloudVoiceAvailable = elizaCloudConnected || elizaCloudEnabled;
   const {
     beginVoiceCapture,
     endVoiceCapture,
@@ -526,8 +528,8 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
     chatFirstTokenReceived,
     chatInput,
     chatSending,
+    cloudVoiceAvailable,
     conversationMessages,
-    elizaCloudConnected,
     handleChatEdit,
     handleChatSend,
     isComposerLocked,

@@ -76,9 +76,11 @@ export function ChatComposer({
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pushToTalkActiveRef = useRef(false);
   const suppressClickRef = useRef(false);
-  const actionButtonTitle = chatSending
+  const hasDraft = chatInput.trim().length > 0 || chatPendingImagesCount > 0;
+  const shouldShowStopButton = chatSending && !hasDraft;
+  const actionButtonTitle = shouldShowStopButton
     ? t("chat.stopGeneration")
-    : isGameModal || !voice.isSpeaking
+    : isGameModal || !voice.isSpeaking || hasDraft
       ? isAgentStarting
         ? t("chat.agentStarting")
         : t("chat.send")
@@ -291,7 +293,7 @@ export function ChatComposer({
         </Button>
       )}
 
-      {chatSending ? (
+      {shouldShowStopButton ? (
         <Button
           variant="destructive"
           data-testid="chat-composer-action"
@@ -303,7 +305,7 @@ export function ChatComposer({
         >
           <Square className="w-4 h-4 fill-current" />
         </Button>
-      ) : !isGameModal && voice.isSpeaking ? (
+      ) : !isGameModal && voice.isSpeaking && !hasDraft ? (
         <Button
           variant="destructive"
           data-testid="chat-composer-action"
@@ -322,7 +324,7 @@ export function ChatComposer({
           size="icon"
           className={`${COMPOSER_ACTION_BUTTON_CLASSNAME} bg-accent text-accent-fg hover:shadow-[0_0_15px_rgba(240,178,50,0.4)] disabled:opacity-40`}
           onClick={onSend}
-          disabled={isComposerLocked || !chatInput.trim()}
+          disabled={isComposerLocked || !hasDraft}
           aria-label={actionButtonLabel}
           title={actionButtonLabel}
         >

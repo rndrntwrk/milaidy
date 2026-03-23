@@ -8,8 +8,8 @@ import type {
   SandboxBrowserSettings,
   SandboxDockerSettings,
   SandboxPruneSettings,
-} from "./types.agent-defaults";
-import type { AgentToolsConfig, MemorySearchConfig } from "./types.tools";
+} from "./types.agent-defaults.js";
+import type { AgentToolsConfig, MemorySearchConfig } from "./types.tools.js";
 
 export type AgentModelConfig =
   | string

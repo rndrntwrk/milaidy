@@ -47,11 +47,11 @@ vi.mock("@miladyai/app-core/hooks", async () => {
   };
 });
 
-vi.mock("@miladyai/app-core/components/ChatAvatar", () => ({
+vi.mock("../../src/components/ChatAvatar", () => ({
   ChatAvatar: () => null,
 }));
 
-vi.mock("@miladyai/app-core/components/MessageContent", () => ({
+vi.mock("../../src/components/MessageContent", () => ({
   MessageContent: ({ message }: { message: { text: string } }) =>
     React.createElement("span", null, message.text),
 }));
@@ -62,13 +62,16 @@ vi.mock("@miladyai/app-core/api", () => ({
 
 // Mock @miladyai/ui components to render inline (no Radix portals)
 // so react-test-renderer does not crash with parentInstance.children.indexOf.
-vi.mock("@miladyai/ui", () => {
+vi.mock("@miladyai/ui", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const React = require("react");
   const passthrough = ({
     children,
     ...props
   }: React.PropsWithChildren<Record<string, unknown>>) =>
     React.createElement("div", props, children);
   return {
+    ...actual,
     Button: ({
       children,
       ...props
@@ -166,9 +169,9 @@ function findInputByPlaceholder(
   return found[0];
 }
 
-import { ChatView } from "@miladyai/app-core/components/ChatView";
-import { CustomActionEditor } from "@miladyai/app-core/components/CustomActionEditor";
-import { CustomActionsPanel } from "@miladyai/app-core/components/CustomActionsPanel";
+import { ChatView } from "../../src/components/ChatView";
+import { CustomActionEditor } from "../../src/components/CustomActionEditor";
+import { CustomActionsPanel } from "../../src/components/CustomActionsPanel";
 
 function FlowHarness({
   onSaved,

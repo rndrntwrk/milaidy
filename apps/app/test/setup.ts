@@ -101,10 +101,28 @@ function createBridgeMock(extraExports: Record<string, unknown> = {}) {
       const rpc = getElectrobunRendererRpc() as Record<string, unknown> | null;
       const request = (rpc?.request as RpcRequestMap)?.[options.rpcMethod];
       if (!request) return { status: "missing" as const };
+      const call = request(options.params) as Promise<unknown>;
+      type RaceWinner =
+        | { tag: "done"; value: unknown }
+        | { tag: "reject"; error: unknown }
+        | { tag: "timeout" };
+      let tid: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<RaceWinner>((resolve) => {
+        tid = setTimeout(() => resolve({ tag: "timeout" }), options.timeoutMs);
+      });
+      const settledPromise: Promise<RaceWinner> = call.then(
+        (value) => ({ tag: "done" as const, value }),
+        (error: unknown) => ({ tag: "reject" as const, error }),
+      );
       try {
-        const value = await request(options.params);
-        return { status: "ok" as const, value };
+        const winner = await Promise.race([settledPromise, timeoutPromise]);
+        if (tid !== undefined) clearTimeout(tid);
+        if (winner.tag === "timeout") return { status: "timeout" as const };
+        if (winner.tag === "reject")
+          return { status: "rejected" as const, error: winner.error };
+        return { status: "ok" as const, value: winner.value };
       } catch (error: unknown) {
+        if (tid !== undefined) clearTimeout(tid);
         return { status: "rejected" as const, error };
       }
     },

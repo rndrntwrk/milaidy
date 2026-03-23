@@ -103,6 +103,8 @@ import {
   loadElizaConfig,
   saveElizaConfig,
 } from "@miladyai/agent/config/config";
+import { resolveUserPath } from "@miladyai/agent/config/paths";
+import { resolveDefaultAgentWorkspaceDir } from "@miladyai/agent/providers/workspace";
 import { ethers } from "ethers";
 import {
   ensureRuntimeSqlCompatibility,
@@ -155,7 +157,11 @@ import {
   deleteWalletSecretsFromOsStore,
   migrateWalletPrivateKeysToOsStore,
 } from "../security/wallet-os-store-actions";
-import { getCloudSecret } from "./cloud-secrets";
+import { clearCloudSecrets, getCloudSecret } from "./cloud-secrets";
+import {
+  clearPersistedOnboardingConfig,
+  resolveExistingOnboardingConnection,
+} from "./provider-switch-config";
 
 // ---------------------------------------------------------------------------
 // Import from extracted modules for use within this file
@@ -433,6 +439,84 @@ export function syncCompatConfigFiles(): void {
     sourcePath === elizaConfigPath ? miladyConfigPath : elizaConfigPath;
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
   fs.copyFileSync(sourcePath, targetPath);
+}
+
+function resolveCompatPgliteDataDir(config: ElizaConfig): string {
+  const explicitDataDir = process.env.PGLITE_DATA_DIR?.trim();
+  if (explicitDataDir) {
+    return resolveUserPath(explicitDataDir);
+  }
+
+  const configuredDataDir = config.database?.pglite?.dataDir?.trim();
+  if (configuredDataDir) {
+    return resolveUserPath(configuredDataDir);
+  }
+
+  const workspaceDir =
+    config.agents?.defaults?.workspace ?? resolveDefaultAgentWorkspaceDir();
+  return path.join(resolveUserPath(workspaceDir), ".eliza", ".elizadb");
+}
+
+async function clearCompatPgliteDataDir(
+  runtime: AgentRuntime | null,
+  config: ElizaConfig,
+): Promise<void> {
+  if (typeof runtime?.stop === "function") {
+    await runtime.stop();
+  }
+
+  const dataDir = resolveCompatPgliteDataDir(config);
+  if (path.basename(dataDir) !== ".elizadb") {
+    logger.warn(
+      `[milady][reset] Refusing to delete unexpected PGlite dir: ${dataDir}`,
+    );
+    return;
+  }
+
+  try {
+    if (fs.existsSync(dataDir)) {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+      logger.info(
+        `[milady][reset] Deleted PGlite data dir (GGUF models preserved): ${dataDir}`,
+      );
+    }
+  } catch (err) {
+    logger.warn(
+      `[milady][reset] Failed to delete PGlite data dir: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+function hasCompatPersistedOnboardingState(config: ElizaConfig): boolean {
+  if ((config.meta as Record<string, unknown>)?.onboardingComplete === true) {
+    return true;
+  }
+
+  const existingConnection = resolveExistingOnboardingConnection(
+    config as Record<string, unknown>,
+  );
+  if (existingConnection?.kind === "local-provider") {
+    return true;
+  }
+  if (existingConnection?.kind === "remote-provider") {
+    return Boolean(existingConnection.remoteApiBase.trim());
+  }
+  if (existingConnection?.kind === "cloud-managed") {
+    return Boolean(
+      existingConnection.apiKey?.trim() &&
+        existingConnection.smallModel?.trim() &&
+        existingConnection.largeModel?.trim(),
+    );
+  }
+
+  if (Array.isArray(config.agents?.list) && config.agents.list.length > 0) {
+    return true;
+  }
+
+  return Boolean(
+    config.agents?.defaults?.workspace?.trim() ||
+      config.agents?.defaults?.adminEntityId?.trim(),
+  );
 }
 
 function maskValue(value: string): string {
@@ -1923,7 +2007,11 @@ async function handleMiladyCompatRoute(
       sendJsonResponse(res, 200, { complete: true });
       return true;
     }
-    return false;
+    const config = loadElizaConfig();
+    sendJsonResponse(res, 200, {
+      complete: hasCompatPersistedOnboardingState(config),
+    });
+    return true;
   }
 
   if (method === "GET" && url.pathname === "/api/auth/status") {
@@ -2066,20 +2154,14 @@ async function handleMiladyCompatRoute(
 
     try {
       logger.info(
-        "[milady][reset] POST /api/agent/reset: loading config, will clear onboarding flag, agents list, cloud apiKey (GGUF / MODELS_DIR untouched)",
+        "[milady][reset] POST /api/agent/reset: loading config, will clear onboarding state, persisted provider config, and cloud keys (GGUF / MODELS_DIR untouched)",
       );
       const config = loadElizaConfig();
-      if (config.meta) {
-        delete (config.meta as Record<string, unknown>).onboardingComplete;
-      }
-      if (config.agents) {
-        (config.agents as Record<string, unknown>).list = [];
-      }
-      if (config.cloud) {
-        delete (config.cloud as Record<string, unknown>).enabled;
-        delete (config.cloud as Record<string, unknown>).apiKey;
-      }
+      await clearCompatPgliteDataDir(state.current, config);
+      state.current = null;
+      clearPersistedOnboardingConfig(config);
       saveElizaConfig(config);
+      clearCloudSecrets();
       try {
         await deleteWalletSecretsFromOsStore();
       } catch (osErr) {
@@ -2781,7 +2863,7 @@ async function handleMiladyCompatRoute(
         string,
         unknown
       >;
-      _extractAndPersistOnboardingApiKey(body);
+      await _extractAndPersistOnboardingApiKey(body);
       _persistCompatOnboardingDefaults(body);
       if (typeof body.name === "string" && body.name.trim()) {
         state.pendingAgentName = body.name.trim();
@@ -2928,37 +3010,9 @@ async function handleMiladyCompatRoute(
     }
 
     const config = loadElizaConfig();
-    let complete = false;
-
-    if ((config.meta as Record<string, unknown>)?.onboardingComplete === true) {
-      complete = true;
-    } else if (
-      Array.isArray(config.agents?.list) &&
-      config.agents.list.length > 0
-    ) {
-      complete = true;
-    } else if (
-      config.agents?.defaults?.workspace?.trim() ||
-      config.agents?.defaults?.adminEntityId?.trim()
-    ) {
-      complete = true;
-    }
-
-    if (!complete && state.current?.adapter?.db) {
-      try {
-        const { rows } = await executeRawSql(
-          state.current,
-          "SELECT count(*) as count FROM participants WHERE agent_id IS NOT NULL",
-        );
-        if (rows && rows.length > 0 && Number(rows[0].count) > 0) {
-          complete = true;
-        }
-      } catch {
-        // Ignore DB query errors
-      }
-    }
-
-    sendJsonResponse(res, 200, { complete });
+    sendJsonResponse(res, 200, {
+      complete: hasCompatPersistedOnboardingState(config),
+    });
     return true;
   }
 
@@ -3290,17 +3344,23 @@ export async function startApiServer(
 
     server.updateRuntime = (runtime: AgentRuntime) => {
       compatState.current = runtime;
-      // Run SQL repair + Edge TTS registration before the upstream handler sets
-      // `state.runtime` and accepts chat. Previously these were fire-and-forget
-      // (`void`), so the first streamed reply could call `useModel(TEXT_TO_SPEECH)`
-      // before `ensureMiladyTextToSpeechHandler` finished — logging "No handler"
-      // even though TTS works moments later (or via the separate client voice path).
+      // Make the runtime immediately visible to upstream routes so hot swaps do
+      // not briefly return 503s while compat setup finishes in the background.
+      originalUpdateRuntime(runtime);
+
+      // Continue repairing SQL compatibility + Edge TTS registration
+      // asynchronously. These are important, but they should not block the
+      // runtime from becoming available to non-TTS routes.
       void (async () => {
         try {
           await ensureRuntimeSqlCompatibility(runtime);
           await (await lazyEnsureTTS())(runtime);
-        } finally {
-          originalUpdateRuntime(runtime);
+        } catch (err) {
+          logger.warn(
+            `[milady][runtime] Deferred compat init failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
         }
       })();
     };

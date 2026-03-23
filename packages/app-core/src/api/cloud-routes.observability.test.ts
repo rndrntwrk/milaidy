@@ -29,7 +29,7 @@ vi.mock("@miladyai/agent/cloud/validate-url", () => ({
   validateCloudBaseUrl: validateCloudBaseUrlMock,
 }));
 
-vi.mock("../config/config", () => ({
+vi.mock("@miladyai/agent/config/config", () => ({
   saveElizaConfig: saveElizaConfigMock,
 }));
 

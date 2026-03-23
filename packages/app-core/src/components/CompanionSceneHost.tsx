@@ -11,7 +11,6 @@ import {
   memo,
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
-  type WheelEvent as ReactWheelEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -49,6 +48,17 @@ type TouchPoint = {
   y: number;
 };
 
+type CompanionWheelEvent = Pick<
+  WheelEvent,
+  "ctrlKey" | "deltaMode" | "deltaY" | "preventDefault" | "target"
+>;
+
+let _companionTeleportCompletedOnce = false;
+
+export function hasCompanionTeleportCompletedOnce(): boolean {
+  return _companionTeleportCompletedOnce;
+}
+
 function getTouchDistance(points: Map<number, TouchPoint>): number {
   const touchPoints = [...points.values()];
   if (touchPoints.length < 2) return 0;
@@ -57,7 +67,9 @@ function getTouchDistance(points: Map<number, TouchPoint>): number {
   return Math.hypot(secondPoint.x - firstPoint.x, secondPoint.y - firstPoint.y);
 }
 
-function getWheelPixels(event: ReactWheelEvent<HTMLDivElement>): number {
+function getWheelPixels(
+  event: Pick<WheelEvent, "deltaMode" | "deltaY">,
+): number {
   if (event.deltaMode === 1) return event.deltaY * 16;
   if (event.deltaMode === 2) {
     return event.deltaY * (window.innerHeight || 1);
@@ -315,7 +327,7 @@ function CompanionSceneSurface({
   );
 
   const handleWheelCapture = useCallback(
-    (event: ReactWheelEvent<HTMLDivElement>) => {
+    (event: CompanionWheelEvent) => {
       if (!active || !interactive) return;
       const wheelPixels = getWheelPixels(event);
       if (Math.abs(wheelPixels) < 0.01) return;
@@ -329,7 +341,7 @@ function CompanionSceneSurface({
   );
 
   const handleRootWheelCapture = useCallback(
-    (event: ReactWheelEvent<HTMLDivElement>) => {
+    (event: CompanionWheelEvent) => {
       if (!active || !interactive) return;
       if (shouldIgnoreCameraZoom(event.target)) {
         return;
@@ -375,6 +387,41 @@ function CompanionSceneSurface({
     },
     [],
   );
+
+  useEffect(() => {
+    const handleTeleportComplete = () => {
+      _companionTeleportCompletedOnce = true;
+    };
+    window.addEventListener(
+      "eliza:vrm-teleport-complete",
+      handleTeleportComplete,
+    );
+    return () =>
+      window.removeEventListener(
+        "eliza:vrm-teleport-complete",
+        handleTeleportComplete,
+      );
+  }, []);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const handleNativeWheel = (event: WheelEvent) => {
+      handleRootWheelCapture(event);
+    };
+
+    root.addEventListener("wheel", handleNativeWheel, {
+      capture: true,
+      passive: false,
+    });
+
+    return () => {
+      root.removeEventListener("wheel", handleNativeWheel, {
+        capture: true,
+      });
+    };
+  }, [handleRootWheelCapture]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -501,7 +548,6 @@ function CompanionSceneSurface({
       onPointerUpCapture={releaseCameraDrag}
       onPointerCancelCapture={releaseCameraDrag}
       onLostPointerCaptureCapture={releaseCameraDrag}
-      onWheelCapture={handleRootWheelCapture}
     >
       <div
         aria-hidden={!active}

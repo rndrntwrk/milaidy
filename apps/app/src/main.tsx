@@ -141,10 +141,12 @@ installDesktopPermissionsClientPatch(client as never);
 // Register custom character editor for app-core's ViewRouter to pick up
 window.__MILADY_CHARACTER_EDITOR__ = CharacterEditor;
 
-import { STYLE_PRESETS } from "@miladyai/shared/onboarding-presets";
+import { getStylePresets } from "@miladyai/shared/onboarding-presets";
 
 // Derive VRM roster from STYLE_PRESETS so character names stay in one place.
-const MILADY_VRM_ASSETS = STYLE_PRESETS.slice()
+const MILADY_STYLE_PRESETS = getStylePresets();
+
+const MILADY_VRM_ASSETS = MILADY_STYLE_PRESETS.slice()
   .sort((a, b) => a.avatarIndex - b.avatarIndex)
   .map((p) => ({ title: p.name, slug: `milady-${p.avatarIndex}` }));
 
@@ -153,7 +155,7 @@ const miladyBootConfig: AppBootConfig = {
   cloudApiBase:
     (import.meta.env.VITE_CLOUD_BASE as string) ?? "https://www.elizacloud.ai",
   vrmAssets: MILADY_VRM_ASSETS,
-  onboardingStyles: STYLE_PRESETS,
+  onboardingStyles: MILADY_STYLE_PRESETS,
   characterEditor: CharacterEditor,
   characterCatalog: MILADY_CHARACTER_CATALOG,
   envAliases: MILADY_ENV_ALIASES,

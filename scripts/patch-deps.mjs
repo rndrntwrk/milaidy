@@ -33,6 +33,7 @@ import {
   patchExtensionlessJsExports,
   patchMissingLifecycleScript,
   patchNobleHashesCompat,
+  patchPtyManagerCursorPositionCompat,
   patchProperLockfileSignalExitCompat,
   warnStaleBunCache,
 } from "./lib/patch-bun-exports.mjs";
@@ -77,6 +78,7 @@ patchExtensionlessJsExports(root, "@noble/curves");
 patchExtensionlessJsExports(root, "@noble/hashes");
 patchNobleHashesCompat(root);
 patchProperLockfileSignalExitCompat(root);
+patchPtyManagerCursorPositionCompat(root);
 patchBrokenElizaCoreRuntimeDists(root);
 try {
   patchAutonomousMiladyOnboardingPresets(root);

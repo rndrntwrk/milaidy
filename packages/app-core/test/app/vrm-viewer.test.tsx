@@ -7,7 +7,7 @@ vi.mock("@miladyai/app-core/utils", () => ({
   resolveAppAssetUrl: (path: string) => path,
 }));
 
-vi.mock("@miladyai/app-core/components/avatar/VrmEngine", () => {
+vi.mock("../../src/components/avatar/VrmEngine", () => {
   class MockVrmEngine {
     static instances: MockVrmEngine[] = [];
 
@@ -71,7 +71,7 @@ vi.mock("@miladyai/app-core/components/avatar/VrmEngine", () => {
   };
 });
 
-import { VrmViewer } from "@miladyai/app-core/components/avatar/VrmViewer";
+import { VrmViewer } from "../../src/components/avatar/VrmViewer";
 
 type MockVrmEngineInstance = {
   setWorldUrl: ReturnType<typeof vi.fn>;

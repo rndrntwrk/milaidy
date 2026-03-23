@@ -2821,33 +2821,29 @@ async function registerSqlPluginWithRecovery(
  * Build an elizaOS Character from the Eliza config.
  *
  * Resolves the agent name from `config.agents.list` (first entry) or
- * `config.ui.assistant.name`, falling back to "Eliza".  Character
+ * `config.ui.assistant.name`, falling back to the default bundled preset.
+ * Character
  * personality data (bio, system prompt, style, etc.) is stored in the
  * database — not the config file — so we only provide sensible defaults
  * here for the initial setup.
  */
 /** @internal Exported for testing. */
 export function buildCharacterFromConfig(config: ElizaConfig): Character {
-  // Resolve name: agents list → ui assistant → "Eliza"
   const agentEntry = config.agents?.list?.[0];
-  const name = agentEntry?.name ?? config.ui?.assistant?.name ?? "Eliza";
-  const bundledPreset = (() => {
-    const defaultPresetByName: Record<string, string> = {
-      Reimu: "uwu~",
-      Marisa: "hell yeah",
-      Yukari: "lol k",
-      Sakuya: "Noted.",
-      Koishi: "hehe~",
-      Remilia: "...",
-      Reisen: "locked in",
-    };
-    const presetByName = getPresetNameMap() ?? defaultPresetByName;
-    const presetCatchphrase = presetByName[name.trim()];
-    if (!presetCatchphrase) return undefined;
-    return getStylePresets().find(
-      (preset: StylePreset) => preset.catchphrase === presetCatchphrase,
-    );
-  })();
+  const uiConfig = (config.ui ?? {}) as {
+    assistant?: { name?: string };
+    avatarIndex?: number;
+    language?: unknown;
+    presetId?: string;
+  };
+  const language = normalizeCharacterLanguage(uiConfig.language);
+  const configuredName = agentEntry?.name ?? uiConfig.assistant?.name;
+  const bundledPreset =
+    resolveStylePresetById(uiConfig.presetId, language) ??
+    resolveStylePresetByAvatarIndex(uiConfig.avatarIndex, language) ??
+    resolveStylePresetByName(configuredName, language) ??
+    (configuredName ? undefined : getDefaultStylePreset(language));
+  const name = configuredName ?? bundledPreset?.name ?? getDefaultStylePreset(language).name;
 
   // Read personality fields from the agent config entry (set during
   // onboarding from the chosen style preset).  Fall back to generic
@@ -2865,6 +2861,10 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
     "You are {{name}}, an autonomous AI agent powered by elizaOS.";
   const style = agentEntry?.style ?? bundledPreset?.style;
   const adjectives = agentEntry?.adjectives ?? bundledPreset?.adjectives;
+  const topics =
+    agentEntry?.topics && agentEntry.topics.length > 0
+      ? agentEntry.topics
+      : bundledPreset?.topics;
   const postExamples = agentEntry?.postExamples ?? bundledPreset?.postExamples;
   const messageExamples =
     agentEntry?.messageExamples ?? bundledPreset?.messageExamples;
@@ -2967,7 +2967,7 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
     ...(agentEntry?.username ? { username: agentEntry.username } : {}),
     bio,
     system: systemPrompt,
-    ...(agentEntry?.topics ? { topics: agentEntry.topics } : {}),
+    ...(topics ? { topics } : {}),
     ...(style ? { style } : {}),
     ...(adjectives ? { adjectives } : {}),
     ...(postExamples ? { postExamples } : {}),
@@ -3021,7 +3021,14 @@ import { pickRandomNames } from "./onboarding-names";
 // ---------------------------------------------------------------------------
 
 import type { StylePreset } from "../contracts/onboarding";
-import { getPresetNameMap, getStylePresets } from "../onboarding-presets";
+import {
+  getDefaultStylePreset,
+  getStylePresets,
+  normalizeCharacterLanguage,
+  resolveStylePresetByAvatarIndex,
+  resolveStylePresetById,
+  resolveStylePresetByName,
+} from "../onboarding-presets";
 
 /**
  * Detect whether this is the first run (no agent name configured)
@@ -3055,7 +3062,7 @@ async function runFirstTimeSetup(config: ElizaConfig): Promise<ElizaConfig> {
   const randomNames = pickRandomNames(4);
 
   const nameChoice = await clack.select({
-    message: "♡♡eliza♡♡: Hey there, I'm.... err, what was my name again?",
+    message: "♡♡chen♡♡: hey, quick check, what was my name again?",
     options: [
       ...randomNames.map((n) => ({ value: n, label: n })),
       { value: "_custom_", label: "Custom...", hint: "type your own" },
@@ -3069,12 +3076,12 @@ async function runFirstTimeSetup(config: ElizaConfig): Promise<ElizaConfig> {
   if (nameChoice === "_custom_") {
     const customName = await clack.text({
       message: "OK, what should I be called?",
-      placeholder: "Eliza",
+      placeholder: "Chen",
     });
 
     if (clack.isCancel(customName)) cancelOnboarding();
 
-    name = customName.trim() || "Eliza";
+    name = customName.trim() || "Chen";
   } else {
     name = nameChoice;
   }
@@ -3085,7 +3092,7 @@ async function runFirstTimeSetup(config: ElizaConfig): Promise<ElizaConfig> {
   const styleChoice = await clack.select({
     message: `${name}: Now... how do I like to talk again?`,
     options: getStylePresets().map((preset: StylePreset) => ({
-      value: preset.catchphrase,
+      value: preset.id,
       label: preset.catchphrase,
       hint: preset.hint,
     })),
@@ -3094,7 +3101,7 @@ async function runFirstTimeSetup(config: ElizaConfig): Promise<ElizaConfig> {
   if (clack.isCancel(styleChoice)) cancelOnboarding();
 
   const chosenTemplate = getStylePresets().find(
-    (p: StylePreset) => p.catchphrase === styleChoice,
+    (p: StylePreset) => p.id === styleChoice,
   );
 
   // ── Step 3.5: Runtime selection (Cloud vs Local) ───────────────────────

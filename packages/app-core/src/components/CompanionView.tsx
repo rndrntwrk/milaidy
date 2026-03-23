@@ -2,17 +2,17 @@ import { useRenderGuard } from "@miladyai/app-core/hooks";
 import { useApp } from "@miladyai/app-core/state";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { ChatModalView } from "./ChatModalView";
+import { CloudStatusBadge } from "./CloudStatusBadge";
 import { CompanionHeader } from "./companion/CompanionHeader";
 import {
   CompanionSceneHost,
+  hasCompanionTeleportCompletedOnce,
   useSharedCompanionScene,
 } from "./companion/CompanionSceneHost";
 import { InferenceCloudAlertButton } from "./companion/InferenceCloudAlertButton";
 import { resolveCompanionInferenceNotice } from "./companion/resolve-companion-inference-notice";
 
-// Module-level flag so remounts (e.g. switching to character editor and back)
-// don't re-hide the chat after the avatar already loaded once.
-let _vrmTeleportCompletedOnce = false;
+const COMPANION_UI_REVEAL_FALLBACK_MS = 3500;
 
 /**
  * Inner overlay that subscribes to useApp() for frequently-changing data
@@ -33,7 +33,10 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
     conversationMessages,
     elizaCloudAuthRejected,
     elizaCloudConnected,
+    elizaCloudCredits,
+    elizaCloudCreditsCritical,
     elizaCloudCreditsError,
+    elizaCloudCreditsLow,
     elizaCloudEnabled,
     handleNewConversation,
     navigation,
@@ -45,19 +48,27 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
 
   // Gate chat + header behind avatar load — don't show chat or play
   // greeting speech until the VRM finishes its teleport-in animation.
-  const [avatarReady, setAvatarReady] = useState(_vrmTeleportCompletedOnce);
+  // When the shared scene already completed teleport while this overlay was
+  // unmounted (e.g. coming back from character edit), reveal immediately.
+  const [avatarReady, setAvatarReady] = useState(() =>
+    hasCompanionTeleportCompletedOnce(),
+  );
   useEffect(() => {
-    if (_vrmTeleportCompletedOnce) {
+    if (hasCompanionTeleportCompletedOnce()) {
       setAvatarReady(true);
       return;
     }
     const handler = () => {
-      _vrmTeleportCompletedOnce = true;
       setAvatarReady(true);
     };
+    const fallbackTimer = window.setTimeout(() => {
+      setAvatarReady((prev) => (prev ? prev : true));
+    }, COMPANION_UI_REVEAL_FALLBACK_MS);
     window.addEventListener("eliza:vrm-teleport-complete", handler);
-    return () =>
+    return () => {
+      window.clearTimeout(fallbackTimer);
       window.removeEventListener("eliza:vrm-teleport-complete", handler);
+    };
   }, []);
 
   const handleShellViewChange = useCallback(
@@ -110,13 +121,36 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
     });
   }, [inferenceNotice, navigation, setState, setTab, switchShellView]);
 
-  const companionInferenceHeaderExtra = inferenceNotice ? (
-    <InferenceCloudAlertButton
-      notice={inferenceNotice}
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={handleInferenceAlertClick}
-    />
-  ) : null;
+  const handleCloudStatusClick = useCallback(() => {
+    switchShellView("desktop");
+    navigation.scheduleAfterTabCommit(() => {
+      setState("cloudDashboardView", "billing");
+      setTab("settings");
+    });
+  }, [navigation, setState, setTab, switchShellView]);
+
+  const companionHeaderRightExtras = (
+    <>
+      {inferenceNotice ? (
+        <InferenceCloudAlertButton
+          notice={inferenceNotice}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={handleInferenceAlertClick}
+        />
+      ) : null}
+      <CloudStatusBadge
+        connected={elizaCloudConnected}
+        credits={elizaCloudCredits}
+        creditsLow={elizaCloudCreditsLow}
+        creditsCritical={elizaCloudCreditsCritical}
+        authRejected={elizaCloudAuthRejected}
+        creditsError={elizaCloudCreditsError}
+        t={t}
+        onClick={handleCloudStatusClick}
+        dataTestId="companion-cloud-status"
+      />
+    </>
+  );
 
   return (
     <div className="absolute inset-0 z-10 flex flex-col pointer-events-none">
@@ -142,7 +176,7 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
             setState("chatAgentVoiceMuted", !chatAgentVoiceMuted)
           }
           onNewChat={() => void handleNewConversation()}
-          rightExtras={companionInferenceHeaderExtra}
+          rightExtras={companionHeaderRightExtras}
         />
       </div>
 

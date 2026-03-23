@@ -5,7 +5,7 @@
  * displayed text and the voice (TTS) text are clean at every step of the
  * stream — no XML leaks, no garbled output, no internal reasoning spoken.
  */
-import { normalizeDisplayText } from "@miladyai/app-core/components/MessageContent";
+import { normalizeDisplayText } from "../../src/components/MessageContent";
 import { __voiceChatInternals } from "@miladyai/app-core/hooks";
 import { mergeStreamingText } from "@miladyai/app-core/utils/streaming-text";
 import { describe, expect, it } from "vitest";

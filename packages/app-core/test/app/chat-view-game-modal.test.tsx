@@ -32,6 +32,7 @@ interface ChatViewContextStub {
   shareIngestNotice: string;
   chatMode: "simple" | "power";
   chatAgentVoiceMuted: boolean;
+  elizaCloudEnabled: boolean;
   elizaCloudConnected: boolean;
   selectedVrmIndex: number;
   uiLanguage: "en" | "zh-CN";
@@ -65,7 +66,7 @@ vi.mock("@miladyai/app-core/hooks", async () => {
   };
 });
 
-vi.mock("@miladyai/app-core/components/MessageContent", () => ({
+vi.mock("../../src/components/MessageContent", () => ({
   MessageContent: ({ message }: { message: { text: string } }) =>
     React.createElement("span", null, message.text),
 }));
@@ -75,7 +76,7 @@ vi.mock("@miladyai/app-core/api", () => ({
 }));
 
 import { textOf } from "../../../../test/helpers/react-test";
-import { ChatView } from "@miladyai/app-core/components/ChatView";
+import { ChatView } from "../../src/components/ChatView";
 
 function createContext(
   overrides?: Partial<ChatViewContextStub>,
@@ -98,6 +99,7 @@ function createContext(
     shareIngestNotice: "",
     chatMode: "simple",
     chatAgentVoiceMuted: false,
+    elizaCloudEnabled: false,
     elizaCloudConnected: false,
     selectedVrmIndex: 0,
     uiLanguage: "en",
@@ -354,10 +356,66 @@ describe("ChatView game-modal variant", () => {
     expect(handleChatSend).toHaveBeenCalled();
   });
 
+  it("keeps the companion composer interactive while a reply is streaming", async () => {
+    const handleChatSend = vi.fn(async () => {});
+    const handleChatStop = vi.fn();
+    mockUseApp.mockReturnValue(
+      createContext({
+        chatSending: true,
+        chatInput: "follow up",
+        handleChatSend,
+        handleChatStop,
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(ChatView, { variant: "game-modal" }),
+      );
+    });
+
+    const textarea = tree.root.findByType("textarea");
+    const actionButton = tree.root.findByProps({
+      "data-testid": "chat-composer-action",
+    });
+
+    expect(textarea.props.disabled).toBe(false);
+
+    await act(async () => {
+      actionButton.props.onClick();
+    });
+
+    expect(handleChatSend).toHaveBeenCalledTimes(1);
+    expect(handleChatStop).not.toHaveBeenCalled();
+  });
+
   it("passes cloud auth into the voice hook for companion defaults", async () => {
     mockUseApp.mockReturnValue(
       createContext({
         elizaCloudConnected: true,
+      }),
+    );
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(ChatView, { variant: "game-modal" }),
+      );
+    });
+
+    expect(mockUseVoiceChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cloudConnected: true,
+        interruptOnSpeech: true,
+      }),
+    );
+  });
+
+  it("treats an enabled cloud key as voice cloud access even without oauth", async () => {
+    mockUseApp.mockReturnValue(
+      createContext({
+        elizaCloudEnabled: true,
+        elizaCloudConnected: false,
       }),
     );
 

@@ -26,6 +26,16 @@ export function sanitizeApiKey(apiKey: string | undefined): string | undefined {
   return apiKey;
 }
 
+/**
+ * Treat any non-empty stored value as an existing key, including masked or
+ * redacted placeholders from persisted config.
+ */
+export function hasConfiguredApiKey(
+  apiKey: string | null | undefined,
+): boolean {
+  return typeof apiKey === "string" && apiKey.trim().length > 0;
+}
+
 export const PREMADE_VOICES: VoicePreset[] = [
   // Female
   {

@@ -6,6 +6,7 @@ import {
   invokeDesktopBridgeRequestWithTimeout,
   subscribeDesktopBridgeEvent,
 } from "@miladyai/app-core/bridge";
+// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 type TestWindow = Window & {
@@ -79,9 +80,9 @@ describe("electrobun rpc bridge", () => {
     const pending = invokeDesktopBridgeRequestWithTimeout({
       rpcMethod: "agentPostCloudDisconnect",
       ipcChannel: "agent:postCloudDisconnect",
-      timeoutMs: 5000,
+      timeoutMs: 10,
     });
-    await vi.advanceTimersByTimeAsync(5000);
+    await vi.advanceTimersByTimeAsync(10);
     await expect(pending).resolves.toEqual({ status: "timeout" });
     vi.useRealTimers();
   });

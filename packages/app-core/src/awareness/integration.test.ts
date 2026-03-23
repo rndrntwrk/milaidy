@@ -1,14 +1,14 @@
 import type { IAgentRuntime, Memory, State } from "@elizaos/core";
+import {
+  AwarenessRegistry,
+  getGlobalAwarenessRegistry,
+  setGlobalAwarenessRegistry,
+} from "@miladyai/shared/awareness";
 import { SUMMARY_TOTAL_CHAR_LIMIT } from "@miladyai/shared/contracts/awareness";
 import { describe, expect, it } from "vitest";
 import { getSelfStatusAction } from "../actions/get-self-status";
 import { createSelfStatusProvider } from "../providers/self-status";
 import { builtinContributors } from "./contributors";
-import {
-  AwarenessRegistry,
-  getGlobalAwarenessRegistry,
-  setGlobalAwarenessRegistry,
-} from "./registry";
 
 function fakeRuntime(): IAgentRuntime {
   return {

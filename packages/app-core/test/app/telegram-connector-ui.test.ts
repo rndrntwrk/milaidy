@@ -24,7 +24,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   },
 }));
 
-import { PluginsView } from "@miladyai/app-core/components/PluginsView";
+import { PluginsView } from "../../src/components/PluginsView";
 
 function telegramPlugin(overrides: Record<string, unknown> = {}) {
   return {

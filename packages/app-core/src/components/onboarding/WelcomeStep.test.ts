@@ -63,10 +63,7 @@ describe("WelcomeStep", () => {
     await act(async () => {
       buttons[1]?.props.onClick({ currentTarget: null });
     });
-    expect(setState).toHaveBeenCalledWith(
-      "onboardingStyle",
-      "Let's get to work!",
-    );
+    expect(setState).toHaveBeenCalledWith("onboardingStyle", "chen");
     expect(setState).toHaveBeenCalledWith("onboardingName", "Chen");
     expect(setState).toHaveBeenCalledWith("selectedVrmIndex", 1);
     expect(goToOnboardingStep).toHaveBeenCalledWith("hosting");

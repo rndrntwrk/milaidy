@@ -3,7 +3,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { isEnvDisabled } from "../utils/env";
 import {
   keychainAccountForSecretKind,
   MILADY_AGENT_VAULT_SERVICE,
@@ -325,5 +324,6 @@ export function createNodePlatformSecureStore(): PlatformSecureStore {
  * explicitly.
  */
 export function isWalletOsStoreReadEnabled(): boolean {
-  return !isEnvDisabled(process.env.MILADY_WALLET_OS_STORE);
+  const raw = process.env.MILADY_WALLET_OS_STORE?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "on" || raw === "yes";
 }

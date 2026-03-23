@@ -92,7 +92,7 @@ import type {
   TrajectoryStats,
 } from "@miladyai/app-core/api";
 import { flush } from "../../../../test/helpers/react-test";
-import { TrajectoriesView } from "@miladyai/app-core/components/TrajectoriesView";
+import { TrajectoriesView } from "../../src/components/TrajectoriesView";
 
 const { mockClient, mockConfirmDesktopAction, mockUseApp } = hoisted;
 

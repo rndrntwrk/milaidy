@@ -19,7 +19,7 @@ const {
   executeDatabaseQueryMock: vi.fn(),
 }));
 
-vi.mock("@miladyai/app-core/components/vector-browser-three", () => {
+vi.mock("../../src/components/vector-browser-three", () => {
   class MockVector2 {
     x = 0;
     y = 0;
@@ -157,7 +157,7 @@ vi.mock("@miladyai/app-core/state", () => ({
 }));
 
 import { client } from "@miladyai/app-core/api";
-import { VectorBrowserView } from "@miladyai/app-core/components/VectorBrowserView";
+import { VectorBrowserView } from "../../src/components/VectorBrowserView";
 
 async function flush(times = 4): Promise<void> {
   for (let i = 0; i < times; i++) {

@@ -29,7 +29,7 @@ import {
   MessageContent,
   normalizePluginId,
   tryParsePatch,
-} from "@miladyai/app-core/components/MessageContent";
+} from "../../src/components/MessageContent";
 
 // ---------------------------------------------------------------------------
 // Helpers

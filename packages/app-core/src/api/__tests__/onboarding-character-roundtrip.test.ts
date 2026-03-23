@@ -123,11 +123,13 @@ describe("Onboarding → Character round-trip", () => {
     expect((character.topics as string[]).length).toBe(
       chenPreset.topics?.length,
     );
-    expect(character.topics).toContain("emotional intelligence");
-    expect(character.topics).toContain("design thinking");
+    expect(character.topics).toContain(chenPreset.topics[0]);
+    expect(character.topics).toContain(
+      chenPreset.topics[chenPreset.topics.length - 1],
+    );
 
     expect(character.postExamples.length).toBeGreaterThan(0);
-    expect(character.postExamples).toContain("you've got this");
+    expect(character.postExamples).toContain(chenPreset.postExamples[0]);
     expect(character.messageExamples.length).toBeGreaterThan(0);
   });
 

@@ -4497,6 +4497,10 @@ export class MiladyClient {
         return;
       }
 
+      if (!parsed.type && typeof parsed.text === "string") {
+        parsed.type = "token";
+      }
+
       if (parsed.type === "token") {
         const chunk = parsed.text ?? "";
         const nextFullText =

@@ -6,6 +6,7 @@ import type { SubscriptionProvider } from "../auth/types";
 import { SUBSCRIPTION_PROVIDER_MAP } from "../auth/types";
 import type { ElizaConfig } from "../config/types.eliza";
 import {
+  ONBOARDING_PROVIDER_CATALOG,
   getOnboardingProviderOption,
   isCloudManagedConnection,
   isLocalProviderConnection,
@@ -94,6 +95,25 @@ function clearPiAiFlag(config: MutableElizaConfig): void {
   const env = ensureEnv(config);
   delete env.ELIZA_USE_PI_AI;
   delete process.env.ELIZA_USE_PI_AI;
+}
+
+function clearPersistedEnvValue(config: MutableElizaConfig, key: string): void {
+  const env = asRecord(config.env);
+  const vars = asRecord(env?.vars);
+
+  if (vars) {
+    delete vars[key];
+    if (Object.keys(vars).length === 0 && env) {
+      delete env.vars;
+    }
+  }
+
+  if (env) {
+    delete env[key];
+    if (Object.keys(env).length === 0) {
+      delete config.env;
+    }
+  }
 }
 
 function readString(
@@ -202,6 +222,53 @@ export function clearSubscriptionProviderConfig(
   config.agents ??= {};
   config.agents.defaults ??= {};
   delete config.agents.defaults.subscriptionProvider;
+}
+
+/**
+ * Clear persisted onboarding state that should force the UI back through the
+ * onboarding flow on the next load/reset.
+ */
+export function clearPersistedOnboardingConfig(
+  config: MutableElizaConfig,
+): void {
+  if (config.meta && typeof config.meta === "object") {
+    delete (config.meta as Record<string, unknown>).onboardingComplete;
+  }
+
+  config.agents = { list: [] };
+
+  if (config.cloud && typeof config.cloud === "object") {
+    config.cloud = {};
+  }
+
+  const models = asRecord(config.models);
+  if (models) {
+    delete models.small;
+    delete models.large;
+    if (Object.keys(models).length === 0) {
+      delete config.models;
+    }
+  }
+
+  const messages = asRecord(config.messages);
+  if (messages) {
+    delete messages.tts;
+    if (Object.keys(messages).length === 0) {
+      delete config.messages;
+    }
+  }
+
+  for (const provider of ONBOARDING_PROVIDER_CATALOG) {
+    if (provider.envKey) {
+      clearPersistedEnvValue(config, provider.envKey);
+    }
+  }
+  clearPersistedEnvValue(config, "ELIZA_USE_PI_AI");
+
+  delete process.env.ELIZAOS_CLOUD_API_KEY;
+  delete process.env.ELIZAOS_CLOUD_ENABLED;
+  deleteCredentials("anthropic-subscription");
+  deleteCredentials("openai-codex");
 }
 
 export function createProviderSwitchConnection(args: {
@@ -375,17 +442,6 @@ export async function applyOnboardingConnectionConfig(
   }
 
   if (connection.kind === "remote-provider") {
-    config.cloud ??= {};
-    config.cloud.enabled = true;
-    config.cloud.provider = "remote";
-    config.cloud.runtime = "cloud";
-    (config.cloud as Record<string, unknown>).remoteApiBase =
-      connection.remoteApiBase;
-    if (connection.remoteAccessToken) {
-      (config.cloud as Record<string, unknown>).remoteAccessToken =
-        connection.remoteAccessToken;
-    }
-
     if (connection.provider) {
       const localConnection = createProviderSwitchConnection({
         provider: connection.provider,
@@ -396,12 +452,38 @@ export async function applyOnboardingConnectionConfig(
         await applyOnboardingConnectionConfig(config, localConnection);
       }
     }
+
+    config.cloud ??= {};
+    config.cloud.enabled = true;
+    config.cloud.provider = "remote";
+    config.cloud.runtime = "cloud";
+    (config.cloud as Record<string, unknown>).remoteApiBase =
+      connection.remoteApiBase;
+    if (connection.remoteAccessToken) {
+      (config.cloud as Record<string, unknown>).remoteAccessToken =
+        connection.remoteAccessToken;
+    }
     return;
   }
 
-  config.cloud ??= {};
-  config.cloud.enabled = false;
-  config.cloud.runtime = "local";
+  config.cloud = {
+    enabled: false,
+    runtime: "local",
+  };
+
+  const models = asRecord(config.models);
+  if (models) {
+    delete models.small;
+    delete models.large;
+    if (Object.keys(models).length === 0) {
+      delete config.models;
+    }
+  }
+
+  delete process.env.ELIZAOS_CLOUD_API_KEY;
+  delete process.env.ELIZAOS_CLOUD_ENABLED;
+  delete process.env.ELIZAOS_CLOUD_SMALL_MODEL;
+  delete process.env.ELIZAOS_CLOUD_LARGE_MODEL;
 
   const normalizedProvider =
     connection.provider === "openai-subscription"

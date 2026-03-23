@@ -301,6 +301,30 @@ describe("Task Lifecycle via API", () => {
     }
   });
 
+  it("GET /api/coding-agents/coordinator/status returns structured status after runtime start", async () => {
+    const { status, data } = await http$(
+      server?.port,
+      "GET",
+      "/api/coding-agents/coordinator/status",
+    );
+
+    expect(status).toBe(200);
+    expect(data.supervisionLevel).toBeTypeOf("string");
+    expect(Array.isArray(data.tasks)).toBe(true);
+    expect(typeof data.pendingConfirmations).toBe("number");
+  });
+
+  it("GET /api/coding-agents/preflight returns an array after runtime start", async () => {
+    const { status, data } = await http$(
+      server?.port,
+      "GET",
+      "/api/coding-agents/preflight",
+    );
+
+    expect(status).toBe(200);
+    expect(Array.isArray(data)).toBe(true);
+  });
+
   it("POST /api/coding-agents/tasks can create a task", async () => {
     const { status, data } = await http$(
       server?.port,

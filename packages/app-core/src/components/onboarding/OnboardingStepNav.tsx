@@ -20,91 +20,97 @@ export function OnboardingStepNav() {
   const currentIndex = activeSteps.findIndex((s) => s.id === onboardingStep);
 
   return (
-    <div className="flex flex-col justify-center py-[60px] pl-[90px] pr-0 relative z-10 max-md:flex-row max-md:justify-center max-md:p-4">
-      <div
-        style={
-          {
-            "--tw-after-height":
-              currentIndex === 0
-                ? "0px"
-                : `calc((100% - 28px) * ${Math.min(currentIndex, 5)} / 5)`,
-          } as React.CSSProperties
-        }
-        {...{
-          className: `flex flex-col max-md:flex-row relative before:hidden after:absolute after:left-[6px] after:top-[14px] after:w-[1px] after:bg-gradient-to-b after:from-[rgba(240,185,11,0.4)] after:to-[rgba(240,185,11,0.12)] after:transition-all after:duration-[800ms] after:ease-[cubic-bezier(0.25,0.46,0.45,0.94)] after:z-0 after:h-[var(--tw-after-height)] max-md:after:hidden`,
-        }}
-      >
-        {activeSteps.map((step, i) => {
-          const isDone = i < currentIndex;
-          const isActive = i === currentIndex;
-          const isClickable = isDone;
-
-          const rowClass = `flex items-center gap-[20px] py-[19px] max-md:py-2 relative group ${isClickable ? "cursor-pointer w-full border-none bg-transparent m-0 text-left text-inherit focus-visible:outline-2 focus-visible:outline-[rgba(240,185,11,0.55)] focus-visible:outline-offset-3" : ""}`;
-
-          // Dot classes
-          let dotClass =
-            "w-[14px] h-[14px] border border-[rgba(255,255,255,0.12)] rotate-45 shrink-0 relative z-10 bg-[#0c0e14] transition-all duration-500 ease-[cubic-bezier(0.25,0.46,0.45,0.94)]";
-          if (isDone) {
-            dotClass +=
-              " !bg-[rgba(240,185,11,0.35)] !border-[rgba(240,185,11,0.5)]";
-          } else if (isActive) {
-            dotClass +=
-              " !bg-[#f0b90b] !border-[var(--text)] shadow-[0_0_12px_rgba(240,185,11,0.5)] animate-[onboarding-dot-pulse_2s_ease-in-out_infinite]";
+    <div className="relative z-10 flex flex-col justify-center py-[48px] pl-[40px] pr-0 max-md:items-center max-md:px-4 max-md:pt-4 max-md:pb-2">
+      <div className="w-[248px] rounded-[28px] border border-[var(--onboarding-nav-border)] [background:var(--onboarding-nav-scrim)] px-[26px] py-[30px] shadow-[var(--onboarding-nav-shadow)] backdrop-blur-[22px] backdrop-saturate-[1.2] max-md:w-fit max-md:max-w-[calc(100vw-32px)] max-md:rounded-[22px] max-md:px-4 max-md:py-3">
+        <div
+          style={
+            {
+              "--tw-after-height":
+                currentIndex === 0
+                  ? "0px"
+                  : `calc((100% - 28px) * ${Math.min(currentIndex, 5)} / 5)`,
+            } as React.CSSProperties
           }
+          {...{
+            className: `relative flex flex-col max-md:flex-row max-md:items-center max-md:justify-center max-md:gap-5 after:absolute after:left-[6px] after:top-[14px] after:z-0 after:h-[var(--tw-after-height)] after:w-[1px] after:bg-gradient-to-b after:from-accent/60 after:to-accent/15 after:transition-all after:duration-[800ms] after:ease-[cubic-bezier(0.25,0.46,0.45,0.94)] max-md:after:hidden`,
+          }}
+        >
+          {activeSteps.map((step, i) => {
+            const isDone = i < currentIndex;
+            const isActive = i === currentIndex;
+            const isClickable = isDone;
 
-          // Name classes
-          let nameClass =
-            "text-[15px] tracking-[0.08em] font-medium drop-shadow-[0_2px_10px_rgba(3,5,10,0.65)] transition-all duration-500";
-          if (isDone) {
-            nameClass +=
-              " text-[rgba(240,238,250,0.72)] group-hover:text-[rgba(240,238,250,0.85)]";
-          } else if (isActive) {
-            nameClass += " text-[rgba(240,238,250,0.92)] font-semibold";
-          } else {
-            nameClass += " text-[rgba(240,238,250,0.58)]";
-          }
+            const rowClass = `relative group flex w-full items-center gap-[20px] py-[19px] max-md:w-auto max-md:gap-0 max-md:py-0 ${isClickable ? "cursor-pointer border-none bg-transparent m-0 text-left text-inherit hover:bg-transparent focus-visible:outline-2 focus-visible:outline-accent/60 focus-visible:outline-offset-3" : ""}`;
 
-          // Subtitle classes
-          let subClass =
-            "text-[13px] tracking-[0.05em] drop-shadow-[0_2px_10px_rgba(3,5,10,0.55)] transition-all duration-500";
-          if (isActive) {
-            subClass += " text-[rgba(240,185,11,0.8)]";
-          } else {
-            subClass += " text-[rgba(240,238,250,0.38)]";
-          }
+            // Dot classes
+            let dotClass =
+              "w-[14px] h-[14px] border border-[var(--onboarding-nav-card-border)] rotate-45 shrink-0 relative z-10 bg-[var(--onboarding-nav-card-bg)] transition-all duration-500 ease-[cubic-bezier(0.25,0.46,0.45,0.94)]";
+            if (isDone) {
+              dotClass +=
+                " !bg-[var(--onboarding-accent-bg)] !border-[var(--onboarding-accent-border-hover)]";
+            } else if (isActive) {
+              dotClass +=
+                " !bg-accent !border-[rgba(255,248,220,0.9)] shadow-[0_0_12px_rgba(240,185,11,0.5)] animate-[onboarding-dot-pulse_2s_ease-in-out_infinite]";
+            }
 
-          if (isClickable) {
+            // Name classes
+            let nameClass =
+              "text-[15px] tracking-[0.08em] font-medium drop-shadow-[0_2px_10px_rgba(3,5,10,0.65)] transition-all duration-500";
+            if (isDone) {
+              nameClass +=
+                " text-[var(--onboarding-nav-link)] group-hover:text-[var(--onboarding-nav-link-hover)]";
+            } else if (isActive) {
+              nameClass +=
+                " text-[var(--onboarding-nav-text-primary)] font-semibold";
+            } else {
+              nameClass += " text-[var(--onboarding-nav-text-subtle)]";
+            }
+
+            // Subtitle classes
+            let subClass =
+              "text-[13px] tracking-[0.05em] drop-shadow-[0_2px_10px_rgba(3,5,10,0.55)] transition-all duration-500";
+            if (isDone) {
+              subClass +=
+                " text-[var(--onboarding-nav-text-subtle)] group-hover:text-[var(--onboarding-nav-text-primary)]";
+            } else if (isActive) {
+              subClass += " text-accent";
+            } else {
+              subClass += " text-[var(--onboarding-nav-text-faint)]";
+            }
+
+            if (isClickable) {
+              return (
+                <Button
+                  key={step.id}
+                  variant="ghost"
+                  type="button"
+                  className={rowClass}
+                  onClick={() => handleOnboardingJumpToStep(step.id)}
+                >
+                  <div className={dotClass} />
+                  <div className="flex flex-col gap-0.5 max-md:hidden">
+                    <span className={nameClass}>{t(step.name)}</span>
+                    <span className={subClass}>{t(step.subtitle)}</span>
+                  </div>
+                </Button>
+              );
+            }
+
             return (
-              <Button
+              <div
                 key={step.id}
-                variant="ghost"
-                type="button"
                 className={rowClass}
-                onClick={() => handleOnboardingJumpToStep(step.id)}
+                {...(isActive ? { "aria-current": "step" as const } : {})}
               >
                 <div className={dotClass} />
                 <div className="flex flex-col gap-0.5 max-md:hidden">
                   <span className={nameClass}>{t(step.name)}</span>
                   <span className={subClass}>{t(step.subtitle)}</span>
                 </div>
-              </Button>
-            );
-          }
-
-          return (
-            <div
-              key={step.id}
-              className={rowClass}
-              {...(isActive ? { "aria-current": "step" as const } : {})}
-            >
-              <div className={dotClass} />
-              <div className="flex flex-col gap-0.5 max-md:hidden">
-                <span className={nameClass}>{t(step.name)}</span>
-                <span className={subClass}>{t(step.subtitle)}</span>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );

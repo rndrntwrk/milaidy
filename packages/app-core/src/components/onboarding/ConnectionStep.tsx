@@ -38,18 +38,18 @@ const providerOverrides: Record<
 > = {
   elizacloud: {
     name: "Eliza Cloud",
-    description: "LLMs, RPCs & more included",
+    description: "Models + RPC included",
   },
   "anthropic-subscription": {
     name: "Claude Sub",
-    description: "Pro/Max subscription",
+    description: "Claude plan",
   },
   "openai-subscription": {
     name: "ChatGPT Sub",
-    description: "Plus/Pro subscription",
+    description: "ChatGPT plan",
   },
-  anthropic: { name: "Anthropic", description: "Claude API key" },
-  openai: { name: "OpenAI", description: "GPT API key" },
+  anthropic: { name: "Anthropic", description: "Claude key" },
+  openai: { name: "OpenAI", description: "GPT key" },
   openrouter: { name: "OpenRouter", description: "Multi-model API" },
   gemini: { name: "Gemini", description: "Google AI" },
   grok: { name: "xAI (Grok)" },
@@ -93,6 +93,7 @@ function applyOnboardingPatch(
 
 export function ConnectionStep() {
   const {
+    onboardingStep,
     onboardingOptions,
     onboardingRunMode,
     onboardingCloudProvider,
@@ -236,6 +237,15 @@ export function ConnectionStep() {
     onboardingDetectedProviders,
     setState,
   ]);
+
+  useEffect(() => {
+    const isProviderScreen =
+      spec.screen === "providerGrid" || spec.screen === "providerDetail";
+    const desiredStep = isProviderScreen ? "providers" : "hosting";
+    if (onboardingStep !== desiredStep) {
+      setState("onboardingStep", desiredStep);
+    }
+  }, [onboardingStep, setState, spec.screen]);
 
   const shared: ConnectionUiSharedProps = {
     dispatch: dispatchConnection,

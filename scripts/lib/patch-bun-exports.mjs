@@ -377,6 +377,7 @@ export function applyPatchToPackageJson(pkgPath) {
   if (dot.default?.endsWith("/src/index.ts")) {
     delete dot.default;
   }
+  rmSync(pkgPath, { force: true });
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
   return true;
 }
@@ -410,6 +411,7 @@ export function applyExtensionlessJsExportAliases(pkgPath) {
 
   if (!patched) return false;
 
+  rmSync(pkgPath, { force: true });
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
   return true;
 }
@@ -480,6 +482,7 @@ export function applyNobleHashesCompat(pkgPath) {
 
   if (!patched) return false;
 
+  rmSync(pkgPath, { force: true });
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
   return true;
 }
@@ -517,6 +520,7 @@ export function applyMissingLifecycleScriptPatch(
     delete pkg.scripts;
   }
 
+  rmSync(pkgPath, { force: true });
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
   return true;
 }
@@ -994,6 +998,105 @@ export function patchProperLockfileSignalExitCompat(root, log = console.log) {
       patched = true;
       log(
         "[patch-deps] Patched proper-lockfile: signal-exit v3/v4 compatibility applied.",
+      );
+    }
+  }
+  return patched;
+}
+
+const PTY_MANAGER_CURSOR_POSITION_WRITE =
+  '      this.ptyProcess.write("\\x1B[1;1R");';
+
+/**
+ * Codex asks the terminal emulator for cursor position via ESC[6n during TUI
+ * bootstrap. node-pty exposes a PTY, not a terminal emulator, so nothing
+ * answers unless we synthesize a CPR response on the host side.
+ */
+export function applyPtyManagerCursorPositionCompat(filePath) {
+  if (!existsSync(filePath)) return false;
+
+  const compatSource = readFileSync(filePath, "utf8");
+  if (compatSource.includes(PTY_MANAGER_CURSOR_POSITION_WRITE)) return false;
+
+  const outputBufferLine = "      this.outputBuffer += data;";
+  const emitOutputLine = '      this.emit("output", data);';
+  const scheduleGuard = "      if (!this._processScheduled) {";
+  const processOutputDoc =
+    "  /**\n   * Process the accumulated output buffer.\n";
+
+  if (
+    !compatSource.includes(outputBufferLine) ||
+    !compatSource.includes(emitOutputLine) ||
+    !compatSource.includes(scheduleGuard) ||
+    !compatSource.includes(processOutputDoc)
+  ) {
+    return false;
+  }
+
+  let next = compatSource.replace(
+    outputBufferLine,
+    "      const sanitizedData = this.respondToCursorPositionRequests(data);\n      this.outputBuffer += sanitizedData;",
+  );
+  next = next.replace(
+    emitOutputLine,
+    '      if (sanitizedData.length > 0) {\n        this.emit("output", sanitizedData);\n      }',
+  );
+  next = next.replace(
+    scheduleGuard,
+    "      if (sanitizedData.length > 0 && !this._processScheduled) {",
+  );
+  next = next.replace(
+    processOutputDoc,
+    [
+      "  respondToCursorPositionRequests(data) {",
+      '    if (!this.ptyProcess || !data.includes("\\x1B[6n")) {',
+      "      return data;",
+      "    }",
+      "    let requestCount = 0;",
+      '    const sanitizedData = data.replace(/\\x1B\\[6n/g, () => {',
+      "      requestCount += 1;",
+      '      return "";',
+      "    });",
+      "    for (let i = 0; i < requestCount; i += 1) {",
+      PTY_MANAGER_CURSOR_POSITION_WRITE,
+      "    }",
+      "    if (requestCount > 0) {",
+      "      this.logger.debug(",
+      "        { sessionId: this.id, requestCount },",
+      '        "Responded to cursor position request",',
+      "      );",
+      "    }",
+      "    return sanitizedData;",
+      "  }",
+      "",
+      processOutputDoc.trimEnd(),
+    ].join("\n"),
+  );
+
+  if (next === compatSource) return false;
+
+  writeFileSync(filePath, next, "utf8");
+  return true;
+}
+
+/**
+ * Patch all installed pty-manager copies so CPR requests get terminal-style
+ * responses when coding-agent CLIs run under node-pty.
+ */
+export function patchPtyManagerCursorPositionCompat(
+  root,
+  log = console.log,
+) {
+  const candidates = [
+    ...findPackageFilePaths(root, "pty-manager", "dist/index.js"),
+    ...findPackageFilePaths(root, "pty-manager", "dist/pty-worker.js"),
+  ];
+  let patched = false;
+  for (const filePath of candidates) {
+    if (applyPtyManagerCursorPositionCompat(filePath)) {
+      patched = true;
+      log(
+        `[patch-deps] Patched pty-manager cursor position compatibility: ${filePath}`,
       );
     }
   }

@@ -37,7 +37,7 @@ vi.mock("@miladyai/ui", async () => {
   };
 });
 
-import { ConversationsSidebar } from "@miladyai/app-core/components/ConversationsSidebar";
+import { ConversationsSidebar } from "../../src/components/ConversationsSidebar";
 
 type ConversationStub = {
   id: string;

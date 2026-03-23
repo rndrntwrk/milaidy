@@ -14,6 +14,7 @@
 
 import { Electroview } from "electrobun/view";
 import type { RpcMessageListener } from "../types.js";
+import { ensureElectrobunGlobal } from "./electrobun-stub.js";
 
 type RendererRequestHandler = (params: unknown) => Promise<unknown>;
 type RendererBridgeRpc = {

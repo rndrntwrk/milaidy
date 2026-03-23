@@ -181,7 +181,7 @@ vi.mock("@miladyai/app-core/state", async () => {
   };
 });
 
-import { InventoryView } from "@miladyai/app-core/components/InventoryView";
+import { InventoryView } from "../../src/components/InventoryView";
 
 type WalletState = {
   walletConfig: { chains: string[]; selectedChain: string } | null;

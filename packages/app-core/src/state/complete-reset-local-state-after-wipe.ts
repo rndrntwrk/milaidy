@@ -15,10 +15,12 @@ export type CompleteResetLocalStateDeps = {
   setAgentStatus: (status: AgentStatus | null) => void;
   resetClientConnection: () => void;
   clearPersistedConnectionMode: () => void;
+  clearPersistedAvatarIndex: () => void;
   setClientBaseUrl: (url: string | null) => void;
   setClientToken: (token: string | null) => void;
   clearElizaCloudSessionUi: () => void;
   markOnboardingReset: () => void;
+  resetAvatarSelection: () => void;
   clearConversationLists: () => void;
   fetchOnboardingOptions: () => Promise<OnboardingOptions>;
   setOnboardingOptions: (options: OnboardingOptions) => void;
@@ -35,10 +37,12 @@ export async function completeResetLocalStateAfterServerWipe(
   d.resetClientConnection();
 
   d.clearPersistedConnectionMode();
+  d.clearPersistedAvatarIndex();
   d.setClientBaseUrl(null);
   d.setClientToken(null);
   d.clearElizaCloudSessionUi();
   d.markOnboardingReset();
+  d.resetAvatarSelection();
   d.clearConversationLists();
   try {
     d.logResetDebug("resetLocalState: fetching onboarding options after reset");

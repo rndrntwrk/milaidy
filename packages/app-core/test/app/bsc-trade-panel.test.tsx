@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { BscTradePanel } from "@miladyai/app-core/components/BscTradePanel";
+import { BscTradePanel } from "../../src/components/BscTradePanel";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";

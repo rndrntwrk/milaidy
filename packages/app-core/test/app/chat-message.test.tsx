@@ -12,12 +12,12 @@ vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
-vi.mock("@miladyai/app-core/components/MessageContent", () => ({
+vi.mock("../../src/components/MessageContent", () => ({
   MessageContent: ({ message }: { message: { text: string } }) =>
     React.createElement("span", null, message.text),
 }));
 
-import { ChatMessage } from "@miladyai/app-core/components/ChatMessage";
+import { ChatMessage } from "../../src/components/ChatMessage";
 
 describe("ChatMessage actions", () => {
   it("reveals assistant actions on tap when hover is unavailable", async () => {

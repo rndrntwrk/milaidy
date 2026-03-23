@@ -268,7 +268,7 @@ vi.mock("@miladyai/app-core/state", () => ({
 }));
 
 // Mock renderer wrapper to avoid WebGL issues in tests.
-vi.mock("@miladyai/app-core/components/vector-browser-three", () => {
+vi.mock("../../src/components/vector-browser-three", () => {
   const mockVector2 = class {
     x = 0;
     y = 0;
@@ -369,7 +369,7 @@ vi.mock("@miladyai/app-core/api", () => ({
 
 import { flush } from "../../../../test/helpers/react-test";
 import { client } from "@miladyai/app-core/api";
-import { VectorBrowserView } from "@miladyai/app-core/components/VectorBrowserView";
+import { VectorBrowserView } from "../../src/components/VectorBrowserView";
 
 // ── Component Tests ────────────────────────────────────────────────────
 

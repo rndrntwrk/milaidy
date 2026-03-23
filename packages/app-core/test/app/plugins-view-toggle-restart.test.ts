@@ -23,7 +23,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   },
 }));
 
-import { PluginsView } from "@miladyai/app-core/components/PluginsView";
+import { PluginsView } from "../../src/components/PluginsView";
 import { createDeferred } from "../../../../test/helpers/test-utils";
 
 function baseContext() {

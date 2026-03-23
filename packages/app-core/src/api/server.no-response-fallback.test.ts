@@ -48,7 +48,7 @@ describe("conversation no-response fallback", () => {
     await close();
   });
 
-  it("uses the character default post when chat generation returns no response", async () => {
+  it("uses the provider issue fallback when chat generation returns no response", async () => {
     updateRuntime(runtime);
     createMemory.mockClear();
     getMemories.mockClear();
@@ -74,12 +74,12 @@ describe("conversation no-response fallback", () => {
 
     expect(response.status).toBe(200);
     expect(response.data).toMatchObject({
-      text: "Sorry, I couldn't generate a response right now. Please try again.",
+      text: "Sorry, I'm having a provider issue",
       agentName: "Reimu",
     });
   });
 
-  it("uses the generic fallback when chat generation returns only a stage direction", async () => {
+  it("uses the provider issue fallback when chat generation returns only a stage direction", async () => {
     updateRuntime(runtime);
     createMemory.mockClear();
     getMemories.mockClear();
@@ -108,7 +108,7 @@ describe("conversation no-response fallback", () => {
 
     expect(response.status).toBe(200);
     expect(response.data).toMatchObject({
-      text: "Sorry, I couldn't generate a response right now. Please try again.",
+      text: "Sorry, I'm having a provider issue",
       agentName: "Reimu",
     });
   });

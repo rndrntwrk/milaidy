@@ -1468,9 +1468,9 @@ describe("buildCharacterFromConfig", () => {
     expect(char.name).toBe("Reimu");
   });
 
-  it("defaults to 'Eliza' when no name is configured", () => {
+  it("defaults to 'Chen' when no name is configured", () => {
     const char = buildCharacterFromConfig({} as ElizaConfig);
-    expect(char.name).toBe("Eliza");
+    expect(char.name).toBe("Chen");
   });
 
   it("collects API keys from process.env as secrets", () => {
@@ -1540,7 +1540,7 @@ describe("buildCharacterFromConfig", () => {
   it("does not throw when agents.list is empty", () => {
     const config = { agents: { list: [] } } as ElizaConfig;
     expect(() => buildCharacterFromConfig(config)).not.toThrow();
-    expect(buildCharacterFromConfig(config).name).toBe("Eliza");
+    expect(buildCharacterFromConfig(config).name).toBe("Chen");
   });
 
   it("builds a character with name from agents.list and default personality", () => {

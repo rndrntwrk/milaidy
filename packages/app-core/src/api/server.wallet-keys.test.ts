@@ -227,12 +227,55 @@ describe("POST /api/agent/reset", () => {
   });
 
   it("clears onboarding, agent list, and cloud state when auth succeeds", async () => {
+    const workspaceDir = path.join(tempDir, "workspace");
+    const dbDir = path.join(workspaceDir, ".eliza", ".elizadb");
+    await fs.mkdir(dbDir, { recursive: true });
+
     await fs.writeFile(
       path.join(tempDir, "eliza.json"),
       JSON.stringify({
         meta: { onboardingComplete: true },
-        agents: { list: [{ name: "Chen" }] },
-        cloud: { enabled: true, apiKey: "cloud-key" },
+        agents: {
+          defaults: {
+            workspace: workspaceDir,
+            adminEntityId: "legacy-admin",
+            subscriptionProvider: "openai-codex",
+            model: { primary: "openai" },
+          },
+          list: [{ name: "Chen" }],
+        },
+        cloud: {
+          enabled: true,
+          apiKey: "cloud-key",
+          inferenceMode: "cloud",
+          remoteApiBase: "https://api.example.test",
+          remoteAccessToken: "remote-token",
+          services: { inference: true },
+        },
+        messages: {
+          tts: {
+            provider: "elevenlabs",
+            mode: "cloud",
+            elevenlabs: {
+              voiceId: "pNInz6obpgDQGcFmaJgB",
+              modelId: "eleven_flash_v2_5",
+            },
+          },
+        },
+        models: {
+          small: "small-model",
+          large: "large-model",
+          embedding: "keep-me",
+        },
+        env: {
+          vars: {
+            OPENAI_API_KEY: "sk-test",
+            ELIZA_USE_PI_AI: "1",
+            KEEP_ME: "still-here",
+          },
+          GROQ_API_KEY: "gsk-test",
+          KEEP_ROOT: "still-here-root",
+        },
         logging: { level: "error" },
       }),
     );
@@ -257,17 +300,46 @@ describe("POST /api/agent/reset", () => {
       expect(savedConfig.meta).toEqual({});
       expect(savedConfig.agents).toEqual({ list: [] });
       expect(savedConfig.cloud).toEqual({});
+      expect(savedConfig.messages).toBeUndefined();
+      expect(savedConfig.models).toEqual({ embedding: "keep-me" });
+      expect(savedConfig.env).toMatchObject({
+        vars: { KEEP_ME: "still-here" },
+        KEEP_ROOT: "still-here-root",
+      });
+      expect(
+        (savedConfig.env as { vars?: Record<string, string> }).vars
+          ?.OPENAI_API_KEY,
+      ).toBeUndefined();
+      expect(
+        (savedConfig.env as Record<string, unknown>).GROQ_API_KEY,
+      ).toBeUndefined();
+      expect(
+        (savedConfig.env as { vars?: Record<string, string> }).vars
+          ?.ELIZA_USE_PI_AI,
+      ).toBeUndefined();
+      await expect(fs.access(dbDir)).rejects.toThrow();
     } finally {
       await server.close();
     }
   });
 
   it("still resets successfully when the config has no meta block", async () => {
+    const workspaceDir = path.join(tempDir, "workspace");
+    const dbDir = path.join(workspaceDir, ".eliza", ".elizadb");
+    await fs.mkdir(dbDir, { recursive: true });
+
     await fs.writeFile(
       path.join(tempDir, "eliza.json"),
       JSON.stringify({
-        agents: { list: [{ name: "Chen" }] },
+        agents: {
+          defaults: {
+            workspace: workspaceDir,
+            adminEntityId: "legacy-admin",
+          },
+          list: [{ name: "Chen" }],
+        },
         cloud: { enabled: true },
+        env: { vars: { OPENAI_API_KEY: "sk-test" } },
         logging: { level: "error" },
       }),
     );
@@ -293,6 +365,11 @@ describe("POST /api/agent/reset", () => {
       expect(savedConfig.meta).toBeUndefined();
       expect(savedConfig.agents).toEqual({ list: [] });
       expect(savedConfig.cloud).toEqual({});
+      expect(
+        (savedConfig.env as { vars?: Record<string, string> | undefined })?.vars
+          ?.OPENAI_API_KEY,
+      ).toBeUndefined();
+      await expect(fs.access(dbDir)).rejects.toThrow();
     } finally {
       await server.close();
     }

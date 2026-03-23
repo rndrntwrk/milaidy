@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { ChatComposer } from "@miladyai/app-core/components/ChatComposer";
+import { ChatComposer } from "../../src/components/ChatComposer";
 import React, { createRef } from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, describe, expect, it, vi } from "vitest";

@@ -161,7 +161,7 @@ describe("ReleaseCenterView", () => {
         rpcMethod: "desktopOpenReleaseNotesWindow",
         params: {
           url: "https://milady.ai/releases/v2",
-          title: "Milady Release Notes",
+          title: "Release Notes",
         },
       }),
     );

@@ -23,16 +23,17 @@ vi.mock("@miladyai/app-core/state", () => ({
     companionHalfFramerateMode: "when_saving_power",
     companionAnimateWhenHidden: false,
   }),
+  useTranslation: () => ({ t: (k: string) => k }),
 }));
 
-vi.mock("@miladyai/app-core/components/avatar/VrmViewer", () => ({
+vi.mock("../../src/components/avatar/VrmViewer", () => ({
   VrmViewer: (props: Record<string, unknown>) => {
     viewerPropsRef.current = props;
     return React.createElement("div", null, "VrmViewer");
   },
 }));
 
-vi.mock("@miladyai/app-core/components/ChatModalView", () => ({
+vi.mock("../../src/components/ChatModalView", () => ({
   ChatModalView: () =>
     React.createElement(
       "div",
@@ -60,8 +61,8 @@ vi.mock("@miladyai/app-core/utils", () => ({
   modelLooksLikeElizaCloudHosted: () => false,
 }));
 
-import { CompanionSceneHost } from "@miladyai/app-core/components/CompanionSceneHost";
-import { CompanionView } from "@miladyai/app-core/components/CompanionView";
+import { CompanionSceneHost } from "../../src/components/CompanionSceneHost";
+import { CompanionView } from "../../src/components/CompanionView";
 
 const COMPANION_ZOOM_STORAGE_KEY = "milady.companion.zoom.v1";
 
@@ -181,15 +182,49 @@ function createContext(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function _countByClass(
-  node: TestRenderer.ReactTestInstance,
-  className: string,
-): number {
-  return node.findAll(
-    (candidate) =>
-      typeof candidate.props.className === "string" &&
-      candidate.props.className.split(/\s+/).includes(className),
-  ).length;
+function createCompanionRootMock(
+  options: { hasPointerCapture?: boolean } = {},
+) {
+  const listeners = new Map<string, EventListener>();
+  const node = {
+    addEventListener: vi.fn(
+      (type: string, listener: EventListenerOrEventListenerObject) => {
+        if (typeof listener === "function") {
+          listeners.set(type, listener);
+        }
+      },
+    ),
+    removeEventListener: vi.fn(
+      (type: string, listener: EventListenerOrEventListenerObject) => {
+        if (listeners.get(type) === listener) {
+          listeners.delete(type);
+        }
+      },
+    ),
+    setPointerCapture: vi.fn(),
+    releasePointerCapture: vi.fn(),
+    hasPointerCapture: vi.fn(() => options.hasPointerCapture ?? true),
+    clientWidth: 1440,
+    clientHeight: 900,
+  };
+
+  return {
+    node,
+    getListener(type: string) {
+      return listeners.get(type) as ((event: Event) => void) | undefined;
+    },
+  };
+}
+
+function renderWithCompanionRootMock(
+  rootMock: ReturnType<typeof createCompanionRootMock>,
+) {
+  return TestRenderer.create(React.createElement(CompanionView), {
+    createNodeMock: (element) =>
+      element.props?.["data-testid"] === "companion-root"
+        ? rootMock.node
+        : null,
+  });
 }
 
 describe("CompanionView", () => {
@@ -274,6 +309,43 @@ describe("CompanionView", () => {
     expect(headerOverlay.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("reveals the companion overlay if teleport completion never arrives", async () => {
+    vi.useFakeTimers();
+    window.setTimeout = globalThis.setTimeout.bind(globalThis);
+    window.clearTimeout = globalThis.clearTimeout.bind(globalThis);
+    mockUseApp.mockReturnValue(createContext());
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    try {
+      await act(async () => {
+        tree = TestRenderer.create(React.createElement(CompanionView));
+      });
+
+      expect(
+        tree?.root.findAllByProps({
+          "data-testid": "companion-chat-modal-stub",
+        }),
+      ).toHaveLength(0);
+
+      await act(async () => {
+        vi.advanceTimersByTime(3500);
+      });
+
+      expect(
+        tree?.root.findAllByProps({
+          "data-testid": "companion-chat-modal-stub",
+        }),
+      ).toHaveLength(1);
+    } finally {
+      await act(async () => {
+        tree?.unmount();
+      });
+      vi.useRealTimers();
+      window.setTimeout = globalThis.setTimeout.bind(globalThis);
+      window.clearTimeout = globalThis.clearTimeout.bind(globalThis);
+    }
+  });
+
   it("renders centered companion header chat controls", async () => {
     const setState = vi.fn();
     const handleStartDraftConversation = vi.fn(async () => {});
@@ -321,6 +393,84 @@ describe("CompanionView", () => {
       newChatButton?.props.onClick();
     });
     expect(handleNewConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the cloud badge in companion mode only when connected", async () => {
+    mockUseApp.mockReturnValue(
+      createContext({
+        elizaCloudConnected: true,
+        elizaCloudCredits: 87.5,
+      }),
+    );
+
+    let connectedTree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      connectedTree = TestRenderer.create(React.createElement(CompanionView));
+    });
+    if (!connectedTree) {
+      throw new Error("Failed to render connected CompanionView");
+    }
+
+    const connectedBadge = connectedTree.root.findByProps({
+      "data-testid": "companion-cloud-status",
+    });
+    expect(connectedBadge.props["data-status"]).toBe("regular-credits");
+    expect(text(connectedBadge)).toContain("$87.5");
+
+    mockUseApp.mockReturnValue(createContext());
+
+    let disconnectedTree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      disconnectedTree = TestRenderer.create(
+        React.createElement(CompanionView),
+      );
+    });
+    if (!disconnectedTree) {
+      throw new Error("Failed to render disconnected CompanionView");
+    }
+
+    expect(
+      disconnectedTree.root.findAllByProps({
+        "data-testid": "companion-cloud-status",
+      }),
+    ).toHaveLength(0);
+  });
+
+  it("opens billing from the companion cloud badge", async () => {
+    const setState = vi.fn();
+    const setTab = vi.fn();
+    const switchShellView = vi.fn();
+
+    mockUseApp.mockReturnValue(
+      createContext({
+        elizaCloudConnected: true,
+        elizaCloudCredits: 87.5,
+        setState,
+        setTab,
+        switchShellView,
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+    });
+    if (!tree) {
+      throw new Error("Failed to render CompanionView");
+    }
+
+    const cloudBadge = tree.root.findByProps({
+      "data-testid": "companion-cloud-status",
+    });
+
+    await act(async () => {
+      cloudBadge.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(switchShellView).toHaveBeenCalledWith("desktop");
+    expect(setState).toHaveBeenCalledWith("cloudDashboardView", "billing");
+    expect(setTab).toHaveBeenCalledWith("settings");
   });
 
   it("keeps the shared companion scene wrapper height-bounded", async () => {
@@ -499,10 +649,10 @@ describe("CompanionView", () => {
 
   it("zooms the companion camera from root wheel input, including over overlay UI", async () => {
     mockUseApp.mockReturnValue(createContext());
+    const rootMock = createCompanionRootMock();
 
-    let tree: TestRenderer.ReactTestRenderer | null = null;
     await act(async () => {
-      tree = TestRenderer.create(React.createElement(CompanionView));
+      renderWithCompanionRootMock(rootMock);
     });
 
     const setCompanionZoomNormalized = vi.fn();
@@ -521,18 +671,17 @@ describe("CompanionView", () => {
     });
     setCompanionZoomNormalized.mockClear();
 
-    expect(tree).not.toBeNull();
-    const root = tree?.root.findByProps({
-      "data-testid": "companion-root",
-    });
+    const wheelListener = rootMock.getListener("wheel");
     const preventDefault = vi.fn();
 
     await act(async () => {
-      root?.props.onWheelCapture({
+      wheelListener?.({
         deltaY: 120,
         deltaMode: 0,
         preventDefault,
-      });
+        target: document.createElement("div"),
+        ctrlKey: false,
+      } as WheelEvent);
     });
 
     const lastZoom =
@@ -547,10 +696,10 @@ describe("CompanionView", () => {
 
   it("does not zoom the companion camera while a text entry is focused", async () => {
     mockUseApp.mockReturnValue(createContext());
+    const rootMock = createCompanionRootMock();
 
-    let tree: TestRenderer.ReactTestRenderer | null = null;
     await act(async () => {
-      tree = TestRenderer.create(React.createElement(CompanionView));
+      renderWithCompanionRootMock(rootMock);
     });
 
     const setCompanionZoomNormalized = vi.fn();
@@ -569,23 +718,22 @@ describe("CompanionView", () => {
     });
     setCompanionZoomNormalized.mockClear();
 
-    const root = tree?.root.findByProps({
-      "data-testid": "companion-root",
-    });
     const focusedTextEntry = document.createElement("textarea");
     Object.defineProperty(document, "activeElement", {
       configurable: true,
       value: focusedTextEntry,
     });
+    const wheelListener = rootMock.getListener("wheel");
     const preventDefault = vi.fn();
 
     await act(async () => {
-      root?.props.onWheelCapture({
+      wheelListener?.({
         ctrlKey: true,
         deltaY: -90,
         deltaMode: 0,
         preventDefault,
-      });
+        target: document.createElement("div"),
+      } as WheelEvent);
     });
 
     expect(setCompanionZoomNormalized).not.toHaveBeenCalled();
@@ -594,10 +742,10 @@ describe("CompanionView", () => {
 
   it("does not zoom the companion camera while the transcript handles wheel scroll", async () => {
     mockUseApp.mockReturnValue(createContext());
+    const rootMock = createCompanionRootMock();
 
-    let tree: TestRenderer.ReactTestRenderer | null = null;
     await act(async () => {
-      tree = TestRenderer.create(React.createElement(CompanionView));
+      renderWithCompanionRootMock(rootMock);
     });
 
     const setCompanionZoomNormalized = vi.fn();
@@ -616,20 +764,19 @@ describe("CompanionView", () => {
     });
     setCompanionZoomNormalized.mockClear();
 
-    const root = tree?.root.findByProps({
-      "data-testid": "companion-root",
-    });
     const transcript = document.createElement("div");
     transcript.setAttribute("data-no-camera-zoom", "true");
+    const wheelListener = rootMock.getListener("wheel");
     const preventDefault = vi.fn();
 
     await act(async () => {
-      root?.props.onWheelCapture({
+      wheelListener?.({
         target: transcript,
         deltaY: 120,
         deltaMode: 0,
         preventDefault,
-      });
+        ctrlKey: false,
+      } as WheelEvent);
     });
 
     expect(setCompanionZoomNormalized).not.toHaveBeenCalled();
@@ -738,10 +885,11 @@ describe("CompanionView", () => {
 
   it("uses the companion root as the interactive drag surface for camera orbit", async () => {
     mockUseApp.mockReturnValue(createContext());
+    const rootMock = createCompanionRootMock();
 
     let tree: TestRenderer.ReactTestRenderer | null = null;
     await act(async () => {
-      tree = TestRenderer.create(React.createElement(CompanionView));
+      tree = renderWithCompanionRootMock(rootMock);
     });
 
     const dragLayer = tree?.root.findByProps({
@@ -754,6 +902,10 @@ describe("CompanionView", () => {
       overscrollBehavior: "none",
     });
     expect(typeof dragLayer?.props.onPointerDownCapture).toBe("function");
-    expect(typeof dragLayer?.props.onWheelCapture).toBe("function");
+    expect(rootMock.node.addEventListener).toHaveBeenCalledWith(
+      "wheel",
+      expect.any(Function),
+      { capture: true, passive: false },
+    );
   });
 });

@@ -1,85 +1,30 @@
+// @vitest-environment jsdom
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
-// Mock @miladyai/ui with a simplified ConfirmDelete that uses plain buttons
-// (matching the real component behavior but avoiding module resolution issues).
+// Mock @miladyai/ui's Button as a plain <button> that passes props through,
+// so className values are preserved exactly as passed by ConfirmDeleteControl.
 vi.mock("@miladyai/ui", () => ({
-  ConfirmDelete: ({
-    onConfirm,
-    disabled = false,
-    triggerLabel = "Delete",
-    confirmLabel = "Confirm",
-    cancelLabel = "Cancel",
-    busyLabel,
-    promptText = "Delete?",
-    triggerClassName,
-    confirmClassName,
-    cancelClassName,
-    promptClassName,
-  }: {
-    onConfirm: () => void;
-    disabled?: boolean;
-    triggerLabel?: string;
-    confirmLabel?: string;
-    cancelLabel?: string;
-    busyLabel?: string;
-    promptText?: string;
-    triggerClassName?: string;
-    confirmClassName?: string;
-    cancelClassName?: string;
-    promptClassName?: string;
-  }) => {
-    const [confirming, setConfirming] = React.useState(false);
-    if (!confirming) {
-      return React.createElement(
-        "button",
-        {
-          type: "button",
-          className: triggerClassName,
-          onClick: () => setConfirming(true),
-          disabled,
-        },
-        triggerLabel,
-      );
-    }
-    return React.createElement(
-      "span",
-      null,
-      React.createElement("span", { className: promptClassName }, promptText),
-      React.createElement(
-        "button",
-        {
-          type: "button",
-          className: confirmClassName,
-          onClick: () => {
-            onConfirm();
-            setConfirming(false);
-          },
-          disabled,
-        },
-        disabled && busyLabel ? busyLabel : confirmLabel,
-      ),
-      React.createElement(
-        "button",
-        {
-          type: "button",
-          className: cancelClassName,
-          onClick: () => setConfirming(false),
-          disabled,
-        },
-        cancelLabel,
-      ),
-    );
-  },
+  Button: React.forwardRef(
+    (
+      {
+        variant: _variant,
+        size: _size,
+        asChild: _asChild,
+        ...props
+      }: Record<string, unknown>,
+      ref: React.Ref<HTMLButtonElement>,
+    ) => React.createElement("button", { ...props, ref }),
+  ),
 }));
 
-import { ConfirmDelete } from "@miladyai/ui";
+import { ConfirmDeleteControl } from "@miladyai/app-core/components/confirm-delete-control";
 
 function createSubject(
-  overrides: Partial<React.ComponentProps<typeof ConfirmDelete>> = {},
+  overrides: Partial<React.ComponentProps<typeof ConfirmDeleteControl>> = {},
 ) {
-  return React.createElement(ConfirmDelete, {
+  return React.createElement(ConfirmDeleteControl, {
     onConfirm: () => {},
     triggerClassName: "trigger",
     confirmClassName: "confirm",
@@ -88,7 +33,7 @@ function createSubject(
   });
 }
 
-describe("ConfirmDelete", () => {
+describe("ConfirmDeleteControl", () => {
   it("shows trigger first and then confirm/cancel state", () => {
     let tree!: TestRenderer.ReactTestRenderer;
     act(() => {

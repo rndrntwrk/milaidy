@@ -50,9 +50,9 @@ vi.mock("@miladyai/app-core/platform", () => ({
   platform: "web",
 }));
 
-import { ActivateStep } from "@miladyai/app-core/components/onboarding/ActivateStep";
-import { ConnectionStep } from "@miladyai/app-core/components/onboarding/ConnectionStep";
-import { IdentityStep } from "@miladyai/app-core/components/onboarding/IdentityStep";
+import { ActivateStep } from "../../src/components/onboarding/ActivateStep";
+import { ConnectionStep } from "../../src/components/onboarding/ConnectionStep";
+import { IdentityStep } from "../../src/components/onboarding/IdentityStep";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 

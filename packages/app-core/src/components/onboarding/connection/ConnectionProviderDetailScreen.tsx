@@ -246,7 +246,7 @@ export function ConnectionProviderDetailScreen({
   return (
     <>
       <div
-        className="text-xs tracking-[0.3em] uppercase text-[rgba(240,238,250,0.62)] font-semibold text-center mb-0"
+        className="text-xs tracking-[0.3em] uppercase text-[var(--onboarding-text-muted)] font-semibold text-center mb-0"
         style={{ textShadow: "0 2px 10px rgba(3,5,10,0.55)" }}
       >
         <span
@@ -272,7 +272,7 @@ export function ConnectionProviderDetailScreen({
           {selectedDisplay.name}
         </span>
       </div>
-      <div className="flex items-center gap-[12px] my-[16px] before:content-[''] before:flex-1 before:h-[1px] before:bg-gradient-to-r before:from-transparent before:via-[rgba(255,255,255,0.15)] before:to-transparent after:content-[''] after:flex-1 after:h-[1px] after:bg-gradient-to-r after:from-transparent after:via-[rgba(255,255,255,0.15)] after:to-transparent">
+      <div className="flex items-center gap-[12px] my-[16px] before:content-[''] before:flex-1 before:h-[1px] before:bg-gradient-to-r before:from-transparent before:via-[var(--onboarding-divider)] before:to-transparent after:content-[''] after:flex-1 after:h-[1px] after:bg-gradient-to-r after:from-transparent after:via-[var(--onboarding-divider)] after:to-transparent">
         <div className="w-1.5 h-1.5 bg-[rgba(240,185,11,0.4)] rotate-45 shrink-0" />
       </div>
 
@@ -322,7 +322,7 @@ export function ConnectionProviderDetailScreen({
               ) : (
                 <Button
                   type="button"
-                  className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[rgba(240,185,11,0.18)] border border-[rgba(240,185,11,0.35)] rounded-[6px] text-white text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[rgba(240,185,11,0.28)] hover:border-[rgba(240,185,11,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[var(--onboarding-accent-bg)] border border-[var(--onboarding-accent-border)] rounded-[6px] text-[var(--onboarding-accent-foreground)] text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[var(--onboarding-accent-bg-hover)] hover:border-[var(--onboarding-accent-border-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ textShadow: "0 1px 6px rgba(3,5,10,0.55)" }}
                   onClick={handleCloudLogin}
                   disabled={elizaCloudLoginBusy}
@@ -341,7 +341,7 @@ export function ConnectionProviderDetailScreen({
                     return (
                       <button
                         type="button"
-                        className="text-sm text-[rgba(240,238,250,0.7)] underline mt-2 cursor-pointer bg-transparent border-none font-inherit hover:text-[rgba(240,238,250,0.95)] transition-colors duration-200"
+                        className="text-sm text-[var(--onboarding-link)] underline mt-2 cursor-pointer bg-transparent border-none font-inherit hover:text-[var(--onboarding-text-strong)] transition-colors duration-200"
                         onClick={() => openExternalUrl(urlMatch[1])}
                       >
                         Open login page in browser
@@ -360,7 +360,7 @@ export function ConnectionProviderDetailScreen({
                     </p>
                   );
                 })()}
-              <p className="text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3">
+              <p className="text-sm text-[var(--onboarding-text-muted)] text-center leading-relaxed mt-3">
                 {t("onboarding.freeCredits")}
               </p>
             </div>
@@ -380,12 +380,12 @@ export function ConnectionProviderDetailScreen({
               <Input
                 id="elizacloud-apikey-detail"
                 type="password"
-                className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
+                className="w-full px-[20px] py-[16px] bg-[var(--onboarding-card-bg)] border border-[var(--onboarding-card-border)] rounded-[6px] text-[var(--onboarding-text-primary)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[var(--onboarding-field-focus-border)] focus:shadow-[var(--onboarding-field-focus-shadow)] placeholder:text-[var(--onboarding-text-faint)]"
                 placeholder="ec-..."
                 value={onboardingApiKey}
                 onChange={handleApiKeyChange}
               />
-              <p className="text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3">
+              <p className="text-sm text-[var(--onboarding-text-muted)] text-center leading-relaxed mt-3">
                 {t("onboarding.useExistingKey")}{" "}
                 <a
                   href="https://elizacloud.ai/dashboard/settings"
@@ -427,13 +427,13 @@ export function ConnectionProviderDetailScreen({
               </span>
               <Input
                 type="password"
-                className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
+                className="w-full px-[20px] py-[16px] bg-[var(--onboarding-card-bg)] border border-[var(--onboarding-card-border)] rounded-[6px] text-[var(--onboarding-text-primary)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[var(--onboarding-field-focus-border)] focus:shadow-[var(--onboarding-field-focus-shadow)] placeholder:text-[var(--onboarding-text-faint)]"
                 value={onboardingApiKey}
                 onChange={handleApiKeyChange}
                 placeholder="sk-ant-oat01-..."
               />
               <p
-                className="text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3"
+                className="text-sm text-[var(--onboarding-text-muted)] text-center leading-relaxed mt-3"
                 style={{ whiteSpace: "pre-line", textAlign: "left" }}
               >
                 {t("onboarding.setupTokenInstructions")}
@@ -480,7 +480,7 @@ export function ConnectionProviderDetailScreen({
                 {t("onboarding.connectedToClaude")}
               </div>
               <p
-                className="text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3"
+                className="text-sm text-[var(--onboarding-text-muted)] text-center leading-relaxed mt-3"
                 style={{ textAlign: "center" }}
               >
                 {t("onboarding.claudeSubscriptionReady")}
@@ -497,7 +497,7 @@ export function ConnectionProviderDetailScreen({
             >
               <Button
                 type="button"
-                className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[rgba(240,185,11,0.18)] border border-[rgba(240,185,11,0.35)] rounded-[6px] text-white text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[rgba(240,185,11,0.28)] hover:border-[rgba(240,185,11,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
+                className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[var(--onboarding-accent-bg)] border border-[var(--onboarding-accent-border)] rounded-[6px] text-[var(--onboarding-accent-foreground)] text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[var(--onboarding-accent-bg-hover)] hover:border-[var(--onboarding-accent-border-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ textShadow: "0 1px 6px rgba(3,5,10,0.55)" }}
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -507,7 +507,7 @@ export function ConnectionProviderDetailScreen({
                   circle.style.left = `${e.clientX - rect.left - diameter / 2}px`;
                   circle.style.top = `${e.clientY - rect.top - diameter / 2}px`;
                   circle.className =
-                    "absolute rounded-full bg-[rgba(240,185,11,0.3)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
+                    "absolute rounded-full bg-[var(--onboarding-ripple)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
                   e.currentTarget.appendChild(circle);
                   setTimeout(() => circle.remove(), 600);
                   void handleAnthropicStart();
@@ -516,7 +516,7 @@ export function ConnectionProviderDetailScreen({
                 {t("onboarding.loginWithAnthropic")}
               </Button>
               <p
-                className="text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3"
+                className="text-sm text-[var(--onboarding-text-muted)] text-center leading-relaxed mt-3"
                 style={{ textAlign: "center" }}
               >
                 {t("onboarding.requiresClaudeSub")}
@@ -554,7 +554,7 @@ export function ConnectionProviderDetailScreen({
               </p>
               <Input
                 type="text"
-                className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
+                className="w-full px-[20px] py-[16px] bg-[var(--onboarding-card-bg)] border border-[var(--onboarding-card-border)] rounded-[6px] text-[var(--onboarding-text-primary)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[var(--onboarding-field-focus-border)] focus:shadow-[var(--onboarding-field-focus-shadow)] placeholder:text-[var(--onboarding-text-faint)]"
                 placeholder={t("onboarding.pasteAuthCode")}
                 value={anthropicCode}
                 onChange={(e) => setAnthropicCode(e.target.value)}
@@ -567,7 +567,7 @@ export function ConnectionProviderDetailScreen({
               )}
               <Button
                 type="button"
-                className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[rgba(240,185,11,0.18)] border border-[rgba(240,185,11,0.35)] rounded-[6px] text-white text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[rgba(240,185,11,0.28)] hover:border-[rgba(240,185,11,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
+                className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[var(--onboarding-accent-bg)] border border-[var(--onboarding-accent-border)] rounded-[6px] text-[var(--onboarding-accent-foreground)] text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[var(--onboarding-accent-bg-hover)] hover:border-[var(--onboarding-accent-border-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ textShadow: "0 1px 6px rgba(3,5,10,0.55)" }}
                 disabled={!anthropicCode}
                 onClick={(e) => {
@@ -578,7 +578,7 @@ export function ConnectionProviderDetailScreen({
                   circle.style.left = `${e.clientX - rect.left - diameter / 2}px`;
                   circle.style.top = `${e.clientY - rect.top - diameter / 2}px`;
                   circle.className =
-                    "absolute rounded-full bg-[rgba(240,185,11,0.3)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
+                    "absolute rounded-full bg-[var(--onboarding-ripple)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
                   e.currentTarget.appendChild(circle);
                   setTimeout(() => circle.remove(), 600);
                   void handleAnthropicExchange();
@@ -634,7 +634,7 @@ export function ConnectionProviderDetailScreen({
                 {t("onboarding.connectedToChatGPT")}
               </div>
               <p
-                className="text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3"
+                className="text-sm text-[var(--onboarding-text-muted)] text-center leading-relaxed mt-3"
                 style={{ textAlign: "center" }}
               >
                 {t("onboarding.chatgptSubscriptionReady")}
@@ -651,7 +651,7 @@ export function ConnectionProviderDetailScreen({
             >
               <Button
                 type="button"
-                className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[rgba(240,185,11,0.18)] border border-[rgba(240,185,11,0.35)] rounded-[6px] text-white text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[rgba(240,185,11,0.28)] hover:border-[rgba(240,185,11,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
+                className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[var(--onboarding-accent-bg)] border border-[var(--onboarding-accent-border)] rounded-[6px] text-[var(--onboarding-accent-foreground)] text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[var(--onboarding-accent-bg-hover)] hover:border-[var(--onboarding-accent-border-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ textShadow: "0 1px 6px rgba(3,5,10,0.55)" }}
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -661,7 +661,7 @@ export function ConnectionProviderDetailScreen({
                   circle.style.left = `${e.clientX - rect.left - diameter / 2}px`;
                   circle.style.top = `${e.clientY - rect.top - diameter / 2}px`;
                   circle.className =
-                    "absolute rounded-full bg-[rgba(240,185,11,0.3)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
+                    "absolute rounded-full bg-[var(--onboarding-ripple)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
                   e.currentTarget.appendChild(circle);
                   setTimeout(() => circle.remove(), 600);
                   void handleOpenAIStart();
@@ -670,7 +670,7 @@ export function ConnectionProviderDetailScreen({
                 {t("onboarding.loginWithOpenAI")}
               </Button>
               <p
-                className="text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3"
+                className="text-sm text-[var(--onboarding-text-muted)] text-center leading-relaxed mt-3"
                 style={{ textAlign: "center" }}
               >
                 {t("onboarding.requiresChatGPTSub")}
@@ -703,7 +703,7 @@ export function ConnectionProviderDetailScreen({
                   {t("onboarding.almostThere")}
                 </p>
                 <p
-                  className="text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3"
+                  className="text-sm text-[var(--onboarding-text-muted)] text-center leading-relaxed mt-3"
                   style={{ lineHeight: "1.5", textAlign: "left" }}
                 >
                   {t("onboarding.redirectInstructions")}{" "}
@@ -721,7 +721,7 @@ export function ConnectionProviderDetailScreen({
               </div>
               <Input
                 type="text"
-                className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
+                className="w-full px-[20px] py-[16px] bg-[var(--onboarding-card-bg)] border border-[var(--onboarding-card-border)] rounded-[6px] text-[var(--onboarding-text-primary)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[var(--onboarding-field-focus-border)] focus:shadow-[var(--onboarding-field-focus-shadow)] placeholder:text-[var(--onboarding-text-faint)]"
                 placeholder="http://localhost:1455/..."
                 value={openaiCallbackUrl}
                 onChange={(e) => {
@@ -743,7 +743,7 @@ export function ConnectionProviderDetailScreen({
               >
                 <Button
                   type="button"
-                  className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[rgba(240,185,11,0.18)] border border-[rgba(240,185,11,0.35)] rounded-[6px] text-white text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[rgba(240,185,11,0.28)] hover:border-[rgba(240,185,11,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[var(--onboarding-accent-bg)] border border-[var(--onboarding-accent-border)] rounded-[6px] text-[var(--onboarding-accent-foreground)] text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[var(--onboarding-accent-bg-hover)] hover:border-[var(--onboarding-accent-border-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ textShadow: "0 1px 6px rgba(3,5,10,0.55)" }}
                   disabled={!openaiCallbackUrl}
                   onClick={(e) => {
@@ -754,7 +754,7 @@ export function ConnectionProviderDetailScreen({
                     circle.style.left = `${e.clientX - rect.left - diameter / 2}px`;
                     circle.style.top = `${e.clientY - rect.top - diameter / 2}px`;
                     circle.className =
-                      "absolute rounded-full bg-[rgba(240,185,11,0.3)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
+                      "absolute rounded-full bg-[var(--onboarding-ripple)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
                     e.currentTarget.appendChild(circle);
                     setTimeout(() => circle.remove(), 600);
                     void handleOpenAIExchange();
@@ -765,7 +765,7 @@ export function ConnectionProviderDetailScreen({
                 <Button
                   variant="ghost"
                   type="button"
-                  className="text-[10px] text-[rgba(240,238,250,0.62)] tracking-[0.15em] uppercase cursor-pointer no-underline bg-none border-none font-inherit transition-colors duration-300 p-0 hover:text-[rgba(240,238,250,0.9)]"
+                  className="text-[10px] text-[var(--onboarding-text-muted)] tracking-[0.15em] uppercase cursor-pointer no-underline bg-none border-none font-inherit transition-colors duration-300 p-0 hover:text-[var(--onboarding-text-strong)]"
                   style={{ textShadow: "0 1px 8px rgba(3,5,10,0.45)" }}
                   onClick={() => {
                     setOpenaiOAuthStarted(false);
@@ -800,7 +800,7 @@ export function ConnectionProviderDetailScreen({
             </span>
             <Input
               type="password"
-              className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
+              className="w-full px-[20px] py-[16px] bg-[var(--onboarding-card-bg)] border border-[var(--onboarding-card-border)] rounded-[6px] text-[var(--onboarding-text-primary)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[var(--onboarding-field-focus-border)] focus:shadow-[var(--onboarding-field-focus-shadow)] placeholder:text-[var(--onboarding-text-faint)]"
               value={onboardingApiKey}
               onChange={handleApiKeyChange}
               placeholder={t("onboarding.enterApiKey")}
@@ -820,7 +820,7 @@ export function ConnectionProviderDetailScreen({
         )}
 
       {onboardingProvider === "ollama" && (
-        <p className="text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3">
+        <p className="text-sm text-[var(--onboarding-text-muted)] text-center leading-relaxed mt-3">
           {t("onboarding.ollamaNoConfig")}
         </p>
       )}
@@ -855,7 +855,7 @@ export function ConnectionProviderDetailScreen({
                   );
                 }}
               >
-                <SelectTrigger className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]">
+                <SelectTrigger className="w-full px-[20px] py-[16px] bg-[var(--onboarding-card-bg)] border border-[var(--onboarding-card-border)] rounded-[6px] text-[var(--onboarding-text-primary)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[var(--onboarding-field-focus-border)] focus:shadow-[var(--onboarding-field-focus-shadow)] placeholder:text-[var(--onboarding-text-faint)]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -876,7 +876,7 @@ export function ConnectionProviderDetailScreen({
               {piAiSelectValue === "__custom__" && (
                 <Input
                   type="text"
-                  className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
+                  className="w-full px-[20px] py-[16px] bg-[var(--onboarding-card-bg)] border border-[var(--onboarding-card-border)] rounded-[6px] text-[var(--onboarding-text-primary)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[var(--onboarding-field-focus-border)] focus:shadow-[var(--onboarding-field-focus-shadow)] placeholder:text-[var(--onboarding-text-faint)]"
                   value={onboardingPrimaryModel}
                   onChange={(e) =>
                     setState("onboardingPrimaryModel", e.target.value)
@@ -889,7 +889,7 @@ export function ConnectionProviderDetailScreen({
           ) : (
             <Input
               type="text"
-              className="w-full px-[20px] py-[16px] bg-[rgba(10,14,20,0.24)] border border-[rgba(255,255,255,0.16)] rounded-[6px] text-[rgba(240,238,250,0.92)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[rgba(240,185,11,0.4)] focus:shadow-[0_0_12px_rgba(240,185,11,0.08)] placeholder:text-[rgba(240,238,250,0.4)]"
+              className="w-full px-[20px] py-[16px] bg-[var(--onboarding-card-bg)] border border-[var(--onboarding-card-border)] rounded-[6px] text-[var(--onboarding-text-primary)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[var(--onboarding-field-focus-border)] focus:shadow-[var(--onboarding-field-focus-shadow)] placeholder:text-[var(--onboarding-text-faint)]"
               value={onboardingPrimaryModel}
               onChange={(e) =>
                 setState("onboardingPrimaryModel", e.target.value)
@@ -898,7 +898,7 @@ export function ConnectionProviderDetailScreen({
             />
           )}
           <p
-            className="text-sm text-[rgba(240,238,250,0.62)] text-center leading-relaxed mt-3"
+            className="text-sm text-[var(--onboarding-text-muted)] text-center leading-relaxed mt-3"
             style={{ textAlign: "left" }}
           >
             {t("onboarding.piCredentialsHint")}
@@ -936,20 +936,20 @@ export function ConnectionProviderDetailScreen({
                   <Button
                     type="button"
                     key={model.id}
-                    className={`flex items-center justify-between gap-[8px] px-[14px] py-[10px] min-h-[52px] bg-[rgba(10,14,20,0.24)] backdrop-blur-[18px] backdrop-saturate-[1.2] border border-[rgba(255,255,255,0.1)] rounded-[8px] cursor-pointer transition-all duration-300 text-left hover:bg-[rgba(10,14,20,0.34)] hover:border-[rgba(255,255,255,0.16)]${onboardingOpenRouterModel === model.id ? " bg-[rgba(240,185,11,0.12)] border-[rgba(240,185,11,0.32)]" : ""}`}
+                    className={`flex items-center justify-between gap-[8px] px-[14px] py-[10px] min-h-[52px] bg-[var(--onboarding-card-bg)] backdrop-blur-[18px] backdrop-saturate-[1.2] border border-[var(--onboarding-card-border)] rounded-[8px] cursor-pointer transition-all duration-300 text-left hover:bg-[var(--onboarding-card-bg-hover)] hover:border-[var(--onboarding-card-border-strong)]${onboardingOpenRouterModel === model.id ? " bg-[rgba(240,185,11,0.12)] border-[rgba(240,185,11,0.32)]" : ""}`}
                     onClick={() => handleOpenRouterModelSelect(model.id)}
                     style={{ width: "100%" }}
                   >
                     <div>
                       <div
-                        className="text-xs text-[rgba(240,238,250,0.88)] leading-[1.3]"
+                        className="text-xs text-[var(--onboarding-text-primary)] leading-[1.3]"
                         style={{ textShadow: "0 1px 8px rgba(3,5,10,0.6)" }}
                       >
                         {model.name}
                       </div>
                       {model.description && (
                         <div
-                          className="text-[10px] text-[rgba(240,238,250,0.58)] leading-[1.3] line-clamp-2"
+                          className="text-[10px] text-[var(--onboarding-text-subtle)] leading-[1.3] line-clamp-2"
                           style={{ textShadow: "0 1px 8px rgba(3,5,10,0.5)" }}
                         >
                           {model.description}
@@ -963,10 +963,10 @@ export function ConnectionProviderDetailScreen({
           </div>
         )}
 
-      <div className="flex justify-between items-center gap-6 mt-[18px] pt-3.5 border-t border-white/[0.08]">
+      <div className="flex justify-between items-center gap-6 mt-[18px] pt-3.5 border-t border-[var(--onboarding-footer-border)]">
         <Button
           variant="ghost"
-          className="text-[10px] text-[rgba(240,238,250,0.62)] tracking-[0.15em] uppercase cursor-pointer no-underline bg-none border-none font-inherit transition-colors duration-300 p-0 hover:text-[rgba(240,238,250,0.9)]"
+          className="text-[10px] text-[var(--onboarding-text-muted)] tracking-[0.15em] uppercase cursor-pointer no-underline bg-none border-none font-inherit transition-colors duration-300 p-0 hover:text-[var(--onboarding-text-strong)]"
           style={{ textShadow: "0 1px 8px rgba(3,5,10,0.45)" }}
           onClick={clearProvider}
           type="button"
@@ -974,7 +974,7 @@ export function ConnectionProviderDetailScreen({
           {t("onboarding.back")}
         </Button>
         <Button
-          className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[rgba(240,185,11,0.18)] border border-[rgba(240,185,11,0.35)] rounded-[6px] text-white text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[rgba(240,185,11,0.28)] hover:border-[rgba(240,185,11,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
+          className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[var(--onboarding-accent-bg)] border border-[var(--onboarding-accent-border)] rounded-[6px] text-[var(--onboarding-accent-foreground)] text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 font-inherit overflow-hidden hover:bg-[var(--onboarding-accent-bg-hover)] hover:border-[var(--onboarding-accent-border-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ textShadow: "0 1px 6px rgba(3,5,10,0.55)" }}
           disabled={isConfirmDisabled}
           onClick={(e) => {
@@ -985,7 +985,7 @@ export function ConnectionProviderDetailScreen({
             circle.style.left = `${e.clientX - rect.left - diameter / 2}px`;
             circle.style.top = `${e.clientY - rect.top - diameter / 2}px`;
             circle.className =
-              "absolute rounded-full bg-[rgba(240,185,11,0.3)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
+              "absolute rounded-full bg-[var(--onboarding-ripple)] transform scale-0 animate-[onboarding-ripple-expand_0.6s_ease-out_forwards] pointer-events-none";
             e.currentTarget.appendChild(circle);
             setTimeout(() => circle.remove(), 600);
             handleOnboardingNext();

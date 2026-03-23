@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { GlobalEmoteOverlay } from "@miladyai/app-core/components/GlobalEmoteOverlay";
+import { GlobalEmoteOverlay } from "../../src/components/GlobalEmoteOverlay";
 import { APP_EMOTE_EVENT } from "@miladyai/app-core/events";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";

@@ -24,6 +24,6 @@ export async function handleSubscriptionRoutes(
     ...ctx,
     saveConfig: (config: unknown) => ctx.saveConfig(config as ElizaConfig),
     loadSubscriptionAuth: async () =>
-      (await import("../auth/credentials.js")) as never,
+      (await import("@miladyai/agent/auth")) as never,
   } as never);
 }

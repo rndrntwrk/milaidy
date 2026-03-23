@@ -246,7 +246,7 @@ function configureOnboardingProviders(api: ProbeApi) {
 
 describe("onboarding finish locking", () => {
   beforeEach(() => {
-    Object.assign(window.location, { protocol: "http:", pathname: "/chat" });
+    window.history.pushState(null, "", "/chat");
     Object.assign(window, {
       setTimeout: globalThis.setTimeout,
       clearTimeout: globalThis.clearTimeout,
@@ -559,7 +559,7 @@ describe("onboarding finish locking", () => {
 
     const snapshot = requireApi().snapshot();
     expect(snapshot.onboardingComplete).toBe(true);
-    expect(snapshot.tab).toBe("companion");
+    expect(snapshot.tab).toBe("character-select");
     expect(snapshot.activeConversationId).toBeNull();
     expect(snapshot.conversationMessages).toEqual([]);
     expect(mockClient.restartAgent).toHaveBeenCalledTimes(1);
@@ -652,7 +652,7 @@ describe("onboarding finish locking", () => {
 
     const snapshot = requireApi().snapshot();
     expect(snapshot.onboardingComplete).toBe(true);
-    expect(snapshot.tab).toBe("companion");
+    expect(snapshot.tab).toBe("character-select");
     expect(snapshot.activeConversationId).toBe("conv-restored");
     expect(mockClient.getStatus).toHaveBeenCalled();
     expect(mockClient.createConversation).not.toHaveBeenCalled();
@@ -667,7 +667,7 @@ describe("onboarding finish locking", () => {
   });
 
   it("starts completed onboarding sessions at character select from the root route", async () => {
-    Object.assign(window.location, { protocol: "http:", pathname: "/" });
+    window.history.pushState(null, "", "/");
     // Persist a local connection so the startup flow reaches the backend
     // instead of short-circuiting into fresh onboarding.
     localStorage.setItem(

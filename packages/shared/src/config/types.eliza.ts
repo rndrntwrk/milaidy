@@ -4,21 +4,21 @@ import type {
   DatabaseProviderType,
   MediaConfig,
   ReleaseChannel,
-} from "../contracts/config";
-import type { AgentBinding, AgentsConfig } from "./types.agents";
+} from "../contracts/config.js";
+import type { AgentBinding, AgentsConfig } from "./types.agents.js";
 import type {
   DiscoveryConfig,
   GatewayConfig,
   TalkConfig,
-} from "./types.gateway";
-import type { HooksConfig } from "./types.hooks";
+} from "./types.gateway.js";
+import type { HooksConfig } from "./types.hooks.js";
 import type {
   AudioConfig,
   BroadcastConfig,
   CommandsConfig,
   MessagesConfig,
-} from "./types.messages";
-import type { ToolsConfig } from "./types.tools";
+} from "./types.messages.js";
+import type { ToolsConfig } from "./types.tools.js";
 
 export type {
   AudioElevenlabsSfxConfig,
@@ -49,7 +49,7 @@ export type {
   VisionOpenaiConfig,
   VisionProvider,
   VisionXaiConfig,
-} from "../contracts/config";
+} from "../contracts/config.js";
 
 // --- Auth types (merged from types.auth.ts) ---
 

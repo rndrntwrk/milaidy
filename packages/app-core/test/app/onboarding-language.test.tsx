@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -30,11 +31,11 @@ vi.mock("@miladyai/app-core/components", async () => {
   };
 });
 
-vi.mock("@miladyai/app-core/components/AvatarSelector", () => ({
+vi.mock("../../src/components/AvatarSelector", () => ({
   AvatarSelector: () => null,
 }));
 
-vi.mock("@miladyai/app-core/components/companion/VrmStage", () => ({
+vi.mock("../../src/components/companion/VrmStage", () => ({
   VrmStage: () => null,
 }));
 
@@ -47,7 +48,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   },
 }));
 
-import { OnboardingWizard } from "@miladyai/app-core/components/OnboardingWizard";
+import { OnboardingWizard } from "../../src/components/OnboardingWizard";
 
 function createOnboardingContext(
   overrides?: Record<string, unknown>,

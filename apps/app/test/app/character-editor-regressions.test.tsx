@@ -21,7 +21,7 @@ const {
   audioConstructorMock: vi.fn(),
 }));
 
-vi.mock("@miladyai/app-core/api", () => ({
+vi.mock("@miladyai/app-core/api/client", () => ({
   client: clientMock,
 }));
 
@@ -32,6 +32,10 @@ vi.mock("@miladyai/app-core/events", () => ({
   dispatchWindowEvent: dispatchWindowEventMock,
 }));
 
+vi.mock("@miladyai/app-core/state/useApp", () => ({
+  useApp: useAppMock,
+}));
+
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: useAppMock,
   CUSTOM_ONBOARDING_STEPS: [],
@@ -40,7 +44,18 @@ vi.mock("@miladyai/app-core/state", () => ({
   getVrmTitle: (index: number) => `Avatar ${index}`,
 }));
 
-vi.mock("@miladyai/app-core/voice", () => ({
+vi.mock("@miladyai/app-core/hooks", () => ({
+  useVoiceChat: () => ({
+    mouthOpen: false,
+    isSpeaking: false,
+    usingAudioAnalysis: false,
+    speak: vi.fn(),
+    stopSpeaking: vi.fn(),
+  }),
+  useChatAvatarVoiceBridge: () => {},
+}));
+
+vi.mock("@miladyai/app-core/voice/types", () => ({
   PREMADE_VOICES: [
     {
       id: "voice-preset-1",
@@ -51,13 +66,37 @@ vi.mock("@miladyai/app-core/voice", () => ({
     },
   ],
   EDGE_BACKUP_VOICES: [],
+}));
+
+vi.mock("@miladyai/app-core/voice/utils", () => ({
   sanitizeApiKey: (value: string | undefined) => value?.trim() ?? "",
 }));
 
 vi.mock("@miladyai/ui", () => {
   const React = require("react") as typeof import("react");
 
+  const DummyComponent = ({ children }: React.PropsWithChildren) =>
+    React.createElement("div", null, children);
+
   return {
+    ConfirmDialog: DummyComponent,
+    ErrorBoundary: DummyComponent,
+    PromptDialog: DummyComponent,
+    SaveFooter: DummyComponent,
+    Skeleton: DummyComponent,
+    SkeletonCard: DummyComponent,
+    SkeletonChat: DummyComponent,
+    SkeletonLine: DummyComponent,
+    SkeletonMessage: DummyComponent,
+    SkeletonSidebar: DummyComponent,
+    SkeletonText: DummyComponent,
+    StatCard: DummyComponent,
+    StatusBadge: DummyComponent,
+    StatusDot: DummyComponent,
+    Switch: DummyComponent,
+    statusToneForBoolean: () => "neutral",
+    useConfirm: () => () => {},
+    usePrompt: () => () => {},
     Button: ({
       children,
       ...props
@@ -98,13 +137,9 @@ vi.mock("@miladyai/ui", () => {
   };
 });
 
-vi.mock("@miladyai/app-core/components", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@miladyai/app-core/components")>();
-  const ReactMock = await import("react");
-
+vi.mock("@miladyai/app-core/components/CharacterRoster", () => {
+  const ReactMock = require("react");
   return {
-    ...actual,
     CharacterRoster: () =>
       ReactMock.createElement("div", { "data-testid": "character-roster" }),
     resolveRosterEntries: () => [
@@ -126,7 +161,7 @@ vi.mock("@miladyai/app-core/components", async (importOriginal) => {
   };
 });
 
-import { CharacterEditor } from "@miladyai/app-core/components";
+import { CharacterEditor } from "@miladyai/app-core/components/CharacterEditor";
 
 function createAppState() {
   return {
@@ -250,9 +285,10 @@ describe("CharacterEditor regressions", () => {
     if (!tree) {
       throw new Error("expected CharacterEditor to render");
     }
+    const root = (tree as TestRenderer.ReactTestRenderer).root;
 
-    const customizeBtn = tree.root.find(
-      (node) =>
+    const customizeBtn = root.find(
+      (node: TestRenderer.ReactTestInstance) =>
         node.type === "button" &&
         Array.isArray(node.children) &&
         node.children.includes("Customize"),
@@ -262,12 +298,20 @@ describe("CharacterEditor regressions", () => {
     });
     await flushEffects();
 
-    const regenerateButtons = tree.root.findAll(
-      (node) =>
+    const identityBtn = root.find(
+      (node: TestRenderer.ReactTestInstance) =>
+        node.type === "button" && node.children.includes("Character"),
+    );
+    await act(async () => {
+      identityBtn.props.onClick();
+    });
+    await flushEffects();
+
+    const regenerateButtons = root.findAll(
+      (node: TestRenderer.ReactTestInstance) =>
         node.type === "button" &&
-        node.props.className &&
-        typeof node.props.className === "string" &&
-        node.props.className.includes("ce-regen-btn"),
+        Array.isArray(node.children) &&
+        node.children.includes("regenerate"),
     );
     const regenerateButton = regenerateButtons[0];
     expect(regenerateButton).toBeDefined();
@@ -319,8 +363,9 @@ describe("CharacterEditor regressions", () => {
     if (!tree) {
       throw new Error("expected CharacterEditor to render");
     }
+    const testRoot = (tree as TestRenderer.ReactTestRenderer).root;
 
-    const customizeBtn = tree.root.find(
+    const customizeBtn = testRoot.find(
       (node) =>
         node.type === "button" &&
         Array.isArray(node.children) &&
@@ -335,13 +380,13 @@ describe("CharacterEditor regressions", () => {
     // verifies the dedicated preview button path.
     clientMock.streamVoiceSpeak.mockClear();
 
-    const previewButton = tree.root.find(
-      (node) =>
+    const playBtn = testRoot.find(
+      (node: TestRenderer.ReactTestInstance) =>
         node.type === "button" && node.props["aria-label"] === "Preview voice",
     );
 
     await act(async () => {
-      previewButton.props.onClick();
+      playBtn.props.onClick();
     });
     await flushEffects();
 

@@ -108,7 +108,7 @@ vi.mock("lucide-react", () => ({
   Terminal: () => React.createElement("span", null, "💻"),
 }));
 
-import { PermissionsSection } from "@miladyai/app-core/components/PermissionsSection";
+import { PermissionsSection } from "../../src/components/PermissionsSection";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 

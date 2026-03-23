@@ -83,11 +83,11 @@ vi.mock("@miladyai/app-core/hooks", async () => {
   };
 });
 
-vi.mock("@miladyai/app-core/components/ChatAvatar", () => ({
+vi.mock("../../src/components/ChatAvatar", () => ({
   ChatAvatar: () => null,
 }));
 
-vi.mock("@miladyai/app-core/components/MessageContent", () => ({
+vi.mock("../../src/components/MessageContent", () => ({
   MessageContent: ({ message }: { message: { text: string } }) =>
     React.createElement("span", null, message.text),
 }));
@@ -96,7 +96,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   client: mockClient,
 }));
 
-import { ChatView } from "@miladyai/app-core/components/ChatView";
+import { ChatView } from "../../src/components/ChatView";
 
 function createContext(
   overrides?: Partial<ChatViewContextStub>,

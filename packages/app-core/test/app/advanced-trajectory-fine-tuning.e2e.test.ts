@@ -70,15 +70,15 @@ vi.mock("@miladyai/app-core/components", () => {
 // Mock ALL child views of AdvancedPageView to avoid react-test-renderer
 // incompatibilities with Radix UI DOM methods and infinite useEffect loops.
 // ---------------------------------------------------------------------------
-vi.mock("@miladyai/app-core/components/CustomActionsView", () => {
+vi.mock("../../src/components/CustomActionsView", () => {
   const R = require("react");
   return { CustomActionsView: () => R.createElement("div", null, "stub") };
 });
-vi.mock("@miladyai/app-core/components/TriggersView", () => {
+vi.mock("../../src/components/TriggersView", () => {
   const R = require("react");
   return { TriggersView: () => R.createElement("div", null, "stub") };
 });
-vi.mock("@miladyai/app-core/components/FineTuningView", () => {
+vi.mock("../../src/components/FineTuningView", () => {
   const R = require("react");
   return {
     FineTuningView: () => R.createElement("div", null, "stub-fine-tuning"),
@@ -86,7 +86,7 @@ vi.mock("@miladyai/app-core/components/FineTuningView", () => {
 });
 
 // TrajectoriesView: render a clickable row so the test can trigger selection
-vi.mock("@miladyai/app-core/components/TrajectoriesView", () => {
+vi.mock("../../src/components/TrajectoriesView", () => {
   const R = require("react");
   return {
     TrajectoriesView: (props: { onSelectTrajectory?: (id: string) => void }) =>
@@ -110,7 +110,7 @@ vi.mock("@miladyai/app-core/components/TrajectoriesView", () => {
 });
 
 // TrajectoryDetailView: render the trajectory ID and a back button
-vi.mock("@miladyai/app-core/components/TrajectoryDetailView", () => {
+vi.mock("../../src/components/TrajectoryDetailView", () => {
   const R = require("react");
   return {
     TrajectoryDetailView: (props: {
@@ -148,7 +148,7 @@ vi.mock("@miladyai/ui", () => {
 });
 
 import { flush } from "../../../../test/helpers/react-test";
-import { AdvancedPageView } from "@miladyai/app-core/components/AdvancedPageView";
+import { AdvancedPageView } from "../../src/components/AdvancedPageView";
 
 const SHARED_TRAJECTORY_ID = "shared-traj-123456789";
 

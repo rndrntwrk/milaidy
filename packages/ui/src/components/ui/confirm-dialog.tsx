@@ -32,7 +32,7 @@ export interface ConfirmDialogProps {
 
 const TONE_STYLES: Record<ConfirmTone, string> = {
   danger: "bg-destructive text-destructive-fg hover:opacity-90",
-  warn: "bg-warn text-white hover:opacity-90",
+  warn: "bg-warn text-accent-fg hover:opacity-90",
   default: "bg-primary text-primary-fg hover:opacity-90",
 };
 
@@ -69,8 +69,7 @@ export function ConfirmDialog({
 
   const content = (
     <div
-      className="fixed inset-0 flex items-center justify-center bg-black/40"
-      style={{ zIndex: 10001 }}
+      className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/40"
       onClick={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
@@ -166,8 +165,7 @@ export function PromptDialog({
 
   const content = (
     <div
-      className="fixed inset-0 flex items-center justify-center bg-black/40"
-      style={{ zIndex: 10001 }}
+      className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/40"
       onClick={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}

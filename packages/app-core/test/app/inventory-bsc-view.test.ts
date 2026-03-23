@@ -11,7 +11,38 @@ vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
-import { InventoryView } from "@miladyai/app-core/components/InventoryView";
+vi.mock("@miladyai/ui", () => {
+  const passthrough = ({
+    children,
+    ...props
+  }: React.PropsWithChildren<Record<string, unknown>>) =>
+    React.createElement("div", props, children);
+  return {
+    Button: ({
+      children,
+      ...props
+    }: React.ButtonHTMLAttributes<HTMLButtonElement>) =>
+      React.createElement("button", { type: "button", ...props }, children),
+    Input: (props: React.InputHTMLAttributes<HTMLInputElement>) =>
+      React.createElement("input", props),
+    Select: passthrough,
+    SelectContent: passthrough,
+    SelectItem: ({
+      children,
+      ...props
+    }: React.PropsWithChildren<Record<string, unknown>>) =>
+      React.createElement("option", props, children),
+    SelectTrigger: passthrough,
+    SelectValue: passthrough,
+    Tabs: passthrough,
+    TabsList: passthrough,
+    TabsTrigger: passthrough,
+    TabsContent: passthrough,
+    Badge: passthrough,
+  };
+});
+
+import { InventoryView } from "../../src/components/InventoryView";
 
 function createWalletBalances(
   bnbBalance = "0.006",
@@ -378,13 +409,13 @@ describe("InventoryView unified wallets", () => {
 
     const chainSelect = tree?.root.findAll(
       (node) =>
-        node.type === "select" &&
-        node.props["data-testid"] === "wallet-chain-select",
+        typeof node.props.onValueChange === "function" &&
+        node.props.value === "all"
     )[0];
     expect(chainSelect).toBeDefined();
 
     await act(async () => {
-      chainSelect.props.onChange({ target: { value: "bsc" } });
+      chainSelect.props.onValueChange("bsc");
     });
     expect(ctx.setState).toHaveBeenCalledWith("inventoryChainFocus", "bsc");
 

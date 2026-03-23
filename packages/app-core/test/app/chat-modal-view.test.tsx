@@ -23,11 +23,11 @@ vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
-vi.mock("@miladyai/app-core/components/ChatView", () => ({
+vi.mock("../../src/components/ChatView", () => ({
   ChatView: () => React.createElement("section", null, "ChatView Ready"),
 }));
 
-vi.mock("@miladyai/app-core/components/ConversationsSidebar", () => ({
+vi.mock("../../src/components/ConversationsSidebar", () => ({
   ConversationsSidebar: () =>
     React.createElement("aside", null, "ConversationsSidebar Ready"),
 }));
@@ -41,7 +41,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   },
 }));
 
-import { ChatModalView } from "@miladyai/app-core/components/ChatModalView";
+import { ChatModalView } from "../../src/components/ChatModalView";
 
 function createContext() {
   return {

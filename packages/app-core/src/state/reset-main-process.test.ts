@@ -21,6 +21,9 @@ describe("completeResetLocalStateAfterServerWipe", () => {
       clearPersistedConnectionMode: vi.fn(() => {
         order.push("clearPersistedConnectionMode");
       }),
+      clearPersistedAvatarIndex: vi.fn(() => {
+        order.push("clearPersistedAvatarIndex");
+      }),
       setClientBaseUrl: vi.fn(() => {
         order.push("setClientBaseUrl");
       }),
@@ -32,6 +35,9 @@ describe("completeResetLocalStateAfterServerWipe", () => {
       }),
       markOnboardingReset: vi.fn(() => {
         order.push("markOnboardingReset");
+      }),
+      resetAvatarSelection: vi.fn(() => {
+        order.push("resetAvatarSelection");
       }),
       clearConversationLists: vi.fn(() => {
         order.push("clearConversationLists");
@@ -54,10 +60,12 @@ describe("completeResetLocalStateAfterServerWipe", () => {
       "setAgentStatus:running",
       "resetClientConnection",
       "clearPersistedConnectionMode",
+      "clearPersistedAvatarIndex",
       "setClientBaseUrl",
       "setClientToken",
       "clearElizaCloudSessionUi",
       "markOnboardingReset",
+      "resetAvatarSelection",
       "clearConversationLists",
       "setOnboardingOptions",
     ]);
@@ -74,10 +82,12 @@ describe("completeResetLocalStateAfterServerWipe", () => {
       setAgentStatus: vi.fn(),
       resetClientConnection: vi.fn(),
       clearPersistedConnectionMode: vi.fn(),
+      clearPersistedAvatarIndex: vi.fn(),
       setClientBaseUrl: vi.fn(),
       setClientToken: vi.fn(),
       clearElizaCloudSessionUi: vi.fn(),
       markOnboardingReset: vi.fn(),
+      resetAvatarSelection: vi.fn(),
       clearConversationLists: vi.fn(),
       fetchOnboardingOptions: vi.fn(async () => {
         throw err;

@@ -1,4 +1,5 @@
 export interface StylePreset {
+  id: string;
   name: string;
   avatarIndex: number;
   voicePresetId?: string;

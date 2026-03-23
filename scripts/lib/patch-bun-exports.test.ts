@@ -16,6 +16,7 @@ import {
   applyMissingLifecycleScriptPatch,
   applyNobleHashesCompat,
   applyPatchToPackageJson,
+  applyPtyManagerCursorPositionCompat,
   applyPluginVisionPermissionPatch,
   applyProperLockfileSignalExitCompat,
   findPackageFilePaths,
@@ -29,6 +30,7 @@ import {
   patchExtensionlessJsExports,
   patchMissingLifecycleScript,
   patchNobleHashesCompat,
+  patchPtyManagerCursorPositionCompat,
   patchPluginVisionPermissionHandling,
   patchProperLockfileSignalExitCompat,
   repairElizaCoreRuntimeDist,
@@ -1100,6 +1102,101 @@ describe("patch-bun-exports", () => {
       );
       expect(patched).toBe(true);
       expect(logs.some((l) => l.includes("proper-lockfile"))).toBe(true);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("applyPtyManagerCursorPositionCompat injects cursor-position replies", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "patch-bun-exports-test-"));
+    try {
+      const target = join(tmp, "dist", "index.js");
+      mkdirSync(join(tmp, "dist"), { recursive: true });
+      writeFileSync(
+        target,
+        [
+          "class PTYSession {",
+          "  setupEventHandlers() {",
+          "    if (!this.ptyProcess) return;",
+          "    this.ptyProcess.onData((data) => {",
+          "      this._lastActivityAt = /* @__PURE__ */ new Date();",
+          "      this.outputBuffer += data;",
+          '      this.emit("output", data);',
+          "      if (!this._processScheduled) {",
+          "        this._processScheduled = true;",
+          "      }",
+          "    });",
+          "  }",
+          "  /**",
+          "   * Process the accumulated output buffer.",
+          "   */",
+          "}",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const patched = applyPtyManagerCursorPositionCompat(target);
+      expect(patched).toBe(true);
+
+      const updated = readFileSync(target, "utf8");
+      expect(updated).toContain("respondToCursorPositionRequests(data)");
+      expect(updated).toContain('data.replace(/\\x1B\\[6n/g');
+      expect(updated).toContain('this.ptyProcess.write("\\x1B[1;1R");');
+      expect(updated).toContain("if (sanitizedData.length > 0)");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("patchPtyManagerCursorPositionCompat patches installed worker and manager files", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "patch-bun-exports-test-"));
+    try {
+      const pkgDir = join(tmp, "node_modules", "pty-manager", "dist");
+      const managerPath = join(pkgDir, "index.js");
+      const workerPath = join(pkgDir, "pty-worker.js");
+      mkdirSync(pkgDir, { recursive: true });
+
+      const source = [
+        "class PTYSession {",
+        "  setupEventHandlers() {",
+        "    if (!this.ptyProcess) return;",
+        "    this.ptyProcess.onData((data) => {",
+        "      this._lastActivityAt = /* @__PURE__ */ new Date();",
+        "      this.outputBuffer += data;",
+        '      this.emit("output", data);',
+        "      if (!this._processScheduled) {",
+        "        this._processScheduled = true;",
+        "      }",
+        "    });",
+        "  }",
+        "  /**",
+        "   * Process the accumulated output buffer.",
+        "   */",
+        "}",
+      ].join("\n");
+
+      writeFileSync(managerPath, source, "utf8");
+      writeFileSync(workerPath, source, "utf8");
+      writeFileSync(
+        join(tmp, "node_modules", "pty-manager", "package.json"),
+        JSON.stringify({ name: "pty-manager" }, null, 2),
+        "utf8",
+      );
+
+      const logs: string[] = [];
+      const patched = patchPtyManagerCursorPositionCompat(tmp, (msg) =>
+        logs.push(msg),
+      );
+
+      expect(patched).toBe(true);
+      expect(readFileSync(managerPath, "utf8")).toContain(
+        'this.ptyProcess.write("\\x1B[1;1R");',
+      );
+      expect(readFileSync(workerPath, "utf8")).toContain(
+        'this.ptyProcess.write("\\x1B[1;1R");',
+      );
+      expect(logs).toHaveLength(2);
+      expect(logs.every((line) => line.includes("pty-manager"))).toBe(true);
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }

@@ -6,6 +6,11 @@
 
 import { ONBOARDING_PROVIDER_CATALOG } from "@miladyai/shared/contracts/onboarding";
 import {
+  getDefaultStylePreset,
+  getStylePresets,
+  resolveStylePresetByAvatarIndex,
+} from "@miladyai/shared/onboarding-presets";
+import {
   type ReactNode,
   useCallback,
   useEffect,
@@ -137,6 +142,7 @@ import {
   type CompanionVrmPowerMode,
   clearPersistedConnectionMode,
   clearPersistedOnboardingStep,
+  clearAvatarIndex,
   deriveOnboardingResumeConnection,
   deriveOnboardingResumeFields,
   formatSearchBullet,
@@ -377,6 +383,15 @@ function shouldStartFreshCompanionConversation(
   });
 }
 
+interface QueuedChatSend {
+  rawInput: string;
+  channelType: ConversationChannelType;
+  conversationId?: string | null;
+  images?: ImageAttachment[];
+  resolve: () => void;
+  reject: (error: unknown) => void;
+}
+
 function isPrivateNetworkHost(host: string): boolean {
   if (
     host === "localhost" ||
@@ -465,6 +480,32 @@ function logResetInfo(message: string, detail?: Record<string, unknown>): void {
 
 function logResetWarn(message: string, detail?: unknown): void {
   console.warn(`${RESET_LOG_PREFIX} ${message}`, detail);
+}
+
+function buildLocalizedCharacterPayload(
+  preset: StylePreset,
+  name?: string | null,
+): CharacterData {
+  const resolvedName = name?.trim() || preset.name;
+  return {
+    name: resolvedName,
+    bio: [...preset.bio],
+    system: preset.system,
+    adjectives: [...preset.adjectives],
+    topics: [...preset.topics],
+    style: {
+      all: [...preset.style.all],
+      chat: [...preset.style.chat],
+      post: [...preset.style.post],
+    },
+    messageExamples: preset.messageExamples.map((conversation) => ({
+      examples: conversation.map((message) => ({
+        name: message.user,
+        content: { text: message.content.text },
+      })),
+    })),
+    postExamples: [...preset.postExamples],
+  };
 }
 
 // ── Provider ───────────────────────────────────────────────────────────
@@ -656,6 +697,8 @@ function AppProviderInner({
     setChatPendingImages,
     resetDraftState: resetConversationDraftState,
     activeConversationIdRef,
+    chatInputRef,
+    chatPendingImagesRef,
     conversationMessagesRef,
     conversationHydrationEpochRef,
     chatAbortRef,
@@ -671,6 +714,26 @@ function AppProviderInner({
     autonomousRunHealthByRunIdRef,
     autonomousReplayInFlightRef,
   } = chatState;
+  const chatSendQueueRef = useRef<QueuedChatSend[]>([]);
+  const resolveQueuedChatSends = useCallback(() => {
+    const queued = chatSendQueueRef.current.splice(0);
+    for (const turn of queued) {
+      turn.resolve();
+    }
+  }, [chatSendQueueRef]);
+  const interruptActiveChatPipeline = useCallback(() => {
+    resolveQueuedChatSends();
+    chatAbortRef.current?.abort();
+    chatAbortRef.current = null;
+    setChatSending(false);
+    setChatFirstTokenReceived(false);
+  }, [
+    chatAbortRef,
+    chatSendQueueRef,
+    resolveQueuedChatSends,
+    setChatFirstTokenReceived,
+    setChatSending,
+  ]);
   // Compat: old code sometimes used a separate chatAwaitingGreeting state
   const [chatAwaitingGreeting, setChatAwaitingGreeting] = useState(false);
   // addUnread / removeUnread wrappers for old setUnreadConversations patterns
@@ -1219,6 +1282,7 @@ function AppProviderInner({
   const prevAgentStateRef = useRef<string | null>(null);
   const restartNotificationSignatureRef = useRef<string | null>(null);
   const heartbeatNotificationKeyRef = useRef<string | null>(null);
+  const localizedCharacterLanguageRef = useRef<UiLanguage>(uiLanguage);
   // Onboarding refs now come from useOnboardingState
   const onboardingFinishBusyRef = onboardingFinishBusyRefFromHook;
   const onboardingResumeConnectionRef = onboardingResumeConnectionRefFromHook;
@@ -1978,6 +2042,54 @@ function AppProviderInner({
     setCharacterLoading(false);
   }, []);
 
+  useEffect(() => {
+    const previousLanguage = localizedCharacterLanguageRef.current;
+    localizedCharacterLanguageRef.current = uiLanguage;
+
+    if (previousLanguage === uiLanguage) {
+      return;
+    }
+    if (!onboardingComplete || selectedVrmIndex <= 0) {
+      return;
+    }
+
+    const preset = resolveStylePresetByAvatarIndex(
+      selectedVrmIndex,
+      uiLanguage,
+    );
+    if (!preset) {
+      return;
+    }
+
+    const resolvedName =
+      characterData?.name?.trim() ||
+      characterDraft?.name?.trim() ||
+      agentStatus?.agentName?.trim() ||
+      preset.name;
+
+    void (async () => {
+      try {
+        await client.updateCharacter(
+          buildLocalizedCharacterPayload(preset, resolvedName),
+        );
+        await loadCharacter();
+      } catch (err) {
+        console.warn(
+          "[milady] Failed to sync localized character preset after language change",
+          err,
+        );
+      }
+    })();
+  }, [
+    agentStatus?.agentName,
+    characterData?.name,
+    characterDraft?.name,
+    loadCharacter,
+    onboardingComplete,
+    selectedVrmIndex,
+    uiLanguage,
+  ]);
+
   const loadWorkbench = useCallback(async () => {
     setWorkbenchLoading(true);
     try {
@@ -2326,8 +2438,9 @@ function AppProviderInner({
   // resetConversationDraftState now comes from useChatState (aliased above)
 
   const handleStartDraftConversation = useCallback(async () => {
+    interruptActiveChatPipeline();
     resetConversationDraftState();
-  }, [resetConversationDraftState]);
+  }, [interruptActiveChatPipeline, resetConversationDraftState]);
 
   const handleStart = useCallback(async () => {
     if (!beginLifecycleAction("start")) return;
@@ -2627,6 +2740,7 @@ function AppProviderInner({
         setAgentStatus,
         resetClientConnection: () => client.resetConnection(),
         clearPersistedConnectionMode,
+        clearPersistedAvatarIndex: clearAvatarIndex,
         setClientBaseUrl: (url) => client.setBaseUrl(url),
         setClientToken: (token) => client.setToken(token),
         clearElizaCloudSessionUi: () => {
@@ -2649,6 +2763,13 @@ function AppProviderInner({
           setOnboardingComplete(false);
           onboardingResumeConnectionRef.current = null;
           setOnboardingStep("welcome");
+          setOnboardingName("Chen");
+          setOnboardingStyle("chen");
+        },
+        resetAvatarSelection: () => {
+          setSelectedVrmIndex(1);
+          setCustomVrmUrl("");
+          setCustomBackgroundUrl("");
         },
         clearConversationLists: () => {
           setConversationMessages([]);
@@ -2671,6 +2792,8 @@ function AppProviderInner({
       setOnboardingLoading,
       setOnboardingOptions,
       setOnboardingStep,
+      setOnboardingName,
+      setOnboardingStyle,
       setOnboardingUiRevealNonce,
       setConversationMessages,
       setActiveConversationId,
@@ -2678,6 +2801,9 @@ function AppProviderInner({
       activeConversationIdRef,
       onboardingCompletionCommittedRef,
       onboardingResumeConnectionRef,
+      setSelectedVrmIndex,
+      setCustomVrmUrl,
+      setCustomBackgroundUrl,
     ],
   );
 
@@ -2908,6 +3034,7 @@ function AppProviderInner({
       const previousMessages = conversationMessagesRef.current;
       const previousCutoffTs = companionMessageCutoffTs;
 
+      interruptActiveChatPipeline();
       resetConversationDraftState();
 
       try {
@@ -2974,6 +3101,7 @@ function AppProviderInner({
       activeConversationIdRef,
       conversationMessagesRef,
       greetingFiredRef,
+      interruptActiveChatPipeline,
       setActiveConversationId,
       setCompanionMessageCutoffTs,
       setConversationMessages,
@@ -3252,292 +3380,252 @@ function AppProviderInner({
     [appendLocalCommandTurn],
   );
 
-  const sendChatText = useCallback(
-    async (
-      rawInput: string,
-      options?: {
-        channelType?: ConversationChannelType;
-        conversationId?: string | null;
-        images?: ImageAttachment[];
-        clearChatInput?: boolean;
-      },
-    ) => {
-      const hasAttachedImages = Boolean(options?.images?.length);
-      const rawText = rawInput.trim();
+  const runQueuedChatSend = useCallback(
+    async (turn: Omit<QueuedChatSend, "resolve" | "reject">) => {
+      const hasAttachedImages = Boolean(turn.images?.length);
+      const rawText = turn.rawInput.trim();
       if (!rawText && !hasAttachedImages) return;
-      if (chatSendBusyRef.current) return;
-      chatSendBusyRef.current = true;
-      const sendNonce = ++chatSendNonceRef.current;
-      const channelType = options?.channelType ?? "DM";
+
+      const channelType = turn.channelType;
       const conversationMode: ConversationMode =
         channelType === "VOICE_DM" || channelType === "VOICE_GROUP"
           ? "simple"
           : chatMode;
-      const imagesToSend = options?.images;
+      const imagesToSend = turn.images;
       let controller: AbortController | null = null;
 
+      let text = hasAttachedImages
+        ? rawText || "Please review the attached image."
+        : rawText;
+      if (rawText) {
+        let commandResult: { handled: boolean; rewrittenText?: string };
+        try {
+          commandResult = await tryHandlePrefixedChatCommand(rawText);
+        } catch (err) {
+          appendLocalCommandTurn(
+            rawText,
+            `Command failed: ${err instanceof Error ? err.message : "unknown error"}`,
+          );
+          return;
+        }
+        if (commandResult.handled) {
+          return;
+        }
+        if (
+          typeof commandResult.rewrittenText === "string" &&
+          commandResult.rewrittenText.trim()
+        ) {
+          text = commandResult.rewrittenText.trim();
+        }
+      }
+
+      let convId: string =
+        turn.conversationId ?? activeConversationIdRef.current ?? "";
+      if (!convId) {
+        try {
+          const { conversation } = await client.createConversation(undefined, {
+            lang: uiLanguage,
+          });
+          const nextCutoffTs = Date.now();
+          setConversations((prev) => [conversation, ...prev]);
+          setActiveConversationId(conversation.id);
+          activeConversationIdRef.current = conversation.id;
+          setCompanionMessageCutoffTs(nextCutoffTs);
+          convId = conversation.id;
+        } catch {
+          return;
+        }
+      }
+
+      client.sendWsMessage({
+        type: "active-conversation",
+        conversationId: convId,
+      });
+
+      const activeConv = conversations.find((c) => c.id === convId);
+      if (
+        activeConv &&
+        (!activeConv.title ||
+          activeConv.title === "New Chat" ||
+          activeConv.title === "companion.newChat" ||
+          activeConv.title === "conversations.newChatTitle")
+      ) {
+        const fallbackTitle =
+          text.length > 15 ? `${text.slice(0, 15)}...` : text;
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === convId ? { ...c, title: fallbackTitle } : c,
+          ),
+        );
+      }
+
+      const now = Date.now();
+      const userMsgId = `temp-${now}`;
+      const assistantMsgId = `temp-resp-${now}`;
+
+      setCompanionMessageCutoffTs(now);
+      setConversationMessages((prev: ConversationMessage[]) => [
+        ...prev,
+        { id: userMsgId, role: "user", text, timestamp: now },
+        { id: assistantMsgId, role: "assistant", text: "", timestamp: now },
+      ]);
+      setChatFirstTokenReceived(false);
+
+      controller = new AbortController();
+      chatAbortRef.current = controller;
+      let streamedAssistantText = "";
+
       try {
-        let text = hasAttachedImages
-          ? rawText || "Please review the attached image."
-          : rawText;
-        if (rawText) {
-          let commandResult: { handled: boolean; rewrittenText?: string };
-          try {
-            commandResult = await tryHandlePrefixedChatCommand(rawText);
-          } catch (err) {
-            appendLocalCommandTurn(
-              rawText,
-              `Command failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        const data = await client.sendConversationMessageStream(
+          convId,
+          text,
+          (token, accumulatedText) => {
+            const nextText =
+              typeof accumulatedText === "string"
+                ? accumulatedText
+                : mergeStreamingText(streamedAssistantText, token);
+            if (nextText === streamedAssistantText) return;
+            streamedAssistantText = nextText;
+            setChatFirstTokenReceived(true);
+            setConversationMessages((prev) =>
+              prev.map((message) =>
+                message.id !== assistantMsgId
+                  ? message
+                  : message.text === nextText
+                    ? message
+                    : { ...message, text: nextText },
+              ),
             );
-            if (options?.clearChatInput) {
-              setChatInput("");
-            }
-            return;
-          }
-          if (commandResult.handled) {
-            if (options?.clearChatInput) {
-              setChatInput("");
-            }
-            return;
-          }
-          if (
-            typeof commandResult.rewrittenText === "string" &&
-            commandResult.rewrittenText.trim()
-          ) {
-            text = commandResult.rewrittenText.trim();
-          }
+          },
+          channelType,
+          controller.signal,
+          imagesToSend,
+          conversationMode,
+        );
+
+        if (!data.text.trim()) {
+          setConversationMessages((prev) =>
+            prev.filter((message) => message.id !== assistantMsgId),
+          );
+        } else if (
+          shouldApplyFinalStreamText(streamedAssistantText, data.text)
+        ) {
+          setConversationMessages((prev) => {
+            let changed = false;
+            const next = prev.map((message) => {
+              if (message.id !== assistantMsgId) return message;
+              if (message.text === data.text) return message;
+              changed = true;
+              return { ...message, text: data.text };
+            });
+            return changed ? next : prev;
+          });
+        }
+        if (data.usage) {
+          setChatLastUsage({
+            promptTokens: data.usage.promptTokens,
+            completionTokens: data.usage.completionTokens,
+            totalTokens: data.usage.totalTokens,
+            model: data.usage.model,
+            updatedAt: Date.now(),
+          });
         }
 
-        let convId: string =
-          options?.conversationId ?? activeConversationId ?? "";
-        if (!convId) {
+        if (!data.completed && streamedAssistantText.trim()) {
+          setConversationMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantMsgId
+                ? { ...message, interrupted: true }
+                : message,
+            ),
+          );
+        }
+
+        const userMessageCount = conversationMessagesRef.current.filter(
+          (message) =>
+            message.role === "user" && !message.id.startsWith("temp-"),
+        ).length;
+
+        if (userMessageCount === 1) {
+          void client
+            .renameConversation(convId, "", { generate: true })
+            .then(() => {
+              void loadConversations();
+            });
+        } else {
+          void loadConversations();
+        }
+
+        if (elizaCloudEnabled || elizaCloudConnected) {
+          void pollCloudCredits();
+        }
+      } catch (err) {
+        const abortError = err as Error;
+        if (abortError.name === "AbortError") {
+          setConversationMessages((prev) =>
+            prev.filter(
+              (message) =>
+                !(message.id === assistantMsgId && !message.text.trim()),
+            ),
+          );
+          return;
+        }
+
+        const status = (err as { status?: number }).status;
+        if (status === 404) {
           try {
-            const { conversation } = await client.createConversation(
-              undefined,
-              {
-                lang: uiLanguage,
-              },
-            );
+            const { conversation } = await client.createConversation();
             const nextCutoffTs = Date.now();
             setConversations((prev) => [conversation, ...prev]);
             setActiveConversationId(conversation.id);
             activeConversationIdRef.current = conversation.id;
             setCompanionMessageCutoffTs(nextCutoffTs);
-            convId = conversation.id;
+            client.sendWsMessage({
+              type: "active-conversation",
+              conversationId: conversation.id,
+            });
+
+            const retryData = await client.sendConversationMessage(
+              conversation.id,
+              text,
+              channelType,
+              imagesToSend,
+              conversationMode,
+            );
+            setConversationMessages(
+              filterRenderableConversationMessages([
+                {
+                  id: `temp-${Date.now()}`,
+                  role: "user",
+                  text,
+                  timestamp: Date.now(),
+                },
+                {
+                  id: `temp-resp-${Date.now()}`,
+                  role: "assistant",
+                  text: retryData.text,
+                  timestamp: Date.now(),
+                },
+              ]),
+            );
           } catch {
-            return;
-          }
-        }
-
-        client.sendWsMessage({
-          type: "active-conversation",
-          conversationId: convId,
-        });
-
-        // Eagerly rename "New Chat" using a snippet of the first message
-        const activeConv = conversations.find((c) => c.id === convId);
-        if (
-          activeConv &&
-          (!activeConv.title ||
-            activeConv.title === "New Chat" ||
-            activeConv.title === "companion.newChat" ||
-            activeConv.title === "conversations.newChatTitle")
-        ) {
-          const fallbackTitle =
-            text.length > 15 ? `${text.slice(0, 15)}...` : text;
-          setConversations((prev) =>
-            prev.map((c) =>
-              c.id === convId ? { ...c, title: fallbackTitle } : c,
-            ),
-          );
-        }
-
-        const now = Date.now();
-        const userMsgId = `temp-${now}`;
-        const assistantMsgId = `temp-resp-${now}`;
-
-        setCompanionMessageCutoffTs(now);
-        setConversationMessages((prev: ConversationMessage[]) => [
-          ...prev,
-          { id: userMsgId, role: "user", text, timestamp: now },
-          { id: assistantMsgId, role: "assistant", text: "", timestamp: now },
-        ]);
-        if (options?.clearChatInput) {
-          setChatInput("");
-        }
-        setChatSending(true);
-        setChatFirstTokenReceived(false);
-
-        controller = new AbortController();
-        chatAbortRef.current = controller;
-        let streamedAssistantText = "";
-
-        try {
-          const data = await client.sendConversationMessageStream(
-            convId,
-            text,
-            (token, accumulatedText) => {
-              const nextText =
-                typeof accumulatedText === "string"
-                  ? accumulatedText
-                  : mergeStreamingText(streamedAssistantText, token);
-              if (nextText === streamedAssistantText) return;
-              streamedAssistantText = nextText;
-              setChatFirstTokenReceived(true);
-              setConversationMessages((prev) =>
-                prev.map((message) =>
-                  message.id !== assistantMsgId
-                    ? message
-                    : message.text === nextText
-                      ? message
-                      : { ...message, text: nextText },
-                ),
-              );
-            },
-            channelType,
-            controller.signal,
-            imagesToSend,
-            conversationMode,
-          );
-
-          if (!data.text.trim()) {
-            setConversationMessages((prev) =>
-              prev.filter((message) => message.id !== assistantMsgId),
-            );
-          } else if (
-            shouldApplyFinalStreamText(streamedAssistantText, data.text)
-          ) {
-            setConversationMessages((prev) => {
-              let changed = false;
-              const next = prev.map((message) => {
-                if (message.id !== assistantMsgId) return message;
-                if (message.text === data.text) return message;
-                changed = true;
-                return { ...message, text: data.text };
-              });
-              return changed ? next : prev;
-            });
-          }
-          if (data.usage) {
-            setChatLastUsage({
-              promptTokens: data.usage.promptTokens,
-              completionTokens: data.usage.completionTokens,
-              totalTokens: data.usage.totalTokens,
-              model: data.usage.model,
-              updatedAt: Date.now(),
-            });
-          }
-
-          if (!data.completed && streamedAssistantText.trim()) {
-            setConversationMessages((prev) =>
-              prev.map((message) =>
-                message.id === assistantMsgId
-                  ? { ...message, interrupted: true }
-                  : message,
-              ),
-            );
-          }
-
-          // Trigger AI summarization if this was the second user message (4th message overall)
-          const userMessageCount = conversationMessagesRef.current.filter(
-            (m) => m.role === "user" && !m.id.startsWith("temp-"),
-          ).length;
-
-          if (userMessageCount === 1) {
-            // It was 1 before this turn was persisted, so this makes it the 2nd
-            void client
-              .renameConversation(convId, "", { generate: true })
-              .then(() => {
-                void loadConversations();
-              });
-          } else {
-            void loadConversations();
-          }
-
-          if (elizaCloudEnabled || elizaCloudConnected) {
-            void pollCloudCredits();
-          }
-        } catch (err) {
-          const abortError = err as Error;
-          if (abortError.name === "AbortError") {
             setConversationMessages((prev) =>
               prev.filter(
                 (message) =>
                   !(message.id === assistantMsgId && !message.text.trim()),
               ),
             );
-            return;
           }
-
-          const status = (err as { status?: number }).status;
-          if (status === 404) {
-            try {
-              const { conversation } = await client.createConversation();
-              const nextCutoffTs = Date.now();
-              setConversations((prev) => [conversation, ...prev]);
-              setActiveConversationId(conversation.id);
-              activeConversationIdRef.current = conversation.id;
-              setCompanionMessageCutoffTs(nextCutoffTs);
-              client.sendWsMessage({
-                type: "active-conversation",
-                conversationId: conversation.id,
-              });
-
-              const retryData = await client.sendConversationMessage(
-                conversation.id,
-                text,
-                channelType,
-                imagesToSend,
-                conversationMode,
-              );
-              setConversationMessages(
-                filterRenderableConversationMessages([
-                  {
-                    id: `temp-${Date.now()}`,
-                    role: "user",
-                    text,
-                    timestamp: Date.now(),
-                  },
-                  {
-                    id: `temp-resp-${Date.now()}`,
-                    role: "assistant",
-                    text: retryData.text,
-                    timestamp: Date.now(),
-                  },
-                ]),
-              );
-            } catch {
-              setConversationMessages((prev) =>
-                prev.filter(
-                  (message) =>
-                    !(message.id === assistantMsgId && !message.text.trim()),
-                ),
-              );
-            }
-          } else {
-            await loadConversationMessages(convId);
-          }
-        } finally {
-          if (chatAbortRef.current === controller) {
-            chatAbortRef.current = null;
-          }
-          if (chatSendNonceRef.current === sendNonce) {
-            chatSendBusyRef.current = false;
-            setChatSending(false);
-            setChatFirstTokenReceived(false);
-          }
+        } else {
+          await loadConversationMessages(convId);
         }
       } finally {
-        // Unconditionally clear the busy ref when the nonce matches —
-        // the inner finally may not run if an error is thrown between
-        // controller assignment and the inner try block.
-        if (chatSendNonceRef.current === sendNonce) {
-          chatSendBusyRef.current = false;
+        if (chatAbortRef.current === controller) {
+          chatAbortRef.current = null;
         }
       }
     },
     [
-      activeConversationId,
       appendLocalCommandTurn,
       chatMode,
       loadConversationMessages,
@@ -3545,15 +3633,11 @@ function AppProviderInner({
       tryHandlePrefixedChatCommand,
       activeConversationIdRef,
       chatAbortRef,
-      chatSendBusyRef,
-      chatSendNonceRef,
       conversationMessagesRef.current.filter,
       conversations.find,
       setActiveConversationId,
       setChatFirstTokenReceived,
-      setChatInput,
       setChatLastUsage,
-      setChatSending,
       setCompanionMessageCutoffTs,
       setConversationMessages,
       setConversations,
@@ -3564,19 +3648,95 @@ function AppProviderInner({
     ],
   );
 
-  const handleChatSend = useCallback(
-    async (channelType: ConversationChannelType = "DM") => {
-      const imagesToSend = chatPendingImages.length
-        ? chatPendingImages
-        : undefined;
-      setChatPendingImages([]);
-      await sendChatText(chatInput, {
-        channelType,
-        images: imagesToSend,
-        clearChatInput: true,
+  const flushQueuedChatSends = useCallback(async () => {
+    if (chatSendBusyRef.current) return;
+    chatSendBusyRef.current = true;
+    setChatSending(true);
+
+    try {
+      while (chatSendQueueRef.current.length > 0) {
+        const nextTurn = chatSendQueueRef.current.shift();
+        if (!nextTurn) break;
+        try {
+          await runQueuedChatSend(nextTurn);
+          nextTurn.resolve();
+        } catch (err) {
+          nextTurn.reject(err);
+        }
+      }
+    } finally {
+      chatSendBusyRef.current = false;
+      setChatSending(false);
+      setChatFirstTokenReceived(false);
+    }
+  }, [
+    chatSendBusyRef,
+    chatSendQueueRef,
+    runQueuedChatSend,
+    setChatFirstTokenReceived,
+    setChatSending,
+  ]);
+
+  const sendChatText = useCallback(
+    async (
+      rawInput: string,
+      options?: {
+        channelType?: ConversationChannelType;
+        conversationId?: string | null;
+        images?: ImageAttachment[];
+      },
+    ) => {
+      const hasAttachedImages = Boolean(options?.images?.length);
+      if (!rawInput.trim() && !hasAttachedImages) {
+        return;
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        chatSendQueueRef.current.push({
+          rawInput,
+          channelType: options?.channelType ?? "DM",
+          conversationId: options?.conversationId,
+          images: options?.images,
+          resolve,
+          reject,
+        });
+        setChatSending(true);
+        void flushQueuedChatSends();
       });
     },
-    [chatInput, chatPendingImages, sendChatText, setChatPendingImages],
+    [chatSendQueueRef, flushQueuedChatSends, setChatSending],
+  );
+
+  const handleChatSend = useCallback(
+    async (channelType: ConversationChannelType = "DM") => {
+      const claimedInput = chatInputRef.current;
+      const imagesToSend = chatPendingImagesRef.current.length
+        ? [...chatPendingImagesRef.current]
+        : undefined;
+
+      if (!claimedInput.trim() && !imagesToSend?.length) {
+        return;
+      }
+
+      chatInputRef.current = "";
+      chatPendingImagesRef.current = [];
+      setChatInput("");
+      setChatPendingImages([]);
+
+      await sendChatText(claimedInput, {
+        channelType,
+        conversationId: activeConversationIdRef.current,
+        images: imagesToSend,
+      });
+    },
+    [
+      activeConversationIdRef,
+      chatInputRef,
+      chatPendingImagesRef,
+      sendChatText,
+      setChatInput,
+      setChatPendingImages,
+    ],
   );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: conversations omitted to limit rerenders
@@ -3731,19 +3891,27 @@ function AppProviderInner({
             chatSendBusyRef.current = false;
             setChatSending(false);
             setChatFirstTokenReceived(false);
+            if (chatSendQueueRef.current.length > 0) {
+              void flushQueuedChatSends();
+            }
           }
         }
       } finally {
         if (controller == null && chatSendNonceRef.current === sendNonce) {
           chatSendBusyRef.current = false;
+          if (chatSendQueueRef.current.length > 0) {
+            void flushQueuedChatSends();
+          }
         }
       }
     },
     [
       chatMode,
       activeConversationId,
+      chatSendQueueRef,
       elizaCloudEnabled,
       elizaCloudConnected,
+      flushQueuedChatSends,
       loadConversationMessages,
       loadConversations,
       pollCloudCredits,
@@ -3752,23 +3920,13 @@ function AppProviderInner({
   );
 
   const handleChatStop = useCallback(() => {
-    chatSendBusyRef.current = false;
-    chatAbortRef.current?.abort();
-    chatAbortRef.current = null;
-    setChatSending(false);
-    setChatFirstTokenReceived(false);
+    interruptActiveChatPipeline();
 
     // Also stop any active PTY sessions — the user wants everything to halt
     for (const session of ptySessions) {
       client.stopCodingAgent(session.sessionId).catch(() => {});
     }
-  }, [
-    ptySessions,
-    chatAbortRef,
-    chatSendBusyRef,
-    setChatFirstTokenReceived,
-    setChatSending,
-  ]);
+  }, [interruptActiveChatPipeline, ptySessions]);
 
   const handleChatRetry = useCallback(
     (assistantMsgId: string) => {
@@ -3838,11 +3996,7 @@ function AppProviderInner({
         return false;
       }
 
-      chatSendBusyRef.current = false;
-      chatAbortRef.current?.abort();
-      chatAbortRef.current = null;
-      setChatSending(false);
-      setChatFirstTokenReceived(false);
+      interruptActiveChatPipeline();
       setChatInput("");
 
       const preservedMessages = currentMessages.slice(0, messageIndex);
@@ -3870,12 +4024,9 @@ function AppProviderInner({
       sendChatText,
       setActionNotice,
       activeConversationIdRef.current,
-      chatAbortRef,
-      chatSendBusyRef,
       conversationMessagesRef,
-      setChatFirstTokenReceived,
+      interruptActiveChatPipeline,
       setChatInput,
-      setChatSending,
       setConversationMessages,
     ],
   );
@@ -3886,6 +4037,7 @@ function AppProviderInner({
       setActionNotice("No active conversation to clear.", "info", 2200);
       return;
     }
+    interruptActiveChatPipeline();
     try {
       await client.deleteConversation(convId);
       setActiveConversationId(null);
@@ -3920,6 +4072,7 @@ function AppProviderInner({
     }
   }, [
     activeConversationId,
+    interruptActiveChatPipeline,
     loadConversations,
     setActionNotice,
     activeConversationIdRef,
@@ -3936,6 +4089,8 @@ function AppProviderInner({
         conversationMessagesRef.current.length > 0
       )
         return;
+
+      interruptActiveChatPipeline();
 
       // Clean up empty conversations: if the previous conversation has only
       // system/greeting messages and no user messages, delete it silently.
@@ -4029,6 +4184,7 @@ function AppProviderInner({
       activeConversationIdRef,
       conversationHydrationEpochRef,
       conversationMessagesRef.current,
+      interruptActiveChatPipeline,
       setActiveConversationId,
       setConversationMessages,
       setConversations,
@@ -4039,6 +4195,9 @@ function AppProviderInner({
   const handleDeleteConversation = useCallback(
     async (id: string) => {
       const deletingActive = activeConversationId === id;
+      if (deletingActive) {
+        interruptActiveChatPipeline();
+      }
       try {
         await client.deleteConversation(id);
         setConversations((prev) =>
@@ -4107,6 +4266,7 @@ function AppProviderInner({
     },
     [
       activeConversationId,
+      interruptActiveChatPipeline,
       loadConversationMessages,
       loadConversations,
       setActionNotice,
@@ -4853,8 +5013,9 @@ function AppProviderInner({
     // Cloud fast-track: if we got here from the 3-step onboarding,
     // submit with cloud defaults directly.
     if (elizaCloudConnected) {
-      const style = onboardingOptions?.styles?.[0];
-      const defaultName = style?.catchphrase ? "Chen" : "Eliza";
+      const style =
+        onboardingOptions?.styles?.[0] ?? getDefaultStylePreset(uiLanguage);
+      const defaultName = style?.name ?? getDefaultStylePreset(uiLanguage).name;
 
       try {
         await client.submitOnboarding({
@@ -4868,14 +5029,12 @@ function AppProviderInner({
             `You are ${onboardingName || defaultName}, an autonomous AI agent powered by elizaOS.`,
           style: style?.style,
           adjectives: style?.adjectives,
-          // biome-ignore lint/suspicious/noExplicitAny: complex type
-          postExamples: (style as any)?.postExamples,
-          // biome-ignore lint/suspicious/noExplicitAny: complex type
-          postExamples_zhCN: (style as any)?.postExamples_zhCN,
-          // biome-ignore lint/suspicious/noExplicitAny: complex type
-          messageExamples: (style as any)?.messageExamples,
-          // biome-ignore lint/suspicious/noExplicitAny: complex type
-          topics: (style as any)?.topics,
+          postExamples: style?.postExamples,
+          messageExamples: style?.messageExamples,
+          topics: style?.topics,
+          avatarIndex: style?.avatarIndex ?? 1,
+          language: uiLanguage,
+          presetId: style?.id ?? "chen",
           // Cloud onboarding: the API key was already persisted server-side
           // by handleCloudLogin → persistCloudLoginStatus. We just need to
           // tell the backend to enable cloud mode with default models.
@@ -4902,7 +5061,7 @@ function AppProviderInner({
     }
 
     const style = onboardingOptions.styles.find(
-      (s: StylePreset) => s.catchphrase === onboardingStyle,
+      (s: StylePreset) => s.id === onboardingStyle,
     );
     const systemPrompt = style?.system
       ? style.system.replace(/\{\{name\}\}/g, onboardingName)
@@ -4959,8 +5118,9 @@ function AppProviderInner({
           setOnboardingActiveGuide(null);
           setOnboardingDeferredTasks([]);
           setPostOnboardingChecklistDismissed(false);
-          setOnboardingName("Eliza");
-          setOnboardingStyle("");
+          setOnboardingName("Chen");
+          setOnboardingStyle("chen");
+          setSelectedVrmIndex(1);
           setOnboardingRunMode("cloud");
           setOnboardingCloudProvider("");
           setOnboardingProvider("");
@@ -5083,11 +5243,12 @@ function AppProviderInner({
         systemPrompt,
         style: style?.style,
         adjectives: style?.adjectives,
-        topics: (style as Record<string, unknown> | undefined)?.topics as
-          | string[]
-          | undefined,
+        topics: style?.topics,
         postExamples: style?.postExamples,
         messageExamples: style?.messageExamples,
+        avatarIndex: style?.avatarIndex ?? selectedVrmIndex,
+        language: uiLanguage,
+        presetId: (style?.id ?? onboardingStyle) || "chen",
         connection,
         walletConfig: nextWalletConfig,
       } as Parameters<typeof client.submitOnboarding>[0]);
@@ -5120,7 +5281,9 @@ function AppProviderInner({
         }) as AppState["onboardingDetectedProviders"],
       );
       setOnboardingComplete(true);
+      initialTabSetRef.current = true;
       setTab("character-select");
+      void loadCharacter();
     } catch (err) {
       const startOver = await confirmDesktopAction({
         title: "Setup Failed",
@@ -5139,8 +5302,9 @@ function AppProviderInner({
         setOnboardingActiveGuide(null);
         setOnboardingDeferredTasks([]);
         setPostOnboardingChecklistDismissed(false);
-        setOnboardingName("Eliza");
-        setOnboardingStyle("");
+        setOnboardingName("Chen");
+        setOnboardingStyle("chen");
+        setSelectedVrmIndex(1);
         setOnboardingRunMode("cloud");
         setOnboardingCloudProvider("");
         setOnboardingProvider("");
@@ -5175,6 +5339,8 @@ function AppProviderInner({
     onboardingRemoteToken,
     onboardingOpenRouterModel,
     onboardingPrimaryModel,
+    selectedVrmIndex,
+    uiLanguage,
     onboardingRpcSelections,
     onboardingRpcKeys,
     walletConfig,
@@ -5209,6 +5375,7 @@ function AppProviderInner({
     setOnboardingStep,
     setOnboardingStyle,
     setPostOnboardingChecklistDismissed,
+    setSelectedVrmIndex,
   ]);
 
   // ── Onboarding motion (flow graph: packages/app-core/src/onboarding/flow.ts) ──
@@ -6253,10 +6420,9 @@ function AppProviderInner({
       if (!restoredConnection) {
         // No reusable backend/config was found yet. Show static onboarding
         // immediately so first-run users are not blocked on server startup.
-        const injectedStyles = getBootConfig().onboardingStyles || [];
         setOnboardingOptions({
           names: [],
-          styles: injectedStyles as StylePreset[],
+          styles: getStylePresets(uiLanguage),
           providers: [
             ...ONBOARDING_PROVIDER_CATALOG,
           ] as OnboardingOptions["providers"],
@@ -6400,14 +6566,12 @@ function AppProviderInner({
             const resumeFields = deriveOnboardingResumeFields(resumeConnection);
             onboardingResumeConnectionRef.current = resumeConnection;
 
-            const injectedStyles = getBootConfig().onboardingStyles || [];
-
             setOnboardingOptions({
               ...options,
               styles:
-                (injectedStyles as StylePreset[]).length > 0
-                  ? (injectedStyles as StylePreset[])
-                  : options.styles,
+                options.styles.length > 0
+                  ? options.styles
+                  : getStylePresets(uiLanguage),
             });
 
             // Auto-detect AI provider credentials from local CLI installs.
@@ -7003,37 +7167,30 @@ function AppProviderInner({
         setOnboardingStep("hosting");
       }
 
-      const shouldStartAtCharacterSelect = shouldStartAtCharacterSelectOnLaunch(
-        {
+      const shouldStartAtCharacterSelect =
+        onboardingCompletionCommittedRef.current ||
+        shouldStartAtCharacterSelectOnLaunch({
           onboardingNeedsOptions,
           onboardingMode,
           navPath,
           urlTab,
-        },
-      );
+        });
       // Only set the initial tab ONCE ever — use a ref so async retries
       // inside the same effect closure don't override the user's navigation.
       if (!initialTabSetRef.current) {
         initialTabSetRef.current = true;
         if (shouldStartAtCharacterSelect) {
+          onboardingCompletionCommittedRef.current = false;
           setTab("character-select");
           void loadCharacter();
         } else if (
           !onboardingNeedsOptions &&
-          (!urlTab ||
-            urlTab === "chat" ||
-            urlTab === "companion" ||
-            urlTab === "character-select")
+          (!urlTab || urlTab === "chat" || urlTab === "companion")
         ) {
           setTab("companion");
         }
       }
-      if (
-        urlTab &&
-        urlTab !== "chat" &&
-        urlTab !== "companion" &&
-        urlTab !== "character-select"
-      ) {
+      if (urlTab && urlTab !== "chat" && urlTab !== "companion") {
         setTabRaw(urlTab);
         if (urlTab === "plugins" || urlTab === "connectors") {
           void loadPlugins();
@@ -7048,7 +7205,7 @@ function AppProviderInner({
           void loadUpdateStatus();
           void loadPlugins();
         }
-        if (urlTab === "character") {
+        if (urlTab === "character" || urlTab === "character-select") {
           void loadCharacter();
         }
         if (urlTab === "wallets") {

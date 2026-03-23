@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { AvatarSelector } from "@miladyai/app-core/components/AvatarSelector";
+import { AvatarSelector } from "../../src/components/AvatarSelector";
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 

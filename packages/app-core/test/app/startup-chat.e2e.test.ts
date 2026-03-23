@@ -109,7 +109,7 @@ vi.mock("@miladyai/app-core/src/components/KnowledgeView", () => ({
 vi.mock("@miladyai/app-core/src/components/LifoSandboxView", () => ({
   LifoSandboxView: () => React.createElement("div", null, "LifoSandboxView"),
 }));
-vi.mock("@miladyai/app-core/components/AvatarLoader", () => ({
+vi.mock("../../src/components/AvatarLoader", () => ({
   AvatarLoader: () => React.createElement("div", null, "AvatarLoader"),
 }));
 vi.mock("@miladyai/app-core/src/components/StreamView", () => ({

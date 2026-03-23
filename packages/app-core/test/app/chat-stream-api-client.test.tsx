@@ -292,9 +292,12 @@ describe("MiladyClient streaming chat endpoints", () => {
       },
     );
 
-    await vi.waitFor(() => {
-      expect(tokens).toEqual(["Hello"]);
-    });
+    let attempts = 0;
+    while (tokens.length === 0 && attempts < 50) {
+      await new Promise((r) => setTimeout(r, 10));
+      attempts++;
+    }
+    expect(tokens).toEqual(["Hello"]);
 
     controlled.push(
       'data: {"type":"done","fullText":"Hello","agentName":"Eliza"}\r\n\r\n',

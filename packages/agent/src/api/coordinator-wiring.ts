@@ -36,13 +36,23 @@ const POLL_TIMEOUT_MS = 90_000;
 const RETRY_DELAY_MS = 500;
 const MAX_RETRIES = 5;
 
+function discoverCoordinator(runtime: AgentRuntime): unknown | null {
+  const coordinator = runtime.getService("SWARM_COORDINATOR");
+  if (coordinator) return coordinator;
+
+  const ptyService = runtime.getService("PTY_SERVICE") as {
+    coordinator?: unknown;
+  } | null;
+  return ptyService?.coordinator ?? null;
+}
+
 /**
  * Wire coordinator bridges using polling-based service discovery.
  *
  * 1. Attempts immediate wiring (coordinator may already be available).
- * 2. If any bridge fails, polls for the SWARM_COORDINATOR service via
- *    `runtime.getService()` (the orchestrator plugin registers it via
- *    direct map insertion, so `getServiceLoadPromise` never resolves).
+ * 2. If any bridge fails, polls for the coordinator via `runtime.getService()`.
+ *    Depending on the installed coding-agent plugin, this may be exposed as a
+ *    `SWARM_COORDINATOR` service or as `PTY_SERVICE.coordinator`.
  * 3. Once the service appears, retries failed bridges up to MAX_RETRIES.
  * 4. On timeout or exhaustion, broadcasts a system-warning WS event.
  *
@@ -98,12 +108,10 @@ export async function wireCoordinatorBridgesWhenReady<S extends WirableState>(
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
 
-      const svc = runtime.getService("SWARM_COORDINATOR");
+      const svc = discoverCoordinator(runtime);
       if (svc) {
         serviceFound = true;
-        logger.debug?.(
-          `[eliza-api] SWARM_COORDINATOR service detected (${context})`,
-        );
+        logger.debug?.(`[eliza-api] coordinator service detected (${context})`);
         break;
       }
     }
@@ -112,7 +120,7 @@ export async function wireCoordinatorBridgesWhenReady<S extends WirableState>(
       // Service never appeared — log at debug level only. This is normal
       // if the orchestrator plugin is disabled or not configured.
       logger.debug?.(
-        `[eliza-api] SWARM_COORDINATOR not available after ${POLL_TIMEOUT_MS / 1000}s (${context}) — coding agent features disabled`,
+        `[eliza-api] coordinator not available after ${POLL_TIMEOUT_MS / 1000}s (${context}) — coding agent features disabled`,
       );
       return result;
     }

@@ -159,6 +159,15 @@ export default defineConfig({
               ),
             },
           ]),
+      // @miladyai/shared — always resolve subpath imports from source
+      {
+        find: /^@miladyai\/shared\/(.*)/,
+        replacement: path.join(repoRoot, "packages", "shared", "src", "$1"),
+      },
+      {
+        find: "@miladyai/shared",
+        replacement: path.join(repoRoot, "packages", "shared", "src", "index.ts"),
+      },
     ],
   },
   test: {
@@ -241,6 +250,7 @@ export default defineConfig({
           "@elizaos/core",
           "@miladyai/agent",
           "@miladyai/app-core",
+          /^@miladyai\/shared/,
           /^@elizaos\/plugin-/,
           "zod",
         ],

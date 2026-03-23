@@ -34,7 +34,7 @@ export function resolveRosterEntries(
   return styles.map((preset, index) => {
     const fallbackName = `Character ${index + 1}`;
     return {
-      id: preset.catchphrase,
+      id: preset.id,
       name: preset.name ?? fallbackName,
       avatarIndex: preset.avatarIndex ?? (index % 4) + 1,
       voicePresetId: preset.voicePresetId,
@@ -70,7 +70,7 @@ export function CharacterRoster({
       <div
         className={`rounded-2xl border p-4 text-sm ${
           useWhiteBorders
-            ? "border-white/10 bg-black/10 text-white/50"
+            ? "border-[var(--onboarding-card-border)] bg-[var(--onboarding-card-bg)] text-[var(--onboarding-text-faint)]"
             : "border-border/40 bg-black/10 text-muted"
         }`}
       >
@@ -135,12 +135,18 @@ export function CharacterRoster({
                 />
                 <div className="absolute inset-x-0 bottom-0">
                   <div
-                    className={`py-0.5 pr-9 pl-2.5 text-[clamp(8px,1.2vw,11px)] font-semibold text-white whitespace-nowrap overflow-hidden text-ellipsis text-right${isSelected ? " bg-black/[0.78]" : " bg-black/60"}`}
+                    className={`py-0.5 pr-9 pl-2.5 text-[clamp(8px,1.2vw,11px)] font-semibold whitespace-nowrap overflow-hidden text-ellipsis text-right ${
+                      useWhiteBorders
+                        ? "text-[var(--onboarding-text-strong)]"
+                        : "text-white"
+                    }${isSelected ? (useWhiteBorders ? " bg-[rgba(12,18,26,0.78)]" : " bg-black/[0.78]") : useWhiteBorders ? " bg-[rgba(12,18,26,0.6)]" : " bg-black/60"}`}
                     style={{
                       clipPath: INSET_CLIP,
                       ...(isSelected
                         ? {
-                            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
+                            boxShadow: useWhiteBorders
+                              ? "inset 0 1px 0 rgba(255,255,255,0.2)"
+                              : "inset 0 1px 0 rgba(255,255,255,0.08)",
                           }
                         : {}),
                     }}

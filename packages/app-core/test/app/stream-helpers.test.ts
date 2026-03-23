@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { toggleAlwaysOnTop } from "@miladyai/app-core/components/stream/helpers";
+import { toggleAlwaysOnTop } from "../../src/components/stream/helpers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 type TestWindow = Window & {
