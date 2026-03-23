@@ -281,6 +281,7 @@ import {
   useConfirm,
   usePrompt,
 } from "../components/ConfirmModal";
+import { NavigationProvider } from "./NavigationContext";
 import { TranslationProvider } from "./TranslationContext";
 import { buildWalletRpcUpdateRequest } from "../wallet-rpc";
 
@@ -6949,11 +6950,13 @@ export function AppProvider({
   return (
     <BrandingContext.Provider value={mergedBranding}>
       <TranslationProvider uiLanguage={uiLanguage}>
-        <AppContext.Provider value={value}>
-          {children}
-          <ConfirmModal {...modalProps} />
-          <PromptModal {...promptModalProps} />
-        </AppContext.Provider>
+        <NavigationProvider activeGameViewerUrl={activeGameViewerUrl}>
+          <AppContext.Provider value={value}>
+            {children}
+            <ConfirmModal {...modalProps} />
+            <PromptModal {...promptModalProps} />
+          </AppContext.Provider>
+        </NavigationProvider>
       </TranslationProvider>
     </BrandingContext.Provider>
   );
