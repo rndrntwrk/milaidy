@@ -2131,7 +2131,7 @@ function AppProviderInner({
         return false;
       }
       greetingInFlightConversationRef.current = convId;
-      _setChatAwaitingGreeting(true);
+      setChatAwaitingGreeting(true);
       try {
         const data = await client.requestGreeting(convId, uiLanguage);
         if (data.text) {
@@ -2170,7 +2170,7 @@ function AppProviderInner({
         greetingFiredRef.current = false;
         /* greeting failed silently — user can still chat */
       } finally {
-        _setChatAwaitingGreeting(false);
+        setChatAwaitingGreeting(false);
         if (greetingInFlightConversationRef.current === convId) {
           greetingInFlightConversationRef.current = null;
         }

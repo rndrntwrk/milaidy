@@ -8,14 +8,30 @@ import {
 } from "./dev-console-log.js";
 
 describe("dev-console-log", () => {
-  it("isAllowedDevConsoleLogPath only allows the expected basename", () => {
-    expect(isAllowedDevConsoleLogPath("/tmp/desktop-dev-console.log")).toBe(
-      true,
-    );
+  it("isAllowedDevConsoleLogPath requires .milady parent and correct basename", () => {
+    // Valid: correct basename under .milady directory
     expect(
       isAllowedDevConsoleLogPath("/repo/.milady/desktop-dev-console.log"),
     ).toBe(true);
+    expect(
+      isAllowedDevConsoleLogPath(
+        "/home/user/.milady/logs/desktop-dev-console.log",
+      ),
+    ).toBe(true);
+
+    // Invalid: correct basename but no .milady parent
+    expect(isAllowedDevConsoleLogPath("/tmp/desktop-dev-console.log")).toBe(
+      false,
+    );
+    expect(
+      isAllowedDevConsoleLogPath("/tmp/.evil/desktop-dev-console.log"),
+    ).toBe(false);
+
+    // Invalid: wrong basename
     expect(isAllowedDevConsoleLogPath("/etc/passwd")).toBe(false);
+    expect(
+      isAllowedDevConsoleLogPath("/repo/.milady/other-file.log"),
+    ).toBe(false);
   });
 
   it("readDevConsoleLogTail returns last lines within byte budget", () => {

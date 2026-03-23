@@ -18,6 +18,7 @@ import {
 import { sendJson as sendJsonResponse, sendJsonError as sendJsonErrorResponse } from "./response";
 
 
+import { handleCloudBillingRoute } from "@elizaos/agent/api/cloud-billing-routes";
 import { handleCloudCompatRoute } from "@elizaos/agent/api/cloud-compat-routes";
 // Override the wallet export rejection function with the hardened version
 // that adds rate limiting, audit logging, and a forced confirmation delay.
@@ -1684,11 +1685,20 @@ async function handleMiladyCompatRoute(
     if (!ensureCompatApiAuthorized(req, res)) {
       return true;
     }
-    const _dbgConfig = loadElizaConfig();
-    const _dbgKey = (_dbgConfig.cloud as Record<string, unknown> | undefined)?.apiKey;
-    console.log(`[DEBUG cloud/compat] apiKey present: ${!!_dbgKey}, type: ${typeof _dbgKey}, cloud keys: ${JSON.stringify(Object.keys((_dbgConfig.cloud as Record<string, unknown>) ?? {}))}`);
     return handleCloudCompatRoute(req, res, url.pathname, method, {
-      config: _dbgConfig,
+      config: loadElizaConfig(),
+    });
+  }
+
+  // Cloud billing routes — handle with fresh config from disk so a cloud
+  // API key persisted during login is always available, even if the
+  // upstream's in-memory state.config hasn't been refreshed.
+  if (url.pathname.startsWith("/api/cloud/billing/")) {
+    if (!ensureCompatApiAuthorized(req, res)) {
+      return true;
+    }
+    return handleCloudBillingRoute(req, res, url.pathname, method, {
+      config: loadElizaConfig(),
     });
   }
 
@@ -1723,12 +1733,25 @@ async function handleMiladyCompatRoute(
       });
       return true;
     }
+    // SSRF guard: reject non-loopback upstream URLs to prevent env-injection SSRF.
+    try {
+      const upstreamUrl = new URL(upstream);
+      const h = upstreamUrl.hostname.toLowerCase();
+      if (h !== "127.0.0.1" && h !== "localhost" && h !== "[::1]" && h !== "::1") {
+        sendJsonErrorResponse(res, 403, "screenshot upstream must be loopback");
+        return true;
+      }
+    } catch {
+      sendJsonErrorResponse(res, 400, "invalid screenshot upstream URL");
+      return true;
+    }
     const token = process.env.MILADY_SCREENSHOT_SERVER_TOKEN?.trim() ?? "";
     const base = upstream.replace(/\/$/, "");
     const target = `${base}/cursor-screenshot.png`;
     try {
       const r = await fetch(target, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
+        redirect: "error",
       });
       if (!r.ok) {
         const text = await r.text().catch(() => "");
@@ -1895,21 +1918,22 @@ async function handleMiladyCompatRoute(
     return true;
   }
 
-  const cloudConfigPath =
-    url.pathname === "/api/cloud/status" ||
-    url.pathname === "/api/cloud/credits" ||
-    url.pathname === "/api/cloud/disconnect";
+  // Handle all /api/cloud/* routes (except compat and billing which have
+  // their own handlers above) through Milady's handleCloudRoute. This is
+  // critical for cloud login — persistCloudLoginStatus saves the API key
+  // to disk and scrubs it from env. Without this, login/status falls
+  // through to the upstream handler whose config save can be clobbered.
+  const isCloudRoute =
+    url.pathname.startsWith("/api/cloud/") &&
+    !url.pathname.startsWith("/api/cloud/compat/") &&
+    !url.pathname.startsWith("/api/cloud/billing/");
 
-  if (cloudConfigPath) {
+  if (isCloudRoute) {
     if (!ensureCompatApiAuthorized(req, res)) {
       return true;
     }
 
     const config = loadElizaConfig();
-    if (url.pathname === "/api/cloud/status") {
-      const _ck = (config.cloud as Record<string, unknown> | undefined)?.apiKey;
-      console.log(`[DEBUG cloud/status] apiKey present: ${!!_ck}, cloud keys: ${JSON.stringify(Object.keys((config.cloud as Record<string, unknown>) ?? {}))}`);
-    }
 
     if (
       url.pathname === "/api/cloud/status" ||
@@ -2666,27 +2690,7 @@ async function handleMiladyCompatRoute(
       const { isCloudMode, replayBody: replayBodyRecord } =
         _deriveCompatOnboardingReplayBody(body);
 
-      if (isCloudMode) {
-        // Ensure the cloud API key is included in the replayed body so the
-        // upstream handler sets it on state.config.  Without this, the
-        // upstream's stale in-memory config won't contain the key and cloud
-        // billing / compat routes return 401.
-        if (
-          !replayBodyRecord.providerApiKey ||
-          typeof replayBodyRecord.providerApiKey !== "string"
-        ) {
-          const { getCloudSecret: getSecret } = await import(
-            "./cloud-secrets"
-          );
-          const sealedKey = getSecret("ELIZAOS_CLOUD_API_KEY");
-          const diskConfig = loadElizaConfig();
-          const apiKey =
-            sealedKey ||
-            (diskConfig.cloud as Record<string, unknown> | undefined)?.apiKey;
-          if (typeof apiKey === "string" && apiKey.trim()) {
-            replayBodyRecord.providerApiKey = apiKey;
-          }
-        }
+      if (isCloudMode && body.runMode !== "cloud") {
         replayBody = Buffer.from(JSON.stringify(replayBodyRecord), "utf8");
       }
 
@@ -2725,8 +2729,6 @@ async function handleMiladyCompatRoute(
               (body.largeModel as string) || "";
           }
         }
-        const _finalCloudKey = (config.cloud as Record<string, unknown> | undefined)?.apiKey;
-        console.log(`[DEBUG onboarding-save] cloud.apiKey present: ${!!_finalCloudKey}, isCloudMode: ${isCloudMode}, cloud keys: ${JSON.stringify(Object.keys((config.cloud as Record<string, unknown>) ?? {}))}`);
         saveElizaConfig(config);
       } catch (err) {
         logger.warn(
