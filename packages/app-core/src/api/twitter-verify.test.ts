@@ -25,7 +25,7 @@ vi.mock("@elizaos/core", () => ({
 
 // Mock resolveStateDir to use a temp dir
 const MOCK_STATE_DIR = path.join(__dirname, "__test_state__");
-vi.mock("@elizaos/agent/config/paths", () => ({
+vi.mock("@miladyai/agent/config/paths", () => ({
   resolveStateDir: () => MOCK_STATE_DIR,
 }));
 
@@ -38,7 +38,7 @@ import {
   loadWhitelist,
   markAddressVerified,
   verifyTweet,
-} from "@elizaos/agent/api/twitter-verify";
+} from "@miladyai/agent/api/twitter-verify";
 
 // ── Constants ────────────────────────────────────────────────────────────
 

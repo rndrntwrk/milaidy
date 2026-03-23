@@ -1,2 +1,2 @@
-export type { ElizaConfig } from "@elizaos/agent/config/types";
-export * from "@elizaos/agent/config/types";
+export type { ElizaConfig } from "@miladyai/agent/config/types";
+export * from "@miladyai/agent/config/types";

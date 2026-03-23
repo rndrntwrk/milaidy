@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { WalletConfigUpdateRequest } from "@elizaos/agent/contracts/wallet";
+import type { WalletConfigUpdateRequest } from "@miladyai/agent/contracts/wallet";
 import React, { useEffect } from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";

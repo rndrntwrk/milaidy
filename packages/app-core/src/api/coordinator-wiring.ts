@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/api/coordinator-wiring";
+export * from "@miladyai/agent/api/coordinator-wiring";

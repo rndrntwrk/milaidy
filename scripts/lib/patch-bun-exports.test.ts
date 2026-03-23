@@ -921,7 +921,7 @@ describe("patch-bun-exports", () => {
       expect(
         logs.some((line) =>
           line.includes(
-            "@elizaos/agent packages/agent/src/onboarding-presets.js",
+            "@miladyai/agent packages/agent/src/onboarding-presets.js",
           ),
         ),
       ).toBe(true);

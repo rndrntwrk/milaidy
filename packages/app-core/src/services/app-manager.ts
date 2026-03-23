@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/services/app-manager";
+export * from "@miladyai/agent/services/app-manager";

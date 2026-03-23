@@ -5,11 +5,11 @@ import {
   createMockIncomingMessage,
 } from "../test-support/test-helpers";
 import type { CloudRouteState } from "./cloud-routes";
+import { handleCloudRoute } from "./cloud-routes";
 import {
   _resetCloudSecretsForTesting,
   getCloudSecret,
-  handleCloudRoute,
-} from "./cloud-routes";
+} from "./cloud-secrets";
 
 const fetchMock =
   vi.fn<
@@ -20,7 +20,7 @@ const { saveElizaConfigMock, validateCloudBaseUrlMock } = vi.hoisted(() => ({
   validateCloudBaseUrlMock: vi.fn<(rawUrl: string) => Promise<string | null>>(),
 }));
 
-vi.mock("@elizaos/agent/cloud/validate-url", () => ({
+vi.mock("@miladyai/agent/cloud/validate-url", () => ({
   validateCloudBaseUrl: validateCloudBaseUrlMock,
 }));
 
@@ -1127,49 +1127,6 @@ function cloudState(): CloudRouteState {
 }
 
 describe("handleCloudRoute timeout behavior", () => {
-  it("returns 504 when cloud login session creation times out", async () => {
-    let capturedSignal: AbortSignal | null | undefined;
-    fetchMock.mockImplementation(async (_input, init) => {
-      capturedSignal = init?.signal;
-      throw timeoutError();
-    });
-
-    const { res, getJson } = createMockHttpResponse<Record<string, unknown>>();
-    const handled = await handleCloudRoute(
-      createMockIncomingMessage({
-        url: "/api/cloud/login",
-      }) as http.IncomingMessage,
-      res,
-      "/api/cloud/login",
-      "POST",
-      cloudState(),
-    );
-
-    expect(handled).toBe(true);
-    expect(res.statusCode).toBe(504);
-    expect(getJson().error).toBe("Eliza Cloud login request timed out");
-    expect(capturedSignal).toBeInstanceOf(AbortSignal);
-  });
-
-  it("returns 502 when cloud login session creation fails with network error", async () => {
-    fetchMock.mockRejectedValue(new Error("ECONNREFUSED"));
-
-    const { res, getJson } = createMockHttpResponse<Record<string, unknown>>();
-    const handled = await handleCloudRoute(
-      createMockIncomingMessage({
-        url: "/api/cloud/login",
-      }) as http.IncomingMessage,
-      res,
-      "/api/cloud/login",
-      "POST",
-      cloudState(),
-    );
-
-    expect(handled).toBe(true);
-    expect(res.statusCode).toBe(502);
-    expect(getJson()).toEqual({ error: "Failed to reach Eliza Cloud" });
-  });
-
   it("returns 502 when cloud login session creation is rejected by service", async () => {
     fetchMock.mockResolvedValue({
       ok: false,

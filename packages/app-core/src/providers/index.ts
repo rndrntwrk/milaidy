@@ -19,7 +19,7 @@ export {
   SUBSCRIPTION_PROVIDER_SELECTIONS,
   type SubscriptionProviderSelectionId,
   sortOnboardingProviders,
-} from "@elizaos/agent/contracts/onboarding";
+} from "@miladyai/agent/contracts/onboarding";
 
 import { resolveAppAssetUrl } from "../utils/asset-url";
 

@@ -8,7 +8,7 @@ import {
   stringToUuid,
 } from "@elizaos/core";
 
-export * from "@elizaos/agent/runtime/eliza";
+export * from "@miladyai/agent/runtime/eliza";
 
 import {
   type BootElizaRuntimeOptions,
@@ -21,7 +21,7 @@ import {
   configureLocalEmbeddingPlugin as upstreamConfigureLocalEmbeddingPlugin,
   shutdownRuntime as upstreamShutdownRuntime,
   startEliza as upstreamStartEliza,
-} from "@elizaos/agent/runtime/eliza";
+} from "@miladyai/agent/runtime/eliza";
 import {
   getBootConfig,
   syncBrandEnvToEliza,
@@ -193,7 +193,7 @@ type RuntimeWithModelRegistration = AgentRuntime & {
 };
 
 /**
- * `@elizaos/agent` boot calls its own `collectPluginNames` — Milady's wrapper
+ * `@miladyai/agent` boot calls its own `collectPluginNames` — Milady's wrapper
  * (which adds Edge TTS) is not used. Register the Edge TTS model handler on
  * the live runtime so core streaming voice (`useModel(TEXT_TO_SPEECH)`) works
  * for swarm / #Chen and matches UI TTS expectations.
@@ -203,7 +203,7 @@ export async function ensureMiladyTextToSpeechHandler(
 ): Promise<void> {
   let config: Parameters<typeof upstreamCollectPluginNames>[0];
   try {
-    const { loadElizaConfig } = await import("@elizaos/agent/config/config");
+    const { loadElizaConfig } = await import("@miladyai/agent/config/config");
     config = loadElizaConfig();
   } catch {
     config = {} as Parameters<typeof upstreamCollectPluginNames>[0];

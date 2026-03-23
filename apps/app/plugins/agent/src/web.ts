@@ -20,8 +20,10 @@ export class AgentWeb extends WebPlugin implements AgentPlugin {
         ? (window as unknown as Record<string, unknown>).__MILADY_API_BASE__
         : undefined;
     if (typeof global === "string" && global.trim().length > 0) return global;
-    
-    throw new Error("No API base URL provided for Agent services. Ensure __MILADY_API_BASE__ is set.");
+
+    throw new Error(
+      "No API base URL provided for Agent services. Ensure __MILADY_API_BASE__ is set.",
+    );
   }
 
   private apiToken(): string | null {

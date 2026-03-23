@@ -62,10 +62,10 @@ RUN bun install --frozen-lockfile --ignore-scripts 2>&1
 RUN node ./scripts/link-browser-server.mjs 2>/dev/null || true && node ./scripts/patch-deps.mjs
 RUN npx tsdown 2>&1 || echo "tsdown done"
 
-# Patch @elizaos/agent version to match the milady wrapper version
+# Patch @miladyai/agent version to match the milady wrapper version
 RUN node -e "const fs=require('fs'); const v=require('./package.json').version; \
-    try { const p=JSON.parse(fs.readFileSync('node_modules/@elizaos/agent/package.json','utf8')); \
-    p.version=v; fs.writeFileSync('node_modules/@elizaos/agent/package.json',JSON.stringify(p,null,2)); \
+    try { const p=JSON.parse(fs.readFileSync('node_modules/@miladyai/agent/package.json','utf8')); \
+    p.version=v; fs.writeFileSync('node_modules/@miladyai/agent/package.json',JSON.stringify(p,null,2)); \
     console.log('Patched autonomous version to', v); } catch(e) { console.log('skip:', e.message); }"
 
 # ─── Stage 2: Pruner ──────────────────────────────────────────────────────────
@@ -327,7 +327,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
-# tsx is required: node --import tsx loads @elizaos/agent raw .ts files.
+# tsx is required: node --import tsx loads @miladyai/agent raw .ts files.
 # Install globally so the node binary can find it via --import.
 RUN npm install -g tsx
 

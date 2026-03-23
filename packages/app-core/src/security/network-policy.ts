@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/security/network-policy";
+export * from "@miladyai/agent/security/network-policy";

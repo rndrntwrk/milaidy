@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/runtime/release-plugin-policy";
+export * from "@miladyai/agent/runtime/release-plugin-policy";

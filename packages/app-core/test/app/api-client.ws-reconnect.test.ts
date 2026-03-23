@@ -52,11 +52,11 @@ vi.stubGlobal(
 );
 
 // Mock contract modules that api-client.ts imports from autonomous.
-vi.mock("@elizaos/agent/contracts/drop", () => ({}));
-vi.mock("@elizaos/agent/contracts/onboarding", () => ({}));
-vi.mock("@elizaos/agent/contracts/verification", () => ({}));
-vi.mock("@elizaos/agent/contracts/wallet", () => ({}));
-vi.mock("@elizaos/agent/contracts/permissions", () => ({}));
+vi.mock("@miladyai/agent/contracts/drop", () => ({}));
+vi.mock("@miladyai/agent/contracts/onboarding", () => ({}));
+vi.mock("@miladyai/agent/contracts/verification", () => ({}));
+vi.mock("@miladyai/agent/contracts/wallet", () => ({}));
+vi.mock("@miladyai/agent/contracts/permissions", () => ({}));
 
 // Provide window.location so connectWs() can build a WS URL
 vi.stubGlobal("window", {

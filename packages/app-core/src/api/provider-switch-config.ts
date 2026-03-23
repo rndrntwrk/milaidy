@@ -1,6 +1,6 @@
-export * from "@elizaos/agent/api/provider-switch-config";
+export * from "@miladyai/agent/api/provider-switch-config";
 
-import { applyOnboardingConnectionConfig as upstreamApplyOnboardingConnectionConfig } from "@elizaos/agent/api/provider-switch-config";
+import { applyOnboardingConnectionConfig as upstreamApplyOnboardingConnectionConfig } from "@miladyai/agent/api/provider-switch-config";
 
 export async function applyOnboardingConnectionConfig(
   ...args: Parameters<typeof upstreamApplyOnboardingConnectionConfig>

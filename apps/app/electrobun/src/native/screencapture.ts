@@ -24,6 +24,7 @@ import os from "node:os";
 import path from "node:path";
 import { BrowserWindow } from "electrobun/bun";
 import { DEFAULT_PORT } from "../constants";
+import type { SendToWebview, WebviewEvalRpc } from "../types.js";
 
 /**
  * Allow-list for game-capture URLs.
@@ -45,57 +46,7 @@ function isAllowedCaptureUrl(url: string): boolean {
   }
 }
 
-/**
- * Structural type for accessing evaluateJavascriptWithResponse via requestProxy.
- * requestProxy is present at runtime on every createRPC result but is not
- * part of the base RPCWithTransport interface exported by electrobun.
- */
-type WebviewEvalRpc = {
-  requestProxy?: {
-    evaluateJavascriptWithResponse?: (params: {
-      script: string;
-    }) => Promise<unknown>;
-  };
-};
-
-/**
- * Minimal structural type for a webview — only the `rpc` property is used
- * by ScreenCaptureManager. Using a structural type (not Webview) allows
- * both real webviews and test mocks to satisfy this interface.
- */
 type Webview = { rpc?: unknown };
-
-type SendToWebview = (message: string, payload?: unknown) => void;
-
-// JS injected into the webview to capture its visible content as a JPEG data URL.
-// Uses html2canvas-style approach via native canvas.drawImage(document.body).
-// Note: cross-origin iframes will be blank (canvas taint).
-const _CAPTURE_SCRIPT = (_quality: number) => `
-(function() {
-  try {
-    var canvas = document.createElement('canvas');
-    var dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.min(window.innerWidth * dpr, 1920);
-    canvas.height = Math.min(window.innerHeight * dpr, 1080);
-    var ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-    // Attempt to capture via foreignObject SVG technique
-    var data = '<svg xmlns="http://www.w3.org/2000/svg" width="' + canvas.width + '" height="' + canvas.height + '">'
-      + '<foreignObject width="100%" height="100%">'
-      + '<div xmlns="http://www.w3.org/1999/xhtml" style="transform:scale(' + (1/dpr) + ');transform-origin:top left;width:' + (canvas.width*dpr) + 'px;height:' + (canvas.height*dpr) + 'px;">'
-      + document.documentElement.outerHTML
-      + '</div></foreignObject></svg>';
-    var img = new Image();
-    var blob = new Blob([data], {type: 'image/svg+xml;charset=utf-8'});
-    var url = URL.createObjectURL(blob);
-    // Sync path isn't possible — return a sentinel to use async path
-    URL.revokeObjectURL(url);
-    return null; // fallback to simpler approach
-  } catch(e) {
-    return null;
-  }
-})()
-`;
 
 export class ScreenCaptureManager {
   private frameCaptureActive = false;

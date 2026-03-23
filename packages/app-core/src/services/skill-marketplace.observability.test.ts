@@ -6,7 +6,7 @@ const { createSpanMock, spanSuccessMock, spanFailureMock } = vi.hoisted(() => ({
   spanFailureMock: vi.fn(),
 }));
 
-vi.mock("@elizaos/agent/diagnostics/integration-observability", () => ({
+vi.mock("@miladyai/agent/diagnostics/integration-observability", () => ({
   createIntegrationTelemetrySpan: createSpanMock,
 }));
 
@@ -14,7 +14,7 @@ vi.mock("@elizaos/core", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-import { searchSkillsMarketplace } from "@elizaos/agent/services/skill-marketplace";
+import { searchSkillsMarketplace } from "@miladyai/agent/services/skill-marketplace";
 
 describe("skills marketplace observability", () => {
   beforeEach(() => {

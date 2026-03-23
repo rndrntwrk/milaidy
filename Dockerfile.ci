@@ -17,9 +17,9 @@ RUN if [ -n "${VERSION_CLEAN}" ]; then \
   const fs = require('fs'); \
   const v = '${VERSION_CLEAN}'; \
   try { \
-  const p = JSON.parse(fs.readFileSync('node_modules/@elizaos/agent/package.json', 'utf8')); \
+  const p = JSON.parse(fs.readFileSync('node_modules/@miladyai/agent/package.json', 'utf8')); \
   p.version = v; \
-  fs.writeFileSync('node_modules/@elizaos/agent/package.json', JSON.stringify(p, null, 2)); \
+  fs.writeFileSync('node_modules/@miladyai/agent/package.json', JSON.stringify(p, null, 2)); \
   console.log('Patched autonomous to', v); \
   } catch(e) { console.log('skip:', e.message); } \
   "; \

@@ -197,27 +197,18 @@ export interface DiscoveryResult {
 }
 
 // -- Permissions --
-export type SystemPermissionId =
-  | "accessibility"
-  | "screen-recording"
-  | "microphone"
-  | "camera"
-  | "shell";
+export type {
+  PermissionState,
+  PermissionStatus,
+  SystemPermissionId,
+} from "@miladyai/app-core/contracts/permissions";
 
-export type PermissionStatus =
-  | "granted"
-  | "denied"
-  | "not-determined"
-  | "restricted"
-  | "not-applicable";
+import type {
+  PermissionState,
+  SystemPermissionId,
+} from "@miladyai/app-core/contracts/permissions";
 
-export interface PermissionState {
-  id: SystemPermissionId;
-  status: PermissionStatus;
-  lastChecked: number;
-  canRequest: boolean;
-}
-
+/** Local variant uses an index signature (the canonical contract uses explicit keys). */
 export interface AllPermissionsState {
   [key: string]: PermissionState;
 }

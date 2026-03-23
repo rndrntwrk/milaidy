@@ -1,4 +1,4 @@
-import { ONBOARDING_PROVIDER_CATALOG } from "@elizaos/agent/contracts/onboarding";
+import { ONBOARDING_PROVIDER_CATALOG } from "@miladyai/agent/contracts/onboarding";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@miladyai/ui";
 import type { ChangeEvent } from "react";
 import { useState } from "react";

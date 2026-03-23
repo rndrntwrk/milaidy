@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/services/whatsapp-pairing";
+export * from "@miladyai/agent/services/whatsapp-pairing";

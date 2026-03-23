@@ -1,9 +1,9 @@
 
 // Override CONNECTOR_IDS to include Milady-local connectors.
 // The wildcard re-export above is shadowed by this explicit named export.
-import { CONNECTOR_IDS as _upstreamConnectorIds } from "@elizaos/agent/config/schema";
+import { CONNECTOR_IDS as _upstreamConnectorIds } from "@miladyai/agent/config/schema";
 
-/** Milady-local connectors not present in upstream @elizaos/agent. */
+/** Milady-local connectors not present in upstream @miladyai/agent. */
 export const MILADY_LOCAL_CONNECTOR_IDS = ["wechat"] as const;
 
 export const CONNECTOR_IDS = [

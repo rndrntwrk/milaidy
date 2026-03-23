@@ -52,7 +52,7 @@ class ThrowingDropService {
 
 // ── Module mocks (hoisted by vitest) ────────────────────────────────────────
 
-vi.mock("@elizaos/agent/api/tx-service", () => ({
+vi.mock("@miladyai/agent/api/tx-service", () => ({
   TxService: class MockTxService {
     address = "0x1111111111111111111111111111111111111111";
     getContract() {
@@ -61,15 +61,15 @@ vi.mock("@elizaos/agent/api/tx-service", () => ({
   },
 }));
 
-vi.mock("@elizaos/agent/api/registry-service", () => ({
+vi.mock("@miladyai/agent/api/registry-service", () => ({
   RegistryService: ThrowingRegistryService,
 }));
 
-vi.mock("@elizaos/agent/api/drop-service", () => ({
+vi.mock("@miladyai/agent/api/drop-service", () => ({
   DropService: ThrowingDropService,
 }));
 
-vi.mock("@elizaos/agent/config/config", () => {
+vi.mock("@miladyai/agent/config/config", () => {
   const configData = {
     registry: {
       registryAddress: "0x2222222222222222222222222222222222222222",
@@ -89,14 +89,14 @@ vi.mock("@elizaos/agent/config/config", () => {
   };
 });
 
-vi.mock("@elizaos/agent/services/mcp-marketplace", () => ({
+vi.mock("@miladyai/agent/services/mcp-marketplace", () => ({
   searchMcpMarketplace: vi.fn().mockResolvedValue({ results: [] }),
   getMcpServerDetails: vi.fn().mockResolvedValue(null),
 }));
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
-const { startApiServer } = await import("@elizaos/agent/api/server");
+const { startApiServer } = await import("@miladyai/agent/api/server");
 
 describe("on-chain route error propagation (MW-02)", () => {
   let port: number;

@@ -8,13 +8,13 @@ const loadConfigMock = vi.fn();
 const saveConfigMock = vi.fn();
 
 // Mock both the "eliza" and "eliza" branded function names so the test works
-// regardless of which branding the resolved @elizaos/agent source uses.
-vi.mock("@elizaos/agent/config/config", () => ({
+// regardless of which branding the resolved @miladyai/agent source uses.
+vi.mock("@miladyai/agent/config/config", () => ({
   loadElizaConfig: () => loadConfigMock(),
   saveElizaConfig: (cfg: unknown) => saveConfigMock(cfg),
 }));
 
-import { handleDatabaseRoute } from "@elizaos/agent/api/database";
+import { handleDatabaseRoute } from "@miladyai/agent/api/database";
 
 describe("database API security hardening", () => {
   const _prevElizaBind = process.env.ELIZA_API_BIND;
@@ -22,7 +22,7 @@ describe("database API security hardening", () => {
 
   beforeEach(() => {
     // Set both env var names so the test works regardless of which branding
-    // the resolved @elizaos/agent source reads.
+    // the resolved @miladyai/agent source reads.
     process.env.ELIZA_API_BIND = "0.0.0.0";
     loadConfigMock.mockReturnValue({
       database: { provider: "postgres", postgres: { host: "8.8.8.8" } },

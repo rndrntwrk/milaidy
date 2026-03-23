@@ -70,6 +70,32 @@ vi.mock("@miladyai/ui", async () => {
       React.createElement("h2", props, children),
     DialogFooter: ({ children }: { children?: React.ReactNode }) =>
       React.createElement("div", null, children),
+    DialogDescription: ({
+      children,
+      ...props
+    }: React.ComponentProps<"p">) =>
+      React.createElement("p", props, children),
+    Input: React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
+      (props, ref) => React.createElement("input", { ...props, ref }),
+    ),
+    Label: ({
+      children,
+      ...props
+    }: React.ComponentProps<"label">) =>
+      React.createElement("label", props, children),
+    TooltipProvider: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    Tooltip: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    TooltipTrigger: ({
+      children,
+      asChild,
+      ...props
+    }: { children?: React.ReactNode; asChild?: boolean } & Record<string, unknown>) =>
+      asChild
+        ? (children as React.ReactElement)
+        : React.createElement("span", props, children),
+    TooltipContent: () => null,
     DropdownMenu: ({ children }: { children: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
     DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) =>
@@ -256,7 +282,9 @@ describe("ConversationsSidebar game-modal variant", () => {
     });
 
     const deleteControls = tree?.root.findAll(
-      (node) => node.props["data-testid"] === "conv-delete",
+      (node) =>
+        node.props["data-testid"] === "conv-delete" &&
+        typeof node.type === "string",
     );
     expect(deleteControls?.length).toBe(2);
 

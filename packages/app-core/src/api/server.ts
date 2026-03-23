@@ -8,7 +8,7 @@ import { type AgentRuntime, logger } from "@elizaos/core";
 import { StewardApiError, type PolicyResult } from "@stwd/sdk";
 
 
-import { handleCloudCompatRoute } from "@elizaos/agent/api/cloud-compat-routes";
+import { handleCloudCompatRoute } from "@miladyai/agent/api/cloud-compat-routes";
 // Override the wallet export rejection function with the hardened version
 // that adds rate limiting, audit logging, and a forced confirmation delay.
 import {

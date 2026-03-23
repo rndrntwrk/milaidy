@@ -1,4 +1,4 @@
-import type { StylePreset } from "@elizaos/agent/contracts/onboarding";
+import type { StylePreset } from "@miladyai/agent/contracts/onboarding";
 
 export type MiladyStylePreset = StylePreset & {
   name: string;

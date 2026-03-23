@@ -55,7 +55,7 @@ import { CONNECTOR_PLUGINS } from "../config/plugin-auto-enable";
 import { CONNECTOR_IDS, MILADY_LOCAL_CONNECTOR_IDS } from "../config/schema";
 // Import the plugin import specifier resolver by whichever name is exported.
 // The eliza workspace exports resolveElizaPluginImportSpecifier while the
-// npm-published @elizaos/agent package exports
+// npm-published @miladyai/agent package exports
 // resolveElizaPluginImportSpecifier.
 import * as _elizaExports from "./eliza";
 import {
@@ -1246,7 +1246,7 @@ describe("applyDatabaseConfigToEnv", () => {
   it("defaults PGLITE_DATA_DIR to the agent workspace when database config is missing", () => {
     applyDatabaseConfigToEnv({} as ElizaConfig);
     expect(process.env.POSTGRES_URL).toBeUndefined();
-    // The state dir name depends on the @elizaos/agent build
+    // The state dir name depends on the @miladyai/agent build
     // (either .eliza in workspace or .eliza in the published npm package).
     expect(process.env.PGLITE_DATA_DIR).toMatch(
       /\.(eliza|eliza)[/\\]workspace[/\\]\.eliza[/\\]\.elizadb$/,

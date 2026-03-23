@@ -100,7 +100,7 @@ These files in `packages/app-core` contain Milady-specific code that should be i
 ## 5. API Server Monolith (HIGH PRIORITY)
 
 `packages/app-core/src/api/server.ts` is **3,730 lines** — a monolithic file that:
-- Re-exports all of `@elizaos/agent/api/server`
+- Re-exports all of `@miladyai/agent/api/server`
 - Overrides 6 upstream functions
 - Adds 30+ Milady-specific endpoint handlers
 - Contains ElevenLabs API key aliasing

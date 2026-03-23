@@ -1,6 +1,6 @@
-export * from "@elizaos/agent/config/env-vars";
+export * from "@miladyai/agent/config/env-vars";
 
-import { collectConfigEnvVars as upstreamCollectConfigEnvVars } from "@elizaos/agent/config/env-vars";
+import { collectConfigEnvVars as upstreamCollectConfigEnvVars } from "@miladyai/agent/config/env-vars";
 
 const COMPAT_BLOCKED_STARTUP_ENV_KEYS = new Set([
   "ELIZA_API_TOKEN",

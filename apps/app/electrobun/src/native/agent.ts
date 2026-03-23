@@ -31,6 +31,7 @@ import path from "node:path";
 
 import { resolveDesktopRuntimeMode } from "../api-base";
 import { DEFAULT_PORT } from "../constants";
+import type { SendToWebview } from "../types.js";
 import { findFirstAvailableLoopbackPort } from "./loopback-port";
 
 // ---------------------------------------------------------------------------
@@ -59,8 +60,6 @@ export interface ExistingElizaInstallInfo {
   hasStateEntries: boolean;
   source: ExistingElizaInstallSource;
 }
-
-type SendToWebview = (message: string, payload?: unknown) => void;
 
 // Subprocess type from Bun.spawn
 type BunSubprocess = ReturnType<typeof Bun.spawn>;

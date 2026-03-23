@@ -6,6 +6,7 @@
  */
 
 import type { BrowserWindow } from "electrobun/bun";
+import type { SendToWebview } from "../types.js";
 import { getAgentManager } from "./agent";
 import { getCameraManager } from "./camera";
 import { getCanvasManager } from "./canvas";
@@ -17,8 +18,6 @@ import { getPermissionManager } from "./permissions";
 import { getScreenCaptureManager } from "./screencapture";
 import { getSwabbleManager } from "./swabble";
 import { getTalkModeManager } from "./talkmode";
-
-type SendToWebview = (message: string, payload?: unknown) => void;
 
 /**
  * Initialize all native modules with the main window and sendToWebview callback.

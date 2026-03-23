@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/api/memory-bounds";
+export * from "@miladyai/agent/api/memory-bounds";

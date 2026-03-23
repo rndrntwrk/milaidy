@@ -610,11 +610,6 @@ import * as electrobunBun from "electrobun/bun";
 import { DesktopManager } from "../native/desktop";
 import * as macEffects from "../native/mac-window-effects";
 
-const mockProxy = new Proxy({}, { get: () => "mock" });
-const CHANNEL_TO_RPC_METHOD: Record<string, string> = mockProxy;
-const PUSH_CHANNEL_TO_RPC_MESSAGE: Record<string, string> = mockProxy;
-const RPC_MESSAGE_TO_PUSH_CHANNEL: Record<string, string> = mockProxy;
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

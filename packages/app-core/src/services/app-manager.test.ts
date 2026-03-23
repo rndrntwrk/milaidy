@@ -2,8 +2,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { AppManager } from "@elizaos/agent/services/app-manager";
-import * as registryClient from "@elizaos/agent/services/registry-client";
+import { AppManager } from "@miladyai/agent/services/app-manager";
+import * as registryClient from "@miladyai/agent/services/registry-client";
 import {
   type Action,
   type Character,

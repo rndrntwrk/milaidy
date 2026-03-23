@@ -27,7 +27,7 @@ vi.mock("../../config/config", () => ({
   }),
 }));
 
-import { persistCompatOnboardingDefaults } from "../server";
+import { persistCompatOnboardingDefaults } from "../server-onboarding-compat";
 
 vi.mock("@elizaos/plugin-agent-orchestrator", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-agent-skills", () => ({ default: {} }));

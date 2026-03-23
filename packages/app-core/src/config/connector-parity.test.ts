@@ -44,7 +44,7 @@ import {
 } from "./plugin-auto-enable";
 import { CONNECTOR_IDS, MILADY_LOCAL_CONNECTOR_IDS } from "./schema";
 
-/** Connectors registered locally in Milady, not in upstream @elizaos/agent. */
+/** Connectors registered locally in Milady, not in upstream @miladyai/agent. */
 const MILADY_LOCAL_CONNECTORS = new Set<string>(MILADY_LOCAL_CONNECTOR_IDS);
 
 function sorted(values: Iterable<string>): string[] {

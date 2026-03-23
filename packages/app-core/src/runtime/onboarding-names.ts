@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/runtime/onboarding-names";
+export * from "@miladyai/agent/runtime/onboarding-names";

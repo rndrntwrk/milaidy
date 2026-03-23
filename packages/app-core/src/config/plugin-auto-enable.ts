@@ -5,7 +5,7 @@ import {
   CONNECTOR_PLUGINS as _upstreamConnectorPlugins,
   type ApplyPluginAutoEnableParams,
   type ApplyPluginAutoEnableResult,
-} from "@elizaos/agent/config/plugin-auto-enable";
+} from "@miladyai/agent/config/plugin-auto-enable";
 
 // Extend upstream CONNECTOR_PLUGINS with Milady-local connectors.
 export const CONNECTOR_PLUGINS: Record<string, string> = {

@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/hooks/discovery";
+export * from "@miladyai/agent/hooks/discovery";

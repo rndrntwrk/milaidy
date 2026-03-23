@@ -8,7 +8,7 @@
  * @see ../../onboarding/connection-flow.ts
  * @see ./connection/README.md
  */
-import { ONBOARDING_PROVIDER_CATALOG } from "@elizaos/agent/contracts/onboarding";
+import { ONBOARDING_PROVIDER_CATALOG } from "@miladyai/agent/contracts/onboarding";
 import type { ProviderOption } from "@miladyai/app-core/api";
 import { useBranding } from "@miladyai/app-core/config";
 import { isNative } from "@miladyai/app-core/platform";

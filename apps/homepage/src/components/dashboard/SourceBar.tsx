@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { useAgents } from "../../lib/AgentProvider";
+import { useAgents, type SourceFilter } from "../../lib/AgentProvider";
 import { useAuth } from "../../lib/useAuth";
 import { ConnectionModal } from "./ConnectionModal";
-
-export type SourceFilter = "all" | "local" | "cloud" | "remote";
 
 export function SourceBar() {
   const {

@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/contracts/onboarding";
+export * from "@miladyai/agent/contracts/onboarding";

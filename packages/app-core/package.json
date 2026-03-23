@@ -72,7 +72,8 @@
     "./styles/styles.css": "./src/styles/styles.css",
     "./shell": "./src/shell/index.ts",
     "./styles/brand-gold.css": "./src/styles/brand-gold.css",
-    "./character-catalog": "./src/character-catalog.ts"
+    "./character-catalog": "./src/character-catalog.ts",
+    "./contracts/permissions": "./src/contracts/permissions.ts"
   },
   "peerDependencies": {
     "@pixiv/three-vrm": "^3.4.5",
@@ -85,7 +86,7 @@
     "@capacitor/haptics": "8.0.0",
     "@capacitor/keyboard": "8.0.0",
     "@capacitor/preferences": "^8.0.1",
-    "@elizaos/agent": "alpha",
+    "@miladyai/agent": "workspace:*",
     "@miladyai/plugin-wechat": "workspace:*",
     "@lookingglass/webxr": "^0.6.0",
     "@miladyai/ui": "alpha",

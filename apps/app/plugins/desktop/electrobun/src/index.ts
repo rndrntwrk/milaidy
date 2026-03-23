@@ -35,6 +35,7 @@ import type {
   WindowBounds,
   WindowOptions,
 } from "@miladyai/app-core/src/definitions";
+import type { EventCallback } from "../../../shared-types.js";
 
 type DesktopEventPayloads = {
   trayClick: TrayClickEvent;
@@ -60,11 +61,10 @@ type DesktopEventPayloads = {
 
 type DesktopEventName = keyof DesktopEventPayloads;
 type DesktopEventData = DesktopEventPayloads[DesktopEventName];
-type EventCallback<T = DesktopEventData> = (event: T) => void;
 
 interface ListenerEntry {
   eventName: DesktopEventName;
-  callback: EventCallback;
+  callback: EventCallback<DesktopEventData>;
 }
 
 type AlwaysOnTopLevel = Parameters<DesktopPlugin["setAlwaysOnTop"]>[0]["level"];

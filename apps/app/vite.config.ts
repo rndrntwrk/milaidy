@@ -195,7 +195,7 @@ export default defineConfig({
         const uiSource = path.resolve(miladyRoot, "packages/ui/src");
         const autonomousSource = path.resolve(
           miladyRoot,
-          "node_modules/@elizaos/agent/packages/agent/src",
+          "node_modules/@miladyai/agent/packages/agent/src",
         );
 
         return [

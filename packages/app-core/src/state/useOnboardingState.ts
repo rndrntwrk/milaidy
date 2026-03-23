@@ -252,7 +252,7 @@ export interface OnboardingStateHook {
   finishBusyRef: React.RefObject<boolean>;
   /** Ref for onboarding resume connection. */
   resumeConnectionRef: React.RefObject<
-    import("@elizaos/agent/contracts/onboarding").OnboardingConnection | null
+    import("@miladyai/agent/contracts/onboarding").OnboardingConnection | null
   >;
   /** Tracks whether onboarding completion has been committed this session. */
   completionCommittedRef: React.RefObject<boolean>;
@@ -269,7 +269,7 @@ export function useOnboardingState(cloudOnly?: boolean): OnboardingStateHook {
 
   const finishBusyRef = useRef(false);
   const resumeConnectionRef = useRef<
-    import("@elizaos/agent/contracts/onboarding").OnboardingConnection | null
+    import("@miladyai/agent/contracts/onboarding").OnboardingConnection | null
   >(null);
   const completionCommittedRef = useRef(false);
   const forceLocalBootstrapRef = useRef(false);

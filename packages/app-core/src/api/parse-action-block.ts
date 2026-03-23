@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/api/parse-action-block";
+export * from "@miladyai/agent/api/parse-action-block";

@@ -6,7 +6,12 @@
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "forceConsistentCasingInFileNames": true,
-    "lib": ["DOM", "DOM.Iterable", "ES2023", "ScriptHost"],
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ES2023",
+      "ScriptHost"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "noEmit": true,
@@ -17,12 +22,20 @@
     "useDefineForClassFields": false,
     "baseUrl": ".",
     "paths": {
-      "@miladyai/ui": ["./packages/ui/src/index.ts"],
-      "@miladyai/ui/*": ["./packages/ui/src/*"],
-      "@elizaos/agent/*": ["./node_modules/@elizaos/agent/packages/agent/src/*"]
+      "@miladyai/ui": [
+        "./packages/ui/src/index.ts"
+      ],
+      "@miladyai/ui/*": [
+        "./packages/ui/src/*"
+      ],
+      "@miladyai/agent/*": [
+        "./node_modules/@miladyai/agent/packages/agent/src/*"
+      ]
     }
   },
-  "include": ["packages/app-core/src/**/*"],
+  "include": [
+    "packages/app-core/src/**/*"
+  ],
   "exclude": [
     "node_modules",
     "node_modules/.bun",

@@ -13,8 +13,8 @@
  */
 
 import { Electroview } from "electrobun/view";
+import type { RpcMessageListener } from "../types.js";
 
-type RpcMessageListener = (payload: unknown) => void;
 type RendererRequestHandler = (params: unknown) => Promise<unknown>;
 type RendererBridgeRpc = {
   request: Record<string, RendererRequestHandler>;

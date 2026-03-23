@@ -1,7 +1,7 @@
 import {
   type RegistryRouteContext as AutonomousRegistryRouteContext,
   handleRegistryRoutes as handleAutonomousRegistryRoutes,
-} from "@elizaos/agent/api/registry-routes";
+} from "@miladyai/agent/api/registry-routes";
 import { classifyRegistryPluginRelease } from "../runtime/release-plugin-policy";
 import type { PluginManagerLike } from "../services/plugin-manager-types";
 import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";

@@ -10,16 +10,7 @@ import {
   type SandboxEngineType,
 } from "./sandbox-engine";
 
-export type SandboxMode = "off" | "light" | "standard" | "max";
-
-export type SandboxState =
-  | "uninitialized"
-  | "initializing"
-  | "ready"
-  | "degraded"
-  | "stopping"
-  | "stopped"
-  | "recovering";
+export type { SandboxMode, SandboxState } from "@miladyai/agent/services/sandbox-manager";
 
 export interface SandboxManagerConfig {
   mode: SandboxMode;

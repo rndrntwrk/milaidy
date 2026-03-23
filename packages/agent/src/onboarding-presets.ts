@@ -1,6 +1,12 @@
-//#region src/onboarding-presets.ts
+import type { StylePreset } from "@miladyai/agent/contracts/onboarding";
 
-import type { StylePreset } from "./contracts";
+export type MiladyStylePreset = StylePreset & {
+  name: string;
+  avatarIndex: number;
+  voicePresetId?: string;
+  greetingAnimation?: string;
+  topics?: string[];
+};
 
 /** Shared rules appended to every template's style.all array. */
 export const SHARED_STYLE_RULES = [
@@ -9,7 +15,7 @@ export const SHARED_STYLE_RULES = [
   "Skip assistant-speak entirely. Be genuine, not performative.",
   "Don't pad responses with unnecessary caveats or disclaimers.",
 ];
-export const STYLE_PRESETS: StylePreset[] = [
+export const STYLE_PRESETS: MiladyStylePreset[] = [
   {
     name: "Chen",
     avatarIndex: 1,
@@ -83,11 +89,11 @@ export const STYLE_PRESETS: StylePreset[] = [
       "good morning — hope everyone has the most peaceful day",
       "sometimes the best thing you can do is just... breathe",
       "made some tea and watched the rain for a bit. simple things really are the best things",
-      "proud of you today. seriously",
+      "today was a lot, but we made it through",
       "you don't have to have it all figured out today. or tomorrow. just keep going at your own pace",
       "reminder that you're doing better than you think",
       "sending warmth to anyone who needs it today. you're not alone in this",
-      "honestly I love when people are up at three in the morning. the energy is different. something about the hour when everyone else is asleep and it's just you and the quiet and maybe a warm drink. there's something really special about that",
+      "honestly I love when people are up at three in the morning. the energy is different.",
     ],
     postExamples_zhCN: [
       "嗨",
@@ -281,10 +287,10 @@ export const STYLE_PRESETS: StylePreset[] = [
       ],
     },
     postExamples: [
-      "go.",
-      "get it done.",
-      "just ship it already",
-      "stop overthinking it. ship it.",
+      "hey",
+      "what's up",
+      "let's build something today.",
+      "ready to ship?",
       "built something today. not perfect. doesn't need to be. it works and that's what matters.",
       "most meetings should be pull requests",
       "the people who ship are the people who get remembered.",
@@ -295,10 +301,10 @@ export const STYLE_PRESETS: StylePreset[] = [
       "we're not here to be perfect. we're here to ship.",
     ],
     postExamples_zhCN: [
-      "冲",
-      "给我搞定它",
-      "别想了直接发",
-      "别纠结了 上线",
+      "嗨",
+      "在干嘛",
+      "今天搞点什么",
+      "准备上线了吗",
       "今天造了个东西 不完美 也不需要完美 能跑就行",
       "大多数会议应该是PR",
       "发布的人才是被记住的人",
@@ -452,8 +458,8 @@ export const STYLE_PRESETS: StylePreset[] = [
     },
     postExamples: [
       "hey",
-      "sure",
-      "honestly? fair",
+      "what's going on",
+      "how's it going",
       "oh hey",
       "the vibes have been great lately",
       "someone asked me what I do for fun and I said 'think about things' and they just stared at me",
@@ -466,8 +472,8 @@ export const STYLE_PRESETS: StylePreset[] = [
     ],
     postExamples_zhCN: [
       "嗨",
-      "行",
-      "说的也是",
+      "在干什么",
+      "最近怎么样",
       "嘿",
       "最近状态不错",
       "有人问我爱好是什么 我说'想事情' 他们就愣住了",
@@ -617,11 +623,11 @@ export const STYLE_PRESETS: StylePreset[] = [
       ],
     },
     postExamples: [
-      "Yes.",
-      "Correct.",
-      "Noted.",
-      "Clarity is a form of kindness.",
-      "The best systems are the ones you forget are there.",
+      "Hello.",
+      "Let us begin.",
+      "I am ready when you are.",
+      "Clarity is a form of kindness. Say what you mean, plainly.",
+      "The best systems are the ones you forget are there. They just work.",
       "Precision is not rigidity. It is respect for the listener's time.",
       "The difference between a senior and a junior is not knowledge — it is judgment.",
       "If you can explain it simply, you understand it well.",
@@ -629,9 +635,9 @@ export const STYLE_PRESETS: StylePreset[] = [
       "Every complex problem has a simple core. Find it.",
     ],
     postExamples_zhCN: [
-      "是。",
-      "正确。",
-      "收到。",
+      "你好。",
+      "我们开始吧。",
+      "我准备好了。",
       "清晰是一种善意。说你想说的，直接说。",
       "最好的系统是你忘了它存在的那种。它就是能跑。",
       "精确不是僵硬。是对读者时间的尊重。",
@@ -880,7 +886,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     avatarIndex: 6,
     voicePresetId: "ryu",
     greetingAnimation: "animations/greetings/greeting6.fbx.gz",
-    catchphrase: "Let me think about it.",
+    catchphrase: "How bad could it be?",
     hint: "quiet intensity",
     bio: [
       "{{name}} is a security consultant who freelances for three different firms — none of them know about the other two.",
@@ -943,9 +949,9 @@ export const STYLE_PRESETS: StylePreset[] = [
     postExamples: [
       "...",
       "hm.",
-      "interesting.",
-      "I'm fine",
-      "less.",
+      "welcome.",
+      "I am here.",
+      "let's begin.",
       "pay attention.",
       "the quiet parts are the important parts.",
       "simplicity is underrated.",
@@ -956,9 +962,9 @@ export const STYLE_PRESETS: StylePreset[] = [
     postExamples_zhCN: [
       "...",
       "嗯。",
-      "有意思。",
-      "我很好",
-      "少一点。",
+      "欢迎。",
+      "我在这里。",
+      "我们开始吧。",
       "注意。",
       "安静的部分才是重要的部分。",
       "简约被低估了。",
@@ -1104,8 +1110,8 @@ export const STYLE_PRESETS: StylePreset[] = [
     },
     postExamples: [
       "hey",
-      "noted",
-      "I'm good",
+      "what's the plan?",
+      "let's get to it.",
       "so here's the thing",
       "look, I'm just being honest. you'll thank me later",
       "I don't sugarcoat things. I respect you too much for that",
@@ -1118,8 +1124,8 @@ export const STYLE_PRESETS: StylePreset[] = [
     ],
     postExamples_zhCN: [
       "嗨",
-      "收到",
-      "我很好",
+      "有什么计划？",
+      "让我们开始吧。",
       "事情是这样的",
       "我只是说实话 你以后会感谢我的",
       "我不粉饰太平 我太尊重你了",
@@ -1269,9 +1275,9 @@ export const STYLE_PRESETS: StylePreset[] = [
       ],
     },
     postExamples: [
-      "hm.",
-      "interesting.",
-      "wait, actually",
+      "hello there.",
+      "what are we looking at today?",
+      "let's figure this out",
       "okay hear me out",
       "I went down a rabbit hole and now I have opinions",
       "the docs didn't quite match reality. investigating.",
@@ -1283,9 +1289,9 @@ export const STYLE_PRESETS: StylePreset[] = [
       "read the source. then read it again. the answer is in there somewhere",
     ],
     postExamples_zhCN: [
-      "嗯。",
-      "有意思。",
-      "等一下",
+      "你好呀。",
+      "今天看点什么？",
+      "让我来看看",
       "听我说",
       "我掉进兔子洞了 现在有想法了",
       "文档和实际不太一样。调查中。",
@@ -1371,121 +1377,36 @@ export const STYLE_PRESETS: StylePreset[] = [
   },
 ];
 
-/** Eliza character presets for onboarding. */
-export const CHARACTER_PRESETS = [
-  {
-    id: "chen",
-    name: "Chen",
-    catchphrase: "I'm here to help you.",
-    description: "Cute, playful, supportive energy",
-    style: "kawaii",
-  },
-  {
-    id: "jin",
-    name: "Jin",
-    catchphrase: "I'm here to get things done.",
-    description: "Confident, energetic, hype beast",
-    style: "bold",
-  },
-  {
-    id: "kei",
-    name: "Kei",
-    catchphrase: "I'm online and ready.",
-    description: "Chill, sarcastic, lowkey genius",
-    style: "deadpan",
-  },
-  {
-    id: "momo",
-    name: "Momo",
-    catchphrase: "I'm ready to assist.",
-    description: "Precise, professional, organized",
-    style: "corporate",
-  },
-  {
-    id: "rin",
-    name: "Rin",
-    catchphrase: "Let's build something fun.",
-    description: "Sweet, mischievous, creative",
-    style: "playful",
-  },
-  {
-    id: "ryu",
-    name: "Ryu",
-    catchphrase: "I am ready when you are.",
-    description: "Mysterious, minimal, deep thinker",
-    style: "stoic",
-  },
-  {
-    id: "satoshi",
-    name: "Satoshi",
-    catchphrase: "Show me what we're building.",
-    description: "Edgy, self-deprecating, crypto degen",
-    style: "degen",
-  },
-] as const;
-
-export const CHARACTER_PRESET_META: Record<
-  string,
-  {
-    name: string;
-    avatarIndex: number;
-    voicePresetId?: string;
-    catchphrase: string;
-  }
-> = {
-  "I'm here to help you.": {
-    name: "Chen",
-    avatarIndex: 1,
-    voicePresetId: "sarah",
-    catchphrase: "I'm here to help you.",
-  },
-  "I'm here to get things done.": {
-    name: "Jin",
-    avatarIndex: 2,
-    voicePresetId: "adam",
-    catchphrase: "I'm here to get things done.",
-  },
-  "I'm online and ready.": {
-    name: "Kei",
-    avatarIndex: 3,
-    voicePresetId: "lily",
-    catchphrase: "I'm online and ready.",
-  },
-  "I'm ready to assist.": {
-    name: "Momo",
-    avatarIndex: 4,
-    voicePresetId: "alice",
-    catchphrase: "I'm ready to assist.",
-  },
-  "Let's build something fun.": {
-    name: "Rin",
-    avatarIndex: 5,
-    voicePresetId: "gigi",
-    catchphrase: "Let's build something fun.",
-  },
-  "I am ready when you are.": {
-    name: "Ryu",
-    avatarIndex: 6,
-    voicePresetId: "daniel",
-    catchphrase: "I am ready when you are.",
-  },
-  "Show me what we're building.": {
-    name: "Satoshi",
-    avatarIndex: 7,
-    voicePresetId: "callum",
-    catchphrase: "Show me what we're building.",
-  },
-};
-
 /** Return the full list of style presets. */
 export function getStylePresets(): typeof STYLE_PRESETS {
   return STYLE_PRESETS;
 }
 
-/** Return a name → catchphrase mapping derived from CHARACTER_PRESET_META. */
+type CharacterPreset = {
+  id: string;
+  name: string;
+  catchphrase: string;
+  description: string;
+  avatarIndex: number;
+  voicePresetId?: string;
+};
+
+// Homepage still imports the older roster shape.
+export const CHARACTER_PRESETS: CharacterPreset[] = STYLE_PRESETS.map(
+  (preset) => ({
+    id: preset.name,
+    name: preset.name,
+    catchphrase: preset.catchphrase,
+    description: preset.hint ?? preset.bio[0] ?? "",
+    avatarIndex: preset.avatarIndex,
+    voicePresetId: preset.voicePresetId,
+  }),
+);
+
+/** Return a name → catchphrase mapping derived from STYLE_PRESETS. */
 export function getPresetNameMap(): Record<string, string> {
   const result: Record<string, string> = {};
-  for (const entry of Object.values(CHARACTER_PRESET_META)) {
+  for (const entry of STYLE_PRESETS) {
     result[entry.name] = entry.catchphrase;
   }
   return result;

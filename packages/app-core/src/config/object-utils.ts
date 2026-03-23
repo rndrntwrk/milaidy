@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/config/object-utils";
+export * from "@miladyai/agent/config/object-utils";

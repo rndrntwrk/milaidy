@@ -42,7 +42,7 @@ export function getVrmUrl(index: number): string {
   const assets = getAssets();
   const n = normalizeAvatarIndex(index);
   const safe = n > 0 ? n : 1;
-  const slug = assets[safe - 1]?.slug ?? assets[0].slug;
+  const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? `avatar-${safe}`;
   return resolveAppAssetUrl(`vrms/${slug}.vrm.gz`);
 }
 
@@ -51,7 +51,7 @@ export function getVrmPreviewUrl(index: number): string {
   const assets = getAssets();
   const n = normalizeAvatarIndex(index);
   const safe = n > 0 ? n : 1;
-  const slug = assets[safe - 1]?.slug ?? assets[0].slug;
+  const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? `avatar-${safe}`;
   return resolveAppAssetUrl(`vrms/previews/${slug}.png`);
 }
 
@@ -60,7 +60,7 @@ export function getVrmBackgroundUrl(index: number): string {
   const assets = getAssets();
   const n = normalizeAvatarIndex(index);
   const safe = n > 0 ? n : 1;
-  const slug = assets[safe - 1]?.slug ?? assets[0].slug;
+  const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? `avatar-${safe}`;
   return resolveAppAssetUrl(`vrms/backgrounds/${slug}.png`);
 }
 

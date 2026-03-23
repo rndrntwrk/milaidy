@@ -13,7 +13,7 @@ import path from "node:path";
 import {
   isSafeResetStateDir as upstreamIsSafeResetStateDir,
   resolveCorsOrigin as upstreamResolveCorsOrigin,
-} from "@elizaos/agent/api/server";
+} from "@miladyai/agent/api/server";
 import {
   getBootConfig,
   syncBrandEnvToEliza,

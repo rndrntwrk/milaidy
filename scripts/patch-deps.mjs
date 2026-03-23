@@ -184,21 +184,21 @@ function patchPluginSqlUUID() {
 patchPluginSqlUUID();
 
 /**
- * Patch @elizaos/agent ensureBrowserServerLink() file extension.
+ * Patch @miladyai/agent ensureBrowserServerLink() file extension.
  *
  * The upstream code checks for `dist/index` without `.js` extension, but
  * existsSync() requires the full filename. Fix to `dist/index.js`.
  * Remove once the upstream adds the extension.
  */
 function patchBrowserServerIndexExtension() {
-  const searchDirs = [resolve(root, "node_modules/@elizaos/agent")];
+  const searchDirs = [resolve(root, "node_modules/@miladyai/agent")];
   const bunCacheDir = resolve(root, "node_modules/.bun");
   if (existsSync(bunCacheDir)) {
     try {
       for (const entry of readdirSync(bunCacheDir)) {
         if (entry.startsWith("@elizaos+autonomous@")) {
           searchDirs.push(
-            resolve(bunCacheDir, entry, "node_modules/@elizaos/agent"),
+            resolve(bunCacheDir, entry, "node_modules/@miladyai/agent"),
           );
         }
       }
@@ -235,7 +235,7 @@ function patchBrowserServerIndexExtension() {
 patchBrowserServerIndexExtension();
 
 /**
- * Patch @elizaos/agent server reset safety check.
+ * Patch @miladyai/agent server reset safety check.
  *
  * The upstream isSafeResetStateDir only allows state directories whose path
  * contains ".eliza" or "eliza" as a segment. Since Milady sets ELIZA_NAMESPACE
@@ -246,7 +246,7 @@ patchBrowserServerIndexExtension();
 function patchAutonomousResetAllowedSegments() {
   const serverJs = resolve(
     root,
-    "node_modules/@elizaos/agent/packages/agent/src/api/server.js",
+    "node_modules/@miladyai/agent/packages/agent/src/api/server.js",
   );
   if (!existsSync(serverJs)) {
     console.log(

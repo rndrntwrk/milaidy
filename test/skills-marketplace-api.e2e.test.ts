@@ -19,7 +19,7 @@ import { req as http$ } from "./helpers/http";
 // Mock skill-catalog-client — returns fixture data instead of reading files
 // ---------------------------------------------------------------------------
 
-vi.mock("@elizaos/agent/services/skill-catalog-client", () => {
+vi.mock("@miladyai/agent/services/skill-catalog-client", () => {
   const fixtureSkills = [
     {
       slug: "hello-world",

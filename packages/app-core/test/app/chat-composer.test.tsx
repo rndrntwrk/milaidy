@@ -139,6 +139,6 @@ describe("ChatComposer mic controls", () => {
     });
     const textarea = findTextarea(renderer);
 
-    expect(textarea.props.placeholder).toBe("Listening...");
+    expect(textarea.props.placeholder).toBe("chat.listening");
   });
 });

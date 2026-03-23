@@ -11,7 +11,7 @@ vi.mock("../auth/index", () => ({
   applySubscriptionCredentials,
   deleteCredentials,
 }));
-vi.mock("@elizaos/agent/auth", () => ({
+vi.mock("@miladyai/agent/auth", () => ({
   applySubscriptionCredentials,
   deleteCredentials,
 }));

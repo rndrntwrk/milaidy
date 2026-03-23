@@ -3,11 +3,11 @@ import {
   readRequestBody,
   sendJson,
   sendJsonError,
-} from "@elizaos/agent/api/http-helpers";
+} from "@miladyai/agent/api/http-helpers";
 import {
   handleStreamVoiceRoute as handleAutonomousStreamVoiceRoute,
   onAgentMessage as onAutonomousAgentMessage,
-} from "@elizaos/agent/api/stream-voice-routes";
+} from "@miladyai/agent/api/stream-voice-routes";
 import {
   getTtsProviderStatus,
   resolveTtsConfig,

@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/providers/ui-catalog";
+export * from "@miladyai/agent/providers/ui-catalog";

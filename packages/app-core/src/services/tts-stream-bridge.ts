@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/services/tts-stream-bridge";
+export * from "@miladyai/agent/services/tts-stream-bridge";

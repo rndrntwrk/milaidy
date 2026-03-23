@@ -21,7 +21,7 @@ vi.mock("@elizaos/core", () => ({
 
 // Mock twitter-verify's getVerifiedAddresses
 const mockAddresses: string[] = [];
-vi.mock("@elizaos/agent/api/twitter-verify", () => ({
+vi.mock("@miladyai/agent/api/twitter-verify", () => ({
   getVerifiedAddresses: () => mockAddresses,
 }));
 
@@ -35,7 +35,7 @@ import {
   getRoot,
   hashLeaf,
   verifyProof,
-} from "@elizaos/agent/api/merkle-tree";
+} from "@miladyai/agent/api/merkle-tree";
 
 // ── Setup ────────────────────────────────────────────────────────────────
 

@@ -16,7 +16,7 @@ const {
   mockWaitForTransaction: vi.fn(),
 }));
 
-vi.mock("@elizaos/agent/diagnostics/integration-observability", () => ({
+vi.mock("@miladyai/agent/diagnostics/integration-observability", () => ({
   createIntegrationTelemetrySpan: createSpanMock,
 }));
 
@@ -45,7 +45,7 @@ vi.mock("ethers", () => {
   };
 });
 
-import { TxService } from "@elizaos/agent/api/tx-service";
+import { TxService } from "@miladyai/agent/api/tx-service";
 
 const VALID_KEY =
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";

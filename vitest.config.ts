@@ -57,7 +57,11 @@ export default defineConfig({
               replacement: path.join(autonomousSourceRoot, "$1"),
             },
             {
-              find: "@elizaos/agent",
+              find: /^@miladyai\/agent\/(.*)/,
+              replacement: path.join(autonomousSourceRoot, "$1"),
+            },
+            {
+              find: "@miladyai/agent",
               replacement: resolveModuleEntry(
                 path.join(autonomousSourceRoot, "index"),
               ),
@@ -65,9 +69,18 @@ export default defineConfig({
           ]
         : [
             {
-              // Stub @elizaos/agent sub-path imports when the package is absent
+              // Stub @miladyai/agent sub-path imports when the package is absent
               // so transitive imports (e.g. contracts/wallet) don't break tests.
               find: /^@elizaos\/agent(\/.*)?$/,
+              replacement: path.join(
+                repoRoot,
+                "test",
+                "stubs",
+                "empty-module.mjs",
+              ),
+            },
+            {
+              find: /^@miladyai\/agent(\/.*)?$/,
               replacement: path.join(
                 repoRoot,
                 "test",
@@ -222,7 +235,7 @@ export default defineConfig({
       deps: {
         inline: [
           "@elizaos/core",
-          "@elizaos/agent",
+          "@miladyai/agent",
           "@miladyai/app-core",
           /^@elizaos\/plugin-/,
           "zod",

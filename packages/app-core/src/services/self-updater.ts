@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/services/self-updater";
+export * from "@miladyai/agent/services/self-updater";

@@ -37,7 +37,7 @@ export default defineConfig({
               replacement: path.join(autonomousSourceRoot, "$1"),
             },
             {
-              find: "@elizaos/agent",
+              find: "@miladyai/agent",
               replacement: resolveModuleEntry(
                 path.join(autonomousSourceRoot, "index"),
               ),
@@ -195,7 +195,7 @@ export default defineConfig({
       deps: {
         inline: [
           "@elizaos/core",
-          "@elizaos/agent",
+          "@miladyai/agent",
           /^@elizaos\/plugin-/,
           "zod",
         ],

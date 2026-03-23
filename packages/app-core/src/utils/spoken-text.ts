@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/utils/spoken-text";
+export * from "@miladyai/agent/utils/spoken-text";

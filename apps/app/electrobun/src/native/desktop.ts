@@ -61,6 +61,7 @@ import type {
   WindowBounds,
   WindowOptions,
 } from "../rpc-schema";
+import type { SendToWebview } from "../types.js";
 import {
   isAppActive,
   isKeyWindow,
@@ -72,12 +73,6 @@ import {
   parseWindowsPowerLineOutput,
 } from "./power-state";
 import { checkWebGpuSupport } from "./webgpu-browser-support";
-
-// ============================================================================
-// Types
-// ============================================================================
-
-type SendToWebview = (message: string, payload?: unknown) => void;
 
 interface SetAlwaysOnTopOptions {
   flag: boolean;

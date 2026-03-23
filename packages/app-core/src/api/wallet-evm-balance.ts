@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/api/wallet-evm-balance";
+export * from "@miladyai/agent/api/wallet-evm-balance";

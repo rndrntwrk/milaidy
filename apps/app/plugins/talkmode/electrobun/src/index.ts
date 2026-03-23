@@ -33,8 +33,8 @@ import type {
   TTSCompleteEvent,
   TTSSpeakingEvent,
 } from "@miladyai/app-core/src/definitions";
+import type { EventCallback } from "../../../shared-types.js";
 
-type EventCallback<T> = (event: T) => void;
 type TalkModeEvent =
   | TalkModeStateEvent
   | TalkModeTranscriptEvent

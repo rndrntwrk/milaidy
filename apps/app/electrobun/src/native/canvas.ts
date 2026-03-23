@@ -16,19 +16,7 @@ import type {
   CanvasWindowOptions,
   WindowBounds,
 } from "../rpc-schema";
-
-/**
- * Structural type for accessing evaluateJavascriptWithResponse via requestProxy.
- * `requestProxy` is present at runtime on every createRPC result but is not
- * reflected in the base RPCWithTransport interface exported by electrobun.
- */
-type WebviewEvalRpc = {
-  requestProxy?: {
-    evaluateJavascriptWithResponse?: (params: {
-      script: string;
-    }) => Promise<unknown>;
-  };
-};
+import type { SendToWebview, WebviewEvalRpc } from "../types.js";
 
 /**
  * Returns true only for local canvas origins.
@@ -64,8 +52,6 @@ function isInternalCanvasEvalUrl(url: string): boolean {
     return false;
   }
 }
-
-type SendToWebview = (message: string, payload?: unknown) => void;
 
 interface CanvasWindow {
   id: string;

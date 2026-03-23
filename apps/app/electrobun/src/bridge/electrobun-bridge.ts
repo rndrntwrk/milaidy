@@ -13,6 +13,7 @@
  */
 
 import { Electroview } from "electrobun/view";
+import type { RpcMessageListener } from "../types.js";
 
 // ============================================================================
 // Listener Registry (for ipcRenderer.on / ipcRenderer.removeListener)
@@ -208,8 +209,6 @@ const electrobunAPI = {
     version: "",
   },
 };
-
-type RpcMessageListener = (payload: unknown) => void;
 
 const rpcListenerWrappers: Record<
   string,

@@ -1,5 +1,5 @@
-import { resolveCloudApiBaseUrl as resolveCanonicalCloudApiBaseUrl } from "@elizaos/agent/cloud/base-url";
-import { validateCloudBaseUrl } from "@elizaos/agent/cloud/validate-url";
+import { resolveCloudApiBaseUrl as resolveCanonicalCloudApiBaseUrl } from "@miladyai/agent/cloud/base-url";
+import { validateCloudBaseUrl } from "@miladyai/agent/cloud/validate-url";
 import type { AgentRuntime } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import type { ElizaConfig } from "../config/config";

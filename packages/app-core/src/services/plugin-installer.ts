@@ -164,7 +164,7 @@ function resolveCurrentElizaReleaseChannel(): "alpha" | "next" | null {
   }
 
   try {
-    const pkgPath = require.resolve("@elizaos/agent/package.json");
+    const pkgPath = require.resolve("@miladyai/agent/package.json");
     const pkg = JSON.parse(fsSync.readFileSync(pkgPath, "utf8")) as {
       version?: unknown;
     };
@@ -178,7 +178,7 @@ function resolveCurrentElizaReleaseChannel(): "alpha" | "next" | null {
       return "next";
     }
   } catch (err) {
-    logger.warn(`[plugin-installer] Failed to detect release channel from @elizaos/agent: ${err instanceof Error ? err.message : String(err)}`);
+    logger.warn(`[plugin-installer] Failed to detect release channel from @miladyai/agent: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   return null;

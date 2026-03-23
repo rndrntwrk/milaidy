@@ -56,8 +56,7 @@ import {
   type ManagedWindowLike,
   SurfaceWindowManager,
 } from "./surface-windows";
-
-type SendToWebview = (message: string, payload?: unknown) => void;
+import type { SendToWebview } from "./types.js";
 
 type HeartbeatMenuTriggerSummary = {
   enabled: boolean;

@@ -5,6 +5,7 @@
  * Shared implementation ported forward to Electrobun; no runtime-specific APIs required.
  */
 
+import type { SendToWebview } from "../types.js";
 import type {
   AllPermissionsState,
   PermissionCheckResult,
@@ -33,8 +34,6 @@ async function getPlatformModule(): Promise<PlatformModule | null> {
       return null;
   }
 }
-
-type SendToWebview = (message: string, payload?: unknown) => void;
 
 const platform = process.platform as "darwin" | "win32" | "linux";
 const DEFAULT_CACHE_TIMEOUT_MS = 30000;

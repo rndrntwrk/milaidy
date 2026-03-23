@@ -32,8 +32,7 @@
 
 import { GpuWindow, WGPUView } from "electrobun/bun";
 import type { GpuViewInfo, GpuWindowInfo, WindowBounds } from "../rpc-schema";
-
-type SendToWebview = (message: string, payload?: unknown) => void;
+import type { SendToWebview } from "../types.js";
 
 // ============================================================================
 // GpuWindowManager

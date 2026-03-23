@@ -104,7 +104,7 @@ interface TrajectoryListResult {
   limit: number;
 }
 
-type TrajectoryExportFormat = "json" | "csv" | "art";
+export type TrajectoryExportFormat = "json" | "csv" | "art" | "zip";
 
 interface TrajectoryExportOptions {
   format: TrajectoryExportFormat;

@@ -10,7 +10,7 @@ import {
   deriveCompatOnboardingReplayBody,
   extractAndPersistOnboardingApiKey,
   persistCompatOnboardingDefaults,
-} from "../server";
+} from "../server-onboarding-compat";
 
 const mockLoadElizaConfig = loadElizaConfig as ReturnType<typeof vi.fn>;
 const mockSaveElizaConfig = saveElizaConfig as ReturnType<typeof vi.fn>;

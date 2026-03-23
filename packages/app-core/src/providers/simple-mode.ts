@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/providers/simple-mode";
+export * from "@miladyai/agent/providers/simple-mode";

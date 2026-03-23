@@ -911,9 +911,20 @@ describe("chat journey", () => {
 
       expect(api).not.toBeNull();
 
+      // Debug: check state after mount
+      const mountSnapshot = api!.snapshot();
+      console.log('[DEBUG] after mount - activeConversationId:', mountSnapshot.activeConversationId);
+      console.log('[DEBUG] after mount - createConversation calls:', mockClient.createConversation.mock.calls.length);
+
       await act(async () => {
         await api!.handleSelectConversation("conv-1");
       });
+
+      const selectSnapshot = api!.snapshot();
+      console.log('[DEBUG] after select - activeConversationId:', selectSnapshot.activeConversationId);
+      console.log('[DEBUG] after select - createConversation calls:', mockClient.createConversation.mock.calls.length);
+      console.log('[DEBUG] after select - messages:', selectSnapshot.conversationMessages.map(m => m.text));
+      console.log('[DEBUG] getConversationMessages calls:', mockClient.getConversationMessages.mock.calls);
 
       expect(api!.snapshot().activeConversationId).toBe("conv-1");
       expect(api!.snapshot().conversationMessages[0].text).toBe(

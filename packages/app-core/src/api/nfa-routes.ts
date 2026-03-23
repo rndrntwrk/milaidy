@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/api/nfa-routes";
+export * from "@miladyai/agent/api/nfa-routes";

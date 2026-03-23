@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/auth/openai-codex";
+export * from "@miladyai/agent/auth/openai-codex";

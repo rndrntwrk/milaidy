@@ -20,8 +20,8 @@ import type {
   VideoProvider,
   VisionConfig,
   VisionProvider,
-} from "@elizaos/agent/contracts/config";
-import type { DropStatus, MintResult } from "@elizaos/agent/contracts/drop";
+} from "@miladyai/agent/contracts/config";
+import type { DropStatus, MintResult } from "@miladyai/agent/contracts/drop";
 import type {
   CloudProviderOption,
   ConnectorConfig,
@@ -39,15 +39,15 @@ import type {
   StylePreset,
   SubscriptionProviderStatus,
   SubscriptionStatusResponse,
-} from "@elizaos/agent/contracts/onboarding";
+} from "@miladyai/agent/contracts/onboarding";
 import type {
   AllPermissionsState,
   PermissionState,
   PermissionStatus,
   SystemPermissionDefinition,
   SystemPermissionId,
-} from "@elizaos/agent/contracts/permissions";
-import type { VerificationResult } from "@elizaos/agent/contracts/verification";
+} from "@miladyai/agent/contracts/permissions";
+import type { VerificationResult } from "@miladyai/agent/contracts/verification";
 import type {
   BscTradeExecuteRequest,
   BscTradeExecuteResponse,
@@ -74,13 +74,13 @@ import type {
   WalletTradingProfileResponse,
   WalletTradingProfileSourceFilter,
   WalletTradingProfileWindow,
-} from "@elizaos/agent/contracts/wallet";
+} from "@miladyai/agent/contracts/wallet";
 import {
   DEFAULT_WALLET_RPC_SELECTIONS,
   normalizeWalletRpcProviderId,
   normalizeWalletRpcSelections,
   WALLET_RPC_PROVIDER_OPTIONS,
-} from "@elizaos/agent/contracts/wallet";
+} from "@miladyai/agent/contracts/wallet";
 import type { ConfigUiHint } from "../types";
 import { stripAssistantStageDirections } from "../utils/assistant-text";
 import { mergeStreamingText } from "../utils/streaming-text";
@@ -420,9 +420,8 @@ export interface RuntimeDebugSnapshot {
   };
 }
 
-export type TriggerType = "interval" | "once" | "cron";
-export type TriggerWakeMode = "inject_now" | "next_autonomy_cycle";
-export type TriggerLastStatus = "success" | "error" | "skipped";
+export type { TriggerType, TriggerWakeMode, TriggerLastStatus } from "@miladyai/agent/triggers/types";
+import type { TriggerType, TriggerWakeMode, TriggerLastStatus } from "@miladyai/agent/triggers/types";
 
 export interface TriggerSummary {
   id: string;
@@ -858,10 +857,8 @@ export type SecurityAuditStreamEvent =
       entry: SecurityAuditEntry;
     };
 
-export type StreamEventType =
-  | "agent_event"
-  | "heartbeat_event"
-  | "training_event";
+export type { StreamEventType } from "@miladyai/agent/api/server";
+import type { StreamEventType } from "@miladyai/agent/api/server";
 
 export interface StreamEventEnvelope {
   type: StreamEventType;
@@ -4537,7 +4534,7 @@ export class MiladyClient {
     // Contract: the API must emit `data: {"type":"done",...}` or
     // `data: {"type":"error",...}` and then end the response. If it stops
     // mid-stream without either, the UI stays in "sending" until the user
-    // aborts — fix belongs in the conversation stream handler (@elizaos/agent).
+    // aborts — fix belongs in the conversation stream handler (@miladyai/agent).
     while (true) {
       let done = false;
       let value: Uint8Array | undefined;

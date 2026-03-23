@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/services/version-compat";
+export * from "@miladyai/agent/services/version-compat";

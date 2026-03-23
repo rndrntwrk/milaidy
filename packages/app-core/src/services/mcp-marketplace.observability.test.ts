@@ -10,14 +10,14 @@ vi.mock("../diagnostics/integration-observability", () => ({
   createIntegrationTelemetrySpan: createSpanMock,
 }));
 
-vi.mock("@elizaos/agent/diagnostics/integration-observability", () => ({
+vi.mock("@miladyai/agent/diagnostics/integration-observability", () => ({
   createIntegrationTelemetrySpan: createSpanMock,
 }));
 
 import {
   getMcpServerDetails,
   searchMcpMarketplace,
-} from "@elizaos/agent/services/mcp-marketplace";
+} from "@miladyai/agent/services/mcp-marketplace";
 
 describe("mcp marketplace observability", () => {
   beforeEach(() => {

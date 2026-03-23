@@ -631,7 +631,7 @@ interface LogEntry {
   tags: string[];
 }
 
-type StreamEventType = "agent_event" | "heartbeat_event" | "training_event";
+export type StreamEventType = "agent_event" | "heartbeat_event" | "training_event";
 
 interface StreamEventEnvelope {
   type: StreamEventType;

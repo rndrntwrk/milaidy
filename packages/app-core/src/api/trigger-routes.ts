@@ -1,7 +1,7 @@
 import {
   type TriggerRouteContext as AutonomousTriggerRouteContext,
   handleTriggerRoutes as handleAutonomousTriggerRoutes,
-} from "@elizaos/agent/api/trigger-routes";
+} from "@miladyai/agent/api/trigger-routes";
 import type { AgentRuntime } from "@elizaos/core";
 import {
   executeTriggerTask,

@@ -1,7 +1,7 @@
 import type {
   CloudConfigLike,
   CloudStatusRouteContext,
-} from "@elizaos/agent/api/cloud-status-routes";
+} from "@miladyai/agent/api/cloud-status-routes";
 import type { ElizaConfig } from "../config/config";
 import {
   CLOUD_BILLING_URL,

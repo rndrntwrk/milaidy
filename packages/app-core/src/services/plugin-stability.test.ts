@@ -638,7 +638,7 @@ describe("Provider Validation", () => {
       const mod = await import("../runtime/eliza-plugin");
       createPlugin = (mod as Record<string, PluginFactory>).createElizaPlugin;
     } catch {
-      const mod = await import("@elizaos/agent/runtime/eliza-plugin");
+      const mod = await import("@miladyai/agent/runtime/eliza-plugin");
       createPlugin = (mod as Record<string, PluginFactory>).createElizaPlugin;
     }
 
@@ -678,7 +678,7 @@ describe("Provider Validation", () => {
       const mod = await import("../runtime/eliza-plugin");
       createPlugin = (mod as Record<string, PluginFactory>).createElizaPlugin;
     } catch {
-      const mod = await import("@elizaos/agent/runtime/eliza-plugin");
+      const mod = await import("@miladyai/agent/runtime/eliza-plugin");
       createPlugin = (mod as Record<string, PluginFactory>).createElizaPlugin;
     }
 

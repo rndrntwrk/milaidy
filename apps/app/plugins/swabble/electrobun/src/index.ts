@@ -18,8 +18,8 @@ import type {
   SwabbleTranscriptEvent,
   SwabbleWakeWordEvent,
 } from "@miladyai/app-core/src/definitions";
+import type { EventCallback } from "../../../shared-types.js";
 
-type EventCallback<T> = (event: T) => void;
 type SwabbleEvent =
   | SwabbleWakeWordEvent
   | SwabbleTranscriptEvent

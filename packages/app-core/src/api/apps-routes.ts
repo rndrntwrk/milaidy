@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/api/apps-routes";
+export * from "@miladyai/agent/api/apps-routes";

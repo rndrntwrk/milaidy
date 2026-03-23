@@ -6,31 +6,31 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const SERVER_TS_PATH = fs.existsSync(
   path.join(
     ROOT,
-    "node_modules/@elizaos/agent/packages/agent/src/api/server.ts",
+    "node_modules/@miladyai/agent/packages/agent/src/api/server.ts",
   ),
 )
   ? path.join(
       ROOT,
-      "node_modules/@elizaos/agent/packages/agent/src/api/server.ts",
+      "node_modules/@miladyai/agent/packages/agent/src/api/server.ts",
     )
   : path.join(
       ROOT,
-      "node_modules/@elizaos/agent/packages/agent/src/api/server.js",
+      "node_modules/@miladyai/agent/packages/agent/src/api/server.js",
     );
 
 const ELIZA_TS_PATH = fs.existsSync(
   path.join(
     ROOT,
-    "node_modules/@elizaos/agent/packages/agent/src/runtime/eliza.ts",
+    "node_modules/@miladyai/agent/packages/agent/src/runtime/eliza.ts",
   ),
 )
   ? path.join(
       ROOT,
-      "node_modules/@elizaos/agent/packages/agent/src/runtime/eliza.ts",
+      "node_modules/@miladyai/agent/packages/agent/src/runtime/eliza.ts",
     )
   : path.join(
       ROOT,
-      "node_modules/@elizaos/agent/packages/agent/src/runtime/eliza.js",
+      "node_modules/@miladyai/agent/packages/agent/src/runtime/eliza.js",
     );
 const WORKFLOW_PATH = path.join(
   ROOT,

@@ -29,6 +29,7 @@ import { getScreenCaptureManager } from "./native/screencapture";
 import { getSwabbleManager } from "./native/swabble";
 import { getTalkModeManager } from "./native/talkmode";
 import { isDetachedSurface } from "./surface-windows";
+import type { SendToWebview } from "./types.js";
 
 /** Push current OS permission states to the agent REST API in-process. */
 async function syncPermissionsToRestApi(): Promise<void> {
@@ -45,8 +46,6 @@ async function syncPermissionsToRestApi(): Promise<void> {
     // non-fatal — renderer will still get data via IPC response
   }
 }
-
-type SendToWebview = (message: string, payload?: unknown) => void;
 
 /**
  * Structural type for the Electrobun RPC instance used in rpc-handlers.

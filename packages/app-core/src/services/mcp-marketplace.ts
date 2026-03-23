@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/services/mcp-marketplace";
+export * from "@miladyai/agent/services/mcp-marketplace";

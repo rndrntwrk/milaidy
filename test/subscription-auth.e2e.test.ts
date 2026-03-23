@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { OAuthCredentials } from "@elizaos/agent/auth/types";
+import type { OAuthCredentials } from "@miladyai/agent/auth/types";
 import { startApiServer } from "@miladyai/app-core/src/api/server";
 import {
   afterAll,
@@ -23,7 +23,7 @@ const authMocks = vi.hoisted(() => ({
   deleteCredentials: vi.fn(),
 }));
 
-vi.mock("@elizaos/agent/auth/index", () => ({
+vi.mock("@miladyai/agent/auth/index", () => ({
   getSubscriptionStatus: authMocks.getSubscriptionStatus,
   startAnthropicLogin: authMocks.startAnthropicLogin,
   startCodexLogin: authMocks.startCodexLogin,
@@ -31,7 +31,7 @@ vi.mock("@elizaos/agent/auth/index", () => ({
   applySubscriptionCredentials: authMocks.applySubscriptionCredentials,
   deleteCredentials: authMocks.deleteCredentials,
 }));
-vi.mock("@elizaos/agent/auth", () => ({
+vi.mock("@miladyai/agent/auth", () => ({
   getSubscriptionStatus: authMocks.getSubscriptionStatus,
   startAnthropicLogin: authMocks.startAnthropicLogin,
   startCodexLogin: authMocks.startCodexLogin,

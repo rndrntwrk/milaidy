@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/api/plugin-validation";
+export * from "@miladyai/agent/api/plugin-validation";

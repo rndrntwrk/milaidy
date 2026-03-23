@@ -1,1 +1,1 @@
-export * from "@elizaos/agent/runtime/core-plugins";
+export * from "@miladyai/agent/runtime/core-plugins";

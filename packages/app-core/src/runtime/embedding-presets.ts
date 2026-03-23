@@ -1,7 +1,7 @@
 import {
   detectEmbeddingTier,
   EMBEDDING_PRESETS as upstreamEmbeddingPresets,
-} from "@elizaos/agent/runtime/embedding-presets";
+} from "@miladyai/agent/runtime/embedding-presets";
 
 export { detectEmbeddingTier };
 
