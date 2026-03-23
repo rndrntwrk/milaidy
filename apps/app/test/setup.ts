@@ -35,9 +35,16 @@ type RpcMessageHandler = (
 ) => void;
 type RpcRequestMap = Record<string, (params?: unknown) => unknown>;
 
+interface ElectrobunTestWindow {
+  __electrobunWindowId?: number;
+  __electrobunWebviewId?: number;
+  __ELIZA_ELECTROBUN_RPC__?: unknown;
+  __MILADY_ELECTROBUN_RPC__?: unknown;
+}
+
 function isInjectedElectrobunRuntime(): boolean {
   if (typeof window === "undefined") return false;
-  const w = window as unknown as Record<string, unknown>;
+  const w = window as ElectrobunTestWindow;
   return (
     typeof w.__electrobunWindowId === "number" ||
     typeof w.__electrobunWebviewId === "number"
@@ -48,12 +55,8 @@ function isInjectedElectrobunRuntime(): boolean {
 function createBridgeMock(extraExports: Record<string, unknown> = {}) {
   function getElectrobunRendererRpc() {
     if (typeof window === "undefined") return null;
-    const w = window as unknown as Record<string, unknown>;
-    return (
-      (w.__ELIZA_ELECTROBUN_RPC__ as unknown) ??
-      (w.__MILADY_ELECTROBUN_RPC__ as unknown) ??
-      null
-    );
+    const w = window as ElectrobunTestWindow;
+    return w.__ELIZA_ELECTROBUN_RPC__ ?? w.__MILADY_ELECTROBUN_RPC__ ?? null;
   }
 
   return {
@@ -312,7 +315,7 @@ if (typeof globalThis.window === "undefined") {
     configurable: true,
   });
 } else {
-  const win = globalThis.window as unknown as Record<string, unknown>;
+  const win = globalThis.window as Record<string, unknown>;
   if (!hasStorageApi(win.sessionStorage)) {
     Object.defineProperty(win, "sessionStorage", {
       value: globalThis.sessionStorage,

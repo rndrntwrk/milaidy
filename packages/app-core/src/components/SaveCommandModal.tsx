@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  Label,
 } from "@miladyai/ui";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useApp } from "../state";
@@ -86,13 +87,13 @@ export function SaveCommandModal({
         </DialogHeader>
 
         <div className="px-5 py-4 flex flex-col gap-3">
-          <label
+          <Label
             id={inputLabelId}
             htmlFor={inputId}
-            className="text-xs text-muted"
+            className="text-xs text-muted font-normal"
           >
             {t("savecommandmodal.CommandName")}
-          </label>
+          </Label>
           <div className="flex items-center gap-1">
             <span className="text-sm text-muted">
               /

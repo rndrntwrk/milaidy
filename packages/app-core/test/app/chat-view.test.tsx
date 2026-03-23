@@ -2,6 +2,7 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { text, flush } from "../../../../test/helpers/react-test";
 
 interface ChatViewContextStub {
   agentStatus: {
@@ -134,19 +135,6 @@ function createContext(
     t: (k: string) => k,
     ...overrides,
   };
-}
-
-function text(node: TestRenderer.ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : ""))
-    .join("")
-    .trim();
-}
-
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-  });
 }
 
 describe("ChatView", () => {

@@ -1,4 +1,4 @@
-// biome-ignore-all lint/suspicious/noExplicitAny: extensive fake runtime stubs require broad casts.
+// biome-ignore-all lint/suspicious/noExplicitAny: extensive fake runtime stubs use `as never` for intentionally incomplete shapes.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -38,9 +38,9 @@ class FakeAgentRuntime implements IAgentRuntime {
   serverUrl = "http://localhost:3000";
   token = "fake-token";
   character = {} as Character;
-  databaseAdapter = {} as any;
-  memoryRoots = {} as any;
-  cacheManager = {} as any;
+  databaseAdapter = {} as never;
+  memoryRoots = {} as never;
+  cacheManager = {} as never;
   providers: Provider[] = [];
   actions: Action[] = [];
   evaluators: Evaluator[] = [];
@@ -96,7 +96,7 @@ class FakeAgentRuntime implements IAgentRuntime {
     return null;
   }
   async createRoom() {
-    return "fake-room-id" as any;
+    return "fake-room-id" as never;
   }
   async removeRoom() {}
   async getRoomsForParticipant() {
@@ -163,7 +163,7 @@ class FakeAgentRuntime implements IAgentRuntime {
   ensureRoomExists = async () => {};
   composeState = async () => ({}) as State;
   useModel = async () => "fake-response";
-  generateText = async () => ({}) as any;
+  generateText = async () => ({}) as never;
   registerModel = () => {};
   getModel = () => undefined;
   getModelConfiguration = () => undefined;
@@ -178,10 +178,10 @@ class FakeAgentRuntime implements IAgentRuntime {
   getAllMemories = async () => [];
   clearAllAgentMemories = async () => {};
   updateMemory = async () => true;
-  createRunId = () => "fake-run-id" as any;
-  startRun = () => "fake-run-id" as any;
+  createRunId = () => "fake-run-id" as never;
+  startRun = () => "fake-run-id" as never;
   endRun = () => {};
-  getCurrentRunId = () => "fake-run-id" as any;
+  getCurrentRunId = () => "fake-run-id" as never;
   getEntityById = async () => null;
   createEntity = async () => true;
   getRooms = async () => [];
@@ -198,7 +198,7 @@ class FakeAgentRuntime implements IAgentRuntime {
   getSetting = () => null;
   getConversationLength = () => 0;
   isActionPlanningEnabled = () => true;
-  getLLMMode = () => "DEFAULT" as any;
+  getLLMMode = () => "DEFAULT" as never;
   isCheckShouldRespondEnabled = () => true;
   getActionResults = () => [];
   getAllActions = () => [];
@@ -269,7 +269,7 @@ class FakeAgentRuntime implements IAgentRuntime {
   deleteComponent = async () => {};
   deleteManyMemories = async () => {};
   deleteAllMemories = async () => {};
-  createWorld = async () => "fake-world-id" as any;
+  createWorld = async () => "fake-world-id" as never;
   getWorld = async () => null;
   removeWorld = async () => {};
   getAllWorlds = async () => [];
@@ -283,16 +283,16 @@ class FakeAgentRuntime implements IAgentRuntime {
   getTasks = async () => [];
   getTask = async () => null;
   getTasksByName = async () => [];
-  createTask = async () => "fake-task-id" as any;
+  createTask = async () => "fake-task-id" as never;
   updateTask = async () => {};
   deleteTask = async () => {};
   getMemoriesByWorldId = async () => [];
   getPairingRequests = async () => [];
-  createPairingRequest = async () => "fake-req-id" as any;
+  createPairingRequest = async () => "fake-req-id" as never;
   updatePairingRequest = async () => {};
   deletePairingRequest = async () => {};
   getPairingAllowlist = async () => [];
-  createPairingAllowlistEntry = async () => "fake-entry-id" as any;
+  createPairingAllowlistEntry = async () => "fake-entry-id" as never;
   deletePairingAllowlistEntry = async () => {};
   isReady = async () => true;
   close = async () => {};

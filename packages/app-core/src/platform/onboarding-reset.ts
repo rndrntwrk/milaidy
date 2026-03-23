@@ -1,4 +1,9 @@
-import type { client as appClient } from "@miladyai/app-core/api";
+import type {
+  HistoryLike,
+  OnboardingClientLike as ClientLike,
+  OnboardingPatchState as PatchState,
+  StorageLike,
+} from "./types";
 
 const CONNECTION_MODE_STORAGE_KEY = "eliza:connection-mode";
 const ONBOARDING_STEP_STORAGE_KEY = "eliza:onboarding:step";
@@ -8,19 +13,7 @@ const FORCE_FRESH_ONBOARDING_STORAGE_KEY = "milady:onboarding:force-fresh";
 const RESET_QUERY_PARAM = "reset";
 const PATCH_STATE = Symbol.for("milady.forceFreshOnboardingPatch");
 
-type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
-type HistoryLike = Pick<History, "replaceState">;
 type OnboardingStatus = { complete: boolean } & Record<string, unknown>;
-type ClientLike = Pick<
-  typeof appClient,
-  "getConfig" | "getOnboardingStatus" | "submitOnboarding"
-> &
-  Record<string | symbol, unknown>;
-type PatchState = {
-  getConfig: ClientLike["getConfig"];
-  getOnboardingStatus: ClientLike["getOnboardingStatus"];
-  submitOnboarding: ClientLike["submitOnboarding"];
-};
 
 function getStorage(
   storage?: StorageLike | null,

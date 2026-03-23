@@ -10,8 +10,7 @@ describe("StatusBadge", () => {
 
   it("applies tone styles", () => {
     const { container } = render(<StatusBadge label="Warn" tone="warning" />);
-    const el = container.firstChild as HTMLElement;
-    expect(el.className).toContain("text-warn");
+    expect(container.firstChild).toHaveClass("text-warn");
   });
 
   it("shows dot when withDot=true", () => {
@@ -30,20 +29,17 @@ describe("StatusBadge", () => {
 describe("StatusDot", () => {
   it("renders with success tone for 'connected'", () => {
     const { container } = render(<StatusDot status="connected" />);
-    const el = container.firstChild as HTMLElement;
-    expect(el.className).toContain("bg-ok");
+    expect(container.firstChild).toHaveClass("bg-ok");
   });
 
   it("renders with danger tone for 'error'", () => {
     const { container } = render(<StatusDot status="error" />);
-    const el = container.firstChild as HTMLElement;
-    expect(el.className).toContain("bg-destructive");
+    expect(container.firstChild).toHaveClass("bg-destructive");
   });
 
   it("renders with muted tone for unknown status", () => {
     const { container } = render(<StatusDot status="unknown" />);
-    const el = container.firstChild as HTMLElement;
-    expect(el.className).toContain("bg-muted");
+    expect(container.firstChild).toHaveClass("bg-muted");
   });
 });
 

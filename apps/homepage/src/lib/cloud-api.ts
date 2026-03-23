@@ -83,6 +83,19 @@ async function readErrorMessage(res: Response): Promise<string> {
   }
 }
 
+function unwrapListResponse<T>(
+  data: unknown,
+  primaryKey?: "agents" | "backups" | "containers",
+): T[] {
+  if (Array.isArray(data)) return data as T[];
+  const obj = data as Record<string, unknown>;
+  if (primaryKey && Array.isArray(obj[primaryKey])) {
+    return obj[primaryKey] as T[];
+  }
+  if (Array.isArray(obj.data)) return obj.data as T[];
+  return [];
+}
+
 export class CloudClient {
   private apiKey: string;
 
@@ -136,23 +149,14 @@ export class CloudClient {
   async listAgents(): Promise<CloudAgentDetail[]> {
     // listAgents is the canonical auth-checking endpoint: if this fails with
     // an auth error, the token is definitely invalid and should be cleared.
-    const data = await this.request<
-      | CloudAgentDetail[]
-      | { agents?: CloudAgentDetail[]; data?: CloudAgentDetail[] }
-    >(
+    const data = await this.request<unknown>(
       "/api/v1/milady/agents",
       {
         method: "GET",
       },
       true, // clearAuthOnFailure: this is the primary auth check
     );
-    const raw = Array.isArray(data)
-      ? data
-      : ((data as { agents?: CloudAgentDetail[]; data?: CloudAgentDetail[] })
-          .agents ??
-        (data as { agents?: CloudAgentDetail[]; data?: CloudAgentDetail[] })
-          .data ??
-        []);
+    const raw = unwrapListResponse<CloudAgentDetail>(data, "agents");
     // Backend returns agentName; normalize to name for the rest of the app
     return raw.map((a) => ({
       ...a,
@@ -225,14 +229,11 @@ export class CloudClient {
   }
 
   async listBackups(agentId: string): Promise<CloudBackup[]> {
-    const data = await this.request<
-      CloudBackup[] | { backups?: CloudBackup[]; data?: CloudBackup[] }
-    >(`/api/v1/milady/agents/${agentId}/backups`, { method: "GET" });
-    return Array.isArray(data)
-      ? data
-      : ((data as { backups?: CloudBackup[]; data?: CloudBackup[] }).backups ??
-          (data as { backups?: CloudBackup[]; data?: CloudBackup[] }).data ??
-          []);
+    const data = await this.request<unknown>(
+      `/api/v1/milady/agents/${agentId}/backups`,
+      { method: "GET" },
+    );
+    return unwrapListResponse<CloudBackup>(data, "backups");
   }
 
   async restoreBackup(agentId: string, backupId?: string): Promise<void> {
@@ -295,30 +296,10 @@ export class CloudClient {
 
   // Containers (for container-level monitoring)
   async listContainers(): Promise<Record<string, unknown>[]> {
-    const data = await this.request<
-      | Record<string, unknown>[]
-      | {
-          containers?: Record<string, unknown>[];
-          data?: Record<string, unknown>[];
-        }
-    >("/api/v1/containers", {
+    const data = await this.request<unknown>("/api/v1/containers", {
       method: "GET",
     });
-    return Array.isArray(data)
-      ? data
-      : ((
-          data as {
-            containers?: Record<string, unknown>[];
-            data?: Record<string, unknown>[];
-          }
-        ).containers ??
-          (
-            data as {
-              containers?: Record<string, unknown>[];
-              data?: Record<string, unknown>[];
-            }
-          ).data ??
-          []);
+    return unwrapListResponse<Record<string, unknown>>(data, "containers");
   }
 
   async getContainerHealth(containerId: string): Promise<object> {

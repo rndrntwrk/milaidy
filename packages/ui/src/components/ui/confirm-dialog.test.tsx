@@ -1,10 +1,15 @@
-(globalThis as Record<string, unknown>).__TEST_RENDERER__ = true;
-
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ConfirmDialog, PromptDialog } from "./confirm-dialog";
 
 describe("ConfirmDialog", () => {
+  beforeEach(() => {
+    (globalThis as Record<string, unknown>).__TEST_RENDERER__ = true;
+  });
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>).__TEST_RENDERER__;
+  });
+
   it("returns null when not open", () => {
     const { container } = render(
       <ConfirmDialog
@@ -77,6 +82,13 @@ describe("ConfirmDialog", () => {
 });
 
 describe("PromptDialog", () => {
+  beforeEach(() => {
+    (globalThis as Record<string, unknown>).__TEST_RENDERER__ = true;
+  });
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>).__TEST_RENDERER__;
+  });
+
   it("renders input when open", () => {
     render(
       <PromptDialog

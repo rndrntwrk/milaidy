@@ -12,12 +12,12 @@ type TslNodeLike = {
   mul(value: unknown): unknown;
 };
 
-type TeleportFallbackShader = {
+export type TeleportFallbackShader = {
   uniforms: { uTeleportProgress: { value: number } };
   isOutgoing?: boolean;
 };
 
-type TeleportSparkleParticle = {
+export type TeleportSparkleParticle = {
   sprite: THREE.Sprite;
   material: THREE.SpriteMaterial;
   baseAngle: number;
@@ -31,7 +31,7 @@ type TeleportSparkleParticle = {
   baseSize: number;
 };
 
-type TeleportSparkleSystem = {
+export type TeleportSparkleSystem = {
   group: THREE.Group;
   particles: TeleportSparkleParticle[];
 };

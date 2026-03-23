@@ -46,7 +46,7 @@ interface SpeechRecognitionResultList {
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
 
-interface SpeechRecognitionWindow extends Window {
+interface SpeechRecognitionWindow {
   SpeechRecognition?: SpeechRecognitionCtor;
   webkitSpeechRecognition?: SpeechRecognitionCtor;
 }

@@ -58,7 +58,6 @@ export function extractAndPersistOnboardingApiKey(
   }
 
   const config = loadElizaConfig();
-  const _hadCloudKey1 = !!(config.cloud as Record<string, unknown> | undefined)?.apiKey;
   if (!config.env || typeof config.env !== "object") {
     (config as Record<string, unknown>).env = {};
   }
@@ -66,7 +65,6 @@ export function extractAndPersistOnboardingApiKey(
   (config as Record<string, unknown>).subscriptionProvider =
     connection.provider;
   saveElizaConfig(config);
-  console.log(`[DEBUG extractAndPersistOnboardingApiKey] cloud.apiKey was present before save: ${_hadCloudKey1}, still present after: ${!!(config.cloud as Record<string, unknown> | undefined)?.apiKey}`);
   process.env[envKey] = connection.apiKey as string;
   logger.info(`[onboarding] Persisted ${envKey} from connection.apiKey`);
   return envKey;
@@ -119,9 +117,7 @@ export function persistCompatOnboardingDefaults(
     agentEntry.messageExamples = body.messageExamples;
   }
 
-  const _hadCloudKey2 = !!(config.cloud as Record<string, unknown> | undefined)?.apiKey;
   saveElizaConfig(config);
-  console.log(`[DEBUG persistCompatOnboardingDefaults] cloud.apiKey present in saved config: ${_hadCloudKey2}`);
   return adminEntityId;
 }
 

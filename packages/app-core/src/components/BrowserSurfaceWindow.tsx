@@ -120,8 +120,8 @@ export function BrowserSurfaceWindow() {
       return;
     }
 
-    const handleNavigation = (event: { detail?: unknown }) => {
-      const nextUrl = readBrowserNavigationUrl(event.detail);
+    const handleNavigation = (event: unknown) => {
+      const nextUrl = readBrowserNavigationUrl((event as Record<string, unknown>)?.detail);
       if (nextUrl) {
         applyNavigationUrl(nextUrl);
       }
@@ -134,8 +134,8 @@ export function BrowserSurfaceWindow() {
       void syncNavigationState();
     };
 
-    const handleNewWindowOpen = (event: { detail?: unknown }) => {
-      const nextUrl = readBrowserNavigationUrl(event.detail);
+    const handleNewWindowOpen = (event: unknown) => {
+      const nextUrl = readBrowserNavigationUrl((event as Record<string, unknown>)?.detail);
       if (nextUrl) {
         navigateTo(nextUrl);
       }

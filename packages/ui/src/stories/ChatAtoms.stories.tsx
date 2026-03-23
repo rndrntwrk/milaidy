@@ -1,8 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "@storybook/test";
-import { TypingIndicator, ChatEmptyState } from "../components/ui/chat-atoms";
+import { TypingIndicator } from "../components/ui/chat-atoms";
 
-const typingMeta = {
+const meta = {
   title: "UI/ChatAtoms/TypingIndicator",
   component: TypingIndicator,
   tags: ["autodocs"],
@@ -12,43 +11,16 @@ const typingMeta = {
   },
 } satisfies Meta<typeof TypingIndicator>;
 
-export default typingMeta;
-type TypingStory = StoryObj<typeof typingMeta>;
+export default meta;
+type Story = StoryObj<typeof meta>;
 
-export const Default: TypingStory = {
+export const Default: Story = {
   args: { agentName: "Eliza" },
 };
 
-export const WithAvatar: TypingStory = {
+export const WithAvatar: Story = {
   args: {
     agentName: "Eliza",
     agentAvatarSrc: "https://api.dicebear.com/7.x/bottts/svg?seed=eliza",
   },
-};
-
-// ChatEmptyState stories exported under a separate meta via a second file
-// is the standard pattern, but we can also render it inline:
-
-export const EmptyState: TypingStory = {
-  render: () => (
-    <div className="h-[400px] border border-border rounded-lg">
-      <ChatEmptyState
-        agentName="Eliza"
-        suggestions={["Hello!", "How are you?", "Tell me a joke"]}
-        onSuggestionClick={fn()}
-      />
-    </div>
-  ),
-};
-
-export const EmptyStateCustomSuggestions: TypingStory = {
-  render: () => (
-    <div className="h-[400px] border border-border rounded-lg">
-      <ChatEmptyState
-        agentName="Milady"
-        suggestions={["What can you do?", "Help me code", "Tell me about yourself"]}
-        onSuggestionClick={fn()}
-      />
-    </div>
-  ),
 };

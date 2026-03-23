@@ -11,7 +11,10 @@ import type { ElizaConfig } from "../config/config";
 import { saveElizaConfig } from "../config/config";
 import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability";
 import { isTimeoutError } from "../utils/errors";
-import { disconnectUnifiedCloudConnection } from "./cloud-connection";
+import {
+  disconnectUnifiedCloudConnection,
+  type RuntimeCloudLike,
+} from "./cloud-connection";
 import { clearCloudSecrets, scrubCloudSecretsFromEnv } from "./cloud-secrets";
 import { sendJson, sendJsonError } from "./response";
 
@@ -25,16 +28,6 @@ export interface CloudRouteState {
 }
 
 type CloudRuntimeSecrets = Record<string, string | number | boolean>;
-type RuntimeCloudLike = AgentRuntime & {
-  agentId: string;
-  character: {
-    secrets?: CloudRuntimeSecrets;
-  };
-  updateAgent?: (
-    agentId: string,
-    update: { secrets: CloudRuntimeSecrets },
-  ) => Promise<unknown>;
-};
 
 const CLOUD_LOGIN_POLL_TIMEOUT_MS = 10_000;
 
@@ -91,9 +84,7 @@ async function persistCloudLoginStatus(args: {
 
   try {
     saveElizaConfig(args.state.config);
-    console.log(`[DEBUG persistCloudLoginStatus] SAVED config with apiKey (${typeof args.apiKey}, len=${args.apiKey.length}), cloud keys after save: ${JSON.stringify(Object.keys(cloud))}`);
-  } catch (saveErr) {
-    console.error(`[DEBUG persistCloudLoginStatus] SAVE FAILED:`, saveErr);
+  } catch {
     // Non-fatal: the authenticated account still lives in sealed secrets/runtime.
   }
 

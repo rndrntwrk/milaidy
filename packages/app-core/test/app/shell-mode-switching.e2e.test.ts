@@ -14,6 +14,7 @@ import type { Tab } from "@miladyai/app-core/navigation";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { textOf } from "../../../../test/helpers/react-test";
 
 const { mockKeyboardSetScroll, mockUseApp, noop, sceneHostState } = vi.hoisted(
   () => ({
@@ -400,12 +401,6 @@ function makeState(overrides?: Partial<HarnessState>): HarnessState {
 }
 
 /* ── Helpers ──────────────────────────────────────────────────────── */
-
-function textOf(node: TestRenderer.ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : textOf(child)))
-    .join("");
-}
 
 function expectValidContent(content: string): void {
   expect(content.trim().length).toBeGreaterThan(0);

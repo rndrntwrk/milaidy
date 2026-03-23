@@ -9,14 +9,14 @@ import {
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
 
-const meta: Meta<typeof DropdownMenu> = {
+const meta = {
   title: "UI/DropdownMenu",
   component: DropdownMenu,
   tags: ["autodocs"],
-};
+} satisfies Meta<typeof DropdownMenu>;
 
 export default meta;
-type Story = StoryObj<typeof DropdownMenu>;
+type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   render: () => (

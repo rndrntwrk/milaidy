@@ -89,7 +89,7 @@ async function startWithMock(config: StreamConfig): Promise<string[]> {
   const proc = makeMockProc({ withTtsPipe: isTts });
   vi.mocked(spawn).mockReturnValueOnce(
     // biome-ignore lint/suspicious/noExplicitAny: mock proc shape doesn't fully match ChildProcess
-    proc as any,
+    proc as never,
   );
 
   vi.useFakeTimers();
@@ -697,7 +697,7 @@ describe("autoRestart on unexpected FFmpeg exit", () => {
     const proc = makeMockProc();
     vi.mocked(spawn).mockReturnValue(
       // biome-ignore lint/suspicious/noExplicitAny: mock proc
-      proc as any,
+      proc as never,
     );
 
     vi.useFakeTimers();
@@ -731,7 +731,7 @@ describe("autoRestart on unexpected FFmpeg exit", () => {
     const proc = makeMockProc();
     vi.mocked(spawn).mockReturnValue(
       // biome-ignore lint/suspicious/noExplicitAny: mock proc
-      proc as any,
+      proc as never,
     );
 
     vi.useFakeTimers();
@@ -774,7 +774,7 @@ describe("autoRestart on unexpected FFmpeg exit", () => {
     const proc = makeMockProc();
     vi.mocked(spawn).mockReturnValue(
       // biome-ignore lint/suspicious/noExplicitAny: mock proc
-      proc as any,
+      proc as never,
     );
 
     vi.useFakeTimers();

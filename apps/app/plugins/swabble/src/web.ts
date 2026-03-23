@@ -43,7 +43,7 @@ interface SpeechRecognitionResultList {
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
 
-interface SpeechRecognitionWindow extends Window {
+interface SpeechRecognitionWindow {
   SpeechRecognition?: SpeechRecognitionCtor;
   webkitSpeechRecognition?: SpeechRecognitionCtor;
 }
@@ -108,10 +108,8 @@ function subscribeDesktopBridgeEvent(options: {
 }
 
 const getSpeechRecognition = (): SpeechRecognitionCtor | null =>
-  (window as SpeechRecognitionWindow)
-    .SpeechRecognition ||
-  (window as SpeechRecognitionWindow)
-    .webkitSpeechRecognition ||
+  (window as SpeechRecognitionWindow).SpeechRecognition ||
+  (window as SpeechRecognitionWindow).webkitSpeechRecognition ||
   null;
 
 /**

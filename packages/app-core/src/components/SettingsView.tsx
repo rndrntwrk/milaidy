@@ -10,7 +10,9 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  Label,
   SectionCard,
+  Spinner,
 } from "@miladyai/ui";
 import {
   AlertTriangle,
@@ -18,7 +20,6 @@ import {
   Cloud,
   Download,
   Image,
-  Loader2,
   RefreshCw,
   Search,
   Shield,
@@ -326,12 +327,12 @@ function AdvancedSection() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <label
+              <Label
                 htmlFor="settings-export-password"
-                className="text-sm font-medium text-txt-strong"
+                className="text-txt-strong"
               >
                 {t("settingsview.Password")}
-              </label>
+              </Label>
               <Input
                 id="settings-export-password"
                 type="password"
@@ -340,7 +341,7 @@ function AdvancedSection() {
                 placeholder={t("settingsview.EnterExportPasswor")}
                 className="rounded-lg bg-bg"
               />
-              <label className="flex items-center gap-2 text-sm text-muted">
+              <Label className="flex items-center gap-2 font-normal text-muted">
                 <Checkbox
                   checked={exportIncludeLogs}
                   onCheckedChange={(checked) =>
@@ -349,7 +350,7 @@ function AdvancedSection() {
                 />
 
                 {t("settingsview.IncludeRecentLogs")}
-              </label>
+              </Label>
             </div>
 
             {exportError && (
@@ -379,7 +380,7 @@ function AdvancedSection() {
                 disabled={exportBusy}
                 onClick={() => void handleAgentExport()}
               >
-                {exportBusy && <Loader2 className="w-4 h-4 animate-spin" />}
+                {exportBusy && <Spinner size={16} />}
                 {t("common.export")}
               </Button>
             </div>
@@ -429,12 +430,12 @@ function AdvancedSection() {
             </div>
 
             <div className="space-y-2">
-              <label
+              <Label
                 htmlFor="settings-import-password"
-                className="text-sm font-medium text-txt-strong"
+                className="text-txt-strong"
               >
                 {t("settingsview.Password")}
-              </label>
+              </Label>
               <Input
                 id="settings-import-password"
                 type="password"
@@ -472,7 +473,7 @@ function AdvancedSection() {
                 disabled={importBusy}
                 onClick={() => void handleAgentImport()}
               >
-                {importBusy && <Loader2 className="w-4 h-4 animate-spin" />}
+                {importBusy && <Spinner size={16} />}
                 {t("settings.import")}
               </Button>
             </div>

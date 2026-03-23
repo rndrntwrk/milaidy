@@ -9,6 +9,7 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { textOf } from "../../../../test/helpers/react-test";
 
 type OnboardingStep =
   | "wakeUp"
@@ -603,12 +604,6 @@ function createHarnessState(
     agentStatus: null,
     ...overrides,
   };
-}
-
-function textOf(node: TestRenderer.ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : textOf(child)))
-    .join("");
 }
 
 function hasText(

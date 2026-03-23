@@ -101,7 +101,7 @@ const sharedSessionStorage = ensureStorage(
 installCanvasMocks();
 
 if (typeof globalThis.window !== "undefined") {
-  const win = globalThis.window as unknown as Record<string, unknown>;
+  const win = globalThis.window as Record<string, unknown>;
   ensureStorage(win, "localStorage", sharedLocalStorage);
   ensureStorage(win, "sessionStorage", sharedSessionStorage);
 }

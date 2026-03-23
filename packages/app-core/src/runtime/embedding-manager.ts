@@ -31,18 +31,18 @@ import { detectEmbeddingPreset } from "./embedding-presets.js";
 // The native module must remain a runtime-only import for desktop packaging.
 
 // biome-ignore lint/suspicious/noExplicitAny: dynamic llama.cpp import types
-type LlamaInstance = unknown;
+type LlamaInstance = any;
 // biome-ignore lint/suspicious/noExplicitAny: dynamic llama.cpp import types
-type LlamaModelInstance = unknown;
+type LlamaModelInstance = any;
 // biome-ignore lint/suspicious/noExplicitAny: dynamic llama.cpp import types
-type LlamaEmbeddingContextInstance = unknown;
+type LlamaEmbeddingContextInstance = any;
 
 /**
  * Dynamically import node-llama-cpp at runtime.
  * Uses indirection to prevent bundlers from converting to static import.
  */
 // biome-ignore lint/suspicious/noExplicitAny: dynamic llama.cpp import types
-async function importNodeLlamaCpp(): Promise<unknown> {
+async function importNodeLlamaCpp(): Promise<any> {
   // The string concatenation prevents static analysis by bundlers
   const moduleName = ["node", "llama", "cpp"].join("-");
   return import(moduleName);

@@ -19,15 +19,12 @@ import type {
   UpdateTriggerRequest,
 } from "../api/client";
 import { useApp } from "../state";
+import type { TranslateFn } from "../types";
 import { confirmDesktopAction } from "../utils";
 import { formatDateTime, formatDurationMs } from "./format";
 
 type TriggerType = "interval" | "once" | "cron";
 type TriggerWakeMode = "inject_now" | "next_autonomy_cycle";
-type TranslateFn = (
-  key: string,
-  vars?: Record<string, string | number | boolean | null | undefined>,
-) => string;
 
 const DURATION_UNITS = [
   {

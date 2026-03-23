@@ -279,6 +279,7 @@ vi.mock("@miladyai/app-core/hooks", async () => {
   };
 });
 
+import { textOf } from "../../../../test/helpers/react-test";
 import { App } from "@miladyai/app-core/src/App";
 
 type HarnessState = {
@@ -290,12 +291,6 @@ type HarnessState = {
   setTab: (tab: Tab) => void;
   [key: string]: unknown;
 };
-
-function textOf(node: TestRenderer.ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : textOf(child)))
-    .join("");
-}
 
 function getButtonByLabel(
   tree: TestRenderer.ReactTestRenderer,

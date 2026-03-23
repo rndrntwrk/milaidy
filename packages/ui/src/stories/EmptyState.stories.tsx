@@ -3,14 +3,14 @@ import { Inbox } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { EmptyState } from "../components/ui/empty-state";
 
-const meta: Meta<typeof EmptyState> = {
+const meta = {
   title: "UI/EmptyState",
   component: EmptyState,
   tags: ["autodocs"],
-};
+} satisfies Meta<typeof EmptyState>;
 
 export default meta;
-type Story = StoryObj<typeof EmptyState>;
+type Story = StoryObj<typeof meta>;
 
 export const Minimal: Story = {
   args: {

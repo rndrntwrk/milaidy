@@ -5,7 +5,9 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  Label,
   SectionCard,
+  Spinner,
   StatusBadge,
 } from "@miladyai/ui";
 import {
@@ -13,7 +15,6 @@ import {
   CircleDollarSign,
   CreditCard,
   ExternalLink,
-  Loader2,
   Plus,
   RefreshCw,
   Server,
@@ -147,7 +148,7 @@ function CloudAgentCard({
           disabled={launching}
         >
           {launching ? (
-            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+            <Spinner size={12} className="mr-1" />
           ) : (
             <ExternalLink className="w-3 h-3 mr-1" />
           )}
@@ -165,7 +166,7 @@ function CloudAgentCard({
           disabled={deleting || launching}
         >
           {deleting ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
+            <Spinner size={12} />
           ) : (
             <Trash2 className="w-3 h-3" />
           )}
@@ -1036,7 +1037,7 @@ export function CloudDashboard() {
               </span>
               <span className="text-sm text-muted">credits</span>
               {billingLoading && (
-                <Loader2 className="h-4 w-4 animate-spin text-muted" />
+                <Spinner size={16} className="text-muted" />
               )}
             </div>
             <StatusBadge
@@ -1116,7 +1117,7 @@ export function CloudDashboard() {
                     onClick={() => void handleStartCheckout()}
                   >
                     {checkoutBusy ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Spinner size={16} />
                     ) : (
                       "Pay"
                     )}
@@ -1187,7 +1188,7 @@ export function CloudDashboard() {
                         onClick={() => void handlePayCryptoFromAgentWallet()}
                       >
                         {cryptoPayBusy ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <Spinner size={12} />
                         ) : (
                           "Pay from wallet"
                         )}
@@ -1202,7 +1203,7 @@ export function CloudDashboard() {
                     onClick={() => void handleCreateCryptoQuote()}
                   >
                     {cryptoBusy ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Spinner size={16} className="mr-2" />
                     ) : null}
                     {t("elizaclouddashboard.PayWithCrypto")}
                   </Button>
@@ -1241,12 +1242,12 @@ export function CloudDashboard() {
             </div>
             <div className="flex items-end gap-3">
               <div className="flex-1 space-y-1">
-                <label
+                <Label
                   htmlFor="cloud-auto-topup-threshold"
-                  className="text-[11px] text-muted"
+                  className="text-[11px] text-muted font-normal"
                 >
                   Refill when below
-                </label>
+                </Label>
                 <Input
                   id="cloud-auto-topup-threshold"
                   type="number"
@@ -1264,12 +1265,12 @@ export function CloudDashboard() {
                 />
               </div>
               <div className="flex-1 space-y-1">
-                <label
+                <Label
                   htmlFor="cloud-auto-topup-amount"
-                  className="text-[11px] text-muted"
+                  className="text-[11px] text-muted font-normal"
                 >
                   Top-up amount
-                </label>
+                </Label>
                 <Input
                   id="cloud-auto-topup-amount"
                   type="number"
@@ -1295,7 +1296,7 @@ export function CloudDashboard() {
                 onClick={() => void handleSaveBillingSettings()}
               >
                 {billingSettingsBusy ? (
-                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  <Spinner size={12} className="mr-1" />
                 ) : null}
                 Save
               </Button>
@@ -1373,7 +1374,7 @@ export function CloudDashboard() {
           <div className="py-4">
             {agentsLoading && cloudAgents.length === 0 ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-5 h-5 text-muted animate-spin" />
+                <Spinner size={20} className="text-muted" />
               </div>
             ) : (
               <div className="space-y-2">
@@ -1409,7 +1410,7 @@ export function CloudDashboard() {
                       disabled={deploying || !deployAgentName.trim()}
                     >
                       {deploying ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <Spinner size={12} />
                       ) : (
                         t("elizaclouddashboard.Deploy")
                       )}

@@ -7,7 +7,7 @@
  * - Explicit load order metadata
  */
 
-import { Button } from "@miladyai/ui";
+import { Button, Input, Label } from "@miladyai/ui";
 import { useCallback, useEffect, useState } from "react";
 import {
   client,
@@ -284,9 +284,9 @@ export function RuntimeView() {
   return (
     <div data-testid="runtime-view" className="flex flex-col gap-4 h-full">
       <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 bg-card/60 backdrop-blur-xl border border-border/40 rounded-2xl">
-        <label className="text-[11px] text-muted flex items-center gap-1">
+        <Label className="text-[11px] text-muted font-normal flex items-center gap-1">
           {t("runtimeview.depth")}
-          <input
+          <Input
             type="number"
             min={1}
             max={24}
@@ -294,12 +294,12 @@ export function RuntimeView() {
             onChange={(e) =>
               setDepth(Math.max(1, Math.min(24, Number(e.target.value) || 1)))
             }
-            className="w-16 px-1.5 py-0.5 border border-border bg-bg text-txt rounded-lg"
+            className="w-16 px-1.5 py-0.5 h-auto rounded-lg"
           />
-        </label>
-        <label className="text-[11px] text-muted flex items-center gap-1">
+        </Label>
+        <Label className="text-[11px] text-muted font-normal flex items-center gap-1">
           {t("runtimeview.arrayCap")}
-          <input
+          <Input
             type="number"
             min={1}
             max={5000}
@@ -309,12 +309,12 @@ export function RuntimeView() {
                 Math.max(1, Math.min(5000, Number(e.target.value) || 1)),
               )
             }
-            className="w-20 px-1.5 py-0.5 border border-border bg-bg text-txt rounded-lg"
+            className="w-20 px-1.5 py-0.5 h-auto rounded-lg"
           />
-        </label>
-        <label className="text-[11px] text-muted flex items-center gap-1">
+        </Label>
+        <Label className="text-[11px] text-muted font-normal flex items-center gap-1">
           {t("runtimeview.objectCap")}
-          <input
+          <Input
             type="number"
             min={1}
             max={5000}
@@ -324,9 +324,9 @@ export function RuntimeView() {
                 Math.max(1, Math.min(5000, Number(e.target.value) || 1)),
               )
             }
-            className="w-20 px-1.5 py-0.5 border border-border bg-bg text-txt rounded-lg"
+            className="w-20 px-1.5 py-0.5 h-auto rounded-lg"
           />
-        </label>
+        </Label>
         <Button
           variant="outline"
           size="sm"

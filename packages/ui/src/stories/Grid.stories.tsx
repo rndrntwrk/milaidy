@@ -1,14 +1,14 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { Grid } from "../components/ui/grid";
 
-const meta: Meta<typeof Grid> = {
+const meta = {
   title: "UI/Grid",
   component: Grid,
   tags: ["autodocs"],
-};
+} satisfies Meta<typeof Grid>;
 
 export default meta;
-type Story = StoryObj<typeof Grid>;
+type Story = StoryObj<typeof meta>;
 
 const ColoredBox = ({ color, label }: { color: string; label: string }) => (
   <div

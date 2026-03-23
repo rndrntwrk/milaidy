@@ -43,6 +43,7 @@ vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
+import { flush } from "../../../../test/helpers/react-test";
 import { GameView } from "@miladyai/app-core/components/GameView";
 
 function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
@@ -66,12 +67,6 @@ function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
     setActionNotice: vi.fn<GameContextStub["setActionNotice"]>(),
     ...overrides,
   };
-}
-
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-  });
 }
 
 describe("GameView auth session reset", () => {

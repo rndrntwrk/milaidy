@@ -1,6 +1,7 @@
 import { LanguageDropdown, ThemeToggle } from "@miladyai/app-core/components";
 import { getTabGroups, type TabGroup } from "@miladyai/app-core/navigation";
 import { useApp } from "@miladyai/app-core/state";
+import { Button } from "@miladyai/ui";
 import { CircleDollarSign, Menu } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -182,25 +183,25 @@ export function Header({
     if (elizaCloudConnected) {
       if (placement === "desktop") {
         return (
-          <button
-            type="button"
+          <Button
+            variant="outline"
             data-testid="header-cloud-credits-desktop"
-            className={`hidden shrink-0 items-center gap-1.5 px-2.5 py-1.5 h-11 border rounded-md font-mono text-[11px] sm:text-xs no-underline transition-all duration-200 hover:border-accent hover:text-txt hover:shadow-sm sm:inline-flex ${elizaCloudCredits === null ? "border-muted text-muted" : creditColor}`}
+            className={`hidden shrink-0 gap-1.5 px-2.5 py-1.5 h-11 font-mono text-[11px] sm:text-xs no-underline transition-all duration-200 hover:border-accent hover:text-txt hover:shadow-sm sm:inline-flex ${elizaCloudCredits === null ? "border-muted text-muted" : creditColor}`}
             title={t("header.CloudCreditsBalanc")}
             onClick={openCloudBilling}
             style={HEADER_BUTTON_STYLE}
           >
             <CircleDollarSign className="pointer-events-none w-3.5 h-3.5" />
             {cloudCreditsDisplay}
-          </button>
+          </Button>
         );
       }
 
       return (
-        <button
-          type="button"
+        <Button
+          variant="outline"
           data-testid="header-cloud-credits-mobile"
-          className={`flex w-full items-center justify-between gap-3 px-3 py-3 border rounded-xl text-left no-underline transition-all duration-200 hover:border-accent hover:text-txt ${elizaCloudCredits === null ? "border-muted text-muted" : creditColor}`}
+          className={`flex w-full justify-between gap-3 px-3 py-3 rounded-xl text-left no-underline transition-all duration-200 hover:border-accent hover:text-txt ${elizaCloudCredits === null ? "border-muted text-muted" : creditColor}`}
           title={t("header.CloudCreditsBalanc")}
           onClick={openCloudBilling}
           style={HEADER_BUTTON_STYLE}
@@ -219,7 +220,7 @@ export function Header({
           <span className="shrink-0 font-mono text-sm">
             {cloudCreditsDisplay}
           </span>
-        </button>
+        </Button>
       );
     }
   };
@@ -311,8 +312,9 @@ export function Header({
           onNewChat={() => void handleNewConversation()}
           trailingExtras={
             showNavigationMenu ? (
-              <button
-                type="button"
+              <Button
+                size="icon"
+                variant="outline"
                 className={`sm:hidden ${HEADER_ICON_BUTTON_CLASSNAME}`}
                 onClick={() => setMobileMenuOpen(true)}
                 aria-label={t("aria.openNavMenu")}
@@ -320,7 +322,7 @@ export function Header({
                 style={HEADER_BUTTON_STYLE}
               >
                 <Menu className="pointer-events-none w-5 h-5" />
-              </button>
+              </Button>
             ) : null
           }
         >
@@ -334,11 +336,11 @@ export function Header({
                 const isActive = group.tabs.includes(tab);
                 const Icon = group.icon;
                 return (
-                  <button
-                    type="button"
+                  <Button
+                    variant={isActive ? "default" : "ghost"}
                     key={group.label}
                     data-testid={`header-nav-button-${primaryTab}`}
-                    className={`relative z-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-0 xl:gap-1.5 shrink-0 px-3 md:px-3.5 xl:px-4 py-2.5 text-[12px] bg-transparent border border-transparent cursor-pointer transition-all duration-300 rounded-full ${
+                    className={`relative z-10 min-h-[44px] min-w-[44px] gap-0 xl:gap-1.5 shrink-0 px-3 md:px-3.5 xl:px-4 py-2.5 text-[12px] bg-transparent border border-transparent transition-all duration-300 rounded-full ${
                       isActive
                         ? "text-accent font-bold bg-accent/15 shadow-[0_0_15px_rgba(var(--accent),0.18)] border-accent/40 ring-1 ring-inset ring-accent/20"
                         : "text-muted hover:text-txt hover:bg-bg-hover hover:border-border/50"
@@ -359,7 +361,7 @@ export function Header({
                     >
                       {t(NAV_LABEL_I18N_KEY[group.label] ?? group.label)}
                     </span>
-                  </button>
+                  </Button>
                 );
               })}
             </nav>
@@ -376,9 +378,9 @@ export function Header({
           aria-label={t("aria.navMenu")}
         >
           {/* Backdrop */}
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/30 backdrop-blur-sm w-full h-full border-0 cursor-pointer"
+          <Button
+            variant="ghost"
+            className="absolute inset-0 bg-black/30 backdrop-blur-sm w-full h-full border-0"
             onClick={() => setMobileMenuOpen(false)}
             aria-label={t("aria.closeNavMenu")}
             style={HEADER_BUTTON_STYLE}
@@ -394,10 +396,10 @@ export function Header({
                     const isActive = group.tabs.includes(tab);
                     const Icon = group.icon;
                     return (
-                      <button
+                      <Button
+                        variant={isActive ? "default" : "ghost"}
                         key={group.label}
-                        type="button"
-                        className={`w-full flex items-center gap-3 px-3 py-3.5 border rounded-xl text-[14px] font-medium transition-all duration-300 cursor-pointer min-h-[48px] ${
+                        className={`w-full flex gap-3 px-3 py-3.5 border rounded-xl text-[14px] font-medium transition-all duration-300 min-h-[48px] ${
                           isActive
                             ? "border-accent/40 bg-accent/15 text-accent shadow-[0_0_15px_rgba(var(--accent),0.18)] ring-1 ring-inset ring-accent/20"
                             : "border-transparent bg-transparent text-txt hover:border-border/50 hover:bg-bg-hover"
@@ -430,7 +432,7 @@ export function Header({
                             </div>
                           )}
                         </div>
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>

@@ -18,7 +18,7 @@ import {
   type JsonSchemaObject,
 } from "../config";
 import { useApp } from "../state";
-import type { ConfigUiHint } from "../types";
+import type { ConfigUiHint, TranslateFn } from "../types";
 import {
   buildWalletRpcUpdateRequest,
   resolveInitialWalletRpcSelections,
@@ -30,10 +30,6 @@ type RpcProviderOption<T extends string> = {
   id: T;
   label: string;
 };
-
-type TranslateOptions = Record<string, unknown>;
-
-type TranslateFn = (key: string, options?: TranslateOptions) => string;
 
 type RpcFieldDefinition = {
   configKey: string;

@@ -8,7 +8,7 @@
  *   - Test functionality
  */
 
-import { Button, Input } from "@miladyai/ui";
+import { Button, Input, Switch } from "@miladyai/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   client,
@@ -476,20 +476,12 @@ function WakeWordSection({
         <div className="text-xs font-semibold text-muted">
           {t("voiceconfigview.WakeWord")}
         </div>
-        <button
-          type="button"
-          onClick={() => void handleToggle()}
-          className={`relative inline-flex h-5 w-9 cursor-pointer items-center rounded-full transition-colors ${
-            enabled ? "bg-accent" : "bg-border"
-          }`}
+        <Switch
+          checked={enabled}
+          onCheckedChange={() => void handleToggle()}
+          className="data-[state=checked]:bg-accent"
           aria-label={enabled ? "Disable wake word" : "Enable wake word"}
-        >
-          <span
-            className={`inline-block h-3.5 w-3.5 rounded-full bg-bg shadow transition-transform ${
-              enabled ? "translate-x-4" : "translate-x-0.5"
-            }`}
-          />
-        </button>
+        />
       </div>
 
       {/* Trigger tag input */}
@@ -887,10 +879,10 @@ export function VoiceConfigView() {
               {PREMADE_VOICES.map((preset) => {
                 const active = selectedVoiceId === preset.voiceId;
                 return (
-                  <button
+                  <Button
                     key={preset.id}
-                    type="button"
-                    className={`h-auto flex flex-col items-start py-2.5 px-3 text-left rounded-lg border transition-all cursor-pointer ${
+                    variant={active ? "default" : "outline"}
+                    className={`h-auto flex-col items-start py-2.5 px-3 text-left rounded-lg ${
                       active
                         ? "border-accent bg-accent/8 text-txt"
                         : "border-border bg-bg-accent text-txt hover:border-border hover:bg-bg-hover"
@@ -903,7 +895,7 @@ export function VoiceConfigView() {
                     <div className="text-[10px] text-muted truncate w-full">
                       {preset.hint}
                     </div>
-                  </button>
+                  </Button>
                 );
               })}
             </div>

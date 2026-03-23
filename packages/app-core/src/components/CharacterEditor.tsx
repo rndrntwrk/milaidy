@@ -5,7 +5,7 @@
  * right panel has style rules + examples. Footer has voice + save + reset.
  */
 
-import { client } from "../api/client";
+import { type CharacterData, client } from "../api/client";
 import {
   APP_EMOTE_EVENT,
   dispatchWindowEvent,

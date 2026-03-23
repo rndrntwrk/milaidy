@@ -92,9 +92,9 @@ const resolvePluginImportSpecifier:
   | ((name: string, url?: string) => string)
   | undefined =
   // biome-ignore lint/suspicious/noExplicitAny: dynamic export name
-  ((_elizaExports as any).resolveElizaPluginImportSpecifier ??
+  ((_elizaExports as Record<string, unknown>).resolveElizaPluginImportSpecifier ??
     // biome-ignore lint/suspicious/noExplicitAny: dynamic export name
-    (_elizaExports as any).resolveElizaPluginImportSpecifier) as
+    (_elizaExports as Record<string, unknown>).resolveElizaPluginImportSpecifier) as
     | ((name: string, url?: string) => string)
     | undefined;
 

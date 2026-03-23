@@ -151,7 +151,7 @@ describe("Plugin Management E2E", () => {
 
     // Start server with mock runtime
     // biome-ignore lint/suspicious/noExplicitAny: mock type
-    server = await startApiServer({ port: 0, runtime: mockRuntime as any });
+    server = await startApiServer({ port: 0, runtime: mockRuntime as never });
   }, 30_000);
 
   afterAll(async () => {

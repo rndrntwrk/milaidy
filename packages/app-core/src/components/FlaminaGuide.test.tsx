@@ -2,13 +2,8 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it } from "vitest";
+import { textOf } from "../../../../test/helpers/react-test";
 import { FlaminaGuideCard } from "./FlaminaGuide";
-
-function textOf(node: TestRenderer.ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : textOf(child)))
-    .join("");
-}
 
 describe("FlaminaGuideCard", () => {
   it("explains provider impact on character behavior", () => {

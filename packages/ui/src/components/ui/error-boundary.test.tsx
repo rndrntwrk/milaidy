@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ErrorBoundary } from "./error-boundary";
 
@@ -10,13 +10,12 @@ function ThrowingComponent({ shouldThrow }: { shouldThrow: boolean }) {
 }
 
 describe("ErrorBoundary", () => {
-  // Suppress console.error from React and the component during error tests
-  const originalConsoleError = console.error;
   beforeEach(() => {
-    console.error = vi.fn();
+    vi.spyOn(console, "error").mockImplementation(() => {});
   });
+
   afterEach(() => {
-    console.error = originalConsoleError;
+    vi.restoreAllMocks();
   });
 
   it("renders children when no error", () => {
@@ -61,7 +60,6 @@ describe("ErrorBoundary", () => {
     );
     expect(screen.getByText("Boom")).toBeInTheDocument();
 
-    // Stop throwing before retry
     shouldThrow = false;
     fireEvent.click(screen.getByText("Try Again"));
     expect(screen.getByText("Recovered")).toBeInTheDocument();

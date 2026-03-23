@@ -40,32 +40,8 @@ vi.mock("@miladyai/ui", () => ({
     React.createElement("input", props),
 }));
 
+import { findButtonByText, textOf } from "../../../../test/helpers/react-test";
 import { ReleaseCenterView } from "./ReleaseCenterView";
-
-function findButtonByText(
-  root: TestRenderer.ReactTestInstance,
-  text: string,
-): TestRenderer.ReactTestInstance {
-  const match = root.findAll(
-    (node) =>
-      node.type === "button" &&
-      node.children.some(
-        (child) => typeof child === "string" && child.includes(text),
-      ),
-  )[0];
-
-  if (!match) {
-    throw new Error(`Button "${text}" not found`);
-  }
-
-  return match;
-}
-
-function textOf(node: TestRenderer.ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : textOf(child)))
-    .join("");
-}
 
 describe("ReleaseCenterView auto-update guard", () => {
   beforeEach(() => {

@@ -13,6 +13,7 @@ import type {
   CompanionHalfFramerateMode,
   CompanionVrmPowerMode,
 } from "../state/types";
+import type { TranslateFn } from "../types";
 import { AvatarLoader } from "./AvatarLoader";
 import type {
   CameraProfile,
@@ -20,8 +21,6 @@ import type {
   VrmEngineState,
 } from "./avatar/VrmEngine";
 import { VrmViewer } from "./avatar/VrmViewer";
-
-type TranslateFn = (key: string) => string;
 
 const AVATAR_CHANGE_WAVE_DELAY_MS = 650;
 const AVATAR_CHANGE_WAVE_EMOTE: AppEmoteEventDetail = {

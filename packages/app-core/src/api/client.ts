@@ -5759,5 +5759,8 @@ export class MiladyClient {
   }
 }
 
+/** @deprecated Use MiladyClient instead. */
+export { MiladyClient as ElizaClient };
+
 // Singleton
 export const client = new MiladyClient();

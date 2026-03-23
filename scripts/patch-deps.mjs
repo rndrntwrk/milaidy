@@ -25,7 +25,6 @@ import {
 } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { patchElizaAgentConversationStreamSse } from "./lib/patch-agent-conversation-stream.mjs";
 import {
   patchAgentSkillsCatalogFetch,
   patchAutonomousMiladyOnboardingPresets,
@@ -282,7 +281,6 @@ function patchAutonomousResetAllowedSegments() {
   );
 }
 patchAutonomousResetAllowedSegments();
-patchElizaAgentConversationStreamSse(root);
 patchElizaCoreClientChatEvaluate(root);
 
 /**

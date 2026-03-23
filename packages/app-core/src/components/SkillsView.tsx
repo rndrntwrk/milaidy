@@ -6,9 +6,8 @@
  * throughout the app (--bg, --card, --border, --accent, --muted, --txt, etc.).
  */
 
-import { Button, ConfirmDelete, EmptyState, Input, StatusBadge, Switch } from "@miladyai/ui";
+import { Button, ConfirmDelete, Dialog, DialogPortal, EmptyState, Input, StatusBadge, Switch } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import type {
   SkillInfo,
   SkillMarketplaceResult,
@@ -1095,37 +1094,41 @@ function SkillsModalView() {
         )}
       </div>
 
-      {/* Portal modals to body so they escape the 3D transform stacking context */}
-      {editingSkill &&
-        createPortal(
-          <EditSkillModal
-            skillId={editingSkill.id}
-            skillName={editingSkill.name}
-            onClose={() => setEditingSkill(null)}
-            onSaved={() => void refreshSkills()}
-          />,
-          document.body,
-        )}
+      {/* Dialog portals modals to body so they escape the 3D transform stacking context */}
+      <Dialog open={!!editingSkill} onOpenChange={(open) => { if (!open) setEditingSkill(null); }}>
+        <DialogPortal>
+          {editingSkill && (
+            <EditSkillModal
+              skillId={editingSkill.id}
+              skillName={editingSkill.name}
+              onClose={() => setEditingSkill(null)}
+              onSaved={() => void refreshSkills()}
+            />
+          )}
+        </DialogPortal>
+      </Dialog>
 
-      {installModalOpen &&
-        createPortal(
-          <InstallModal
-            skills={skills}
-            skillsMarketplaceQuery={skillsMarketplaceQuery}
-            skillsMarketplaceResults={skillsMarketplaceResults}
-            skillsMarketplaceError={skillsMarketplaceError}
-            skillsMarketplaceLoading={skillsMarketplaceLoading}
-            skillsMarketplaceAction={skillsMarketplaceAction}
-            skillsMarketplaceManualGithubUrl={skillsMarketplaceManualGithubUrl}
-            searchSkillsMarketplace={searchSkillsMarketplace}
-            installSkillFromMarketplace={installSkillFromMarketplace}
-            uninstallMarketplaceSkill={uninstallMarketplaceSkill}
-            installSkillFromGithubUrl={installSkillFromGithubUrl}
-            setState={setState}
-            onClose={() => setInstallModalOpen(false)}
-          />,
-          document.body,
-        )}
+      <Dialog open={installModalOpen} onOpenChange={(open) => { if (!open) setInstallModalOpen(false); }}>
+        <DialogPortal>
+          {installModalOpen && (
+            <InstallModal
+              skills={skills}
+              skillsMarketplaceQuery={skillsMarketplaceQuery}
+              skillsMarketplaceResults={skillsMarketplaceResults}
+              skillsMarketplaceError={skillsMarketplaceError}
+              skillsMarketplaceLoading={skillsMarketplaceLoading}
+              skillsMarketplaceAction={skillsMarketplaceAction}
+              skillsMarketplaceManualGithubUrl={skillsMarketplaceManualGithubUrl}
+              searchSkillsMarketplace={searchSkillsMarketplace}
+              installSkillFromMarketplace={installSkillFromMarketplace}
+              uninstallMarketplaceSkill={uninstallMarketplaceSkill}
+              installSkillFromGithubUrl={installSkillFromGithubUrl}
+              setState={setState}
+              onClose={() => setInstallModalOpen(false)}
+            />
+          )}
+        </DialogPortal>
+      </Dialog>
     </div>
   );
 }

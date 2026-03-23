@@ -32,6 +32,10 @@ vi.mock("@miladyai/app-core/components", () => ({
 }));
 
 vi.mock("@miladyai/ui", () => ({
+  Button: React.forwardRef(
+    (props: Record<string, unknown>, ref: React.Ref<HTMLButtonElement>) =>
+      React.createElement("button", { ...props, ref }),
+  ),
   IconTooltip: ({
     children,
   }: {

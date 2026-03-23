@@ -7,7 +7,7 @@ import {
   BRIDGE_READY_EVENT,
   COMMAND_PALETTE_EVENT,
   CONNECT_EVENT,
-  dispatchElizaEvent,
+  dispatchMiladyEvent,
   dispatchWindowEvent,
   type ElizaDocumentEventName,
   type ElizaWindowEventName,
@@ -37,9 +37,9 @@ describe("event constants", () => {
   });
 });
 
-describe("dispatchElizaEvent", () => {
+describe("dispatchMiladyEvent", () => {
   it("accepts only known document event names", () => {
-    expectTypeOf(dispatchElizaEvent)
+    expectTypeOf(dispatchMiladyEvent)
       .parameter(0)
       .toEqualTypeOf<ElizaDocumentEventName>();
   });
@@ -47,7 +47,7 @@ describe("dispatchElizaEvent", () => {
   it("dispatches a CustomEvent on document", () => {
     const handler = vi.fn();
     document.addEventListener(COMMAND_PALETTE_EVENT, handler);
-    dispatchElizaEvent(COMMAND_PALETTE_EVENT);
+    dispatchMiladyEvent(COMMAND_PALETTE_EVENT);
     expect(handler).toHaveBeenCalledTimes(1);
     document.removeEventListener(COMMAND_PALETTE_EVENT, handler);
   });
@@ -55,7 +55,7 @@ describe("dispatchElizaEvent", () => {
   it("includes detail when provided", () => {
     const handler = vi.fn();
     document.addEventListener(AGENT_READY_EVENT, handler);
-    dispatchElizaEvent(AGENT_READY_EVENT, { state: "running" });
+    dispatchMiladyEvent(AGENT_READY_EVENT, { state: "running" });
     const event = handler.mock.calls[0][0] as CustomEvent;
     expect(event.detail).toEqual({ state: "running" });
     document.removeEventListener(AGENT_READY_EVENT, handler);

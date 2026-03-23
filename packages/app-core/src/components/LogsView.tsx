@@ -4,6 +4,7 @@
 
 import {
   Button,
+  Input,
   Select,
   SelectContent,
   SelectItem,
@@ -80,9 +81,9 @@ export function LogsView() {
     <div className="flex flex-col h-full">
       {/* Filters row — filters left, refresh right */}
       <div className="flex flex-wrap gap-1.5 mb-2.5 items-center">
-        <input
+        <Input
           type="text"
-          className="text-xs px-3 py-1.5 border border-border bg-card text-txt min-w-56"
+          className="text-xs py-1.5 bg-card text-txt min-w-56 h-auto"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder={t("logsview.SearchLogs")}

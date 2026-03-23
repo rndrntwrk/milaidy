@@ -144,6 +144,7 @@ vi.mock("@miladyai/ui", () => {
   );
 });
 
+import { flush } from "../../../../test/helpers/react-test";
 import { AdvancedPageView } from "@miladyai/app-core/components/AdvancedPageView";
 
 const SHARED_TRAJECTORY_ID = "shared-traj-123456789";
@@ -244,15 +245,6 @@ const trainingTrajectories: TrainingTrajectoryList = {
   ],
 };
 
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-  });
-  await act(async () => {
-    await Promise.resolve();
-  });
-}
-
 function nodeText(node: ReactTestInstance): string {
   return node.children
     .map((child) => {
@@ -329,7 +321,7 @@ describe("Advanced trajectories/fine-tuning integration", () => {
     const standardSubtabButtons = tree.root.findAll(
       (node) =>
         node.type === "button" &&
-        String(node.props.className ?? "").includes("advanced-subtab-btn"),
+        String(node.props.className ?? "").includes("select-none"),
     );
     expect(standardSubtabButtons.length).toBeGreaterThan(0);
 
@@ -344,7 +336,7 @@ describe("Advanced trajectories/fine-tuning integration", () => {
     const modalSubtabButtons = tree.root.findAll(
       (node) =>
         node.type === "button" &&
-        String(node.props.className ?? "").includes("advanced-subtab-btn"),
+        String(node.props.className ?? "").includes("select-none"),
     );
     expect(modalSubtabButtons.length).toBeGreaterThan(0);
   });

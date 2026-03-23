@@ -66,7 +66,7 @@ export type CloudAuthLike = {
   >
 >;
 
-type RuntimeCloudLike = AgentRuntime & {
+export type RuntimeCloudLike = AgentRuntime & {
   agentId: string;
   character: {
     secrets?: Record<string, string | number | boolean>;

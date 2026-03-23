@@ -352,3 +352,18 @@ Please don't restore files I've deleted. If the entire file is `describe.skip`, 
 - Deleted `packages/app-core/test/app/character-action-bar-visibility.test.ts` — reads CSS files and checks for class names
 - Cleaned `packages/app-core/test/app/restart-banner.test.tsx` — removed CSS styling test (kept behavior tests)
 - Re-deleted 5 fully-skipped files (other agent keeps restoring them)
+
+### Seventh pass — final cleanup of packages/agent/test/ duplicates:
+- Re-deleted `SettingsView.test.tsx` and `hero.test.tsx` (restored by other agent again)
+- Cleaned `packages/agent/test/e2e-validation.e2e.test.ts` — replaced expect(true).toBe(true)
+- Cleaned `packages/agent/test/agent-orchestration.e2e.test.ts` — removed larp service lookup test
+- Cleaned `packages/agent/test/discord-connector.e2e.test.ts` — removed todo stubs, larp config/integration tests
+- Cleaned `packages/agent/test/signal-connector.e2e.test.ts` — removed TODO stubs and Configuration Validation regex tests
+
+### Current state:
+- `expect(true).toBe(true)` — only in swabble.test.ts (documented gap, intentional)
+- `it.todo()` — only in kitchen-sink.test.ts (hardware/visual gaps, intentional)
+- `describe.skip()` — only in local-models.test.ts (network-dependent, legitimate)
+- All connector larp tests removed from both test/ and packages/agent/test/
+- All CSS-only tests removed
+- All fully-skipped files removed

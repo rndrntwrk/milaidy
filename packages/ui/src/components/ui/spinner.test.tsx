@@ -10,13 +10,13 @@ describe("Spinner", () => {
 
   it("applies animate-spin", () => {
     const { container } = render(<Spinner />);
-    const svg = container.querySelector("svg") as SVGElement;
-    expect(svg.getAttribute("class")).toContain("animate-spin");
+    const svg = container.querySelector("svg")!;
+    expect(svg).toHaveClass("animate-spin");
   });
 
   it("accepts custom size", () => {
     const { container } = render(<Spinner size={32} />);
-    const svg = container.querySelector("svg") as SVGElement;
+    const svg = container.querySelector("svg")!;
     expect(svg.getAttribute("width")).toBe("32");
     expect(svg.getAttribute("height")).toBe("32");
   });

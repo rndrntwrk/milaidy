@@ -135,7 +135,7 @@ beforeEach(async () => {
 
   const { getPluginInfo } = await import("./registry-client");
   // biome-ignore lint/suspicious/noExplicitAny: mocking
-  (getPluginInfo as any).mockResolvedValue({
+  vi.mocked(getPluginInfo).mockResolvedValue({
     name: "@elizaos/core",
     npm: {
       package: "@elizaos/core",

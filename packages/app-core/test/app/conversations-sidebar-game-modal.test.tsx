@@ -95,6 +95,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   },
 }));
 
+import { textOf } from "../../../../test/helpers/react-test";
 import { ConversationsSidebar } from "@miladyai/app-core/components/ConversationsSidebar";
 
 function createContext(
@@ -130,12 +131,6 @@ function createContext(
     uiLanguage: "en",
     ...overrides,
   };
-}
-
-function textOf(node: TestRenderer.ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : textOf(child)))
-    .join("");
 }
 
 describe("ConversationsSidebar game-modal variant", () => {

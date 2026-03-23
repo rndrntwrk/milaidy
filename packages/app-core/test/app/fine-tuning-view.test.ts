@@ -9,6 +9,7 @@ import type {
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { text, findButtonByText, flush } from "../../../../test/helpers/react-test";
 
 interface FineTuningContextStub {
   t: (key: string) => string;
@@ -135,24 +136,6 @@ function baseModel(): TrainingModelRecord {
   };
 }
 
-function text(node: TestRenderer.ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : ""))
-    .join("")
-    .trim();
-}
-
-function findButtonByText(
-  root: TestRenderer.ReactTestInstance,
-  label: string,
-): TestRenderer.ReactTestInstance {
-  const matches = root.findAll(
-    (node) => node.type === "button" && text(node) === label,
-  );
-  if (!matches[0]) throw new Error(`Button "${label}" not found`);
-  return matches[0];
-}
-
 function findInputByPlaceholder(
   root: TestRenderer.ReactTestInstance,
   placeholder: string,
@@ -165,15 +148,6 @@ function findInputByPlaceholder(
   );
   if (!matches[0]) throw new Error(`Input "${placeholder}" not found`);
   return matches[matches.length - 1];
-}
-
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-  });
-  await act(async () => {
-    await Promise.resolve();
-  });
 }
 
 describe("FineTuningView", () => {

@@ -1,4 +1,4 @@
-import { Button } from "@miladyai/ui";
+import { Button, Input } from "@miladyai/ui";
 import type { RegistryAppInfo } from "../../api";
 import { useApp } from "../../state";
 import { getAppEmoji, getAppShortName } from "./helpers";
@@ -41,12 +41,12 @@ export function AppsCatalogGrid({
   return (
     <>
       <div className="mb-4">
-        <input
+        <Input
           type="text"
           placeholder="Search..."
           value={searchQuery}
           onChange={(event) => onSearchQueryChange(event.target.value)}
-          className="w-full px-3 py-2 text-[12px] rounded-xl border border-border bg-surface text-txt placeholder:text-muted/50 focus:border-accent focus:outline-none"
+          className="text-[12px] rounded-xl bg-surface text-txt placeholder:text-muted/50 focus:border-accent"
         />
       </div>
 

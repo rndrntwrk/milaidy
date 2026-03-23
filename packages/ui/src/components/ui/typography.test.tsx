@@ -11,8 +11,7 @@ describe("Text", () => {
 
   it("applies variant classes", () => {
     render(<Text variant="muted">Faded</Text>);
-    const el = screen.getByText("Faded");
-    expect(el.className).toContain("text-muted");
+    expect(screen.getByText("Faded")).toHaveClass("text-muted");
   });
 
   it("renders span when asChild", () => {
@@ -25,19 +24,16 @@ describe("Text", () => {
 describe("Heading", () => {
   it("renders correct heading level", () => {
     render(<Heading level="h3">Title</Heading>);
-    const el = screen.getByText("Title");
-    expect(el.tagName).toBe("H3");
+    expect(screen.getByText("Title").tagName).toBe("H3");
   });
 
   it("defaults to h1", () => {
     render(<Heading>Big Title</Heading>);
-    const el = screen.getByText("Big Title");
-    expect(el.tagName).toBe("H1");
+    expect(screen.getByText("Big Title").tagName).toBe("H1");
   });
 
   it("applies variant classes", () => {
     render(<Heading level="h2">Sub</Heading>);
-    const el = screen.getByText("Sub");
-    expect(el.className).toContain("text-3xl");
+    expect(screen.getByText("Sub")).toHaveClass("text-3xl");
   });
 });

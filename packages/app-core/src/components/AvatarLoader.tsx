@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Spinner } from "@miladyai/ui";
 import { useEffect, useState } from "react";
 
 function useLinearProgress(durationMs: number) {
@@ -79,8 +79,9 @@ export function AvatarLoader({
             userSelect: "none",
           }}
         >
-          <Loader2
-            className="h-4 w-4 shrink-0 animate-spin text-[var(--text)] opacity-90"
+          <Spinner
+            size={16}
+            className="shrink-0 text-[var(--text)] opacity-90"
             aria-hidden
           />
           <span>
