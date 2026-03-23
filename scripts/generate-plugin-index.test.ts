@@ -27,6 +27,16 @@ describe("generate-plugin-index", () => {
     );
   });
 
+  it("resolves full URLs as-is instead of appending to root", () => {
+    const url = resolveSetupGuideUrl("telegram");
+    expect(url).toMatch(/^https:\/\/docs\.milady\.ai\//);
+    expect(url).not.toContain("plugin-setup-guide#");
+  });
+
+  it("returns undefined for unknown plugin IDs", () => {
+    expect(resolveSetupGuideUrl("nonexistent-plugin")).toBeUndefined();
+  });
+
   it("marks direct chat connectors with social-chat tags", () => {
     expect(connectorTags("telegram")).toEqual(
       expect.arrayContaining(["social", "social-chat", "messaging"]),

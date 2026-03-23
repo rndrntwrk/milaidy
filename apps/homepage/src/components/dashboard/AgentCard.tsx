@@ -82,7 +82,7 @@ const SOURCE_ICON: Record<string, string> = {
 };
 
 function formatUptime(seconds?: number): string {
-  if (!seconds) return "—";
+  if (seconds == null) return "—";
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
   const m = Math.floor((seconds % 3600) / 60);

@@ -10,8 +10,8 @@
  */
 
 import { ChevronDown, X } from "lucide-react";
-import { Switch } from "../components/ui-switch";
 import React, { useCallback, useRef, useState } from "react";
+import { Switch } from "../components/ui-switch";
 import { useApp } from "../state";
 import type { DynamicValue } from "../types";
 import type { FieldRenderer, FieldRenderProps } from "./config-catalog";
@@ -902,9 +902,10 @@ function JsonFieldInner({ fp: props }: { fp: FieldRenderProps }) {
             : "border-[var(--border)]"
         } bg-[var(--card)] text-[13px] font-mono transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border min-h-[100px] resize-y rounded-sm`}
         defaultValue={initial}
-        placeholder={t("config-field.KeyValue", {
-          defaultValue: "Key-value JSON",
-        })}
+        placeholder={
+          props.hint.placeholder ||
+          t("config-field.KeyValue", { defaultValue: "Key-value JSON" })
+        }
         rows={6}
         data-config-key={props.key}
         data-field-type="json"

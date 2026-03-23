@@ -233,6 +233,74 @@ describe("persistCompatOnboardingDefaults", () => {
     });
   });
 
+  it("persists style, adjectives, topics, postExamples, and messageExamples", () => {
+    const config = {
+      agents: { defaults: {} },
+    } as Record<string, unknown>;
+    mockLoadElizaConfig.mockReturnValue(config);
+
+    const style = {
+      all: ["be brief"],
+      chat: ["lowercase"],
+      post: ["no emoji"],
+    };
+    const adjectives = ["warm", "gentle"];
+    const topics = ["emotional intelligence", "design thinking"];
+    const postExamples = ["goodnight everyone", "you've got this"];
+    const messageExamples = [
+      [
+        { user: "{{user1}}", content: { text: "hi" } },
+        { user: "Chen", content: { text: "hey there!" } },
+      ],
+    ];
+
+    persistCompatOnboardingDefaults({
+      name: "Chen",
+      bio: ["A warm analyst."],
+      systemPrompt: "You are Chen.",
+      style,
+      adjectives,
+      topics,
+      postExamples,
+      messageExamples,
+    });
+
+    expect(mockSaveElizaConfig).toHaveBeenCalledTimes(1);
+    const saved = mockSaveElizaConfig.mock.calls[0][0];
+    const agent = saved.agents.list[0];
+    expect(agent.name).toBe("Chen");
+    expect(agent.style).toEqual(style);
+    expect(agent.adjectives).toEqual(adjectives);
+    expect(agent.topics).toEqual(topics);
+    expect(agent.postExamples).toEqual(postExamples);
+    expect(agent.messageExamples).toEqual(messageExamples);
+  });
+
+  it("skips non-array/non-object character fields gracefully", () => {
+    const config = {
+      agents: { defaults: {} },
+    } as Record<string, unknown>;
+    mockLoadElizaConfig.mockReturnValue(config);
+
+    persistCompatOnboardingDefaults({
+      name: "Test",
+      style: "not-an-object",
+      adjectives: "not-an-array",
+      topics: 42,
+      postExamples: null,
+      messageExamples: "nope",
+    });
+
+    const saved = mockSaveElizaConfig.mock.calls[0][0];
+    const agent = saved.agents.list[0];
+    expect(agent.name).toBe("Test");
+    expect(agent.style).toBeUndefined();
+    expect(agent.adjectives).toBeUndefined();
+    expect(agent.topics).toBeUndefined();
+    expect(agent.postExamples).toBeUndefined();
+    expect(agent.messageExamples).toBeUndefined();
+  });
+
   it("returns null when compat onboarding has no usable name", () => {
     const result = persistCompatOnboardingDefaults({
       name: "   ",

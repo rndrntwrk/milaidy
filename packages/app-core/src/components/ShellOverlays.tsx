@@ -1,12 +1,10 @@
 import { Loader2 } from "lucide-react";
 import type { ActionNotice } from "../state/types";
 import { GlobalEmoteOverlay } from "./GlobalEmoteOverlay";
-import {
-  BugReportModal,
-  CommandPalette,
-  RestartBanner,
-  ShortcutsOverlay,
-} from "./index";
+import { BugReportModal } from "./BugReportModal";
+import { CommandPalette } from "./CommandPalette";
+import { RestartBanner } from "./RestartBanner";
+import { ShortcutsOverlay } from "./ShortcutsOverlay";
 
 export function ShellOverlays({
   actionNotice,

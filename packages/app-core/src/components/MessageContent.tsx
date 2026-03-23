@@ -101,7 +101,16 @@ function extractXmlTag(
   return raw.slice(contentStart, end);
 }
 
-function normalizeDisplayText(text: string): string {
+/**
+ * Strip partial/incomplete XML tags at the end of a streaming text chunk.
+ * During streaming, the buffer may end mid-tag (e.g. `"Hello<thi"`,
+ * `"Hello</respon"`, or just `"Hello<"`).  These fragments are not
+ * user-facing content and must be hidden from both the display and voice
+ * pipelines.
+ */
+const TRAILING_PARTIAL_TAG_RE = /<\/?[a-zA-Z][^>]*$|<\/?$/s;
+
+export function normalizeDisplayText(text: string): string {
   let normalized = text;
 
   // Hide framework-selected actions and tool params from chat bubbles.
@@ -124,6 +133,12 @@ function normalizeDisplayText(text: string): string {
 
   // Drop any leftover wrapper tags without disturbing plain text.
   normalized = normalized.replace(/<\/?(response|text|thought)\b[^>]*>/gi, "");
+
+  // During streaming, a chunk may end mid-tag (e.g. "<thi", "</respon").
+  // Strip any incomplete opening or closing tag at the very end so the
+  // user never sees raw XML fragments while tokens arrive.
+  normalized = normalized.replace(TRAILING_PARTIAL_TAG_RE, "");
+
   normalized = stripAssistantStageDirections(normalized);
   return normalized.trim();
 }

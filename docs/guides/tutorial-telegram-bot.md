@@ -75,14 +75,16 @@ After saving your bot token, click **Test Connection** in the connector settings
 
 ### Chat Access Toggle
 
-By default, your bot responds to **all chats** — anyone who messages it will get a response. To restrict access:
+By default, your bot is set to **Allow all chats** — anyone who messages it will get a response. To restrict access:
 
-1. Toggle **Chat Access** from ON (green) to OFF
-2. Enter a JSON array of allowed chat IDs in the input field, e.g.:
+1. Click the **Allow all chats** toggle to switch to **Allow only specific chats**
+2. An input field will appear — enter a JSON array of allowed chat IDs, e.g.:
    ```json
    ["123456789", "-1001234567890"]
    ```
 3. Click **Save Settings**
+
+To switch back, click the toggle again to return to **Allow all chats** — your previously saved chat IDs will be restored if you toggle back to specific chats.
 
 Chat ID formats:
 - **Positive numbers** (e.g. `123456789`) — private chats with individual users
