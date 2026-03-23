@@ -4,14 +4,8 @@
 
 import type { EvmChainBalance } from "@miladyai/app-core/api";
 import type { createTranslator } from "@miladyai/app-core/i18n";
-import { Button } from "@miladyai/ui";
 import { chainIcon, formatBalance, type TokenRow } from "./constants";
 import { TokenLogo } from "./TokenLogo";
-
-interface WalletCopyAddress {
-  label: string;
-  address: string;
-}
 
 export interface TokensTableProps {
   t: ReturnType<typeof createTranslator>;
@@ -20,8 +14,6 @@ export interface TokensTableProps {
   visibleRows: TokenRow[];
   visibleChainErrors: EvmChainBalance[];
   inventoryChainFocus: string;
-  addresses: WalletCopyAddress[];
-  onCopyAddress: (address: string) => Promise<void> | void;
   handleUntrackToken: (address: string) => void;
 }
 
@@ -32,8 +24,6 @@ export function TokensTable({
   visibleRows,
   visibleChainErrors,
   inventoryChainFocus,
-  addresses,
-  onCopyAddress,
   handleUntrackToken,
 }: TokensTableProps) {
   const renderChainErrors = () =>
@@ -89,24 +79,6 @@ export function TokensTable({
           </div>
           <div className="text-xs text-muted">{t("wallet.emptyTokensCta")}</div>
         </div>
-        {addresses.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {addresses.map((item) => (
-              <Button
-                key={`${item.label}-${item.address}`}
-                variant="outline"
-                size="sm"
-                data-testid={`wallet-copy-${item.label.toLowerCase()}-address`}
-                className="h-8 px-3 text-xs shadow-sm hover:border-accent hover:text-txt"
-                onClick={() => void onCopyAddress(item.address)}
-              >
-                {item.label === "EVM"
-                  ? t("wallet.copyEvmAddress")
-                  : t("wallet.copySolanaAddress")}
-              </Button>
-            ))}
-          </div>
-        )}
         {renderChainErrors()}
       </div>
     );

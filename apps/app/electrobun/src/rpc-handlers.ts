@@ -12,6 +12,7 @@ import fs from "node:fs";
 import { Utils } from "electrobun/bun";
 import { setAgentReady } from "./agent-ready-state";
 import { showBackgroundNoticeOnce } from "./background-notice";
+import { postCloudDisconnectFromMain } from "./cloud-disconnect-from-main";
 import { getAgentManager } from "./native/agent";
 import { getCameraManager } from "./native/camera";
 import { getCanvasManager } from "./native/canvas";
@@ -124,6 +125,55 @@ export function registerRpcHandlers(
     },
     agentStatus: async () => agent.getStatus(),
     agentInspectExistingInstall: async () => agent.inspectExistingInstall(),
+    /** Renderer `fetch` after native dialogs can stall; main POST matches menu reset pattern. */
+    agentPostCloudDisconnect: async (
+      params?: { apiBase?: string; bearerToken?: string } | null,
+    ) => {
+      try {
+        return await postCloudDisconnectFromMain({
+          apiBaseOverride: params?.apiBase ?? null,
+          bearerTokenOverride: params?.bearerToken ?? null,
+        });
+      } catch (err) {
+        console.error("[RPC] agentPostCloudDisconnect failed", err);
+        throw err;
+      }
+    },
+    /** Native confirm + main-process POST (renderer bridge/fetch can stall after a sheet). */
+    agentCloudDisconnectWithConfirm: async (
+      params?: { apiBase?: string; bearerToken?: string } | null,
+    ) => {
+      const box = await desktop.showMessageBox({
+        type: "warning",
+        title: "Disconnect from Eliza Cloud",
+        message: "The agent will need a local AI provider to continue working.",
+        buttons: ["Disconnect", "Cancel"],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      const raw =
+        box && typeof box === "object" && "response" in box
+          ? (box as { response: unknown }).response
+          : box;
+      const response =
+        typeof raw === "number" && Number.isFinite(raw)
+          ? raw
+          : typeof raw === "bigint"
+            ? Number(raw)
+            : 1;
+      if (response !== 0) {
+        return { cancelled: true as const };
+      }
+      try {
+        return await postCloudDisconnectFromMain({
+          apiBaseOverride: params?.apiBase ?? null,
+          bearerTokenOverride: params?.bearerToken ?? null,
+        });
+      } catch (err) {
+        console.error("[RPC] agentCloudDisconnectWithConfirm failed", err);
+        throw err;
+      }
+    },
 
     // ---- Desktop: Tray ----
     desktopCreateTray: async (
@@ -248,11 +298,15 @@ export function registerRpcHandlers(
         | "plugins"
         | "connectors"
         | "cloud";
+      browse?: string;
     }) => {
       if (!isDetachedSurface(params.surface)) {
         return;
       }
-      desktop.openSurfaceWindow(params.surface);
+      desktop.openSurfaceWindow(
+        params.surface,
+        params.surface === "browser" ? params.browse : undefined,
+      );
     },
 
     // ---- Desktop: Screen ----

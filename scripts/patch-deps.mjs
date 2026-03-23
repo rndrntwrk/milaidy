@@ -11,6 +11,9 @@
  *    npm tarball. Bun picks "bun" first and fails. We remove the dead "bun"/
  *    "default" conditions so Bun resolves via "import" → dist/. WHY: See
  *    docs/plugin-resolution-and-node-path.md "Bun and published package exports".
+ *
+ * 3) @elizaos/core: Strips the hard-coded streaming retry line pushed to
+ *    onChunk on each parse retry (avoids triple "-- that's not right..." in chat).
  */
 import {
   existsSync,
@@ -27,6 +30,8 @@ import {
   patchAutonomousMiladyOnboardingPresets,
   patchAutonomousTypeError,
   patchBrokenElizaCoreRuntimeDists,
+  patchElizaCoreStreamingTtsHandlerGuard,
+  patchElizaCoreStreamingRetryPlaceholder,
   patchBunExports,
   patchExtensionlessJsExports,
   patchMissingLifecycleScript,
@@ -35,6 +40,8 @@ import {
   patchProperLockfileSignalExitCompat,
   warnStaleBunCache,
 } from "./lib/patch-bun-exports.mjs";
+import { patchElizaAgentConversationStreamSse } from "./lib/patch-agent-conversation-stream.mjs";
+import { patchElizaCoreClientChatEvaluate } from "./lib/patch-eliza-core-client-chat-eval.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -70,6 +77,8 @@ patchExtensionlessJsExports(root, "@noble/hashes");
 patchNobleHashesCompat(root);
 patchProperLockfileSignalExitCompat(root);
 patchBrokenElizaCoreRuntimeDists(root);
+patchElizaCoreStreamingTtsHandlerGuard(root);
+patchElizaCoreStreamingRetryPlaceholder(root);
 patchAutonomousMiladyOnboardingPresets(root);
 patchAutonomousTypeError(root);
 patchPluginVisionPermissionHandling(root);
@@ -273,6 +282,8 @@ function patchAutonomousResetAllowedSegments() {
   );
 }
 patchAutonomousResetAllowedSegments();
+patchElizaAgentConversationStreamSse(root);
+patchElizaCoreClientChatEvaluate(root);
 
 /**
  * Vite caches prebundled dependencies under node_modules/.vite. When patch-deps

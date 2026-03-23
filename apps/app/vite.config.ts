@@ -14,6 +14,7 @@ const miladyRoot = path.resolve(here, "../..");
 
 // The dev script sets MILADY_API_PORT; default to 31337 for standalone vite dev.
 const apiPort = Number(process.env.MILADY_API_PORT) || 31337;
+const uiPort = Number(process.env.MILADY_PORT) || 2138;
 const enableAppSourceMaps = process.env.MILADY_APP_SOURCEMAP === "1";
 /** Set by scripts/dev-platform.mjs for `vite build --watch` (Electrobun desktop). */
 const desktopFastDist = process.env.MILADY_DESKTOP_VITE_FAST_DIST === "1";
@@ -245,8 +246,14 @@ export default defineConfig({
   },
   server: {
     host: true,
-    port: 2138,
+    port: uiPort,
     strictPort: true,
+    // WKWebView (Electrobun) can build broken HMR / source-map URLs when the
+    // client advertises 0.0.0.0; pin the HMR endpoint to loopback.
+    hmr: {
+      host: "127.0.0.1",
+      port: uiPort,
+    },
     cors: {
       origin: true,
       credentials: true,

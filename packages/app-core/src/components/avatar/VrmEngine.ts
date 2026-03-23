@@ -216,6 +216,12 @@ const SPARK_SORT_DISTANCE = 0.035;
 const SPARK_SORT_DISTANCE_NEAR = 0.05;
 const SPARK_MAX_PIXEL_RADIUS = 96;
 const SPARK_MAX_PIXEL_RADIUS_NEAR = 28;
+/** Extra clamp when `lowPowerRenderMode` (battery): cheaper splat sorting / coverage. */
+const SPARK_LOW_POWER_MAX_PIXEL_RADIUS = 44;
+const SPARK_LOW_POWER_MAX_STD_DEV = 1.45;
+const SPARK_LOW_POWER_MIN_ALPHA = 0.0028;
+const SPARK_LOW_POWER_CLIP_XY = 1.02;
+const SPARK_LOW_POWER_SORT_DISTANCE = 0.022;
 const MAX_RENDERER_PIXEL_RATIO = 2;
 const AVATAR_RENDERER_OVERRIDE_KEY = "eliza.avatarRenderer";
 const LOOKING_GLASS_ENABLED_KEY = "eliza.avatarLookingGlass";
@@ -535,11 +541,11 @@ async function loadGltfAsset(
 }
 
 /**
- * Create the best available renderer for the current platform.
- * Electrobun's CEF desktop shell expects WebGPU for the avatar stage, while the
- * browser dev shell stays on WebGL by default to avoid upstream TSL noise.
- * A localStorage override can force either backend for debugging.
- * THREE.WebGPURenderer is async-init and requires await renderer.init().
+ * Create the best available renderer for the canvas.
+ * Tries WebGPURenderer only when preference allows, Electrobun defaults prefer
+ * webgpu, and `navigator.gpu` exists; otherwise uses WebGL (also on WebGPU init failure).
+ * Non-Electrobun (e.g. browser dev) defaults preference to WebGL to reduce TSL noise.
+ * `localStorage` can force `webgpu` or `webgl`. WebGPURenderer is async; await `init()` when present.
  */
 async function createRenderer(
   canvas: HTMLCanvasElement,
@@ -646,7 +652,26 @@ export class VrmEngine {
   private emoteClipCache = new Map<string, THREE.AnimationClip>();
   private emoteRequestId = 0;
   private controls: OrbitControls | null = null;
+  /** Key light used for avatar shadows — toggled in low-power mode. */
+  private keyDirectionalLight: THREE.DirectionalLight | null = null;
+  /** When true, cap effective `devicePixelRatio` at 1 (fewer shaded pixels on Retina). */
+  private lowPowerRenderMode = false;
+  /**
+   * When true, skip every other animation tick (~half display rate). Independent
+   * of {@link lowPowerRenderMode}; `Clock.getDelta()` on active ticks absorbs skips.
+   */
+  private halfFramerateMode = false;
+  private halfFramerateSkipNext = false;
+  /** Mirrors `setup({ sparkOptimized })` — used when re-applying pixel ratio. */
+  private worldStageSparkOptimized = false;
   private paused = false;
+  /**
+   * When true, splat world + Spark backdrop are hidden so the loop can keep
+   * driving VRM idle/physics only (document hidden + user opt-in).
+   */
+  private minimalBackgroundMode = false;
+  private worldVisibleBeforeMinimalBackground = true;
+  private sparkVisibleBeforeMinimalBackground = true;
   private interactionEnabled = false;
   private interactionMode: InteractionMode = "free";
   private cameraProfile: CameraProfile = "chat";
@@ -876,6 +901,43 @@ export class VrmEngine {
     this.clock.stop();
   }
 
+  /**
+   * Re-applies `setPixelRatio` from DPR, spark mode, and battery policy, then
+   * resizes the drawing buffer to match the canvas CSS size.
+   *
+   * **WHY:** `setPixelRatio` alone does not always refit the buffer after
+   * snapshot capture or when toggling low-power mode mid-session.
+   */
+  private applyRendererPixelRatio(): void {
+    if (!this.renderer || !this.camera) return;
+    const base = getRendererPixelRatio(this.worldStageSparkOptimized);
+    const ratio = this.lowPowerRenderMode ? Math.min(base, 1) : base;
+    this.renderer.setPixelRatio(ratio);
+    const canvas = this.renderer.domElement as HTMLCanvasElement | undefined;
+    if (!canvas) return;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (w > 0 && h > 0) {
+      this.resize(w, h);
+    }
+  }
+
+  /** Disable expensive directional shadow maps on battery — big GPU savings. */
+  private applyLowPowerShadowPolicy(): void {
+    const light = this.keyDirectionalLight;
+    if (!light) return;
+    if (this.lowPowerRenderMode) {
+      light.castShadow = false;
+    } else {
+      light.castShadow = true;
+      light.shadow.mapSize.setScalar(1024);
+    }
+    const r = this.renderer as THREE.WebGLRenderer | null;
+    if (r?.shadowMap) {
+      r.shadowMap.needsUpdate = true;
+    }
+  }
+
   private resumeLoop(): void {
     if (!this.initialized || this.paused) return;
     this.clock.start();
@@ -916,6 +978,9 @@ export class VrmEngine {
     sparkRenderer.renderOrder = 9998;
     this.scene.add(sparkRenderer);
     this.sparkRenderer = sparkRenderer;
+    if (this.minimalBackgroundMode) {
+      sparkRenderer.visible = false;
+    }
 
     if (
       sparkRenderer.material &&
@@ -939,38 +1004,61 @@ export class VrmEngine {
       sparkRenderer.minAlpha = SPARK_MIN_ALPHA;
       sparkRenderer.clipXY = SPARK_CLIP_XY;
       sparkRenderer.defaultView.sortDistance = SPARK_SORT_DISTANCE;
-      return;
-    }
-    const isCompanionProfile = this.cameraProfile === "companion";
-    const closeZoomFactor = isCompanionProfile
-      ? THREE.MathUtils.smoothstep(this.companionZoomCurrent, 0.3, 1)
-      : 0;
+    } else {
+      const isCompanionProfile = this.cameraProfile === "companion";
+      const closeZoomFactor = isCompanionProfile
+        ? THREE.MathUtils.smoothstep(this.companionZoomCurrent, 0.3, 1)
+        : 0;
 
-    sparkRenderer.maxPixelRadius = THREE.MathUtils.lerp(
-      SPARK_MAX_PIXEL_RADIUS,
-      SPARK_MAX_PIXEL_RADIUS_NEAR,
-      closeZoomFactor,
-    );
-    sparkRenderer.maxStdDev = THREE.MathUtils.lerp(
-      SPARK_MAX_STD_DEV,
-      SPARK_MAX_STD_DEV_NEAR,
-      closeZoomFactor,
-    );
-    sparkRenderer.minAlpha = THREE.MathUtils.lerp(
-      SPARK_MIN_ALPHA,
-      SPARK_MIN_ALPHA_NEAR,
-      closeZoomFactor,
-    );
-    sparkRenderer.clipXY = THREE.MathUtils.lerp(
-      SPARK_CLIP_XY,
-      1.03,
-      closeZoomFactor,
-    );
-    sparkRenderer.defaultView.sortDistance = THREE.MathUtils.lerp(
-      SPARK_SORT_DISTANCE,
-      SPARK_SORT_DISTANCE_NEAR,
-      closeZoomFactor,
-    );
+      sparkRenderer.maxPixelRadius = THREE.MathUtils.lerp(
+        SPARK_MAX_PIXEL_RADIUS,
+        SPARK_MAX_PIXEL_RADIUS_NEAR,
+        closeZoomFactor,
+      );
+      sparkRenderer.maxStdDev = THREE.MathUtils.lerp(
+        SPARK_MAX_STD_DEV,
+        SPARK_MAX_STD_DEV_NEAR,
+        closeZoomFactor,
+      );
+      sparkRenderer.minAlpha = THREE.MathUtils.lerp(
+        SPARK_MIN_ALPHA,
+        SPARK_MIN_ALPHA_NEAR,
+        closeZoomFactor,
+      );
+      sparkRenderer.clipXY = THREE.MathUtils.lerp(
+        SPARK_CLIP_XY,
+        1.03,
+        closeZoomFactor,
+      );
+      sparkRenderer.defaultView.sortDistance = THREE.MathUtils.lerp(
+        SPARK_SORT_DISTANCE,
+        SPARK_SORT_DISTANCE_NEAR,
+        closeZoomFactor,
+      );
+    }
+
+    if (this.lowPowerRenderMode) {
+      sparkRenderer.maxPixelRadius = Math.min(
+        sparkRenderer.maxPixelRadius,
+        SPARK_LOW_POWER_MAX_PIXEL_RADIUS,
+      );
+      sparkRenderer.maxStdDev = Math.min(
+        sparkRenderer.maxStdDev,
+        SPARK_LOW_POWER_MAX_STD_DEV,
+      );
+      sparkRenderer.minAlpha = Math.max(
+        sparkRenderer.minAlpha,
+        SPARK_LOW_POWER_MIN_ALPHA,
+      );
+      sparkRenderer.clipXY = Math.min(
+        sparkRenderer.clipXY,
+        SPARK_LOW_POWER_CLIP_XY,
+      );
+      sparkRenderer.defaultView.sortDistance = Math.min(
+        sparkRenderer.defaultView.sortDistance,
+        SPARK_LOW_POWER_SORT_DISTANCE,
+      );
+    }
   }
 
   private async createWorldRevealController(
@@ -1700,6 +1788,7 @@ export class VrmEngine {
     this.onUpdate = onUpdate;
     this.loadingAborted = false;
     this.rendererPreference = options?.rendererPreference ?? "auto";
+    this.worldStageSparkOptimized = options?.sparkOptimized ?? false;
     this.resetReadyPromise();
     // Async renderer creation: tries WebGPU, falls back to WebGL.
     // setup() remains synchronous for callers; the loop starts after init resolves.
@@ -1720,9 +1809,7 @@ export class VrmEngine {
           return;
         }
         this.releaseKnownWebGpuWarningFilter = releaseKnownWebGpuWarningFilter;
-        renderer.setPixelRatio(
-          getRendererPixelRatio(options?.sparkOptimized ?? false),
-        );
+        this.renderer = renderer;
         renderer.setClearColor(0x000000, 0);
         if (backend === "webgl") {
           const webglRenderer = renderer as THREE.WebGLRenderer;
@@ -1732,7 +1819,6 @@ export class VrmEngine {
           webglRenderer.toneMappingExposure = 1.0;
           webglRenderer.outputColorSpace = THREE.SRGBColorSpace;
         }
-        this.renderer = renderer;
         this.rendererBackend = backend;
         if (backend === "webgl" && isLookingGlassEnabled()) {
           // Looking Glass: create a SEPARATE hidden renderer so the main
@@ -1783,10 +1869,14 @@ export class VrmEngine {
         keyLight.castShadow = true;
         keyLight.shadow.mapSize.setScalar(1024);
         scene.add(keyLight);
+        this.keyDirectionalLight = keyLight;
         const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
         fillLight.position.set(-1, 0.5, -1).normalize();
         scene.add(fillLight);
-        this.resize(canvas.clientWidth, canvas.clientHeight);
+        this.applyRendererPixelRatio();
+        if (this.lowPowerRenderMode) {
+          this.applyLowPowerShadowPolicy();
+        }
         this.initialized = true;
         this.resumeLoop();
         this.settleReady();
@@ -1799,6 +1889,7 @@ export class VrmEngine {
         this.scene = null;
         this.camera = null;
         this.controls = null;
+        this.keyDirectionalLight = null;
         console.error("[VrmEngine] Failed to initialize renderer:", error);
         this.settleReady(error);
       }
@@ -1867,6 +1958,7 @@ export class VrmEngine {
     this.renderer = null;
     this.rendererBackend = "webgl";
     this.disposeLookingGlass();
+    this.keyDirectionalLight = null;
     this.scene = null;
     this.avatarRoot = null;
     this.camera = null;
@@ -2010,6 +2102,65 @@ export class VrmEngine {
     }
     this.resumeLoop();
   }
+
+  /**
+   * Hides the Gaussian world + Spark layer while keeping the animation/render
+   * loop alive so the avatar keeps idling. Restores prior mesh visibility when
+   * disabled.
+   */
+  setMinimalBackgroundMode(enabled: boolean): void {
+    if (this.minimalBackgroundMode === enabled) return;
+    if (enabled) {
+      this.worldVisibleBeforeMinimalBackground = this.worldMesh?.visible ?? false;
+      this.sparkVisibleBeforeMinimalBackground =
+        this.sparkRenderer?.visible ?? true;
+      if (this.worldMesh) this.worldMesh.visible = false;
+      if (this.sparkRenderer) this.sparkRenderer.visible = false;
+    } else {
+      if (this.worldMesh) {
+        this.worldMesh.visible = this.worldVisibleBeforeMinimalBackground;
+      }
+      if (this.sparkRenderer) {
+        this.sparkRenderer.visible = this.sparkVisibleBeforeMinimalBackground;
+      }
+    }
+    this.minimalBackgroundMode = enabled;
+  }
+
+  private applyMinimalBackgroundHidingToAttachedWorld(): void {
+    if (!this.minimalBackgroundMode) return;
+    if (this.worldMesh) this.worldMesh.visible = false;
+    if (this.sparkRenderer) this.sparkRenderer.visible = false;
+  }
+
+  /**
+   * When true, caps the WebGL/WebGPU pixel ratio at **1** on top of the usual
+   * DPR clamp and applies cheaper shadows + Spark tuning — primarily for
+   * **battery** on Retina. Does **not** change frame cadence; use
+   * {@link setHalfFramerateMode} for ~half refresh rate.
+   *
+   * **WHY:** shader cost scales with physical pixels; `desktopGetPowerState`
+   * → `onBattery` toggles this from the Electrobun shell without a full reload.
+   */
+  setLowPowerRenderMode(enabled: boolean): void {
+    if (this.lowPowerRenderMode === enabled) return;
+    this.lowPowerRenderMode = enabled;
+    this.applyRendererPixelRatio();
+    this.applyLowPowerShadowPolicy();
+    this.updateSparkPerformanceProfile();
+  }
+
+  /**
+   * When true, the main loop skips every other tick so `renderer.render` runs at
+   * roughly half the display refresh rate; skipped ticks do not call
+   * `clock.getDelta()`, so the next tick’s delta spans two intervals.
+   */
+  setHalfFramerateMode(enabled: boolean): void {
+    if (this.halfFramerateMode === enabled) return;
+    this.halfFramerateMode = enabled;
+    this.halfFramerateSkipNext = false;
+  }
+
   setInteractionEnabled(enabled: boolean): void {
     this.interactionEnabled = enabled;
     if (this.controls) {
@@ -2302,6 +2453,7 @@ export class VrmEngine {
       }
       splat.visible = true;
     }
+    this.applyMinimalBackgroundHidingToAttachedWorld();
   }
   async playEmote(
     path: string,
@@ -2926,6 +3078,16 @@ ${isOutgoing ? "if (teleportNoise >= teleportRatio) discard;" : "if (teleportNoi
     const camera = this.camera;
     if (!renderer || !scene || !camera) return;
 
+    if (this.halfFramerateMode) {
+      if (this.halfFramerateSkipNext) {
+        this.halfFramerateSkipNext = false;
+        return;
+      }
+      this.halfFramerateSkipNext = true;
+    } else {
+      this.halfFramerateSkipNext = false;
+    }
+
     // Reset camera to the pristine tracking base before processing this frame's
     // motion and offsets. This ensures OrbitControls and transitions never see
     // the temporary frame-based dynamic offsets (zoom, yaw, parallax),
@@ -3235,8 +3397,6 @@ ${isOutgoing ? "if (teleportNoise >= teleportRatio) discard;" : "if (teleportNoi
     }
 
     // Resize renderer for the capture resolution
-    const prevWidth = canvas.width;
-    const prevHeight = canvas.height;
     renderer.setPixelRatio(1);
     renderer.setSize(width, height);
     camera.aspect = width / height;
@@ -3261,11 +3421,9 @@ ${isOutgoing ? "if (teleportNoise >= teleportRatio) discard;" : "if (teleportNoi
       canvas.toBlob((b) => resolve(b), "image/png");
     });
 
-    // Restore previous renderer state
-    renderer.setPixelRatio(window.devicePixelRatio ?? 1);
-    renderer.setSize(prevWidth, prevHeight);
-    camera.aspect = prevWidth / prevHeight;
-    camera.updateProjectionMatrix();
+    // Restore drawing buffer + DPR policy (matches normal display, including
+    // low-power cap) instead of raw `devicePixelRatio` alone.
+    this.applyRendererPixelRatio();
 
     // Restore paused state — resume the render loop
     this.setPaused(wasPaused);

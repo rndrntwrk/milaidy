@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_BROWSER_HOME,
+  isAllowedBrowserStartUrl,
   normalizeBrowserAddressInput,
   readBrowserNavigationUrl,
 } from "../../../../packages/app-core/src/components/browser-surface";
@@ -26,6 +27,14 @@ describe("browser surface helpers", () => {
     expect(normalizeBrowserAddressInput("javascript:alert(1)")).toBe(
       "https://duckduckgo.com/?q=javascript%3Aalert(1)",
     );
+  });
+
+  it("allows only https or localhost http as browser shell seed URLs", () => {
+    expect(isAllowedBrowserStartUrl("https://elizacloud.ai")).toBe(true);
+    expect(isAllowedBrowserStartUrl("http://localhost:3000")).toBe(true);
+    expect(isAllowedBrowserStartUrl("http://192.168.1.1")).toBe(true);
+    expect(isAllowedBrowserStartUrl("http://evil.com")).toBe(false);
+    expect(isAllowedBrowserStartUrl("")).toBe(false);
   });
 
   it("extracts navigation URLs from webview event payloads", () => {

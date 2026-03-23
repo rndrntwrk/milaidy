@@ -20,6 +20,7 @@ type SidebarContextStub = {
   handleSelectConversation: (id: string) => Promise<void>;
   handleDeleteConversation: (id: string) => Promise<void>;
   handleRenameConversation: (id: string, title: string) => Promise<void>;
+  suggestConversationTitle: (id: string) => Promise<string | null>;
   uiLanguage: "en" | "zh-CN";
   t: (k: string) => string;
 };
@@ -41,6 +42,34 @@ vi.mock("@miladyai/ui", async () => {
 
   return {
     ...actual,
+    Dialog: ({
+      open,
+      children,
+    }: {
+      open?: boolean;
+      children?: React.ReactNode;
+    }) =>
+      open
+        ? React.createElement(
+            "div",
+            { "data-testid": "radix-dialog-stub" },
+            children,
+          )
+        : null,
+    DialogContent: ({
+      children,
+      ...props
+    }: React.ComponentProps<"div">) =>
+      React.createElement("div", props, children),
+    DialogHeader: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement("div", null, children),
+    DialogTitle: ({
+      children,
+      ...props
+    }: React.ComponentProps<"h2">) =>
+      React.createElement("h2", props, children),
+    DialogFooter: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement("div", null, children),
     DropdownMenu: ({ children }: { children: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
     DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) =>
@@ -97,6 +126,7 @@ function createContext(
     handleSelectConversation: vi.fn(async () => {}),
     handleDeleteConversation: vi.fn(async () => {}),
     handleRenameConversation: vi.fn(async () => {}),
+    suggestConversationTitle: vi.fn(async () => null),
     uiLanguage: "en",
     ...overrides,
   };
@@ -210,6 +240,45 @@ describe("ConversationsSidebar game-modal variant", () => {
     expect(handleDeleteConversation).toHaveBeenCalledWith("conv-2");
   });
 
+  it("opens delete confirm from row X control then deletes", async () => {
+    const handleDeleteConversation = vi.fn(async () => {});
+    mockUseApp.mockReturnValue(
+      createContext({
+        handleDeleteConversation,
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(ConversationsSidebar, { variant: "game-modal" }),
+      );
+    });
+
+    const deleteControls = tree?.root.findAll(
+      (node) => node.props["data-testid"] === "conv-delete",
+    );
+    expect(deleteControls?.length).toBe(2);
+
+    await act(async () => {
+      deleteControls?.[0].props.onClick({
+        preventDefault: () => {},
+        stopPropagation: () => {},
+      });
+    });
+
+    const confirmYes = tree?.root.findAll(
+      (node) =>
+        node.type === "button" &&
+        textOf(node).trim() === "conversations.deleteYes",
+    );
+    expect(confirmYes.length).toBe(1);
+    await act(async () => {
+      confirmYes[0].props.onClick();
+    });
+    expect(handleDeleteConversation).toHaveBeenCalledWith("conv-2");
+  });
+
   it("supports inline rename in game-modal variant", async () => {
     const handleRenameConversation = vi.fn(async () => {});
     mockUseApp.mockReturnValue(
@@ -244,22 +313,76 @@ describe("ConversationsSidebar game-modal variant", () => {
       editMenuItem.props.onClick();
     });
 
-    const input = tree?.root.findAll((node) => node.type === "input")[0];
+    const input = tree?.root.findByProps({
+      "data-testid": "conv-rename-input",
+    });
     expect(input).toBeTruthy();
 
     await act(async () => {
       input?.props.onChange({ target: { value: "Renamed room" } });
     });
+    const saveBtn = tree?.root.findByProps({
+      "data-testid": "conv-rename-save",
+    });
     await act(async () => {
-      input?.props.onKeyDown({
-        key: "Enter",
-        preventDefault: () => {},
-      });
+      saveBtn.props.onClick();
+      await Promise.resolve();
     });
 
     expect(handleRenameConversation).toHaveBeenCalledWith(
       "conv-2",
       "Renamed room",
+    );
+  });
+
+  it("fills title from suggest then saves", async () => {
+    const handleRenameConversation = vi.fn(async () => {});
+    const suggestConversationTitle = vi.fn(async () => "LLM suggested title");
+    mockUseApp.mockReturnValue(
+      createContext({
+        handleRenameConversation,
+        suggestConversationTitle,
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(ConversationsSidebar, { variant: "game-modal" }),
+      );
+    });
+
+    const renameBtn = tree?.root.findAllByProps({
+      "data-testid": "conv-rename",
+    })[0];
+    await act(async () => {
+      renameBtn.props.onClick({
+        preventDefault: () => {},
+        stopPropagation: () => {},
+      });
+    });
+
+    const suggestBtn = tree?.root.findByProps({
+      "data-testid": "conv-rename-suggest",
+    });
+    await act(async () => {
+      suggestBtn.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(suggestConversationTitle).toHaveBeenCalledWith("conv-2");
+
+    const saveBtn = tree?.root.findByProps({
+      "data-testid": "conv-rename-save",
+    });
+    await act(async () => {
+      saveBtn.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(handleRenameConversation).toHaveBeenCalledWith(
+      "conv-2",
+      "LLM suggested title",
     );
   });
 });

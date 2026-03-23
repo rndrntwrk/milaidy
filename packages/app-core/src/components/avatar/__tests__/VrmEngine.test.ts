@@ -665,6 +665,9 @@ describe("VrmEngine", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     hoisted.mixerListeners.clear();
+    (
+      globalThis as { window: { devicePixelRatio: number } }
+    ).window.devicePixelRatio = 1;
     hoisted.navigatorMock.gpu = undefined;
     hoisted.fetchMock.mockResolvedValue({
       ok: true,
@@ -789,6 +792,60 @@ describe("VrmEngine", () => {
       expect(hoisted.mockRendererInstance.setPixelRatio).toHaveBeenCalledWith(
         1,
       );
+    });
+
+    it("setLowPowerRenderMode caps pixel ratio at 1 on high-DPR displays", async () => {
+      (
+        globalThis as { window: { devicePixelRatio: number } }
+      ).window.devicePixelRatio = 2;
+      hoisted.mockRendererInstance.setPixelRatio.mockClear();
+      const canvas = createMockCanvas();
+      engine.setup(canvas, vi.fn());
+      await waitForEngineReady(engine);
+
+      expect(hoisted.mockRendererInstance.setPixelRatio).toHaveBeenCalledWith(
+        2,
+      );
+      hoisted.mockRendererInstance.setPixelRatio.mockClear();
+      engine.setLowPowerRenderMode(true);
+      expect(hoisted.mockRendererInstance.setPixelRatio).toHaveBeenCalledWith(
+        1,
+      );
+      hoisted.mockRendererInstance.setPixelRatio.mockClear();
+      engine.setLowPowerRenderMode(false);
+      expect(hoisted.mockRendererInstance.setPixelRatio).toHaveBeenCalledWith(
+        2,
+      );
+    });
+
+    it("setHalfFramerateMode halves animation-loop work (skip alternate ticks)", async () => {
+      const canvas = createMockCanvas();
+      engine.setup(canvas, vi.fn());
+      await waitForEngineReady(engine);
+
+      const extractLoopCallback = (): (() => void) => {
+        const calls = hoisted.mockRendererInstance.setAnimationLoop.mock.calls;
+        const withFn = [...calls].reverse().find((c) => typeof c[0] === "function");
+        expect(withFn?.[0]).toBeTypeOf("function");
+        return withFn![0] as () => void;
+      };
+
+      const loopCb = extractLoopCallback();
+      hoisted.mockRendererInstance.render.mockClear();
+
+      for (let i = 0; i < 10; i += 1) loopCb();
+      const rendersFullRate = hoisted.mockRendererInstance.render.mock.calls.length;
+      expect(rendersFullRate).toBe(10);
+
+      hoisted.mockRendererInstance.render.mockClear();
+      engine.setHalfFramerateMode(true);
+      for (let i = 0; i < 10; i += 1) loopCb();
+      expect(hoisted.mockRendererInstance.render.mock.calls.length).toBe(5);
+
+      hoisted.mockRendererInstance.render.mockClear();
+      engine.setHalfFramerateMode(false);
+      for (let i = 0; i < 10; i += 1) loopCb();
+      expect(hoisted.mockRendererInstance.render.mock.calls.length).toBe(10);
     });
 
     it("uses WebGPURenderer when navigator.gpu is available and opted in", async () => {

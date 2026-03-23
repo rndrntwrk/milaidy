@@ -461,6 +461,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
     elizaCloudCredits,
     elizaCloudCreditsLow,
     elizaCloudCreditsCritical,
+    elizaCloudAuthRejected,
     elizaCloudTopUpUrl,
     elizaCloudLoginBusy,
     walletConfig,
@@ -726,24 +727,32 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
           {elizaCloudConnected ? (
             <>
               <div className="flex items-center gap-2.5 mb-4 p-3 rounded-lg bg-accent/5 border border-accent/15">
-                <span className="w-2 h-2 rounded-full bg-ok shrink-0" />
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${elizaCloudAuthRejected ? "bg-danger" : "bg-ok"}`}
+                />
                 <span className="text-[13px] font-semibold text-txt">
-                  Connected to Eliza Cloud
+                  {elizaCloudAuthRejected
+                    ? "Eliza Cloud key invalid"
+                    : "Connected to Eliza Cloud"}
                 </span>
-                {elizaCloudCredits !== null && (
+                {(elizaCloudCredits !== null || elizaCloudAuthRejected) && (
                   <span className="text-xs text-muted ml-auto flex items-center gap-1.5">
                     <span
                       className={
-                        elizaCloudCreditsCritical
+                        elizaCloudAuthRejected || elizaCloudCreditsCritical
                           ? "text-danger font-bold"
                           : elizaCloudCreditsLow
                             ? "text-warn font-bold"
                             : "text-txt font-semibold"
                       }
                     >
-                      ${elizaCloudCredits.toFixed(2)}
+                      {elizaCloudAuthRejected
+                        ? "Fix in Cloud settings"
+                        : elizaCloudCredits !== null
+                          ? `$${elizaCloudCredits.toFixed(2)}`
+                          : ""}
                     </span>
-                    {elizaCloudTopUpUrl && (
+                    {elizaCloudTopUpUrl && !elizaCloudAuthRejected && (
                       <a
                         href={elizaCloudTopUpUrl}
                         target="_blank"

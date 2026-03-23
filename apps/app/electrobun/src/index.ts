@@ -21,6 +21,7 @@ import {
   pushApiBaseToRenderer,
   resolveDesktopRuntimeMode,
   resolveInitialApiBase,
+  resolveRendererFacingApiBase,
 } from "./api-base";
 import {
   buildApplicationMenu,
@@ -50,6 +51,7 @@ import { checkWebGpuSupport } from "./native/webgpu-browser-support";
 import { readBuiltPreloadScript } from "./preload-validation";
 import { registerRpcHandlers } from "./rpc-handlers";
 import { PUSH_CHANNEL_TO_RPC_MESSAGE } from "./rpc-schema";
+import { startScreenshotDevServer } from "./screenshot-dev-server";
 import {
   isDetachedSurface,
   type ManagedWindowLike,
@@ -258,7 +260,10 @@ async function resetMiladyFromApplicationMenu(): Promise<void> {
         if (currentWindow) {
           pushApiBaseToRenderer(
             currentWindow,
-            `http://127.0.0.1:${port}`,
+            resolveRendererFacingApiBase(
+              process.env as Record<string, string | undefined>,
+              port,
+            ),
             apiToken,
           );
         }
@@ -1118,7 +1123,14 @@ function injectApiBase(win: BrowserWindow): void {
   const port =
     agent.getPort() ?? (Number(process.env.MILADY_PORT) || DEFAULT_PORT);
   const apiToken = configureDesktopLocalApiAuth();
-  pushApiBaseToRenderer(win, `http://127.0.0.1:${port}`, apiToken);
+  pushApiBaseToRenderer(
+    win,
+    resolveRendererFacingApiBase(
+      process.env as Record<string, string | undefined>,
+      port,
+    ),
+    apiToken,
+  );
   setAgentReady(true);
 }
 
@@ -1166,7 +1178,14 @@ async function _startAgent(win: BrowserWindow): Promise<void> {
     const status = await agent.start();
 
     if (status.state === "running" && status.port) {
-      pushApiBaseToRenderer(win, `http://127.0.0.1:${status.port}`, apiToken);
+      pushApiBaseToRenderer(
+        win,
+        resolveRendererFacingApiBase(
+          process.env as Record<string, string | undefined>,
+          status.port,
+        ),
+        apiToken,
+      );
       setAgentReady(true);
       // Sync real OS permission states to the REST API so the renderer
       // can display them and capability toggles can unlock.
@@ -1412,8 +1431,13 @@ function initializeBundledWebGPU(): void {
 
 /**
  * Check WebGPU availability in the webview browser and push status to renderer.
- * On macOS 26+ with native renderer, WebGPU is available via WKWebView.
- * On Linux/Windows with CEF, upstream Electrobun support is needed.
+ *
+ * **WHY not inline `os.release() - 9`:** that was wrong on macOS 26 (Darwin 25);
+ * see `checkWebGpuSupport` / `getMacOSMajorVersion` in `webgpu-browser-support.ts`
+ * and `docs/apps/electrobun-darwin-macos-webgpu-version.md`.
+ *
+ * On macOS 26+ with native renderer, WebGPU is expected via WKWebView.
+ * On Linux/Windows with CEF, upstream Electrobun flag support is still needed.
  */
 function checkWebGpuBrowserSupport(): void {
   if (!BROWSER_SURFACE_ENABLED) {
@@ -1472,10 +1496,19 @@ async function main(): Promise<void> {
   checkWebGpuBrowserSupport();
   const cleanupFns: Array<() => void> = [];
 
+  // WHY push API base on every status tick with a port: embedded startup can
+  // settle on a different loopback port than env/static HTML (allocation + stdout).
+  // Detached surfaces must not keep a stale __MILADY_API_BASE__ while the main
+  // window was already updated—menu reset, chat, and settings each own a webview.
   cleanupFns.push(
     getAgentManager().onStatusChange((status) => {
-      if (currentWindow && status.port) {
-        injectApiBase(currentWindow);
+      if (status.port) {
+        if (currentWindow) {
+          injectApiBase(currentWindow);
+        }
+        surfaceWindowManager?.forEachWindow((w) => {
+          injectApiBase(w as BrowserWindow);
+        });
       }
       void refreshHeartbeatMenuSnapshot();
     }),
@@ -1501,6 +1534,10 @@ async function main(): Promise<void> {
   });
   // Set up app menu after the window (and its message loop) exists.
   setupApplicationMenu();
+  const stopScreenshotDevServer = startScreenshotDevServer();
+  if (stopScreenshotDevServer) {
+    cleanupFns.push(stopScreenshotDevServer);
+  }
   startHeartbeatMenuRefresh();
   cleanupFns.push(() => {
     if (heartbeatMenuRefreshTimer) {
@@ -1513,11 +1550,11 @@ async function main(): Promise<void> {
   getDesktopManager().setOpenSettingsCallback((tabHint) => {
     void createSettingsWindow(tabHint);
   });
-  getDesktopManager().setOpenSurfaceWindowCallback((surface) => {
+  getDesktopManager().setOpenSurfaceWindowCallback((surface, browse) => {
     if (!surfaceWindowManager) {
       return;
     }
-    void surfaceWindowManager.openSurfaceWindow(surface);
+    void surfaceWindowManager.openSurfaceWindow(surface, browse);
   });
 
   // If launched with --hidden (e.g. auto-launch with openAsHidden), minimize immediately.

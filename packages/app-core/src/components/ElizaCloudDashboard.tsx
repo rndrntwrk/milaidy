@@ -12,7 +12,6 @@ import {
   CircleDollarSign,
   CreditCard,
   ExternalLink,
-  LayoutDashboard,
   Loader2,
   Plus,
   RefreshCw,
@@ -32,14 +31,17 @@ import {
   type CloudCompatAgent,
   client,
 } from "../api";
+import { useIntervalWhenDocumentVisible } from "../hooks/useDocumentVisibility";
 import { useApp } from "../state";
-import { Switch } from "./ui-switch";
-import { openExternalUrl } from "../utils";
+import { openDesktopInAppBrowser, openExternalUrl } from "../utils";
 import { StripeEmbeddedCheckout } from "./StripeEmbeddedCheckout";
+import { Switch } from "./ui-switch";
 
 const ELIZA_CLOUD_LOGIN_URL =
   "https://www.elizacloud.ai/login?returnTo=%2Fdashboard%2Feliza";
 const ELIZA_CLOUD_INSTANCES_URL = "https://www.elizacloud.ai/dashboard/eliza";
+/** Marketing / docs site — “Learn more” when not connected (in-app browser on desktop). */
+const ELIZA_CLOUD_WEB_URL = "https://elizacloud.ai";
 const BILLING_PRESET_AMOUNTS = [10, 25, 100];
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
@@ -331,6 +333,7 @@ export function CloudDashboard() {
     elizaCloudCredits,
     elizaCloudCreditsLow,
     elizaCloudCreditsCritical,
+    elizaCloudAuthRejected,
     elizaCloudTopUpUrl,
     elizaCloudUserId,
     cloudDashboardView,
@@ -796,6 +799,13 @@ export function CloudDashboard() {
     };
   }, []);
 
+  const handleLearnMoreElizaCloud = useCallback(async () => {
+    const opened = await openDesktopInAppBrowser(ELIZA_CLOUD_WEB_URL);
+    if (!opened) {
+      await openExternalUrl(ELIZA_CLOUD_WEB_URL);
+    }
+  }, []);
+
   useEffect(() => {
     if (elizaCloudConnected) {
       void loadDropStatus();
@@ -804,8 +814,35 @@ export function CloudDashboard() {
     }
   }, [fetchBillingData, fetchCloudAgents, loadDropStatus, elizaCloudConnected]);
 
+  // Drop cached billing / agents when disconnected so we never show stale balances
+  // after context clears credits (local state would otherwise outlive AppContext).
+  useEffect(() => {
+    if (elizaCloudConnected) return;
+    setBillingSummary(null);
+    setBillingSettings(null);
+    setBillingError(null);
+    setCloudAgents([]);
+    setAgentsError(null);
+    setAgentsLoading(false);
+    setDeletingAgentId(null);
+    setLaunchingAgentId(null);
+    setSelectedAgentId(null);
+    setShowDeployForm(false);
+    setDeployAgentName("");
+    setCheckoutSession(null);
+    setCheckoutDialogOpen(false);
+    setCryptoQuote(null);
+    setCryptoPayResult(null);
+    dispatchAutoTopUpForm({
+      type: "hydrate",
+      next: buildAutoTopUpFormState(null, null),
+      force: true,
+    });
+  }, [elizaCloudConnected]);
+
   const summaryCritical =
-    billingSummary?.critical ?? elizaCloudCreditsCritical ?? false;
+    elizaCloudAuthRejected ||
+    (billingSummary?.critical ?? elizaCloudCreditsCritical ?? false);
   const summaryLow = billingSummary?.low ?? elizaCloudCreditsLow ?? false;
   const creditStatusColor = summaryCritical
     ? "text-danger"
@@ -813,7 +850,12 @@ export function CloudDashboard() {
       ? "text-warn"
       : "text-ok";
   const activeView = cloudDashboardView;
-  const cloudBalance = billingSummary?.balance ?? elizaCloudCredits ?? 0;
+  const cloudBalanceNumber =
+    typeof elizaCloudCredits === "number"
+      ? elizaCloudCredits
+      : typeof billingSummary?.balance === "number"
+        ? billingSummary.balance
+        : null;
   const cloudCurrency = billingSummary?.currency ?? "USD";
   const fallbackBillingUrl =
     billingSummary?.topUpUrl ?? elizaCloudTopUpUrl ?? null;
@@ -834,11 +876,13 @@ export function CloudDashboard() {
   const autoTopUpMaxAmount = readNumber(billingLimits.maxAmount) ?? 1000;
   const autoTopUpMinThreshold = readNumber(billingLimits.minThreshold) ?? 0;
   const autoTopUpMaxThreshold = readNumber(billingLimits.maxThreshold) ?? 1000;
-  const creditStatusTone = summaryCritical
-    ? t("elizaclouddashboard.CreditsCritical")
-    : summaryLow
-      ? t("elizaclouddashboard.CreditsLow")
-      : t("elizaclouddashboard.CreditsHealthy");
+  const creditStatusTone = elizaCloudAuthRejected
+    ? t("notice.elizaCloudAuthRejected")
+    : summaryCritical
+      ? t("elizaclouddashboard.CreditsCritical")
+      : summaryLow
+        ? t("elizaclouddashboard.CreditsLow")
+        : t("elizaclouddashboard.CreditsHealthy");
   const hasAgentWallet = Boolean(
     walletAddresses?.evmAddress || walletAddresses?.solanaAddress,
   );
@@ -883,14 +927,13 @@ export function CloudDashboard() {
         </Button>
         <p className="mt-4 text-xs text-muted/60">
           {t("elizaclouddashboard.NewToElizaCloud")}{" "}
-          <a
-            href={ELIZA_CLOUD_LOGIN_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-txt underline hover:text-txt-hover transition-colors"
+          <button
+            type="button"
+            className="text-txt underline hover:text-txt-hover transition-colors p-0 border-0 bg-transparent cursor-pointer font-inherit text-xs align-baseline"
+            onClick={() => void handleLearnMoreElizaCloud()}
           >
             {t("elizaclouddashboard.LearnMore")}
-          </a>
+          </button>
         </p>
       </div>
     );
@@ -898,6 +941,14 @@ export function CloudDashboard() {
 
   return (
     <div className="custom-scrollbar p-4 lg:p-6 space-y-4 max-w-7xl mx-auto animate-in fade-in duration-500">
+      {elizaCloudAuthRejected ? (
+        <div
+          className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger"
+          role="alert"
+        >
+          {t("notice.elizaCloudAuthRejected")}
+        </div>
+      ) : null}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-bold text-txt-strong tracking-tight">
@@ -949,10 +1000,11 @@ export function CloudDashboard() {
             {t("common.refresh")}
           </Button>
           <Button
+            type="button"
             variant="outline"
             size="sm"
             className="rounded-lg border-danger/30 text-danger hover:bg-danger/10 h-8 text-xs"
-            onClick={handleCloudDisconnect}
+            onClick={() => void handleCloudDisconnect()}
             disabled={cloudDisconnecting}
           >
             {cloudDisconnecting
@@ -971,7 +1023,13 @@ export function CloudDashboard() {
                 className={`text-3xl font-bold tracking-tight ${creditStatusColor}`}
               >
                 {cloudCurrency === "USD" ? "$" : `${cloudCurrency} `}
-                {cloudBalance.toFixed(2)}
+                {cloudBalanceNumber !== null ? (
+                  cloudBalanceNumber.toFixed(2)
+                ) : (
+                  <span className="text-muted">
+                    {billingLoading ? "…" : "—"}
+                  </span>
+                )}
               </span>
               <span className="text-sm text-muted">credits</span>
               {billingLoading && (
@@ -1292,7 +1350,13 @@ export function CloudDashboard() {
             </div>
             <div className="flex items-center gap-3">
               <span className={`font-semibold ${creditStatusColor}`}>
-                ${cloudBalance.toFixed(2)}
+                {cloudBalanceNumber !== null ? (
+                  `$${cloudBalanceNumber.toFixed(2)}`
+                ) : (
+                  <span className="text-muted">
+                    {billingLoading ? "…" : "—"}
+                  </span>
+                )}
               </span>
               <Button
                 variant="ghost"
@@ -1436,33 +1500,42 @@ function AgentDetailSidebar({
   const [logs, setLogs] = useState<string>("");
   const [statusDetail, setStatusDetail] = useState<StatusDetail | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const aliveRef = useRef(true);
 
   useEffect(() => {
-    if (!agent) return;
-    let mounted = true;
-
-    const fetchDetails = async () => {
-      try {
-        const [statusRes, logsRes] = await Promise.all([
-          client.getCloudCompatAgentStatus(agent.agent_id),
-          client.getCloudCompatAgentLogs(agent.agent_id, 100),
-        ]);
-
-        if (!mounted) return;
-        setStatusDetail(statusRes.data);
-        setLogs(typeof logsRes.data === "string" ? logsRes.data : "");
-      } catch {
-        // Silently retry next tick
-      }
-    };
-
-    void fetchDetails();
-    const intId = setInterval(fetchDetails, 5000);
+    aliveRef.current = true;
     return () => {
-      mounted = false;
-      clearInterval(intId);
+      aliveRef.current = false;
     };
+  }, []);
+
+  const fetchDetails = useCallback(async () => {
+    if (!agent) return;
+    try {
+      const [statusRes, logsRes] = await Promise.all([
+        client.getCloudCompatAgentStatus(agent.agent_id),
+        client.getCloudCompatAgentLogs(agent.agent_id, 100),
+      ]);
+
+      if (!aliveRef.current) return;
+      setStatusDetail(statusRes.data);
+      setLogs(typeof logsRes.data === "string" ? logsRes.data : "");
+    } catch {
+      // Silently retry next tick
+    }
   }, [agent]);
+
+  useEffect(() => {
+    void fetchDetails();
+  }, [fetchDetails]);
+
+  useIntervalWhenDocumentVisible(
+    () => {
+      void fetchDetails();
+    },
+    5000,
+    Boolean(agent),
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: rerun when logs update
   useEffect(() => {

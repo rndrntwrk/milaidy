@@ -219,7 +219,7 @@
 .settings-page-content
   :is(button.inline-flex, a.inline-flex, .btn):not(
     .settings-compact-button
-  ):not(.settings-icon-button) {
+  ):not(.settings-icon-button):not([role="switch"]) {
   min-height: 2.625rem;
   padding-inline: 1rem;
   border-radius: calc(var(--radius-lg) + 2px);

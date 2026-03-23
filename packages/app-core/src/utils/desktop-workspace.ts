@@ -1,4 +1,8 @@
 import { invokeDesktopBridgeRequest, isElectrobunRuntime } from "../bridge";
+import {
+  isAllowedBrowserStartUrl,
+  normalizeBrowserAddressInput,
+} from "../components/browser-surface";
 
 export type DesktopClickAuditEntryPoint =
   | "tray"
@@ -182,12 +186,39 @@ export async function openDesktopSettingsWindow(
 
 export async function openDesktopSurfaceWindow(
   surface: DesktopWorkspaceSurface,
+  options?: { browse?: string },
 ): Promise<void> {
+  const browse =
+    surface === "browser" ? options?.browse?.trim() || undefined : undefined;
   await requestDesktopBridge<void>(
     "desktopOpenSurfaceWindow",
     "desktop:openSurfaceWindow",
-    { surface },
+    browse ? { surface, browse } : { surface },
   );
+}
+
+/**
+ * Opens the detached in-app browser (Electrobun browser surface) to `url`.
+ *
+ * Returns `true` when the desktop bridge was used. Returns `false` outside the
+ * desktop runtime or when `url` is not allowed (HTTPS, or HTTP on localhost /
+ * typical private LAN hosts — same rules as shell `browse=` seed URLs).
+ *
+ * Callers that need a non-desktop fallback should use `openExternalUrl` when
+ * this returns `false`.
+ */
+export async function openDesktopInAppBrowser(url: string): Promise<boolean> {
+  if (!isElectrobunRuntime()) {
+    return false;
+  }
+  const trimmed = url.trim();
+  if (!trimmed || !isAllowedBrowserStartUrl(trimmed)) {
+    return false;
+  }
+  await openDesktopSurfaceWindow("browser", {
+    browse: normalizeBrowserAddressInput(trimmed),
+  });
+  return true;
 }
 
 export async function loadDesktopWorkspaceSnapshot(): Promise<DesktopWorkspaceSnapshot> {

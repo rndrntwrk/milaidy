@@ -61,9 +61,10 @@ describe("Switch", () => {
     });
 
     const button = tree.root.findByType("button");
-    expect(String(button.props.className)).toContain("w-10 h-6");
+    expect(String(button.props.className)).toContain("w-9");
+    expect(String(button.props.className)).toContain("h-5");
 
     const knob = tree.root.findByType("span");
-    expect(String(knob.props.className)).toContain("translate-x-4");
+    expect(String(knob.props.className)).toContain("translate-x-[0.875rem]");
   });
 });

@@ -51,6 +51,7 @@ vi.mock("@miladyai/app-core/utils", () => ({
   resolveApiUrl: (p: string) => p,
   resolveAppAssetUrl: (p: string) => p,
   DESKTOP_WORKSPACE_SURFACES: [],
+  modelLooksLikeElizaCloudHosted: () => false,
 }));
 
 import { CompanionSceneHost } from "@miladyai/app-core/components/CompanionSceneHost";
@@ -63,6 +64,12 @@ function createContext(overrides: Record<string, unknown> = {}) {
     t: (k: string) => k,
     chatMode: "simple",
     chatAgentVoiceMuted: false,
+    conversationMessages: [],
+    chatLastUsage: null,
+    elizaCloudAuthRejected: false,
+    elizaCloudCreditsError: null,
+    elizaCloudEnabled: false,
+    elizaCloudConnected: false,
     setState: vi.fn(),
     handleStartDraftConversation: vi.fn(async () => {}),
     handleNewConversation: vi.fn(async () => {}),
@@ -139,8 +146,6 @@ function createContext(overrides: Record<string, unknown> = {}) {
       platform: "test",
       pid: null,
     },
-    elizaCloudEnabled: false,
-    elizaCloudConnected: false,
     elizaCloudCredits: null,
     elizaCloudCreditsCritical: false,
     elizaCloudCreditsLow: false,
@@ -158,6 +163,12 @@ function createContext(overrides: Record<string, unknown> = {}) {
     setUiShellMode: vi.fn(),
     switchUiShellMode: vi.fn(),
     switchShellView: vi.fn(),
+    navigation: {
+      subscribeTabCommitted: () => () => {},
+      scheduleAfterTabCommit: (fn: () => void) => {
+        queueMicrotask(fn);
+      },
+    },
     setTab: vi.fn(),
     plugins: [],
     ...overrides,

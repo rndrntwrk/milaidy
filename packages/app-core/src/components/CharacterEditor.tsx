@@ -245,12 +245,20 @@ export function CharacterEditor({
   >("identity");
   const [rightTab, setRightTab] = useState<"style" | "examples">("style");
   const [customizing, setCustomizing] = useState(false);
+  const leftPanelRef = useRef<HTMLDivElement>(null);
+  const rightPanelRef = useRef<HTMLDivElement>(null);
 
   // Sync rightTab with activePage
   useEffect(() => {
     if (activePage === "style") setRightTab("style");
     else if (activePage === "examples") setRightTab("examples");
   }, [activePage]);
+
+  useEffect(() => {
+    if (!customizing) return;
+    leftPanelRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    rightPanelRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [activePage, customizing]);
 
   /* ── Style entry state ──────────────────────────────────────────── */
   const [pendingStyleEntries, setPendingStyleEntries] = useState<
@@ -1005,59 +1013,103 @@ export function CharacterEditor({
         )}
 
         {customizing && (
-          <div className="ce-page-tabs-row">
-            <div className="ce-page-tabs">
-              <button
+          <div
+            className={`ce-tabbed-editor-group ce-tabbed-editor-group--${activePage}`}
+            role="region"
+            aria-label={t("charactereditor.TabbedEditorGroupLabel", {
+              defaultValue: "Character editor — tabbed sections",
+            })}
+          >
+            <div className="ce-page-tabs-row">
+              <div className="ce-page-tabs">
+                <button
+                  type="button"
+                  className={`ce-page-tab ${activePage === "identity" ? "ce-page-tab--active" : ""}`}
+                  onClick={() => setActivePage("identity")}
+                >
+                  {t("charactereditor.TabCharacter", {
+                    defaultValue: "Character",
+                  })}
+                </button>
+                <button
+                  type="button"
+                  className={`ce-page-tab ${activePage === "style" ? "ce-page-tab--active" : ""}`}
+                  onClick={() => {
+                    setRightTab("style");
+                    setActivePage("style");
+                  }}
+                >
+                  {t("charactereditor.TabStyles", { defaultValue: "Styles" })}
+                </button>
+                <button
+                  type="button"
+                  className={`ce-page-tab ${activePage === "examples" ? "ce-page-tab--active" : ""}`}
+                  onClick={() => {
+                    setRightTab("examples");
+                    setActivePage("examples");
+                  }}
+                >
+                  {t("charactereditor.TabExamples", { defaultValue: "Examples" })}
+                </button>
+              </div>
+              <Button
                 type="button"
-                className={`ce-page-tab ${activePage === "identity" ? "ce-page-tab--active" : ""}`}
-                onClick={() => setActivePage("identity")}
-              >
-                {t("charactereditor.TabCharacter", {
-                  defaultValue: "Character",
+                variant="outline"
+                size="sm"
+                className="ce-reset-btn"
+                onClick={handleResetToDefaults}
+                disabled={!activeCharacterRosterEntry}
+                title={t("charactereditor.ResetToDefaults", {
+                  defaultValue: "Reset to Defaults",
                 })}
-              </button>
-              <button
-                type="button"
-                className={`ce-page-tab ${activePage === "style" ? "ce-page-tab--active" : ""}`}
-                onClick={() => {
-                  setRightTab("style");
-                  setActivePage("style");
-                }}
               >
-                {t("charactereditor.TabStyles", { defaultValue: "Styles" })}
-              </button>
-              <button
-                type="button"
-                className={`ce-page-tab ${activePage === "examples" ? "ce-page-tab--active" : ""}`}
-                onClick={() => {
-                  setRightTab("examples");
-                  setActivePage("examples");
-                }}
-              >
-                {t("charactereditor.TabExamples", { defaultValue: "Examples" })}
-              </button>
+                <RotateCcw className="h-4 w-4 mr-1" />
+                {t("charactereditor.Reset", { defaultValue: "Reset" })}
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="ce-reset-btn"
-              onClick={handleResetToDefaults}
-              disabled={!activeCharacterRosterEntry}
-              title={t("charactereditor.ResetToDefaults", {
-                defaultValue: "Reset to Defaults",
-              })}
-            >
-              <RotateCcw className="h-4 w-4 mr-1" />
-              {t("charactereditor.Reset", { defaultValue: "Reset" })}
-            </Button>
-          </div>
-        )}
 
-        {customizing && (
-          <div className="ce-panels ce-panels--single">
+            <div
+              key={activePage}
+              className={`ce-page-context ce-page-context--${activePage}`}
+              aria-live="polite"
+            >
+              <div className="ce-page-context-title">
+                {activePage === "identity"
+                  ? t("charactereditor.PageContextTitle.identity", {
+                      defaultValue: "Profile & directions",
+                    })
+                  : activePage === "style"
+                    ? t("charactereditor.PageContextTitle.style", {
+                        defaultValue: "Speaking style",
+                      })
+                    : t("charactereditor.PageContextTitle.examples", {
+                        defaultValue: "Sample chats & posts",
+                      })}
+              </div>
+              <p className="ce-page-context-desc">
+                {activePage === "identity"
+                  ? t("charactereditor.PageContextDesc.identity", {
+                      defaultValue:
+                        "Name, voice, bio, and system prompt — who the agent is and how it should behave.",
+                    })
+                  : activePage === "style"
+                    ? t("charactereditor.PageContextDesc.style", {
+                        defaultValue:
+                          "Short rules that steer tone and wording in chat and posts.",
+                      })
+                    : t("charactereditor.PageContextDesc.examples", {
+                        defaultValue:
+                          "Example conversations and posts the model can imitate.",
+                      })}
+              </p>
+            </div>
+
+            <div
+              className={`ce-panels ce-panels--single ce-panels--page-${activePage}`}
+            >
             {/* ── LEFT PANEL (Character identity) ───────────────────────── */}
             <div
+              ref={leftPanelRef}
               className={`ce-panel ce-panel-left ${activePage !== "identity" ? "ce-panel--hidden" : ""}`}
             >
               {/* Name + Voice (50/50 split) */}
@@ -1226,6 +1278,7 @@ export function CharacterEditor({
 
             {/* ── RIGHT PANEL ───────────────────────────────────────────── */}
             <div
+              ref={rightPanelRef}
               className={`ce-panel ce-panel-right ${activePage === "identity" ? "ce-panel--hidden" : ""}`}
             >
               {/* Style Rules */}
@@ -1541,6 +1594,7 @@ export function CharacterEditor({
                 </div>
               </section>
             </div>
+          </div>
           </div>
         )}
       </div>

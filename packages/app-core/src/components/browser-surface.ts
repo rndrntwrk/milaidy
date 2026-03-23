@@ -40,6 +40,25 @@ function toSearchUrl(query: string): string {
   return `${BROWSER_SEARCH_BASE}${encodeURIComponent(query)}`;
 }
 
+export function isAllowedBrowserStartUrl(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!trimmed) return false;
+  const normalized = normalizeBrowserAddressInput(trimmed);
+  try {
+    const url = new URL(normalized);
+    if (url.protocol === "https:") return true;
+    if (url.protocol === "http:") {
+      const hostPort = url.port
+        ? `${url.hostname.toLowerCase()}:${url.port}`
+        : url.hostname.toLowerCase();
+      return isLocalHostLike(`${hostPort}/`);
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export function normalizeBrowserAddressInput(raw: string): string {
   const trimmed = raw.trim();
 

@@ -768,6 +768,14 @@ export async function startEliza(
         },
       });
 
+      // WHY: `startApiServer` may bind a different port than requested (busy
+      // socket, upstream policy). Shells, scripts, and follow-up code reading
+      // env must match the real listener or health checks and user-facing URLs
+      // disagree with `GET /api/health`.
+      process.env.MILADY_PORT = String(actualApiPort);
+      process.env.MILADY_API_PORT = String(actualApiPort);
+      process.env.ELIZA_PORT = String(actualApiPort);
+
       logger.info(
         `[milady] API server listening on http://localhost:${actualApiPort}`,
       );

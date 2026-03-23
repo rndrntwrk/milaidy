@@ -3,6 +3,7 @@ export * from "./useCanvasWindow";
 export * from "./useChatAvatarVoice";
 export * from "./useClickOutside";
 export * from "./useContextMenu";
+export * from "./useDocumentVisibility";
 export * from "./useKeyboardShortcuts";
 export * from "./useLifoSync";
 export * from "./useMemoryMonitor";

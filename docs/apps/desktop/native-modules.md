@@ -161,7 +161,7 @@ The largest native module. Wraps desktop system APIs for the tray, global shortc
 
 | Channel | Direction | Description |
 |---|---|---|
-| `desktop:getPowerState` | invoke | Returns the current power state (AC/battery, suspend status). |
+| `desktop:getPowerState` | invoke | Returns AC vs battery for companion power policy: **macOS** (`pmset`), **Linux** (`/sys/class/power_supply` Battery `status`), **Windows** (`PowerStatus.PowerLineStatus`). Idle/suspend fields are stubs today. |
 | `desktop:powerSuspend` | event | Fired when the system is about to sleep. |
 | `desktop:powerResume` | event | Fired when the system wakes from sleep. |
 | `desktop:powerOnAC` | event | Fired when the system is plugged in. |

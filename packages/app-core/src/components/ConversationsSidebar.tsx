@@ -3,10 +3,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  TooltipProvider,
 } from "@miladyai/ui";
-import { useEffect, useRef, useState } from "react";
+import type React from "react";
+import { useRef, useState } from "react";
 import { useApp } from "../state";
 import { ConversationListItem } from "./conversations/ConversationListItem";
+import { ConversationRenameDialog } from "./conversations/ConversationRenameDialog";
 
 type ConversationsSidebarVariant = "default" | "game-modal";
 
@@ -28,12 +31,13 @@ export function ConversationsSidebar({
     handleNewConversation,
     handleSelectConversation,
     handleDeleteConversation,
-    handleRenameConversation,
     t,
   } = useApp();
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState("");
+  const [renameTarget, setRenameTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [menuConversation, setMenuConversation] = useState<{
@@ -41,15 +45,7 @@ export function ConversationsSidebar({
     title: string;
   } | null>(null);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
-  const inputRef = useRef<HTMLInputElement>(null);
   const menuAnchorRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (editingId && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [editingId]);
 
   const sortedConversations = [...conversations].sort((a, b) => {
     const aTime = new Date(a.updatedAt).getTime();
@@ -57,25 +53,10 @@ export function ConversationsSidebar({
     return bTime - aTime;
   });
 
-  const handleStartEdit = (conv: { id: string; title: string }) => {
+  const openRenameDialog = (conv: { id: string; title: string }) => {
     setConfirmDeleteId(null);
     setMenuConversation(null);
-    setEditingId(conv.id);
-    setEditingTitle(conv.title);
-  };
-
-  const handleEditSubmit = async (id: string) => {
-    const trimmed = editingTitle.trim();
-    if (trimmed && trimmed !== conversations.find((c) => c.id === id)?.title) {
-      await handleRenameConversation(id, trimmed);
-    }
-    setEditingId(null);
-    setEditingTitle("");
-  };
-
-  const handleEditCancel = () => {
-    setEditingId(null);
-    setEditingTitle("");
+    setRenameTarget({ id: conv.id, title: conv.title });
   };
 
   const openActionsMenu = (
@@ -105,19 +86,6 @@ export function ConversationsSidebar({
     }
   };
 
-  const handleEditKeyDown = (
-    e: React.KeyboardEvent<HTMLInputElement>,
-    id: string,
-  ) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      void handleEditSubmit(id);
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      handleEditCancel();
-    }
-  };
-
   const isGameModal = variant === "game-modal";
 
   return (
@@ -132,6 +100,14 @@ export function ConversationsSidebar({
       data-variant={variant}
       onPointerDown={() => setMenuConversation(null)}
     >
+      <TooltipProvider delayDuration={280} skipDelayDuration={120}>
+      <ConversationRenameDialog
+        open={renameTarget !== null}
+        conversationId={renameTarget?.id ?? null}
+        initialTitle={renameTarget?.title ?? ""}
+        onClose={() => setRenameTarget(null)}
+      />
+
       <DropdownMenu
         open={menuConversation !== null}
         onOpenChange={(open) => {
@@ -166,7 +142,7 @@ export function ConversationsSidebar({
               data-testid="conv-menu-edit"
               onClick={() => {
                 if (!menuConversation) return;
-                handleStartEdit(menuConversation);
+                openRenameDialog(menuConversation);
               }}
             >
               {t("conversations.rename")}
@@ -176,8 +152,7 @@ export function ConversationsSidebar({
               className="text-danger focus:text-danger"
               onClick={() => {
                 if (!menuConversation) return;
-                setEditingId(null);
-                setEditingTitle("");
+                setRenameTarget(null);
                 setConfirmDeleteId(menuConversation.id);
                 setMenuConversation(null);
               }}
@@ -250,13 +225,10 @@ export function ConversationsSidebar({
               key={conv.id}
               conv={conv}
               isActive={conv.id === activeConversationId}
-              isEditing={editingId === conv.id}
               isUnread={unreadConversations.has(conv.id)}
               isGameModal={isGameModal}
-              editingTitle={editingTitle}
               confirmDeleteId={confirmDeleteId}
               deletingId={deletingId}
-              inputRef={inputRef}
               t={t}
               mobile={mobile}
               onSelect={(id) => {
@@ -265,16 +237,20 @@ export function ConversationsSidebar({
                 void handleSelectConversation(id);
                 onClose?.();
               }}
-              onEditingTitleChange={setEditingTitle}
-              onEditSubmit={(id) => void handleEditSubmit(id)}
-              onEditKeyDown={handleEditKeyDown}
               onConfirmDelete={(id) => void handleConfirmDelete(id)}
               onCancelDelete={() => setConfirmDeleteId(null)}
+              onRequestDeleteConfirm={(id) => {
+                setMenuConversation(null);
+                setRenameTarget(null);
+                setConfirmDeleteId(id);
+              }}
+              onRequestRename={(c) => openRenameDialog(c)}
               onOpenActions={openActionsMenu}
             />
           ))
         )}
       </div>
+      </TooltipProvider>
     </aside>
   );
 }

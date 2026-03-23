@@ -1,12 +1,14 @@
 import { useRenderGuard } from "@miladyai/app-core/hooks";
 import { useApp } from "@miladyai/app-core/state";
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { ChatModalView } from "./ChatModalView";
 import { CompanionHeader } from "./companion/CompanionHeader";
+import { InferenceCloudAlertButton } from "./companion/InferenceCloudAlertButton";
 import {
   CompanionSceneHost,
   useSharedCompanionScene,
 } from "./companion/CompanionSceneHost";
+import { resolveCompanionInferenceNotice } from "./companion/resolve-companion-inference-notice";
 
 // Module-level flag so remounts (e.g. switching to character editor and back)
 // don't re-hide the chat after the avatar already loaded once.
@@ -20,8 +22,16 @@ export const CompanionView = memo(function CompanionView() {
     uiTheme,
     setUiTheme,
     chatAgentVoiceMuted,
+    chatLastUsage,
+    conversationMessages,
+    elizaCloudAuthRejected,
+    elizaCloudConnected,
+    elizaCloudCreditsError,
+    elizaCloudEnabled,
     handleNewConversation,
+    navigation,
     setState,
+    setTab,
     switchShellView,
     t,
   } = useApp();
@@ -55,13 +65,63 @@ export const CompanionView = memo(function CompanionView() {
     setState("chatMode", "simple");
   }, [setState]);
 
+  const hasInterruptedAssistant = useMemo(
+    () =>
+      conversationMessages.some(
+        (m) => m.role === "assistant" && m.interrupted,
+      ),
+    [conversationMessages],
+  );
+
+  const inferenceNotice = useMemo(
+    () =>
+      resolveCompanionInferenceNotice({
+        elizaCloudConnected,
+        elizaCloudAuthRejected,
+        elizaCloudCreditsError,
+        elizaCloudEnabled,
+        chatLastUsageModel: chatLastUsage?.model,
+        hasInterruptedAssistant,
+        t,
+      }),
+    [
+      chatLastUsage?.model,
+      elizaCloudAuthRejected,
+      elizaCloudConnected,
+      elizaCloudCreditsError,
+      elizaCloudEnabled,
+      hasInterruptedAssistant,
+      t,
+    ],
+  );
+
+  const handleInferenceAlertClick = useCallback(() => {
+    if (!inferenceNotice) return;
+    switchShellView("desktop");
+    navigation.scheduleAfterTabCommit(() => {
+      setTab("settings");
+      if (inferenceNotice.kind === "cloud") {
+        setState("cloudDashboardView", "billing");
+      }
+    });
+  }, [inferenceNotice, navigation, setState, setTab, switchShellView]);
+
+  const companionInferenceHeaderExtra = inferenceNotice ? (
+    <InferenceCloudAlertButton
+      notice={inferenceNotice}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={handleInferenceAlertClick}
+    />
+  ) : null;
+
   const overlay = (
     <div className="absolute inset-0 z-10 flex flex-col pointer-events-none">
       <div
         style={{
           opacity: avatarReady ? 1 : 0,
           transition: "opacity 0.5s ease-in",
-          pointerEvents: avatarReady ? undefined : "none",
+          // Explicit auto so header hit-testing is not ambiguous under a `pointer-events-none` ancestor.
+          pointerEvents: avatarReady ? "auto" : "none",
         }}
       >
         <CompanionHeader
@@ -78,6 +138,7 @@ export const CompanionView = memo(function CompanionView() {
             setState("chatAgentVoiceMuted", !chatAgentVoiceMuted)
           }
           onNewChat={() => void handleNewConversation()}
+          rightExtras={companionInferenceHeaderExtra}
         />
       </div>
 

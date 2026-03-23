@@ -693,6 +693,12 @@ describe("Channel mapping — requests", () => {
       "agentRestartClearLocalDb",
     );
     expect(CHANNEL_TO_RPC_METHOD["agent:status"]).toBe("agentStatus");
+    expect(CHANNEL_TO_RPC_METHOD["agent:postCloudDisconnect"]).toBe(
+      "agentPostCloudDisconnect",
+    );
+    expect(CHANNEL_TO_RPC_METHOD["agent:cloudDisconnectWithConfirm"]).toBe(
+      "agentCloudDisconnectWithConfirm",
+    );
   });
 
   it("desktop-tray channels", () => {
@@ -4818,5 +4824,40 @@ describe("RPC handler delegation — desktop", () => {
       handlers.desktopOpenSurfaceWindow?.({ surface: "evil" } as never),
     ).resolves.toBeUndefined();
     expect(manager?.openSurfaceWindow).not.toHaveBeenCalled();
+  });
+
+  it("desktopOpenSurfaceWindow forwards browse for the browser surface", async () => {
+    const desktopModule = await import("../native/desktop");
+    const getDesktopManagerMock = desktopModule.getDesktopManager as Mock;
+
+    getDesktopManagerMock.mockClear();
+    const { handlers } = await captureHandlers();
+    const manager = getDesktopManagerMock.mock.results.at(-1)?.value;
+
+    expect(manager).toBeDefined();
+    await handlers.desktopOpenSurfaceWindow?.({
+      surface: "browser",
+      browse: "https://elizacloud.ai",
+    });
+    expect(manager?.openSurfaceWindow).toHaveBeenCalledWith(
+      "browser",
+      "https://elizacloud.ai",
+    );
+  });
+
+  it("desktopOpenSurfaceWindow drops browse for non-browser surfaces", async () => {
+    const desktopModule = await import("../native/desktop");
+    const getDesktopManagerMock = desktopModule.getDesktopManager as Mock;
+
+    getDesktopManagerMock.mockClear();
+    const { handlers } = await captureHandlers();
+    const manager = getDesktopManagerMock.mock.results.at(-1)?.value;
+
+    expect(manager).toBeDefined();
+    await handlers.desktopOpenSurfaceWindow?.({
+      surface: "chat",
+      browse: "https://evil.test",
+    });
+    expect(manager?.openSurfaceWindow).toHaveBeenCalledWith("chat", undefined);
   });
 });

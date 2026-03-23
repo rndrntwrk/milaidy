@@ -109,6 +109,164 @@ export function patchBrokenElizaCoreRuntimeDists(root, log = console.log) {
   return patched;
 }
 
+/** @see patchElizaCoreStreamingTtsHandlerGuard */
+const ELIZA_CORE_STREAMING_TTS_PATCH_MARKER =
+  "getModel(ModelType.TEXT_TO_SPEECH) ? await runtime2.useModel(ModelType.TEXT_TO_SPEECH, params)";
+
+const ELIZA_CORE_NODE_EDGE_TTS_FROM =
+  "const result2 = await runtime2.useModel(ModelType.TEXT_TO_SPEECH, params);";
+const ELIZA_CORE_NODE_EDGE_TTS_TO =
+  "const result2 = runtime2.getModel(ModelType.TEXT_TO_SPEECH) ? await runtime2.useModel(ModelType.TEXT_TO_SPEECH, params) : void 0;";
+
+/**
+ * Minified browser bundle (variable names change between releases — extend if
+ * postinstall logs "Skipping @elizaos/core streaming TTS guard" for browser).
+ */
+const ELIZA_CORE_BROWSER_TTS_REPLACEMENTS = [
+  [
+    ",S=await $.useModel(b$.TEXT_TO_SPEECH,M);",
+    ",S=$.getModel(b$.TEXT_TO_SPEECH)?await $.useModel(b$.TEXT_TO_SPEECH,M):void 0;",
+  ],
+  [
+    ",X=await $.useModel(b$.TEXT_TO_SPEECH,J);",
+    ",X=$.getModel(b$.TEXT_TO_SPEECH)?await $.useModel(b$.TEXT_TO_SPEECH,J):void 0;",
+  ],
+];
+
+/**
+ * Eliza core's message handler synthesizes voice audio whenever `onStreamChunk`
+ * is provided. Milady's SSE chat always passes that callback, so the runtime
+ * calls `useModel(TEXT_TO_SPEECH)` — unrelated to the dashboard "agent voice"
+ * toggle. If no handler is registered yet (e.g. race before Edge TTS loads) or
+ * no provider is configured, that throws and logs
+ * "No handler found for delegate type: TEXT_TO_SPEECH".
+ *
+ * Guard both `useModel` sites so we only call TTS when `getModel` finds a handler.
+ */
+export function patchElizaCoreStreamingTtsHandlerGuard(root, log = console.log) {
+  const pkgJsonPaths = findPackageJsonPaths(root, "@elizaos/core");
+  let patchedAny = false;
+
+  for (const pkgJsonPath of pkgJsonPaths) {
+    const pkgDir = dirname(pkgJsonPath);
+    const files = [
+      resolve(pkgDir, "dist/node/index.node.js"),
+      resolve(pkgDir, "dist/edge/index.edge.js"),
+      resolve(pkgDir, "dist/browser/index.browser.js"),
+    ];
+
+    for (const filePath of files) {
+      if (!existsSync(filePath)) continue;
+      let src = readFileSync(filePath, "utf8");
+      if (!src.includes("Error generating voice for remaining text")) continue;
+      if (src.includes(ELIZA_CORE_STREAMING_TTS_PATCH_MARKER)) continue;
+
+      let next = src;
+      const isNodeOrEdge =
+        filePath.endsWith("index.node.js") || filePath.endsWith("index.edge.js");
+
+      if (isNodeOrEdge) {
+        if (!next.includes(ELIZA_CORE_NODE_EDGE_TTS_FROM)) continue;
+        next = next.replaceAll(
+          ELIZA_CORE_NODE_EDGE_TTS_FROM,
+          ELIZA_CORE_NODE_EDGE_TTS_TO,
+        );
+      } else {
+        // Newer core builds may already ship this guard in the browser bundle.
+        if (next.includes("getModel(b$.TEXT_TO_SPEECH)?await $.useModel(b$.TEXT_TO_SPEECH"))
+          continue;
+        const allPresent = ELIZA_CORE_BROWSER_TTS_REPLACEMENTS.every(([from]) =>
+          next.includes(from),
+        );
+        if (!allPresent) continue;
+        for (const [from, to] of ELIZA_CORE_BROWSER_TTS_REPLACEMENTS) {
+          next = next.replace(from, to);
+        }
+      }
+
+      if (next !== src) {
+        writeFileSync(filePath, next, "utf8");
+        patchedAny = true;
+        log(
+          `[patch-deps] Patched @elizaos/core streaming TTS guard: ${filePath}`,
+        );
+      }
+    }
+  }
+
+  return patchedAny;
+}
+
+/** User-visible chunk injected on each structured-output retry (non-rich stream). */
+const ELIZA_CORE_STREAM_RETRY_PLACEHOLDER_NODE = `    if (!this.config.hasRichConsumer) {
+      this.config.onChunk(\`
+-- that's not right, let me start again:
+\`);
+    }
+`;
+
+/** Minified browser bundle: comma-operator if sets state then checks hasRichConsumer. */
+const ELIZA_CORE_STREAM_RETRY_PLACEHOLDER_BROWSER_FROM = `if(this.state="retrying",!this.config.hasRichConsumer)this.config.onChunk(\`
+-- that's not right, let me start again:
+\`);`;
+
+const ELIZA_CORE_STREAM_RETRY_PLACEHOLDER_BROWSER_TO = `this.state="retrying";`;
+
+/**
+ * `ValidationStreamExtractor.signalRetry` in @elizaos/core calls `onChunk` with a
+ * fixed apology line for non-rich streaming consumers on every parse/validation
+ * retry. That duplicates in the saved message (e.g. 3× with maxRetries 3).
+ * Remove the placeholder; `emitEvent({ eventType: "retry_start" })` is unchanged.
+ */
+export function patchElizaCoreStreamingRetryPlaceholder(root, log = console.log) {
+  const pkgJsonPaths = findPackageJsonPaths(root, "@elizaos/core");
+  let patchedAny = false;
+
+  for (const pkgJsonPath of pkgJsonPaths) {
+    const pkgDir = dirname(pkgJsonPath);
+    const files = [
+      resolve(pkgDir, "dist/node/index.node.js"),
+      resolve(pkgDir, "dist/edge/index.edge.js"),
+      resolve(pkgDir, "dist/browser/index.browser.js"),
+    ];
+
+    for (const filePath of files) {
+      if (!existsSync(filePath)) continue;
+      let src = readFileSync(filePath, "utf8");
+      if (!src.includes("that's not right, let me start again")) continue;
+
+      let next = src;
+      if (
+        filePath.endsWith("index.node.js") ||
+        filePath.endsWith("index.edge.js")
+      ) {
+        if (!next.includes(ELIZA_CORE_STREAM_RETRY_PLACEHOLDER_NODE)) continue;
+        next = next.replace(
+          ELIZA_CORE_STREAM_RETRY_PLACEHOLDER_NODE,
+          "",
+        );
+      } else {
+        if (!next.includes(ELIZA_CORE_STREAM_RETRY_PLACEHOLDER_BROWSER_FROM))
+          continue;
+        next = next.replaceAll(
+          ELIZA_CORE_STREAM_RETRY_PLACEHOLDER_BROWSER_FROM,
+          ELIZA_CORE_STREAM_RETRY_PLACEHOLDER_BROWSER_TO,
+        );
+      }
+
+      if (next !== src) {
+        writeFileSync(filePath, next, "utf8");
+        patchedAny = true;
+        log(
+          `[patch-deps] Patched @elizaos/core streaming retry placeholder: ${filePath}`,
+        );
+      }
+    }
+  }
+
+  return patchedAny;
+}
+
 /**
  * Detect stale Bun module cache and warn the user.
  *

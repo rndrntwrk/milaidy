@@ -3,6 +3,76 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-03-22" description="Energy: visibility polling, battery Spark/shadows" tags={["Update", "Desktop", "macOS"]}>
+## Companion VRM: visibility pause + battery-aware pixel ratio (Electrobun)
+
+**Problem:** The avatar **WebGL/WebGPU** loop could keep running when the document was **hidden** (background surface / tab) or when the Mac was on **battery**, wasting GPU time users do not see.
+
+**What shipped**
+
+- **`VrmViewer`** listens for **`visibilitychange`** and pauses **`VrmEngine`** whenever **`document.visibilityState !== "visible"`**, in addition to the existing **`active`** prop. **Why:** `rAF` / `setAnimationLoop` should not run at full rate when the user is not viewing the canvas.
+- **`desktop:getPowerState`** (existing main-process bridge) drives **`VrmEngine.setLowPowerRenderMode`**: on **`onBattery`**, effective **device pixel ratio** is capped at **1×** (still respects world **`sparkOptimized`** and **`MAX_RENDERER_PIXEL_RATIO`**). Polled every **60s**, when the document becomes **visible** again, and once when the engine finishes init. **Why:** unplugged laptops pay a large per-pixel shader cost on Retina; full quality returns on AC. **Opt-out:** **localStorage** **`milady.vrmBatteryPixelCap`** = **`"0"`**.
+- **Battery → Spark + shadows:** **`setLowPowerRenderMode`** disables **directional shadow casting** on the avatar key light and applies **tighter Spark splat tuning** (radius, alpha floor, sort distance, clip). **Why:** shadows and splats dominate GPU cost beside raw DPR.
+- **Half display framerate (split from pixel low-power):** **`VrmEngine.setHalfFramerateMode`** drives **skip-every-other-tick** rendering; **`setLowPowerRenderMode`** only affects **1× DPR, shadows, and Spark**. **`refreshVrmDesktopBatteryPixelPolicy`** sets both. Default **Companion frame rate** = **When saving power** (half-FPS whenever pixel low-power is active). Settings → Media also offers **Full speed** and **Always half** so you can mix and match (e.g. full fps + battery pixels, or half fps + full quality).
+- **`snapshot()`** restore uses the same pixel-ratio policy instead of raw **`window.devicePixelRatio`** alone. **Why:** low-power mode stays consistent after preview capture.
+- **Settings → Media — Companion rendering:** single choice among **Always quality**, **Depends on battery** (default), and **Always efficient**, persisted as **`localStorage`** **`eliza:companion-vrm-power`** = **`quality`** | **`balanced`** | **`efficiency`**. **Why:** one control replaces paired toggles. **Balanced** uses **`desktop:getPowerState`** when the battery pixel cap is on (Electrobun); **efficiency** forces low-power everywhere; **quality** never applies battery-driven downshift. Legacy **`eliza:companion-efficiency`** / **`eliza:companion-quality-on-battery`** migrate once on read.
+- **Animate in background** (opt-in): **`eliza:companion-animate-when-hidden`** = **`"1"`** / **`"0"`**. When the document is hidden but the companion scene is still active, **`VrmEngine`** keeps the loop running and **hides the Gaussian splat world + Spark** so the avatar can keep idling with less GPU than the full scene.
+
+## Dashboard UI: pause background polling + 3D vector graph
+
+- **`useDocumentVisibility` / `useIntervalWhenDocumentVisible`** — Stream, game logs (panel open), fine-tuning, Eliza Cloud agent detail sidebar, and stream voice config only run their **multi-second** `setInterval` loops while the document is **visible**. **`AppContext`** Eliza Cloud **credits** timer skips **`pollCloudCredits`** when hidden. **Why:** background tabs should not keep waking the main thread and API.
+- **`VectorBrowserView` 3D graph** — cancels **`requestAnimationFrame`** while hidden; restarts when **visible**. **Why:** avoid animating a second WebGL scene off-screen.
+- **`ChatView`** game-modal **carryover fade** timer runs only while **visible** (time syncs on focus). **Why:** opacity animation does not need 250ms ticks in a background tab.
+
+Docs: [Desktop app — battery and energy (macOS)](/apps/desktop#battery-and-energy-use-macos).
+
+</Update>
+
+<Update label="2026-03-22" description="Automatic free ports when defaults are busy" tags={["Update", "Desktop", "DevEx"]}>
+## Port collisions: allocate free loopback ports and sync the stack
+
+**Problem:** Default **API** (**31337** in `bun run dev` / dev-server) and **UI** (**2138** for Vite / embedded child **`MILADY_PORT`**) assume nothing else is listening. A second Milady, another tool, or a stuck process caused **EADDRINUSE**, **wrong `MILADY_DESKTOP_API_BASE`**, or the old embedded-agent behavior of **`lsof` + SIGKILL** on the preferred port—which breaks the legitimate case of **two instances** (separate state dirs).
+
+**What shipped**
+
+- **`scripts/dev-platform.mjs`** ( **`dev:desktop` / `dev:desktop:watch`** ) — Before spawning children, probes **`MILADY_API_PORT`** (default **31337**) and, in Vite dev mode, **`MILADY_PORT`** (default **2138**), advancing to the next free **127.0.0.1** TCP port when needed. **Why:** Vite’s `server.port` + proxy target and Electrobun’s **`MILADY_RENDERER_URL` / `MILADY_DESKTOP_API_BASE`** must match the **same** numbers the API process binds; pre-allocating in the orchestrator avoids a race where Vite loads config before the API picks a dynamic port. **Implementation:** `scripts/lib/allocate-loopback-port.mjs` (brief bind test per candidate).
+- **`apps/app/vite.config.ts`** — Dev server **`port`** reads **`MILADY_PORT`** (default **2138**) so the Vite child started by dev-platform listens where the orchestrator chose. **Why:** the config file used to hard-code **2138**, ignoring env when the orchestrator moved the UI port.
+- **Embedded desktop agent (`apps/app/electrobun/src/native/agent.ts`)** — Resolves a free port from the preferred **`MILADY_PORT`** via **`findFirstAvailableLoopbackPort`** (`loopback-port.ts`) instead of killing foreign PIDs by default. **Why:** coexistence with another Milady (or any server) on the default port should not require root or surprise SIGKILL. After a healthy start, the **Electrobun main process** sets **`process.env.MILADY_PORT` / `MILADY_API_PORT` / `ELIZA_PORT`** to the real API port so late readers and tooling stay consistent. **Opt-in legacy reclaim:** **`MILADY_AGENT_RECLAIM_STALE_PORT=1`** restores **`lsof` + SIGKILL** on the preferred port first (single-instance / “take over” dev workflows).
+- **`packages/app-core/src/runtime/eliza.ts`** ( **`milady start`** server-only path) — After **`startApiServer`**, syncs **`MILADY_PORT`**, **`MILADY_API_PORT`**, and **`ELIZA_PORT`** to the **actual** bound port. **Why:** upstream may fall back if the requested port is busy; the CLI banner and anything reading env must match **`/api/health`**.
+- **`packages/app-core/src/runtime/dev-server.ts`** — Syncs **`MILADY_API_PORT`** and **`ELIZA_PORT`** to the actual bind; **does not** overwrite **`MILADY_PORT`** when it carries the **Vite UI** port from dev-platform. **Why:** one process serves both “logical” roles in desktop dev; conflating UI and API env vars would break **`GET /api/dev/stack`** `desktop.uiPort` and proxy assumptions.
+- **Electrobun `index.ts` + `surface-windows.ts`** — On **`agent:status`** updates with a port, **`injectApiBase`** runs for the **main** window and **every** detached surface window. **Why:** dynamic API ports must reach Settings / Chat / etc. without a full reload.
+
+**Docs:** [Desktop local development — when default ports are busy](/apps/desktop-local-development#when-default-ports-are-busy); [Desktop app — port configuration](/apps/desktop#port-configuration).
+
+</Update>
+
+<Update label="2026-03-22" description="Desktop dev observability for IDEs and agents" tags={["Update", "Docs", "Desktop"]}>
+## Desktop dev: stack probe, screenshot proxy, aggregated console (IDE / Cursor)
+
+**Problem:** The desktop stack is **several processes** (Vite, API, Electrobun). Coding agents and headless tools cannot see the native window and do not automatically discover localhost. Guessing ports from chat logs is fragile.
+
+**What shipped**
+
+- **`GET /api/dev/stack`** — JSON index: real API listen port (from socket when possible), desktop renderer URL/ports from env, whether **screenshot** and **aggregated console** hooks are active, plus hints (e.g. Electrobun’s internal RPC port in launcher logs). **Why on the API:** one host agents already probe; avoids parsing Electrobun’s ephemeral port.
+- **`bun run desktop:stack-status -- --json`** — CLI that checks ports and merges `/api/dev/stack`, `/api/health`, `/api/status`. **Why:** scripts and CI do not need the dashboard.
+- **Screenshot (default on for `dev:desktop` / `dev:desktop:watch`)** — Electrobun serves a loopback PNG; the API proxies **`GET /api/dev/cursor-screenshot`** (loopback, session token between children). Uses existing **full-screen OS capture** (`screencapture` on macOS). **Why proxy:** single URL on the API port; **why full screen first:** reuses `ScreenCaptureManager.takeScreenshot()` instead of unproven webview-only capture. Opt-out: **`MILADY_DESKTOP_SCREENSHOT_SERVER=0`**.
+- **Aggregated console (default on)** — Prefixed vite/api/electrobun lines append to **`.milady/desktop-dev-console.log`**; **`GET /api/dev/console-log`** (loopback) returns a capped tail (`maxLines` / `maxBytes`). **Why file:** agents can read the path from stack JSON; **why HTTP tail:** avoids loading huge files into context; **why basename allow-list on path env:** prevents arbitrary file read via mis-set env. Opt-out: **`MILADY_DESKTOP_DEV_LOG=0`**.
+- **Cursor** — `.cursor/rules/milady-desktop-dev-observability.mdc` documents the workflow (**why:** Cursor does not auto-poll localhost; rules carry discovery).
+
+Docs: [Desktop local development — IDE and agent observability](/apps/desktop-local-development#ide-and-agent-observability-cursor-scripts).
+
+</Update>
+
+<Update label="2026-03-22" description="Electrobun Darwin → macOS mapping for WebGPU" tags={["Fix", "Docs"]}>
+## Electrobun: Darwin kernel major vs macOS marketing major (WebGPU)
+
+**`getMacOSMajorVersion()`** in **`webgpu-browser-support.ts`** now maps **Darwin 25** (`os.release()` / `uname -r`) to **macOS 26** (Tahoe), not **16**. **Why:** through Sequoia, `Darwin − 9` matched macOS 11–15; from Tahoe onward the **product** major is **Darwin + 1** while Darwin stays one lower (build numbers still start with Darwin). A single `− 9` rule mis-logged “macOS 16” and blocked the **WKWebView WebGPU** path for real Tahoe machines.
+
+- **Tests** cover Darwin **20–25** and **26 → 27** (expected continuation). **Why:** this is numeric policy, not UI—regressions are silent until someone reads logs.
+- **Doc:** [Darwin vs macOS version (Electrobun WebGPU)](/apps/electrobun-darwin-macos-webgpu-version) (`docs/apps/electrobun-darwin-macos-webgpu-version.md` in-repo).
+
+</Update>
+
 <Update label="2026-03-22" description="Desktop reset reliability, tests, disclosures" tags={["Update", "Fix", "Docs"]}>
 ## Main-process menu reset + renderer sync (Electrobun)
 

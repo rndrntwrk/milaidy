@@ -15,6 +15,8 @@ We ship **separate** `Milady-arm64.dmg` and `Milady-x64.dmg` because:
 
 See `.github/workflows/release-electrobun.yml`: the platform jobs run `arch -x86_64` for the macOS Intel leg during "Install root dependencies", `scripts/desktop-build.mjs stage`, and `scripts/desktop-build.mjs package`.
 
+**Runner hygiene:** When GitHub **renames, updates, or retires** labels such as `macos-14` or `macos-15-intel`, update the matrix in `.github/workflows/release-electrobun.yml` (and any callers) and run **`.github/workflows/test-electrobun-release.yml`** on a branch to confirm the desktop build graph still passes before relying on it for a release.
+
 ## Desktop bundle: why we copy plugins and deps
 
 The packaged app runs the agent from `milady-dist/` (bundled JS + `node_modules`). The main bundle is built by tsdown with dependencies inlined where possible, but:

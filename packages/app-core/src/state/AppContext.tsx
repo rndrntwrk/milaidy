@@ -10,6 +10,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -85,6 +86,7 @@ import {
   getBackendStartupTimeoutMs,
   inspectExistingElizaInstall,
   invokeDesktopBridgeRequest,
+  invokeDesktopBridgeRequestWithTimeout,
   isElectrobunRuntime,
   scanProviderCredentials,
 } from "../bridge";
@@ -122,6 +124,7 @@ import {
   copyTextToClipboard,
   openExternalUrl,
   resolveApiUrl,
+  yieldMiladyHttpAfterNativeMessageBox,
 } from "../utils";
 import {
   computeAgentDeadlineExtensions,
@@ -138,6 +141,8 @@ import {
   applyUiTheme,
   asApiLikeError,
   type ChatTurnUsage,
+  type CompanionHalfFramerateMode,
+  type CompanionVrmPowerMode,
   clearPersistedConnectionMode,
   clearPersistedOnboardingStep,
   deriveOnboardingResumeConnection,
@@ -154,7 +159,10 @@ import {
   loadChatAvatarVisible,
   loadChatMode,
   loadChatVoiceMuted,
+  loadCompanionAnimateWhenHidden,
+  loadCompanionHalfFramerateMode,
   loadCompanionMessageCutoffTs,
+  loadCompanionVrmPowerMode,
   loadLastNativeTab,
   loadPersistedConnectionMode,
   loadPersistedOnboardingStep,
@@ -162,6 +170,8 @@ import {
   loadUiTheme,
   mergeStreamingText,
   normalizeAvatarIndex,
+  normalizeCompanionHalfFramerateMode,
+  normalizeCompanionVrmPowerMode,
   normalizeCustomActionName,
   normalizeUiShellMode,
   normalizeUiTheme,
@@ -181,7 +191,10 @@ import {
   saveChatAvatarVisible,
   saveChatMode,
   saveChatVoiceMuted,
+  saveCompanionAnimateWhenHidden,
+  saveCompanionHalfFramerateMode,
   saveCompanionMessageCutoffTs,
+  saveCompanionVrmPowerMode,
   saveLastNativeTab,
   saveOnboardingStep,
   savePersistedConnectionMode,
@@ -189,9 +202,11 @@ import {
   saveUiShellMode,
   saveUiTheme,
   shouldApplyFinalStreamText,
+  type TabCommittedDetail,
   type UiShellMode,
   type UiTheme,
 } from "./internal";
+import { NavigationEventHub } from "./navigation-events";
 import {
   deriveDetectedProviderPrefill,
   detectExistingOnboardingConnection,
@@ -216,6 +231,8 @@ export {
   applyUiTheme,
   asApiLikeError,
   type ChatTurnUsage,
+  type CompanionHalfFramerateMode,
+  type CompanionVrmPowerMode,
   computeStreamingDelta,
   formatSearchBullet,
   formatStartupErrorDetail,
@@ -233,11 +250,17 @@ export {
   loadChatAvatarVisible,
   loadChatMode,
   loadChatVoiceMuted,
+  loadCompanionAnimateWhenHidden,
+  loadCompanionHalfFramerateMode,
+  loadCompanionVrmPowerMode,
   loadUiLanguage,
   loadUiShellMode,
   loadUiTheme,
   mergeStreamingText,
+  type NavigationEventsApi,
   normalizeAvatarIndex,
+  normalizeCompanionHalfFramerateMode,
+  normalizeCompanionVrmPowerMode,
   normalizeCustomActionName,
   normalizeStreamComparisonText,
   normalizeUiShellMode,
@@ -262,10 +285,14 @@ export {
   saveChatAvatarVisible,
   saveChatMode,
   saveChatVoiceMuted,
+  saveCompanionAnimateWhenHidden,
+  saveCompanionHalfFramerateMode,
+  saveCompanionVrmPowerMode,
   saveUiLanguage,
   saveUiShellMode,
   saveUiTheme,
   shouldApplyFinalStreamText,
+  type TabCommittedDetail,
   type UiShellMode,
   type UiTheme,
   useApp,
@@ -476,6 +503,12 @@ export function AppProvider({
   }, []);
   const [uiLanguage, setUiLanguageState] = useState<UiLanguage>(loadUiLanguage);
   const [uiTheme, setUiThemeState] = useState<UiTheme>(loadUiTheme);
+  const [companionVrmPowerMode, setCompanionVrmPowerModeState] =
+    useState<CompanionVrmPowerMode>(loadCompanionVrmPowerMode);
+  const [companionAnimateWhenHidden, setCompanionAnimateWhenHiddenState] =
+    useState<boolean>(loadCompanionAnimateWhenHidden);
+  const [companionHalfFramerateMode, setCompanionHalfFramerateModeState] =
+    useState<CompanionHalfFramerateMode>(loadCompanionHalfFramerateMode);
   const [connected, setConnected] = useState(false);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -766,6 +799,10 @@ export function AppProvider({
   const [elizaCloudCreditsLow, setElizaCloudCreditsLow] = useState(false);
   const [elizaCloudCreditsCritical, setElizaCloudCreditsCritical] =
     useState(false);
+  const [elizaCloudAuthRejected, setElizaCloudAuthRejected] = useState(false);
+  const [elizaCloudCreditsError, setElizaCloudCreditsError] = useState<
+    string | null
+  >(null);
   const [elizaCloudTopUpUrl, setElizaCloudTopUpUrl] =
     useState("/cloud/billing");
   const [elizaCloudUserId, setElizaCloudUserId] = useState<string | null>(null);
@@ -1045,6 +1082,15 @@ export function AppProvider({
   /** Session-scoped set of notice texts that have been shown with once=true. */
   const shownOnceNotices = useRef<Set<string>>(new Set());
   const elizaCloudPollInterval = useRef<number | null>(null);
+  /** While true, ignore stale poll results (in-flight GETs may predate POST /api/cloud/disconnect). */
+  const elizaCloudDisconnectInFlightRef = useRef(false);
+  /**
+   * After the user disconnects, keep the “Connect Eliza Cloud” screen until they start login again,
+   * even if GET /api/cloud/status still reports `connected: true` (laggy snapshot or proxy mismatch).
+   */
+  const elizaCloudPreferDisconnectedUntilLoginRef = useRef(false);
+  /** Last `connected` applied by pollCloudCredits; used when a poll is skipped mid-flight. */
+  const lastElizaCloudPollConnectedRef = useRef(false);
   const elizaCloudLoginPollTimer = useRef<number | null>(null);
   const prevAgentStateRef = useRef<string | null>(null);
   /** Tracks last agent status to skip no-op updates from WS heartbeats. */
@@ -1094,6 +1140,7 @@ export function AppProvider({
   const walletApiKeySavingRef = useRef(false);
   /** Synchronous lock for cloud login action to prevent duplicate clicks in the same tick. */
   const elizaCloudLoginBusyRef = useRef(false);
+  const elizaCloudAuthNoticeSentRef = useRef(false);
   /** Forward ref so handleOnboardingNext (defined earlier) can call handleCloudLogin (defined later). */
   const handleCloudLoginRef = useRef<() => Promise<void>>(async () => {});
   /** Synchronous lock for update channel changes to prevent duplicate submits. */
@@ -1216,6 +1263,38 @@ export function AppProvider({
     applyUiTheme(uiTheme);
   }, [uiTheme]);
 
+  const setCompanionVrmPowerMode = useCallback(
+    (mode: CompanionVrmPowerMode) => {
+      setCompanionVrmPowerModeState(normalizeCompanionVrmPowerMode(mode));
+    },
+    [],
+  );
+
+  useEffect(() => {
+    saveCompanionVrmPowerMode(companionVrmPowerMode);
+  }, [companionVrmPowerMode]);
+
+  const setCompanionAnimateWhenHidden = useCallback((enabled: boolean) => {
+    setCompanionAnimateWhenHiddenState(enabled);
+  }, []);
+
+  useEffect(() => {
+    saveCompanionAnimateWhenHidden(companionAnimateWhenHidden);
+  }, [companionAnimateWhenHidden]);
+
+  const setCompanionHalfFramerateMode = useCallback(
+    (mode: CompanionHalfFramerateMode) => {
+      setCompanionHalfFramerateModeState(
+        normalizeCompanionHalfFramerateMode(mode),
+      );
+    },
+    [],
+  );
+
+  useEffect(() => {
+    saveCompanionHalfFramerateMode(companionHalfFramerateMode);
+  }, [companionHalfFramerateMode]);
+
   // Apply theme on initial mount
   useEffect(() => {
     applyUiTheme(uiTheme);
@@ -1294,6 +1373,56 @@ export function AppProvider({
     },
     [lastNativeTab, setTab],
   );
+
+  const navigationHubRef = useRef(new NavigationEventHub());
+  const pendingPostTabCommitRef = useRef<(() => void)[]>([]);
+  const prevTabCommittedRef = useRef<Tab | null>(null);
+  const prevUiShellCommittedRef = useRef<UiShellMode | null>(null);
+  const [tabCommitFlushNonce, setTabCommitFlushNonce] = useState(0);
+
+  const scheduleAfterTabCommit = useCallback((fn: () => void) => {
+    pendingPostTabCommitRef.current.push(fn);
+    if (pendingPostTabCommitRef.current.length === 1) {
+      queueMicrotask(() => {
+        setTabCommitFlushNonce((n) => n + 1);
+      });
+    }
+  }, []);
+
+  const navigation = useMemo(
+    () => ({
+      subscribeTabCommitted: (
+        listener: (detail: TabCommittedDetail) => void,
+      ): (() => void) => navigationHubRef.current.subscribe(listener),
+      scheduleAfterTabCommit,
+    }),
+    [scheduleAfterTabCommit],
+  );
+
+  useLayoutEffect(() => {
+    const tabChanged = prevTabCommittedRef.current !== tab;
+    const shellChanged = prevUiShellCommittedRef.current !== uiShellMode;
+    const pending = pendingPostTabCommitRef.current;
+    pendingPostTabCommitRef.current = [];
+
+    if (tabChanged || shellChanged) {
+      const previousTab = prevTabCommittedRef.current;
+      prevTabCommittedRef.current = tab;
+      prevUiShellCommittedRef.current = uiShellMode;
+      navigationHubRef.current.emit({ tab, previousTab, uiShellMode });
+    }
+
+    for (const task of pending) {
+      try {
+        task();
+      } catch (err) {
+        console.warn(
+          "[milady][navigation] scheduleAfterTabCommit task failed",
+          err,
+        );
+      }
+    }
+  }, [tab, uiShellMode, tabCommitFlushNonce]);
 
   const sortTriggersByNextRun = useCallback(
     (items: TriggerSummary[]): TriggerSummary[] => {
@@ -1826,39 +1955,78 @@ export function AppProvider({
   }, []);
 
   const pollCloudCredits = useCallback(async (): Promise<boolean> => {
+    if (elizaCloudDisconnectInFlightRef.current) {
+      return lastElizaCloudPollConnectedRef.current;
+    }
     const cloudStatus = await client.getCloudStatus().catch(() => null);
+    if (elizaCloudDisconnectInFlightRef.current) {
+      return lastElizaCloudPollConnectedRef.current;
+    }
     if (!cloudStatus) {
       setElizaCloudConnected(false);
       setElizaCloudCredits(null);
       setElizaCloudCreditsLow(false);
       setElizaCloudCreditsCritical(false);
+      setElizaCloudAuthRejected(false);
+      setElizaCloudCreditsError(null);
+      lastElizaCloudPollConnectedRef.current = false;
       return false;
     }
-    // A cached cloud API key represents a completed login and should be shared
-    // across all views, even before runtime CLOUD_AUTH fully initializes.
-    const isConnected = Boolean(cloudStatus.connected || cloudStatus.hasApiKey);
+    // Trust `connected` from the server snapshot (it already folds in API key + CLOUD_AUTH).
+    const isConnected = Boolean(cloudStatus.connected);
+    if (isConnected && elizaCloudPreferDisconnectedUntilLoginRef.current) {
+      lastElizaCloudPollConnectedRef.current = false;
+      return false;
+    }
+    if (!isConnected) {
+      elizaCloudPreferDisconnectedUntilLoginRef.current = false;
+    }
     setElizaCloudEnabled(Boolean(cloudStatus.enabled ?? false));
     setElizaCloudConnected(isConnected);
     setElizaCloudUserId(cloudStatus.userId ?? null);
     if (cloudStatus.topUpUrl) setElizaCloudTopUpUrl(cloudStatus.topUpUrl);
     if (isConnected) {
       const credits = await client.getCloudCredits().catch(() => null);
-      if (credits && typeof credits.balance === "number") {
-        setElizaCloudCredits(credits.balance);
-        setElizaCloudCreditsLow(credits.low ?? false);
-        setElizaCloudCreditsCritical(credits.critical ?? false);
-        if (credits.topUpUrl) setElizaCloudTopUpUrl(credits.topUpUrl);
-      } else {
+      if (elizaCloudDisconnectInFlightRef.current) {
+        return lastElizaCloudPollConnectedRef.current;
+      }
+      if (credits?.authRejected) {
+        setElizaCloudAuthRejected(true);
+        setElizaCloudCreditsError(null);
         setElizaCloudCredits(null);
         setElizaCloudCreditsLow(false);
         setElizaCloudCreditsCritical(false);
-        if (credits?.topUpUrl) setElizaCloudTopUpUrl(credits.topUpUrl);
+        if (credits.topUpUrl) setElizaCloudTopUpUrl(credits.topUpUrl);
+      } else {
+        setElizaCloudAuthRejected(false);
+        const apiErr =
+          credits &&
+          typeof credits.error === "string" &&
+          credits.error.trim() &&
+          typeof credits.balance !== "number"
+            ? credits.error.trim()
+            : null;
+        setElizaCloudCreditsError(apiErr);
+        if (credits && typeof credits.balance === "number") {
+          setElizaCloudCredits(credits.balance);
+          setElizaCloudCreditsLow(credits.low ?? false);
+          setElizaCloudCreditsCritical(credits.critical ?? false);
+          if (credits.topUpUrl) setElizaCloudTopUpUrl(credits.topUpUrl);
+        } else {
+          setElizaCloudCredits(null);
+          setElizaCloudCreditsLow(false);
+          setElizaCloudCreditsCritical(false);
+          if (credits?.topUpUrl) setElizaCloudTopUpUrl(credits.topUpUrl);
+        }
       }
     } else {
       setElizaCloudCredits(null);
       setElizaCloudCreditsLow(false);
       setElizaCloudCreditsCritical(false);
+      setElizaCloudAuthRejected(false);
+      setElizaCloudCreditsError(null);
     }
+    lastElizaCloudPollConnectedRef.current = isConnected;
     return isConnected;
   }, []);
 
@@ -2406,11 +2574,14 @@ export function AppProvider({
         setClientBaseUrl: (url) => client.setBaseUrl(url),
         setClientToken: (token) => client.setToken(token),
         clearElizaCloudSessionUi: () => {
+          elizaCloudPreferDisconnectedUntilLoginRef.current = false;
           setElizaCloudEnabled(false);
           setElizaCloudConnected(false);
           setElizaCloudCredits(null);
           setElizaCloudCreditsLow(false);
           setElizaCloudCreditsCritical(false);
+          setElizaCloudAuthRejected(false);
+          setElizaCloudCreditsError(null);
           setElizaCloudTopUpUrl("/cloud/billing");
           setElizaCloudUserId(null);
           setElizaCloudLoginError(null);
@@ -2443,6 +2614,8 @@ export function AppProvider({
       setElizaCloudCredits,
       setElizaCloudCreditsCritical,
       setElizaCloudCreditsLow,
+      setElizaCloudAuthRejected,
+      setElizaCloudCreditsError,
       setElizaCloudConnected,
       setElizaCloudEnabled,
       setElizaCloudLoginError,
@@ -3221,6 +3394,10 @@ export function AppProvider({
           } else {
             void loadConversations();
           }
+
+          if (elizaCloudEnabled || elizaCloudConnected) {
+            void pollCloudCredits();
+          }
         } catch (err) {
           const abortError = err as Error;
           if (abortError.name === "AbortError") {
@@ -3304,6 +3481,9 @@ export function AppProvider({
       loadConversationMessages,
       loadConversations,
       tryHandlePrefixedChatCommand,
+      elizaCloudEnabled,
+      elizaCloudConnected,
+      pollCloudCredits,
     ],
   );
 
@@ -3322,7 +3502,7 @@ export function AppProvider({
     [chatInput, chatPendingImages, sendChatText],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: t is stable but defined later
+  // biome-ignore lint/correctness/useExhaustiveDependencies: conversations omitted to limit rerenders
   const sendActionMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
@@ -3340,7 +3520,7 @@ export function AppProvider({
             const actionTitle =
               trimmed.length > 50 ? `${trimmed.slice(0, 47)}...` : trimmed;
             const { conversation } = await client.createConversation(
-              actionTitle || t("companion.newChat"),
+              actionTitle || translateText(uiLanguage, "companion.newChat"),
             );
             const nextCutoffTs = Date.now();
             setConversations((prev) => [conversation, ...prev]);
@@ -3439,7 +3619,21 @@ export function AppProvider({
               return changed ? next : prev;
             });
           }
+
+          if (!data.completed && streamedAssistantText.trim()) {
+            setConversationMessages((prev) =>
+              prev.map((message) =>
+                message.id === assistantMsgId
+                  ? { ...message, interrupted: true }
+                  : message,
+              ),
+            );
+          }
+
           void loadConversations();
+          if (elizaCloudEnabled || elizaCloudConnected) {
+            void pollCloudCredits();
+          }
         } catch (err) {
           const abortError = err as Error;
           if (abortError.name === "AbortError") {
@@ -3471,8 +3665,12 @@ export function AppProvider({
     [
       chatMode,
       activeConversationId,
+      elizaCloudEnabled,
+      elizaCloudConnected,
       loadConversationMessages,
       loadConversations,
+      pollCloudCredits,
+      uiLanguage,
     ],
   );
 
@@ -3835,6 +4033,41 @@ export function AppProvider({
           "error",
           4200,
         );
+      }
+    },
+    [loadConversations, setActionNotice],
+  );
+
+  const suggestConversationTitle = useCallback(
+    async (id: string) => {
+      try {
+        const { conversation } = await client.renameConversation(id, "", {
+          generate: true,
+        });
+        setConversations((prev) =>
+          prev.map((existing) =>
+            existing.id === id ? conversation : existing,
+          ),
+        );
+        const next = conversation.title?.trim();
+        return next && next.length > 0 ? next : null;
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        if (status === 404) {
+          await loadConversations();
+          setActionNotice(
+            "Conversation was not found. Refreshed the conversation list.",
+            "info",
+            3200,
+          );
+          return null;
+        }
+        setActionNotice(
+          `Failed to suggest conversation title: ${err instanceof Error ? err.message : "network error"}`,
+          "error",
+          4200,
+        );
+        return null;
       }
     },
     [loadConversations, setActionNotice],
@@ -5015,6 +5248,7 @@ export function AppProvider({
     elizaCloudLoginBusyRef.current = true;
     setElizaCloudLoginBusy(true);
     setElizaCloudLoginError(null);
+    elizaCloudPreferDisconnectedUntilLoginRef.current = false;
 
     // Determine if we should use direct cloud auth (no local backend) or
     // go through the local agent's proxy. During sandbox onboarding there is
@@ -5180,23 +5414,129 @@ export function AppProvider({
   handleCloudLoginRef.current = handleCloudLogin;
 
   const handleCloudDisconnect = useCallback(async () => {
-    if (
-      !(await confirmDesktopAction({
-        title: "Disconnect from Eliza Cloud",
-        message: "The agent will need a local AI provider to continue working.",
-        confirmLabel: "Disconnect",
-        cancelLabel: "Cancel",
-        type: "warning",
-      }))
-    )
-      return;
+    const MAIN_CONFIRM_DISCONNECT_MS = 300_000;
+    const MAIN_POST_ONLY_MS = 12_000;
+    const RENDERER_DISCONNECT_MS = 12_000;
+
+    elizaCloudDisconnectInFlightRef.current = true;
     setElizaCloudDisconnecting(true);
+
     try {
-      await client.cloudDisconnect();
+      let needRendererDisconnect = true;
+
+      if (isElectrobunRuntime()) {
+        const combined = await invokeDesktopBridgeRequestWithTimeout<
+          { cancelled: true } | { ok: true } | { ok: false; error?: string }
+        >({
+          rpcMethod: "agentCloudDisconnectWithConfirm",
+          ipcChannel: "agent:cloudDisconnectWithConfirm",
+          params: {
+            apiBase: client.getBaseUrl().trim() || undefined,
+            bearerToken: client.getRestAuthToken() ?? undefined,
+          },
+          timeoutMs: MAIN_CONFIRM_DISCONNECT_MS,
+        });
+
+        if (combined.status === "ok" && combined.value) {
+          const v = combined.value;
+          if ("cancelled" in v && v.cancelled) {
+            return;
+          }
+          if ("ok" in v) {
+            if (
+              v.ok === false &&
+              typeof v.error === "string" &&
+              v.error.trim()
+            ) {
+              throw new Error(v.error.trim());
+            }
+            if (v.ok === true) {
+              needRendererDisconnect = false;
+            }
+          }
+        }
+
+        if (needRendererDisconnect) {
+          if (
+            !(await confirmDesktopAction({
+              title: "Disconnect from Eliza Cloud",
+              message:
+                "The agent will need a local AI provider to continue working.",
+              confirmLabel: "Disconnect",
+              cancelLabel: "Cancel",
+              type: "warning",
+            }))
+          ) {
+            return;
+          }
+          await yieldMiladyHttpAfterNativeMessageBox();
+
+          const postOutcome = await invokeDesktopBridgeRequestWithTimeout<{
+            ok: boolean;
+            error?: string;
+          }>({
+            rpcMethod: "agentPostCloudDisconnect",
+            ipcChannel: "agent:postCloudDisconnect",
+            params: {
+              apiBase: client.getBaseUrl().trim() || undefined,
+              bearerToken: client.getRestAuthToken() ?? undefined,
+            },
+            timeoutMs: MAIN_POST_ONLY_MS,
+          });
+
+          if (postOutcome.status === "ok" && postOutcome.value) {
+            const mr = postOutcome.value;
+            if (mr.ok === true) {
+              needRendererDisconnect = false;
+            } else if (
+              mr.ok === false &&
+              typeof mr.error === "string" &&
+              mr.error.trim()
+            ) {
+              throw new Error(mr.error.trim());
+            }
+          }
+        }
+      } else if (
+        !(await confirmDesktopAction({
+          title: "Disconnect from Eliza Cloud",
+          message:
+            "The agent will need a local AI provider to continue working.",
+          confirmLabel: "Disconnect",
+          cancelLabel: "Cancel",
+          type: "warning",
+        }))
+      ) {
+        return;
+      } else {
+        await yieldMiladyHttpAfterNativeMessageBox();
+      }
+
+      if (needRendererDisconnect) {
+        await Promise.race([
+          client.cloudDisconnect(),
+          new Promise<never>((_, reject) => {
+            window.setTimeout(() => {
+              reject(
+                new Error(
+                  `Disconnect timed out after ${RENDERER_DISCONNECT_MS / 1000}s`,
+                ),
+              );
+            }, RENDERER_DISCONNECT_MS);
+          }),
+        ]);
+      }
+
       setElizaCloudEnabled(false);
       setElizaCloudConnected(false);
       setElizaCloudCredits(null);
+      setElizaCloudCreditsLow(false);
+      setElizaCloudCreditsCritical(false);
+      setElizaCloudAuthRejected(false);
+      setElizaCloudCreditsError(null);
       setElizaCloudUserId(null);
+      lastElizaCloudPollConnectedRef.current = false;
+      elizaCloudPreferDisconnectedUntilLoginRef.current = true;
       setActionNotice("Disconnected from Eliza Cloud.", "success");
     } catch (err) {
       setActionNotice(
@@ -5204,9 +5544,11 @@ export function AppProvider({
         "error",
       );
     } finally {
+      elizaCloudDisconnectInFlightRef.current = false;
       setElizaCloudDisconnecting(false);
+      void pollCloudCredits();
     }
-  }, [setActionNotice]);
+  }, [pollCloudCredits, setActionNotice]);
 
   const handleCloudOnboardingFinish = useCallback(() => {
     setOnboardingComplete(true);
@@ -6409,10 +6751,15 @@ export function AppProvider({
       // recurring interval too.
       pollCloudCredits().then((connected) => {
         if (connected) {
-          elizaCloudPollInterval.current = window.setInterval(
-            () => pollCloudCredits(),
-            60_000,
-          );
+          elizaCloudPollInterval.current = window.setInterval(() => {
+            if (
+              typeof document !== "undefined" &&
+              document.visibilityState !== "visible"
+            ) {
+              return;
+            }
+            void pollCloudCredits();
+          }, 60_000);
         }
       });
 
@@ -6576,6 +6923,21 @@ export function AppProvider({
 
   const t = useMemo(() => createTranslator(uiLanguage), [uiLanguage]);
 
+  useEffect(() => {
+    if (elizaCloudAuthRejected) {
+      if (!elizaCloudAuthNoticeSentRef.current) {
+        elizaCloudAuthNoticeSentRef.current = true;
+        setActionNotice(
+          translateText(uiLanguage, "notice.elizaCloudAuthRejected"),
+          "error",
+          14_000,
+        );
+      }
+    } else {
+      elizaCloudAuthNoticeSentRef.current = false;
+    }
+  }, [elizaCloudAuthRejected, setActionNotice, uiLanguage]);
+
   const value: AppContextValue = {
     // Translations
     t,
@@ -6584,6 +6946,9 @@ export function AppProvider({
     uiShellMode,
     uiLanguage,
     uiTheme,
+    companionVrmPowerMode,
+    companionAnimateWhenHidden,
+    companionHalfFramerateMode,
     connected,
     agentStatus,
     onboardingComplete,
@@ -6701,6 +7066,8 @@ export function AppProvider({
     elizaCloudCredits,
     elizaCloudCreditsLow,
     elizaCloudCreditsCritical,
+    elizaCloudAuthRejected,
+    elizaCloudCreditsError,
     elizaCloudTopUpUrl,
     elizaCloudUserId,
     cloudDashboardView,
@@ -6824,8 +7191,12 @@ export function AppProvider({
     setUiShellMode,
     switchUiShellMode,
     switchShellView,
+    navigation,
     setUiLanguage,
     setUiTheme,
+    setCompanionVrmPowerMode,
+    setCompanionAnimateWhenHidden,
+    setCompanionHalfFramerateMode,
     handleStart,
     handleStop,
 
@@ -6853,6 +7224,7 @@ export function AppProvider({
     handleSelectConversation,
     handleDeleteConversation,
     handleRenameConversation,
+    suggestConversationTitle,
     sendActionMessage,
     loadTriggers,
     createTrigger,

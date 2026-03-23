@@ -644,7 +644,11 @@ function VectorGraph3D({
       let onWheel: ((e: WheelEvent) => void) | null = null;
       let onMouseLeave: (() => void) | null = null;
       let handleResize: (() => void) | null = null;
+      let visibilityHandler: (() => void) | null = null;
       let cleanedUp = false;
+      let rafActive =
+        typeof document === "undefined" ||
+        document.visibilityState === "visible";
 
       cleanupRef.current = () => {
         if (cleanedUp) return;
@@ -920,13 +924,27 @@ function VectorGraph3D({
         return;
       }
 
-      // Animation loop
+      // Animation loop — pause while tab is hidden to save GPU.
       const animate = () => {
+        if (!rafActive || cleanedUp) return;
         updateCamera();
         renderer.render(scene, camera);
         animationRef.current = requestAnimationFrame(animate);
       };
-      animate();
+      visibilityHandler = () => {
+        if (document.visibilityState === "hidden") {
+          rafActive = false;
+          cancelAnimationFrame(animationRef.current);
+          animationRef.current = 0;
+        } else {
+          rafActive = true;
+          animationRef.current = requestAnimationFrame(animate);
+        }
+      };
+      document.addEventListener("visibilitychange", visibilityHandler);
+      if (rafActive) {
+        animate();
+      }
 
       // Resize handler
       handleResize = () => {

@@ -9,6 +9,10 @@ import {
 } from "@miladyai/app-core/hooks";
 import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import type {
+  CompanionHalfFramerateMode,
+  CompanionVrmPowerMode,
+} from "../state/types";
 import { AvatarLoader } from "./AvatarLoader";
 import type {
   CameraProfile,
@@ -53,6 +57,9 @@ export const VrmStage = memo(function VrmStage({
   // engine handles character swaps without preloading separate layers.
   preloadAvatars: _preloadAvatars = [],
   onLayerEngineReady: _onLayerEngineReady,
+  companionVrmPowerMode = "balanced",
+  companionHalfFramerateMode = "when_saving_power",
+  companionAnimateWhenHidden = false,
   t,
 }: {
   active?: boolean;
@@ -66,6 +73,9 @@ export const VrmStage = memo(function VrmStage({
   onRevealStart?: () => void;
   playWaveOnAvatarChange?: boolean;
   preloadAvatars?: readonly VrmStageAvatarEntry[];
+  companionVrmPowerMode?: CompanionVrmPowerMode;
+  companionHalfFramerateMode?: CompanionHalfFramerateMode;
+  companionAnimateWhenHidden?: boolean;
   t: TranslateFn;
 }) {
   useRenderGuard("VrmStage");
@@ -274,6 +284,9 @@ export const VrmStage = memo(function VrmStage({
           mouthOpen={chatAvatarVoice.mouthOpen}
           isSpeaking={chatAvatarVoice.isSpeaking}
           cameraProfile={cameraProfile}
+          companionVrmPowerMode={companionVrmPowerMode}
+          companionHalfFramerateMode={companionHalfFramerateMode}
+          companionAnimateWhenHidden={companionAnimateWhenHidden}
           onEngineReady={handleEngineReady}
           onEngineState={handleEngineState}
           onRevealStart={handleRevealStart}

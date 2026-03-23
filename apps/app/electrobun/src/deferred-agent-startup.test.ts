@@ -43,7 +43,7 @@ describe("deferred agent startup (desktop)", () => {
     expect(source).toContain(
       "const apiToken = configureDesktopLocalApiAuth();",
     );
-    expect(source).toContain("pushApiBaseToRenderer(win, `http://127.0.0.1:");
-    expect(source).toContain("apiToken);");
+    expect(source).toContain("resolveRendererFacingApiBase");
+    expect(source).toContain("pushApiBaseToRenderer(");
   });
 });

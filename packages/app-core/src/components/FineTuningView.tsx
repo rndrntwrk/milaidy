@@ -11,6 +11,7 @@ import {
   type TrainingTrajectoryList,
 } from "@miladyai/app-core/api";
 import { formatTime } from "@miladyai/app-core/components";
+import { useIntervalWhenDocumentVisible } from "@miladyai/app-core/hooks";
 import { useApp } from "@miladyai/app-core/state";
 import { confirmDesktopAction } from "@miladyai/app-core/utils";
 import { Button, Input } from "@miladyai/ui";
@@ -447,16 +448,11 @@ export function FineTuningView() {
     void refreshAll();
   }, [refreshAll]);
 
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      void loadStatus();
-      void loadJobs();
-      void loadModels();
-    }, 5000);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [loadJobs, loadModels, loadStatus]);
+  useIntervalWhenDocumentVisible(() => {
+    void loadStatus();
+    void loadJobs();
+    void loadModels();
+  }, 5000);
 
   useEffect(() => {
     const unbind = client.onWsEvent("training_event", (rawEnvelope) => {

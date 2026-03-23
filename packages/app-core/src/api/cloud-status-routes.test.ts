@@ -122,6 +122,59 @@ describe("cloud status routes", () => {
     });
   });
 
+  test("reports cloud as enabled when inferenceMode is cloud without explicit enabled flag", async () => {
+    const result = await invoke({
+      method: "GET",
+      pathname: "/api/cloud/status",
+      runtime: null,
+      config: { cloud: { inferenceMode: "cloud" } } as ElizaConfig,
+    });
+
+    expect(result.handled).toBe(true);
+    expect(result.payload).toEqual({
+      connected: false,
+      enabled: true,
+      hasApiKey: false,
+      reason: "runtime_not_started",
+    });
+  });
+
+  test("reports cloud as enabled when provider is elizacloud", async () => {
+    const result = await invoke({
+      method: "GET",
+      pathname: "/api/cloud/status",
+      runtime: null,
+      config: { cloud: { provider: "elizacloud" } } as ElizaConfig,
+    });
+
+    expect(result.handled).toBe(true);
+    expect(result.payload).toEqual({
+      connected: false,
+      enabled: true,
+      hasApiKey: false,
+      reason: "runtime_not_started",
+    });
+  });
+
+  test("reports cloud as not enabled when explicitly disabled even if inferenceMode is cloud", async () => {
+    const result = await invoke({
+      method: "GET",
+      pathname: "/api/cloud/status",
+      runtime: null,
+      config: {
+        cloud: { enabled: false, inferenceMode: "cloud" },
+      } as ElizaConfig,
+    });
+
+    expect(result.handled).toBe(true);
+    expect(result.payload).toEqual({
+      connected: false,
+      enabled: false,
+      hasApiKey: false,
+      reason: "runtime_not_started",
+    });
+  });
+
   test("reports cloud as not enabled when explicitly disabled with api key", async () => {
     const result = await invoke({
       method: "GET",
@@ -275,6 +328,40 @@ describe("cloud status routes", () => {
       error: expect.stringContaining("blocked"),
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("returns authRejected when api key yields HTTP 401", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 401,
+        json: async () => ({
+          error: {
+            message: "Unauthorized: Authentication required",
+            type: "authentication_error",
+          },
+        }),
+      })) as typeof fetch,
+    );
+
+    const result = await invoke({
+      method: "GET",
+      pathname: "/api/cloud/credits",
+      runtime: null,
+      config: {
+        cloud: { apiKey: "bad-key", baseUrl: "https://cloud.example" },
+      } as ElizaConfig,
+    });
+
+    expect(result.handled).toBe(true);
+    expect(result.payload).toEqual({
+      balance: null,
+      connected: true,
+      authRejected: true,
+      error: "Unauthorized: Authentication required",
+      topUpUrl: "https://www.elizacloud.ai/dashboard/settings?tab=billing",
+    });
   });
 
   test("rejects redirected cloud credits responses", async () => {

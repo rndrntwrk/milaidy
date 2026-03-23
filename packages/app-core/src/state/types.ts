@@ -60,7 +60,36 @@ import type { Tab } from "../navigation";
 import type { UiShellMode, UiTheme } from "./ui-preferences";
 
 export type { UiShellMode } from "./ui-preferences";
+
+/** 3D companion render power: full quality, OS/battery-aware default, or always efficient. */
+export type CompanionVrmPowerMode = "quality" | "balanced" | "efficiency";
+
+/** When to cap the companion VRM loop at ~half the display refresh rate. */
+export type CompanionHalfFramerateMode =
+  | "off"
+  | "when_saving_power"
+  | "always";
 export type ShellView = "companion" | "character" | "desktop";
+
+/** Emitted after each tab/shell-related layout commit (see `navigation` on app context). */
+export interface TabCommittedDetail {
+  tab: Tab;
+  previousTab: Tab | null;
+  uiShellMode: UiShellMode;
+}
+
+/** Tab commit subscription + deferred work (for multi-step navigation). */
+export interface NavigationEventsApi {
+  subscribeTabCommitted: (
+    listener: (detail: TabCommittedDetail) => void,
+  ) => () => void;
+  /**
+   * Run `fn` after the next layout commit where `tab` has been applied.
+   * Use to chain `switchShellView` → `setTab` without the second call losing
+   * to batched `setTab(lastNativeTab)`.
+   */
+  scheduleAfterTabCommit: (fn: () => void) => void;
+}
 
 export type OnboardingStep =
   | "welcome"
@@ -221,6 +250,15 @@ export interface AppState {
   uiShellMode: UiShellMode;
   uiLanguage: UiLanguage;
   uiTheme: UiTheme;
+  /** VRM quality vs GPU use: always full quality, battery-aware (default), or always efficient. */
+  companionVrmPowerMode: CompanionVrmPowerMode;
+  /**
+   * When true and the document is hidden, keep the VRM render loop alive and
+   * hide only the splat world + Spark backdrop (lower GPU than full scene).
+   */
+  companionAnimateWhenHidden: boolean;
+  /** When to cap companion at ~half display Hz (independent of DPR/shadows/Spark). */
+  companionHalfFramerateMode: CompanionHalfFramerateMode;
   connected: boolean;
   agentStatus: AgentStatus | null;
   onboardingComplete: boolean;
@@ -377,6 +415,10 @@ export interface AppState {
   elizaCloudCredits: number | null;
   elizaCloudCreditsLow: boolean;
   elizaCloudCreditsCritical: boolean;
+  /** Eliza Cloud returned 401 on balance check — inference will fail until the key is fixed. */
+  elizaCloudAuthRejected: boolean;
+  /** Non-fatal credits/API message from Eliza Cloud (e.g. unexpected response, network). */
+  elizaCloudCreditsError: string | null;
   elizaCloudTopUpUrl: string;
   elizaCloudUserId: string | null;
   cloudDashboardView: "billing" | "agents";
@@ -550,8 +592,12 @@ export interface AppActions {
   setUiShellMode: (mode: UiShellMode) => void;
   switchUiShellMode: (mode: UiShellMode) => void;
   switchShellView: (view: ShellView) => void;
+  navigation: NavigationEventsApi;
   setUiLanguage: (language: UiLanguage) => void;
   setUiTheme: (theme: UiTheme) => void;
+  setCompanionVrmPowerMode: (mode: CompanionVrmPowerMode) => void;
+  setCompanionAnimateWhenHidden: (enabled: boolean) => void;
+  setCompanionHalfFramerateMode: (mode: CompanionHalfFramerateMode) => void;
 
   // Lifecycle
   handleStart: () => Promise<void>;
@@ -583,6 +629,8 @@ export interface AppActions {
   handleSelectConversation: (id: string) => Promise<void>;
   handleDeleteConversation: (id: string) => Promise<void>;
   handleRenameConversation: (id: string, title: string) => Promise<void>;
+  /** LLM title from recent messages; persists on the server and updates local list. */
+  suggestConversationTitle: (id: string) => Promise<string | null>;
   /** Send a programmatic message (e.g. from a UiSpec action) without touching chatInput. */
   sendActionMessage: (text: string) => Promise<void>;
 

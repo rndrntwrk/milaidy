@@ -15,6 +15,13 @@
  *
  * The renderer never needs to know whether the API server is embedded or
  * remote -- it simply connects to `http://localhost:{port}`.
+ *
+ * **Port policy (WHY):** we resolve a **free** loopback port from `MILADY_PORT`
+ * (see `findFirstAvailableLoopbackPort`) instead of SIGKILL-ing listeners by
+ * default, so two Milady apps can run side by side. Optional
+ * `MILADY_AGENT_RECLAIM_STALE_PORT=1` restores lsof-based reclaim for
+ * single-instance dev. After a successful start we mirror the bound API port
+ * into `process.env` so main-process HTTP (menus, probes) matches the child.
  */
 
 import crypto from "node:crypto";
@@ -24,6 +31,7 @@ import path from "node:path";
 
 import { resolveDesktopRuntimeMode } from "../api-base";
 import { DEFAULT_PORT } from "../constants";
+import { findFirstAvailableLoopbackPort } from "./loopback-port";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -621,6 +629,44 @@ function shouldAutoRecoverPgliteFailure(line: string): boolean {
   );
 }
 
+/**
+ * Opt-in: kill processes listening on `port` (lsof + SIGKILL). Default off so a
+ * second Milady instance can coexist on the same machine when ports differ.
+ * Set MILADY_AGENT_RECLAIM_STALE_PORT=1 to restore the old “take over default port” behavior.
+ */
+async function maybeReclaimPortWithSigkill(port: number): Promise<void> {
+  const raw = process.env.MILADY_AGENT_RECLAIM_STALE_PORT?.trim().toLowerCase();
+  if (raw !== "1" && raw !== "true" && raw !== "yes") {
+    return;
+  }
+  try {
+    const lsofResult = Bun.spawnSync(["lsof", "-ti", `tcp:${port}`]);
+    const pids = new TextDecoder()
+      .decode(lsofResult.stdout)
+      .trim()
+      .split("\n")
+      .filter(Boolean);
+    for (const pid of pids) {
+      const numPid = parseInt(pid, 10);
+      if (!Number.isNaN(numPid) && numPid !== process.pid) {
+        diagnosticLog(
+          `[Agent] Reclaim: killing process ${numPid} on port ${port} (MILADY_AGENT_RECLAIM_STALE_PORT)`,
+        );
+        try {
+          process.kill(numPid, "SIGKILL");
+        } catch {
+          // Process may have already exited
+        }
+      }
+    }
+    if (pids.length > 0) {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  } catch {
+    // lsof missing — ignore
+  }
+}
+
 function resolvePgliteDataDir(): string {
   return joinPortable(
     os.homedir(),
@@ -724,36 +770,29 @@ export class AgentManager {
       await this.killChildProcess();
     }
 
-    // Kill any stale bun process holding the target port from a previous
-    // crash or unclean shutdown.  Without this, the server falls back to a
-    // dynamic port and agent.ts may not detect the change.
-    const targetPort = Number(process.env.MILADY_PORT) || DEFAULT_PORT;
+    const preferredPort = Number(process.env.MILADY_PORT) || DEFAULT_PORT;
+    await maybeReclaimPortWithSigkill(preferredPort);
+    let apiPort: number;
     try {
-      const lsofResult = Bun.spawnSync(["lsof", "-ti", `tcp:${targetPort}`]);
-      const pids = new TextDecoder()
-        .decode(lsofResult.stdout)
-        .trim()
-        .split("\n")
-        .filter(Boolean);
-      for (const pid of pids) {
-        const numPid = parseInt(pid, 10);
-        if (!Number.isNaN(numPid) && numPid !== process.pid) {
-          diagnosticLog(
-            `[Agent] Killing stale process ${numPid} on port ${targetPort}`,
-          );
-          try {
-            process.kill(numPid, "SIGKILL");
-          } catch {
-            // Process may have already exited
-          }
-        }
-      }
-      if (pids.length > 0) {
-        // Brief pause for the OS to release the port
-        await new Promise((r) => setTimeout(r, 500));
-      }
-    } catch {
-      // lsof not available or failed — proceed and let the port fallback handle it
+      apiPort = await findFirstAvailableLoopbackPort(preferredPort);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to allocate loopback port";
+      diagnosticLog(`[Agent] ${msg}`);
+      this.status = {
+        state: "error",
+        agentName: null,
+        port: null,
+        startedAt: null,
+        error: msg,
+      };
+      this.emitStatus();
+      return this.status;
+    }
+    if (apiPort !== preferredPort) {
+      diagnosticLog(
+        `[Agent] Port ${preferredPort} busy — using ${apiPort} for embedded API (set MILADY_AGENT_RECLAIM_STALE_PORT=1 to try reclaiming the preferred port first)`,
+      );
     }
 
     this.status = {
@@ -798,8 +837,6 @@ export class AgentManager {
 
       diagnosticLog(`[Agent] runtime entry: exists (${runtimeEntryPath})`);
 
-      // Resolve port
-      let apiPort = Number(process.env.MILADY_PORT) || DEFAULT_PORT;
       diagnosticLog(`[Agent] Starting child process on port ${apiPort}...`);
 
       // Build NODE_PATH so the child can find node_modules
@@ -985,6 +1022,9 @@ export class AgentManager {
         startedAt: Date.now(),
         error: null,
       };
+      process.env.MILADY_PORT = String(apiPort);
+      process.env.MILADY_API_PORT = String(apiPort);
+      process.env.ELIZA_PORT = String(apiPort);
       this.emitStatus();
       diagnosticLog(
         `[Agent] Runtime started -- agent: ${agentName}, port: ${apiPort}, pid: ${proc.pid}, startup_ms: ${Date.now() - spawnTime}`,

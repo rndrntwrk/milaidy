@@ -467,7 +467,9 @@ function mountReactApp(): void {
       <StrictMode>
         <AppProvider branding={MILADY_BRANDING}>
           {isDetachedWindowShell(windowShellRoute) ? (
-            <DetachedShellRoot route={windowShellRoute} />
+            <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden">
+              <DetachedShellRoot route={windowShellRoute} />
+            </div>
           ) : (
             <>
               <DesktopOnboardingRuntime />

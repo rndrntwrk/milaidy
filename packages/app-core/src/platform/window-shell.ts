@@ -12,7 +12,11 @@ export type DetachedSurfaceTab =
 export type WindowShellRoute =
   | { mode: "main" }
   | { mode: "settings"; tab?: string }
-  | { mode: "surface"; tab: DetachedSurfaceTab };
+  | { mode: "surface"; tab: "browser"; browse?: string }
+  | {
+      mode: "surface";
+      tab: Exclude<DetachedSurfaceTab, "browser">;
+    };
 
 export interface DetachedShellTarget {
   settingsSection?: string;
@@ -32,9 +36,14 @@ export function parseWindowShellRoute(search: string): WindowShellRoute {
 
   if (shell === "surface") {
     const tab = params.get("tab");
+    if (tab === "browser") {
+      const browse = params.get("browse")?.trim();
+      return browse
+        ? { mode: "surface", tab: "browser", browse }
+        : { mode: "surface", tab: "browser" };
+    }
     if (
       tab === "chat" ||
-      tab === "browser" ||
       tab === "release" ||
       tab === "triggers" ||
       tab === "plugins" ||

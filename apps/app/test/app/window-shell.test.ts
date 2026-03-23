@@ -21,6 +21,15 @@ describe("window shell routing", () => {
       mode: "surface",
       tab: "browser",
     });
+    expect(
+      parseWindowShellRoute(
+        "?shell=surface&tab=browser&browse=https%3A%2F%2Felizacloud.ai",
+      ),
+    ).toEqual({
+      mode: "surface",
+      tab: "browser",
+      browse: "https://elizacloud.ai",
+    });
     expect(parseWindowShellRoute("?shell=surface&tab=connectors")).toEqual({
       mode: "surface",
       tab: "connectors",

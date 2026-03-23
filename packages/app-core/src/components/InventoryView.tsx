@@ -310,6 +310,8 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
         chainFocus={chainFocus}
         walletBalances={walletBalances}
         walletNfts={walletNfts}
+        addresses={addresses}
+        onCopyAddress={handleCopyAddress}
         setState={setState}
         onChainChange={(chain) => setState("inventoryChainFocus", chain)}
         loadBalances={loadBalances}
@@ -375,8 +377,6 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
             visibleRows={visibleRows}
             visibleChainErrors={visibleChainErrors}
             inventoryChainFocus={inventoryChainFocus ?? "all"}
-            addresses={addresses}
-            onCopyAddress={handleCopyAddress}
             handleUntrackToken={handleUntrackToken}
           />
         ) : (

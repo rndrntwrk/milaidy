@@ -44,6 +44,59 @@ export async function invokeDesktopBridgeRequest<T>(options: {
   return null;
 }
 
+export type DesktopBridgeTimeoutResult<T> =
+  | { status: "ok"; value: T }
+  | { status: "missing" }
+  | { status: "timeout" }
+  | { status: "rejected"; error: unknown };
+
+/**
+ * Same as `invokeDesktopBridgeRequest`, but never hangs past `timeoutMs`.
+ * Use after native dialogs when a missing or wedged RPC would freeze the UI.
+ */
+export async function invokeDesktopBridgeRequestWithTimeout<T>(options: {
+  rpcMethod: string;
+  ipcChannel: string;
+  params?: unknown;
+  timeoutMs: number;
+}): Promise<DesktopBridgeTimeoutResult<T>> {
+  const rpc = getElectrobunRendererRpc();
+  const request = rpc?.request?.[options.rpcMethod];
+  if (!request) {
+    return { status: "missing" };
+  }
+
+  const call = request(options.params) as Promise<T>;
+  let tid: ReturnType<typeof setTimeout> | undefined;
+  type RaceWinner =
+    | { tag: "done"; value: T }
+    | { tag: "reject"; error: unknown }
+    | { tag: "timeout" };
+  const timeoutPromise = new Promise<RaceWinner>((resolve) => {
+    tid = setTimeout(() => resolve({ tag: "timeout" }), options.timeoutMs);
+  });
+  const settledPromise: Promise<RaceWinner> = call.then(
+    (value) => ({ tag: "done" as const, value: value as T }),
+    (error: unknown) => ({ tag: "reject" as const, error }),
+  );
+
+  try {
+    const winner = await Promise.race<RaceWinner>([
+      settledPromise,
+      timeoutPromise,
+    ]);
+    if (tid !== undefined) clearTimeout(tid);
+    if (winner.tag === "timeout") return { status: "timeout" };
+    if (winner.tag === "reject") {
+      return { status: "rejected", error: winner.error };
+    }
+    return { status: "ok", value: winner.value };
+  } catch (error) {
+    if (tid !== undefined) clearTimeout(tid);
+    return { status: "rejected", error };
+  }
+}
+
 export interface DetectedProvider {
   id: string;
   source: string;

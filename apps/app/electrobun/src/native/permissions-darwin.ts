@@ -34,17 +34,24 @@ const DEFAULT_APP_BUNDLE_ID = "com.miladyai.milady";
 const sessionPromptedPermissions = new Set<SystemPermissionId>();
 
 let nativeLib: NativePermissionsLib | null = null;
+/** After the first load attempt (success or failure), do not call `dlopen` again. */
+let nativeLibResolved = false;
 
 function getNativeLib(): NativePermissionsLib | null {
-  if (nativeLib) {
+  if (nativeLibResolved) {
     return nativeLib;
+  }
+  nativeLibResolved = true;
+
+  const dylibPath = path.join(import.meta.dir, "../libMacWindowEffects.dylib");
+  if (!existsSync(dylibPath)) {
+    console.warn(
+      `[Permissions] Native permission dylib missing at ${dylibPath}. Preflight uses safe fallbacks. Build with: (cd apps/app/electrobun && bun run build:native-effects)`,
+    );
+    return null;
   }
 
   try {
-    const dylibPath = path.join(
-      import.meta.dir,
-      "../libMacWindowEffects.dylib",
-    );
     const { symbols } = dlopen(dylibPath, {
       requestAccessibilityPermission: { args: [], returns: FFIType.bool },
       checkAccessibilityPermission: { args: [], returns: FFIType.bool },

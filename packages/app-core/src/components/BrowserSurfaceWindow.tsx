@@ -4,23 +4,37 @@ import {
   type FormEvent,
   useEffect,
   useEffectEvent,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import "../styles/browser-surface.css";
+import { parseWindowShellRoute } from "../platform/window-shell";
 import { useApp } from "../state";
 import {
   DEFAULT_BROWSER_HOME,
+  isAllowedBrowserStartUrl,
   normalizeBrowserAddressInput,
   readBrowserNavigationUrl,
 } from "./browser-surface";
 
+function readBrowserShellSeedUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const route = parseWindowShellRoute(window.location.search);
+  if (route.mode !== "surface" || route.tab !== "browser") return null;
+  const raw = route.browse?.trim();
+  if (!raw || !isAllowedBrowserStartUrl(raw)) return null;
+  return normalizeBrowserAddressInput(raw);
+}
+
 export function BrowserSurfaceWindow() {
   const { t } = useApp();
+  const browseSeed = useMemo(() => readBrowserShellSeedUrl(), []);
+  const initialUrl = browseSeed ?? DEFAULT_BROWSER_HOME;
   const webviewRef = useRef<WebviewTagElement | null>(null);
   const [webviewTagAvailable, setWebviewTagAvailable] = useState(false);
-  const [addressValue, setAddressValue] = useState(DEFAULT_BROWSER_HOME);
-  const [currentUrl, setCurrentUrl] = useState(DEFAULT_BROWSER_HOME);
+  const [addressValue, setAddressValue] = useState(initialUrl);
+  const [currentUrl, setCurrentUrl] = useState(initialUrl);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -204,7 +218,7 @@ export function BrowserSurfaceWindow() {
             ref: (node: HTMLElement | null) => {
               webviewRef.current = node as WebviewTagElement | null;
             },
-            src: DEFAULT_BROWSER_HOME,
+            src: initialUrl,
           })
         ) : (
           <div className="flex flex-1 items-center justify-center bg-black/5 px-6 text-center text-sm text-muted">

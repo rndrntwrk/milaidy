@@ -3,7 +3,9 @@ import { getTabGroups, type TabGroup } from "@miladyai/app-core/navigation";
 import { useApp } from "@miladyai/app-core/state";
 import { CircleDollarSign, Menu } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { InferenceCloudAlertButton } from "./companion/InferenceCloudAlertButton";
+import { resolveCompanionInferenceNotice } from "./companion/resolve-companion-inference-notice";
 import {
   HEADER_BUTTON_STYLE,
   HEADER_ICON_BUTTON_CLASSNAME,
@@ -41,6 +43,8 @@ export function Header({
     elizaCloudCredits,
     elizaCloudCreditsCritical,
     elizaCloudCreditsLow,
+    elizaCloudAuthRejected,
+    elizaCloudCreditsError,
     tab,
     setTab,
     setState,
@@ -54,6 +58,8 @@ export function Header({
     setUiTheme,
     chatAgentVoiceMuted,
     handleNewConversation,
+    conversationMessages,
+    chatLastUsage,
     t,
   } = useApp();
 
@@ -97,11 +103,13 @@ export function Header({
     [streamingEnabled],
   );
 
-  const creditColor = elizaCloudCreditsCritical
+  const creditColor = elizaCloudAuthRejected
     ? "border-danger text-danger bg-danger/10"
-    : elizaCloudCreditsLow
-      ? "border-warn text-warn bg-warn/10"
-      : "border-ok text-ok bg-ok/10";
+    : elizaCloudCreditsCritical
+      ? "border-danger text-danger bg-danger/10"
+      : elizaCloudCreditsLow
+        ? "border-warn text-warn bg-warn/10"
+        : "border-ok text-ok bg-ok/10";
 
   const shellMode =
     tab === "character" || tab === "character-select"
@@ -117,8 +125,9 @@ export function Header({
   const showNavigationMenu = activeShellView === "desktop";
   const showCloudCredits = activeShellView === "desktop" && !hideCloudCredits;
   const showCloudCreditsStatus = showCloudCredits && elizaCloudConnected;
-  const cloudCreditsDisplay =
-    elizaCloudCredits === null
+  const cloudCreditsDisplay = elizaCloudAuthRejected
+    ? t("header.elizaCloudAuthRejected")
+    : elizaCloudCredits === null
       ? t("header.elizaCloudConnected")
       : `$${elizaCloudCredits.toFixed(2)}`;
 
@@ -133,6 +142,39 @@ export function Header({
     setTab("settings");
     setMobileMenuOpen(false);
   };
+
+  const chatInferenceNotice = useMemo(() => {
+    if (tab !== "chat") return null;
+    return resolveCompanionInferenceNotice({
+      elizaCloudConnected,
+      elizaCloudAuthRejected,
+      elizaCloudCreditsError,
+      elizaCloudEnabled,
+      chatLastUsageModel: chatLastUsage?.model,
+      hasInterruptedAssistant: (conversationMessages ?? []).some(
+        (m) => m.role === "assistant" && m.interrupted,
+      ),
+      t,
+    });
+  }, [
+    chatLastUsage?.model,
+    conversationMessages,
+    elizaCloudAuthRejected,
+    elizaCloudConnected,
+    elizaCloudCreditsError,
+    elizaCloudEnabled,
+    tab,
+    t,
+  ]);
+
+  const handleChatInferenceAlertClick = useCallback(() => {
+    if (!chatInferenceNotice) return;
+    if (chatInferenceNotice.kind === "cloud") {
+      setState("cloudDashboardView", "billing");
+    }
+    setTab("settings");
+    setMobileMenuOpen(false);
+  }, [chatInferenceNotice, setState, setTab]);
 
   const renderCloudCredits = (placement: "desktop" | "mobile-menu") => {
     if (!showCloudCreditsStatus) return null;
@@ -248,7 +290,17 @@ export function Header({
           themeToggleWrapperTestId={
             showNavigationMenu ? "header-theme-toggle-desktop" : undefined
           }
-          rightExtras={renderCloudCredits("desktop")}
+          rightExtras={
+            <>
+              {chatInferenceNotice ? (
+                <InferenceCloudAlertButton
+                  notice={chatInferenceNotice}
+                  onClick={handleChatInferenceAlertClick}
+                />
+              ) : null}
+              {renderCloudCredits("desktop")}
+            </>
+          }
           showCompanionControls={
             activeShellView === "companion" || activeShellView === "character"
           }

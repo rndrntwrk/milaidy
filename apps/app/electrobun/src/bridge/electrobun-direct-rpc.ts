@@ -71,7 +71,11 @@ function handleWildcardMessage(messageName: unknown, payload: unknown): void {
   }
 }
 
+// Electrobun defaults maxRequestTime to 1000ms (see node_modules/electrobun/.../rpc.ts).
+// Native sheets + main-process HTTP (disconnect, reset, file pickers) exceed that and
+// surface as "RPC request timed out." in the renderer.
 const rpc = Electroview.defineRPC({
+  maxRequestTime: 600_000,
   handlers: {
     requests: {},
     messages: {

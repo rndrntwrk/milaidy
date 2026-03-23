@@ -337,3 +337,15 @@ The desktop app is signed and notarized. If Gatekeeper still blocks it:
 ```bash
 xattr -cr /Applications/Milady.app
 ```
+
+### Local macOS desktop builds (unsigned / no Apple certs)
+
+GitHub **releases** are signed and notarized. If you **package the Electrobun app locally** without Developer ID credentials, set **`ELECTROBUN_SKIP_CODESIGN=1`** (or leave secrets unset in CI) so the build does not expect Apple signing.
+
+On **macOS**, after `node scripts/desktop-build.mjs package` (from the repo root), the desktop builder runs **`apps/app/electrobun/scripts/local-adhoc-sign-macos.ts`** on the produced **`.app`** so the bundle is **ad hoc–signed** for local testing. You can also run it by hand:
+
+```bash
+cd apps/app/electrobun && bun scripts/local-adhoc-sign-macos.ts /path/to/Milady.app
+```
+
+Ad hoc signing is **not** notarization; Gatekeeper may still require **Right-click → Open** the first time. Full pipeline context: [Build and release](build-and-release.md).

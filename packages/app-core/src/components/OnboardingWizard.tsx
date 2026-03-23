@@ -43,6 +43,9 @@ export function OnboardingWizard() {
     setState,
     t,
     onboardingUiRevealNonce,
+    companionVrmPowerMode,
+    companionHalfFramerateMode,
+    companionAnimateWhenHidden,
   } = useApp();
   // After Reset Agent from chat/companion, nonce bumps: show welcome UI immediately instead
   // of waiting for VrmStage reveal (often missing when remounting after an active session).
@@ -118,6 +121,9 @@ export function OnboardingWizard() {
           fallbackPreviewUrl={fallbackPreview}
           cameraProfile="companion"
           initialCompanionZoomNormalized={1}
+          companionVrmPowerMode={companionVrmPowerMode}
+          companionHalfFramerateMode={companionHalfFramerateMode}
+          companionAnimateWhenHidden={companionAnimateWhenHidden}
           onRevealStart={() => setRevealStarted((prev) => (prev ? prev : true))}
           t={t}
         />

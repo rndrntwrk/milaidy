@@ -16,6 +16,8 @@ export interface CompanionHeaderProps {
   chatAgentVoiceMuted?: boolean;
   onToggleVoiceMute?: () => void;
   onNewChat?: () => void;
+  /** Shown in the shell header right cluster (e.g. inference / cloud alert). */
+  rightExtras?: ReactNode;
 }
 
 export const CompanionHeader = memo(function CompanionHeader(
@@ -34,11 +36,12 @@ export const CompanionHeader = memo(function CompanionHeader(
     chatAgentVoiceMuted,
     onToggleVoiceMute,
     onNewChat,
+    rightExtras,
   } = props;
 
   return (
     <header
-      className="absolute inset-x-0 top-0 z-10"
+      className="absolute inset-x-0 top-0 z-10 overflow-visible"
       data-no-camera-drag="true"
     >
       <ShellHeaderControls
@@ -54,6 +57,7 @@ export const CompanionHeader = memo(function CompanionHeader(
         chatAgentVoiceMuted={chatAgentVoiceMuted}
         onToggleVoiceMute={onToggleVoiceMute}
         onNewChat={onNewChat}
+        rightExtras={rightExtras}
       >
         {children}
       </ShellHeaderControls>

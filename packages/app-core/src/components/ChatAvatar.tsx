@@ -27,7 +27,13 @@ export function ChatAvatar({
   mouthOpen = 0,
   isSpeaking = false,
 }: ChatAvatarProps) {
-  const { selectedVrmIndex, customVrmUrl } = useApp();
+  const {
+    selectedVrmIndex,
+    customVrmUrl,
+    companionVrmPowerMode,
+    companionHalfFramerateMode,
+    companionAnimateWhenHidden,
+  } = useApp();
 
   // Resolve VRM path from selected index or custom upload
   const vrmPath =
@@ -126,6 +132,9 @@ export function ChatAvatar({
               isSpeaking={isSpeaking}
               interactive
               interactiveMode="orbitZoom"
+              companionVrmPowerMode={companionVrmPowerMode}
+              companionHalfFramerateMode={companionHalfFramerateMode}
+              companionAnimateWhenHidden={companionAnimateWhenHidden}
               onEngineReady={handleEngineReady}
               onEngineState={handleEngineState}
             />

@@ -632,6 +632,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                   </span>
                 </div>
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   className="!mt-0"

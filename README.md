@@ -8,6 +8,10 @@ manages your sessions, tools, and vibes through a Gateway control plane. Connect
 
 tl;dr: local AI gf that's actually fast and doesn't phone home
 
+### Energy and polish (desktop)
+
+Milady is **not** a full IDE: the product bet is **fewer wasted GPU frames and wakeups** when you are not looking at the app—especially **on battery**—while keeping the **companion visually strong** when you are. Background polling, off-screen WebGL, and battery-aware render quality are tuned toward that (see [Desktop — battery and energy](docs/apps/desktop.md#battery-and-energy-use-macos)). Comparing to **Cursor** or other heavy dev tools is **workload-dependent**; the north star is **great UX per watt** for a local assistant, not matching an editor’s surface area.
+
 ---
 
 ## BSC / BNB Chain Integration
@@ -404,6 +408,8 @@ Logs go to `stdout/stderr (or configure LOG_FILE)`. Daemonize with your favorite
 | Dashboard (Web UI) | `2138` | `MILADY_PORT` |
 | Home Dashboard | `2142` | `MILADY_HOME_PORT` |
 
+**If a default port is already in use:** `bun run dev` / `dev-server.ts` can bind to a different port and then **sync `MILADY_API_PORT` / `ELIZA_PORT`** to match. **`dev:desktop` / `dev:desktop:watch`** resolve **free** loopback ports **before** spawning Vite + API + Electrobun so proxy, `MILADY_RENDERER_URL`, and `MILADY_DESKTOP_API_BASE` stay aligned—**why:** Vite reads `vite.config.ts` once; guessing the API port only inside the API process would desync the UI proxy. The **packaged Electrobun** shell picks the next free port from `MILADY_PORT` for the embedded child instead of `lsof`+SIGKILL by default—**why:** two Milady installs (separate state dirs) should coexist. Opt-in old reclaim: **`MILADY_AGENT_RECLAIM_STALE_PORT=1`**. See [Desktop local development](docs/apps/desktop-local-development.md#when-default-ports-are-busy) and [Desktop — Port configuration](docs/apps/desktop.md#port-configuration).
+
 ```bash
 # custom ports
 MILADY_GATEWAY_PORT=19000 MILADY_PORT=3000 milady start
@@ -510,10 +516,10 @@ bun run milady start
 ### Dev mode (recommended for development)
 
 ```bash
-bun run dev          # starts API (:31337) + Vite UI (:2138) with hot reload
+bun run dev          # starts API (:31337) + Vite UI (:2138) with hot reload (defaults; see Ports if busy)
 ```
 
-This auto-kills zombie processes on the dev ports, waits for the API to be healthy, then starts the Vite dev server with proxy.
+The dev orchestrator frees the UI listen port when needed, waits for the API to be healthy, then starts Vite with an `/api` proxy to **`MILADY_API_PORT`**.
 
 ### Desktop shell (Electrobun)
 
@@ -522,7 +528,9 @@ bun run dev:desktop        # API + Electrobun; skips vite build when apps/app/di
 bun run dev:desktop:watch  # + Vite dev server and MILADY_RENDERER_URL (HMR for UI work)
 ```
 
-**Why a separate flow:** the desktop stack runs **multiple processes** (orchestrator, Vite and/or built assets, API, Electrobun). See **[docs/apps/desktop-local-development.md](docs/apps/desktop-local-development.md)** for signals, shutdown when you quit the app, and env vars.
+**Why a separate flow:** the desktop stack runs **multiple processes** (orchestrator, Vite and/or built assets, API, Electrobun). The orchestrator **pre-allocates** free **API** and **Vite** ports when defaults are taken so every child gets consistent env—**why:** misaligned ports cause blank UI or 502s on `/api`. See **[docs/apps/desktop-local-development.md](docs/apps/desktop-local-development.md)** (including [when default ports are busy](docs/apps/desktop-local-development.md#when-default-ports-are-busy)) for signals, shutdown when you quit the app, and env vars.
+
+**IDE / agent hooks** — Editors and agents do not see the native window or auto-discover localhost. **Why we added hooks:** with desktop dev running, the API exposes **`GET /api/dev/stack`** (JSON: ports, renderer URL, which features are on). **`bun run desktop:stack-status -- --json`** probes ports and merges stack + health + status. By default, **`.milady/desktop-dev-console.log`** mirrors prefixed child logs and **`GET /api/dev/cursor-screenshot`** (loopback) returns a full-screen PNG via OS capture — both are opt-out via env (see doc). Cursor uses **`.cursor/rules/milady-desktop-dev-observability.mdc`** plus that guide.
 
 ```bash
 bun run check        # typecheck + lint (run before committing)
@@ -537,8 +545,9 @@ See **[DEVELOPMENT.md](./DEVELOPMENT.md)** for the full development guide includ
 
 - **[Plugin resolution and NODE_PATH](docs/plugin-resolution-and-node-path.md)** — Why we set `NODE_PATH` in three places so dynamic plugin imports resolve when building from source (CLI, desktop dev, Electrobun).
 - **[Build and release](docs/build-and-release.md)** — Why the release pipeline uses strict shell, retries, setup-node v3/Blacksmith, Bun cache, timeouts; why size-report pipelines handle SIGPIPE; why Windows plugin build uses `npx -p typescript tsc`.
-- **[Desktop local development](docs/apps/desktop-local-development.md)** — Why `dev:desktop` / `dev:desktop:watch` orchestrate Vite, API, and Electrobun; HMR vs `vite build --watch`; Ctrl-C, Quit, and `detached` children.
+- **[Desktop local development](docs/apps/desktop-local-development.md)** — Why `dev:desktop` / `dev:desktop:watch` orchestrate Vite, API, and Electrobun; HMR vs `vite build --watch`; Ctrl-C, Quit, and `detached` children; **IDE/agent observability** (`/api/dev/stack`, aggregated console, screenshot proxy, WHY loopback and opt-out).
 - **[Desktop main-process reset](docs/apps/desktop-main-process-reset.md)** — Why **Reset Milady…** runs HTTP in the Electrobun main process after native confirm, how the renderer syncs UI state, reachable API probing (`res.ok`), and where tests live.
+- **[Darwin vs macOS version (Electrobun WebGPU)](docs/apps/electrobun-darwin-macos-webgpu-version.md)** — Why **`uname -r` / `os.release()`** is not the macOS marketing major after Tahoe, how we map **Darwin 25 → macOS 26**, and why the WebGPU gate used to print “macOS 16.”
 - **[Changelog](docs/changelog.mdx)** — Shipped features and fixes with rationale (**WHY** bullets in each update).
 - **[Roadmap](docs/ROADMAP.md)** — Direction and follow-ups; points to changelog for what already landed.
 

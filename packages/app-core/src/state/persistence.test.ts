@@ -9,7 +9,15 @@ import { describe, expect, it } from "vitest";
 // we can verify the contract without re-exporting the private function.
 import {
   clearPersistedOnboardingStep,
+  loadCompanionAnimateWhenHidden,
+  loadCompanionHalfFramerateMode,
+  loadCompanionVrmPowerMode,
   loadPersistedOnboardingStep,
+  normalizeCompanionHalfFramerateMode,
+  normalizeCompanionVrmPowerMode,
+  saveCompanionAnimateWhenHidden,
+  saveCompanionHalfFramerateMode,
+  saveCompanionVrmPowerMode,
   saveOnboardingStep,
 } from "./persistence";
 
@@ -108,6 +116,99 @@ describe("normalizeOnboardingStep (via load/save helpers)", () => {
       saveOnboardingStep("hosting");
       clearPersistedOnboardingStep();
       expect(loadPersistedOnboardingStep()).toBeNull();
+    });
+  });
+});
+
+describe("companion VRM power mode persistence", () => {
+  it("defaults to balanced when unset", () => {
+    withLocalStorageStub(() => {
+      expect(loadCompanionVrmPowerMode()).toBe("balanced");
+    });
+  });
+
+  it("round-trips quality, balanced, and efficiency", () => {
+    withLocalStorageStub(() => {
+      saveCompanionVrmPowerMode("quality");
+      expect(loadCompanionVrmPowerMode()).toBe("quality");
+      saveCompanionVrmPowerMode("efficiency");
+      expect(loadCompanionVrmPowerMode()).toBe("efficiency");
+      saveCompanionVrmPowerMode("balanced");
+      expect(loadCompanionVrmPowerMode()).toBe("balanced");
+    });
+  });
+
+  it("migrates legacy companion-efficiency on", () => {
+    withLocalStorageStub(() => {
+      localStorage.setItem("eliza:companion-efficiency", "1");
+      expect(loadCompanionVrmPowerMode()).toBe("efficiency");
+      expect(localStorage.getItem("eliza:companion-vrm-power")).toBe(
+        "efficiency",
+      );
+      expect(localStorage.getItem("eliza:companion-efficiency")).toBeNull();
+    });
+  });
+
+  it("migrates legacy quality-on-battery on when efficiency off", () => {
+    withLocalStorageStub(() => {
+      localStorage.setItem("eliza:companion-efficiency", "0");
+      localStorage.setItem("eliza:companion-quality-on-battery", "1");
+      expect(loadCompanionVrmPowerMode()).toBe("quality");
+      expect(localStorage.getItem("eliza:companion-quality-on-battery")).toBeNull();
+    });
+  });
+
+  it("normalizeCompanionVrmPowerMode coerces unknown to balanced", () => {
+    expect(normalizeCompanionVrmPowerMode("nope")).toBe("balanced");
+    expect(normalizeCompanionVrmPowerMode("quality")).toBe("quality");
+  });
+});
+
+describe("companion half-framerate mode persistence", () => {
+  it("defaults to when_saving_power when unset", () => {
+    withLocalStorageStub(() => {
+      expect(loadCompanionHalfFramerateMode()).toBe("when_saving_power");
+    });
+  });
+
+  it("round-trips off, when_saving_power, and always", () => {
+    withLocalStorageStub(() => {
+      saveCompanionHalfFramerateMode("off");
+      expect(loadCompanionHalfFramerateMode()).toBe("off");
+      saveCompanionHalfFramerateMode("always");
+      expect(loadCompanionHalfFramerateMode()).toBe("always");
+      saveCompanionHalfFramerateMode("when_saving_power");
+      expect(loadCompanionHalfFramerateMode()).toBe("when_saving_power");
+    });
+  });
+
+  it("normalizeCompanionHalfFramerateMode coerces unknown to when_saving_power", () => {
+    expect(normalizeCompanionHalfFramerateMode("nope")).toBe(
+      "when_saving_power",
+    );
+    expect(normalizeCompanionHalfFramerateMode("always")).toBe("always");
+  });
+});
+
+describe("companion animate when hidden persistence", () => {
+  it("defaults to false when unset", () => {
+    withLocalStorageStub(() => {
+      expect(loadCompanionAnimateWhenHidden()).toBe(false);
+    });
+  });
+
+  it("round-trips true and false", () => {
+    withLocalStorageStub(() => {
+      saveCompanionAnimateWhenHidden(true);
+      expect(loadCompanionAnimateWhenHidden()).toBe(true);
+      expect(localStorage.getItem("eliza:companion-animate-when-hidden")).toBe(
+        "1",
+      );
+      saveCompanionAnimateWhenHidden(false);
+      expect(loadCompanionAnimateWhenHidden()).toBe(false);
+      expect(localStorage.getItem("eliza:companion-animate-when-hidden")).toBe(
+        "0",
+      );
     });
   });
 });

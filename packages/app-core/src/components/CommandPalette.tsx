@@ -70,8 +70,8 @@ export function CommandPalette() {
       openDesktopSettingsWindow: (tabHint?: string) => {
         void openDesktopSettingsWindow(tabHint);
       },
-      openDesktopSurfaceWindow: (surface) => {
-        void openDesktopSurfaceWindow(surface);
+      openDesktopSurfaceWindow: (surface, options) => {
+        void openDesktopSurfaceWindow(surface, options);
       },
     });
   }, [

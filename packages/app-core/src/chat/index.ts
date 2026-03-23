@@ -153,7 +153,10 @@ export interface BuildCommandsArgs {
   desktopRuntime: boolean;
   focusDesktopMainWindow: () => void;
   openDesktopSettingsWindow: (tabHint?: string) => void;
-  openDesktopSurfaceWindow: (surface: DesktopWorkspaceSurface) => void;
+  openDesktopSurfaceWindow: (
+    surface: DesktopWorkspaceSurface,
+    options?: { browse?: string },
+  ) => void;
 }
 
 export const DESKTOP_COMMAND_CLICK_AUDIT: readonly DesktopClickAuditItem[] = [

@@ -97,11 +97,37 @@ export type CloudConnectionSnapshot = {
 type CloudCreditsResponse = {
   balance: number | null;
   connected: boolean;
+  authRejected?: boolean;
   critical?: boolean;
   error?: string;
   low?: boolean;
   topUpUrl?: string;
 };
+
+/** Thrown when the credits endpoint returns 401 — same credential path as chat completions. */
+export class CloudCreditsAuthRejectedError extends Error {
+  override readonly name = "CloudCreditsAuthRejectedError";
+  constructor(message = "Eliza Cloud API key was rejected") {
+    super(message);
+  }
+}
+
+function cloudCreditsHttpErrorMessage(
+  status: number,
+  creditResponse: { error?: unknown },
+): string {
+  const err = creditResponse.error;
+  if (typeof err === "string" && err.trim()) {
+    return err.trim();
+  }
+  if (err && typeof err === "object" && "message" in err) {
+    const msg = (err as { message?: unknown }).message;
+    if (typeof msg === "string" && msg.trim()) {
+      return msg.trim();
+    }
+  }
+  return `HTTP ${status}`;
+}
 
 function normalizeSecret(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -146,9 +172,25 @@ export function resolveCloudConnectionSnapshot(
   config: Partial<ElizaConfig>,
   runtime: AgentRuntime | null,
 ): CloudConnectionSnapshot {
+  const cloudRecord =
+    config.cloud && typeof config.cloud === "object"
+      ? (config.cloud as Record<string, unknown>)
+      : undefined;
+  const explicitlyDisabled = cloudRecord?.enabled === false;
+  const provider =
+    typeof cloudRecord?.provider === "string"
+      ? cloudRecord.provider.trim().toLowerCase()
+      : "";
+  const inferenceMode =
+    typeof cloudRecord?.inferenceMode === "string"
+      ? cloudRecord.inferenceMode.trim().toLowerCase()
+      : "";
   const enabled =
-    config.cloud?.enabled === true ||
-    getCloudSecret("ELIZAOS_CLOUD_ENABLED") === "true";
+    !explicitlyDisabled &&
+    (config.cloud?.enabled === true ||
+      getCloudSecret("ELIZAOS_CLOUD_ENABLED") === "true" ||
+      provider === "elizacloud" ||
+      inferenceMode === "cloud");
   const apiKey = resolveCloudApiKey(config);
   const cloudAuth = getCloudAuth(runtime);
   const authConnected = Boolean(cloudAuth?.isAuthenticated?.());
@@ -195,12 +237,16 @@ async function fetchCloudCreditsByApiKey(
     error?: unknown;
   };
 
+  if (response.status === 401) {
+    throw new CloudCreditsAuthRejectedError(
+      cloudCreditsHttpErrorMessage(401, creditResponse),
+    );
+  }
+
   if (!response.ok) {
-    const message =
-      typeof creditResponse.error === "string" && creditResponse.error.trim()
-        ? creditResponse.error
-        : `HTTP ${response.status}`;
-    throw new Error(message);
+    throw new Error(
+      cloudCreditsHttpErrorMessage(response.status, creditResponse),
+    );
   }
 
   const rawBalance =
@@ -304,6 +350,16 @@ export async function fetchUnifiedCloudCredits(
 
     return withCreditFlags(balance);
   } catch (err) {
+    if (err instanceof CloudCreditsAuthRejectedError) {
+      logger.debug(`[cloud/credits] API key rejected: ${err.message}`);
+      return {
+        balance: null,
+        connected: true,
+        authRejected: true,
+        error: err.message,
+        topUpUrl: CLOUD_BILLING_URL,
+      };
+    }
     const msg = err instanceof Error ? err.message : "cloud API unreachable";
     logger.debug(`[cloud/credits] Failed to fetch balance via API key: ${msg}`);
     return {

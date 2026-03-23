@@ -92,6 +92,10 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  box-shadow: inset 3px 0 0 var(--ce-panels-accent, transparent);
+  padding-left: 0.35rem;
+  margin-left: -0.12rem;
+  transition: box-shadow 0.35s ease;
 }
 
 @media (max-width: 768px) {
@@ -102,6 +106,54 @@
   .ce-panel--hidden {
     display: none;
   }
+}
+
+/* ── Tabbed editor group (tabs + context + panel = one unit) ───── */
+
+.ce-tabbed-editor-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 0.45rem;
+  padding: 0.55rem 0.6rem 0.55rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated, rgba(255, 255, 255, 0.04));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 10px 32px rgba(0, 0, 0, 0.14);
+  border-left: 3px solid var(--ce-group-accent, var(--border));
+  transition: border-left-color 0.35s ease;
+}
+
+.ce-tabbed-editor-group--identity {
+  --ce-group-accent: var(--burnished-gold);
+}
+
+.ce-tabbed-editor-group--style {
+  --ce-group-accent: rgba(120, 198, 255, 0.88);
+}
+
+.ce-tabbed-editor-group--examples {
+  --ce-group-accent: rgba(196, 160, 255, 0.88);
+}
+
+/* Scrollable body separated from tab header area */
+.ce-tabbed-editor-group .ce-panels--single {
+  box-shadow: none;
+  padding-left: 0;
+  margin-left: 0;
+  padding-top: 0.4rem;
+  margin-top: 0.15rem;
+  border-top: 1px solid var(--border);
+  flex: 1;
+  min-height: 0;
+}
+
+/* Slightly nest the context strip inside the group */
+.ce-tabbed-editor-group .ce-page-context {
+  margin-bottom: 0;
 }
 
 /* ── Page tabs row (tabs left, reset right) ───────────────────── */
@@ -168,6 +220,95 @@
   box-shadow:
     0 0 18px var(--gold-glow),
     inset 0 1px 0 var(--soft-white-glow);
+}
+
+/* ── Page context (below tabs — makes the active editor obvious) ─ */
+
+.ce-page-context {
+  flex-shrink: 0;
+  padding: 0.5rem 0.65rem 0.55rem;
+  margin-bottom: 0.2rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--card, rgba(255, 255, 255, 0.03));
+  border-left: 3px solid var(--ce-context-accent, var(--burnished-gold));
+  transition:
+    border-left-color 0.35s ease,
+    background 0.35s ease;
+}
+
+.ce-page-context--identity {
+  --ce-context-accent: var(--burnished-gold);
+  background: linear-gradient(
+    100deg,
+    rgba(232, 201, 120, 0.08) 0%,
+    var(--card, rgba(255, 255, 255, 0.03)) 55%
+  );
+}
+
+.ce-page-context--style {
+  --ce-context-accent: rgba(120, 198, 255, 0.95);
+  background: linear-gradient(
+    100deg,
+    rgba(120, 198, 255, 0.1) 0%,
+    var(--card, rgba(255, 255, 255, 0.03)) 55%
+  );
+}
+
+.ce-page-context--examples {
+  --ce-context-accent: rgba(196, 160, 255, 0.95);
+  background: linear-gradient(
+    100deg,
+    rgba(196, 160, 255, 0.11) 0%,
+    var(--card, rgba(255, 255, 255, 0.03)) 55%
+  );
+}
+
+.ce-page-context-title {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-strong, var(--txt, #fff));
+  margin: 0 0 0.2rem;
+}
+
+.ce-page-context-desc {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ce-page-context {
+    animation: ce-context-enter 0.34s ease-out;
+  }
+}
+
+@keyframes ce-context-enter {
+  from {
+    opacity: 0.55;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Tie the scrollable panel to the same accent as the context strip */
+.ce-panels--single.ce-panels--page-identity {
+  --ce-panels-accent: var(--burnished-gold);
+}
+
+.ce-panels--single.ce-panels--page-style {
+  --ce-panels-accent: rgba(120, 198, 255, 0.65);
+}
+
+.ce-panels--single.ce-panels--page-examples {
+  --ce-panels-accent: rgba(196, 160, 255, 0.7);
 }
 
 /* Hidden panel in single-panel mode */

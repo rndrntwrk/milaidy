@@ -387,6 +387,18 @@ export type MiladyRPCSchema = {
         params: undefined;
         response: ExistingElizaInstallInfo;
       };
+      agentPostCloudDisconnect: {
+        params: { apiBase?: string; bearerToken?: string } | undefined | null;
+        response: { ok: boolean; error?: string };
+      };
+      /** Native confirm + main POST (renderer bridge/fetch can stall after a sheet). */
+      agentCloudDisconnectWithConfirm: {
+        params: { apiBase?: string; bearerToken?: string } | undefined | null;
+        response:
+          | { cancelled: true }
+          | { ok: true }
+          | { ok: false; error: string };
+      };
 
       // ---- Desktop: Tray ----
       desktopCreateTray: { params: TrayOptions; response: undefined };
@@ -557,6 +569,7 @@ export type MiladyRPCSchema = {
             | "plugins"
             | "connectors"
             | "cloud";
+          browse?: string;
         };
         response: undefined;
       };
@@ -1125,6 +1138,8 @@ export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
   "agent:restartClearLocalDb": "agentRestartClearLocalDb",
   "agent:status": "agentStatus",
   "agent:inspectExistingInstall": "agentInspectExistingInstall",
+  "agent:postCloudDisconnect": "agentPostCloudDisconnect",
+  "agent:cloudDisconnectWithConfirm": "agentCloudDisconnectWithConfirm",
 
   // Desktop: Tray
   "desktop:createTray": "desktopCreateTray",

@@ -135,11 +135,14 @@ export function IconTooltip({
   label,
   shortcut,
   position = "top",
+  multiline = false,
 }: {
   children: React.ReactNode;
   label: string;
   shortcut?: string;
   position?: "top" | "bottom";
+  /** Long labels: wrap and cap width (native `title` is unreliable in embedded WebViews). */
+  multiline?: boolean;
 }) {
   const posClass =
     position === "top"
@@ -150,11 +153,15 @@ export function IconTooltip({
       ? "top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-bg-elevated"
       : "bottom-full left-1/2 -translate-x-1/2 -mb-1 border-4 border-transparent border-b-bg-elevated";
 
+  const bodyClass = multiline
+    ? "max-w-[min(22rem,calc(100vw-1.5rem))] whitespace-normal text-left leading-snug"
+    : "whitespace-nowrap";
+
   return (
-    <div className="relative group">
+    <div className="relative isolate group">
       {children}
       <div
-        className={`absolute ${posClass} px-2 py-1 bg-bg-elevated border border-border text-[11px] text-txt-strong rounded-md whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 shadow-lg pointer-events-none`}
+        className={`absolute ${posClass} px-2 py-1.5 bg-bg-elevated border border-border text-[11px] text-txt-strong rounded-md ${bodyClass} opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-opacity duration-200 z-[200] shadow-lg pointer-events-none`}
         role="tooltip"
       >
         <div className="font-medium">{label}</div>
