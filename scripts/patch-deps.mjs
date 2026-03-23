@@ -55,7 +55,11 @@ warnStaleBunCache(root);
 // Patch @elizaos packages whose exports["."].bun points to ./src/index.ts.
 // Logic lives in scripts/lib/patch-bun-exports.mjs (testable).
 // ---------------------------------------------------------------------------
-patchBunExports(root, "@elizaos/plugin-coding-agent");
+try {
+  patchBunExports(root, "@elizaos/plugin-coding-agent");
+} catch {
+  // May fail if the bun patch already modified package.json.
+}
 try {
   patchMissingLifecycleScript(
     root,
