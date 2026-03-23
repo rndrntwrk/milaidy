@@ -10,9 +10,24 @@ import { handleCloudCompatRoute } from "@miladyai/agent/api/cloud-compat-routes"
 // Override the wallet export rejection function with the hardened version
 // that adds rate limiting, audit logging, and a forced confirmation delay.
 import {
+  AGENT_EVENT_ALLOWED_STREAMS,
+  CONFIG_WRITE_ALLOWED_TOP_KEYS,
+  type ConversationMeta,
+  cloneWithoutBlockedObjectKeys,
   discoverInstalledPlugins,
   discoverPluginsFromManifest,
+  extractAuthToken,
+  fetchWithTimeoutGuard,
+  isAllowedHost,
+  isAuthorized,
+  normalizeWsClientId,
+  persistConversationRoomTitle,
+  resolvePluginConfigMutationRejections,
+  resolveMcpServersRejection,
+  routeAutonomyTextToUser,
   startApiServer as upstreamStartApiServer,
+  streamResponseBodyWithByteLimit,
+  validateMcpServerConfig,
 } from "@miladyai/agent/api/server";
 import { type PolicyResult, StewardApiError } from "@stwd/sdk";
 import {
@@ -26,7 +41,51 @@ import {
   sendJson as sendJsonResponse,
 } from "./response";
 
-export { discoverInstalledPlugins, discoverPluginsFromManifest };
+export {
+  AGENT_EVENT_ALLOWED_STREAMS,
+  CONFIG_WRITE_ALLOWED_TOP_KEYS,
+  type ConversationMeta,
+  cloneWithoutBlockedObjectKeys,
+  discoverInstalledPlugins,
+  discoverPluginsFromManifest,
+  extractAuthToken,
+  fetchWithTimeoutGuard,
+  isAllowedHost,
+  isAuthorized,
+  normalizeWsClientId,
+  persistConversationRoomTitle,
+  resolvePluginConfigMutationRejections,
+  resolveMcpServersRejection,
+  routeAutonomyTextToUser,
+  streamResponseBodyWithByteLimit,
+  validateMcpServerConfig,
+};
+
+// Re-export helpers from split-out modules so tests can import from "./server"
+export {
+  ensureApiTokenForBindHost,
+  resolveHyperscapeAuthorizationHeader,
+  resolveMcpTerminalAuthorizationRejection,
+  resolveTerminalRunClientId,
+  resolveTerminalRunRejection,
+  resolveWebSocketUpgradeRejection,
+} from "./server-security";
+export {
+  findOwnPackageRoot,
+  isSafeResetStateDir,
+  resolveCorsOrigin,
+} from "./server-startup";
+export { injectApiBaseIntoHtml } from "./server-html";
+export { resolveWalletExportRejection } from "./server-wallet-trade";
+export {
+  SENSITIVE_ENV_RESPONSE_KEYS,
+  filterConfigEnvForResponse,
+} from "./server-config-filter";
+export {
+  ensureCloudTtsApiKeyAlias,
+  resolveCloudTtsBaseUrl,
+  resolveElevenLabsApiKeyForCloudMode,
+} from "./server-cloud-tts";
 
 import {
   buildBscApproveUnsignedTx,

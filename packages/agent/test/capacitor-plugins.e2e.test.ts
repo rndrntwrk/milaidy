@@ -155,7 +155,7 @@ describe("Capacitor Plugin Build Verification", () => {
       });
 
       it("ESM index.js exports expected symbols", async () => {
-        const esmPath = resolveEsmIndexPath(dir);
+        const esmPath = resolveEsmIndexPath(resolvedDir);
         if (!esmPath) {
           console.warn(`[SKIP] ${plugin.name}: ESM build not found`);
           return;
@@ -166,7 +166,7 @@ describe("Capacitor Plugin Build Verification", () => {
       });
 
       it("definitions are exported", async () => {
-        const esmPath = resolveEsmIndexPath(dir);
+        const esmPath = resolveEsmIndexPath(resolvedDir);
         if (!esmPath) {
           console.warn(`[SKIP] ${plugin.name}: ESM build not found`);
           return;

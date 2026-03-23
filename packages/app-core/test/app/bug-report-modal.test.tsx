@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -43,23 +44,29 @@ const { mockUseBugReport, mockClient } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@miladyai/app-core/hooks", async () => {
-  const actual = await vi.importActual<
-    typeof import("@miladyai/app-core/hooks")
-  >("@miladyai/app-core/hooks");
-  return {
-    ...actual,
-    useBugReport: () => mockUseBugReport(),
-    useTimeout: () => ({
-      setTimeout: (fn: () => void, ms: number) => globalThis.setTimeout(fn, ms),
-      clearTimeout: (id: ReturnType<typeof globalThis.setTimeout>) =>
-        globalThis.clearTimeout(id),
-    }),
-  };
-});
+vi.mock("@miladyai/app-core/hooks", () => ({
+  useBugReport: () => mockUseBugReport(),
+  useTimeout: () => ({
+    setTimeout: (fn: () => void, ms: number) => globalThis.setTimeout(fn, ms),
+    clearTimeout: (id: ReturnType<typeof globalThis.setTimeout>) =>
+      globalThis.clearTimeout(id),
+  }),
+}));
 
 vi.mock("@miladyai/app-core/api", () => ({
   client: mockClient,
+}));
+
+vi.mock("@miladyai/app-core/state", () => ({
+  useApp: () => ({ t: (key: string) => key }),
+}));
+
+vi.mock("@miladyai/app-core/config/branding", () => ({
+  useBranding: () => ({ appName: "Milady" }),
+}));
+
+vi.mock("@miladyai/app-core/utils", () => ({
+  openExternalUrl: vi.fn(),
 }));
 
 import { BugReportModal } from "@miladyai/app-core/components/BugReportModal";

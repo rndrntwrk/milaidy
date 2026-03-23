@@ -38,7 +38,8 @@
   },
   "include": [
     "packages/app-core/src/**/*",
-    "packages/agent/src/external-modules.d.ts"
+    "packages/agent/src/external-modules.d.ts",
+    "packages/vrm-utils/src/external-modules.d.ts"
   ],
   "exclude": [
     "node_modules",

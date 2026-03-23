@@ -61,7 +61,7 @@ describe("WelcomeStep", () => {
     expect(handleOnboardingUseLocalBackend).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      buttons[1]?.props.onClick();
+      buttons[1]?.props.onClick({ currentTarget: null });
     });
     expect(setState).toHaveBeenCalledWith(
       "onboardingStyle",
@@ -98,7 +98,7 @@ describe("WelcomeStep", () => {
     expect(buttons[1]?.children).toContain("onboarding.useExistingSetup");
 
     await act(async () => {
-      buttons[1]?.props.onClick();
+      buttons[1]?.props.onClick({ currentTarget: null });
     });
 
     expect(setState).toHaveBeenCalledTimes(1);
