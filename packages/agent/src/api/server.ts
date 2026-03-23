@@ -3130,6 +3130,64 @@ function writeSseJson(
 const CHAT_KNOWLEDGE_MIN_SIMILARITY = 0.2;
 const CHAT_KNOWLEDGE_MAX_SNIPPETS = 3;
 const CHAT_KNOWLEDGE_MAX_CHARS = 900;
+const DEFAULT_CHAT_KNOWLEDGE_TIMEOUT_MS = 4_000;
+const MAX_CHAT_KNOWLEDGE_TIMEOUT_MS = 15_000;
+
+function getChatKnowledgeTimeoutMs(): number {
+  const raw = process.env.CHAT_KNOWLEDGE_TIMEOUT_MS;
+  if (!raw) return DEFAULT_CHAT_KNOWLEDGE_TIMEOUT_MS;
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return DEFAULT_CHAT_KNOWLEDGE_TIMEOUT_MS;
+  }
+  return Math.min(parsed, MAX_CHAT_KNOWLEDGE_TIMEOUT_MS);
+}
+
+function shouldAugmentChatMessageWithKnowledge(userPrompt: string): boolean {
+  const normalizedPrompt = userPrompt.toLowerCase();
+  return [
+    "uploaded",
+    "file",
+    "document",
+    "knowledge",
+    "codeword",
+    "attachment",
+  ].some((token) => normalizedPrompt.includes(token));
+}
+
+async function getChatKnowledgeMatchesWithTimeout(
+  lookup: Promise<
+    Array<{
+      id: UUID;
+      content: { text?: string };
+      similarity?: number;
+      metadata?: Record<string, unknown>;
+    }>
+  >,
+): Promise<
+  Array<{
+    id: UUID;
+    content: { text?: string };
+    similarity?: number;
+    metadata?: Record<string, unknown>;
+  }>
+> {
+  const timeoutMs = getChatKnowledgeTimeoutMs();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    return await Promise.race([
+      lookup,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error("Chat knowledge lookup timed out"));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function normalizeChatKnowledgeSnippet(text: string): string {
   return text.replace(/\s+/g, " ").trim().slice(0, CHAT_KNOWLEDGE_MAX_CHARS);
@@ -3157,6 +3215,9 @@ async function maybeAugmentChatMessageWithKnowledge(
   if (!userPrompt || !runtime.agentId) {
     return message;
   }
+  if (!shouldAugmentChatMessageWithKnowledge(userPrompt)) {
+    return message;
+  }
 
   try {
     const knowledge = await getKnowledgeService(runtime);
@@ -3174,9 +3235,13 @@ async function maybeAugmentChatMessageWithKnowledge(
       createdAt: Date.now(),
     } as ReturnType<typeof createMessageMemory>;
 
-    const snippets = (await knowledge.service.getKnowledge(searchMessage, {
-      roomId: runtime.agentId,
-    }))
+    const snippets = (
+      await getChatKnowledgeMatchesWithTimeout(
+        knowledge.service.getKnowledge(searchMessage, {
+          roomId: runtime.agentId,
+        }),
+      )
+    )
       .filter(
         (match) => (match.similarity ?? 0) >= CHAT_KNOWLEDGE_MIN_SIMILARITY,
       )
