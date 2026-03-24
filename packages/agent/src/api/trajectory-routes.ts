@@ -340,7 +340,7 @@ function listItemToUIRecord(item: TrajectoryListItem): UITrajectoryRecord {
     endTime: item.endTime,
     durationMs: item.durationMs,
     llmCallCount: item.llmCallCount,
-    providerAccessCount: 0,
+    providerAccessCount: (item as { providerAccessCount?: number }).providerAccessCount ?? 0,
     totalPromptTokens: item.totalPromptTokens,
     totalCompletionTokens: item.totalCompletionTokens,
     metadata: {},
@@ -680,10 +680,11 @@ async function handleDeleteTrajectories(
   const body = await parseJsonBody<{
     trajectoryIds?: string[];
     all?: boolean;
+    clearAll?: boolean;
   }>(req, res);
   if (!body) return;
 
-  if (body.all) {
+  if (body.clearAll || body.all) {
     const deletedCount = await logger.clearAllTrajectories();
     sendJson(res, { deleted: deletedCount });
     return;

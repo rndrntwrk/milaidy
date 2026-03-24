@@ -680,26 +680,35 @@ async function ensureTrajectoriesTable(
     try {
       await executeRawSql(
         runtime,
-        `SELECT trajectory_id, metadata, steps_json, archetype FROM trajectories LIMIT 1`,
+        `SELECT id FROM trajectories LIMIT 1`,
       );
+      // Table exists — try to add any missing columns via ALTER TABLE
+      // instead of dropping and losing all data.
+      const optionalColumns = [
+        { name: "trajectory_id", def: "TEXT" },
+        { name: "metadata", def: "TEXT NOT NULL DEFAULT '{}'" },
+        { name: "steps_json", def: "TEXT NOT NULL DEFAULT '[]'" },
+        { name: "archetype", def: "TEXT" },
+        { name: "episode_length", def: "INTEGER" },
+        { name: "ai_judge_reward", def: "REAL" },
+        { name: "ai_judge_reasoning", def: "TEXT" },
+      ];
+      for (const col of optionalColumns) {
+        try {
+          await executeRawSql(
+            runtime,
+            `ALTER TABLE trajectories ADD COLUMN ${col.name} ${col.def}`,
+          );
+        } catch {
+          // Column already exists — expected
+        }
+      }
     } catch {
-      // Table doesn't exist or is missing trajectory_id column
-      // Try to drop and recreate
+      // Table doesn't exist at all — create fresh (no data loss)
       needsRecreate = true;
       console.warn(
-        "[trajectory-persistence] Trajectories table missing or has outdated schema, recreating...",
+        "[trajectory-persistence] Trajectories table does not exist, creating...",
       );
-      try {
-        await executeRawSql(
-          runtime,
-          `DROP TABLE IF EXISTS trajectories CASCADE`,
-        );
-      } catch (dropErr) {
-        console.warn(
-          "[trajectory-persistence] Could not drop old table:",
-          dropErr,
-        );
-      }
     }
 
     await executeRawSql(

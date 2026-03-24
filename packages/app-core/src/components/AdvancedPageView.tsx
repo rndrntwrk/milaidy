@@ -235,7 +235,10 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
           );
         }
         return (
-          <TrajectoriesView onSelectTrajectory={setSelectedTrajectoryId} />
+          <TrajectoriesView
+            key={selectedTrajectoryId === null ? "list" : "hidden"}
+            onSelectTrajectory={setSelectedTrajectoryId}
+          />
         );
       case "runtime":
         return <RuntimeView />;

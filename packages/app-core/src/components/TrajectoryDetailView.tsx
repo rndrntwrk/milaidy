@@ -25,42 +25,16 @@ interface TrajectoryDetailViewProps {
   onBack?: () => void;
 }
 
+// Use the shared cost estimator which has a more complete pricing table
+// (GPT-5, Claude 4, Gemini, DeepSeek, Qwen, etc.)
+import { estimateTokenCost } from "./conversations/conversation-utils";
+
 function estimateCost(
   promptTokens: number,
   completionTokens: number,
   model: string,
 ): string {
-  // Rough cost estimates per 1M tokens (input/output)
-  const costs: Record<string, [number, number]> = {
-    "gpt-4o": [2.5, 10],
-    "gpt-4o-mini": [0.15, 0.6],
-    "gpt-4-turbo": [10, 30],
-    "gpt-4": [30, 60],
-    "gpt-3.5-turbo": [0.5, 1.5],
-    "claude-3-opus": [15, 75],
-    "claude-3-sonnet": [3, 15],
-    "claude-3-haiku": [0.25, 1.25],
-    "claude-3.5-sonnet": [3, 15],
-  };
-
-  // Find matching model (partial match)
-  let inputCost = 1;
-  let outputCost = 3;
-  for (const [name, [ic, oc]] of Object.entries(costs)) {
-    if (model.toLowerCase().includes(name.toLowerCase())) {
-      inputCost = ic;
-      outputCost = oc;
-      break;
-    }
-  }
-
-  const cost =
-    (promptTokens / 1_000_000) * inputCost +
-    (completionTokens / 1_000_000) * outputCost;
-
-  if (cost < 0.001) return "<$0.001";
-  if (cost < 0.01) return `~$${cost.toFixed(4)}`;
-  return `~$${cost.toFixed(3)}`;
+  return estimateTokenCost(promptTokens, completionTokens, model);
 }
 
 function CodeBlock({ content, label }: { content: string; label: string }) {
