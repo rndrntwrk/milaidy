@@ -1,8 +1,10 @@
 import { useRenderGuard } from "@miladyai/app-core/hooks";
 import { useApp } from "@miladyai/app-core/state";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { AgentActivityBox } from "./AgentActivityBox";
 import { ChatModalView } from "./ChatModalView";
 import { CloudStatusBadge } from "./CloudStatusBadge";
+import { PtyConsoleSidePanel } from "./PtyConsoleSidePanel";
 import { CompanionHeader } from "./companion/CompanionHeader";
 import {
   CompanionSceneHost,
@@ -40,11 +42,16 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
     elizaCloudEnabled,
     handleNewConversation,
     navigation,
+    ptySessions,
     setState,
     setTab,
     switchShellView,
     t,
   } = useApp();
+
+  const [ptySidePanelSessionId, setPtySidePanelSessionId] = useState<
+    string | null
+  >(null);
 
   // Gate chat + header behind avatar load — don't show chat or play
   // greeting speech until the VRM finishes its teleport-in animation.
@@ -183,6 +190,29 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
       {avatarReady && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-3xl h-[45%] z-20 pointer-events-auto">
           <ChatModalView variant="companion-dock" />
+        </div>
+      )}
+
+      {/* Floating agent-status pill (bottom-right, above chat dock) */}
+      {ptySessions.length > 0 && (
+        <div className="absolute bottom-[48%] right-4 z-30 pointer-events-auto">
+          <AgentActivityBox
+            sessions={ptySessions}
+            onSessionClick={(id) =>
+              setPtySidePanelSessionId((prev) => (prev === id ? null : id))
+            }
+          />
+        </div>
+      )}
+
+      {/* PTY console side panel */}
+      {ptySidePanelSessionId && ptySessions.length > 0 && (
+        <div className="pointer-events-auto">
+          <PtyConsoleSidePanel
+            activeSessionId={ptySidePanelSessionId}
+            sessions={ptySessions}
+            onClose={() => setPtySidePanelSessionId(null)}
+          />
         </div>
       )}
 

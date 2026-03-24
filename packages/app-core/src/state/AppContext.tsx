@@ -6299,6 +6299,7 @@ function AppProviderInner({
     let unbindWsReconnect: (() => void) | null = null;
     let unbindSystemWarnings: (() => void) | null = null;
     let unbindRestartRequired: (() => void) | null = null;
+    let ptyPollInterval: ReturnType<typeof setInterval> | null = null;
     let cancelled = false;
     const describeBackendFailure = (
       err: unknown,
@@ -6793,6 +6794,11 @@ function AppProviderInner({
       hydratePtySessions();
       let ptyHydratedViaWs = false;
 
+      // Fallback 5s poll for PTY sessions in case WS events don't flow
+      ptyPollInterval = setInterval(() => {
+        hydratePtySessions();
+      }, 5_000);
+
       // Connect WebSocket
       client.connectWs();
 
@@ -7277,6 +7283,10 @@ function AppProviderInner({
       unbindWsReconnect?.();
       unbindSystemWarnings?.();
       unbindRestartRequired?.();
+      if (ptyPollInterval) {
+        clearInterval(ptyPollInterval);
+        ptyPollInterval = null;
+      }
       if (handleVisibilityRef)
         document.removeEventListener("visibilitychange", handleVisibilityRef);
       client.disconnectWs();
