@@ -103,4 +103,17 @@ describe("patchElizaCoreActionParsing", () => {
     const result = applyPatchedActionParsing("actions", xmlValue);
     expect(result).toEqual(["GOOD_ACTION"]);
   });
+
+  it("does not split on commas inside action param content", () => {
+    const xmlValue = `<action>
+  <name>START_CODING_TASK</name>
+  <params>
+    <repo>https://github.com/org/repo</repo>
+    <task>Add orange, black, and red colors, hex grids, technical fonts</task>
+  </params>
+</action>`;
+
+    const result = applyPatchedActionParsing("actions", xmlValue);
+    expect(result).toEqual(["START_CODING_TASK"]);
+  });
 });
