@@ -5324,9 +5324,52 @@ export class MiladyClient {
 
   async getCodingAgentStatus(): Promise<CodingAgentStatus | null> {
     try {
-      return await this.fetch<CodingAgentStatus>(
+      const status = await this.fetch<CodingAgentStatus>(
         "/api/coding-agents/coordinator/status",
       );
+      // If coordinator returned but tasks is empty, fall back to ptyService
+      // session list so the UI shows active PTY sessions even when the
+      // coordinator hasn't registered them yet.
+      if (status && (!status.tasks || status.tasks.length === 0)) {
+        try {
+          const ptySessions =
+            await this.fetch<
+              Array<{
+                id: string;
+                name?: string;
+                agentType?: string;
+                workdir?: string;
+                status?: string;
+                metadata?: Record<string, unknown>;
+              }>
+            >("/api/coding-agents");
+          if (Array.isArray(ptySessions) && ptySessions.length > 0) {
+            status.tasks = ptySessions.map((s) => ({
+              sessionId: s.id,
+              agentType: s.agentType ?? "claude",
+              label:
+                (s.metadata?.label as string) ??
+                s.name ??
+                s.agentType ??
+                "Agent",
+              originalTask: "",
+              workdir: s.workdir ?? "",
+              status:
+                s.status === "ready" || s.status === "busy"
+                  ? ("active" as const)
+                  : s.status === "error"
+                    ? ("error" as const)
+                    : ("active" as const),
+              decisionCount: 0,
+              autoResolvedCount: 0,
+            }));
+            status.taskCount = status.tasks.length;
+          }
+        } catch {
+          // /api/coding-agents may not exist — ignore
+        }
+      }
+      return status;
     } catch {
       return null;
     }
