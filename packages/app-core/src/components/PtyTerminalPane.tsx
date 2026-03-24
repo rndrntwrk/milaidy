@@ -104,7 +104,7 @@ export function PtyTerminalPane({
       );
 
       // Forward keyboard input for manual interjection
-      term.onData((data) => {
+      term.onData((data: string) => {
         if (!disposed) {
           try {
             client.sendPtyInput(sessionId, data);

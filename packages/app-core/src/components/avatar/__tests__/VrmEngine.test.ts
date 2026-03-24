@@ -1767,14 +1767,24 @@ describe("VrmEngine", () => {
       await waitForEngineReady(engine);
 
       const engineAny = engine as unknown as {
+        cameraManager: {
+          centerAndFrame: ReturnType<typeof vi.fn>;
+          ensureFacingCamera: ReturnType<typeof vi.fn>;
+        };
         configureAvatarLookTracking: ReturnType<typeof vi.fn>;
         loadAndPlayIdle: ReturnType<typeof vi.fn>;
         playTeleportReveal: ReturnType<typeof vi.fn>;
         startPendingWorldReveal: ReturnType<typeof vi.fn>;
       };
-      const dispatchSpy = vi.spyOn(window, "dispatchEvent");
+      const onTeleportComplete = vi.fn();
       const vrm = createMockLoadedVrm();
+      window.addEventListener(
+        "eliza:vrm-teleport-complete",
+        onTeleportComplete,
+      );
 
+      engineAny.cameraManager.centerAndFrame = vi.fn();
+      engineAny.cameraManager.ensureFacingCamera = vi.fn();
       engineAny.configureAvatarLookTracking = vi.fn();
       engineAny.loadAndPlayIdle = vi
         .fn()
@@ -1786,8 +1796,10 @@ describe("VrmEngine", () => {
       await engine.loadVrmFromUrl("http://example.com/model.vrm");
 
       expect(engineAny.startPendingWorldReveal).toHaveBeenCalledWith(false);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "eliza:vrm-teleport-complete" }),
+      expect(onTeleportComplete).toHaveBeenCalledTimes(1);
+      window.removeEventListener(
+        "eliza:vrm-teleport-complete",
+        onTeleportComplete,
       );
     });
   });

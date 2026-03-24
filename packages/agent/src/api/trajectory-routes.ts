@@ -49,6 +49,7 @@ interface TrajectoryListItem {
   endTime: number | null;
   durationMs: number | null;
   llmCallCount: number;
+  providerAccessCount?: number;
   totalPromptTokens: number;
   totalCompletionTokens: number;
   createdAt: string;

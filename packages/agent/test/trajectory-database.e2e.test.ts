@@ -259,8 +259,16 @@ describe("Trajectory Database E2E", () => {
       const db = (
         migrationRuntime as AgentRuntime & {
           adapter?: { db?: { execute: (query: unknown) => Promise<unknown> } };
+          databaseAdapter?: {
+            db?: { execute: (query: unknown) => Promise<unknown> };
+          };
         }
-      ).adapter?.db;
+      ).adapter?.db ??
+        (migrationRuntime as AgentRuntime & {
+          databaseAdapter?: {
+            db?: { execute: (query: unknown) => Promise<unknown> };
+          };
+        }).databaseAdapter?.db;
       if (!db) {
         throw new Error("runtime database adapter unavailable");
       }
