@@ -250,7 +250,10 @@ export class WechatChannel {
 
   private resolveAccounts(): ResolvedWechatAccount[] {
     const accounts: ResolvedWechatAccount[] = [];
-    const defaultPort = this.config.webhookPort ?? 18790;
+    const rawPort = Number(process.env.MILADY_WECHAT_WEBHOOK_PORT);
+    const envPort =
+      Number.isFinite(rawPort) && rawPort > 0 ? rawPort : undefined;
+    const defaultPort = envPort ?? this.config.webhookPort ?? 18790;
     const defaultDevice = this.config.deviceType ?? "ipad";
 
     if (this.config.accounts) {
