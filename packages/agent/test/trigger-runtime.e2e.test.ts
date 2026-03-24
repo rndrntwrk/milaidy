@@ -70,8 +70,6 @@ function createTriggerRuntimeHarness(): TriggerRuntimeHarness {
       tasks = tasks.filter((task) => task.id !== taskId);
     },
     createMemory: createMemoryMock,
-    composeState: vi.fn(async () => ({})),
-    processActions: vi.fn(async () => undefined),
     getTaskWorker: vi.fn(),
     registerTaskWorker: vi.fn(),
     logger: {
@@ -139,9 +137,12 @@ describe("Trigger runtime E2E", () => {
     const executeBody = executeResponse.data as Record<string, unknown>;
     const executeResult = (executeBody.result ?? {}) as Record<string, unknown>;
     expect(executeResult.status).toBe("success");
-    // inject_now with successful processActions: no memory persisted
-    // (avoids double-dispatch). createMemory only called as fallback.
-    expect(harness.createMemoryMock).not.toHaveBeenCalled();
+    expect(harness.createMemoryMock).toHaveBeenCalledTimes(1);
+    // Verify the memory payload contains the trigger instruction
+    const memoryCall = harness.createMemoryMock.mock.calls[0];
+    expect(memoryCall[0].content.text).toContain("Send a runtime heartbeat update");
+    expect(memoryCall[0].content.source).toBe("trigger-runtime");
+    expect(memoryCall[0].content.metadata.isAutonomousInstruction).toBe(true);
 
     const runsResponse = await req(
       server.port,
