@@ -2,7 +2,6 @@ import "./styles.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import { Nav } from "./components/Nav";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { consumeUrlToken } from "./lib/auth";
 import { getSpaFallbackRedirectTarget } from "./lib/spa-fallback";
@@ -22,7 +21,6 @@ createRoot(root).render(
   <ErrorBoundary>
     <StrictMode>
       <BrowserRouter>
-        <Nav />
         <AppRoutes />
       </BrowserRouter>
     </StrictMode>

@@ -89,11 +89,6 @@ export function HeroBackground() {
       <div className="hidden sm:block absolute bottom-12 left-12 w-6 h-6 border-b border-l border-brand/30" />
       <div className="hidden sm:block absolute bottom-12 right-12 w-6 h-6 border-b border-r border-brand/30" />
 
-      {/* Grid lines */}
-      <div className="hidden md:block absolute top-0 bottom-0 left-[20%] w-px bg-border-subtle" />
-      <div className="hidden md:block absolute top-0 bottom-0 right-[20%] w-px bg-border-subtle" />
-      <div className="hidden md:block absolute top-[30%] left-0 right-0 h-px bg-border-subtle" />
-
       <motion.div
         className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center"
         variants={containerVariants}
@@ -105,7 +100,7 @@ export function HeroBackground() {
           className="text-[28vw] sm:text-[11vw] lg:text-[13vw] font-black leading-[0.76] tracking-tighter uppercase text-white/95 flex flex-col items-center pointer-events-none select-none mt-16 sm:mt-12 max-w-[10ch] sm:max-w-none"
         >
           <span>MILADY</span>
-          <span className="text-white/90 drop-shadow-lg text-[28vw] sm:text-[9vw] lg:text-[11vw] break-words hyphens-none text-center w-full">
+          <span className="text-brand drop-shadow-lg text-[28vw] sm:text-[9vw] lg:text-[11vw] break-words hyphens-none text-center w-full">
             <TypewriterLoop />
           </span>
         </motion.h1>
