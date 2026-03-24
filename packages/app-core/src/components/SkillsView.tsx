@@ -11,7 +11,6 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogPortal,
   DialogTitle,
   Input,
   StatusBadge,
@@ -140,7 +139,7 @@ function SkillCard({
           {t("triggersview.Edit")}
         </Button>
         <ConfirmDeleteControl
-          triggerClassName="h-7 px-3 text-[11px] font-bold text-danger hover:bg-danger/10 hover:text-danger-foreground transition-colors rounded-md"
+          triggerClassName="h-7 px-3 text-[11px] font-bold !bg-transparent text-danger hover:!bg-danger/15 hover:text-danger-foreground transition-colors rounded-md border border-transparent hover:border-danger/30"
           confirmClassName="px-3 py-1 text-[11px] font-bold bg-danger text-danger-foreground hover:bg-danger/90 transition-colors rounded-md shadow-sm"
           cancelClassName="px-3 py-1 text-[11px] font-bold text-muted border border-border/40 hover:text-txt transition-colors rounded-md"
           confirmLabel={t("conversations.deleteYes")}
@@ -353,16 +352,15 @@ function InstallModal({
   return (
     <Dialog
       open
-      onOpenChange={(v) => {
-        if (!v) onClose();
+      onOpenChange={(open: boolean) => {
+        if (!open) onClose();
       }}
     >
-      <DialogContent className="max-w-2xl max-h-[80vh] p-0 flex flex-col overflow-hidden rounded-2xl">
-        {/* Header */}
-        <DialogHeader
-          className="px-5 py-4"
-          style={{ borderBottom: "1px solid var(--border)" }}
-        >
+      <DialogContent
+        container={typeof document !== "undefined" ? document.body : undefined}
+        className="w-full max-w-2xl max-h-[80vh] p-0 flex flex-col overflow-hidden rounded-2xl"
+      >
+        <DialogHeader>
           <DialogTitle
             style={{
               fontSize: 13,
@@ -718,16 +716,15 @@ function EditSkillModal({
   return (
     <Dialog
       open
-      onOpenChange={(v) => {
-        if (!v) onClose();
+      onOpenChange={(open: boolean) => {
+        if (!open) onClose();
       }}
     >
-      <DialogContent className="max-w-4xl h-[85vh] p-0 flex flex-col overflow-hidden rounded-xl">
-        {/* Header */}
-        <DialogHeader
-          className="flex items-center justify-between px-5 py-3 shrink-0 flex-row"
-          style={{ borderBottom: "1px solid var(--border)" }}
-        >
+      <DialogContent
+        container={typeof document !== "undefined" ? document.body : undefined}
+        className="w-full max-w-4xl h-[85vh] p-0 flex flex-col overflow-hidden rounded-xl"
+      >
+        <DialogHeader className="flex-row items-center justify-between px-5 py-3 shrink-0 border-b border-[var(--border)] space-y-0">
           <div className="flex items-center gap-3 min-w-0">
             <DialogTitle className="font-semibold text-sm truncate">
               {skillName}
@@ -757,14 +754,6 @@ function EditSkillModal({
               {navigator.platform.includes("Mac") ? "⌘S" : "Ctrl+S"}{" "}
               {t("skillsview.toSave")}
             </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-lg text-muted hover:text-txt"
-              onClick={onClose}
-            >
-              ×
-            </Button>
           </div>
         </DialogHeader>
 
@@ -1081,53 +1070,32 @@ function SkillsModalView() {
         )}
       </div>
 
-      {/* Portal modals to body so they escape the 3D transform stacking context */}
-      <Dialog
-        open={!!editingSkill}
-        onOpenChange={(open) => {
-          if (!open) setEditingSkill(null);
-        }}
-      >
-        <DialogPortal>
-          {editingSkill && (
-            <EditSkillModal
-              skillId={editingSkill.id}
-              skillName={editingSkill.name}
-              onClose={() => setEditingSkill(null)}
-              onSaved={() => void refreshSkills()}
-            />
-          )}
-        </DialogPortal>
-      </Dialog>
+      {editingSkill && (
+        <EditSkillModal
+          skillId={editingSkill.id}
+          skillName={editingSkill.name}
+          onClose={() => setEditingSkill(null)}
+          onSaved={() => void refreshSkills()}
+        />
+      )}
 
-      <Dialog
-        open={installModalOpen}
-        onOpenChange={(open) => {
-          if (!open) setInstallModalOpen(false);
-        }}
-      >
-        <DialogPortal>
-          {installModalOpen && (
-            <InstallModal
-              skills={skills}
-              skillsMarketplaceQuery={skillsMarketplaceQuery}
-              skillsMarketplaceResults={skillsMarketplaceResults}
-              skillsMarketplaceError={skillsMarketplaceError}
-              skillsMarketplaceLoading={skillsMarketplaceLoading}
-              skillsMarketplaceAction={skillsMarketplaceAction}
-              skillsMarketplaceManualGithubUrl={
-                skillsMarketplaceManualGithubUrl
-              }
-              searchSkillsMarketplace={searchSkillsMarketplace}
-              installSkillFromMarketplace={installSkillFromMarketplace}
-              uninstallMarketplaceSkill={uninstallMarketplaceSkill}
-              installSkillFromGithubUrl={installSkillFromGithubUrl}
-              setState={setState}
-              onClose={() => setInstallModalOpen(false)}
-            />
-          )}
-        </DialogPortal>
-      </Dialog>
+      {installModalOpen && (
+        <InstallModal
+          skills={skills}
+          skillsMarketplaceQuery={skillsMarketplaceQuery}
+          skillsMarketplaceResults={skillsMarketplaceResults}
+          skillsMarketplaceError={skillsMarketplaceError}
+          skillsMarketplaceLoading={skillsMarketplaceLoading}
+          skillsMarketplaceAction={skillsMarketplaceAction}
+          skillsMarketplaceManualGithubUrl={skillsMarketplaceManualGithubUrl}
+          searchSkillsMarketplace={searchSkillsMarketplace}
+          installSkillFromMarketplace={installSkillFromMarketplace}
+          uninstallMarketplaceSkill={uninstallMarketplaceSkill}
+          installSkillFromGithubUrl={installSkillFromGithubUrl}
+          setState={setState}
+          onClose={() => setInstallModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

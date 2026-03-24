@@ -383,7 +383,7 @@ function DocumentCard({
       </Button>
       <div className="flex items-center gap-2 ml-4 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
         <ConfirmDeleteControl
-          triggerClassName="h-8 px-3 text-xs font-bold text-danger hover:bg-danger/10 hover:text-danger rounded-lg transition-all"
+          triggerClassName="h-8 px-3 text-xs font-bold !bg-transparent text-danger hover:!bg-danger/15 hover:text-danger rounded-lg transition-all border border-transparent hover:border-danger/30"
           confirmClassName="h-8 px-3 text-xs font-bold bg-danger/20 text-danger hover:bg-danger/30 rounded-lg transition-all"
           cancelClassName="h-8 px-3 text-xs font-bold text-muted hover:text-txt rounded-lg transition-all"
           disabled={deleting}
@@ -446,20 +446,22 @@ function DocumentDetailModal({
   return (
     <Dialog
       open
-      onOpenChange={(v) => {
-        if (!v) onClose();
+      onOpenChange={(open: boolean) => {
+        if (!open) onClose();
       }}
     >
-      <DialogContent className="max-w-4xl max-h-[85vh] p-0 flex flex-col overflow-hidden rounded-2xl">
-        {/* Header */}
-        <DialogHeader className="p-5 border-b border-border/30 bg-bg/20">
-          <DialogTitle className="text-lg font-bold text-txt tracking-wide">
+      <DialogContent
+        container={typeof document !== "undefined" ? document.body : undefined}
+        className="w-full max-w-4xl max-h-[85vh] p-0 flex flex-col overflow-hidden rounded-2xl"
+      >
+        <DialogHeader>
+          <DialogTitle>
             {loading ? "Loading..." : doc?.filename || "Document"}
           </DialogTitle>
         </DialogHeader>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+        <div className="flex-1 overflow-y-auto p-6">
           {loading && (
             <div className="text-center py-12 text-muted font-bold tracking-wide animate-pulse">
               <span className="inline-block w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin mr-3 align-middle" />
