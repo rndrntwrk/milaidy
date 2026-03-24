@@ -646,6 +646,7 @@ export interface ConversationGreeting {
 
 export interface CreateConversationOptions {
   includeGreeting?: boolean;
+  bootstrapGreeting?: boolean;
   lang?: string;
 }
 

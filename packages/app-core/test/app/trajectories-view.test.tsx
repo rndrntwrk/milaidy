@@ -2,6 +2,7 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../../src/api/client";
 
 const hoisted = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
@@ -208,5 +209,36 @@ describe("TrajectoriesView logging toggle", () => {
     expect(mockClient.updateTrajectoryConfig).toHaveBeenCalledWith({
       enabled: false,
     });
+  });
+
+  it("retries trajectory loading when the logger API is still starting", async () => {
+    vi.useFakeTimers();
+    try {
+      setBaseMocks({ enabled: true });
+      mockClient.getTrajectories
+        .mockRejectedValueOnce(
+          new ApiError({
+            kind: "http",
+            path: "/api/trajectories",
+            status: 503,
+            message: "service unavailable",
+          }),
+        )
+        .mockResolvedValue(trajectoryList);
+
+      await act(async () => {
+        TestRenderer.create(React.createElement(TrajectoriesView));
+      });
+
+      expect(mockClient.getTrajectories).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+
+      expect(mockClient.getTrajectories).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

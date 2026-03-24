@@ -2260,6 +2260,7 @@ describe("API Server E2E (no runtime)", () => {
               durationMs: endTime - startTime,
               stepCount: 1,
               llmCallCount: 1,
+              providerAccessCount: 2,
               totalPromptTokens: 12,
               totalCompletionTokens: 18,
               totalReward: 0,
@@ -2330,6 +2331,7 @@ describe("API Server E2E (no runtime)", () => {
         >;
         expect(Array.isArray(listRows)).toBe(true);
         expect(listRows[0]?.llmCallCount).toBe(1);
+        expect(listRows[0]?.providerAccessCount).toBe(2);
 
         const detail = await req(
           streamServer.port,
@@ -2344,6 +2346,64 @@ describe("API Server E2E (no runtime)", () => {
         expect(llmCalls[0]?.response).toBe("fallback response");
         expect(llmCalls[0]?.promptTokens).toBe(12);
         expect(llmCalls[0]?.completionTokens).toBe(18);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("DELETE /api/trajectories accepts the client clearAll payload", async () => {
+      const clearAllTrajectories = vi.fn(async () => 7);
+      const trajectoryLogger = {
+        isEnabled: () => true,
+        setEnabled: () => {},
+        listTrajectories: async () => ({
+          trajectories: [],
+          total: 0,
+          offset: 0,
+          limit: 50,
+        }),
+        getTrajectoryDetail: async () => null,
+        getStats: async () => ({
+          totalTrajectories: 0,
+          totalSteps: 0,
+          totalLlmCalls: 0,
+          totalPromptTokens: 0,
+          totalCompletionTokens: 0,
+          averageDurationMs: 0,
+          averageReward: 0,
+          bySource: {},
+          byStatus: {},
+          byScenario: {},
+        }),
+        deleteTrajectories: async () => 0,
+        clearAllTrajectories,
+        exportTrajectories: async () => ({
+          data: "[]",
+          filename: "trajectories.json",
+          mimeType: "application/json",
+        }),
+      };
+
+      const runtime = createRuntimeForChatSseTests({
+        getService: (serviceType) =>
+          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+        getServicesByType: (serviceType) =>
+          serviceType === "trajectory_logger" ? [trajectoryLogger] : [],
+      }) as AgentRuntime & { adapter?: unknown };
+      runtime.adapter = {};
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const response = await req(
+          streamServer.port,
+          "DELETE",
+          "/api/trajectories",
+          { clearAll: true },
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.data.deleted).toBe(7);
+        expect(clearAllTrajectories).toHaveBeenCalledTimes(1);
       } finally {
         await streamServer.close();
       }

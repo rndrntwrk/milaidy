@@ -1760,5 +1760,35 @@ describe("VrmEngine", () => {
       expect(engineAny.playTeleportReveal).toHaveBeenCalledTimes(1);
       expect(engineAny.startPendingWorldReveal).toHaveBeenCalledWith(true);
     });
+
+    it("dispatches teleport-complete when reveal falls back after load failure", async () => {
+      const canvas = createMockCanvas();
+      engine.setup(canvas, vi.fn());
+      await waitForEngineReady(engine);
+
+      const engineAny = engine as unknown as {
+        configureAvatarLookTracking: ReturnType<typeof vi.fn>;
+        loadAndPlayIdle: ReturnType<typeof vi.fn>;
+        playTeleportReveal: ReturnType<typeof vi.fn>;
+        startPendingWorldReveal: ReturnType<typeof vi.fn>;
+      };
+      const dispatchSpy = vi.spyOn(window, "dispatchEvent");
+      const vrm = createMockLoadedVrm();
+
+      engineAny.configureAvatarLookTracking = vi.fn();
+      engineAny.loadAndPlayIdle = vi
+        .fn()
+        .mockRejectedValue(new Error("teleport unavailable"));
+      engineAny.playTeleportReveal = vi.fn().mockResolvedValue(undefined);
+      engineAny.startPendingWorldReveal = vi.fn();
+      hoisted.mockLoaderLoadAsync.mockResolvedValueOnce({ userData: { vrm } });
+
+      await engine.loadVrmFromUrl("http://example.com/model.vrm");
+
+      expect(engineAny.startPendingWorldReveal).toHaveBeenCalledWith(false);
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "eliza:vrm-teleport-complete" }),
+      );
+    });
   });
 });

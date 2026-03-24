@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentRuntime, createCharacter, logger } from "@elizaos/core";
+import { sql } from "drizzle-orm";
 import { default as pluginSql } from "@elizaos/plugin-sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { withTimeout } from "../../../test/helpers/test-utils";
@@ -234,5 +235,110 @@ describe("Trajectory Database E2E", () => {
     const providers = steps[0]?.providerAccesses ?? [];
     expect(providers.length).toBe(1);
     expect(providers[0].providerName).toBe("dummy-api");
+  });
+
+  it("migrates older trajectory tables without dropping existing rows", async () => {
+    const migrationDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "eliza-e2e-traj-migrate-"),
+    );
+    const previousDataDir = process.env.PGLITE_DATA_DIR;
+    let migrationRuntime: AgentRuntime | null = null;
+
+    try {
+      process.env.PGLITE_DATA_DIR = migrationDir;
+
+      migrationRuntime = new AgentRuntime({
+        character: createCharacter({ name: "TrajectoryMigrationAgent" }),
+        plugins: [],
+        logLevel: "warn",
+        enableAutonomy: false,
+      });
+      await migrationRuntime.registerPlugin(pluginSql);
+      await migrationRuntime.initialize();
+
+      const db = (
+        migrationRuntime as AgentRuntime & {
+          adapter?: { db?: { execute: (query: unknown) => Promise<unknown> } };
+        }
+      ).adapter?.db;
+      if (!db) {
+        throw new Error("runtime database adapter unavailable");
+      }
+
+      await db.execute(
+        sql.raw(`CREATE TABLE trajectories (
+          id TEXT PRIMARY KEY,
+          agent_id TEXT NOT NULL,
+          source TEXT NOT NULL DEFAULT 'runtime',
+          status TEXT NOT NULL DEFAULT 'completed',
+          start_time BIGINT NOT NULL,
+          end_time BIGINT,
+          duration_ms BIGINT,
+          step_count INTEGER NOT NULL DEFAULT 0,
+          llm_call_count INTEGER NOT NULL DEFAULT 0,
+          provider_access_count INTEGER NOT NULL DEFAULT 0,
+          total_prompt_tokens INTEGER NOT NULL DEFAULT 0,
+          total_completion_tokens INTEGER NOT NULL DEFAULT 0,
+          total_reward REAL NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )`),
+      );
+      await db.execute(
+        sql.raw(`INSERT INTO trajectories (
+          id,
+          agent_id,
+          source,
+          status,
+          start_time,
+          end_time,
+          duration_ms,
+          step_count,
+          llm_call_count,
+          provider_access_count,
+          total_prompt_tokens,
+          total_completion_tokens,
+          total_reward,
+          created_at,
+          updated_at
+        ) VALUES (
+          'legacy-trajectory-row',
+          'migration-agent',
+          'chat',
+          'completed',
+          1000,
+          1500,
+          500,
+          1,
+          1,
+          2,
+          12,
+          8,
+          0,
+          '1970-01-01T00:00:01.000Z',
+          '1970-01-01T00:00:01.500Z'
+        )`),
+      );
+
+      const migrationLogger = new DatabaseTrajectoryLogger(migrationRuntime);
+      await migrationLogger.initialize();
+
+      const list = await migrationLogger.listTrajectories({
+        limit: 10,
+        offset: 0,
+      });
+      const migratedRow = list.trajectories.find(
+        (trajectory) => trajectory.id === "legacy-trajectory-row",
+      );
+
+      expect(migratedRow).toBeDefined();
+      expect(migratedRow?.providerAccessCount).toBe(2);
+    } finally {
+      if (migrationRuntime) {
+        await withTimeout(migrationRuntime.stop(), 90_000, "migration.stop()");
+      }
+      process.env.PGLITE_DATA_DIR = previousDataDir;
+      fs.rmSync(migrationDir, { recursive: true, force: true });
+    }
   });
 });

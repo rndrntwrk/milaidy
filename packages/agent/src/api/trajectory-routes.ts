@@ -340,7 +340,7 @@ function listItemToUIRecord(item: TrajectoryListItem): UITrajectoryRecord {
     endTime: item.endTime,
     durationMs: item.durationMs,
     llmCallCount: item.llmCallCount,
-    providerAccessCount: (item as { providerAccessCount?: number }).providerAccessCount ?? 0,
+    providerAccessCount: item.providerAccessCount ?? 0,
     totalPromptTokens: item.totalPromptTokens,
     totalCompletionTokens: item.totalCompletionTokens,
     metadata: {},
