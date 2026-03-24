@@ -1777,11 +1777,19 @@ describe("VrmEngine", () => {
         startPendingWorldReveal: ReturnType<typeof vi.fn>;
       };
       const onTeleportComplete = vi.fn();
+      const originalDispatchEvent = window.dispatchEvent;
       const vrm = createMockLoadedVrm();
       window.addEventListener(
         "eliza:vrm-teleport-complete",
         onTeleportComplete,
       );
+      Object.defineProperty(window, "dispatchEvent", {
+        configurable: true,
+        value: (event: Event) => {
+          onTeleportComplete(event);
+          return true;
+        },
+      });
 
       engineAny.cameraManager.centerAndFrame = vi.fn();
       engineAny.cameraManager.ensureFacingCamera = vi.fn();
@@ -1801,6 +1809,10 @@ describe("VrmEngine", () => {
         "eliza:vrm-teleport-complete",
         onTeleportComplete,
       );
+      Object.defineProperty(window, "dispatchEvent", {
+        configurable: true,
+        value: originalDispatchEvent,
+      });
     });
   });
 });

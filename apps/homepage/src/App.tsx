@@ -120,7 +120,10 @@ function DownloadDropdown() {
   };
 
   return (
-    <div className="relative" role="group" onMouseLeave={() => setOpen(false)}>
+    <fieldset
+      className="relative border-0 p-0 m-0"
+      onMouseLeave={() => setOpen(false)}
+    >
       <button
         type="button"
         className="flex items-center gap-2 px-6 py-3 border border-text-subtle/30 text-text-muted font-mono text-[11px] tracking-[0.15em] uppercase hover:border-text-muted/50 hover:text-text-light transition-all"
@@ -163,7 +166,7 @@ function DownloadDropdown() {
           </a>
         </div>
       )}
-    </div>
+    </fieldset>
   );
 }
 
