@@ -484,12 +484,17 @@ export class DesktopManager {
       const action = e?.data?.action;
       if (!action) return;
 
-      // Native actions
-      if (action === "show") {
+      // Native actions — these must work even when the renderer RPC bridge
+      // is not yet connected (e.g. PGLite init on Windows can take 240s).
+      if (action === "show" || action === "tray-show-window") {
         void this.showWindow().catch((err: unknown) => {
           console.warn("[Desktop] Failed to show window from tray menu:", err);
         });
-      } else if (action === "restart-agent") {
+      } else if (action === "tray-hide-window") {
+        void this.hideWindow().catch((err: unknown) => {
+          console.warn("[Desktop] Failed to hide window from tray menu:", err);
+        });
+      } else if (action === "restart-agent" || action === "tray-restart") {
         triggerAgentRestart();
       } else if (action === "quit") {
         Utils.quit();

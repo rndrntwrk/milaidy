@@ -217,6 +217,7 @@ export function OnboardingWizard() {
             display: "flex",
             gap: "0.5rem",
             alignItems: "center",
+            pointerEvents: "auto",
           }}
         >
           <LanguageDropdown
@@ -233,7 +234,7 @@ export function OnboardingWizard() {
             <IdentityStep />
           </div>
         ) : (
-          <div className="onboarding-ui-overlay">
+          <div className="absolute inset-0 z-20 pointer-events-none [&>*]:pointer-events-auto">
             <OnboardingStepNav />
             <OnboardingPanel step={onboardingStep}>
               {renderStep()}

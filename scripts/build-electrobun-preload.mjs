@@ -20,19 +20,13 @@ const ELECTROBUN_DIR = path.resolve(
   "electrobun",
 );
 
-const SRC = path.join(
-  ELECTROBUN_DIR,
-  "src",
-  "bridge",
-  "electrobun-preload.ts",
-);
+const SRC = path.join(ELECTROBUN_DIR, "src", "bridge", "electrobun-preload.ts");
 const OUT = path.join(ELECTROBUN_DIR, "src", "preload.js");
 
 // Try to locate the bun binary
-const bunBin =
-  process.env.BUN_INSTALL
-    ? path.join(process.env.BUN_INSTALL, "bin", "bun")
-    : "bun";
+const bunBin = process.env.BUN_INSTALL
+  ? path.join(process.env.BUN_INSTALL, "bin", "bun")
+  : "bun";
 
 const args = [
   "build",

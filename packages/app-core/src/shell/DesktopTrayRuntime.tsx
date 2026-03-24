@@ -164,7 +164,6 @@ export function DesktopTrayRuntime() {
 
     let cancelled = false;
     let unsubscribe: (() => void) | null = null;
-    let intervalId: ReturnType<typeof setInterval> | null = null;
     let rpcBridgeWaitTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const attach = (): boolean => {
@@ -206,33 +205,26 @@ export function DesktopTrayRuntime() {
     };
 
     if (!attach()) {
-      intervalId = setInterval(() => {
-        if (attach() && intervalId) {
-          clearInterval(intervalId);
-          intervalId = null;
-          if (rpcBridgeWaitTimeoutId) {
-            clearTimeout(rpcBridgeWaitTimeoutId);
-            rpcBridgeWaitTimeoutId = null;
-          }
-        }
-      }, 100);
-      rpcBridgeWaitTimeoutId = setTimeout(() => {
-        rpcBridgeWaitTimeoutId = null;
-        if (intervalId) {
-          clearInterval(intervalId);
-          intervalId = null;
-        }
-        if (!cancelled && !getElectrobunRendererRpc()) {
-          console.warn(
-            "[milady][reset] tray: Electrobun RPC not ready after 10s — menu Reset Milady may not work until reload",
-          );
-        }
-      }, 10_000);
+      // Poll until the RPC bridge is ready. On Windows, PGLite init can
+      // take up to 240s so a hard 10s ceiling caused the tray subscription
+      // to silently never attach. Back off from 200ms → 2s to stay cheap.
+      let pollMs = 200;
+      const MAX_POLL_MS = 2_000;
+      const schedulePoll = () => {
+        if (cancelled) return;
+        rpcBridgeWaitTimeoutId = setTimeout(() => {
+          rpcBridgeWaitTimeoutId = null;
+          if (cancelled) return;
+          if (attach()) return; // success — stop polling
+          pollMs = Math.min(pollMs * 1.5, MAX_POLL_MS);
+          schedulePoll();
+        }, pollMs);
+      };
+      schedulePoll();
     }
 
     return () => {
       cancelled = true;
-      if (intervalId) clearInterval(intervalId);
       if (rpcBridgeWaitTimeoutId) clearTimeout(rpcBridgeWaitTimeoutId);
       unsubscribe?.();
     };
