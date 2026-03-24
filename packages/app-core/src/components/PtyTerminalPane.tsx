@@ -34,6 +34,14 @@ export function PtyTerminalPane({
 
       if (disposed || !containerRef.current) return;
 
+      // Resolve CSS custom properties at mount time — xterm.js passes
+      // theme colors directly to canvas.fillStyle which cannot resolve
+      // CSS var() expressions. fontFamily works because it's applied to
+      // a DOM element, not canvas.
+      const cs = getComputedStyle(containerRef.current);
+      const cssVar = (name: string, fallback: string) =>
+        cs.getPropertyValue(name).trim() || fallback;
+
       const term = new Terminal({
         fontSize: 12,
         fontFamily: "var(--font-mono, monospace)",
@@ -41,10 +49,13 @@ export function PtyTerminalPane({
         scrollback: 5000,
         cursorBlink: true,
         theme: {
-          background: "var(--bg-deep, #0a0a0a)",
-          foreground: "var(--txt, #e4e4e7)",
-          cursor: "var(--accent, #5a9a2a)",
-          selectionBackground: "var(--accent-muted, rgba(90, 154, 42, 0.3))",
+          background: cssVar("--bg-deep", "#0a0a0a"),
+          foreground: cssVar("--txt", "#e4e4e7"),
+          cursor: cssVar("--accent", "#5a9a2a"),
+          selectionBackground: cssVar(
+            "--accent-muted",
+            "rgba(90, 154, 42, 0.3)",
+          ),
         },
       });
 
