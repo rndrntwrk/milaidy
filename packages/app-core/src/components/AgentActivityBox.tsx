@@ -1,14 +1,5 @@
 import type { CodingAgentSession } from "@miladyai/app-core/api";
-
-/** Status dot color classes for coding-agent activity. */
-const STATUS_DOT: Record<string, string> = {
-  active: "bg-ok",
-  tool_running: "bg-accent",
-  blocked: "bg-warn",
-  error: "bg-danger",
-};
-
-const PULSE_STATUSES = new Set(["active", "tool_running"]);
+import { PULSE_STATUSES, STATUS_DOT } from "./pty-status-dots";
 
 /** Derive activity text for sessions hydrated from the server (no lastActivity yet). */
 function deriveActivity(s: CodingAgentSession): string {

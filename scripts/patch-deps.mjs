@@ -574,7 +574,7 @@ if (threeVrmNodeTargets.length === 0) {
  */
 function patchElizaCoreActionParsing() {
   const needle = `result[key] = value ? value.split(",").map((s) => s.trim()) : [];`;
-  const replacement = `result[key] = value ? (value.includes("<action>") || value.includes("<action ") ? value : value.split(",").map((s) => s.trim())) : [];`;
+  const replacement = `result[key] = (key === "actions" && value && (value.includes("<action>") || value.includes("<action "))) ? [...value.matchAll(/<action[^>]*>[\\s\\S]*?<name>([\\s\\S]*?)<\\/name>[\\s\\S]*?<\\/action>/g)].map(m => m[1].trim()).filter(Boolean) : (value ? value.split(",").map((s) => s.trim()) : []);`;
 
   let patched = 0;
   for (const target of elizaCoreBundleTargets) {

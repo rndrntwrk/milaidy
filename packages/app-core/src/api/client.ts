@@ -1401,6 +1401,46 @@ export interface CodingAgentStatus {
   pendingConfirmations: number;
 }
 
+/** Raw PTY session shape returned by /api/coding-agents. */
+export interface RawPtySession {
+  id: string;
+  name?: string;
+  agentType?: string;
+  workdir?: string;
+  status?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Maps raw PTY sessions from /api/coding-agents into CodingAgentSession[].
+ * Extracted as a pure function so it can be unit-tested without instantiating
+ * the full MiladyClient.
+ */
+export function mapPtySessionsToCodingAgentSessions(
+  ptySessions: RawPtySession[],
+): CodingAgentSession[] {
+  return ptySessions.map((s) => ({
+    sessionId: s.id,
+    agentType: s.agentType ?? "claude",
+    label: (s.metadata?.label as string) ?? s.name ?? s.agentType ?? "Agent",
+    originalTask: "",
+    workdir: s.workdir ?? "",
+    status:
+      s.status === "ready" || s.status === "busy"
+        ? ("active" as const)
+        : s.status === "error"
+          ? ("error" as const)
+          : s.status === "stopped" ||
+              s.status === "done" ||
+              s.status === "completed" ||
+              s.status === "exited"
+            ? ("stopped" as const)
+            : ("active" as const),
+    decisionCount: 0,
+    autoResolvedCount: 0,
+  }));
+}
+
 // MCP
 export interface McpServerConfig {
   type: "stdio" | "streamable-http" | "sse";
@@ -5334,36 +5374,9 @@ export class MiladyClient {
       if (status && (!status.tasks || status.tasks.length === 0)) {
         try {
           const ptySessions =
-            await this.fetch<
-              Array<{
-                id: string;
-                name?: string;
-                agentType?: string;
-                workdir?: string;
-                status?: string;
-                metadata?: Record<string, unknown>;
-              }>
-            >("/api/coding-agents");
+            await this.fetch<RawPtySession[]>("/api/coding-agents");
           if (Array.isArray(ptySessions) && ptySessions.length > 0) {
-            status.tasks = ptySessions.map((s) => ({
-              sessionId: s.id,
-              agentType: s.agentType ?? "claude",
-              label:
-                (s.metadata?.label as string) ??
-                s.name ??
-                s.agentType ??
-                "Agent",
-              originalTask: "",
-              workdir: s.workdir ?? "",
-              status:
-                s.status === "ready" || s.status === "busy"
-                  ? ("active" as const)
-                  : s.status === "error"
-                    ? ("error" as const)
-                    : ("active" as const),
-              decisionCount: 0,
-              autoResolvedCount: 0,
-            }));
+            status.tasks = mapPtySessionsToCodingAgentSessions(ptySessions);
             status.taskCount = status.tasks.length;
           }
         } catch {

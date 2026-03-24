@@ -92,6 +92,7 @@ export * from "./PairingView";
 export * from "./PermissionsSection";
 export * from "./PluginsPageView";
 export * from "./PluginsView";
+export * from "./PtyConsoleBase";
 export * from "./PtyConsoleDrawer";
 export * from "./PtyConsoleSidePanel";
 export * from "./PtyTerminalPane";
