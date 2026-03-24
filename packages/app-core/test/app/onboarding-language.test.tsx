@@ -128,7 +128,9 @@ describe("Onboarding language mode", () => {
   });
 
   it("shows english copy by default", async () => {
-    mockUseApp.mockReturnValue(createOnboardingContext({ uiLanguage: "en" }));
+    mockUseApp.mockReturnValue(
+      createOnboardingContext({ uiLanguage: "en", onboardingStep: "hosting" }),
+    );
     let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(OnboardingWizard));
@@ -144,7 +146,10 @@ describe("Onboarding language mode", () => {
 
   it("shows chinese copy when uiLanguage is zh-CN", async () => {
     mockUseApp.mockReturnValue(
-      createOnboardingContext({ uiLanguage: "zh-CN" }),
+      createOnboardingContext({
+        uiLanguage: "zh-CN",
+        onboardingStep: "hosting",
+      }),
     );
     let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {

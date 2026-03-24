@@ -910,6 +910,8 @@
   "onboarding.stepSub.providers": "Neural link",
   "onboarding.stepName.permissions": "Permissions",
   "onboarding.stepSub.permissions": "System access",
+  "onboarding.stepName.identity": "Identity",
+  "onboarding.stepSub.identity": "Choose your style",
   "onboarding.stepName.launch": "Launch",
   "onboarding.stepSub.launch": "Ready",
   "onboarding.welcomeTitle": "Welcome to {{appName}}",

@@ -55,6 +55,7 @@ describe("DetachedShellRoot", () => {
       onboardingLoading: false,
       retryStartup,
       startupError: null,
+      t: (key: string) => key,
     });
   });
 

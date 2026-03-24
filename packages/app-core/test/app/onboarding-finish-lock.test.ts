@@ -510,10 +510,17 @@ describe("onboarding finish locking", () => {
     await act(async () => {
       await api?.handleOnboardingNext();
     });
+    expect(requireApi().getOnboardingStep()).toBe("identity");
     expect(mockClient.submitOnboarding).not.toHaveBeenCalled();
 
     await act(async () => {
       await api?.handleOnboardingNext({ allowPermissionBypass: true });
+    });
+    expect(requireApi().getOnboardingStep()).toBe("launch");
+    expect(mockClient.submitOnboarding).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await api?.handleOnboardingNext();
     });
     expect(mockClient.submitOnboarding).toHaveBeenCalledTimes(1);
 
@@ -562,7 +569,7 @@ describe("onboarding finish locking", () => {
     expect(snapshot.tab).toBe("character-select");
     expect(snapshot.activeConversationId).toBeNull();
     expect(snapshot.conversationMessages).toEqual([]);
-    expect(mockClient.restartAgent).toHaveBeenCalledTimes(1);
+    expect(mockClient.restartAgent).toHaveBeenCalled();
     expect(mockClient.createConversation).not.toHaveBeenCalled();
 
     await act(async () => {

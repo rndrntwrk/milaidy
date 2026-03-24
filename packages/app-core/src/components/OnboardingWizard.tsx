@@ -137,75 +137,7 @@ export function OnboardingWizard() {
           zIndex: 40,
         }}
       >
-        {/* Corner decorations */}
-        <svg
-          className="onboarding-corner onboarding-corner--tl"
-          viewBox="0 0 36 36"
-          fill="none"
-          stroke="rgba(240,185,11,0.18)"
-          strokeWidth="1"
-          aria-hidden="true"
-        >
-          <path d="M0 18 L0 0 L18 0" />
-          <circle
-            cx="0"
-            cy="0"
-            r="2"
-            fill="rgba(240,185,11,0.25)"
-            stroke="none"
-          />
-        </svg>
-        <svg
-          className="onboarding-corner onboarding-corner--tr"
-          viewBox="0 0 36 36"
-          fill="none"
-          stroke="rgba(240,185,11,0.18)"
-          strokeWidth="1"
-          aria-hidden="true"
-        >
-          <path d="M0 18 L0 0 L18 0" />
-          <circle
-            cx="0"
-            cy="0"
-            r="2"
-            fill="rgba(240,185,11,0.25)"
-            stroke="none"
-          />
-        </svg>
-        <svg
-          className="onboarding-corner onboarding-corner--bl"
-          viewBox="0 0 36 36"
-          fill="none"
-          stroke="rgba(240,185,11,0.18)"
-          strokeWidth="1"
-          aria-hidden="true"
-        >
-          <path d="M0 18 L0 0 L18 0" />
-          <circle
-            cx="0"
-            cy="0"
-            r="2"
-            fill="rgba(240,185,11,0.25)"
-            stroke="none"
-          />
-        </svg>
-        <svg
-          className="onboarding-corner onboarding-corner--br"
-          viewBox="0 0 36 36"
-          fill="none"
-          stroke="rgba(240,185,11,0.18)"
-          strokeWidth="1"
-          aria-hidden="true"
-        >
-          <path d="M0 18 L0 0 L18 0" />
-          <circle
-            cx="0"
-            cy="0"
-            r="2"
-            fill="rgba(240,185,11,0.25)"
-            stroke="none"
-          />
-        </svg>
+        {/* Corner decorations removed to avoid gold tint artifacts on the scene. */}
 
         {/* Language selector — top right */}
         <div

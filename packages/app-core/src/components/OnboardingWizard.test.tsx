@@ -99,9 +99,8 @@ describe("OnboardingWizard", () => {
       companionAnimateWhenHidden: false,
     });
 
-    let tree: ReactTestRenderer | undefined;
     await act(async () => {
-      tree = TestRenderer.create(<OnboardingWizard />);
+      TestRenderer.create(<OnboardingWizard />);
     });
 
     // CSS variables are now applied via Tailwind/CSS, not inline styles.
@@ -128,9 +127,8 @@ describe("OnboardingWizard", () => {
       companionAnimateWhenHidden: false,
     });
 
-    let tree: ReactTestRenderer | undefined;
     await act(async () => {
-      tree = TestRenderer.create(<OnboardingWizard />);
+      TestRenderer.create(<OnboardingWizard />);
     });
 
     // CSS variables are now applied via Tailwind/CSS, not inline styles.
@@ -141,6 +139,30 @@ describe("OnboardingWizard", () => {
       cameraProfile: "companion",
       initialCompanionZoomNormalized: 1,
     });
+  });
+
+  it("does not render the legacy corner decoration svgs", async () => {
+    mockUseApp.mockReturnValue({
+      onboardingStep: "hosting",
+      selectedVrmIndex: 1,
+      customVrmUrl: "",
+      uiLanguage: "en",
+      uiTheme: "light",
+      setState: vi.fn(),
+      t: (key: string) => key,
+      onboardingUiRevealNonce: 0,
+      companionVrmPowerMode: "balanced",
+      companionHalfFramerateMode: "when_saving_power",
+      companionAnimateWhenHidden: false,
+    });
+
+    let tree: ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(<OnboardingWizard />);
+    });
+
+    const svgs = tree?.root.findAll((node) => node.type === "svg");
+    expect(svgs?.length ?? 0).toBe(0);
   });
 
   describe("onboarding overlay reveal fallback", () => {

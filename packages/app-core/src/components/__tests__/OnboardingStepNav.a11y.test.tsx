@@ -17,7 +17,11 @@ vi.mock("@miladyai/app-core/state", () => ({
 
 vi.mock("@miladyai/ui", () => ({
   Button: (props: Record<string, unknown>) =>
-    React.createElement("button", props, props.children as React.ReactNode),
+    React.createElement(
+      "button",
+      { type: "button", ...props },
+      props.children as React.ReactNode,
+    ),
 }));
 
 vi.mock("../../../config/branding", () => ({
@@ -47,25 +51,25 @@ vi.mock("../../../onboarding/flow", () => ({
 import { OnboardingStepNav } from "../onboarding/OnboardingStepNav";
 
 describe("OnboardingStepNav accessibility", () => {
-  it("renders a container with role=list and aria-label", async () => {
+  it("renders a semantic list container with an aria-label", async () => {
     let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(<OnboardingStepNav />);
     });
     const lists = tree?.root.findAll(
-      (node) => node.props.role === "list" && node.props["aria-label"],
+      (node) => node.type === "ul" && node.props["aria-label"],
     );
     expect(lists?.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("renders listitem roles for non-clickable steps", async () => {
+  it("renders semantic list items for non-clickable steps", async () => {
     let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(<OnboardingStepNav />);
     });
     // "hosting" is current (index=1), "welcome" is done (clickable → Button),
-    // "hosting" and "activate" are non-clickable → role=listitem
-    const items = tree?.root.findAll((node) => node.props.role === "listitem");
+    // "hosting" and "activate" are non-clickable → li
+    const items = tree?.root.findAll((node) => node.type === "li");
     expect(items?.length).toBeGreaterThanOrEqual(2); // hosting (active) + activate (future)
   });
 
@@ -107,5 +111,39 @@ describe("OnboardingStepNav accessibility", () => {
       "onboarding.stepName.welcome",
     );
     expect(buttons?.[0].props["aria-label"]).toContain("onboarding.completed");
+  });
+
+  it("pins the nav rail to the left side of the onboarding viewport", async () => {
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(<OnboardingStepNav />);
+    });
+
+    const wrapper = tree?.root.findAllByType("div")[0];
+    expect(String(wrapper?.props.className)).toContain(
+      "absolute left-0 top-0 bottom-0",
+    );
+  });
+
+  it("keeps the existing diamond dot styling for the active step", async () => {
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(<OnboardingStepNav />);
+    });
+
+    const activeStep = tree?.root.find(
+      (node) => node.props["aria-current"] === "step",
+    );
+    const activeDot = activeStep?.find(
+      (node) =>
+        node.props["aria-hidden"] === "true" &&
+        typeof node.props.className === "string",
+    );
+
+    expect(String(activeDot?.props.className)).toContain("rotate-45");
+    expect(String(activeDot?.props.className)).toContain(
+      "animate-[onboarding-dot-pulse_2s_ease-in-out_infinite]",
+    );
+    expect(String(activeDot?.props.className)).not.toContain("rounded-full");
   });
 });

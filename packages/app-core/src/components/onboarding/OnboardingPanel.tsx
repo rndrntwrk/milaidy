@@ -30,9 +30,9 @@ export function OnboardingPanel({ step, children }: OnboardingPanelProps) {
   }, [step]);
 
   return (
-    <div className="relative z-10 flex w-full max-w-[460px] flex-col items-end justify-center py-10 pr-14 pl-0 max-md:max-w-none max-md:items-center max-md:p-4 max-md:pt-0">
+    <div className="absolute right-0 top-0 bottom-0 z-10 flex w-full max-w-[460px] flex-col items-end justify-center py-10 pr-14 pl-0 max-md:relative max-md:max-w-none max-md:items-center max-md:p-4 max-md:pt-0">
       <div
-        className="flex w-full flex-col gap-0 overflow-x-hidden overflow-y-auto rounded-[18px] border border-[var(--onboarding-panel-border)] bg-[var(--onboarding-panel-bg)] py-[36px] px-6 shadow-[var(--onboarding-panel-shadow)] backdrop-blur-[40px] backdrop-saturate-[1.4] animate-[onboarding-panel-enter_0.6s_cubic-bezier(0.25,0.46,0.45,0.94)_both] max-h-[calc(100vh-80px)] max-md:max-h-[50vh] max-md:max-w-[calc(100vw-32px)] max-md:rounded-[16px] max-md:py-6 max-md:px-4"
+        className="flex w-full flex-col gap-0 overflow-x-hidden overflow-y-auto rounded-[18px] border border-[var(--onboarding-panel-border)] bg-[var(--onboarding-panel-bg)] py-[36px] px-6 shadow-[var(--onboarding-panel-shadow)] backdrop-blur-[40px] backdrop-saturate-[1.4] animate-[onboarding-panel-enter_0.6s_cubic-bezier(0.25,0.46,0.45,0.94)_both] max-h-full max-md:max-h-[50vh] max-md:max-w-[calc(100vw-32px)] max-md:rounded-[16px] max-md:py-6 max-md:px-4"
         ref={panelRef}
       >
         {children}

@@ -25,10 +25,9 @@ export function OnboardingStepNav() {
       : `calc((100% - 52px) * ${Math.min(currentIndex, connectorCount)} / ${connectorCount})`;
 
   return (
-    <div className="relative z-10 flex flex-col justify-center py-[48px] pl-[40px] pr-0 max-md:items-center max-md:px-4 max-md:pt-4 max-md:pb-2">
+    <div className="absolute left-0 top-0 bottom-0 z-10 flex flex-col justify-center py-[48px] pl-[40px] pr-0 max-md:relative max-md:items-center max-md:px-4 max-md:pt-4 max-md:pb-2">
       <div className="w-[248px] rounded-[28px] border border-[var(--onboarding-nav-border,rgba(201,204,209,0.12))] [background:var(--onboarding-nav-scrim,rgba(18,18,20,0.72))] px-[26px] py-[30px] shadow-[var(--onboarding-nav-shadow,0_16px_40px_rgba(0,0,0,0.24))] backdrop-blur-[22px] backdrop-saturate-[1.2] max-md:w-fit max-md:max-w-[calc(100vw-32px)] max-md:rounded-[22px] max-md:px-4 max-md:py-3">
-        <div
-          role="list"
+        <ul
           aria-label={t("onboarding.stepNavigation")}
           style={
             {
@@ -84,28 +83,28 @@ export function OnboardingStepNav() {
 
             if (isClickable) {
               return (
-                <Button
-                  key={step.id}
-                  variant="ghost"
-                  type="button"
-                  className={rowClass}
-                  aria-label={`${t(step.name)} — ${t("onboarding.stepLabel", { current: i + 1, total: activeSteps.length })} (${t("onboarding.completed")})`}
-                  onClick={() => handleOnboardingJumpToStep(step.id)}
-                >
-                  <div className={dotClass} aria-hidden="true" />
-                  <div className="flex flex-col gap-0.5 max-md:hidden">
-                    <span className={nameClass}>{t(step.name)}</span>
-                    <span className={subClass}>{t(step.subtitle)}</span>
-                  </div>
-                </Button>
+                <li key={step.id} className="list-none">
+                  <Button
+                    variant="ghost"
+                    type="button"
+                    className={rowClass}
+                    aria-label={`${t(step.name)} — ${t("onboarding.stepLabel", { current: i + 1, total: activeSteps.length })} (${t("onboarding.completed")})`}
+                    onClick={() => handleOnboardingJumpToStep(step.id)}
+                  >
+                    <div className={dotClass} aria-hidden="true" />
+                    <div className="flex flex-col gap-0.5 max-md:hidden">
+                      <span className={nameClass}>{t(step.name)}</span>
+                      <span className={subClass}>{t(step.subtitle)}</span>
+                    </div>
+                  </Button>
+                </li>
               );
             }
 
             return (
-              <div
+              <li
                 key={step.id}
-                className={rowClass}
-                role="listitem"
+                className={`${rowClass} list-none`}
                 aria-label={`${t(step.name)} — ${t("onboarding.stepLabel", { current: i + 1, total: activeSteps.length })}`}
                 {...(isActive ? { "aria-current": "step" as const } : {})}
               >
@@ -114,10 +113,10 @@ export function OnboardingStepNav() {
                   <span className={nameClass}>{t(step.name)}</span>
                   <span className={subClass}>{t(step.subtitle)}</span>
                 </div>
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       </div>
     </div>
   );
