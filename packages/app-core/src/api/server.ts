@@ -487,10 +487,13 @@ async function compatLoopbackFetchJson<T>(
   pathname: string,
   init?: RequestInit,
 ): Promise<T> {
-  const response = await fetch(new URL(pathname, resolveCompatLoopbackApiBase(req)), {
-    ...init,
-    headers: buildCompatLoopbackHeaders(req, init),
-  });
+  const response = await fetch(
+    new URL(pathname, resolveCompatLoopbackApiBase(req)),
+    {
+      ...init,
+      headers: buildCompatLoopbackHeaders(req, init),
+    },
+  );
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}: ${pathname}`);
   }
@@ -502,10 +505,13 @@ async function compatLoopbackRequest(
   pathname: string,
   init?: RequestInit,
 ): Promise<void> {
-  const response = await fetch(new URL(pathname, resolveCompatLoopbackApiBase(req)), {
-    ...init,
-    headers: buildCompatLoopbackHeaders(req, init),
-  });
+  const response = await fetch(
+    new URL(pathname, resolveCompatLoopbackApiBase(req)),
+    {
+      ...init,
+      headers: buildCompatLoopbackHeaders(req, init),
+    },
+  );
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}: ${pathname}`);
   }
