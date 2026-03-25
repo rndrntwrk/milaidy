@@ -6331,6 +6331,14 @@ function extractWsQueryToken(url: URL): string | null {
   return token?.trim() || null;
 }
 
+function hasWsQueryToken(url: URL): boolean {
+  return (
+    url.searchParams.has("token") ||
+    url.searchParams.has("apiKey") ||
+    url.searchParams.has("api_key")
+  );
+}
+
 function extractWebSocketHandshakeToken(
   request: http.IncomingMessage,
   url: URL,
@@ -6375,6 +6383,13 @@ export function resolveWebSocketUpgradeRejection(
   const expected = getConfiguredApiToken();
   if (!expected) {
     return null;
+  }
+
+  if (
+    process.env.ELIZA_ALLOW_WS_QUERY_TOKEN !== "1" &&
+    hasWsQueryToken(wsUrl)
+  ) {
+    return { status: 401, reason: "Unauthorized" };
   }
 
   const handshakeToken = extractWebSocketHandshakeToken(req, wsUrl);

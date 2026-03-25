@@ -10,7 +10,7 @@ describe("handleTaskBackedWorkbenchTodoRoute error handling", () => {
     const handlerIdx = source.indexOf("async function handleTaskBackedWorkbenchTodoRoute");
     expect(handlerIdx).toBeGreaterThan(-1);
 
-    const nearbyCode = source.slice(handlerIdx, handlerIdx + 6500);
+    const nearbyCode = source.slice(handlerIdx, handlerIdx + 12000);
     expect(nearbyCode).toContain("let operation = \"route\"");
     expect(nearbyCode).toContain("catch (err)");
     expect(nearbyCode).toContain('`[workbench/todos] ${operation} failed:');

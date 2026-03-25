@@ -18,6 +18,9 @@ const MOCK_DIST_PATH = "/mock/milady-dist";
 process.env.MILADY_DIST_PATH = MOCK_DIST_PATH;
 const ORIGINAL_EXEC_PATH = process.execPath;
 const ORIGINAL_PLATFORM = process.platform;
+const ORIGINAL_MILADY_PORT = process.env.MILADY_PORT;
+const ORIGINAL_MILADY_API_PORT = process.env.MILADY_API_PORT;
+const ORIGINAL_ELIZA_PORT = process.env.ELIZA_PORT;
 
 vi.mock("node:fs", () => {
   const existsSyncFn = vi.fn(() => true);
@@ -164,6 +167,9 @@ describe("AgentManager", () => {
       configurable: true,
       value: ORIGINAL_PLATFORM,
     });
+    delete process.env.MILADY_PORT;
+    delete process.env.MILADY_API_PORT;
+    delete process.env.ELIZA_PORT;
     // Default: all filesystem checks return true (dist exists, entry.js exists, etc.)
     const existsSync = await getExistsSyncMock();
     existsSync.mockReturnValue(true);
@@ -250,6 +256,21 @@ describe("AgentManager", () => {
       configurable: true,
       value: ORIGINAL_PLATFORM,
     });
+    if (ORIGINAL_MILADY_PORT === undefined) {
+      delete process.env.MILADY_PORT;
+    } else {
+      process.env.MILADY_PORT = ORIGINAL_MILADY_PORT;
+    }
+    if (ORIGINAL_MILADY_API_PORT === undefined) {
+      delete process.env.MILADY_API_PORT;
+    } else {
+      process.env.MILADY_API_PORT = ORIGINAL_MILADY_API_PORT;
+    }
+    if (ORIGINAL_ELIZA_PORT === undefined) {
+      delete process.env.ELIZA_PORT;
+    } else {
+      process.env.ELIZA_PORT = ORIGINAL_ELIZA_PORT;
+    }
     await manager.dispose();
   });
 
