@@ -4418,7 +4418,7 @@ export class MiladyClient {
 
     if (this.wsSendQueue.length >= this.wsSendQueueLimit) {
       const droppedType = typeof data.type === "string" ? data.type : "unknown";
-      console.warn("[ws] send queue full — dropping:", droppedType);
+      console.warn("[ws] send queue full - dropping:", droppedType);
       this.wsSendQueue.shift();
     }
     this.wsSendQueue.push(payload);

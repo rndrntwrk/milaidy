@@ -118,12 +118,19 @@ describe("MiladyClient WebSocket auth", () => {
     const { MiladyClient } = await import("./client");
 
     const client = new MiladyClient("http://127.0.0.1:31337", null);
-    for (let i = 0; i < 33; i += 1) {
-      client.sendWsMessage({ type: `message-${i}` });
-    }
+    const internals = client as unknown as {
+      wsSendQueue: string[];
+      wsSendQueueLimit: number;
+    };
+    internals.wsSendQueue = Array.from(
+      { length: internals.wsSendQueueLimit },
+      (_, i) => JSON.stringify({ type: `queued-${i}` }),
+    );
+
+    client.sendWsMessage({ type: "message-32" });
 
     expect(warnSpy).toHaveBeenCalledWith(
-      "[ws] send queue full — dropping:",
+      "[ws] send queue full - dropping:",
       "message-32",
     );
   });
