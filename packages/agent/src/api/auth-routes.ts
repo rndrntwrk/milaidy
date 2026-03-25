@@ -1,5 +1,12 @@
 import crypto from "node:crypto";
+import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
 import type { RouteRequestContext } from "./route-helpers";
+
+function getConfiguredApiToken(): string | undefined {
+  return (
+    process.env.ELIZA_API_TOKEN?.trim() || process.env.MILADY_API_TOKEN?.trim()
+  );
+}
 
 export interface AuthRouteContext extends RouteRequestContext {
   pairingEnabled: () => boolean;
@@ -32,7 +39,16 @@ export async function handleAuthRoutes(
   if (!pathname.startsWith("/api/auth/")) return false;
 
   if (method === "GET" && pathname === "/api/auth/status") {
-    const required = Boolean(process.env.ELIZA_API_TOKEN?.trim());
+    const required = Boolean(getConfiguredApiToken());
+
+    if (isCloudProvisionedContainer()) {
+      json(res, {
+        required,
+        pairingEnabled: false,
+        expiresAt: null,
+      });
+      return true;
+    }
     const enabled = pairingEnabled();
     if (enabled) ensurePairingCode();
     json(res, {
@@ -47,7 +63,12 @@ export async function handleAuthRoutes(
     const body = await readJsonBody<{ code?: string }>(req, res);
     if (!body) return true;
 
-    const token = process.env.ELIZA_API_TOKEN?.trim();
+    if (isCloudProvisionedContainer()) {
+      error(res, "Pairing disabled", 403);
+      return true;
+    }
+
+    const token = getConfiguredApiToken();
     if (!token) {
       error(res, "Pairing not enabled", 400);
       return true;
