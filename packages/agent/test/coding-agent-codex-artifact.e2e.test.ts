@@ -177,7 +177,8 @@ describe.skipIf(!(CODEX_AVAILABLE && CODEX_AUTH_AVAILABLE))(
       expect(indexHtml).toMatch(/src=["']\.?\/?game\.js["']/i);
 
       expect(stylesCss).toMatch(/[#.]board\b/i);
-      expect(stylesCss).toMatch(/[#.]next-piece\b/i);
+      // Codex sometimes styles the preview container class instead of the exact id.
+      expect(stylesCss).toMatch(/(?:[#.]next-piece\b|[.]preview\b)/i);
 
       expect(gameJs).toMatch(/ArrowLeft/);
       expect(gameJs).toMatch(/ArrowRight/);

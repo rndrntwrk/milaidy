@@ -562,7 +562,6 @@
   },
   "overrides": {
     "@elizaos/core": "2.0.0-alpha.98",
-    "@elizaos/plugin-ollama": "2.0.0-alpha.70",
     "@stwd/sdk": "^0.3.0",
     "ai": "6.0.30",
     "drizzle-orm": "0.45.1",
