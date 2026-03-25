@@ -10,6 +10,13 @@ const CODEX_AUTH_PATH = path.join(REAL_HOME_DIR, ".codex", "auth.json");
 const CODEX_AVAILABLE =
   spawnSync("codex", ["--version"], { encoding: "utf8" }).status === 0;
 const CODEX_AUTH_AVAILABLE = fs.existsSync(CODEX_AUTH_PATH);
+const CODEX_UNAVAILABLE_OUTPUT_PATTERNS = [
+  "usage_limit_reached",
+  "insufficient_quota",
+  "rate_limit_exceeded",
+  "429 Too Many Requests",
+  "You've hit your usage limit",
+];
 
 function createIsolatedCodexHome(): string {
   const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-codex-home-"));
@@ -91,6 +98,12 @@ function runCodexExec(
   });
 }
 
+function isCodexUnavailableOutput(output: string): boolean {
+  return CODEX_UNAVAILABLE_OUTPUT_PATTERNS.some((pattern) =>
+    output.includes(pattern),
+  );
+}
+
 describe.skipIf(!(CODEX_AVAILABLE && CODEX_AUTH_AVAILABLE))(
   "Coding agent Codex artifact generation",
   () => {
@@ -125,11 +138,18 @@ describe.skipIf(!(CODEX_AVAILABLE && CODEX_AUTH_AVAILABLE))(
         prompt,
         300_000,
       );
+      const resultOutput = [result.stdout, result.stderr]
+        .filter(Boolean)
+        .join("\n\n");
 
-      expect(
-        result.exitCode,
-        [result.stdout, result.stderr].filter(Boolean).join("\n\n"),
-      ).toBe(0);
+      if (result.exitCode !== 0 && isCodexUnavailableOutput(resultOutput)) {
+        console.warn(
+          "[coding-agent-codex-artifact] Skipping artifact assertion because Codex is currently unavailable (rate limit or usage limit).",
+        );
+        return;
+      }
+
+      expect(result.exitCode, resultOutput).toBe(0);
 
       const entries = fs
         .readdirSync(workingDirectory)
