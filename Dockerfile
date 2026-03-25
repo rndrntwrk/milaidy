@@ -179,5 +179,5 @@ ENV PGLITE_DATA_DIR="/data/.milady/workspace/.eliza/.elizadb"
 # onboarding/config/database survive redeploys.
 RUN mkdir -p /data/.milady/workspace/.eliza/.elizadb
 
-# Railway sets $PORT dynamically. Map it to MILADY_PORT at runtime.
-CMD ["sh", "-lc", "MILADY_PORT=${PORT:-2138} node milady.mjs start"]
+# Railway sets $PORT dynamically. Map it to MILADY_API_PORT at runtime.
+CMD ["sh", "-lc", "MILADY_API_PORT=${PORT:-31337} node milady.mjs start"]
