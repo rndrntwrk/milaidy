@@ -24,70 +24,75 @@ const {
   mockGetKnowledgeFragments: vi.fn(),
 }));
 
-vi.mock("@miladyai/ui", () => ({
-  Select: ({
-    children,
-    ...props
-  }: React.PropsWithChildren<Record<string, unknown>>) =>
-    React.createElement("div", props, children),
-  SelectContent: ({
-    children,
-    ...props
-  }: React.PropsWithChildren<Record<string, unknown>>) =>
-    React.createElement("div", props, children),
-  SelectItem: ({
-    children,
-    ...props
-  }: React.PropsWithChildren<Record<string, unknown>>) =>
-    React.createElement("option", props, children),
-  SelectTrigger: ({
-    children,
-    ...props
-  }: React.PropsWithChildren<Record<string, unknown>>) =>
-    React.createElement("div", props, children),
-  SelectValue: ({
-    children,
-    ...props
-  }: React.PropsWithChildren<Record<string, unknown>>) =>
-    React.createElement("div", props, children),
-  Button: ({
-    children,
-    className,
-    ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement>) =>
-    React.createElement(
-      "button",
-      { type: "button", className, ...props },
+vi.mock("@miladyai/ui", async (importOriginal) => {
+  const React = await import("react");
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    Select: ({
       children,
-    ),
-  Checkbox: ({
-    checked,
-    onCheckedChange,
-  }: {
-    checked?: boolean;
-    onCheckedChange?: (next: boolean) => void;
-  }) =>
-    React.createElement("button", {
-      type: "button",
-      "aria-pressed": checked,
-      onClick: () => onCheckedChange?.(!checked),
-    }),
-  Dialog: ({ children }: { children: React.ReactNode }) =>
-    React.createElement("div", null, children),
-  DialogContent: ({
-    children,
-    className,
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) => React.createElement("div", { className }, children),
-  DialogHeader: ({ children }: { children: React.ReactNode }) =>
-    React.createElement("div", null, children),
-  DialogTitle: ({ children }: { children: React.ReactNode }) =>
-    React.createElement("div", null, children),
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) =>
-    React.createElement("input", props),
-}));
+      ...props
+    }: React.PropsWithChildren<Record<string, unknown>>) =>
+      React.createElement("div", props, children),
+    SelectContent: ({
+      children,
+      ...props
+    }: React.PropsWithChildren<Record<string, unknown>>) =>
+      React.createElement("div", props, children),
+    SelectItem: ({
+      children,
+      ...props
+    }: React.PropsWithChildren<Record<string, unknown>>) =>
+      React.createElement("option", props, children),
+    SelectTrigger: ({
+      children,
+      ...props
+    }: React.PropsWithChildren<Record<string, unknown>>) =>
+      React.createElement("div", props, children),
+    SelectValue: ({
+      children,
+      ...props
+    }: React.PropsWithChildren<Record<string, unknown>>) =>
+      React.createElement("div", props, children),
+    Button: ({
+      children,
+      className,
+      ...props
+    }: React.ButtonHTMLAttributes<HTMLButtonElement>) =>
+      React.createElement(
+        "button",
+        { type: "button", className, ...props },
+        children,
+      ),
+    Checkbox: ({
+      checked,
+      onCheckedChange,
+    }: {
+      checked?: boolean;
+      onCheckedChange?: (next: boolean) => void;
+    }) =>
+      React.createElement("button", {
+        type: "button",
+        "aria-pressed": checked,
+        onClick: () => onCheckedChange?.(!checked),
+      }),
+    Dialog: ({ children }: { children: React.ReactNode }) =>
+      React.createElement("div", null, children),
+    DialogContent: ({
+      children,
+      className,
+    }: {
+      children: React.ReactNode;
+      className?: string;
+    }) => React.createElement("div", { className }, children),
+    DialogHeader: ({ children }: { children: React.ReactNode }) =>
+      React.createElement("div", null, children),
+    DialogTitle: ({ children }: { children: React.ReactNode }) =>
+      React.createElement("div", null, children),
+    Input: (props: React.InputHTMLAttributes<HTMLInputElement>) =>
+      React.createElement("input", props),
+  };
+});
 
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
@@ -106,6 +111,7 @@ vi.mock("@miladyai/app-core/api", () => ({
 }));
 
 vi.mock("@miladyai/app-core/components", async () => {
+  const React = await import("react");
   const actual = await vi.importActual<object>("@miladyai/app-core/components");
   return {
     ...actual,
@@ -132,26 +138,38 @@ vi.mock("@miladyai/app-core/utils", async () => {
   };
 });
 
-vi.mock("../../src/components/BscTradePanel", () => ({
-  TradePanel: () => React.createElement("div", null, "TradePanel"),
-}));
+vi.mock("../../src/components/BscTradePanel", async () => {
+  const React = await import("react");
+  return {
+    TradePanel: () => React.createElement("div", null, "TradePanel"),
+  };
+});
 
-vi.mock("../../src/components/inventory/InventoryToolbar", () => ({
-  InventoryToolbar: () =>
-    React.createElement(
-      "div",
-      { "data-testid": "inventory-toolbar" },
-      "toolbar",
-    ),
-}));
+vi.mock("../../src/components/inventory/InventoryToolbar", async () => {
+  const React = await import("react");
+  return {
+    InventoryToolbar: () =>
+      React.createElement(
+        "div",
+        { "data-testid": "inventory-toolbar" },
+        "toolbar",
+      ),
+  };
+});
 
-vi.mock("../../src/components/inventory/NftGrid", () => ({
-  NftGrid: () => React.createElement("div", null, "NftGrid"),
-}));
+vi.mock("../../src/components/inventory/NftGrid", async () => {
+  const React = await import("react");
+  return {
+    NftGrid: () => React.createElement("div", null, "NftGrid"),
+  };
+});
 
-vi.mock("../../src/components/inventory/TokensTable", () => ({
-  TokensTable: () => React.createElement("div", null, "TokensTable"),
-}));
+vi.mock("../../src/components/inventory/TokensTable", async () => {
+  const React = await import("react");
+  return {
+    TokensTable: () => React.createElement("div", null, "TokensTable"),
+  };
+});
 
 vi.mock("../../src/components/inventory/useInventoryData", () => ({
   useInventoryData: () => ({

@@ -236,11 +236,16 @@ export function IdentityStep() {
         <Button
           className={onboardingPrimaryActionClass}
           style={onboardingPrimaryActionTextShadowStyle}
-          onClick={(e) => {
-            spawnOnboardingRipple(e.currentTarget, {
-              x: e.clientX,
-              y: e.clientY,
-            });
+          onClick={(event?: React.MouseEvent<HTMLButtonElement>) => {
+            spawnOnboardingRipple(
+              event?.currentTarget ?? null,
+              event
+                ? {
+                    x: event.clientX,
+                    y: event.clientY,
+                  }
+                : undefined,
+            );
             handleOnboardingNext();
           }}
           type="button"
