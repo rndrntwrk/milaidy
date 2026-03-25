@@ -3526,10 +3526,19 @@ export async function startApiServer(
       void (async () => {
         try {
           await ensureRuntimeSqlCompatibility(runtime);
+        } catch (err) {
+          logger.error(
+            `[milady][runtime] SQL compatibility init failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+
+        try {
           await (await lazyEnsureTTS())(runtime);
         } catch (err) {
           logger.warn(
-            `[milady][runtime] Deferred compat init failed: ${
+            `[milady][runtime] TTS init failed (non-critical): ${
               err instanceof Error ? err.message : String(err)
             }`,
           );
