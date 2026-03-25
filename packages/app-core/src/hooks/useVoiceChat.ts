@@ -219,7 +219,11 @@ function mergeTranscriptWindows(existing: string, incoming: string): string {
   if (!right) return left;
 
   const exactMerged = mergeStreamingText(left, right);
-  if (exactMerged === right || exactMerged === left || exactMerged === `${left}${right}`) {
+  if (
+    exactMerged === right ||
+    exactMerged === left ||
+    exactMerged === `${left}${right}`
+  ) {
     const leftWords = left.split(" ");
     const rightWords = right.split(" ");
     const maxOverlap = Math.min(leftWords.length, rightWords.length);
