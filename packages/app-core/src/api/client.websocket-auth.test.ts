@@ -28,6 +28,7 @@ describe("MiladyClient WebSocket auth", () => {
   const originalWebSocket = globalThis.WebSocket;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.resetModules();
     setBootConfig(DEFAULT_BOOT_CONFIG);
     MockWebSocket.instances = [];
@@ -54,6 +55,7 @@ describe("MiladyClient WebSocket auth", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     if (originalWindow === undefined) {
       Reflect.deleteProperty(globalThis, "window");
     } else {
@@ -89,5 +91,25 @@ describe("MiladyClient WebSocket auth", () => {
     expect(ws.sent[0]).toBe(
       JSON.stringify({ type: "auth", token: "secret-token" }),
     );
+  });
+
+  it("keeps retrying on a long interval after max reconnect attempts", async () => {
+    const { MiladyClient } = await import("./client");
+
+    const client = new MiladyClient("http://127.0.0.1:31337", null);
+    client.connectWs();
+
+    const firstWs = MockWebSocket.instances[0];
+    (client as unknown as { reconnectAttempt: number }).reconnectAttempt = 14;
+
+    firstWs.onclose?.();
+    expect(client.getConnectionState().state).toBe("failed");
+    expect(MockWebSocket.instances).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(MockWebSocket.instances).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(MockWebSocket.instances).toHaveLength(2);
   });
 });

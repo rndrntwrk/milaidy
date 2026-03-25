@@ -4335,8 +4335,13 @@ export class MiladyClient {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer) return;
-    // Stop reconnecting if we've hit max attempts
+    // After the short backoff window is exhausted, keep probing at a
+    // low frequency so the UI can recover without a full page refresh.
     if (this.reconnectAttempt >= this.maxReconnectAttempts) {
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        this.connectWs();
+      }, 30_000);
       return;
     }
     this.reconnectTimer = setTimeout(() => {
