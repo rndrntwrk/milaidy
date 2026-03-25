@@ -851,7 +851,12 @@ export async function startEliza(
       console.log("[milady] Server running. Press Ctrl+C to stop.");
 
       const keepAlive = setInterval(() => {}, 1 << 30);
+      let isCleaningUp = false;
       const cleanup = async () => {
+        if (isCleaningUp) {
+          return;
+        }
+        isCleaningUp = true;
         clearInterval(keepAlive);
         // Force exit if graceful shutdown hangs for more than 10 seconds.
         const forceExitTimer = setTimeout(() => {
