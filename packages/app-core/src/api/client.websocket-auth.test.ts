@@ -112,4 +112,19 @@ describe("MiladyClient WebSocket auth", () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(MockWebSocket.instances).toHaveLength(2);
   });
+
+  it("warns when the disconnected ws send queue drops the oldest message", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { MiladyClient } = await import("./client");
+
+    const client = new MiladyClient("http://127.0.0.1:31337", null);
+    for (let i = 0; i < 33; i += 1) {
+      client.sendWsMessage({ type: `message-${i}` });
+    }
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[ws] send queue full — dropping:",
+      "message-32",
+    );
+  });
 });
