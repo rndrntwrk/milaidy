@@ -2434,6 +2434,11 @@ async function handleMiladyCompatRoute(
   // general-purpose key export endpoint.
 
   if (method === "GET" && url.pathname === "/api/wallet/keys") {
+    if (!isLoopbackRemoteAddress(req.socket.remoteAddress)) {
+      sendJsonErrorResponse(res, 403, "loopback only");
+      return true;
+    }
+
     if (!ensureCompatSensitiveRouteAuthorized(req, res)) {
       return true;
     }
