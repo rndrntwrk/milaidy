@@ -182,6 +182,48 @@ describe("Non-loopback binding enforces auth without explicit token", () => {
   });
 });
 
+describe("MILADY_API_BIND alias enforces auth without explicit token", () => {
+  let port: number;
+  let close: () => Promise<void>;
+  let envBackup: { restore: () => void };
+  let generatedToken = "";
+
+  beforeAll(async () => {
+    envBackup = saveEnv(
+      "ELIZA_API_TOKEN",
+      "MILADY_API_TOKEN",
+      "ELIZA_PAIRING_DISABLED",
+      "ELIZA_API_BIND",
+      "MILADY_API_BIND",
+    );
+    delete process.env.ELIZA_API_TOKEN;
+    delete process.env.MILADY_API_TOKEN;
+    delete process.env.ELIZA_PAIRING_DISABLED;
+    delete process.env.ELIZA_API_BIND;
+    process.env.MILADY_API_BIND = "0.0.0.0";
+
+    const server = await startApiServer({ port: 0 });
+    port = server.port;
+    close = server.close;
+    generatedToken = process.env.ELIZA_API_TOKEN ?? "";
+  }, 30_000);
+
+  afterAll(async () => {
+    await close();
+    envBackup.restore();
+  });
+
+  it("auto-generates a token when MILADY_API_BIND is non-loopback", () => {
+    expect(generatedToken).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("rejects unauthenticated requests", async () => {
+    const { status, data } = await req(port, "GET", "/api/status");
+    expect(status).toBe(401);
+    expect(data.error).toBe("Unauthorized");
+  });
+});
+
 describe("Cloud-provisioned containers bypass local onboarding", () => {
   let port: number;
   let close: () => Promise<void>;

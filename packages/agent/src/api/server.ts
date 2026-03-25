@@ -5856,7 +5856,7 @@ export function isAllowedHost(req: http.IncomingMessage): boolean {
 
   const bindHost = (
     process.env.ELIZA_API_BIND ??
-    process.env.ELIZA_API_BIND ??
+    process.env.MILADY_API_BIND ??
     ""
   )
     .trim()
@@ -5897,7 +5897,7 @@ export function resolveCorsOrigin(origin?: string): string | null {
   // require an explicit token, so this only relaxes the browser origin check.
   const bindHost = (
     process.env.ELIZA_API_BIND ??
-    process.env.ELIZA_API_BIND ??
+    process.env.MILADY_API_BIND ??
     ""
   )
     .trim()
@@ -17228,7 +17228,7 @@ export async function startApiServer(opts?: {
   const host =
     (
       process.env.ELIZA_API_BIND ??
-      process.env.ELIZA_API_BIND ??
+      process.env.MILADY_API_BIND ??
       "127.0.0.1"
     ).trim() || "127.0.0.1";
   ensureApiTokenForBindHost(host);
