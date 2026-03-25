@@ -149,6 +149,7 @@ import {
   getHealthPollTimeoutMs,
   getMiladyDistFallbackCandidates,
 } from "../native/agent";
+import { findFirstAvailableLoopbackPort } from "../native/loopback-port";
 
 describe("AgentManager", () => {
   let manager: AgentManager;
@@ -550,6 +551,44 @@ describe("AgentManager", () => {
           delete process.env.MILADY_PORT;
         } else {
           process.env.MILADY_PORT = originalPort;
+        }
+      }
+    });
+
+    it("does not overwrite MILADY_PORT in child env when the API falls back to another port", async () => {
+      const originalPort = process.env.MILADY_PORT;
+      const originalApiPort = process.env.MILADY_API_PORT;
+      process.env.MILADY_PORT = "9999";
+      delete process.env.MILADY_API_PORT;
+
+      try {
+        vi.mocked(findFirstAvailableLoopbackPort).mockResolvedValueOnce(31337);
+
+        const mockProc = createMockProcess();
+        mockSpawn.mockReturnValue(mockProc);
+
+        mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ agents: [] }),
+        });
+
+        await manager.start();
+
+        const spawnArgs = mockSpawn.mock.calls[0];
+        const childEnv = spawnArgs[1].env as Record<string, string>;
+        expect(childEnv.MILADY_PORT).toBe("9999");
+      } finally {
+        if (originalPort === undefined) {
+          delete process.env.MILADY_PORT;
+        } else {
+          process.env.MILADY_PORT = originalPort;
+        }
+
+        if (originalApiPort === undefined) {
+          delete process.env.MILADY_API_PORT;
+        } else {
+          process.env.MILADY_API_PORT = originalApiPort;
         }
       }
     });

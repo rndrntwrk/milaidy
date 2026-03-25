@@ -872,7 +872,6 @@ export class AgentManager {
 
       const childEnv: Record<string, string> = {
         ...(process.env as Record<string, string>),
-        MILADY_PORT: String(apiPort),
       };
 
       // node-llama-cpp crashes Bun on Windows during packaged startup.
