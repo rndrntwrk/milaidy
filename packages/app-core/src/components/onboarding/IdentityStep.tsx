@@ -10,18 +10,7 @@ import {
   type CharacterRosterEntry,
   resolveRosterEntries,
 } from "../CharacterRoster";
-
-const CLOUD_TTS_VOICE_IDS = new Set([
-  "alloy",
-  "ash",
-  "ballad",
-  "coral",
-  "echo",
-  "nova",
-  "sage",
-  "shimmer",
-  "verse",
-]);
+import { resolvePreviewTtsEndpoints } from "./identity-preview-tts";
 
 export function IdentityStep() {
   const { onboardingStyle, handleOnboardingNext, setState, t, uiLanguage } =
@@ -102,11 +91,7 @@ export function IdentityStep() {
 
       if (selectedPreset?.voiceId) {
         const apiToken = getElizaApiToken()?.trim() ?? "";
-        const normalizedVoiceId = selectedPreset.voiceId.trim().toLowerCase();
-        const isCloudVoice = CLOUD_TTS_VOICE_IDS.has(normalizedVoiceId);
-        const endpoints = isCloudVoice
-          ? ["/api/tts/cloud", "/api/tts/elevenlabs"]
-          : ["/api/tts/elevenlabs"];
+        const endpoints = resolvePreviewTtsEndpoints(selectedPreset.voiceId);
 
         for (const endpoint of endpoints) {
           if (!isCurrentRequest()) return;
