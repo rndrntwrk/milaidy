@@ -477,4 +477,46 @@ describe("Header", () => {
       ),
     ).toHaveLength(1);
   });
+
+  it("renders the glassmorphic pill container in all modes", async () => {
+    const mockUseApp = {
+      elizaCloudEnabled: false,
+      elizaCloudConnected: false,
+      elizaCloudCredits: null,
+      elizaCloudCreditsCritical: false,
+      elizaCloudCreditsLow: false,
+      elizaCloudAuthRejected: false,
+      elizaCloudCreditsError: false,
+      chatAgentVoiceMuted: false,
+      handleNewConversation: vi.fn(),
+      handleSaveCharacter: vi.fn(),
+      characterSaving: false,
+      characterSaveSuccess: false,
+      conversationMessages: [],
+      chatLastUsage: null,
+      t: (k: string) => k,
+      handleStart: vi.fn(),
+      loadDropStatus: vi.fn().mockResolvedValue(undefined),
+      tab: "chat",
+      setTab: vi.fn(),
+      setState: vi.fn(),
+      plugins: [],
+      uiLanguage: "en",
+      setUiLanguage: vi.fn(),
+      uiTheme: "dark",
+      setUiTheme: vi.fn(),
+      uiShellMode: "native",
+      switchShellView: vi.fn(),
+    };
+    // @ts-expect-error - test uses a narrowed subset
+    vi.spyOn(AppContext, "useApp").mockReturnValue(mockUseApp);
+    let tree: ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = create(<Header />);
+    });
+    const glassShell = tree?.root.findAll(
+      (node) => node.props["data-testid"] === "header-glass-shell",
+    );
+    expect(glassShell?.length).toBe(1);
+  });
 });

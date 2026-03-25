@@ -217,12 +217,18 @@ export function Header({
   return (
     <>
       <header
-        className={`sticky top-0 z-20 w-full px-3 py-2.5 select-none transition-all sm:px-4 sm:py-3 ${
-          useMinimalHeaderChrome
-            ? "border-b border-transparent bg-transparent backdrop-blur-0 shadow-none"
-            : "border-b border-border/50 bg-bg/82 backdrop-blur-xl"
-        }`}
+        className="sticky top-0 z-20 w-full select-none overflow-visible"
         style={{ WebkitUserSelect: "none", userSelect: "none" }}
+        data-no-camera-drag="true"
+      >
+      <div className={`px-1.5 pt-1.5 sm:px-4 sm:pt-3 ${useMinimalHeaderChrome ? "" : "pb-1.5 sm:pb-3"}`}>
+      <div
+        className={`pointer-events-auto relative mx-auto w-full rounded-[20px] border bg-clip-padding shadow ring-1 ring-inset ring-white/10 backdrop-blur-2xl sm:rounded-[22px] transition-all ${
+          useMinimalHeaderChrome
+            ? "max-w-5xl border-[rgba(255,255,255,0.12)] bg-[image:linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02)),linear-gradient(180deg,rgba(8,11,18,0.52),rgba(5,7,12,0.3))] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(255,255,255,0.04),0_24px_50px_rgba(2,4,8,0.28)]"
+            : "border-[rgba(255,255,255,0.12)] bg-[image:linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02)),linear-gradient(180deg,rgba(8,11,18,0.52),rgba(5,7,12,0.3))] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(255,255,255,0.04),0_24px_50px_rgba(2,4,8,0.28)]"
+        }`}
+        data-testid="header-glass-shell"
       >
         <ShellHeaderControls
           activeShellView={activeShellView}
@@ -338,6 +344,8 @@ export function Header({
             </nav>
           ) : null}
         </ShellHeaderControls>
+      </div>
+      </div>
       </header>
 
       {/* Mobile Menu Overlay */}
