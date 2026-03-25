@@ -3507,7 +3507,14 @@ export function patchHttpCreateServerForMiladyCompat(
         }
       }
 
-      listener(req, res);
+      Promise.resolve(listener(req, res)).catch((err) => {
+        console.error("[milady-compat] upstream listener error", err);
+        if (!res.headersSent) {
+          res.statusCode = 500;
+          res.setHeader("content-type", "application/json; charset=utf-8");
+          res.end(JSON.stringify({ error: "Internal server error" }));
+        }
+      });
     };
 
     if (typeof firstArg === "function") {
