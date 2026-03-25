@@ -644,6 +644,7 @@ describe("AgentManager", () => {
 
     it("restarts once after a PGLite migration failure is detected", async () => {
       vi.useFakeTimers();
+      const statusChanges: string[] = [];
       const mockProc1 = createMockProcess({
         pid: 111,
         stderr: makeReadableStream("Failed query: create schema if not exists"),
@@ -662,11 +663,15 @@ describe("AgentManager", () => {
         json: async () => ({ agents: [{ name: "Milady" }] }),
       });
 
+      const unsubscribe = manager.onStatusChange((nextStatus) => {
+        statusChanges.push(nextStatus.state);
+      });
       const status = await manager.start();
       expect(status.state).toBe("running");
 
       mockProc1._exitDeferred.resolve(1);
       await Promise.resolve();
+      expect(statusChanges).toContain("not_started");
       await vi.advanceTimersByTimeAsync(500);
 
       const fs = await import("node:fs");
@@ -675,6 +680,7 @@ describe("AgentManager", () => {
         { recursive: true, force: true },
       );
       expect(mockSpawn).toHaveBeenCalledTimes(2);
+      unsubscribe();
 
       vi.useRealTimers();
     });

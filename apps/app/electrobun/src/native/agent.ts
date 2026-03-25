@@ -1213,6 +1213,7 @@ export class AgentManager {
               startedAt: null,
               error: null,
             };
+            this.emitStatus();
             // Delay slightly so OS releases file handles before respawn
             setTimeout(() => void this.start(), 500);
             return;
