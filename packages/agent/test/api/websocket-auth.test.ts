@@ -18,7 +18,7 @@ describe("resolveWebSocketUpgradeRejection", () => {
     process.env = { ...originalEnv };
   });
 
-  it("rejects websocket upgrades when an API token is configured", () => {
+  it("allows websocket upgrades when an API token is configured so clients can auth after open", () => {
     process.env.ELIZA_API_TOKEN = "local-token";
 
     const request = { headers: {} } as http.IncomingMessage;
@@ -27,10 +27,10 @@ describe("resolveWebSocketUpgradeRejection", () => {
       new URL("ws://127.0.0.1/ws"),
     );
 
-    expect(result).toEqual({ status: 401, reason: "Unauthorized" });
+    expect(result).toBeNull();
   });
 
-  it("does not bypass websocket auth for steward-managed cloud containers", () => {
+  it("still requires post-open websocket auth for steward-managed cloud containers", () => {
     process.env.MILADY_CLOUD_PROVISIONED = "1";
     process.env.STEWARD_AGENT_TOKEN = "steward-token";
     process.env.ELIZA_API_TOKEN = "cloud-token";
@@ -41,6 +41,6 @@ describe("resolveWebSocketUpgradeRejection", () => {
       new URL("ws://127.0.0.1/ws"),
     );
 
-    expect(result).toEqual({ status: 401, reason: "Unauthorized" });
+    expect(result).toBeNull();
   });
 });

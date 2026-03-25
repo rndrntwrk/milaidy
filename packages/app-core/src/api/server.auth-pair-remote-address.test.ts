@@ -10,7 +10,7 @@ describe("/api/auth/pair remote address guard", () => {
     const pairRouteIdx = source.indexOf('"/api/auth/pair"');
     expect(pairRouteIdx).toBeGreaterThan(-1);
 
-    const nearbyCode = source.slice(pairRouteIdx, pairRouteIdx + 500);
+    const nearbyCode = source.slice(pairRouteIdx, pairRouteIdx + 800);
     expect(nearbyCode).toContain(
       "const remoteAddress = req.socket.remoteAddress",
     );

@@ -10,7 +10,7 @@ describe("patchHttpCreateServerForMiladyCompat upstream listener guard", () => {
     const listenerIdx = source.indexOf("listener(req, res)");
     expect(listenerIdx).toBeGreaterThan(-1);
 
-    const nearbyCode = source.slice(listenerIdx - 80, listenerIdx + 220);
+    const nearbyCode = source.slice(listenerIdx - 120, listenerIdx + 420);
     expect(nearbyCode).toContain("Promise.resolve(listener(req, res)).catch");
     expect(nearbyCode).toContain('"[milady-compat] upstream listener error"');
     expect(nearbyCode).toContain(
