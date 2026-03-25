@@ -360,6 +360,42 @@ describe("AgentManager", () => {
       expect(mockSpawn).toHaveBeenCalledTimes(1);
     });
 
+    it("marks status as starting before awaited startup work so concurrent callers do not double-spawn", async () => {
+      const portDeferred = createDeferred<number>();
+      vi.mocked(findFirstAvailableLoopbackPort).mockReturnValueOnce(
+        portDeferred.promise,
+      );
+
+      const mockProc = createMockProcess();
+      mockSpawn.mockReturnValue(mockProc);
+
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ agents: [{ name: "TestAgent" }] }),
+      });
+
+      const firstStart = manager.start();
+      await Promise.resolve();
+
+      expect(manager.getStatus().state).toBe("starting");
+
+      const secondStart = manager.start();
+      await Promise.resolve();
+
+      expect(mockSpawn).toHaveBeenCalledTimes(0);
+
+      portDeferred.resolve(9999);
+      const [firstStatus, secondStatus] = await Promise.all([
+        firstStart,
+        secondStart,
+      ]);
+
+      expect(firstStatus.state).toBe("running");
+      expect(secondStatus.state).toBe("starting");
+      expect(mockSpawn).toHaveBeenCalledTimes(1);
+    });
+
     it("authenticates local health and agent probes with the desktop API token", async () => {
       const originalMiladyToken = process.env.MILADY_API_TOKEN;
       const originalElizaToken = process.env.ELIZA_API_TOKEN;

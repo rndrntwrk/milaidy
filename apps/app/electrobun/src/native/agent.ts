@@ -767,6 +767,15 @@ export class AgentManager {
 
     configureDesktopLocalApiAuth();
 
+    this.status = {
+      state: "starting",
+      agentName: null,
+      port: null,
+      startedAt: null,
+      error: null,
+    };
+    this.emitStatus();
+
     // Reset per-startup flags
     this.pgliteRecoveryDone = false;
 
@@ -799,15 +808,6 @@ export class AgentManager {
         `[Agent] Port ${preferredPort} busy — using ${apiPort} for embedded API (set MILADY_AGENT_RECLAIM_STALE_PORT=1 to try reclaiming the preferred port first)`,
       );
     }
-
-    this.status = {
-      state: "starting",
-      agentName: null,
-      port: null,
-      startedAt: null,
-      error: null,
-    };
-    this.emitStatus();
 
     try {
       // Resolve milady-dist path
