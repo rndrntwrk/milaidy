@@ -314,7 +314,9 @@ describe("readOverlayLayout() / writeOverlayLayout()", () => {
 
     expect(() => writeOverlayLayout(testLayout, "retake")).not.toThrow();
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("Failed to write overlay layout [retake]: disk full"),
+      expect.stringContaining(
+        "Failed to write overlay layout [retake]: disk full",
+      ),
     );
 
     mkdirSpy.mockRestore();

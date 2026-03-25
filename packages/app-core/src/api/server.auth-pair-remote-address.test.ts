@@ -11,7 +11,9 @@ describe("/api/auth/pair remote address guard", () => {
     expect(pairRouteIdx).toBeGreaterThan(-1);
 
     const nearbyCode = source.slice(pairRouteIdx, pairRouteIdx + 500);
-    expect(nearbyCode).toContain("const remoteAddress = req.socket.remoteAddress");
+    expect(nearbyCode).toContain(
+      "const remoteAddress = req.socket.remoteAddress",
+    );
     expect(nearbyCode).toContain("Cannot determine client address");
     expect(nearbyCode).toContain("rateLimitPairing(remoteAddress)");
   });

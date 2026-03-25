@@ -33,7 +33,7 @@ describe("/api/dev/stack auth guard", () => {
     expect(devStackIdx).toBeGreaterThan(-1);
 
     const nearbyCode = source.slice(devStackIdx, devStackIdx + 350);
-    expect(nearbyCode).toContain('req.socket.remoteAddress');
+    expect(nearbyCode).toContain("req.socket.remoteAddress");
     expect(nearbyCode).toContain('"loopback only"');
   });
 
@@ -48,6 +48,8 @@ describe("/api/dev/stack auth guard", () => {
 
     const nearbyCode = source.slice(devRouteIdx, devRouteIdx + 220);
     expect(nearbyCode).toContain('process.env.NODE_ENV === "production"');
-    expect(nearbyCode).toContain('sendJsonErrorResponse(res, 404, "Not found")');
+    expect(nearbyCode).toContain(
+      'sendJsonErrorResponse(res, 404, "Not found")',
+    );
   });
 });

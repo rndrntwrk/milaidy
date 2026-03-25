@@ -173,7 +173,9 @@ describe("GET /api/wallet/keys", () => {
     expect(routeIdx).toBeGreaterThan(-1);
 
     const nearbyCode = source.slice(routeIdx, routeIdx + 300);
-    expect(nearbyCode).toContain("isLoopbackRemoteAddress(req.socket.remoteAddress)");
+    expect(nearbyCode).toContain(
+      "isLoopbackRemoteAddress(req.socket.remoteAddress)",
+    );
     expect(nearbyCode).toContain('"loopback only"');
   });
 

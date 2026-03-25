@@ -12,10 +12,13 @@ describe("isLoopbackRemoteAddress", () => {
     expect(isLoopbackRemoteAddress(address)).toBe(true);
   });
 
-  it.each(["10.0.0.5", "::ffff:10.0.0.5", "", null, undefined])(
-    "rejects non-loopback address %s",
-    (address) => {
-      expect(isLoopbackRemoteAddress(address)).toBe(false);
-    },
-  );
+  it.each([
+    "10.0.0.5",
+    "::ffff:10.0.0.5",
+    "",
+    null,
+    undefined,
+  ])("rejects non-loopback address %s", (address) => {
+    expect(isLoopbackRemoteAddress(address)).toBe(false);
+  });
 });

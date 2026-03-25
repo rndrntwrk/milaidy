@@ -13,6 +13,8 @@ describe("patchHttpCreateServerForMiladyCompat upstream listener guard", () => {
     const nearbyCode = source.slice(listenerIdx - 80, listenerIdx + 220);
     expect(nearbyCode).toContain("Promise.resolve(listener(req, res)).catch");
     expect(nearbyCode).toContain('"[milady-compat] upstream listener error"');
-    expect(nearbyCode).toContain('JSON.stringify({ error: "Internal server error" })');
+    expect(nearbyCode).toContain(
+      'JSON.stringify({ error: "Internal server error" })',
+    );
   });
 });

@@ -987,7 +987,9 @@ async function handleTaskBackedWorkbenchTodoRoute(
   try {
     const getTaskList = async () =>
       (
-        (await runtime.getTasks({})) as unknown as Array<Record<string, unknown>>
+        (await runtime.getTasks({})) as unknown as Array<
+          Record<string, unknown>
+        >
       ).map((task) => task as Record<string, unknown>);
 
     if (method === "GET" && pathname === "/api/workbench/todos") {
