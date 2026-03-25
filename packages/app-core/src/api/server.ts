@@ -2209,7 +2209,12 @@ async function handleMiladyCompatRoute(
       sendJsonErrorResponse(res, 403, "Pairing disabled");
       return true;
     }
-    if (!rateLimitPairing(req.socket.remoteAddress ?? null)) {
+    const remoteAddress = req.socket.remoteAddress;
+    if (!remoteAddress) {
+      sendJsonErrorResponse(res, 403, "Cannot determine client address");
+      return true;
+    }
+    if (!rateLimitPairing(remoteAddress)) {
       sendJsonErrorResponse(res, 429, "Too many attempts. Try again later.");
       return true;
     }
