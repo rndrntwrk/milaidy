@@ -1659,7 +1659,11 @@ async function main(): Promise<void> {
       console.log("[Main] Starting embedded agent (local mode).");
       _startAgent(currentWindow).catch((err) => {
         const error =
-          err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown startup error";
+          err instanceof Error
+            ? err.message
+            : typeof err === "string"
+              ? err
+              : "Unknown startup error";
         console.error("[Main] Agent auto-start failed:", err);
         sendToActiveRenderer("agentStartupFailed", { error });
         Utils.showNotification({

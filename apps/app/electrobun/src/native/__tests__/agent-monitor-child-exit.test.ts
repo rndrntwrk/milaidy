@@ -9,7 +9,7 @@ describe("monitorChildExit stale-exit guard", () => {
 
   it("re-checks childProcess after clearing the exiting process reference", () => {
     const unexpectedExitIdx = source.indexOf(
-      'this.childProcess = null;\n          if (this.childProcess !== null) return;',
+      "this.childProcess = null;\n          if (this.childProcess !== null) return;",
     );
     expect(unexpectedExitIdx).toBeGreaterThan(-1);
   });
