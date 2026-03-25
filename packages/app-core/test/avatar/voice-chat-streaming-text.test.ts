@@ -9,11 +9,33 @@ const {
   resolveVoiceMode,
   resolveVoiceProxyEndpoint,
   toSpeakableText,
+  mergeTranscriptWindows,
 } = __voiceChatInternals;
 
 describe("useVoiceChat streaming text helpers", () => {
   it("returns only unseen suffix text when remainder grows", () => {
     expect(remainderAfter("alpha beta gamma", "alpha beta")).toBe("gamma");
+  });
+
+  it("merges overlapping STT windows without garbling punctuation drift", () => {
+    expect(
+      mergeTranscriptWindows("hello world how are", "world, how are you"),
+    ).toBe("hello world how are you");
+  });
+
+  it("merges overlapping STT windows without replaying recased phrases", () => {
+    expect(
+      mergeTranscriptWindows(
+        "schedule a meeting for friday",
+        "meeting for Friday at two",
+      ),
+    ).toBe("schedule a meeting for friday at two");
+  });
+
+  it("falls back to exact merge when there is no word overlap", () => {
+    expect(mergeTranscriptWindows("alpha beta", "gamma delta")).toBe(
+      "alpha betagamma delta",
+    );
   });
 
   it("does not replay full text when prefix matching fails", () => {
