@@ -1,4 +1,7 @@
+import { dispatchAppEmoteEvent } from "@miladyai/app-core/events";
 import { useApp } from "@miladyai/app-core/state";
+import { PREMADE_VOICES } from "../../voice/types";
+import { getElizaApiToken, resolveApiUrl } from "../../utils";
 import { getStylePresets } from "@miladyai/shared/onboarding-presets";
 import { Button, Input } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -18,6 +21,7 @@ import {
   onboardingSecondaryActionTextShadowStyle,
   spawnOnboardingRipple,
 } from "./onboarding-step-chrome";
+import { resolvePreviewTtsEndpoints } from "./identity-preview-tts";
 
 export function IdentityStep() {
   const { onboardingStyle, handleOnboardingNext, setState, t, uiLanguage } =
@@ -38,22 +42,180 @@ export function IdentityStep() {
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const importBusyRef = useRef(false);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewObjectUrlRef = useRef<string | null>(null);
+  const previewRequestIdRef = useRef(0);
+  const pendingPreviewEntryRef = useRef<CharacterRosterEntry | null>(null);
+  const teleportPreviewTimerRef = useRef<number | null>(null);
+
+  const stopPreviewAudio = useCallback(() => {
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current = null;
+    }
+    if (previewObjectUrlRef.current) {
+      URL.revokeObjectURL(previewObjectUrlRef.current);
+      previewObjectUrlRef.current = null;
+    }
+  }, []);
+
+  const playPreviewFromUrl = useCallback(
+    async (url: string) => {
+      stopPreviewAudio();
+      const audio = new Audio(url);
+      previewAudioRef.current = audio;
+      try {
+        await audio.play();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [stopPreviewAudio],
+  );
+
+  const playSelectionPreview = useCallback(
+    async (entry: CharacterRosterEntry) => {
+      const requestId = ++previewRequestIdRef.current;
+      const isCurrentRequest = () => previewRequestIdRef.current === requestId;
+
+      const animationPath =
+        entry.greetingAnimation?.trim() || "animations/emotes/greeting.fbx";
+      dispatchAppEmoteEvent({
+        emoteId: "greeting",
+        path: `/${animationPath.replace(/^\/+/, "")}`,
+        duration: 2.5,
+        loop: false,
+        showOverlay: false,
+      });
+
+      const catchphrase = entry.catchphrase?.trim();
+      if (!catchphrase || typeof window === "undefined") return;
+
+      const selectedPreset = entry.voicePresetId
+        ? PREMADE_VOICES.find((voice) => voice.id === entry.voicePresetId)
+        : undefined;
+
+      if (selectedPreset?.previewUrl) {
+        const played = await playPreviewFromUrl(selectedPreset.previewUrl);
+        if (played && isCurrentRequest()) return;
+      }
+
+      if (selectedPreset?.voiceId) {
+        const apiToken = getElizaApiToken()?.trim() ?? "";
+        const endpoints = resolvePreviewTtsEndpoints(selectedPreset.voiceId);
+
+        for (const endpoint of endpoints) {
+          if (!isCurrentRequest()) return;
+          try {
+            const response = await fetch(resolveApiUrl(endpoint), {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "audio/mpeg",
+                ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
+              },
+              body: JSON.stringify({
+                text: catchphrase,
+                voiceId: selectedPreset.voiceId,
+                modelId: "eleven_flash_v2_5",
+                outputFormat: "mp3_44100_128",
+              }),
+            });
+            if (!response.ok) continue;
+
+            const blob = await response.blob();
+            if (!isCurrentRequest()) return;
+            const objectUrl = URL.createObjectURL(blob);
+            previewObjectUrlRef.current = objectUrl;
+            const played = await playPreviewFromUrl(objectUrl);
+            if (played && isCurrentRequest()) return;
+          } catch {
+            // Try next endpoint.
+          }
+        }
+      }
+
+      // Intentionally do not fall back to generic system/browser TTS voices for
+      // onboarding previews. If preset sample + ElevenLabs are unavailable, stay
+      // silent instead of degrading character identity quality.
+    },
+    [playPreviewFromUrl],
+  );
 
   const handleSelect = useCallback(
-    (entry: CharacterRosterEntry) => {
+    (entry: CharacterRosterEntry, preview = false) => {
+      const previousAvatarIndex = selectedId
+        ? entries.find((candidate) => candidate.id === selectedId)?.avatarIndex
+        : undefined;
       setState("onboardingStyle", entry.id);
       setState("onboardingName", entry.name);
       setState("selectedVrmIndex", entry.avatarIndex);
+      if (preview) {
+        previewRequestIdRef.current += 1;
+        stopPreviewAudio();
+        pendingPreviewEntryRef.current = null;
+        if (teleportPreviewTimerRef.current != null) {
+          window.clearTimeout(teleportPreviewTimerRef.current);
+          teleportPreviewTimerRef.current = null;
+        }
+        // Character swaps trigger a teleport dissolve; wait for completion before
+        // greeting emote/voice or the emote can be swallowed during transition.
+        const avatarChanged = previousAvatarIndex !== entry.avatarIndex;
+        if (avatarChanged) {
+          pendingPreviewEntryRef.current = entry;
+        } else {
+          pendingPreviewEntryRef.current = null;
+          void playSelectionPreview(entry);
+        }
+      }
     },
-    [setState],
+    [entries, playSelectionPreview, selectedId, setState, stopPreviewAudio],
   );
 
   // Auto-select the first one if nothing is selected yet
   useEffect(() => {
     if (!onboardingStyle && firstEntry) {
-      handleSelect(firstEntry);
+      handleSelect(firstEntry, false);
     }
   }, [onboardingStyle, handleSelect, firstEntry]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const onTeleportComplete = () => {
+      const pending = pendingPreviewEntryRef.current;
+      if (!pending) return;
+      pendingPreviewEntryRef.current = null;
+      if (teleportPreviewTimerRef.current != null) {
+        window.clearTimeout(teleportPreviewTimerRef.current);
+      }
+      teleportPreviewTimerRef.current = window.setTimeout(() => {
+        teleportPreviewTimerRef.current = null;
+        void playSelectionPreview(pending);
+      }, 450);
+    };
+    window.addEventListener("eliza:vrm-teleport-complete", onTeleportComplete);
+    return () => {
+      window.removeEventListener(
+        "eliza:vrm-teleport-complete",
+        onTeleportComplete,
+      );
+    };
+  }, [playSelectionPreview]);
+
+  useEffect(() => {
+    return () => {
+      pendingPreviewEntryRef.current = null;
+      previewRequestIdRef.current += 1;
+      if (teleportPreviewTimerRef.current != null) {
+        window.clearTimeout(teleportPreviewTimerRef.current);
+        teleportPreviewTimerRef.current = null;
+      }
+      stopPreviewAudio();
+    };
+  }, [stopPreviewAudio]);
 
   const handleImportAgent = useCallback(async () => {
     if (importBusyRef.current || importBusy) return;
@@ -223,7 +385,7 @@ export function IdentityStep() {
         <CharacterRoster
           entries={entries}
           selectedId={selectedId}
-          onSelect={handleSelect}
+          onSelect={(entry) => handleSelect(entry, true)}
           variant="onboarding"
           testIdPrefix="onboarding"
         />
