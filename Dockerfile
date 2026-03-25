@@ -1,10 +1,11 @@
 # ==============================================================================
 # Stage 1: Builder — install all deps, resolve LFS assets, build
 # ==============================================================================
+ARG BUN_VERSION=1.3.10
 FROM node:22-bookworm AS builder
 
 # Install Bun (primary package manager and build tool)
-RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.10"
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
 ENV PATH="/root/.bun/bin:${PATH}"
 
 WORKDIR /app
@@ -137,7 +138,7 @@ RUN rm -rf node_modules && bun install --frozen-lockfile --ignore-scripts --prod
 FROM node:22-bookworm AS runtime
 
 # Install Bun (needed at runtime for bun-native modules)
-RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.10"
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
 ENV PATH="/root/.bun/bin:${PATH}"
 
 WORKDIR /app
