@@ -142,7 +142,10 @@ function DownloadDropdown() {
         type="button"
         className="flex items-center gap-2 px-6 py-3 border border-text-subtle/30 text-text-muted font-mono text-[11px] tracking-[0.15em] uppercase hover:border-text-muted/50 hover:text-text-light transition-all"
         onClick={() => setOpen((v) => !v)}
-        onMouseEnter={() => { cancelClose(); setOpen(true); }}
+        onMouseEnter={() => {
+          cancelClose();
+          setOpen(true);
+        }}
       >
         <DownloadIcon />
         Download
