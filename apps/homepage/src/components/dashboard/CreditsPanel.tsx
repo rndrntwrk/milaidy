@@ -87,11 +87,20 @@ export function CreditsPanel() {
 
   /* ── Derived usage stats ────────────────────────────────────────── */
 
-  const runningAgents = cloudAgents.filter(
-    (a) => a.status === "running" || a.status === "provisioning",
+  // Memoize these filter results so the hourlyBurn useMemo has stable dependencies
+  const runningAgents = useMemo(
+    () =>
+      cloudAgents.filter(
+        (a) => a.status === "running" || a.status === "provisioning",
+      ),
+    [cloudAgents],
   );
-  const idleAgents = cloudAgents.filter(
-    (a) => a.status === "paused" || a.status === "stopped",
+  const idleAgents = useMemo(
+    () =>
+      cloudAgents.filter(
+        (a) => a.status === "paused" || a.status === "stopped",
+      ),
+    [cloudAgents],
   );
 
   const hourlyBurn = useMemo(() => {
@@ -792,11 +801,14 @@ function CreditPackCard({ pack }: { pack: CreditPack }) {
       )}
       <button
         type="button"
-        className={`mt-4 w-full py-2 font-mono text-[11px] tracking-wider font-medium transition-all
+        disabled
+        title="Payment integration coming soon"
+        className={`mt-4 w-full py-2 font-mono text-[11px] tracking-wider font-medium
+          opacity-50 cursor-not-allowed
           ${
             pack.highlight
-              ? "bg-brand text-dark hover:bg-brand-hover"
-              : "bg-surface border border-border text-text-muted hover:text-text-light hover:border-text-muted"
+              ? "bg-brand text-dark"
+              : "bg-surface border border-border text-text-muted"
           }`}
       >
         PURCHASE

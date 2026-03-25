@@ -11,6 +11,8 @@
 .env
 .env.local
 .env.*.local
+node_modules/
+**/node_modules/
 node_modules/.cache
 apps/app/android
 apps/app/electrobun
