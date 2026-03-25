@@ -28,9 +28,12 @@ vi.mock("@miladyai/ui", () => ({
 }));
 
 vi.mock("lucide-react", () => ({
+  Check: () => React.createElement("span", null, "check"),
+  Loader2: () => React.createElement("span", null, "loader"),
   MessageCirclePlus: () => React.createElement("span", null, "new"),
   Monitor: () => React.createElement("span", null, "desktop"),
   PencilLine: () => React.createElement("span", null, "character"),
+  Save: () => React.createElement("span", null, "save"),
   Smartphone: () => React.createElement("span", null, "phone"),
   UserRound: () => React.createElement("span", null, "companion"),
   Volume2: () => React.createElement("span", null, "voice"),
@@ -193,5 +196,39 @@ describe("ShellHeaderControls", () => {
       null,
       null,
     ]);
+  });
+
+  it("renders Save button instead of New Chat when onSave is provided", async () => {
+    mockUseMediaQuery.mockReturnValue(false);
+    const onSave = vi.fn();
+    let tree: ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = create(
+        <ShellHeaderControls
+          activeShellView="character"
+          onShellViewChange={() => {}}
+          uiLanguage="en"
+          setUiLanguage={() => {}}
+          uiTheme="dark"
+          setUiTheme={() => {}}
+          t={(k: string) => k}
+          showCompanionControls
+          onSave={onSave}
+        />,
+      );
+    });
+    const buttons = tree!.root.findAll(
+      (node) =>
+        node.type === "button" &&
+        node.props["aria-label"] === "charactereditor.Save",
+    );
+    expect(buttons.length).toBeGreaterThanOrEqual(1);
+    // New Chat should NOT be present
+    const newChatButtons = tree!.root.findAll(
+      (node) =>
+        node.type === "button" &&
+        node.props["aria-label"] === "companion.newChat",
+    );
+    expect(newChatButtons.length).toBe(0);
   });
 });

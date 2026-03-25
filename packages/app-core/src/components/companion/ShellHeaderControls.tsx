@@ -5,9 +5,12 @@ import type { ShellView, UiTheme } from "@miladyai/app-core/state";
 import { Button } from "@miladyai/ui";
 import {
   type LucideIcon,
+  Check,
+  Loader2,
   MessageCirclePlus,
   Monitor,
   PencilLine,
+  Save,
   Smartphone,
   UserRound,
   Volume2,
@@ -58,6 +61,9 @@ interface ShellHeaderControlsProps {
   chatAgentVoiceMuted?: boolean;
   onToggleVoiceMute?: () => void;
   onNewChat?: () => void;
+  onSave?: () => void;
+  isSaving?: boolean;
+  saveSuccess?: boolean;
 }
 
 export function ShellHeaderControls({
@@ -84,6 +90,9 @@ export function ShellHeaderControls({
   chatAgentVoiceMuted = false,
   onToggleVoiceMute,
   onNewChat,
+  onSave,
+  isSaving = false,
+  saveSuccess = false,
 }: ShellHeaderControlsProps) {
   const isMobileViewport = useMediaQuery(SHELL_MODE_MOBILE_MEDIA_QUERY);
   const shouldSplitCompanionMobileActions =
@@ -170,6 +179,47 @@ export function ShellHeaderControls({
     </Button>
   );
 
+  const renderSaveButton = (compact: boolean) => (
+    <Button
+      size="icon"
+      variant="outline"
+      aria-label={t("charactereditor.Save")}
+      title={t("charactereditor.Save")}
+      className={
+        compact
+          ? compactCompanionActionClassName
+          : expandedCompanionActionClassName
+      }
+      onClick={onSave}
+      disabled={isSaving}
+      onPointerDown={(event) => event.stopPropagation()}
+      style={HEADER_BUTTON_STYLE}
+      data-no-camera-drag="true"
+    >
+      {isSaving ? (
+        <Loader2 className="pointer-events-none h-4 w-4 shrink-0 animate-spin" />
+      ) : saveSuccess ? (
+        <Check className="pointer-events-none h-4 w-4 shrink-0 text-green-400" />
+      ) : (
+        <Save className="pointer-events-none h-4 w-4 shrink-0" />
+      )}
+      <span className="pointer-events-none hidden sm:inline">
+        {isSaving
+          ? t("charactereditor.Saving")
+          : saveSuccess
+            ? t("charactereditor.Saved")
+            : t("charactereditor.Save")}
+      </span>
+    </Button>
+  );
+
+  /** Render the appropriate action button — Save for character, New Chat for companion */
+  const renderActionButton = (compact: boolean) => {
+    if (onSave) return renderSaveButton(compact);
+    if (onNewChat) return renderNewChatButton(compact);
+    return null;
+  };
+
   return (
     <div
       className={`min-w-0 w-full overflow-visible gap-2 ${
@@ -250,7 +300,7 @@ export function ShellHeaderControls({
             >
               <div className="inline-flex items-center gap-2">
                 {renderVoiceButton(false)}
-                {renderNewChatButton(false)}
+                {renderActionButton(false)}
               </div>
             </div>
           )
@@ -276,7 +326,7 @@ export function ShellHeaderControls({
             data-testid="companion-header-desktop-new-chat"
             data-no-camera-drag="true"
           >
-            {renderNewChatButton(false)}
+            {renderActionButton(false)}
           </div>
         ) : null}
         {rightTrailingExtras}
@@ -324,7 +374,7 @@ export function ShellHeaderControls({
             className="flex items-center justify-end"
             data-testid="companion-header-mobile-new-chat"
           >
-            {renderNewChatButton(true)}
+            {renderActionButton(true)}
           </div>
         </div>
       ) : null}

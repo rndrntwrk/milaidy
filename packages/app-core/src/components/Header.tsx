@@ -73,6 +73,9 @@ export function Header({
     setUiTheme,
     chatAgentVoiceMuted,
     handleNewConversation,
+    handleSaveCharacter,
+    characterSaving,
+    characterSaveSuccess,
     conversationMessages,
     chatLastUsage,
     t,
@@ -271,7 +274,14 @@ export function Header({
           onToggleVoiceMute={() =>
             setState("chatAgentVoiceMuted", !chatAgentVoiceMuted)
           }
-          onNewChat={() => void handleNewConversation()}
+          onNewChat={
+            activeShellView === "character" ? undefined : () => void handleNewConversation()
+          }
+          onSave={
+            activeShellView === "character" ? handleSaveCharacter : undefined
+          }
+          isSaving={activeShellView === "character" ? characterSaving : false}
+          saveSuccess={activeShellView === "character" ? Boolean(characterSaveSuccess) : false}
           trailingExtras={
             showNavigationMenu ? (
               <Button
