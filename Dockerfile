@@ -30,9 +30,10 @@ RUN if [ -d .git ]; then \
 ARG MILADY_LFS_REPO_URL=""
 ARG MILADY_LFS_REF=""
 ARG MILADY_LFS_COMMIT=""
-ARG GITHUB_TOKEN=""
-RUN set -e; \
-    GITHUB_TOKEN="${GITHUB_TOKEN}"; \
+RUN --mount=type=secret,id=github_token \
+    set -e; \
+    GITHUB_TOKEN=""; \
+    if [ -f /run/secrets/github_token ]; then GITHUB_TOKEN="$(cat /run/secrets/github_token)"; fi; \
     REPO_URL_RAW="$MILADY_LFS_REPO_URL"; \
     if [ -z "$REPO_URL_RAW" ] && [ -d .git ]; then REPO_URL_RAW="$(git config --get remote.origin.url || true)"; fi; \
     if [ -z "$REPO_URL_RAW" ]; then REPO_URL_RAW="https://github.com/miladybsc/milady.git"; fi; \
