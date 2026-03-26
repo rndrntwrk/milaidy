@@ -24,10 +24,10 @@ describe.each(["light", "dark"] as const)("theme %s", (theme) => {
 
     expect(
       screen.getByRole("button", { name: "Continue" }).className,
-    ).toContain("text-txt");
+    ).toContain("text-accent-fg");
     expect(
       screen.getByRole("button", { name: "Continue" }).className,
-    ).toContain("bg-accent/15");
+    ).toContain("bg-accent/18");
   });
 
   it("keeps warning confirmations readable on both themes", () => {

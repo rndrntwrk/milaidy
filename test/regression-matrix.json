@@ -144,9 +144,9 @@
   },
   "surfaces": [
     {
-      "name": "root-src",
+      "name": "packages-shared",
       "globs": [
-        "src/**"
+        "packages/shared/**"
       ],
       "workflowSuites": {
         "pr": [
