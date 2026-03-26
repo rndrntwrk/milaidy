@@ -117,6 +117,9 @@ describe("BrowserSurfaceWindow", () => {
       expect(FakeElectrobunWebview.latest?.loadURL).toHaveBeenCalledWith(
         "https://example.com/",
       );
+      expect(FakeElectrobunWebview.latest?.getAttribute("sandbox")).toBe(
+        "allow-scripts allow-same-origin allow-forms allow-popups",
+      );
     } finally {
       getSpy.mockRestore();
       createSpy.mockRestore();

@@ -167,6 +167,18 @@ export function BrowserSurfaceWindow() {
     navigateTo(addressValue);
   };
 
+  const attachWebviewRef = (node: HTMLElement | null) => {
+    webviewRef.current = node as WebviewTagElement | null;
+    if (!node) return;
+    // Electrobun exposes `sandbox` as a getter-only property on the custom
+    // webview element. Setting the HTML attribute avoids React property writes
+    // that throw on Windows.
+    node.setAttribute(
+      "sandbox",
+      "allow-scripts allow-same-origin allow-forms allow-popups",
+    );
+  };
+
   return (
     <div
       className="flex min-h-full flex-col gap-3.5 p-4 text-[color:var(--text-strong,#f5f7fa)]"
@@ -271,10 +283,7 @@ export function BrowserSurfaceWindow() {
           createElement("electrobun-webview", {
             className: "h-full min-h-0 w-full bg-white",
             partition: "milady-browser",
-            ref: (node: HTMLElement | null) => {
-              webviewRef.current = node as WebviewTagElement | null;
-            },
-            sandbox: "allow-scripts allow-same-origin allow-forms allow-popups",
+            ref: attachWebviewRef,
             src: initialUrl,
           })
         ) : (
