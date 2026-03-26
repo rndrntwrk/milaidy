@@ -7,6 +7,7 @@ const SMOKE_TEST_PATH = path.resolve(
   import.meta.dirname,
   "../../scripts/smoke-test.sh",
 );
+const ROOT_PACKAGE_JSON_PATH = path.resolve(import.meta.dirname, "../../../../../package.json");
 
 describe("smoke-test.sh", () => {
   it("waits for packaged app handoff after the launcher exits", () => {
@@ -90,13 +91,21 @@ describe("smoke-test.sh", () => {
     expect(script).toContain('process.stdout.write(String(128 + signalCode));');
     expect(script).toContain('launch_packaged_app_with_open() {');
     expect(script).toContain('/usr/bin/open -n "$LAUNCH_APP_BUNDLE"');
+    expect(script).toContain('OPEN_LAUNCH_ATTEMPTED="1"');
+    expect(script).toContain('OPEN_LAUNCH_EXIT_CODE="$?"');
+    expect(script).toContain(
+      'dump_failure_diagnostics "open(1) failed to launch packaged app"',
+    );
     expect(script).toContain('echo "Mac launch mode: ${MAC_LAUNCH_MODE:-<unset>}"');
+    expect(script).toContain('echo "open(1) attempted: ${OPEN_LAUNCH_ATTEMPTED:-0}"');
+    expect(script).toContain('echo "open(1) exit code: ${OPEN_LAUNCH_EXIT_CODE:-<unset>}"');
     expect(script).toContain(
       'echo "Mac direct bundle exec probe rc: ${MAC_DIRECT_EXEC_PROBE_RC:-<unset>}"',
     );
     expect(script).toContain(
       'FAILURE_REASON="macOS direct app-bundle exec probe returned SIGKILL (137) before startup trace began"',
     );
+    expect(script).toContain('FAILURE_REASON="open(1) launch produced no startup trace"');
   });
 
   it("strips macOS provenance xattrs from the copied local smoke bundle", () => {
@@ -117,12 +126,13 @@ describe("smoke-test.sh", () => {
     expect(script).toContain("init_startup_session() {");
     expect(script).toContain('STARTUP_STATE_FILE="$SMOKE_DIAGNOSTICS_DIR/startup-state.json"');
     expect(script).toContain('STARTUP_EVENTS_FILE="$SMOKE_DIAGNOSTICS_DIR/startup-events.jsonl"');
-    expect(script).toContain('STARTUP_BOOTSTRAP_FILE="$HOME/.config/Milady/startup-session.json"');
-    expect(script).toContain('STARTUP_FALLBACK_STATE_FILE="$HOME/.config/Milady/milady-startup-state.json"');
-    expect(script).toContain('STARTUP_FALLBACK_EVENTS_FILE="$HOME/.config/Milady/milady-startup-events.jsonl"');
+    expect(script).toContain(
+      'STARTUP_BOOTSTRAP_FILE="$LAUNCH_APP_BUNDLE/Contents/Resources/startup-session.json"',
+    );
     expect(script).toContain('mv "$bootstrap_temp" "$STARTUP_BOOTSTRAP_FILE"');
     expect(script).toContain("load_startup_state() {");
-    expect(script).toContain('startup_state_file="$STARTUP_FALLBACK_STATE_FILE"');
+    expect(script).toContain('const [filePath, expectedSession] = process.argv.slice(1);');
+    expect(script).toContain('if ((data.session_id ?? "") !== expectedSession) {');
     expect(script).toContain('if [[ "$STATE_PHASE" == "fatal" ]]');
     expect(script).toContain(
       'if [[ "$STATE_PHASE" == "runtime_ready" || "$STATE_PHASE" == "metadata_ready" ]]',
@@ -130,10 +140,10 @@ describe("smoke-test.sh", () => {
     expect(script).toContain('FAILURE_REASON="startup trace never reached runtime_ready"');
     expect(script).toContain('dump_failure_diagnostics "$FAILURE_REASON"');
     expect(script).toContain("Startup bootstrap snapshot:");
-    expect(script).toContain("Startup fallback state snapshot:");
     expect(script).toContain("Startup state snapshot:");
     expect(script).toContain("Startup session events:");
-    expect(script).toContain("Startup fallback events:");
+    expect(script).not.toContain("Startup fallback state snapshot:");
+    expect(script).not.toContain("Startup fallback events:");
   });
 
   it("treats auth-protected health probes as proof the packaged backend is alive", () => {
@@ -158,5 +168,26 @@ describe("smoke-test.sh", () => {
     );
     expect(script).toContain('"$APP_BUNDLE/Contents/MacOS/launcher"');
     expect(script).toContain('"$APP_BUNDLE/Contents/MacOS/bun"');
+  });
+
+  it("keeps strict packaged smoke separate from explicit unsigned local smoke", () => {
+    const script = fs.readFileSync(SMOKE_TEST_PATH, "utf8");
+    const pkg = JSON.parse(
+      fs.readFileSync(ROOT_PACKAGE_JSON_PATH, "utf8"),
+    ) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(script).toContain("ERROR: No Developer ID Application identity found.");
+    expect(script).toContain(
+      "WARNING: Running unsigned/ad-hoc packaged smoke. This is not a release-grade signing/notarization check.",
+    );
+    expect(script).not.toContain("falling back to unsigned local smoke build");
+    expect(pkg.scripts?.["test:desktop:packaged"]).toBe(
+      "bash apps/app/electrobun/scripts/smoke-test.sh",
+    );
+    expect(pkg.scripts?.["test:desktop:packaged:unsigned"]).toBe(
+      "SKIP_SIGNATURE_CHECK=1 ELECTROBUN_SKIP_CODESIGN=1 bash apps/app/electrobun/scripts/smoke-test.sh",
+    );
   });
 });

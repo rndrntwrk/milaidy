@@ -50,8 +50,6 @@ type StartupTraceConfig = {
   sessionId: string | null;
   stateFile: string | null;
   eventsFile: string | null;
-  mirrorStateFile: string | null;
-  mirrorEventsFile: string | null;
 };
 
 type StartupTraceBootstrap = {
@@ -64,8 +62,6 @@ type StartupTraceBootstrap = {
 const sessionStartMs = new Map<string, number>();
 const latestStateBySession = new Map<string, StartupTraceState>();
 const STARTUP_TRACE_BOOTSTRAP_FILENAME = "startup-session.json";
-const DEFAULT_STARTUP_STATE_FILENAME = "milady-startup-state.json";
-const DEFAULT_STARTUP_EVENTS_FILENAME = "milady-startup-events.jsonl";
 const enabledTraceSessionsLogged = new Set<string>();
 let disabledTraceLogged = false;
 
@@ -150,44 +146,33 @@ function resolveStartupTraceControlDir(
 }
 
 export function resolveStartupTraceBootstrapFile(
-  env: NodeJS.ProcessEnv = process.env,
-  platform: NodeJS.Platform = process.platform,
-): string {
-  return path.join(
-    resolveStartupTraceControlDir(env, platform),
-    STARTUP_TRACE_BOOTSTRAP_FILENAME,
-  );
-}
-
-export function resolveDefaultStartupTraceFiles(
-  env: NodeJS.ProcessEnv = process.env,
-  platform: NodeJS.Platform = process.platform,
-): { stateFile: string; eventsFile: string } {
-  const controlDir = resolveStartupTraceControlDir(env, platform);
-  return {
-    stateFile: path.join(controlDir, DEFAULT_STARTUP_STATE_FILENAME),
-    eventsFile: path.join(controlDir, DEFAULT_STARTUP_EVENTS_FILENAME),
-  };
-}
-
-export function shouldUseDefaultStartupTraceFallback(
   execPath: string = process.execPath,
-): boolean {
-  const normalizedExecPath = execPath.replaceAll("\\", "/").toLowerCase();
-  return (
-    normalizedExecPath.includes(".app/contents/") ||
-    normalizedExecPath.includes("/self-extraction/") ||
-    normalizedExecPath.endsWith("/launcher") ||
-    normalizedExecPath.endsWith("/launcher.exe")
-  );
+  platform: NodeJS.Platform = process.platform,
+): string | null {
+  const bundlePath = resolveStartupBundlePath(execPath);
+  if (!bundlePath) {
+    return null;
+  }
+
+  const normalizedBundlePath = bundlePath.replaceAll("\\", "/").toLowerCase();
+  if (platform === "darwin" && normalizedBundlePath.endsWith(".app")) {
+    return path.join(
+      bundlePath,
+      "Contents",
+      "Resources",
+      STARTUP_TRACE_BOOTSTRAP_FILENAME,
+    );
+  }
+
+  return path.join(bundlePath, STARTUP_TRACE_BOOTSTRAP_FILENAME);
 }
 
 function readStartupTraceBootstrap(
-  env: NodeJS.ProcessEnv = process.env,
+  execPath: string = process.execPath,
   platform: NodeJS.Platform = process.platform,
 ): StartupTraceBootstrap | null {
-  const bootstrapFile = resolveStartupTraceBootstrapFile(env, platform);
-  if (!fs.existsSync(bootstrapFile)) {
+  const bootstrapFile = resolveStartupTraceBootstrapFile(execPath, platform);
+  if (!bootstrapFile || !fs.existsSync(bootstrapFile)) {
     return null;
   }
 
@@ -210,35 +195,26 @@ function readStartupTraceBootstrap(
 
 export function getStartupTraceConfig(
   env: NodeJS.ProcessEnv = process.env,
+  execPath: string = process.execPath,
 ): StartupTraceConfig {
-  const bootstrap = readStartupTraceBootstrap(env);
-  const defaultTraceFiles = resolveDefaultStartupTraceFiles(env);
-  const useDefaultFallback = shouldUseDefaultStartupTraceFallback();
+  const bootstrap = readStartupTraceBootstrap(execPath);
   const sessionId =
     trimEnv(env.MILADY_STARTUP_SESSION_ID) ??
     trimEnv(bootstrap?.session_id ?? undefined) ??
-    (useDefaultFallback ? `startup-${process.pid}` : null);
+    null;
   const stateFile =
     trimEnv(env.MILADY_STARTUP_STATE_FILE) ??
     trimEnv(bootstrap?.state_file ?? undefined) ??
-    (useDefaultFallback ? defaultTraceFiles.stateFile : null);
+    null;
   const eventsFile =
     trimEnv(env.MILADY_STARTUP_EVENTS_FILE) ??
     trimEnv(bootstrap?.events_file ?? undefined) ??
-    (useDefaultFallback ? defaultTraceFiles.eventsFile : null);
+    null;
   return {
     enabled: Boolean(sessionId && (stateFile || eventsFile)),
     sessionId,
     stateFile,
     eventsFile,
-    mirrorStateFile:
-      useDefaultFallback && defaultTraceFiles.stateFile !== stateFile
-        ? defaultTraceFiles.stateFile
-        : null,
-    mirrorEventsFile:
-      useDefaultFallback && defaultTraceFiles.eventsFile !== eventsFile
-        ? defaultTraceFiles.eventsFile
-        : null,
   };
 }
 
@@ -246,19 +222,18 @@ export function recordStartupPhase(
   phase: StartupTracePhase,
   update: StartupTraceUpdate = {},
   env: NodeJS.ProcessEnv = process.env,
+  execPath: string = process.execPath,
 ): StartupTraceState | null {
-  const config = getStartupTraceConfig(env);
+  const config = getStartupTraceConfig(env, execPath);
   if (!config.enabled || !config.sessionId) {
     if (!disabledTraceLogged) {
-      const bootstrapFile = resolveStartupTraceBootstrapFile(env);
+      const bootstrapFile = resolveStartupTraceBootstrapFile(execPath);
       disabledTraceLogged = true;
       writeStartupTraceDebugLine(
         `disabled session=${config.sessionId ?? "<none>"} ` +
           `state=${config.stateFile ?? "<none>"} ` +
           `events=${config.eventsFile ?? "<none>"} ` +
-          `mirrorState=${config.mirrorStateFile ?? "<none>"} ` +
-          `mirrorEvents=${config.mirrorEventsFile ?? "<none>"} ` +
-          `bootstrap=${bootstrapFile} exists=${fs.existsSync(bootstrapFile)} ` +
+          `bootstrap=${bootstrapFile ?? "<none>"} exists=${bootstrapFile ? fs.existsSync(bootstrapFile) : false} ` +
           `execPath=${process.execPath}`,
         env,
       );
@@ -272,8 +247,6 @@ export function recordStartupPhase(
       `enabled session=${config.sessionId} ` +
         `state=${config.stateFile ?? "<none>"} ` +
         `events=${config.eventsFile ?? "<none>"} ` +
-        `mirrorState=${config.mirrorStateFile ?? "<none>"} ` +
-        `mirrorEvents=${config.mirrorEventsFile ?? "<none>"} ` +
         `execPath=${process.execPath}`,
       env,
     );
@@ -285,7 +258,7 @@ export function recordStartupPhase(
   }
   const startedAt = sessionStartMs.get(config.sessionId) ?? now;
   const previous = latestStateBySession.get(config.sessionId);
-  const execPath =
+  const stateExecPath =
     hasOwn(update, "exec_path") && update.exec_path !== undefined
       ? update.exec_path
       : previous?.exec_path ?? process.execPath ?? null;
@@ -304,11 +277,11 @@ export function recordStartupPhase(
       hasOwn(update, "port") && update.port !== undefined
         ? update.port
         : previous?.port ?? null,
-    exec_path: execPath,
+    exec_path: stateExecPath,
     bundle_path:
       hasOwn(update, "bundle_path") && update.bundle_path !== undefined
         ? update.bundle_path
-        : previous?.bundle_path ?? resolveStartupBundlePath(execPath ?? ""),
+        : previous?.bundle_path ?? resolveStartupBundlePath(stateExecPath ?? ""),
     elapsed_ms: now - startedAt,
     error:
       hasOwn(update, "error") && update.error !== undefined
@@ -328,12 +301,6 @@ export function recordStartupPhase(
   }
   if (config.eventsFile) {
     appendJsonLine(config.eventsFile, nextState);
-  }
-  if (config.mirrorStateFile) {
-    writeJsonAtomic(config.mirrorStateFile, nextState);
-  }
-  if (config.mirrorEventsFile) {
-    appendJsonLine(config.mirrorEventsFile, nextState);
   }
 
   return nextState;

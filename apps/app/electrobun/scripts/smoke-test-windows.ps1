@@ -24,7 +24,7 @@ $persistLauncherPathFile = $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE
 $startupSessionId = "milady-windows-smoke-" + [Guid]::NewGuid().ToString("N")
 $startupStateFile = Join-Path $env:RUNNER_TEMP ($startupSessionId + ".state.json")
 $startupEventsFile = Join-Path $env:RUNNER_TEMP ($startupSessionId + ".events.jsonl")
-$startupBootstrapFile = Join-Path $env:APPDATA "Milady\\startup-session.json"
+$startupBootstrapFile = $null
 
 function Find-Launcher([string]$Root) {
   if (-not (Test-Path $Root)) {
@@ -114,13 +114,20 @@ function Get-StartupState() {
   }
 
   try {
-    return Get-Content $startupStateFile -Raw -ErrorAction Stop | ConvertFrom-Json
+    $state = Get-Content $startupStateFile -Raw -ErrorAction Stop | ConvertFrom-Json
+    if ($state.session_id -ne $startupSessionId) {
+      return $null
+    }
+    return $state
   } catch {
     return $null
   }
 }
 
 function Write-StartupBootstrap() {
+  if ([string]::IsNullOrWhiteSpace($startupBootstrapFile)) {
+    throw "Startup bootstrap file path was not initialized."
+  }
   $bootstrapDir = Split-Path -Parent $startupBootstrapFile
   if ($bootstrapDir) {
     New-Item -ItemType Directory -Force -Path $bootstrapDir | Out-Null
@@ -149,10 +156,6 @@ $env:MILADY_FORCE_AUTOSTART_AGENT = "1"
 $env:MILADY_STARTUP_SESSION_ID = $startupSessionId
 $env:MILADY_STARTUP_STATE_FILE = $startupStateFile
 $env:MILADY_STARTUP_EVENTS_FILE = $startupEventsFile
-Remove-Item $startupStateFile -Force -ErrorAction SilentlyContinue
-Remove-Item $startupEventsFile -Force -ErrorAction SilentlyContinue
-Remove-Item $startupBootstrapFile -Force -ErrorAction SilentlyContinue
-Write-StartupBootstrap
 
 # Reset stale startup logs before launch so fatal classification only applies
 # to this run.
@@ -278,6 +281,12 @@ if (-not $launcher) {
 $launcher = Write-ReusableLauncherPath -Launcher $launcher -TemporaryRoot $tempExtractDir
 Write-Host "Using $launcherSource launcher: $($launcher.FullName)"
 $launcherDir = Split-Path -Parent $launcher.FullName
+$startupBundleRoot = Split-Path -Parent $launcherDir
+$startupBootstrapFile = Join-Path $startupBundleRoot "startup-session.json"
+Remove-Item $startupStateFile -Force -ErrorAction SilentlyContinue
+Remove-Item $startupEventsFile -Force -ErrorAction SilentlyContinue
+Remove-Item $startupBootstrapFile -Force -ErrorAction SilentlyContinue
+Write-StartupBootstrap
 $launcherProcess = Start-Process -FilePath $launcher.FullName -WorkingDirectory $launcherDir -PassThru
 $launcherStarted = $true
 
@@ -562,7 +571,9 @@ try {
   }
 } finally {
   Stop-MiladyProcesses
-  Remove-Item $startupBootstrapFile -Force -ErrorAction SilentlyContinue
+  if (-not [string]::IsNullOrWhiteSpace($startupBootstrapFile)) {
+    Remove-Item $startupBootstrapFile -Force -ErrorAction SilentlyContinue
+  }
   if (Test-Path $tempExtractDir) {
     Remove-Item $tempExtractDir -Recurse -Force -ErrorAction SilentlyContinue
   }

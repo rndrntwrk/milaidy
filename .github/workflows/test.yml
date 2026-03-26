@@ -235,6 +235,9 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
 
+      - name: Run startup E2E contract guard
+        run: bun run test:startup:contract
+
       - name: Run app startup/onboarding tests
         run: bun run test:startup:e2e
 

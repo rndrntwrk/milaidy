@@ -170,6 +170,9 @@ jobs:
       - name: Run deterministic E2E tests
         run: bun run test:e2e
 
+      - name: Run startup E2E contract guard
+        run: bun run test:startup:contract
+
       - name: Run startup E2E tests
         run: bun run test:startup:e2e
 

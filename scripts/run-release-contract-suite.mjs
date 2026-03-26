@@ -26,6 +26,7 @@ run("bunx", [
   "scripts/whisper-build-script-drift.test.ts",
   "scripts/release-check.test.ts",
 ]);
+run("bun", ["run", "test:startup:contract"]);
 
 run("bunx", ["tsdown"]);
 fs.mkdirSync(path.join(ROOT, "dist"), { recursive: true });

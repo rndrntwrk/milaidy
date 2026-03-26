@@ -692,16 +692,17 @@ function assertWindowsSmokeScriptHasLeadingParamBlock() {
     "Using packaged tarball:",
     "Find-Launcher $selfExtractionRoot",
     "Started extracted launcher:",
-    "Runtime ready -- port: ",
-    "Runtime started -- agent: .* port:",
-    "Waiting for health endpoint at http://(?:localhost|127\\.0\\.0\\.1):",
+    '$startupSessionId = "milady-windows-smoke-"',
+    '$startupStateFile = Join-Path $env:RUNNER_TEMP',
+    '$startupBootstrapFile = Join-Path $startupBundleRoot "startup-session.json"',
+    "Write-StartupBootstrap",
+    'if ($state.session_id -ne $startupSessionId)',
     "$handler.UseProxy = $false",
     '--noproxy "127.0.0.1"',
     "function Test-BackendProbeStatus",
-    "function Test-StartupLogFatalLine",
     "Cleared stale startup log:",
-    "optional plugin",
-    "Fatal startup lines detected:",
+    "Startup trace entered fatal phase:",
+    "Latest startup trace state:",
     "-SkipHttpErrorCheck",
     "Dump-PortDiagnostics",
     "Dump-ProcessDiagnostics",
@@ -826,19 +827,16 @@ function assertMacSmokeScriptLaunchesPackagedLauncherDirectly() {
     process.exit(1);
   }
 
-  if (script.includes('open "$LAUNCH_APP_BUNDLE"')) {
-    console.error(
-      "release-check: smoke-test.sh must not use open(1); it can reactivate a stale installed bundle.",
-    );
-    process.exit(1);
-  }
-
   const requiredSnippets = [
     "dump_failure_diagnostics()",
     "write_bundle_diagnostics()",
     "collect_recent_crash_reports()",
     "build_launcher_command()",
-    'if [[ "$(uname)" == "Darwin" && -n "$' + "{GITHUB_ACTIONS:-}" + '" ]]',
+    "probe_macos_bundle_exec_support()",
+    "launch_packaged_app_with_open()",
+    'OPEN_LAUNCH_ATTEMPTED="1"',
+    'STARTUP_BOOTSTRAP_FILE="$LAUNCH_APP_BUNDLE/Contents/Resources/startup-session.json"',
+    'const [filePath, expectedSession] = process.argv.slice(1);',
     'TERM="$' + "{TERM:-dumb}" + '"',
     "attach_dmg_with_retry()",
     'MOUNT_POINT="$(attach_dmg_with_retry "$DMG_PATH")"',
@@ -851,8 +849,9 @@ function assertMacSmokeScriptLaunchesPackagedLauncherDirectly() {
     "backend_health_probe_satisfied()",
     '[[ "$status" == "200" || "$status" == "401" ]]',
     "Launcher exited before the first health probe; continuing to wait for packaged app handoff...",
-    'dump_failure_diagnostics "backend startup log reported a failure"',
-    'dump_failure_diagnostics "backend never reported a started port"',
+    'dump_failure_diagnostics "open(1) failed to launch packaged app"',
+    'FAILURE_REASON="open(1) launch produced no startup trace"',
+    'FAILURE_REASON="macOS direct app-bundle exec probe returned SIGKILL (137) before startup trace began"',
   ];
   const missing = requiredSnippets.filter(
     (snippet) => !script.includes(snippet),

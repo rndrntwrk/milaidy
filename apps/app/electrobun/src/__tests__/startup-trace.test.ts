@@ -8,9 +8,7 @@ import {
   getStartupTraceConfig,
   recordStartupPhase,
   resetStartupTraceForTests,
-  resolveDefaultStartupTraceFiles,
   resolveStartupTraceBootstrapFile,
-  shouldUseDefaultStartupTraceFallback,
 } from "../startup-trace";
 
 function createTraceEnv(rootDir: string, sessionId: string): NodeJS.ProcessEnv {
@@ -116,16 +114,32 @@ describe("startup trace", () => {
     ]);
   });
 
-  it("falls back to the session bootstrap file when wrapper env is stripped", () => {
-    const homeDir = fs.mkdtempSync(path.join(tempDir, "home-"));
-    const env = {
-      HOME: homeDir,
-    } as NodeJS.ProcessEnv;
-    const bootstrapFile = resolveStartupTraceBootstrapFile(env, "darwin");
+  it("reads the bundle-local bootstrap file when wrapper env is stripped", () => {
+    const execPath = path.join(
+      tempDir,
+      "Milady-canary.app",
+      "Contents",
+      "MacOS",
+      "launcher",
+    );
+    const env = {} as NodeJS.ProcessEnv;
+    const bootstrapFile = resolveStartupTraceBootstrapFile(execPath, "darwin");
     const sessionId = "session-bootstrap";
     const stateFile = path.join(tempDir, `${sessionId}.state.json`);
     const eventsFile = path.join(tempDir, `${sessionId}.events.jsonl`);
 
+    expect(bootstrapFile).toBe(
+      path.join(
+        tempDir,
+        "Milady-canary.app",
+        "Contents",
+        "Resources",
+        "startup-session.json",
+      ),
+    );
+    if (!bootstrapFile) {
+      throw new Error("expected packaged exec path to resolve a bootstrap file");
+    }
     fs.mkdirSync(path.dirname(bootstrapFile), { recursive: true });
     fs.writeFileSync(
       bootstrapFile,
@@ -142,33 +156,53 @@ describe("startup trace", () => {
       "utf8",
     );
 
-    const config = getStartupTraceConfig(env);
+    const config = getStartupTraceConfig(env, execPath);
     expect(config.enabled).toBe(true);
     expect(config.sessionId).toBe(sessionId);
     expect(config.stateFile).toBe(stateFile);
     expect(config.eventsFile).toBe(eventsFile);
 
-    const snapshot = recordStartupPhase("main_start", { pid: 777 }, env);
+    const snapshot = recordStartupPhase("main_start", { pid: 777 }, env, execPath);
     expect(snapshot?.session_id).toBe(sessionId);
     expect(readJson(stateFile).pid).toBe(777);
   });
 
-  it("derives packaged fallback trace files under the Milady config directory", () => {
-    const env = {
-      HOME: path.join(tempDir, "fallback-home"),
-    } as NodeJS.ProcessEnv;
-
-    const files = resolveDefaultStartupTraceFiles(env, "darwin");
-    expect(files.stateFile).toBe(
-      path.join(env.HOME!, ".config", "Milady", "milady-startup-state.json"),
-    );
-    expect(files.eventsFile).toBe(
-      path.join(env.HOME!, ".config", "Milady", "milady-startup-events.jsonl"),
+  it("derives bundle-local bootstrap sidecars from packaged launcher paths", () => {
+    expect(
+      resolveStartupTraceBootstrapFile(
+        "/Applications/Milady-canary.app/Contents/MacOS/launcher",
+        "darwin",
+      ),
+    ).toBe(
+      "/Applications/Milady-canary.app/Contents/Resources/startup-session.json",
     );
     expect(
-      shouldUseDefaultStartupTraceFallback(
-        "/Applications/Milady-canary.app/Contents/MacOS/launcher",
+      resolveStartupTraceBootstrapFile(
+        "/Users/test/AppData/Local/com.miladyai.milady/canary/self-extraction/Milady-canary/bin/launcher.exe",
+        "win32",
       ),
-    ).toBe(true);
+    ).toBe(
+      "/Users/test/AppData/Local/com.miladyai.milady/canary/self-extraction/Milady-canary/startup-session.json",
+    );
+  });
+
+  it("does not enable tracing for packaged runtimes without explicit env or bootstrap", () => {
+    const execPath = path.join(
+      tempDir,
+      "Milady-canary.app",
+      "Contents",
+      "MacOS",
+      "launcher",
+    );
+
+    expect(getStartupTraceConfig({} as NodeJS.ProcessEnv, execPath)).toEqual({
+      enabled: false,
+      sessionId: null,
+      stateFile: null,
+      eventsFile: null,
+    });
+    expect(
+      recordStartupPhase("main_start", { pid: 111 }, {} as NodeJS.ProcessEnv, execPath),
+    ).toBeNull();
   });
 });

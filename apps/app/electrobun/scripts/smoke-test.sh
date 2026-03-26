@@ -44,11 +44,11 @@ STARTUP_SESSION_ID=""
 STARTUP_STATE_FILE=""
 STARTUP_EVENTS_FILE=""
 STARTUP_BOOTSTRAP_FILE=""
-STARTUP_FALLBACK_STATE_FILE=""
-STARTUP_FALLBACK_EVENTS_FILE=""
 MAC_DIRECT_EXEC_PROBE_RC=""
 MAC_LAUNCH_MODE="${MILADY_SMOKE_MAC_LAUNCH_MODE:-auto}"
 OPEN_LAUNCH_OUTPUT=""
+OPEN_LAUNCH_ATTEMPTED="0"
+OPEN_LAUNCH_EXIT_CODE=""
 STATE_PHASE=""
 STATE_PORT=""
 STATE_PID=""
@@ -70,19 +70,22 @@ if [[ "$(uname)" == "Darwin" && "$BUILD_SKIP_CODESIGN" != "1" && -z "$BUILD_DEVE
       | sed 's/.*"\(.*\)"/\1/' || true
   )"
   if [[ -z "$BUILD_DEVELOPER_ID" && -z "${CI:-}" && -z "${GITHUB_ACTIONS:-}" ]]; then
-    BUILD_SKIP_CODESIGN="1"
-    SKIP_SIGNATURE_CHECK="1"
-    echo "No Developer ID Application identity found; falling back to unsigned local smoke build."
+    echo "ERROR: No Developer ID Application identity found."
+    echo "       \`bun run test:desktop:packaged\` is the strict signed-packaged gate."
+    echo "       Use \`bun run test:desktop:packaged:unsigned\` for ad-hoc local smoke,"
+    echo "       or set ELECTROBUN_DEVELOPER_ID / ELECTROBUN_SKIP_CODESIGN explicitly."
+    exit 1
   fi
+fi
+
+if [[ "$BUILD_SKIP_CODESIGN" == "1" || "$SKIP_SIGNATURE_CHECK" == "1" ]]; then
+  echo "WARNING: Running unsigned/ad-hoc packaged smoke. This is not a release-grade signing/notarization check."
 fi
 
 cleanup() {
   kill_stale_processes
   if [[ -n "$STARTUP_BOOTSTRAP_FILE" ]]; then
     rm -f "$STARTUP_BOOTSTRAP_FILE"
-  fi
-  if [[ -n "$STARTUP_FALLBACK_STATE_FILE" || -n "$STARTUP_FALLBACK_EVENTS_FILE" ]]; then
-    rm -f "$STARTUP_FALLBACK_STATE_FILE" "$STARTUP_FALLBACK_EVENTS_FILE"
   fi
   if [[ -n "$LAUNCH_APP_BUNDLE" && "$LAUNCH_APP_BUNDLE" == /tmp/* && -d "$LAUNCH_APP_BUNDLE" ]]; then
     rm -rf "$LAUNCH_APP_BUNDLE"
@@ -147,14 +150,8 @@ init_startup_session() {
   STARTUP_SESSION_ID="${MILADY_STARTUP_SESSION_ID:-milady-smoke-${BUILD_ENV}-$$-${RANDOM:-0}-$(date +%s)}"
   STARTUP_STATE_FILE="$SMOKE_DIAGNOSTICS_DIR/startup-state.json"
   STARTUP_EVENTS_FILE="$SMOKE_DIAGNOSTICS_DIR/startup-events.jsonl"
-  STARTUP_BOOTSTRAP_FILE="$HOME/.config/Milady/startup-session.json"
-  STARTUP_FALLBACK_STATE_FILE="$HOME/.config/Milady/milady-startup-state.json"
-  STARTUP_FALLBACK_EVENTS_FILE="$HOME/.config/Milady/milady-startup-events.jsonl"
-  rm -f \
-    "$STARTUP_STATE_FILE" \
-    "$STARTUP_EVENTS_FILE" \
-    "$STARTUP_FALLBACK_STATE_FILE" \
-    "$STARTUP_FALLBACK_EVENTS_FILE"
+  STARTUP_BOOTSTRAP_FILE="$LAUNCH_APP_BUNDLE/Contents/Resources/startup-session.json"
+  rm -f "$STARTUP_STATE_FILE" "$STARTUP_EVENTS_FILE"
   mkdir -p "$(dirname "$STARTUP_BOOTSTRAP_FILE")"
   local bootstrap_temp="${STARTUP_BOOTSTRAP_FILE}.tmp.$$"
   node -e '
@@ -190,21 +187,19 @@ load_startup_state() {
   STATE_SOURCE_FILE=""
 
   local startup_state_file="$STARTUP_STATE_FILE"
-  if [[ ! -f "$startup_state_file" && -f "$STARTUP_FALLBACK_STATE_FILE" ]]; then
-    startup_state_file="$STARTUP_FALLBACK_STATE_FILE"
-  fi
-
   if [[ ! -f "$startup_state_file" ]]; then
     return 1
   fi
-
-  STATE_SOURCE_FILE="$startup_state_file"
 
   local -a startup_state_parts=()
   mapfile -t startup_state_parts < <(
     node -e '
       const fs = require("node:fs");
-      const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      const [filePath, expectedSession] = process.argv.slice(1);
+      const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      if ((data.session_id ?? "") !== expectedSession) {
+        process.exit(2);
+      }
       const fields = [
         data.phase ?? "",
         data.port ?? "",
@@ -217,9 +212,13 @@ load_startup_state() {
       for (const field of fields) {
         console.log(String(field));
       }
-    ' "$startup_state_file" 2>/dev/null || true
+    ' "$startup_state_file" "$STARTUP_SESSION_ID" 2>/dev/null || true
   )
+  if [[ "${#startup_state_parts[@]}" -eq 0 ]]; then
+    return 1
+  fi
 
+  STATE_SOURCE_FILE="$startup_state_file"
   STATE_PHASE="${startup_state_parts[0]:-}"
   STATE_PORT="${startup_state_parts[1]:-}"
   STATE_PID="${startup_state_parts[2]:-}"
@@ -257,12 +256,6 @@ copy_supporting_diagnostics() {
   fi
   if [[ -f "$STARTUP_EVENTS_FILE" ]]; then
     cp "$STARTUP_EVENTS_FILE" "$SMOKE_DIAGNOSTICS_DIR/startup-events.jsonl" 2>/dev/null || true
-  fi
-  if [[ -f "$STARTUP_FALLBACK_STATE_FILE" ]]; then
-    cp "$STARTUP_FALLBACK_STATE_FILE" "$SMOKE_DIAGNOSTICS_DIR/milady-startup-state.json" 2>/dev/null || true
-  fi
-  if [[ -f "$STARTUP_FALLBACK_EVENTS_FILE" ]]; then
-    cp "$STARTUP_FALLBACK_EVENTS_FILE" "$SMOKE_DIAGNOSTICS_DIR/milady-startup-events.jsonl" 2>/dev/null || true
   fi
   if [[ -f "$STARTUP_BOOTSTRAP_FILE" ]]; then
     cp "$STARTUP_BOOTSTRAP_FILE" "$SMOKE_DIAGNOSTICS_DIR/startup-session.json" 2>/dev/null || true
@@ -360,10 +353,10 @@ dump_failure_diagnostics() {
     echo "Startup state file: ${STARTUP_STATE_FILE:-<unset>}"
     echo "Startup events file: ${STARTUP_EVENTS_FILE:-<unset>}"
     echo "Startup bootstrap file: ${STARTUP_BOOTSTRAP_FILE:-<unset>}"
-    echo "Startup fallback state file: ${STARTUP_FALLBACK_STATE_FILE:-<unset>}"
-    echo "Startup fallback events file: ${STARTUP_FALLBACK_EVENTS_FILE:-<unset>}"
     echo "Loaded startup state source: ${STATE_SOURCE_FILE:-<none>}"
     echo "Mac launch mode: ${MAC_LAUNCH_MODE:-<unset>}"
+    echo "open(1) attempted: ${OPEN_LAUNCH_ATTEMPTED:-0}"
+    echo "open(1) exit code: ${OPEN_LAUNCH_EXIT_CODE:-<unset>}"
     echo "Mac direct bundle exec probe rc: ${MAC_DIRECT_EXEC_PROBE_RC:-<unset>}"
     echo "Mounted volume: ${MOUNT_POINT:-<none>}"
     echo "Launch bundle: ${LAUNCH_APP_BUNDLE:-<none>}"
@@ -402,19 +395,9 @@ dump_failure_diagnostics() {
       cat "$STARTUP_BOOTSTRAP_FILE" 2>/dev/null || true
     fi
     echo ""
-    echo "Startup fallback state snapshot:"
-    if [[ -f "$STARTUP_FALLBACK_STATE_FILE" ]]; then
-      cat "$STARTUP_FALLBACK_STATE_FILE" 2>/dev/null || true
-    fi
-    echo ""
     echo "Startup session events:"
     if [[ -f "$STARTUP_EVENTS_FILE" ]]; then
       tail -n 200 "$STARTUP_EVENTS_FILE" 2>/dev/null || true
-    fi
-    echo ""
-    echo "Startup fallback events:"
-    if [[ -f "$STARTUP_FALLBACK_EVENTS_FILE" ]]; then
-      tail -n 200 "$STARTUP_FALLBACK_EVENTS_FILE" 2>/dev/null || true
     fi
   } >"$SMOKE_DIAGNOSTICS_DIR/failure-summary.txt"
 
@@ -547,8 +530,13 @@ EOF
 }
 
 launch_packaged_app_with_open() {
+  OPEN_LAUNCH_ATTEMPTED="1"
   OPEN_LAUNCH_OUTPUT="$(mktemp /tmp/milady-smoke-open.stderr.XXXXXX)"
-  /usr/bin/open -n "$LAUNCH_APP_BUNDLE" >"$LAUNCHER_STDOUT" 2>"$OPEN_LAUNCH_OUTPUT" || true
+  if /usr/bin/open -n "$LAUNCH_APP_BUNDLE" >"$LAUNCHER_STDOUT" 2>"$OPEN_LAUNCH_OUTPUT"; then
+    OPEN_LAUNCH_EXIT_CODE="0"
+  else
+    OPEN_LAUNCH_EXIT_CODE="$?"
+  fi
   PID=""
 }
 
@@ -921,6 +909,11 @@ if [[ ! -x "$LAUNCHER_PATH" ]]; then
 fi
 
 launch_packaged_app
+if [[ "$OPEN_LAUNCH_ATTEMPTED" == "1" && "${OPEN_LAUNCH_EXIT_CODE:-1}" != "0" ]]; then
+  echo "ERROR: open(1) failed to launch the packaged app (exit ${OPEN_LAUNCH_EXIT_CODE})."
+  dump_failure_diagnostics "open(1) failed to launch packaged app"
+  exit 1
+fi
 sleep 2
 
 BACKEND_PORT=""
@@ -1002,7 +995,9 @@ done
 if [[ -z "$BACKEND_PORT" ]]; then
   echo "ERROR: Packaged startup never reached runtime_ready with a backend port."
   FAILURE_REASON="startup trace never reached runtime_ready"
-  if [[ "$(uname)" == "Darwin" && -z "$STATE_PHASE" && "$MAC_DIRECT_EXEC_PROBE_RC" == "137" ]]; then
+  if [[ "$OPEN_LAUNCH_ATTEMPTED" == "1" ]]; then
+    FAILURE_REASON="open(1) launch produced no startup trace"
+  elif [[ "$(uname)" == "Darwin" && -z "$STATE_PHASE" && "$MAC_DIRECT_EXEC_PROBE_RC" == "137" ]]; then
     FAILURE_REASON="macOS direct app-bundle exec probe returned SIGKILL (137) before startup trace began"
   fi
   dump_failure_diagnostics "$FAILURE_REASON"

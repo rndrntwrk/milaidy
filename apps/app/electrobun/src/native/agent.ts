@@ -986,6 +986,25 @@ export class AgentManager {
       const nodePaths = buildChildNodePaths(miladyDistPath, {
         packagedRuntime,
       });
+      if (packagedRuntime && nodePaths.length === 0) {
+        const errMsg =
+          `Packaged runtime is missing bundle-local node_modules under ${miladyDistPath}; ` +
+          "refusing to inherit the parent NODE_PATH";
+        diagnosticLog(`[Agent] ${errMsg}`);
+        this.status = {
+          state: "error",
+          agentName: null,
+          port: apiPort,
+          startedAt: null,
+          error: errMsg,
+        };
+        recordStartupPhase("fatal", {
+          port: apiPort,
+          error: errMsg,
+        });
+        this.emitStatus();
+        return this.status;
+      }
 
       const childEnv: Record<string, string> = {
         ...(process.env as Record<string, string>),
@@ -994,6 +1013,7 @@ export class AgentManager {
         ELIZA_PORT: String(apiPort),
       };
       delete childEnv.MILADY_PORT;
+      delete childEnv.NODE_PATH;
 
       // node-llama-cpp crashes Bun on Windows during packaged startup.
       // Disable local embeddings until upstream fix lands.

@@ -601,14 +601,15 @@ describe("Electrobun release workflow drift", () => {
     expect(smokeScript).toContain("ANTHROPIC_API_KEY");
   });
 
-  it("resets stale Windows startup logs and classifies only true fatal startup lines", () => {
+  it("resets stale Windows startup logs and uses session-scoped startup trace files", () => {
     const smokeScript = fs.readFileSync(WINDOWS_SMOKE_PATH, "utf8");
 
     expect(smokeScript).toContain("Cleared stale startup log:");
-    expect(smokeScript).toContain("function Test-StartupLogFatalLine");
-    expect(smokeScript).toContain("optional plugin");
-    expect(smokeScript).toContain("@elizaos/plugin-");
-    expect(smokeScript).toContain("Fatal startup lines detected:");
+    expect(smokeScript).toContain('$startupSessionId = "milady-windows-smoke-"');
+    expect(smokeScript).toContain('$startupStateFile = Join-Path $env:RUNNER_TEMP');
+    expect(smokeScript).toContain('$startupBootstrapFile = Join-Path $startupBundleRoot "startup-session.json"');
+    expect(smokeScript).toContain("Write-StartupBootstrap");
+    expect(smokeScript).toContain('if ($state.session_id -ne $startupSessionId)');
   });
 
   it("bundles plugins.json and package.json into milady-dist for packaged builds", () => {

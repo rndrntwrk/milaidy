@@ -175,6 +175,10 @@ describe("AgentManager", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockSpawn.mockReset();
+    mockFetch.mockReset();
+    mockSleep.mockReset();
+    mockSleep.mockImplementation(() => Promise.resolve());
     Object.defineProperty(process, "execPath", {
       configurable: true,
       value: ORIGINAL_EXEC_PATH,
@@ -672,6 +676,12 @@ describe("AgentManager", () => {
           if (candidate === "/Users/test/AppData/Local/bun/bun.exe")
             return true;
           if (
+            candidate ===
+            "/Users/test/AppData/Local/com.miladyai.milady/canary/self-extraction/Milady-canary/Resources/app/milady-dist/node_modules"
+          ) {
+            return true;
+          }
+          if (
             typeof candidate === "string" &&
             candidate.endsWith("/entry.js")
           ) {
@@ -736,7 +746,7 @@ describe("AgentManager", () => {
       }
     });
 
-    it("does not inherit ambient NODE_PATH into the child process", async () => {
+    it("does not inherit ambient NODE_PATH into the child process in dev mode", async () => {
       const originalNodePath = process.env.NODE_PATH;
       process.env.NODE_PATH = "/tmp/hostile-modules";
 
@@ -763,6 +773,56 @@ describe("AgentManager", () => {
           process.env.NODE_PATH = originalNodePath;
         }
       }
+    });
+
+    it("does not inherit ambient NODE_PATH into the child process in packaged mode", async () => {
+      const originalNodePath = process.env.NODE_PATH;
+      process.env.NODE_PATH = "/tmp/hostile-modules";
+      Object.defineProperty(process, "execPath", {
+        configurable: true,
+        value: "/Applications/Milady-canary.app/Contents/MacOS/launcher",
+      });
+
+      try {
+        const mockProc = createMockProcess();
+        mockSpawn.mockReturnValue(mockProc);
+
+        mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ agents: [{ name: "Milady" }] }),
+        });
+
+        await manager.start();
+
+        const spawnOptions = mockSpawn.mock.calls[0]?.[1];
+        expect(spawnOptions?.env?.NODE_PATH).toBe(
+          "/Applications/Milady-canary.app/Contents/Resources/app/milady-dist/node_modules",
+        );
+      } finally {
+        if (originalNodePath === undefined) {
+          delete process.env.NODE_PATH;
+        } else {
+          process.env.NODE_PATH = originalNodePath;
+        }
+      }
+    });
+
+    it("fails packaged startup before spawn when bundle-local node_modules are missing", async () => {
+      Object.defineProperty(process, "execPath", {
+        configurable: true,
+        value: "/Applications/Milady-canary.app/Contents/MacOS/launcher",
+      });
+      const existsSync = await getExistsSyncMock();
+      existsSync.mockImplementation(
+        (candidate: string) => !candidate.endsWith("/node_modules"),
+      );
+
+      const status = await manager.start();
+
+      expect(status.state).toBe("error");
+      expect(status.error).toContain("bundle-local node_modules");
+      expect(mockSpawn).not.toHaveBeenCalled();
     });
 
     it("does not rewrite parent port env vars after startup", async () => {
