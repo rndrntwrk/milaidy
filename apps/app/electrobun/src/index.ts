@@ -84,6 +84,15 @@ import {
 } from "./agent-ready-state";
 import { DEFAULT_PORT } from "./constants";
 
+function resolveDesktopAppIconPath(): string {
+  return path.join(
+    import.meta.dir,
+    process.platform === "win32"
+      ? "../assets/appIcon.ico"
+      : "../assets/appIcon.png",
+  );
+}
+
 function setupApplicationMenu(): void {
   const isMac = process.platform === "darwin";
   const menu = buildApplicationMenu({
@@ -700,6 +709,7 @@ async function createMainWindow(): Promise<BrowserWindow> {
     title: "Milady",
     url: rendererUrl,
     preload,
+    icon: resolveDesktopAppIconPath(),
     frame: {
       width: state.width,
       height: state.height,
@@ -1584,7 +1594,7 @@ async function main(): Promise<void> {
   const desktop = getDesktopManager();
   try {
     await desktop.createTray({
-      icon: path.join(import.meta.dir, "../assets/appIcon.png"),
+      icon: resolveDesktopAppIconPath(),
       tooltip: "Milady",
       title: "Milady",
       menu: [

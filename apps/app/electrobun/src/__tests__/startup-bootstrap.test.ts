@@ -45,6 +45,15 @@ describe("Electrobun startup bootstrap", () => {
     );
   });
 
+  it("uses the packaged app icon for the main window and tray", () => {
+    const source = fs.readFileSync(INDEX_PATH, "utf8");
+
+    expect(source).toContain("function resolveDesktopAppIconPath()");
+    expect(source).toContain("icon: resolveDesktopAppIconPath(),");
+    expect(source).toContain('process.platform === "win32"');
+    expect(source).toContain('"../assets/appIcon.ico"');
+  });
+
   it("resolves the initial renderer API base from desktop runtime mode", () => {
     const source = fs.readFileSync(INDEX_PATH, "utf8");
 
