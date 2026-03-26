@@ -197,7 +197,7 @@ describe("trigger routes", () => {
     const executeResult = execute.payload as {
       result?: { status?: string };
     };
-    expect(executeResult.result?.status).toBe("success");
+    expect(executeResult.result?.status).toBe("queued");
 
     const runs = await invoke({
       method: "GET",
@@ -207,6 +207,6 @@ describe("trigger routes", () => {
     const runItems =
       (runs.payload as { runs?: Array<{ status: string }> }).runs ?? [];
     expect(runItems.length).toBeGreaterThan(0);
-    expect(runItems[0].status).toBe("success");
+    expect(runItems[0].status).toBe("queued");
   });
 });
