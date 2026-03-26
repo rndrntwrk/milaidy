@@ -11,10 +11,18 @@ import {
 import { ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { client } from "../api";
+import { isElectrobunRuntime } from "../bridge";
 import { useBranding } from "../config/branding";
 import { useBugReport, useTimeout } from "../hooks";
 import { useApp } from "../state";
 import { openExternalUrl } from "../utils";
+import {
+  createDesktopBugReportBundle,
+  type DesktopBugReportDiagnostics,
+  formatDesktopBugReportDiagnostics,
+  loadDesktopBugReportDiagnostics,
+  openDesktopLogsFolder,
+} from "../utils/desktop-bug-report";
 
 const ENV_OPTIONS = ["macOS", "Windows", "Linux", "Other"] as const;
 
@@ -44,6 +52,7 @@ export function BugReportModal() {
   const { setTimeout } = useTimeout();
 
   const { copyToClipboard, t } = useApp();
+  const desktopRuntime = isElectrobunRuntime();
   const branding = useBranding();
   const { isOpen, close } = useBugReport();
   const [form, setForm] = useState<BugReportForm>(EMPTY_FORM);
@@ -52,6 +61,13 @@ export function BugReportModal() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showLogs, setShowLogs] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedDiagnostics, setCopiedDiagnostics] = useState(false);
+  const [desktopDiagnostics, setDesktopDiagnostics] =
+    useState<DesktopBugReportDiagnostics | null>(null);
+  const [attachLogs, setAttachLogs] = useState(true);
+  const [attachSystemInfo, setAttachSystemInfo] = useState(true);
+  const [bundlePath, setBundlePath] = useState<string | null>(null);
+  const [savingBundle, setSavingBundle] = useState(false);
   const descRef = useRef<HTMLTextAreaElement>(null);
 
   // Fetch env info on open with cancellation guard
@@ -65,6 +81,12 @@ export function BugReportModal() {
     setErrorMsg(null);
     setShowLogs(false);
     setCopied(false);
+    setCopiedDiagnostics(false);
+    setDesktopDiagnostics(null);
+    setAttachLogs(true);
+    setAttachSystemInfo(true);
+    setBundlePath(null);
+    setSavingBundle(false);
 
     client
       .checkBugReportInfo()
@@ -88,12 +110,37 @@ export function BugReportModal() {
       .catch((err: unknown) => {
         console.warn("[BugReportModal] Failed to fetch bug report info:", err);
       });
+    if (desktopRuntime) {
+      loadDesktopBugReportDiagnostics()
+        .then((diagnostics) => {
+          if (cancelled || !diagnostics) return;
+          setDesktopDiagnostics(diagnostics);
+          if (diagnostics.platform === "win32") {
+            setForm((f) => ({
+              ...f,
+              environment: f.environment || "Windows",
+              logs: f.logs || diagnostics.logTail || "",
+            }));
+          } else {
+            setForm((f) => ({
+              ...f,
+              logs: f.logs || diagnostics.logTail || "",
+            }));
+          }
+        })
+        .catch((err: unknown) => {
+          console.warn(
+            "[BugReportModal] Failed to fetch desktop diagnostics:",
+            err,
+          );
+        });
+    }
     setTimeout(() => descRef.current?.focus(), 50);
 
     return () => {
       cancelled = true;
     };
-  }, [isOpen, setTimeout]);
+  }, [desktopRuntime, isOpen, setTimeout]);
 
   const updateField = useCallback(
     <K extends keyof BugReportForm>(key: K, value: BugReportForm[K]) => {
@@ -101,6 +148,25 @@ export function BugReportModal() {
     },
     [],
   );
+
+  const buildDiagnosticsBlock = useCallback((): string => {
+    if (!desktopDiagnostics) return "";
+    const sections: string[] = [];
+    if (attachSystemInfo) {
+      sections.push(formatDesktopBugReportDiagnostics(desktopDiagnostics));
+    }
+    if (attachLogs && desktopDiagnostics.logTail) {
+      sections.push(`Startup Log Tail\n${desktopDiagnostics.logTail}`);
+    }
+    return sections.join("\n\n");
+  }, [attachLogs, attachSystemInfo, desktopDiagnostics]);
+
+  const buildCombinedLogs = useCallback((): string => {
+    const sections = [form.logs.trim(), buildDiagnosticsBlock().trim()].filter(
+      Boolean,
+    );
+    return sections.join("\n\n");
+  }, [buildDiagnosticsBlock, form.logs]);
 
   const formatMarkdown = useCallback((): string => {
     const strip = (s: string, max = 10_000) =>
@@ -119,10 +185,33 @@ export function BugReportModal() {
       lines.push(`\n### Node Version\n${strip(form.nodeVersion, 200)}`);
     if (form.modelProvider)
       lines.push(`\n### Model Provider\n${strip(form.modelProvider, 200)}`);
-    if (form.logs)
-      lines.push(`\n### Logs\n\`\`\`\n${strip(form.logs, 50_000)}\n\`\`\``);
+    const combinedLogs = buildCombinedLogs();
+    if (combinedLogs) {
+      lines.push(`\n### Logs\n\`\`\`\n${strip(combinedLogs, 50_000)}\n\`\`\``);
+    }
     return lines.join("\n");
-  }, [form]);
+  }, [buildCombinedLogs, form]);
+
+  const buildReportPayload = useCallback(
+    () => ({
+      description: form.description,
+      stepsToReproduce: form.stepsToReproduce,
+      expectedBehavior: form.expectedBehavior,
+      actualBehavior: form.actualBehavior,
+      environment: form.environment,
+      nodeVersion: form.nodeVersion,
+      modelProvider: form.modelProvider,
+      attachLogs,
+      attachSystemInfo,
+      desktopDiagnostics: desktopDiagnostics
+        ? {
+            ...desktopDiagnostics,
+            logTail: attachLogs ? desktopDiagnostics.logTail : "",
+          }
+        : null,
+    }),
+    [attachLogs, attachSystemInfo, desktopDiagnostics, form],
+  );
 
   const handleSubmit = useCallback(async () => {
     if (!form.description.trim() || !form.stepsToReproduce.trim()) {
@@ -140,7 +229,7 @@ export function BugReportModal() {
         environment: form.environment,
         nodeVersion: form.nodeVersion,
         modelProvider: form.modelProvider,
-        logs: form.logs,
+        logs: buildCombinedLogs(),
       });
       if (result.url) {
         setResultUrl(result.url);
@@ -167,7 +256,7 @@ export function BugReportModal() {
     } finally {
       setSubmitting(false);
     }
-  }, [copyToClipboard, form, formatMarkdown, t]);
+  }, [buildCombinedLogs, copyToClipboard, form, formatMarkdown, t]);
 
   const handleCopyAndOpen = useCallback(async () => {
     let ok = false;
@@ -184,6 +273,38 @@ export function BugReportModal() {
     setCopied(ok);
     await openExternalUrl(branding.bugReportUrl);
   }, [copyToClipboard, formatMarkdown, branding.bugReportUrl]);
+
+  const handleCopyDiagnostics = useCallback(async () => {
+    const diagnosticsText = buildDiagnosticsBlock();
+    if (!diagnosticsText) return;
+    let ok = false;
+    try {
+      await copyToClipboard(diagnosticsText);
+      ok = true;
+    } catch (err) {
+      console.warn("[BugReportModal] Failed to copy diagnostics:", err);
+    }
+    setCopiedDiagnostics(ok);
+  }, [buildDiagnosticsBlock, copyToClipboard]);
+
+  const handleSaveBundle = useCallback(async () => {
+    setSavingBundle(true);
+    setErrorMsg(null);
+    try {
+      const bundle = await createDesktopBugReportBundle({
+        prefix: "milady-report",
+        reportMarkdown: formatMarkdown(),
+        reportJson: buildReportPayload(),
+      });
+      setBundlePath(bundle?.directory ?? null);
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : "Failed to create report bundle",
+      );
+    } finally {
+      setSavingBundle(false);
+    }
+  }, [buildReportPayload, formatMarkdown]);
 
   // Close on Escape
   useEffect(() => {
@@ -341,6 +462,17 @@ export function BugReportModal() {
               {errorMsg}
             </div>
           )}
+          {bundlePath && (
+            <div
+              className="text-xs px-3 py-2"
+              style={{
+                color: "var(--text)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              {bundlePath}
+            </div>
+          )}
 
           {/* biome-ignore lint/a11y/noLabelWithoutControl: form control is associated programmatically */}
           <label className={labelClass} style={labelStyle}>
@@ -462,14 +594,46 @@ export function BugReportModal() {
               {t("bugreportmodal.Logs")}
             </Button>
             {showLogs && (
-              <Textarea
-                className={`${textareaClass} mt-1 font-mono text-xs`}
-                style={textareaStyle}
-                placeholder={t("bugreportmodal.PasteRelevantError")}
-                value={form.logs}
-                onChange={(e) => updateField("logs", e.target.value)}
-                rows={4}
-              />
+              <div className="mt-1 flex flex-col gap-2">
+                <div className="flex flex-wrap gap-3 text-[11px]">
+                  {desktopRuntime && (
+                    <>
+                      <label
+                        className="flex items-center gap-1"
+                        style={{ color: "var(--muted)" }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={attachLogs}
+                          onChange={(e) => setAttachLogs(e.target.checked)}
+                        />
+                        {t("bugreportmodal.attachLogs")}
+                      </label>
+                      <label
+                        className="flex items-center gap-1"
+                        style={{ color: "var(--muted)" }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={attachSystemInfo}
+                          onChange={(e) =>
+                            setAttachSystemInfo(e.target.checked)
+                          }
+                        />
+                        {t("bugreportmodal.attachSystemInfo")}
+                      </label>
+                    </>
+                  )}
+                </div>
+                <Textarea
+                  className={`${textareaClass} font-mono text-xs`}
+                  style={textareaStyle}
+                  placeholder={t("bugreportmodal.PasteRelevantError")}
+                  value={form.logs}
+                  onChange={(e) => updateField("logs", e.target.value)}
+                  rows={4}
+                />
+              </div>
             )}
           </div>
         </div>
@@ -483,6 +647,36 @@ export function BugReportModal() {
             {t("common.cancel")}
           </Button>
           <div className="flex items-center gap-2">
+            {desktopRuntime && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyDiagnostics}
+                >
+                  {copiedDiagnostics
+                    ? t("bugreportmodal.copiedDiagnostics")
+                    : t("bugreportmodal.copyDiagnostics")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={openDesktopLogsFolder}
+                >
+                  {t("bugreportmodal.openLogsFolder")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveBundle}
+                  disabled={savingBundle}
+                >
+                  {savingBundle
+                    ? t("bugreportmodal.savingBundle")
+                    : t("bugreportmodal.saveBundle")}
+                </Button>
+              </>
+            )}
             <Button
               variant="outline"
               size="sm"

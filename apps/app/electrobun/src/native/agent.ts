@@ -55,6 +55,29 @@ interface AgentStatus {
   error: string | null;
 }
 
+export interface StartupDiagnosticsSnapshot {
+  state: AgentStatus["state"];
+  phase: string;
+  updatedAt: string;
+  lastError: string | null;
+  agentName: string | null;
+  port: number | null;
+  startedAt: number | null;
+  platform: string;
+  arch: string;
+  configDir: string;
+  logPath: string;
+  statusPath: string;
+}
+
+export interface BugReportBundleResult {
+  directory: string;
+  reportMarkdownPath: string;
+  reportJsonPath: string;
+  startupLogPath: string | null;
+  startupStatusPath: string | null;
+}
+
 type ExistingElizaInstallSource =
   | "config-path-env"
   | "state-dir-env"
@@ -321,8 +344,9 @@ function getDesktopApiHeaders(
 }
 
 let diagnosticLogPath: string | null = null;
+let startupStatusPath: string | null = null;
 
-function getDiagnosticLogPath(): string {
+export function getDiagnosticLogPath(): string {
   if (diagnosticLogPath !== null) return diagnosticLogPath;
   try {
     const configDir = resolveConfigDir();
@@ -335,6 +359,20 @@ function getDiagnosticLogPath(): string {
     diagnosticLogPath = path.join(os.tmpdir(), "milady-startup.log");
   }
   return diagnosticLogPath;
+}
+
+export function getStartupStatusPath(): string {
+  if (startupStatusPath !== null) return startupStatusPath;
+  try {
+    const configDir = resolveConfigDir();
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+    startupStatusPath = path.join(configDir, "startup-status.json");
+  } catch {
+    startupStatusPath = path.join(os.tmpdir(), "startup-status.json");
+  }
+  return startupStatusPath;
 }
 
 function diagnosticLog(message: string): void {
@@ -358,6 +396,131 @@ function shortError(err: unknown, maxLen = 280): string {
   const oneLine = raw.replace(/\s+/g, " ").trim();
   if (oneLine.length <= maxLen) return oneLine;
   return `${oneLine.slice(0, maxLen)}... (see logs for full details)`;
+}
+
+function redactSensitiveDiagnostics(input: string): string {
+  return input
+    .replace(
+      /(authorization\s*[:=]\s*bearer\s+)([a-z0-9._-]+)/gi,
+      "$1[REDACTED]",
+    )
+    .replace(
+      /((?:x-api-key|x-api-token|api[_-]?key|bearer[_-]?token|access[_-]?token|secret|password)\s*[:=]\s*)([^\s]+)/gi,
+      "$1[REDACTED]",
+    );
+}
+
+function readFileTail(filePath: string, maxChars = 16_000): string {
+  try {
+    const content = fs.readFileSync(filePath, "utf8");
+    return redactSensitiveDiagnostics(content.slice(-maxChars));
+  } catch {
+    return "";
+  }
+}
+
+function writeStartupDiagnosticsSnapshot(
+  snapshot: StartupDiagnosticsSnapshot,
+): void {
+  try {
+    fs.writeFileSync(
+      getStartupStatusPath(),
+      `${JSON.stringify(snapshot, null, 2)}\n`,
+      "utf8",
+    );
+  } catch {
+    // Ignore write errors
+  }
+}
+
+export function getStartupDiagnosticsSnapshot(): StartupDiagnosticsSnapshot {
+  let parsed: Partial<StartupDiagnosticsSnapshot> | null = null;
+  try {
+    parsed = JSON.parse(
+      fs.readFileSync(getStartupStatusPath(), "utf8"),
+    ) as Partial<StartupDiagnosticsSnapshot> | null;
+  } catch {
+    parsed = null;
+  }
+
+  return {
+    state: parsed?.state ?? "not_started",
+    phase: parsed?.phase ?? "unknown",
+    updatedAt: parsed?.updatedAt ?? new Date().toISOString(),
+    lastError: parsed?.lastError ?? null,
+    agentName: parsed?.agentName ?? null,
+    port: parsed?.port ?? null,
+    startedAt: parsed?.startedAt ?? null,
+    platform: parsed?.platform ?? process.platform,
+    arch: parsed?.arch ?? process.arch,
+    configDir: parsed?.configDir ?? resolveConfigDir(),
+    logPath: parsed?.logPath ?? getDiagnosticLogPath(),
+    statusPath: parsed?.statusPath ?? getStartupStatusPath(),
+  };
+}
+
+export function getStartupDiagnosticLogTail(maxChars = 16_000): string {
+  return readFileTail(getDiagnosticLogPath(), maxChars);
+}
+
+export function createBugReportBundle(options: {
+  reportMarkdown: string;
+  reportJson: Record<string, unknown>;
+  prefix?: string;
+}): BugReportBundleResult {
+  const configDir = resolveConfigDir();
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const prefix = options.prefix?.trim() || "bug-report";
+  const directory = path.join(
+    configDir,
+    "bug-reports",
+    `${prefix}-${timestamp}`,
+  );
+  const reportMarkdownPath = path.join(directory, "report.md");
+  const reportJsonPath = path.join(directory, "report.json");
+  const logPath = getDiagnosticLogPath();
+  const statusPath = getStartupStatusPath();
+  const startupLogTarget = path.join(directory, "milady-startup.log");
+  const startupStatusTarget = path.join(directory, "startup-status.json");
+  const startupDiagnostics = getStartupDiagnosticsSnapshot();
+  const includeLogTail =
+    typeof options.reportJson.attachLogs === "boolean"
+      ? options.reportJson.attachLogs
+      : true;
+  const startupLogTail = includeLogTail ? getStartupDiagnosticLogTail() : "";
+  const normalizedReportJson = {
+    ...options.reportJson,
+    startupDiagnostics,
+    startupLogTail,
+  };
+
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(reportMarkdownPath, options.reportMarkdown, "utf8");
+  fs.writeFileSync(
+    reportJsonPath,
+    `${JSON.stringify(normalizedReportJson, null, 2)}\n`,
+    "utf8",
+  );
+
+  let copiedLogPath: string | null = null;
+  let copiedStatusPath: string | null = null;
+
+  if (fs.existsSync(logPath)) {
+    fs.copyFileSync(logPath, startupLogTarget);
+    copiedLogPath = startupLogTarget;
+  }
+  if (fs.existsSync(statusPath)) {
+    fs.copyFileSync(statusPath, startupStatusTarget);
+    copiedStatusPath = startupStatusTarget;
+  }
+
+  return {
+    directory,
+    reportMarkdownPath,
+    reportJsonPath,
+    startupLogPath: copiedLogPath,
+    startupStatusPath: copiedStatusPath,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -844,6 +1007,11 @@ export class AgentManager {
   private stdioAbortController: AbortController | null = null;
   private hasPgliteError = false;
   private pgliteRecoveryDone = false;
+  private startupPhase = "not_started";
+
+  constructor() {
+    this.persistStartupDiagnostics();
+  }
 
   setSendToWebview(fn: SendToWebview): void {
     this.sendToWebview = fn;
@@ -865,6 +1033,7 @@ export class AgentManager {
       exec_path: process.execPath,
       bundle_path: resolveStartupBundlePath(process.execPath),
     });
+    this.setStartupPhase("start_requested");
     diagnosticLog(
       `[Agent] start() called, current state: ${this.status.state}`,
     );
@@ -883,6 +1052,7 @@ export class AgentManager {
           ? `Embedded desktop runtime is disabled because ${runtimeMode.externalApi.source} points at ${runtimeMode.externalApi.base}.`
           : "Embedded desktop runtime is disabled by MILADY_DESKTOP_SKIP_EMBEDDED_AGENT=1.";
       diagnosticLog(`[Agent] ${reason}`);
+      this.setStartupPhase("startup_disabled", reason);
       throw new Error(reason);
     }
 
@@ -919,6 +1089,7 @@ export class AgentManager {
         port: null,
         error: msg,
       });
+      this.setStartupPhase("port_allocation_failed", msg);
       this.emitStatus();
       return this.status;
     }
@@ -938,10 +1109,12 @@ export class AgentManager {
       startedAt: null,
       error: null,
     };
+    this.setStartupPhase("starting_runtime");
     this.emitStatus();
 
     try {
       // Resolve milady-dist path
+      this.setStartupPhase("resolving_runtime");
       const miladyDistPath = resolveMiladyDistPath();
       diagnosticLog(`[Agent] Resolved milady dist: ${miladyDistPath}`);
 
@@ -971,6 +1144,7 @@ export class AgentManager {
           port: apiPort,
           error: errMsg,
         });
+        this.setStartupPhase("runtime_entry_missing", errMsg);
         this.emitStatus();
         return this.status;
       }
@@ -981,6 +1155,7 @@ export class AgentManager {
       });
 
       diagnosticLog(`[Agent] Starting child process on port ${apiPort}...`);
+      this.setStartupPhase("spawning_runtime");
 
       // Build NODE_PATH so the child can find node_modules
       const nodePaths = buildChildNodePaths(miladyDistPath, {
@@ -1126,6 +1301,7 @@ export class AgentManager {
       diagnosticLog(
         `[Agent] Waiting for health endpoint at http://127.0.0.1:${apiPort}/api/health ...`,
       );
+      this.setStartupPhase("waiting_for_health");
       const healthPollTimeoutMs = getHealthPollTimeoutMs();
       const healthy = await waitForHealthy(
         () => apiPort,
@@ -1152,6 +1328,7 @@ export class AgentManager {
             error: errMsg,
             exit_code: proc.exitCode,
           });
+          this.setStartupPhase("startup_failed", errMsg);
           this.emitStatus();
           return this.status;
         }
@@ -1172,6 +1349,7 @@ export class AgentManager {
           child_pid: proc.pid,
           error: errMsg,
         });
+        this.setStartupPhase("startup_failed", errMsg);
         this.emitStatus();
         return this.status;
       }
@@ -1182,6 +1360,10 @@ export class AgentManager {
 
       const startedAt = Date.now();
       const startupMs = startedAt - spawnTime;
+      // Fetch agent name from the running server
+      this.setStartupPhase("fetching_agent_metadata");
+      const agentName = await this.fetchAgentName(apiPort);
+
       this.status = {
         state: "running",
         agentName: "Milady",
@@ -1189,6 +1371,11 @@ export class AgentManager {
         startedAt,
         error: null,
       };
+
+      process.env.MILADY_PORT = String(apiPort);
+      process.env.MILADY_API_PORT = String(apiPort);
+      process.env.ELIZA_PORT = String(apiPort);
+      this.setStartupPhase("ready", null);
       this.emitStatus();
       diagnosticLog(
         `[Agent] Runtime ready -- port: ${apiPort}, pid: ${proc.pid}, startup_ms: ${startupMs}`,
@@ -1220,6 +1407,7 @@ export class AgentManager {
         startedAt: null,
         error: shortError(err),
       };
+      this.setStartupPhase("startup_failed", shortError(err));
       this.emitStatus();
       return this.status;
     }
@@ -1232,6 +1420,7 @@ export class AgentManager {
     }
 
     diagnosticLog("[Agent] Stopping...");
+    this.setStartupPhase("stopping");
 
     // Abort stdio watchers
     if (this.stdioAbortController) {
@@ -1248,6 +1437,7 @@ export class AgentManager {
       startedAt: null,
       error: null,
     };
+    this.setStartupPhase("stopped", null);
     this.emitStatus();
     diagnosticLog("[Agent] Runtime stopped");
   }
@@ -1258,6 +1448,7 @@ export class AgentManager {
    */
   async restart(): Promise<AgentStatus> {
     diagnosticLog("[Agent] Restart requested -- stopping current runtime...");
+    this.setStartupPhase("restart_requested");
     await this.stop();
     diagnosticLog("[Agent] Restarting...");
     return this.start();
@@ -1332,6 +1523,7 @@ export class AgentManager {
   // -----------------------------------------------------------------------
 
   private emitStatus(): void {
+    this.persistStartupDiagnostics();
     if (this.sendToWebview) {
       this.sendToWebview("agentStatusUpdate", this.status);
     }
@@ -1376,6 +1568,28 @@ export class AgentManager {
     });
   }
 
+  private setStartupPhase(phase: string, lastError?: string | null): void {
+    this.startupPhase = phase;
+    this.persistStartupDiagnostics(lastError);
+  }
+
+  private persistStartupDiagnostics(lastError?: string | null): void {
+    writeStartupDiagnosticsSnapshot({
+      state: this.status.state,
+      phase: this.startupPhase,
+      updatedAt: new Date().toISOString(),
+      lastError: lastError ?? this.status.error,
+      agentName: this.status.agentName,
+      port: this.status.port,
+      startedAt: this.status.startedAt,
+      platform: process.platform,
+      arch: process.arch,
+      configDir: resolveConfigDir(),
+      logPath: getDiagnosticLogPath(),
+      statusPath: getStartupStatusPath(),
+    });
+  }
+
   /**
    * Monitor the child process for unexpected exits and update status.
    */
@@ -1416,6 +1630,7 @@ export class AgentManager {
               startedAt: null,
               error: null,
             };
+            this.setStartupPhase("recovering_pglite");
             // Delay slightly so OS releases file handles before respawn
             setTimeout(() => void this.start(), 500);
             return;
@@ -1428,6 +1643,10 @@ export class AgentManager {
             startedAt: null,
             error: `Process exited unexpectedly with code ${exitCode}`,
           };
+          this.setStartupPhase(
+            "process_exited_unexpectedly",
+            `Process exited unexpectedly with code ${exitCode}`,
+          );
           this.emitStatus();
         } else {
           // Expected exit (we called stop)
@@ -1456,6 +1675,7 @@ export class AgentManager {
             startedAt: null,
             error: shortError(err),
           };
+          this.setStartupPhase("process_exit_error", shortError(err));
           this.emitStatus();
         }
       });
