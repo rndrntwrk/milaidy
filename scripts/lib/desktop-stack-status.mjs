@@ -31,10 +31,6 @@ function resolveDesktopApiPort(env) {
   );
 }
 
-function resolveDesktopUiPort(env) {
-  return parsePositivePort(env.MILADY_PORT) || DEFAULT_UI_PORT;
-}
-
 /**
  * @param {number} port
  * @param {string} [host]
@@ -121,7 +117,7 @@ export async function gatherDesktopStackStatus(
     }
   }
 
-  const uiFromEnv = resolveDesktopUiPort(env);
+  const uiFromEnv = parsePositivePort(env.MILADY_PORT);
   const uiFromApi =
     devStack?.desktop &&
     typeof devStack.desktop.uiPort === "number" &&
