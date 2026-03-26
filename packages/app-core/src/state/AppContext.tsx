@@ -6299,6 +6299,11 @@ function AppProviderInner({
     ],
   );
 
+  const requestGreetingWhenRunningRef = useRef(requestGreetingWhenRunning);
+  useEffect(() => {
+    requestGreetingWhenRunningRef.current = requestGreetingWhenRunning;
+  }, [requestGreetingWhenRunning]);
+
   // ── Initialization ─────────────────────────────────────────────────
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: t is stable but defined later
@@ -6789,7 +6794,7 @@ function AppProviderInner({
       setStartupPhase("ready");
       setOnboardingLoading(false);
       if (greetConvId) {
-        void requestGreetingWhenRunning(greetConvId, { showOverlay: true });
+        void requestGreetingWhenRunningRef.current(greetConvId, { showOverlay: true });
       }
 
       void loadWorkbench();
@@ -7330,11 +7335,15 @@ function AppProviderInner({
     loadWalletConfig,
     loadWorkbench, // Cloud polling
     pollCloudCredits,
-    requestGreetingWhenRunning,
     setSelectedVrmIndex,
     startupRetryNonce,
     uiLanguage,
   ]);
+
+  const requestGreetingWhenRunningRef2 = useRef(requestGreetingWhenRunning);
+  useEffect(() => {
+    requestGreetingWhenRunningRef2.current = requestGreetingWhenRunning;
+  }, [requestGreetingWhenRunning]);
 
   // When agent transitions to "running", send a greeting if conversation is empty
   useEffect(() => {
@@ -7365,8 +7374,6 @@ function AppProviderInner({
     conversationMessages.length,
     chatSending,
     fetchGreeting,
-    greetingFiredRef.current,
-    greetingInFlightConversationRef.current,
   ]);
 
   // ── Context value ──────────────────────────────────────────────────
