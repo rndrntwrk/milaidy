@@ -21,10 +21,10 @@ export const coverageDocReferences = Object.freeze([
 ]);
 
 export const coverageSurfaceGlobs = Object.freeze({
-  "root-src": ["src/**/*.ts"],
   "packages/agent": ["packages/agent/src/**/*.ts"],
   "packages/app-core": ["packages/app-core/src/**/*.ts"],
   "apps/app/electrobun": ["apps/app/electrobun/src/**/*.ts"],
+  "packages/shared": ["packages/shared/src/**/*.ts"],
 });
 
 export function formatCompactCoverageThresholds() {
