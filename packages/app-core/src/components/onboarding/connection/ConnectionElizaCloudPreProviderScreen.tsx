@@ -1,5 +1,6 @@
 import { Button, Input } from "@miladyai/ui";
 import type { ChangeEvent } from "react";
+import { useBranding } from "../../../config";
 import type { ConnectionEvent } from "../../../onboarding/connection-flow";
 import { useApp } from "../../../state";
 import { openExternalUrl } from "../../../utils";
@@ -21,6 +22,7 @@ export function ConnectionElizaCloudPreProviderScreen({
 }: {
   dispatch: (event: ConnectionEvent) => void;
 }) {
+  const branding = useBranding();
   const {
     t,
     onboardingApiKey,
@@ -146,8 +148,20 @@ export function ConnectionElizaCloudPreProviderScreen({
                   </p>
                 );
               })()}
+            {elizaCloudLoginError ? (
+              <button
+                type="button"
+                className="text-xs text-[var(--onboarding-link)] underline mt-1 cursor-pointer bg-transparent border-none font-inherit hover:text-[var(--onboarding-text-strong)] transition-colors duration-200"
+                onClick={() => openExternalUrl(branding.bugReportUrl)}
+              >
+                {t("onboarding.reportIssue")}
+              </button>
+            ) : null}
             <p className="text-sm text-[var(--onboarding-text-muted)] text-center leading-relaxed mt-3">
               {t("onboarding.freeCredits")}
+            </p>
+            <p className="text-xs text-[var(--onboarding-text-subtle)] text-center leading-relaxed">
+              {t("onboarding.cloudProviderBehaviorHint")}
             </p>
           </div>
         ) : (
@@ -212,6 +226,9 @@ export function ConnectionElizaCloudPreProviderScreen({
           {t("onboarding.confirm")}
         </Button>
       </div>
+      <p className="mt-3 text-center text-xs leading-relaxed text-[var(--onboarding-text-subtle)]">
+        {t("onboarding.restartAfterProviderChangeHint")}
+      </p>
     </>
   );
 }
