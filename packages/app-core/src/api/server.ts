@@ -92,6 +92,7 @@ import {
   buildBscBuyUnsignedTx,
   buildBscSellUnsignedTx,
   buildBscTradeQuote,
+  resolveBscApprovalSpender,
   resolvePrimaryBscRpcUrl,
 } from "@miladyai/agent/api/bsc-trade";
 import { getWalletAddresses } from "@miladyai/agent/api/wallet";
@@ -2546,6 +2547,12 @@ async function handleMiladyCompatRoute(
     const tokenAddress =
       typeof body.tokenAddress === "string" ? body.tokenAddress : "";
     const amount = typeof body.amount === "string" ? body.amount : "";
+    const routeProvider =
+      body.routeProvider === "0x" ||
+      body.routeProvider === "pancakeswap-v2" ||
+      body.routeProvider === "auto"
+        ? body.routeProvider
+        : undefined;
 
     if (!side || !tokenAddress || !amount) {
       sendJsonErrorResponse(
@@ -2585,6 +2592,7 @@ async function handleMiladyCompatRoute(
           amount,
           slippageBps:
             typeof body.slippageBps === "number" ? body.slippageBps : undefined,
+          routeProvider,
         },
       });
 
@@ -2613,7 +2621,7 @@ async function handleMiladyCompatRoute(
         unsignedApprovalTx = buildBscApproveUnsignedTx(
           quote.tokenAddress,
           walletAddress,
-          quote.routerAddress,
+          resolveBscApprovalSpender(quote),
           quote.quoteIn.amountWei,
         );
         requiresApproval = true;
