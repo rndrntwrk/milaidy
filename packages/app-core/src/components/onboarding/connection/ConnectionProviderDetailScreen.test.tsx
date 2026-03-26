@@ -147,4 +147,34 @@ describe("ConnectionProviderDetailScreen", () => {
       "https://example.com/login",
     );
   });
+
+  it("shows report-issue action for non-link cloud login errors", async () => {
+    mockUseBranding.mockImplementation(() => ({
+      bugReportUrl: "https://example.invalid",
+    }));
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "elizacloud",
+        elizaCloudLoginError: "Login failed unexpectedly",
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <ConnectionProviderDetailScreen dispatch={vi.fn()} />,
+      );
+    });
+
+    const reportIssueButton = tree?.root
+      .findAll((node) => typeof node.props?.onClick === "function")
+      .find((node) => textOf(node).includes("onboarding.reportIssue"));
+
+    expect(reportIssueButton).toBeDefined();
+
+    await act(async () => {
+      reportIssueButton?.props.onClick();
+    });
+    expect(mockOpenExternalUrl).toHaveBeenCalledWith("https://example.invalid");
+  });
 });
