@@ -155,9 +155,6 @@ export function ConnectionElizaCloudPreProviderScreen({
             <p className={`${onboardingHelperTextClassName} text-center`}>
               {t("onboarding.freeCredits")}
             </p>
-            <p className="text-xs text-[var(--onboarding-text-subtle)] text-center leading-relaxed">
-              {t("onboarding.cloudProviderBehaviorHint")}
-            </p>
           </div>
         ) : (
           <div className={onboardingDetailStackClassName}>

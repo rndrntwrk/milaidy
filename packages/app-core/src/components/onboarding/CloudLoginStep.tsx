@@ -56,12 +56,6 @@ export function CloudLoginStep() {
         description={t("onboarding.cloudLoginDesc")}
         descriptionClassName="mx-auto mt-1 max-w-[34ch] text-balance"
       />
-      <p
-        className="mx-auto mt-3 max-w-[40ch] text-center text-xs leading-relaxed text-[var(--onboarding-text-muted)]"
-        style={onboardingBodyTextShadowStyle}
-      >
-        {t("onboarding.cloudProviderBehaviorHint")}
-      </p>
 
       {elizaCloudConnected ? (
         <div
@@ -118,12 +112,6 @@ export function CloudLoginStep() {
               ? t("onboarding.cloudLoginRetry")
               : t("onboarding.cloudLoginBtn")}
           </Button>
-          <p
-            className="mx-auto mt-3 max-w-[40ch] text-center text-xs leading-relaxed text-[var(--onboarding-text-subtle)]"
-            style={onboardingBodyTextShadowStyle}
-          >
-            {t("onboarding.restartAfterProviderChangeHint")}
-          </p>
         </>
       )}
 
