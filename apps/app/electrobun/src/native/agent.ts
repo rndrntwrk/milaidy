@@ -16,18 +16,23 @@
  * The renderer never needs to know whether the API server is embedded or
  * remote -- it simply connects to `http://localhost:{port}`.
  *
- * **Port policy (WHY):** we resolve a **free** loopback port from `MILADY_PORT`
- * (see `findFirstAvailableLoopbackPort`) instead of SIGKILL-ing listeners by
+ * **Port policy (WHY):** we resolve a **free** loopback desktop API port from
+ * `MILADY_API_PORT`, `ELIZA_API_PORT`, or `ELIZA_PORT` (see
+ * `findFirstAvailableLoopbackPort`) instead of SIGKILL-ing listeners by
  * default, so two Milady apps can run side by side. Optional
  * `MILADY_AGENT_RECLAIM_STALE_PORT=1` restores lsof-based reclaim for
- * single-instance dev. After a successful start we mirror the bound API port
- * into `process.env` so main-process HTTP (menus, probes) matches the child.
+ * single-instance dev.
  */
 
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import {
+  resolveApiToken,
+  resolveDesktopApiPort,
+  setApiToken,
+} from "@miladyai/shared/runtime-env";
 
 import { resolveDesktopRuntimeMode } from "../api-base";
 import { DEFAULT_PORT } from "../constants";
@@ -290,14 +295,12 @@ export function ensureDesktopApiToken(
 ): string {
   const existing = getDesktopApiToken(env);
   if (existing) {
-    env.MILADY_API_TOKEN = existing;
-    env.ELIZA_API_TOKEN = existing;
+    setApiToken(env, existing);
     return existing;
   }
 
   const generated = crypto.randomBytes(16).toString("hex");
-  env.MILADY_API_TOKEN = generated;
-  env.ELIZA_API_TOKEN = generated;
+  setApiToken(env, generated);
   diagnosticLog(
     "[Agent] Generated local API token for embedded desktop runtime",
   );
@@ -316,9 +319,7 @@ export function configureDesktopLocalApiAuth(
 function getDesktopApiToken(
   env: NodeJS.ProcessEnv = process.env,
 ): string | null {
-  const token =
-    env.MILADY_API_TOKEN?.trim() ?? env.ELIZA_API_TOKEN?.trim() ?? "";
-  return token || null;
+  return resolveApiToken(env);
 }
 
 function getDesktopApiHeaders(
@@ -960,7 +961,7 @@ export class AgentManager {
       await this.killChildProcess();
     }
 
-    const preferredPort = Number(process.env.MILADY_PORT) || DEFAULT_PORT;
+    const preferredPort = resolveDesktopApiPort(process.env) || DEFAULT_PORT;
     await maybeReclaimPortWithSigkill(preferredPort);
     let apiPort: number;
     try {
@@ -1035,12 +1036,12 @@ export class AgentManager {
       this.setStartupPhase("spawning_runtime");
 
       // Build NODE_PATH so the child can find node_modules
-      const nodePaths: string[] = [];
+      const nodePaths = new Set<string>();
 
       // milady-dist/node_modules for native binaries (sharp, llama-cpp, etc.)
       const distModules = joinPortable(miladyDistPath, "node_modules");
       if (fs.existsSync(distModules)) {
-        nodePaths.push(distModules);
+        nodePaths.add(distModules);
       }
 
       // Walk up from milady-dist to find monorepo root node_modules
@@ -1048,22 +1049,19 @@ export class AgentManager {
       while (searchDir !== path.dirname(searchDir)) {
         const candidate = joinPortable(searchDir, "node_modules");
         if (fs.existsSync(candidate) && candidate !== distModules) {
-          nodePaths.push(candidate);
+          nodePaths.add(candidate);
           break;
         }
         searchDir = dirnamePortable(searchDir);
       }
 
-      // Preserve existing NODE_PATH
-      const existingNodePath = process.env.NODE_PATH;
-      if (existingNodePath) {
-        nodePaths.push(existingNodePath);
-      }
-
       const childEnv: Record<string, string> = {
         ...(process.env as Record<string, string>),
-        MILADY_PORT: String(apiPort),
+        MILADY_API_PORT: String(apiPort),
+        ELIZA_API_PORT: String(apiPort),
+        ELIZA_PORT: String(apiPort),
       };
+      delete childEnv.MILADY_PORT;
 
       // node-llama-cpp crashes Bun on Windows during packaged startup.
       // Disable local embeddings until upstream fix lands.
@@ -1071,8 +1069,8 @@ export class AgentManager {
         childEnv.MILADY_DISABLE_LOCAL_EMBEDDINGS = "1";
       }
 
-      if (nodePaths.length > 0) {
-        childEnv.NODE_PATH = nodePaths.join(path.delimiter);
+      if (nodePaths.size > 0) {
+        childEnv.NODE_PATH = [...nodePaths].join(path.delimiter);
         diagnosticLog(`[Agent] Child NODE_PATH: ${childEnv.NODE_PATH}`);
       }
 
@@ -1225,9 +1223,6 @@ export class AgentManager {
         startedAt: Date.now(),
         error: null,
       };
-      process.env.MILADY_PORT = String(apiPort);
-      process.env.MILADY_API_PORT = String(apiPort);
-      process.env.ELIZA_PORT = String(apiPort);
       this.setStartupPhase("ready", null);
       this.emitStatus();
       diagnosticLog(
@@ -1347,17 +1342,19 @@ export class AgentManager {
   }
 
   /** Clean up on app quit. */
-  dispose(): void {
+  async dispose(): Promise<void> {
     if (this.stdioAbortController) {
       this.stdioAbortController.abort();
       this.stdioAbortController = null;
     }
-    this.killChildProcess().catch((err) =>
+    try {
+      await this.killChildProcess();
+    } catch (err) {
       console.warn(
         "[Agent] dispose error:",
         err instanceof Error ? err.message : err,
-      ),
-    );
+      );
+    }
   }
 
   // -----------------------------------------------------------------------

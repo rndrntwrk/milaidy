@@ -312,7 +312,6 @@ milady/
 │   ├── app/                 # Desktop/mobile app (Capacitor + React)
 │   │   ├── electrobun/      # Electrobun desktop wrapper
 │   │   └── src/             # React UI components
-│   └── chrome-extension/    # Browser extension
 ├── deploy/                  # Docker deployment configs
 ├── docs/                    # Documentation site
 ├── packages/                # Workspace packages

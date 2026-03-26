@@ -37,6 +37,17 @@ import {
   loadElizaConfig,
   saveElizaConfig,
 } from "../config/config.js";
+import {
+  isNullOriginAllowed,
+  resolveAllowedHosts,
+  resolveAllowedOrigins,
+  resolveApiBindHost,
+  resolveApiSecurityConfig,
+  resolveApiToken,
+  resolveServerOnlyPort,
+  setApiToken,
+  stripOptionalHostPort,
+} from "../config/runtime-env.js";
 import { resolveModelsCacheDir, resolveStateDir } from "../config/paths.js";
 import {
   isConnectorConfigured,
@@ -875,10 +886,11 @@ const BLOCKED_ENV_KEYS = new Set([
   "HOME",
   "SHELL",
   // Auth / step-up tokens — writable via API would grant privilege escalation
+  "MILADY_API_TOKEN",
   "ELIZA_API_TOKEN",
-  "ELIZA_API_TOKEN",
-  "ELIZA_WALLET_EXPORT_TOKEN",
   "MILADY_WALLET_EXPORT_TOKEN",
+  "ELIZA_WALLET_EXPORT_TOKEN",
+  "MILADY_TERMINAL_RUN_TOKEN",
   "ELIZA_TERMINAL_RUN_TOKEN",
   "HYPERSCAPE_AUTH_TOKEN",
   // Wallet private keys — writable via API would enable key theft / replacement
@@ -6328,11 +6340,6 @@ const LOCAL_HOST_RE =
 /** Wildcard bind addresses that listen on all interfaces. */
 const WILDCARD_BIND_RE = /^(0\.0\.0\.0|::|0:0:0:0:0:0:0:0)$/;
 
-/** Strip an optional port suffix from a hostname string. */
-function stripPort(host: string): string {
-  return host.replace(/:\d+$/, "");
-}
-
 export function isAllowedHost(req: http.IncomingMessage): boolean {
   const raw = req.headers.host;
   if (!raw) return true; // No Host header → non-browser client (e.g. curl)
@@ -6350,40 +6357,28 @@ export function isAllowedHost(req: http.IncomingMessage): boolean {
     hostname = trimmed;
   } else {
     // IPv4 or hostname: localhost:31337 → localhost
-    hostname = stripPort(trimmed);
+    hostname = stripOptionalHostPort(trimmed);
   }
 
   if (!hostname) return true;
 
-  const bindHost = (
-    process.env.ELIZA_API_BIND ??
-    process.env.MILADY_API_BIND ??
-    ""
-  )
-    .trim()
-    .toLowerCase();
+  const bindHost = resolveApiBindHost(process.env).toLowerCase();
 
   // When binding on all interfaces (0.0.0.0 / ::), any Host is acceptable —
   // ensureApiTokenForBindHost already enforces a token for non-loopback binds.
-  if (WILDCARD_BIND_RE.test(stripPort(bindHost))) {
+  if (WILDCARD_BIND_RE.test(stripOptionalHostPort(bindHost))) {
     return true;
   }
 
   // Allow the exact configured bind hostname.
-  if (bindHost && hostname === stripPort(bindHost)) {
+  if (bindHost && hostname === stripOptionalHostPort(bindHost)) {
     return true;
   }
 
-  // Allow explicitly listed extra hostnames via ELIZA_ALLOWED_HOSTS / ELIZA_ALLOWED_HOSTS
-  // (comma-separated, e.g. "myserver.local,192.168.1.10").
-  const extra =
-    process.env.ELIZA_ALLOWED_HOSTS ?? process.env.ELIZA_ALLOWED_HOSTS;
-  if (extra) {
-    const allowed = extra
-      .split(",")
-      .map((h) => stripPort(h.trim().toLowerCase()))
-      .filter(Boolean);
-    if (allowed.includes(hostname)) return true;
+  for (const allowedHost of resolveAllowedHosts(process.env)) {
+    if (stripOptionalHostPort(allowedHost).toLowerCase() === hostname) {
+      return true;
+    }
   }
 
   return LOCAL_HOST_RE.test(hostname);
@@ -6396,29 +6391,19 @@ export function resolveCorsOrigin(origin?: string): string | null {
 
   // When bound to a wildcard address, allow any origin. Non-loopback binds still
   // require an explicit token, so this only relaxes the browser origin check.
-  const bindHost = (
-    process.env.ELIZA_API_BIND ??
-    process.env.MILADY_API_BIND ??
-    ""
-  )
-    .trim()
-    .toLowerCase();
-  if (WILDCARD_BIND_RE.test(stripPort(bindHost))) return trimmed;
+  const bindHost = resolveApiBindHost(process.env).toLowerCase();
+  if (WILDCARD_BIND_RE.test(stripOptionalHostPort(bindHost))) return trimmed;
 
   // Explicit allowlist via env (comma-separated)
-  const extra = process.env.ELIZA_ALLOWED_ORIGINS;
-  if (extra) {
-    const allow = extra
-      .split(",")
-      .map((v) => v.trim())
-      .filter(Boolean);
-    if (allow.includes(trimmed)) return trimmed;
+  const allow = resolveAllowedOrigins(process.env);
+  if (allow.includes(trimmed)) {
+    return trimmed;
   }
 
   if (LOCAL_ORIGIN_RE.test(trimmed)) return trimmed;
   if (APP_ORIGIN_RE.test(trimmed)) return trimmed;
   if (trimmed === "null" || trimmed === "file://") {
-    if (process.env.ELIZA_ALLOW_NULL_ORIGIN === "1") {
+    if (isNullOriginAllowed(process.env)) {
       return "null";
     }
   }
@@ -6599,9 +6584,7 @@ function tokenMatches(expected: string, provided: string): boolean {
 }
 
 function getConfiguredApiToken(): string | undefined {
-  return (
-    process.env.ELIZA_API_TOKEN?.trim() || process.env.MILADY_API_TOKEN?.trim()
-  );
+  return resolveApiToken(process.env) ?? undefined;
 }
 
 function isLoopbackBindHost(host: string): boolean {
@@ -6646,10 +6629,7 @@ function isLoopbackBindHost(host: string): boolean {
 }
 
 export function ensureApiTokenForBindHost(host: string): void {
-  if (
-    process.env.MILADY_DISABLE_AUTO_API_TOKEN === "1" ||
-    process.env.ELIZA_DISABLE_AUTO_API_TOKEN === "1"
-  ) {
+  if (resolveApiSecurityConfig(process.env).disableAutoApiToken) {
     return;
   }
 
@@ -6658,8 +6638,7 @@ export function ensureApiTokenForBindHost(host: string): void {
   if (isLoopbackBindHost(host)) return;
 
   const generated = crypto.randomBytes(32).toString("hex");
-  process.env.MILADY_API_TOKEN = generated;
-  process.env.ELIZA_API_TOKEN = generated;
+  setApiToken(process.env, generated);
 
   logger.warn(
     `[eliza-api] MILADY_API_BIND/ELIZA_API_BIND=${host} is non-loopback and MILADY_API_TOKEN/ELIZA_API_TOKEN is unset.`,
@@ -13024,10 +13003,11 @@ async function handleRequest(
       // merge, even though BLOCKED_ENV_KEYS also blocks them during process.env
       // sync below. Keeping both guards prevents accidental persistence if one
       // path changes in future refactors.
+      delete envPatch.MILADY_API_TOKEN;
       delete envPatch.ELIZA_API_TOKEN;
-      delete envPatch.ELIZA_API_TOKEN;
-      delete envPatch.ELIZA_WALLET_EXPORT_TOKEN;
       delete envPatch.MILADY_WALLET_EXPORT_TOKEN;
+      delete envPatch.ELIZA_WALLET_EXPORT_TOKEN;
+      delete envPatch.MILADY_TERMINAL_RUN_TOKEN;
       delete envPatch.ELIZA_TERMINAL_RUN_TOKEN;
       delete envPatch.HYPERSCAPE_AUTH_TOKEN;
       delete envPatch.EVM_PRIVATE_KEY;
@@ -13039,10 +13019,11 @@ async function handleRequest(
         !Array.isArray(envPatch.vars)
       ) {
         const vars = envPatch.vars as Record<string, unknown>;
+        delete vars.MILADY_API_TOKEN;
         delete vars.ELIZA_API_TOKEN;
-        delete vars.ELIZA_API_TOKEN;
-        delete vars.ELIZA_WALLET_EXPORT_TOKEN;
         delete vars.MILADY_WALLET_EXPORT_TOKEN;
+        delete vars.ELIZA_WALLET_EXPORT_TOKEN;
+        delete vars.MILADY_TERMINAL_RUN_TOKEN;
         delete vars.ELIZA_TERMINAL_RUN_TOKEN;
         delete vars.HYPERSCAPE_AUTH_TOKEN;
         delete vars.EVM_PRIVATE_KEY;
@@ -17708,13 +17689,8 @@ export async function startApiServer(opts?: {
   const apiStartTime = Date.now();
   console.log(`[eliza-api] startApiServer called`);
 
-  const port = opts?.port ?? 2138;
-  const host =
-    (
-      process.env.ELIZA_API_BIND ??
-      process.env.MILADY_API_BIND ??
-      "127.0.0.1"
-    ).trim() || "127.0.0.1";
+  const port = opts?.port ?? resolveServerOnlyPort(process.env);
+  const host = resolveApiBindHost(process.env);
   ensureApiTokenForBindHost(host);
   console.log(`[eliza-api] Token check done (${Date.now() - apiStartTime}ms)`);
 

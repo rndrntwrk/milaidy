@@ -3,4 +3,5 @@
  * Use subpath imports for granular access (e.g. @miladyai/shared/contracts).
  */
 export * from "./restart.js";
+export * from "./runtime-env.js";
 export { sanitizeSpeechText } from "./spoken-text.js";

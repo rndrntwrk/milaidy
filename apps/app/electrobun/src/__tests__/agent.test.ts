@@ -497,7 +497,7 @@ describe("AgentManager", () => {
 
         expect(mockFetch).toHaveBeenNthCalledWith(
           1,
-          "http://127.0.0.1:2138/api/health",
+          "http://127.0.0.1:31337/api/health",
           expect.objectContaining({
             headers: expectedHeaders,
             signal: expect.anything(),
@@ -505,7 +505,7 @@ describe("AgentManager", () => {
         );
         expect(mockFetch).toHaveBeenNthCalledWith(
           2,
-          "http://127.0.0.1:2138/api/agents",
+          "http://127.0.0.1:31337/api/agents",
           expect.objectContaining({
             headers: expectedHeaders,
             signal: expect.anything(),
@@ -538,7 +538,7 @@ describe("AgentManager", () => {
       const status = await manager.start();
       expect(status.state).toBe("running");
       expect(status.agentName).toBe("Milady");
-      expect(status.port).toBe(2138); // DEFAULT_PORT
+      expect(status.port).toBe(31337);
       expect(status.startedAt).toBeGreaterThan(0);
       expect(status.error).toBeNull();
 
@@ -641,9 +641,9 @@ describe("AgentManager", () => {
       }
     });
 
-    it("uses MILADY_PORT env var when set", async () => {
-      const originalPort = process.env.MILADY_PORT;
-      process.env.MILADY_PORT = "9999";
+    it("uses MILADY_API_PORT env var when set", async () => {
+      const originalPort = process.env.MILADY_API_PORT;
+      process.env.MILADY_API_PORT = "9999";
 
       try {
         const mockProc = createMockProcess();
@@ -659,9 +659,80 @@ describe("AgentManager", () => {
         expect(status.port).toBe(9999);
       } finally {
         if (originalPort === undefined) {
+          delete process.env.MILADY_API_PORT;
+        } else {
+          process.env.MILADY_API_PORT = originalPort;
+        }
+      }
+    });
+
+    it("does not inherit ambient NODE_PATH into the child process", async () => {
+      const originalNodePath = process.env.NODE_PATH;
+      process.env.NODE_PATH = "/tmp/hostile-modules";
+
+      try {
+        const mockProc = createMockProcess();
+        mockSpawn.mockReturnValue(mockProc);
+
+        mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ agents: [{ name: "Milady" }] }),
+        });
+
+        await manager.start();
+
+        const spawnOptions = mockSpawn.mock.calls[0]?.[1];
+        expect(spawnOptions?.env?.NODE_PATH).toBe(
+          "/mock/milady-dist/node_modules:/mock/node_modules",
+        );
+      } finally {
+        if (originalNodePath === undefined) {
+          delete process.env.NODE_PATH;
+        } else {
+          process.env.NODE_PATH = originalNodePath;
+        }
+      }
+    });
+
+    it("does not rewrite parent port env vars after startup", async () => {
+      const originalMiladyPort = process.env.MILADY_PORT;
+      const originalMiladyApiPort = process.env.MILADY_API_PORT;
+      const originalElizaPort = process.env.ELIZA_PORT;
+      delete process.env.MILADY_PORT;
+      delete process.env.MILADY_API_PORT;
+      delete process.env.ELIZA_PORT;
+
+      try {
+        const mockProc = createMockProcess();
+        mockSpawn.mockReturnValue(mockProc);
+
+        mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ agents: [{ name: "Milady" }] }),
+        });
+
+        const status = await manager.start();
+        expect(status.port).toBe(31337);
+        expect(process.env.MILADY_PORT).toBeUndefined();
+        expect(process.env.MILADY_API_PORT).toBeUndefined();
+        expect(process.env.ELIZA_PORT).toBeUndefined();
+      } finally {
+        if (originalMiladyPort === undefined) {
           delete process.env.MILADY_PORT;
         } else {
-          process.env.MILADY_PORT = originalPort;
+          process.env.MILADY_PORT = originalMiladyPort;
+        }
+        if (originalMiladyApiPort === undefined) {
+          delete process.env.MILADY_API_PORT;
+        } else {
+          process.env.MILADY_API_PORT = originalMiladyApiPort;
+        }
+        if (originalElizaPort === undefined) {
+          delete process.env.ELIZA_PORT;
+        } else {
+          process.env.ELIZA_PORT = originalElizaPort;
         }
       }
     });

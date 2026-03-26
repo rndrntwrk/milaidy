@@ -28,7 +28,7 @@
 - **Tests:** colocated `*.test.ts` alongside source files
 - **Build output:** `dist/` (via `tsdown`)
 - **Entry points:** `packages/app-core/src/entry.ts` (CLI), `packages/app-core/src/index.ts` (library), `packages/agent/src/runtime/eliza.ts` (elizaOS runtime)
-- **Apps:** `apps/app/` (Capacitor mobile/desktop, includes React UI), `apps/chrome-extension/`
+- **Apps:** `apps/app/` (Capacitor mobile/desktop, includes React UI). The browser relay extension is not part of this release checkout.
 - **Internal packages:** `packages/ui/`, `packages/shared/`, `packages/vrm-utils/`, `packages/plugin-wechat/`
 - **Deployment:** `deploy/` (Docker configs)
 - **Scripts:** `scripts/` (build, dev, release tooling)

@@ -19,6 +19,8 @@ function run(command, args) {
 run("bunx", [
   "vitest",
   "run",
+  "scripts/docker-contract.test.ts",
+  "scripts/chrome-extension-release-surface.test.ts",
   "scripts/electrobun-release-workflow-drift.test.ts",
   "scripts/electrobun-test-workflow-drift.test.ts",
   "scripts/whisper-build-script-drift.test.ts",

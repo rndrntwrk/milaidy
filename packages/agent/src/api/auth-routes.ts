@@ -1,11 +1,10 @@
 import crypto from "node:crypto";
+import { resolveApiToken } from "../config/runtime-env.js";
 import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
 import type { RouteRequestContext } from "./route-helpers";
 
 function getConfiguredApiToken(): string | undefined {
-  return (
-    process.env.ELIZA_API_TOKEN?.trim() || process.env.MILADY_API_TOKEN?.trim()
-  );
+  return resolveApiToken(process.env) ?? undefined;
 }
 
 export interface AuthRouteContext extends RouteRequestContext {

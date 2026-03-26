@@ -282,7 +282,7 @@ export async function handleTriggerRoutes(
     json(res, {
       ok: true,
       result,
-      trigger: refreshed ? taskToTriggerSummary(refreshed) : null,
+      trigger: refreshed ? taskToTriggerSummary(refreshed) : result.trigger ?? null,
     });
     return true;
   }

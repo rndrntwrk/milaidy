@@ -213,4 +213,27 @@ describe("resolveWebSocketUpgradeRejection", () => {
     );
     expect(rejection).toBeNull();
   });
+
+  it("prefers MILADY_ALLOWED_ORIGINS over ELIZA aliases", () => {
+    delete process.env.ELIZA_API_TOKEN;
+    process.env.MILADY_ALLOWED_ORIGINS = "https://milady.example.com";
+    process.env.ELIZA_ALLOWED_ORIGINS = "https://legacy.example.com";
+    const rejection = resolveWebSocketUpgradeRejection(
+      mockReq({
+        origin: "https://legacy.example.com",
+      }) as http.IncomingMessage,
+      new URL("ws://localhost/ws"),
+    );
+    expect(rejection).toEqual({ status: 403, reason: "Origin not allowed" });
+  });
+
+  it("accepts null origin when MILADY_ALLOW_NULL_ORIGIN=1", () => {
+    delete process.env.ELIZA_API_TOKEN;
+    process.env.MILADY_ALLOW_NULL_ORIGIN = "1";
+    const rejection = resolveWebSocketUpgradeRejection(
+      mockReq({ origin: "null" }) as http.IncomingMessage,
+      new URL("ws://localhost/ws"),
+    );
+    expect(rejection).toBeNull();
+  });
 });

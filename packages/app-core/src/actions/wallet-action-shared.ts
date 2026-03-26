@@ -5,24 +5,21 @@
  * @module actions/wallet-action-shared
  */
 
-/** Resolve the loopback API port for wallet action calls at runtime. */
-export function getWalletActionApiPort(): string {
-  return (
-    process.env.MILADY_API_PORT ||
-    process.env.MILADY_PORT ||
-    process.env.ELIZA_PORT ||
-    process.env.API_PORT ||
-    "31337"
-  );
-}
+import {
+  resolveApiToken,
+  resolveDesktopApiPort,
+} from "@miladyai/shared/runtime-env";
+
+/** API port for loopback wallet API calls. Shared across all wallet actions. */
+export const WALLET_ACTION_API_PORT = String(resolveDesktopApiPort(process.env));
 
 /**
  * Build Authorization headers for loopback API calls.
- * Reads ELIZA_API_TOKEN from the environment and formats it as a Bearer token.
+ * Reads the resolved API token from the environment and formats it as a Bearer token.
  * Returns an empty object when no token is configured.
  */
 export function buildAuthHeaders(): Record<string, string> {
-  const token = process.env.ELIZA_API_TOKEN?.trim();
+  const token = resolveApiToken(process.env);
   if (!token) return {};
   return {
     Authorization: /^Bearer\s+/i.test(token) ? token : `Bearer ${token}`,

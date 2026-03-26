@@ -68,4 +68,20 @@ describe("desktop-stack-status", () => {
     expect(report.apiHealth.ok).toBe(true);
     expect(report.apiStatus.json).toEqual({ state: "running" });
   });
+
+  it("falls back through legacy ELIZA API aliases", async () => {
+    const report = await stackStatus.gatherDesktopStackStatus(
+      { ELIZA_API_PORT: "4555", ELIZA_PORT: "4999" },
+      async () =>
+        /** @type {Response} */ ({
+          ok: false,
+          status: 404,
+          text: async () => "",
+        }) as unknown as Response,
+      { isPortOpen: async () => false },
+    );
+
+    expect(report.apiPort).toBe(4555);
+    expect(report.uiPort).toBe(2138);
+  });
 });

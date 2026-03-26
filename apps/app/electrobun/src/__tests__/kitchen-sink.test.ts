@@ -3170,9 +3170,10 @@ describe("PermissionManager — checkFeaturePermissions", () => {
 // ============================================================================
 
 describe("Desktop regression inventory", () => {
-  it("keeps heavy and manual desktop coverage explicitly tracked", () => {
-    const manifestText = fs.readFileSync(REGRESSION_MATRIX_PATH, "utf8");
-    const checklistText = fs.readFileSync(
+  it("keeps heavy and manual desktop coverage explicitly tracked", async () => {
+    const nodeFs = await vi.importActual<typeof import("node:fs")>("node:fs");
+    const manifestText = nodeFs.readFileSync(REGRESSION_MATRIX_PATH, "utf8");
+    const checklistText = nodeFs.readFileSync(
       DESKTOP_RELEASE_CHECKLIST_PATH,
       "utf8",
     );
