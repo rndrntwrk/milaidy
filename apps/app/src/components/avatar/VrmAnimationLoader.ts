@@ -1,7 +1,8 @@
 import type { VRM } from "@pixiv/three-vrm";
-import type * as THREE from "three";
+import * as THREE from "three";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { classifyIdleGltfAnimationClipForVrm } from "./resolveGltfAnimationClipForVrm";
 
 /**
  * Context needed by the animation loader to check whether the owning engine
@@ -13,6 +14,55 @@ export type AnimationLoaderContext = {
   /** Returns `true` if `vrm` is still the active model in the engine. */
   isCurrentVrm: (vrm: VRM) => boolean;
 };
+
+function createFallbackIdleClip(vrm: VRM): THREE.AnimationClip {
+  const times = [0, 1, 2, 3, 4];
+  const tracks: Array<THREE.KeyframeTrack> = [];
+  const basePosition = vrm.scene.position.clone();
+  const baseQuaternion = vrm.scene.quaternion.clone();
+
+  tracks.push(
+    new THREE.VectorKeyframeTrack(".position", times, [
+      basePosition.x,
+      basePosition.y,
+      basePosition.z,
+      basePosition.x + 0.004,
+      basePosition.y + 0.012,
+      basePosition.z,
+      basePosition.x,
+      basePosition.y,
+      basePosition.z,
+      basePosition.x - 0.004,
+      basePosition.y - 0.008,
+      basePosition.z,
+      basePosition.x,
+      basePosition.y,
+      basePosition.z,
+    ]),
+  );
+
+  const quaternionValues: number[] = [];
+  for (const [x, y, z] of [
+    [0, 0, 0],
+    [-0.01, 0.02, 0.008],
+    [0, 0, 0],
+    [0.008, -0.018, -0.006],
+    [0, 0, 0],
+  ] as const) {
+    const delta = new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z));
+    const value = baseQuaternion.clone().multiply(delta);
+    quaternionValues.push(value.x, value.y, value.z, value.w);
+  }
+  tracks.push(
+    new THREE.QuaternionKeyframeTrack(
+      ".quaternion",
+      times,
+      quaternionValues,
+    ),
+  );
+
+  return new THREE.AnimationClip("procedural-idle", 4, tracks);
+}
 
 /**
  * Load and return an idle {@link THREE.AnimationClip} for the given VRM.
@@ -26,26 +76,34 @@ export async function loadIdleClip(
   idleGlbUrl: string,
   ctx: AnimationLoaderContext,
 ): Promise<THREE.AnimationClip | null> {
-  const { retargetMixamoGltfToVrm } = await import("./retargetMixamoGltfToVrm");
   if (ctx.isAborted() || !ctx.isCurrentVrm(vrm)) return null;
 
-  const gltfLoader = new GLTFLoader();
-  const gltf = await gltfLoader.loadAsync(idleGlbUrl);
-  if (ctx.isAborted() || !ctx.isCurrentVrm(vrm)) return null;
+  try {
+    const gltfLoader = new GLTFLoader();
+    const gltf = await gltfLoader.loadAsync(idleGlbUrl);
+    if (ctx.isAborted() || !ctx.isCurrentVrm(vrm)) return null;
 
-  gltf.scene.updateMatrixWorld(true);
-  vrm.scene.updateMatrixWorld(true);
-  const clip = retargetMixamoGltfToVrm(
-    { scene: gltf.scene, animations: gltf.animations },
-    vrm,
-  );
-
-  if (!clip) {
-    throw new Error("No usable idle animation (idle.glb)");
+    gltf.scene.updateMatrixWorld(true);
+    vrm.scene.updateMatrixWorld(true);
+    const classified = classifyIdleGltfAnimationClipForVrm(
+      { scene: gltf.scene, animations: gltf.animations },
+      vrm,
+    );
+    if (classified.status === "accepted") {
+      return classified.clip;
+    }
+    console.warn(
+      `[VrmEngine] Idle clip rejected (${idleGlbUrl}): ${classified.reason}. Using procedural fallback.`,
+    );
+  } catch (error) {
+    console.warn(
+      `[VrmEngine] Failed to load idle clip (${idleGlbUrl}). Using procedural fallback.`,
+      error,
+    );
   }
 
   if (ctx.isAborted() || !ctx.isCurrentVrm(vrm)) return null;
-  return clip;
+  return createFallbackIdleClip(vrm);
 }
 
 /**

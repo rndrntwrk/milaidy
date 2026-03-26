@@ -8,7 +8,11 @@ import {
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { computeStageCoverFit } from "../../proStreamerStageFit";
+import {
+  computeStageAvatarSafeScale,
+  computeStageCoverFit,
+  getStageAvatarSafeFrame,
+} from "../../proStreamerStageFit";
 import {
   instantiateProStreamerStageScene,
   type ProStreamerStageSceneContract,
@@ -39,6 +43,7 @@ export type VrmEngineState = {
   idlePlaying: boolean;
   idleTime: number;
   idleTracks: number;
+  stageScale: number | null;
 };
 
 type UpdateCallback = () => void;
@@ -174,6 +179,9 @@ export class VrmEngine {
   private currentSceneMark: StageSceneMark = "stage";
   private stageScene: ProStreamerStageSceneContract | null = null;
   private stageLoadRequestId = 0;
+  private stageScale: number | null = null;
+  private rawAvatarHeight = 1.7;
+  private rawAvatarMinY = 0;
   private currentRigPosition = new THREE.Vector3();
   private currentRigQuaternion = new THREE.Quaternion();
   private readyPromise: Promise<void> = Promise.resolve();
@@ -343,6 +351,9 @@ export class VrmEngine {
     this.vrmName = null;
     this.mixer = null;
     this.idleAction = null;
+    this.stageScale = null;
+    this.rawAvatarHeight = 1.7;
+    this.rawAvatarMinY = 0;
     if (this.emoteTimeout !== null) {
       clearTimeout(this.emoteTimeout);
       this.emoteTimeout = null;
@@ -479,6 +490,7 @@ export class VrmEngine {
       idlePlaying,
       idleTime: this.idleAction?.time ?? 0,
       idleTracks: this.idleAction?.getClip()?.tracks.length ?? 0,
+      stageScale: this.stageScale,
     };
   }
   setMouthOpen(value: number): void {
@@ -597,6 +609,7 @@ export class VrmEngine {
     const vrm = gltf.userData.vrm as VRM | undefined;
     if (!vrm) throw new Error("Loaded asset is not a VRM");
     VRMUtils.removeUnnecessaryVertices(vrm.scene);
+    this.measureRawAvatarBounds(vrm);
     if (this.currentScenePreset !== "pro-streamer-stage" && this.camera) {
       this.cameraManager.centerAndFrame(
         vrm,
@@ -643,7 +656,8 @@ export class VrmEngine {
         await this.playTeleportReveal(vrm);
         vrm.scene.visible = true;
       }
-    } catch {
+    } catch (error) {
+      console.warn("[VrmEngine] Idle load failed, continuing without idle clip:", error);
       if (!this.loadingAborted && this.vrm === vrm) {
         this.vrmReady = true;
         vrm.scene.visible = true;
@@ -813,23 +827,132 @@ export class VrmEngine {
     }
     this.stageScene = null;
   }
+  private measureRawAvatarBounds(vrm: VRM): void {
+    vrm.scene.updateMatrixWorld(true);
+
+    const bounds = new THREE.Box3().setFromObject(vrm.scene);
+    const maybeIsEmpty = bounds as THREE.Box3 & { isEmpty?: () => boolean };
+    if (typeof maybeIsEmpty.isEmpty === "function" && maybeIsEmpty.isEmpty()) {
+      this.rawAvatarHeight = 1.7;
+      this.rawAvatarMinY = 0;
+      return;
+    }
+
+    const size = new THREE.Vector3();
+    bounds.getSize(size);
+    this.rawAvatarHeight =
+      Number.isFinite(size.y) && size.y > 1e-3 ? size.y : 1.7;
+    this.rawAvatarMinY = Number.isFinite(bounds.min.y) ? bounds.min.y : 0;
+  }
+  private measureProjectedAvatarFrame(
+    object: THREE.Object3D,
+    camera: THREE.PerspectiveCamera,
+  ): { heightRatio: number; widthRatio: number } | null {
+    object.updateWorldMatrix(true, true);
+    camera.updateMatrixWorld(true);
+
+    const bounds = new THREE.Box3().setFromObject(object);
+    const maybeIsEmpty = bounds as THREE.Box3 & { isEmpty?: () => boolean };
+    if (typeof maybeIsEmpty.isEmpty === "function" && maybeIsEmpty.isEmpty()) {
+      return null;
+    }
+
+    const corners = [
+      new THREE.Vector3(bounds.min.x, bounds.min.y, bounds.min.z),
+      new THREE.Vector3(bounds.min.x, bounds.min.y, bounds.max.z),
+      new THREE.Vector3(bounds.min.x, bounds.max.y, bounds.min.z),
+      new THREE.Vector3(bounds.min.x, bounds.max.y, bounds.max.z),
+      new THREE.Vector3(bounds.max.x, bounds.min.y, bounds.min.z),
+      new THREE.Vector3(bounds.max.x, bounds.min.y, bounds.max.z),
+      new THREE.Vector3(bounds.max.x, bounds.max.y, bounds.min.z),
+      new THREE.Vector3(bounds.max.x, bounds.max.y, bounds.max.z),
+    ];
+
+    let minX = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+
+    for (const corner of corners) {
+      const projected = corner.clone().project(camera);
+      if (!Number.isFinite(projected.x) || !Number.isFinite(projected.y)) {
+        continue;
+      }
+      minX = Math.min(minX, projected.x);
+      maxX = Math.max(maxX, projected.x);
+      minY = Math.min(minY, projected.y);
+      maxY = Math.max(maxY, projected.y);
+    }
+
+    if (
+      !Number.isFinite(minX) ||
+      !Number.isFinite(maxX) ||
+      !Number.isFinite(minY) ||
+      !Number.isFinite(maxY)
+    ) {
+      return null;
+    }
+
+    return {
+      heightRatio: Math.max(0, (maxY - minY) * 0.5),
+      widthRatio: Math.max(0, (maxX - minX) * 0.5),
+    };
+  }
+  private fitStageAvatarScale(
+    baseScale: number,
+    mark: StageSceneMark,
+  ): number {
+    const vrm = this.vrm;
+    const camera = this.camera;
+    const characterRoot = this.characterRoot;
+    if (!vrm || !camera || !characterRoot) {
+      return baseScale;
+    }
+
+    const projectedFrame = this.measureProjectedAvatarFrame(vrm.scene, camera);
+    if (!projectedFrame) {
+      return baseScale;
+    }
+
+    const downscale = computeStageAvatarSafeScale({
+      projectedHeightRatio: projectedFrame.heightRatio,
+      projectedWidthRatio: projectedFrame.widthRatio,
+      safeFrame: getStageAvatarSafeFrame(mark),
+    });
+
+    return Math.max(0.1, baseScale * downscale);
+  }
   private applySceneLayout(): void {
     const camera = this.camera;
     const characterRoot = this.characterRoot;
     if (!camera || !characterRoot) return;
 
     if (this.currentScenePreset === "pro-streamer-stage" && this.stageScene) {
-      characterRoot.scale.setScalar(
-        Math.max(0.1, this.stageScene.anchorMetadata.targetHeightM * 2.8),
-      );
-      this.applyStageCamera(this.stageScene);
-      this.applyMarkTransform(
+      const mark =
         this.currentSceneMark === "portrait"
           ? this.stageScene.portraitMark
-          : this.stageScene.stageMark,
+          : this.stageScene.stageMark;
+      const normalizedStageScale = Math.max(
+        0.1,
+        this.stageScene.anchorMetadata.targetHeightM /
+          Math.max(this.rawAvatarHeight, 1e-3),
       );
+
+      this.applyStageCamera(this.stageScene);
+      this.applyMarkTransform(mark);
+      characterRoot.scale.setScalar(normalizedStageScale);
+      this.stageScale = normalizedStageScale;
       if (this.vrm) {
+        this.vrm.scene.position.set(0, -this.rawAvatarMinY, 0);
+        this.vrm.scene.updateMatrixWorld(true);
         this.cameraManager.ensureFacingCamera(this.vrm, camera);
+        const fittedStageScale = this.fitStageAvatarScale(
+          normalizedStageScale,
+          this.currentSceneMark,
+        );
+        characterRoot.scale.setScalar(fittedStageScale);
+        this.stageScale = fittedStageScale;
+        this.vrm.scene.updateMatrixWorld(true);
       }
       return;
     }
@@ -837,6 +960,7 @@ export class VrmEngine {
     characterRoot.position.set(0, 0, 0);
     characterRoot.quaternion.identity();
     characterRoot.scale.setScalar(1);
+    this.stageScale = null;
     this.currentRigPosition.copy(characterRoot.position);
     this.currentRigQuaternion.copy(characterRoot.quaternion);
 

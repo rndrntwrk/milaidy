@@ -1,0 +1,38 @@
+[
+  {
+    "label": "initial",
+    "state": "loading",
+    "mark": "stage",
+    "idlePlaying": "false",
+    "idleTracks": "0",
+    "stageScale": "n/a",
+    "bodyText": "ALICE STAGE DEBUG\nstate: loading\nmark: stage\nvrmLoaded: false\nvrmName: n/a\nidlePlaying: false\nidleTracks: 0\nstageScale: n/a"
+  },
+  {
+    "label": "1s",
+    "state": "ready",
+    "mark": "stage",
+    "idlePlaying": "true",
+    "idleTracks": "2",
+    "stageScale": "0.9911262567633827",
+    "bodyText": "ALICE STAGE DEBUG\nstate: ready\nmark: stage\nvrmLoaded: true\nvrmName: alice.vrm\nidlePlaying: true\nidleTracks: 2\nstageScale: 0.9911\nrenderer: webgl\nstageScene: present\nsceneChildren: 6\nstageRootChildren: 3\nbackdropType: Mesh\nbackdropVisible: true\nbackdropChildCount: 0\nbackdropMeshCount: 1\nbackdropMaterial: MeshStandardMaterial name=StageBackdropMaterial color=#000000 emissive=#ffffff map=no emissiveMap=yes transparent=false opacity=1\nstageCameraFov: 18.325133849542688\nbackdropAspect: 1.7777776459517485"
+  },
+  {
+    "label": "5s",
+    "state": "ready",
+    "mark": "stage",
+    "idlePlaying": "true",
+    "idleTracks": "2",
+    "stageScale": "0.9911262567633827",
+    "bodyText": "ALICE STAGE DEBUG\nstate: ready\nmark: stage\nvrmLoaded: true\nvrmName: alice.vrm\nidlePlaying: true\nidleTracks: 2\nstageScale: 0.9911\nrenderer: webgl\nstageScene: present\nsceneChildren: 6\nstageRootChildren: 3\nbackdropType: Mesh\nbackdropVisible: true\nbackdropChildCount: 0\nbackdropMeshCount: 1\nbackdropMaterial: MeshStandardMaterial name=StageBackdropMaterial color=#000000 emissive=#ffffff map=no emissiveMap=yes transparent=false opacity=1\nstageCameraFov: 18.325133849542688\nbackdropAspect: 1.7777776459517485"
+  },
+  {
+    "label": "15s",
+    "state": "ready",
+    "mark": "stage",
+    "idlePlaying": "true",
+    "idleTracks": "2",
+    "stageScale": "0.9911262567633827",
+    "bodyText": "ALICE STAGE DEBUG\nstate: ready\nmark: stage\nvrmLoaded: true\nvrmName: alice.vrm\nidlePlaying: true\nidleTracks: 2\nstageScale: 0.9911\nrenderer: webgl\nstageScene: present\nsceneChildren: 6\nstageRootChildren: 3\nbackdropType: Mesh\nbackdropVisible: true\nbackdropChildCount: 0\nbackdropMeshCount: 1\nbackdropMaterial: MeshStandardMaterial name=StageBackdropMaterial color=#000000 emissive=#ffffff map=no emissiveMap=yes transparent=false opacity=1\nstageCameraFov: 18.325133849542688\nbackdropAspect: 1.7777776459517485"
+  }
+]

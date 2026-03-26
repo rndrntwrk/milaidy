@@ -1,8 +1,19 @@
 import * as THREE from "three";
 
 export const PRO_STREAMER_STAGE_COVER_OVERSCAN = 1.01;
+export const PRO_STREAMER_STAGE_SAFE_FRAME = {
+  stage: {
+    maxHeightRatio: 0.8,
+    maxWidthRatio: 0.56,
+  },
+  portrait: {
+    maxHeightRatio: 0.86,
+    maxWidthRatio: 0.78,
+  },
+} as const;
 
 export type StageCoverFitAxis = "height" | "width";
+export type StageAvatarSafeFrameMark = keyof typeof PRO_STREAMER_STAGE_SAFE_FRAME;
 
 export type StageCoverFitInput = {
   backdropWidth: number;
@@ -18,6 +29,17 @@ export type StageCoverFitResult = {
   visibleHeight: number;
   fovRadians: number;
   fovDegrees: number;
+};
+
+export type StageAvatarSafeFrame = {
+  maxHeightRatio: number;
+  maxWidthRatio: number;
+};
+
+export type StageAvatarSafeScaleInput = {
+  projectedHeightRatio: number;
+  projectedWidthRatio: number;
+  safeFrame: StageAvatarSafeFrame;
 };
 
 export function computeStageCoverFit({
@@ -52,4 +74,32 @@ export function computeStageCoverFit({
     fovRadians,
     fovDegrees: THREE.MathUtils.radToDeg(fovRadians),
   };
+}
+
+export function getStageAvatarSafeFrame(
+  mark: StageAvatarSafeFrameMark,
+): StageAvatarSafeFrame {
+  return PRO_STREAMER_STAGE_SAFE_FRAME[mark];
+}
+
+export function computeStageAvatarSafeScale({
+  projectedHeightRatio,
+  projectedWidthRatio,
+  safeFrame,
+}: StageAvatarSafeScaleInput): number {
+  const safeHeightRatio = Math.max(1e-3, safeFrame.maxHeightRatio);
+  const safeWidthRatio = Math.max(1e-3, safeFrame.maxWidthRatio);
+  const safeProjectedHeightRatio = Math.max(0, projectedHeightRatio);
+  const safeProjectedWidthRatio = Math.max(0, projectedWidthRatio);
+
+  const heightScale =
+    safeProjectedHeightRatio > 0
+      ? safeHeightRatio / safeProjectedHeightRatio
+      : 1;
+  const widthScale =
+    safeProjectedWidthRatio > 0
+      ? safeWidthRatio / safeProjectedWidthRatio
+      : 1;
+
+  return Math.max(0.05, Math.min(1, heightScale, widthScale));
 }

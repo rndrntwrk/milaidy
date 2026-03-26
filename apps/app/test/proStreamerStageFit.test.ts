@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { computeStageCoverFit } from "../src/proStreamerStageFit";
+import {
+  computeStageAvatarSafeScale,
+  computeStageCoverFit,
+  getStageAvatarSafeFrame,
+} from "../src/proStreamerStageFit";
 
 describe("proStreamerStageFit", () => {
   it("recreates the full stage composition for 16:9 full-stage", () => {
@@ -63,5 +67,36 @@ describe("proStreamerStageFit", () => {
     expect(overscanned.visibleHeight).toBeLessThan(exact.visibleHeight);
     expect(overscanned.visibleWidth).toBeLessThan(exact.visibleWidth);
     expect(overscanned.fovDegrees).toBeLessThan(exact.fovDegrees);
+  });
+
+  it("returns the authored stage safe frame for each mark", () => {
+    expect(getStageAvatarSafeFrame("stage")).toEqual({
+      maxHeightRatio: 0.8,
+      maxWidthRatio: 0.56,
+    });
+    expect(getStageAvatarSafeFrame("portrait")).toEqual({
+      maxHeightRatio: 0.86,
+      maxWidthRatio: 0.78,
+    });
+  });
+
+  it("keeps scale unchanged when projected bounds already fit the stage frame", () => {
+    const safeScale = computeStageAvatarSafeScale({
+      projectedHeightRatio: 0.74,
+      projectedWidthRatio: 0.41,
+      safeFrame: getStageAvatarSafeFrame("stage"),
+    });
+
+    expect(safeScale).toBe(1);
+  });
+
+  it("downscales using the tighter of width and height constraints", () => {
+    const safeScale = computeStageAvatarSafeScale({
+      projectedHeightRatio: 0.98,
+      projectedWidthRatio: 0.71,
+      safeFrame: getStageAvatarSafeFrame("stage"),
+    });
+
+    expect(safeScale).toBeCloseTo(0.789, 3);
   });
 });

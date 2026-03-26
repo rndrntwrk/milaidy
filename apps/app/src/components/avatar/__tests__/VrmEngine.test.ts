@@ -512,9 +512,11 @@ describe("VrmEngine", () => {
       const state = engine.getState();
       expect(state.vrmLoaded).toBe(false);
       expect(state.vrmName).toBeNull();
+      expect(state.stageLoaded).toBe(true);
       expect(state.idlePlaying).toBe(false);
       expect(state.idleTime).toBe(0);
       expect(state.idleTracks).toBe(0);
+      expect(state.stageScale).toBeNull();
     });
 
     it("state after setup still has no VRM loaded", async () => {
@@ -545,6 +547,8 @@ describe("VrmEngine", () => {
           "idlePlaying",
           "idleTime",
           "idleTracks",
+          "stageLoaded",
+          "stageScale",
           "vrmLoaded",
           "vrmName",
         ].sort(),
