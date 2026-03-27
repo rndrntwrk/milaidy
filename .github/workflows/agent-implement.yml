@@ -224,12 +224,11 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           show_full_output: true
-          use_oauth: false
           additional_permissions: |
             actions: read
           claude_args: |
             --allowedTools "Bash(*),Read,Write,Edit,Glob,Grep,LS"
-          direct_prompt: |
+          prompt: |
             You are the implementation agent for the Milady project. Your job is to implement issue #${{ github.event.issue.number }}.
 
             ## Issue

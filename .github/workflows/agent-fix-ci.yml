@@ -234,13 +234,12 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           show_full_output: true
-          use_oauth: false
           additional_permissions: |
             actions: read
             checks: read
           claude_args: |
             --allowedTools "Bash(*),Read,Write,Edit,Glob,Grep,LS"
-          direct_prompt: |
+          prompt: |
             You are the CI fixer agent for the Milady project. CI has failed on PR #${{ needs.should-fix.outputs.pr_number }}.
             This is fix attempt ${{ needs.should-fix.outputs.attempt }} of ${{ env.MAX_FIX_ATTEMPTS }}.
 
