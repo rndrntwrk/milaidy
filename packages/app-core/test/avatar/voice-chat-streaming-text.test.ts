@@ -10,9 +10,14 @@ const {
   resolveVoiceProxyEndpoint,
   toSpeakableText,
   webSpeechVoiceDebugFields,
+  ASSISTANT_TTS_FINAL_ONLY,
 } = __voiceChatInternals;
 
 describe("useVoiceChat streaming text helpers", () => {
+  it("uses final-only assistant speech mode as a temporary safety band-aid", () => {
+    expect(ASSISTANT_TTS_FINAL_ONLY).toBe(true);
+  });
+
   it("returns only unseen suffix text when remainder grows", () => {
     expect(remainderAfter("alpha beta gamma", "alpha beta")).toBe("gamma");
   });

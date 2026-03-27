@@ -194,6 +194,14 @@ const ASSISTANT_TTS_FIRST_FLUSH_CHARS = 24;
 const ASSISTANT_TTS_MIN_CHUNK_CHARS = 88;
 /** Merge rapid stream deltas into one request after a short pause. */
 const ASSISTANT_TTS_DEBOUNCE_MS = 170;
+/**
+ * Temporary safety switch:
+ * only speak assistant replies once the final text has arrived.
+ *
+ * This avoids garbled overlap when cloud text streaming and speech playback
+ * race each other on partial chunks.
+ */
+const ASSISTANT_TTS_FINAL_ONLY = true;
 const TALKMODE_STOP_SETTLE_MS = 120;
 const REDACTED_SECRET = "[REDACTED]";
 const MOUTH_OPEN_STEP = 0.02;
@@ -626,6 +634,7 @@ export const __voiceChatInternals = {
   resolveVoiceProxyEndpoint,
   toSpeakableText,
   webSpeechVoiceDebugFields,
+  ASSISTANT_TTS_FINAL_ONLY,
   ASSISTANT_TTS_FIRST_FLUSH_CHARS,
   ASSISTANT_TTS_MIN_CHUNK_CHARS,
 };
@@ -1919,6 +1928,40 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
       if (!state) return;
 
       state.latestSpeakable = speakable;
+
+      if (ASSISTANT_TTS_FINAL_ONLY && !isFinal) {
+        // Band-aid mode: never speak partial stream chunks.
+        return;
+      }
+
+      if (ASSISTANT_TTS_FINAL_ONLY) {
+        if (state.finalQueued) return;
+        clearAssistantTtsDebounce();
+
+        const elConfig = voiceConfigRef.current?.elevenlabs;
+        const cacheKey =
+          voiceConfigRef.current?.provider === "elevenlabs" && elConfig
+            ? makeElevenCacheKey(speakable, elConfig)
+            : undefined;
+        const dbgUtterance = isMiladyTtsDebugEnabled()
+          ? {
+              messageId,
+              fullAssistTextPreview: miladyTtsDebugTextPreview(speakable, 220),
+            }
+          : undefined;
+
+        // Final-only means one utterance per assistant message.
+        enqueueSpeech({
+          text: speakable,
+          append: false,
+          segment: "full",
+          cacheKey,
+          debugUtteranceContext: dbgUtterance,
+        });
+        state.queuedSpeakablePrefix = speakable;
+        state.finalQueued = true;
+        return;
+      }
 
       if (
         speakable === state.queuedSpeakablePrefix &&
