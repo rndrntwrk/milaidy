@@ -212,6 +212,7 @@ jobs:
     with:
       version: ${{ needs.version.outputs.tag }}
       push_image: false
+      source_sha: ${{ github.sha }}
     secrets: inherit
 
   build-npm:
