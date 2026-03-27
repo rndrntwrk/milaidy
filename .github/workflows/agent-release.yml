@@ -229,11 +229,14 @@ jobs:
       run_validation: true
     secrets: inherit
 
-  # ── 5. ALL GREEN → tag and publish ─────────────────────────────────
+  # ── 5. Electrobun + Docker must pass. npm is nice-to-have. ──────────
   publish:
     name: Tag & publish release
     needs: [version, build-electrobun, build-docker, build-npm]
-    # Only runs if ALL three builds succeeded — no if:always() here
+    if: >-
+      always() &&
+      needs.build-electrobun.result == 'success' &&
+      needs.build-docker.result == 'success'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
