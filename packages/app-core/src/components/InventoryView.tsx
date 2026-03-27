@@ -71,7 +71,6 @@ const WALLET_SIDEBAR_KICKER_CLASS = APP_SIDEBAR_KICKER_CLASSNAME;
 const WALLET_SIDEBAR_ITEM_ACTIVE_CLASS = APP_SIDEBAR_CARD_ACTIVE_CLASSNAME;
 const WALLET_PANEL_CLASS = DESKTOP_SURFACE_PANEL_CLASSNAME;
 const WALLET_SORT_PILL_CLASS = `${APP_SIDEBAR_COMPACT_PILL_CLASSNAME} text-[10px] font-semibold tracking-[0.14em] text-txt-strong`;
-const WALLET_SORT_TRIGGER_CLASS = `${APP_SIDEBAR_PILL_CLASSNAME} h-9 min-w-[9.5rem] justify-between gap-2 rounded-full border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_82%,transparent),color-mix(in_srgb,var(--bg)_92%,transparent))] px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-txt-strong`;
 
 type InventorySortKey = "chain" | "symbol" | "value";
 
@@ -561,7 +560,8 @@ export function InventoryView() {
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   {chainItemMeta.map((item) => {
                     const isActive = chainFocus === item.key;
-                    const label = item.key === "all" ? "All chains" : item.label;
+                    const label =
+                      item.key === "all" ? "All chains" : item.label;
                     const disabled = !item.hasAddress;
                     return (
                       <Tooltip key={item.key}>
@@ -571,7 +571,8 @@ export function InventoryView() {
                             onClick={
                               disabled
                                 ? undefined
-                                : () => setState("inventoryChainFocus", item.key)
+                                : () =>
+                                    setState("inventoryChainFocus", item.key)
                             }
                             aria-current={isActive ? "page" : undefined}
                             aria-label={label}
@@ -584,15 +585,13 @@ export function InventoryView() {
                                   : "border-border/40 bg-bg/20 text-muted hover:border-border/60 hover:text-txt"
                             }`}
                           >
-                            {item.key === "all"
-                              ? (
-                                  <span className="text-[11px] font-bold uppercase">
-                                    {t("wallet.all")}
-                                  </span>
-                                )
-                              : (
-                                  <ChainIcon chain={item.key} size="lg" />
-                                )}
+                            {item.key === "all" ? (
+                              <span className="text-[11px] font-bold uppercase">
+                                {t("wallet.all")}
+                              </span>
+                            ) : (
+                              <ChainIcon chain={item.key} size="lg" />
+                            )}
                           </button>
                         </TooltipTrigger>
                         <TooltipContent
@@ -653,8 +652,8 @@ export function InventoryView() {
                     Wallet Overview
                   </h1>
                   <p className="mt-1 text-sm text-muted">
-                    Track balances, managed addresses, and trading readiness in one
-                    place.
+                    Track balances, managed addresses, and trading readiness in
+                    one place.
                   </p>
                 </div>
                 {inventoryView === "tokens" ? (
@@ -681,9 +680,15 @@ export function InventoryView() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="value">{t("wallet.value")}</SelectItem>
-                        <SelectItem value="chain">{t("wallet.chain")}</SelectItem>
-                        <SelectItem value="symbol">{t("wallet.name")}</SelectItem>
+                        <SelectItem value="value">
+                          {t("wallet.value")}
+                        </SelectItem>
+                        <SelectItem value="chain">
+                          {t("wallet.chain")}
+                        </SelectItem>
+                        <SelectItem value="symbol">
+                          {t("wallet.name")}
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

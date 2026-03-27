@@ -29,7 +29,9 @@ const SIZE_CLASSES: Record<ChainIconSize, string> = {
 
 /* Per-chain size overrides for visual balance.
  * Some SVGs appear smaller at the same pixel size due to viewBox proportions. */
-const SIZE_OVERRIDES: Partial<Record<string, Partial<Record<ChainIconSize, string>>>> = {
+const SIZE_OVERRIDES: Partial<
+  Record<string, Partial<Record<ChainIconSize, string>>>
+> = {
   bsc: { sm: "h-5 w-5", md: "h-6 w-6", lg: "h-7 w-7" },
   ethereum: { lg: "h-7 w-7" },
   base: { lg: "h-7 w-7" },
@@ -96,8 +98,7 @@ export function ChainIcon({
   const def = CHAIN_SVGS[key];
   if (!def) return null;
 
-  const sizeClass =
-    SIZE_OVERRIDES[key]?.[size] ?? SIZE_CLASSES[size];
+  const sizeClass = SIZE_OVERRIDES[key]?.[size] ?? SIZE_CLASSES[size];
 
   return (
     <svg
@@ -106,8 +107,8 @@ export function ChainIcon({
       className={`${sizeClass} ${className}`.trim()}
       aria-hidden="true"
     >
-      {def.paths.map((d, i) => (
-        <path key={i} d={d} />
+      {def.paths.map((d) => (
+        <path key={d} d={d} />
       ))}
     </svg>
   );

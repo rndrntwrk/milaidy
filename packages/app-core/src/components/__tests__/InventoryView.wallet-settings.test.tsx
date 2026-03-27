@@ -20,7 +20,11 @@ vi.mock("@miladyai/ui", () => ({
       props.children as React.ReactNode,
     ),
   Select: (props: Record<string, unknown>) =>
-    React.createElement("mock-select", props, props.children as React.ReactNode),
+    React.createElement(
+      "mock-select",
+      props,
+      props.children as React.ReactNode,
+    ),
   SelectTrigger: (props: Record<string, unknown>) =>
     React.createElement(
       "button",
@@ -30,21 +34,38 @@ vi.mock("@miladyai/ui", () => ({
   SelectContent: (props: Record<string, unknown>) =>
     React.createElement("div", props, props.children as React.ReactNode),
   SelectItem: (props: Record<string, unknown>) =>
-    React.createElement("mock-option", props, props.children as React.ReactNode),
+    React.createElement(
+      "mock-option",
+      props,
+      props.children as React.ReactNode,
+    ),
   SelectValue: (props: Record<string, unknown>) =>
     React.createElement("span", props, props.children as React.ReactNode),
   Tooltip: (props: Record<string, unknown>) =>
-    React.createElement(React.Fragment, null, props.children as React.ReactNode),
+    React.createElement(
+      React.Fragment,
+      null,
+      props.children as React.ReactNode,
+    ),
   TooltipContent: (props: Record<string, unknown>) =>
     React.createElement("div", props, props.children as React.ReactNode),
   TooltipProvider: (props: Record<string, unknown>) =>
-    React.createElement(React.Fragment, null, props.children as React.ReactNode),
+    React.createElement(
+      React.Fragment,
+      null,
+      props.children as React.ReactNode,
+    ),
   TooltipTrigger: (props: Record<string, unknown>) =>
-    React.createElement(React.Fragment, null, props.children as React.ReactNode),
+    React.createElement(
+      React.Fragment,
+      null,
+      props.children as React.ReactNode,
+    ),
 }));
 
 vi.mock("../BscTradePanel", () => ({
-  TradePanel: () => React.createElement("div", { "data-testid": "trade-panel" }),
+  TradePanel: () =>
+    React.createElement("div", { "data-testid": "trade-panel" }),
 }));
 
 vi.mock("../desktop-surface-primitives", () => ({
@@ -219,7 +240,9 @@ describe("InventoryView wallet settings", () => {
       (node) => node.props["data-testid"] === "wallet-funding-route-pill",
     );
     expect(routePill).toBeTruthy();
-    expect(JSON.stringify(routePill?.props.children)).toContain("funding route");
+    expect(JSON.stringify(routePill?.props.children)).toContain(
+      "funding route",
+    );
     expect(
       assetsHeader?.findAll(
         (node) => node.props["data-testid"] === "wallet-assets-sort-meta",
@@ -287,8 +310,7 @@ describe("InventoryView wallet settings", () => {
     ).toHaveLength(0);
 
     const baseButton = tree?.root.find(
-      (node) =>
-        node.type === "button" && node.props["aria-label"] === "Base",
+      (node) => node.type === "button" && node.props["aria-label"] === "Base",
     );
     expect(baseButton).toBeTruthy();
 
