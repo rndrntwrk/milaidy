@@ -452,6 +452,14 @@ function makeUnauthenticatedAgentStatus(): AgentStatus {
   };
 }
 
+/**
+ * Milady-hosted agents use the modern /api/* contract only.
+ * Local or third-party agents may still need the older fallback endpoints.
+ */
+function isMiladyAgent(url: string): boolean {
+  return /milady\.ai|waifu\.fun/i.test(url);
+}
+
 export class CloudApiClient {
   private baseUrl: string;
   private authToken?: string;
@@ -520,7 +528,15 @@ export class CloudApiClient {
       throw new Error(`API ${primary.status}: /api/health`);
     }
 
-    throw new Error(`API ${primary.status}: /api/health`);
+    if (isMiladyAgent(this.baseUrl)) {
+      throw new Error(`API ${primary.status}: /api/health`);
+    }
+
+    const fallback = await this.rawFetch("/health", fetchOpts);
+    if (!fallback.ok) {
+      throw new Error(`API ${fallback.status}: /health`);
+    }
+    return fallback.json();
   }
 
   async getAgentStatus(options?: {
@@ -567,7 +583,21 @@ export class CloudApiClient {
       throw new Error(`API ${primary.status}: /api/status`);
     }
 
-    throw new Error(`API ${primary.status}: /api/status`);
+    if (isMiladyAgent(this.baseUrl)) {
+      throw new Error(`API ${primary.status}: /api/status`);
+    }
+
+    const legacy = await this.rawFetch("/api/agent/status", fetchOpts);
+    if (legacy.ok) {
+      return legacy.json();
+    }
+    if (legacy.status === 401 || legacy.status === 403) {
+      if (!this.authToken) {
+        return makeUnauthenticatedAgentStatus();
+      }
+      throw new Error(`API ${legacy.status}: /api/agent/status`);
+    }
+    throw new Error(`API ${legacy.status}: /api/agent/status`);
   }
 
   async startAgent(): Promise<{ ok: boolean; status: { state: string } }> {
