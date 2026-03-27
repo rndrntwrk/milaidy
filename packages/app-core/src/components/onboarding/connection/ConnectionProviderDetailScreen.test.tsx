@@ -105,6 +105,11 @@ describe("ConnectionProviderDetailScreen", () => {
     expect(screen.getByText("OpenAI")).toBeTruthy();
     expect(screen.getByLabelText("API Key")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Confirm" })).toBeTruthy();
+    const backButton = screen.getByRole("button", { name: "Back" });
+    expect(backButton.className).toContain(
+      "hover:bg-[var(--onboarding-secondary-hover-bg)]",
+    );
+    expect(backButton.className).not.toContain("bg-bg-accent");
   });
 
   it("renders an actionable browser-login recovery control for Eliza Cloud", () => {

@@ -14,13 +14,13 @@ import {
   onboardingChoiceCardDetectedBadgeClassName,
   onboardingChoiceCardRecommendedLabelClassName,
   onboardingChoiceCardTitleClassName,
+  onboardingHelperTextClassName,
 } from "../onboarding-form-primitives";
 import {
+  OnboardingSecondaryActionButton,
   OnboardingStepHeader,
   onboardingBodyTextShadowStyle,
   onboardingFooterClass,
-  onboardingSecondaryActionClass,
-  onboardingSecondaryActionTextShadowStyle,
 } from "../onboarding-step-chrome";
 
 const recommendedIds = new Set<string>(CONNECTION_RECOMMENDED_PROVIDER_IDS);
@@ -59,7 +59,7 @@ export function ConnectionProviderGridScreen({
       />
       {onboardingRemoteConnected && (
         <p
-          className="mx-auto mb-3 mt-1.5 max-w-[32ch] text-center text-[12px] leading-[1.35] text-[var(--onboarding-text-muted)]"
+          className={`${onboardingHelperTextClassName} mx-auto mb-3 mt-1.5 max-w-[32ch] text-center text-[12px] leading-[1.35]`}
           style={onboardingBodyTextShadowStyle}
         >
           {t(
@@ -123,10 +123,7 @@ export function ConnectionProviderGridScreen({
         })}
       </div>
       <div className={`${onboardingFooterClass} pb-1`}>
-        <Button
-          variant="ghost"
-          className={onboardingSecondaryActionClass}
-          style={onboardingSecondaryActionTextShadowStyle}
+        <OnboardingSecondaryActionButton
           onClick={() => {
             if (onboardingRemoteConnected) {
               onTransitionEffect("useLocalBackend");
@@ -137,7 +134,7 @@ export function ConnectionProviderGridScreen({
           type="button"
         >
           {t("onboarding.back")}
-        </Button>
+        </OnboardingSecondaryActionButton>
         <span />
       </div>
     </>

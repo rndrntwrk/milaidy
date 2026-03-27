@@ -69,14 +69,32 @@
   --onboarding-text-subtle: rgba(210, 208, 220, 0.78);
   --onboarding-text-muted: rgba(186, 184, 198, 0.7);
   --onboarding-text-faint: rgba(160, 158, 176, 0.56);
-  --onboarding-card-bg: rgba(10, 10, 12, 0.8);
-  --onboarding-card-bg-hover: rgba(18, 18, 21, 0.88);
-  --onboarding-card-border: rgba(49, 49, 56, 0.32);
-  --onboarding-card-border-strong: rgba(240, 185, 11, 0.34);
-  --onboarding-panel-bg: rgba(5, 5, 6, 0.88);
-  --onboarding-panel-border: rgba(49, 49, 56, 0.28);
-  --onboarding-panel-shadow: 0 16px 44px rgba(0, 0, 0, 0.42);
+  --onboarding-text-stroke: rgba(4, 8, 14, 0.78);
+  --onboarding-text-stroke-soft: rgba(4, 8, 14, 0.52);
+  --onboarding-text-shadow-strong:
+    0 1px 0 rgba(255, 255, 255, 0.06),
+    0 2px 14px rgba(3, 5, 10, 0.62),
+    0 0 24px rgba(3, 5, 10, 0.24);
+  --onboarding-text-shadow-primary:
+    0 1px 0 rgba(255, 255, 255, 0.05),
+    0 2px 11px rgba(3, 5, 10, 0.56),
+    0 0 18px rgba(3, 5, 10, 0.18);
+  --onboarding-text-shadow-muted:
+    0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 8px rgba(3, 5, 10, 0.5),
+    0 0 14px rgba(3, 5, 10, 0.16);
+  --onboarding-card-bg: rgba(10, 10, 12, 0.58);
+  --onboarding-card-bg-hover: rgba(18, 18, 21, 0.68);
+  --onboarding-card-border: rgba(255, 255, 255, 0.08);
+  --onboarding-card-border-strong: rgba(240, 185, 11, 0.3);
+  --onboarding-card-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  --onboarding-panel-bg: rgba(6, 7, 8, 0.64);
+  --onboarding-panel-border: rgba(255, 255, 255, 0.08);
+  --onboarding-panel-shadow: 0 14px 40px rgba(0, 0, 0, 0.26);
   --onboarding-divider: rgba(49, 49, 56, 0.22);
+  --onboarding-secondary-hover-bg: rgba(240, 185, 11, 0.08);
+  --onboarding-secondary-pressed-bg: rgba(240, 185, 11, 0.14);
+  --onboarding-secondary-focus-ring: rgba(240, 185, 11, 0.42);
 }
 
 /* ── Onboarding theme variables ────────────────────────────────────────
@@ -90,12 +108,27 @@
   --onboarding-text-subtle: rgba(183, 189, 198, 0.82);
   --onboarding-text-muted: rgba(132, 142, 156, 0.78);
   --onboarding-text-faint: rgba(132, 142, 156, 0.58);
+  --onboarding-text-stroke: rgba(4, 8, 14, 0.78);
+  --onboarding-text-stroke-soft: rgba(4, 8, 14, 0.52);
+  --onboarding-text-shadow-strong:
+    0 1px 0 rgba(255, 255, 255, 0.06),
+    0 2px 14px rgba(3, 5, 10, 0.62),
+    0 0 24px rgba(3, 5, 10, 0.24);
+  --onboarding-text-shadow-primary:
+    0 1px 0 rgba(255, 255, 255, 0.05),
+    0 2px 11px rgba(3, 5, 10, 0.56),
+    0 0 18px rgba(3, 5, 10, 0.18);
+  --onboarding-text-shadow-muted:
+    0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 8px rgba(3, 5, 10, 0.5),
+    0 0 14px rgba(3, 5, 10, 0.16);
 
   /* Cards (Remote, Cloud buttons) */
-  --onboarding-card-bg: rgba(10, 10, 12, 0.8);
-  --onboarding-card-bg-hover: rgba(18, 18, 21, 0.88);
-  --onboarding-card-border: rgba(49, 49, 56, 0.32);
-  --onboarding-card-border-strong: rgba(240, 185, 11, 0.34);
+  --onboarding-card-bg: rgba(10, 10, 12, 0.58);
+  --onboarding-card-bg-hover: rgba(18, 18, 21, 0.68);
+  --onboarding-card-border: rgba(255, 255, 255, 0.08);
+  --onboarding-card-border-strong: rgba(240, 185, 11, 0.3);
+  --onboarding-card-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
 
   /* Recommended card (Local button) */
   --onboarding-recommended-bg: rgba(240, 185, 11, 0.12);
@@ -111,42 +144,22 @@
   --onboarding-accent-foreground: var(--highlight-gold);
 
   /* Panel (main onboarding container) */
-  --onboarding-panel-bg: rgba(5, 5, 6, 0.88);
-  --onboarding-panel-border: rgba(49, 49, 56, 0.28);
-  --onboarding-panel-shadow: 0 16px 44px rgba(0, 0, 0, 0.42);
+  --onboarding-panel-bg: rgba(6, 7, 8, 0.64);
+  --onboarding-panel-border: rgba(255, 255, 255, 0.08);
+  --onboarding-panel-shadow: 0 14px 40px rgba(0, 0, 0, 0.26);
 
   /* Misc */
   --onboarding-divider: rgba(49, 49, 56, 0.22);
   --onboarding-footer-border: rgba(49, 49, 56, 0.16);
   --onboarding-link: var(--classic-gold);
   --onboarding-ripple: rgba(240, 185, 11, 0.08);
+  --onboarding-secondary-hover-bg: rgba(240, 185, 11, 0.08);
+  --onboarding-secondary-pressed-bg: rgba(240, 185, 11, 0.14);
+  --onboarding-secondary-focus-ring: rgba(240, 185, 11, 0.42);
   --onboarding-roster-bg: rgba(8, 10, 13, 0.76);
   --onboarding-roster-border: rgba(49, 49, 56, 0.18);
   --onboarding-field-focus-border: rgba(240, 185, 11, 0.42);
   --onboarding-field-focus-shadow: 0 0 0 3px rgba(240, 185, 11, 0.12);
-}
-
-/* Light-mode overrides */
-:root:not(.dark) {
-  --onboarding-text-strong: rgba(30, 35, 41, 0.95);
-  --onboarding-text-primary: rgba(40, 44, 52, 0.9);
-  --onboarding-text-subtle: rgba(52, 58, 67, 0.76);
-  --onboarding-text-muted: rgba(70, 76, 88, 0.72);
-  --onboarding-text-faint: rgba(86, 92, 106, 0.58);
-  --onboarding-card-bg: rgba(252, 253, 253, 0.76);
-  --onboarding-card-bg-hover: rgba(252, 253, 253, 0.88);
-  --onboarding-card-border: rgba(0, 0, 0, 0.1);
-  --onboarding-card-border-strong: rgba(240, 185, 11, 0.28);
-  --onboarding-recommended-bg: rgba(240, 185, 11, 0.1);
-  --onboarding-recommended-bg-hover: rgba(240, 185, 11, 0.16);
-  --onboarding-recommended-border: rgba(240, 185, 11, 0.24);
-  --onboarding-recommended-border-strong: rgba(240, 185, 11, 0.38);
-  --onboarding-panel-bg: rgba(247, 248, 250, 0.92);
-  --onboarding-panel-border: rgba(0, 0, 0, 0.08);
-  --onboarding-panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-  --onboarding-divider: rgba(0, 0, 0, 0.08);
-  --onboarding-roster-bg: rgba(245, 245, 248, 0.7);
-  --onboarding-roster-border: rgba(0, 0, 0, 0.08);
 }
 
 .onboarding-step-list::after {

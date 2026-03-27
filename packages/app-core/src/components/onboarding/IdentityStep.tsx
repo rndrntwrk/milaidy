@@ -22,14 +22,19 @@ import {
 } from "../CharacterRoster";
 import { resolvePreviewTtsEndpoints } from "./identity-preview-tts";
 import {
+  onboardingInputClassName,
+  onboardingReadableTextMutedClassName,
+  onboardingReadableTextStrongClassName,
+} from "./onboarding-form-primitives";
+import { onboardingPanelSurfaceClassName } from "./OnboardingPanel";
+import {
+  OnboardingLinkActionButton,
+  OnboardingSecondaryActionButton,
   OnboardingStepHeader,
   onboardingBodyTextShadowStyle,
   onboardingFooterClass,
-  onboardingLinkActionClass,
   onboardingPrimaryActionClass,
   onboardingPrimaryActionTextShadowStyle,
-  onboardingSecondaryActionClass,
-  onboardingSecondaryActionTextShadowStyle,
   spawnOnboardingRipple,
 } from "./onboarding-step-chrome";
 
@@ -336,7 +341,7 @@ export function IdentityStep({
             setImportFile(e.target.files?.[0] ?? null);
             setImportError(null);
           }}
-          className="w-full px-[20px] py-[16px] bg-[var(--onboarding-card-bg)] border border-[var(--onboarding-card-border)] rounded-[6px] text-[var(--onboarding-text-primary)] font-inherit outline-none tracking-[0.03em] transition-all duration-300 focus:border-[var(--onboarding-field-focus-border)] focus:shadow-[var(--onboarding-field-focus-shadow)] placeholder:text-[var(--onboarding-text-faint)] text-[13px] text-left"
+          className={`${onboardingInputClassName} h-auto rounded-[6px] px-[20px] py-[16px] text-[13px] font-inherit tracking-[0.03em] text-center`}
         />
 
         <Input
@@ -347,7 +352,7 @@ export function IdentityStep({
             setImportPassword(e.target.value);
             setImportError(null);
           }}
-          className="w-full px-[20px] py-[16px] bg-[var(--onboarding-card-bg)] border border-[var(--onboarding-card-border)] rounded-[6px] text-[var(--onboarding-text-primary)] font-inherit outline-none tracking-[0.03em] text-center transition-all duration-300 focus:border-[var(--onboarding-field-focus-border)] focus:shadow-[var(--onboarding-field-focus-shadow)] placeholder:text-[var(--onboarding-text-faint)]"
+          className={`${onboardingInputClassName} h-auto rounded-[6px] px-[20px] py-[16px] font-inherit tracking-[0.03em] text-center`}
         />
 
         {importError && (
@@ -368,10 +373,7 @@ export function IdentityStep({
         )}
 
         <div className={`${onboardingFooterClass} mt-2 w-full border-t-0 pt-0`}>
-          <Button
-            variant="ghost"
-            className={onboardingSecondaryActionClass}
-            style={onboardingSecondaryActionTextShadowStyle}
+          <OnboardingSecondaryActionButton
             onClick={() => {
               setShowImport(false);
               setImportError(null);
@@ -382,7 +384,7 @@ export function IdentityStep({
             type="button"
           >
             {t("common.cancel")}
-          </Button>
+          </OnboardingSecondaryActionButton>
           <Button
             className={onboardingPrimaryActionClass}
             style={onboardingPrimaryActionTextShadowStyle}
@@ -417,16 +419,16 @@ export function IdentityStep({
         style={{ animation: "onboarding-content-fade-in 0.5s ease 0.1s both" }}
       >
         <div
-          className="mb-2 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--onboarding-text-muted)]"
+          className={`mb-2 text-xs font-semibold uppercase tracking-[0.3em] ${onboardingReadableTextMutedClassName}`}
           style={onboardingBodyTextShadowStyle}
         >
           {t("onboarding.stepSub.identity")}
         </div>
         <div
-          className="text-[28px] font-bold tracking-[0.12em] uppercase text-[var(--onboarding-text-strong)] transition-all duration-300 max-md:text-xl"
+          className={`text-[28px] font-bold tracking-[0.12em] uppercase transition-all duration-300 max-md:text-xl ${onboardingReadableTextStrongClassName}`}
           style={{
             textShadow:
-              "0 0 30px rgba(240,185,11,0.3), 0 2px 12px rgba(3,5,10,0.65)",
+              "0 0 24px rgba(240,185,11,0.18), var(--onboarding-text-shadow-strong)",
           }}
         >
           {selected?.name ?? ""}
@@ -435,7 +437,7 @@ export function IdentityStep({
 
       {/* ── Roster bar ── */}
       <div
-        className="flex flex-nowrap items-end justify-center gap-0 w-full max-w-[900px] px-2 max-md:px-1 max-md:max-w-full rounded-[18px] border border-[var(--onboarding-panel-border)] bg-[linear-gradient(180deg,rgba(9,12,18,0.18),rgba(9,12,18,0.08)),var(--onboarding-panel-bg)] p-4 pb-8 backdrop-blur-[36px] backdrop-saturate-[1.24] shadow-[var(--onboarding-panel-shadow)]"
+        className={`flex w-full max-w-[900px] flex-nowrap items-end justify-center gap-0 rounded-[18px] p-4 pb-8 px-2 backdrop-blur-[36px] backdrop-saturate-[1.24] max-md:max-w-full max-md:px-1 ${onboardingPanelSurfaceClassName}`}
         style={{
           animation:
             "ob-roster-slide-up 0.5s cubic-bezier(0.25,0.46,0.45,0.94) 0.15s both",
@@ -473,14 +475,12 @@ export function IdentityStep({
         >
           Continue
         </Button>
-        <Button
-          variant="link"
+        <OnboardingLinkActionButton
           type="button"
           onClick={() => setShowImport(true)}
-          className={onboardingLinkActionClass}
         >
           {t("onboarding.restoreFromBackup")}
-        </Button>
+        </OnboardingLinkActionButton>
       </div>
     </div>
   );

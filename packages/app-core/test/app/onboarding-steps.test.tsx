@@ -490,6 +490,18 @@ describe("ConnectionStep", () => {
     expect(text).toContain("onboarding.hostingLocal");
     expect(text).toContain("header.Cloud");
     expect(text).toContain("onboarding.back");
+
+    const buttons = findButtons(tree?.root as TestRenderer.ReactTestInstance);
+    const remoteButton = buttons.find((button) =>
+      collectText(button).includes("onboarding.hostingRemote"),
+    );
+    expect(remoteButton).toBeDefined();
+    expect(String(remoteButton?.props.className)).toContain(
+      "bg-[var(--onboarding-card-bg)]",
+    );
+    expect(String(remoteButton?.props.className)).toContain(
+      "var(--onboarding-card-shadow)",
+    );
   });
 
   it("calls handleOnboardingBack from hosting selection", async () => {

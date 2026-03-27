@@ -9,10 +9,9 @@ import {
   onboardingChoiceCardTitleClassName,
 } from "../onboarding-form-primitives";
 import {
+  OnboardingSecondaryActionButton,
   OnboardingStepHeader,
   onboardingFooterClass,
-  onboardingSecondaryActionClass,
-  onboardingSecondaryActionTextShadowStyle,
 } from "../onboarding-step-chrome";
 
 export function ConnectionHostingScreen({
@@ -92,15 +91,12 @@ export function ConnectionHostingScreen({
         </Button>
       </div>
       <div className={onboardingFooterClass}>
-        <Button
-          variant="ghost"
-          className={onboardingSecondaryActionClass}
-          style={onboardingSecondaryActionTextShadowStyle}
+        <OnboardingSecondaryActionButton
           onClick={handleOnboardingBack}
           type="button"
         >
           {t("onboarding.back")}
-        </Button>
+        </OnboardingSecondaryActionButton>
         <span />
       </div>
     </>

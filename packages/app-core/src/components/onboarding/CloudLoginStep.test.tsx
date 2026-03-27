@@ -94,4 +94,36 @@ describe("CloudLoginStep", () => {
 
     expect(handleOnboardingNext).toHaveBeenCalledTimes(1);
   });
+
+  it("renders the back action with onboarding-owned secondary styling", async () => {
+    useAppMock.mockReturnValue({
+      onboardingStep: "providers",
+      elizaCloudConnected: false,
+      elizaCloudLoginBusy: false,
+      elizaCloudLoginError: "",
+      handleCloudLogin: vi.fn(),
+      handleOnboardingNext: vi.fn(),
+      handleOnboardingBack: vi.fn(),
+      t: (key: string) => key,
+    });
+
+    let renderer: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = TestRenderer.create(<CloudLoginStep />);
+    });
+
+    if (!renderer) {
+      throw new Error("CloudLoginStep did not render");
+    }
+
+    const buttons = renderer.root.findAllByType("button");
+    const backButton = buttons.find((button) =>
+      button.children.includes("onboarding.back"),
+    );
+    expect(backButton).toBeDefined();
+    expect(String(backButton?.props.className)).toContain(
+      "hover:bg-[var(--onboarding-secondary-hover-bg)]",
+    );
+    expect(String(backButton?.props.className)).not.toContain("bg-bg-accent");
+  });
 });
