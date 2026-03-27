@@ -621,7 +621,7 @@ function useGameModalMessages(options: {
     const tick = () => setCompanionNowMs(Date.now());
     tick();
 
-    if (!docVisible) return () => {};
+    if (!docVisible) return () => { };
 
     const intervalId = window.setInterval(tick, 250);
     return () => window.clearInterval(intervalId);
@@ -910,9 +910,8 @@ export function ChatView({
   return (
     <section
       aria-label={t("aria.chatWorkspace")}
-      className={`flex flex-col flex-1 min-h-0 relative ${
-        isGameModal ? "overflow-visible pointer-events-none" : "bg-transparent"
-      }${imageDragOver ? " ring-2 ring-accent ring-inset" : ""}`}
+      className={`flex flex-col flex-1 min-h-0 relative ${isGameModal ? "overflow-visible pointer-events-none" : "bg-transparent"
+        }${imageDragOver ? " ring-2 ring-accent ring-inset" : ""}`}
       onDragOver={(e) => {
         e.preventDefault();
         setImageDragOver(true);
@@ -920,6 +919,7 @@ export function ChatView({
       onDragLeave={() => setImageDragOver(false)}
       onDrop={handleImageDrop}
     >
+<<<<<<< Updated upstream
 <div
         ref={messagesRef}
         data-testid="chat-messages-scroll"
@@ -1076,6 +1076,19 @@ export function ChatView({
       {/* Agent activity box — sticky status per active coding-agent task (default layout) */}
       {!isGameModal && (
 
+=======
+      {/* Agent activity box — sticky status per active coding-agent task */}
+      {isGameModal ? (
+        <div className="pointer-events-auto">
+          <AgentActivityBox
+            sessions={ptySessions}
+            onSessionClick={(id) =>
+              setPtyDrawerSessionId((prev) => (prev === id ? null : id))
+            }
+          />
+        </div>
+      ) : (
+>>>>>>> Stashed changes
         <AgentActivityBox
           sessions={ptySessions}
           onSessionClick={(id) =>

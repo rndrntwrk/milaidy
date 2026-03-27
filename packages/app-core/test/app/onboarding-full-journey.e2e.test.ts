@@ -963,10 +963,12 @@ describe("agent reset and re-onboarding (e2e)", () => {
     expect(state.conversations).toEqual([]);
     expect(state.plugins).toEqual([]);
 
-    // UI should show onboarding again
+    // UI should show onboarding again (the shell may render behind the
+    // onboarding overlay during the crossfade transition, so check for
+    // positive onboarding presence rather than negative ChatView absence)
     const renderedText = textOf(tree.root);
     expect(renderedText).not.toContain("CharacterEditor");
-    expect(renderedText).not.toContain("ChatView");
+    expect(renderedText).toContain("onboarding.chooseAgent");
 
     tree.unmount();
   });

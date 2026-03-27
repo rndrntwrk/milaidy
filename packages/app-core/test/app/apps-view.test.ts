@@ -211,6 +211,7 @@ describe("AppsView", () => {
   const tStub = (k: string) => k;
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     delete (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__;
     vi.restoreAllMocks();
   });
@@ -279,7 +280,7 @@ describe("AppsView", () => {
       }),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -334,7 +335,7 @@ describe("AppsView", () => {
       }),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -374,7 +375,7 @@ describe("AppsView", () => {
 
     const popupSpy = vi.spyOn(window, "open").mockReturnValue({} as Window);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -421,7 +422,7 @@ describe("AppsView", () => {
 
     vi.spyOn(window, "open").mockReturnValue(null);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -465,14 +466,14 @@ describe("AppsView", () => {
         viewer: null,
       }),
     );
-    vi.stubGlobal("__MILADY_ELECTROBUN_RPC__", {
+    (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__ = {
       request: { desktopOpenExternal: request },
       onMessage: vi.fn(),
       offMessage: vi.fn(),
-    });
+    };
     const popupSpy = vi.spyOn(window, "open");
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -518,7 +519,7 @@ describe("AppsView", () => {
       },
     ]);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -594,7 +595,7 @@ describe("AppsView", () => {
     });
     mockClientFns.listApps.mockResolvedValue([app]);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -640,7 +641,7 @@ describe("AppsView", () => {
       },
     ]);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -669,7 +670,7 @@ describe("AppsView", () => {
     const appTwo = createApp("@elizaos/app-babylon", "Babylon", "Wallet");
     mockClientFns.listApps.mockResolvedValue([appOne, appTwo]);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });

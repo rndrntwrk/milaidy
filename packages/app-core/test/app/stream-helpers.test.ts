@@ -4,26 +4,15 @@ import {
   STREAM_SOURCE_LABELS,
   toggleAlwaysOnTop,
 } from "../../src/components/stream/helpers";
+import * as electrobunRpc from "@miladyai/app-core/bridge/electrobun-rpc";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-type TestWindow = Window & {
-  __MILADY_ELECTROBUN_RPC__?: {
-    request: Record<string, (params?: unknown) => Promise<unknown>>;
-    onMessage: (
-      messageName: string,
-      listener: (payload: unknown) => void,
-    ) => void;
-    offMessage: (
-      messageName: string,
-      listener: (payload: unknown) => void,
-    ) => void;
-  };
-};
+  // No custom globals needed
 
 describe("toggleAlwaysOnTop", () => {
   afterEach(() => {
+    vi.unstubAllGlobals();
     delete (window as typeof window & { Capacitor?: unknown }).Capacitor;
-    delete (window as TestWindow).__MILADY_ELECTROBUN_RPC__;
     vi.restoreAllMocks();
   });
 
@@ -34,11 +23,11 @@ describe("toggleAlwaysOnTop", () => {
       writable: true,
       value: undefined,
     });
-    (window as TestWindow).__MILADY_ELECTROBUN_RPC__ = {
+    vi.stubGlobal("__MILADY_ELECTROBUN_RPC__", {
       request: { desktopSetAlwaysOnTop: request },
       onMessage: vi.fn(),
       offMessage: vi.fn(),
-    };
+    });
 
     await expect(toggleAlwaysOnTop(true)).resolves.toBe(true);
 

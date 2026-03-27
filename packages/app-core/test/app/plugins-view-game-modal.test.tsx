@@ -4,6 +4,7 @@ import type { PluginInfo } from "@miladyai/app-core/api";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as electrobunRpc from "@miladyai/app-core/bridge/electrobun-rpc";
 import { textOf as text } from "../../../../test/helpers/react-test";
 
 const mockUseApp = vi.fn();
@@ -242,6 +243,7 @@ function baseContext(plugins?: PluginInfo[]) {
 describe("PluginsView game modal", () => {
   beforeEach(() => {
     ensureWindowGlobals();
+    delete (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__;
     mockUseApp.mockReset();
     mockOnWsEvent.mockReset();
     mockHandlePluginToggle.mockReset();
@@ -284,12 +286,12 @@ describe("PluginsView game modal", () => {
         };
       }),
     });
-    delete (window as any).__MILADY_ELECTROBUN_RPC__;
-    delete (globalThis as any).__MILADY_ELECTROBUN_RPC__;
+    // Relies on vi.restoreAllMocks() in suite cleanup
     mockOpenExternalInvoke.mockReset();
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     if (originalMatchMedia) {
       Object.defineProperty(window, "matchMedia", {
         configurable: true,
@@ -300,7 +302,7 @@ describe("PluginsView game modal", () => {
   });
 
   it("renders game modal for both plugins and connectors modals", async () => {
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(
         React.createElement(PluginsView, { inModal: true, mode: "all" }),
@@ -338,7 +340,7 @@ describe("PluginsView game modal", () => {
       ]),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(
         React.createElement(PluginsView, { inModal: true, mode: "social" }),
@@ -397,7 +399,7 @@ describe("PluginsView game modal", () => {
       ]),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(
         React.createElement(PluginsView, { inModal: true, mode: "social" }),
@@ -426,7 +428,7 @@ describe("PluginsView game modal", () => {
 
   it("uses list/detail mobile panes on narrow viewport", async () => {
     narrowViewport = true;
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(
         React.createElement(PluginsView, { inModal: true, mode: "all" }),
@@ -477,7 +479,7 @@ describe("PluginsView game modal", () => {
       ]),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(
         React.createElement(PluginsView, { inModal: true, mode: "social" }),
@@ -514,7 +516,7 @@ describe("PluginsView game modal", () => {
     ]);
     mockUseApp.mockImplementation(() => state);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(
         React.createElement(PluginsView, { inModal: true, mode: "all" }),
@@ -547,7 +549,7 @@ describe("PluginsView game modal", () => {
       baseContext([createPlugin("test-plugin", "Test Plugin", "feature")]),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(
         React.createElement(PluginsView, { inModal: true, mode: "all" }),
@@ -588,7 +590,7 @@ describe("PluginsView game modal", () => {
       ]),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(
         React.createElement(PluginsView, { inModal: true, mode: "streaming" }),
@@ -621,7 +623,7 @@ describe("PluginsView game modal", () => {
     ]);
     mockUseApp.mockImplementation(() => state);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(
         React.createElement(PluginsView, { mode: "social" }),
@@ -667,7 +669,7 @@ describe("PluginsView game modal", () => {
       ]),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(PluginsView));
     });
@@ -691,17 +693,13 @@ describe("PluginsView game modal", () => {
     const openSpy = vi
       .spyOn(window, "open")
       .mockImplementation(() => null as unknown as Window);
-    Object.defineProperty(window, "__MILADY_ELECTROBUN_RPC__", {
-      configurable: true,
-      writable: true,
-      value: {
-        request: {
-          desktopOpenExternal: mockOpenExternalInvoke,
-        },
-        onMessage: vi.fn(),
-        offMessage: vi.fn(),
+    (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__ = {
+      request: {
+        desktopOpenExternal: mockOpenExternalInvoke,
       },
-    });
+      onMessage: vi.fn(),
+      offMessage: vi.fn(),
+    };
 
     mockUseApp.mockReturnValue(
       baseContext([
@@ -713,7 +711,7 @@ describe("PluginsView game modal", () => {
       ]),
     );
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree: TestRenderer.ReactTestRenderer = null as any;
     await act(async () => {
       tree = TestRenderer.create(
         React.createElement(PluginsView, { mode: "streaming" }),
@@ -752,8 +750,7 @@ describe("PluginsView game modal", () => {
       url: "https://docs.milady.ai/plugin-setup-guide#retaketv",
     });
 
-    delete (window as any).__MILADY_ELECTROBUN_RPC__;
-    delete (globalThis as any).__MILADY_ELECTROBUN_RPC__;
+    delete (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__;
     const sourceButton = tree?.root.findAll(
       (node) =>
         hasClass(node, "plugins-game-link-btn") &&

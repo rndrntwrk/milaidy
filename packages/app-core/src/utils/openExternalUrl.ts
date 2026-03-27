@@ -16,6 +16,7 @@ export async function openExternalUrl(url: string): Promise<void> {
   // unmanaged BrowserView to an external URL and crashes the shell.
   // The RPC may be missing because the preload hasn't wired yet or the
   // specific method isn't registered; either way opening a raw popup is worse.
+  console.log("getElectrobunRendererRpc:", getElectrobunRendererRpc() !== undefined);
   if (getElectrobunRendererRpc() !== undefined) {
     console.warn(
       "[openExternalUrl] desktopOpenExternal RPC returned null — skipping window.open fallback",

@@ -3,6 +3,7 @@
 import { useRetakeCapture } from "@miladyai/app-core/hooks";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
+import * as electrobunRpc from "@miladyai/app-core/bridge/electrobun-rpc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 function HookHost({
@@ -23,26 +24,22 @@ describe("useRetakeCapture", () => {
   const mockStop = vi.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
-    Object.defineProperty(window, "__MILADY_ELECTROBUN_RPC__", {
-      value: {
-        request: {
-          screencaptureStartFrameCapture: mockStart,
-          screencaptureStopFrameCapture: mockStop,
-        },
-        onMessage: vi.fn(),
-        offMessage: vi.fn(),
+    vi.stubGlobal("__MILADY_ELECTROBUN_RPC__", {
+      request: {
+        screencaptureStartFrameCapture: mockStart,
+        screencaptureStopFrameCapture: mockStop,
       },
-      writable: true,
-      configurable: true,
+      onMessage: vi.fn(),
+      offMessage: vi.fn(),
     });
     mockStart.mockReset().mockResolvedValue(undefined);
     mockStop.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
-    // @ts-expect-error cleanup rpc stub
-    delete window.__MILADY_ELECTROBUN_RPC__;
   });
 
   it("does not start capture when active is false", () => {
