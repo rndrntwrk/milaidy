@@ -97,12 +97,7 @@ jobs:
   # ── 2. Trust gate ──────────────────────────────────────────────────
   gate:
     name: Trust gate
-    if: >-
-      always() && (
-        (github.event_name == 'workflow_dispatch') ||
-        (github.event_name == 'issues' && github.event.label.name == 'release-ready') ||
-        (needs.evaluate.result == 'success' && needs.evaluate.outputs.should_release == 'true')
-      )
+    if: always() && ((github.event_name == 'workflow_dispatch') || (github.event_name == 'issues' && github.event.label.name == 'release-ready') || (needs.evaluate.result == 'success' && needs.evaluate.outputs.should_release == 'true'))
     needs: [evaluate]
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
@@ -233,10 +228,7 @@ jobs:
   publish:
     name: Tag & publish release
     needs: [version, build-electrobun, build-docker, build-npm]
-    if: >-
-      always() &&
-      needs.build-electrobun.result == 'success' &&
-      needs.build-docker.result == 'success'
+    if: always() && needs.build-electrobun.result == 'success' && needs.build-docker.result == 'success'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
@@ -396,10 +388,7 @@ jobs:
   report-warnings:
     name: Report skipped builds
     needs: [version, build-electrobun, build-docker, build-npm, publish]
-    if: >-
-      always() &&
-      needs.publish.result == 'success' &&
-      (needs.build-electrobun.result == 'skipped' || needs.build-docker.result == 'skipped' || needs.build-npm.result == 'skipped')
+    if: always() && needs.publish.result == 'success' && (needs.build-electrobun.result == 'skipped' || needs.build-docker.result == 'skipped' || needs.build-npm.result == 'skipped')
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       issues: write
