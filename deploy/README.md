@@ -1,12 +1,15 @@
-# Milady Agent Image — Cloud Deploys
+# Milady Agent Images — Generic And Cloud Deploys
 
 ## Overview
 
-The canonical Milady agent image is the same image used for both generic agent
-deploys and cloud-deployed agents. Cloud behavior is selected at runtime by
-`scripts/container-entrypoint.mjs`, which switches to the cloud bridge
-entrypoint when `MILADY_CONTAINER_MODE=cloud-agent` or bridge-specific env vars
-are present.
+Milady ships two Docker images:
+
+- The canonical generic agent image, built from `Dockerfile.ci`
+- A dedicated cloud-only image, built from `deploy/Dockerfile.cloud-slim`
+
+Use the generic image for the standard Milady runtime. Use the cloud-only image
+when you want a separate headless cloud instance with the bridge runtime
+already baked in.
 
 ### Image Architecture
 
@@ -15,15 +18,25 @@ are present.
 │  milady/agent:latest                   │
 │                                         │
 │  ┌──────────────────────────────────┐   │
-│  │  container-entrypoint.mjs       │   │
-│  │                                  │   │
-│  │  ├─ node milady.mjs start            │
-│  │  └─ tsx deploy/cloud-agent-entrypoint.ts │
-│  │     └─ Compat bridge             :18790 │
+│  │  Generic runtime + UI/API       │
 │  └──────────────────────────────────┘   │
 │                                         │
 │  Base: node:22-slim + tsx               │
 │  Build: Dockerfile.ci                   │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│  ghcr.io/milady-ai/milady/agent:cloud-agent │
+│                                         │
+│  ┌──────────────────────────────────┐   │
+│  │  Headless runtime + bridge       │   │
+│  │  deploy/cloud-agent-entrypoint.ts│   │
+│  │  /health                         │   │
+│  │  /bridge                         │   │
+│  └──────────────────────────────────┘   │
+│                                         │
+│  Base: node:22-bookworm-slim            │
+│  Build: deploy/Dockerfile.cloud-slim    │
 └─────────────────────────────────────────┘
 ```
 
@@ -46,11 +59,11 @@ are present.
 # Build the canonical agent image
 docker build -f Dockerfile.ci -t milady/agent:latest .
 
-# Build with a specific version tag
-docker build -f Dockerfile.ci -t milady/agent:v2.0.0-alpha.92 .
+# Build the cloud-only image
+docker build -f deploy/Dockerfile.cloud-slim -t milady/agent:cloud-agent .
 
-# Build without cache
-docker build --no-cache -f Dockerfile.ci -t milady/agent:latest .
+# Build with a specific version tag
+docker build -f deploy/Dockerfile.cloud-slim -t milady/agent:cloud-agent-2.0.0-alpha.92 .
 ```
 
 ### Deploy to nodes
@@ -89,12 +102,15 @@ docker build --no-cache -f Dockerfile.ci -t milady/agent:latest .
 
 ### Dockerfile
 
-The build uses `Dockerfile.ci`. Key points:
+The generic image uses `Dockerfile.ci`. The cloud-only image uses
+`deploy/Dockerfile.cloud-slim`.
 
-- **Single canonical image** — generic and cloud deploys share the same build
-- **Runtime-selected mode** — normal agent vs cloud bridge chosen from env
-- **Cloud-compatible** — includes `deploy/cloud-agent-entrypoint.ts`
-- **Health check** — tries `/health` first, then falls back to `/api/health`
+Key points:
+
+- **Generic image** — full Milady runtime, UI/API capable
+- **Cloud image** — headless runtime tuned for separate cloud instances
+- **Cloud workflow** — published by `build-cloud-image.yml`
+- **Health checks** — generic uses `/api/health`, cloud uses `/health`
 
 ### Build args
 
@@ -173,9 +189,9 @@ $SSH "docker stop -t 30 $CONTAINER && docker rm $CONTAINER"
 ### Version relationship
 
 - Milady releases create git tags like `v2.0.0-alpha.81`
-- The canonical image is published to `ghcr.io/milady-ai/agent`
-- Cloud deploys use the same published image with cloud-mode env vars
-- There is no separate cloud-only or steward-only image on the release path
+- The canonical generic image is published to `ghcr.io/milady-ai/agent`
+- The cloud-only image is published to `ghcr.io/milady-ai/milady/agent:cloud-agent`
+- The steward-only image was removed from the release path
 
 ### GitHub Actions (CI)
 
@@ -185,10 +201,18 @@ The `build-docker.yml` workflow:
 - Builds and pushes the shared agent image to GitHub Container Registry
 - Uses Docker layer caching for faster rebuilds
 
+The `build-cloud-image.yml` workflow:
+- **Auto-triggers** on release tags
+- **Runs inside `Agent Release`** as the cloud-only image validation job
+- Builds and pushes the dedicated cloud-only image
+
 To use the CI-built image on nodes:
 ```bash
-# Pull from GHCR (requires login)
+# Pull the generic image from GHCR (requires login)
 docker pull ghcr.io/milady-ai/agent:latest
+
+# Pull the cloud-only image from GHCR
+docker pull ghcr.io/milady-ai/milady/agent:cloud-agent
 
 # Or build locally and transfer via SSH
 docker build -f Dockerfile.ci -t milady/agent:latest .
@@ -199,8 +223,9 @@ docker build -f Dockerfile.ci -t milady/agent:latest .
 ```
 git tag v2.0.0-alpha.82
 git push origin v2.0.0-alpha.82
-  → CI builds and pushes the canonical image to GHCR (automatic)
+  → CI builds and pushes the canonical image and cloud-only image to GHCR
   → OR: docker build -f Dockerfile.ci -t milady/agent:latest . (manual)
+  → OR: docker build -f deploy/Dockerfile.cloud-slim -t milady/agent:cloud-agent . (manual)
 ./deploy/deploy-to-nodes.sh --restart --rolling
 ```
 
@@ -243,8 +268,10 @@ docker save milady/agent:latest | gzip | \
 
 | File | Description |
 |------|-------------|
-| `../Dockerfile.ci` | Canonical Docker build file for Milady agent containers |
-| `../scripts/container-entrypoint.mjs` | Runtime selector for generic vs cloud agent mode |
+| `../Dockerfile.ci` | Canonical generic agent image |
+| `Dockerfile.cloud-slim` | Dedicated cloud-only image |
+| `../scripts/container-entrypoint.mjs` | Runtime selector used by the generic image |
 | `cloud-agent-entrypoint.ts` | Cloud agent entrypoint (bridge server + runtime) |
 | `deploy-to-nodes.sh` | Deploy script (push to nodes, restart containers) |
-| `../.github/workflows/build-docker.yml` | CI workflow for canonical image builds |
+| `../.github/workflows/build-docker.yml` | CI workflow for canonical generic image builds |
+| `../.github/workflows/build-cloud-image.yml` | CI workflow for cloud-only image builds |

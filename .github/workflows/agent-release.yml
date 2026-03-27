@@ -182,7 +182,7 @@ jobs:
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
           echo "Next: v$VERSION (prerelease=$PRERELEASE)"
 
-  # ── 3. FULL BUILD MATRIX (blocking — electrobun + docker required) ─
+  # ── 3. FULL BUILD MATRIX (blocking — electrobun + generic/cloud docker) ─
   build-electrobun:
     name: Electrobun full matrix
     needs: [version]
@@ -197,6 +197,16 @@ jobs:
     name: Agent image build
     needs: [version]
     uses: ./.github/workflows/build-docker.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-cloud-image:
+    name: Cloud agent image build
+    needs: [version]
+    uses: ./.github/workflows/build-cloud-image.yml
     with:
       version: ${{ needs.version.outputs.tag }}
       push_image: false
@@ -415,8 +425,8 @@ jobs:
   # ── 4. Electrobun + Docker green → tag and publish ─────────────────
   publish:
     name: Tag & publish release
-    needs: [version, build-electrobun, build-docker, build-npm]
-    if: always() && needs.build-electrobun.result == 'success' && needs.build-docker.result == 'success'
+    needs: [version, build-electrobun, build-docker, build-cloud-image, build-npm]
+    if: always() && needs.build-electrobun.result == 'success' && needs.build-docker.result == 'success' && needs.build-cloud-image.result == 'success'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
@@ -510,9 +520,10 @@ jobs:
                 previousTag ? `**Previous tag:** ${previousTag}` : '**Previous tag:** none',
                 `**Triggered by:** @${context.actor}`,
                 '',
-                '### Pre-release verification',
+                '### Release verification',
                 '- ✅ Electrobun desktop — full matrix (macOS ARM, macOS Intel, Windows, Linux)',
                 '- ✅ Canonical agent image — built successfully',
+                '- ✅ Cloud-only agent image — built successfully',
                 npmOk ? '- ✅ npm package — built and validated' : '- ⚠️ npm package — build failed (non-blocking)',
                 '',
                 generatedNotes ? '## Release notes' : null,
@@ -524,7 +535,8 @@ jobs:
                 '- [ ] Electrobun artifacts upload + updater channel',
                 '- [ ] npm publish',
                 '- [ ] PyPI publish',
-                '- [ ] Docker push to GHCR',
+                '- [ ] Canonical agent image push to GHCR',
+                '- [ ] Cloud-only agent image push to GHCR',
                 '- [ ] Android / iOS / macOS App Store',
                 '- [ ] Snap / Flatpak / Debian',
                 '- [ ] Homebrew / Homepage',
@@ -553,7 +565,7 @@ jobs:
   # ── 5. Report — open issues for any failures/warnings ───────────────
   report:
     name: Report build results
-    needs: [version, build-electrobun, build-docker, build-npm, build-android, build-ios, build-macos-store, build-snap, build-flatpak, build-pypi, build-debian, build-homepage, build-docs, publish]
+    needs: [version, build-electrobun, build-docker, build-cloud-image, build-npm, build-android, build-ios, build-macos-store, build-snap, build-flatpak, build-pypi, build-debian, build-homepage, build-docs, publish]
     if: always() && needs.version.result == 'success'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
@@ -565,6 +577,7 @@ jobs:
           TAG: ${{ needs.version.outputs.tag || 'unknown' }}
           R_ELECTROBUN: ${{ needs.build-electrobun.result }}
           R_DOCKER: ${{ needs.build-docker.result }}
+          R_CLOUD_IMAGE: ${{ needs.build-cloud-image.result }}
           R_NPM: ${{ needs.build-npm.result }}
           R_ANDROID: ${{ needs.build-android.result }}
           R_IOS: ${{ needs.build-ios.result }}
@@ -583,7 +596,8 @@ jobs:
 
             const blocking = {
               'Electrobun (4-platform)': process.env.R_ELECTROBUN,
-              'Docker image': process.env.R_DOCKER,
+              'Canonical agent image': process.env.R_DOCKER,
+              'Cloud agent image': process.env.R_CLOUD_IMAGE,
             };
             const nonBlocking = {
               'npm package': process.env.R_NPM,

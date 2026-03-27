@@ -1,0 +1,146 @@
+# =============================================================================
+# build-cloud-image.yml — Build Milady cloud-only agent image and push to GHCR
+# =============================================================================
+#
+# Triggers:
+#   - Push of release tags: v2.0.0-alpha.*, v2.0.*
+#   - Reusable workflow call from agent-release.yml for validated releases
+#   - Manual dispatch (workflow_dispatch) with optional override
+#
+# Published to: ghcr.io/milady-ai/milady/agent
+#   Tags: :cloud-agent
+#         :cloud-agent-{version}
+#
+# Build strategy: use the dedicated headless cloud runtime Dockerfile so users
+# who want a separate cloud-only deployment do not need the full generic image.
+# =============================================================================
+
+name: Build Cloud Agent Image
+
+on:
+  push:
+    tags:
+      - "v2.0.0-alpha.*"
+      - "v2.0.*"
+  workflow_call:
+    inputs:
+      version:
+        description: "Version tag to publish (e.g. v2.0.0-alpha.91)"
+        required: true
+        type: string
+      push_image:
+        description: "Push image to GHCR"
+        required: false
+        type: boolean
+        default: true
+      source_sha:
+        description: "Exact git commit to build"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Override version tag (e.g. v2.0.0-alpha.91). Defaults to latest tag."
+        required: false
+        type: string
+      push_image:
+        description: "Push image to GHCR (uncheck for dry-run)"
+        required: false
+        type: boolean
+        default: true
+      source_sha:
+        description: "Optional exact git commit to build instead of the dispatched ref"
+        required: false
+        type: string
+
+concurrency:
+  group: build-cloud-image-${{ inputs.version || github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: milady-ai/milady/agent
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build cloud agent image
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_sha || github.sha }}
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION="$(git tag --sort=-creatordate | grep '^v' | head -1)"
+          fi
+
+          VERSION_CLEAN="${VERSION#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version_clean=${VERSION_CLEAN}" >> "$GITHUB_OUTPUT"
+          echo "Source SHA: $(git rev-parse HEAD)"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        if: ${{ github.event_name == 'push' || inputs.push_image != false }}
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=cloud-agent
+            type=raw,value=cloud-agent-${{ steps.version.outputs.version_clean }}
+
+      - name: Build and push cloud image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.cloud-slim
+          platforms: linux/amd64
+          push: ${{ github.event_name == 'push' || inputs.push_image != false }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=milady-cloud-agent
+          cache-to: type=gha,scope=milady-cloud-agent,mode=max
+          provenance: false
+
+      - name: Build summary
+        if: always()
+        run: |
+          echo "## ☁️ Milady Cloud Agent Image" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Registry | \`${{ env.REGISTRY }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | \`${{ steps.version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Built SHA | \`$(git rev-parse HEAD)\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pull commands" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cloud-agent" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cloud-agent-${{ steps.version.outputs.version_clean }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

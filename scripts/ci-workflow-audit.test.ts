@@ -42,17 +42,21 @@ describe("CI workflow audit regressions", () => {
   });
 
   it("Docker build workflows use pinned Blacksmith runners", () => {
-    const files = ["build-docker.yml", "docker-ci-smoke.yml"];
+    const files = [
+      "build-docker.yml",
+      "build-cloud-image.yml",
+      "docker-ci-smoke.yml",
+    ];
     for (const f of files) {
       const content = readWorkflow(f);
       expect(content).not.toMatch(/runs-on:\s*ubuntu-latest/);
     }
   });
 
-  it("legacy cloud and steward image workflows are removed", () => {
+  it("keeps the cloud image workflow and removes steward", () => {
     expect(
       fs.existsSync(path.join(WORKFLOWS_DIR, "build-cloud-image.yml")),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       fs.existsSync(path.join(WORKFLOWS_DIR, "build-steward-image.yml")),
     ).toBe(false);

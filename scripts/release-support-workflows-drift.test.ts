@@ -8,7 +8,7 @@ const AGENT_RELEASE_WORKFLOW = path.join(
   ROOT,
   ".github/workflows/agent-release.yml",
 );
-const LEGACY_CLOUD_IMAGE_WORKFLOW = path.join(
+const CLOUD_IMAGE_WORKFLOW = path.join(
   ROOT,
   ".github/workflows/build-cloud-image.yml",
 );
@@ -36,19 +36,18 @@ const UPDATE_HOMEBREW_WORKFLOW = path.join(
 );
 
 describe("release support workflow drift", () => {
-  it("keeps Agent Release on the single canonical docker validation path", () => {
+  it("validates both generic and cloud agent image builds in Agent Release", () => {
     const workflow = fs.readFileSync(AGENT_RELEASE_WORKFLOW, "utf8");
 
     expect(workflow).toContain("build-docker");
-    expect(workflow).not.toContain("build-cloud-image:");
+    expect(workflow).toContain("build-cloud-image");
     expect(workflow).not.toContain("build-steward-image:");
-    expect(workflow).not.toContain("R_CLOUD_IMAGE");
+    expect(workflow).toContain("R_CLOUD_IMAGE");
     expect(workflow).not.toContain("R_STEWARD_IMAGE");
-    expect(workflow).not.toContain("publish_docker: false");
   });
 
-  it("removes the legacy cloud and steward image workflows", () => {
-    expect(fs.existsSync(LEGACY_CLOUD_IMAGE_WORKFLOW)).toBe(false);
+  it("keeps the dedicated cloud image workflow and removes steward", () => {
+    expect(fs.existsSync(CLOUD_IMAGE_WORKFLOW)).toBe(true);
     expect(fs.existsSync(LEGACY_STEWARD_IMAGE_WORKFLOW)).toBe(false);
   });
 
@@ -61,6 +60,20 @@ describe("release support workflow drift", () => {
     expect(workflow).toContain("repos.generateReleaseNotes");
     expect(workflow).toContain("## Full changelog");
     expect(workflow).toContain("- [ ] PyPI publish");
+    expect(workflow).toContain("- [ ] Cloud-only agent image push to GHCR");
+  });
+
+  it("builds the cloud-only image from the dedicated cloud runtime Dockerfile", () => {
+    const workflow = fs.readFileSync(CLOUD_IMAGE_WORKFLOW, "utf8");
+
+    expect(workflow).toContain("name: Build Cloud Agent Image");
+    expect(workflow).toContain("file: deploy/Dockerfile.cloud-slim");
+    expect(workflow).toContain("type=raw,value=cloud-agent");
+    expect(workflow).toContain(
+      "type=raw,value=cloud-agent-$" +
+        "{{ steps.version.outputs.version_clean }}",
+    );
+    expect(workflow).not.toContain("cloud-full-ui");
   });
 
   it("uses the canonical image runtime selector for both agent and cloud launches", () => {
