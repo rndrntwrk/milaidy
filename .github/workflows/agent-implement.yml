@@ -224,6 +224,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           show_full_output: true
+          label_trigger: agent-ready
           additional_permissions: |
             actions: read
           claude_args: |
