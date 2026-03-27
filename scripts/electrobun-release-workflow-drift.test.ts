@@ -226,20 +226,9 @@ describe("Electrobun release workflow drift", () => {
     expect(validateSection).not.toContain("matrix.platform.artifact-name");
   });
 
-  it("verifies the Windows electrobun tarball digest before extraction", () => {
+  it("builds a patched Windows electrobun CLI instead of relying on temp extraction heuristics", () => {
     const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
 
-    expect(workflow).toContain(
-      "https://api.github.com/repos/blackboardsh/electrobun/releases/tags/v$version",
-    );
-    expect(workflow).toContain(
-      "$asset = @($release.assets) | Where-Object { $_.name -eq $assetName } | Select-Object -First 1",
-    );
-    expect(workflow).toContain(
-      "$actualHash = (Get-FileHash -Path $tarPath -Algorithm SHA256).Hash.ToLowerInvariant()",
-    );
-    expect(workflow).toContain("electrobun CLI checksum mismatch");
-    expect(workflow).toContain("Verified electrobun CLI SHA256:");
     expect(workflow).toContain("name: Resolve electrobun package dir");
     expect(workflow).toContain("id: resolve-electrobun");
     expect(workflow).toContain(
@@ -257,32 +246,27 @@ describe("Electrobun release workflow drift", () => {
       'echo "cache-dir=$package_dir/.cache" >> "$GITHUB_OUTPUT"',
     );
     expect(workflow).toContain(
-      "$resolvedElectrobunDir = '" +
-        "$" +
-        "{{ steps.resolve-electrobun.outputs.package-dir }}" +
-        "'",
+      'name: Build patched Electrobun CLI for Windows',
     );
     expect(workflow).toContain(
-      '$cacheDir     = Join-Path $resolvedElectrobunDir ".cache"',
+      'node scripts/build-patched-electrobun-cli.mjs "${{ steps.resolve-electrobun.outputs.package-dir }}"',
     );
-    expect(workflow).toContain(
-      '$resolvedRceditDir = Join-Path $resolvedElectrobunDir "node_modules\\rcedit"',
-    );
-    expect(workflow).toContain(
-      '(Join-Path (Split-Path -Parent $resolvedElectrobunDir) "rcedit")',
-    );
-    expect(workflow).toContain(
-      'Get-ChildItem -Path (Join-Path $PWD "node_modules\\.bun") -Directory -Filter "rcedit@*"',
-    );
-    expect(workflow).toContain("Seeding rcedit from $seedRceditDir");
     expect(workflow).not.toContain(
       'Join-Path $PWD "apps/app/electrobun/node_modules/electrobun"',
     );
-    expect(workflow).not.toContain('bun install -g "rcedit@4.0.1"');
-    // The node here-string must receive $resolvedElectrobunDir, not the
-    // undefined $electrobunDir — see commit fixing this variable mismatch.
-    expect(workflow).toContain("'@ $resolvedElectrobunDir");
-    expect(workflow).not.toMatch(/'@ \$electrobunDir\b/);
+    expect(workflow).not.toContain(
+      "name: Ensure Windows rcedit binary is available for Electrobun",
+    );
+    expect(workflow).not.toContain(
+      "name: Pre-extract electrobun native CLI on Windows",
+    );
+    expect(workflow).not.toContain(
+      "https://api.github.com/repos/blackboardsh/electrobun/releases/tags/v$version",
+    );
+    expect(workflow).not.toContain("electrobun CLI checksum mismatch");
+    expect(workflow).not.toContain(
+      '$extractionBases = @("D:\\a\\electrobun\\electrobun\\package")',
+    );
   });
 
   it("treats auth-protected health probes as valid smoke-test success on every desktop platform", () => {
@@ -363,6 +347,9 @@ describe("Electrobun release workflow drift", () => {
 
   it("installs Inno Setup 6.7.1 and builds a standalone Windows installer", () => {
     const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
+    const patchedCliIndex = workflow.indexOf(
+      "name: Build patched Electrobun CLI for Windows",
+    );
     const installIndex = workflow.lastIndexOf("name: Install Inno Setup 6.7.1");
     const extractIndex = workflow.indexOf(
       "name: Extract Windows app bundle for Inno Setup",
@@ -377,6 +364,8 @@ describe("Electrobun release workflow drift", () => {
     );
     expect(workflow).toContain("name: Build Inno Setup installer");
     expect(workflow).toContain("packaging/inno/build-inno.ps1");
+    expect(patchedCliIndex).toBeGreaterThan(-1);
+    expect(signIndex).toBeGreaterThan(patchedCliIndex);
     expect(installIndex).toBeGreaterThan(signIndex);
     expect(extractIndex).toBeGreaterThan(installIndex);
     expect(buildIndex).toBeGreaterThan(extractIndex);
