@@ -400,8 +400,7 @@ function AdvancedSection() {
   return (
     <>
       <div className="space-y-6">
-        {/* Export/Import */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Button
             variant="outline"
             type="button"
@@ -442,9 +441,7 @@ function AdvancedSection() {
             </div>
           </Button>
         </div>
-
-        {/* Danger Zone */}
-        <div className="border border-danger/30 rounded-2xl overflow-hidden bg-bg/40 backdrop-blur-sm">
+<div className="border border-danger/30 rounded-2xl overflow-hidden bg-bg/40 backdrop-blur-sm">
           <div className="bg-danger/10 px-5 py-3 border-b border-danger/20 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-danger" />
             <span className="font-bold text-sm text-danger tracking-wide uppercase">

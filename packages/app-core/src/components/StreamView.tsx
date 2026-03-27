@@ -64,20 +64,14 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
   const { branding } = getBootConfig();
   const agentName = agentStatus?.agentName ?? branding.appName ?? "Eliza";
   const isElectrobun = isElectrobunRuntime();
-
-  // ── Stream status polling ─────────────────────────────────────────────
   const [streamLive, setStreamLive] = useState(false);
   const [streamLoading, setStreamLoading] = useState(false);
   const loadingRef = useRef(false);
   const docVisible = useDocumentVisibility();
 
   const [streamAvailable, setStreamAvailable] = useState(true);
-
-  // ── Volume / mute ───────────────────────────────────────────────────
   const [volume, setVolume] = useState(100);
   const [muted, setMuted] = useState(false);
-
-  // ── Destinations ────────────────────────────────────────────────────
   const [destinations, setDestinations] = useState<
     Array<{ id: string; name: string }>
   >([]);
@@ -85,13 +79,9 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
     id: string;
     name: string;
   } | null>(null);
-
-  // ── Health stats ────────────────────────────────────────────────────
   const [uptime, setUptime] = useState(0);
   const [frameCount, setFrameCount] = useState(0);
   const [audioSource, setAudioSource] = useState("");
-
-  // ── Stream source ─────────────────────────────────────────────────
   const [streamSource, setStreamSource] = useState<{
     type: StreamSourceType;
     url?: string;
@@ -129,8 +119,6 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
       clearInterval(id);
     };
   }, [streamAvailable, docVisible]);
-
-  // ── Auto-detect game source ─────────────────────────────────────────
   useEffect(() => {
     if (!streamLive) return;
     let cancelled = false;
@@ -208,8 +196,6 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
       setStreamLoading(false);
     }
   }, [isElectrobun, streamLive]);
-
-  // ── Fetch destinations on mount ──────────────────────────────────────
   useEffect(() => {
     if (!streamAvailable) return;
     client
@@ -221,8 +207,6 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
         console.warn("[stream] Failed to fetch destinations:", err);
       });
   }, [streamAvailable]);
-
-  // ── Volume / mute / destination handlers ────────────────────────────
   const handleVolumeChange = useCallback((vol: number) => {
     setVolume(vol);
     client.setStreamVolume(vol).catch((err) => {
@@ -264,11 +248,7 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
     },
     [],
   );
-
-  // Settings panel
   const [showSettings, setShowSettings] = useState(false);
-
-  // PIP mode state — small overlay window
   const [isPip, setIsPip] = useState(false);
 
   const togglePip = useCallback(() => {

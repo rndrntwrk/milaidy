@@ -723,8 +723,6 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
       setLoading(false);
     });
   }, [loadData]);
-
-  // Auto-retry with exponential backoff when knowledge service is still loading (503)
   useEffect(() => {
     if (!isServiceLoading) {
       serviceRetryRef.current = 0;

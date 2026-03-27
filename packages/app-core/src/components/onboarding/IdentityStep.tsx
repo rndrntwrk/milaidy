@@ -33,8 +33,6 @@ export function IdentityStep() {
   );
   const firstEntry = entries[0];
   const selectedId = onboardingStyle || entries[0]?.id || "";
-
-  /* ── Import / restore state ─────────────────────────────────────── */
   const [showImport, setShowImport] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importPassword, setImportPassword] = useState("");
@@ -172,8 +170,6 @@ export function IdentityStep() {
     },
     [entries, playSelectionPreview, selectedId, setState, stopPreviewAudio],
   );
-
-  // Auto-select the first one if nothing is selected yet
   useEffect(() => {
     if (!onboardingStyle && firstEntry) {
       handleSelect(firstEntry, false);
@@ -259,8 +255,6 @@ export function IdentityStep() {
       setImportBusy(false);
     }
   }, [importBusy, importFile, importPassword, t]);
-
-  /* ── Import UI ──────────────────────────────────────────────────── */
   if (showImport) {
     return (
       <div className="flex flex-col items-center gap-3 w-full max-w-[400px]">
@@ -343,8 +337,6 @@ export function IdentityStep() {
       </div>
     );
   }
-
-  /* ── Overwatch-style character select — full-width bottom bar ──── */
   const selected = entries.find((e) => e.id === selectedId);
 
   return (
@@ -352,7 +344,6 @@ export function IdentityStep() {
       className="flex flex-col items-center gap-3 w-full"
       style={{ animation: "onboarding-content-fade-in 0.6s ease both" }}
     >
-      {/* Selected character info — floats above the roster */}
       <div
         className="w-full text-center"
         style={{ animation: "onboarding-content-fade-in 0.5s ease 0.1s both" }}
@@ -373,8 +364,6 @@ export function IdentityStep() {
           {selected?.name ?? ""}
         </div>
       </div>
-
-      {/* ── Roster bar ── */}
       <CharacterRoster
         entries={entries}
         selectedId={selectedId}

@@ -778,8 +778,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
       onDragLeave={() => setImageDragOver(false)}
       onDrop={handleImageDrop}
     >
-      {/* ── Messages ───────────────────────────────────────────────── */}
-      <div
+<div
         ref={messagesRef}
         data-testid="chat-messages-scroll"
         data-no-window-drag={false}
@@ -951,9 +950,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
           </div>
         )}
       </div>
-
-      {/* Agent activity box — sticky status per active coding-agent task */}
-      {isGameModal ? (
+{isGameModal ? (
         <div className="pointer-events-auto">
           <AgentActivityBox
             sessions={ptySessions}
@@ -970,18 +967,14 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
           }
         />
       )}
-
-      {/* PTY console drawer */}
-      {ptyDrawerSessionId && ptySessions.length > 0 && (
+{ptyDrawerSessionId && ptySessions.length > 0 && (
         <PtyConsoleDrawer
           activeSessionId={ptyDrawerSessionId}
           sessions={ptySessions}
           onClose={() => setPtyDrawerSessionId(null)}
         />
       )}
-
-      {/* Share ingest notice */}
-      {shareIngestNotice && (
+{shareIngestNotice && (
         <div
           className={`text-xs text-ok py-1 relative${isGameModal ? " pointer-events-auto" : ""}`}
           style={{ zIndex: 1 }}
@@ -989,9 +982,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
           {shareIngestNotice}
         </div>
       )}
-
-      {/* Dropped files */}
-      {droppedFiles.length > 0 && (
+{droppedFiles.length > 0 && (
         <div
           className={`text-xs text-muted py-0.5 flex gap-2 relative${isGameModal ? " pointer-events-auto" : ""}`}
           style={{ zIndex: 1 }}
@@ -1001,9 +992,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
           ))}
         </div>
       )}
-
-      {/* Pending image thumbnails */}
-      {chatPendingImages.length > 0 && (
+{chatPendingImages.length > 0 && (
         <div
           className={`flex gap-2 flex-wrap py-1 relative${isGameModal ? " pointer-events-auto" : ""}`}
           data-no-camera-drag={isGameModal || undefined}
@@ -1051,9 +1040,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
               : "uncached"}
         </div>
       )}
-
-      {/* ── Input row: mic + paperclip + textarea + send ───────────── */}
-      <input
+<input
         ref={fileInputRef}
         type="file"
         accept="image/*"

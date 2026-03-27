@@ -1087,9 +1087,9 @@ export function HeartbeatsView() {
 
                     <div className={`${HEARTBEATS_PANEL_CLASS} space-y-4`}>
                       <div className="flex items-center justify-between gap-3 border-b border-border/30 pb-3">
-                        <h3 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
+                        <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
                           {t("triggersview.RunHistory")}
-                        </h3>
+                        </div>
                         <Button
                           variant="outline"
                           size="sm"
@@ -1331,7 +1331,7 @@ export function HeartbeatsView() {
                       <div className="flex items-center justify-between gap-3">
                         <h3 className="text-[12px] font-semibold uppercase tracking-wider text-muted">
                           {t("triggersview.RunHistory")}
-                        </h3>
+                        </div>
                         <Button
                           variant="outline"
                           size="sm"

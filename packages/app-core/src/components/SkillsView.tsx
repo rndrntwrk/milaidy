@@ -199,9 +199,7 @@ function InstallModal({
             Add skills from the marketplace or a GitHub repository.
           </DialogDescription>
         </DialogHeader>
-
-        {/* Tabs */}
-        <div
+<div
           className={ADMIN_SEGMENTED_TABLIST_CLASSNAME}
           role="tablist"
           aria-label="Install skill source"
@@ -227,9 +225,7 @@ function InstallModal({
             </Button>
           ))}
         </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+<div className="flex-1 overflow-y-auto px-5 py-4">
           {tab === "search" && (
             <div
               id="skills-install-panel-search"
@@ -539,9 +535,7 @@ function EditSkillModal({
             </span>
           </div>
         </DialogHeader>
-
-        {/* Editor body */}
-        <div className="flex-1 overflow-hidden">
+<div className="flex-1 overflow-hidden">
           {loading ? (
             <div className="flex h-full items-center justify-center text-sm text-muted">
               {t("skillsview.LoadingSkillSource")}
@@ -568,9 +562,7 @@ function EditSkillModal({
             />
           )}
         </div>
-
-        {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between border-t border-border px-5 py-3">
+<div className="flex shrink-0 items-center justify-between border-t border-border px-5 py-3">
           <div className="text-[11px] text-muted">
             {content ? `${content.split("\n").length} lines` : ""}
             {error && content ? (
@@ -678,8 +670,7 @@ function SkillsModalView() {
 
   return (
     <div className="plugins-game-modal">
-      {/* ── Left sidebar ── */}
-      <div className="plugins-game-list-panel">
+<div className="plugins-game-list-panel">
         <div className="plugins-game-list-head">
           <div className="plugins-game-section-title">
             {t("skillsview.Talents", { defaultValue: "Talents" })}
@@ -689,9 +680,7 @@ function SkillsModalView() {
             {t("skillsview.installed", { defaultValue: "installed" })}
           </div>
         </div>
-
-        {/* Search + Install */}
-        <div className="plugins-game-list-search">
+<div className="plugins-game-list-search">
           <div className="plugins-game-list-search-row">
             <Input
               type="text"
@@ -717,9 +706,7 @@ function SkillsModalView() {
             </Button>
           </div>
         </div>
-
-        {/* Filter tabs */}
-        <div className="plugins-game-chip-row">
+<div className="plugins-game-chip-row">
           {tabs.map((tab) => (
             <Button
               variant="ghost"
@@ -733,9 +720,7 @@ function SkillsModalView() {
             </Button>
           ))}
         </div>
-
-        {/* Skill list */}
-        <div
+<div
           className="plugins-game-list-scroll"
           role="listbox"
           aria-label={t("skillsview.Talents", {
@@ -779,9 +764,7 @@ function SkillsModalView() {
           )}
         </div>
       </div>
-
-      {/* ── Right detail panel ── */}
-      <div className="plugins-game-detail-panel">
+<div className="plugins-game-detail-panel">
         {selected ? (
           <>
             <div className="plugins-game-detail-head">
@@ -1431,9 +1414,7 @@ function SkillsFullView() {
           </div>
         </div>
       </div>
-
-      {/* Edit modal */}
-      {editingSkill && (
+{editingSkill && (
         <EditSkillModal
           skillId={editingSkill.id}
           skillName={editingSkill.name}
@@ -1441,9 +1422,7 @@ function SkillsFullView() {
           onSaved={() => void refreshSkills()}
         />
       )}
-
-      {/* Install modal */}
-      {installModalOpen && (
+{installModalOpen && (
         <InstallModal
           skills={skills}
           skillsMarketplaceQuery={skillsMarketplaceQuery}

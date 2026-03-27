@@ -212,7 +212,7 @@ export function ReleaseCenterView() {
     return (
       <section className={`${RELEASE_PANEL_CLASSNAME} space-y-3 p-4`}>
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-txt">Release Center</h2>
+          <div className="text-sm font-semibold text-txt">Release Center</div>
           <p className="max-w-2xl text-xs leading-5 text-muted">
             Update actions and detached release tooling are only available in
             the Electrobun desktop runtime.
@@ -374,7 +374,7 @@ export function ReleaseCenterView() {
       {/* ── Actions ───────────────────────────────────────────── */}
       <section className={`${RELEASE_PANEL_CLASSNAME} space-y-3 p-4`}>
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-txt">Update Actions</h2>
+          <div className="text-sm font-semibold text-txt">Update Actions</div>
           <p className="max-w-2xl text-xs leading-5 text-muted">
             Refresh the desktop updater state, download available updates, and
             open the detached release tooling without leaving the app shell.
