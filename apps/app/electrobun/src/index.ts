@@ -1162,6 +1162,12 @@ async function setupUpdater(): Promise<void> {
             "[Updater] Skipping auto-update check:",
             updaterState.autoUpdateDisabledReason,
           );
+          if (notifyOnNoUpdate) {
+            Utils.showNotification({
+              title: "Updates Unavailable",
+              body: updaterState.autoUpdateDisabledReason,
+            });
+          }
         }
         return;
       }
@@ -1213,6 +1219,10 @@ async function setupUpdater(): Promise<void> {
     });
 
     const triggerManualUpdateCheck = () => {
+      Utils.showNotification({
+        title: "Checking for Updates",
+        body: "Milady is checking for a newer release.",
+      });
       void runUpdateCheck(true);
     };
 
@@ -1227,6 +1237,14 @@ async function setupUpdater(): Promise<void> {
         }
         if (action === "check-for-updates") {
           triggerManualUpdateCheck();
+        } else if (action === "open-about") {
+          const updaterState = await getDesktopManager().getUpdaterState();
+          const version = updaterState.currentVersion || "unknown";
+          Utils.showNotification({
+            title: "About Milady",
+            body: `Version ${version} (${process.platform}/${process.arch})`,
+          });
+          void createSettingsWindow("updates");
         } else if (action === "export-config") {
           void exportConfigFromMenu();
         } else if (action === "import-config") {
@@ -1275,6 +1293,8 @@ async function setupUpdater(): Promise<void> {
             .catch((err: unknown) => {
               console.error("[Main] Agent restart failed:", err);
             });
+        } else if (action === "quit") {
+          Utils.quit();
         } else if (action === "show") {
           void getDesktopManager().showWindow();
         } else if (action?.startsWith("navigate-")) {

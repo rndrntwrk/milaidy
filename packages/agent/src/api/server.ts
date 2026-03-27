@@ -2647,6 +2647,38 @@ interface ChatGenerateOptions {
   onSnapshot?: (text: string) => void;
   isAborted?: () => boolean;
   resolveNoResponseText?: () => string;
+  preferredLanguage?: string;
+}
+
+const CHAT_LANGUAGE_INSTRUCTION: Record<string, string> = {
+  en: "Reply in natural English unless the user explicitly requests another language.",
+  "zh-CN":
+    "Reply in natural Simplified Chinese unless the user explicitly requests another language.",
+  ko: "Reply in natural Korean unless the user explicitly requests another language.",
+  es: "Reply in natural Spanish unless the user explicitly requests another language.",
+  pt: "Reply in natural Brazilian Portuguese unless the user explicitly requests another language.",
+  vi: "Reply in natural Vietnamese unless the user explicitly requests another language.",
+  tl: "Reply in natural Tagalog unless the user explicitly requests another language.",
+};
+
+function maybeAugmentChatMessageWithLanguage(
+  message: ReturnType<typeof createMessageMemory>,
+  preferredLanguage?: string,
+): ReturnType<typeof createMessageMemory> {
+  if (!preferredLanguage) return message;
+  const instruction =
+    CHAT_LANGUAGE_INSTRUCTION[normalizeCharacterLanguage(preferredLanguage)];
+  if (!instruction) return message;
+  const originalText = extractCompatTextContent(message.content);
+  if (!originalText) return message;
+
+  return {
+    ...message,
+    content: {
+      ...(message.content as Content),
+      text: `${originalText}\n\n[Language instruction: ${instruction}]`,
+    },
+  };
 }
 
 const PROVIDER_ISSUE_CHAT_REPLY = "Sorry, I'm having a provider issue";
@@ -3438,9 +3470,13 @@ async function generateChatResponse(
         responseMessages: [],
       };
     } else {
+      const languageAugmentedMessage = maybeAugmentChatMessageWithLanguage(
+        message,
+        opts?.preferredLanguage,
+      );
       const walletAugmentedMessage = maybeAugmentChatMessageWithWalletContext(
         runtime,
-        message,
+        languageAugmentedMessage,
       );
       const generationMessage = await maybeAugmentChatMessageWithKnowledge(
         runtime,
@@ -4106,12 +4142,14 @@ async function readChatRequestPayload(
   channelType: ChannelType;
   images?: ChatImageAttachment[];
   conversationMode?: "simple" | "power";
+  preferredLanguage?: string;
 } | null> {
   const body = await helpers.readJsonBody<{
     text?: string;
     channelType?: string;
     images?: ChatImageAttachment[];
     conversationMode?: string;
+    language?: string;
   }>(req, res, { maxBytes });
   if (!body) return null;
   const normalizedPrompt = normalizeIncomingChatPrompt(body.text, body.images);
@@ -4143,11 +4181,19 @@ async function readChatRequestPayload(
         mimeType: img.mimeType.toLowerCase(),
       }))
     : undefined;
+  const rawPreferredLanguage =
+    (typeof body.language === "string" && body.language.trim()
+      ? body.language
+      : undefined) ?? readUiLanguageHeader(req);
+  const preferredLanguage = rawPreferredLanguage
+    ? normalizeCharacterLanguage(rawPreferredLanguage)
+    : undefined;
   return {
     prompt: normalizedPrompt,
     channelType,
     images,
     ...(conversationMode ? { conversationMode } : {}),
+    ...(preferredLanguage ? { preferredLanguage } : {}),
   };
 }
 
@@ -15252,7 +15298,8 @@ async function handleRequest(
       error,
     });
     if (!chatPayload) return;
-    const { prompt, channelType, images, conversationMode } = chatPayload;
+    const { prompt, channelType, images, conversationMode, preferredLanguage } =
+      chatPayload;
 
     const runtime = state.runtime;
     if (!runtime) {
@@ -15366,6 +15413,7 @@ async function handleRequest(
           },
           resolveNoResponseText: () =>
             resolveNoResponseFallback(state.logBuffer, runtime),
+          preferredLanguage,
         },
       );
 
@@ -15434,7 +15482,8 @@ async function handleRequest(
       error,
     });
     if (!chatPayload) return;
-    const { prompt, channelType, images, conversationMode } = chatPayload;
+    const { prompt, channelType, images, conversationMode, preferredLanguage } =
+      chatPayload;
     const runtime = state.runtime;
     if (!runtime) {
       error(res, "Agent is not running", 503);
@@ -15500,6 +15549,7 @@ async function handleRequest(
         {
           resolveNoResponseText: () =>
             resolveNoResponseFallback(state.logBuffer, runtime),
+          preferredLanguage,
         },
       );
 
@@ -15704,7 +15754,8 @@ async function handleRequest(
       MAX_BODY_BYTES,
     );
     if (!chatPayload) return;
-    const { prompt, channelType, conversationMode } = chatPayload;
+    const { prompt, channelType, conversationMode, preferredLanguage } =
+      chatPayload;
 
     // Cloud proxy path
 
@@ -15784,6 +15835,7 @@ async function handleRequest(
           },
           resolveNoResponseText: () =>
             resolveNoResponseFallback(state.logBuffer, runtime),
+          preferredLanguage,
         },
       );
 
@@ -15831,7 +15883,8 @@ async function handleRequest(
       MAX_BODY_BYTES,
     );
     if (!chatPayload) return;
-    const { prompt, channelType, conversationMode } = chatPayload;
+    const { prompt, channelType, conversationMode, preferredLanguage } =
+      chatPayload;
 
     if (!state.runtime) {
       error(res, "Agent is not running", 503);
@@ -15886,6 +15939,7 @@ async function handleRequest(
         {
           resolveNoResponseText: () =>
             resolveNoResponseFallback(state.logBuffer, runtime),
+          preferredLanguage,
         },
       );
 
