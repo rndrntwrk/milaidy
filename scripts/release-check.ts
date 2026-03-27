@@ -94,11 +94,6 @@ const requiredWorkflowSnippets = [
   '-name "*.tar.zst" -o \\',
   '-name "*-update.json" \\',
   "DMG attach attempt $attempt/5 failed",
-  "https://api.github.com/repos/blackboardsh/electrobun/releases/tags/v$version",
-  "$asset = @($release.assets) | Where-Object { $_.name -eq $assetName } | Select-Object -First 1",
-  "$expectedHash = $asset.digest.Substring(7).ToLowerInvariant()",
-  "$actualHash = (Get-FileHash -Path $tarPath -Algorithm SHA256).Hash.ToLowerInvariant()",
-  "electrobun CLI checksum mismatch",
   "name: Resolve electrobun package dir",
   "id: resolve-electrobun",
   'const workspacePackageJson = path.resolve("apps/app/electrobun/package.json");',
@@ -108,15 +103,9 @@ const requiredWorkflowSnippets = [
   'echo "package-dir=$package_dir" >> "$GITHUB_OUTPUT"',
   'echo "cache-dir=$package_dir/.cache" >> "$GITHUB_OUTPUT"',
   "path: $" + "{{ steps.resolve-electrobun.outputs.cache-dir }}",
-  "$resolvedElectrobunDir = '" +
-    "$" +
-    "{{ steps.resolve-electrobun.outputs.package-dir }}" +
-    "'",
-  '$cacheDir     = Join-Path $resolvedElectrobunDir ".cache"',
-  '$resolvedRceditDir = Join-Path $resolvedElectrobunDir "node_modules\\rcedit"',
-  '(Join-Path (Split-Path -Parent $resolvedElectrobunDir) "rcedit")',
-  'Get-ChildItem -Path (Join-Path $PWD "node_modules\\.bun") -Directory -Filter "rcedit@*"',
-  "Seeding rcedit from $seedRceditDir",
+  "name: Build patched Electrobun CLI for Windows",
+  'node scripts/build-patched-electrobun-cli.mjs "$' +
+    '{{ steps.resolve-electrobun.outputs.package-dir }}"',
   "node scripts/desktop-build.mjs package --env=$" +
     "{{ needs.prepare.outputs.env }}",
   "MILADY_ELECTROBUN_NOTARIZE: 0",
@@ -130,8 +119,16 @@ const requiredWorkflowSnippets = [
   "path: apps/app/electrobun/artifacts/windows-installer-proof/**",
   "if: always() && matrix.platform.os == 'windows'",
   "ANTHROPIC_API_KEY: $" + "{{ secrets.ANTHROPIC_API_KEY }}",
-  "if ($null -eq $resolvedRceditPackageJson)",
-  '$resolvedRceditPackageJson = "$resolvedRceditPackageJson".Trim()',
+];
+const requiredPatchedElectrobunCliSnippets = [
+  "https://github.com/blackboardsh/electrobun.git",
+  '"sparse-checkout", "set", "package"',
+  'writeGitHubEnv("ELECTROBUN_RCEDIT_PACKAGE_JSON", resolvedRceditPackageJson);',
+  'const overridePackageJson = process.env["ELECTROBUN_RCEDIT_PACKAGE_JSON"];',
+  'const overrideEntry = overrideRequire.resolve("rcedit");',
+  "--target=bun-windows-x64-baseline",
+  "const installedBinPath = path.join(",
+  "const installedCachePath = path.join(",
 ];
 const forbiddenWorkflowSnippets = [
   ' -name "*.exe" -o \\',
@@ -147,6 +144,11 @@ const forbiddenWorkflowSnippets = [
     "{{ matrix.platform.artifact-name }}" +
     "-$" +
     "{{ hashFiles('bun.lock') }}",
+  "name: Ensure Windows rcedit binary is available for Electrobun",
+  "name: Pre-extract electrobun native CLI on Windows",
+  "https://api.github.com/repos/blackboardsh/electrobun/releases/tags/v$version",
+  "electrobun CLI checksum mismatch",
+  '$extractionBases = @("D:\\a\\electrobun\\electrobun\\package")',
 ];
 const requiredElectrobunPrWorkflowSnippets = [
   "name: Validate Electrobun Release Workflow",
@@ -365,6 +367,22 @@ export function findFloatingDependencySpecs(
   });
 }
 
+export function findMissingRequiredSnippets(
+  content: string,
+  snippets: readonly string[],
+): string[] {
+  return snippets.filter((snippet) => !content.includes(snippet));
+}
+
+export function findMissingPatchedElectrobunCliSnippets(
+  helperSource: string,
+): string[] {
+  return findMissingRequiredSnippets(
+    helperSource,
+    requiredPatchedElectrobunCliSnippets,
+  );
+}
+
 function readExistingReleaseCheckFile(
   label: string,
   candidates: readonly string[],
@@ -526,8 +544,9 @@ function assertReleaseWorkflowHasNotaryWrapper() {
     ".github/workflows/release-electrobun.yml",
     "utf8",
   );
-  const missing = requiredWorkflowSnippets.filter(
-    (snippet) => !workflow.includes(snippet),
+  const missing = findMissingRequiredSnippets(
+    workflow,
+    requiredWorkflowSnippets,
   );
 
   if (missing.length > 0) {
@@ -535,6 +554,23 @@ function assertReleaseWorkflowHasNotaryWrapper() {
       "release-check: release workflow is missing notary wrapper wiring:",
     );
     for (const snippet of missing) {
+      console.error(`  - ${snippet}`);
+    }
+    process.exit(1);
+  }
+
+  const patchedCliHelper = readFileSync(
+    "scripts/build-patched-electrobun-cli.mjs",
+    "utf8",
+  );
+  const missingPatchedCli =
+    findMissingPatchedElectrobunCliSnippets(patchedCliHelper);
+
+  if (missingPatchedCli.length > 0) {
+    console.error(
+      "release-check: patched Electrobun helper is missing expected build wiring:",
+    );
+    for (const snippet of missingPatchedCli) {
       console.error(`  - ${snippet}`);
     }
     process.exit(1);
