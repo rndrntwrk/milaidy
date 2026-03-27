@@ -238,7 +238,8 @@ jobs:
           bun run postinstall
           bun run build
       - name: Capacitor sync
-        run: bunx cap sync android
+        working-directory: apps/app
+        run: bun run cap:sync:android
       - name: Build AAB
         run: |
           cd android
@@ -338,7 +339,8 @@ jobs:
           bun run postinstall
           bun run build
       - name: Capacitor sync iOS
-        run: bunx cap sync ios
+        working-directory: apps/app
+        run: bun run cap:sync:ios
       - name: Verify Xcode project
         run: |
           if [ -d ios/App ]; then
