@@ -15,6 +15,8 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SELECT_FLOATING_LAYER_NAME,
+  SELECT_FLOATING_LAYER_Z_INDEX,
   SelectTrigger,
   SelectValue,
   Switch,
@@ -479,7 +481,7 @@ function SearchableSelectInner({
       top: rect.bottom + 4,
       left: rect.left,
       width: rect.width,
-      zIndex: 9999,
+      zIndex: SELECT_FLOATING_LAYER_Z_INDEX,
     };
   }, []);
 
@@ -541,6 +543,7 @@ function SearchableSelectInner({
         createPortal(
           <div
             ref={dropdownRef}
+            data-floating-layer={SELECT_FLOATING_LAYER_NAME}
             style={dropdownStyle}
             className="border border-[var(--border)] bg-[var(--card)] shadow-lg rounded-sm"
           >
