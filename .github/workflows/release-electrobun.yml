@@ -975,6 +975,10 @@ jobs:
 
           $exeFiles = Get-ChildItem -Path $artifactsDir -File -Filter "*.exe" -ErrorAction SilentlyContinue
           foreach ($exe in $exeFiles) {
+            if ($exe.FullName -eq $canonicalInstaller.FullName) {
+              Write-Host "Keeping canonical Windows installer uncompressed for single-extract downloads: $($exe.Name)"
+              continue
+            }
             $zipPath = $exe.FullName + ".zip"
             Write-Host "Compressing $($exe.Name) -> $($exe.Name).zip"
             Compress-Archive -Path $exe.FullName -DestinationPath $zipPath -CompressionLevel Optimal
@@ -993,29 +997,41 @@ jobs:
           Remove-Item $publicCanaryDir -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $publicCanaryDir | Out-Null
 
-          $canonicalInstallerZips = Get-ChildItem -Path $artifactsDir -File -Filter "Milady-Setup-*.exe.zip" -ErrorAction SilentlyContinue |
+          $canonicalInstallers = Get-ChildItem -Path $artifactsDir -File -Filter "Milady-Setup-*.exe" -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending
-          if (-not $canonicalInstallerZips) {
-            Write-Error "No canonical Windows installer zip found for canary artifact publishing."
-            exit 1
-          }
-          if ($canonicalInstallerZips.Count -gt 1) {
-            Write-Error "Multiple canonical Windows installer zips found for canary artifact publishing."
-            $canonicalInstallerZips | ForEach-Object { Write-Host "  - $($_.FullName)" }
-            exit 1
-          }
+          if ($canonicalInstallers) {
+            if ($canonicalInstallers.Count -gt 1) {
+              Write-Error "Multiple canonical Windows installers found for canary artifact publishing."
+              $canonicalInstallers | ForEach-Object { Write-Host "  - $($_.FullName)" }
+              exit 1
+            }
+            $canonicalInstaller = $canonicalInstallers | Select-Object -First 1
+            Copy-Item $canonicalInstaller.FullName -Destination $publicCanaryDir -Force
+          } else {
+            $canonicalInstallerZips = Get-ChildItem -Path $artifactsDir -File -Filter "Milady-Setup-*.exe.zip" -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTime -Descending
+            if (-not $canonicalInstallerZips) {
+              Write-Error "No canonical Windows installer (or zip fallback) found for canary artifact publishing."
+              exit 1
+            }
+            if ($canonicalInstallerZips.Count -gt 1) {
+              Write-Error "Multiple canonical Windows installer zips found for canary artifact publishing."
+              $canonicalInstallerZips | ForEach-Object { Write-Host "  - $($_.FullName)" }
+              exit 1
+            }
 
-          $canonicalInstallerZip = $canonicalInstallerZips | Select-Object -First 1
-          Expand-Archive -Path $canonicalInstallerZip.FullName -DestinationPath $publicCanaryDir -Force
+            $canonicalInstallerZip = $canonicalInstallerZips | Select-Object -First 1
+            Expand-Archive -Path $canonicalInstallerZip.FullName -DestinationPath $publicCanaryDir -Force
+          }
 
           $publicInstallers = Get-ChildItem -Path $publicCanaryDir -File -Filter "Milady-Setup-*.exe" -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending
           if (-not $publicInstallers) {
-            Write-Error "Failed to expand a public Windows installer from $($canonicalInstallerZip.FullName)"
+            Write-Error "Failed to stage a public Windows installer under $publicCanaryDir"
             exit 1
           }
           if ($publicInstallers.Count -gt 1) {
-            Write-Error "Expanded canary installer artifact contains multiple public installers."
+            Write-Error "Canary installer artifact contains multiple public installers."
             $publicInstallers | ForEach-Object { Write-Host "  - $($_.FullName)" }
             exit 1
           }
@@ -1090,6 +1106,7 @@ jobs:
           # installer, not the raw Electrobun bootstrap stub.
           find release-artifacts -type f \( \
             -name "*.dmg" -o \
+            -name "Milady-Setup-*.exe" -o \
             -name "Milady-Setup-*.exe.zip" -o \
             -name "*Setup*.tar.gz" -o \
             -name "*.msix" \

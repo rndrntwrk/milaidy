@@ -9,6 +9,7 @@
 #define MyOutputBaseFilename "__OUTPUT_BASE_FILENAME__"
 #define MySourceDir "__SOURCE_DIR__"
 #define MySetupIconFile "__ICON_FILE__"
+#define MyAppIconFile "Milady.ico"
 
 [Setup]
 AppId={#MyAppId}
@@ -24,7 +25,7 @@ DisableProgramGroupPage=yes
 OutputDir={#MyOutputDir}
 OutputBaseFilename={#MyOutputBaseFilename}
 SetupIconFile={#MySetupIconFile}
-UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayIcon={app}\{#MyAppIconFile}
 Compression=lzma2/ultra64
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
@@ -44,8 +45,9 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 
 [Files]
 Source: "{#MySourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#MySetupIconFile}"; DestDir: "{app}"; DestName: "{#MyAppIconFile}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#MyDefaultGroupName}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{autoprograms}\{#MyDefaultGroupName}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppIconFile}"
 Name: "{autoprograms}\{#MyDefaultGroupName}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\{#MyAppIconFile}"

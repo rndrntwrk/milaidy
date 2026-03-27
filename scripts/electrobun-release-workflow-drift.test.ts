@@ -333,6 +333,7 @@ describe("Electrobun release workflow drift", () => {
 
     expect(workflow).toContain("name: Collect public release files");
     expect(workflow).toContain(' -name "*.dmg" -o \\');
+    expect(workflow).toContain(' -name "Milady-Setup-*.exe" -o \\');
     expect(workflow).toContain(' -name "Milady-Setup-*.exe.zip" -o \\');
     expect(workflow).toContain(' -name "*Setup*.tar.gz" -o \\');
     expect(workflow).toContain(' -name "*.msix" \\');
@@ -427,12 +428,16 @@ describe("Electrobun release workflow drift", () => {
     const template = fs.readFileSync(INNO_TEMPLATE_PATH, "utf8");
 
     expect(template).toContain('#define MyAppExeName "bin\\launcher.exe"');
-    expect(template).toContain("UninstallDisplayIcon={app}\\{#MyAppExeName}");
+    expect(template).toContain('#define MyAppIconFile "Milady.ico"');
     expect(template).toContain(
-      'Name: "{autoprograms}\\{#MyDefaultGroupName}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"',
+      'Source: "{#MySetupIconFile}"; DestDir: "{app}"; DestName: "{#MyAppIconFile}"; Flags: ignoreversion',
+    );
+    expect(template).toContain("UninstallDisplayIcon={app}\\{#MyAppIconFile}");
+    expect(template).toContain(
+      'Name: "{autoprograms}\\{#MyDefaultGroupName}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"; IconFilename: "{app}\\{#MyAppIconFile}"',
     );
     expect(template).toContain(
-      'Name: "{autodesktop}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"; Tasks: desktopicon',
+      'Name: "{autodesktop}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\\{#MyAppIconFile}"',
     );
     expect(template).not.toContain('#define MyAppExeName "launcher.exe"');
   });
@@ -730,10 +735,16 @@ describe("Electrobun release workflow drift", () => {
       "if: matrix.platform.os == 'windows' && needs.prepare.outputs.env == 'canary'",
     );
     expect(workflow).toContain(
+      '$canonicalInstallers = Get-ChildItem -Path $artifactsDir -File -Filter "Milady-Setup-*.exe"',
+    );
+    expect(workflow).toContain(
+      "Copy-Item $canonicalInstaller.FullName -Destination $publicCanaryDir -Force",
+    );
+    expect(workflow).toContain(
       '$canonicalInstallerZips = Get-ChildItem -Path $artifactsDir -File -Filter "Milady-Setup-*.exe.zip"',
     );
     expect(workflow).toContain(
-      "Expand-Archive -Path $canonicalInstallerZip.FullName -DestinationPath $publicCanaryDir -Force",
+      "No canonical Windows installer (or zip fallback) found for canary artifact publishing.",
     );
     expect(workflow).toContain(
       '$publicInstallers = Get-ChildItem -Path $publicCanaryDir -File -Filter "Milady-Setup-*.exe"',

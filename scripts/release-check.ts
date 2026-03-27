@@ -82,12 +82,16 @@ const requiredWorkflowSnippets = [
   "name: Prepare public canary Windows installer artifact",
   "needs.prepare.outputs.env == 'canary'",
   '$publicCanaryDir = Join-Path $artifactsDir "public-canary-installer"',
-  "Expand-Archive -Path $canonicalInstallerZip.FullName -DestinationPath $publicCanaryDir -Force",
+  '$canonicalInstallers = Get-ChildItem -Path $artifactsDir -File -Filter "Milady-Setup-*.exe"',
+  "Copy-Item $canonicalInstaller.FullName -Destination $publicCanaryDir -Force",
+  '$canonicalInstallerZips = Get-ChildItem -Path $artifactsDir -File -Filter "Milady-Setup-*.exe.zip"',
+  "No canonical Windows installer (or zip fallback) found for canary artifact publishing.",
   "Prepared public canary installer artifact:",
   "name: Upload public canary installer artifact",
   "name: electrobun-$" + "{{ matrix.platform.artifact-name }}-public-installer",
   "path: apps/app/electrobun/artifacts/public-canary-installer/Milady-Setup-*.exe",
   "name: Collect public release files",
+  '-name "Milady-Setup-*.exe" -o \\',
   '-name "Milady-Setup-*.exe.zip" -o \\',
   '-name "*Setup*.tar.gz" -o \\',
   "name: Collect update channel files",
@@ -826,9 +830,11 @@ function assertInnoTemplateTargetsBundledLauncher() {
   const template = readFileSync("packaging/inno/Milady.iss", "utf8");
   const requiredSnippets = [
     '#define MyAppExeName "bin\\launcher.exe"',
-    "UninstallDisplayIcon={app}\\{#MyAppExeName}",
-    'Name: "{autoprograms}\\{#MyDefaultGroupName}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"',
-    'Name: "{autodesktop}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"; Tasks: desktopicon',
+    '#define MyAppIconFile "Milady.ico"',
+    'Source: "{#MySetupIconFile}"; DestDir: "{app}"; DestName: "{#MyAppIconFile}"; Flags: ignoreversion',
+    "UninstallDisplayIcon={app}\\{#MyAppIconFile}",
+    'Name: "{autoprograms}\\{#MyDefaultGroupName}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"; IconFilename: "{app}\\{#MyAppIconFile}"',
+    'Name: "{autodesktop}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\\{#MyAppIconFile}"',
   ];
   const missingSnippets = requiredSnippets.filter(
     (snippet) => !template.includes(snippet),
