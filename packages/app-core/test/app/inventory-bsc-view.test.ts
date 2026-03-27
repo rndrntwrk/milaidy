@@ -36,6 +36,10 @@ vi.mock("@miladyai/ui", () => {
       React.createElement("option", props, children),
     SelectTrigger: passthrough,
     SelectValue: passthrough,
+    Tooltip: passthrough,
+    TooltipContent: passthrough,
+    TooltipProvider: passthrough,
+    TooltipTrigger: passthrough,
     Tabs: passthrough,
     TabsList: passthrough,
     TabsTrigger: passthrough,
@@ -413,7 +417,7 @@ describe("InventoryView unified wallets", () => {
       (node) =>
         node.type === "button" &&
         typeof node.props.onClick === "function" &&
-        text(node).includes("BSC")
+        node.props["aria-label"] === "BSC"
     )[0];
     expect(bscButton).toBeDefined();
 
