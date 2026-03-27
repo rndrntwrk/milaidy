@@ -150,8 +150,8 @@ jobs:
   # ── 3. Resolve version (no tag yet) ───────────────────────────────
   version:
     name: Resolve version
-    needs: [evaluate, gate]
-    if: always() && needs.gate.result == 'success' && needs.gate.outputs.allowed == 'true'
+    needs: [gate]
+    if: needs.gate.result == 'success' && needs.gate.outputs.allowed == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
