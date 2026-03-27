@@ -83,14 +83,14 @@
     0 1px 0 rgba(255, 255, 255, 0.04),
     0 1px 8px rgba(3, 5, 10, 0.5),
     0 0 14px rgba(3, 5, 10, 0.16);
-  --onboarding-card-bg: rgba(10, 10, 12, 0.58);
-  --onboarding-card-bg-hover: rgba(18, 18, 21, 0.68);
-  --onboarding-card-border: rgba(255, 255, 255, 0.08);
+  --onboarding-card-bg: rgba(10, 10, 12, 0.42);
+  --onboarding-card-bg-hover: rgba(18, 18, 21, 0.52);
+  --onboarding-card-border: rgba(255, 255, 255, 0.09);
   --onboarding-card-border-strong: rgba(240, 185, 11, 0.3);
-  --onboarding-card-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
-  --onboarding-panel-bg: rgba(6, 7, 8, 0.64);
-  --onboarding-panel-border: rgba(255, 255, 255, 0.08);
-  --onboarding-panel-shadow: 0 14px 40px rgba(0, 0, 0, 0.26);
+  --onboarding-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  --onboarding-panel-bg: rgba(6, 7, 8, 0.46);
+  --onboarding-panel-border: rgba(255, 255, 255, 0.09);
+  --onboarding-panel-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
   --onboarding-divider: rgba(49, 49, 56, 0.22);
   --onboarding-secondary-hover-bg: rgba(240, 185, 11, 0.08);
   --onboarding-secondary-pressed-bg: rgba(240, 185, 11, 0.14);
@@ -124,11 +124,11 @@
     0 0 14px rgba(3, 5, 10, 0.16);
 
   /* Cards (Remote, Cloud buttons) */
-  --onboarding-card-bg: rgba(10, 10, 12, 0.58);
-  --onboarding-card-bg-hover: rgba(18, 18, 21, 0.68);
-  --onboarding-card-border: rgba(255, 255, 255, 0.08);
+  --onboarding-card-bg: rgba(10, 10, 12, 0.42);
+  --onboarding-card-bg-hover: rgba(18, 18, 21, 0.52);
+  --onboarding-card-border: rgba(255, 255, 255, 0.09);
   --onboarding-card-border-strong: rgba(240, 185, 11, 0.3);
-  --onboarding-card-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  --onboarding-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
 
   /* Recommended card (Local button) */
   --onboarding-recommended-bg: rgba(240, 185, 11, 0.12);
@@ -144,9 +144,9 @@
   --onboarding-accent-foreground: var(--highlight-gold);
 
   /* Panel (main onboarding container) */
-  --onboarding-panel-bg: rgba(6, 7, 8, 0.64);
-  --onboarding-panel-border: rgba(255, 255, 255, 0.08);
-  --onboarding-panel-shadow: 0 14px 40px rgba(0, 0, 0, 0.26);
+  --onboarding-panel-bg: rgba(6, 7, 8, 0.46);
+  --onboarding-panel-border: rgba(255, 255, 255, 0.09);
+  --onboarding-panel-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
 
   /* Misc */
   --onboarding-divider: rgba(49, 49, 56, 0.22);

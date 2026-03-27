@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 import {
   OnboardingLinkActionButton,
   OnboardingSecondaryActionButton,
+  OnboardingStepHeader,
+  onboardingHeaderBlockClass,
 } from "./onboarding-step-chrome";
 
 describe("onboarding step chrome actions", () => {
@@ -40,5 +42,20 @@ describe("onboarding step chrome actions", () => {
       "[text-shadow:var(--onboarding-text-shadow-muted)]",
     );
     expect(button.className).not.toContain("bg-bg-accent");
+  });
+
+  it("owns a shared bottom rhythm for onboarding headers", () => {
+    const { container } = render(
+      <OnboardingStepHeader
+        eyebrow="Hosting"
+        title="Choose your AI provider"
+        description="Pick a provider to continue."
+      />,
+    );
+
+    expect(container.firstElementChild).toBeTruthy();
+    expect(String(container.firstElementChild?.className)).toContain(
+      onboardingHeaderBlockClass,
+    );
   });
 });

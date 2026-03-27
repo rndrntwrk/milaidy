@@ -3,6 +3,7 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { onboardingHeaderBlockClass } from "./onboarding-step-chrome";
 
 const { useAppMock, useBrandingMock } = vi.hoisted(() => ({
   useAppMock: vi.fn(),
@@ -51,6 +52,13 @@ describe("WelcomeStep", () => {
       throw new Error("WelcomeStep did not render");
     }
 
+    const headerBlock = renderer.root.findAll(
+      (node) =>
+        node.type === "div" &&
+        String(node.props.className ?? "").includes(onboardingHeaderBlockClass),
+    )[0];
+    expect(headerBlock).toBeDefined();
+
     const buttons = renderer.root.findAllByType("button");
     expect(buttons[0]?.children).toContain("onboarding.checkExistingSetup");
     expect(buttons[1]?.children).toContain("onboarding.getStarted");
@@ -89,6 +97,13 @@ describe("WelcomeStep", () => {
     if (!renderer) {
       throw new Error("WelcomeStep did not render");
     }
+
+    const headerBlock = renderer.root.findAll(
+      (node) =>
+        node.type === "div" &&
+        String(node.props.className ?? "").includes(onboardingHeaderBlockClass),
+    )[0];
+    expect(headerBlock).toBeDefined();
 
     const buttons = renderer.root.findAllByType("button");
     expect(buttons[0]?.children).toContain("onboarding.customSetup");

@@ -22,14 +22,14 @@ describe("brand-gold onboarding styles", () => {
       "utf8",
     );
 
-    expect(css).toContain("--onboarding-panel-bg: rgba(6, 7, 8, 0.64);");
+    expect(css).toContain("--onboarding-panel-bg: rgba(6, 7, 8, 0.46);");
     expect(css).toContain(
       "--onboarding-text-primary: rgba(234, 236, 239, 0.92);",
     );
     expect(css).toContain("--onboarding-text-stroke: rgba(4, 8, 14, 0.78);");
     expect(css).toContain("--onboarding-text-shadow-strong:");
-    expect(css).toContain("--onboarding-card-bg: rgba(10, 10, 12, 0.58);");
-    expect(css).toContain("--onboarding-card-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);");
+    expect(css).toContain("--onboarding-card-bg: rgba(10, 10, 12, 0.42);");
+    expect(css).toContain("--onboarding-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);");
     expect(css).toContain(
       "--onboarding-secondary-hover-bg: rgba(240, 185, 11, 0.08);",
     );

@@ -59,7 +59,7 @@ export function ConnectionProviderGridScreen({
       />
       {onboardingRemoteConnected && (
         <p
-          className={`${onboardingHelperTextClassName} mx-auto mb-3 mt-1.5 max-w-[32ch] text-center text-[12px] leading-[1.35]`}
+          className={`${onboardingHelperTextClassName} mx-auto mb-3 max-w-[32ch] text-center text-[12px] leading-[1.35]`}
           style={onboardingBodyTextShadowStyle}
         >
           {t(

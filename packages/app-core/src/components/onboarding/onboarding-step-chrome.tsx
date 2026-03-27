@@ -22,6 +22,8 @@ export const onboardingTitleClass =
 
 export const onboardingDescriptionClass =
   `text-center text-sm leading-relaxed ${onboardingReadableTextMutedClassName}`;
+export const onboardingHeaderBlockClass =
+  "mb-5 max-md:mb-4";
 
 export const onboardingFooterClass =
   "mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-[var(--onboarding-footer-border)] pt-4";
@@ -116,7 +118,7 @@ export function OnboardingStepHeader({
   descriptionClassName = "",
 }: OnboardingStepHeaderProps) {
   return (
-    <>
+    <div className={onboardingHeaderBlockClass}>
       <div className={onboardingEyebrowClass} style={onboardingTextShadowStyle}>
         {eyebrow}
       </div>
@@ -137,7 +139,7 @@ export function OnboardingStepHeader({
           {description}
         </p>
       ) : null}
-    </>
+    </div>
   );
 }
 

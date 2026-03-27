@@ -62,7 +62,7 @@ export function CloudLoginStep() {
         descriptionClassName="mx-auto mt-1 max-w-[34ch] text-balance"
       />
       <p
-        className={`${onboardingHelperTextClassName} mx-auto mt-3 max-w-[40ch] text-center text-xs`}
+        className={`${onboardingHelperTextClassName} mx-auto max-w-[40ch] text-center text-xs`}
         style={onboardingBodyTextShadowStyle}
       >
         {t("onboarding.cloudProviderBehaviorHint")}
