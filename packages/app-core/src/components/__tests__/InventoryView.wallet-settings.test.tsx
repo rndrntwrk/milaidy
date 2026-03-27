@@ -196,6 +196,13 @@ describe("InventoryView wallet settings", () => {
     );
     expect(sortTrigger).toBeTruthy();
 
+    const summarySortPill = tree?.root.find(
+      (node) => node.props["data-testid"] === "wallet-summary-sort-pill",
+    );
+    expect(summarySortPill).toBeTruthy();
+    expect(JSON.stringify(summarySortPill?.props.children)).toContain("Sort");
+    expect(JSON.stringify(summarySortPill?.props.children)).toContain("Value");
+
     const assetsHeader = tree?.root.find(
       (node) => node.props["data-testid"] === "wallet-assets-header",
     );
@@ -208,12 +215,11 @@ describe("InventoryView wallet settings", () => {
       ),
     ).toHaveLength(0);
 
-    const sortPill = tree?.root.find(
-      (node) => node.props["data-testid"] === "wallet-sort-pill",
+    const routePill = tree?.root.find(
+      (node) => node.props["data-testid"] === "wallet-funding-route-pill",
     );
-    expect(sortPill).toBeTruthy();
-    expect(JSON.stringify(sortPill?.props.children)).toContain("Sort");
-    expect(JSON.stringify(sortPill?.props.children)).toContain("Value");
+    expect(routePill).toBeTruthy();
+    expect(JSON.stringify(routePill?.props.children)).toContain("funding route");
     expect(
       assetsHeader?.findAll(
         (node) => node.props["data-testid"] === "wallet-assets-sort-meta",
@@ -251,7 +257,12 @@ describe("InventoryView wallet settings", () => {
     ).toHaveLength(0);
     expect(
       tree?.root.findAll(
-        (node) => node.props["data-testid"] === "wallet-sort-pill",
+        (node) => node.props["data-testid"] === "wallet-funding-route-pill",
+      ),
+    ).toHaveLength(1);
+    expect(
+      tree?.root.findAll(
+        (node) => node.props["data-testid"] === "wallet-summary-sort-pill",
       ),
     ).toHaveLength(0);
     expect(

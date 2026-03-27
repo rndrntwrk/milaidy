@@ -59,6 +59,7 @@ import {
   APP_SIDEBAR_COMPACT_PILL_CLASSNAME,
   APP_SIDEBAR_INNER_CLASSNAME,
   APP_SIDEBAR_KICKER_CLASSNAME,
+  APP_SIDEBAR_PILL_CLASSNAME,
   APP_SIDEBAR_RAIL_CLASSNAME,
 } from "./sidebar-shell-styles";
 
@@ -70,6 +71,7 @@ const WALLET_SIDEBAR_KICKER_CLASS = APP_SIDEBAR_KICKER_CLASSNAME;
 const WALLET_SIDEBAR_ITEM_ACTIVE_CLASS = APP_SIDEBAR_CARD_ACTIVE_CLASSNAME;
 const WALLET_PANEL_CLASS = DESKTOP_SURFACE_PANEL_CLASSNAME;
 const WALLET_SORT_PILL_CLASS = `${APP_SIDEBAR_COMPACT_PILL_CLASSNAME} text-[10px] font-semibold tracking-[0.14em] text-txt-strong`;
+const WALLET_SORT_TRIGGER_CLASS = `${APP_SIDEBAR_PILL_CLASSNAME} h-9 min-w-[9.5rem] justify-between gap-2 rounded-full border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_82%,transparent),color-mix(in_srgb,var(--bg)_92%,transparent))] px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-txt-strong`;
 
 type InventorySortKey = "chain" | "symbol" | "value";
 
@@ -131,7 +133,6 @@ export function InventoryView() {
     copyToClipboard,
     t,
   } = useApp();
-
   const currentSortLabel = getInventorySortLabel(inventorySort, t);
 
   // ── Tracked tokens state ──────────────────────────────────────────
@@ -260,6 +261,10 @@ export function InventoryView() {
     evmAddr ? { label: "EVM", address: evmAddr } : null,
     solAddr ? { label: "Solana", address: solAddr } : null,
   ].filter((item): item is { label: string; address: string } => Boolean(item));
+  const fundingRouteLabel =
+    addresses.length > 0
+      ? `${addresses.length} funding route${addresses.length === 1 ? "" : "s"} available`
+      : "Managed wallet overview";
 
   const chainItemMeta = useMemo(() => {
     const totalAssetCount = countVisibleAssetsForFocus("all", tokenRows);
@@ -465,16 +470,14 @@ export function InventoryView() {
       <div className={WALLET_SHELL_CLASS}>
         <aside className={WALLET_SIDEBAR_CLASS}>
           <div className={APP_SIDEBAR_INNER_CLASSNAME}>
-            {inventoryView === "tokens" ? (
-              <div className="mb-3 flex items-center justify-end px-1">
-                <div
-                  data-testid="wallet-sort-pill"
-                  className={WALLET_SORT_PILL_CLASS}
-                >
-                  {t("wallet.sort")}: {currentSortLabel}
-                </div>
+            <div className="mb-3 flex items-center justify-end px-1">
+              <div
+                data-testid="wallet-funding-route-pill"
+                className={WALLET_SORT_PILL_CLASS}
+              >
+                {fundingRouteLabel}
               </div>
-            ) : null}
+            </div>
 
             <div className={DESKTOP_RAIL_SUMMARY_CARD_CLASSNAME}>
               <div
@@ -490,6 +493,26 @@ export function InventoryView() {
               </div>
               <div className="mt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/60">
                 total balance
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/75">
+                <span className={APP_SIDEBAR_PILL_CLASSNAME}>
+                  {inventoryView === "tokens"
+                    ? t("wallet.tokens")
+                    : t("wallet.nfts")}
+                </span>
+                {inventoryView === "tokens" ? (
+                  <span
+                    data-testid="wallet-summary-sort-pill"
+                    className={APP_SIDEBAR_PILL_CLASSNAME}
+                  >
+                    {t("wallet.sort")}: {currentSortLabel}
+                  </span>
+                ) : null}
+                {chainFocus !== "all" ? (
+                  <span className="rounded-full border border-accent/25 bg-accent/8 px-2.5 py-1 text-accent">
+                    {focusedChainLabel ?? chainFocus}
+                  </span>
+                ) : null}
               </div>
             </div>
 

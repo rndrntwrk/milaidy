@@ -387,7 +387,12 @@ describe("InventoryView unified wallets", () => {
 
     expect(
       tree?.root.findAll(
-        (node) => node.props?.["data-testid"] === "wallet-sort-pill",
+        (node) => node.props?.["data-testid"] === "wallet-funding-route-pill",
+      ),
+    ).toHaveLength(1);
+    expect(
+      tree?.root.findAll(
+        (node) => node.props?.["data-testid"] === "wallet-summary-sort-pill",
       ),
     ).toHaveLength(0);
     expect(
