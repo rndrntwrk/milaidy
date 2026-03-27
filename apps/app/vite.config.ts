@@ -2,6 +2,10 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  resolveDesktopApiPort,
+  resolveDesktopUiPort,
+} from "../../packages/shared/src/runtime-env.ts";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
 import type { Plugin } from "vite";
@@ -9,15 +13,15 @@ import { defineConfig } from "vite";
 
 const _require = createRequire(import.meta.url);
 
-// Keep this as a workspace-relative import so Vite transpiles the TS module
-// while bundling the config instead of asking Node to load a package-exported
-// .ts file directly in CI.
+// Keep workspace-relative TS imports in this config so Vite transpiles them
+// while bundling the config instead of asking Node to load package-exported
+// .ts files directly in CI.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const miladyRoot = path.resolve(here, "../..");
 
 // The dev script sets MILADY_API_PORT; default to 31337 for standalone vite dev.
-const apiPort = Number(process.env.MILADY_API_PORT) || 31337;
-const uiPort = Number(process.env.MILADY_PORT) || 2138;
+const apiPort = resolveDesktopApiPort(process.env);
+const uiPort = resolveDesktopUiPort(process.env);
 const enableAppSourceMaps = process.env.MILADY_APP_SOURCEMAP === "1";
 /** Set by scripts/dev-platform.mjs for `vite build --watch` (Electrobun desktop). */
 const desktopFastDist = process.env.MILADY_DESKTOP_VITE_FAST_DIST === "1";

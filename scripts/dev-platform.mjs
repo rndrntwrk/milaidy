@@ -58,6 +58,10 @@ import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createConnection } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  resolveDesktopApiPort,
+  resolveDesktopUiPort,
+} from "../packages/shared/src/runtime-env.ts";
 import { allocateFirstFreeLoopbackPort } from "./lib/allocate-loopback-port.mjs";
 import { signalSpawnedProcessTree } from "./lib/kill-process-tree.mjs";
 import { killUiListenPort } from "./lib/kill-ui-listen-port.mjs";
@@ -223,7 +227,7 @@ function pushChild(name, cmd, args, cwd, extraEnv = {}) {
 }
 
 async function launch() {
-  const preferredApi = Number(process.env.MILADY_API_PORT) || 31337;
+  const preferredApi = resolveDesktopApiPort(process.env);
   const resolvedApiPort = await allocateFirstFreeLoopbackPort(preferredApi);
   if (resolvedApiPort !== preferredApi) {
     console.log(
@@ -232,7 +236,7 @@ async function launch() {
   }
   const apiPort = String(resolvedApiPort);
 
-  const preferredUi = Number(process.env.MILADY_PORT) || 2138;
+  const preferredUi = resolveDesktopUiPort(process.env);
   let uiDevPort = preferredUi;
   if (viteDevServer) {
     uiDevPort = await allocateFirstFreeLoopbackPort(preferredUi);
@@ -267,6 +271,7 @@ async function launch() {
       MILADY_PORT: String(uiDevPort),
       MILADY_API_PORT: apiPort,
       ELIZA_API_PORT: apiPort,
+      ELIZA_PORT: apiPort,
       ELIZA_NAMESPACE: process.env.ELIZA_NAMESPACE ?? "milady",
     });
     await waitForPort(uiDevPort);
@@ -305,6 +310,7 @@ async function launch() {
       {
         NODE_ENV: "development",
         ELIZA_PORT: apiPort,
+        ELIZA_API_PORT: apiPort,
         ELIZA_HEADLESS: "1",
         MILADY_API_PORT: apiPort,
         MILADY_PORT: String(uiDevPort),
@@ -336,6 +342,8 @@ async function launch() {
       ? {}
       : {
           MILADY_API_PORT: apiPort,
+          ELIZA_API_PORT: apiPort,
+          ELIZA_PORT: apiPort,
           MILADY_DESKTOP_API_BASE: `http://127.0.0.1:${apiPort}`,
         }),
     ...screenshotEnvElectrobun,

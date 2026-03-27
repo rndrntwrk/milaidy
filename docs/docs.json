@@ -86,8 +86,7 @@
               "apps/desktop/deep-linking",
               "apps/mobile",
               "apps/mobile/capacitor-plugins",
-              "apps/mobile/build-guide",
-              "apps/chrome-extension"
+              "apps/mobile/build-guide"
             ]
           },
           {

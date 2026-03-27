@@ -7,6 +7,10 @@ import {
   getElizaCoreEntry,
   resolveModuleEntry,
 } from "./test/eliza-package-paths";
+import {
+  coverageSummaryReporters,
+  coverageThresholds,
+} from "./scripts/coverage-policy.mjs";
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 const elizaCoreEntry = getElizaCoreEntry(repoRoot);
@@ -217,13 +221,8 @@ export default defineConfig({
     ],
     coverage: {
       provider: "v8",
-      reporter: ["text", "lcov"],
-      thresholds: {
-        lines: 25,
-        functions: 25,
-        branches: 15,
-        statements: 25,
-      },
+      reporter: [...coverageSummaryReporters],
+      thresholds: coverageThresholds,
       include: ["src/**/*.ts"],
       exclude: [
         "src/**/*.test.ts",

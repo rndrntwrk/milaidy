@@ -7,6 +7,7 @@
 
 import crypto from "node:crypto";
 import type http from "node:http";
+import { resolveApiToken } from "@miladyai/shared/runtime-env";
 import { sendJsonError } from "./response";
 
 /**
@@ -25,9 +26,7 @@ export function extractHeaderValue(
  * Returns `null` when no token is configured (open access).
  */
 export function getCompatApiToken(): string | null {
-  const token =
-    process.env.MILADY_API_TOKEN?.trim() ?? process.env.ELIZA_API_TOKEN?.trim();
-  return token || null;
+  return resolveApiToken(process.env);
 }
 
 /** Timing-safe token comparison (constant-time for equal-length inputs). */

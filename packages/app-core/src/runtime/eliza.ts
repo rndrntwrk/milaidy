@@ -23,6 +23,10 @@ import {
   startEliza as upstreamStartEliza,
 } from "@miladyai/agent/runtime/eliza";
 import {
+  resolveServerOnlyPort,
+  syncResolvedApiPort,
+} from "@miladyai/shared/runtime-env";
+import {
   getBootConfig,
   syncBrandEnvToEliza,
   syncElizaEnvToBrand,
@@ -830,8 +834,7 @@ export async function startEliza(
       }
 
       const { startApiServer } = await import("../api/server");
-      const apiPort =
-        Number(process.env.MILADY_PORT || process.env.ELIZA_PORT) || 2138;
+      const apiPort = resolveServerOnlyPort(process.env);
       const { port: actualApiPort } = await startApiServer({
         port: apiPort,
         runtime: currentRuntime,
@@ -864,9 +867,9 @@ export async function startEliza(
       // socket, upstream policy). Shells, scripts, and follow-up code reading
       // env must match the real listener or health checks and user-facing URLs
       // disagree with `GET /api/health`.
-      process.env.MILADY_PORT = String(actualApiPort);
-      process.env.MILADY_API_PORT = String(actualApiPort);
-      process.env.ELIZA_PORT = String(actualApiPort);
+      syncResolvedApiPort(process.env, actualApiPort, {
+        overwriteUiPort: true,
+      });
 
       logger.info(
         `[milady] API server listening on http://localhost:${actualApiPort}`,

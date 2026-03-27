@@ -27,8 +27,11 @@ import path from "node:path";
 import process from "node:process";
 import { ethers } from "ethers";
 import * as JSON5Module from "json5";
+import {
+  resolveDesktopApiPort,
+  resolveDesktopUiPort,
+} from "../packages/shared/src/runtime-env.ts";
 import { CAPACITOR_PLUGIN_NAMES } from "../apps/app/scripts/capacitor-plugin-names.mjs";
-import { allocateFirstFreeLoopbackPort } from "./lib/allocate-loopback-port.mjs";
 import { getBunVersionAdvisory } from "./lib/bun-version-guard.mjs";
 import { capacitorPluginsBuildNeeded } from "./lib/capacitor-plugin-build-needed.mjs";
 import {
@@ -38,15 +41,14 @@ import {
 import { buildVisionDepsFailureMessage } from "./lib/dev-ui-vision.mjs";
 import { signalSpawnedProcessTree } from "./lib/kill-process-tree.mjs";
 
-const requestedApiPort = Number(process.env.MILADY_API_PORT) || 31337;
-let resolvedApiPort = requestedApiPort;
+const API_PORT = resolveDesktopApiPort(process.env);
 const JSON5 = JSON5Module.default ?? JSON5Module;
 
 // --app=<name> selects which app to serve (default: "app" → apps/app)
 const appArgMatch = process.argv.find((a) => a.startsWith("--app="));
 const appName = appArgMatch ? appArgMatch.split("=")[1] : "app";
 const APP_UI_PORTS = {
-  app: 2138,
+  app: resolveDesktopUiPort(process.env),
   home: Number(process.env.MILADY_HOME_PORT) || 2142,
 };
 const UI_PORT = APP_UI_PORTS[appName] ?? 2138;
@@ -1068,7 +1070,10 @@ try {
   );
 }
 
-// ANVIL_PORT is killed after on-chain preference is determined (in main block).
+if (!uiOnly) {
+  killPort(API_PORT);
+  // ANVIL_PORT is killed after on-chain preference is determined (in main block).
+}
 
 let apiProcess = null;
 let viteProcess = null;
@@ -1184,9 +1189,11 @@ function startVite() {
       ...process.env,
       NODE_ENV: "development",
       ELIZA_NAMESPACE: cliName,
-      ELIZA_API_PORT: String(resolvedApiPort),
-      MILADY_API_PORT: String(resolvedApiPort),
-      ELIZA_HOME_API_PORT: String(resolvedApiPort),
+      MILADY_PORT: String(UI_PORT),
+      ELIZA_API_PORT: String(API_PORT),
+      MILADY_API_PORT: String(API_PORT),
+      ELIZA_PORT: String(API_PORT),
+      ELIZA_HOME_API_PORT: String(API_PORT),
     },
     stdio: ["inherit", "pipe", "pipe"],
   });
@@ -1229,29 +1236,6 @@ if (uiOnly) {
       }`,
     )}`,
   );
-
-  try {
-    resolvedApiPort = await allocateFirstFreeLoopbackPort(requestedApiPort, {
-      maxHops: 64,
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`  ${green(logPrefix)} Failed to resolve API port: ${msg}`);
-    cleanup(1);
-    process.exit(1);
-  }
-
-  if (resolvedApiPort !== requestedApiPort) {
-    console.warn(
-      `  ${green(logPrefix)} ${dim(`MILADY_API_PORT ${requestedApiPort} unavailable; using ${resolvedApiPort}.`)}`,
-    );
-  }
-
-  process.env.MILADY_API_PORT = String(resolvedApiPort);
-  process.env.ELIZA_API_PORT = String(resolvedApiPort);
-  process.env.ELIZA_HOME_API_PORT = String(resolvedApiPort);
-  process.env.ELIZA_PORT = String(resolvedApiPort);
-  killPort(resolvedApiPort);
 
   // Determine on-chain preference — env var wins (CI/scripts), otherwise ask.
   const resolved = await resolveOnchainPreference({
@@ -1347,7 +1331,10 @@ if (uiOnly) {
       NODE_ENV: "development",
       ...chainEnv,
       ELIZA_NAMESPACE: cliName,
-      ELIZA_PORT: String(resolvedApiPort),
+      MILADY_API_PORT: String(API_PORT),
+      ELIZA_API_PORT: String(API_PORT),
+      ELIZA_PORT: String(API_PORT),
+      MILADY_PORT: String(UI_PORT),
       ELIZA_HEADLESS: "1",
       LOG_LEVEL: devLogLevel,
     },
@@ -1385,7 +1372,7 @@ if (uiOnly) {
     );
   }, 1000);
 
-  waitForPort(resolvedApiPort)
+  waitForPort(API_PORT)
     .then(() => {
       clearInterval(dots);
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

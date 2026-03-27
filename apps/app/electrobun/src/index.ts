@@ -2,6 +2,10 @@ import fs from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
+import {
+  resolveApiToken,
+  resolveDesktopApiPort,
+} from "@miladyai/shared/runtime-env";
 import Electrobun, {
   ApplicationMenu,
   BrowserWindow,
@@ -53,6 +57,10 @@ import { resolveRendererAsset } from "./renderer-static";
 import { registerRpcHandlers } from "./rpc-handlers";
 import { startScreenshotDevServer } from "./screenshot-dev-server";
 import {
+  recordStartupPhase,
+  resolveStartupBundlePath,
+} from "./startup-trace";
+import {
   isDetachedSurface,
   type ManagedWindowLike,
   SurfaceWindowManager,
@@ -91,7 +99,6 @@ import {
   onAgentReadyChange,
   setAgentReady,
 } from "./agent-ready-state";
-import { DEFAULT_PORT } from "./constants";
 
 function resolveDesktopAppIconPath(): string {
   return path.join(
@@ -136,8 +143,7 @@ function buildApiRequestHeaders(contentType?: string): Record<string, string> {
   if (contentType) {
     headers["Content-Type"] = contentType;
   }
-  let apiToken =
-    process.env.MILADY_API_TOKEN?.trim() ?? process.env.ELIZA_API_TOKEN?.trim();
+  let apiToken = resolveApiToken(process.env);
   if (!apiToken) {
     const rt = resolveDesktopRuntimeMode(
       process.env as Record<string, string | undefined>,
@@ -609,9 +615,7 @@ async function startRendererServer(): Promise<string> {
     resolveDesktopRuntimeMode(process.env as Record<string, string | undefined>)
       .mode === "local"
       ? configureDesktopLocalApiAuth()
-      : (process.env.MILADY_API_TOKEN?.trim() ??
-        process.env.ELIZA_API_TOKEN?.trim() ??
-        "");
+      : (resolveApiToken(process.env) ?? "");
 
   // Inject the API base into index.html so it's available before React mounts.
   function injectApiBaseIntoHtml(html: string): string {
@@ -1090,7 +1094,7 @@ function injectApiBase(win: BrowserWindow): void {
     pushApiBaseToRenderer(
       win,
       runtimeResolution.externalApi.base,
-      process.env.MILADY_API_TOKEN,
+      resolveApiToken(process.env) ?? undefined,
     );
     setAgentReady(true);
     return;
@@ -1098,7 +1102,7 @@ function injectApiBase(win: BrowserWindow): void {
 
   const agent = getAgentManager();
   const port =
-    agent.getPort() ?? (Number(process.env.MILADY_PORT) || DEFAULT_PORT);
+    agent.getPort() ?? resolveDesktopApiPort(process.env);
   const apiToken = configureDesktopLocalApiAuth();
   pushApiBaseToRenderer(
     win,
@@ -1145,12 +1149,17 @@ async function _startAgent(win: BrowserWindow): Promise<void> {
   }
 
   const agent = getAgentManager();
-  const apiToken = configureDesktopLocalApiAuth();
+  recordStartupPhase("autostart_requested", {
+    pid: process.pid,
+    exec_path: process.execPath,
+    bundle_path: resolveStartupBundlePath(process.execPath),
+  });
 
   try {
     const status = await agent.start();
 
     if (status.state === "running" && status.port) {
+      const apiToken = resolveApiToken(process.env) ?? undefined;
       pushApiBaseToRenderer(
         win,
         resolveRendererFacingApiBase(
@@ -1352,6 +1361,7 @@ function setupDockReopen(): void {
   });
 }
 
+<<<<<<< HEAD
 async function runShutdownCleanup(reason: string): Promise<void> {
   if (shutdownCleanupStarted) {
     return;
@@ -1374,6 +1384,18 @@ function setupShutdown(cleanupFns: Array<() => void | Promise<void>>): void {
     isQuitting = true;
     console.log("[Main] App quitting, disposing native modules...");
     void runShutdownCleanup("before-quit");
+=======
+function setupShutdown(cleanupFns: Array<() => void | Promise<void>>): void {
+  Electrobun.events.on("before-quit", () => {
+    void (async () => {
+      isQuitting = true;
+      console.log("[Main] App quitting, disposing native modules...");
+      for (const cleanupFn of cleanupFns) {
+        await Promise.resolve(cleanupFn());
+      }
+      await disposeNativeModules();
+    })();
+>>>>>>> pr-1360
   });
 }
 
@@ -1477,6 +1499,11 @@ function checkWebGpuBrowserSupport(): void {
 }
 
 async function main(): Promise<void> {
+  recordStartupPhase("main_start", {
+    pid: process.pid,
+    exec_path: process.execPath,
+    bundle_path: resolveStartupBundlePath(process.execPath),
+  });
   await loadMiladyEnvFilesForMain();
   console.log("[Main] Starting Milady (Electrobun)");
   const normalizedModuleDir = import.meta.dir.replaceAll("\\", "/");
@@ -1568,6 +1595,9 @@ async function main(): Promise<void> {
   // running before any synchronous FFI calls like setApplicationMenu().
   // Calling setupApplicationMenu() before createMainWindow() deadlocks.
   const mainWin = attachMainWindow(await createMainWindow());
+  recordStartupPhase("window_ready", {
+    pid: process.pid,
+  });
 
   surfaceWindowManager = new SurfaceWindowManager({
     createWindow: (options) =>
@@ -1689,7 +1719,7 @@ async function main(): Promise<void> {
       pushApiBaseToRenderer(
         currentWindow,
         rt.externalApi.base,
-        process.env.MILADY_API_TOKEN,
+        resolveApiToken(process.env) ?? undefined,
       );
     } else if (rt.mode === "local") {
       // In local mode the embedded agent must be started by the main process.
@@ -1873,6 +1903,12 @@ main().catch((err) => {
   persistStartupCrashReport({
     source: "fatal-startup",
     error: msg,
+  });
+  recordStartupPhase("fatal", {
+    pid: process.pid,
+    exec_path: process.execPath,
+    bundle_path: resolveStartupBundlePath(process.execPath),
+    error: err instanceof Error ? err.stack || err.message : String(err),
   });
   // Write to startup log so it's visible even without a console
   try {

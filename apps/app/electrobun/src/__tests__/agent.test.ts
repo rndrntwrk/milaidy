@@ -24,27 +24,31 @@ const ORIGINAL_ELIZA_PORT = process.env.ELIZA_PORT;
 
 vi.mock("node:fs", () => {
   const existsSyncFn = vi.fn(() => true);
+  const appendFileSyncFn = vi.fn();
+  const writeFileSyncFn = vi.fn();
+  const renameSyncFn = vi.fn();
   const rmSyncFn = vi.fn();
   const readFileSyncFn = vi.fn(() => "");
-  const writeFileSyncFn = vi.fn();
   const copyFileSyncFn = vi.fn();
   return {
     default: {
       existsSync: existsSyncFn,
       mkdirSync: vi.fn(),
-      appendFileSync: vi.fn(),
+      appendFileSync: appendFileSyncFn,
       readFileSync: readFileSyncFn,
       writeFileSync: writeFileSyncFn,
       copyFileSync: copyFileSyncFn,
+      renameSync: renameSyncFn,
       readdirSync: vi.fn(() => ["entry.js"]),
       rmSync: rmSyncFn,
     },
     existsSync: existsSyncFn,
     mkdirSync: vi.fn(),
-    appendFileSync: vi.fn(),
+    appendFileSync: appendFileSyncFn,
     readFileSync: readFileSyncFn,
     writeFileSync: writeFileSyncFn,
     copyFileSync: copyFileSyncFn,
+    renameSync: renameSyncFn,
     readdirSync: vi.fn(() => ["entry.js"]),
     rmSync: rmSyncFn,
   };
@@ -168,11 +172,22 @@ async function getCopyFileSyncMock(): Promise<Mock> {
   return fs.default.copyFileSync as Mock;
 }
 
+async function getAppendFileSyncMock(): Promise<Mock> {
+  const fs = await import("node:fs");
+  return fs.default.appendFileSync as Mock;
+}
+
+async function flushAsyncWork(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 // ---------------------------------------------------------------------------
 // Import AFTER mocks
 // ---------------------------------------------------------------------------
 import {
   AgentManager,
+  buildChildNodePaths,
   createBugReportBundle,
   getDiagnosticLogPath,
   getHealthPollTimeoutMs,
@@ -180,6 +195,8 @@ import {
   getStartupDiagnosticLogTail,
   getStartupDiagnosticsSnapshot,
   getStartupStatusPath,
+  resolveBunExecutablePath,
+  resolveMiladyDistPath,
 } from "../native/agent";
 import { findFirstAvailableLoopbackPort } from "../native/loopback-port";
 
@@ -188,6 +205,10 @@ describe("AgentManager", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockSpawn.mockReset();
+    mockFetch.mockReset();
+    mockSleep.mockReset();
+    mockSleep.mockImplementation(() => Promise.resolve());
     Object.defineProperty(process, "execPath", {
       configurable: true,
       value: ORIGINAL_EXEC_PATH,
@@ -196,9 +217,16 @@ describe("AgentManager", () => {
       configurable: true,
       value: ORIGINAL_PLATFORM,
     });
+<<<<<<< HEAD
     delete process.env.MILADY_PORT;
     delete process.env.MILADY_API_PORT;
     delete process.env.ELIZA_PORT;
+=======
+    process.env.MILADY_DIST_PATH = MOCK_DIST_PATH;
+    delete process.env.MILADY_STARTUP_SESSION_ID;
+    delete process.env.MILADY_STARTUP_STATE_FILE;
+    delete process.env.MILADY_STARTUP_EVENTS_FILE;
+>>>>>>> pr-1360
     // Default: all filesystem checks return true (dist exists, entry.js exists, etc.)
     const existsSync = await getExistsSyncMock();
     existsSync.mockReturnValue(true);
@@ -256,6 +284,77 @@ describe("AgentManager", () => {
       expect(candidates).toContain(
         "/Users/test/AppData/Local/com.miladyai.milady/canary/self-extraction/Milady-canary/resources/app/milady-dist",
       );
+    });
+  });
+
+  describe("packaged runtime resolution", () => {
+    it("keeps milady-dist resolution bundle-local in packaged builds", async () => {
+      const existsSync = await getExistsSyncMock();
+      existsSync.mockImplementation((candidate: string) => {
+        return (
+          candidate ===
+            "/Applications/Milady-canary.app/Contents/Resources/app/milady-dist" ||
+          candidate === "/tmp/override-dist"
+        );
+      });
+
+      const originalDistPath = process.env.MILADY_DIST_PATH;
+      process.env.MILADY_DIST_PATH = "/tmp/override-dist";
+
+      try {
+        expect(
+          resolveMiladyDistPath({
+            env: process.env,
+            moduleDir:
+              "/Applications/Milady-canary.app/Contents/Resources/app/bun",
+            execPath:
+              "/Applications/Milady-canary.app/Contents/MacOS/launcher",
+          }),
+        ).toBe(
+          "/Applications/Milady-canary.app/Contents/Resources/app/milady-dist",
+        );
+      } finally {
+        if (originalDistPath === undefined) {
+          delete process.env.MILADY_DIST_PATH;
+        } else {
+          process.env.MILADY_DIST_PATH = originalDistPath;
+        }
+      }
+    });
+
+    it("disables parent node_modules walking in packaged mode", async () => {
+      const existsSync = await getExistsSyncMock();
+      existsSync.mockImplementation((candidate: string) => {
+        return (
+          candidate === "/mock/milady-dist/node_modules" ||
+          candidate === "/mock/node_modules"
+        );
+      });
+
+      expect(
+        buildChildNodePaths("/mock/milady-dist", { packagedRuntime: true }),
+      ).toEqual(["/mock/milady-dist/node_modules"]);
+      expect(
+        buildChildNodePaths("/mock/milady-dist", { packagedRuntime: false }),
+      ).toEqual(["/mock/milady-dist/node_modules", "/mock/node_modules"]);
+    });
+
+    it("prefers bundle-local Bun executables in packaged builds", async () => {
+      const existsSync = await getExistsSyncMock();
+      existsSync.mockImplementation((candidate: string) => {
+        return (
+          candidate ===
+          "/Applications/Milady-canary.app/Contents/Resources/app/bun/bun"
+        );
+      });
+
+      expect(
+        resolveBunExecutablePath({
+          execPath: "/Applications/Milady-canary.app/Contents/MacOS/launcher",
+          moduleDir:
+            "/Applications/Milady-canary.app/Contents/Resources/app/bun",
+        }),
+      ).toBe("/Applications/Milady-canary.app/Contents/Resources/app/bun/bun");
     });
   });
 
@@ -436,6 +535,53 @@ describe("AgentManager", () => {
       expect(status.error).toContain("checked entry.js");
     });
 
+    it("records a fatal startup phase when the child exits before health is ready", async () => {
+      const appendFileSync = await getAppendFileSyncMock();
+      const originalSessionId = process.env.MILADY_STARTUP_SESSION_ID;
+      const originalStateFile = process.env.MILADY_STARTUP_STATE_FILE;
+      const originalEventsFile = process.env.MILADY_STARTUP_EVENTS_FILE;
+      process.env.MILADY_STARTUP_SESSION_ID = "test-session";
+      process.env.MILADY_STARTUP_STATE_FILE = "/tmp/test-startup-state.json";
+      process.env.MILADY_STARTUP_EVENTS_FILE = "/tmp/test-startup-events.jsonl";
+
+      try {
+        const mockProc = createMockProcess({ exitCode: 23 });
+        mockSpawn.mockReturnValue(mockProc);
+
+        const status = await manager.start();
+        expect(status.state).toBe("error");
+        expect(status.error).toContain(
+          "Child process exited with code 23 before becoming healthy",
+        );
+
+        const traceEvents = appendFileSync.mock.calls
+          .map(([, line]) => String(line))
+          .filter((line) => line.includes('"session_id":"test-session"'));
+        expect(traceEvents.some((line) => line.includes('"phase":"fatal"'))).toBe(
+          true,
+        );
+        expect(
+          traceEvents.some((line) => line.includes('"exit_code":23')),
+        ).toBe(true);
+      } finally {
+        if (originalSessionId === undefined) {
+          delete process.env.MILADY_STARTUP_SESSION_ID;
+        } else {
+          process.env.MILADY_STARTUP_SESSION_ID = originalSessionId;
+        }
+        if (originalStateFile === undefined) {
+          delete process.env.MILADY_STARTUP_STATE_FILE;
+        } else {
+          process.env.MILADY_STARTUP_STATE_FILE = originalStateFile;
+        }
+        if (originalEventsFile === undefined) {
+          delete process.env.MILADY_STARTUP_EVENTS_FILE;
+        } else {
+          process.env.MILADY_STARTUP_EVENTS_FILE = originalEventsFile;
+        }
+      }
+    });
+
     it("rejects embedded startup in external mode", async () => {
       const originalApiBase = process.env.MILADY_DESKTOP_API_BASE;
       process.env.MILADY_DESKTOP_API_BASE = "https://api.milady.ai";
@@ -555,7 +701,7 @@ describe("AgentManager", () => {
 
         expect(mockFetch).toHaveBeenNthCalledWith(
           1,
-          "http://127.0.0.1:2138/api/health",
+          "http://127.0.0.1:31337/api/health",
           expect.objectContaining({
             headers: expectedHeaders,
             signal: expect.anything(),
@@ -563,7 +709,7 @@ describe("AgentManager", () => {
         );
         expect(mockFetch).toHaveBeenNthCalledWith(
           2,
-          "http://127.0.0.1:2138/api/agents",
+          "http://127.0.0.1:31337/api/agents",
           expect.objectContaining({
             headers: expectedHeaders,
             signal: expect.anything(),
@@ -583,6 +729,46 @@ describe("AgentManager", () => {
       }
     });
 
+    it("marks the runtime ready before agent metadata resolves", async () => {
+      const mockProc = createMockProcess();
+      const agentProbe = createDeferred<{
+        ok: boolean;
+        json: () => Promise<{ agents: Array<{ name: string }> }>;
+      }>();
+      mockSpawn.mockReturnValue(mockProc);
+
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+      mockFetch.mockReturnValueOnce(agentProbe.promise);
+
+      const status = await manager.start();
+      expect(status.state).toBe("running");
+      expect(status.agentName).toBe("Milady");
+      expect(manager.getStatus().agentName).toBe("Milady");
+
+      const appendFileSync = await getAppendFileSyncMock();
+      const initialLog = appendFileSync.mock.calls
+        .map(([, line]) => String(line))
+        .join("\n");
+      expect(initialLog).toContain(
+        "[Agent] Runtime ready -- port: 31337, pid: 12345",
+      );
+      expect(initialLog).not.toContain("Runtime started -- agent:");
+
+      agentProbe.resolve({
+        ok: true,
+        json: async () => ({ agents: [{ name: "DeferredAgent" }] }),
+      });
+      await flushAsyncWork();
+
+      expect(manager.getStatus().agentName).toBe("DeferredAgent");
+      const finalLog = appendFileSync.mock.calls
+        .map(([, line]) => String(line))
+        .join("\n");
+      expect(finalLog).toContain(
+        "[Agent] Runtime started -- agent: DeferredAgent, port: 31337, pid: 12345",
+      );
+    });
+
     it("spawns bun process with the canonical runtime entry when present", async () => {
       const mockProc = createMockProcess();
       mockSpawn.mockReturnValue(mockProc);
@@ -596,7 +782,7 @@ describe("AgentManager", () => {
       const status = await manager.start();
       expect(status.state).toBe("running");
       expect(status.agentName).toBe("Milady");
-      expect(status.port).toBe(2138); // DEFAULT_PORT
+      expect(status.port).toBe(31337);
       expect(status.startedAt).toBeGreaterThan(0);
       expect(status.error).toBeNull();
 
@@ -630,11 +816,11 @@ describe("AgentManager", () => {
         [
           "/Applications/Milady-canary.app/Contents/MacOS/bun",
           "run",
-          "/mock/milady-dist/entry.js",
+          "/Applications/Milady-canary.app/Contents/Resources/app/milady-dist/entry.js",
           "start",
         ],
         expect.objectContaining({
-          cwd: MOCK_DIST_PATH,
+          cwd: "/Applications/Milady-canary.app/Contents/Resources/app/milady-dist",
         }),
       );
     });
@@ -660,6 +846,12 @@ describe("AgentManager", () => {
           if (candidate === "/Users/test/AppData/Local/bun/bun.exe")
             return true;
           if (
+            candidate ===
+            "/Users/test/AppData/Local/com.miladyai.milady/canary/self-extraction/Milady-canary/Resources/app/milady-dist/node_modules"
+          ) {
+            return true;
+          }
+          if (
             typeof candidate === "string" &&
             candidate.endsWith("/entry.js")
           ) {
@@ -681,13 +873,13 @@ describe("AgentManager", () => {
 
         expect(mockSpawn).toHaveBeenCalledWith(
           [
-            "/Users/test/AppData/Local/bun/bun.exe",
+            "/Users/test/AppData/Local/com.miladyai.milady/canary/self-extraction/Milady-canary/bin/bun.exe",
             "run",
-            "/mock/milady-dist/entry.js",
+            "/Users/test/AppData/Local/com.miladyai.milady/canary/self-extraction/Milady-canary/Resources/app/milady-dist/entry.js",
             "start",
           ],
           expect.objectContaining({
-            cwd: MOCK_DIST_PATH,
+            cwd: "/Users/test/AppData/Local/com.miladyai.milady/canary/self-extraction/Milady-canary/Resources/app/milady-dist",
           }),
         );
       } finally {
@@ -699,9 +891,9 @@ describe("AgentManager", () => {
       }
     });
 
-    it("uses MILADY_PORT env var when set", async () => {
-      const originalPort = process.env.MILADY_PORT;
-      process.env.MILADY_PORT = "9999";
+    it("uses MILADY_API_PORT env var when set", async () => {
+      const originalPort = process.env.MILADY_API_PORT;
+      process.env.MILADY_API_PORT = "9999";
 
       try {
         const mockProc = createMockProcess();
@@ -717,9 +909,130 @@ describe("AgentManager", () => {
         expect(status.port).toBe(9999);
       } finally {
         if (originalPort === undefined) {
+          delete process.env.MILADY_API_PORT;
+        } else {
+          process.env.MILADY_API_PORT = originalPort;
+        }
+      }
+    });
+
+    it("does not inherit ambient NODE_PATH into the child process in dev mode", async () => {
+      const originalNodePath = process.env.NODE_PATH;
+      process.env.NODE_PATH = "/tmp/hostile-modules";
+
+      try {
+        const mockProc = createMockProcess();
+        mockSpawn.mockReturnValue(mockProc);
+
+        mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ agents: [{ name: "Milady" }] }),
+        });
+
+        await manager.start();
+
+        const spawnOptions = mockSpawn.mock.calls[0]?.[1];
+        expect(spawnOptions?.env?.NODE_PATH).toBe(
+          "/mock/milady-dist/node_modules:/mock/node_modules",
+        );
+      } finally {
+        if (originalNodePath === undefined) {
+          delete process.env.NODE_PATH;
+        } else {
+          process.env.NODE_PATH = originalNodePath;
+        }
+      }
+    });
+
+    it("does not inherit ambient NODE_PATH into the child process in packaged mode", async () => {
+      const originalNodePath = process.env.NODE_PATH;
+      process.env.NODE_PATH = "/tmp/hostile-modules";
+      Object.defineProperty(process, "execPath", {
+        configurable: true,
+        value: "/Applications/Milady-canary.app/Contents/MacOS/launcher",
+      });
+
+      try {
+        const mockProc = createMockProcess();
+        mockSpawn.mockReturnValue(mockProc);
+
+        mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ agents: [{ name: "Milady" }] }),
+        });
+
+        await manager.start();
+
+        const spawnOptions = mockSpawn.mock.calls[0]?.[1];
+        expect(spawnOptions?.env?.NODE_PATH).toBe(
+          "/Applications/Milady-canary.app/Contents/Resources/app/milady-dist/node_modules",
+        );
+      } finally {
+        if (originalNodePath === undefined) {
+          delete process.env.NODE_PATH;
+        } else {
+          process.env.NODE_PATH = originalNodePath;
+        }
+      }
+    });
+
+    it("fails packaged startup before spawn when bundle-local node_modules are missing", async () => {
+      Object.defineProperty(process, "execPath", {
+        configurable: true,
+        value: "/Applications/Milady-canary.app/Contents/MacOS/launcher",
+      });
+      const existsSync = await getExistsSyncMock();
+      existsSync.mockImplementation(
+        (candidate: string) => !candidate.endsWith("/node_modules"),
+      );
+
+      const status = await manager.start();
+
+      expect(status.state).toBe("error");
+      expect(status.error).toContain("bundle-local node_modules");
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+
+    it("does not rewrite parent port env vars after startup", async () => {
+      const originalMiladyPort = process.env.MILADY_PORT;
+      const originalMiladyApiPort = process.env.MILADY_API_PORT;
+      const originalElizaPort = process.env.ELIZA_PORT;
+      delete process.env.MILADY_PORT;
+      delete process.env.MILADY_API_PORT;
+      delete process.env.ELIZA_PORT;
+
+      try {
+        const mockProc = createMockProcess();
+        mockSpawn.mockReturnValue(mockProc);
+
+        mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ agents: [{ name: "Milady" }] }),
+        });
+
+        const status = await manager.start();
+        expect(status.port).toBe(31337);
+        expect(process.env.MILADY_PORT).toBeUndefined();
+        expect(process.env.MILADY_API_PORT).toBeUndefined();
+        expect(process.env.ELIZA_PORT).toBeUndefined();
+      } finally {
+        if (originalMiladyPort === undefined) {
           delete process.env.MILADY_PORT;
         } else {
-          process.env.MILADY_PORT = originalPort;
+          process.env.MILADY_PORT = originalMiladyPort;
+        }
+        if (originalMiladyApiPort === undefined) {
+          delete process.env.MILADY_API_PORT;
+        } else {
+          process.env.MILADY_API_PORT = originalMiladyApiPort;
+        }
+        if (originalElizaPort === undefined) {
+          delete process.env.ELIZA_PORT;
+        } else {
+          process.env.ELIZA_PORT = originalElizaPort;
         }
       }
     });
@@ -862,6 +1175,7 @@ describe("AgentManager", () => {
       });
 
       await manager.start();
+      await flushAsyncWork();
       expect(manager.getStatus().state).toBe("running");
 
       // Resolve process exit so killChildProcess completes
@@ -884,6 +1198,7 @@ describe("AgentManager", () => {
       });
 
       await manager.start();
+      await flushAsyncWork();
       expect(manager.getStatus().state).toBe("running");
 
       mockProc._exitDeferred.resolve(0);
@@ -902,6 +1217,7 @@ describe("AgentManager", () => {
       });
 
       await manager.start();
+      await flushAsyncWork();
       mockProc._exitDeferred.resolve(0);
       await manager.stop();
       expect(manager.getStatus().state).toBe("stopped");
@@ -926,6 +1242,7 @@ describe("AgentManager", () => {
       });
 
       await manager.start();
+      await flushAsyncWork();
       expect(manager.getStatus().state).toBe("running");
 
       // For stop to work, resolve process 1 exit
@@ -940,7 +1257,9 @@ describe("AgentManager", () => {
 
       const status = await manager.restart();
       expect(status.state).toBe("running");
-      expect(status.agentName).toBe("Agent2");
+      expect(status.agentName).toBe("Milady");
+      await flushAsyncWork();
+      expect(manager.getStatus().agentName).toBe("Agent2");
       expect(mockSpawn).toHaveBeenCalledTimes(2);
     });
   });
