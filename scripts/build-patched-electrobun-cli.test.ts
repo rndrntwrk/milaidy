@@ -20,9 +20,12 @@ describe("build-patched-electrobun-cli", () => {
     expect(script).toContain("async function importRcedit()");
     expect(script).toContain('overrideRequire.resolve("rcedit")');
     expect(script).toContain("--target=bun-windows-x64-baseline");
-    expect(script).toContain('path.join(installedElectrobunDir, "bin", "electrobun.exe")');
+    expect(script).toContain("const installedBinPath = path.join(");
+    expect(script).toContain("  installedElectrobunDir,");
+    expect(script).toContain('  "bin",');
+    expect(script).toContain('  "electrobun.exe",');
     expect(script).toContain("const installedCachePath = path.join(");
-    expect(script).toContain('  installedElectrobunDir,');
+    expect(script).toContain("  installedElectrobunDir,");
     expect(script).toContain('  ".cache",');
     expect(script).toContain('  "electrobun.exe",');
   });

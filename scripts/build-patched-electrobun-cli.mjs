@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
 import {
   appendFileSync,
   copyFileSync,
@@ -11,6 +10,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 
@@ -65,7 +65,9 @@ function patchCliSource(cliIndexPath) {
   const original = readFileSync(cliIndexPath, "utf8");
 
   if (
-    original.includes('const overridePackageJson = process.env["ELECTROBUN_RCEDIT_PACKAGE_JSON"];')
+    original.includes(
+      'const overridePackageJson = process.env["ELECTROBUN_RCEDIT_PACKAGE_JSON"];',
+    )
   ) {
     return;
   }
@@ -112,7 +114,10 @@ async function importRcedit() {
       `Expected 3 rcedit dynamic import call sites in ${cliIndexPath}, found ${replacements?.length ?? 0}`,
     );
   }
-  patched = patched.replaceAll(importCall, "const rcedit = await importRcedit();");
+  patched = patched.replaceAll(
+    importCall,
+    "const rcedit = await importRcedit();",
+  );
 
   writeFileSync(cliIndexPath, patched, "utf8");
 }
@@ -137,7 +142,9 @@ const installedElectrobunDir = process.argv[2]
   ? path.resolve(process.argv[2])
   : resolveElectrobunDir();
 const installedManifestPath = path.join(installedElectrobunDir, "package.json");
-const installedManifest = JSON.parse(readFileSync(installedManifestPath, "utf8"));
+const installedManifest = JSON.parse(
+  readFileSync(installedManifestPath, "utf8"),
+);
 const electrobunVersion = installedManifest.version;
 const installedElectrobunRequire = createRequire(installedManifestPath);
 const resolvedRceditPackageJson = installedElectrobunRequire.resolve(
@@ -219,7 +226,11 @@ if (!existsSync(compiledCliPath)) {
   fail(`Expected compiled CLI at ${compiledCliPath}`);
 }
 
-const installedBinPath = path.join(installedElectrobunDir, "bin", "electrobun.exe");
+const installedBinPath = path.join(
+  installedElectrobunDir,
+  "bin",
+  "electrobun.exe",
+);
 const installedCachePath = path.join(
   installedElectrobunDir,
   ".cache",

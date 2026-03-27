@@ -246,10 +246,11 @@ describe("Electrobun release workflow drift", () => {
       'echo "cache-dir=$package_dir/.cache" >> "$GITHUB_OUTPUT"',
     );
     expect(workflow).toContain(
-      'name: Build patched Electrobun CLI for Windows',
+      "name: Build patched Electrobun CLI for Windows",
     );
     expect(workflow).toContain(
-      'node scripts/build-patched-electrobun-cli.mjs "${{ steps.resolve-electrobun.outputs.package-dir }}"',
+      'node scripts/build-patched-electrobun-cli.mjs "$' +
+        '{{ steps.resolve-electrobun.outputs.package-dir }}"',
     );
     expect(workflow).not.toContain(
       'Join-Path $PWD "apps/app/electrobun/node_modules/electrobun"',
