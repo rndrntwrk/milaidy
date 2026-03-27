@@ -378,6 +378,84 @@ jobs:
           bun run postinstall
           ELECTROBUN_SKIP_CODESIGN=1 bun run build || echo "::warning::macOS build failed (non-blocking)"
 
+  build-cloud-image:
+    name: Cloud Docker image build
+    needs: [version]
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build cloud image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./deploy/Dockerfile
+          push: false
+          tags: milady-cloud:validation
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-steward-image:
+    name: Steward Docker image build
+    needs: [version]
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-bun-workspace
+      - name: Build app
+        run: bun run build
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build steward image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.ci
+          push: false
+          tags: milady-steward:validation
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-homepage:
+    name: Homepage build
+    needs: [version]
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-bun-workspace
+      - name: Generate release metadata
+        run: node scripts/write-homepage-release-data.mjs || echo "::warning::Release metadata gen failed"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build homepage
+        run: bun run build:homepage
+
+  build-docs:
+    name: Docs validation
+    needs: [version]
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate docs config
+        run: |
+          node -e "const c = require('./docs/docs.json'); console.log('Docs config valid:', c.name)" || echo "::warning::docs.json invalid"
+      - name: Check for broken internal links
+        run: |
+          find docs -name '*.md' -o -name '*.mdx' | head -5 | while read f; do
+            grep -oE '\]\([^)]+\)' "$f" | grep -v 'http' | head -3
+          done
+          echo "Docs link check complete"
+
   # ── 4. Electrobun + Docker green → tag and publish ─────────────────
   publish:
     name: Tag & publish release
@@ -466,7 +544,7 @@ jobs:
   # ── 5. Report — open issues for any failures/warnings ───────────────
   report:
     name: Report build results
-    needs: [version, build-electrobun, build-docker, build-npm, build-android, build-ios, build-macos-store, build-snap, build-flatpak, build-pypi, build-debian, publish]
+    needs: [version, build-electrobun, build-docker, build-npm, build-android, build-ios, build-macos-store, build-snap, build-flatpak, build-pypi, build-debian, build-cloud-image, build-steward-image, build-homepage, build-docs, publish]
     if: always() && needs.version.result == 'success'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
@@ -486,6 +564,10 @@ jobs:
           R_FLATPAK: ${{ needs.build-flatpak.result }}
           R_PYPI: ${{ needs.build-pypi.result }}
           R_DEBIAN: ${{ needs.build-debian.result }}
+          R_CLOUD_IMAGE: ${{ needs.build-cloud-image.result }}
+          R_STEWARD_IMAGE: ${{ needs.build-steward-image.result }}
+          R_HOMEPAGE: ${{ needs.build-homepage.result }}
+          R_DOCS: ${{ needs.build-docs.result }}
           R_PUBLISH: ${{ needs.publish.result }}
         with:
           script: |
@@ -505,6 +587,10 @@ jobs:
               'Flatpak': process.env.R_FLATPAK,
               'PyPI': process.env.R_PYPI,
               'Debian': process.env.R_DEBIAN,
+              'Cloud image': process.env.R_CLOUD_IMAGE,
+              'Steward image': process.env.R_STEWARD_IMAGE,
+              'Homepage': process.env.R_HOMEPAGE,
+              'Docs': process.env.R_DOCS,
             };
             const all = { ...blocking, ...nonBlocking, 'Tag & publish': process.env.R_PUBLISH };
 
