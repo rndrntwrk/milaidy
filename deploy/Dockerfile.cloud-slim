@@ -131,17 +131,15 @@ RUN npm install -g tsx@4 && npm cache clean --force
 
 WORKDIR /app
 
+# Create the runtime user before any chowned COPY steps.
+RUN groupadd -r agent && useradd -r -g agent -m agent
+
 # Copy built dist (thin JS wrappers ~800KB)
 COPY --from=pruner --chown=agent:agent /build/dist ./dist
 
 # Copy milady.mjs entry point and root package.json
 COPY --from=pruner --chown=agent:agent /build/milady.mjs ./milady.mjs
 COPY --from=pruner --chown=agent:agent /build/package.json ./package.json
-
-# Copy source code (needed because workspace packages have relative imports
-# back to src/ — e.g. packages/agent/src/runtime/eliza.ts imports
-# from ../../../../src/runtime/milady-plugin.ts)
-COPY --from=pruner --chown=agent:agent /build/src ./src
 
 # Copy workspace packages (especially @miladyai/agent which IS the runtime)
 COPY --from=pruner --chown=agent:agent /build/packages ./packages
@@ -175,7 +173,6 @@ EXPOSE ${PORT}
 EXPOSE ${BRIDGE_PORT}
 
 # Security: run as non-root
-RUN useradd -m agent
 USER agent
 
 # Start the real Milady runtime in headless/server-only mode

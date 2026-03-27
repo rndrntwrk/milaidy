@@ -17,6 +17,7 @@ const LEGACY_STEWARD_IMAGE_WORKFLOW = path.join(
   ".github/workflows/build-steward-image.yml",
 );
 const CANONICAL_IMAGE_DOCKERFILE = path.join(ROOT, "Dockerfile.ci");
+const CLOUD_IMAGE_DOCKERFILE = path.join(ROOT, "deploy/Dockerfile.cloud-slim");
 const CI_DOCKERIGNORE = path.join(ROOT, ".dockerignore.ci");
 const BUILD_IMAGE_SCRIPT = path.join(ROOT, "scripts/build-image.sh");
 const DEPLOY_TO_NODES_SCRIPT = path.join(ROOT, "deploy/deploy-to-nodes.sh");
@@ -74,6 +75,22 @@ describe("release support workflow drift", () => {
         "{{ steps.version.outputs.version_clean }}",
     );
     expect(workflow).not.toContain("cloud-full-ui");
+  });
+
+  it("keeps the cloud runtime Dockerfile limited to real runtime inputs", () => {
+    const dockerfile = fs.readFileSync(CLOUD_IMAGE_DOCKERFILE, "utf8");
+
+    expect(dockerfile).not.toContain("/build/src ./src");
+
+    const createUserIndex = dockerfile.indexOf(
+      "RUN groupadd -r agent && useradd -r -g agent -m agent",
+    );
+    const firstChownedCopyIndex = dockerfile.indexOf(
+      "COPY --from=pruner --chown=agent:agent /build/dist ./dist",
+    );
+
+    expect(createUserIndex).toBeGreaterThanOrEqual(0);
+    expect(firstChownedCopyIndex).toBeGreaterThan(createUserIndex);
   });
 
   it("uses the canonical image runtime selector for both agent and cloud launches", () => {
