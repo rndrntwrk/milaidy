@@ -12,12 +12,11 @@ import {
   onboardingInputClassName,
 } from "../onboarding-form-primitives";
 import {
+  OnboardingSecondaryActionButton,
   OnboardingStepHeader,
   onboardingFooterClass,
   onboardingPrimaryActionClass,
   onboardingPrimaryActionTextShadowStyle,
-  onboardingSecondaryActionClass,
-  onboardingSecondaryActionTextShadowStyle,
   spawnOnboardingRipple,
 } from "../onboarding-step-chrome";
 
@@ -96,10 +95,7 @@ export function ConnectionRemoteBackendScreen({
         ) : null}
       </div>
       <div className={onboardingFooterClass}>
-        <Button
-          variant="ghost"
-          className={onboardingSecondaryActionClass}
-          style={onboardingSecondaryActionTextShadowStyle}
+        <OnboardingSecondaryActionButton
           onClick={() => {
             if (onboardingRemoteConnected) {
               onTransitionEffect("useLocalBackend");
@@ -110,7 +106,7 @@ export function ConnectionRemoteBackendScreen({
           type="button"
         >
           {t("onboarding.back")}
-        </Button>
+        </OnboardingSecondaryActionButton>
         <Button
           className={onboardingPrimaryActionClass}
           style={onboardingPrimaryActionTextShadowStyle}

@@ -67,6 +67,7 @@ vi.mock("../../src/components/onboarding/onboarding-step-chrome", async () => {
 import { ActivateStep } from "../../src/components/onboarding/ActivateStep";
 import { ConnectionStep } from "../../src/components/onboarding/ConnectionStep";
 import { IdentityStep } from "../../src/components/onboarding/IdentityStep";
+import { onboardingHeaderBlockClass } from "../../src/components/onboarding/onboarding-step-chrome";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -490,6 +491,25 @@ describe("ConnectionStep", () => {
     expect(text).toContain("onboarding.hostingLocal");
     expect(text).toContain("header.Cloud");
     expect(text).toContain("onboarding.back");
+
+    const buttons = findButtons(tree?.root as TestRenderer.ReactTestInstance);
+    const headerBlock = (tree?.root as TestRenderer.ReactTestInstance).findAll(
+      (node) =>
+        node.type === "header" &&
+        String(node.props.className ?? "").includes(onboardingHeaderBlockClass),
+    )[0];
+    expect(headerBlock).toBeDefined();
+
+    const remoteButton = buttons.find((button) =>
+      collectText(button).includes("onboarding.hostingRemote"),
+    );
+    expect(remoteButton).toBeDefined();
+    expect(String(remoteButton?.props.className)).toContain(
+      "bg-[var(--onboarding-card-bg)]",
+    );
+    expect(String(remoteButton?.props.className)).toContain(
+      "var(--onboarding-card-shadow)",
+    );
   });
 
   it("calls handleOnboardingBack from hosting selection", async () => {
