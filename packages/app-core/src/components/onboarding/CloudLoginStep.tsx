@@ -41,7 +41,7 @@ export function CloudLoginStep() {
   useEffect(() => {
     if (
       elizaCloudConnected &&
-      onboardingStep === "providers" &&
+      onboardingStep === "cloud_login" &&
       !advancedRef.current
     ) {
       advancedRef.current = true;
@@ -120,10 +120,10 @@ export function CloudLoginStep() {
           variant="ghost"
           className={onboardingSecondaryActionClass}
           style={onboardingSecondaryActionTextShadowStyle}
-          onClick={() => handleOnboardingBack()}
+          onClick={() => handleOnboardingNext()}
           type="button"
         >
-          {t("onboarding.back")}
+          {branding.cloudOnly ? t("onboarding.continueOffline") : t("onboarding.skip")}
         </Button>
       </div>
     </>

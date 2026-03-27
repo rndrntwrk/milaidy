@@ -64,19 +64,35 @@
   /* Onboarding panels sit over a permanently dark VRM scene. Keep their chrome
    * in the dark variant even when the surrounding UI theme is light.
    */
-  --onboarding-text-strong: rgba(240, 238, 250, 0.95);
-  --onboarding-text-primary: rgba(232, 230, 240, 0.92);
-  --onboarding-text-subtle: rgba(210, 208, 220, 0.78);
-  --onboarding-text-muted: rgba(186, 184, 198, 0.7);
-  --onboarding-text-faint: rgba(160, 158, 176, 0.56);
-  --onboarding-card-bg: rgba(10, 10, 12, 0.8);
-  --onboarding-card-bg-hover: rgba(18, 18, 21, 0.88);
-  --onboarding-card-border: rgba(49, 49, 56, 0.32);
-  --onboarding-card-border-strong: rgba(240, 185, 11, 0.34);
-  --onboarding-panel-bg: rgba(5, 5, 6, 0.88);
-  --onboarding-panel-border: rgba(49, 49, 56, 0.28);
-  --onboarding-panel-shadow: 0 16px 44px rgba(0, 0, 0, 0.42);
-  --onboarding-divider: rgba(49, 49, 56, 0.22);
+  --onboarding-text-strong: rgba(248, 249, 251, 0.98);
+  --onboarding-text-primary: rgba(236, 239, 243, 0.94);
+  --onboarding-text-subtle: rgba(215, 220, 228, 0.84);
+  --onboarding-text-muted: rgba(196, 202, 213, 0.8);
+  --onboarding-text-faint: rgba(170, 176, 188, 0.72);
+  --onboarding-card-bg: rgba(11, 13, 18, 0.9);
+  --onboarding-card-bg-hover: rgba(16, 19, 25, 0.95);
+  --onboarding-card-border: rgba(255, 255, 255, 0.11);
+  --onboarding-card-border-strong: rgba(240, 185, 11, 0.36);
+  --onboarding-recommended-bg: rgba(240, 185, 11, 0.16);
+  --onboarding-recommended-bg-hover: rgba(240, 185, 11, 0.22);
+  --onboarding-recommended-border: rgba(240, 185, 11, 0.28);
+  --onboarding-recommended-border-strong: rgba(240, 185, 11, 0.44);
+  --onboarding-accent-bg: rgba(240, 185, 11, 0.18);
+  --onboarding-accent-bg-hover: rgba(240, 185, 11, 0.24);
+  --onboarding-accent-border: rgba(240, 185, 11, 0.3);
+  --onboarding-accent-border-hover: rgba(240, 185, 11, 0.46);
+  --onboarding-accent-foreground: rgba(255, 250, 238, 0.98);
+  --onboarding-panel-bg: rgba(7, 9, 13, 0.94);
+  --onboarding-panel-border: rgba(255, 255, 255, 0.12);
+  --onboarding-panel-shadow: 0 28px 72px rgba(0, 0, 0, 0.46);
+  --onboarding-divider: rgba(255, 255, 255, 0.08);
+  --onboarding-footer-border: rgba(255, 255, 255, 0.08);
+  --onboarding-link: var(--highlight-gold);
+  --onboarding-ripple: rgba(240, 185, 11, 0.12);
+  --onboarding-roster-bg: rgba(7, 10, 14, 0.8);
+  --onboarding-roster-border: rgba(255, 255, 255, 0.1);
+  --onboarding-field-focus-border: rgba(240, 185, 11, 0.46);
+  --onboarding-field-focus-shadow: 0 0 0 3px rgba(240, 185, 11, 0.14);
 }
 
 /* ── Onboarding theme variables ────────────────────────────────────────

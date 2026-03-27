@@ -48,7 +48,7 @@ export function ConnectionRemoteBackendScreen({
           appNameInterpolationVars(branding),
         )}
       />
-      <div className={onboardingDetailStackClassName}>
+      <div className={`${onboardingDetailStackClassName} mt-1`}>
         <OnboardingField
           controlId="remote-api-base"
           label={t("onboarding.remoteAddress")}

@@ -255,9 +255,7 @@ export function SecretsView() {
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="m-0 max-w-2xl text-[13px] leading-6 text-muted">
-          {t("secretsview.ManageAPIKeysAnd")}
-        </div>
+        <div className="m-0 max-w-2xl text-[13px] leading-6 text-muted" />
         <Button
           variant="default"
           size="sm"
@@ -527,9 +525,6 @@ function SecretCard({
             <span className="truncate text-[13px] font-mono font-medium text-txt">
               {secret.key}
             </span>
-          </div>
-          <div className="mt-1 text-[12px] leading-snug text-muted">
-            {secret.description}
           </div>
         </div>
         <div className="flex flex-shrink-0 items-center gap-1.5">

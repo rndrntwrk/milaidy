@@ -219,9 +219,6 @@ export function ConnectionElizaCloudPreProviderScreen({
           {t("onboarding.confirm")}
         </Button>
       </div>
-      <p className="mt-3 text-center text-xs leading-relaxed text-[var(--onboarding-text-subtle)]">
-        {t("onboarding.restartAfterProviderChangeHint")}
-      </p>
     </>
   );
 }

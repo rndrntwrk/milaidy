@@ -719,13 +719,9 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
                   Database
                 </div>
-                <div className="mt-1 text-2xl font-semibold text-txt-strong">
+                <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
                   Table Browser
-                </div>
-                <div className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-                  Review schemas, inspect rows, and switch into SQL when the
-                  database becomes available.
-                </div>
+                </h1>
               </section>
 
               <div
@@ -748,13 +744,9 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                     <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
                       Database
                     </div>
-                    <div className="mt-1 text-2xl font-semibold text-txt-strong">
+                    <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
                       Table Browser
-                    </div>
-                    <div className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-                      Choose a table from the sidebar to inspect columns, sort
-                      rows, and review the data structure.
-                    </div>
+                    </h1>
                   </section>
 
                   <div
@@ -783,13 +775,9 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                         <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
                           Database
                         </div>
-                        <div className="mt-1 text-2xl font-semibold text-txt-strong">
+                        <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
                           {selectedTable}
-                        </div>
-                        <div className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-                          Inspect rows, sort columns, and review table structure
-                          in one place.
-                        </div>
+                        </h1>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {columnMeta.size > 0 && (
@@ -846,13 +834,9 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
                   Database
                 </div>
-                <div className="mt-1 text-2xl font-semibold text-txt-strong">
+                <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
                   SQL Workspace
-                </div>
-                <div className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-                  Run ad-hoc queries, inspect results, and reuse recent SQL from
-                  the sidebar.
-                </div>
+                </h1>
               </section>
 
               <div
@@ -982,10 +966,10 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
 
       {dbStatus && !dbStatus.connected && (
         <div className="p-4 border border-border/40 bg-card/60 backdrop-blur-md rounded-2xl text-muted text-sm shadow-sm">
-          <div className="m-0 mb-2 font-medium text-txt tracking-wide">
+          <p className="m-0 mb-2 font-medium text-txt tracking-wide">
             {t("databaseview.DatabaseNotAvailab")}
-          </div>
-          <div className="m-0 text-xs">{t("databaseview.TheDatabaseViewer")}</div>
+          </p>
+          <p className="m-0 text-xs">{t("databaseview.TheDatabaseViewer")}</p>
         </div>
       )}
 

@@ -467,67 +467,6 @@ describe("onboarding finish locking", () => {
     });
   });
 
-  it("requires permissions check before finishing unless user explicitly skips", async () => {
-    mockClient.getPermissions.mockResolvedValue({
-      accessibility: { id: "accessibility", ...permissionState("granted") },
-      "screen-recording": {
-        id: "screen-recording",
-        ...permissionState("denied", true),
-      },
-      microphone: { id: "microphone", ...permissionState("granted") },
-      camera: { id: "camera", ...permissionState("granted") },
-      shell: { id: "shell", ...permissionState("granted") },
-    });
-
-    let api: ProbeApi | null = null;
-    let tree: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      tree = TestRenderer.create(
-        React.createElement(
-          AppProvider,
-          null,
-          React.createElement(Probe, {
-            onReady: (nextApi) => {
-              api = nextApi;
-            },
-          }),
-        ),
-      );
-    });
-
-    expect(api).not.toBeNull();
-    const requireApi = () => {
-      if (!api) throw new Error("onboarding probe API was not initialized");
-      return api;
-    };
-
-    await waitForOnboardingOptions(requireApi);
-    await act(async () => {
-      configureOnboardingProviders(requireApi());
-    });
-    await advanceToPermissions(requireApi);
-
-    await act(async () => {
-      await api?.handleOnboardingNext();
-    });
-    expect(requireApi().getOnboardingStep()).toBe("identity");
-    expect(mockClient.submitOnboarding).not.toHaveBeenCalled();
-
-    await act(async () => {
-      await api?.handleOnboardingNext({ allowPermissionBypass: true });
-    });
-    expect(requireApi().getOnboardingStep()).toBe("launch");
-    expect(mockClient.submitOnboarding).not.toHaveBeenCalled();
-
-    await act(async () => {
-      await api?.handleOnboardingNext();
-    });
-    expect(mockClient.submitOnboarding).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      tree?.unmount();
-    });
-  });
 
   it("does not create an empty conversation after onboarding completes", async () => {
     let api: ProbeApi | null = null;

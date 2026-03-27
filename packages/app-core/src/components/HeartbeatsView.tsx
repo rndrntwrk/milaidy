@@ -746,11 +746,6 @@ export function HeartbeatsView() {
                   <h2 className="text-2xl font-semibold text-txt">
                     {modalTitle}
                   </h2>
-                  <p className="max-w-2xl text-sm leading-relaxed text-muted">
-                    {editingId
-                      ? t("heartbeatsview.emptyStateDescription")
-                      : t("heartbeatsview.emptyStateDescription")}
-                  </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 lg:justify-end">
@@ -1329,7 +1324,7 @@ export function HeartbeatsView() {
 
                     <div className={`${HEARTBEATS_PANEL_CLASS} space-y-4`}>
                       <div className="flex items-center justify-between gap-3">
-                        <h3 className="text-[12px] font-semibold uppercase tracking-wider text-muted">
+                        <div className="text-[12px] font-semibold uppercase tracking-wider text-muted">
                           {t("triggersview.RunHistory")}
                         </div>
                         <Button

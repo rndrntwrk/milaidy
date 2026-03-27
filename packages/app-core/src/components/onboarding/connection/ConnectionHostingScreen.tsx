@@ -34,7 +34,7 @@ export function ConnectionHostingScreen({
           appNameInterpolationVars(branding),
         )}
       />
-      <div className="mb-4 flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         {showHostingLocalCard ? (
           <Button
             type="button"
@@ -48,7 +48,7 @@ export function ConnectionHostingScreen({
                 {t("onboarding.hostingLocal")}
               </div>
               <div
-                className={`${onboardingChoiceCardDescriptionClassName} line-clamp-1`}
+                className={`${onboardingChoiceCardDescriptionClassName} line-clamp-2`}
               >
                 {t("onboarding.hostingLocalDesc")}
               </div>
@@ -68,7 +68,7 @@ export function ConnectionHostingScreen({
               {t("onboarding.hostingRemote")}
             </div>
             <div
-              className={`${onboardingChoiceCardDescriptionClassName} line-clamp-1`}
+              className={`${onboardingChoiceCardDescriptionClassName} line-clamp-2`}
             >
               {t("onboarding.hostingRemoteDesc")}
             </div>
@@ -84,7 +84,7 @@ export function ConnectionHostingScreen({
               {t("header.Cloud")}
             </div>
             <div
-              className={`${onboardingChoiceCardDescriptionClassName} line-clamp-1`}
+              className={`${onboardingChoiceCardDescriptionClassName} line-clamp-2`}
             >
               {t("onboarding.hostingElizaCloudDesc")}
             </div>

@@ -18,7 +18,8 @@ import { IdentityStep } from "./onboarding/IdentityStep";
 import { OnboardingPanel } from "./onboarding/OnboardingPanel";
 import { OnboardingStepNav } from "./onboarding/OnboardingStepNav";
 import { PermissionsStep } from "./onboarding/PermissionsStep";
-import { WelcomeStep } from "./onboarding/WelcomeStep";
+import { CloudLoginStep } from "./onboarding/CloudLoginStep";
+import { VoiceProviderStep } from "./onboarding/VoiceProviderStep";
 
 const FORCE_VRM =
   typeof window !== "undefined" &&
@@ -48,8 +49,8 @@ export function OnboardingWizard() {
     onboardingUiRevealNonce,
   } = useApp();
   const revealWelcomeUiImmediately =
-    disableVrm || onboardingStep === "welcome" || onboardingUiRevealNonce > 0;
-  // After Reset Agent from chat/companion, nonce bumps: show welcome UI immediately instead
+    disableVrm || onboardingStep === "cloud_login" || onboardingUiRevealNonce > 0;
+  // After Reset Agent from chat/companion, nonce bumps: show cloud ui immediately instead
   // of waiting for VrmStage reveal (often missing when remounting after an active session).
   const [revealStarted, setRevealStarted] = useState(
     () => revealWelcomeUiImmediately,
@@ -115,11 +116,13 @@ export function OnboardingWizard() {
 
   function renderStep() {
     switch (onboardingStep) {
-      case "welcome":
-        return <WelcomeStep />;
+      case "cloud_login":
+        return <CloudLoginStep />;
       case "hosting":
       case "providers":
         return <ConnectionStep />;
+      case "voice":
+        return <VoiceProviderStep />;
       case "permissions":
         return <PermissionsStep />;
       case "identity":
@@ -186,6 +189,7 @@ export function OnboardingWizard() {
             setUiLanguage={setUiLanguage}
             t={t}
             variant="companion"
+            triggerClassName="!h-9 !min-h-[36px] !rounded-[8px] !border !border-[var(--onboarding-card-border)] !bg-[var(--onboarding-card-bg)] !text-[var(--onboarding-text-primary)] !shadow-[0_2px_4px_rgba(0,0,0,0.04)] !ring-0 hover:!border-[var(--onboarding-field-focus-border)] transition-colors"
           />
         </div>
 

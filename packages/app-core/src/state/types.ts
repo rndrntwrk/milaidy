@@ -90,11 +90,12 @@ export interface NavigationEventsApi {
 }
 
 export type OnboardingStep =
-  | "welcome"
+  | "cloud_login"
+  | "identity"
   | "hosting"
   | "providers"
+  | "voice"
   | "permissions"
-  | "identity"
   | "launch";
 
 export interface OnboardingStepMeta {
@@ -103,12 +104,12 @@ export interface OnboardingStepMeta {
   subtitle: string;
 }
 
-/** Unified 6-step onboarding flow — identity (character select) is first. */
+/** Unified 7-step onboarding flow — cloud check is first, identity is second. */
 export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
   {
-    id: "welcome",
-    name: "onboarding.stepName.welcome",
-    subtitle: "onboarding.stepSub.welcome",
+    id: "cloud_login",
+    name: "onboarding.stepName.cloudLogin",
+    subtitle: "onboarding.stepSub.cloudLogin",
   },
   {
     id: "identity",
@@ -124,6 +125,11 @@ export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
     id: "providers",
     name: "onboarding.stepName.providers",
     subtitle: "onboarding.stepSub.providers",
+  },
+  {
+    id: "voice",
+    name: "onboarding.stepName.voice",
+    subtitle: "onboarding.stepSub.voice",
   },
   {
     id: "permissions",
@@ -505,6 +511,8 @@ export interface AppState {
   onboardingLargeModel: string;
   onboardingProvider: string;
   onboardingApiKey: string;
+  onboardingVoiceProvider: string;
+  onboardingVoiceApiKey: string;
   onboardingExistingInstallDetected: boolean;
   onboardingDetectedProviders: Array<{
     id: string;

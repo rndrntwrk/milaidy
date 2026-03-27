@@ -127,7 +127,7 @@ export function ReleaseCenterView() {
   useEffect(() => {
     setWgpuTagAvailable(
       typeof window !== "undefined" &&
-        Boolean(window.customElements.get("electrobun-wgpu")),
+      Boolean(window.customElements.get("electrobun-wgpu")),
     );
   }, []);
 
@@ -212,11 +212,7 @@ export function ReleaseCenterView() {
     return (
       <section className={`${RELEASE_PANEL_CLASSNAME} space-y-3 p-4`}>
         <div className="space-y-1">
-          <div className="text-sm font-semibold text-txt">Release Center</div>
-          <p className="max-w-2xl text-xs leading-5 text-muted">
-            Update actions and detached release tooling are only available in
-            the Electrobun desktop runtime.
-          </p>
+          <h2 className="text-sm font-semibold text-txt">Release Center</h2>
         </div>
         <div className="rounded-xl border border-border/40 bg-bg-hover/60 px-3 py-3 text-xs leading-5 text-muted">
           This web session is read-only for release management. Open Milady in
@@ -374,11 +370,7 @@ export function ReleaseCenterView() {
       {/* ── Actions ───────────────────────────────────────────── */}
       <section className={`${RELEASE_PANEL_CLASSNAME} space-y-3 p-4`}>
         <div className="space-y-1">
-          <div className="text-sm font-semibold text-txt">Update Actions</div>
-          <p className="max-w-2xl text-xs leading-5 text-muted">
-            Refresh the desktop updater state, download available updates, and
-            open the detached release tooling without leaving the app shell.
-          </p>
+          <h2 className="text-sm font-semibold text-txt">Update Actions</h2>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -451,15 +443,9 @@ export function ReleaseCenterView() {
       {/* ── Release Notes ─────────────────────────────────────── */}
       <section className={`${RELEASE_PANEL_CLASSNAME} space-y-3 p-4`}>
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-txt">
-              Release Notes
-            </span>
-          </div>
-          <p className="max-w-2xl text-xs leading-5 text-muted">
-            Review the release notes source URL, open it in the desktop
-            BrowserView, or reset back to the updater-provided default.
-          </p>
+          <span className="text-sm font-semibold text-txt">
+            Release Notes
+          </span>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Input
