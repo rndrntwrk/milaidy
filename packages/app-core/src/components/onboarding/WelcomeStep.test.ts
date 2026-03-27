@@ -2,6 +2,7 @@
 
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { onboardingHeaderBlockClass } from "./onboarding-step-chrome";
 
@@ -10,14 +11,10 @@ const { useAppMock, useBrandingMock } = vi.hoisted(() => ({
   useBrandingMock: vi.fn(),
 }));
 
-vi.mock("@miladyai/app-core/config", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@miladyai/app-core/config")>();
-  return {
-    ...actual,
-    useBranding: () => useBrandingMock(),
-  };
-});
+vi.mock("@miladyai/app-core/config", () => ({
+  appNameInterpolationVars: (branding: { appName?: string }) => branding,
+  useBranding: () => useBrandingMock(),
+}));
 
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => useAppMock(),
@@ -54,7 +51,7 @@ describe("WelcomeStep", () => {
 
     const headerBlock = renderer.root.findAll(
       (node) =>
-        node.type === "div" &&
+        node.type === "header" &&
         String(node.props.className ?? "").includes(onboardingHeaderBlockClass),
     )[0];
     expect(headerBlock).toBeDefined();
@@ -100,7 +97,7 @@ describe("WelcomeStep", () => {
 
     const headerBlock = renderer.root.findAll(
       (node) =>
-        node.type === "div" &&
+        node.type === "header" &&
         String(node.props.className ?? "").includes(onboardingHeaderBlockClass),
     )[0];
     expect(headerBlock).toBeDefined();
@@ -116,5 +113,27 @@ describe("WelcomeStep", () => {
     expect(setState).toHaveBeenCalledTimes(1);
     expect(setState).toHaveBeenCalledWith("onboardingStep", "identity");
     expect(handleOnboardingUseLocalBackend).not.toHaveBeenCalled();
+  });
+
+  it("uses the welcome prompt as the semantic heading when no explicit title is provided", () => {
+    useAppMock.mockReturnValue({
+      onboardingExistingInstallDetected: true,
+      handleOnboardingUseLocalBackend: vi.fn(),
+      setState: vi.fn(),
+      goToOnboardingStep: vi.fn(),
+      t: (key: string) =>
+        key === "onboarding.existingSetupDesc"
+          ? "Existing setup detected. Continue, or start fresh?"
+          : key,
+    });
+
+    render(React.createElement(WelcomeStep));
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Existing setup detected. Continue, or start fresh?",
+      }),
+    ).toBeTruthy();
   });
 });

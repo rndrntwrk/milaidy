@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import {
   OnboardingLinkActionButton,
@@ -14,6 +14,8 @@ describe("onboarding step chrome actions", () => {
     render(<OnboardingSecondaryActionButton>Back</OnboardingSecondaryActionButton>);
 
     const button = screen.getByRole("button", { name: "Back" });
+    expect(button.className).toContain("min-h-[44px]");
+    expect(button.className).toContain("min-w-[44px]");
     expect(button.className).toContain(
       "hover:bg-[var(--onboarding-secondary-hover-bg)]",
     );
@@ -23,9 +25,7 @@ describe("onboarding step chrome actions", () => {
     expect(button.className).toContain(
       "[text-shadow:var(--onboarding-text-shadow-muted)]",
     );
-    expect(button.className).toContain(
-      "[-webkit-text-stroke:0.25px_var(--onboarding-text-stroke-soft)]",
-    );
+    expect(button.className).not.toContain("-webkit-text-stroke");
     expect(button.className).not.toContain("bg-bg-accent");
     expect(button.className).not.toContain("text-muted-strong");
   });
@@ -41,6 +41,7 @@ describe("onboarding step chrome actions", () => {
     expect(button.className).toContain(
       "[text-shadow:var(--onboarding-text-shadow-muted)]",
     );
+    expect(button.className).toContain("min-h-[44px]");
     expect(button.className).not.toContain("bg-bg-accent");
   });
 
@@ -57,5 +58,36 @@ describe("onboarding step chrome actions", () => {
     expect(String(container.firstElementChild?.className)).toContain(
       onboardingHeaderBlockClass,
     );
+  });
+
+  it("renders the onboarding title as a semantic level-one heading", () => {
+    const { container } = render(
+      <OnboardingStepHeader
+        eyebrow="Hosting"
+        title="Choose your AI provider"
+        description="Pick a provider to continue."
+      />,
+    );
+
+    const heading = within(container).getByRole("heading", {
+      level: 1,
+      name: "Choose your AI provider",
+    });
+    expect(heading).toBeTruthy();
+  });
+
+  it("promotes description-only prompts into the semantic heading slot", () => {
+    const { container } = render(
+      <OnboardingStepHeader
+        eyebrow="Welcome to Milady"
+        description="Existing setup detected. Continue, or start fresh?"
+      />,
+    );
+
+    const heading = within(container).getByRole("heading", {
+      level: 1,
+      name: "Existing setup detected. Continue, or start fresh?",
+    });
+    expect(heading).toBeTruthy();
   });
 });

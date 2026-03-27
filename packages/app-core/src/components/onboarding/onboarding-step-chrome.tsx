@@ -1,9 +1,11 @@
 import { cn } from "@miladyai/ui";
 import type { ButtonHTMLAttributes, CSSProperties } from "react";
+import { useId } from "react";
 import {
   onboardingReadableTextFaintClassName,
   onboardingReadableTextMutedClassName,
   onboardingReadableTextStrongClassName,
+  onboardingTextSupportClassName,
 } from "./onboarding-form-primitives";
 
 interface OnboardingStepHeaderProps {
@@ -21,7 +23,7 @@ export const onboardingTitleClass =
   `text-center text-xl font-light leading-[1.4] ${onboardingReadableTextStrongClassName}`;
 
 export const onboardingDescriptionClass =
-  `text-center text-sm leading-relaxed ${onboardingReadableTextMutedClassName}`;
+  `mx-auto max-w-[36ch] text-center text-[13px] leading-relaxed ${onboardingReadableTextMutedClassName} ${onboardingTextSupportClassName}`;
 export const onboardingHeaderBlockClass =
   "mb-5 max-md:mb-4";
 
@@ -29,13 +31,13 @@ export const onboardingFooterClass =
   "mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-[var(--onboarding-footer-border)] pt-4";
 
 export const onboardingSecondaryActionClass =
-  `inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-transparent bg-transparent px-2.5 py-1.5 text-[10px] uppercase tracking-[0.15em] transition-[color,background-color,box-shadow] duration-300 hover:bg-[var(--onboarding-secondary-hover-bg)] hover:text-[var(--onboarding-text-strong)] active:bg-[var(--onboarding-secondary-pressed-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onboarding-secondary-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-50 ${onboardingReadableTextMutedClassName}`;
+  `inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-md border border-transparent bg-transparent px-3 py-2 text-[11px] uppercase tracking-[0.14em] transition-[color,background-color,box-shadow] duration-300 hover:bg-[var(--onboarding-secondary-hover-bg)] hover:text-[var(--onboarding-text-strong)] active:bg-[var(--onboarding-secondary-pressed-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onboarding-secondary-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-50 ${onboardingReadableTextMutedClassName}`;
 
 export const onboardingPrimaryActionClass =
   "group relative inline-flex min-h-[44px] items-center justify-center gap-2 overflow-hidden rounded-[8px] border border-[var(--onboarding-accent-border)] bg-[var(--onboarding-accent-bg)] px-8 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--onboarding-accent-foreground)] transition-all duration-300 hover:border-[var(--onboarding-accent-border-hover)] hover:bg-[var(--onboarding-accent-bg-hover)] disabled:cursor-not-allowed disabled:opacity-40";
 
 export const onboardingLinkActionClass =
-  `inline-flex min-h-8 items-center justify-center rounded-md border border-transparent bg-transparent px-2 py-1 text-[11px] transition-[color,background-color,box-shadow] duration-300 hover:bg-[var(--onboarding-secondary-hover-bg)] hover:text-[var(--onboarding-link)] active:bg-[var(--onboarding-secondary-pressed-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onboarding-secondary-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-50 ${onboardingReadableTextFaintClassName}`;
+  `inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border border-transparent bg-transparent px-3 py-2 text-[11px] transition-[color,background-color,box-shadow] duration-300 hover:bg-[var(--onboarding-secondary-hover-bg)] hover:text-[var(--onboarding-link)] active:bg-[var(--onboarding-secondary-pressed-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onboarding-secondary-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-50 ${onboardingReadableTextFaintClassName}`;
 
 export const onboardingTextShadowStyle = {
   textShadow: "var(--onboarding-text-shadow-strong)",
@@ -43,8 +45,7 @@ export const onboardingTextShadowStyle = {
 } as const;
 
 export const onboardingBodyTextShadowStyle = {
-  textShadow: "var(--onboarding-text-shadow-primary)",
-  WebkitTextStroke: "0.25px var(--onboarding-text-stroke-soft)",
+  textShadow: "var(--onboarding-text-shadow-muted)",
 } as const;
 
 export const onboardingPrimaryActionTextShadowStyle = {
@@ -53,7 +54,6 @@ export const onboardingPrimaryActionTextShadowStyle = {
 
 export const onboardingSecondaryActionTextShadowStyle = {
   textShadow: "var(--onboarding-text-shadow-muted)",
-  WebkitTextStroke: "0.25px var(--onboarding-text-stroke-soft)",
 } as const;
 
 function mergeOnboardingTextShadowStyle(
@@ -117,29 +117,52 @@ export function OnboardingStepHeader({
   titleClassName = "",
   descriptionClassName = "",
 }: OnboardingStepHeaderProps) {
+  const reactId = useId().replace(/:/g, "");
+  const headingId = `onboarding-step-heading-${reactId}`;
+  const descriptionId = `onboarding-step-description-${reactId}`;
+  const headingText = title || description || eyebrow;
+  const usesTitleHeading = Boolean(title);
+  const usesDescriptionHeading = !title && Boolean(description);
+  const hasBodyDescription = Boolean(title && description);
+  const headingClassName = usesTitleHeading || usesDescriptionHeading
+    ? `${onboardingTitleClass} ${
+        usesDescriptionHeading ? descriptionClassName : titleClassName
+      }`.trim()
+    : onboardingEyebrowClass;
+
   return (
-    <div className={onboardingHeaderBlockClass}>
-      <div className={onboardingEyebrowClass} style={onboardingTextShadowStyle}>
-        {eyebrow}
-      </div>
-      <OnboardingStepDivider />
-      {title ? (
-        <div
-          className={`${onboardingTitleClass} ${titleClassName}`.trim()}
-          style={onboardingTextShadowStyle}
-        >
-          {title}
-        </div>
+    <header
+      className={onboardingHeaderBlockClass}
+      aria-labelledby={headingId}
+      aria-describedby={hasBodyDescription ? descriptionId : undefined}
+    >
+      {usesTitleHeading || usesDescriptionHeading ? (
+        <p className={onboardingEyebrowClass} style={onboardingBodyTextShadowStyle}>
+          {eyebrow}
+        </p>
       ) : null}
-      {description ? (
+      <OnboardingStepDivider />
+      <h1
+        id={headingId}
+        className={headingClassName}
+        style={
+          usesTitleHeading || usesDescriptionHeading
+            ? onboardingTextShadowStyle
+            : onboardingBodyTextShadowStyle
+        }
+      >
+        {headingText}
+      </h1>
+      {hasBodyDescription ? (
         <p
+          id={descriptionId}
           className={`${onboardingDescriptionClass} ${descriptionClassName}`.trim()}
           style={onboardingBodyTextShadowStyle}
         >
           {description}
         </p>
       ) : null}
-    </div>
+    </header>
   );
 }
 

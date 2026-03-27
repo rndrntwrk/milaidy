@@ -495,7 +495,7 @@ describe("ConnectionStep", () => {
     const buttons = findButtons(tree?.root as TestRenderer.ReactTestInstance);
     const headerBlock = (tree?.root as TestRenderer.ReactTestInstance).findAll(
       (node) =>
-        node.type === "div" &&
+        node.type === "header" &&
         String(node.props.className ?? "").includes(onboardingHeaderBlockClass),
     )[0];
     expect(headerBlock).toBeDefined();

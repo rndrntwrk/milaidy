@@ -42,6 +42,7 @@ function t(key: string): string {
     "onboarding.apiKey": "API Key",
     "onboarding.enterApiKey": "Enter API key",
     "onboarding.back": "Back",
+    "onboarding.connected": "Connected",
     "onboarding.confirm": "Confirm",
     "onboarding.login": "Login",
     "onboarding.useExistingKey": "Use an existing key.",
@@ -103,9 +104,13 @@ describe("ConnectionProviderDetailScreen", () => {
     render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
 
     expect(screen.getByText("OpenAI")).toBeTruthy();
-    expect(screen.getByLabelText("API Key")).toBeTruthy();
+    const apiKeyInput = screen.getByLabelText("API Key");
+    expect(apiKeyInput).toBeTruthy();
+    expect(apiKeyInput.className).toContain("bg-[var(--onboarding-input-bg)]");
+    expect(apiKeyInput.className).not.toContain("-webkit-text-stroke");
     expect(screen.getByRole("button", { name: "Confirm" })).toBeTruthy();
     const backButton = screen.getByRole("button", { name: "Back" });
+    expect(backButton.className).toContain("min-h-[44px]");
     expect(backButton.className).toContain(
       "hover:bg-[var(--onboarding-secondary-hover-bg)]",
     );
@@ -149,6 +154,25 @@ describe("ConnectionProviderDetailScreen", () => {
       screen.getByRole("button", { name: "onboarding.reportIssue" }),
     );
     expect(mockOpenExternalUrl).toHaveBeenCalledWith("https://example.invalid");
+  });
+
+  it("uses the compact success banner for the Eliza Cloud connected state", () => {
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "elizacloud",
+        onboardingElizaCloudTab: "login",
+        elizaCloudConnected: true,
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    const banner = screen.getByRole("status");
+    expect(banner.getAttribute("data-onboarding-status-layout")).toBe(
+      "compact",
+    );
+    const content = banner.querySelector("[data-onboarding-status-content]");
+    expect(content?.textContent).toContain("Connected");
   });
 
   it("exposes openrouter model choices as a radiogroup", () => {

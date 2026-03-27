@@ -15,6 +15,7 @@ import {
   onboardingChoiceCardRecommendedLabelClassName,
   onboardingChoiceCardTitleClassName,
   onboardingHelperTextClassName,
+  onboardingTextSupportClassName,
 } from "../onboarding-form-primitives";
 import {
   OnboardingSecondaryActionButton,
@@ -59,7 +60,7 @@ export function ConnectionProviderGridScreen({
       />
       {onboardingRemoteConnected && (
         <p
-          className={`${onboardingHelperTextClassName} mx-auto mb-3 max-w-[32ch] text-center text-[12px] leading-[1.35]`}
+          className={`${onboardingHelperTextClassName} ${onboardingTextSupportClassName} mx-auto mb-3 max-w-[32ch] text-center leading-[1.35]`}
           style={onboardingBodyTextShadowStyle}
         >
           {t(
@@ -85,34 +86,34 @@ export function ConnectionProviderGridScreen({
                 dispatch({ type: "selectProvider", providerId: p.id })
               }
             >
-              <div className="flex min-h-[46px] w-full items-center gap-2">
+              <div className="flex min-h-[52px] w-full items-start gap-2.5">
                 <img
                   src={getProviderLogo(p.id, true, getCustomLogo(p.id))}
                   alt=""
-                  className="h-[22px] w-[22px] shrink-0 rounded-md object-contain"
+                  className="mt-0.5 h-[22px] w-[22px] shrink-0 rounded-md object-contain"
                 />
                 <div className="min-w-0 flex-1">
-                  <div
-                    className={`${onboardingChoiceCardTitleClassName} truncate`}
-                  >
+                  <div className={`${onboardingChoiceCardTitleClassName} line-clamp-2`}>
                     {display.name}
                   </div>
                   {display.description && (
                     <div
-                      className={`${onboardingChoiceCardDescriptionClassName} truncate`}
+                      className={`${onboardingChoiceCardDescriptionClassName} line-clamp-2`}
                     >
                       {display.description}
                     </div>
                   )}
                 </div>
                 {detectedLabel && (
-                  <span className={onboardingChoiceCardDetectedBadgeClassName}>
+                  <span
+                    className={`${onboardingChoiceCardDetectedBadgeClassName} self-start`}
+                  >
                     {detectedLabel}
                   </span>
                 )}
                 {isRecommended && !detectedLabel && (
                   <span
-                    className={onboardingChoiceCardRecommendedLabelClassName}
+                    className={`${onboardingChoiceCardRecommendedLabelClassName} self-start`}
                   >
                     {t("onboarding.recommended") ?? "Recommended"}
                   </span>
