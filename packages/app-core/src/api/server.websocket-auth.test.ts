@@ -52,7 +52,7 @@ describe("resolveWebSocketUpgradeRejection", () => {
     expect(rejection).toEqual({ status: 403, reason: "Origin not allowed" });
   });
 
-  it("allows tokenless upgrades so clients can authenticate on the first message", () => {
+  it("allows upgrades without handshake auth so clients can authenticate after open", () => {
     process.env.ELIZA_API_TOKEN = "test-token";
     const rejection = resolveWebSocketUpgradeRejection(
       mockReq() as http.IncomingMessage,
@@ -175,7 +175,7 @@ describe("resolveWebSocketUpgradeRejection", () => {
     expect(rejection).toBeNull();
   });
 
-  it("treats whitespace-only bearer tokens as missing and falls back to deferred auth", () => {
+  it("allows whitespace-only bearer token to fall back to post-open auth", () => {
     process.env.ELIZA_API_TOKEN = "test-token";
     const rejection = resolveWebSocketUpgradeRejection(
       mockReq({ authorization: "Bearer   " }) as http.IncomingMessage,

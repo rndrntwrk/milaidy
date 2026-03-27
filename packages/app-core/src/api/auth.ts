@@ -44,7 +44,7 @@ export function tokenMatches(expected: string, provided: string): boolean {
  * Checks (in order):
  *   1. `Authorization: Bearer <token>`
  *   2. `x-eliza-token`
- *   3. `x-milady-token` / `x-milaidy-token`
+ *   3. `x-milady-token`
  *   4. `x-api-key` / `x-api-token`
  */
 export function getProvidedApiToken(
@@ -59,7 +59,6 @@ export function getProvidedApiToken(
   const headerToken =
     extractHeaderValue(req.headers["x-eliza-token"]) ??
     extractHeaderValue(req.headers["x-milady-token"]) ??
-    extractHeaderValue(req.headers["x-milaidy-token"]) ??
     extractHeaderValue(req.headers["x-api-key"]) ??
     extractHeaderValue(req.headers["x-api-token"]);
 

@@ -93,6 +93,15 @@ import {
 } from "./agent-ready-state";
 import { DEFAULT_PORT } from "./constants";
 
+function resolveDesktopAppIconPath(): string {
+  return path.join(
+    import.meta.dir,
+    process.platform === "win32"
+      ? "../assets/appIcon.ico"
+      : "../assets/appIcon.png",
+  );
+}
+
 function setupApplicationMenu(): void {
   const isMac = process.platform === "darwin";
   const menu = buildApplicationMenu({
@@ -390,8 +399,15 @@ async function refreshHeartbeatMenuSnapshot(): Promise<void> {
 function startHeartbeatMenuRefresh(): void {
   if (heartbeatMenuRefreshTimer) return;
   void refreshHeartbeatMenuSnapshot();
+  let heartbeatRefreshInProgress = false;
   heartbeatMenuRefreshTimer = setInterval(() => {
-    void refreshHeartbeatMenuSnapshot();
+    if (heartbeatRefreshInProgress) {
+      return;
+    }
+    heartbeatRefreshInProgress = true;
+    void refreshHeartbeatMenuSnapshot().finally(() => {
+      heartbeatRefreshInProgress = false;
+    });
   }, HEARTBEAT_MENU_REFRESH_MS);
 }
 
@@ -523,6 +539,8 @@ let rendererUrlPromise: Promise<string> | null = null;
 let backgroundWindowPromise: Promise<void> | null = null;
 let isQuitting = false;
 let lastFocusedWindow: ManagedWindowLike | null = null;
+let registeredCleanupFns: Array<() => void | Promise<void>> = [];
+let shutdownCleanupStarted = false;
 
 function sendToActiveRenderer(message: string, payload?: unknown): void {
   currentSendToWebview?.(message, payload);
@@ -700,6 +718,7 @@ async function createMainWindow(): Promise<BrowserWindow> {
     title: "Milady",
     url: rendererUrl,
     preload,
+    icon: resolveDesktopAppIconPath(),
     frame: {
       width: state.width,
       height: state.height,
@@ -1333,14 +1352,28 @@ function setupDockReopen(): void {
   });
 }
 
-function setupShutdown(cleanupFns: Array<() => void>): void {
+async function runShutdownCleanup(reason: string): Promise<void> {
+  if (shutdownCleanupStarted) {
+    return;
+  }
+  shutdownCleanupStarted = true;
+  console.log(`[Main] Running shutdown cleanup (${reason})...`);
+  for (const cleanupFn of registeredCleanupFns) {
+    try {
+      await cleanupFn();
+    } catch (err) {
+      console.warn("[Main] Cleanup handler failed:", err);
+    }
+  }
+  disposeNativeModules();
+}
+
+function setupShutdown(cleanupFns: Array<() => void | Promise<void>>): void {
+  registeredCleanupFns = cleanupFns;
   Electrobun.events.on("before-quit", () => {
     isQuitting = true;
     console.log("[Main] App quitting, disposing native modules...");
-    for (const cleanupFn of cleanupFns) {
-      cleanupFn();
-    }
-    disposeNativeModules();
+    void runShutdownCleanup("before-quit");
   });
 }
 
@@ -1510,7 +1543,7 @@ async function main(): Promise<void> {
 
   initializeBundledWebGPU();
   checkWebGpuBrowserSupport();
-  const cleanupFns: Array<() => void> = [];
+  const cleanupFns: Array<() => void | Promise<void>> = [];
 
   // WHY push API base on every status tick with a port: embedded startup can
   // settle on a different loopback port than env/static HTML (allocation + stdout).
@@ -1529,6 +1562,7 @@ async function main(): Promise<void> {
       void refreshHeartbeatMenuSnapshot();
     }),
   );
+  cleanupFns.push(() => getAgentManager().stop());
 
   // Create window first — on Windows (CEF) the UI message loop must be
   // running before any synchronous FFI calls like setApplicationMenu().
@@ -1591,7 +1625,7 @@ async function main(): Promise<void> {
   const desktop = getDesktopManager();
   try {
     await desktop.createTray({
-      icon: path.join(import.meta.dir, "../assets/appIcon.png"),
+      icon: resolveDesktopAppIconPath(),
       tooltip: "Milady",
       title: "Milady",
       menu: [
@@ -1665,7 +1699,18 @@ async function main(): Promise<void> {
       // ensure the agent is running before the renderer starts polling.
       console.log("[Main] Starting embedded agent (local mode).");
       _startAgent(currentWindow).catch((err) => {
+        const error =
+          err instanceof Error
+            ? err.message
+            : typeof err === "string"
+              ? err
+              : "Unknown startup error";
         console.error("[Main] Agent auto-start failed:", err);
+        sendToActiveRenderer("agentStartupFailed", { error });
+        Utils.showNotification({
+          title: "Milady startup failed",
+          body: `Embedded agent failed to start: ${error}`,
+        });
       });
     }
   }
@@ -1853,5 +1898,7 @@ main().catch((err) => {
       "utf8",
     );
   } catch {}
-  process.exit(1);
+  void runShutdownCleanup("fatal-startup").finally(() => {
+    process.exit(1);
+  });
 });

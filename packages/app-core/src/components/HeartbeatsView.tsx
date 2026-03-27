@@ -334,7 +334,9 @@ function toneForLastStatus(
 function localizedExecutionStatus(status: string, t: TranslateFn): string {
   switch (status) {
     case "success":
-      return t("heartbeatsview.statusSuccess");
+      // Trigger "success" currently means the instruction was queued into the
+      // autonomy room, not that the autonomous action already completed.
+      return t("heartbeatsview.statusQueued");
     case "completed":
       return t("trajectoriesview.Completed");
     case "skipped":

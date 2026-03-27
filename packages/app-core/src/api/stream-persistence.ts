@@ -133,11 +133,17 @@ export function writeOverlayLayout(
   layout: unknown,
   destinationId?: string | null,
 ): void {
-  fs.mkdirSync(OVERLAY_DIR, { recursive: true });
-  const file = overlayFileForDestination(destinationId);
-  fs.writeFileSync(file, JSON.stringify(layout, null, 2), "utf-8");
   const label = destinationId ? `[${destinationId}]` : "[global]";
-  logger.info(`[stream] Overlay layout ${label} saved`);
+  try {
+    fs.mkdirSync(OVERLAY_DIR, { recursive: true });
+    const file = overlayFileForDestination(destinationId);
+    fs.writeFileSync(file, JSON.stringify(layout, null, 2), "utf-8");
+    logger.info(`[stream] Overlay layout ${label} saved`);
+  } catch (err) {
+    logger.warn(
+      `[stream] Failed to write overlay layout ${label}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 }
 
 /**

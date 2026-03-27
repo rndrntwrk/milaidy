@@ -2026,7 +2026,6 @@ const GENERIC_NO_RESPONSE_TEXT =
 const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
 const SESSION_STORAGE_API_BASE_KEY = "milady_api_base";
-const SESSION_STORAGE_API_TOKEN_KEY = "milady_api_token";
 
 export class MiladyClient {
   private _baseUrl: string;
@@ -2069,17 +2068,13 @@ export class MiladyClient {
 
   constructor(baseUrl?: string, token?: string) {
     this.clientId = MiladyClient.generateClientId();
-    const stored =
-      typeof window !== "undefined"
-        ? window.sessionStorage.getItem(SESSION_STORAGE_API_TOKEN_KEY)
-        : null;
     const storedBase =
       typeof window !== "undefined"
         ? window.sessionStorage.getItem(SESSION_STORAGE_API_BASE_KEY)
         : null;
     this._explicitBase = baseUrl != null || Boolean(storedBase?.trim());
-    this._token = token?.trim() || stored || null;
-    // Priority: explicit arg > session storage > boot config > same origin (Vite proxy)
+    this._token = token?.trim() || null;
+    // Priority: explicit arg > session storage(base only) > boot config > same origin (Vite proxy)
     const bootBase = getBootConfig().apiBase;
     this._baseUrl =
       baseUrl ?? storedBase ?? bootBase ?? getElizaApiBase() ?? "";
@@ -2130,16 +2125,6 @@ export class MiladyClient {
     // Update boot config so other consumers see the new token.
     const config = getBootConfig();
     setBootConfig({ ...config, apiToken: this._token ?? undefined });
-    if (typeof window !== "undefined") {
-      if (this._token) {
-        window.sessionStorage.setItem(
-          SESSION_STORAGE_API_TOKEN_KEY,
-          this._token,
-        );
-      } else {
-        window.sessionStorage.removeItem(SESSION_STORAGE_API_TOKEN_KEY);
-      }
-    }
   }
 
   getBaseUrl(): string {
@@ -4253,13 +4238,15 @@ export class MiladyClient {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     let url = `${protocol}//${host}/ws`;
     const params = new URLSearchParams({ clientId: this.clientId });
-    const token = this.apiToken;
-    if (token) params.set("token", token);
     url += `?${params.toString()}`;
 
     this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
+      const token = this.apiToken;
+      if (token && this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: "auth", token }));
+      }
       this.backoffMs = 500;
       // Reset connection state on successful connection
       this.reconnectAttempt = 0;
@@ -4348,8 +4335,13 @@ export class MiladyClient {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer) return;
-    // Stop reconnecting if we've hit max attempts
+    // After the short backoff window is exhausted, keep probing at a
+    // low frequency so the UI can recover without a full page refresh.
     if (this.reconnectAttempt >= this.maxReconnectAttempts) {
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        this.connectWs();
+      }, 30_000);
       return;
     }
     this.reconnectTimer = setTimeout(() => {
@@ -4425,6 +4417,8 @@ export class MiladyClient {
     }
 
     if (this.wsSendQueue.length >= this.wsSendQueueLimit) {
+      const droppedType = typeof data.type === "string" ? data.type : "unknown";
+      console.warn("[ws] send queue full - dropping:", droppedType);
       this.wsSendQueue.shift();
     }
     this.wsSendQueue.push(payload);

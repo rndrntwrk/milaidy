@@ -1,10 +1,11 @@
 # ==============================================================================
 # Stage 1: Builder — install all deps, resolve LFS assets, build
 # ==============================================================================
+ARG BUN_VERSION=1.3.10
 FROM node:22-bookworm AS builder
 
 # Install Bun (primary package manager and build tool)
-RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.10"
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
 ENV PATH="/root/.bun/bin:${PATH}"
 
 WORKDIR /app
@@ -30,9 +31,10 @@ RUN if [ -d .git ]; then \
 ARG MILADY_LFS_REPO_URL=""
 ARG MILADY_LFS_REF=""
 ARG MILADY_LFS_COMMIT=""
-ARG GITHUB_TOKEN=""
-RUN set -e; \
-    GITHUB_TOKEN="${GITHUB_TOKEN}"; \
+RUN --mount=type=secret,id=github_token \
+    set -e; \
+    GITHUB_TOKEN=""; \
+    if [ -f /run/secrets/github_token ]; then GITHUB_TOKEN="$(cat /run/secrets/github_token)"; fi; \
     REPO_URL_RAW="$MILADY_LFS_REPO_URL"; \
     if [ -z "$REPO_URL_RAW" ] && [ -d .git ]; then REPO_URL_RAW="$(git config --get remote.origin.url || true)"; fi; \
     if [ -z "$REPO_URL_RAW" ]; then REPO_URL_RAW="https://github.com/miladybsc/milady.git"; fi; \
@@ -136,7 +138,7 @@ RUN rm -rf node_modules && bun install --frozen-lockfile --ignore-scripts --prod
 FROM node:22-bookworm AS runtime
 
 # Install Bun (needed at runtime for bun-native modules)
-RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.10"
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
 ENV PATH="/root/.bun/bin:${PATH}"
 
 WORKDIR /app
@@ -177,7 +179,15 @@ ENV PGLITE_DATA_DIR="/data/.milady/workspace/.eliza/.elizadb"
 
 # Railway volume mount target. If /data is backed by a persistent volume,
 # onboarding/config/database survive redeploys.
-RUN mkdir -p /data/.milady/workspace/.eliza/.elizadb
+RUN mkdir -p /data/.milady/workspace/.eliza/.elizadb && \
+    chown -R node:node /app /data
 
-# Railway sets $PORT dynamically. Map it to MILADY_PORT at runtime.
-CMD ["sh", "-lc", "MILADY_PORT=${PORT:-2138} node milady.mjs start"]
+USER node
+
+EXPOSE 31337
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+  CMD sh -lc 'code="$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${MILADY_API_PORT:-31337}/api/health")" && [ "$code" = "200" -o "$code" = "401" ]'
+
+# Railway sets $PORT dynamically. Map it to MILADY_API_PORT at runtime.
+CMD ["sh", "-lc", "MILADY_API_PORT=${PORT:-31337} node milady.mjs start"]

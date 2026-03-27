@@ -18,6 +18,9 @@ const MOCK_DIST_PATH = "/mock/milady-dist";
 process.env.MILADY_DIST_PATH = MOCK_DIST_PATH;
 const ORIGINAL_EXEC_PATH = process.execPath;
 const ORIGINAL_PLATFORM = process.platform;
+const ORIGINAL_MILADY_PORT = process.env.MILADY_PORT;
+const ORIGINAL_MILADY_API_PORT = process.env.MILADY_API_PORT;
+const ORIGINAL_ELIZA_PORT = process.env.ELIZA_PORT;
 
 vi.mock("node:fs", () => {
   const existsSyncFn = vi.fn(() => true);
@@ -178,6 +181,7 @@ import {
   getStartupDiagnosticsSnapshot,
   getStartupStatusPath,
 } from "../native/agent";
+import { findFirstAvailableLoopbackPort } from "../native/loopback-port";
 
 describe("AgentManager", () => {
   let manager: AgentManager;
@@ -192,6 +196,9 @@ describe("AgentManager", () => {
       configurable: true,
       value: ORIGINAL_PLATFORM,
     });
+    delete process.env.MILADY_PORT;
+    delete process.env.MILADY_API_PORT;
+    delete process.env.ELIZA_PORT;
     // Default: all filesystem checks return true (dist exists, entry.js exists, etc.)
     const existsSync = await getExistsSyncMock();
     existsSync.mockReturnValue(true);
@@ -278,6 +285,21 @@ describe("AgentManager", () => {
       configurable: true,
       value: ORIGINAL_PLATFORM,
     });
+    if (ORIGINAL_MILADY_PORT === undefined) {
+      delete process.env.MILADY_PORT;
+    } else {
+      process.env.MILADY_PORT = ORIGINAL_MILADY_PORT;
+    }
+    if (ORIGINAL_MILADY_API_PORT === undefined) {
+      delete process.env.MILADY_API_PORT;
+    } else {
+      process.env.MILADY_API_PORT = ORIGINAL_MILADY_API_PORT;
+    }
+    if (ORIGINAL_ELIZA_PORT === undefined) {
+      delete process.env.ELIZA_PORT;
+    } else {
+      process.env.ELIZA_PORT = ORIGINAL_ELIZA_PORT;
+    }
     await manager.dispose();
   });
 
@@ -468,6 +490,42 @@ describe("AgentManager", () => {
       // Second call should return immediately without spawning again
       const secondStatus = await manager.start();
       expect(secondStatus.state).toBe("running");
+      expect(mockSpawn).toHaveBeenCalledTimes(1);
+    });
+
+    it("marks status as starting before awaited startup work so concurrent callers do not double-spawn", async () => {
+      const portDeferred = createDeferred<number>();
+      vi.mocked(findFirstAvailableLoopbackPort).mockReturnValueOnce(
+        portDeferred.promise,
+      );
+
+      const mockProc = createMockProcess();
+      mockSpawn.mockReturnValue(mockProc);
+
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ agents: [{ name: "TestAgent" }] }),
+      });
+
+      const firstStart = manager.start();
+      await Promise.resolve();
+
+      expect(manager.getStatus().state).toBe("starting");
+
+      const secondStart = manager.start();
+      await Promise.resolve();
+
+      expect(mockSpawn).toHaveBeenCalledTimes(0);
+
+      portDeferred.resolve(9999);
+      const [firstStatus, secondStatus] = await Promise.all([
+        firstStart,
+        secondStart,
+      ]);
+
+      expect(firstStatus.state).toBe("running");
+      expect(secondStatus.state).toBe("starting");
       expect(mockSpawn).toHaveBeenCalledTimes(1);
     });
 
@@ -666,6 +724,44 @@ describe("AgentManager", () => {
       }
     });
 
+    it("does not overwrite MILADY_PORT in child env when the API falls back to another port", async () => {
+      const originalPort = process.env.MILADY_PORT;
+      const originalApiPort = process.env.MILADY_API_PORT;
+      process.env.MILADY_PORT = "9999";
+      delete process.env.MILADY_API_PORT;
+
+      try {
+        vi.mocked(findFirstAvailableLoopbackPort).mockResolvedValueOnce(31337);
+
+        const mockProc = createMockProcess();
+        mockSpawn.mockReturnValue(mockProc);
+
+        mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ agents: [] }),
+        });
+
+        await manager.start();
+
+        const spawnArgs = mockSpawn.mock.calls[0];
+        const childEnv = spawnArgs[1].env as Record<string, string>;
+        expect(childEnv.MILADY_PORT).toBe("9999");
+      } finally {
+        if (originalPort === undefined) {
+          delete process.env.MILADY_PORT;
+        } else {
+          process.env.MILADY_PORT = originalPort;
+        }
+
+        if (originalApiPort === undefined) {
+          delete process.env.MILADY_API_PORT;
+        } else {
+          process.env.MILADY_API_PORT = originalApiPort;
+        }
+      }
+    });
+
     it("defaults agent name to Milady when agents endpoint fails", async () => {
       const mockProc = createMockProcess();
       mockSpawn.mockReturnValue(mockProc);
@@ -681,6 +777,7 @@ describe("AgentManager", () => {
 
     it("restarts once after a PGLite migration failure is detected", async () => {
       vi.useFakeTimers();
+      const statusChanges: string[] = [];
       const mockProc1 = createMockProcess({
         pid: 111,
         stderr: makeReadableStream("Failed query: create schema if not exists"),
@@ -699,11 +796,15 @@ describe("AgentManager", () => {
         json: async () => ({ agents: [{ name: "Milady" }] }),
       });
 
+      const unsubscribe = manager.onStatusChange((nextStatus) => {
+        statusChanges.push(nextStatus.state);
+      });
       const status = await manager.start();
       expect(status.state).toBe("running");
 
       mockProc1._exitDeferred.resolve(1);
       await Promise.resolve();
+      expect(statusChanges).toContain("not_started");
       await vi.advanceTimersByTimeAsync(500);
 
       const fs = await import("node:fs");
@@ -712,6 +813,7 @@ describe("AgentManager", () => {
         { recursive: true, force: true },
       );
       expect(mockSpawn).toHaveBeenCalledTimes(2);
+      unsubscribe();
 
       vi.useRealTimers();
     });

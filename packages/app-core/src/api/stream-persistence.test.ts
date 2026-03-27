@@ -14,6 +14,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { logger } from "@elizaos/core";
 
 vi.mock("@elizaos/core", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
@@ -304,6 +305,21 @@ describe("readOverlayLayout() / writeOverlayLayout()", () => {
     writeOverlayLayout(destLayout, "retake");
     const read = readOverlayLayout("retake", undefined);
     expect(read).toEqual(destLayout);
+  });
+
+  it("logs a warning instead of throwing when writing fails", () => {
+    const mkdirSpy = vi.spyOn(fs, "mkdirSync").mockImplementation(() => {
+      throw new Error("disk full");
+    });
+
+    expect(() => writeOverlayLayout(testLayout, "retake")).not.toThrow();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "Failed to write overlay layout [retake]: disk full",
+      ),
+    );
+
+    mkdirSpy.mockRestore();
   });
 });
 
