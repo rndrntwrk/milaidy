@@ -26,6 +26,47 @@ import {
 } from "vitest";
 import { req } from "../../../../test/helpers/http";
 
+class MockFileReader {
+  result: string | ArrayBuffer | null = null;
+  error: Error | null = null;
+  onload: null | (() => void) = null;
+  onerror: null | (() => void) = null;
+
+  readAsText(file: Blob) {
+    void file
+      .text()
+      .then((text) => {
+        this.result = text;
+        this.onload?.();
+      })
+      .catch((error: Error) => {
+        this.error = error;
+        this.onerror?.();
+      });
+  }
+
+  readAsArrayBuffer(file: Blob) {
+    void file
+      .arrayBuffer()
+      .then((buffer) => {
+        this.result = buffer;
+        this.onload?.();
+      })
+      .catch((error: Error) => {
+        this.error = error;
+        this.onerror?.();
+      });
+  }
+}
+
+beforeAll(() => {
+  vi.stubGlobal("FileReader", MockFileReader);
+});
+
+afterAll(() => {
+  vi.unstubAllGlobals();
+});
+
 // ---------------------------------------------------------------------------
 // Part 1: API Tests for Knowledge Endpoints
 // ---------------------------------------------------------------------------
@@ -334,9 +375,16 @@ vi.mock("@miladyai/app-core/api", () => ({
       },
     }),
     getKnowledgeFragments: vi.fn().mockResolvedValue({ fragments: [] }),
-    uploadKnowledgeDocument: vi.fn().mockResolvedValue({ ok: true }),
-    uploadKnowledgeUrl: vi.fn().mockResolvedValue({ ok: true }),
-    searchKnowledge: vi.fn().mockResolvedValue([]),
+    uploadKnowledgeDocumentsBulk: vi.fn().mockResolvedValue({
+      results: [{ index: 0, ok: true, filename: "test.txt", warnings: [] }],
+    }),
+    uploadKnowledgeFromUrl: vi.fn().mockResolvedValue({
+      filename: "example.com",
+      fragmentCount: 1,
+      isYouTubeTranscript: false,
+      warnings: [],
+    }),
+    searchKnowledge: vi.fn().mockResolvedValue({ results: [] }),
     deleteKnowledgeDocument: vi.fn().mockResolvedValue({ ok: true }),
   },
 }));
@@ -373,6 +421,25 @@ vi.mock("@miladyai/ui", async (importOriginal) => {
       React.createElement("div", null, children),
     DialogTitle: ({ children }: { children: React.ReactNode }) =>
       React.createElement("div", null, children),
+    Checkbox: ({
+      checked,
+      disabled,
+      onCheckedChange,
+    }: {
+      checked?: boolean;
+      disabled?: boolean;
+      onCheckedChange?: (checked: boolean) => void;
+    }) =>
+      React.createElement("input", {
+        type: "checkbox",
+        checked: !!checked,
+        disabled,
+        onChange: (event: {
+          target: {
+            checked: boolean;
+          };
+        }) => onCheckedChange?.(event.target.checked),
+      }),
   };
 });
 
@@ -426,11 +493,45 @@ function createKnowledgeUIState(): KnowledgeState {
   };
 }
 
+async function flushPromises() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+function findButtonByLabel(
+  tree: TestRenderer.ReactTestRenderer | null,
+  label: string,
+) {
+  return tree?.root
+    .findAllByType("button")
+    .find((node) => node.props.children === label);
+}
+
+function getRenderedText(tree: TestRenderer.ReactTestRenderer | null) {
+  return JSON.stringify(tree?.toJSON());
+}
+
 describe("KnowledgeView UI", () => {
   let state: KnowledgeState;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     state = createKnowledgeUIState();
+
+    vi.mocked(client.listKnowledgeDocuments).mockResolvedValue({
+      documents: state.knowledgeDocuments,
+    });
+    vi.mocked(client.searchKnowledge).mockResolvedValue({ results: [] });
+    vi.mocked(client.uploadKnowledgeDocumentsBulk).mockResolvedValue({
+      results: [{ index: 0, ok: true, filename: "test.txt", warnings: [] }],
+    });
+    vi.mocked(client.uploadKnowledgeFromUrl).mockResolvedValue({
+      filename: "example.com",
+      fragmentCount: 1,
+      isYouTubeTranscript: false,
+      warnings: [],
+    });
 
     mockUseApp.mockReset();
     mockUseApp.mockImplementation(() => ({
@@ -549,22 +650,22 @@ describe("KnowledgeView UI", () => {
     expect(tree).not.toBeNull();
   });
 
-  it("keeps yellow knowledge action buttons on a dark foreground", async () => {
+  it("uses translated knowledge controls instead of hardcoded branch copy", async () => {
     let tree: TestRenderer.ReactTestRenderer | null = null;
 
     await act(async () => {
       tree = TestRenderer.create(React.createElement(KnowledgeView));
     });
 
-    const findButton = (label: string) =>
-      tree?.root
-        .findAllByType("button")
-        .find((node) => node.props.children === label);
-
-    const chooseFilesButton = findButton("upload files");
-    const addUrlButton = findButton("add url");
-    const searchButton = findButton("go");
+    const chooseFilesButton = findButtonByLabel(
+      tree,
+      "knowledgeview.ChooseFiles",
+    );
+    const addUrlButton = findButtonByLabel(tree, "knowledgeview.AddFromURL");
+    const searchButton = findButtonByLabel(tree, "knowledge.ui.search");
+    const refreshButton = findButtonByLabel(tree, "common.refresh");
     const searchForm = tree?.root.findAllByType("form")[0];
+    const allText = getRenderedText(tree);
 
     expect(addUrlButton?.props.className).toContain("h-10");
     expect(searchForm?.props.className).toContain("w-full");
@@ -572,6 +673,166 @@ describe("KnowledgeView UI", () => {
     expect(chooseFilesButton?.props.className).toContain("text-txt");
     expect(searchButton?.props.className).toContain("h-10");
     expect(searchButton?.props.className).toContain("text-txt");
+    expect(refreshButton).toBeDefined();
+    expect(allText).toContain("knowledgeview.IncludeAIImageDes");
+    expect(allText).toContain("knowledgeview.Documents");
+    expect(allText).not.toContain("upload files");
+    expect(allText).not.toContain("add url");
+    expect(allText).not.toContain("\"go\"");
+    expect(allText).not.toContain("no results");
+  });
+
+  it("shows the image-processing toggle checked by default", async () => {
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(KnowledgeView));
+    });
+
+    const checkbox = tree?.root.find(
+      (node) => node.type === "input" && node.props.type === "checkbox",
+    );
+
+    expect(checkbox?.props.checked).toBe(true);
+  });
+
+  it("passes includeImageDescriptions=false to bulk file uploads when toggled off", async () => {
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(KnowledgeView));
+    });
+
+    const checkbox = tree?.root.find(
+      (node) => node.type === "input" && node.props.type === "checkbox",
+    );
+    const fileInput = tree?.root.find(
+      (node) => node.type === "input" && node.props.type === "file",
+    );
+    const file = new File(["test content"], "test.txt", {
+      type: "text/plain",
+    });
+
+    await act(async () => {
+      checkbox?.props.onChange({ target: { checked: false } });
+    });
+
+    await act(async () => {
+      fileInput?.props.onChange({ target: { files: [file], value: "" } });
+      await flushPromises();
+    });
+
+    expect(client.uploadKnowledgeDocumentsBulk).toHaveBeenCalledTimes(1);
+    expect(
+      vi.mocked(client.uploadKnowledgeDocumentsBulk).mock.calls[0]?.[0],
+    ).toEqual(
+      expect.objectContaining({
+        documents: [
+          expect.objectContaining({
+            metadata: expect.objectContaining({
+              includeImageDescriptions: false,
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("passes includeImageDescriptions=false to URL imports when toggled off", async () => {
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(KnowledgeView));
+    });
+
+    const checkbox = tree?.root.find(
+      (node) => node.type === "input" && node.props.type === "checkbox",
+    );
+
+    await act(async () => {
+      checkbox?.props.onChange({ target: { checked: false } });
+    });
+
+    await act(async () => {
+      findButtonByLabel(tree, "knowledgeview.AddFromURL")?.props.onClick();
+    });
+
+    const urlInput = tree?.root.find(
+      (node) => node.type === "input" && node.props.type === "url",
+    );
+
+    await act(async () => {
+      urlInput?.props.onChange({
+        target: { value: "https://example.com/document" },
+      });
+    });
+
+    await act(async () => {
+      findButtonByLabel(tree, "settings.import")?.props.onClick();
+      await flushPromises();
+    });
+
+    expect(client.uploadKnowledgeFromUrl).toHaveBeenCalledWith(
+      "https://example.com/document",
+      { includeImageDescriptions: false },
+    );
+  });
+
+  it("renders a refresh action for the document rail and reloads when clicked", async () => {
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(KnowledgeView));
+      await flushPromises();
+    });
+
+    const initialCalls = vi.mocked(client.listKnowledgeDocuments).mock.calls.length;
+    const refreshButton = findButtonByLabel(tree, "common.refresh");
+
+    expect(refreshButton).toBeDefined();
+
+    await act(async () => {
+      refreshButton?.props.onClick();
+      await flushPromises();
+    });
+
+    expect(client.listKnowledgeDocuments).toHaveBeenCalledTimes(
+      initialCalls + 1,
+    );
+  });
+
+  it("uses translated empty-state labels for documents and search results", async () => {
+    vi.mocked(client.listKnowledgeDocuments).mockResolvedValueOnce({
+      documents: [],
+    });
+
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(KnowledgeView));
+      await flushPromises();
+    });
+
+    expect(getRenderedText(tree)).toContain("knowledgeview.NoDocumentsYet");
+    expect(getRenderedText(tree)).toContain("knowledgeview.UploadFilesOrImpo");
+
+    const searchInput = tree?.root.find(
+      (node) => node.type === "input" && node.props.type === "text",
+    );
+
+    await act(async () => {
+      searchInput?.props.onChange({ target: { value: "nothing" } });
+    });
+
+    await act(async () => {
+      tree?.root.findAllByType("form")[0]?.props.onSubmit({
+        preventDefault: () => {},
+      });
+      await flushPromises();
+    });
+
+    expect(findButtonByLabel(tree, "common.refresh")).toBeDefined();
+    expect(getRenderedText(tree)).toContain("knowledgeview.NoResultsFound");
   });
 
   it("shows loading state when knowledgeLoading is true", async () => {
