@@ -1,7 +1,7 @@
 # Agent Release: build-first release pipeline.
 #
-# Flow: evaluate → gate → version → FULL BUILD MATRIX → tag → publish
-# Real builds run BEFORE any tag or release. Only tags if builds succeed.
+# Flow: decide (evaluate + trust) → version → FULL BUILD MATRIX → tag → publish
+# Builds are verified BEFORE any tag or release is created.
 #
 # Triggers:
 #   - PR merged to develop: auto-evaluates if enough changes warrant a release
@@ -43,115 +43,108 @@ env:
   BUN_VERSION: "1.3.10"
 
 jobs:
-  # ── 1. Evaluate (PR merge only) ───────────────────────────────────
-  evaluate:
-    name: Evaluate release need
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.merged == true
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    permissions:
-      contents: read
-    outputs:
-      should_release: ${{ steps.eval.outputs.should_release }}
-      reason: ${{ steps.eval.outputs.reason }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Evaluate changes since last release
-        id: eval
-        run: |
-          LATEST_TAG=$(git tag --sort=-creatordate | grep '^v' | head -1)
-          if [ -z "$LATEST_TAG" ]; then
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
-            echo "reason=No prior release tag found" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          COMMIT_COUNT=$(git rev-list --count "${LATEST_TAG}..HEAD")
-          CHANGED_FILES=$(git diff --name-only "$LATEST_TAG"..HEAD)
-          SRC_CHANGES=$(echo "$CHANGED_FILES" | grep -cE '^(packages/|apps/|scripts/)' || true)
-          DOC_ONLY=$([ "$SRC_CHANGES" -eq 0 ] && echo true || echo false)
-          HAS_ELECTROBUN=$(echo "$CHANGED_FILES" | grep -cE '^apps/app/electrobun/' || true)
-
-          if [ "$DOC_ONLY" = "true" ]; then
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-            echo "reason=Doc-only changes since $LATEST_TAG" >> "$GITHUB_OUTPUT"
-          elif [ "$COMMIT_COUNT" -lt 5 ]; then
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-            echo "reason=Only $COMMIT_COUNT commits since $LATEST_TAG (threshold: 5)" >> "$GITHUB_OUTPUT"
-          elif [ "$HAS_ELECTROBUN" -gt 0 ]; then
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
-            echo "reason=Electrobun changes ($HAS_ELECTROBUN files), $COMMIT_COUNT commits since $LATEST_TAG" >> "$GITHUB_OUTPUT"
-          elif [ "$SRC_CHANGES" -ge 10 ]; then
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
-            echo "reason=$SRC_CHANGES source files, $COMMIT_COUNT commits since $LATEST_TAG" >> "$GITHUB_OUTPUT"
-          elif [ "$COMMIT_COUNT" -ge 15 ]; then
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
-            echo "reason=$COMMIT_COUNT commits accumulated since $LATEST_TAG" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-            echo "reason=$COMMIT_COUNT commits, $SRC_CHANGES src files — below thresholds" >> "$GITHUB_OUTPUT"
-          fi
-
-  # ── 2. Trust gate ──────────────────────────────────────────────────
-  gate:
-    name: Trust gate
-    if: always() && ((github.event_name == 'workflow_dispatch') || (github.event_name == 'issues' && github.event.label.name == 'release-ready') || (needs.evaluate.result == 'success' && needs.evaluate.outputs.should_release == 'true'))
-    needs: [evaluate]
+  # ── 1. Single decision gate — combines evaluation + trust check ────
+  # No skipped ancestors — this job always runs and outputs proceed=true/false.
+  decide:
+    name: Evaluate & authorize
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
       issues: write
     outputs:
-      allowed: ${{ steps.check.outputs.allowed }}
+      proceed: ${{ steps.decision.outputs.proceed }}
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: .github
-          fetch-depth: 1
-      - name: Check trust eligibility
-        id: check
+          fetch-depth: 0
+
+      - name: Decide whether to release
+        id: decision
         uses: actions/github-script@v7
         with:
           script: |
-            const { computeTrustScore, DEFAULT_CONFIG, createContributorState, expandState } = require('./.github/trust-scoring.cjs');
+            const event = context.eventName;
             const actor = context.actor;
+
+            // ── Step 1: Should we release? ──────────────────────────
+            let shouldRelease = false;
+            let reason = '';
+
+            if (event === 'workflow_dispatch' || (event === 'issues' && context.payload.label?.name === 'release-ready')) {
+              shouldRelease = true;
+              reason = event === 'workflow_dispatch' ? 'Manual dispatch' : 'release-ready label';
+            } else if (event === 'pull_request' && context.payload.pull_request?.merged) {
+              // Evaluate changes since last tag
+              const { execSync } = require('child_process');
+              const latestTag = execSync('git tag --sort=-creatordate | grep "^v" | head -1').toString().trim();
+              if (!latestTag) {
+                shouldRelease = true;
+                reason = 'No prior release tag';
+              } else {
+                const commitCount = parseInt(execSync(`git rev-list --count ${latestTag}..HEAD`).toString().trim(), 10);
+                const changedFiles = execSync(`git diff --name-only ${latestTag}..HEAD`).toString().trim().split('\n').filter(Boolean);
+                const srcChanges = changedFiles.filter(f => /^(packages\/|apps\/|scripts\/)/.test(f)).length;
+                const hasElectrobun = changedFiles.filter(f => f.startsWith('apps/app/electrobun/')).length;
+                const docOnly = srcChanges === 0;
+
+                if (docOnly) { reason = `Doc-only since ${latestTag}`; }
+                else if (commitCount < 5) { reason = `${commitCount} commits since ${latestTag} (need 5)`; }
+                else if (hasElectrobun > 0) { shouldRelease = true; reason = `Electrobun changes (${hasElectrobun} files), ${commitCount} commits since ${latestTag}`; }
+                else if (srcChanges >= 10) { shouldRelease = true; reason = `${srcChanges} src files, ${commitCount} commits since ${latestTag}`; }
+                else if (commitCount >= 15) { shouldRelease = true; reason = `${commitCount} commits since ${latestTag}`; }
+                else { reason = `${commitCount} commits, ${srcChanges} src files — below thresholds`; }
+              }
+            } else {
+              reason = 'Event not applicable';
+            }
+
+            core.info(`Should release: ${shouldRelease} — ${reason}`);
+            if (!shouldRelease) {
+              core.setOutput('proceed', 'false');
+              return;
+            }
+
+            // ── Step 2: Trust check ─────────────────────────────────
+            const { computeTrustScore, DEFAULT_CONFIG, expandState } = require('./.github/trust-scoring.cjs');
+
             let isOrgMember = false;
             try {
               const { status } = await github.rest.orgs.checkMembershipForUser({ org: context.repo.owner, username: actor });
               isOrgMember = status === 204 || status === 302;
-            } catch (e) { /* not a member */ }
-            if (isOrgMember) { core.setOutput('allowed', 'true'); return; }
+            } catch (e) {}
 
-            let trustTier = 'untested', trustScore = DEFAULT_CONFIG.initialScore;
-            try {
-              const { data: fileData } = await github.rest.repos.getContent({
-                owner: context.repo.owner, repo: context.repo.repo,
-                path: '.github/contributor-trust.json', ref: 'develop',
-              });
-              const allStates = JSON.parse(Buffer.from(fileData.content, 'base64').toString());
-              if (allStates[actor]) {
-                const state = expandState(allStates[actor]);
-                const result = computeTrustScore(state, DEFAULT_CONFIG);
-                trustTier = result.tier; trustScore = result.score;
+            let allowed = isOrgMember;
+            if (!allowed) {
+              let trustTier = 'untested', trustScore = DEFAULT_CONFIG.initialScore;
+              try {
+                const { data: fileData } = await github.rest.repos.getContent({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  path: '.github/contributor-trust.json', ref: 'develop',
+                });
+                const allStates = JSON.parse(Buffer.from(fileData.content, 'base64').toString());
+                if (allStates[actor]) {
+                  const state = expandState(allStates[actor]);
+                  const result = computeTrustScore(state, DEFAULT_CONFIG);
+                  trustTier = result.tier;
+                  trustScore = result.score;
+                }
+              } catch (e) { core.info(`Trust data unavailable: ${e.message}`); }
+
+              allowed = ['legendary', 'trusted'].includes(trustTier);
+              if (!allowed && context.payload.issue) {
+                try { await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.payload.issue.number, name: 'release-ready' }); } catch (e) {}
+                await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.payload.issue.number, body: `⚠️ **Release not authorized** — @${actor} trust \`${trustTier}\` (${trustScore}/100). Need org member or trusted+ (75+).` });
               }
-            } catch (e) { core.info(`Trust data unavailable: ${e.message}`); }
-
-            if (['legendary', 'trusted'].includes(trustTier)) {
-              core.setOutput('allowed', 'true'); return;
-            }
-            core.setOutput('allowed', 'false');
-            if (context.payload.issue) {
-              try { await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.payload.issue.number, name: 'release-ready' }); } catch (e) {}
-              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.payload.issue.number, body: `⚠️ **Release not authorized** — @${actor} trust \`${trustTier}\` (${trustScore}/100). Need org member or trusted+ (75+).` });
             }
 
-  # ── 3. Resolve version (no tag yet) ───────────────────────────────
+            core.info(`Trust: allowed=${allowed} (org=${isOrgMember})`);
+            core.setOutput('proceed', allowed ? 'true' : 'false');
+
+  # ── 2. Resolve version ─────────────────────────────────────────────
   version:
     name: Resolve version
-    needs: [gate]
-    if: needs.gate.result == 'success' && needs.gate.outputs.allowed == 'true'
+    needs: [decide]
+    if: needs.decide.outputs.proceed == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
@@ -189,11 +182,7 @@ jobs:
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
           echo "Next: v$VERSION (prerelease=$PRERELEASE)"
 
-  # ── 4. FULL BUILD MATRIX (blocking — must all pass) ────────────────
-  #
-  # These call the REAL release workflows with publish disabled.
-  # Same runners, same matrix, same build steps — just no upload/push.
-
+  # ── 3. FULL BUILD MATRIX (blocking — electrobun + docker required) ─
   build-electrobun:
     name: Electrobun full matrix
     needs: [version]
@@ -225,7 +214,7 @@ jobs:
       run_validation: true
     secrets: inherit
 
-  # ── 5. Electrobun + Docker must pass. npm is nice-to-have. ──────────
+  # ── 4. Electrobun + Docker green → tag and publish ─────────────────
   publish:
     name: Tag & publish release
     needs: [version, build-electrobun, build-docker, build-npm]
@@ -257,13 +246,13 @@ jobs:
         env:
           TAG: ${{ needs.version.outputs.tag }}
           PRERELEASE: ${{ needs.version.outputs.prerelease }}
-          EVAL_REASON: ${{ needs.evaluate.outputs.reason || 'Manual trigger' }}
+          NPM_RESULT: ${{ needs.build-npm.result }}
         with:
           github-token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           script: |
             const tag = process.env.TAG;
             const prerelease = process.env.PRERELEASE === 'true';
-            const reason = process.env.EVAL_REASON;
+            const npmOk = process.env.NPM_RESULT === 'success';
 
             const { data: release } = await github.rest.repos.createRelease({
               owner: context.repo.owner,
@@ -275,23 +264,18 @@ jobs:
                 '',
                 prerelease ? '⚠️ Pre-release (alpha)' : '✅ Stable release',
                 '',
-                `**Reason:** ${reason}`,
-                '',
-                '### Pre-release verification (all passed)',
+                '### Pre-release verification',
                 '- ✅ Electrobun desktop — full matrix (macOS ARM, macOS Intel, Windows, Linux)',
                 '- ✅ Docker image — built successfully',
-                '- ✅ npm package — built and validated',
+                npmOk ? '- ✅ npm package — built and validated' : '- ⚠️ npm package — build failed (non-blocking)',
                 '',
                 '### Publishing pipelines (triggered by this release)',
                 '- [ ] Electrobun artifacts upload + updater channel',
-                '- [ ] npm publish to registry',
+                '- [ ] npm publish',
                 '- [ ] Docker push to GHCR',
-                '- [ ] Android AAB → Play Store',
-                '- [ ] iOS → App Store',
-                '- [ ] macOS → App Store',
+                '- [ ] Android / iOS / macOS App Store',
                 '- [ ] Snap / Flatpak / Debian',
-                '- [ ] Homebrew tap update',
-                '- [ ] Homepage deploy',
+                '- [ ] Homebrew / Homepage',
                 '',
                 `Triggered by @${context.actor}`,
               ].join('\n'),
@@ -306,25 +290,20 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner, repo: context.repo.repo,
                 issue_number: issue,
-                body: `🚀 **Release ${tag} published** — all builds verified\n\n${release.html_url}`,
+                body: `🚀 **Release ${tag} published**\n\n${release.html_url}`,
               });
               await github.rest.issues.update({
                 owner: context.repo.owner, repo: context.repo.repo,
                 issue_number: issue, state: 'closed', state_reason: 'completed',
               });
-              try {
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner, repo: context.repo.repo,
-                  issue_number: issue, name: 'release-ready',
-                });
-              } catch (e) { /* ok */ }
+              try { await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issue, name: 'release-ready' }); } catch (e) {}
             }
 
-  # ── 6. On ANY failure — open an issue with diagnostics ─────────────
+  # ── 5. On failure — open issue with diagnostics ────────────────────
   report-failure:
     name: Report build failures
     needs: [version, build-electrobun, build-docker, build-npm, publish]
-    if: always() && (needs.build-electrobun.result == 'failure' || needs.build-docker.result == 'failure' || needs.build-npm.result == 'failure' || needs.publish.result == 'failure')
+    if: always() && (needs.build-electrobun.result == 'failure' || needs.build-docker.result == 'failure' || needs.publish.result == 'failure')
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       issues: write
@@ -333,63 +312,30 @@ jobs:
         uses: actions/github-script@v7
         env:
           TAG: ${{ needs.version.outputs.tag || 'unknown' }}
-          ELECTROBUN_RESULT: ${{ needs.build-electrobun.result }}
-          DOCKER_RESULT: ${{ needs.build-docker.result }}
-          NPM_RESULT: ${{ needs.build-npm.result }}
-          PUBLISH_RESULT: ${{ needs.publish.result }}
+          ELECTROBUN: ${{ needs.build-electrobun.result }}
+          DOCKER: ${{ needs.build-docker.result }}
+          NPM: ${{ needs.build-npm.result }}
+          PUBLISH: ${{ needs.publish.result }}
         with:
           script: |
             const tag = process.env.TAG;
-            const results = {
-              'Electrobun full matrix': process.env.ELECTROBUN_RESULT,
-              'Docker image build': process.env.DOCKER_RESULT,
-              'npm package build': process.env.NPM_RESULT,
-              'Tag & publish': process.env.PUBLISH_RESULT,
-            };
-
-            const lines = Object.entries(results).map(([name, result]) => {
-              const icon = result === 'success' ? '✅' : result === 'failure' ? '❌' : '⏭️';
-              return `| ${name} | ${icon} ${result} |`;
-            });
-
-            const failed = Object.entries(results)
-              .filter(([, r]) => r === 'failure')
-              .map(([n]) => n);
-
+            const results = { Electrobun: process.env.ELECTROBUN, Docker: process.env.DOCKER, npm: process.env.NPM, Publish: process.env.PUBLISH };
+            const lines = Object.entries(results).map(([n, r]) => `| ${n} | ${r === 'success' ? '✅' : r === 'failure' ? '❌' : '⏭️'} ${r} |`);
+            const failed = Object.entries(results).filter(([,r]) => r === 'failure').map(([n]) => n);
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
-            const body = [
-              `## Release build failure — ${tag}`,
-              '',
-              `**Run:** ${runUrl}`,
-              `**Triggered by:** @${context.actor}`,
-              '',
-              '### Build results',
-              '| Step | Result |',
-              '|------|--------|',
-              ...lines,
-              '',
-              `### Failed: ${failed.join(', ')}`,
-              '',
-              'Investigate the failed jobs in the run linked above.',
-              'The release tag was **NOT** created — no artifacts were published.',
-              '',
-              'Once fixed, re-trigger with `workflow_dispatch` or the `release-ready` label.',
-            ].join('\n');
-
             await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner: context.repo.owner, repo: context.repo.repo,
               title: `❌ Release ${tag} failed: ${failed.join(', ')}`,
-              body,
+              body: `## Release build failure — ${tag}\n\n**Run:** ${runUrl}\n**By:** @${context.actor}\n\n| Step | Result |\n|------|--------|\n${lines.join('\n')}\n\nTag was **NOT** created. Re-trigger after fixing.`,
               labels: ['release-tracker', 'bug'],
             });
 
-  # ── 7. On warnings (partial skip) — open advisory issue ───────────
-  report-warnings:
-    name: Report skipped builds
-    needs: [version, build-electrobun, build-docker, build-npm, publish]
-    if: always() && needs.publish.result == 'success' && (needs.build-electrobun.result == 'skipped' || needs.build-docker.result == 'skipped' || needs.build-npm.result == 'skipped')
+  # ── 6. On npm failure with successful release — warning issue ──────
+  report-npm-warning:
+    name: Report npm build warning
+    needs: [version, build-npm, publish]
+    if: always() && needs.publish.result == 'success' && needs.build-npm.result == 'failure'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       issues: write
@@ -398,40 +344,13 @@ jobs:
         uses: actions/github-script@v7
         env:
           TAG: ${{ needs.version.outputs.tag || 'unknown' }}
-          ELECTROBUN_RESULT: ${{ needs.build-electrobun.result }}
-          DOCKER_RESULT: ${{ needs.build-docker.result }}
-          NPM_RESULT: ${{ needs.build-npm.result }}
         with:
           script: |
             const tag = process.env.TAG;
-            const results = {
-              'Electrobun': process.env.ELECTROBUN_RESULT,
-              'Docker': process.env.DOCKER_RESULT,
-              'npm': process.env.NPM_RESULT,
-            };
-
-            const skipped = Object.entries(results)
-              .filter(([, r]) => r === 'skipped')
-              .map(([n]) => n);
-
-            if (skipped.length === 0) return;
-
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-
             await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `⚠️ Release ${tag} — ${skipped.join(', ')} builds were skipped`,
-              body: [
-                `## Release ${tag} published with warnings`,
-                '',
-                `**Run:** ${runUrl}`,
-                '',
-                `The following builds were skipped: **${skipped.join(', ')}**`,
-                '',
-                'The release was published but these artifacts may be missing.',
-                'Investigate and re-run the individual workflows if needed.',
-              ].join('\n'),
+              owner: context.repo.owner, repo: context.repo.repo,
+              title: `⚠️ Release ${tag} — npm build failed (non-blocking)`,
+              body: `## Release ${tag} published with npm warning\n\n**Run:** ${runUrl}\n\nElectrobun and Docker passed, but npm package build failed.\nThe npm publish pipeline may fail downstream. Investigate and fix.`,
               labels: ['release-tracker'],
             });
-
