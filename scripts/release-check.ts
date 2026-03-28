@@ -750,6 +750,7 @@ function assertWindowsSmokeScriptHasLeadingParamBlock() {
     '$stopProtectedProcessIds = [System.Collections.Generic.HashSet[int]]::new()',
     'Get-CimInstance Win32_Process -Filter "ProcessId = $PID"',
     "-not $stopProtectedProcessIds.Contains([int]$_.Id)",
+    "[int]::TryParse([string]$state.port, [ref]$observedPort)",
     "if ($state.session_id -ne $startupSessionId)",
     "$handler.UseProxy = $false",
     '--noproxy "127.0.0.1"',

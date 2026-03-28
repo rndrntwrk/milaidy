@@ -688,6 +688,9 @@ describe("Electrobun release workflow drift", () => {
     expect(smokeScript).toContain(
       "-not $stopProtectedProcessIds.Contains([int]$_.Id)",
     );
+    expect(smokeScript).toContain(
+      "[int]::TryParse([string]$state.port, [ref]$observedPort)",
+    );
     const tarballBranchIndex = smokeScript.indexOf(
       'Get-ChildItem -Path $resolvedArtifactsDir -File -Filter "*.tar.zst"',
     );

@@ -224,8 +224,15 @@ function Get-ObservedBackendPorts([int]$DefaultPort) {
 
   try {
     $state = Get-Content $startupStateFile -Raw -ErrorAction Stop | ConvertFrom-Json
-    if ($state.port -is [int] -and -not $ports.Contains([int]$state.port)) {
-      $ports.Add([int]$state.port)
+    # ConvertFrom-Json can hydrate numeric fields as Int64 on Windows runners.
+    $observedPort = 0
+    if (
+      [int]::TryParse([string]$state.port, [ref]$observedPort) -and
+      $observedPort -gt 0 -and
+      $observedPort -le 65535 -and
+      -not $ports.Contains($observedPort)
+    ) {
+      $ports.Add($observedPort)
     }
   } catch {
     return $ports.ToArray()
