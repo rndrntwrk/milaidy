@@ -41,4 +41,5 @@ export * from "./components/ui/tooltip-extended";
 export * from "./components/ui/typography";
 export * from "./hooks";
 export * from "./lib/button-styles";
+export * from "./lib/floating-layers";
 export * from "./lib/utils";

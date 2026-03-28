@@ -1,0 +1,3 @@
+export const SELECT_FLOATING_LAYER_NAME = "config-select";
+export const SELECT_FLOATING_LAYER_Z_INDEX = 12000;
+export const SELECT_FLOATING_LAYER_CLASSNAME = "z-[12000]";

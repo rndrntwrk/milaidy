@@ -7,6 +7,10 @@ import {
   SelectContent,
   SelectItem,
 } from "./select";
+import {
+  SELECT_FLOATING_LAYER_CLASSNAME,
+  SELECT_FLOATING_LAYER_NAME,
+} from "../../lib/floating-layers";
 
 describe("Select", () => {
   beforeEach(() => {
@@ -61,5 +65,36 @@ describe("Select", () => {
     fireEvent.click(screen.getByRole("combobox"));
     // After opening, the listbox should appear
     expect(screen.getByRole("listbox")).toBeInTheDocument();
+  });
+
+  it("mounts the listbox on the shared floating layer outside clipping shells", () => {
+    const { getByTestId } = render(
+      <div
+        data-testid="clipping-shell"
+        className="overflow-hidden rounded-[30px] border border-border"
+      >
+        <Select>
+          <SelectTrigger>
+            <SelectValue placeholder="Choose" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="one">One</SelectItem>
+            <SelectItem value="two">Two</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>,
+    );
+
+    fireEvent.click(screen.getByRole("combobox"));
+
+    const shell = getByTestId("clipping-shell");
+    const floatingLayer = document.body.querySelector(
+      `[data-floating-layer="${SELECT_FLOATING_LAYER_NAME}"]`,
+    ) as HTMLElement | null;
+
+    expect(floatingLayer).not.toBeNull();
+    expect(floatingLayer).toHaveClass(SELECT_FLOATING_LAYER_CLASSNAME);
+    expect(shell.contains(floatingLayer!)).toBe(false);
+    expect(screen.getByRole("listbox")).toBe(floatingLayer);
   });
 });
