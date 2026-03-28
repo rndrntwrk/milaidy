@@ -1,8 +1,8 @@
 /**
  * Inventory view — unified wallet balances, NFTs, and scoped BSC trading.
  *
- * This is a thin coordinator that delegates rendering to sub-components
- * inside the ./inventory/ directory.
+ * Thin coordinator that delegates rendering to sub-components
+ * in the ./inventory/ directory.
  */
 
 import type { StewardStatusResponse } from "@miladyai/app-core/api";
@@ -39,7 +39,6 @@ import {
 } from "./chainConfig";
 import {
   DESKTOP_PAGE_CONTENT_CLASSNAME,
-  DESKTOP_RAIL_SUMMARY_CARD_CLASSNAME,
   DESKTOP_SURFACE_PANEL_CLASSNAME,
   DesktopPageFrame,
 } from "./desktop-surface-primitives";
@@ -62,10 +61,7 @@ import { useInventoryData } from "./inventory/useInventoryData";
 import {
   APP_PANEL_SHELL_CLASSNAME,
   APP_SIDEBAR_CARD_ACTIVE_CLASSNAME,
-  APP_SIDEBAR_COMPACT_PILL_CLASSNAME,
   APP_SIDEBAR_INNER_CLASSNAME,
-  APP_SIDEBAR_KICKER_CLASSNAME,
-  APP_SIDEBAR_PILL_CLASSNAME,
   APP_SIDEBAR_RAIL_CLASSNAME,
 } from "./sidebar-shell-styles";
 
@@ -73,10 +69,8 @@ import {
 
 const WALLET_SHELL_CLASS = APP_PANEL_SHELL_CLASSNAME;
 const WALLET_SIDEBAR_CLASS = `lg:w-[21rem] lg:max-w-[352px] ${APP_SIDEBAR_RAIL_CLASSNAME}`;
-const WALLET_SIDEBAR_KICKER_CLASS = APP_SIDEBAR_KICKER_CLASSNAME;
 const WALLET_SIDEBAR_ITEM_ACTIVE_CLASS = APP_SIDEBAR_CARD_ACTIVE_CLASSNAME;
 const WALLET_PANEL_CLASS = DESKTOP_SURFACE_PANEL_CLASSNAME;
-const WALLET_SORT_PILL_CLASS = `${APP_SIDEBAR_COMPACT_PILL_CLASSNAME} text-[10px] font-semibold tracking-[0.14em] text-txt-strong`;
 
 type InventorySortKey = "chain" | "symbol" | "value";
 
@@ -100,15 +94,6 @@ function countVisibleAssetsForFocus(
 
 function isInventorySortKey(value: string): value is InventorySortKey {
   return value === "value" || value === "chain" || value === "symbol";
-}
-
-function getInventorySortLabel(
-  inventorySort: InventorySortKey,
-  t: (key: string) => string,
-): string {
-  if (inventorySort === "chain") return t("wallet.chain");
-  if (inventorySort === "symbol") return t("wallet.name");
-  return t("wallet.value");
 }
 
 export function InventoryView() {
@@ -138,7 +123,6 @@ export function InventoryView() {
     copyToClipboard,
     t,
   } = useApp();
-  const currentSortLabel = getInventorySortLabel(inventorySort, t);
 
   // ── Tracked tokens state ──────────────────────────────────────────
   const [trackedTokens, setTrackedTokens] = useState<TrackedToken[]>(() =>
@@ -266,13 +250,6 @@ export function InventoryView() {
     evmAddr ? { label: "EVM", address: evmAddr } : null,
     solAddr ? { label: "Solana", address: solAddr } : null,
   ].filter((item): item is { label: string; address: string } => Boolean(item));
-  const fundingRouteLabel =
-    addresses.length > 1
-      ? t("wallet.fundingRoutesAvailable", { count: addresses.length })
-      : addresses.length === 1
-        ? t("wallet.fundingRouteAvailable")
-        : t("wallet.managedWalletOverview");
-
   const chainItemMeta = useMemo(() => {
     const items: Array<{
       key: PrimaryInventoryChainKey;
@@ -331,10 +308,6 @@ export function InventoryView() {
       ? (CHAIN_CONFIGS[singleChainFocus as keyof typeof CHAIN_CONFIGS]?.name ??
         singleChainFocus)
       : null);
-  const overviewTitle =
-    singleChainFocus && focusedChainLabel
-      ? t("wallet.overviewTitleChain", { chain: focusedChainLabel })
-      : t("wallet.overviewTitle");
   const inlineError =
     singleChainFocus && focusedChainError
       ? {
@@ -478,6 +451,107 @@ export function InventoryView() {
       <div className={WALLET_SHELL_CLASS}>
         <aside className={WALLET_SIDEBAR_CLASS}>
           <div className={APP_SIDEBAR_INNER_CLASSNAME}>
+            {inventoryView === "tokens" ? (
+              <div
+                className="space-y-2"
+                data-testid="wallet-sidebar-sort-block"
+              >
+                <div className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/60">
+                  {t("wallet.sort")}
+                </div>
+                <Select
+                  value={inventorySort}
+                  onValueChange={(nextSort) => {
+                    if (!isInventorySortKey(nextSort)) return;
+                    setState("inventorySort", nextSort);
+                    setState(
+                      "inventorySortDirection",
+                      nextSort === "value" ? "desc" : "asc",
+                    );
+                  }}
+                >
+                  <SelectTrigger
+                    data-testid="wallet-sort-select"
+                    aria-label={t("wallet.sort")}
+                    className="h-10 w-full rounded-xl border border-border/60 bg-card/88 px-3 text-sm text-txt shadow-sm"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value="value">{t("wallet.value")}</SelectItem>
+                    <SelectItem value="chain">{t("wallet.chain")}</SelectItem>
+                    <SelectItem value="symbol">{t("wallet.name")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-1 items-stretch overflow-hidden rounded-xl border border-border/60 bg-bg/24">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className={`h-10 flex-1 rounded-none ${inventorySortDirection === "asc" ? "bg-accent/14 text-txt-strong" : "text-muted"}`}
+                          aria-label={t("wallet.sortAscending")}
+                          aria-pressed={inventorySortDirection === "asc"}
+                          onClick={() =>
+                            setState("inventorySortDirection", "asc")
+                          }
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">
+                        {t("wallet.sortAscending")}
+                      </TooltipContent>
+                    </Tooltip>
+                    <div
+                      className="w-px shrink-0 self-stretch bg-border/45"
+                      aria-hidden
+                    />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className={`h-10 flex-1 rounded-none ${inventorySortDirection === "desc" ? "bg-accent/14 text-txt-strong" : "text-muted"}`}
+                          aria-label={t("wallet.sortDescending")}
+                          aria-pressed={inventorySortDirection === "desc"}
+                          onClick={() =>
+                            setState("inventorySortDirection", "desc")
+                          }
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">
+                        {t("wallet.sortDescending")}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        data-testid="wallet-refresh-balances"
+                        className="h-10 w-10 shrink-0 rounded-xl border-border/60 bg-card/88 shadow-sm"
+                        aria-label={t("common.refresh")}
+                        onClick={() => void loadBalances()}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs">
+                      {t("common.refresh")}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+            ) : null}
+
             {/* ── View toggle ── */}
             <div className="mt-4 grid grid-cols-2 gap-2">
               <Button
@@ -602,7 +676,7 @@ export function InventoryView() {
 
         <div className={DESKTOP_PAGE_CONTENT_CLASSNAME}>
           <div className="mx-auto max-w-[76rem] px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
-            <div className="mt-4 grid gap-3">
+            <div className="grid gap-3">
               {stewardStatus?.connected && (
                 <div
                   className="inline-flex items-center gap-1.5 rounded-2xl border border-accent/25 bg-accent/10 px-3 py-2 text-[11px] text-accent-fg shadow-sm"
@@ -669,153 +743,10 @@ export function InventoryView() {
                 />
               )}
             </div>
-
             <div
-              data-testid="wallet-overview-card"
-              className="mt-4 flex flex-col gap-4 sm:gap-5"
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h1 className="text-xl font-semibold text-txt-strong">
-                    {overviewTitle}
-                  </h1>
-                  <p className="mt-1 text-sm text-muted">
-                    {t("wallet.overviewSubtitle")}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    data-testid="wallet-funding-route-pill"
-                    className="inline-flex rounded-full border border-border/50 bg-bg/24 px-3 py-1 text-[11px] font-medium text-muted"
-                  >
-                    {fundingRouteLabel}
-                  </span>
-                  {inventoryView === "tokens" ? (
-                    <span
-                      data-testid="wallet-summary-sort-pill"
-                      className="inline-flex rounded-full border border-border/50 bg-bg/24 px-3 py-1 text-[11px] font-medium text-muted"
-                    >
-                      {t("wallet.sort")} {currentSortLabel}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-              {inventoryView === "tokens" ? (
-                <div
-                  data-testid="wallet-overview-sort-block"
-                  className="flex w-full flex-wrap items-center justify-end gap-2"
-                >
-                  <div className="min-w-0 flex-1 sm:max-w-[min(100%,14rem)]">
-                    <Select
-                      value={inventorySort}
-                      onValueChange={(nextSort) => {
-                        if (!isInventorySortKey(nextSort)) return;
-                        setState("inventorySort", nextSort);
-                        setState(
-                          "inventorySortDirection",
-                          nextSort === "value" ? "desc" : "asc",
-                        );
-                      }}
-                    >
-                      <SelectTrigger
-                        data-testid="wallet-sort-select"
-                        aria-label={t("wallet.sort")}
-                        className="h-10 w-full rounded-xl border border-border/60 bg-card/88 px-3 text-sm text-txt shadow-sm"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent position="popper">
-                        <SelectItem value="value">
-                          {t("wallet.value")}
-                        </SelectItem>
-                        <SelectItem value="chain">
-                          {t("wallet.chain")}
-                        </SelectItem>
-                        <SelectItem value="symbol">
-                          {t("wallet.name")}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <TooltipProvider delayDuration={200} skipDelayDuration={100}>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <div className="flex shrink-0 items-stretch overflow-hidden rounded-xl border border-border/60 bg-bg/24">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className={`h-10 w-10 shrink-0 rounded-none ${inventorySortDirection === "asc" ? "bg-accent/14 text-txt-strong" : "text-muted"}`}
-                              aria-label={t("wallet.sortAscending")}
-                              aria-pressed={inventorySortDirection === "asc"}
-                              onClick={() =>
-                                setState("inventorySortDirection", "asc")
-                              }
-                            >
-                              <ArrowUp className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" className="text-xs">
-                            {t("wallet.sortAscending")}
-                          </TooltipContent>
-                        </Tooltip>
-                        <div
-                          className="w-px shrink-0 self-stretch bg-border/45"
-                          aria-hidden
-                        />
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className={`h-10 w-10 shrink-0 rounded-none ${inventorySortDirection === "desc" ? "bg-accent/14 text-txt-strong" : "text-muted"}`}
-                              aria-label={t("wallet.sortDescending")}
-                              aria-pressed={inventorySortDirection === "desc"}
-                              onClick={() =>
-                                setState("inventorySortDirection", "desc")
-                              }
-                            >
-                              <ArrowDown className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" className="text-xs">
-                            {t("wallet.sortDescending")}
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            data-testid="wallet-refresh-balances"
-                            className="h-10 w-10 shrink-0 rounded-xl border-border/60 bg-card/88 shadow-sm"
-                            aria-label={t("common.refresh")}
-                            onClick={() =>
-                              inventoryView === "tokens"
-                                ? void loadBalances()
-                                : void loadNfts()
-                            }
-                          >
-                            <RefreshCw className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" className="text-xs">
-                          {t("common.refresh")}
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-                  </TooltipProvider>
-                </div>
-              ) : null}
-              <div
-                data-testid="wallet-assets-header"
-                className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-end"
-              />
-            </div>
+              data-testid="wallet-assets-header"
+              className="mt-4 mb-2 flex items-center justify-end"
+            />
             <div
               className={`min-h-[58vh] ${WALLET_PANEL_CLASS} overflow-hidden`}
             >
