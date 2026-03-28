@@ -1020,6 +1020,7 @@ const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   "x-streaming": "@elizaos/plugin-x-streaming",
   "stream555-canonical": "@rndrntwrk/plugin-555stream",
   "555stream": "@rndrntwrk/plugin-555stream",
+  "five55-games": "@miladyai/agent/plugins/five55-games",
 };
 
 function looksLikePlugin(value: unknown): value is Plugin {
@@ -1356,6 +1357,21 @@ export function collectPluginNames(config: ElizaConfig): Set<string> {
   // provider, and would be incorrectly removed during provider precedence.
   if (process.env.OPINION_API_KEY?.trim()) {
     pluginsToLoad.add("@elizaos/plugin-opinion");
+  }
+
+  // Five55 games runtime — auto-load only when the current stream/agent-v1
+  // control plane is configured. This keeps the feature dormant on ordinary
+  // builds while restoring Alice-era runtime capabilities on integration
+  // branches that wire stream+games together.
+  if (
+    process.env.STREAM555_BASE_URL?.trim() &&
+    (
+      process.env.STREAM555_AGENT_API_KEY?.trim() ||
+      process.env.STREAM555_AGENT_TOKEN?.trim() ||
+      process.env.STREAM_API_BEARER_TOKEN?.trim()
+    )
+  ) {
+    pluginsToLoad.add("@miladyai/agent/plugins/five55-games");
   }
 
   // User-installed plugins from config.plugins.installs
