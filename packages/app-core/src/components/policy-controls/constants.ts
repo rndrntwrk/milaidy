@@ -6,10 +6,11 @@ import type {
   TimeWindowConfig,
 } from "./types";
 
+/** All monetary values are in USD for cross-chain compatibility. */
 export const DEFAULT_SPENDING: SpendingLimitConfig = {
-  maxPerTx: "0.1",
-  maxPerDay: "1.0",
-  maxPerWeek: "5.0",
+  maxPerTx: "50",
+  maxPerDay: "500",
+  maxPerWeek: "2000",
 };
 
 export const DEFAULT_APPROVED_ADDRESSES: ApprovedAddressesConfig = {
@@ -29,8 +30,9 @@ export const DEFAULT_TIME_WINDOW: TimeWindowConfig = {
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
 };
 
+/** Threshold in USD. */
 export const DEFAULT_AUTO_APPROVE: AutoApproveConfig = {
-  threshold: "0.01",
+  threshold: "5",
 };
 
 export const TIMEZONES = [

@@ -4,7 +4,13 @@ export {
 } from "./ApprovedAddressesSection";
 export { AutoApproveSection, autoApproveSummary } from "./AutoApproveSection";
 export * from "./constants";
-export { findPolicy } from "./helpers";
+export {
+  chainTypeLabel,
+  detectChainType,
+  findPolicy,
+  isValidAddress,
+  parseAmount,
+} from "./helpers";
 export { PolicyToggle } from "./PolicyToggle";
 export { RateLimitSection, rateLimitSummary } from "./RateLimitSection";
 export { SpendingLimitSection, spendingSummary } from "./SpendingLimitSection";

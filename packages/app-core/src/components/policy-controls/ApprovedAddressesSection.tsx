@@ -1,7 +1,7 @@
 import { Button, Input } from "@miladyai/ui";
 import { Plus, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { isValidAddress } from "./helpers";
+import { chainTypeLabel, isValidAddress } from "./helpers";
 import type { ApprovedAddressEntry, ApprovedAddressesConfig } from "./types";
 
 export function ApprovedAddressesSection({
@@ -34,7 +34,7 @@ export function ApprovedAddressesSection({
     const trimmed = newAddress.trim();
     if (!trimmed) return;
     if (!isValidAddress(trimmed)) {
-      setAddressError("Invalid address (0x + 40 hex chars)");
+      setAddressError("Invalid address format (EVM 0x... or Solana base58)");
       return;
     }
     if (config.addresses.includes(trimmed)) {
@@ -98,30 +98,40 @@ export function ApprovedAddressesSection({
       {/* Address list */}
       {entries.length > 0 ? (
         <div className="space-y-1 max-h-[180px] overflow-y-auto">
-          {entries.map((entry) => (
-            <div
-              key={entry.address}
-              className="flex items-center gap-2 rounded-lg bg-bg/50 px-3 py-1.5 group"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="text-[11px] font-mono text-txt truncate">
-                  {entry.address}
-                </div>
-                {entry.label && (
-                  <div className="text-[10px] text-muted">{entry.label}</div>
-                )}
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-danger hover:text-danger"
-                onClick={() => handleRemove(entry.address)}
-                aria-label={`Remove ${entry.label || entry.address}`}
+          {entries.map((entry) => {
+            const chain = chainTypeLabel(entry.address);
+            return (
+              <div
+                key={entry.address}
+                className="flex items-center gap-2 rounded-lg bg-bg/50 px-3 py-1.5 group"
               >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-mono text-txt truncate">
+                      {entry.address}
+                    </span>
+                    {chain && (
+                      <span className="text-[9px] text-muted bg-muted/10 px-1.5 py-0.5 rounded shrink-0">
+                        {chain}
+                      </span>
+                    )}
+                  </div>
+                  {entry.label && (
+                    <div className="text-[10px] text-muted">{entry.label}</div>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-danger hover:text-danger"
+                  onClick={() => handleRemove(entry.address)}
+                  aria-label={`Remove ${entry.label || entry.address}`}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="text-[11px] text-muted/60 py-1">
@@ -135,7 +145,7 @@ export function ApprovedAddressesSection({
       <div className="flex gap-2">
         <Input
           type="text"
-          placeholder="0x..."
+          placeholder="EVM or Solana address"
           value={newAddress}
           onChange={(e) => {
             setNewAddress(e.target.value);

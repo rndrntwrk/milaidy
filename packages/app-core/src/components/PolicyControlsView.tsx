@@ -1,5 +1,6 @@
 /**
  * PolicyControlsView — wallet policy settings for Steward.
+ * All monetary values are in USD for cross-chain compatibility.
  * Simple settings rows that match the rest of the Settings page.
  */
 
@@ -13,7 +14,8 @@ import {
   Switch,
 } from "@miladyai/ui";
 import { AlertTriangle } from "lucide-react";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { client } from "../api";
 import type {
   ApprovedAddressesConfig,
@@ -25,18 +27,33 @@ import type {
   TimeWindowConfig,
 } from "./policy-controls";
 import {
+  chainTypeLabel,
   DAY_NAMES,
   DEFAULT_APPROVED_ADDRESSES,
   DEFAULT_AUTO_APPROVE,
   DEFAULT_RATE_LIMIT,
   DEFAULT_SPENDING,
   DEFAULT_TIME_WINDOW,
-  TIMEZONES,
   findPolicy,
+  isValidAddress,
+  TIMEZONES,
 } from "./policy-controls";
 import { StewardLogo } from "./steward/StewardLogo";
 
 const asRecord = (v: unknown) => v as unknown as Record<string, unknown>;
+
+/** Static hour options to avoid array-index-as-key lint issues. */
+const HOUR_FROM_OPTIONS = Array.from({ length: 24 }, (_, i) => ({
+  key: `from-${i}`,
+  value: i,
+  label: `${String(i).padStart(2, "0")}:00`,
+}));
+
+const HOUR_TO_OPTIONS = Array.from({ length: 24 }, (_, i) => ({
+  key: `to-${i + 1}`,
+  value: i + 1,
+  label: `${String(i + 1).padStart(2, "0")}:00`,
+}));
 
 export function PolicyControlsView() {
   const [policies, setPolicies] = useState<PolicyRule[]>([]);
@@ -141,9 +158,7 @@ export function PolicyControlsView() {
       setSaveSuccess(true);
       setDirty(false);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to save policies",
-      );
+      setError(err instanceof Error ? err.message : "Failed to save policies");
     } finally {
       setSaving(false);
     }
@@ -199,9 +214,7 @@ export function PolicyControlsView() {
     return (
       <div className="flex flex-col items-center gap-4 py-8 text-center">
         <StewardLogo size={48} className="opacity-30" />
-        <p className="text-sm font-semibold text-txt">
-          Steward Not Connected
-        </p>
+        <p className="text-sm font-semibold text-txt">Steward Not Connected</p>
         <p className="text-xs text-muted max-w-sm">
           Connect your Steward instance to manage wallet policies.
         </p>
@@ -223,7 +236,7 @@ export function PolicyControlsView() {
         title="Auto-Approve"
         desc={
           autoApprovePolicy?.enabled
-            ? `Under ${autoApproveConfig.threshold ?? "0.01"} ETH`
+            ? `Under $${autoApproveConfig.threshold ?? "5"}`
             : "Off"
         }
         enabled={autoApprovePolicy?.enabled ?? false}
@@ -239,8 +252,8 @@ export function PolicyControlsView() {
           <Label className="text-xs text-muted whitespace-nowrap">
             Threshold
           </Label>
-          <EthField
-            value={autoApproveConfig.threshold ?? "0.01"}
+          <UsdField
+            value={autoApproveConfig.threshold ?? "5"}
             onChange={(v) =>
               updatePolicy("auto-approve-threshold", {
                 config: asRecord({ threshold: v }),
@@ -255,7 +268,7 @@ export function PolicyControlsView() {
         title="Spending Limits"
         desc={
           spendingPolicy?.enabled
-            ? `${spendingConfig.maxPerTx}/tx · ${spendingConfig.maxPerDay}/day · ${spendingConfig.maxPerWeek}/wk`
+            ? `$${spendingConfig.maxPerTx}/tx · $${spendingConfig.maxPerDay}/day · $${spendingConfig.maxPerWeek}/wk`
             : "Off"
         }
         enabled={spendingPolicy?.enabled ?? false}
@@ -264,7 +277,7 @@ export function PolicyControlsView() {
         }
       >
         <div className="grid grid-cols-3 gap-3">
-          <EthFieldLabeled
+          <UsdFieldLabeled
             label="Per Tx"
             value={spendingConfig.maxPerTx}
             onChange={(v) =>
@@ -273,7 +286,7 @@ export function PolicyControlsView() {
               })
             }
           />
-          <EthFieldLabeled
+          <UsdFieldLabeled
             label="Daily"
             value={spendingConfig.maxPerDay}
             onChange={(v) =>
@@ -282,7 +295,7 @@ export function PolicyControlsView() {
               })
             }
           />
-          <EthFieldLabeled
+          <UsdFieldLabeled
             label="Weekly"
             value={spendingConfig.maxPerWeek}
             onChange={(v) =>
@@ -404,7 +417,7 @@ export function PolicyControlsView() {
       )}
       {saveSuccess && !dirty && (
         <div className="pt-3 text-right border-t-0">
-          <span className="text-xs text-ok">✓ Saved</span>
+          <span className="text-xs text-ok">Saved</span>
         </div>
       )}
 
@@ -458,7 +471,7 @@ function PolicyRow({
   );
 }
 
-function EthField({
+function UsdField({
   value,
   onChange,
 }: {
@@ -467,6 +480,9 @@ function EthField({
 }) {
   return (
     <div className="relative w-28">
+      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted pointer-events-none">
+        $
+      </span>
       <Input
         type="text"
         inputMode="decimal"
@@ -474,17 +490,14 @@ function EthField({
         onChange={(e) => {
           if (/^\d*\.?\d*$/.test(e.target.value)) onChange(e.target.value);
         }}
-        className="h-8 text-xs pr-10 tabular-nums"
-        placeholder="0.0"
+        className="h-8 text-xs pl-6 tabular-nums"
+        placeholder="0"
       />
-      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted pointer-events-none">
-        ETH
-      </span>
     </div>
   );
 }
 
-function EthFieldLabeled({
+function UsdFieldLabeled({
   label,
   value,
   onChange,
@@ -496,7 +509,7 @@ function EthFieldLabeled({
   return (
     <div className="space-y-1">
       <Label className="text-[11px] text-muted">{label}</Label>
-      <EthField value={value} onChange={onChange} />
+      <UsdField value={value} onChange={onChange} />
     </div>
   );
 }
@@ -543,13 +556,22 @@ function AddressSection({
   onUpdate: (cfg: ApprovedAddressesConfig) => void;
 }) {
   const [newAddr, setNewAddr] = useState("");
+  const [addrError, setAddrError] = useState<string | null>(null);
 
   const handleAdd = () => {
     const trimmed = newAddr.trim();
-    if (!trimmed || !/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return;
-    if (config.addresses.includes(trimmed)) return;
+    if (!trimmed) return;
+    if (!isValidAddress(trimmed)) {
+      setAddrError("Invalid address (EVM 0x... or Solana base58)");
+      return;
+    }
+    if (config.addresses.includes(trimmed)) {
+      setAddrError("Already in list");
+      return;
+    }
     onUpdate({ ...config, addresses: [...config.addresses, trimmed] });
     setNewAddr("");
+    setAddrError(null);
   };
 
   const handleRemove = (addr: string) => {
@@ -585,21 +607,31 @@ function AddressSection({
 
       {addresses.length > 0 && (
         <div className="space-y-1">
-          {addresses.map((addr) => (
-            <div
-              key={addr}
-              className="flex items-center justify-between group text-[11px] font-mono text-muted py-1"
-            >
-              <span className="truncate">{addr}</span>
-              <button
-                type="button"
-                className="text-danger opacity-0 group-hover:opacity-100 text-[10px] ml-2"
-                onClick={() => handleRemove(addr)}
+          {addresses.map((addr) => {
+            const chain = chainTypeLabel(addr);
+            return (
+              <div
+                key={addr}
+                className="flex items-center justify-between group text-[11px] font-mono text-muted py-1"
               >
-                remove
-              </button>
-            </div>
-          ))}
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="truncate">{addr}</span>
+                  {chain && (
+                    <span className="text-[9px] text-muted bg-muted/10 px-1.5 py-0.5 rounded shrink-0">
+                      {chain}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="text-danger opacity-0 group-hover:opacity-100 text-[10px] ml-2"
+                  onClick={() => handleRemove(addr)}
+                >
+                  remove
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -607,9 +639,12 @@ function AddressSection({
         <Input
           type="text"
           value={newAddr}
-          onChange={(e) => setNewAddr(e.target.value)}
+          onChange={(e) => {
+            setNewAddr(e.target.value);
+            setAddrError(null);
+          }}
           onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-          placeholder="0x..."
+          placeholder="EVM or Solana address"
           className="h-8 text-xs font-mono flex-1"
         />
         <Button
@@ -621,6 +656,7 @@ function AddressSection({
           Add
         </Button>
       </div>
+      {addrError && <div className="text-[11px] text-danger">{addrError}</div>}
     </div>
   );
 }
@@ -652,9 +688,9 @@ function TimeSection({
             }
             className="h-8 rounded-md border border-input bg-bg px-2 text-xs text-txt"
           >
-            {Array.from({ length: 24 }, (_, i) => (
-              <option key={`from-${i}`} value={i}>
-                {String(i).padStart(2, "0")}:00
+            {HOUR_FROM_OPTIONS.map((h) => (
+              <option key={h.key} value={h.value}>
+                {h.label}
               </option>
             ))}
           </select>
@@ -674,9 +710,9 @@ function TimeSection({
             }
             className="h-8 rounded-md border border-input bg-bg px-2 text-xs text-txt"
           >
-            {Array.from({ length: 24 }, (_, i) => (
-              <option key={`to-${i + 1}`} value={i + 1}>
-                {String(i + 1).padStart(2, "0")}:00
+            {HOUR_TO_OPTIONS.map((h) => (
+              <option key={h.key} value={h.value}>
+                {h.label}
               </option>
             ))}
           </select>
@@ -709,8 +745,7 @@ function TimeSection({
         <Label className="text-[11px] text-muted">Timezone</Label>
         <select
           value={
-            config.timezone ??
-            Intl.DateTimeFormat().resolvedOptions().timeZone
+            config.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
           }
           onChange={(e) => onUpdate({ ...config, timezone: e.target.value })}
           className="h-8 rounded-md border border-input bg-bg px-2 text-xs text-txt w-full"

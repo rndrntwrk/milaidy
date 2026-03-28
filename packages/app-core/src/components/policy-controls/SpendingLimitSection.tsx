@@ -1,7 +1,7 @@
 import { Input, Label } from "@miladyai/ui";
 import type { SpendingLimitConfig } from "./types";
 
-function EthInput({
+function UsdInput({
   label,
   value,
   onChange,
@@ -14,6 +14,9 @@ function EthInput({
     <div className="space-y-1">
       <Label className="text-[11px] text-muted">{label}</Label>
       <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-muted pointer-events-none">
+          $
+        </span>
         <Input
           type="text"
           inputMode="decimal"
@@ -22,12 +25,9 @@ function EthInput({
             const v = e.target.value;
             if (/^\d*\.?\d*$/.test(v)) onChange(v);
           }}
-          className="h-8 text-[13px] pr-12 tabular-nums"
-          placeholder="0.0"
+          className="h-8 text-[13px] pl-7 tabular-nums"
+          placeholder="0"
         />
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-muted pointer-events-none">
-          ETH
-        </span>
       </div>
     </div>
   );
@@ -42,17 +42,17 @@ export function SpendingLimitSection({
 }) {
   return (
     <div className="grid grid-cols-3 gap-3">
-      <EthInput
+      <UsdInput
         label="Per Transaction"
         value={config.maxPerTx}
         onChange={(v) => onChange({ ...config, maxPerTx: v })}
       />
-      <EthInput
+      <UsdInput
         label="Daily Max"
         value={config.maxPerDay}
         onChange={(v) => onChange({ ...config, maxPerDay: v })}
       />
-      <EthInput
+      <UsdInput
         label="Weekly Max"
         value={config.maxPerWeek}
         onChange={(v) => onChange({ ...config, maxPerWeek: v })}
@@ -62,5 +62,5 @@ export function SpendingLimitSection({
 }
 
 export function spendingSummary(config: SpendingLimitConfig): string {
-  return `${config.maxPerTx}/tx · ${config.maxPerDay}/day · ${config.maxPerWeek}/wk ETH`;
+  return `$${config.maxPerTx}/tx · $${config.maxPerDay}/day · $${config.maxPerWeek}/wk`;
 }

@@ -1,6 +1,6 @@
 import { Input, Label } from "@miladyai/ui";
 import { ShieldCheck } from "lucide-react";
-import { ethToNumber } from "./helpers";
+import { parseAmount } from "./helpers";
 import type { AutoApproveConfig } from "./types";
 
 export function AutoApproveSection({
@@ -14,9 +14,12 @@ export function AutoApproveSection({
     <div className="space-y-3">
       <div className="space-y-1">
         <Label className="text-[11px] text-muted">
-          Auto-approve below this amount
+          Auto-approve below this amount (USD)
         </Label>
         <div className="relative w-40">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-muted pointer-events-none">
+            $
+          </span>
           <Input
             type="text"
             inputMode="decimal"
@@ -25,12 +28,9 @@ export function AutoApproveSection({
               const v = e.target.value;
               if (/^\d*\.?\d*$/.test(v)) onChange({ threshold: v });
             }}
-            className="h-8 text-[13px] pr-12 tabular-nums"
-            placeholder="0.01"
+            className="h-8 text-[13px] pl-7 tabular-nums"
+            placeholder="5"
           />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-muted pointer-events-none">
-            ETH
-          </span>
         </div>
       </div>
       <div className="flex items-center gap-2 rounded-lg bg-accent/5 border border-accent/15 px-3 py-1.5">
@@ -38,9 +38,9 @@ export function AutoApproveSection({
         <div className="text-[11px] text-muted">
           Under{" "}
           <span className="font-semibold text-txt">
-            {ethToNumber(config.threshold)} ETH
+            ${parseAmount(config.threshold)}
           </span>{" "}
-          → auto-approved
+          auto-approved across all chains
         </div>
       </div>
     </div>
@@ -48,5 +48,5 @@ export function AutoApproveSection({
 }
 
 export function autoApproveSummary(config: AutoApproveConfig): string {
-  return `< ${config.threshold} ETH`;
+  return `Under $${config.threshold}`;
 }
