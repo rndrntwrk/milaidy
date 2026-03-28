@@ -8,10 +8,11 @@ import { ApprovalQueue } from "./ApprovalQueue";
 import { ExportPanel } from "./ExportPanel";
 import { LogsPanel } from "./LogsPanel";
 import { MetricsPanel } from "./MetricsPanel";
+import { PolicyControls } from "./PolicyControls";
 import { TransactionHistory } from "./TransactionHistory";
 import { WalletsPanel } from "./WalletsPanel";
 
-const TABS = ["Overview", "Wallets", "Transactions", "Approvals", "Metrics", "Logs", "Snapshots"] as const;
+const TABS = ["Overview", "Wallets", "Policies", "Transactions", "Approvals", "Metrics", "Logs", "Snapshots"] as const;
 type Tab = (typeof TABS)[number];
 
 interface AgentDetailProps {
@@ -209,6 +210,16 @@ export function AgentDetail({
           />
         )}
         {tab === "Wallets" && <WalletsPanel managedAgent={managedAgent} />}
+        {tab === "Policies" && stewardClient && (
+          <PolicyControls client={stewardClient} />
+        )}
+        {tab === "Policies" && !stewardClient && (
+          <div className="border border-border bg-surface p-8 text-center">
+            <p className="font-mono text-xs text-text-muted">
+              Connect an agent to manage transaction policies.
+            </p>
+          </div>
+        )}
         {tab === "Transactions" && stewardClient && (
           <TransactionHistory client={stewardClient} />
         )}

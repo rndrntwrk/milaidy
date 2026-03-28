@@ -1,6 +1,8 @@
 import {
   type PolicyResult,
+  type PolicyRule,
   type SignTransactionInput,
+  type TxRecord,
   StewardApiError,
   StewardClient,
 } from "@stwd/sdk";
@@ -206,4 +208,175 @@ export async function signTransactionWithOptionalSteward(params: {
   }
 
   throw new Error("Steward returned an unsigned transaction unexpectedly");
+}
+
+// ── Extended steward operations (not yet in @stwd/sdk) ───────────────────────
+
+/**
+ * Build auth headers for direct steward API calls.
+ * Used for endpoints not yet exposed in the SDK (pending, approve, deny).
+ */
+function buildStewardHeaders(
+  env: NodeJS.ProcessEnv = process.env,
+): Headers {
+  const headers = new Headers();
+  headers.set("Content-Type", "application/json");
+  headers.set("Accept", "application/json");
+
+  const bearerToken = normalizeEnvValue(env.STEWARD_AGENT_TOKEN);
+  const apiKey = normalizeEnvValue(env.STEWARD_API_KEY);
+  const tenantId = normalizeEnvValue(env.STEWARD_TENANT_ID);
+
+  if (bearerToken) {
+    headers.set("Authorization", `Bearer ${bearerToken}`);
+  } else if (apiKey) {
+    headers.set("X-Steward-Key", apiKey);
+  }
+  if (tenantId) {
+    headers.set("X-Steward-Tenant", tenantId);
+  }
+  return headers;
+}
+
+function getStewardBaseUrl(
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  return normalizeEnvValue(env.STEWARD_API_URL);
+}
+
+export interface StewardPendingEntry {
+  queueId: string;
+  status: string;
+  requestedAt: string;
+  transaction: TxRecord;
+}
+
+/**
+ * Fetch pending approval queue from steward.
+ * Returns empty array if the endpoint is not available (404).
+ */
+export async function getStewardPendingApprovals(
+  agentId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<StewardPendingEntry[]> {
+  const baseUrl = getStewardBaseUrl(env);
+  if (!baseUrl) throw new Error("Steward not configured");
+
+  const headers = buildStewardHeaders(env);
+  const res = await fetch(
+    `${baseUrl}/vault/${encodeURIComponent(agentId)}/pending`,
+    { headers },
+  );
+
+  if (res.status === 404) return [];
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "Unknown error");
+    throw new Error(`Steward pending approvals failed (${res.status}): ${errText}`);
+  }
+
+  const body = await res.json();
+  return body.data ?? body ?? [];
+}
+
+/**
+ * Approve a pending transaction on steward.
+ */
+export async function approveStewardTransaction(
+  agentId: string,
+  txId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ txId: string; txHash?: string }> {
+  const baseUrl = getStewardBaseUrl(env);
+  if (!baseUrl) throw new Error("Steward not configured");
+
+  const headers = buildStewardHeaders(env);
+  const res = await fetch(
+    `${baseUrl}/vault/${encodeURIComponent(agentId)}/approve/${encodeURIComponent(txId)}`,
+    { method: "POST", headers },
+  );
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "Unknown error");
+    throw new Error(`Steward approve failed (${res.status}): ${errText}`);
+  }
+
+  const body = await res.json();
+  return body.data ?? body;
+}
+
+/**
+ * Deny/reject a pending transaction on steward.
+ * Uses POST /vault/:agentId/reject/:txId
+ */
+export async function denyStewardTransaction(
+  agentId: string,
+  txId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ txId: string }> {
+  const baseUrl = getStewardBaseUrl(env);
+  if (!baseUrl) throw new Error("Steward not configured");
+
+  const headers = buildStewardHeaders(env);
+  const res = await fetch(
+    `${baseUrl}/vault/${encodeURIComponent(agentId)}/reject/${encodeURIComponent(txId)}`,
+    { method: "POST", headers },
+  );
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "Unknown error");
+    throw new Error(`Steward deny failed (${res.status}): ${errText}`);
+  }
+
+  const body = await res.json().catch(() => ({}));
+  return body.data ?? body ?? { txId };
+}
+
+/**
+ * Fetch transaction history from steward.
+ * Returns TxRecord[] — the full transaction objects, not just {timestamp, value}.
+ */
+export async function getStewardHistory(
+  agentId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<TxRecord[]> {
+  const client = createStewardClient({ env });
+  if (!client) throw new Error("Steward not configured");
+
+  // getHistory() returns TxRecord[] from the steward API despite the SDK
+  // type annotation saying StewardHistoryEntry[]. The actual API returns
+  // full transaction records with id, status, request, policyResults, etc.
+  const history = await client.getHistory(agentId);
+  return history as unknown as TxRecord[];
+}
+
+/**
+ * Provision a steward wallet for a new agent.
+ * Creates the agent identity + wallet on steward, optionally with default policies.
+ */
+export async function provisionStewardWallet(params: {
+  agentId: string;
+  agentName: string;
+  platformId?: string;
+  defaultPolicies?: PolicyRule[];
+  env?: NodeJS.ProcessEnv;
+}): Promise<{ walletAddress: string }> {
+  const env = params.env ?? process.env;
+  const client = createStewardClient({ env });
+  if (!client) {
+    throw new Error("Steward not configured — cannot provision wallet");
+  }
+
+  const identity = await client.createWallet(
+    params.agentId,
+    params.agentName,
+    params.platformId,
+  );
+
+  // Apply default policies if provided
+  if (params.defaultPolicies && params.defaultPolicies.length > 0) {
+    await client.setPolicies(params.agentId, params.defaultPolicies);
+  }
+
+  return { walletAddress: identity.walletAddress };
 }

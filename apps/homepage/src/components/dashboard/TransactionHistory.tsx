@@ -138,7 +138,12 @@ export function TransactionHistory({ client }: TransactionHistoryProps) {
         setOffset(newOffset);
       } catch (err) {
         if (!mountedRef.current) return;
-        setError(err instanceof Error ? err.message : "Failed to load transactions");
+        const msg = err instanceof Error ? err.message : "Failed to load transactions";
+        if (msg.includes("503") || msg.includes("not configured")) {
+          setError("Steward is not configured for this agent. Transaction history requires a connected Steward instance.");
+        } else {
+          setError(msg);
+        }
       } finally {
         if (mountedRef.current) {
           setLoading(false);

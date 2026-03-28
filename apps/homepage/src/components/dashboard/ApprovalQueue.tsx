@@ -78,9 +78,12 @@ export function ApprovalQueue({ client }: ApprovalQueueProps) {
         setPending(Array.isArray(result) ? result : []);
       } catch (err) {
         if (!mountedRef.current) return;
-        setError(
-          err instanceof Error ? err.message : "Failed to load approvals",
-        );
+        const msg = err instanceof Error ? err.message : "Failed to load approvals";
+        if (msg.includes("503") || msg.includes("not configured")) {
+          setError("Steward is not configured for this agent. Approval queue requires a connected Steward instance.");
+        } else {
+          setError(msg);
+        }
       } finally {
         if (mountedRef.current) setLoading(false);
       }

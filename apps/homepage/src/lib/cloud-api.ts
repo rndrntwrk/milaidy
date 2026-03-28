@@ -106,6 +106,20 @@ export interface StewardApprovalActionResponse {
   error?: string;
 }
 
+export type StewardPolicyType =
+  | "spending-limit"
+  | "approved-addresses"
+  | "auto-approve-threshold"
+  | "time-window"
+  | "rate-limit";
+
+export interface StewardPolicyRule {
+  id: string;
+  type: StewardPolicyType;
+  enabled: boolean;
+  config: Record<string, unknown>;
+}
+
 export interface CloudAgentDetail {
   id: string;
   name: string;
@@ -794,6 +808,17 @@ export class CloudApiClient {
     return this.request("/api/wallet/steward-deny-tx", {
       method: "POST",
       body: JSON.stringify({ txId }),
+    });
+  }
+
+  async getStewardPolicies(): Promise<StewardPolicyRule[]> {
+    return this.request("/api/wallet/steward-policies", { method: "GET" });
+  }
+
+  async setStewardPolicies(policies: StewardPolicyRule[]): Promise<{ ok: boolean }> {
+    return this.request("/api/wallet/steward-policies", {
+      method: "PUT",
+      body: JSON.stringify({ policies }),
     });
   }
 }
