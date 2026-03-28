@@ -261,6 +261,35 @@ if (_rootModules) {
   }
 }
 
+function findMilaidyProjectRoot(startDir: string): string {
+  let dir = startDir;
+  const { root } = path.parse(dir);
+
+  while (dir !== root) {
+    const pkgPath = path.join(dir, "package.json");
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
+        name?: string;
+        workspaces?: unknown;
+      };
+      if (typeof pkg.name === "string" && pkg.name.toLowerCase() === "miladyai") {
+        return dir;
+      }
+      if (
+        Array.isArray(pkg.workspaces) &&
+        existsSync(path.join(dir, "packages", "agent"))
+      ) {
+        return dir;
+      }
+    } catch {
+      // Keep walking until we reach the workspace root.
+    }
+    dir = path.dirname(dir);
+  }
+
+  return startDir;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -989,6 +1018,8 @@ const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   "custom-rtmp": "@elizaos/plugin-custom-rtmp",
   "pumpfun-streaming": "@elizaos/plugin-pumpfun-streaming",
   "x-streaming": "@elizaos/plugin-x-streaming",
+  "stream555-canonical": "@rndrntwrk/plugin-555stream",
+  "555stream": "@rndrntwrk/plugin-555stream",
 };
 
 function looksLikePlugin(value: unknown): value is Plugin {
@@ -1457,6 +1488,7 @@ const WORKSPACE_PLUGIN_OVERRIDES = new Set<string>([
   // "@elizaos/plugin-media-generation",
   "@elizaos/plugin-twitch-streaming",
   "@elizaos/plugin-youtube-streaming",
+  "@rndrntwrk/plugin-555stream",
 ]);
 
 function getWorkspacePluginOverridePath(pluginName: string): string | null {
@@ -1467,21 +1499,27 @@ function getWorkspacePluginOverridePath(pluginName: string): string | null {
     return null;
   }
 
-  const pluginSegmentMatch = pluginName.match(/^@[^/]+\/(plugin-[^/]+)$/);
-  const pluginSegment = pluginSegmentMatch?.[1];
-  if (!pluginSegment) return null;
-
   const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  const milaidyRoot = findMilaidyProjectRoot(thisDir);
   const elizaRoot = path.resolve(thisDir, "..", "..");
   const workspaceRoot = path.resolve(elizaRoot, "..");
-  const candidates = [
-    path.join(elizaRoot, "plugins", pluginSegment, "typescript"),
-    path.join(workspaceRoot, "plugins", pluginSegment, "typescript"),
-    path.join(elizaRoot, "plugins", pluginSegment),
-    path.join(workspaceRoot, "plugins", pluginSegment),
-    path.join(elizaRoot, "packages", pluginSegment),
-    path.join(workspaceRoot, "packages", pluginSegment),
-  ];
+  const explicitCandidates =
+    pluginName === "@rndrntwrk/plugin-555stream"
+      ? [path.join(milaidyRoot, "packages", "plugin-555stream")]
+      : [];
+  const pluginSegmentMatch = pluginName.match(/^@[^/]+\/(plugin-[^/]+)$/);
+  const pluginSegment = pluginSegmentMatch?.[1];
+  const candidates = pluginSegment
+    ? [
+        ...explicitCandidates,
+        path.join(elizaRoot, "plugins", pluginSegment, "typescript"),
+        path.join(workspaceRoot, "plugins", pluginSegment, "typescript"),
+        path.join(elizaRoot, "plugins", pluginSegment),
+        path.join(workspaceRoot, "plugins", pluginSegment),
+        path.join(elizaRoot, "packages", pluginSegment),
+        path.join(workspaceRoot, "packages", pluginSegment),
+      ]
+    : explicitCandidates;
 
   for (const candidate of candidates) {
     if (existsSync(path.join(candidate, "package.json"))) {

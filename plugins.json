@@ -1,7 +1,7 @@
 {
   "$schema": "plugin-index-v1",
   "generatedAt": "2026-03-22T08:36:32.187Z",
-  "count": 106,
+  "count": 107,
   "plugins": [
     {
       "id": "acp",
@@ -5240,6 +5240,67 @@
       "repository": "https://github.com/elizaos-plugins/plugin-streaming-base",
       "setupGuideUrl": "https://docs.milady.ai/plugin-setup-guide#enable-streaming-streaming-base",
       "tags": ["streaming", "broadcast", "streaming-base", "base"]
+    },
+    {
+      "id": "555stream",
+      "dirName": "plugin-555stream",
+      "name": "555 Stream",
+      "npmName": "@rndrntwrk/plugin-555stream",
+      "description": "Canonical 555 Stream control plugin for live sessions, destination sync, and go-live readiness.",
+      "category": "streaming",
+      "envKey": null,
+      "configKeys": [
+        "STREAM555_BASE_URL",
+        "STREAM555_PUBLIC_BASE_URL",
+        "STREAM555_INTERNAL_BASE_URL",
+        "STREAM555_AGENT_API_KEY",
+        "STREAM555_AGENT_TOKEN",
+        "STREAM555_DEFAULT_SESSION_ID",
+        "STREAM555_REQUIRE_APPROVALS"
+      ],
+      "version": "0.1.0-beta.1",
+      "pluginParameters": {
+        "STREAM555_BASE_URL": {
+          "type": "string",
+          "description": "Legacy unified base URL override. Prefer STREAM555_PUBLIC_BASE_URL, with STREAM555_INTERNAL_BASE_URL reserved for allow-listed internal agents.",
+          "required": false
+        },
+        "STREAM555_PUBLIC_BASE_URL": {
+          "type": "string",
+          "description": "Public 555 Stream control-plane URL for general agents and operators.",
+          "required": false
+        },
+        "STREAM555_INTERNAL_BASE_URL": {
+          "type": "string",
+          "description": "Internal 555 Stream control-plane URL for allow-listed internal agents only.",
+          "required": false
+        },
+        "STREAM555_AGENT_API_KEY": {
+          "type": "string",
+          "description": "Preferred agent API key used to mint and refresh runtime bearer tokens.",
+          "required": false,
+          "sensitive": true
+        },
+        "STREAM555_AGENT_TOKEN": {
+          "type": "string",
+          "description": "Static bearer token fallback when API-key token exchange is unavailable.",
+          "required": false,
+          "sensitive": true
+        },
+        "STREAM555_DEFAULT_SESSION_ID": {
+          "type": "string",
+          "description": "Optional session ID to auto-connect",
+          "required": false
+        },
+        "STREAM555_REQUIRE_APPROVALS": {
+          "type": "boolean",
+          "description": "Require approval for dangerous actions (start/stop stream, etc.)",
+          "default": true
+        }
+      },
+      "repository": "https://github.com/rndrntwrk/stream-plugin",
+      "setupGuideUrl": "https://docs.rndrntwrk.com/555stream",
+      "tags": ["streaming", "broadcast", "555stream", "livestream"]
     },
     {
       "id": "tee",

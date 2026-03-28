@@ -12,6 +12,7 @@ describe("release-plugin-policy", () => {
       "@elizaos/plugin-openai",
       "@elizaos/plugin-bnb-identity",
       "@elizaos/plugin-streaming-base",
+      "@rndrntwrk/plugin-555stream",
       "@elizaos/prompts",
     ]);
 
@@ -20,6 +21,7 @@ describe("release-plugin-policy", () => {
       "@elizaos/plugin-agent-orchestrator",
       "@elizaos/plugin-openai",
       "@elizaos/prompts",
+      "@rndrntwrk/plugin-555stream",
     ]);
   });
 

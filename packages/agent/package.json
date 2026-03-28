@@ -146,6 +146,7 @@
     "@mariozechner/pi-ai": "0.52.12",
     "@miladyai/shared": "workspace:*",
     "@noble/curves": "^2.0.1",
+    "@rndrntwrk/plugin-555stream": "workspace:*",
     "@whiskeysockets/baileys": "7.0.0-rc.9",
     "dotenv": "^17.2.3",
     "drizzle-orm": "0.45.1",
