@@ -1,8 +1,24 @@
 import type { CodingAgentSession } from "@miladyai/app-core/api";
-import { AgentActivityBox } from "../../src/components/AgentActivityBox";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+function testT(key: string, opts?: Record<string, unknown>): string {
+  if (opts?.defaultValue && typeof opts.defaultValue === "string") {
+    let str = opts.defaultValue;
+    for (const [k, v] of Object.entries(opts)) {
+      if (k !== "defaultValue") str = str.replace(`{{${k}}}`, String(v));
+    }
+    return str;
+  }
+  return key;
+}
+
+vi.mock("@miladyai/app-core/state", () => ({
+  useApp: () => ({ t: testT }),
+}));
+
+import { AgentActivityBox } from "../../src/components/AgentActivityBox";
 
 function makeSession(
   overrides: Partial<CodingAgentSession> = {},

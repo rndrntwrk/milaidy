@@ -510,11 +510,17 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
       const found = plugins.find((p) => p.id === pluginId);
       setPlugin(found ?? null);
     } catch {
-      if (mountedRef.current) setError("Failed to load plugin info.");
+      if (mountedRef.current) {
+        setError(
+          t("messagecontent.LoadPluginInfoFailed", {
+            defaultValue: "Couldn't load plugin info.",
+          }),
+        );
+      }
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [pluginId]);
+  }, [pluginId, t]);
 
   useEffect(() => {
     void fetchPlugin();
@@ -544,12 +550,19 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
       if (mountedRef.current) setSaved(true);
       await fetchPlugin();
     } catch (e) {
-      if (mountedRef.current)
-        setError(e instanceof Error ? e.message : "Failed to save.");
+      if (mountedRef.current) {
+        setError(
+          e instanceof Error
+            ? e.message
+            : t("messagecontent.SaveFailed", {
+                defaultValue: "Couldn't save changes.",
+              }),
+        );
+      }
     } finally {
       if (mountedRef.current) setSaving(false);
     }
-  }, [pluginId, values, fetchPlugin]);
+  }, [pluginId, values, fetchPlugin, t]);
 
   const handleToggle = useCallback(
     async (enable: boolean) => {
@@ -573,12 +586,22 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
         if (enable && mountedRef.current) {
           const tabLabel =
             plugin?.category === "feature"
-              ? "Plugins > Features"
+              ? t("messagecontent.FeaturesTabLabel", {
+                  defaultValue: "Plugins > Features",
+                })
               : plugin?.category === "connector"
-                ? "Plugins > Connectors"
-                : "Plugins > System";
+                ? t("messagecontent.ConnectorsTabLabel", {
+                    defaultValue: "Plugins > Connectors",
+                  })
+                : t("messagecontent.SystemTabLabel", {
+                    defaultValue: "Plugins > System",
+                  });
           setActionNotice(
-            `${plugin?.name ?? pluginId} enabled! Find it in ${tabLabel}.`,
+            t("messagecontent.PluginEnabledNotice", {
+              defaultValue: "{{name}} is on. Find it in {{tabLabel}}.",
+              name: plugin?.name ?? pluginId,
+              tabLabel,
+            }),
             "success",
             4000,
           );
@@ -591,20 +614,29 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
           setError(
             e instanceof Error
               ? e.message
-              : `Failed to ${enable ? "enable" : "disable"} plugin.`,
+              : enable
+                ? t("messagecontent.EnablePluginFailed", {
+                    defaultValue: "Couldn't enable this plugin.",
+                  })
+                : t("messagecontent.DisablePluginFailed", {
+                    defaultValue: "Couldn't disable this plugin.",
+                  }),
           );
         }
       } finally {
         if (mountedRef.current) setEnabling(false);
       }
     },
-    [pluginId, plugin, values, fetchPlugin, loadPlugins, setActionNotice],
+    [pluginId, plugin, values, fetchPlugin, loadPlugins, setActionNotice, t],
   );
 
   if (dismissed) {
     return (
       <div className="my-2 px-3 py-2 border border-ok/30 bg-ok/5 text-xs text-ok">
-        {plugin?.name ?? pluginId} {t("messagecontent.Enabled")}
+        {t("messagecontent.PluginEnabledInlineNotice", {
+          defaultValue: "{{name}} is enabled.",
+          name: plugin?.name ?? pluginId,
+        })}
       </div>
     );
   }
@@ -612,7 +644,10 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
   if (loading) {
     return (
       <div className="my-2 px-3 py-2 border border-border bg-card text-xs text-muted italic">
-        {t("common.loading")} {pluginId} {t("messagecontent.configuration")}
+        {t("messagecontent.LoadingConfiguration", {
+          defaultValue: "Loading {{pluginId}} configuration...",
+          pluginId,
+        })}
       </div>
     );
   }
@@ -620,9 +655,10 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
   if (!plugin) {
     return (
       <div className="my-2 px-3 py-2 border border-border bg-card text-xs text-muted italic">
-        {t("messagecontent.Plugin")}
-        {pluginId}
-        {t("messagecontent.NotFound")}
+        {t("messagecontent.PluginNotFound", {
+          defaultValue: 'Plugin "{{pluginId}}" not found.',
+          pluginId,
+        })}
       </div>
     );
   }
@@ -640,7 +676,10 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
             <span className="text-[13px] opacity-60">{"\u2699\uFE0F"}</span>
           )}
           <span>
-            {plugin.name} {t("messagecontent.Configuration")}
+            {t("messagecontent.PluginConfigurationTitle", {
+              defaultValue: "{{name}} Configuration",
+              name: plugin.name,
+            })}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -652,7 +691,13 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
           <span
             className={`text-[10px] font-medium ${isEnabled ? "text-ok" : "text-muted"}`}
           >
-            {isEnabled ? "Active" : "Inactive"}
+            {isEnabled
+              ? t("messagecontent.Active", {
+                  defaultValue: "Active",
+                })
+              : t("messagecontent.Inactive", {
+                  defaultValue: "Inactive",
+                })}
           </span>
         </div>
       </div>
@@ -686,7 +731,11 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
             onClick={handleSave}
             disabled={saving || enabling || Object.keys(values).length === 0}
           >
-            {saving ? "Saving..." : "Save"}
+            {saving
+              ? t("messagecontent.Saving", {
+                  defaultValue: "Saving...",
+                })
+              : t("common.save")}
           </Button>
         )}
 
@@ -698,7 +747,13 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
             onClick={() => void handleToggle(true)}
             disabled={enabling || saving}
           >
-            {enabling ? "Enabling..." : "Enable Plugin"}
+            {enabling
+              ? t("messagecontent.Enabling", {
+                  defaultValue: "Turning on...",
+                })
+              : t("messagecontent.EnablePlugin", {
+                  defaultValue: "Enable plugin",
+                })}
           </Button>
         ) : (
           <Button
@@ -708,7 +763,13 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
             onClick={() => void handleToggle(false)}
             disabled={enabling || saving}
           >
-            {enabling ? "Disabling..." : "Disable"}
+            {enabling
+              ? t("messagecontent.Disabling", {
+                  defaultValue: "Turning off...",
+                })
+              : t("messagecontent.DisablePlugin", {
+                  defaultValue: "Disable",
+                })}
           </Button>
         )}
 
@@ -748,7 +809,13 @@ function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
           className="h-auto p-0 text-[10px] text-txt hover:underline decoration-accent/50 underline-offset-2"
           onClick={() => setShowRaw((v) => !v)}
         >
-          {showRaw ? "Hide JSON" : "View JSON"}
+          {showRaw
+            ? t("messagecontent.HideJson", {
+                defaultValue: "Hide JSON",
+              })
+            : t("messagecontent.ViewJson", {
+                defaultValue: "View JSON",
+              })}
         </Button>
       </div>
       {showRaw && (

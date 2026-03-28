@@ -34,32 +34,88 @@ const recommendedIds = new Set<string>(CONNECTION_RECOMMENDED_PROVIDER_IDS);
 
 const providerOverrides: Record<
   string,
-  { name: string; description?: string }
+  {
+    nameDefault: string;
+    descriptionDefault?: string;
+    nameKey?: string;
+    descriptionKey?: string;
+  }
 > = {
   elizacloud: {
-    name: "Eliza Cloud",
-    description: "Models + RPC included",
+    nameDefault: "Eliza Cloud",
+    descriptionDefault: "Models + RPC included",
+    nameKey: "onboarding.providerElizaCloud",
+    descriptionKey: "onboarding.providerElizaCloudDescription",
   },
   "anthropic-subscription": {
-    name: "Claude Sub",
-    description: "Claude plan",
+    nameDefault: "Claude Sub",
+    descriptionDefault: "Claude plan",
+    nameKey: "onboarding.providerClaudeSubscription",
+    descriptionKey: "onboarding.providerClaudeSubscriptionDescription",
   },
   "openai-subscription": {
-    name: "ChatGPT Sub",
-    description: "ChatGPT plan",
+    nameDefault: "ChatGPT Sub",
+    descriptionDefault: "ChatGPT plan",
+    nameKey: "onboarding.providerChatGPTSubscription",
+    descriptionKey: "onboarding.providerChatGPTSubscriptionDescription",
   },
-  anthropic: { name: "Anthropic", description: "Claude key" },
-  openai: { name: "OpenAI", description: "GPT key" },
-  openrouter: { name: "OpenRouter", description: "Many models" },
-  gemini: { name: "Gemini", description: "Google AI" },
-  grok: { name: "xAI (Grok)" },
-  groq: { name: "Groq", description: "Fast inference" },
-  deepseek: { name: "DeepSeek", description: "DeepSeek models" },
-  mistral: { name: "Mistral", description: "Mistral models" },
-  together: { name: "Together AI", description: "OSS models" },
-  ollama: { name: "Ollama", description: "Local models" },
-  zai: { name: "z.ai", description: "GLM models" },
-  "pi-ai": { name: "Pi Credentials", description: "Local auth" },
+  anthropic: {
+    nameDefault: "Anthropic",
+    descriptionDefault: "Claude key",
+    descriptionKey: "onboarding.providerAnthropicDescription",
+  },
+  openai: {
+    nameDefault: "OpenAI",
+    descriptionDefault: "GPT key",
+    descriptionKey: "onboarding.providerOpenAIDescription",
+  },
+  openrouter: {
+    nameDefault: "OpenRouter",
+    descriptionDefault: "Many models",
+    descriptionKey: "onboarding.providerOpenRouterDescription",
+  },
+  gemini: {
+    nameDefault: "Gemini",
+    descriptionDefault: "Google AI",
+    descriptionKey: "onboarding.providerGeminiDescription",
+  },
+  grok: { nameDefault: "xAI (Grok)" },
+  groq: {
+    nameDefault: "Groq",
+    descriptionDefault: "Fast inference",
+    descriptionKey: "onboarding.providerGroqDescription",
+  },
+  deepseek: {
+    nameDefault: "DeepSeek",
+    descriptionDefault: "DeepSeek models",
+    descriptionKey: "onboarding.providerDeepSeekDescription",
+  },
+  mistral: {
+    nameDefault: "Mistral",
+    descriptionDefault: "Mistral models",
+    descriptionKey: "onboarding.providerMistralDescription",
+  },
+  together: {
+    nameDefault: "Together AI",
+    descriptionDefault: "OSS models",
+    descriptionKey: "onboarding.providerTogetherDescription",
+  },
+  ollama: {
+    nameDefault: "Ollama",
+    descriptionDefault: "Local models",
+    descriptionKey: "onboarding.providerOllamaDescription",
+  },
+  zai: {
+    nameDefault: "z.ai",
+    descriptionDefault: "GLM models",
+    descriptionKey: "onboarding.providerZaiDescription",
+  },
+  "pi-ai": {
+    nameDefault: "Pi Credentials",
+    descriptionDefault: "Local auth",
+    nameKey: "onboarding.providerPiCredentials",
+    descriptionKey: "onboarding.providerPiCredentialsDescription",
+  },
 };
 
 function applyOnboardingPatch(
@@ -108,6 +164,7 @@ export function ConnectionStep() {
     onboardingRemoteConnected,
     handleOnboardingUseLocalBackend,
     setState,
+    t,
   } = useApp();
 
   const branding = useBranding();
@@ -135,8 +192,16 @@ export function ConnectionStep() {
   const getProviderDisplay = (provider: ProviderOption) => {
     const override = providerOverrides[provider.id];
     return {
-      name: override?.name ?? provider.name,
-      description: override?.description ?? provider.description,
+      name:
+        override?.nameKey && override?.nameDefault
+          ? t(override.nameKey, { defaultValue: override.nameDefault })
+          : override?.nameDefault ?? provider.name,
+      description:
+        override?.descriptionKey && override?.descriptionDefault
+          ? t(override.descriptionKey, {
+              defaultValue: override.descriptionDefault,
+            })
+          : override?.descriptionDefault ?? provider.description,
     };
   };
 
@@ -156,11 +221,27 @@ export function ConnectionStep() {
   const getDetectedLabel = (providerId: string): string | null => {
     const d = detectedByProviderId.get(providerId);
     if (!d) return null;
-    if (d.source === "codex-auth") return "Detected from Codex";
-    if (d.source === "claude-credentials") return "Detected from Claude Code";
-    if (d.source === "keychain") return "Detected from Keychain";
-    if (d.source === "env") return "Detected from env";
-    return "Auto-detected";
+    if (d.source === "codex-auth") {
+      return t("onboarding.detectedFromCodex", {
+        defaultValue: "Detected from Codex",
+      });
+    }
+    if (d.source === "claude-credentials") {
+      return t("onboarding.detectedFromClaudeCode", {
+        defaultValue: "Detected from Claude Code",
+      });
+    }
+    if (d.source === "keychain") {
+      return t("onboarding.detectedFromKeychain", {
+        defaultValue: "Detected from Keychain",
+      });
+    }
+    if (d.source === "env") {
+      return t("onboarding.detectedFromEnv", {
+        defaultValue: "Detected from env",
+      });
+    }
+    return t("onboarding.autoDetected", { defaultValue: "Auto-detected" });
   };
 
   const connectionSnapshot: ConnectionFlowSnapshot = useMemo(

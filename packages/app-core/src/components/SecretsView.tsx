@@ -349,8 +349,15 @@ export function SecretsView() {
             onClick={handleSave}
           >
             {saving
-              ? "Saving..."
-              : `Save${dirtyKeys.length > 0 ? ` (${dirtyKeys.length})` : ""}`}
+              ? t("secretsview.Saving", {
+                  defaultValue: "Saving...",
+                })
+              : dirtyKeys.length > 0
+                ? t("secretsview.SaveCount", {
+                    defaultValue: "Save ({{count}})",
+                    count: dirtyKeys.length,
+                  })
+                : t("common.save")}
           </Button>
           {saveResult && (
             <span

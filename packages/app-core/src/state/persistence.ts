@@ -498,8 +498,8 @@ export function loadCompanionMessageCutoffTs(): number {
   return tryLocalStorage(() => {
     const stored = localStorage.getItem(COMPANION_MESSAGE_CUTOFF_TS_KEY);
     const parsed = stored ? Number.parseInt(stored, 10) : Number.NaN;
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : Date.now();
-  }, Date.now());
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  }, 0);
 }
 
 export function saveCompanionMessageCutoffTs(value: number): void {

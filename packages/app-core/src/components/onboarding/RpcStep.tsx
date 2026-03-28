@@ -115,6 +115,7 @@ function RpcKeyField({
 }
 
 function CloudLoginErrorMessage({ error }: { error: string }) {
+  const { t } = useApp();
   const urlMatch = error.match(/^Open this link to log in: (.+)$/);
   if (urlMatch) {
     return (
@@ -122,14 +123,18 @@ function CloudLoginErrorMessage({ error }: { error: string }) {
         className={`mt-3 text-sm ${onboardingReadableTextPrimaryClassName}`}
         style={onboardingBodyTextShadowStyle}
       >
-        Open this link to log in:{" "}
+        {t("onboarding.openThisLinkToLogIn", {
+          defaultValue: "Open this link to log in:",
+        })}{" "}
         <a
           href={urlMatch[1]}
           target="_blank"
           rel="noopener noreferrer"
           className="underline underline-offset-2"
         >
-          Click here
+          {t("onboarding.clickHere", {
+            defaultValue: "Click here",
+          })}
         </a>
       </p>
     );

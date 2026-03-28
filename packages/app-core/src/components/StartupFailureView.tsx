@@ -14,13 +14,33 @@ import { type BugReportDraft, useOptionalBugReport } from "../hooks";
 import type { StartupErrorState } from "../state";
 import { useApp } from "../state";
 
-const REASON_LABELS: Record<StartupErrorState["reason"], string> = {
-  "backend-timeout": "Backend Timeout",
-  "backend-unreachable": "Backend Unreachable",
-  "agent-timeout": "Agent Timeout",
-  "agent-error": "Agent Error",
-  "asset-missing": "Asset Missing",
-};
+function startupReasonLabel(
+  t: ReturnType<typeof useApp>["t"],
+  reason: StartupErrorState["reason"],
+): string {
+  switch (reason) {
+    case "backend-timeout":
+      return t("startupfailureview.BackendTimeout", {
+        defaultValue: "Backend Timeout",
+      });
+    case "backend-unreachable":
+      return t("startupfailureview.BackendUnreachable", {
+        defaultValue: "Backend Unreachable",
+      });
+    case "agent-timeout":
+      return t("startupfailureview.AgentTimeout", {
+        defaultValue: "Agent Timeout",
+      });
+    case "agent-error":
+      return t("startupfailureview.AgentError", {
+        defaultValue: "Agent Error",
+      });
+    case "asset-missing":
+      return t("startupfailureview.AssetMissing", {
+        defaultValue: "Asset Missing",
+      });
+  }
+}
 
 const SCREEN_SHELL_CLASS =
   "relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-bg px-4 py-6 font-body text-txt sm:px-6";
@@ -78,7 +98,7 @@ export function StartupFailureView({
   >("idle");
   const [reportMessage, setReportMessage] = useState<string | null>(null);
   const isBackendUnreachable = error.reason === "backend-unreachable";
-  const reasonLabel = REASON_LABELS[error.reason];
+  const reasonLabel = startupReasonLabel(t, error.reason);
   const startupDraft = buildStartupBugReportDraft(reasonLabel, error);
 
   async function handleShareReport() {
@@ -187,7 +207,9 @@ export function StartupFailureView({
           {error.detail ? (
             <section className="space-y-2 rounded-2xl border border-border/50 bg-bg/35 p-4 shadow-sm">
               <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                Details
+                {t("startupfailureview.Details", {
+                  defaultValue: "Details",
+                })}
               </div>
               <pre className="max-h-60 overflow-auto rounded-xl border border-border bg-bg-muted p-3 text-xs leading-relaxed text-muted whitespace-pre-wrap break-words">
                 {error.detail}

@@ -6,6 +6,7 @@
 import { getVrmPreviewUrl } from "@miladyai/app-core/state";
 import type { StylePreset } from "@miladyai/shared/contracts/onboarding";
 import { Button } from "@miladyai/ui";
+import { useApp } from "../state";
 
 /* ── Shared constants ─────────────────────────────────────────────────── */
 
@@ -63,6 +64,7 @@ export function CharacterRoster({
   variant = "editor",
   testIdPrefix = "character",
 }: CharacterRosterProps) {
+  const { t } = useApp();
   const useWhiteBorders = variant === "onboarding";
 
   if (entries.length === 0) {
@@ -74,7 +76,9 @@ export function CharacterRoster({
             : "border-border/40 bg-black/10 text-muted"
         }`}
       >
-        Loading character presets...
+        {t("characterroster.LoadingPresets", {
+          defaultValue: "Loading character presets...",
+        })}
       </div>
     );
   }

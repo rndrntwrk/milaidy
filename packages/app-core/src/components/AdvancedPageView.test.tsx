@@ -3,6 +3,7 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
+import { testT } from "../../../../test/helpers/i18n";
 
 const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
@@ -65,6 +66,7 @@ describe("AdvancedPageView", () => {
     mockUseApp.mockReturnValue({
       tab: "skills",
       setTab,
+      t: (key: string, vars?: Record<string, unknown>) => testT(key, vars),
     });
 
     let tree!: TestRenderer.ReactTestRenderer;
@@ -89,6 +91,7 @@ describe("AdvancedPageView", () => {
     mockUseApp.mockReturnValue({
       tab: "runtime",
       setTab,
+      t: (key: string, vars?: Record<string, unknown>) => testT(key, vars),
     });
 
     let tree!: TestRenderer.ReactTestRenderer;

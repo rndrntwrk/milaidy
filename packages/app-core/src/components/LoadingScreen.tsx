@@ -5,11 +5,27 @@
 
 import { useEffect, useState } from "react";
 import type { StartupPhase } from "../state";
+import { useApp } from "../state";
 
-const PHASE_META: Record<StartupPhase, { label: string; progress: number }> = {
-  "starting-backend": { label: "Initializing systems", progress: 20 },
-  "initializing-agent": { label: "Loading neural network", progress: 50 },
-  ready: { label: "Systems online", progress: 100 },
+const PHASE_META: Record<
+  StartupPhase,
+  { labelKey: string; defaultLabel: string; progress: number }
+> = {
+  "starting-backend": {
+    labelKey: "loadingscreen.InitializingSystems",
+    defaultLabel: "Initializing systems",
+    progress: 20,
+  },
+  "initializing-agent": {
+    labelKey: "loadingscreen.LoadingNeuralNetwork",
+    defaultLabel: "Loading neural network",
+    progress: 50,
+  },
+  ready: {
+    labelKey: "loadingscreen.SystemsOnline",
+    defaultLabel: "Systems online",
+    progress: 100,
+  },
 };
 
 interface LoadingScreenProps {
@@ -23,6 +39,7 @@ export function LoadingScreen({
   elapsedSeconds,
   vrmUrl,
 }: LoadingScreenProps) {
+  const { t } = useApp();
   const [vrmCached, setVrmCached] = useState(false);
   const [fetchProgress, setFetchProgress] = useState(0);
   const [, setRuntimeElapsedSeconds] = useState(0);
@@ -82,13 +99,16 @@ export function LoadingScreen({
   } else {
     progress = meta.progress;
   }
-  const label = vrmCached && phase !== "ready" ? "Loading avatar" : meta.label;
+  const label =
+    vrmCached && phase !== "ready"
+      ? t("loadingscreen.LoadingAvatar", { defaultValue: "Loading avatar" })
+      : t(meta.labelKey, { defaultValue: meta.defaultLabel });
 
   return (
     <div className="flex items-center justify-center h-dvh bg-[#0c0e14] relative overflow-hidden">
       <div className="flex flex-col items-start gap-3.5 w-[420px] max-w-[90vw]">
         <div className="font-mono text-[13px] font-normal tracking-[0.35em] uppercase text-white/70 select-none">
-          LOADING
+          {t("loadingscreen.Loading", { defaultValue: "Loading" })}
           <span className="loading-screen__dots" />
         </div>
 

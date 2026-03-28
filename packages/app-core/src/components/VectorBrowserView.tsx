@@ -1030,10 +1030,15 @@ function VectorGraph3D({
     return (
       <div className="border border-[var(--border)] bg-[var(--card)] px-4 py-10 text-center">
         <div className="text-sm text-[var(--txt)]">
-          3D view unavailable in this environment.
+          {t("vectorbrowserview.RendererUnavailable", {
+            defaultValue: "3D view unavailable in this environment.",
+          })}
         </div>
         <div className="mt-2 text-xs text-[var(--muted)]">
-          The current runtime could not initialize a renderer.
+          {t("vectorbrowserview.RendererUnavailableDescription", {
+            defaultValue:
+              "The current runtime could not initialize a renderer.",
+          })}
         </div>
       </div>
     );
@@ -1109,8 +1114,10 @@ function MemoryDetailPanel({ memory }: { memory: MemoryRecord | null }) {
             {t("vectorbrowserview.MemoryDetail")}
           </div>
           <div className="mt-2 max-w-sm text-sm text-muted">
-            Select a memory from the sidebar to inspect its content, metadata,
-            and embedding values.
+            {t("vectorbrowserview.MemorySelectionHint", {
+              defaultValue:
+                "Select a memory from the sidebar to inspect its content, metadata, and embedding values.",
+            })}
           </div>
         </div>
       </div>
@@ -1121,7 +1128,7 @@ function MemoryDetailPanel({ memory }: { memory: MemoryRecord | null }) {
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="border-b border-border/40 px-6 py-5">
         <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/60">
-          Vectors
+          {t("vectorbrowserview.Vectors", { defaultValue: "Vectors" })}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h2 className="text-2xl font-semibold text-txt">
@@ -1131,12 +1138,15 @@ function MemoryDetailPanel({ memory }: { memory: MemoryRecord | null }) {
           </h2>
           {memory.unique ? (
             <span className="rounded-full border border-accent/30 bg-accent/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-fg">
-              Unique
+              {t("vectorbrowserview.Unique", { defaultValue: "Unique" })}
             </span>
           ) : null}
         </div>
         <div className="mt-2 text-sm text-muted">
-          {memory.createdAt || "No timestamp"}{" "}
+          {memory.createdAt ||
+            t("vectorbrowserview.NoTimestamp", {
+              defaultValue: "No timestamp",
+            })}{" "}
           {memory.id ? `· ${memory.id}` : ""}
         </div>
       </div>
@@ -1272,12 +1282,22 @@ export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "error";
       if (msg === "Failed to fetch" || msg.includes("fetch")) {
-        setError("Cannot connect to database. Make sure the agent is running.");
+        setError(
+          t("vectorbrowserview.DatabaseConnectionError", {
+            defaultValue:
+              "Cannot connect to database. Make sure the agent is running.",
+          }),
+        );
       } else {
-        setError(`Failed to load tables: ${msg}`);
+        setError(
+          t("vectorbrowserview.FailedToLoadTables", {
+            message: msg,
+            defaultValue: "Failed to load tables: {{message}}",
+          }),
+        );
       }
     }
-  }, [selectedTable]);
+  }, [selectedTable, t]);
 
   // Build a SELECT that casts any vector/embedding column to text so the raw
   // driver returns a parseable string instead of a binary blob.
@@ -1405,11 +1425,14 @@ export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
       }
     } catch (err) {
       setError(
-        `Failed to load memories: ${err instanceof Error ? err.message : "error"}`,
+        t("vectorbrowserview.LoadFailed", {
+          message: err instanceof Error ? err.message : "error",
+          defaultValue: "Failed to load memories: {{message}}",
+        }),
       );
     }
     setLoading(false);
-  }, [selectedTable, page, search, buildSelect, buildJoinQuery]);
+  }, [buildJoinQuery, buildSelect, page, search, selectedTable, t]);
 
   // Load embeddings for graph view (fetch more rows to make graph useful)
   // Only include rows that actually have embeddings (INNER JOIN or filter).
@@ -1437,11 +1460,14 @@ export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
       setGraphMemories(result.rows.map(rowToMemory));
     } catch (err) {
       setError(
-        `Failed to load graph data: ${err instanceof Error ? err.message : "error"}`,
+        t("vectorbrowserview.GraphLoadFailed", {
+          message: err instanceof Error ? err.message : "error",
+          defaultValue: "Failed to load graph data: {{message}}",
+        }),
       );
     }
     setGraphLoading(false);
-  }, [selectedTable, buildSelect, hasEmbeddingsTable]);
+  }, [buildSelect, hasEmbeddingsTable, selectedTable, t]);
 
   useEffect(() => {
     loadTables();
@@ -1487,19 +1513,31 @@ export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
             {leftNav}
             <DesktopRailSummaryCard>
               <div className="text-sm font-semibold text-txt">
-                {selectedTable || "Vectors"}
+                {selectedTable ||
+                  t("vectorbrowserview.Vectors", {
+                    defaultValue: "Vectors",
+                  })}
               </div>
               <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/75">
                 <span className={APP_SIDEBAR_PILL_CLASSNAME}>
                   {viewMode === "list"
-                    ? "List view"
+                    ? t("vectorbrowserview.ListView", {
+                        defaultValue: "List view",
+                      })
                     : viewMode === "graph"
-                      ? "2D graph"
-                      : "3D graph"}
+                      ? t("vectorbrowserview.Graph2D", {
+                          defaultValue: "2D graph",
+                        })
+                      : t("vectorbrowserview.Graph3D", {
+                          defaultValue: "3D graph",
+                        })}
                 </span>
                 {stats ? (
                   <span className={APP_SIDEBAR_PILL_CLASSNAME}>
-                    {Number(stats.total).toLocaleString()} memories
+                    {t("vectorbrowserview.MemoryCount", {
+                      count: Number(stats.total).toLocaleString(),
+                      defaultValue: "{{count}} memories",
+                    })}
                   </span>
                 ) : null}
               </div>
@@ -1624,8 +1662,10 @@ export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
               </div>
             ) : viewMode !== "list" ? (
               <div className="rounded-xl border border-border/35 bg-bg/35 px-3 py-4 text-xs text-muted">
-                Select a point from the viewer to inspect its full record on the
-                right.
+                {t("vectorbrowserview.SelectPointHint", {
+                  defaultValue:
+                    "Select a point from the viewer to inspect its full record on the right.",
+                })}
               </div>
             ) : loading ? (
               <div className="rounded-xl border border-border/35 bg-bg/35 px-3 py-4 text-center text-xs text-muted">

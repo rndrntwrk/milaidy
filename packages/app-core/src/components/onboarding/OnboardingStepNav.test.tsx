@@ -78,7 +78,7 @@ describe("OnboardingStepNav", () => {
         node.props.className.includes("w-full relative isolate rounded-[28px]"),
     );
 
-    expect(String(outerShell?.props.className)).toContain("max-md:-mb-3");
+    expect(String(outerShell?.props.className)).toContain("max-md:-mb-12");
     expect(String(outerShell?.props.className)).toContain("max-md:pb-1");
     expect(String(outerShell?.props.className)).toContain("max-md:pt-1");
     expect(String(navSurface?.props.className)).toContain("max-md:px-2.5");

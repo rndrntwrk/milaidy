@@ -128,16 +128,33 @@ function getKnowledgeTypeLabel(contentType?: string): string {
   return contentType?.split("/").pop()?.toUpperCase() || "DOC";
 }
 
-function getKnowledgeSourceLabel(source?: string): string {
-  if (source === "youtube") return "YouTube";
-  if (source === "url") return "From URL";
-  return "Upload";
+function getKnowledgeSourceLabel(
+  source: string | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (source === "youtube") {
+    return t("knowledgeview.YouTube", { defaultValue: "YouTube" });
+  }
+  if (source === "url") {
+    return t("knowledgeview.FromUrl", { defaultValue: "From URL" });
+  }
+  return t("knowledgeview.Upload", { defaultValue: "Upload" });
 }
 
-function getKnowledgeDocumentSummary(doc: KnowledgeDocument): string {
+function getKnowledgeDocumentSummary(
+  doc: KnowledgeDocument,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
   const fragmentLabel =
-    doc.fragmentCount === 1 ? "1 fragment" : `${doc.fragmentCount} fragments`;
-  return `${getKnowledgeSourceLabel(doc.source)} • ${fragmentLabel} • ${formatByteSize(doc.fileSize)}`;
+    doc.fragmentCount === 1
+      ? t("knowledgeview.FragmentCountOne", {
+          defaultValue: "1 fragment",
+        })
+      : t("knowledgeview.FragmentCountMany", {
+          defaultValue: "{{count}} fragments",
+          count: doc.fragmentCount,
+        });
+  return `${getKnowledgeSourceLabel(doc.source, t)} • ${fragmentLabel} • ${formatByteSize(doc.fileSize)}`;
 }
 
 /* ── Upload Zone ────────────────────────────────────────────────────── */
@@ -219,7 +236,10 @@ function UploadZone({
       />
       <div className="flex items-start justify-between gap-3 px-1">
         <div className={KNOWLEDGE_META_PILL_CLASS}>
-          {SUPPORTED_UPLOAD_EXTENSIONS.size} formats
+          {t("knowledgeview.FormatsCount", {
+            defaultValue: "{{count}} formats",
+            count: SUPPORTED_UPLOAD_EXTENSIONS.size,
+          })}
         </div>
       </div>
 
@@ -263,8 +283,17 @@ function UploadZone({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted/80">
             <span className="font-medium text-txt/80">
               {uploadStatus
-                ? `Uploading ${uploadStatus.current}/${uploadStatus.total}${uploadStatus.filename ? `: ${uploadStatus.filename}` : ""}`
-                : "Drop files or folders to upload"}
+                ? t("knowledgeview.UploadingProgress", {
+                    defaultValue: "Uploading {{current}}/{{total}}{{filename}}",
+                    current: uploadStatus.current,
+                    total: uploadStatus.total,
+                    filename: uploadStatus.filename
+                      ? `: ${uploadStatus.filename}`
+                      : "",
+                  })
+                : t("knowledgeview.DropFilesOrFoldersToUpload", {
+                    defaultValue: "Drop files or folders to upload",
+                  })}
             </span>
           </div>
         )}
@@ -272,10 +301,14 @@ function UploadZone({
         {!dragOver && !uploading && !showUrlInput && (
           <div className="space-y-1 py-1 text-center">
             <div className="text-[11px] font-medium text-muted-strong">
-              Drop files here to upload
+              {t("knowledgeview.DropFilesHereToUpload", {
+                defaultValue: "Drop files here to upload",
+              })}
             </div>
             <div className="text-[10px] text-muted">
-              Docs, PDFs, JSON, CSV, and supported images.
+              {t("knowledgeview.UploadSupportedTypes", {
+                defaultValue: "Docs, PDFs, JSON, CSV, and supported images.",
+              })}
             </div>
           </div>
         )}
@@ -351,7 +384,10 @@ function SearchResultListItem({
       </span>
       <span className="min-w-0 flex-1 text-left">
         <span className="block truncate text-sm font-semibold text-txt">
-          {result.documentTitle || "Unknown Document"}
+          {result.documentTitle ||
+            t("knowledgeview.UnknownDocument", {
+              defaultValue: "Unknown Document",
+            })}
         </span>
         <span className="mt-1 block line-clamp-2 text-[11px] leading-relaxed text-muted/85">
           {result.text}
@@ -379,6 +415,7 @@ function DocumentListItem({
   onDelete: (id: string) => void;
   deleting: boolean;
 }) {
+  const { t } = useApp();
   return (
     <div
       className={`${KNOWLEDGE_SIDEBAR_ITEM_BASE_CLASS} ${
@@ -400,18 +437,21 @@ function DocumentListItem({
         variant="ghost"
         className="h-auto min-w-0 flex-1 rounded-sm p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         onClick={() => onSelect(doc.id)}
-        aria-label={`Open ${doc.filename}`}
+        aria-label={t("knowledgeview.OpenDocument", {
+          defaultValue: "Open {{filename}}",
+          filename: doc.filename,
+        })}
         aria-current={active ? "page" : undefined}
       >
         <div className="truncate text-sm font-semibold text-txt transition-colors">
           {doc.filename}
         </div>
         <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted/85">
-          {getKnowledgeDocumentSummary(doc)}
+          {getKnowledgeDocumentSummary(doc, t)}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted/70">
           <span className="rounded-full border border-border/45 bg-bg/30 px-2 py-0.5">
-            {getKnowledgeSourceLabel(doc.source)}
+            {getKnowledgeSourceLabel(doc.source, t)}
           </span>
           <span>{formatShortDate(doc.createdAt, { fallback: "—" })}</span>
         </div>
@@ -470,7 +510,11 @@ function DocumentViewer({ documentId }: { documentId: string | null }) {
     load().catch((err) => {
       if (!cancelled) {
         setError(
-          err instanceof Error ? err.message : "Failed to load document",
+          err instanceof Error
+            ? err.message
+            : t("knowledgeview.FailedToLoadDocument", {
+                defaultValue: "Failed to load document",
+              }),
         );
         setLoading(false);
       }
@@ -493,7 +537,7 @@ function DocumentViewer({ documentId }: { documentId: string | null }) {
             {getKnowledgeTypeLabel(doc.contentType)}
           </span>
           <span className="rounded-full border border-accent/25 bg-accent/8 px-3 py-1.5 text-[11px] font-semibold text-txt-strong">
-            {getKnowledgeSourceLabel(doc.source)}
+            {getKnowledgeSourceLabel(doc.source, t)}
           </span>
         </div>
       )}
@@ -587,7 +631,9 @@ function DocumentViewer({ documentId }: { documentId: string | null }) {
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted/70">
-                      Fragments
+                      {t("knowledgeview.FragmentsLabel", {
+                        defaultValue: "Fragments",
+                      })}
                     </span>
                     <span className="inline-block w-fit rounded-md border border-border/25 bg-bg-hover px-2 py-1 font-medium text-txt">
                       {fragments.length}
@@ -698,7 +744,11 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
       } else {
         setIsServiceLoading(false);
         const msg =
-          err instanceof Error ? err.message : "Failed to load knowledge data";
+          err instanceof Error
+            ? err.message
+            : t("knowledgeview.FailedToLoadKnowledgeData", {
+                defaultValue: "Failed to load knowledge data",
+              });
         setLoadError(msg);
         setActionNoticeRef.current(msg, "error");
       }
@@ -722,7 +772,10 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
     if (attempt >= 5) {
       setIsServiceLoading(false);
       setLoadError(
-        "Knowledge service did not become available. Please reload the page.",
+        t("knowledgeview.ServiceDidNotBecomeAvailable", {
+          defaultValue:
+            "Knowledge service did not become available. Please reload the page.",
+        }),
       );
       return;
     }
@@ -754,7 +807,13 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
           return;
         }
 
-        reject(new Error("Failed to read file"));
+        reject(
+          new Error(
+            t("knowledgeview.FailedToReadFile", {
+              defaultValue: "Failed to read file",
+            }),
+          ),
+        );
       };
 
       reader.onerror = () => reject(reader.error);
@@ -776,7 +835,11 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
         uploadFile.size > MAX_KNOWLEDGE_IMAGE_PROCESSING_BYTES
       ) {
         throw new Error(
-          `Image could not be compressed below ${formatByteSize(MAX_KNOWLEDGE_IMAGE_PROCESSING_BYTES)} for processing.`,
+          t("knowledgeview.ImageCouldNotBeCompressed", {
+            defaultValue:
+              "Image could not be compressed below {{limit}} for processing.",
+            limit: formatByteSize(MAX_KNOWLEDGE_IMAGE_PROCESSING_BYTES),
+          }),
         );
       }
 
@@ -797,7 +860,12 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
       ).length;
       if (requestBytes > MAX_UPLOAD_REQUEST_BYTES) {
         throw new Error(
-          `Upload payload is ${formatByteSize(requestBytes)}, which exceeds the current limit (${formatByteSize(MAX_UPLOAD_REQUEST_BYTES)}).`,
+          t("knowledgeview.UploadPayloadExceedsLimit", {
+            defaultValue:
+              "Upload payload is {{size}}, which exceeds the current limit ({{limit}}).",
+            size: formatByteSize(requestBytes),
+            limit: formatByteSize(MAX_UPLOAD_REQUEST_BYTES),
+          }),
         );
       }
 
@@ -821,8 +889,12 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
       if (uploadQueue.length === 0) {
         setActionNotice(
           unsupportedFiles.length > 0
-            ? "No supported non-empty files were selected."
-            : "No non-empty files were selected.",
+            ? t("knowledgeview.NoSupportedNonEmptyFiles", {
+                defaultValue: "No supported non-empty files were selected.",
+              })
+            : t("knowledgeview.NoNonEmptyFiles", {
+                defaultValue: "No non-empty files were selected.",
+              }),
           "info",
           3000,
         );
@@ -837,12 +909,23 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
           typeof window === "undefined"
             ? true
             : await confirmDesktopAction({
-                title: "Upload Large Files",
-                message: `${largeFiles.length} large file(s) detected.`,
-                detail:
-                  "Uploading can take longer and may increase embedding or vision costs.",
-                confirmLabel: "Continue",
-                cancelLabel: "Cancel",
+                title: t("knowledgeview.UploadLargeFiles", {
+                  defaultValue: "Upload Large Files",
+                }),
+                message: t("knowledgeview.LargeFilesDetected", {
+                  defaultValue: "{{count}} large file(s) detected.",
+                  count: largeFiles.length,
+                }),
+                detail: t("knowledgeview.UploadLargeFilesDetail", {
+                  defaultValue:
+                    "Uploading can take longer and may increase embedding or vision costs.",
+                }),
+                confirmLabel: t("onboarding.savedMyKeys", {
+                  defaultValue: "Continue",
+                }),
+                cancelLabel: t("common.cancel", {
+                  defaultValue: "Cancel",
+                }),
                 type: "warning",
               });
         if (!shouldContinue) return;
@@ -854,10 +937,16 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
 
       const normalizeUploadError = (err: unknown): string => {
         const message =
-          err instanceof Error ? err.message : "Unknown upload error";
+          err instanceof Error
+            ? err.message
+            : t("knowledgeview.UnknownUploadError", {
+                defaultValue: "Unknown upload error",
+              });
         const status = (err as Error & { status?: number })?.status;
         return status === 413 || /maximum size|payload is/i.test(message)
-          ? "Upload too large. Try splitting this file."
+          ? t("knowledgeview.UploadTooLarge", {
+              defaultValue: "Upload too large. Try splitting this file.",
+            })
           : message;
       };
 
@@ -865,7 +954,9 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
       setUploadStatus({
         current: 0,
         total: uploadQueue.length,
-        filename: "Preparing...",
+        filename: t("knowledgeview.Preparing", {
+          defaultValue: "Preparing...",
+        }),
       });
 
       try {
@@ -893,11 +984,16 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
           currentBatch = [];
           currentBatchBytes = 0;
 
-          const batchLabel = batchToUpload[0]?.filename || "batch";
+          const batchLabel =
+            batchToUpload[0]?.filename ||
+            t("knowledgeview.Batch", { defaultValue: "batch" });
           setUploadStatus({
             current: successful + failures.length,
             total: uploadQueue.length,
-            filename: `Uploading batch starting with ${batchLabel}`,
+            filename: t("knowledgeview.UploadingBatchStartingWith", {
+              defaultValue: "Uploading batch starting with {{label}}",
+              label: batchLabel,
+            }),
           });
 
           try {
@@ -908,14 +1004,22 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
             for (const item of result.results) {
               const batchItem = batchToUpload[item.index];
               const filename =
-                item.filename || batchItem?.filename || "document";
+                item.filename ||
+                batchItem?.filename ||
+                t("knowledgeview.Document", {
+                  defaultValue: "document",
+                });
               if (item.ok) {
                 successful += 1;
                 if (item.warnings?.[0]) {
                   warnings.push(`${filename}: ${item.warnings[0]}`);
                 }
-              } else {
-                failures.push(`${filename}: ${item.error || "Upload failed"}`);
+                } else {
+                failures.push(
+                  `${filename}: ${item.error || t("knowledgeview.UploadFailed", {
+                    defaultValue: "Upload failed",
+                  })}`,
+                );
               }
             }
           } catch (err) {
@@ -931,7 +1035,10 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
           setUploadStatus({
             current: index + 1,
             total: uploadQueue.length,
-            filename: `Preparing: ${uploadFilename}`,
+            filename: t("knowledgeview.PreparingFile", {
+              defaultValue: "Preparing: {{filename}}",
+              filename: uploadFilename,
+            }),
           });
 
           try {
@@ -1037,8 +1144,19 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
         loadData();
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Unknown import error";
-        setActionNotice(`Failed to import from URL: ${message}`, "error", 5000);
+          err instanceof Error
+            ? err.message
+            : t("knowledgeview.UnknownImportError", {
+                defaultValue: "Unknown import error",
+              });
+        setActionNotice(
+          t("knowledgeview.FailedToImportFromUrl", {
+            defaultValue: "Failed to import from URL: {{message}}",
+            message,
+          }),
+          "error",
+          5000,
+        );
       } finally {
         setUploading(false);
       }
@@ -1057,8 +1175,19 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
         setSearchResults(result.results);
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Unknown search error";
-        setActionNotice(`Search failed: ${message}`, "error", 4000);
+          err instanceof Error
+            ? err.message
+            : t("knowledgeview.UnknownSearchError", {
+                defaultValue: "Unknown search error",
+              });
+        setActionNotice(
+          t("knowledgeview.SearchFailed", {
+            defaultValue: "Search failed: {{message}}",
+            message,
+          }),
+          "error",
+          4000,
+        );
         setSearchResults([]);
       } finally {
         setSearching(false);
@@ -1076,18 +1205,38 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
 
         if (result.ok) {
           setActionNotice(
-            `Deleted document (${result.deletedFragments} fragments removed)`,
+            t("knowledgeview.DeletedDocument", {
+              defaultValue: "Deleted document ({{count}} fragments removed)",
+              count: result.deletedFragments,
+            }),
             "success",
             3000,
           );
           await loadData();
         } else {
-          setActionNotice("Failed to delete document", "error", 4000);
+          setActionNotice(
+            t("knowledgeview.FailedToDeleteDocument", {
+              defaultValue: "Failed to delete document",
+            }),
+            "error",
+            4000,
+          );
         }
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Unknown delete error";
-        setActionNotice(`Failed to delete document: ${message}`, "error", 5000);
+          err instanceof Error
+            ? err.message
+            : t("knowledgeview.UnknownDeleteError", {
+                defaultValue: "Unknown delete error",
+              });
+        setActionNotice(
+          t("knowledgeview.FailedToDeleteDocumentWithMessage", {
+            defaultValue: "Failed to delete document: {{message}}",
+            message,
+          }),
+          "error",
+          5000,
+        );
       } finally {
         setDeleting(null);
       }
@@ -1169,7 +1318,7 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
                     className="h-8 rounded-lg border border-border/35 px-3 text-[11px] font-semibold text-muted hover:border-border/60 hover:bg-bg/35 hover:text-txt"
                     onClick={() => setSearchResults(null)}
                   >
-                    Clear
+                    {t("common.clear", { defaultValue: "Clear" })}
                   </Button>
                 )}
               </div>
@@ -1197,7 +1346,10 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
               {isShowingSearchResults && visibleSearchResults.length === 0 && (
                 <DesktopEmptyStatePanel
                   className="min-h-[12rem] px-4 py-8"
-                  description="Try a filename, topic, or phrase from the document body."
+                  description={t("knowledgeview.SearchTips", {
+                    defaultValue:
+                      "Try a filename, topic, or phrase from the document body.",
+                  })}
                   title={t("knowledgeview.NoResultsFound")}
                 />
               )}

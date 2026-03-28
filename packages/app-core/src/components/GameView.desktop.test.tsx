@@ -13,6 +13,15 @@ vi.mock("../bridge", () => ({
   isElectrobunRuntime: vi.fn(() => true),
 }));
 
+vi.mock("../state", () => ({
+  useApp: () => ({
+    t: (key: string, opts?: Record<string, unknown>) =>
+      opts?.defaultValue && typeof opts.defaultValue === "string"
+        ? opts.defaultValue
+        : key,
+  }),
+}));
+
 vi.mock("@miladyai/ui", () => ({
   Button: ({
     children,

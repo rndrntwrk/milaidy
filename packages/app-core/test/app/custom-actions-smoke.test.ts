@@ -6,6 +6,16 @@ import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { text, findButtonByText, flush } from "../../../../test/helpers/react-test";
 
+function translateTest(
+  key: string,
+  vars?: {
+    defaultValue?: string;
+  },
+): string {
+  if (key === "common.save") return "Save";
+  return vars?.defaultValue ?? key;
+}
+
 const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
   mockClient: {
     getCodingAgentStatus: vi.fn(async () => null),
@@ -151,7 +161,7 @@ function createContext(
     chatPendingImages: [],
     ...overrides,
     uiLanguage: "en" as const,
-    t: (k: string) => k,
+    t: translateTest,
   };
 }
 

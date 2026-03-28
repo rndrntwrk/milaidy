@@ -99,7 +99,7 @@ export function useTranslation(): TranslationContextValue {
   if (!ctx) {
     if (typeof process !== "undefined" && process.env.NODE_ENV === "test") {
       return {
-        t: (k: string) => k,
+        t: createTranslator("en"),
         uiLanguage: "en",
         setUiLanguage: () => {},
       };

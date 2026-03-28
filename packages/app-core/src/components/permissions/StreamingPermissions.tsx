@@ -10,7 +10,9 @@ type StreamingPermissionMode = "mobile" | "web";
 interface MediaPermissionDef {
   id: string;
   name: string;
+  nameKey: string;
   description: string;
+  descriptionKey: string;
   icon: string;
 }
 
@@ -29,13 +31,17 @@ const MEDIA_PERMISSIONS: MediaPermissionDef[] = [
   {
     id: "camera",
     name: "Camera",
+    nameKey: "permissionssection.streaming.camera.name",
     description: "Stream video to your agent for vision tasks",
+    descriptionKey: "permissionssection.streaming.camera.description",
     icon: "camera",
   },
   {
     id: "microphone",
     name: "Microphone",
+    nameKey: "permissionssection.streaming.microphone.name",
     description: "Stream audio for voice interaction with your agent",
+    descriptionKey: "permissionssection.streaming.microphone.description",
     icon: "mic",
   },
 ];
@@ -236,6 +242,12 @@ export function StreamingPermissionsSettingsView({
           {MEDIA_PERMISSIONS.map((def) => {
             const status = permStates[def.id] ?? "unknown";
             const isGranted = status === "granted";
+            const name = translateWithFallback(t, def.nameKey, def.name);
+            const description = translateWithFallback(
+              t,
+              def.descriptionKey,
+              def.description,
+            );
 
             return (
               <div
@@ -247,17 +259,25 @@ export function StreamingPermissionsSettingsView({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-[13px]">
-                      {def.name}
+                      {name}
                     </span>
                     <StatusBadge
-                      label={getBadgeLabel(status)}
+                      label={translateWithFallback(
+                        t,
+                        status === "granted"
+                          ? "permissionssection.badge.granted"
+                          : status === "denied"
+                            ? "permissionssection.badge.denied"
+                            : "permissionssection.badge.notDetermined",
+                        getBadgeLabel(status),
+                      )}
                       tone={getBadgeTone(status)}
                       withDot
                       className="rounded-full font-semibold"
                     />
                   </div>
                   <div className="text-[11px] text-[var(--muted)] mt-0.5 truncate">
-                    {def.description}
+                    {description}
                   </div>
                 </div>
                 {!isGranted ? (
@@ -266,7 +286,7 @@ export function StreamingPermissionsSettingsView({
                     size="sm"
                     className="h-auto text-[11px] py-1 px-2.5"
                     onClick={() => void requestPermission(def.id)}
-                    aria-label={`${translateWithFallback(t, "permissionssection.Grant", "Grant")} ${def.name}`}
+                    aria-label={`${translateWithFallback(t, "permissionssection.Grant", "Grant")} ${name}`}
                   >
                     {translateWithFallback(
                       t,
@@ -335,6 +355,12 @@ export function StreamingPermissionsOnboardingView({
       <div className="mb-6 space-y-2.5">
         {MEDIA_PERMISSIONS.map((def) => {
           const isGranted = permStates[def.id] === "granted";
+          const name = translateWithFallback(t, def.nameKey, def.name);
+          const description = translateWithFallback(
+            t,
+            def.descriptionKey,
+            def.description,
+          );
 
           return (
             <div
@@ -349,10 +375,10 @@ export function StreamingPermissionsOnboardingView({
               <PermissionIcon icon={def.icon} />
               <div className="flex-1">
                 <div className="text-sm font-semibold text-[var(--onboarding-text-strong)]">
-                  {def.name}
+                  {name}
                 </div>
                 <div className="text-[11px] text-[var(--onboarding-text-subtle)]">
-                  {def.description}
+                  {description}
                 </div>
               </div>
               {isGranted ? (
@@ -363,7 +389,7 @@ export function StreamingPermissionsOnboardingView({
                   size="sm"
                   className="h-auto text-xs py-1.5 px-3"
                   onClick={() => void requestPermission(def.id)}
-                  aria-label={`${translateWithFallback(t, "permissionssection.Grant", "Grant")} ${def.name}`}
+                  aria-label={`${translateWithFallback(t, "permissionssection.Grant", "Grant")} ${name}`}
                 >
                   {translateWithFallback(
                     t,

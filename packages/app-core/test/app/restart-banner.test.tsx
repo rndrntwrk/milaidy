@@ -1,9 +1,10 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { testT } from "../../../../test/helpers/i18n";
 
 interface RestartBannerContextStub {
-  t: (key: string) => string;
+  t: (key: string, vars?: Record<string, unknown>) => string;
   pendingRestart: boolean;
   pendingRestartReasons: string[];
   restartBannerDismissed: boolean;
@@ -31,7 +32,7 @@ function makeContext(
   overrides: Partial<RestartBannerContextStub> = {},
 ): RestartBannerContextStub {
   return {
-    t: (k: string) => k,
+    t: (key: string, vars?: Record<string, unknown>) => testT(key, vars),
     pendingRestart: false,
     pendingRestartReasons: [],
     restartBannerDismissed: false,

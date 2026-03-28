@@ -1,14 +1,27 @@
 import type { CodingAgentSession } from "@miladyai/app-core/api";
+import { useApp } from "../state";
 import { PULSE_STATUSES, STATUS_DOT } from "./pty-status-dots";
 
 /** Derive activity text for sessions hydrated from the server (no lastActivity yet). */
-function deriveActivity(s: CodingAgentSession): string {
+function deriveActivity(
+  s: CodingAgentSession,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
   if (s.status === "tool_running" && s.toolDescription) {
-    return `Running ${s.toolDescription}`.slice(0, 60);
+    return t("agentactivitybox.RunningTool", {
+      defaultValue: "Running {{tool}}",
+      tool: s.toolDescription,
+    }).slice(0, 60);
   }
-  if (s.status === "blocked") return "Waiting for input";
-  if (s.status === "error") return "Error";
-  return "Running";
+  if (s.status === "blocked") {
+    return t("agentactivitybox.WaitingForInput", {
+      defaultValue: "Waiting for input",
+    });
+  }
+  if (s.status === "error") {
+    return t("agentactivitybox.Error", { defaultValue: "Error" });
+  }
+  return t("agentactivitybox.Running", { defaultValue: "Running" });
 }
 
 interface AgentActivityBoxProps {
@@ -20,6 +33,7 @@ export function AgentActivityBox({
   sessions,
   onSessionClick,
 }: AgentActivityBoxProps) {
+  const { t } = useApp();
   if (!sessions || sessions.length === 0) return null;
 
   return (
@@ -50,7 +64,7 @@ export function AgentActivityBox({
                     : "text-muted"
             }`}
           >
-            {s.lastActivity ?? deriveActivity(s)}
+            {s.lastActivity ?? deriveActivity(s, t)}
           </span>
           {/* Chevron-up icon */}
           <svg

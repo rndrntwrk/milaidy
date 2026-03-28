@@ -15,6 +15,7 @@ export function CloudOnboarding() {
     elizaCloudLoginError,
     handleCloudLogin,
     handleCloudOnboardingFinish,
+    t,
   } = useApp();
 
   // Auto-complete onboarding once cloud is connected.
@@ -35,7 +36,9 @@ export function CloudOnboarding() {
         <div className="flex flex-col items-center gap-2 mb-2">
           <div className="text-4xl font-bold tracking-tight">eliza</div>
           <p className="text-muted text-sm text-center">
-            Connect to Eliza Cloud to get started
+            {t("cloudonboarding.ConnectToElizaCloud", {
+              defaultValue: "Connect to Eliza Cloud to get started",
+            })}
           </p>
         </div>
 
@@ -43,7 +46,9 @@ export function CloudOnboarding() {
         <div className="w-full rounded-xl border border-border bg-surface p-6 flex flex-col items-center gap-4">
           {elizaCloudConnected ? (
             <p className="text-ok text-sm">
-              Connected! Setting up your agent...
+              {t("cloudonboarding.ConnectedSetupAgent", {
+                defaultValue: "Connected! Setting up your agent...",
+              })}
             </p>
           ) : (
             <>
@@ -54,8 +59,12 @@ export function CloudOnboarding() {
                 disabled={elizaCloudLoginBusy}
               >
                 {elizaCloudLoginBusy
-                  ? "Waiting for login..."
-                  : "Connect to Eliza Cloud"}
+                  ? t("cloudonboarding.WaitingForLogin", {
+                      defaultValue: "Waiting for login...",
+                    })
+                  : t("cloudonboarding.ConnectButton", {
+                      defaultValue: "Connect to Eliza Cloud",
+                    })}
               </Button>
 
               {elizaCloudLoginError && (
@@ -66,7 +75,9 @@ export function CloudOnboarding() {
                       className="text-accent underline"
                       onClick={() => void openExternalUrl(urlMatch[1])}
                     >
-                      Click here to open the login page
+                      {t("cloudonboarding.ClickToOpenLogin", {
+                        defaultValue: "Click here to open the login page",
+                      })}
                     </Button>
                   ) : (
                     <p className="text-err">{elizaCloudLoginError}</p>

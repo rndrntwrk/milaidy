@@ -342,7 +342,9 @@ export function TrajectoryDetailView({
           </div>
           <div className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-4`}>
             <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-              Total Tokens
+              {t("trajectorydetailview.TotalTokens", {
+                defaultValue: "Total Tokens",
+              })}
             </div>
             <div className="mt-2 text-sm font-semibold text-txt">
               {formatTrajectoryTokenCount(

@@ -38,6 +38,7 @@ export function ActivateStep() {
         </OnboardingSecondaryActionButton>
         <Button
           className={onboardingPrimaryActionClass}
+          data-testid="onboarding-activate-enter"
           style={onboardingPrimaryActionTextShadowStyle}
           onClick={(event?: React.MouseEvent<HTMLButtonElement>) => {
             spawnOnboardingRipple(

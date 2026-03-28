@@ -144,6 +144,8 @@ interface HeartbeatTemplate {
   instructions: string;
   interval: string;
   unit: DurationUnit;
+  nameKey?: string;
+  instructionsKey?: string;
 }
 
 const TEMPLATES_STORAGE_KEY = "milady:heartbeat-templates";
@@ -152,24 +154,30 @@ const BUILT_IN_TEMPLATES: HeartbeatTemplate[] = [
   {
     id: "__builtin_crypto",
     name: "Check crypto prices",
+    nameKey: "heartbeatsview.template.crypto.name",
     instructions:
       "Check the current prices of BTC, ETH, and SOL. Summarize any significant moves in the last hour.",
+    instructionsKey: "heartbeatsview.template.crypto.instructions",
     interval: "30",
     unit: "minutes",
   },
   {
     id: "__builtin_journal",
     name: "Daily journal prompt",
+    nameKey: "heartbeatsview.template.journal.name",
     instructions:
       "Write a brief, thoughtful journal prompt for the user based on current events or seasonal themes. Keep it under 2 sentences.",
+    instructionsKey: "heartbeatsview.template.journal.instructions",
     interval: "24",
     unit: "hours",
   },
   {
     id: "__builtin_trending",
     name: "Trending topics digest",
+    nameKey: "heartbeatsview.template.trending.name",
     instructions:
       "Scan for trending topics on crypto Twitter and tech news. Give a 3-bullet summary of what's worth paying attention to.",
+    instructionsKey: "heartbeatsview.template.trending.instructions",
     interval: "4",
     unit: "hours",
   },
@@ -205,6 +213,24 @@ function saveUserTemplates(templates: HeartbeatTemplate[]): void {
   } catch {
     // localStorage full or unavailable
   }
+}
+
+function getTemplateName(
+  template: HeartbeatTemplate,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  return template.nameKey
+    ? t(template.nameKey, { defaultValue: template.name })
+    : template.name;
+}
+
+function getTemplateInstructions(
+  template: HeartbeatTemplate,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  return template.instructionsKey
+    ? t(template.instructionsKey, { defaultValue: template.instructions })
+    : template.instructions;
 }
 
 function parsePositiveInteger(value: string): number | undefined {
@@ -632,13 +658,20 @@ export function HeartbeatsView() {
             {/* Templates */}
             <div className="mt-3 border-t border-border/30 px-1 pb-1 pt-4">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <div className={SIDEBAR_SECTION_LABEL_CLASS}>Templates</div>
+                <div className={SIDEBAR_SECTION_LABEL_CLASS}>
+                  {t("heartbeatsview.Templates", { defaultValue: "Templates" })}
+                </div>
                 <span className="text-[10px] text-muted/50">
                   {userTemplates.length + BUILT_IN_TEMPLATES.length}
                 </span>
               </div>
               {[...userTemplates, ...BUILT_IN_TEMPLATES].map((template) => {
                 const isUserTemplate = !template.id.startsWith("__builtin_");
+                const templateName = getTemplateName(template, t);
+                const templateInstructions = getTemplateInstructions(
+                  template,
+                  t,
+                );
                 return (
                   <div key={template.id} className="relative mb-1.5 group">
                     <button
@@ -651,8 +684,8 @@ export function HeartbeatsView() {
                       onClick={() => {
                         setForm({
                           ...emptyForm,
-                          displayName: template.name,
-                          instructions: template.instructions,
+                          displayName: templateName,
+                          instructions: templateInstructions,
                           durationValue: template.interval,
                           durationUnit: template.unit,
                         });
@@ -660,16 +693,24 @@ export function HeartbeatsView() {
                         setEditingId(null);
                         setSelectedTriggerId(null);
                         setTemplateNotice(
-                          `Template "${template.name}" loaded — customize and create.`,
+                          t("heartbeatsview.TemplateLoadedNotice", {
+                            defaultValue:
+                              'Template "{{name}}" loaded. Customize and create.',
+                            name: templateName,
+                          }),
                         );
                         setTimeout(() => setTemplateNotice(null), 3000);
                       }}
                     >
                       <div className="text-xs font-medium text-txt">
-                        {template.name}
+                        {templateName}
                       </div>
                       <div className="mt-0.5 text-[10px] text-muted/60">
-                        Every {template.interval} {template.unit}
+                        {t("heartbeatsview.EveryIntervalUnit", {
+                          defaultValue: "Every {{interval}} {{unit}}",
+                          interval: template.interval,
+                          unit: template.unit,
+                        })}
                       </div>
                     </button>
                     {isUserTemplate && (
@@ -705,7 +746,9 @@ export function HeartbeatsView() {
               setEditingId(null);
             }}
           >
-            ← Back
+            {t("heartbeatsview.BackToList", {
+              defaultValue: "← Back",
+            })}
           </button>
           {editorOpen || editingId ? (
             <div
@@ -967,7 +1010,9 @@ export function HeartbeatsView() {
                       className="text-xs font-medium text-muted transition-colors hover:text-accent underline-offset-2 hover:underline"
                       onClick={saveFormAsTemplate}
                     >
-                      Save as template
+                      {t("heartbeatsview.SaveAsTemplate", {
+                        defaultValue: "Save as template",
+                      })}
                     </button>
                   )}
 

@@ -381,8 +381,10 @@ export function Header({
                       : t("aria.navMenu")}
                   </DialogTitle>
                   <DialogDescription className="sr-only">
-                    Switch between Milady sections from the mobile navigation
-                    drawer.
+                    {t("header.MobileNavigationDescription", {
+                      defaultValue:
+                        "Switch between Milady sections from the mobile navigation drawer.",
+                    })}
                   </DialogDescription>
                 </div>
                 <Button

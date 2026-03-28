@@ -3,6 +3,7 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { testT } from "../../../../test/helpers/i18n";
 
 const {
   invokeDesktopBridgeRequestMock,
@@ -55,7 +56,7 @@ describe("ReleaseCenterView", () => {
 
     isElectrobunRuntimeMock.mockReturnValue(true);
     useAppMock.mockReturnValue({
-      t: (k: string) => k,
+      t: (key: string, vars?: Record<string, unknown>) => testT(key, vars),
       loadUpdateStatus: vi.fn(() => Promise.resolve()),
       updateLoading: false,
       updateStatus: {

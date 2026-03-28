@@ -1,5 +1,6 @@
 import { StatusBadge, type StatusTone } from "@miladyai/ui";
 import { formatDateTime } from "../format";
+import { useApp } from "../../state";
 
 export function summarizeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -18,8 +19,11 @@ export function normalizeReleaseNotesUrl(url?: string | null): string {
  * Delegates to the canonical {@link formatDateTime} from `../format.ts`,
  * preserving the original "Not yet" fallback used in release-center views.
  */
-export function formatTimestamp(timestamp?: number | null): string {
-  return formatDateTime(timestamp, { fallback: "Not yet" });
+export function formatTimestamp(
+  timestamp?: number | null,
+  fallback = "Not yet",
+): string {
+  return formatDateTime(timestamp, { fallback });
 }
 
 const PILL_TONE_MAP: Record<string, StatusTone> = {
@@ -45,24 +49,36 @@ export function StatusPill({
 }
 
 export function DefinitionRow({
+  emptyFallback,
   label,
   value,
 }: {
+  emptyFallback?: string;
   label: string;
   value: string | number | null | undefined;
 }) {
+  const { t } = useApp();
   return (
     <div className="flex items-start justify-between gap-4 py-2">
       <div className="text-xs text-muted">{label}</div>
       <div className="text-right text-xs text-txt break-all">
-        {value ?? "Unavailable"}
+        {value ??
+          emptyFallback ??
+          t("releasecenter.Unavailable", { defaultValue: "Unavailable" })}
       </div>
     </div>
   );
 }
 
-export function partitionDescription(partition: string): string {
+export function partitionDescription(
+  partition: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
   return partition === "persist:default"
-    ? "Renderer default session"
-    : "Sandboxed release notes session";
+    ? t("releasecenter.RendererDefaultSession", {
+        defaultValue: "Renderer default session",
+      })
+    : t("releasecenter.SandboxedReleaseNotesSession", {
+        defaultValue: "Sandboxed release notes session",
+      });
 }

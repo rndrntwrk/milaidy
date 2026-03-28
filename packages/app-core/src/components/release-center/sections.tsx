@@ -1,5 +1,7 @@
 import { Button, Input } from "@miladyai/ui";
 import { createElement } from "react";
+import { useApp } from "../../state";
+import { useBranding } from "../../config/branding";
 import {
   DefinitionRow,
   formatTimestamp,
@@ -16,6 +18,14 @@ import type {
   WgpuTagElement,
 } from "./types";
 import { SESSION_PARTITIONS } from "./types";
+function tr(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  key: string,
+  defaultValue: string,
+  options?: Record<string, unknown>,
+) {
+  return t(key, { defaultValue, ...options });
+}
 
 export function ReleaseStatusSection({
   busyAction,
@@ -36,6 +46,7 @@ export function ReleaseStatusSection({
   onDetach: () => void;
   onRefresh: () => void;
 }) {
+  const { t } = useApp();
   const appReleaseTone = updateStatus?.updateAvailable ? "warning" : "good";
   const autoUpdateDisabled =
     nativeUpdater != null && !nativeUpdater.canAutoUpdate;
@@ -44,21 +55,39 @@ export function ReleaseStatusSection({
     : nativeUpdater?.updateAvailable
       ? "warning"
       : "neutral";
+  const loadingLabel = tr(t, "common.loading", "loading");
+  const currentLabel = tr(t, "releasecenterview.Current", "Current");
 
   return (
     <section className="rounded-2xl border border-border bg-bg-accent p-4">
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <StatusPill
-          label={`App: ${updateStatus?.currentVersion ?? "loading"}`}
+          label={tr(t, "releasecenter.AppVersionPill", "App: {{version}}", {
+            version: updateStatus?.currentVersion ?? loadingLabel,
+          })}
           tone={appReleaseTone}
         />
         <StatusPill
-          label={`Desktop: ${nativeUpdater?.currentVersion ?? "loading"}`}
+          label={tr(
+            t,
+            "releasecenter.DesktopVersionPill",
+            "Desktop: {{version}}",
+            {
+              version: nativeUpdater?.currentVersion ?? loadingLabel,
+            },
+          )}
           tone={nativeReleaseTone}
         />
         {nativeUpdater?.channel ? (
           <StatusPill
-            label={`Channel: ${nativeUpdater.channel}`}
+            label={tr(
+              t,
+              "releasecenter.ChannelPill",
+              "Channel: {{channel}}",
+              {
+                channel: nativeUpdater.channel,
+              },
+            )}
             tone="neutral"
           />
         ) : null}
@@ -66,10 +95,15 @@ export function ReleaseStatusSection({
 
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-sm font-semibold text-txt">Release Status</h3>
+          <h3 className="text-sm font-semibold text-txt">
+            {tr(t, "releasecenter.ReleaseStatus", "Release Status")}
+          </h3>
           <p className="mt-1 text-xs text-muted">
-            Compare backend release metadata with the native Electrobun updater
-            state.
+            {tr(
+              t,
+              "releasecenter.ReleaseStatusDescription",
+              "Compare backend release metadata with the native Electrobun updater state.",
+            )}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -78,7 +112,7 @@ export function ReleaseStatusSection({
             disabled={busyAction === "refresh" || updateLoading}
             onClick={onRefresh}
           >
-            Refresh
+            {tr(t, "common.refresh", "Refresh")}
           </Button>
           <Button
             size="sm"
@@ -86,7 +120,11 @@ export function ReleaseStatusSection({
             disabled={busyAction === "detach-release"}
             onClick={onDetach}
           >
-            Open Detached Release Center
+            {tr(
+              t,
+              "releasecenter.OpenDetachedReleaseCenter",
+              "Open Detached Release Center",
+            )}
           </Button>
         </div>
       </div>
@@ -94,50 +132,64 @@ export function ReleaseStatusSection({
       <div className="grid gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-border bg-bg p-3">
           <div className="text-xs font-semibold text-txt">
-            App Release Service
+            {tr(t, "releasecenter.AppReleaseService", "App Release Service")}
           </div>
           <DefinitionRow
-            label="Current version"
+            label={tr(t, "releasecenter.CurrentVersion", "Current version")}
             value={updateStatus?.currentVersion}
           />
           <DefinitionRow
-            label="Latest version"
-            value={updateStatus?.latestVersion ?? "Current"}
+            label={tr(t, "releasecenter.LatestVersion", "Latest version")}
+            value={updateStatus?.latestVersion ?? currentLabel}
           />
-          <DefinitionRow label="Channel" value={updateStatus?.channel} />
           <DefinitionRow
-            label="Last checked"
+            label={tr(t, "releasecenterview.Channel", "Channel")}
+            value={updateStatus?.channel}
+          />
+          <DefinitionRow
+            label={tr(t, "releasecenter.LastChecked", "Last checked")}
             value={
               updateStatus?.lastCheckAt
                 ? new Date(updateStatus.lastCheckAt).toLocaleString()
-                : "Not yet"
+                : tr(t, "releasecenter.NotYet", "Not yet")
             }
           />
         </div>
 
         <div className="rounded-xl border border-border bg-bg p-3">
           <div className="mb-3 text-xs font-semibold text-txt">
-            Native Electrobun Updater
+            {tr(
+              t,
+              "releasecenter.NativeElectrobunUpdater",
+              "Native Electrobun Updater",
+            )}
           </div>
           <DefinitionRow
-            label="Current version"
+            label={tr(t, "releasecenter.CurrentVersion", "Current version")}
             value={nativeUpdater?.currentVersion}
           />
           <DefinitionRow
-            label="Latest version"
-            value={nativeUpdater?.latestVersion ?? "Current"}
+            label={tr(t, "releasecenter.LatestVersion", "Latest version")}
+            value={nativeUpdater?.latestVersion ?? currentLabel}
           />
           <DefinitionRow
-            label="App bundle"
-            value={nativeUpdater?.appBundlePath ?? "Unknown"}
+            label={tr(t, "releasecenter.AppBundle", "App bundle")}
+            value={
+              nativeUpdater?.appBundlePath ?? tr(t, "common.unknown", "Unknown")
+            }
           />
           <DefinitionRow
-            label="Last status"
-            value={nativeUpdater?.lastStatus?.message ?? "Idle"}
+            label={tr(t, "releasecenter.LastStatus", "Last status")}
+            value={
+              nativeUpdater?.lastStatus?.message ?? tr(t, "releasecenterview.Idle", "Idle")
+            }
           />
           <DefinitionRow
-            label="Status time"
-            value={formatTimestamp(nativeUpdater?.lastStatus?.timestamp)}
+            label={tr(t, "releasecenter.StatusTime", "Status time")}
+            value={formatTimestamp(
+              nativeUpdater?.lastStatus?.timestamp,
+              tr(t, "releasecenter.NotYet", "Not yet"),
+            )}
           />
           {autoUpdateDisabled && nativeUpdater?.autoUpdateDisabledReason ? (
             <div className="mt-3 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
@@ -150,7 +202,11 @@ export function ReleaseStatusSection({
               disabled={busyAction === "check-updates" || autoUpdateDisabled}
               onClick={onCheckForUpdates}
             >
-              Check / Download Update
+              {tr(
+                t,
+                "releasecenter.CheckDownloadUpdate",
+                "Check / Download Update",
+              )}
             </Button>
             <Button
               size="sm"
@@ -162,7 +218,11 @@ export function ReleaseStatusSection({
               }
               onClick={onApplyUpdate}
             >
-              Apply Downloaded Update
+              {tr(
+                t,
+                "releasecenter.ApplyDownloadedUpdate",
+                "Apply Downloaded Update",
+              )}
             </Button>
           </div>
         </div>
@@ -188,6 +248,7 @@ export function ReleaseNotesSection({
   onReleaseNotesUrlChange: (value: string) => void;
   onResetUrl: () => void;
 }) {
+  const { t } = useApp();
   const { appUrl } = useBranding();
   const defaultReleaseNotesUrl = `${appUrl}/releases/`;
 
@@ -195,11 +256,18 @@ export function ReleaseNotesSection({
     <section className="rounded-2xl border border-border bg-bg-accent p-4">
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-txt">
-          Release Notes BrowserView
+          {tr(
+            t,
+            "releasecenter.ReleaseNotesBrowserView",
+            "Release Notes BrowserView",
+          )}
         </h3>
         <p className="mt-1 text-xs text-muted">
-          Opens release notes in a dedicated sandboxed BrowserView on its own
-          persistent session.
+          {tr(
+            t,
+            "releasecenter.ReleaseNotesBrowserViewDescription",
+            "Opens release notes in a dedicated sandboxed BrowserView on its own persistent session.",
+          )}
         </p>
       </div>
 
@@ -216,7 +284,11 @@ export function ReleaseNotesSection({
             disabled={busyAction === "open-release-notes"}
             onClick={onOpenWindow}
           >
-            Open BrowserView Window
+            {tr(
+              t,
+              "releasecenter.OpenBrowserViewWindow",
+              "Open BrowserView Window",
+            )}
           </Button>
           <Button
             size="sm"
@@ -224,25 +296,28 @@ export function ReleaseNotesSection({
             disabled={busyAction === "reset-release-url"}
             onClick={onResetUrl}
           >
-            Reset URL
+            {tr(t, "releasecenter.ResetUrl", "Reset URL")}
           </Button>
         </div>
 
         {releaseNotesWindow ? (
           <div className="rounded-xl border border-border bg-bg p-3 text-xs text-txt">
             <DefinitionRow
-              label="Window ID"
+              label={tr(t, "releasecenter.WindowId", "Window ID")}
               value={releaseNotesWindow.windowId}
             />
             <DefinitionRow
-              label="BrowserView ID"
+              label={tr(t, "releasecenter.BrowserViewId", "BrowserView ID")}
               value={releaseNotesWindow.webviewId}
             />
-            <DefinitionRow label="URL" value={releaseNotesWindow.url} />
+            <DefinitionRow
+              label={tr(t, "appsview.URL", "URL")}
+              value={releaseNotesWindow.url}
+            />
           </div>
         ) : (
           <div className="rounded-xl border border-border bg-bg p-3 text-xs text-muted">
-            Using updater URL:{" "}
+            {tr(t, "releasecenter.UsingUpdaterUrl", "Using updater URL:")}{" "}
             {nativeUpdater?.baseUrl ?? defaultReleaseNotesUrl}
           </div>
         )}
@@ -264,6 +339,7 @@ export function BuildRuntimeSection({
   nativeUpdater: DesktopUpdaterSnapshot | null;
   onToggleDock: () => void;
 }) {
+  const { t } = useApp();
   const { appUrl } = useBranding();
   const defaultReleaseNotesUrl = `${appUrl}/releases/`;
 
@@ -271,37 +347,56 @@ export function BuildRuntimeSection({
     <section className="rounded-2xl border border-border bg-bg-accent p-4">
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-txt">
-          BuildConfig and Shell Runtime
+          {tr(
+            t,
+            "releasecenter.BuildConfigAndShellRuntime",
+            "BuildConfig and Shell Runtime",
+          )}
         </h3>
         <p className="mt-1 text-xs text-muted">
-          Native runtime metadata sourced directly from Electrobun BuildConfig
-          and shell APIs.
+          {tr(
+            t,
+            "releasecenter.BuildConfigAndShellRuntimeDescription",
+            "Native runtime metadata sourced directly from Electrobun BuildConfig and shell APIs.",
+          )}
         </p>
       </div>
 
       <div className="rounded-xl border border-border bg-bg p-3">
-        <DefinitionRow label="Platform" value={buildInfo?.platform} />
-        <DefinitionRow label="Architecture" value={buildInfo?.arch} />
         <DefinitionRow
-          label="Default renderer"
+          label={tr(t, "releasecenter.Platform", "Platform")}
+          value={buildInfo?.platform}
+        />
+        <DefinitionRow
+          label={tr(t, "releasecenter.Architecture", "Architecture")}
+          value={buildInfo?.arch}
+        />
+        <DefinitionRow
+          label={tr(t, "releasecenter.DefaultRenderer", "Default renderer")}
           value={buildInfo?.defaultRenderer}
         />
         <DefinitionRow
-          label="Available renderers"
+          label={tr(t, "releasecenter.AvailableRenderers", "Available renderers")}
           value={buildInfo?.availableRenderers.join(", ")}
         />
-        <DefinitionRow label="Bun version" value={buildInfo?.bunVersion} />
-        <DefinitionRow label="CEF version" value={buildInfo?.cefVersion} />
         <DefinitionRow
-          label="Updater base URL"
+          label={tr(t, "releasecenter.BunVersion", "Bun version")}
+          value={buildInfo?.bunVersion}
+        />
+        <DefinitionRow
+          label={tr(t, "releasecenter.CefVersion", "CEF version")}
+          value={buildInfo?.cefVersion}
+        />
+        <DefinitionRow
+          label={tr(t, "releasecenter.UpdaterBaseUrl", "Updater base URL")}
           value={nativeUpdater?.baseUrl ?? defaultReleaseNotesUrl}
         />
         <DefinitionRow
-          label="Dock icon visible"
+          label={tr(t, "releasecenter.DockIconVisible", "Dock icon visible")}
           value={
             buildInfo?.platform === "darwin"
               ? String(dockVisible)
-              : "macOS only"
+              : tr(t, "releasecenter.MacOsOnly", "macOS only")
           }
         />
         <div className="mt-3 flex flex-wrap gap-2">
@@ -313,7 +408,9 @@ export function BuildRuntimeSection({
             }
             onClick={onToggleDock}
           >
-            {dockVisible ? "Hide Dock Icon" : "Show Dock Icon"}
+            {dockVisible
+              ? tr(t, "releasecenter.HideDockIcon", "Hide Dock Icon")
+              : tr(t, "releasecenter.ShowDockIcon", "Show Dock Icon")}
           </Button>
         </div>
       </div>
@@ -332,14 +429,23 @@ export function SessionControlsSection({
   onClearCookies: (partition: string) => void;
   onClearSession: (partition: string) => void;
 }) {
+  const { t } = useApp();
   return (
     <section className="rounded-2xl border border-border bg-bg-accent p-4">
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-txt">
-          Session and Cookie Controls
+          {tr(
+            t,
+            "releasecenter.SessionAndCookieControls",
+            "Session and Cookie Controls",
+          )}
         </h3>
         <p className="mt-1 text-xs text-muted">
-          Explicit Session APIs for inspecting and clearing renderer storage.
+          {tr(
+            t,
+            "releasecenter.SessionAndCookieControlsDescription",
+            "Explicit Session APIs for inspecting and clearing renderer storage.",
+          )}
         </p>
       </div>
 
@@ -355,7 +461,7 @@ export function SessionControlsSection({
                 <div>
                   <div className="text-xs font-semibold text-txt">{label}</div>
                   <div className="mt-1 text-[11px] text-muted">
-                    {partitionDescription(partition)}
+                    {partitionDescription(partition, t)}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -365,7 +471,7 @@ export function SessionControlsSection({
                     disabled={busyAction === `clear-cookies:${partition}`}
                     onClick={() => onClearCookies(partition)}
                   >
-                    Clear Cookies
+                    {tr(t, "releasecenter.ClearCookies", "Clear Cookies")}
                   </Button>
                   <Button
                     size="sm"
@@ -373,22 +479,22 @@ export function SessionControlsSection({
                     disabled={busyAction === `clear-session:${partition}`}
                     onClick={() => onClearSession(partition)}
                   >
-                    Clear Storage
+                    {tr(t, "releasecenter.ClearStorage", "Clear Storage")}
                   </Button>
                 </div>
               </div>
 
               <div className="mt-3">
                 <DefinitionRow
-                  label="Partition"
+                  label={tr(t, "releasecenter.Partition", "Partition")}
                   value={snapshot?.partition ?? partition}
                 />
                 <DefinitionRow
-                  label="Persistent"
+                  label={tr(t, "releasecenter.Persistent", "Persistent")}
                   value={snapshot ? String(snapshot.persistent) : undefined}
                 />
                 <DefinitionRow
-                  label="Cookie count"
+                  label={tr(t, "releasecenter.CookieCount", "Cookie count")}
                   value={snapshot?.cookieCount}
                 />
               </div>
@@ -406,7 +512,11 @@ export function SessionControlsSection({
                 </div>
               ) : (
                 <div className="mt-3 text-[11px] text-muted">
-                  No cookies stored for this partition.
+                  {tr(
+                    t,
+                    "releasecenter.NoCookiesStoredForThisPartition",
+                    "No cookies stored for this partition.",
+                  )}
                 </div>
               )}
             </div>
@@ -442,13 +552,19 @@ export function WgpuSurfaceSection({
   onTogglePassthrough: () => void;
   onToggleTransparent: () => void;
 }) {
+  const { t } = useApp();
   return (
     <section className="rounded-2xl border border-border bg-bg-accent p-4">
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-txt">Browser WGPU Surface</h3>
+        <h3 className="text-sm font-semibold text-txt">
+          {tr(t, "releasecenter.BrowserWgpuSurface", "Browser WGPU Surface")}
+        </h3>
         <p className="mt-1 text-xs text-muted">
-          Inline <code>&lt;electrobun-wgpu&gt;</code> preview plus browser
-          WebGPU compatibility status from the active desktop renderer.
+          {tr(
+            t,
+            "releasecenter.BrowserWgpuSurfaceDescription",
+            "Inline <electrobun-wgpu> preview plus browser WebGPU compatibility status from the active desktop renderer.",
+          )}
         </p>
       </div>
 
@@ -465,13 +581,17 @@ export function WgpuSurfaceSection({
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-border px-4 py-12 text-center text-sm text-muted">
-              The WGPU custom element is not available in this renderer.
+              {tr(
+                t,
+                "releasecenter.WgpuCustomElementUnavailable",
+                "The WGPU custom element is not available in this renderer.",
+              )}
             </div>
           )}
 
           <div className="flex flex-wrap gap-2">
             <Button size="sm" disabled={!wgpuTagAvailable} onClick={onRunTest}>
-              Run Test
+              {tr(t, "releasecenter.RunTest", "Run Test")}
             </Button>
             <Button
               size="sm"
@@ -479,7 +599,9 @@ export function WgpuSurfaceSection({
               disabled={!wgpuTagAvailable}
               onClick={onToggleTransparent}
             >
-              {wgpuTransparent ? "Opaque" : "Transparent"}
+              {wgpuTransparent
+                ? tr(t, "releasecenter.Opaque", "Opaque")
+                : tr(t, "releasecenter.Transparent", "Transparent")}
             </Button>
             <Button
               size="sm"
@@ -487,7 +609,9 @@ export function WgpuSurfaceSection({
               disabled={!wgpuTagAvailable}
               onClick={onTogglePassthrough}
             >
-              {wgpuPassthrough ? "Passthrough Off" : "Passthrough On"}
+              {wgpuPassthrough
+                ? tr(t, "releasecenter.PassthroughOff", "Passthrough Off")
+                : tr(t, "releasecenter.PassthroughOn", "Passthrough On")}
             </Button>
             <Button
               size="sm"
@@ -495,36 +619,54 @@ export function WgpuSurfaceSection({
               disabled={!wgpuTagAvailable}
               onClick={onToggleHidden}
             >
-              {wgpuHidden ? "Show Surface" : "Hide Surface"}
+              {wgpuHidden
+                ? tr(t, "releasecenter.ShowSurface", "Show Surface")
+                : tr(t, "releasecenter.HideSurface", "Hide Surface")}
             </Button>
           </div>
         </div>
 
         <div className="rounded-xl border border-border bg-bg p-3">
           <div className="mb-3 text-xs font-semibold text-txt">
-            Browser WebGPU Status
+            {tr(t, "releasecenter.BrowserWebgpuStatus", "Browser WebGPU Status")}
           </div>
           <p className="mb-3 text-xs text-muted">
-            This reports whether the desktop webview is expected to expose
-            WebGPU for the WGPU preview above. It is not overall app health:
-            companion and avatar already fall back to WebGL when WebGPU is
-            missing.
+            {tr(
+              t,
+              "releasecenter.BrowserWebgpuStatusDescription",
+              "This reports whether the desktop webview is expected to expose WebGPU for the WGPU preview above. It is not overall app health: companion and avatar already fall back to WebGL when WebGPU is missing.",
+            )}
           </p>
           <DefinitionRow
-            label="Inline surface ready"
+            label={tr(t, "releasecenter.InlineSurfaceReady", "Inline surface ready")}
             value={String(wgpuReady)}
           />
           <DefinitionRow
-            label="Renderer support"
-            value={webGpuStatus?.available ? "Available" : "Not available"}
+            label={tr(t, "releasecenter.RendererSupport", "Renderer support")}
+            value={
+              webGpuStatus?.available
+                ? tr(t, "releasecenter.Available", "Available")
+                : tr(t, "releasecenter.NotAvailable", "Not available")
+            }
           />
-          <DefinitionRow label="Renderer type" value={webGpuStatus?.renderer} />
           <DefinitionRow
-            label="Chrome Beta"
-            value={webGpuStatus?.chromeBetaPath ?? "Not detected"}
+            label={tr(t, "releasecenter.RendererType", "Renderer type")}
+            value={webGpuStatus?.renderer}
+          />
+          <DefinitionRow
+            label={tr(t, "releasecenter.ChromeBeta", "Chrome Beta")}
+            value={
+              webGpuStatus?.chromeBetaPath ??
+              tr(t, "releasecenter.NotDetected", "Not detected")
+            }
           />
           <div className="mt-3 rounded-lg border border-border bg-bg-accent px-3 py-2 text-xs text-muted">
-            {webGpuStatus?.reason ?? "Waiting for desktop renderer status."}
+            {webGpuStatus?.reason ??
+              tr(
+                t,
+                "releasecenter.WaitingForDesktopRendererStatus",
+                "Waiting for desktop renderer status.",
+              )}
           </div>
           {webGpuStatus?.downloadUrl ? (
             <div className="mt-3 text-xs">
@@ -534,7 +676,11 @@ export function WgpuSurfaceSection({
                 target="_blank"
                 rel="noreferrer"
               >
-                Download Chrome Beta fallback
+                {tr(
+                  t,
+                  "releasecenter.DownloadChromeBetaFallback",
+                  "Download Chrome Beta fallback",
+                )}
               </a>
             </div>
           ) : null}
@@ -543,5 +689,3 @@ export function WgpuSurfaceSection({
     </section>
   );
 }
-
-import { useBranding } from "../../config/branding";

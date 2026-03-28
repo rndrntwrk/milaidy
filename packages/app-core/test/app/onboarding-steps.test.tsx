@@ -69,11 +69,20 @@ import { ConnectionStep } from "../../src/components/onboarding/ConnectionStep";
 import { IdentityStep } from "../../src/components/onboarding/IdentityStep";
 import { onboardingHeaderBlockClass } from "../../src/components/onboarding/onboarding-step-chrome";
 
+function translateTest(
+  key: string,
+  vars?: {
+    defaultValue?: string;
+  },
+): string {
+  return vars?.defaultValue ?? key;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────
 
 function baseContext(overrides?: Record<string, unknown>) {
   return {
-    t: (k: string) => k,
+    t: translateTest,
     onboardingStep: "wakeUp",
     onboardingOptions: {
       names: ["Eliza", "Nova"],

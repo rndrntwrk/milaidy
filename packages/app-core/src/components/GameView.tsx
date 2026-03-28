@@ -91,16 +91,23 @@ export function DesktopGameWindowControls({
 }: {
   gameWindowId: string | null;
 }) {
+  const { t } = useApp();
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [boundsLabel, setBoundsLabel] = useState("Bounds unavailable.");
+  const [boundsLabel, setBoundsLabel] = useState(
+    t("gameview.BoundsUnavailable", { defaultValue: "Bounds unavailable." }),
+  );
   const [gpuWindowId, setGpuWindowId] = useState<string | null>(null);
   const branding = useBranding();
 
   const refresh = useCallback(async () => {
     if (!gameWindowId) {
-      setBoundsLabel("Waiting for native game window.");
+      setBoundsLabel(
+        t("gameview.WaitingForNativeGameWindow", {
+          defaultValue: "Waiting for native game window.",
+        }),
+      );
     } else {
       const bounds = await invokeDesktopBridgeRequest<{
         x: number;
@@ -152,13 +159,17 @@ export function DesktopGameWindowControls({
         }
       } catch (err) {
         setError(
-          err instanceof Error ? err.message : "Native game action failed.",
+          err instanceof Error
+            ? err.message
+            : t("gameview.NativeGameActionFailed", {
+                defaultValue: "Native game action failed.",
+              }),
         );
       } finally {
         setBusyAction(null);
       }
     },
-    [refresh],
+    [refresh, t],
   );
 
   return (
@@ -174,12 +185,16 @@ export function DesktopGameWindowControls({
           void runAction(
             "game-native-refresh",
             async () => {},
-            "Native game state refreshed.",
+            t("gameview.NativeGameStateRefreshed", {
+              defaultValue: "Native game state refreshed.",
+            }),
           )
         }
         disabled={busyAction === "game-native-refresh"}
       >
-        Refresh Native State
+        {t("gameview.RefreshNativeState", {
+          defaultValue: "Refresh Native State",
+        })}
       </Button>
       <Button
         variant="outline"
@@ -190,7 +205,11 @@ export function DesktopGameWindowControls({
             "game-native-focus",
             async () => {
               if (!gameWindowId) {
-                throw new Error("Game window not ready yet.");
+                throw new Error(
+                  t("gameview.GameWindowNotReadyYet", {
+                    defaultValue: "Game window not ready yet.",
+                  }),
+                );
               }
               await invokeDesktopBridgeRequest<void>({
                 rpcMethod: "canvasFocus",
@@ -198,13 +217,15 @@ export function DesktopGameWindowControls({
                 params: { id: gameWindowId },
               });
             },
-            "Focused native game window.",
+            t("gameview.FocusedNativeGameWindow", {
+              defaultValue: "Focused native game window.",
+            }),
             false,
           )
         }
         disabled={!gameWindowId || busyAction === "game-native-focus"}
       >
-        Focus Window
+        {t("gameview.FocusWindow", { defaultValue: "Focus Window" })}
       </Button>
       <Button
         variant="outline"
@@ -215,7 +236,11 @@ export function DesktopGameWindowControls({
             "game-native-show",
             async () => {
               if (!gameWindowId) {
-                throw new Error("Game window not ready yet.");
+                throw new Error(
+                  t("gameview.GameWindowNotReadyYet", {
+                    defaultValue: "Game window not ready yet.",
+                  }),
+                );
               }
               await invokeDesktopBridgeRequest<void>({
                 rpcMethod: "canvasShow",
@@ -223,13 +248,15 @@ export function DesktopGameWindowControls({
                 params: { id: gameWindowId },
               });
             },
-            "Shown native game window.",
+            t("gameview.ShownNativeGameWindow", {
+              defaultValue: "Shown native game window.",
+            }),
             false,
           )
         }
         disabled={!gameWindowId || busyAction === "game-native-show"}
       >
-        Show Window
+        {t("gameview.ShowWindow", { defaultValue: "Show Window" })}
       </Button>
       <Button
         variant="outline"
@@ -240,7 +267,11 @@ export function DesktopGameWindowControls({
             "game-native-hide",
             async () => {
               if (!gameWindowId) {
-                throw new Error("Game window not ready yet.");
+                throw new Error(
+                  t("gameview.GameWindowNotReadyYet", {
+                    defaultValue: "Game window not ready yet.",
+                  }),
+                );
               }
               await invokeDesktopBridgeRequest<void>({
                 rpcMethod: "canvasHide",
@@ -248,13 +279,15 @@ export function DesktopGameWindowControls({
                 params: { id: gameWindowId },
               });
             },
-            "Hid native game window.",
+            t("gameview.HidNativeGameWindow", {
+              defaultValue: "Hid native game window.",
+            }),
             false,
           )
         }
         disabled={!gameWindowId || busyAction === "game-native-hide"}
       >
-        Hide Window
+        {t("gameview.HideWindow", { defaultValue: "Hide Window" })}
       </Button>
       <Button
         variant="outline"
@@ -265,7 +298,11 @@ export function DesktopGameWindowControls({
             "game-native-snapshot",
             async () => {
               if (!gameWindowId) {
-                throw new Error("Game window not ready yet.");
+                throw new Error(
+                  t("gameview.GameWindowNotReadyYet", {
+                    defaultValue: "Game window not ready yet.",
+                  }),
+                );
               }
               const snapshot = await invokeDesktopBridgeRequest<{
                 data: string;
@@ -275,16 +312,22 @@ export function DesktopGameWindowControls({
                 params: { id: gameWindowId, format: "png" },
               });
               if (!snapshot?.data) {
-                throw new Error("Snapshot unavailable.");
+                throw new Error(
+                  t("gameview.SnapshotUnavailable", {
+                    defaultValue: "Snapshot unavailable.",
+                  }),
+                );
               }
             },
-            "Captured native game snapshot.",
+            t("gameview.CapturedNativeGameSnapshot", {
+              defaultValue: "Captured native game snapshot.",
+            }),
             false,
           )
         }
         disabled={!gameWindowId || busyAction === "game-native-snapshot"}
       >
-        Snapshot Window
+        {t("gameview.SnapshotWindow", { defaultValue: "Snapshot Window" })}
       </Button>
       <Button
         variant="outline"
@@ -319,12 +362,16 @@ export function DesktopGameWindowControls({
                 setGpuWindowId(nextGpuWindowId);
               }
             },
-            "GPU diagnostics window ready.",
+            t("gameview.GpuDiagnosticsWindowReady", {
+              defaultValue: "GPU diagnostics window ready.",
+            }),
           )
         }
         disabled={busyAction === "game-gpu-window"}
       >
-        Launch GPU Diagnostics
+        {t("gameview.LaunchGpuDiagnostics", {
+          defaultValue: "Launch GPU Diagnostics",
+        })}
       </Button>
       {gpuWindowId && (
         <>
@@ -342,13 +389,17 @@ export function DesktopGameWindowControls({
                     params: { id: gpuWindowId },
                   });
                 },
-                "GPU diagnostics window shown.",
+                t("gameview.GpuDiagnosticsWindowShown", {
+                  defaultValue: "GPU diagnostics window shown.",
+                }),
                 false,
               )
             }
             disabled={busyAction === "game-gpu-show"}
           >
-            Show GPU Window
+            {t("gameview.ShowGpuWindow", {
+              defaultValue: "Show GPU Window",
+            })}
           </Button>
           <Button
             variant="outline"
@@ -364,13 +415,17 @@ export function DesktopGameWindowControls({
                     params: { id: gpuWindowId },
                   });
                 },
-                "GPU diagnostics window hidden.",
+                t("gameview.GpuDiagnosticsWindowHidden", {
+                  defaultValue: "GPU diagnostics window hidden.",
+                }),
                 false,
               )
             }
             disabled={busyAction === "game-gpu-hide"}
           >
-            Hide GPU Window
+            {t("gameview.HideGpuWindow", {
+              defaultValue: "Hide GPU Window",
+            })}
           </Button>
         </>
       )}
@@ -428,18 +483,30 @@ export function GameView() {
       // Show agent's response
       if (response.text) {
         setActionNotice(
-          `Agent: ${response.text.slice(0, 100)}${response.text.length > 100 ? "..." : ""}`,
+          t("gameview.AgentResponseNotice", {
+            defaultValue: "Agent: {{response}}",
+            response: `${response.text.slice(0, 100)}${response.text.length > 100 ? "..." : ""}`,
+          }),
           "success",
           4000,
         );
       } else {
-        setActionNotice("Command sent to agent.", "success", 2000);
+        setActionNotice(
+          t("gameview.CommandSentToAgent", {
+            defaultValue: "Command sent to agent.",
+          }),
+          "success",
+          2000,
+        );
       }
       // Refresh logs to show activity
       setTimeout(() => void loadLogs(), 1500);
     } catch (err) {
       setActionNotice(
-        `Failed to send: ${err instanceof Error ? err.message : "error"}`,
+        t("gameview.FailedToSend", {
+          defaultValue: "Failed to send: {{message}}",
+          message: err instanceof Error ? err.message : "error",
+        }),
         "error",
         3000,
       );
@@ -507,7 +574,10 @@ export function GameView() {
       ipcChannel: "game:openWindow",
       params: {
         url: activeGameViewerUrl,
-        title: activeGameDisplayName || activeGameApp || "Game",
+        title:
+          activeGameDisplayName ||
+          activeGameApp ||
+          t("gameview.Game", { defaultValue: "Game" }),
       },
     })
       .then((result) => {
@@ -585,7 +655,11 @@ export function GameView() {
       );
       authSentRef.current = true;
       setConnectionStatus("connected");
-      setActionNotice("Viewer auth sent.", "info", 1800);
+      setActionNotice(
+        t("gameview.ViewerAuthSent", { defaultValue: "Viewer auth sent." }),
+        "info",
+        1800,
+      );
     };
 
     window.addEventListener("message", onMessage);
@@ -604,7 +678,9 @@ export function GameView() {
       await openExternalUrl(activeGameViewerUrl);
     } catch {
       setActionNotice(
-        "Popup blocked. Allow popups and try again.",
+        t("gameview.PopupBlocked", {
+          defaultValue: "Popup blocked. Allow popups and try again.",
+        }),
         "error",
         3600,
       );
@@ -625,7 +701,10 @@ export function GameView() {
       );
     } catch (err) {
       setActionNotice(
-        `Failed to stop: ${err instanceof Error ? err.message : "error"}`,
+        t("gameview.FailedToStop", {
+          defaultValue: "Failed to stop: {{message}}",
+          message: err instanceof Error ? err.message : "error",
+        }),
         "error",
       );
     } finally {
@@ -862,7 +941,10 @@ export function GameView() {
               src={activeGameViewerUrl}
               sandbox={activeGameSandbox}
               className="w-full h-full border-none"
-              title={activeGameDisplayName || "Game"}
+              title={
+                activeGameDisplayName ||
+                t("gameview.Game", { defaultValue: "Game" })
+              }
             />
           )}
         </div>

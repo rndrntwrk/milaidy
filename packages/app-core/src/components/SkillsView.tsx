@@ -1511,9 +1511,10 @@ function SkillsFullView() {
                         })}
                       </div>
                       <div className="mt-2 text-sm leading-relaxed text-muted">
-                        Open the skill source editor to inspect or modify
-                        `SKILL.md`, or review findings here when a skill needs
-                        attention.
+                        {t("skillsview.SkillSourceEditorDescription", {
+                          defaultValue:
+                            "Open the skill source editor to inspect or modify `SKILL.md`, or review findings here when a skill needs attention.",
+                        })}
                       </div>
                     </div>
                   )}

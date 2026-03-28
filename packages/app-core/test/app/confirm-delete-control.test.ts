@@ -3,6 +3,15 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@miladyai/app-core/state", () => ({
+  useApp: () => ({
+    t: (key: string, opts?: Record<string, unknown>) =>
+      opts?.defaultValue && typeof opts.defaultValue === "string"
+        ? opts.defaultValue
+        : key,
+  }),
+}));
+
 // Mock @miladyai/ui's Button as a plain <button> that passes props through,
 // so className values are preserved exactly as passed by ConfirmDeleteControl.
 vi.mock("@miladyai/ui", () => ({

@@ -70,7 +70,9 @@ export function StatusBar({
           }`}
         />
         <span className="text-xs font-bold uppercase tracking-wider text-txt">
-          {streamLive ? "LIVE" : "OFFLINE"}
+          {streamLive
+            ? t("statusbar.LiveShort", { defaultValue: "LIVE" })
+            : t("statusbar.OfflineShort", { defaultValue: "OFFLINE" })}
         </span>
         <span className="text-sm font-semibold text-txt-strong">
           {agentName}
@@ -106,10 +108,17 @@ export function StatusBar({
           title={
             streamAvailable
               ? undefined
-              : "Install and enable the streaming plugin to go live"
+              : t("statusbar.InstallStreamingPlugin", {
+                  defaultValue:
+                    "Install and enable the streaming plugin to go live",
+                })
           }
         >
-          {streamLoading ? "..." : streamLive ? "Stop Stream" : "Go Live"}
+          {streamLoading
+            ? "..."
+            : streamLive
+              ? t("statusbar.StopStream", { defaultValue: "Stop Stream" })
+              : t("statusbar.GoLive", { defaultValue: "Go Live" })}
         </Button>
 
         {/* Popout button — non-Electrobun only */}

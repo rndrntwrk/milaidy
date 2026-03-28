@@ -161,6 +161,13 @@ function t(
     "wallet.copySolanaAddress": "Copy Solana address",
     "common.refresh": "Refresh",
     "common.retry": "Retry",
+    "inventoryview.ChainShownClickToHide": "{{chain}} — shown (click to hide)",
+    "inventoryview.ChainHiddenClickToShow": "{{chain}} — hidden (click to show)",
+    "inventoryview.ChainNoWalletConfigured": "{{chain}} — no wallet configured",
+    "inventoryview.ChainVisible": "{{chain}} — visible",
+    "inventoryview.ChainHidden": "{{chain}} — hidden",
+    "wallet.sortAscending": "Sort ascending",
+    "wallet.sortDescending": "Sort descending",
   };
 
   const template = translations[key] ?? key;

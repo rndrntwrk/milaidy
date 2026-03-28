@@ -16,11 +16,27 @@ const HANDLER_TYPE_COLORS: Record<string, string> = {
   code: "bg-purple-500/20 text-purple-400",
 };
 
-const HANDLER_TYPE_NAMES: Record<string, string> = {
-  http: "HTTP",
-  shell: "Shell",
-  code: "Code",
-};
+function handlerTypeLabel(
+  type: string,
+  t: (key: string, options?: Record<string, string | number>) => string,
+): string {
+  switch (type) {
+    case "http":
+      return t("customactionspanel.HandlerTypeHttp", {
+        defaultValue: "HTTP",
+      });
+    case "shell":
+      return t("customactionspanel.HandlerTypeShell", {
+        defaultValue: "Shell",
+      });
+    case "code":
+      return t("customactionspanel.HandlerTypeCode", {
+        defaultValue: "Code",
+      });
+    default:
+      return type;
+  }
+}
 
 export function CustomActionsPanel({
   open,
@@ -41,11 +57,15 @@ export function CustomActionsPanel({
       setActions(result || []);
     } catch (err) {
       console.error("Failed to load custom actions:", err);
-      setError("Failed to load custom actions. Please retry.");
+      setError(
+        t("customactionspanel.LoadFailed", {
+          defaultValue: "Couldn't load custom actions. Try again.",
+        }),
+      );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (open) {
@@ -73,6 +93,39 @@ export function CustomActionsPanel({
     () => actions.filter((action) => action.enabled).length,
     [actions],
   );
+  const actionSummary = t("customactionspanel.ActionSummary", {
+    defaultValue: "{{actionCount}} total · {{enabledCount}} enabled",
+    actionCount: actions.length,
+    enabledCount,
+  });
+  const formatParameterCount = useCallback(
+    (count: number) => {
+      return count === 1
+        ? t("customactionsview.ParameterCountOne", {
+            defaultValue: "{{count}} parameter",
+            count,
+          })
+        : t("customactionsview.ParameterCountOther", {
+            defaultValue: "{{count}} parameters",
+            count,
+          });
+    },
+    [t],
+  );
+  const formatAliasCount = useCallback(
+    (count: number) => {
+      return count === 1
+        ? t("customactionspanel.AliasCountOne", {
+            defaultValue: "{{count}} alias",
+            count,
+          })
+        : t("customactionspanel.AliasCountOther", {
+            defaultValue: "{{count}} aliases",
+            count,
+          });
+    },
+    [t],
+  );
 
   const handleToggleEnabled = async (action: CustomActionDef) => {
     try {
@@ -92,16 +145,22 @@ export function CustomActionsPanel({
       );
     } catch (err) {
       console.error("Failed to toggle action:", err);
-      setError("Failed to update this action. Try again.");
+      setError(
+        t("customactionspanel.UpdateFailed", {
+          defaultValue: "Couldn't update this action. Try again.",
+        }),
+      );
     }
   };
 
   const handleDelete = async (action: CustomActionDef) => {
     const confirmed = await confirmDesktopAction({
-      title: "Delete Custom Action",
-      message: `Are you sure you want to delete "${action.name}"?`,
-      confirmLabel: "Delete",
-      cancelLabel: "Cancel",
+      title: t("customactionsview.DeleteCustomActionTitle"),
+      message: t("customactionsview.DeleteCustomActionMessage", {
+        name: action.name,
+      }),
+      confirmLabel: t("customactionsview.Delete"),
+      cancelLabel: t("common.cancel"),
       type: "warning",
     });
     if (!confirmed) {
@@ -113,7 +172,11 @@ export function CustomActionsPanel({
       setActions((prev) => prev.filter((item) => item.id !== action.id));
     } catch (err) {
       console.error("Failed to delete action:", err);
-      setError("Failed to delete action. Try again.");
+      setError(
+        t("customactionspanel.DeleteFailed", {
+          defaultValue: "Couldn't delete this action. Try again.",
+        }),
+      );
     }
   };
 
@@ -139,11 +202,7 @@ export function CustomActionsPanel({
               <h2 className="text-sm font-semibold text-txt">
                 {t("customactionspanel.CustomActions")}
               </h2>
-              <p className="text-xs text-muted mt-0.5">
-                {actions.length} {t("customactionspanel.action")}
-                {actions.length === 1 ? "" : "s"} · {enabledCount}{" "}
-                {t("customactionspanel.enabled")}
-              </p>
+              <p className="text-xs text-muted mt-0.5">{actionSummary}</p>
             </div>
             <Button
               variant="ghost"
@@ -202,8 +261,13 @@ export function CustomActionsPanel({
             ) : filteredActions.length === 0 ? (
               <div className="text-center text-muted text-xs py-8">
                 {search
-                  ? "No actions match this search."
-                  : "No custom actions yet. Create one to get started."}
+                  ? t("customactionspanel.NoActionsMatchSearch", {
+                      defaultValue: "Nothing matches that search.",
+                    })
+                  : t("customactionspanel.NoActionsYet", {
+                      defaultValue:
+                        "No custom actions yet. Make one to get started.",
+                    })}
               </div>
             ) : (
               filteredActions.map((action) => (
@@ -217,13 +281,9 @@ export function CustomActionsPanel({
                         {action.name}
                       </div>
                       <p className="text-[10px] text-muted mt-0.5">
-                        {action.parameters?.length || 0}{" "}
-                        {t("customactionsview.parameter")}
-                        {(action.parameters?.length || 0) === 1 ? "" : "s"}
+                        {formatParameterCount(action.parameters?.length || 0)}
                         {action.similes?.length
-                          ? ` • ${action.similes.length} alias`.concat(
-                              action.similes.length === 1 ? "" : "es",
-                            )
+                          ? ` • ${formatAliasCount(action.similes.length)}`
                           : ""}
                       </p>
                     </div>
@@ -234,8 +294,7 @@ export function CustomActionsPanel({
                         "bg-surface text-muted"
                       }`}
                     >
-                      {HANDLER_TYPE_NAMES[action.handler.type] ??
-                        action.handler.type}
+                      {handlerTypeLabel(action.handler.type, t)}
                     </span>
                   </div>
 

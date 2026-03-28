@@ -45,17 +45,26 @@ describe("StartupFailureView", () => {
       appUrl: "https://milady.example",
     });
     mockUseApp.mockReturnValue({
-      t: (key: string) =>
-        (
-          ({
-            "startupfailureview.StartupFailed": "Startup failed:",
-            "startupfailureview.ThisOriginDoesNot":
-              "This origin does not host the agent backend.",
-            "startupfailureview.RetryStartup": "Retry Startup",
-            "startupfailureview.OpenApp": "Open App",
-            "bugreportmodal.ReportABug": "Report Bug",
-          }) as Record<string, string>
-        )[key] ?? key,
+      t: (key: string, opts?: Record<string, unknown>) => {
+        const lookup: Record<string, string> = {
+          "startupfailureview.StartupFailed": "Startup failed:",
+          "startupfailureview.BackendUnreachable": "Backend Unreachable",
+          "startupfailureview.ThisOriginDoesNot":
+            "This origin does not host the agent backend.",
+          "startupfailureview.RetryStartup": "Retry Startup",
+          "startupfailureview.OpenApp": "Open App",
+          "bugreportmodal.ReportABug": "Report Bug",
+        };
+        if (key in lookup) return lookup[key];
+        if (opts?.defaultValue && typeof opts.defaultValue === "string") {
+          let str = opts.defaultValue;
+          for (const [k, v] of Object.entries(opts)) {
+            if (k !== "defaultValue") str = str.replace(`{{${k}}}`, String(v));
+          }
+          return str;
+        }
+        return key;
+      },
     });
     openBugReportMock.mockReset();
     optionalBugReportMock.mockReturnValue({ open: openBugReportMock });

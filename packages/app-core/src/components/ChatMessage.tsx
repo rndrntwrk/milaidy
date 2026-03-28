@@ -256,7 +256,13 @@ export const ChatMessage = memo(function ChatMessage({
                   }
                   className={`h-8 rounded-[11px] px-3 text-xs ${DESKTOP_CONTROL_SURFACE_ACCENT_CLASSNAME} disabled:border-border/20 disabled:bg-bg-accent disabled:text-muted-strong`}
                 >
-                  {savingEdit ? "Saving..." : "Save and resend"}
+                  {savingEdit
+                    ? t("chatmessage.Saving", {
+                        defaultValue: "Saving...",
+                      })
+                    : t("chatmessage.SaveAndResend", {
+                        defaultValue: "Save and resend",
+                      })}
                 </Button>
               </div>
             </div>

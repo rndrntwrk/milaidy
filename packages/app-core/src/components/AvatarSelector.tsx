@@ -35,13 +35,24 @@ function isVrmFile(file: File): boolean {
   return file.name.toLowerCase().endsWith(".vrm");
 }
 
-async function validateVrmFile(file: File): Promise<string | null> {
+type TranslateFn = (
+  key: string,
+  options?: Record<string, string | number>,
+) => string;
+
+async function validateVrmFile(
+  file: File,
+  t: TranslateFn,
+): Promise<string | null> {
   try {
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer.slice(0, 32));
     const textHeader = new TextDecoder().decode(bytes);
     if (textHeader.startsWith("version https://git-lfs.github.com/spec/v1")) {
-      return "This .vrm is a Git LFS pointer, not the real model file. Export/download the actual VRM binary.";
+      return t("avatarselector.GitLfsPointer", {
+        defaultValue:
+          "This .vrm is a Git LFS pointer, not the real model file. Download the actual VRM file first.",
+      });
     }
     const isGlbMagic =
       bytes.length >= 4 &&
@@ -50,11 +61,15 @@ async function validateVrmFile(file: File): Promise<string | null> {
       bytes[2] === 0x54 && // T
       bytes[3] === 0x46; // F
     if (!isGlbMagic) {
-      return "Invalid VRM file. Please select a valid .vrm binary.";
+      return t("avatarselector.InvalidVrmBinary", {
+        defaultValue: "Invalid VRM file. Pick a real .vrm binary.",
+      });
     }
     return null;
   } catch {
-    return "Could not read the selected file. Please try another .vrm.";
+    return t("avatarselector.ReadSelectedFile", {
+      defaultValue: "Couldn't read that file. Try a different .vrm.",
+    });
   }
 }
 
@@ -74,17 +89,23 @@ export function AvatarSelector({
     (file: File) => {
       if (!isVrmFile(file)) {
         void alertDesktopMessage({
-          title: "Invalid Avatar File",
-          message: "Please select a .vrm file.",
+          title: t("avatarselector.InvalidAvatarFile", {
+            defaultValue: "Invalid avatar file",
+          }),
+          message: t("avatarselector.SelectVrmFile", {
+            defaultValue: "Please pick a .vrm file.",
+          }),
           type: "error",
         });
         return;
       }
       void (async () => {
-        const validationError = await validateVrmFile(file);
+        const validationError = await validateVrmFile(file, t);
         if (validationError) {
           await alertDesktopMessage({
-            title: "Invalid Avatar File",
+            title: t("avatarselector.InvalidAvatarFile", {
+              defaultValue: "Invalid avatar file",
+            }),
             message: validationError,
             type: "error",
           });
@@ -94,7 +115,7 @@ export function AvatarSelector({
         onSelect(0);
       })();
     },
-    [onUpload, onSelect],
+    [onUpload, onSelect, t],
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

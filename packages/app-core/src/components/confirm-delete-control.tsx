@@ -1,5 +1,6 @@
 import { Button } from "@miladyai/ui";
 import { useState } from "react";
+import { useApp } from "../state";
 
 type ConfirmDeleteControlProps = {
   onConfirm: () => void;
@@ -18,17 +19,30 @@ type ConfirmDeleteControlProps = {
 export function ConfirmDeleteControl({
   onConfirm,
   disabled = false,
-  triggerLabel = "Delete",
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  triggerLabel,
+  confirmLabel,
+  cancelLabel,
   busyLabel,
-  promptText = "Delete?",
+  promptText,
   triggerClassName,
   confirmClassName,
   cancelClassName,
   promptClassName = "text-[11px] text-[#e74c3c] ml-1",
 }: ConfirmDeleteControlProps) {
+  const { t } = useApp();
   const [confirming, setConfirming] = useState(false);
+  const resolvedTriggerLabel =
+    triggerLabel ??
+    t("confirmdeletecontrol.Delete", { defaultValue: "Delete" });
+  const resolvedConfirmLabel =
+    confirmLabel ??
+    t("confirmdeletecontrol.Confirm", { defaultValue: "Confirm" });
+  const resolvedCancelLabel =
+    cancelLabel ??
+    t("confirmdeletecontrol.Cancel", { defaultValue: "Cancel" });
+  const resolvedPromptText =
+    promptText ??
+    t("confirmdeletecontrol.DeletePrompt", { defaultValue: "Delete?" });
 
   if (!confirming) {
     return (
@@ -40,14 +54,14 @@ export function ConfirmDeleteControl({
         onClick={() => setConfirming(true)}
         disabled={disabled}
       >
-        {triggerLabel}
+        {resolvedTriggerLabel}
       </Button>
     );
   }
 
   return (
     <>
-      <span className={promptClassName}>{promptText}</span>
+      <span className={promptClassName}>{resolvedPromptText}</span>
       <Button
         variant="destructive"
         size="sm"
@@ -59,7 +73,7 @@ export function ConfirmDeleteControl({
         }}
         disabled={disabled}
       >
-        {disabled && busyLabel ? busyLabel : confirmLabel}
+        {disabled && busyLabel ? busyLabel : resolvedConfirmLabel}
       </Button>
       <Button
         variant="outline"
@@ -69,7 +83,7 @@ export function ConfirmDeleteControl({
         onClick={() => setConfirming(false)}
         disabled={disabled}
       >
-        {cancelLabel}
+        {resolvedCancelLabel}
       </Button>
     </>
   );

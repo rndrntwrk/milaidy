@@ -44,7 +44,9 @@ import {
 interface PermissionDef {
   id: SystemPermissionId;
   name: string;
+  nameKey: string;
   description: string;
+  descriptionKey: string;
   icon: string;
   platforms: string[];
   requiredForFeatures: string[];
@@ -54,8 +56,10 @@ const SYSTEM_PERMISSIONS: PermissionDef[] = [
   {
     id: "accessibility",
     name: "Accessibility",
+    nameKey: "permissionssection.permission.accessibility.name",
     description:
       "Control mouse, keyboard, and interact with other applications",
+    descriptionKey: "permissionssection.permission.accessibility.description",
     icon: "cursor",
     platforms: ["darwin"],
     requiredForFeatures: ["computeruse", "browser"],
@@ -63,7 +67,9 @@ const SYSTEM_PERMISSIONS: PermissionDef[] = [
   {
     id: "screen-recording",
     name: "Screen Recording",
+    nameKey: "permissionssection.permission.screenRecording.name",
     description: "Capture screen content for screenshots and vision",
+    descriptionKey: "permissionssection.permission.screenRecording.description",
     icon: "monitor",
     platforms: ["darwin"],
     requiredForFeatures: ["computeruse", "vision"],
@@ -71,7 +77,9 @@ const SYSTEM_PERMISSIONS: PermissionDef[] = [
   {
     id: "microphone",
     name: "Microphone",
+    nameKey: "permissionssection.permission.microphone.name",
     description: "Voice input for talk mode and speech recognition",
+    descriptionKey: "permissionssection.permission.microphone.description",
     icon: "mic",
     platforms: ["darwin", "win32", "linux"],
     requiredForFeatures: ["talkmode", "voice"],
@@ -79,7 +87,9 @@ const SYSTEM_PERMISSIONS: PermissionDef[] = [
   {
     id: "camera",
     name: "Camera",
+    nameKey: "permissionssection.permission.camera.name",
     description: "Video input for vision and video capture",
+    descriptionKey: "permissionssection.permission.camera.description",
     icon: "camera",
     platforms: ["darwin", "win32", "linux"],
     requiredForFeatures: ["camera", "vision"],
@@ -87,7 +97,9 @@ const SYSTEM_PERMISSIONS: PermissionDef[] = [
   {
     id: "shell",
     name: "Shell Access",
+    nameKey: "permissionssection.permission.shell.name",
     description: "Execute terminal commands and scripts",
+    descriptionKey: "permissionssection.permission.shell.description",
     icon: "terminal",
     platforms: ["darwin", "win32", "linux"],
     requiredForFeatures: ["shell"],
@@ -98,7 +110,9 @@ const SYSTEM_PERMISSIONS: PermissionDef[] = [
 interface CapabilityDef {
   id: string;
   label: string;
+  labelKey: string;
   description: string;
+  descriptionKey: string;
   requiredPermissions: SystemPermissionId[];
 }
 
@@ -106,39 +120,71 @@ const CAPABILITIES: CapabilityDef[] = [
   {
     id: "browser",
     label: "Browser Control",
+    labelKey: "permissionssection.capability.browser.label",
     description: "Automated web browsing and interaction",
+    descriptionKey: "permissionssection.capability.browser.description",
     requiredPermissions: ["accessibility"],
   },
   {
     id: "computeruse",
     label: "Computer Use",
+    labelKey: "permissionssection.capability.computerUse.label",
     description: "Full desktop control with mouse and keyboard",
+    descriptionKey: "permissionssection.capability.computerUse.description",
     requiredPermissions: ["accessibility", "screen-recording"],
   },
   {
     id: "vision",
     label: "Vision",
+    labelKey: "permissionssection.capability.vision.label",
     description: "Screen capture and visual analysis",
+    descriptionKey: "permissionssection.capability.vision.description",
     requiredPermissions: ["screen-recording"],
   },
   {
     id: "coding-agent",
     label: "Coding Agent Swarms",
+    labelKey: "permissionssection.capability.codingAgent.label",
     description:
       "Orchestrate CLI coding agents (Claude Code, Gemini, Codex, Aider, Pi)",
+    descriptionKey: "permissionssection.capability.codingAgent.description",
     requiredPermissions: [],
   },
 ];
 
 const PERMISSION_BADGE_LABELS: Record<
   PermissionStatus,
-  { tone: "success" | "danger" | "warning" | "muted"; label: string }
+  {
+    defaultLabel: string;
+    labelKey: string;
+    tone: "success" | "danger" | "warning" | "muted";
+  }
 > = {
-  granted: { tone: "success", label: "Granted" },
-  denied: { tone: "danger", label: "Denied" },
-  "not-determined": { tone: "warning", label: "Not Set" },
-  restricted: { tone: "muted", label: "Restricted" },
-  "not-applicable": { tone: "muted", label: "N/A" },
+  granted: {
+    tone: "success",
+    labelKey: "permissionssection.badge.granted",
+    defaultLabel: "Granted",
+  },
+  denied: {
+    tone: "danger",
+    labelKey: "permissionssection.badge.denied",
+    defaultLabel: "Denied",
+  },
+  "not-determined": {
+    tone: "warning",
+    labelKey: "permissionssection.badge.notDetermined",
+    defaultLabel: "Not Set",
+  },
+  restricted: {
+    tone: "muted",
+    labelKey: "permissionssection.badge.restricted",
+    defaultLabel: "Restricted",
+  },
+  "not-applicable": {
+    tone: "muted",
+    labelKey: "permissionssection.badge.notApplicable",
+    defaultLabel: "N/A",
+  },
 };
 
 const SETTINGS_REFRESH_DELAYS_MS = [1500, 4000] as const;
@@ -200,25 +246,47 @@ function getPermissionAction(
 }
 
 function getPermissionBadge(
+  t: (key: string) => string,
   id: SystemPermissionId,
   status: PermissionStatus,
   platform: string,
 ): { tone: "success" | "danger" | "warning" | "muted"; label: string } {
   if (status === "denied") {
     if (id === "shell") {
-      return { tone: "danger", label: "Off" };
+      return {
+        tone: "danger",
+        label: translateWithFallback(t, "permissionssection.badge.off", "Off"),
+      };
     }
 
     if (platform === "darwin") {
-      return { tone: "danger", label: "Off in Settings" };
+      return {
+        tone: "danger",
+        label: translateWithFallback(
+          t,
+          "permissionssection.badge.offInSettings",
+          "Off in Settings",
+        ),
+      };
     }
   }
 
   if (status === "not-determined") {
-    return { tone: "warning", label: "Not Asked" };
+    return {
+      tone: "warning",
+      label: translateWithFallback(
+        t,
+        "permissionssection.badge.notAsked",
+        "Not Asked",
+      ),
+    };
   }
 
-  return PERMISSION_BADGE_LABELS[status];
+  const badge = PERMISSION_BADGE_LABELS[status];
+  return {
+    tone: badge.tone,
+    label: translateWithFallback(t, badge.labelKey, badge.defaultLabel),
+  };
 }
 
 type DesktopMediaPermissionId = Extract<
@@ -406,7 +474,13 @@ function PermissionRow({
 }) {
   const { t } = useApp();
   const action = getPermissionAction(t, def.id, status, canRequest);
-  const badge = getPermissionBadge(def.id, status, platform);
+  const badge = getPermissionBadge(t, def.id, status, platform);
+  const name = translateWithFallback(t, def.nameKey, def.name);
+  const description = translateWithFallback(
+    t,
+    def.descriptionKey,
+    def.description,
+  );
 
   return (
     <div className="flex flex-col gap-3 border-b border-border/50 px-4 py-3 last:border-b-0 sm:flex-row sm:items-center">
@@ -415,11 +489,15 @@ function PermissionRow({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-[13px] text-txt">
-              {def.name}
+              {name}
             </span>
             {isShell && (
               <span className="rounded-full border border-border/50 bg-bg-hover px-2 py-0.5 text-[10px] font-medium text-muted-strong">
-                Local runtime
+                {translateWithFallback(
+                  t,
+                  "permissionssection.LocalRuntime",
+                  "Local runtime",
+                )}
               </span>
             )}
           </div>
@@ -430,7 +508,7 @@ function PermissionRow({
             className="rounded-full font-semibold"
           />
           <div className="mt-1 text-[11px] leading-5 text-muted">
-            {def.description}
+            {description}
           </div>
         </div>
       </div>
@@ -438,13 +516,33 @@ function PermissionRow({
         {isShell && onToggleShell && status !== "not-applicable" && (
           <div className="flex min-h-10 items-center gap-2 rounded-xl border border-border/50 bg-bg-hover px-3">
             <span className="text-[11px] font-medium text-muted-strong">
-              {shellEnabled ? "Enabled" : "Disabled"}
+              {shellEnabled
+                ? translateWithFallback(
+                    t,
+                    "permissionssection.Enabled",
+                    "Enabled",
+                  )
+                : translateWithFallback(
+                    t,
+                    "permissionssection.Disabled",
+                    "Disabled",
+                  )}
             </span>
             <Switch
               checked={shellEnabled}
               onCheckedChange={onToggleShell}
               title={
-                shellEnabled ? "Disable shell access" : "Enable shell access"
+                shellEnabled
+                  ? translateWithFallback(
+                      t,
+                      "permissionssection.DisableShellAccess",
+                      "Disable shell access",
+                    )
+                  : translateWithFallback(
+                      t,
+                      "permissionssection.EnableShellAccess",
+                      "Enable shell access",
+                    )
               }
             />
           </div>
@@ -455,7 +553,7 @@ function PermissionRow({
             size="sm"
             className="min-h-10 rounded-xl px-3 text-[11px] font-semibold"
             onClick={action.type === "request" ? onRequest : onOpenSettings}
-            aria-label={`${action.ariaLabelPrefix} ${def.name}`}
+            aria-label={`${action.ariaLabelPrefix} ${name}`}
           >
             {action.label}
           </Button>
@@ -481,6 +579,12 @@ function CapabilityToggle({
   const enabled = plugin?.enabled ?? false;
   const available = plugin !== null;
   const canEnable = permissionsGranted && available;
+  const label = translateWithFallback(t, cap.labelKey, cap.label);
+  const description = translateWithFallback(
+    t,
+    cap.descriptionKey,
+    cap.description,
+  );
 
   return (
     <div
@@ -493,11 +597,15 @@ function CapabilityToggle({
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-semibold text-[13px] text-txt">
-            {cap.label}
+            {label}
           </span>
           {!available && (
             <span className="rounded-full border border-border/50 bg-bg-hover px-2 py-0.5 text-[10px] font-medium text-muted-strong">
-              Plugin unavailable
+              {translateWithFallback(
+                t,
+                "permissionssection.PluginUnavailable",
+                "Plugin unavailable",
+              )}
             </span>
           )}
           {!permissionsGranted && (
@@ -507,13 +615,19 @@ function CapabilityToggle({
           )}
         </div>
         <div className="mt-1 text-[11px] leading-5 text-muted">
-          {cap.description}
+          {description}
         </div>
       </div>
       <div className="flex w-full justify-end sm:w-auto">
         <div className="flex min-h-10 items-center gap-2 rounded-xl border border-border/50 bg-bg-hover px-3">
           <span className="text-[11px] font-medium text-muted-strong">
-            {enabled ? "Enabled" : "Disabled"}
+            {enabled
+              ? translateWithFallback(t, "permissionssection.Enabled", "Enabled")
+              : translateWithFallback(
+                  t,
+                  "permissionssection.Disabled",
+                  "Disabled",
+                )}
           </span>
           <Switch
             checked={enabled}
@@ -521,12 +635,28 @@ function CapabilityToggle({
             disabled={!canEnable}
             title={
               !available
-                ? "Plugin not available"
+                ? translateWithFallback(
+                    t,
+                    "permissionssection.PluginNotAvailable",
+                    "Plugin not available",
+                  )
                 : !permissionsGranted
-                  ? "Grant required permissions first"
+                  ? translateWithFallback(
+                      t,
+                      "permissionssection.GrantRequiredPermissionsFirst",
+                      "Grant required permissions first",
+                    )
                   : enabled
-                    ? "Disable"
-                    : "Enable"
+                    ? translateWithFallback(
+                        t,
+                        "permissionssection.Disable",
+                        "Disable",
+                      )
+                    : translateWithFallback(
+                        t,
+                        "permissionssection.Enable",
+                        "Enable",
+                      )
             }
           />
         </div>
@@ -915,8 +1045,16 @@ function DesktopPermissionsView() {
               </div>
               <div className="max-w-2xl text-[11px] leading-5 text-muted">
                 {platform === "darwin"
-                  ? "Review the native permissions Milady needs for desktop control, voice input, and visual analysis. macOS changes may require opening System Settings."
-                  : "Grant the runtime access it needs for voice input, camera capture, shell tasks, and desktop automation features."}
+                  ? translateWithFallback(
+                      t,
+                      "permissionssection.MacSystemPermissionsDescription",
+                      "Review the native permissions Milady needs for desktop control, voice input, and visual analysis. macOS changes may require opening System Settings.",
+                    )
+                  : translateWithFallback(
+                      t,
+                      "permissionssection.SystemPermissionsDescription",
+                      "Grant the runtime access it needs for voice input, camera capture, shell tasks, and desktop automation features.",
+                    )}
               </div>
             </div>
             <div className={SETTINGS_PANEL_ACTIONS_CLASSNAME}>
@@ -950,7 +1088,17 @@ function DesktopPermissionsView() {
                 onClick={handleRefresh}
                 disabled={refreshing}
               >
-                {refreshing ? "Refreshing..." : "Refresh"}
+                {refreshing
+                  ? translateWithFallback(
+                      t,
+                      "permissionssection.Refreshing",
+                      "Refreshing...",
+                    )
+                  : translateWithFallback(
+                      t,
+                      "common.refresh",
+                      "Refresh",
+                    )}
               </Button>
             </div>
           </div>
@@ -979,13 +1127,19 @@ function DesktopPermissionsView() {
         <div className="mt-2 text-[11px] leading-5 text-muted">
           {platform === "darwin" ? (
             <>
-              macOS requires Accessibility permission for computer control. Open
-              System Settings → Privacy &amp; Security to grant access.
+              {translateWithFallback(
+                t,
+                "permissionssection.MacGrantAccessNote",
+                "macOS requires Accessibility permission for computer control. Open System Settings → Privacy & Security to grant access.",
+              )}
             </>
           ) : (
             <>
-              Grant permissions to enable features like voice input and computer
-              control.
+              {translateWithFallback(
+                t,
+                "permissionssection.GrantPermissionsNote",
+                "Grant permissions to enable features like voice input and computer control.",
+              )}
             </>
           )}
         </div>
@@ -999,8 +1153,11 @@ function DesktopPermissionsView() {
               {t("appsview.Capabilities")}
             </div>
             <div className="mt-1 text-[11px] leading-5 text-muted">
-              Turn higher-level capabilities on only after the required runtime
-              permissions are available.
+              {translateWithFallback(
+                t,
+                "permissionssection.CapabilitiesDescription",
+                "Turn higher-level capabilities on only after the required runtime permissions are available.",
+              )}
             </div>
           </div>
           <div className="space-y-2 px-4 py-4">

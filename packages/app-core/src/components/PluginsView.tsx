@@ -598,16 +598,27 @@ function TelegramChatModeToggle({
   allowAll: boolean;
   onToggle: (next: boolean) => void;
 }) {
+  const { t } = useApp();
   return (
     <div className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--card,rgba(255,255,255,0.03))] px-4 py-3 mb-4">
       <div className="flex flex-col gap-0.5">
         <span className="text-[13px] font-semibold text-[var(--text)]">
-          {allowAll ? "Allow all chats" : "Allow only specific chats"}
+          {allowAll
+            ? t("pluginsview.AllowAllChats", {
+                defaultValue: "Allow all chats",
+              })
+            : t("pluginsview.AllowSpecificChatsOnly", {
+                defaultValue: "Allow only specific chats",
+              })}
         </span>
         <span className="text-[11px] text-[var(--muted)]">
           {allowAll
-            ? "Bot will respond in any chat"
-            : "Bot will only respond in listed chat IDs"}
+            ? t("pluginsview.BotRespondsAnyChat", {
+                defaultValue: "Bot will respond in any chat",
+              })
+            : t("pluginsview.BotRespondsListedChatIds", {
+                defaultValue: "Bot will only respond in listed chat IDs",
+              })}
         </span>
       </div>
       <Switch checked={allowAll} onCheckedChange={onToggle} />
@@ -883,21 +894,33 @@ function iconImageSource(icon: string): string | null {
   return null;
 }
 
+type TranslateFn = ReturnType<typeof useApp>["t"];
+
 function getPluginResourceLinks(
   plugin: Pick<PluginInfo, "setupGuideUrl" | "homepage" | "repository">,
-): Array<{ key: string; label: string; url: string }> {
+): Array<{ key: string; url: string }> {
   const seen = new Set<string>();
   const ordered = [
-    { key: "guide", label: "Setup guide", url: plugin.setupGuideUrl },
-    { key: "official", label: "Official", url: plugin.homepage },
-    { key: "source", label: "Source", url: plugin.repository },
+    { key: "guide", url: plugin.setupGuideUrl },
+    { key: "official", url: plugin.homepage },
+    { key: "source", url: plugin.repository },
   ];
   return ordered.flatMap((item) => {
     const url = item.url?.trim();
     if (!url || seen.has(url)) return [];
     seen.add(url);
-    return [{ key: item.key, label: item.label, url }];
+    return [{ key: item.key, url }];
   });
+}
+
+function pluginResourceLinkLabel(t: TranslateFn, key: string): string {
+  if (key === "guide") {
+    return t("pluginsview.SetupGuide", { defaultValue: "Setup guide" });
+  }
+  if (key === "official") {
+    return t("pluginsview.Official", { defaultValue: "Official" });
+  }
+  return t("pluginsview.Source", { defaultValue: "Source" });
 }
 
 /* ── Sub-group Classification ──────────────────────────────────────── */
@@ -1233,6 +1256,103 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
   const [installProgress, setInstallProgress] = useState<
     Map<string, { phase: string; message: string }>
   >(new Map());
+  const pluginDescriptionFallback = t("pluginsview.NoDescriptionAvailable", {
+    defaultValue: "No description available",
+  });
+  const installProgressLabel = (message?: string) =>
+    message ||
+    t("pluginsview.Installing", {
+      defaultValue: "Installing...",
+    });
+  const installPluginLabel = t("pluginsview.InstallPlugin", {
+    defaultValue: "Install Plugin",
+  });
+  const installLabel = t("pluginsview.Install", {
+    defaultValue: "Install",
+  });
+  const testingLabel = t("pluginsview.Testing", {
+    defaultValue: "Testing...",
+  });
+  const saveSettingsLabel = t("pluginsview.SaveSettings", {
+    defaultValue: "Save Settings",
+  });
+  const saveLabel = t("common.save", { defaultValue: "Save" });
+  const savingLabel = t("apikeyconfig.saving", {
+    defaultValue: "Saving...",
+  });
+  const savedLabel = t("pluginsview.Saved", {
+    defaultValue: "Saved",
+  });
+  const savedWithBangLabel = t("pluginsview.SavedWithBang", {
+    defaultValue: "Saved!",
+  });
+  const readyLabel = t("pluginsview.Ready", { defaultValue: "Ready" });
+  const needsSetupLabel = t("pluginsview.NeedsSetup", {
+    defaultValue: "Needs setup",
+  });
+  const loadFailedLabel = t("pluginsview.LoadFailed", {
+    defaultValue: "Load failed",
+  });
+  const notInstalledLabel = t("pluginsview.NotInstalled", {
+    defaultValue: "Not installed",
+  });
+  const expandLabel = t("pluginsview.Expand", { defaultValue: "Expand" });
+  const collapseLabel = t("pluginsview.Collapse", {
+    defaultValue: "Collapse",
+  });
+  const noConfigurationNeededLabel = t("pluginsview.NoConfigurationNeeded", {
+    defaultValue: "No configuration needed.",
+  });
+  const connectorInstallPrompt = t("pluginsview.InstallConnectorPrompt", {
+    defaultValue: "Install this connector to activate it in the runtime.",
+  });
+  const formatTestConnectionLabel = (result?: {
+    success: boolean;
+    error?: string;
+    durationMs: number;
+    loading: boolean;
+  }) => {
+    if (result?.loading) return testingLabel;
+    if (result?.success) {
+      return t("pluginsview.ConnectionTestPassed", {
+        durationMs: result.durationMs,
+        defaultValue: "OK ({{durationMs}}ms)",
+      });
+    }
+    if (result?.error) {
+      return t("pluginsview.ConnectionTestFailed", {
+        error: result.error,
+        defaultValue: "Failed: {{error}}",
+      });
+    }
+    return t("pluginsview.TestConnection");
+  };
+  const formatDialogTestConnectionLabel = (result?: {
+    success: boolean;
+    error?: string;
+    durationMs: number;
+    loading: boolean;
+  }) => {
+    if (result?.loading) return testingLabel;
+    if (result?.success) {
+      return t("pluginsview.ConnectionTestPassedDialog", {
+        durationMs: result.durationMs,
+        defaultValue: "✓ OK ({{durationMs}}ms)",
+      });
+    }
+    if (result?.error) {
+      return t("pluginsview.ConnectionTestFailedDialog", {
+        error: result.error,
+        defaultValue: "✕ {{error}}",
+      });
+    }
+    return t("pluginsview.TestConnection");
+  };
+  const formatSaveSettingsLabel = (isSaving: boolean, didSave: boolean) => {
+    if (isSaving) return savingLabel;
+    if (didSave) return savedLabel;
+    return saveSettingsLabel;
+  };
   const [togglingPlugins, setTogglingPlugins] = useState<Set<string>>(
     new Set(),
   );
@@ -1377,7 +1497,10 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                 {tag.label}
               </span>
               <span className="mt-1 block text-[11px] leading-relaxed text-muted/85">
-                {tag.count} available
+                {t("pluginsview.AvailableCount", {
+                  count: tag.count,
+                  defaultValue: "{{count}} available",
+                })}
               </span>
             </span>
             <span
@@ -1490,12 +1613,19 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
       await client.installRegistryPlugin(npmName);
       await loadPlugins();
       setActionNotice(
-        `${npmName} installed. Restart required to activate.`,
+        t("pluginsview.PluginInstalledRestartRequired", {
+          plugin: npmName,
+          defaultValue: "{{plugin}} installed. Restart required to activate.",
+        }),
         "success",
       );
     } catch (err) {
       setActionNotice(
-        `Failed to install ${npmName}: ${err instanceof Error ? err.message : "unknown error"}`,
+        t("pluginsview.PluginInstallFailed", {
+          plugin: npmName,
+          message: err instanceof Error ? err.message : "unknown error",
+          defaultValue: "Failed to install {{plugin}}: {{message}}",
+        }),
         "error",
         3800,
       );
@@ -1792,7 +1922,13 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
               }}
               disabled={toggleDisabled}
             >
-              {isToggleBusy ? "APPLYING" : p.enabled ? "ON" : "OFF"}
+              {isToggleBusy
+                ? t("pluginsview.Applying", {
+                    defaultValue: "Applying",
+                  })
+                : p.enabled
+                  ? t("common.on")
+                  : t("common.off")}
             </Button>
           )}
         </div>
@@ -1816,7 +1952,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                 p.loadError || "Plugin is enabled but not loaded in the runtime"
               }
             >
-              {p.loadError ? "load failed" : "not installed"}
+              {p.loadError ? loadFailedLabel : notInstalledLabel}
             </span>
           )}
           {isToggleBusy && (
@@ -1834,7 +1970,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
             overflow: "hidden",
           }}
         >
-          {p.description || "No description available"}
+          {p.description || pluginDescriptionFallback}
         </p>
 
         {(p.tags?.length ?? 0) > 0 && (
@@ -1862,9 +1998,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                   e.stopPropagation();
                   void handleOpenPluginExternalUrl(link.url);
                 }}
-                title={`${link.label}: ${link.url}`}
+                title={`${pluginResourceLinkLabel(t, link.key)}: ${link.url}`}
               >
-                {link.label}
+                {pluginResourceLinkLabel(t, link.key)}
               </Button>
             ))}
           </div>
@@ -1909,9 +2045,10 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                 }}
               >
                 {installingPlugins.has(p.id)
-                  ? installProgress.get(p.npmName ?? "")?.message ||
-                    "Installing..."
-                  : "Install"}
+                  ? installProgressLabel(
+                      installProgress.get(p.npmName ?? "")?.message,
+                    )
+                  : installLabel}
               </Button>
             )}
           {hasParams && (
@@ -2254,7 +2391,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                               </span>
                               <span className="mt-1 block whitespace-normal break-words [overflow-wrap:anywhere] text-[11px] leading-relaxed text-muted/85">
                                 {plugin.description ||
-                                  "No description available"}
+                                  pluginDescriptionFallback}
                               </span>
                             </span>
                           </Button>
@@ -2281,8 +2418,8 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                             {isToggleBusy
                               ? "..."
                               : plugin.enabled
-                                ? "ON"
-                                : "OFF"}
+                                ? t("common.on")
+                                : t("common.off")}
                           </Button>
                           <span
                             className={`shrink-0 text-muted transition-transform ${
@@ -2407,7 +2544,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                                       : "border-warn/30 bg-warn/10 text-warn"
                                   }`}
                                 >
-                                  {allParamsSet ? "Ready" : "Needs setup"}
+                                  {allParamsSet ? readyLabel : needsSetupLabel}
                                 </span>
                                 {plugin.version && (
                                   <span className="text-[11px] font-mono text-muted/80">
@@ -2442,8 +2579,8 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                               {isToggleBusy
                                 ? "..."
                                 : plugin.enabled
-                                  ? "ON"
-                                  : "OFF"}
+                                  ? t("common.on")
+                                  : t("common.off")}
                             </Button>
                             <Button
                               variant="outline"
@@ -2457,9 +2594,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                                 handleConnectorSectionToggle(plugin.id)
                               }
                               aria-expanded={isExpanded}
-                              aria-label={`${isExpanded ? "Collapse" : "Expand"} ${plugin.name}`}
+                              aria-label={`${isExpanded ? collapseLabel : expandLabel} ${plugin.name}`}
                             >
-                              <span>{isExpanded ? "Collapse" : "Expand"}</span>
+                              <span>{isExpanded ? collapseLabel : expandLabel}</span>
                               <ChevronRight
                                 className={`h-4 w-4 transition-transform ${
                                   isExpanded ? "rotate-90" : ""
@@ -2470,13 +2607,13 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                         </div>
                         <div className="px-4 pb-3 sm:px-5">
                           <p className="text-sm text-muted">
-                            {plugin.description || "No description available"}
+                            {plugin.description || pluginDescriptionFallback}
                           </p>
                           <span className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-muted">
                             <span>
                               {hasParams
-                                ? `${setCount}/${totalCount} configured`
-                                : "No configuration needed"}
+                                ? `${setCount}/${totalCount} ${t("pluginsview.configured")}`
+                                : noConfigurationNeededLabel}
                             </span>
                             {plugin.enabled && !plugin.isActive && (
                               <span
@@ -2487,8 +2624,8 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                                 }`}
                               >
                                 {plugin.loadError
-                                  ? "Load failed"
-                                  : "Not installed"}
+                                  ? loadFailedLabel
+                                  : notInstalledLabel}
                               </span>
                             )}
                           </span>
@@ -2509,9 +2646,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                                         link.url,
                                       );
                                     }}
-                                    title={`${link.label}: ${link.url}`}
+                                    title={`${pluginResourceLinkLabel(t, link.key)}: ${link.url}`}
                                   >
-                                    {link.label}
+                                    {pluginResourceLinkLabel(t, link.key)}
                                   </Button>
                                 ))}
                               </div>
@@ -2524,8 +2661,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                                 <div className="mb-4 rounded-2xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm text-txt">
                                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
-                                      Install this connector to activate it in
-                                      the runtime.
+                                      {connectorInstallPrompt}
                                     </div>
                                     <Button
                                       variant="default"
@@ -2542,10 +2678,12 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                                       }
                                     >
                                       {installingPlugins.has(plugin.id)
-                                        ? installProgress.get(
-                                            plugin.npmName ?? "",
-                                          )?.message || "Installing..."
-                                        : "Install Plugin"}
+                                        ? installProgressLabel(
+                                            installProgress.get(
+                                              plugin.npmName ?? "",
+                                            )?.message,
+                                          )
+                                        : installPluginLabel}
                                     </Button>
                                   </div>
                                 </div>
@@ -2574,7 +2712,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                               </div>
                             ) : (
                               <div className="rounded-2xl border border-border/40 bg-card/30 px-4 py-3 text-sm text-muted">
-                                No configuration needed.
+                                {noConfigurationNeededLabel}
                               </div>
                             )}
 
@@ -2632,13 +2770,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                                     void handleTestConnection(plugin.id)
                                   }
                                 >
-                                  {testResult?.loading
-                                    ? "Testing..."
-                                    : testResult?.success
-                                      ? `OK (${testResult.durationMs}ms)`
-                                      : testResult?.error
-                                        ? `Failed: ${testResult.error}`
-                                        : "Test Connection"}
+                                  {formatTestConnectionLabel(testResult)}
                                 </Button>
                               )}
                               {hasParams && (
@@ -2649,7 +2781,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                                     className="h-8 rounded-xl px-4 text-[11px] font-semibold text-muted hover:text-txt"
                                     onClick={() => handleConfigReset(plugin.id)}
                                   >
-                                    Reset
+                                    {t("pluginsview.Reset")}
                                   </Button>
                                   <Button
                                     variant={
@@ -2666,11 +2798,10 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                                     }
                                     disabled={isSaving}
                                   >
-                                    {isSaving
-                                      ? "Saving..."
-                                      : saveSuccess
-                                        ? "Saved"
-                                        : "Save Settings"}
+                                    {formatSaveSettingsLabel(
+                                      isSaving,
+                                      saveSuccess,
+                                    )}
                                   </Button>
                                 </>
                               )}
@@ -2708,7 +2839,10 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
           >
             {gameVisiblePlugins.length === 0 ? (
               <div className="plugins-game-list-empty">
-                No {resultLabel} {t("pluginsview.found")}
+                {t("pluginsview.NoResultsFound", {
+                  label: resultLabel,
+                  defaultValue: "No {{label}} found",
+                })}
               </div>
             ) : (
               gameVisiblePlugins.map((p: PluginInfo) => (
@@ -2757,7 +2891,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                           p.enabled ? "is-on" : "is-off"
                         }`}
                       >
-                        {p.enabled ? "ON" : "OFF"}
+                        {p.enabled ? t("common.on") : t("common.off")}
                       </span>
                     </div>
                   </div>
@@ -2833,7 +2967,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                     }
                     disabled={togglingPlugins.has(selectedPlugin.id)}
                   >
-                    {selectedPlugin.enabled ? "ON" : "OFF"}
+                    {selectedPlugin.enabled ? t("common.on") : t("common.off")}
                   </Button>
                 </div>
               </div>
@@ -2865,7 +2999,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                         void handleOpenPluginExternalUrl(link.url);
                       }}
                     >
-                      {link.label}
+                      {pluginResourceLinkLabel(t, link.key)}
                     </Button>
                   ))}
                 </div>
@@ -2924,10 +3058,10 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                   disabled={pluginSaving.has(selectedPlugin.id)}
                 >
                   {pluginSaving.has(selectedPlugin.id)
-                    ? "Saving..."
+                    ? savingLabel
                     : pluginSaveSuccess.has(selectedPlugin.id)
-                      ? "Saved!"
-                      : "Save"}
+                      ? savedWithBangLabel
+                      : saveLabel}
                 </Button>
               </div>
             </>
@@ -3131,8 +3265,11 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                       {p.name}
                     </DialogTitle>
                     <DialogDescription className="sr-only">
-                      Review plugin metadata, adjust settings, and save changes
-                      for {p.name}.
+                      {t("pluginsview.PluginDialogDescription", {
+                        plugin: p.name,
+                        defaultValue:
+                          "Review plugin metadata, adjust settings, and save changes for {{plugin}}.",
+                      })}
                     </DialogDescription>
                     <span className={ADMIN_DIALOG_META_BADGE_CLASSNAME}>
                       {categoryLabel}
@@ -3229,13 +3366,14 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                             onClick={() =>
                               handleInstallPlugin(p.id, p.npmName ?? "")
                             }
-                          >
-                            {installingPlugins.has(p.id)
-                              ? installProgress.get(p.npmName ?? "")?.message ||
-                                "Installing..."
-                              : "Install Plugin"}
-                          </Button>
-                        )}
+                        >
+                          {installingPlugins.has(p.id)
+                            ? installProgressLabel(
+                                installProgress.get(p.npmName ?? "")?.message,
+                              )
+                            : installPluginLabel}
+                        </Button>
+                      )}
                       {p.loadError && (
                         <span
                           className="px-3 py-1.5 text-[11px] text-danger font-bold tracking-wide"
@@ -3266,13 +3404,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                           disabled={testResults.get(p.id)?.loading}
                           onClick={() => handleTestConnection(p.id)}
                         >
-                          {testResults.get(p.id)?.loading
-                            ? "Testing..."
-                            : testResults.get(p.id)?.success
-                              ? `\u2713 OK (${testResults.get(p.id)?.durationMs}ms)`
-                              : testResults.get(p.id)?.error
-                                ? `\u2715 ${testResults.get(p.id)?.error}`
-                                : "Test Connection"}
+                          {formatDialogTestConnectionLabel(
+                            testResults.get(p.id),
+                          )}
                         </Button>
                       )}
                       <Button
@@ -3295,10 +3429,12 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                         disabled={isSaving}
                       >
                         {isSaving
-                          ? "Saving..."
+                          ? savingLabel
                           : saveSuccess
-                            ? "\u2713 Saved"
-                            : "Save Settings"}
+                            ? t("pluginsview.SavedWithCheck", {
+                                defaultValue: "✓ Saved",
+                              })
+                            : saveSettingsLabel}
                       </Button>
                     </div>
                   )}
@@ -3322,8 +3458,10 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
               {t("pluginsview.AddPlugin1")}
             </DialogTitle>
             <DialogDescription className="text-sm text-muted">
-              Enter a local directory path that contains a plugin package and
-              Milady will register it.
+              {t("pluginsview.AddPluginDescription", {
+                defaultValue:
+                  "Enter a local directory path that contains a plugin package and Milady will register it.",
+              })}
             </DialogDescription>
           </DialogHeader>
 

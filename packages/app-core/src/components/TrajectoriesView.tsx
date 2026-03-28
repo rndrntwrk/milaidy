@@ -258,7 +258,9 @@ export function TrajectoriesView({
             </div>
 
             <div className={`mt-3 ${APP_SIDEBAR_SECTION_HEADING_CLASSNAME}`}>
-              Entries
+              {t("trajectoriesview.Entries", {
+                defaultValue: "Entries",
+              })}
             </div>
 
             <div className={`mt-2 ${APP_SIDEBAR_SCROLL_REGION_CLASSNAME}`}>

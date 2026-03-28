@@ -152,7 +152,12 @@ describe("ChatMessage actions", () => {
   it("edits and resends user messages from the inline editor", async () => {
     mockUseApp.mockReturnValue({
       copyToClipboard: vi.fn(),
-      t: (key: string) => key,
+      t: (
+        key: string,
+        vars?: {
+          defaultValue?: string;
+        },
+      ) => vars?.defaultValue ?? key,
     });
     const onEdit = vi.fn(async () => true);
 

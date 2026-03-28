@@ -605,6 +605,7 @@ export function InventoryView() {
                         <TooltipTrigger asChild>
                           <button
                             type="button"
+                            data-testid={`inventory-chain-toggle-${item.key}`}
                             onClick={
                               disabled
                                 ? undefined

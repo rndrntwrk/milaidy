@@ -267,6 +267,15 @@ const TRANSLATIONS: Record<string, string> = {
   "flaminaguide.tasks.voice.description": "Pick a voice preset.",
 };
 
+function translateTest(
+  key: string,
+  vars?: {
+    defaultValue?: string;
+  },
+): string {
+  return vars?.defaultValue ?? TRANSLATIONS[key] ?? key;
+}
+
 vi.mock("@miladyai/app-core/components", async () => {
   const actual = await vi.importActual<
     typeof import("@miladyai/app-core/components")
@@ -714,7 +723,7 @@ function setupMockUseApp(state: AppHarnessState) {
 
   mockUseApp.mockReset();
   mockUseApp.mockImplementation(() => ({
-    t: (k: string) => TRANSLATIONS[k] ?? k,
+    t: translateTest,
     ...state,
     setState: (key: string, value: unknown) => {
       state[key] = value;

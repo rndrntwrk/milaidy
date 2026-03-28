@@ -301,9 +301,22 @@ function PaginationBar({
   return (
     <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/40 bg-card/60 backdrop-blur-md rounded-b-2xl text-[11px] text-muted">
       <span className="font-medium">
-        {total.toLocaleString()} {t("databaseview.row")}
-        {total !== 1 ? "s" : ""}
-        {total > 0 && ` · showing ${start}-${end}`}
+        {t("databaseview.RowCountSummary", {
+          count: total.toLocaleString(),
+          rowLabel:
+            total === 1
+              ? t("databaseview.row")
+              : t("databaseview.rows", { defaultValue: "rows" }),
+          range:
+            total > 0
+              ? t("databaseview.ShowingRange", {
+                  start,
+                  end,
+                  defaultValue: " · showing {{start}}-{{end}}",
+                })
+              : "",
+          defaultValue: "{{count}} {{rowLabel}}{{range}}",
+        })}
       </span>
       <div className="flex items-center gap-2">
         <Button
@@ -377,11 +390,16 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
       const msg = err instanceof Error ? err.message : "error";
       // Don't show error if database is simply not connected (cloud mode, agent not running)
       if (!msg.includes("Database not available")) {
-        setErrorMessage(`Failed to load tables: ${msg}`);
+        setErrorMessage(
+          t("databaseview.FailedToLoadTables", {
+            message: msg,
+            defaultValue: "Failed to load tables: {{message}}",
+          }),
+        );
       }
     }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   const loadTableData = useCallback(
     async (
@@ -409,12 +427,15 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
         }
       } catch (err) {
         setErrorMessage(
-          `Failed to load table: ${err instanceof Error ? err.message : "error"}`,
+          t("databaseview.FailedToLoadTable", {
+            message: err instanceof Error ? err.message : "error",
+            defaultValue: "Failed to load table: {{message}}",
+          }),
         );
       }
       setLoading(false);
     },
-    [tables],
+    [t, tables],
   );
 
   const handleSort = useCallback(
@@ -484,11 +505,14 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
       });
     } catch (err) {
       setErrorMessage(
-        `Query failed: ${err instanceof Error ? err.message : "error"}`,
+        t("databaseview.QueryFailed", {
+          message: err instanceof Error ? err.message : "error",
+          defaultValue: "Query failed: {{message}}",
+        }),
       );
     }
     setQueryLoading(false);
-  }, [queryText]);
+  }, [queryText, t]);
 
   useEffect(() => {
     const init = async () => {
@@ -514,7 +538,9 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
     <div
       className={DESKTOP_SEGMENTED_GROUP_CLASSNAME}
       role="tablist"
-      aria-label="Database editor modes"
+      aria-label={t("databaseview.EditorModes", {
+        defaultValue: "Database editor modes",
+      })}
     >
       <Button
         variant="ghost"
@@ -651,7 +677,10 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                             {table.name}
                           </span>
                           <span className="mt-1 block text-[11px] leading-relaxed text-muted/85">
-                            {(table.rowCount ?? 0).toLocaleString()} rows
+                            {t("databaseview.RowCountLabel", {
+                              count: (table.rowCount ?? 0).toLocaleString(),
+                              defaultValue: "{{count}} rows",
+                            })}
                           </span>
                         </span>
                       </Button>
@@ -663,8 +692,10 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
               <>
                 <div className="space-y-3 pt-4">
                   <div className={DATABASE_INFO_PANEL_CLASS}>
-                    Write ad-hoc queries and inspect results without leaving the
-                    database workspace.
+                    {t("databaseview.QueryWorkspaceInfo", {
+                      defaultValue:
+                        "Write ad-hoc queries and inspect results without leaving the database workspace.",
+                    })}
                   </div>
                 </div>
 
@@ -1129,14 +1160,16 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-                        Database
+                        {t("databaseview.Database")}
                       </div>
                       <div className="mt-1 text-2xl font-semibold text-txt-strong">
                         {selectedTable}
                       </div>
                       <div className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-                        Inspect rows, sort columns, and review table structure
-                        in one place.
+                        {t("databaseview.TableWorkspaceDescription", {
+                          defaultValue:
+                            "Inspect rows, sort columns, and review table structure in one place.",
+                        })}
                       </div>
                     </div>
                     {columnMeta.size > 0 && (
@@ -1145,7 +1178,10 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                           {columnMeta.size} {t("databaseview.columns")}
                         </span>
                         <span className={APP_SIDEBAR_PILL_CLASSNAME}>
-                          {tableData.total.toLocaleString()} rows
+                          {t("databaseview.RowCountLabel", {
+                            count: tableData.total.toLocaleString(),
+                            defaultValue: "{{count}} rows",
+                          })}
                         </span>
                       </div>
                     )}
@@ -1160,7 +1196,10 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                       <DesktopEmptyStatePanel
                         className="min-h-[14rem]"
                         title={t("databaseview.TableIsEmpty")}
-                        description="This table is connected and available, but it does not have any rows yet."
+                        description={t("databaseview.EmptyTableDescription", {
+                          defaultValue:
+                            "This table is connected and available, but it does not have any rows yet.",
+                        })}
                       />
                     ) : (
                       <ResultsGrid
@@ -1215,8 +1254,10 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                 </div>
                 <div className="h-px bg-border/30" />
                 <div className={DATABASE_INFO_PANEL_CLASS}>
-                  Write ad-hoc queries and inspect results without leaving the
-                  database workspace.
+                  {t("databaseview.QueryWorkspaceInfo", {
+                    defaultValue:
+                      "Write ad-hoc queries and inspect results without leaving the database workspace.",
+                  })}
                 </div>
                 {queryHistory.length > 0 ? (
                   <div
@@ -1250,14 +1291,18 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-                    Database
+                    {t("databaseview.Database")}
                   </div>
                   <div className="mt-1 text-2xl font-semibold text-txt-strong">
-                    SQL Workspace
+                    {t("databaseview.SQLWorkspace", {
+                      defaultValue: "SQL Workspace",
+                    })}
                   </div>
                   <div className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-                    Run ad-hoc queries, inspect results, and reuse recent SQL
-                    from the sidebar.
+                    {t("databaseview.SQLWorkspaceDescription", {
+                      defaultValue:
+                        "Run ad-hoc queries, inspect results, and reuse recent SQL from the sidebar.",
+                    })}
                   </div>
                 </div>
               </div>

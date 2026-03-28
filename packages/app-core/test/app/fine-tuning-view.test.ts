@@ -10,9 +10,10 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { text, findButtonByText, flush } from "../../../../test/helpers/react-test";
+import { testT } from "../../../../test/helpers/i18n";
 
 interface FineTuningContextStub {
-  t: (key: string) => string;
+  t: (key: string, vars?: Record<string, unknown>) => string;
   setState: (key: string, value: unknown) => void;
   handleRestart: () => Promise<void>;
   setActionNotice: (
@@ -221,19 +222,7 @@ describe("FineTuningView", () => {
     mockClientFns.onWsEvent.mockReset();
 
     appContext = {
-      t: (k: string) => {
-        if (k === "finetuningview.LimitTrajectories")
-          return "Limit trajectories";
-        if (k === "finetuningview.MinLLMCallsPerTr")
-          return "Min LLM calls per trajectory";
-        if (k === "finetuningview.OllamaModelNameO")
-          return "Ollama model name (optional)";
-        if (k === "finetuningview.BaseModelForOllam")
-          return "Base model for Ollama (optional)";
-        if (k === "finetuningview.ProviderModelEG")
-          return 'Provider model (e.g. "ollama/my-model")';
-        return k;
-      },
+      t: (key: string, vars?: Record<string, unknown>) => testT(key, vars),
       setState: vi.fn((_key, _value) => {
         // Mock implementation if needed, otherwise a no-op
       }),
@@ -317,7 +306,7 @@ describe("FineTuningView", () => {
       tree?.root.findAll(
         (node) =>
           typeof node.type === "string" &&
-          node.children.includes("finetuningview.FineTuning"),
+          node.children.includes(testT("finetuningview.FineTuning")),
       ).length,
     ).toBeGreaterThan(0);
   });

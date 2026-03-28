@@ -19,11 +19,18 @@ vi.mock("@miladyai/app-core/state", () => ({
   getVrmTitle: (index: number) => `MILADY-${index}`,
   VRM_COUNT: 24,
   CUSTOM_ONBOARDING_STEPS: [],
-  useCompanionSceneConfig: () => ({
-    companionVrmPowerMode: "balanced",
-    companionHalfFramerateMode: "when_saving_power",
-    companionAnimateWhenHidden: false,
-  }),
+  useCompanionSceneConfig: () => {
+    const state = (mockUseApp() as Record<string, unknown>) ?? {};
+    return {
+      selectedVrmIndex: (state.selectedVrmIndex as number | undefined) ?? 1,
+      customVrmUrl: (state.customVrmUrl as string | undefined) ?? "",
+      uiTheme: (state.uiTheme as string | undefined) ?? "light",
+      tab: (state.tab as string | undefined) ?? "companion",
+      companionVrmPowerMode: "balanced",
+      companionHalfFramerateMode: "when_saving_power",
+      companionAnimateWhenHidden: false,
+    };
+  },
   useTranslation: () => ({ t: (k: string) => k }),
 }));
 

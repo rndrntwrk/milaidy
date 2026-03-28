@@ -1177,7 +1177,13 @@ export function CustomActionEditor({
               onClick={handleTest}
               disabled={testing || saving}
             >
-              {testing ? "Testing..." : "Test"}
+              {testing
+                ? t("customactioneditor.Testing", {
+                    defaultValue: "Testing...",
+                  })
+                : t("customactioneditor.Test", {
+                    defaultValue: "Test",
+                  })}
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={onClose}>
@@ -1189,7 +1195,11 @@ export function CustomActionEditor({
             onClick={() => void handleSave()}
             disabled={saving}
           >
-            {saving ? "Saving..." : "Save"}
+            {saving
+              ? t("customactioneditor.Saving", {
+                  defaultValue: "Saving...",
+                })
+              : t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

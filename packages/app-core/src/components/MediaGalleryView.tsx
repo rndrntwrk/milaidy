@@ -38,6 +38,11 @@ interface MediaItem {
   createdAt: string;
 }
 
+type TranslateFn = (
+  key: string,
+  vars?: Record<string, string | number | boolean | null | undefined>,
+) => string;
+
 const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)(\?|$)/i;
 const VIDEO_EXTS = /\.(mp4|webm|mov|avi|mkv|ogv)(\?|$)/i;
 const AUDIO_EXTS = /\.(mp3|wav|ogg|flac|aac|m4a|opus)(\?|$)/i;
@@ -58,9 +63,9 @@ function filenameFromUrl(url: string): string {
   try {
     const path = new URL(url, "https://placeholder").pathname;
     const segments = path.split("/").filter(Boolean);
-    return segments[segments.length - 1] || "media";
+    return segments[segments.length - 1] || "";
   } catch {
-    return "media";
+    return "";
   }
 }
 
@@ -79,12 +84,20 @@ function normalizeMediaUrl(url: string): string {
     : candidate;
 }
 
-const FILTER_CHIPS: { id: MediaType; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "image", label: "Images" },
-  { id: "video", label: "Video" },
-  { id: "audio", label: "Audio" },
-];
+function mediaTypeLabel(t: TranslateFn, type: MediaType): string {
+  switch (type) {
+    case "all":
+      return t("mediagalleryview.All", { defaultValue: "All" });
+    case "image":
+      return t("mediagalleryview.Images", { defaultValue: "Images" });
+    case "video":
+      return t("mediagalleryview.Video", { defaultValue: "Video" });
+    case "audio":
+      return t("mediagalleryview.Audio", { defaultValue: "Audio" });
+  }
+}
+
+const FILTER_CHIPS: readonly MediaType[] = ["all", "image", "video", "audio"];
 
 /** Extract media URLs from arbitrary row data by scanning all string values. */
 function extractMediaFromRows(
@@ -235,11 +248,14 @@ export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
       setMedia(allMedia);
     } catch (err) {
       setError(
-        `Failed to load media: ${err instanceof Error ? err.message : "error"}`,
+        t("mediagalleryview.LoadFailed", {
+          message: err instanceof Error ? err.message : "error",
+          defaultValue: "Failed to load media: {{message}}",
+        }),
       );
     }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadMedia();
@@ -286,16 +302,29 @@ export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
             {leftNav}
             <DesktopRailSummaryCard>
               <div className="text-sm font-semibold text-txt">
-                {filtered.length} {t("mediagalleryview.item")}
-                {filtered.length !== 1 ? "s" : ""}
+                {filtered.length === 1
+                  ? t("mediagalleryview.ItemCountOne", {
+                      count: filtered.length,
+                      defaultValue: "{{count}} item",
+                    })
+                  : t("mediagalleryview.ItemCountMany", {
+                      count: filtered.length,
+                      defaultValue: "{{count}} items",
+                    })}
               </div>
               <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/75">
                 <span className={APP_SIDEBAR_PILL_CLASSNAME}>
-                  {filter === "all" ? "All media" : filter}
+                  {filter === "all"
+                    ? t("mediagalleryview.AllMedia", {
+                        defaultValue: "All media",
+                      })
+                    : mediaTypeLabel(t, filter)}
                 </span>
                 {search ? (
                   <span className="rounded-full border border-accent/25 bg-accent/8 px-2.5 py-1 text-accent">
-                    Search active
+                    {t("mediagalleryview.SearchActive", {
+                      defaultValue: "Search active",
+                    })}
                   </span>
                 ) : null}
               </div>
@@ -313,10 +342,10 @@ export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
 
             <div className="grid grid-cols-2 gap-1.5">
               {FILTER_CHIPS.map((chip) => {
-                const isActive = filter === chip.id;
+                const isActive = filter === chip;
                 return (
                   <Button
-                    key={chip.id}
+                    key={chip}
                     variant="ghost"
                     size="sm"
                     className={`h-auto min-h-[2.25rem] rounded-xl border px-3 py-2 text-left text-[11px] font-semibold transition-colors ${
@@ -324,9 +353,9 @@ export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
                         ? "border-accent/35 bg-accent/14 text-txt-strong"
                         : "border-border/45 bg-bg/35 text-muted hover:border-border/60 hover:bg-bg-hover hover:text-txt"
                     }`}
-                    onClick={() => setFilter(chip.id)}
+                    onClick={() => setFilter(chip)}
                   >
-                    {chip.label}
+                    {mediaTypeLabel(t, chip)}
                   </Button>
                 );
               })}
@@ -371,12 +400,15 @@ export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
                     </div>
                     <div className="min-w-0 flex-1 text-left">
                       <div className="truncate text-sm font-semibold leading-snug text-inherit">
-                        {item.filename}
+                        {item.filename ||
+                          t("mediagalleryview.MediaItem", {
+                            defaultValue: "Media item",
+                          })}
                       </div>
                       <div className="mt-1 flex items-center gap-2 text-[11px] text-muted/85">
                         <span className="truncate">{item.source}</span>
                         <span className="rounded-full border border-border/45 px-2 py-0.5 uppercase tracking-[0.16em]">
-                          {item.type}
+                          {mediaTypeLabel(t, item.type)}
                         </span>
                       </div>
                     </div>
@@ -405,8 +437,13 @@ export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
               </div>
               <div className="mt-2 max-w-sm text-sm text-muted">
                 {media.length === 0
-                  ? "No images, videos, or audio files were detected in the database."
-                  : "No items match the current filter."}
+                  ? t("mediagalleryview.NoMediaDetectedDescription", {
+                      defaultValue:
+                        "No images, videos, or audio files were detected in the database.",
+                    })
+                  : t("mediagalleryview.NoFilterMatchesDescription", {
+                      defaultValue: "No items match the current filter.",
+                    })}
               </div>
             </div>
           </div>
@@ -414,18 +451,24 @@ export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
           <>
             <div className="border-b border-border/40 px-6 py-5">
               <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/60">
-                Media
+                {t("mediagalleryview.Media", { defaultValue: "Media" })}
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-3">
                 <h2 className="text-2xl font-semibold text-txt">
-                  {selectedItem.filename}
+                  {selectedItem.filename ||
+                    t("mediagalleryview.MediaItem", {
+                      defaultValue: "Media item",
+                    })}
                 </h2>
                 <span className="rounded-full border border-accent/30 bg-accent/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-fg">
-                  {selectedItem.type}
+                  {mediaTypeLabel(t, selectedItem.type)}
                 </span>
               </div>
               <div className="mt-2 text-sm text-muted">
-                Source: {selectedItem.source}
+                {t("mediagalleryview.SourceLabel", {
+                  defaultValue: "Source:",
+                })}{" "}
+                {selectedItem.source}
                 {selectedItem.createdAt ? ` · ${selectedItem.createdAt}` : ""}
               </div>
             </div>
@@ -448,10 +491,12 @@ export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
                   >
                     <track kind="captions" />
                   </video>
-                ) : (
+                  ) : (
                   <div className="flex w-full max-w-xl flex-col items-center gap-5 rounded-3xl border border-border/35 bg-bg/35 px-8 py-10 text-center">
                     <div className="text-lg font-semibold text-txt">
-                      Audio Preview
+                      {t("mediagalleryview.AudioPreview", {
+                        defaultValue: "Audio Preview",
+                      })}
                     </div>
                     <audio
                       src={normalizeMediaUrl(selectedItem.url)}
@@ -466,20 +511,24 @@ export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
 
               <div className="mt-5 rounded-2xl border border-border/40 bg-card/45 px-5 py-4 text-sm text-muted">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/60">
-                  Media Details
+                  {t("mediagalleryview.MediaDetails", {
+                    defaultValue: "Media Details",
+                  })}
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.16em] text-muted/60">
-                      Type
+                      {t("mediagalleryview.Type", { defaultValue: "Type" })}
                     </div>
                     <div className="mt-1 text-sm text-txt">
-                      {selectedItem.type}
+                      {mediaTypeLabel(t, selectedItem.type)}
                     </div>
                   </div>
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.16em] text-muted/60">
-                      Source
+                      {t("mediagalleryview.Source", {
+                        defaultValue: "Source",
+                      })}
                     </div>
                     <div className="mt-1 text-sm text-txt">
                       {selectedItem.source}

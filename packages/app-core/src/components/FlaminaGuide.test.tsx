@@ -1,9 +1,21 @@
 // @vitest-environment jsdom
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { textOf } from "../../../../test/helpers/react-test";
 import { FlaminaGuideCard } from "./FlaminaGuide";
+
+const { mockUseApp } = vi.hoisted(() => ({
+  mockUseApp: vi.fn(),
+}));
+
+vi.mock("../state", () => ({
+  useApp: () => mockUseApp(),
+}));
+
+beforeEach(() => {
+  mockUseApp.mockReturnValue({ t: (k: string) => k });
+});
 
 describe("FlaminaGuideCard", () => {
   it("explains provider impact on character behavior", () => {
@@ -16,9 +28,9 @@ describe("FlaminaGuideCard", () => {
 
     const renderedText = textOf(tree?.root);
 
-    expect(renderedText).toContain("reasons");
-    expect(renderedText).toContain("latency");
-    expect(renderedText).toContain("output quality");
+    expect(renderedText).toContain("flaminaguide.provider.whenToUse");
+    expect(renderedText).toContain("flaminaguide.provider.characterImpact");
+    expect(renderedText).toContain("flaminaguide.provider.description");
   });
 
   it("explains rpc impact on external capabilities", () => {
@@ -31,9 +43,9 @@ describe("FlaminaGuideCard", () => {
 
     const renderedText = textOf(tree?.root);
 
-    expect(renderedText).toContain("wallets");
-    expect(renderedText).toContain("chains");
-    expect(renderedText).toContain("external execution");
+    expect(renderedText).toContain("flaminaguide.rpc.characterImpact");
+    expect(renderedText).toContain("flaminaguide.rpc.description");
+    expect(renderedText).toContain("flaminaguide.rpc.whenToUse");
   });
 
   it("explains permissions impact on local access", () => {
@@ -46,9 +58,9 @@ describe("FlaminaGuideCard", () => {
 
     const renderedText = textOf(tree?.root);
 
-    expect(renderedText).toContain("see");
-    expect(renderedText).toContain("control");
-    expect(renderedText).toContain("locally");
+    expect(renderedText).toContain("flaminaguide.permissions.characterImpact");
+    expect(renderedText).toContain("flaminaguide.permissions.description");
+    expect(renderedText).toContain("flaminaguide.permissions.whenToUse");
   });
 
   it("explains voice impact on presentation", () => {
@@ -61,8 +73,8 @@ describe("FlaminaGuideCard", () => {
 
     const renderedText = textOf(tree?.root);
 
-    expect(renderedText).toContain("sounds");
-    expect(renderedText).toContain("spoken interactions");
-    expect(renderedText).toContain("saved");
+    expect(renderedText).toContain("flaminaguide.voice.characterImpact");
+    expect(renderedText).toContain("flaminaguide.voice.description");
+    expect(renderedText).toContain("flaminaguide.voice.whenToUse");
   });
 });

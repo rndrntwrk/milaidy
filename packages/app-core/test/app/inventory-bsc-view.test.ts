@@ -457,13 +457,9 @@ describe("InventoryView unified wallets", () => {
       tree = TestRenderer.create(React.createElement(InventoryView));
     });
 
-    const bscButton = tree?.root.findAll(
-      (node) =>
-        node.type === "button" &&
-        typeof node.props.onClick === "function" &&
-        typeof node.props["aria-label"] === "string" &&
-        node.props["aria-label"].startsWith("BSC"),
-    )[0];
+    const bscButton = tree?.root.findByProps({
+      "data-testid": "inventory-chain-toggle-bsc",
+    });
     expect(bscButton).toBeDefined();
 
     await act(async () => {
@@ -498,7 +494,7 @@ describe("InventoryView unified wallets", () => {
       tree = TestRenderer.create(React.createElement(InventoryView));
     });
     let content = text(tree?.root);
-    expect(content).toContain("Trade Not Ready");
+    expect(content).toContain("bsctradepanel.TradeNotReady");
 
     const readyCtx = createContext({
       inventoryChainFilters: { ...INVENTORY_FILTERS_BSC_ONLY },
@@ -509,7 +505,7 @@ describe("InventoryView unified wallets", () => {
       tree?.update(React.createElement(InventoryView));
     });
     content = text(tree?.root);
-    expect(content).toContain("Trade Ready");
+    expect(content).toContain("bsctradepanel.TradeReady");
   });
 
   it("renders BSC chain errors and token preflight/quote actions", async () => {
@@ -735,7 +731,7 @@ describe("InventoryView unified wallets", () => {
     });
 
     expect(ctx.setActionNotice).toHaveBeenCalledWith(
-      "Token added to watchlist.",
+      "bsctradepanel.TokenAddedToWatchlist",
       "success",
       2600,
     );
@@ -886,7 +882,12 @@ describe("InventoryView unified wallets", () => {
       expect.objectContaining({ side: "sell" }),
     );
     expect(ctx.setActionNotice).toHaveBeenCalledWith(
-      expect.stringContaining("Sign swap transaction"),
+      "bsctradepanel.SellQuoteReady",
+      "success",
+      3200,
+    );
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
+      "bsctradepanel.SignSwapTransactionInWallet",
       "info",
       4600,
     );
@@ -1011,7 +1012,7 @@ describe("InventoryView unified wallets", () => {
     });
 
     const content = text(tree?.root);
-    expect(content).toContain("BSC is using legacy raw RPC config.");
-    expect(content).toContain("Re-save a supported provider in Settings");
+    expect(content).toContain("inventoryview.LegacyRpcConfigTitle");
+    expect(content).toContain("inventoryview.LegacyRpcConfigBody");
   });
 });

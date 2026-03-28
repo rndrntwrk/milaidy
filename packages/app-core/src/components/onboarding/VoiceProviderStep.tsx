@@ -66,7 +66,9 @@ export function VoiceProviderStep() {
           <div className={onboardingInfoPanelClassName}>
             <OnboardingField
               controlId="voice-api-key"
-              label="ElevenLabs API Key"
+              label={t("onboarding.elevenLabsApiKey", {
+                defaultValue: "ElevenLabs API Key",
+              })}
             >
               {({ describedBy, invalid }) => (
                 <Input

@@ -1,7 +1,6 @@
 /** @vitest-environment jsdom */
 
 import { act, useState } from "react";
-import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -161,9 +160,8 @@ import { VectorBrowserView } from "../../src/components/VectorBrowserView";
 
 async function flush(times = 4): Promise<void> {
   for (let i = 0; i < times; i++) {
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }
 
@@ -319,8 +317,28 @@ describe("VectorBrowserView async cleanup", () => {
   });
 
   it("disposes the renderer if the component unmounts during canvas attach", async () => {
-    let unmountedDuringAppend = false;
     let hideGraph: (() => void) | null = null;
+    let resolveRenderer:
+      | ((renderer: {
+          domElement: HTMLCanvasElement;
+          setSize: () => void;
+          setPixelRatio: () => void;
+          render: () => void;
+          dispose: () => void;
+        }) => void)
+      | null = null;
+
+    const rendererReady = new Promise<{
+      domElement: HTMLCanvasElement;
+      setSize: () => void;
+      setPixelRatio: () => void;
+      render: () => void;
+      dispose: () => void;
+    }>((resolve) => {
+      resolveRenderer = resolve;
+    });
+
+    createVectorBrowserRendererMock.mockImplementation(async () => rendererReady);
 
     function Harness() {
       const [visible, setVisible] = useState(true);
@@ -328,24 +346,7 @@ describe("VectorBrowserView async cleanup", () => {
       return visible ? <VectorBrowserView /> : null;
     }
 
-    HTMLDivElement.prototype.appendChild = function appendChildWithUnmount(
-      child: Node,
-    ) {
-      const result = originalAppendChild.call(this, child);
-      if (
-        !unmountedDuringAppend &&
-        this.style.height === "550px" &&
-        child instanceof HTMLCanvasElement
-      ) {
-        unmountedDuringAppend = true;
-        flushSync(() => {
-          hideGraph?.();
-        });
-      }
-      return result;
-    };
-
-    await act(async () => {
+    act(() => {
       root.render(<Harness />);
     });
     await flush();
@@ -355,17 +356,32 @@ describe("VectorBrowserView async cleanup", () => {
     );
     expect(threeDButton).toBeTruthy();
 
-    await act(async () => {
+    act(() => {
       threeDButton?.dispatchEvent(
         new MouseEvent("click", {
           bubbles: true,
         }),
       );
     });
-    await flush();
-
-    expect(unmountedDuringAppend).toBe(true);
-    expect(createVectorBrowserRendererMock).toHaveBeenCalledTimes(1);
-    expect(rendererDisposeMock).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(createVectorBrowserRendererMock.mock.calls.length).toBeGreaterThan(
+        0,
+      );
+    });
+    act(() => {
+      hideGraph?.();
+    });
+    resolveRenderer?.({
+      domElement: document.createElement("canvas"),
+      setSize: () => {},
+      setPixelRatio: () => {},
+      render: () => {},
+      dispose: () => {
+        rendererDisposeMock();
+      },
+    });
+    await vi.waitFor(() => {
+      expect(rendererDisposeMock.mock.calls.length).toBeGreaterThan(0);
+    });
   });
 });

@@ -26,12 +26,17 @@ vi.mock("@miladyai/app-core/state", () => ({
   CUSTOM_ONBOARDING_STEPS: [],
   useApp: () => ({
     uiLanguage: "en",
-    t: (k: string) => {
+    t: (
+      k: string,
+      vars?: {
+        defaultValue?: string;
+      },
+    ) => {
       if (k === "startupfailureview.StartupFailed") return "Startup Failed:";
       if (k === "startupfailureview.ThisOriginDoesNot")
         return "This origin does not host the agent backend.";
       if (k === "startupfailureview.OpenApp") return "Open App";
-      return k;
+      return vars?.defaultValue ?? k;
     },
   }),
 }));

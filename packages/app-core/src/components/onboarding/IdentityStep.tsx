@@ -425,7 +425,9 @@ export function IdentityStep({
           }}
           type="button"
         >
-          Continue
+          {t("common.continue", {
+            defaultValue: "Continue",
+          })}
         </Button>
       </div>
     </div>

@@ -403,6 +403,13 @@ describe("VectorBrowserView Component", () => {
   });
 
   it("shows connection error when database is unavailable", async () => {
+    mockUseApp.mockReturnValue({
+      uiLanguage: "en",
+      t: (k: string, opts?: Record<string, unknown>) =>
+        opts?.defaultValue && typeof opts.defaultValue === "string"
+          ? opts.defaultValue
+          : k,
+    });
     vi.mocked(client.getDatabaseTables).mockRejectedValue(
       new Error("Failed to fetch"),
     );

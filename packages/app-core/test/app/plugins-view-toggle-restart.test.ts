@@ -97,7 +97,7 @@ describe("PluginsView restart-aware toggles", () => {
 
     expect(mockHandlePluginToggle).toHaveBeenCalledTimes(1);
     expect(getToggle().props.disabled).toBe(true);
-    expect(String(getToggle().props.children)).toContain("APPLYING");
+    expect(String(getToggle().props.children)).toContain("pluginsview.Applying");
     expect(
       tree?.root.findAll(
         (node) =>

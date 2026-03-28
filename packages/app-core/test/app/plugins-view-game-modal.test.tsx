@@ -23,6 +23,16 @@ const mockOpenExternalInvoke = vi.fn(async () => undefined);
 let narrowViewport = false;
 let originalMatchMedia: typeof window.matchMedia | undefined;
 
+function translateTest(
+  key: string,
+  vars?: {
+    defaultValue?: string;
+  },
+): string {
+  if (key === "pluginsview.TestConnection") return "Test Connection";
+  return vars?.defaultValue ?? key;
+}
+
 function ensureWindowGlobals() {
   const root = globalThis as typeof globalThis & {
     window?: typeof globalThis & Window;
@@ -221,7 +231,7 @@ function createPlugin(
 
 function baseContext(plugins?: PluginInfo[]) {
   return {
-    t: (k: string) => k,
+    t: translateTest,
     plugins: plugins ?? [
       createPlugin("test-plugin", "Test Plugin", "feature"),
       createPlugin("second-plugin", "Second Plugin", "feature"),
@@ -564,7 +574,7 @@ describe("PluginsView game modal", () => {
         node.type === "button" &&
         typeof node.props.className === "string" &&
         node.props.className.includes("plugins-game-action-btn") &&
-        node.children.some((c) => c === "pluginsview.TestConnection"),
+        node.children.some((c) => c === "Test Connection"),
     )[0];
     await act(async () => {
       await testConnectionBtn.props.onClick();

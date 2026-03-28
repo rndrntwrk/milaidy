@@ -153,7 +153,11 @@ export function DesktopTalkModePanel() {
       });
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Talk mode status unavailable.",
+        err instanceof Error
+          ? err.message
+          : t("voiceconfigview.TalkModeStatusUnavailable", {
+              defaultValue: "Talk mode status unavailable.",
+            }),
       );
     } finally {
       setLoading(false);
@@ -532,12 +536,22 @@ function WakeWordSection({
         </div>
         <div className="flex min-h-10 items-center gap-2 rounded-xl border border-border/50 bg-bg-hover px-3">
           <span className="text-[11px] font-medium text-muted-strong">
-            {enabled ? "Enabled" : "Disabled"}
+            {enabled
+              ? t("voiceconfigview.Enabled", { defaultValue: "Enabled" })
+              : t("voiceconfigview.Disabled", { defaultValue: "Disabled" })}
           </span>
           <Switch
             checked={enabled}
             onCheckedChange={() => void handleToggle()}
-            aria-label={enabled ? "Disable wake word" : "Enable wake word"}
+            aria-label={
+              enabled
+                ? t("voiceconfigview.DisableWakeWord", {
+                    defaultValue: "Disable wake word",
+                  })
+                : t("voiceconfigview.EnableWakeWord", {
+                    defaultValue: "Enable wake word",
+                  })
+            }
           />
         </div>
       </div>
@@ -546,19 +560,22 @@ function WakeWordSection({
           {t("voiceconfigview.Triggers")}
         </span>
         <div className="flex min-h-10 flex-wrap gap-1.5 rounded-xl border border-border/60 bg-bg px-2 py-2">
-          {triggers.map((t) => (
+          {triggers.map((trigger) => (
             <span
-              key={t}
+              key={trigger}
               className="flex min-h-7 items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-[10px] text-txt"
             >
-              {t}
+              {trigger}
               {triggers.length > 1 && (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="ml-1 h-5 w-5 rounded-full p-0 leading-none text-muted-strong hover:bg-bg-hover hover:text-txt"
-                  onClick={() => removeTrigger(t)}
-                  aria-label={`Remove trigger "${t}"`}
+                  onClick={() => removeTrigger(trigger)}
+                  aria-label={t("voiceconfigview.RemoveTrigger", {
+                    defaultValue: 'Remove trigger "{{trigger}}"',
+                    trigger,
+                  })}
                 >
                   ×
                 </Button>
@@ -808,7 +825,13 @@ export function VoiceConfigView() {
       setDirty(false);
       setTimeout(() => setSaveSuccess(false), 2500);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Failed to save");
+      setSaveError(
+        err instanceof Error
+          ? err.message
+          : t("voiceconfigview.FailedToSave", {
+              defaultValue: "Failed to save",
+            }),
+      );
     }
     setSaving(false);
   }, [currentMode, swabbleServerConfig, voiceConfig, setTimeout]);

@@ -12,6 +12,7 @@ import {
   clearPersistedOnboardingStep,
   loadCompanionAnimateWhenHidden,
   loadCompanionHalfFramerateMode,
+  loadCompanionMessageCutoffTs,
   loadCompanionVrmPowerMode,
   loadLastNativeTab,
   loadPersistedOnboardingStep,
@@ -201,6 +202,21 @@ describe("theme persistence", () => {
         (globalThis as Record<string, unknown>).document = previousDocument;
       }
     }
+  });
+});
+
+describe("companion message cutoff persistence", () => {
+  it("defaults to zero when unset", () => {
+    withLocalStorageStub(() => {
+      expect(loadCompanionMessageCutoffTs()).toBe(0);
+    });
+  });
+
+  it("defaults to zero when the stored value is invalid", () => {
+    withLocalStorageStub(() => {
+      localStorage.setItem("eliza:chat:companionMessageCutoffTs", "bogus");
+      expect(loadCompanionMessageCutoffTs()).toBe(0);
+    });
   });
 });
 

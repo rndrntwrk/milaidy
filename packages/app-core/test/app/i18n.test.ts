@@ -7,7 +7,94 @@ import {
   t,
   UI_LANGUAGES,
 } from "@miladyai/app-core/i18n";
+import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
+
+function collectSourceFiles(dir: string, files: string[] = []): string[] {
+  const items = fs.readdirSync(dir, { withFileTypes: true });
+  for (const item of items) {
+    const itemPath = path.join(dir, item.name);
+    if (item.isDirectory()) {
+      if (
+        item.name === "node_modules" ||
+        item.name === "dist" ||
+        item.name === "test" ||
+        item.name === "test-results" ||
+        item.name.startsWith(".")
+      ) {
+        continue;
+      }
+      collectSourceFiles(itemPath, files);
+      continue;
+    }
+
+    if (!item.isFile()) {
+      continue;
+    }
+
+    if (!/\.(ts|tsx)$/.test(item.name)) {
+      continue;
+    }
+
+    if (item.name.endsWith(".test.ts") || item.name.endsWith(".test.tsx")) {
+      continue;
+    }
+
+    files.push(itemPath);
+  }
+
+  return files;
+}
+
+function stringLiteralText(node: ts.Expression | undefined): string | null {
+  if (!node) return null;
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+    return node.text;
+  }
+  return null;
+}
+
+function collectStaticTranslationKeys(sourceDir: string): Set<string> {
+  const keys = new Set<string>();
+  for (const file of collectSourceFiles(sourceDir)) {
+    const source = fs.readFileSync(file, "utf8");
+    const sourceFile = ts.createSourceFile(
+      file,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    );
+
+    const visit = (node: ts.Node) => {
+      if (ts.isCallExpression(node)) {
+        if (ts.isIdentifier(node.expression) && node.expression.text === "t") {
+          const key = stringLiteralText(node.arguments[0]);
+          if (key) keys.add(key);
+        }
+
+        if (ts.isIdentifier(node.expression) && node.expression.text === "tr") {
+          const maybeTranslator = node.arguments[0];
+          const key = stringLiteralText(node.arguments[1]);
+          if (
+            key &&
+            maybeTranslator &&
+            ts.isIdentifier(maybeTranslator) &&
+            maybeTranslator.text === "t"
+          ) {
+            keys.add(key);
+          }
+        }
+      }
+
+      ts.forEachChild(node, visit);
+    };
+
+    visit(sourceFile);
+  }
+
+  return keys;
+}
 
 describe("i18n helpers", () => {
   it("normalizes supported language tags", () => {
@@ -121,11 +208,32 @@ describe("i18n helpers", () => {
     }
   });
 
+  it("keeps every statically referenced translation key available in all locales", () => {
+    const sourceCandidates = [
+      path.resolve(process.cwd(), "packages", "app-core", "src"),
+      path.resolve(process.cwd(), "..", "..", "packages", "app-core", "src"),
+      path.resolve(__dirname, "..", "..", "src"),
+    ];
+    const sourceDir =
+      sourceCandidates.find((candidate) => fs.existsSync(candidate)) ??
+      path.resolve(__dirname, "..", "..", "src");
+    const keys = collectStaticTranslationKeys(sourceDir);
+    const localeEntries = Object.entries(MESSAGES) as Array<
+      [string, Record<string, string>]
+    >;
+
+    for (const key of keys) {
+      for (const [lang, messages] of localeEntries) {
+        expect(messages[key], `${lang} is missing ${key}`).toBeTypeOf("string");
+      }
+    }
+  });
+
   it("keeps production UI source files free of hardcoded Chinese text", () => {
     const candidates = [
       path.resolve(process.cwd(), "src"),
       path.resolve(process.cwd(), "apps", "app", "src"),
-      path.resolve(__dirname, "..", "src"),
+      path.resolve(__dirname, "..", "..", "src"),
     ];
     const sourceDir =
       candidates.find((candidate) => fs.existsSync(candidate)) ??

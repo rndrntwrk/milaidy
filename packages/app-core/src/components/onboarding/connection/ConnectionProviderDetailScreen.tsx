@@ -59,32 +59,89 @@ function formatRequestError(err: unknown): string {
 
 const providerOverrides: Record<
   string,
-  { name: string; description?: string }
+  {
+    nameDefault: string;
+    descriptionDefault?: string;
+    nameKey?: string;
+    descriptionKey?: string;
+  }
 > = {
   elizacloud: {
-    name: "Eliza Cloud",
-    description: "LLMs, RPCs & more included",
+    nameDefault: "Eliza Cloud",
+    descriptionDefault: "LLMs, RPCs & more included",
+    nameKey: "onboarding.providerElizaCloud",
+    descriptionKey: "onboarding.providerElizaCloudDetailDescription",
   },
   "anthropic-subscription": {
-    name: "Claude Sub",
-    description: "Pro/Max subscription",
+    nameDefault: "Claude Sub",
+    descriptionDefault: "Pro/Max subscription",
+    nameKey: "onboarding.providerClaudeSubscription",
+    descriptionKey: "onboarding.providerClaudeSubscriptionDetailDescription",
   },
   "openai-subscription": {
-    name: "ChatGPT Sub",
-    description: "Plus/Pro subscription",
+    nameDefault: "ChatGPT Sub",
+    descriptionDefault: "Plus/Pro subscription",
+    nameKey: "onboarding.providerChatGPTSubscription",
+    descriptionKey:
+      "onboarding.providerChatGPTSubscriptionDetailDescription",
   },
-  anthropic: { name: "Anthropic", description: "Claude API key" },
-  openai: { name: "OpenAI", description: "GPT API key" },
-  openrouter: { name: "OpenRouter", description: "Many models" },
-  gemini: { name: "Gemini", description: "Google AI" },
-  grok: { name: "xAI (Grok)" },
-  groq: { name: "Groq", description: "Fast inference" },
-  deepseek: { name: "DeepSeek", description: "DeepSeek models" },
-  mistral: { name: "Mistral", description: "Mistral models" },
-  together: { name: "Together AI", description: "OSS models" },
-  ollama: { name: "Ollama", description: "Local models" },
-  zai: { name: "z.ai", description: "GLM models" },
-  "pi-ai": { name: "Pi Credentials", description: "Local auth" },
+  anthropic: {
+    nameDefault: "Anthropic",
+    descriptionDefault: "Claude API key",
+    descriptionKey: "onboarding.providerAnthropicApiKeyDescription",
+  },
+  openai: {
+    nameDefault: "OpenAI",
+    descriptionDefault: "GPT API key",
+    descriptionKey: "onboarding.providerOpenAIApiKeyDescription",
+  },
+  openrouter: {
+    nameDefault: "OpenRouter",
+    descriptionDefault: "Many models",
+    descriptionKey: "onboarding.providerOpenRouterDescription",
+  },
+  gemini: {
+    nameDefault: "Gemini",
+    descriptionDefault: "Google AI",
+    descriptionKey: "onboarding.providerGeminiDescription",
+  },
+  grok: { nameDefault: "xAI (Grok)" },
+  groq: {
+    nameDefault: "Groq",
+    descriptionDefault: "Fast inference",
+    descriptionKey: "onboarding.providerGroqDescription",
+  },
+  deepseek: {
+    nameDefault: "DeepSeek",
+    descriptionDefault: "DeepSeek models",
+    descriptionKey: "onboarding.providerDeepSeekDescription",
+  },
+  mistral: {
+    nameDefault: "Mistral",
+    descriptionDefault: "Mistral models",
+    descriptionKey: "onboarding.providerMistralDescription",
+  },
+  together: {
+    nameDefault: "Together AI",
+    descriptionDefault: "OSS models",
+    descriptionKey: "onboarding.providerTogetherDescription",
+  },
+  ollama: {
+    nameDefault: "Ollama",
+    descriptionDefault: "Local models",
+    descriptionKey: "onboarding.providerOllamaDescription",
+  },
+  zai: {
+    nameDefault: "z.ai",
+    descriptionDefault: "GLM models",
+    descriptionKey: "onboarding.providerZaiDescription",
+  },
+  "pi-ai": {
+    nameDefault: "Pi Credentials",
+    descriptionDefault: "Local auth",
+    nameKey: "onboarding.providerPiCredentials",
+    descriptionKey: "onboarding.providerPiCredentialsDescription",
+  },
 };
 
 function ConnectedIcon({ title }: { title: string }) {
@@ -172,8 +229,16 @@ export function ConnectionProviderDetailScreen({
   const getProviderDisplay = (provider: ProviderOption) => {
     const override = providerOverrides[provider.id];
     return {
-      name: override?.name ?? provider.name,
-      description: override?.description ?? provider.description,
+      name:
+        override?.nameKey && override?.nameDefault
+          ? t(override.nameKey, { defaultValue: override.nameDefault })
+          : override?.nameDefault ?? provider.name,
+      description:
+        override?.descriptionKey && override?.descriptionDefault
+          ? t(override.descriptionKey, {
+              defaultValue: override.descriptionDefault,
+            })
+          : override?.descriptionDefault ?? provider.description,
     };
   };
 
@@ -231,9 +296,18 @@ export function ConnectionProviderDetailScreen({
         setAnthropicOAuthStarted(true);
         return;
       }
-      setAnthropicError("Failed to get auth URL");
+      setAnthropicError(
+        t("onboarding.failedToGetAuthUrl", {
+          defaultValue: "Failed to get auth URL",
+        }),
+      );
     } catch (err) {
-      setAnthropicError(`Failed to start login: ${formatRequestError(err)}`);
+      setAnthropicError(
+        t("onboarding.failedToStartLogin", {
+          message: formatRequestError(err),
+          defaultValue: "Failed to start login: {{message}}",
+        }),
+      );
     }
   };
 
@@ -245,9 +319,19 @@ export function ConnectionProviderDetailScreen({
         setAnthropicConnected(true);
         return;
       }
-      setAnthropicError(result.error ?? "Exchange failed");
+      setAnthropicError(
+        result.error ??
+          t("onboarding.exchangeFailed", {
+            defaultValue: "Exchange failed",
+          }),
+      );
     } catch (err) {
-      setAnthropicError(`Exchange failed: ${formatRequestError(err)}`);
+      setAnthropicError(
+        t("onboarding.exchangeFailedWithMessage", {
+          message: formatRequestError(err),
+          defaultValue: "Exchange failed: {{message}}",
+        }),
+      );
     }
   };
 
@@ -259,9 +343,18 @@ export function ConnectionProviderDetailScreen({
         setOpenaiOAuthStarted(true);
         return;
       }
-      setOpenaiError("No auth URL returned from login");
+      setOpenaiError(
+        t("onboarding.noAuthUrlReturned", {
+          defaultValue: "No auth URL returned from login",
+        }),
+      );
     } catch (err) {
-      setOpenaiError(`Failed to start login: ${formatRequestError(err)}`);
+      setOpenaiError(
+        t("onboarding.failedToStartLogin", {
+          message: formatRequestError(err),
+          defaultValue: "Failed to start login: {{message}}",
+        }),
+      );
     }
   };
 
@@ -276,7 +369,11 @@ export function ConnectionProviderDetailScreen({
         setState("onboardingProvider", "openai-subscription");
         return;
       }
-      const msg = data.error ?? "Exchange failed";
+      const msg =
+        data.error ??
+        t("onboarding.exchangeFailed", {
+          defaultValue: "Exchange failed",
+        });
       setOpenaiError(
         msg.includes("No active flow")
           ? t("onboarding.loginSessionExpired")

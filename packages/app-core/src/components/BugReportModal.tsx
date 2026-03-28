@@ -70,6 +70,16 @@ const modalTextareaClassName =
 
 const subtleMonoDescriptionClassName = "font-mono text-[11px] text-muted";
 
+function environmentOptionLabel(
+  t: ReturnType<typeof useApp>["t"],
+  option: (typeof ENV_OPTIONS)[number],
+): string {
+  if (option === "Other") {
+    return t("bugreportmodal.Other", { defaultValue: "Other" });
+  }
+  return option;
+}
+
 function normalizeHttpsResultUrl(url?: string): string | null {
   if (!url) return null;
   try {
@@ -411,7 +421,9 @@ export function BugReportModal() {
               </a>
             ) : (
               <p className="text-xs text-muted">
-                Diagnostics were shared successfully.
+                {t("bugreportmodal.DiagnosticsSharedSuccessfully", {
+                  defaultValue: "Diagnostics were shared successfully.",
+                })}
               </p>
             )}
           </div>
@@ -444,8 +456,10 @@ export function BugReportModal() {
             {t("bugreportmodal.ReportABug")}
           </DialogTitle>
           <DialogDescription className="text-sm leading-relaxed text-muted">
-            Help us reproduce the issue with concrete steps and environment
-            details.
+            {t("bugreportmodal.ReproductionPrompt", {
+              defaultValue:
+                "Help us reproduce the issue with concrete steps and environment details.",
+            })}
           </DialogDescription>
         </DialogHeader>
 
@@ -481,7 +495,10 @@ export function BugReportModal() {
                 rows={4}
               />
               <FieldDescription className={subtleMonoDescriptionClassName}>
-                Describe what happened and why it was unexpected.
+                {t("bugreportmodal.DescriptionHint", {
+                  defaultValue:
+                    "Describe what happened and why it was unexpected.",
+                })}
               </FieldDescription>
             </Field>
 
@@ -503,7 +520,10 @@ export function BugReportModal() {
                 rows={4}
               />
               <FieldDescription className={subtleMonoDescriptionClassName}>
-                Include the shortest reliable path that reproduces the bug.
+                {t("bugreportmodal.StepsHint", {
+                  defaultValue:
+                    "Include the shortest reliable path that reproduces the bug.",
+                })}
               </FieldDescription>
             </Field>
 
@@ -558,7 +578,7 @@ export function BugReportModal() {
                     </SelectItem>
                     {ENV_OPTIONS.map((opt) => (
                       <SelectItem key={opt} value={opt}>
-                        {opt}
+                        {environmentOptionLabel(t, opt)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -599,7 +619,10 @@ export function BugReportModal() {
                     {t("bugreportmodal.Logs")}
                   </FieldLabel>
                   <FieldDescription className={subtleMonoDescriptionClassName}>
-                    Paste only the relevant errors, traces, or console output.
+                    {t("bugreportmodal.LogsHint", {
+                      defaultValue:
+                        "Paste only the relevant errors, traces, or console output.",
+                    })}
                   </FieldDescription>
                 </div>
                 <Button
@@ -613,7 +636,13 @@ export function BugReportModal() {
                   <ChevronRight
                     className={`h-3.5 w-3.5 transition-transform ${showLogs ? "rotate-90" : ""}`}
                   />
-                  {showLogs ? "Hide logs" : "Add logs"}
+                  {showLogs
+                    ? t("bugreportmodal.HideLogs", {
+                        defaultValue: "Hide logs",
+                      })
+                    : t("bugreportmodal.AddLogs", {
+                        defaultValue: "Add logs",
+                      })}
                 </Button>
               </div>
               {showLogs && (
@@ -719,7 +748,9 @@ export function BugReportModal() {
               aria-atomic="true"
               className="px-5 pb-4 pt-0"
             >
-              Report copied to clipboard.
+              {t("bugreportmodal.ReportCopiedToClipboard", {
+                defaultValue: "Report copied to clipboard.",
+              })}
             </FieldMessage>
           ) : null}
         </div>

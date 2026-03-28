@@ -192,30 +192,45 @@ function buildVoiceConfigForCharacterEntry(args: {
 }
 const CHARACTER_EDITOR_PAGES = ["identity", "style", "examples"] as const;
 const STYLE_SECTION_KEYS = ["all"] as const;
-const STYLE_SECTION_PLACEHOLDERS: Record<string, string> = {
-  all: "Add a style rule",
+const STYLE_SECTION_PLACEHOLDERS: Record<
+  string,
+  { key: string; defaultValue: string }
+> = {
+  all: {
+    key: "charactereditor.StylePlaceholderAll",
+    defaultValue: "Add a style rule",
+  },
 };
-const STYLE_SECTION_EMPTY_STATES: Record<string, string> = {
-  all: "No style rules yet.",
+const STYLE_SECTION_EMPTY_STATES: Record<
+  string,
+  { key: string; defaultValue: string }
+> = {
+  all: {
+    key: "charactereditor.StyleEmptyStateAll",
+    defaultValue: "No style rules yet.",
+  },
 };
 
 const ELEVENLABS_VOICE_GROUPS = [
   {
-    label: "Female",
+    labelKey: "charactereditor.VoiceGroupFemale",
+    defaultLabel: "Female",
     items: PREMADE_VOICES.filter((p) => p.gender === "female").map((p) => ({
       id: p.id,
       text: p.name,
     })),
   },
   {
-    label: "Male",
+    labelKey: "charactereditor.VoiceGroupMale",
+    defaultLabel: "Male",
     items: PREMADE_VOICES.filter((p) => p.gender === "male").map((p) => ({
       id: p.id,
       text: p.name,
     })),
   },
   {
-    label: "Character",
+    labelKey: "charactereditor.VoiceGroupCharacter",
+    defaultLabel: "Character",
     items: PREMADE_VOICES.filter((p) => p.gender === "character").map((p) => ({
       id: p.id,
       text: p.name,
@@ -225,7 +240,8 @@ const ELEVENLABS_VOICE_GROUPS = [
 
 const EDGE_VOICE_GROUPS = [
   {
-    label: "Backup Voices",
+    labelKey: "charactereditor.BackupVoices",
+    defaultLabel: "Backup Voices",
     items: EDGE_BACKUP_VOICES.map((p) => ({
       id: p.id,
       text: p.name,
@@ -328,6 +344,14 @@ export function CharacterEditor({
 
   /** ElevenLabs voices are available when cloud is connected/enabled (provides API key). */
   const useElevenLabs = elizaCloudConnected || elizaCloudEnabled;
+  const elevenLabsVoiceGroups = ELEVENLABS_VOICE_GROUPS.map((group) => ({
+    label: t(group.labelKey, { defaultValue: group.defaultLabel }),
+    items: group.items,
+  }));
+  const edgeVoiceGroups = EDGE_VOICE_GROUPS.map((group) => ({
+    label: t(group.labelKey, { defaultValue: group.defaultLabel }),
+    items: group.items,
+  }));
 
   useEffect(() => {
     void loadCharacter();
@@ -1330,12 +1354,12 @@ export function CharacterEditor({
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <ThemedSelect
+                          <ThemedSelect
                           value={voiceSelectValue}
                           groups={
                             useElevenLabs
-                              ? ELEVENLABS_VOICE_GROUPS
-                              : EDGE_VOICE_GROUPS
+                              ? elevenLabsVoiceGroups
+                              : edgeVoiceGroups
                           }
                           onChange={(id: string) => {
                             const allVoices = useElevenLabs
@@ -1580,7 +1604,11 @@ export function CharacterEditor({
                               ))
                             ) : (
                               <div className="rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted">
-                                {STYLE_SECTION_EMPTY_STATES[key]}
+                                {t(STYLE_SECTION_EMPTY_STATES[key].key, {
+                                  defaultValue:
+                                    STYLE_SECTION_EMPTY_STATES[key]
+                                      .defaultValue,
+                                })}
                               </div>
                             )}
                           </div>
@@ -1588,7 +1616,14 @@ export function CharacterEditor({
                             <Input
                               type="text"
                               value={pendingStyleEntries[key]}
-                              placeholder={STYLE_SECTION_PLACEHOLDERS[key]}
+                              placeholder={t(
+                                STYLE_SECTION_PLACEHOLDERS[key].key,
+                                {
+                                  defaultValue:
+                                    STYLE_SECTION_PLACEHOLDERS[key]
+                                      .defaultValue,
+                                },
+                              )}
                               onChange={(
                                 e: ChangeEvent<
                                   HTMLInputElement | HTMLTextAreaElement
@@ -1618,7 +1653,9 @@ export function CharacterEditor({
                               onClick={() => handleAddStyleEntry(key)}
                               disabled={!pendingStyleEntries[key].trim()}
                             >
-                              + add
+                              {t("charactereditor.AddInline", {
+                                defaultValue: "+ add",
+                              })}
                             </Button>
                           </div>
                         </div>

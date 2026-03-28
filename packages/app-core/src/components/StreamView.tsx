@@ -147,12 +147,24 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
               }`}
             />
             <h2 className="text-lg font-semibold text-txt">
-              {streamLive ? "Stream is Live" : "Stream Ready"}
+              {streamLive
+                ? t("streamview.StreamIsLive", {
+                    defaultValue: "Stream is Live",
+                  })
+                : t("streamview.StreamReady", {
+                    defaultValue: "Stream Ready",
+                  })}
             </h2>
             <p className="mt-2 text-sm text-muted">
               {streamLive
-                ? `Uptime: ${formatUptime(uptime)} · ${frameCount.toLocaleString()} frames`
-                : "Press Go Live to start streaming."}
+                ? t("streamview.StreamLiveStatus", {
+                    uptime: formatUptime(uptime),
+                    frameCount: frameCount.toLocaleString(),
+                    defaultValue: "Uptime: {{uptime}} · {{frameCount}} frames",
+                  })
+                : t("streamview.GoLiveHint", {
+                    defaultValue: "Press Go Live to start streaming.",
+                  })}
             </p>
           </div>
         )}

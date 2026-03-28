@@ -217,10 +217,7 @@ const steps: StepSpec[] = [
     label: "Connection — Provider Selection",
     setup: async (page) => {
       // Select local hosting to advance into the provider list.
-      await page
-        .getByRole("button", { name: /Local/i })
-        .first()
-        .click();
+      await page.getByRole("button", { name: /Local/i }).first().click();
       await page.waitForTimeout(600);
     },
     expectedContent: [/Choose your AI provider/i, /Ollama/i],

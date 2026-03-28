@@ -8,7 +8,7 @@ import { text, findButtonByText, flush } from "../../../../test/helpers/react-te
 import * as electrobunRpc from "@miladyai/app-core/bridge/electrobun-rpc";
 
 interface GameContextStub {
-  t: (key: string) => string;
+  t: (key: string, opts?: Record<string, unknown>) => string;
   activeGameApp: string;
   activeGameDisplayName: string;
   activeGameViewerUrl: string;
@@ -53,7 +53,16 @@ import { GameView } from "../../src/components/GameView";
 
 function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
   return {
-    t: (k: string) => k,
+    t: (k: string, opts?: Record<string, unknown>) => {
+      if (opts?.defaultValue && typeof opts.defaultValue === "string") {
+        let str = opts.defaultValue;
+        for (const [key, val] of Object.entries(opts)) {
+          if (key !== "defaultValue") str = str.replace(`{{${key}}}`, String(val));
+        }
+        return str;
+      }
+      return k;
+    },
     activeGameApp: "@elizaos/app-2004scape",
     activeGameDisplayName: "2004scape",
     activeGameViewerUrl: "http://localhost:5175/viewer",

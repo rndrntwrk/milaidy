@@ -9,10 +9,15 @@
 
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
+import { testT } from "../../../../test/helpers/i18n";
 
 vi.mock("@miladyai/app-core/state", () => ({
   getVrmPreviewUrl: (index: number) => `/avatars/preview-${index}.png`,
   CUSTOM_ONBOARDING_STEPS: [],
+  useApp: () => ({
+    uiLanguage: "en",
+    t: testT,
+  }),
 }));
 
 // Stub out the onboarding-presets to avoid pulling in the full preset data
