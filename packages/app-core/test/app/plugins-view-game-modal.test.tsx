@@ -585,10 +585,10 @@ describe("PluginsView game modal", () => {
     expect(mockHandlePluginConfigSave).toHaveBeenCalledWith("test-plugin", {});
   });
 
-  it("shows retake only in streaming mode", async () => {
+  it("shows streaming plugin only in streaming mode", async () => {
     mockUseApp.mockReturnValue(
       baseContext([
-        createPlugin("retake", "Retake.tv", "streaming"),
+        createPlugin("twitch", "Twitch", "streaming"),
         createPlugin("discord", "Discord", "connector"),
       ]),
     );
@@ -600,7 +600,7 @@ describe("PluginsView game modal", () => {
       );
     });
 
-    expect(text(tree?.root)).toContain("Retake.tv");
+    expect(text(tree?.root)).toContain("Twitch");
     expect(text(tree?.root)).not.toContain("Discord");
   });
 
@@ -620,9 +620,6 @@ describe("PluginsView game modal", () => {
         enabled: false,
         tags: [],
       }),
-      createPlugin("retake", "Retake.tv", "streaming", {
-        tags: ["streaming", "broadcast"],
-      }),
     ]);
     mockUseApp.mockImplementation(() => state);
 
@@ -637,7 +634,6 @@ describe("PluginsView game modal", () => {
     expect(text(tree?.root)).toContain("Signal");
     expect(text(tree?.root)).toContain("GitHub");
     expect(text(tree?.root)).toContain("Iq");
-    expect(text(tree?.root)).not.toContain("Retake.tv");
     const sidebar = tree?.root.findAll(
       (node) => node.props?.["data-testid"] === "connectors-settings-sidebar",
     )[0];
@@ -666,7 +662,7 @@ describe("PluginsView game modal", () => {
         createPlugin("discord", "Discord", "connector", {
           tags: ["connector", "messaging"],
         }),
-        createPlugin("retake", "Retake.tv", "streaming", {
+        createPlugin("twitch", "Twitch", "streaming", {
           tags: ["streaming", "broadcast"],
         }),
       ]),
@@ -706,10 +702,10 @@ describe("PluginsView game modal", () => {
 
     mockUseApp.mockReturnValue(
       baseContext([
-        createPlugin("retake", "Retake.tv", "streaming", {
-          setupGuideUrl: "https://docs.milady.ai/plugin-setup-guide#retaketv",
+        createPlugin("twitch", "Twitch", "streaming", {
+          setupGuideUrl: "https://docs.milady.ai/plugin-setup-guide#twitch",
           repository:
-            "https://github.com/milady-ai/milady/tree/main/packages/plugin-retake",
+            "https://github.com/milady-ai/milady/tree/main/packages/plugin-twitch",
         }),
       ]),
     );
@@ -750,7 +746,7 @@ describe("PluginsView game modal", () => {
       await Promise.resolve();
     });
     expect(mockOpenExternalInvoke).toHaveBeenCalledWith({
-      url: "https://docs.milady.ai/plugin-setup-guide#retaketv",
+      url: "https://docs.milady.ai/plugin-setup-guide#twitch",
     });
 
     delete (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__;
@@ -764,7 +760,7 @@ describe("PluginsView game modal", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(openSpy).toHaveBeenCalledWith(
-      "https://github.com/milady-ai/milady/tree/main/packages/plugin-retake",
+      "https://github.com/milady-ai/milady/tree/main/packages/plugin-twitch",
       "_blank",
       "noopener,noreferrer",
     );
