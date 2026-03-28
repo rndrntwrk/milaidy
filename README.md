@@ -416,12 +416,22 @@ Logs go to `stdout/stderr`. Daemonize with your favorite process manager.
 
 ## Ports
 
+**Production** (`milady start`):
+
+| Service | Default | Env Override |
+|---------|---------|--------------|
+| Dashboard + API | `2138` | `MILADY_PORT` |
+| Gateway (WebSocket + HTTP) | `18789` | `MILADY_GATEWAY_PORT` |
+| Home Dashboard | `2142` | `MILADY_HOME_PORT` |
+| WeChat Webhook | `18790` | `MILADY_WECHAT_WEBHOOK_PORT` |
+
+**Development** (`bun run dev`):
+
 | Service | Default | Env Override |
 |---------|---------|--------------|
 | API + WebSocket | `31337` | `MILADY_API_PORT` |
-| Gateway (API + WebSocket) | `18789` | `MILADY_GATEWAY_PORT` |
-| Dashboard (Web UI) | `2138` | `MILADY_PORT` |
-| Home Dashboard | `2142` | `MILADY_HOME_PORT` |
+| Dashboard UI (Vite) | `2138` | `MILADY_PORT` |
+| Gateway | `19001` | `MILADY_GATEWAY_PORT` (set by `--profile dev`) |
 
 **If a default port is already in use:** `bun run dev` / `dev-server.ts` can bind to a different port and then **sync `MILADY_API_PORT` / `ELIZA_PORT`** to match. **`dev:desktop` / `dev:desktop:watch`** resolve **free** loopback ports **before** spawning Vite + API + Electrobun so proxy, `MILADY_RENDERER_URL`, and `MILADY_DESKTOP_API_BASE` stay aligned—**why:** Vite reads `vite.config.ts` once; guessing the API port only inside the API process would desync the UI proxy. The **packaged Electrobun** shell picks the next free port from `MILADY_PORT` for the embedded child instead of `lsof`+SIGKILL by default—**why:** two Milady installs (separate state dirs) should coexist. Opt-in old reclaim: **`MILADY_AGENT_RECLAIM_STALE_PORT=1`**. See [Desktop local development](docs/apps/desktop-local-development.md#when-default-ports-are-busy) and [Desktop — Port configuration](docs/apps/desktop.md#port-configuration).
 
