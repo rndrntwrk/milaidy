@@ -129,15 +129,16 @@ export async function getStewardBridgeStatus(
   }
 
   try {
-    let agentData: {
+    type AgentDataShape = {
       walletAddress?: string;
       walletAddresses?: { evm?: string; solana?: string };
       name?: string;
-    } | null = null;
+    };
+    let agentData: AgentDataShape | null = null;
 
     if (agentId) {
       try {
-        agentData = (await client.getAgent(agentId)) as unknown as typeof agentData;
+        agentData = (await client.getAgent(agentId)) as unknown as AgentDataShape;
       } catch (error: unknown) {
         if (
           !(error instanceof StewardApiError) ||

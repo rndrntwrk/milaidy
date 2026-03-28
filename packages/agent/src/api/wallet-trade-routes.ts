@@ -1,13 +1,13 @@
-import { ethers } from "ethers";
+import type { ethers } from "ethers";
 import type { ElizaConfig } from "../config/config";
 import type {
   BscTradeQuoteResponse,
   BscUnsignedApprovalTx,
   BscUnsignedTradeTx,
 } from "../contracts/wallet";
-import type { WalletTradeLedgerRecordInput } from "./wallet-trading-profile";
 import type { RouteRequestContext } from "./route-helpers";
 import type { TradePermissionMode } from "./trade-safety";
+import type { WalletTradeLedgerRecordInput } from "./wallet-trading-profile";
 
 type WalletAddresses = {
   evmAddress: string | null;
@@ -21,12 +21,12 @@ type WalletRpcReadiness = {
 
 type WalletForExecution = {
   address: string;
-  sendTransaction: (
-    tx: ethers.TransactionRequest,
-  ) => Promise<{
+  sendTransaction: (tx: ethers.TransactionRequest) => Promise<{
     hash: string;
     gasLimit?: bigint;
-    wait: (confirmations?: number) => Promise<{ status?: number | null } | null>;
+    wait: (
+      confirmations?: number,
+    ) => Promise<{ status?: number | null } | null>;
   }>;
 };
 
@@ -57,9 +57,7 @@ export interface WalletTradeExecuteDeps {
   getWalletAddresses: () => WalletAddresses;
   resolveWalletRpcReadiness: (config: ElizaConfig) => WalletRpcReadiness;
   resolveTradePermissionMode: (config: ElizaConfig) => TradePermissionMode;
-  isAgentAutomationRequest: (
-    req: RouteRequestContext["req"],
-  ) => boolean;
+  isAgentAutomationRequest: (req: RouteRequestContext["req"]) => boolean;
   canUseLocalTradeExecution: (
     mode: TradePermissionMode,
     isAgentRequest: boolean,
@@ -100,7 +98,10 @@ export interface WalletTradeExecuteDeps {
   assertQuoteFresh: (quotedAt?: number) => void;
   recordWalletTradeLedgerEntry: (input: WalletTradeLedgerRecordInput) => void;
   createProvider: (rpcUrl: string) => ProviderForExecution;
-  createWallet: (privateKey: string, provider: ProviderForExecution) => WalletForExecution;
+  createWallet: (
+    privateKey: string,
+    provider: ProviderForExecution,
+  ) => WalletForExecution;
   logger: {
     warn: (message: string) => void;
     error: (message: string) => void;
@@ -192,7 +193,11 @@ export async function handleWalletTradeExecuteRoute(
     const unsignedTx =
       quote.side === "buy"
         ? deps.buildBscBuyUnsignedTx(quote, walletAddress, body.deadlineSeconds)
-        : deps.buildBscSellUnsignedTx(quote, walletAddress, body.deadlineSeconds);
+        : deps.buildBscSellUnsignedTx(
+            quote,
+            walletAddress,
+            body.deadlineSeconds,
+          );
 
     let unsignedApprovalTx: BscUnsignedApprovalTx | undefined;
     let requiresApproval = false;

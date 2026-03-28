@@ -757,23 +757,25 @@ export function InventoryView() {
                           </span>
                         )}
                       </span>
-                      {stewardStatus.vaultHealth && stewardStatus.vaultHealth !== "ok" && (
-                        <span
-                          className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase ${
-                            stewardStatus.vaultHealth === "error"
-                              ? "bg-danger/20 text-danger"
-                              : "bg-warning/20 text-warning"
-                          }`}
-                        >
-                          {stewardStatus.vaultHealth}
-                        </span>
-                      )}
+                      {stewardStatus.vaultHealth &&
+                        stewardStatus.vaultHealth !== "ok" && (
+                          <span
+                            className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase ${
+                              stewardStatus.vaultHealth === "error"
+                                ? "bg-danger/20 text-danger"
+                                : "bg-warning/20 text-warning"
+                            }`}
+                          >
+                            {stewardStatus.vaultHealth}
+                          </span>
+                        )}
                     </div>
                     {/* Show wallet addresses — local vs steward vault */}
                     <div className="flex flex-col gap-0.5 pl-5 font-mono text-muted">
                       {evmAddr && (
                         <span>
-                          Local wallet: {evmAddr.slice(0, 6)}…{evmAddr.slice(-4)}
+                          Local wallet: {evmAddr.slice(0, 6)}…
+                          {evmAddr.slice(-4)}
                         </span>
                       )}
                       {stewardStatus.walletAddresses?.evm &&
@@ -851,6 +853,7 @@ export function InventoryView() {
                     getBscTradeQuote={getBscTradeQuote}
                     executeBscTrade={executeBscTrade}
                     getBscTradeTxStatus={getBscTradeTxStatus}
+                    stewardConnected={stewardConnected}
                   />
                 )}
               </div>

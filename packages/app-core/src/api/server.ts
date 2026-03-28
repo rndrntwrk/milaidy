@@ -141,9 +141,9 @@ import {
   isStewardConfigured,
   pushWebhookEvent,
   resolveStewardAgentId,
+  type StewardWebhookEventType,
   signTransactionWithOptionalSteward,
   signViaSteward,
-  type StewardWebhookEventType,
 } from "./steward-bridge";
 
 const require = createRequire(import.meta.url);
@@ -2853,7 +2853,10 @@ async function handleMiladyCompatRoute(
       const status = url.searchParams.get("status") || undefined;
       const limit = parseInt(url.searchParams.get("limit") || "50", 10);
       const offset = parseInt(url.searchParams.get("offset") || "0", 10);
-      const history = await getStewardHistory(agentId, { limit: 200, offset: 0 });
+      const history = await getStewardHistory(agentId, {
+        limit: 200,
+        offset: 0,
+      });
       const filtered = status
         ? history.filter((h: { status: string }) => h.status === status)
         : history;
@@ -2991,13 +2994,21 @@ async function handleMiladyCompatRoute(
 
   /* ── Steward Webhook Events (poll) ────────────────────────────────── */
 
-  if (method === "GET" && url.pathname === "/api/wallet/steward-webhook-events") {
+  if (
+    method === "GET" &&
+    url.pathname === "/api/wallet/steward-webhook-events"
+  ) {
     if (!ensureCompatApiAuthorized(req, res)) {
       return true;
     }
 
-    const eventType = url.searchParams.get("event") as StewardWebhookEventType | null;
-    const sinceIndex = Number.parseInt(url.searchParams.get("since") || "0", 10);
+    const eventType = url.searchParams.get(
+      "event",
+    ) as StewardWebhookEventType | null;
+    const sinceIndex = Number.parseInt(
+      url.searchParams.get("since") || "0",
+      10,
+    );
 
     const result = getRecentWebhookEvents(
       eventType || undefined,
@@ -3074,7 +3085,9 @@ async function handleMiladyCompatRoute(
       sendJsonResponse(res, 200, stewardAddresses);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Failed to fetch steward addresses";
+        err instanceof Error
+          ? err.message
+          : "Failed to fetch steward addresses";
       sendJsonResponse(res, 500, { error: message });
     }
     return true;
@@ -3097,10 +3110,7 @@ async function handleMiladyCompatRoute(
     const parsedChainId = chainId ? Number.parseInt(chainId, 10) : undefined;
 
     try {
-      const balance = await getStewardBalance(
-        agentId,
-        parsedChainId,
-      );
+      const balance = await getStewardBalance(agentId, parsedChainId);
       sendJsonResponse(res, 200, balance);
     } catch (err) {
       const message =
@@ -3127,10 +3137,7 @@ async function handleMiladyCompatRoute(
     const parsedChainId = chainId ? Number.parseInt(chainId, 10) : undefined;
 
     try {
-      const tokens = await getStewardTokenBalances(
-        agentId,
-        parsedChainId,
-      );
+      const tokens = await getStewardTokenBalances(agentId, parsedChainId);
       sendJsonResponse(res, 200, tokens);
     } catch (err) {
       const message =

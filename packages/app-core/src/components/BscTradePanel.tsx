@@ -493,6 +493,15 @@ export function TradePanel({
             ? t("bsctradepanel.TradeReady")
             : t("bsctradepanel.TradeNotReady")}
         </span>
+        {stewardConnected && (
+          <span
+            data-testid="steward-trade-indicator"
+            className="text-purple-400 flex items-center gap-0.5"
+            title="Trades routed through Steward vault policy enforcement"
+          >
+            🛡️ Steward
+          </span>
+        )}
         <span className="text-muted">
           {t("bsctradepanel.BNB")} {formatBalance(String(bnbBalance))}
         </span>
