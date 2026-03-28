@@ -366,7 +366,7 @@ describe("InventoryView unified wallets", () => {
     expect(content).not.toContain("WALLET");
     expect(content).toContain("wallet.tokens");
     expect(content).toContain("wallet.nfts");
-    expect(content).toContain("wallet.all");
+    expect(content).not.toContain("wallet.all");
     expect(content).toContain("tokenstable.nativeGasEthereum");
     expect(content).toContain("tokenstable.nativeGasSolana");
     expect(
@@ -389,17 +389,7 @@ describe("InventoryView unified wallets", () => {
 
     expect(
       tree?.root.findAll(
-        (node) => node.props?.["data-testid"] === "wallet-funding-route-pill",
-      ),
-    ).toHaveLength(1);
-    expect(
-      tree?.root.findAll(
-        (node) => node.props?.["data-testid"] === "wallet-summary-sort-pill",
-      ),
-    ).toHaveLength(0);
-    expect(
-      tree?.root.findAll(
-        (node) => node.props?.["data-testid"] === "wallet-overview-sort-block",
+        (node) => node.props?.["data-testid"] === "wallet-sidebar-sort-block",
       ),
     ).toHaveLength(0);
     expect(
@@ -451,7 +441,7 @@ describe("InventoryView unified wallets", () => {
       (node) =>
         node.type === "button" &&
         typeof node.props.onClick === "function" &&
-        node.props["aria-label"] === "BSC"
+        node.props["aria-label"] === "BSC",
     )[0];
     expect(bscButton).toBeDefined();
 

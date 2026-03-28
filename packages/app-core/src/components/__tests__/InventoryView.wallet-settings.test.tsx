@@ -229,55 +229,38 @@ describe("InventoryView wallet settings", () => {
       tree = TestRenderer.create(<InventoryView />);
     });
 
-    const overviewCard = tree?.root.find(
-      (node) => node.props["data-testid"] === "wallet-overview-card",
+    const sidebarSortBlock = tree?.root.find(
+      (node) => node.props["data-testid"] === "wallet-sidebar-sort-block",
     );
-    expect(overviewCard).toBeTruthy();
+    expect(sidebarSortBlock).toBeTruthy();
 
-    const sortTrigger = overviewCard?.find(
+    const sortSelect = sidebarSortBlock?.find(
       (node) =>
-        node.type === "button" &&
-        node.props["data-testid"] === "wallet-sort-select",
+        node.type === "mock-select" && node.props.value === ctx.inventorySort,
     );
-    expect(sortTrigger).toBeTruthy();
-
-    const summarySortPill = tree?.root.find(
-      (node) => node.props["data-testid"] === "wallet-summary-sort-pill",
-    );
-    expect(summarySortPill).toBeTruthy();
-    expect(JSON.stringify(summarySortPill?.props.children)).toContain("Sort");
-    expect(JSON.stringify(summarySortPill?.props.children)).toContain("Value");
+    expect(sortSelect).toBeTruthy();
 
     const assetsHeader = tree?.root.find(
       (node) => node.props["data-testid"] === "wallet-assets-header",
     );
     expect(assetsHeader).toBeTruthy();
+
+    // No overview card, funding route pill, or summary sort pill
     expect(
-      assetsHeader?.findAll(
-        (node) =>
-          node.type === "button" &&
-          node.props["data-testid"] === "wallet-sort-select",
+      tree?.root.findAll(
+        (node) => node.props["data-testid"] === "wallet-overview-card",
       ),
     ).toHaveLength(0);
-
-    const routePill = tree?.root.find(
-      (node) => node.props["data-testid"] === "wallet-funding-route-pill",
-    );
-    expect(routePill).toBeTruthy();
-    expect(JSON.stringify(routePill?.props.children)).toContain(
-      "2 funding routes available",
-    );
     expect(
-      assetsHeader?.findAll(
-        (node) => node.props["data-testid"] === "wallet-assets-sort-meta",
+      tree?.root.findAll(
+        (node) => node.props["data-testid"] === "wallet-funding-route-pill",
       ),
     ).toHaveLength(0);
-
-    const sortSelect = overviewCard?.find(
-      (node) =>
-        node.type === "mock-select" && node.props.value === ctx.inventorySort,
-    );
-    expect(sortSelect).toBeTruthy();
+    expect(
+      tree?.root.findAll(
+        (node) => node.props["data-testid"] === "wallet-summary-sort-pill",
+      ),
+    ).toHaveLength(0);
 
     await act(async () => {
       sortSelect?.props.onValueChange("chain");
@@ -304,17 +287,7 @@ describe("InventoryView wallet settings", () => {
     ).toHaveLength(0);
     expect(
       tree?.root.findAll(
-        (node) => node.props["data-testid"] === "wallet-funding-route-pill",
-      ),
-    ).toHaveLength(1);
-    expect(
-      tree?.root.findAll(
-        (node) => node.props["data-testid"] === "wallet-summary-sort-pill",
-      ),
-    ).toHaveLength(0);
-    expect(
-      tree?.root.findAll(
-        (node) => node.props["data-testid"] === "wallet-overview-sort-block",
+        (node) => node.props["data-testid"] === "wallet-sidebar-sort-block",
       ),
     ).toHaveLength(0);
   });
@@ -328,7 +301,8 @@ describe("InventoryView wallet settings", () => {
       tree = TestRenderer.create(<InventoryView />);
     });
 
-    expect(JSON.stringify(tree?.toJSON())).toContain("Wallet Overview");
+    // Wallet Overview heading is removed
+    expect(JSON.stringify(tree?.toJSON())).not.toContain("Wallet Overview");
     expect(
       tree?.root.findAll((node) => node.children.includes("WALLET")),
     ).toHaveLength(0);
@@ -345,7 +319,7 @@ describe("InventoryView wallet settings", () => {
     expect(ctx.setState).toHaveBeenCalledWith("inventoryChainFocus", "base");
   });
 
-  it("restores a chain-aware overview heading for focused wallets", async () => {
+  it("does not render an overview card for focused wallets", async () => {
     const ctx = createContext({ inventoryChainFocus: "base" });
     mockUseApp.mockImplementation(() => ctx);
 
@@ -354,16 +328,10 @@ describe("InventoryView wallet settings", () => {
       tree = TestRenderer.create(<InventoryView />);
     });
 
-    const overviewCard = tree?.root.find(
-      (node) => node.props["data-testid"] === "wallet-overview-card",
-    );
-    expect(overviewCard).toBeTruthy();
-
-    const heading = overviewCard?.findByType("h1");
-    const subtitle = overviewCard?.findByType("p");
-    expect(heading?.children.join("")).toBe("Base Wallet Overview");
-    expect(subtitle?.children.join("")).toBe(
-      "Track balances, managed addresses, and trading readiness in one place.",
-    );
+    expect(
+      tree?.root.findAll(
+        (node) => node.props["data-testid"] === "wallet-overview-card",
+      ),
+    ).toHaveLength(0);
   });
 });
