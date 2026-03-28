@@ -266,14 +266,14 @@ function SettingsSidebar({
       data-testid="settings-sidebar"
     >
       <div className={APP_SIDEBAR_INNER_CLASSNAME}>
-          <Input
-            type="search"
-            value={searchQuery}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder={searchLabel}
-            aria-label={searchLabel}
-            className={`w-full ${APP_SIDEBAR_SEARCH_INPUT_CLASSNAME}`}
-          />
+        <Input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder={searchLabel}
+          aria-label={searchLabel}
+          className={`w-full ${APP_SIDEBAR_SEARCH_INPUT_CLASSNAME}`}
+        />
 
         <nav
           className={`mt-4 space-y-1.5 ${APP_SIDEBAR_SCROLL_REGION_CLASSNAME}`}

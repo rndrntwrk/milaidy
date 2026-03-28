@@ -78,7 +78,12 @@ const COMPANION_HISTORY_FADE_MS = 5_000;
 const COMPANION_MESSAGE_LAYER_TOP = "calc(-100% + 1.5rem)";
 const COMPANION_MESSAGE_LAYER_BOTTOM_FALLBACK = "5.25rem";
 const COMPANION_COMPOSER_GAP_PX = 18;
-const COMPANION_COMPOSER_SHELL_MIN_HEIGHT_PX = 84;
+/** Companion dock composer: padding + min-height live here (not on the glass layer). */
+const COMPANION_COMPOSER_SHELL_LAYOUT_CLASSNAME =
+  "relative flex items-center min-h-[80px] max-[380px]:min-h-[72px] px-2.5 py-1.5 max-[380px]:px-2 max-[380px]:py-1";
+/** Frosted pill behind the game-modal composer; separate from content so padding stays obvious. */
+const COMPANION_COMPOSER_GLASS_LAYER_CLASSNAME =
+  "pointer-events-none absolute inset-0 rounded-[34px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] shadow-[0_20px_52px_rgba(0,0,0,0.17)] ring-1 ring-inset ring-white/6 backdrop-blur-[22px]";
 const COMPANION_MESSAGE_LAYER_MASK =
   "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.28) 6%, rgba(0,0,0,0.82) 12%, black 17%, black 100%)";
 const COMPANION_ASSISTANT_BUBBLE_CLASSNAME =
@@ -1269,8 +1274,7 @@ export function ChatView({
             }
           />
           <div
-            className="relative flex min-h-[84px] items-center px-4 py-3 max-[380px]:min-h-[78px] max-[380px]:px-3 max-[380px]:py-2.5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[34px] before:border before:border-white/8 before:bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] before:shadow-[0_20px_52px_rgba(0,0,0,0.17)] before:ring-1 before:ring-inset before:ring-white/6 before:backdrop-blur-[22px] before:content-['']"
-            style={{ minHeight: `${COMPANION_COMPOSER_SHELL_MIN_HEIGHT_PX}px` }}
+            className="relative flex items-center px-3 py-2 max-[380px]:min-h-[78px] max-[380px]:px-2.5 max-[380px]:py-1.5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[34px] before:border before:border-white/8 before:bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] before:shadow-[0_20px_52px_rgba(0,0,0,0.17)] before:ring-1 before:ring-inset before:ring-white/6 before:backdrop-blur-[22px] before:content-['']"
           >
             <div className="relative z-[1] flex w-full items-center">
               <ChatComposer

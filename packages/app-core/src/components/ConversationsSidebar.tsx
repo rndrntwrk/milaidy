@@ -15,7 +15,6 @@ import { ConversationRenameDialog } from "./conversations/ConversationRenameDial
 import {
   DESKTOP_CONTROL_SURFACE_ACCENT_CLASSNAME,
   DESKTOP_CONTROL_SURFACE_CLASSNAME,
-  DESKTOP_FLOATING_ACTION_RAIL_CLASSNAME,
 } from "./desktop-surface-primitives";
 import {
   APP_SIDEBAR_KICKER_CLASSNAME,
@@ -41,7 +40,6 @@ const GAME_MODAL_HEADER_PANEL_CLASS =
 const DEFAULT_MOBILE_HEADER_PANEL_CLASS =
   "sticky top-0 z-10 flex items-center justify-between border-b border-border/40 bg-card/88 px-3.5 py-2.5 backdrop-blur-md";
 const SECTION_EYEBROW_CLASS = APP_SIDEBAR_KICKER_CLASSNAME;
-const DEFAULT_HEADER_ACTIONS_CLASS = `flex items-center gap-1.5 rounded-[14px] px-1.5 py-1 ${DESKTOP_FLOATING_ACTION_RAIL_CLASSNAME}`;
 const COUNT_BADGE_CLASS = `${APP_SIDEBAR_PILL_CLASSNAME} min-w-[2rem] justify-center border-border/24 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_82%,transparent),color-mix(in_srgb,var(--bg)_92%,transparent))] px-2.5 text-[10px] font-semibold tabular-nums text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_10px_16px_-16px_rgba(15,23,42,0.14)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_18px_-16px_rgba(0,0,0,0.28)]`;
 const UNREAD_BADGE_CLASS =
   "inline-flex min-h-6 min-w-[2rem] items-center justify-center rounded-full border border-accent/24 bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.14),rgba(var(--accent-rgb),0.06))] px-2.5 py-1 text-[10px] font-semibold tabular-nums text-txt-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_10px_18px_-16px_rgba(var(--accent-rgb),0.22)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_12px_20px_-18px_rgba(var(--accent-rgb),0.2)]";
@@ -312,22 +310,20 @@ export function ConversationsSidebar({
               </div>
             </div>
           ) : (
-            <>
-              <Button
-                variant="outline"
-                className={
-                  isGameModal
-                    ? "h-11 w-full rounded-xl border-[color:var(--onboarding-accent-border)] bg-[color:var(--onboarding-accent-bg)] px-3 py-2 text-sm font-medium text-[color:var(--onboarding-text-strong)] shadow-[0_12px_28px_rgba(0,0,0,0.18)] hover:border-[color:var(--onboarding-accent-border-hover)] hover:bg-[color:var(--onboarding-accent-bg-hover)] active:scale-[0.98]"
-                    : `min-h-[44px] w-full rounded-[14px] px-3 py-2.5 text-[12px] font-medium ${DESKTOP_CONTROL_SURFACE_ACCENT_CLASSNAME}`
-                }
-                onClick={() => {
-                  handleNewConversation();
-                  onClose?.();
-                }}
-              >
-                {t("conversations.newChat")}
-              </Button>
-            </>
+            <Button
+              variant="outline"
+              className={
+                isGameModal
+                  ? "h-11 w-full rounded-xl border-[color:var(--onboarding-accent-border)] bg-[color:var(--onboarding-accent-bg)] px-3 py-2 text-sm font-medium text-[color:var(--onboarding-text-strong)] shadow-[0_12px_28px_rgba(0,0,0,0.18)] hover:border-[color:var(--onboarding-accent-border-hover)] hover:bg-[color:var(--onboarding-accent-bg-hover)] active:scale-[0.98]"
+                  : `min-h-[44px] w-full rounded-[14px] px-3 py-2.5 text-[12px] font-medium ${DESKTOP_CONTROL_SURFACE_ACCENT_CLASSNAME}`
+              }
+              onClick={() => {
+                handleNewConversation();
+                onClose?.();
+              }}
+            >
+              {t("conversations.newChat")}
+            </Button>
           )}
         </div>
 
@@ -337,10 +333,11 @@ export function ConversationsSidebar({
               <div className={listPanelClassName}>
                 {sortedConversations.length === 0 ? (
                   <div
-                    className={`${EMPTY_STATE_CLASS} ${isGameModal
-                      ? "border-white/10 bg-black/15 font-medium italic text-[color:var(--onboarding-text-muted)]"
-                      : "border-border/50 bg-bg/35 text-muted"
-                      }`}
+                    className={`${EMPTY_STATE_CLASS} ${
+                      isGameModal
+                        ? "border-white/10 bg-black/15 font-medium italic text-[color:var(--onboarding-text-muted)]"
+                        : "border-border/50 bg-bg/35 text-muted"
+                    }`}
                   >
                     {t("conversations.none")}
                   </div>
@@ -377,7 +374,7 @@ export function ConversationsSidebar({
               </div>
             </div>
             {canCollapse ? (
-              <div className="shrink-0 border-t border-border/25 mb-3 bg-[linear-gradient(0deg,color-mix(in_srgb,var(--card)_34%,transparent),transparent)] px-3.5 pb-3.5 pt-2 shadow-[inset_0_-1px_0_rgba(255,255,255,0.03)] flex justify-end">
+              <div className="relative z-10 mb-3 shrink-0 border-t border-border/25 bg-[linear-gradient(0deg,color-mix(in_srgb,var(--card)_34%,transparent),transparent)] px-3.5 pb-3.5 pt-2 shadow-[inset_0_-1px_0_rgba(255,255,255,0.03)] flex justify-end">
                 <Button
                   variant="ghost"
                   size="icon"
