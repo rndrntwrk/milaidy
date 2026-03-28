@@ -6,8 +6,12 @@
 
 import { ONBOARDING_PROVIDER_CATALOG } from "@miladyai/shared/contracts/onboarding";
 import {
+  DEFAULT_VISUAL_AVATAR_INDEX,
+  DEFAULT_VISUAL_STYLE_PRESET_ID,
+  DEFAULT_VISUAL_STYLE_PRESET_NAME,
   getDefaultStylePreset,
   getStylePresets,
+  resolveStylePresetById,
   resolveStylePresetByAvatarIndex,
 } from "@miladyai/shared/onboarding-presets";
 import {
@@ -309,7 +313,7 @@ export {
   type UiTheme,
   useApp,
   useTranslation,
-  VRM_COUNT,
+  getDefaultBundledVrmIndex,
 } from "./internal";
 export { AGENT_READY_TIMEOUT_MS } from "./types";
 
@@ -2915,8 +2919,8 @@ function AppProviderInner({
           setOnboardingActiveGuide(null);
           setOnboardingDeferredTasks([]);
           setPostOnboardingChecklistDismissed(false);
-          setOnboardingName("Chen");
-          setOnboardingStyle("chen");
+          setOnboardingName(DEFAULT_VISUAL_STYLE_PRESET_NAME);
+          setOnboardingStyle(DEFAULT_VISUAL_STYLE_PRESET_ID);
           setOnboardingRunMode("");
           setOnboardingCloudProvider("");
           setOnboardingProvider("");
@@ -2932,7 +2936,7 @@ function AppProviderInner({
           setOnboardingLargeModel("");
         },
         resetAvatarSelection: () => {
-          setSelectedVrmIndex(1);
+          setSelectedVrmIndex(DEFAULT_VISUAL_AVATAR_INDEX);
           setCustomVrmUrl("");
           setCustomBackgroundUrl("");
         },
@@ -7627,7 +7631,7 @@ function AppProviderInner({
         if (hasVrm) {
           setCustomVrmUrl(resolveApiUrl(`/api/avatar/vrm?t=${Date.now()}`));
         } else {
-          setSelectedVrmIndex(1);
+          setSelectedVrmIndex(getDefaultBundledVrmIndex());
         }
         // Restore custom background if one was uploaded
         const hasBg = await client.hasCustomBackground();

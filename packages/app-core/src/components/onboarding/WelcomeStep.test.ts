@@ -5,6 +5,11 @@ import TestRenderer, { act } from "react-test-renderer";
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { onboardingHeaderBlockClass } from "./onboarding-step-chrome";
+import {
+  DEFAULT_VISUAL_AVATAR_INDEX,
+  DEFAULT_VISUAL_STYLE_PRESET_ID,
+  DEFAULT_VISUAL_STYLE_PRESET_NAME,
+} from "@miladyai/shared/onboarding-presets";
 
 const { useAppMock, useBrandingMock } = vi.hoisted(() => ({
   useAppMock: vi.fn(),
@@ -68,9 +73,18 @@ describe("WelcomeStep", () => {
     await act(async () => {
       buttons[1]?.props.onClick({ currentTarget: null });
     });
-    expect(setState).toHaveBeenCalledWith("onboardingStyle", "chen");
-    expect(setState).toHaveBeenCalledWith("onboardingName", "Chen");
-    expect(setState).toHaveBeenCalledWith("selectedVrmIndex", 1);
+    expect(setState).toHaveBeenCalledWith(
+      "onboardingStyle",
+      DEFAULT_VISUAL_STYLE_PRESET_ID,
+    );
+    expect(setState).toHaveBeenCalledWith(
+      "onboardingName",
+      DEFAULT_VISUAL_STYLE_PRESET_NAME,
+    );
+    expect(setState).toHaveBeenCalledWith(
+      "selectedVrmIndex",
+      DEFAULT_VISUAL_AVATAR_INDEX,
+    );
     expect(goToOnboardingStep).toHaveBeenCalledWith("identity");
   });
 

@@ -12,6 +12,11 @@ import {
   onboardingPrimaryActionTextShadowStyle,
   spawnOnboardingRipple,
 } from "./onboarding-step-chrome";
+import {
+  DEFAULT_VISUAL_AVATAR_INDEX,
+  DEFAULT_VISUAL_STYLE_PRESET_ID,
+  DEFAULT_VISUAL_STYLE_PRESET_NAME,
+} from "@miladyai/shared/onboarding-presets";
 
 /** First screen; enters the custom setup track at `connection`. */
 export function WelcomeStep() {
@@ -25,11 +30,11 @@ export function WelcomeStep() {
   } = useApp();
 
   const handleGetStarted = () => {
-    // Default to Chen (blue-haired anime character) — user picks their
-    // character in the identity step (now the very next screen).
-    setState("onboardingStyle", "chen");
-    setState("onboardingName", "Chen");
-    setState("selectedVrmIndex", 1);
+    // Default to Alice on fresh setup; user can still change character on the
+    // next identity step before onboarding completes.
+    setState("onboardingStyle", DEFAULT_VISUAL_STYLE_PRESET_ID);
+    setState("onboardingName", DEFAULT_VISUAL_STYLE_PRESET_NAME);
+    setState("selectedVrmIndex", DEFAULT_VISUAL_AVATAR_INDEX);
     // WHY goToOnboardingStep: syncs Flamina guide in advanced mode; persisted
     // step still goes through the same setter as the rest of onboarding.
     goToOnboardingStep("identity");

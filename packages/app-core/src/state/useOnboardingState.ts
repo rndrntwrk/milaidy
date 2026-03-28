@@ -10,6 +10,11 @@ import { useCallback, useReducer, useRef } from "react";
 import type { OnboardingOptions } from "../api";
 import { loadPersistedOnboardingStep, saveOnboardingStep } from "./persistence";
 import type { AppState, OnboardingStep } from "./types";
+import {
+  DEFAULT_VISUAL_AVATAR_INDEX,
+  DEFAULT_VISUAL_STYLE_PRESET_ID,
+  DEFAULT_VISUAL_STYLE_PRESET_NAME,
+} from "@miladyai/shared/onboarding-presets";
 
 // ── Connector token keys ───────────────────────────────────────────────
 
@@ -125,10 +130,10 @@ function createInitialState(cloudOnly?: boolean): OnboardingState {
     deferredTasks: [],
     postChecklistDismissed: false,
     options: null,
-    name: "Chen",
+    name: DEFAULT_VISUAL_STYLE_PRESET_NAME,
     ownerName: "anon",
-    style: "chen",
-    avatar: 1,
+    style: DEFAULT_VISUAL_STYLE_PRESET_ID,
+    avatar: DEFAULT_VISUAL_AVATAR_INDEX,
     runMode: cloudOnly ? "cloud" : "",
     cloudProvider: cloudOnly ? "elizacloud" : "",
     provider: "",

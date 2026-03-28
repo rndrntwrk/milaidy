@@ -20,6 +20,7 @@ const { TEST_VRM_ASSETS } = vi.hoisted(() => {
     { name: "Ryu", avatarIndex: 6 },
     { name: "Satoshi", avatarIndex: 7 },
     { name: "Yuki", avatarIndex: 8 },
+    { name: "Alice", avatarIndex: 9 },
   ];
   return {
     TEST_VRM_ASSETS: presets
@@ -42,6 +43,7 @@ vi.mock("../../src/config/boot-config", async (importOriginal) => {
 });
 
 import {
+  getDefaultBundledVrmIndex,
   getCompanionBackgroundUrl,
   getVrmPreviewUrl,
   getVrmTitle,
@@ -51,7 +53,7 @@ import {
 
 describe("Avatar VRM Utilities", () => {
   describe("getVrmUrl", () => {
-    it("returns correct path for bundled Milady VRMs (1-8)", () => {
+    it("returns correct path for bundled Milady VRMs (1-9)", () => {
       const expectedSlugs = [
         "milady-1",
         "milady-2",
@@ -61,23 +63,24 @@ describe("Avatar VRM Utilities", () => {
         "milady-6",
         "milady-7",
         "milady-8",
+        "milady-9",
       ];
       expectedSlugs.forEach((slug, index) => {
         expect(getVrmUrl(index + 1)).toBe(`/vrms/${slug}.vrm.gz`);
       });
     });
 
-    it("clamps out-of-range indices to avatar 1", () => {
-      expect(getVrmUrl(9)).toBe("/vrms/milady-1.vrm.gz");
-      expect(getVrmUrl(34)).toBe("/vrms/milady-1.vrm.gz");
-      expect(getVrmUrl(-3)).toBe("/vrms/milady-1.vrm.gz");
-      expect(getVrmUrl(Number.NaN)).toBe("/vrms/milady-1.vrm.gz");
-      expect(getVrmUrl(0)).toBe("/vrms/milady-1.vrm.gz");
+    it("clamps out-of-range indices to the default bundled avatar", () => {
+      expect(getVrmUrl(10)).toBe("/vrms/milady-9.vrm.gz");
+      expect(getVrmUrl(34)).toBe("/vrms/milady-9.vrm.gz");
+      expect(getVrmUrl(-3)).toBe("/vrms/milady-9.vrm.gz");
+      expect(getVrmUrl(Number.NaN)).toBe("/vrms/milady-9.vrm.gz");
+      expect(getVrmUrl(0)).toBe("/vrms/milady-9.vrm.gz");
     });
   });
 
   describe("getVrmPreviewUrl", () => {
-    it("returns correct preview path for bundled Milady VRMs (1-8)", () => {
+    it("returns correct preview path for bundled Milady VRMs (1-9)", () => {
       const expectedSlugs = [
         "milady-1",
         "milady-2",
@@ -87,17 +90,18 @@ describe("Avatar VRM Utilities", () => {
         "milady-6",
         "milady-7",
         "milady-8",
+        "milady-9",
       ];
       expectedSlugs.forEach((slug, index) => {
         expect(getVrmPreviewUrl(index + 1)).toBe(`/vrms/previews/${slug}.png`);
       });
     });
 
-    it("clamps out-of-range preview indices to avatar 1", () => {
-      expect(getVrmPreviewUrl(9)).toBe("/vrms/previews/milady-1.png");
-      expect(getVrmPreviewUrl(999)).toBe("/vrms/previews/milady-1.png");
-      expect(getVrmPreviewUrl(-1)).toBe("/vrms/previews/milady-1.png");
-      expect(getVrmPreviewUrl(0)).toBe("/vrms/previews/milady-1.png");
+    it("clamps out-of-range preview indices to the default bundled avatar", () => {
+      expect(getVrmPreviewUrl(10)).toBe("/vrms/previews/milady-9.png");
+      expect(getVrmPreviewUrl(999)).toBe("/vrms/previews/milady-9.png");
+      expect(getVrmPreviewUrl(-1)).toBe("/vrms/previews/milady-9.png");
+      expect(getVrmPreviewUrl(0)).toBe("/vrms/previews/milady-9.png");
     });
   });
 
@@ -111,10 +115,11 @@ describe("Avatar VRM Utilities", () => {
       expect(getVrmTitle(6)).toBe("Ryu");
       expect(getVrmTitle(7)).toBe("Satoshi");
       expect(getVrmTitle(8)).toBe("Yuki");
+      expect(getVrmTitle(9)).toBe("Alice");
     });
 
-    it("clamps out-of-range index to avatar 1", () => {
-      expect(getVrmTitle(9)).toBe("Chen");
+    it("clamps out-of-range index to the default bundled avatar", () => {
+      expect(getVrmTitle(10)).toBe("Alice");
     });
 
     it("hoisted test roster stays in sync with STYLE_PRESETS", async () => {
@@ -183,16 +188,15 @@ describe("Avatar Selection State", () => {
       expect(index).toBe(0); // custom VRM
     });
 
-    it("falls back to 1 for invalid stored values", () => {
+    it("falls back to the bundled Alice default for invalid stored values", () => {
       const testCases = ["", "abc", "-1", "34", "NaN"];
 
       for (const invalid of testCases) {
         const n = Number(invalid);
         const isValid = !Number.isNaN(n) && n >= 0 && n <= VRM_COUNT;
-        const result = isValid ? n : 1;
-        // Invalid cases should fall back to 1
+        const result = isValid ? n : getDefaultBundledVrmIndex();
         if (!isValid) {
-          expect(result).toBe(1);
+          expect(result).toBe(9);
         }
       }
     });

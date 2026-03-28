@@ -4,11 +4,12 @@ import {
   VRM_TELEPORT_COMPLETE_EVENT,
 } from "@miladyai/app-core/events";
 import {
+  getDefaultBundledVrmIndex,
+  getVrmCount,
   getVrmPreviewUrl,
   getVrmUrl,
   useCompanionSceneConfig,
   useTranslation,
-  VRM_COUNT,
 } from "@miladyai/app-core/state";
 import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
 import {
@@ -396,7 +397,8 @@ function CompanionSceneSurface({
     [],
   );
 
-  const safeSelectedVrmIndex = selectedVrmIndex > 0 ? selectedVrmIndex : 1;
+  const safeSelectedVrmIndex =
+    selectedVrmIndex > 0 ? selectedVrmIndex : getDefaultBundledVrmIndex();
   const vrmPath =
     selectedVrmIndex === 0 && customVrmUrl
       ? customVrmUrl
@@ -404,7 +406,7 @@ function CompanionSceneSurface({
   const fallbackPreviewUrl =
     selectedVrmIndex > 0
       ? getVrmPreviewUrl(safeSelectedVrmIndex)
-      : getVrmPreviewUrl(1);
+      : getVrmPreviewUrl(getDefaultBundledVrmIndex());
   const teleportKey = vrmPath;
   const worldUrl =
     uiTheme === "dark"
@@ -571,7 +573,7 @@ function CompanionSceneSurface({
     if (tab !== "character" && tab !== "character-select") {
       return [];
     }
-    return Array.from({ length: VRM_COUNT }, (_, index) => {
+    return Array.from({ length: getVrmCount() }, (_, index) => {
       const avatarIndex = index + 1;
       return {
         vrmPath: getVrmUrl(avatarIndex),
