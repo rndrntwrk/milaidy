@@ -485,7 +485,10 @@ export interface BscTradeExecuteResponse {
   unsignedApprovalTx?: BscUnsignedApprovalTx;
   requiresApproval?: boolean;
   execution?: Omit<BscTradeExecutionResult, "status"> & {
-    status?: BscTradeExecutionResult["status"] | "pending_approval" | "rejected";
+    status?:
+      | BscTradeExecutionResult["status"]
+      | "pending_approval"
+      | "rejected";
     policyResults?: StewardPolicyResult[];
   };
   /** Present when the approval tx is pending Steward policy review. */
@@ -535,7 +538,10 @@ export interface BscTransferExecuteResponse {
   tokenAddress?: string;
   unsignedTx: BscUnsignedTransferTx;
   execution?: Omit<BscTransferExecutionResult, "status"> & {
-    status?: BscTransferExecutionResult["status"] | "pending_approval" | "rejected";
+    status?:
+      | BscTransferExecutionResult["status"]
+      | "pending_approval"
+      | "rejected";
     policyResults?: StewardPolicyResult[];
   };
   /** Steward error message on policy rejection (403). */

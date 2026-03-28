@@ -1,3 +1,7 @@
+import type {
+  StewardSignRequest,
+  StewardSignResponse,
+} from "@miladyai/shared/contracts/wallet";
 import {
   type PolicyResult,
   type PolicyRule,
@@ -6,17 +10,12 @@ import {
   StewardClient,
   type TxRecord,
 } from "@stwd/sdk";
-import type {
-  StewardSignRequest,
-  StewardSignResponse,
-} from "@miladyai/shared/contracts/wallet";
-import { normalizeEnvValueOrNull } from "../utils/env";
 import {
-  type PersistedStewardCredentials,
   loadStewardCredentials,
   resolveEffectiveStewardConfig,
   saveStewardCredentials,
 } from "../services/steward-credentials";
+import { normalizeEnvValueOrNull } from "../utils/env";
 
 export interface StewardBridgeOptions {
   env?: NodeJS.ProcessEnv;
@@ -138,7 +137,9 @@ export async function getStewardBridgeStatus(
 
     if (agentId) {
       try {
-        agentData = (await client.getAgent(agentId)) as unknown as AgentDataShape;
+        agentData = (await client.getAgent(
+          agentId,
+        )) as unknown as AgentDataShape;
       } catch (error: unknown) {
         if (
           !(error instanceof StewardApiError) ||
@@ -155,7 +156,10 @@ export async function getStewardBridgeStatus(
     // Extract wallet addresses from agent data
     const walletAddresses = agentData
       ? {
-          evm: agentData.walletAddresses?.evm?.trim() || agentData.walletAddress?.trim() || null,
+          evm:
+            agentData.walletAddresses?.evm?.trim() ||
+            agentData.walletAddress?.trim() ||
+            null,
           solana: agentData.walletAddresses?.solana?.trim() || null,
         }
       : undefined;
@@ -386,7 +390,15 @@ export async function getStewardTokenBalances(
     data?: StewardTokenBalancesResult;
   };
   return (
-    body.data ?? { native: { balance: "0", formatted: "0", symbol: "???", chainId: chainId ?? 0 }, tokens: [] }
+    body.data ?? {
+      native: {
+        balance: "0",
+        formatted: "0",
+        symbol: "???",
+        chainId: chainId ?? 0,
+      },
+      tokens: [],
+    }
   );
 }
 
@@ -622,7 +634,7 @@ export async function signViaSteward(
     },
   );
 
-  const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
 
   // Approved — HTTP 200
   if (res.ok && body.ok === true) {
@@ -703,7 +715,10 @@ const recentWebhookEvents: StewardWebhookEvent[] = [];
 export function pushWebhookEvent(event: StewardWebhookEvent): void {
   recentWebhookEvents.push(event);
   if (recentWebhookEvents.length > MAX_WEBHOOK_EVENTS) {
-    recentWebhookEvents.splice(0, recentWebhookEvents.length - MAX_WEBHOOK_EVENTS);
+    recentWebhookEvents.splice(
+      0,
+      recentWebhookEvents.length - MAX_WEBHOOK_EVENTS,
+    );
   }
 }
 
@@ -731,7 +746,8 @@ export async function registerStewardWebhook(
   if (!baseUrl) throw new Error("Steward not configured");
 
   const tenantId = normalizeEnvValue(env.STEWARD_TENANT_ID);
-  if (!tenantId) throw new Error("STEWARD_TENANT_ID not set — cannot register webhook");
+  if (!tenantId)
+    throw new Error("STEWARD_TENANT_ID not set — cannot register webhook");
 
   const headers = buildStewardHeaders(env);
   const res = await fetch(
@@ -745,7 +761,9 @@ export async function registerStewardWebhook(
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "Unknown error");
-    throw new Error(`Steward webhook registration failed (${res.status}): ${errText}`);
+    throw new Error(
+      `Steward webhook registration failed (${res.status}): ${errText}`,
+    );
   }
 }
 
@@ -809,10 +827,7 @@ export async function ensureStewardAgent(
     return null;
   }
 
-  const agentId =
-    options.agentId ??
-    resolveStewardAgentId(env) ??
-    null;
+  const agentId = options.agentId ?? resolveStewardAgentId(env) ?? null;
 
   if (!agentId) {
     return null;
@@ -841,7 +856,10 @@ export async function ensureStewardAgent(
         agentId,
         agentName: agent.name || agentName,
         walletAddresses: {
-          evm: agent.walletAddresses?.evm?.trim() || agent.walletAddress?.trim() || null,
+          evm:
+            agent.walletAddresses?.evm?.trim() ||
+            agent.walletAddress?.trim() ||
+            null,
           solana: agent.walletAddresses?.solana?.trim() || null,
         },
         created: false,
@@ -852,7 +870,10 @@ export async function ensureStewardAgent(
 
       return result;
     } catch (err: unknown) {
-      if (!(err instanceof StewardApiError) || (err as StewardApiError).status !== 404) {
+      if (
+        !(err instanceof StewardApiError) ||
+        (err as StewardApiError).status !== 404
+      ) {
         throw err;
       }
     }
@@ -880,9 +901,13 @@ export async function ensureStewardAgent(
         });
 
         if (!tenantRes.ok) {
-          const body = (await tenantRes.json().catch(() => ({}))) as { error?: string };
+          const body = (await tenantRes.json().catch(() => ({}))) as {
+            error?: string;
+          };
           if (!body.error?.includes("already exists")) {
-            console.warn(`[steward] Tenant creation returned ${tenantRes.status}: ${body.error}`);
+            console.warn(
+              `[steward] Tenant creation returned ${tenantRes.status}: ${body.error}`,
+            );
           }
         }
       } catch (tenantErr) {
@@ -904,7 +929,9 @@ export async function ensureStewardAgent(
 
     if (!agentRes.ok) {
       const errText = await agentRes.text().catch(() => "Unknown error");
-      console.warn(`[steward] Agent creation failed (${agentRes.status}): ${errText}`);
+      console.warn(
+        `[steward] Agent creation failed (${agentRes.status}): ${errText}`,
+      );
       stewardAgentEnsured = true;
       return null;
     }
@@ -986,10 +1013,15 @@ function persistAgentCredentials(
     const existing = loadStewardCredentials();
     saveStewardCredentials({
       apiUrl,
-      tenantId: normalizeEnvValue(env.STEWARD_TENANT_ID) ?? existing?.tenantId ?? "",
+      tenantId:
+        normalizeEnvValue(env.STEWARD_TENANT_ID) ?? existing?.tenantId ?? "",
       agentId: result.agentId,
       apiKey: normalizeEnvValue(env.STEWARD_API_KEY) ?? existing?.apiKey ?? "",
-      agentToken: agentToken ?? normalizeEnvValue(env.STEWARD_AGENT_TOKEN) ?? existing?.agentToken ?? "",
+      agentToken:
+        agentToken ??
+        normalizeEnvValue(env.STEWARD_AGENT_TOKEN) ??
+        existing?.agentToken ??
+        "",
       walletAddresses: {
         evm: result.walletAddresses.evm ?? undefined,
         solana: result.walletAddresses.solana ?? undefined,

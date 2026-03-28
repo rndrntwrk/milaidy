@@ -86,22 +86,19 @@ export function resolveEffectiveStewardConfig(
 ): PersistedStewardCredentials | null {
   const persisted = loadStewardCredentials();
 
-  const apiUrl =
-    env.STEWARD_API_URL?.trim() || persisted?.apiUrl || null;
+  const apiUrl = env.STEWARD_API_URL?.trim() || persisted?.apiUrl || null;
   if (!apiUrl) {
     return null;
   }
 
-  const tenantId =
-    env.STEWARD_TENANT_ID?.trim() || persisted?.tenantId || null;
+  const tenantId = env.STEWARD_TENANT_ID?.trim() || persisted?.tenantId || null;
   const agentId =
     env.STEWARD_AGENT_ID?.trim() ||
     env.MILADY_STEWARD_AGENT_ID?.trim() ||
     env.ELIZA_STEWARD_AGENT_ID?.trim() ||
     persisted?.agentId ||
     null;
-  const apiKey =
-    env.STEWARD_API_KEY?.trim() || persisted?.apiKey || "";
+  const apiKey = env.STEWARD_API_KEY?.trim() || persisted?.apiKey || "";
   const agentToken =
     env.STEWARD_AGENT_TOKEN?.trim() || persisted?.agentToken || "";
 

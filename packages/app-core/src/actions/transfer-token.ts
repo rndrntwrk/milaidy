@@ -299,7 +299,19 @@ export const transferTokenAction: Action = {
                 recipient: toAddress,
               });
             }
-            return { text, success: true, data: { toAddress, amount: amountRaw, assetSymbol, mode: "steward", txHash, explorerUrl, executed: true } };
+            return {
+              text,
+              success: true,
+              data: {
+                toAddress,
+                amount: amountRaw,
+                assetSymbol,
+                mode: "steward",
+                txHash,
+                explorerUrl,
+                executed: true,
+              },
+            };
           }
 
           // Pending approval — tx queued for manual review
@@ -324,13 +336,28 @@ export const transferTokenAction: Action = {
                 txId,
               });
             }
-            return { text, success: false, data: { toAddress, amount: amountRaw, assetSymbol, mode: "steward", pending: true, txId, executed: false } };
+            return {
+              text,
+              success: false,
+              data: {
+                toAddress,
+                amount: amountRaw,
+                assetSymbol,
+                mode: "steward",
+                pending: true,
+                txId,
+                executed: false,
+              },
+            };
           }
 
           // Denied — policy violation
           if (stewardResult.status === 403) {
             const violations = Array.isArray(stewardBody.violations)
-              ? (stewardBody.violations as Array<{ policy: string; reason: string }>)
+              ? (stewardBody.violations as Array<{
+                  policy: string;
+                  reason: string;
+                }>)
               : [];
             const violationText = violations
               .map((v) => `• ${v.policy}: ${v.reason}`)
@@ -356,7 +383,19 @@ export const transferTokenAction: Action = {
                 violations,
               });
             }
-            return { text, success: false, data: { toAddress, amount: amountRaw, assetSymbol, mode: "steward", denied: true, violations, executed: false } };
+            return {
+              text,
+              success: false,
+              data: {
+                toAddress,
+                amount: amountRaw,
+                assetSymbol,
+                mode: "steward",
+                denied: true,
+                violations,
+                executed: false,
+              },
+            };
           }
 
           // Other steward errors — fall through to direct signing
