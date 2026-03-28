@@ -687,6 +687,7 @@
   "heartbeatsview.heartbeatSingular": "Heartbeat",
   "heartbeatsview.editTitle": "Edit: {{name}}",
   "heartbeatsview.newHeartbeat": "New Heartbeat",
+  "heartbeatsview.createFirstHeartbeat": "Create your first heartbeat",
   "heartbeatsview.selectAHeartbeat": "Select a Heartbeat",
   "heartbeatsview.emptyStateDescription": "Use the sidebar to create a new heartbeat or select an existing one to view and edit its details.",
   "heartbeatsview.statusPaused": "Paused",

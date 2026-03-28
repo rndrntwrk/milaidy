@@ -517,6 +517,7 @@
   "heartbeatsview.runCountPlural": "{{count}} execuções",
   "heartbeatsview.runCountSingle": "{{count}} execução",
   "heartbeatsview.saveChanges": "Salvar alterações",
+  "heartbeatsview.createFirstHeartbeat": "Crie seu primeiro heartbeat",
   "heartbeatsview.selectAHeartbeat": "Selecionar um Heartbeat",
   "heartbeatsview.statusFailed": "Falhou",
   "heartbeatsview.statusPaused": "Pausado",

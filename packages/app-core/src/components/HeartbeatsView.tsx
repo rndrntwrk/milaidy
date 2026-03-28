@@ -11,7 +11,7 @@ import {
   Switch,
   Textarea,
 } from "@miladyai/ui";
-import { Clock3, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type {
   CreateTriggerRequest,
@@ -25,7 +25,6 @@ import { confirmDesktopAction } from "../utils";
 import {
   DESKTOP_PADDED_SURFACE_PANEL_CLASSNAME,
   DESKTOP_RAIL_SUMMARY_CARD_CLASSNAME,
-  DesktopEmptyStatePanel,
   DesktopPageFrame,
 } from "./desktop-surface-primitives";
 import { formatDateTime, formatDurationMs } from "./format";
@@ -534,6 +533,7 @@ export function HeartbeatsView() {
       ? (triggers.find((trigger) => trigger.id === editingId)?.enabled ??
         form.enabled)
       : form.enabled;
+  const hasHeartbeats = triggers.length > 0;
 
   return (
     <DesktopPageFrame>
@@ -1361,13 +1361,25 @@ export function HeartbeatsView() {
                   </div>
                 );
               })()) || (
-              <div className="flex h-full flex-col items-center justify-center p-8 text-center bg-bg/5">
-                <DesktopEmptyStatePanel
-                  className="h-full min-h-[22rem]"
-                  description={t("heartbeatsview.emptyStateDescription")}
-                  icon={<Clock3 className="h-7 w-7" />}
-                  title={t("heartbeatsview.selectAHeartbeat")}
-                />
+              <div
+                className="flex h-full min-h-[22rem] flex-col items-center justify-center px-8 py-16 text-center"
+                data-testid="heartbeats-empty-state"
+              >
+                <div className="mx-auto flex max-w-xl flex-col items-center gap-3">
+                  <h2
+                    className="text-2xl font-semibold tracking-tight text-txt"
+                    data-testid="heartbeats-empty-state-title"
+                  >
+                    {hasHeartbeats
+                      ? t("heartbeatsview.selectAHeartbeat")
+                      : t("heartbeatsview.createFirstHeartbeat")}
+                  </h2>
+                  {hasHeartbeats && (
+                    <p className="max-w-md text-sm leading-relaxed text-muted">
+                      {t("heartbeatsview.emptyStateDescription")}
+                    </p>
+                  )}
+                </div>
               </div>
             )
           )}

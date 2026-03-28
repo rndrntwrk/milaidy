@@ -510,6 +510,7 @@
   "heartbeatsview.runCountPlural": "{{count}} 次运行",
   "heartbeatsview.runCountSingle": "{{count}} 次运行",
   "heartbeatsview.saveChanges": "保存更改",
+  "heartbeatsview.createFirstHeartbeat": "创建你的第一个心跳",
   "heartbeatsview.selectAHeartbeat": "选择一个心跳",
   "heartbeatsview.statusFailed": "失败",
   "heartbeatsview.statusPaused": "暂停",
