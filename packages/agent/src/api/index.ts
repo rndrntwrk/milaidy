@@ -25,6 +25,7 @@ export * from "./database.js";
 export * from "./diagnostics-routes.js";
 export * from "./drop-service.js";
 export * from "./early-logs.js";
+export * from "./five55-games-routes.js";
 export * from "./http-helpers.js";
 export * from "./knowledge-routes.js";
 export * from "./knowledge-service-loader.js";
