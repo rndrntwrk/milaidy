@@ -495,9 +495,6 @@ export function ConnectionProviderDetailScreen({
               <div className={`${onboardingHelperTextClassName} text-center`}>
                 {t("onboarding.freeCredits")}
               </div>
-              <div className={`${onboardingSubtleTextClassName} text-center`}>
-                {t("onboarding.cloudProviderBehaviorHint")}
-              </div>
             </div>
           ) : (
             <div className={onboardingDetailStackClassName}>
@@ -966,9 +963,6 @@ export function ConnectionProviderDetailScreen({
           {t("onboarding.confirm")}
         </Button>
       </div>
-      <p className={`${onboardingSubtleTextClassName} mt-3 text-center`}>
-        {t("onboarding.restartAfterProviderChangeHint")}
-      </p>
     </>
   );
 }

@@ -1027,7 +1027,7 @@
   "onboarding.useExistingSetup": "Existing Setup",
   "onboarding.getStarted": "Get Started",
   "onboarding.cloudLoginTitle": "Milady / Eliza Cloud",
-  "onboarding.cloudLoginDesc": "Connect your Eliza Cloud account to sync settings and use cloud voices, or skip if you prefer to run offline.",
+  "onboarding.cloudLoginDesc": "Eliza Cloud is free to get started and handles all the backend infrastructure for you.",
   "onboarding.voiceProviderTitle": "Voice Provider Setup",
   "onboarding.voiceProviderDesc": "Choose your preferred voice provider for Eliza, or skip to use text only.",
   "onboarding.skip": "Skip",

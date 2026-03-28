@@ -141,18 +141,6 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
 
   const companionHeaderRightExtras = (
     <>
-      <Button
-        variant="outline"
-        onClick={() => setHistoryOpen(true)}
-        onPointerDown={(event) => event.stopPropagation()}
-        className="h-11 min-h-[44px] min-w-[44px] max-w-[min(14rem,44vw)] justify-start gap-2 rounded-xl px-3 text-left"
-        data-testid="companion-history-button"
-        aria-label={t("conversations.chats")}
-        title={t("conversations.chats")}
-      >
-        <PanelLeftOpen className="h-4 w-4 shrink-0" aria-hidden />
-        <span className="truncate text-sm">{t("conversations.chats")}</span>
-      </Button>
       {inferenceNotice ? (
         <InferenceCloudAlertButton
           notice={inferenceNotice}
