@@ -536,6 +536,7 @@
   "idlecontent.Thought": "Iniisip",
   "knowledge.ui.search": "Hanapin",
   "knowledge.ui.searchPlaceholder": "Maghanap sa kaalaman...",
+  "knowledge.ui.searchDisabledPlaceholder": "Walang mga dokumentong mahahanap",
   "knowledge.ui.searching": "Naghahanap...",
   "knowledgeview.AddFromURL": "Magdagdag mula sa URL",
   "knowledgeview.ChooseFiles": "Pumili ng mga File",

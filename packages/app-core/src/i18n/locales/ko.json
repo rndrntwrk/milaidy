@@ -536,6 +536,7 @@
   "idlecontent.Thought": "생각",
   "knowledge.ui.search": "검색",
   "knowledge.ui.searchPlaceholder": "지식 검색...",
+  "knowledge.ui.searchDisabledPlaceholder": "검색할 문서가 없습니다",
   "knowledge.ui.searching": "검색 중...",
   "knowledgeview.AddFromURL": "URL에서 추가",
   "knowledgeview.ChooseFiles": "파일 선택",

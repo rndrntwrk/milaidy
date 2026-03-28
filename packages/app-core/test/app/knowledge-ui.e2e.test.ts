@@ -813,15 +813,60 @@ describe("KnowledgeView UI", () => {
       await flushPromises();
     });
 
-    expect(getRenderedText(tree)).toContain("knowledgeview.NoDocumentsYet");
-    expect(getRenderedText(tree)).toContain("knowledgeview.UploadFilesOrImpo");
+    expect(getRenderedText(tree)).not.toContain("knowledgeview.NoDocumentsYet");
+    expect(getRenderedText(tree)).not.toContain("knowledgeview.Documents");
+    expect(getRenderedText(tree)).not.toContain("common.refresh");
+    expect(getRenderedText(tree)).toContain("Build your knowledge base");
+    expect(getRenderedText(tree)).toContain("No documents yet");
+    expect(getRenderedText(tree)).not.toContain("knowledge.ui.searchDisabledHint");
+    expect(
+      getRenderedText(tree).match(
+        /Upload files or add a URL from the sidebar to start reviewing metadata, previews, and indexed fragments\./g,
+      )?.length ?? 0,
+    ).toBe(1);
+    expect(getRenderedText(tree)).not.toContain("No document selected");
+
+    const searchInput = tree?.root.find(
+      (node) => node.type === "input" && node.props.type === "text",
+    );
+    const searchButton = findButtonByLabel(tree, "knowledge.ui.search");
+
+    expect(searchInput?.props.disabled).toBe(true);
+    expect(searchInput?.props.placeholder).toBe(
+      "knowledge.ui.searchDisabledPlaceholder",
+    );
+    expect(searchButton?.props.disabled).toBe(true);
+  });
+
+  it("clears stale search state when the last document disappears", async () => {
+    let documentsResponse = [...state.knowledgeDocuments];
+    vi.mocked(client.listKnowledgeDocuments).mockImplementation(async () => ({
+      documents: documentsResponse,
+    }));
+    vi.mocked(client.searchKnowledge).mockResolvedValueOnce({
+      results: [
+        {
+          documentId: "doc-1",
+          title: "README.md",
+          snippet: "Matching content...",
+          score: 0.9,
+        },
+      ],
+    });
+
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(KnowledgeView));
+      await flushPromises();
+    });
 
     const searchInput = tree?.root.find(
       (node) => node.type === "input" && node.props.type === "text",
     );
 
     await act(async () => {
-      searchInput?.props.onChange({ target: { value: "nothing" } });
+      searchInput?.props.onChange({ target: { value: "readme" } });
     });
 
     await act(async () => {
@@ -831,8 +876,31 @@ describe("KnowledgeView UI", () => {
       await flushPromises();
     });
 
-    expect(findButtonByLabel(tree, "common.refresh")).toBeDefined();
-    expect(getRenderedText(tree)).toContain("knowledgeview.NoResultsFound");
+    expect(getRenderedText(tree)).toContain("README.md");
+    expect(findButtonByLabel(tree, "knowledgeview.Clear")).toBeDefined();
+
+    documentsResponse = [];
+
+    await act(async () => {
+      findButtonByLabel(tree, "common.refresh")?.props.onClick();
+      await flushPromises();
+    });
+
+    const disabledSearchInput = tree?.root.find(
+      (node) => node.type === "input" && node.props.type === "text",
+    );
+    const disabledSearchButton = findButtonByLabel(tree, "knowledge.ui.search");
+
+    expect(disabledSearchInput?.props.disabled).toBe(true);
+    expect(disabledSearchInput?.props.value).toBe("");
+    expect(disabledSearchInput?.props.placeholder).toBe(
+      "knowledge.ui.searchDisabledPlaceholder",
+    );
+    expect(disabledSearchButton?.props.disabled).toBe(true);
+    expect(findButtonByLabel(tree, "knowledgeview.Clear")).toBeUndefined();
+    expect(getRenderedText(tree)).not.toContain("knowledgeview.Documents");
+    expect(getRenderedText(tree)).not.toContain("README.md");
+    expect(getRenderedText(tree)).not.toContain("knowledge.ui.searchDisabledHint");
   });
 
   it("shows loading state when knowledgeLoading is true", async () => {

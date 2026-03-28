@@ -536,6 +536,7 @@
   "idlecontent.Thought": "Pensamiento",
   "knowledge.ui.search": "Buscar",
   "knowledge.ui.searchPlaceholder": "Buscar conocimiento...",
+  "knowledge.ui.searchDisabledPlaceholder": "No hay documentos para buscar",
   "knowledge.ui.searching": "Búsqueda...",
   "knowledgeview.AddFromURL": "Agregar desde URL",
   "knowledgeview.ChooseFiles": "Elija archivos",

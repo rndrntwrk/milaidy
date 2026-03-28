@@ -529,6 +529,7 @@
   "idlecontent.Thought": "想法",
   "knowledge.ui.search": "搜索",
   "knowledge.ui.searchPlaceholder": "搜索知识内容...",
+  "knowledge.ui.searchDisabledPlaceholder": "没有可搜索的文档",
   "knowledge.ui.searching": "搜索中...",
   "knowledgeview.AddFromURL": "从网址添加",
   "knowledgeview.ChooseFiles": "选择文件",

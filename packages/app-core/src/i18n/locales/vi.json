@@ -536,6 +536,7 @@
   "idlecontent.Thought": "Suy nghĩ",
   "knowledge.ui.search": "Tìm",
   "knowledge.ui.searchPlaceholder": "Tìm kiếm tri thức...",
+  "knowledge.ui.searchDisabledPlaceholder": "Không có tài liệu để tìm kiếm",
   "knowledge.ui.searching": "Đang tìm...",
   "knowledgeview.AddFromURL": "Thêm từ URL",
   "knowledgeview.ChooseFiles": "Chọn file",

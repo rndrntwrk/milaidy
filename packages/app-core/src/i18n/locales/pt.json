@@ -536,6 +536,7 @@
   "idlecontent.Thought": "Pensamento",
   "knowledge.ui.search": "Buscar",
   "knowledge.ui.searchPlaceholder": "Busque conhecimento...",
+  "knowledge.ui.searchDisabledPlaceholder": "Não há documentos para pesquisar",
   "knowledge.ui.searching": "Buscando...",
   "knowledgeview.AddFromURL": "Adicionar do URL",
   "knowledgeview.ChooseFiles": "Escolha arquivos",
