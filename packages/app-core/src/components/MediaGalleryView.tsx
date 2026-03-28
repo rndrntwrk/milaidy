@@ -22,13 +22,10 @@ import {
   APP_SIDEBAR_CARD_ACTIVE_CLASSNAME,
   APP_SIDEBAR_CARD_BASE_CLASSNAME,
   APP_SIDEBAR_CARD_INACTIVE_CLASSNAME,
-  APP_SIDEBAR_HEADER_CLASSNAME,
   APP_SIDEBAR_INNER_CLASSNAME,
-  APP_SIDEBAR_KICKER_CLASSNAME,
-  APP_SIDEBAR_META_CLASSNAME,
   APP_SIDEBAR_PILL_CLASSNAME,
   APP_SIDEBAR_SCROLL_REGION_CLASSNAME,
-  APP_SIDEBAR_SEARCH_INPUT_CLASSNAME,
+  APP_SIDEBAR_SEARCH_INPUT_CLASSNAME
 } from "./sidebar-shell-styles";
 
 type MediaType = "all" | "image" | "video" | "audio";
@@ -285,12 +282,6 @@ export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
     <div className={APP_DESKTOP_SPLIT_SHELL_CLASSNAME}>
       <aside className={APP_DESKTOP_SIDEBAR_RAIL_STANDARD_CLASSNAME}>
         <div className={APP_SIDEBAR_INNER_CLASSNAME}>
-          <div className={`${APP_SIDEBAR_HEADER_CLASSNAME} border-b-0 pb-0`}>
-            <div className={APP_SIDEBAR_KICKER_CLASSNAME}>Database</div>
-            <div className={APP_SIDEBAR_META_CLASSNAME}>
-              Browse stored images, video, and audio from your workspace.
-            </div>
-          </div>
           <div className="space-y-3 pt-4">
             {leftNav}
             <DesktopRailSummaryCard>
@@ -328,11 +319,10 @@ export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
                     key={chip.id}
                     variant="ghost"
                     size="sm"
-                    className={`h-auto min-h-[2.25rem] rounded-xl border px-3 py-2 text-left text-[11px] font-semibold transition-colors ${
-                      isActive
-                        ? "border-accent/35 bg-accent/14 text-txt-strong"
-                        : "border-border/45 bg-bg/35 text-muted hover:border-border/60 hover:bg-bg-hover hover:text-txt"
-                    }`}
+                    className={`h-auto min-h-[2.25rem] rounded-xl border px-3 py-2 text-left text-[11px] font-semibold transition-colors ${isActive
+                      ? "border-accent/35 bg-accent/14 text-txt-strong"
+                      : "border-border/45 bg-bg/35 text-muted hover:border-border/60 hover:bg-bg-hover hover:text-txt"
+                      }`}
                     onClick={() => setFilter(chip.id)}
                   >
                     {chip.label}
@@ -362,19 +352,17 @@ export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
                     type="button"
                     // biome-ignore lint/suspicious/noArrayIndexKey: stable url plus index tiebreaker
                     key={`${item.url}-${index}`}
-                    className={`${APP_SIDEBAR_CARD_BASE_CLASSNAME} ${
-                      isActive
-                        ? APP_SIDEBAR_CARD_ACTIVE_CLASSNAME
-                        : APP_SIDEBAR_CARD_INACTIVE_CLASSNAME
-                    }`}
+                    className={`${APP_SIDEBAR_CARD_BASE_CLASSNAME} ${isActive
+                      ? APP_SIDEBAR_CARD_ACTIVE_CLASSNAME
+                      : APP_SIDEBAR_CARD_INACTIVE_CLASSNAME
+                      }`}
                     onClick={() => setSelectedMediaUrl(item.url)}
                   >
                     <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-[11px] font-bold uppercase ${
-                        isActive
-                          ? "border-accent/30 bg-accent/18 text-txt-strong"
-                          : "border-border/50 bg-bg-accent/80 text-muted"
-                      }`}
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-[11px] font-bold uppercase ${isActive
+                        ? "border-accent/30 bg-accent/18 text-txt-strong"
+                        : "border-border/50 bg-bg-accent/80 text-muted"
+                        }`}
                     >
                       {item.type.slice(0, 1)}
                     </div>

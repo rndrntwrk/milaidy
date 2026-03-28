@@ -34,13 +34,10 @@ import {
   APP_SIDEBAR_CARD_ACTIVE_CLASSNAME,
   APP_SIDEBAR_CARD_BASE_CLASSNAME,
   APP_SIDEBAR_CARD_INACTIVE_CLASSNAME,
-  APP_SIDEBAR_HEADER_CLASSNAME,
   APP_SIDEBAR_INNER_CLASSNAME,
-  APP_SIDEBAR_KICKER_CLASSNAME,
-  APP_SIDEBAR_META_CLASSNAME,
   APP_SIDEBAR_PILL_CLASSNAME,
   APP_SIDEBAR_SCROLL_REGION_CLASSNAME,
-  APP_SIDEBAR_SEARCH_INPUT_CLASSNAME,
+  APP_SIDEBAR_SEARCH_INPUT_CLASSNAME
 } from "./sidebar-shell-styles";
 import { createVectorBrowserRenderer, THREE } from "./vector-browser-three";
 
@@ -186,11 +183,11 @@ function rowToMemory(row: Record<string, unknown>): MemoryRecord {
     roomId: String(row.roomId ?? row.room_id ?? row.roomID ?? ""),
     entityId: String(
       row.entityId ??
-        row.entity_id ??
-        row.entityID ??
-        row.userId ??
-        row.user_id ??
-        "",
+      row.entity_id ??
+      row.entityID ??
+      row.userId ??
+      row.user_id ??
+      "",
     ),
     type: String(row.type ?? row.memoryType ?? row.memory_type ?? ""),
     createdAt: String(row.createdAt ?? row.created_at ?? row.timestamp ?? ""),
@@ -1486,12 +1483,6 @@ export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
     <div className={APP_DESKTOP_SPLIT_SHELL_CLASSNAME}>
       <aside className={APP_DESKTOP_SIDEBAR_RAIL_STANDARD_CLASSNAME}>
         <div className={APP_SIDEBAR_INNER_CLASSNAME}>
-          <div className={`${APP_SIDEBAR_HEADER_CLASSNAME} border-b-0 pb-0`}>
-            <div className={APP_SIDEBAR_KICKER_CLASSNAME}>Database</div>
-            <div className={APP_SIDEBAR_META_CLASSNAME}>
-              Explore memories, embeddings, and vector projections.
-            </div>
-          </div>
           <div className="space-y-3 pt-4">
             {leftNav}
             <DesktopRailSummaryCard>
@@ -1547,11 +1538,10 @@ export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={`${VECTOR_VIEW_TOGGLE_BASE_CLASSNAME} ${
-                    viewMode === "list"
-                      ? VECTOR_VIEW_TOGGLE_ACTIVE_CLASSNAME
-                      : VECTOR_VIEW_TOGGLE_INACTIVE_CLASSNAME
-                  }`}
+                  className={`${VECTOR_VIEW_TOGGLE_BASE_CLASSNAME} ${viewMode === "list"
+                    ? VECTOR_VIEW_TOGGLE_ACTIVE_CLASSNAME
+                    : VECTOR_VIEW_TOGGLE_INACTIVE_CLASSNAME
+                    }`}
                   onClick={() => setViewMode("list")}
                 >
                   {t("vectorbrowserview.List")}
@@ -1559,11 +1549,10 @@ export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={`${VECTOR_VIEW_TOGGLE_BASE_CLASSNAME} ${
-                    viewMode === "graph"
-                      ? VECTOR_VIEW_TOGGLE_ACTIVE_CLASSNAME
-                      : VECTOR_VIEW_TOGGLE_INACTIVE_CLASSNAME
-                  }`}
+                  className={`${VECTOR_VIEW_TOGGLE_BASE_CLASSNAME} ${viewMode === "graph"
+                    ? VECTOR_VIEW_TOGGLE_ACTIVE_CLASSNAME
+                    : VECTOR_VIEW_TOGGLE_INACTIVE_CLASSNAME
+                    }`}
                   onClick={() => setViewMode("graph")}
                 >
                   {t("vectorbrowserview.2D", { defaultValue: "2D" })}
@@ -1571,11 +1560,10 @@ export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={`${VECTOR_VIEW_TOGGLE_BASE_CLASSNAME} ${
-                    viewMode === "3d"
-                      ? VECTOR_VIEW_TOGGLE_ACTIVE_CLASSNAME
-                      : VECTOR_VIEW_TOGGLE_INACTIVE_CLASSNAME
-                  }`}
+                  className={`${VECTOR_VIEW_TOGGLE_BASE_CLASSNAME} ${viewMode === "3d"
+                    ? VECTOR_VIEW_TOGGLE_ACTIVE_CLASSNAME
+                    : VECTOR_VIEW_TOGGLE_INACTIVE_CLASSNAME
+                    }`}
                   onClick={() => setViewMode("3d")}
                 >
                   {t("vectorbrowserview.3D", { defaultValue: "3D" })}
@@ -1607,11 +1595,11 @@ export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
                   <div className="mt-1">
                     {Number(stats.dimensions) > 0
                       ? t("vectorbrowserview.DimensionsEmbeddings", {
-                          defaultValue: "{dimensions}D embeddings",
-                        }).replace("{dimensions}", String(stats.dimensions))
+                        defaultValue: "{dimensions}D embeddings",
+                      }).replace("{dimensions}", String(stats.dimensions))
                       : t("vectorbrowserview.Loading", {
-                          defaultValue: "loading...",
-                        })}
+                        defaultValue: "loading...",
+                      })}
                   </div>
                   {Number(stats.uniqueCount) > 0 ? (
                     <div className="mt-1">
@@ -1644,12 +1632,12 @@ export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
               <div className="rounded-xl border border-border/35 bg-bg/35 px-3 py-4 text-center text-xs text-muted">
                 {search
                   ? t("vectorbrowserview.NoRecordsMatchSearchQuery", {
-                      defaultValue: "No records match your search query.",
-                    })
+                    defaultValue: "No records match your search query.",
+                  })
                   : t("vectorbrowserview.NoMemoryRecordsDetected", {
-                      defaultValue:
-                        "No memory records detected in the database.",
-                    })}
+                    defaultValue:
+                      "No memory records detected in the database.",
+                  })}
               </div>
             ) : (
               memories.map((mem) => {
@@ -1660,19 +1648,17 @@ export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
                       mem.id || `${mem.content.slice(0, 30)}-${mem.createdAt}`
                     }
                     variant="ghost"
-                    className={`${APP_SIDEBAR_CARD_BASE_CLASSNAME} ${
-                      isActive
-                        ? APP_SIDEBAR_CARD_ACTIVE_CLASSNAME
-                        : APP_SIDEBAR_CARD_INACTIVE_CLASSNAME
-                    }`}
+                    className={`${APP_SIDEBAR_CARD_BASE_CLASSNAME} ${isActive
+                      ? APP_SIDEBAR_CARD_ACTIVE_CLASSNAME
+                      : APP_SIDEBAR_CARD_INACTIVE_CLASSNAME
+                      }`}
                     onClick={() => setSelectedMemory(mem)}
                   >
                     <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-[11px] font-bold uppercase ${
-                        isActive
-                          ? "border-accent/30 bg-accent/18 text-txt-strong"
-                          : "border-border/50 bg-bg-accent/80 text-muted"
-                      }`}
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-[11px] font-bold uppercase ${isActive
+                        ? "border-accent/30 bg-accent/18 text-txt-strong"
+                        : "border-border/50 bg-bg-accent/80 text-muted"
+                        }`}
                     >
                       {mem.type && mem.type !== "undefined"
                         ? mem.type.slice(0, 1)
