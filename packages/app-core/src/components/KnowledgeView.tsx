@@ -245,9 +245,7 @@ function UploadZone({
           onCheckedChange={(checked) => setIncludeImageDescriptions(!!checked)}
           disabled={uploading}
         />
-        <span className="min-w-0">
-          {t("knowledgeview.IncludeAIImageDes")}
-        </span>
+        <span className="min-w-0">{t("knowledgeview.IncludeAIImageDes")}</span>
       </label>
       <div
         className={`mt-3 min-h-[12rem] flex items-center justify-center rounded-2xl border-2 px-3 py-3 transition-colors ${
@@ -1294,9 +1292,9 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
                           doc={doc}
                           active={selectedDocId === doc.id}
                           onSelect={setSelectedDocId}
-                        onDelete={handleDelete}
-                        deleting={deleting === doc.id}
-                      />
+                          onDelete={handleDelete}
+                          deleting={deleting === doc.id}
+                        />
                       ))}
                 </div>
               </div>

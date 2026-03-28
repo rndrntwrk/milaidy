@@ -515,6 +515,7 @@
   "heartbeatsview.runCountPlural": "{{count}}회 실행",
   "heartbeatsview.runCountSingle": "{{count}}회 실행",
   "heartbeatsview.saveChanges": "변경 사항 저장",
+  "heartbeatsview.createFirstHeartbeat": "첫 하트비트 만들기",
   "heartbeatsview.selectAHeartbeat": "하트비트 선택",
   "heartbeatsview.statusFailed": "실패",
   "heartbeatsview.statusPaused": "일시중지됨",

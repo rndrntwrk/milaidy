@@ -1,4 +1,7 @@
-import { LanguageDropdown } from "@miladyai/app-core/components";
+import {
+  LANGUAGE_DROPDOWN_TRIGGER_CLASSNAME,
+  LanguageDropdown,
+} from "@miladyai/app-core/components";
 import type { UiLanguage } from "@miladyai/app-core/i18n";
 import { normalizeLanguage } from "@miladyai/app-core/i18n";
 import {
@@ -215,7 +218,7 @@ export function OnboardingWizard() {
             setUiLanguage={setUiLanguage}
             t={t}
             variant="companion"
-            triggerClassName="!h-9 !min-h-[36px] !rounded-[8px] !border !border-[var(--onboarding-card-border)] !bg-[var(--onboarding-card-bg)] !text-[var(--onboarding-text-primary)] !shadow-[0_2px_4px_rgba(0,0,0,0.04)] !ring-0 hover:!border-[var(--onboarding-field-focus-border)] transition-colors"
+            triggerClassName={LANGUAGE_DROPDOWN_TRIGGER_CLASSNAME}
           />
         </div>
 

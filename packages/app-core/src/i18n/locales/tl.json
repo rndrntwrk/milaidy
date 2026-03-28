@@ -515,6 +515,7 @@
   "heartbeatsview.runCountPlural": "{{count}} mga pagpapatakbo",
   "heartbeatsview.runCountSingle": "{{count}} pagpapatakbo",
   "heartbeatsview.saveChanges": "I-save ang mga Pagbabago",
+  "heartbeatsview.createFirstHeartbeat": "Gawin ang una mong heartbeat",
   "heartbeatsview.selectAHeartbeat": "Pumili ng Heartbeat",
   "heartbeatsview.statusFailed": "Nabigo",
   "heartbeatsview.statusPaused": "Naka-pause",

@@ -393,6 +393,16 @@ vi.mock("@miladyai/ui", async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
+    Button: ({
+      children,
+      className,
+      ...props
+    }: React.ButtonHTMLAttributes<HTMLButtonElement>) =>
+      React.createElement(
+        "button",
+        { type: "button", className, ...props },
+        children,
+      ),
     ConfirmDelete: ({
       onConfirm,
       children,
@@ -678,7 +688,7 @@ describe("KnowledgeView UI", () => {
     expect(allText).toContain("knowledgeview.Documents");
     expect(allText).not.toContain("upload files");
     expect(allText).not.toContain("add url");
-    expect(allText).not.toContain("\"go\"");
+    expect(allText).not.toContain('"go"');
     expect(allText).not.toContain("no results");
   });
 
@@ -786,7 +796,8 @@ describe("KnowledgeView UI", () => {
       await flushPromises();
     });
 
-    const initialCalls = vi.mocked(client.listKnowledgeDocuments).mock.calls.length;
+    const initialCalls = vi.mocked(client.listKnowledgeDocuments).mock.calls
+      .length;
     const refreshButton = findButtonByLabel(tree, "common.refresh");
 
     expect(refreshButton).toBeDefined();
@@ -818,7 +829,9 @@ describe("KnowledgeView UI", () => {
     expect(getRenderedText(tree)).not.toContain("common.refresh");
     expect(getRenderedText(tree)).toContain("Build your knowledge base");
     expect(getRenderedText(tree)).toContain("No documents yet");
-    expect(getRenderedText(tree)).not.toContain("knowledge.ui.searchDisabledHint");
+    expect(getRenderedText(tree)).not.toContain(
+      "knowledge.ui.searchDisabledHint",
+    );
     expect(
       getRenderedText(tree).match(
         /Upload files or add a URL from the sidebar to start reviewing metadata, previews, and indexed fragments\./g,
@@ -900,7 +913,9 @@ describe("KnowledgeView UI", () => {
     expect(findButtonByLabel(tree, "knowledgeview.Clear")).toBeUndefined();
     expect(getRenderedText(tree)).not.toContain("knowledgeview.Documents");
     expect(getRenderedText(tree)).not.toContain("README.md");
-    expect(getRenderedText(tree)).not.toContain("knowledge.ui.searchDisabledHint");
+    expect(getRenderedText(tree)).not.toContain(
+      "knowledge.ui.searchDisabledHint",
+    );
   });
 
   it("shows loading state when knowledgeLoading is true", async () => {

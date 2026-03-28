@@ -534,6 +534,9 @@ export function HeartbeatsView() {
       ? (triggers.find((trigger) => trigger.id === editingId)?.enabled ??
         form.enabled)
       : form.enabled;
+  const hasHeartbeats = triggers.length > 0;
+  const showFirstRunEmptyState =
+    !triggersLoading && !triggerError && !hasHeartbeats;
 
   return (
     <DesktopPageFrame>
@@ -1363,12 +1366,20 @@ export function HeartbeatsView() {
                   </div>
                 );
               })()) || (
-              <div className="flex h-full flex-col items-center justify-center p-8 text-center bg-bg/5">
+              <div className="flex h-full flex-col items-center justify-center bg-bg/5 p-8 text-center">
                 <DesktopEmptyStatePanel
                   className="h-full min-h-[22rem]"
-                  description={t("heartbeatsview.emptyStateDescription")}
+                  description={
+                    showFirstRunEmptyState
+                      ? undefined
+                      : t("heartbeatsview.emptyStateDescription")
+                  }
                   icon={<Clock3 className="h-7 w-7" />}
-                  title={t("heartbeatsview.selectAHeartbeat")}
+                  title={
+                    showFirstRunEmptyState
+                      ? t("heartbeatsview.createFirstHeartbeat")
+                      : t("heartbeatsview.selectAHeartbeat")
+                  }
                 />
               </div>
             )

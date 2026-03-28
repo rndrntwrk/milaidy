@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 29 messaging platforms — 20 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, Retake, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 28 messaging platforms — 19 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -38,10 +38,9 @@ Connectors are platform bridges that allow your agent to communicate across mess
 28. [Nextcloud Talk](#nextcloud-talk)
 29. [Tlon](#tlon)
 30. [Lens](#lens)
-31. [Retake](#retake)
-32. [Connector Lifecycle](#connector-lifecycle)
-33. [Multi-Account Support](#multi-account-support)
-34. [Session Management](#session-management)
+31. [Connector Lifecycle](#connector-lifecycle)
+32. [Multi-Account Support](#multi-account-support)
+33. [Session Management](#session-management)
 
 ---
 
@@ -70,7 +69,6 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
 | Lens | API key | Yes | N/A | No | Auto |
-| Retake | Access token | Yes | Yes | No | Auto |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
@@ -1093,32 +1091,6 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 
 ---
 
-## Retake
-
-**Plugin:** `@elizaos/plugin-retake`
-
-```json5
-{
-  connectors: {
-    retake: {
-      accessToken: "your-retake-access-token",
-    }
-  }
-}
-```
-
-| Env Variable | Config Path |
-|-------------|-------------|
-| `RETAKE_AGENT_TOKEN` | `connectors.retake.accessToken` |
-
-**Auto-enable triggers:** `accessToken` or `enabled: true`.
-
-**Features:**
-- Retake platform messaging
-- Also supports streaming output — see [Streaming](/skills/streaming)
-
----
-
 ## Connector Lifecycle
 
 The typical connector lifecycle follows this pattern:
@@ -1304,10 +1276,10 @@ The `dmPolicy` options are:
 - Authentication fails:
   Confirm `connectors.twitch.accessToken` or `connectors.twitch.clientId` is set. Alternatively, set `enabled: true` to force-enable. Ensure the access token has the required chat scopes.
 
-**Retake / Blooio:**
+**Blooio:**
 
 - Authentication fails:
-  Retake uses `accessToken` or `enabled: true` for configuration detection. Blooio uses `apiKey`. Confirm credentials are set under the respective connector config.
+  Blooio uses `apiKey`. Confirm credentials are set under the connector config.
 
 **Bluesky:**
 

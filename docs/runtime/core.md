@@ -165,7 +165,6 @@ const CHANNEL_PLUGIN_MAP = {
   feishu:      "@elizaos/plugin-feishu",
   matrix:      "@elizaos/plugin-matrix",
   nostr:       "@elizaos/plugin-nostr",
-  retake:      "@elizaos/plugin-retake",
   blooio:      "@elizaos/plugin-blooio",
   twitch:      "@elizaos/plugin-twitch",
 };

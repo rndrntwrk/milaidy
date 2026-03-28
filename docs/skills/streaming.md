@@ -92,9 +92,9 @@ Parameters: { "destinationName": "Twitch" }
 **Configured destinations depend on installed streaming plugins:**
 - `twitch-streaming` → Twitch
 - `youtube-streaming` → YouTube Live
-- `retake` → Retake.tv
 - `x-streaming` → X (Twitter)
 - `custom-rtmp` → Any RTMP endpoint
+- `pumpfun-streaming` → Pump.fun
 
 **Workflow to switch channels:**
 1. `GO_OFFLINE`

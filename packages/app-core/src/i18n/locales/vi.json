@@ -515,6 +515,7 @@
   "heartbeatsview.runCountPlural": "{{count}} lần chạy",
   "heartbeatsview.runCountSingle": "{{count}} lần chạy",
   "heartbeatsview.saveChanges": "Lưu thay đổi",
+  "heartbeatsview.createFirstHeartbeat": "Tạo heartbeat đầu tiên",
   "heartbeatsview.selectAHeartbeat": "Chọn một Heartbeat",
   "heartbeatsview.statusFailed": "Thất bại",
   "heartbeatsview.statusPaused": "Tạm dừng",
