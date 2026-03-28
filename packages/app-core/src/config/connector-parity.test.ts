@@ -123,6 +123,7 @@ const CONNECTOR_CREDS: Record<string, Record<string, unknown>> = {
   feishu: { token: "fs-token" },
   matrix: { token: "matrix-token" },
   nostr: { apiKey: "nostr-key" },
+  retake: { accessToken: "rtk-token" },
   blooio: { apiKey: "blk-key" },
   twitch: { accessToken: "twitch-token" },
   wechat: { apiKey: "key" },

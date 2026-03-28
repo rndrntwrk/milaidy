@@ -20,7 +20,11 @@ import { sendMessageAction } from "../actions/send-message";
 import {
   goLiveAction,
   goOfflineAction,
+  manageOverlayWidgetAction,
+  setStreamDestinationAction,
+  speakOnStreamAction,
 } from "../actions/stream-control";
+import { switchStreamSourceAction } from "../actions/switch-stream-source";
 import { terminalAction } from "../actions/terminal";
 import { adminTrustProvider } from "../providers/admin-trust";
 
@@ -133,6 +137,13 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       terminalAction,
       createTriggerTaskAction,
       emoteAction,
+      // switchStreamSourceAction,
+      // goLiveAction,
+      // goOfflineAction,
+      // setStreamDestinationAction,
+      // speakOnStreamAction,
+      // manageOverlayWidgetAction,
+      // ...loadCustomActions(),
     ],
   };
 

@@ -53,5 +53,6 @@ export {
   type ShareTargetPayload,
   setupPlatformStyles,
 } from "./init";
+export * from "./lifo";
 export * from "./onboarding-reset";
 export * from "./window-shell";

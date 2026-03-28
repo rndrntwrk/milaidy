@@ -50,6 +50,7 @@ const AI_PROVIDERS = new Set([
 
 export const STREAMING_DESTINATIONS = new Set([
   "streaming-base",
+  "retake",
   "custom-rtmp",
   "youtube-streaming",
   "twitch-streaming",
@@ -161,6 +162,7 @@ const SETUP_GUIDE_ANCHORS = {
   mcp: "#mcp-model-context-protocol",
   iq: "#iq-solana-on-chain",
   "gmail-watch": "#gmail-watch",
+  retake: "#retaketv",
   "streaming-base": "#enable-streaming-streaming-base",
   "twitch-streaming": "#twitch-streaming",
   "youtube-streaming": "#youtube-streaming",

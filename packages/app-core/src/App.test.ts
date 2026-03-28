@@ -27,6 +27,7 @@ vi.mock("@capacitor/keyboard", () => ({
 vi.mock("@miladyai/app-core/platform", () => ({
   isIOS: false,
   isNative: false,
+  isLifoPopoutValue: vi.fn(() => false),
 }));
 
 vi.mock("./state", () => ({

@@ -18,6 +18,7 @@ import {
 } from "@miladyai/app-core/components";
 import { useApp } from "@miladyai/app-core/state";
 import type { JSX } from "react";
+import { BrowserSurfaceWindow } from "../components";
 import {
   resolveDetachedShellTarget,
   type WindowShellRoute,
@@ -87,6 +88,8 @@ function DetachedShellContent({ route }: DetachedShellRootProps): JSX.Element {
   switch (target.tab) {
     case "chat":
       return <DetachedChatView />;
+    case "browser":
+      return <BrowserSurfaceWindow />;
     case "connectors":
       return <ConnectorsPageView />;
     case "plugins":
@@ -124,15 +127,17 @@ export function DetachedShellRoot({
     retryStartup,
     startupError,
   } = useApp();
-  if (startupError) {
+  const isBrowserSurface = route.mode === "surface" && route.tab === "browser";
+
+  if (!isBrowserSurface && startupError) {
     return <StartupFailureView error={startupError} onRetry={retryStartup} />;
   }
 
-  if (authRequired) {
+  if (!isBrowserSurface && authRequired) {
     return <PairingView />;
   }
 
-  if (!onboardingLoading && !onboardingComplete) {
+  if (!isBrowserSurface && !onboardingLoading && !onboardingComplete) {
     return (
       <div className="flex h-full min-h-0 w-full flex-col font-body text-txt bg-bg">
         <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

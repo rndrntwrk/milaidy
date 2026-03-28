@@ -3,6 +3,7 @@ import type { HistoryLike } from "./types";
 
 export type DetachedSurfaceTab =
   | "chat"
+  | "browser"
   | "release"
   | "triggers"
   | "plugins"
@@ -12,11 +13,15 @@ export type DetachedSurfaceTab =
 export type WindowShellRoute =
   | { mode: "main" }
   | { mode: "settings"; tab?: string }
-  | { mode: "surface"; tab: DetachedSurfaceTab };
+  | { mode: "surface"; tab: "browser"; browse?: string }
+  | {
+      mode: "surface";
+      tab: Exclude<DetachedSurfaceTab, "browser">;
+    };
 
 export interface DetachedShellTarget {
   settingsSection?: string;
-  tab: "chat" | "connectors" | "plugins" | "settings" | "triggers";
+  tab: "browser" | "chat" | "connectors" | "plugins" | "settings" | "triggers";
 }
 
 export function parseWindowShellRoute(search: string): WindowShellRoute {
@@ -30,6 +35,12 @@ export function parseWindowShellRoute(search: string): WindowShellRoute {
 
   if (shell === "surface") {
     const tab = params.get("tab");
+    if (tab === "browser") {
+      const browse = params.get("browse")?.trim();
+      return browse
+        ? { mode: "surface", tab: "browser", browse }
+        : { mode: "surface", tab: "browser" };
+    }
     if (
       tab === "chat" ||
       tab === "release" ||
@@ -77,6 +88,8 @@ export function resolveDetachedShellTarget(
   switch (route.tab) {
     case "chat":
       return { tab: "chat" };
+    case "browser":
+      return { tab: "browser" };
     case "release":
       return { tab: "settings", settingsSection: "updates" };
     case "triggers":
@@ -92,6 +105,9 @@ export function resolveDetachedShellTarget(
 
 export function resolveDetachedShellPathname(route: WindowShellRoute): string {
   const target = resolveDetachedShellTarget(route);
+  if (target.tab === "browser") {
+    return "/browser";
+  }
   return pathForTab(target.tab);
 }
 

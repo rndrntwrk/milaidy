@@ -196,6 +196,7 @@ export default defineConfig({
       "packages/app-core/src/**/*.test.tsx",
       "packages/app-core/test/**/*.test.ts",
       "packages/app-core/test/**/*.test.tsx",
+      "packages/plugin-retake/src/**/*.test.ts",
       "packages/plugin-wechat/src/**/*.test.ts",
       "src/**/*.test.ts",
       "scripts/**/*.test.ts",

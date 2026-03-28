@@ -361,6 +361,11 @@ vi.mock("@miladyai/app-core/src/components/TrajectoryDetailView", () => ({
     React.createElement("section", null, "TrajectoryDetailView Ready"),
 }));
 
+vi.mock("@miladyai/app-core/src/components/LifoSandboxView", () => ({
+  LifoSandboxView: () =>
+    React.createElement("section", null, "LifoSandboxView Ready"),
+}));
+
 vi.mock("@miladyai/app-core/hooks", async () => {
   const actual = await vi.importActual<
     typeof import("@miladyai/app-core/hooks")
@@ -527,6 +532,7 @@ function expectShellForTab(text: string, tab: Tab): void {
       case "trajectories":
       case "runtime":
       case "database":
+      case "lifo":
       case "logs":
       case "security":
         return "AdvancedPageView Ready";
@@ -587,6 +593,7 @@ describe("shell mode switching (e2e)", () => {
       "trajectories",
       "runtime",
       "database",
+      "lifo",
       "logs",
     ];
 

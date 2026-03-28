@@ -30,11 +30,13 @@ export const CONNECTOR_PLUGINS: Record<string, string> = {
   feishu: "@elizaos/plugin-feishu",
   matrix: "@elizaos/plugin-matrix",
   nostr: "@elizaos/plugin-nostr",
+  retake: "@elizaos/plugin-retake",
   blooio: "@elizaos/plugin-blooio",
   twitch: "@elizaos/plugin-twitch",
 };
 
 export const STREAMING_PLUGINS: Record<string, string> = {
+  retake: "@elizaos/plugin-retake",
   twitch: "@elizaos/plugin-twitch-streaming",
   youtube: "@elizaos/plugin-youtube-streaming",
   customRtmp: "@elizaos/plugin-custom-rtmp",
@@ -194,6 +196,8 @@ export function isConnectorConfigured(
               },
             )),
       );
+    case "retake":
+      return Boolean(config.accessToken || config.enabled === true);
     case "twitch":
       return Boolean(
         config.accessToken || config.clientId || config.enabled === true,
@@ -212,6 +216,8 @@ export function isStreamingDestinationConfigured(
   if (config.enabled === false) return false;
 
   switch (destName) {
+    case "retake":
+      return Boolean(config.accessToken || config.enabled === true);
     case "twitch":
       return Boolean(config.streamKey || config.enabled === true);
     case "youtube":

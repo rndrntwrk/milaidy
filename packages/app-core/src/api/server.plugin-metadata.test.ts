@@ -33,6 +33,22 @@ const hasManifest = manifestPlugins.length > 0;
 
 describe("plugin metadata discovery", () => {
   it.skipIf(!hasManifest)(
+    "returns retake as a streaming plugin with setup metadata from the bundled manifest",
+    () => {
+      const plugins = manifestPlugins;
+      const retake = plugins.find((plugin) => plugin.id === "retake");
+
+      expect(retake).toBeDefined();
+      expect(retake?.category).toBe("streaming");
+      expect(retake?.tags?.length).toBeGreaterThan(0);
+      expect(retake?.setupGuideUrl).toMatch(
+        /^https:\/\/docs\.(elizaos|eliza|milady)\.ai\/plugin-setup-guide#retaketv$/,
+      );
+      expect(retake?.repository).toContain("plugin-retake");
+    },
+  );
+
+  it.skipIf(!hasManifest)(
     "fills fallback descriptions and tags for social connectors",
     () => {
       const plugins = manifestPlugins;
@@ -48,14 +64,14 @@ describe("plugin metadata discovery", () => {
   );
 
   it("enriches installed plugins with homepage, repository, and setup links", () => {
-    const installPath = makeTempDir("plugin-twitch-");
+    const installPath = makeTempDir("plugin-retake-");
     writeFileSync(
       path.join(installPath, "package.json"),
       JSON.stringify(
         {
-          name: "@elizaos/plugin-twitch",
-          description: "Twitch streaming plugin",
-          homepage: "https://twitch.tv",
+          name: "@elizaos/plugin-retake",
+          description: "Retake.tv streaming plugin",
+          homepage: "https://retake.tv",
           repository: {
             type: "git",
             url: "git+https://github.com/elizaos/eliza.git",
@@ -63,9 +79,9 @@ describe("plugin metadata discovery", () => {
           keywords: ["streaming", "video", "creator"],
           agentConfig: {
             pluginParameters: {
-              TWITCH_STREAM_KEY: {
+              RETAKE_AGENT_TOKEN: {
                 type: "string",
-                description: "Stream key",
+                description: "Token",
                 required: true,
               },
             },
@@ -81,7 +97,7 @@ describe("plugin metadata discovery", () => {
       {
         plugins: {
           installs: {
-            "@elizaos/plugin-twitch": {
+            "@elizaos/plugin-retake": {
               installPath,
               version: "0.1.0",
             },
@@ -92,11 +108,15 @@ describe("plugin metadata discovery", () => {
     );
 
     expect(plugins).toHaveLength(1);
-    expect(plugins[0]?.homepage).toBe("https://twitch.tv");
+    expect(plugins[0]?.category).toBe("streaming");
+    expect(plugins[0]?.homepage).toBe("https://retake.tv");
     expect(plugins[0]?.repository).toBe("https://github.com/elizaos/eliza");
+    expect(plugins[0]?.setupGuideUrl).toMatch(
+      /^https:\/\/docs\.(elizaos|eliza|milady)\.ai\/plugin-setup-guide#retaketv$/,
+    );
     expect(plugins[0]?.tags).toEqual(
       expect.arrayContaining(["streaming", "video", "creator"]),
     );
-    expect(plugins[0]?.parameters[0]?.key).toBe("TWITCH_STREAM_KEY");
+    expect(plugins[0]?.parameters[0]?.key).toBe("RETAKE_AGENT_TOKEN");
   });
 });

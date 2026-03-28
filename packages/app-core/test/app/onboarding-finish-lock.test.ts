@@ -200,15 +200,7 @@ async function advanceToLaunch(getApi: () => ProbeApi) {
   for (let i = 0; i < 20; i += 1) {
     if (getApi().getOnboardingStep() === "launch") return;
     await act(async () => {
-      const api = getApi();
-      if (api.getOnboardingStep() === "hosting") {
-        api.setState("onboardingRunMode", "local");
-      }
-      if (api.getOnboardingStep() === "providers") {
-        api.setState("onboardingProvider", "openai");
-        api.setState("onboardingApiKey", "sk-test-onboarding-key");
-      }
-      await api.handleOnboardingNext();
+      await getApi().handleOnboardingNext();
     });
   }
   throw new Error("Failed to reach launch onboarding step");
@@ -218,15 +210,7 @@ async function advanceToPermissions(getApi: () => ProbeApi) {
   for (let i = 0; i < 20; i += 1) {
     if (getApi().getOnboardingStep() === "permissions") return;
     await act(async () => {
-      const api = getApi();
-      if (api.getOnboardingStep() === "hosting") {
-        api.setState("onboardingRunMode", "local");
-      }
-      if (api.getOnboardingStep() === "providers") {
-        api.setState("onboardingProvider", "openai");
-        api.setState("onboardingApiKey", "sk-test-onboarding-key");
-      }
-      await api.handleOnboardingNext();
+      await getApi().handleOnboardingNext();
     });
   }
   throw new Error("Failed to reach permissions onboarding step");
@@ -252,6 +236,12 @@ async function waitForOnboardingCompletion(getApi: () => ProbeApi) {
     });
   }
   throw new Error("Onboarding did not complete");
+}
+
+function configureOnboardingProviders(api: ProbeApi) {
+  api.setState("onboardingRunMode", "local");
+  api.setState("onboardingProvider", "openai");
+  api.setState("onboardingApiKey", "sk-test-onboarding-key");
 }
 
 describe("onboarding finish locking", () => {
@@ -408,6 +398,9 @@ describe("onboarding finish locking", () => {
     };
 
     await waitForOnboardingOptions(requireApi);
+    await act(async () => {
+      configureOnboardingProviders(requireApi());
+    });
     await advanceToLaunch(requireApi);
 
     await act(async () => {
@@ -455,6 +448,9 @@ describe("onboarding finish locking", () => {
     };
 
     await waitForOnboardingOptions(requireApi);
+    await act(async () => {
+      configureOnboardingProviders(requireApi());
+    });
     await advanceToLaunch(requireApi);
 
     await act(async () => {
@@ -506,6 +502,9 @@ describe("onboarding finish locking", () => {
     };
 
     await waitForOnboardingOptions(requireApi);
+    await act(async () => {
+      configureOnboardingProviders(requireApi());
+    });
     await advanceToPermissions(requireApi);
 
     await act(async () => {
@@ -563,6 +562,9 @@ describe("onboarding finish locking", () => {
     };
 
     await waitForOnboardingOptions(requireApi);
+    await act(async () => {
+      configureOnboardingProviders(requireApi());
+    });
     await advanceToLaunch(requireApi);
 
     await act(async () => {
@@ -649,6 +651,9 @@ describe("onboarding finish locking", () => {
     };
 
     await waitForOnboardingOptions(requireApi);
+    await act(async () => {
+      configureOnboardingProviders(requireApi());
+    });
     await advanceToLaunch(requireApi);
 
     await act(async () => {

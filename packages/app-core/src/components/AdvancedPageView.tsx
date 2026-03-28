@@ -8,6 +8,7 @@
  *   - Trajectories: LLM call viewer and analysis
  *   - Runtime: Runtime object inspection
  *   - Databases: Tables/media/vector browser
+ *   - Lifo: Browser-native terminal sandbox
  *   - Logs: Runtime log viewer
  */
 
@@ -26,6 +27,7 @@ import {
   DESKTOP_SEGMENTED_ITEM_INACTIVE_CLASSNAME,
 } from "./desktop-surface-primitives";
 import { FineTuningView } from "./FineTuningView";
+import { LifoSandboxView } from "./LifoSandboxView";
 import { LogsPageView } from "./LogsPageView";
 import { PluginsPageView } from "./PluginsPageView";
 import { RuntimeView } from "./RuntimeView";
@@ -41,6 +43,7 @@ type SubTab =
   | "runtime"
   | "database"
   | "desktop"
+  | "lifo"
   | "logs";
 
 const SUB_TABS: Array<{ id: SubTab; label: string; description: string }> = [
@@ -77,6 +80,11 @@ const SUB_TABS: Array<{ id: SubTab; label: string; description: string }> = [
     description:
       "Native runtime diagnostics, detached windows, file dialogs, clipboard, and shell controls",
   },
+  // {
+  //   id: "lifo",
+  //   label: "Lifo",
+  //   description: "Browser-native shell sandbox and file explorer",
+  // },
   { id: "logs", label: "Logs", description: "Runtime and service logs" },
 ];
 
@@ -111,6 +119,8 @@ function mapTabToSubTab(tab: Tab): SubTab {
       return "database";
     case "desktop":
       return "desktop";
+    case "lifo":
+      return "lifo";
     case "logs":
       return "logs";
     default:
@@ -193,6 +203,8 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
         return <DatabasePageView />;
       case "desktop":
         return <DesktopWorkspaceSection />;
+      case "lifo":
+        return <LifoSandboxView />;
       case "logs":
         return <LogsPageView />;
       default:
