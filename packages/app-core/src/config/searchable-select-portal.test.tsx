@@ -12,14 +12,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import React from "react";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SELECT_FLOATING_LAYER_NAME,
   SELECT_FLOATING_LAYER_Z_INDEX,
@@ -129,7 +122,10 @@ describe("SearchableSelectInner portal contract", () => {
     });
     mockGetOnboardingOptions.mockResolvedValue({
       models: {
-        small: [buildModel("small-1", "Small One"), buildModel("small-2", "Small Two")],
+        small: [
+          buildModel("small-1", "Small One"),
+          buildModel("small-2", "Small Two"),
+        ],
         large: Array.from({ length: 10 }, (_, index) =>
           buildModel(`large-${index + 1}`, `Large ${index + 1}`),
         ),
@@ -209,11 +205,15 @@ describe("SearchableSelectInner portal contract", () => {
   });
 
   it("keeps the source contract for body portals and fixed positioning", () => {
-    expect(configFieldSource).toContain('import { createPortal } from "react-dom"');
+    expect(configFieldSource).toContain(
+      'import { createPortal } from "react-dom"',
+    );
     expect(configFieldSource).toContain("createPortal(");
     expect(configFieldSource).toContain("document.body");
     expect(configFieldSource).toContain('position: "fixed"');
-    expect(configFieldSource).toContain("setDropdownStyle(computeDropdownStyle())");
+    expect(configFieldSource).toContain(
+      "setDropdownStyle(computeDropdownStyle())",
+    );
   });
 });
 
