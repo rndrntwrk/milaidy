@@ -37,6 +37,8 @@ export interface TradePanelProps {
     request: BscTradeExecuteRequest,
   ) => Promise<BscTradeExecuteResponse>;
   getBscTradeTxStatus?: (hash: string) => Promise<BscTradeTxStatusResponse>;
+  /** When true, trades are routed through Steward vault for policy enforcement. */
+  stewardConnected?: boolean;
 }
 
 /* ── Component ─────────────────────────────────────────────────────── */
@@ -49,6 +51,7 @@ export function TradePanel({
   getBscTradeQuote,
   executeBscTrade,
   getBscTradeTxStatus,
+  stewardConnected,
 }: TradePanelProps) {
   const { t, copyToClipboard, setActionNotice } = useApp();
   const [quickTokenAddress, setQuickTokenAddress] = useState("");

@@ -393,6 +393,90 @@ export function getWalletAddresses(): WalletAddresses {
   return { evmAddress, solanaAddress };
 }
 
+/**
+ * Extended wallet addresses including steward-managed wallets.
+ * Calls steward API (async) to discover additional addresses.
+ * Key-derived addresses are always preferred; steward addresses fill gaps.
+ */
+export async function getWalletAddressesWithSteward(): Promise<
+  WalletAddresses & {
+    stewardEvmAddress?: string | null;
+    stewardSolanaAddress?: string | null;
+  }
+> {
+  const base = getWalletAddresses();
+
+  // Only augment when steward is configured
+  const stewardApiUrl = process.env.STEWARD_API_URL?.trim();
+  if (!stewardApiUrl) {
+    return base;
+  }
+
+  const agentId =
+    process.env.STEWARD_AGENT_ID?.trim() ||
+    process.env.MILADY_STEWARD_AGENT_ID?.trim() ||
+    process.env.ELIZA_STEWARD_AGENT_ID?.trim() ||
+    base.evmAddress?.trim() ||
+    null;
+
+  if (!agentId) {
+    return base;
+  }
+
+  try {
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+    };
+    const bearerToken = process.env.STEWARD_AGENT_TOKEN?.trim();
+    const apiKey = process.env.STEWARD_API_KEY?.trim();
+    const tenantId = process.env.STEWARD_TENANT_ID?.trim();
+
+    if (bearerToken) {
+      headers.Authorization = `Bearer ${bearerToken}`;
+    } else if (apiKey) {
+      headers["X-Steward-Key"] = apiKey;
+    }
+    if (tenantId) {
+      headers["X-Steward-Tenant"] = tenantId;
+    }
+
+    const res = await fetch(
+      `${stewardApiUrl}/agents/${encodeURIComponent(agentId)}`,
+      { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
+    );
+
+    if (!res.ok) {
+      logger.warn(`Steward agent lookup returned ${res.status}`);
+      return base;
+    }
+
+    const body = (await res.json()) as {
+      ok?: boolean;
+      data?: {
+        walletAddress?: string;
+        walletAddresses?: { evm?: string; solana?: string };
+      };
+    };
+
+    const agent = body.data ?? (body as unknown as typeof body.data);
+    const stewardEvm =
+      agent?.walletAddresses?.evm?.trim() ||
+      agent?.walletAddress?.trim() ||
+      null;
+    const stewardSolana = agent?.walletAddresses?.solana?.trim() || null;
+
+    return {
+      evmAddress: base.evmAddress ?? stewardEvm,
+      solanaAddress: base.solanaAddress ?? stewardSolana,
+      stewardEvmAddress: stewardEvm,
+      stewardSolanaAddress: stewardSolana,
+    };
+  } catch (err) {
+    logger.warn(`Steward wallet address lookup failed: ${err}`);
+    return base;
+  }
+}
+
 // ── Helius API (Solana tokens + NFTs) ─────────────────────────────────
 
 interface HeliusAsset {

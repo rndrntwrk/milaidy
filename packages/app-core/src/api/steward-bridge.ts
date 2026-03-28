@@ -2,11 +2,21 @@ import {
   type PolicyResult,
   type PolicyRule,
   type SignTransactionInput,
-  type TxRecord,
   StewardApiError,
   StewardClient,
+  type TxRecord,
 } from "@stwd/sdk";
+import type {
+  StewardSignRequest,
+  StewardSignResponse,
+} from "@miladyai/shared/contracts/wallet";
 import { normalizeEnvValueOrNull } from "../utils/env";
+import {
+  type PersistedStewardCredentials,
+  loadStewardCredentials,
+  resolveEffectiveStewardConfig,
+  saveStewardCredentials,
+} from "../services/steward-credentials";
 
 export interface StewardBridgeOptions {
   env?: NodeJS.ProcessEnv;
@@ -23,6 +33,9 @@ export interface StewardBridgeStatus {
   agentId: string | null;
   evmAddress: string | null;
   error: string | null;
+  walletAddresses?: { evm: string | null; solana: string | null };
+  agentName?: string;
+  vaultHealth?: "ok" | "degraded" | "error";
 }
 
 export interface StewardPendingApprovalResult {
@@ -88,6 +101,22 @@ export async function getStewardBridgeStatus(
   const client = createStewardClient(options);
 
   if (!baseUrl || !client) {
+    // Check persisted credentials as fallback
+    const persisted = resolveEffectiveStewardConfig(env);
+    if (!persisted) {
+      return {
+        configured: false,
+        available: false,
+        connected: false,
+        baseUrl,
+        agentId,
+        evmAddress,
+        error: null,
+      };
+    }
+  }
+
+  if (!baseUrl || !client) {
     return {
       configured: false,
       available: false,
@@ -100,9 +129,15 @@ export async function getStewardBridgeStatus(
   }
 
   try {
+    let agentData: {
+      walletAddress?: string;
+      walletAddresses?: { evm?: string; solana?: string };
+      name?: string;
+    } | null = null;
+
     if (agentId) {
       try {
-        await client.getAgent(agentId);
+        agentData = (await client.getAgent(agentId)) as unknown as typeof agentData;
       } catch (error: unknown) {
         if (
           !(error instanceof StewardApiError) ||
@@ -116,14 +151,33 @@ export async function getStewardBridgeStatus(
       await client.listAgents();
     }
 
+    // Extract wallet addresses from agent data
+    const walletAddresses = agentData
+      ? {
+          evm: agentData.walletAddresses?.evm?.trim() || agentData.walletAddress?.trim() || null,
+          solana: agentData.walletAddresses?.solana?.trim() || null,
+        }
+      : undefined;
+
+    const agentName = agentData?.name || undefined;
+
+    // Determine vault health by checking if we could read the agent
+    let vaultHealth: "ok" | "degraded" | "error" = "ok";
+    if (agentId && !agentData) {
+      vaultHealth = "degraded";
+    }
+
     return {
       configured: true,
       available: true,
       connected: true,
       baseUrl,
       agentId,
-      evmAddress,
+      evmAddress: walletAddresses?.evm ?? evmAddress,
       error: null,
+      walletAddresses,
+      agentName,
+      vaultHealth,
     };
   } catch (error) {
     return {
@@ -134,6 +188,7 @@ export async function getStewardBridgeStatus(
       agentId,
       evmAddress,
       error: formatStewardError(error),
+      vaultHealth: "error",
     };
   }
 }
@@ -210,15 +265,137 @@ export async function signTransactionWithOptionalSteward(params: {
   throw new Error("Steward returned an unsigned transaction unexpectedly");
 }
 
+// ── Wallet address / balance / token helpers ─────────────────────────────────
+
+export interface StewardWalletAddresses {
+  evmAddress: string | null;
+  solanaAddress: string | null;
+}
+
+/**
+ * Fetch steward-managed wallet addresses for the configured agent.
+ * Calls `GET /agents/:agentId` and extracts `walletAddresses.evm` / `walletAddresses.solana`.
+ * Falls back to the flat `walletAddress` field if the extended shape is missing.
+ */
+export async function getStewardWalletAddresses(
+  options: StewardBridgeOptions = {},
+): Promise<StewardWalletAddresses> {
+  const env = options.env ?? process.env;
+  const evmAddr = options.evmAddress ?? null;
+  const agentId =
+    options.agentId ?? resolveStewardAgentId(env, evmAddr) ?? null;
+  const client = createStewardClient(options);
+
+  if (!client || !agentId) {
+    return { evmAddress: null, solanaAddress: null };
+  }
+
+  // The SDK's AgentIdentity type only declares `walletAddress` (string),
+  // but the live API returns an extended `walletAddresses` object with
+  // per-chain addresses.  Cast to `unknown` to access those extra fields.
+  const agent = (await client.getAgent(agentId)) as unknown as {
+    walletAddress?: string;
+    walletAddresses?: { evm?: string; solana?: string };
+  };
+
+  const evmAddress =
+    agent.walletAddresses?.evm?.trim() || agent.walletAddress?.trim() || null;
+  const solanaAddress = agent.walletAddresses?.solana?.trim() || null;
+
+  return { evmAddress, solanaAddress };
+}
+
+export interface StewardBalanceResult {
+  balance: string;
+  formatted: string;
+  symbol: string;
+  chainId: number;
+}
+
+/**
+ * Fetch the native balance for a steward-managed agent wallet.
+ * Uses the SDK's `getBalance()` when available.
+ */
+export async function getStewardBalance(
+  agentId: string,
+  chainId?: number,
+  options: StewardBridgeOptions = {},
+): Promise<StewardBalanceResult> {
+  const client = createStewardClient(options);
+  if (!client) throw new Error("Steward not configured");
+
+  const result = await client.getBalance(agentId, chainId);
+  return {
+    balance: result.balances.native,
+    formatted: result.balances.nativeFormatted,
+    symbol: result.balances.symbol,
+    chainId: result.balances.chainId,
+  };
+}
+
+export interface StewardTokenBalancesResult {
+  native: {
+    balance: string;
+    formatted: string;
+    symbol: string;
+    chainId: number;
+  };
+  tokens: Array<{
+    address: string;
+    symbol: string;
+    name: string;
+    balance: string;
+    formatted: string;
+    decimals: number;
+    valueUsd?: string;
+    logoUrl?: string;
+  }>;
+}
+
+/**
+ * Fetch token balances for a steward-managed agent wallet.
+ * The SDK doesn't expose a token-list endpoint, so this uses a direct
+ * fetch to `GET /agents/:agentId/tokens?chainId=X`.
+ */
+export async function getStewardTokenBalances(
+  agentId: string,
+  chainId?: number,
+  options: StewardBridgeOptions = {},
+): Promise<StewardTokenBalancesResult> {
+  const env = options.env ?? process.env;
+  const baseUrl = normalizeEnvValue(env.STEWARD_API_URL);
+  if (!baseUrl) throw new Error("Steward not configured");
+
+  const headers = buildStewardHeaders(env);
+  const qs = chainId != null ? `?chainId=${encodeURIComponent(chainId)}` : "";
+  const res = await fetch(
+    `${baseUrl}/agents/${encodeURIComponent(agentId)}/tokens${qs}`,
+    { headers },
+  );
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "Unknown error");
+    throw new Error(
+      `Steward token balances failed (${res.status}): ${errText}`,
+    );
+  }
+
+  const body = (await res.json()) as {
+    ok?: boolean;
+    data?: StewardTokenBalancesResult;
+  };
+  return (
+    body.data ?? { native: { balance: "0", formatted: "0", symbol: "???", chainId: chainId ?? 0 }, tokens: [] }
+  );
+}
+
 // ── Extended steward operations (not yet in @stwd/sdk) ───────────────────────
 
 /**
  * Build auth headers for direct steward API calls.
  * Used for endpoints not yet exposed in the SDK (pending, approve, deny).
  */
-function buildStewardHeaders(
-  env: NodeJS.ProcessEnv = process.env,
-): Headers {
+function buildStewardHeaders(env: NodeJS.ProcessEnv = process.env): Headers {
   const headers = new Headers();
   headers.set("Content-Type", "application/json");
   headers.set("Accept", "application/json");
@@ -272,7 +449,9 @@ export async function getStewardPendingApprovals(
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "Unknown error");
-    throw new Error(`Steward pending approvals failed (${res.status}): ${errText}`);
+    throw new Error(
+      `Steward pending approvals failed (${res.status}): ${errText}`,
+    );
   }
 
   const body = await res.json();
@@ -312,15 +491,19 @@ export async function approveStewardTransaction(
 export async function denyStewardTransaction(
   agentId: string,
   txId: string,
+  reason?: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<{ txId: string }> {
   const baseUrl = getStewardBaseUrl(env);
   if (!baseUrl) throw new Error("Steward not configured");
 
   const headers = buildStewardHeaders(env);
+  const reqBody: Record<string, string> = {};
+  if (reason) reqBody.reason = reason;
+
   const res = await fetch(
     `${baseUrl}/vault/${encodeURIComponent(agentId)}/reject/${encodeURIComponent(txId)}`,
-    { method: "POST", headers },
+    { method: "POST", headers, body: JSON.stringify(reqBody) },
   );
 
   if (!res.ok) {
@@ -334,20 +517,34 @@ export async function denyStewardTransaction(
 
 /**
  * Fetch transaction history from steward.
- * Returns TxRecord[] — the full transaction objects, not just {timestamp, value}.
+ * Uses GET /vault/:agentId/history for full transaction records.
  */
 export async function getStewardHistory(
   agentId: string,
+  opts?: { limit?: number; offset?: number },
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<TxRecord[]> {
-  const client = createStewardClient({ env });
-  if (!client) throw new Error("Steward not configured");
+  const baseUrl = getStewardBaseUrl(env);
+  if (!baseUrl) throw new Error("Steward not configured");
 
-  // getHistory() returns TxRecord[] from the steward API despite the SDK
-  // type annotation saying StewardHistoryEntry[]. The actual API returns
-  // full transaction records with id, status, request, policyResults, etc.
-  const history = await client.getHistory(agentId);
-  return history as unknown as TxRecord[];
+  const headers = buildStewardHeaders(env);
+  const params = new URLSearchParams();
+  if (opts?.limit != null) params.set("limit", String(opts.limit));
+  if (opts?.offset != null) params.set("offset", String(opts.offset));
+  const qs = params.toString() ? `?${params.toString()}` : "";
+
+  const res = await fetch(
+    `${baseUrl}/vault/${encodeURIComponent(agentId)}/history${qs}`,
+    { headers },
+  );
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "Unknown error");
+    throw new Error(`Steward history failed (${res.status}): ${errText}`);
+  }
+
+  const body = await res.json();
+  return body.data ?? body ?? [];
 }
 
 /**
@@ -379,4 +576,435 @@ export async function provisionStewardWallet(params: {
   }
 
   return { walletAddress: identity.walletAddress };
+}
+
+// ── Steward Vault Signing ────────────────────────────────────────────────────
+
+/**
+ * Sign (and optionally broadcast) a transaction through the Steward vault.
+ *
+ * This calls `POST /vault/:agentId/sign` directly. The three possible outcomes
+ * are mapped to a unified {@link StewardSignResponse}:
+ *
+ * - **Approved** (HTTP 200): `{ approved: true, txHash }`.
+ * - **Pending approval** (HTTP 202): `{ approved: false, pending: true, txId }`.
+ * - **Denied** (HTTP 403): `{ approved: false, denied: true, violations }`.
+ */
+export async function signViaSteward(
+  request: StewardSignRequest,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<StewardSignResponse> {
+  const baseUrl = getStewardBaseUrl(env);
+  if (!baseUrl) throw new Error("Steward not configured");
+
+  const evmAddress =
+    normalizeEnvValue(env.EVM_ADDRESS) ??
+    normalizeEnvValue(env.MILADY_EVM_ADDRESS) ??
+    null;
+  const agentId = resolveStewardAgentId(env, evmAddress);
+  if (!agentId) throw new Error("Steward agent ID not resolved");
+
+  const headers = buildStewardHeaders(env);
+  const res = await fetch(
+    `${baseUrl}/vault/${encodeURIComponent(agentId)}/sign`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        to: request.to,
+        value: request.value,
+        chainId: request.chainId,
+        data: request.data,
+        broadcast: request.broadcast ?? true,
+        description: request.description,
+      }),
+    },
+  );
+
+  const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+
+  // Approved — HTTP 200
+  if (res.ok && body.ok === true) {
+    const data = (body.data ?? {}) as Record<string, unknown>;
+    return {
+      approved: true,
+      txHash: typeof data.txHash === "string" ? data.txHash : undefined,
+    };
+  }
+
+  // Pending approval — HTTP 202
+  if (res.status === 202) {
+    const data = (body.data ?? {}) as Record<string, unknown>;
+    return {
+      approved: false,
+      pending: true,
+      txId: typeof data.txId === "string" ? data.txId : undefined,
+      violations: normalizeViolations(data.violations),
+    };
+  }
+
+  // Denied — HTTP 403
+  if (res.status === 403) {
+    const data = (body.data ?? {}) as Record<string, unknown>;
+    return {
+      approved: false,
+      denied: true,
+      violations: normalizeViolations(data.violations),
+    };
+  }
+
+  // Unexpected error
+  const errMsg =
+    typeof body.error === "string"
+      ? body.error
+      : `Steward sign failed (${res.status})`;
+  throw new Error(errMsg);
+}
+
+function normalizeViolations(
+  raw: unknown,
+): Array<{ policy: string; reason: string }> | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  return raw
+    .filter(
+      (v): v is { policy: string; reason: string } =>
+        !!v &&
+        typeof v === "object" &&
+        typeof (v as Record<string, unknown>).policy === "string" &&
+        typeof (v as Record<string, unknown>).reason === "string",
+    )
+    .map((v) => ({ policy: v.policy, reason: v.reason }));
+}
+
+// ── Webhook Support ──────────────────────────────────────────────────────────
+
+export type StewardWebhookEventType =
+  | "tx.pending"
+  | "tx.approved"
+  | "tx.denied"
+  | "tx.confirmed";
+
+export interface StewardWebhookEvent {
+  event: StewardWebhookEventType;
+  data: Record<string, unknown>;
+  timestamp?: string;
+}
+
+const MAX_WEBHOOK_EVENTS = 200;
+
+/**
+ * In-memory ring buffer for recent webhook events from steward.
+ * The UI can poll these to get near-real-time updates without WebSocket.
+ */
+const recentWebhookEvents: StewardWebhookEvent[] = [];
+
+/** Push a webhook event into the in-memory buffer. */
+export function pushWebhookEvent(event: StewardWebhookEvent): void {
+  recentWebhookEvents.push(event);
+  if (recentWebhookEvents.length > MAX_WEBHOOK_EVENTS) {
+    recentWebhookEvents.splice(0, recentWebhookEvents.length - MAX_WEBHOOK_EVENTS);
+  }
+}
+
+/** Read recent webhook events, optionally filtered by event type. */
+export function getRecentWebhookEvents(
+  eventType?: StewardWebhookEventType,
+  sinceIndex = 0,
+): { events: StewardWebhookEvent[]; nextIndex: number } {
+  const all = eventType
+    ? recentWebhookEvents.filter((e) => e.event === eventType)
+    : recentWebhookEvents;
+  const events = all.slice(sinceIndex);
+  return { events, nextIndex: recentWebhookEvents.length };
+}
+
+/**
+ * Register a webhook URL with steward so it pushes tx events to milady.
+ * Calls PUT /tenants/:tenantId with { webhookUrl }.
+ */
+export async function registerStewardWebhook(
+  webhookUrl: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
+  const baseUrl = getStewardBaseUrl(env);
+  if (!baseUrl) throw new Error("Steward not configured");
+
+  const tenantId = normalizeEnvValue(env.STEWARD_TENANT_ID);
+  if (!tenantId) throw new Error("STEWARD_TENANT_ID not set — cannot register webhook");
+
+  const headers = buildStewardHeaders(env);
+  const res = await fetch(
+    `${baseUrl}/tenants/${encodeURIComponent(tenantId)}`,
+    {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ webhookUrl }),
+    },
+  );
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "Unknown error");
+    throw new Error(`Steward webhook registration failed (${res.status}): ${errText}`);
+  }
+}
+
+/**
+ * Attempt to register the local webhook endpoint with steward.
+ * Logs but does not throw on failure (best-effort).
+ */
+export async function tryRegisterStewardWebhook(
+  port = 31337,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
+  if (!isStewardConfigured(env)) return;
+
+  const webhookUrl = `http://127.0.0.1:${port}/api/wallet/steward-webhook`;
+  try {
+    await registerStewardWebhook(webhookUrl, env);
+    console.info(`[steward] Webhook registered: ${webhookUrl}`);
+  } catch (err) {
+    console.warn(
+      `[steward] Webhook registration failed (non-fatal): ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+}
+
+// ── Steward Auto-Setup (first launch) ────────────────────────────────────────
+
+/** Tracks whether ensureStewardAgent has already run this process. */
+let stewardAgentEnsured = false;
+
+export interface EnsureStewardAgentResult {
+  agentId: string;
+  agentName: string;
+  walletAddresses: { evm: string | null; solana: string | null };
+  created: boolean;
+}
+
+/**
+ * Ensure the configured steward agent exists. If it doesn't, create it.
+ *
+ * This is a lazy-init function — call it on first request to steward-status,
+ * not on server startup. It's idempotent and will only run once per process.
+ *
+ * If steward setup fails, logs a warning and returns null (does not throw).
+ */
+export async function ensureStewardAgent(
+  options: {
+    agentId?: string;
+    agentName?: string;
+    env?: NodeJS.ProcessEnv;
+  } = {},
+): Promise<EnsureStewardAgentResult | null> {
+  if (stewardAgentEnsured) {
+    return null;
+  }
+
+  const env = options.env ?? process.env;
+  const baseUrl = normalizeEnvValue(env.STEWARD_API_URL);
+  if (!baseUrl) {
+    return null;
+  }
+
+  const agentId =
+    options.agentId ??
+    resolveStewardAgentId(env) ??
+    null;
+
+  if (!agentId) {
+    return null;
+  }
+
+  const agentName = options.agentName ?? agentId;
+
+  try {
+    const client = createStewardClient({ env });
+    if (!client) {
+      return null;
+    }
+
+    // Check if agent exists
+    try {
+      const agent = (await client.getAgent(agentId)) as unknown as {
+        id: string;
+        name?: string;
+        walletAddress?: string;
+        walletAddresses?: { evm?: string; solana?: string };
+      };
+
+      stewardAgentEnsured = true;
+
+      const result: EnsureStewardAgentResult = {
+        agentId,
+        agentName: agent.name || agentName,
+        walletAddresses: {
+          evm: agent.walletAddresses?.evm?.trim() || agent.walletAddress?.trim() || null,
+          solana: agent.walletAddresses?.solana?.trim() || null,
+        },
+        created: false,
+      };
+
+      // Update persisted credentials with wallet addresses
+      persistAgentCredentials(baseUrl, env, result);
+
+      return result;
+    } catch (err: unknown) {
+      if (!(err instanceof StewardApiError) || (err as StewardApiError).status !== 404) {
+        throw err;
+      }
+    }
+
+    // Agent doesn't exist — try to create it
+    console.info(`[steward] Agent "${agentId}" not found, creating...`);
+
+    const tenantId = normalizeEnvValue(env.STEWARD_TENANT_ID);
+    const apiKey = normalizeEnvValue(env.STEWARD_API_KEY);
+
+    // Try to create tenant first (may already exist, that's ok)
+    if (tenantId && apiKey) {
+      try {
+        const tenantRes = await fetch(`${baseUrl}/tenants`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Api-Key": normalizeEnvValue(env.STEWARD_MASTER_PASSWORD) ?? "",
+          },
+          body: JSON.stringify({
+            id: tenantId,
+            name: "Milady Desktop",
+            apiKeyHash: apiKey,
+          }),
+        });
+
+        if (!tenantRes.ok) {
+          const body = (await tenantRes.json().catch(() => ({}))) as { error?: string };
+          if (!body.error?.includes("already exists")) {
+            console.warn(`[steward] Tenant creation returned ${tenantRes.status}: ${body.error}`);
+          }
+        }
+      } catch (tenantErr) {
+        console.warn(
+          `[steward] Tenant creation failed (non-fatal): ${
+            tenantErr instanceof Error ? tenantErr.message : String(tenantErr)
+          }`,
+        );
+      }
+    }
+
+    // Create agent
+    const headers = buildStewardHeaders(env);
+    const agentRes = await fetch(`${baseUrl}/agents`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ id: agentId, name: agentName }),
+    });
+
+    if (!agentRes.ok) {
+      const errText = await agentRes.text().catch(() => "Unknown error");
+      console.warn(`[steward] Agent creation failed (${agentRes.status}): ${errText}`);
+      stewardAgentEnsured = true;
+      return null;
+    }
+
+    const agentBody = (await agentRes.json()) as {
+      ok: boolean;
+      data?: {
+        id: string;
+        walletAddress?: string;
+        walletAddresses?: { evm?: string; solana?: string };
+      };
+    };
+
+    if (!agentBody.ok || !agentBody.data) {
+      console.warn("[steward] Agent creation returned unexpected response");
+      stewardAgentEnsured = true;
+      return null;
+    }
+
+    // Get agent token
+    let agentToken = "";
+    try {
+      const tokenRes = await fetch(
+        `${baseUrl}/agents/${encodeURIComponent(agentId)}/token`,
+        { method: "POST", headers },
+      );
+      if (tokenRes.ok) {
+        const tokenBody = (await tokenRes.json()) as {
+          ok: boolean;
+          data?: { token: string };
+        };
+        agentToken = tokenBody.data?.token ?? "";
+      }
+    } catch {
+      console.warn("[steward] Token generation failed (non-fatal)");
+    }
+
+    stewardAgentEnsured = true;
+
+    const result: EnsureStewardAgentResult = {
+      agentId,
+      agentName,
+      walletAddresses: {
+        evm:
+          agentBody.data.walletAddresses?.evm?.trim() ||
+          agentBody.data.walletAddress?.trim() ||
+          null,
+        solana: agentBody.data.walletAddresses?.solana?.trim() || null,
+      },
+      created: true,
+    };
+
+    console.info(
+      `[steward] Agent "${agentId}" created with wallet ${result.walletAddresses.evm ?? "(none)"}`,
+    );
+
+    // Persist credentials
+    persistAgentCredentials(baseUrl, env, result, agentToken);
+
+    return result;
+  } catch (err) {
+    console.warn(
+      `[steward] Auto-setup failed (non-fatal): ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    stewardAgentEnsured = true;
+    return null;
+  }
+}
+
+function persistAgentCredentials(
+  apiUrl: string,
+  env: NodeJS.ProcessEnv,
+  result: EnsureStewardAgentResult,
+  agentToken?: string,
+): void {
+  try {
+    const existing = loadStewardCredentials();
+    saveStewardCredentials({
+      apiUrl,
+      tenantId: normalizeEnvValue(env.STEWARD_TENANT_ID) ?? existing?.tenantId ?? "",
+      agentId: result.agentId,
+      apiKey: normalizeEnvValue(env.STEWARD_API_KEY) ?? existing?.apiKey ?? "",
+      agentToken: agentToken ?? normalizeEnvValue(env.STEWARD_AGENT_TOKEN) ?? existing?.agentToken ?? "",
+      walletAddresses: {
+        evm: result.walletAddresses.evm ?? undefined,
+        solana: result.walletAddresses.solana ?? undefined,
+      },
+      agentName: result.agentName,
+    });
+  } catch (credErr) {
+    console.warn(
+      `[steward] Failed to persist credentials (non-fatal): ${
+        credErr instanceof Error ? credErr.message : String(credErr)
+      }`,
+    );
+  }
+}
+
+/** Reset the ensured flag (for testing). */
+export function __resetStewardAgentEnsured(): void {
+  stewardAgentEnsured = false;
 }

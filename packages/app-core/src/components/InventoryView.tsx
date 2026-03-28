@@ -744,17 +744,63 @@ export function InventoryView() {
               <div className="grid gap-3">
                 {stewardStatus?.connected && (
                   <div
-                    className="inline-flex items-center gap-1.5 rounded-2xl border border-accent/25 bg-accent/10 px-3 py-2 text-[11px] text-accent-fg shadow-sm"
+                    className="flex flex-col gap-1 rounded-2xl border border-accent/25 bg-accent/10 px-3 py-2 text-[11px] text-accent-fg shadow-sm"
                     data-testid="steward-status-badge"
                   >
-                    <span>🔐</span>
-                    <span>Steward vault connected</span>
-                    {stewardStatus.evmAddress && (
-                      <span className="ml-1 font-mono text-muted">
-                        {stewardStatus.evmAddress.slice(0, 6)}…
-                        {stewardStatus.evmAddress.slice(-4)}
+                    <div className="inline-flex items-center gap-1.5">
+                      <span>🔐</span>
+                      <span>
+                        Steward vault connected
+                        {stewardStatus.agentName && (
+                          <span className="ml-1 text-muted">
+                            ({stewardStatus.agentName})
+                          </span>
+                        )}
                       </span>
-                    )}
+                      {stewardStatus.vaultHealth && stewardStatus.vaultHealth !== "ok" && (
+                        <span
+                          className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase ${
+                            stewardStatus.vaultHealth === "error"
+                              ? "bg-danger/20 text-danger"
+                              : "bg-warning/20 text-warning"
+                          }`}
+                        >
+                          {stewardStatus.vaultHealth}
+                        </span>
+                      )}
+                    </div>
+                    {/* Show wallet addresses — local vs steward vault */}
+                    <div className="flex flex-col gap-0.5 pl-5 font-mono text-muted">
+                      {evmAddr && (
+                        <span>
+                          Local wallet: {evmAddr.slice(0, 6)}…{evmAddr.slice(-4)}
+                        </span>
+                      )}
+                      {stewardStatus.walletAddresses?.evm &&
+                        stewardStatus.walletAddresses.evm !== evmAddr && (
+                          <span>
+                            🏦 Steward vault:{" "}
+                            {stewardStatus.walletAddresses.evm.slice(0, 6)}…
+                            {stewardStatus.walletAddresses.evm.slice(-4)}
+                          </span>
+                        )}
+                      {!stewardStatus.walletAddresses?.evm &&
+                        stewardStatus.evmAddress &&
+                        stewardStatus.evmAddress !== evmAddr && (
+                          <span>
+                            🏦 Steward vault:{" "}
+                            {stewardStatus.evmAddress.slice(0, 6)}…
+                            {stewardStatus.evmAddress.slice(-4)}
+                          </span>
+                        )}
+                      {stewardStatus.walletAddresses?.solana && (
+                        <span>
+                          🏦 Solana vault:{" "}
+                          {stewardStatus.walletAddresses.solana.slice(0, 6)}…
+                          {stewardStatus.walletAddresses.solana.slice(-4)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
 

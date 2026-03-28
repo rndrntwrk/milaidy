@@ -83,6 +83,8 @@ import type {
 } from "@miladyai/agent/contracts/wallet";
 import type {
   StewardPendingApproval,
+  StewardSignRequest,
+  StewardSignResponse,
   StewardTxRecord,
   StewardTxStatus,
 } from "@miladyai/shared/contracts/wallet";
@@ -150,6 +152,8 @@ export type {
   StewardPendingApproval,
   StewardPendingResponse,
   StewardPolicyResult,
+  StewardSignRequest,
+  StewardSignResponse,
   StewardStatusResponse,
   StewardTxRecord,
   StewardTxStatus,
@@ -3615,6 +3619,13 @@ export class MiladyClient {
     return this.fetch("/api/wallet/steward-deny-tx", {
       method: "POST",
       body: JSON.stringify({ txId, reason }),
+    });
+  }
+
+  async signViaSteward(request: StewardSignRequest): Promise<StewardSignResponse> {
+    return this.fetch("/api/wallet/steward-sign", {
+      method: "POST",
+      body: JSON.stringify(request),
     });
   }
 

@@ -469,6 +469,9 @@ export interface StewardStatusResponse {
   agentId?: string;
   evmAddress?: string;
   error?: string | null;
+  walletAddresses?: { evm: string | null; solana: string | null };
+  agentName?: string;
+  vaultHealth?: "ok" | "degraded" | "error";
 }
 
 export interface BscTradeExecuteResponse {
@@ -611,4 +614,26 @@ export interface StewardApprovalActionResponse {
   ok: boolean;
   txHash?: string;
   error?: string;
+}
+
+// ─── Steward Vault Signing ────────────────────────────────────────────────────
+
+/** Request body for signing a transaction through the Steward vault. */
+export interface StewardSignRequest {
+  to: string;
+  value: string;
+  chainId: number;
+  data?: string;
+  broadcast?: boolean;
+  description?: string;
+}
+
+/** Response from a Steward vault sign operation. */
+export interface StewardSignResponse {
+  approved: boolean;
+  txHash?: string;
+  txId?: string;
+  pending?: boolean;
+  denied?: boolean;
+  violations?: Array<{ policy: string; reason: string }>;
 }

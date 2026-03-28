@@ -27,6 +27,10 @@ import {
 /** Timeout for the transfer API call (includes on-chain confirmation). */
 const TRANSFER_TIMEOUT_MS = 60_000;
 
+/** Chain ID used for BSC mainnet / testnet when routing through steward. */
+const BSC_CHAIN_ID = 56;
+const BSC_TESTNET_CHAIN_ID = 97;
+
 /** Matches a 0x-prefixed 40-hex-char EVM address. */
 const EVM_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 const EVM_ADDRESS_CAPTURE_RE = /\b0x[a-fA-F0-9]{40}\b/g;
@@ -69,6 +73,21 @@ function inferTransferParamsFromMessage(message: unknown): {
           : assetSymbol.trim().toUpperCase()
         : undefined,
   };
+}
+
+function isStewardConfigured(): boolean {
+  const url = process.env.STEWARD_API_URL?.trim();
+  const agentId =
+    process.env.STEWARD_AGENT_ID?.trim() ||
+    process.env.MILADY_STEWARD_AGENT_ID?.trim() ||
+    process.env.ELIZA_STEWARD_AGENT_ID?.trim();
+  return Boolean(url && agentId);
+}
+
+function resolveBscChainId(): number {
+  return process.env.MILADY_WALLET_NETWORK?.trim().toLowerCase() === "testnet"
+    ? BSC_TESTNET_CHAIN_ID
+    : BSC_CHAIN_ID;
 }
 
 function walletNetworkLabel(): string {
@@ -225,7 +244,128 @@ export const transferTokenAction: Action = {
         return { text, success: false };
       }
 
-      // ── POST to transfer execution API ─────────────────────────────────
+      // ── Try Steward vault signing first ─────────────────────────────────
+      if (isStewardConfigured()) {
+        try {
+          const stewardResult = await fetch(
+            `http://127.0.0.1:${getWalletActionApiPort()}/api/wallet/steward-sign`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...buildAuthHeaders(),
+              },
+              body: JSON.stringify({
+                to: toAddress,
+                value: amountRaw,
+                chainId: resolveBscChainId(),
+                description: `Transfer ${amountRaw} ${assetSymbol} to ${toAddress}`,
+              }),
+              signal: AbortSignal.timeout(TRANSFER_TIMEOUT_MS),
+            },
+          );
+
+          const stewardBody = (await stewardResult
+            .json()
+            .catch(() => ({}))) as Record<string, unknown>;
+
+          // Approved — steward signed and broadcast
+          if (stewardResult.ok && stewardBody.approved === true) {
+            const txHash =
+              typeof stewardBody.txHash === "string"
+                ? stewardBody.txHash
+                : "unknown";
+            const explorerUrl =
+              resolveBscChainId() === BSC_CHAIN_ID
+                ? `https://bscscan.com/tx/${txHash}`
+                : `https://testnet.bscscan.com/tx/${txHash}`;
+            const text = buildTransferSuccessText({
+              amount: amountRaw,
+              assetSymbol,
+              toAddress,
+              mode: "steward",
+              txHash,
+              explorerUrl,
+              status: "success",
+            });
+            if (callback) {
+              callback({
+                text,
+                action: "TRANSFER_TOKEN_SUCCESS",
+                txHash,
+                explorerUrl,
+                executionMode: "steward",
+                executed: true,
+                recipient: toAddress,
+              });
+            }
+            return { text, success: true, data: { toAddress, amount: amountRaw, assetSymbol, mode: "steward", txHash, explorerUrl, executed: true } };
+          }
+
+          // Pending approval — tx queued for manual review
+          if (stewardResult.status === 202 && stewardBody.pending === true) {
+            const txId =
+              typeof stewardBody.txId === "string" ? stewardBody.txId : "";
+            const text = buildTransferFailureText({
+              amount: amountRaw,
+              assetSymbol,
+              toAddress,
+              mode: "steward",
+              requiresUserSignature: false,
+              reason: `Transaction queued for manual approval${txId ? ` (ID: ${txId})` : ""}. A policy admin must approve before it broadcasts.`,
+            });
+            if (callback) {
+              callback({
+                text,
+                action: "TRANSFER_TOKEN_PENDING",
+                executionMode: "steward",
+                executed: false,
+                recipient: toAddress,
+                txId,
+              });
+            }
+            return { text, success: false, data: { toAddress, amount: amountRaw, assetSymbol, mode: "steward", pending: true, txId, executed: false } };
+          }
+
+          // Denied — policy violation
+          if (stewardResult.status === 403) {
+            const violations = Array.isArray(stewardBody.violations)
+              ? (stewardBody.violations as Array<{ policy: string; reason: string }>)
+              : [];
+            const violationText = violations
+              .map((v) => `• ${v.policy}: ${v.reason}`)
+              .join("\n");
+            const reason = violationText
+              ? `Policy violations:\n${violationText}`
+              : "Transaction denied by steward policy.";
+            const text = buildTransferFailureText({
+              amount: amountRaw,
+              assetSymbol,
+              toAddress,
+              mode: "steward",
+              requiresUserSignature: false,
+              reason,
+            });
+            if (callback) {
+              callback({
+                text,
+                action: "TRANSFER_TOKEN_FAILED",
+                executionMode: "steward",
+                executed: false,
+                recipient: toAddress,
+                violations,
+              });
+            }
+            return { text, success: false, data: { toAddress, amount: amountRaw, assetSymbol, mode: "steward", denied: true, violations, executed: false } };
+          }
+
+          // Other steward errors — fall through to direct signing
+        } catch (_stewardErr) {
+          // Steward unavailable — fall through to direct signing
+        }
+      }
+
+      // ── POST to transfer execution API (direct signing fallback) ───────
       const body: Record<string, unknown> = {
         toAddress,
         amount: amountRaw,
