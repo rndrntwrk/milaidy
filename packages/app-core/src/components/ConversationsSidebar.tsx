@@ -303,7 +303,7 @@ export function ConversationsSidebar({
             </div>
           ) : (
             <>
-              <div className="mr-auto">
+              <div className="ml-auto mr-0">
                 {canCollapse ? (
                   <Button
                     variant="ghost"

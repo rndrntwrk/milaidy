@@ -78,11 +78,11 @@ function countVisibleAssetsForFocus(
   focus: string,
   rows:
     | Array<{
-        chain: string;
-        balanceRaw: number;
-        valueUsd: number;
-        isTracked?: boolean;
-      }>
+      chain: string;
+      balanceRaw: number;
+      valueUsd: number;
+      isTracked?: boolean;
+    }>
     | undefined,
 ): number {
   return (rows ?? []).filter((row) => {
@@ -216,42 +216,42 @@ export function InventoryView() {
   );
   const ethereumReady = Boolean(
     evmAddr &&
-      !evmChainErrors.get("ethereum") &&
-      (loadedEvmChainKeys.has("ethereum") ||
-        cfg?.ethereumBalanceReady ||
-        cfg?.alchemyKeySet ||
-        cloudManagedAccess),
+    !evmChainErrors.get("ethereum") &&
+    (loadedEvmChainKeys.has("ethereum") ||
+      cfg?.ethereumBalanceReady ||
+      cfg?.alchemyKeySet ||
+      cloudManagedAccess),
   );
   const baseReady = Boolean(
     evmAddr &&
-      !evmChainErrors.get("base") &&
-      (loadedEvmChainKeys.has("base") ||
-        cfg?.baseBalanceReady ||
-        cfg?.alchemyKeySet ||
-        cloudManagedAccess),
+    !evmChainErrors.get("base") &&
+    (loadedEvmChainKeys.has("base") ||
+      cfg?.baseBalanceReady ||
+      cfg?.alchemyKeySet ||
+      cloudManagedAccess),
   );
   const bscReady = Boolean(
     evmAddr &&
-      !evmChainErrors.get("bsc") &&
-      (loadedEvmChainKeys.has("bsc") ||
-        cfg?.bscBalanceReady ||
-        cfg?.ankrKeySet ||
-        hasManagedBscRpc),
+    !evmChainErrors.get("bsc") &&
+    (loadedEvmChainKeys.has("bsc") ||
+      cfg?.bscBalanceReady ||
+      cfg?.ankrKeySet ||
+      hasManagedBscRpc),
   );
   const avaxReady = Boolean(
     evmAddr &&
-      !evmChainErrors.get("avax") &&
-      (loadedEvmChainKeys.has("avax") ||
-        cfg?.avalancheBalanceReady ||
-        cfg?.alchemyKeySet ||
-        cloudManagedAccess),
+    !evmChainErrors.get("avax") &&
+    (loadedEvmChainKeys.has("avax") ||
+      cfg?.avalancheBalanceReady ||
+      cfg?.alchemyKeySet ||
+      cloudManagedAccess),
   );
   const solanaReady = Boolean(
     solAddr &&
-      (Boolean(walletBalances?.solana) ||
-        cfg?.solanaBalanceReady ||
-        cfg?.heliusKeySet ||
-        cloudManagedAccess),
+    (Boolean(walletBalances?.solana) ||
+      cfg?.solanaBalanceReady ||
+      cfg?.heliusKeySet ||
+      cloudManagedAccess),
   );
   const bnbBalance = Number.parseFloat(focusedNativeBalance ?? "0") || 0;
   const tradeReady =
@@ -337,56 +337,55 @@ export function InventoryView() {
   const inlineError =
     chainFocus !== "all" && focusedChainError
       ? {
-          message: `${focusedChainLabel ?? "Chain"}: ${focusedChainError}`,
-          retryTitle: `Retry fetching ${focusedChainLabel ?? "chain"} balances`,
-        }
+        message: `${focusedChainLabel ?? "Chain"}: ${focusedChainError}`,
+        retryTitle: `Retry fetching ${focusedChainLabel ?? "chain"} balances`,
+      }
       : null;
 
   const legacyRpcChain = chainKeyToWalletRpcChain(chainFocus);
   const headerWarning =
     chainFocus !== "all" &&
-    legacyRpcChain !== null &&
-    cfg?.legacyCustomChains?.includes(legacyRpcChain)
+      legacyRpcChain !== null &&
+      cfg?.legacyCustomChains?.includes(legacyRpcChain)
       ? {
-          title: `${
-            focusedChainLabel ??
-            (chainFocus === "bsc"
-              ? "BSC"
-              : chainFocus === "solana"
-                ? "Solana"
-                : "EVM")
+        title: `${focusedChainLabel ??
+          (chainFocus === "bsc"
+            ? "BSC"
+            : chainFocus === "solana"
+              ? "Solana"
+              : "EVM")
           } is using legacy raw RPC config.`,
-          body: "Re-save a supported provider in Settings to migrate fully.",
-          actionLabel: t("wallet.setup.configureRpc"),
-        }
+        body: "Re-save a supported provider in Settings to migrate fully.",
+        actionLabel: t("wallet.setup.configureRpc"),
+      }
       : chainFocus === "bsc" && evmAddr && !bscReady
         ? {
-            title: t("wallet.setup.rpcNotConfigured"),
-            body: t("portfolioheader.ConnectViaElizaCl"),
-            actionLabel: t("wallet.setup.configureRpc"),
-          }
+          title: t("wallet.setup.rpcNotConfigured"),
+          body: t("portfolioheader.ConnectViaElizaCl"),
+          actionLabel: t("wallet.setup.configureRpc"),
+        }
         : chainFocus === "solana" && solAddr && !solanaReady
           ? {
-              title: "Solana RPC is not configured.",
-              body: "Connect via Eliza Cloud or configure HELIUS_API_KEY / SOLANA_RPC_URL in Settings to load Solana balances.",
+            title: "Solana RPC is not configured.",
+            body: "Connect via Eliza Cloud or configure HELIUS_API_KEY / SOLANA_RPC_URL in Settings to load Solana balances.",
+            actionLabel: t("wallet.setup.configureRpc"),
+          }
+          : chainFocus !== "all" &&
+            chainFocus !== "bsc" &&
+            chainFocus !== "solana" &&
+            evmAddr &&
+            !(chainFocus === "ethereum"
+              ? ethereumReady
+              : chainFocus === "base"
+                ? baseReady
+                : chainFocus === "avax"
+                  ? avaxReady
+                  : false)
+            ? {
+              title: `${focusedChainLabel ?? "Chain"} access is not configured.`,
+              body: `Connect via Eliza Cloud or configure ${focusedChainLabel ?? "this chain"} RPC access in Settings to load balances.`,
               actionLabel: t("wallet.setup.configureRpc"),
             }
-          : chainFocus !== "all" &&
-              chainFocus !== "bsc" &&
-              chainFocus !== "solana" &&
-              evmAddr &&
-              !(chainFocus === "ethereum"
-                ? ethereumReady
-                : chainFocus === "base"
-                  ? baseReady
-                  : chainFocus === "avax"
-                    ? avaxReady
-                    : false)
-            ? {
-                title: `${focusedChainLabel ?? "Chain"} access is not configured.`,
-                body: `Connect via Eliza Cloud or configure ${focusedChainLabel ?? "this chain"} RPC access in Settings to load balances.`,
-                actionLabel: t("wallet.setup.configureRpc"),
-              }
             : null;
 
   // ── Tracked token handlers ────────────────────────────────────────
@@ -475,63 +474,16 @@ export function InventoryView() {
       <div className={WALLET_SHELL_CLASS}>
         <aside className={WALLET_SIDEBAR_CLASS}>
           <div className={APP_SIDEBAR_INNER_CLASSNAME}>
-            <div className="mb-3 flex items-center justify-end px-1">
-              <div
-                data-testid="wallet-funding-route-pill"
-                className={WALLET_SORT_PILL_CLASS}
-              >
-                {fundingRouteLabel}
-              </div>
-            </div>
-
-            <div className={DESKTOP_RAIL_SUMMARY_CARD_CLASSNAME}>
-              <div
-                className="text-[2rem] font-semibold leading-none text-txt-strong"
-                data-testid="wallet-balance-value"
-              >
-                {totalUsd > 0
-                  ? `$${totalUsd.toLocaleString("en-US", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}`
-                  : "$0.00"}
-              </div>
-              <div className="mt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/60">
-                total balance
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/75">
-                <span className={APP_SIDEBAR_PILL_CLASSNAME}>
-                  {inventoryView === "tokens"
-                    ? t("wallet.tokens")
-                    : t("wallet.nfts")}
-                </span>
-                {inventoryView === "tokens" ? (
-                  <span
-                    data-testid="wallet-summary-sort-pill"
-                    className={APP_SIDEBAR_PILL_CLASSNAME}
-                  >
-                    {t("wallet.sort")}: {currentSortLabel}
-                  </span>
-                ) : null}
-                {chainFocus !== "all" ? (
-                  <span className="rounded-full border border-accent/25 bg-accent/8 px-2.5 py-1 text-accent">
-                    {focusedChainLabel ?? chainFocus}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-
             {/* ── View toggle ── */}
             <div className="mt-4 grid grid-cols-2 gap-2">
               <Button
                 variant="ghost"
                 size="sm"
                 data-testid="wallet-view-tokens"
-                className={`h-10 rounded-xl border text-xs font-semibold ${
-                  inventoryView === "tokens"
-                    ? WALLET_SIDEBAR_ITEM_ACTIVE_CLASS
-                    : "border-border/45 bg-bg/20 text-muted hover:border-border/70 hover:bg-bg/35 hover:text-txt"
-                }`}
+                className={`h-10 rounded-xl border text-xs font-semibold ${inventoryView === "tokens"
+                  ? WALLET_SIDEBAR_ITEM_ACTIVE_CLASS
+                  : "border-border/45 bg-bg/20 text-muted hover:border-border/70 hover:bg-bg/35 hover:text-txt"
+                  }`}
                 onClick={() => {
                   setState("inventoryView", "tokens");
                   if (!walletBalances) void loadBalances();
@@ -544,11 +496,10 @@ export function InventoryView() {
                 variant="ghost"
                 size="sm"
                 data-testid="wallet-view-nfts"
-                className={`h-10 rounded-xl border text-xs font-semibold ${
-                  inventoryView === "nfts"
-                    ? WALLET_SIDEBAR_ITEM_ACTIVE_CLASS
-                    : "border-border/45 bg-bg/20 text-muted hover:border-border/70 hover:bg-bg/35 hover:text-txt"
-                }`}
+                className={`h-10 rounded-xl border text-xs font-semibold ${inventoryView === "nfts"
+                  ? WALLET_SIDEBAR_ITEM_ACTIVE_CLASS
+                  : "border-border/45 bg-bg/20 text-muted hover:border-border/70 hover:bg-bg/35 hover:text-txt"
+                  }`}
                 onClick={() => {
                   setState("inventoryView", "nfts");
                   if (!walletNfts) void loadNfts();
@@ -561,9 +512,8 @@ export function InventoryView() {
 
             {/* ── Chains ── */}
             <div className="mt-4">
-              <div className={WALLET_SIDEBAR_KICKER_CLASS}>Chains</div>
               <TooltipProvider delayDuration={200} skipDelayDuration={100}>
-                <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className="mt-3 grid grid-cols-5 gap-2">
                   {chainItemMeta.map((item) => {
                     const isActive = chainFocus === item.key;
                     const label =
@@ -578,18 +528,17 @@ export function InventoryView() {
                               disabled
                                 ? undefined
                                 : () =>
-                                    setState("inventoryChainFocus", item.key)
+                                  setState("inventoryChainFocus", item.key)
                             }
                             aria-current={isActive ? "page" : undefined}
                             aria-label={label}
                             aria-disabled={disabled}
-                            className={`flex aspect-square items-center justify-center rounded-2xl border transition-colors ${
-                              disabled
-                                ? "opacity-25 cursor-not-allowed border-border/20 bg-bg/10 text-muted"
-                                : isActive
-                                  ? "border-accent/30 bg-accent/14 text-txt-strong"
-                                  : "border-border/40 bg-bg/20 text-muted hover:border-border/60 hover:text-txt"
-                            }`}
+                            className={`flex aspect-square items-center justify-center rounded-2xl border transition-colors ${disabled
+                              ? "opacity-25 cursor-not-allowed border-border/20 bg-bg/10 text-muted"
+                              : isActive
+                                ? "border-accent/30 bg-accent/14 text-txt-strong"
+                                : "border-border/40 bg-bg/20 text-muted hover:border-border/60 hover:text-txt"
+                              }`}
                           >
                             {item.key === "all" ? (
                               <span className="text-[11px] font-bold uppercase">
@@ -648,59 +597,6 @@ export function InventoryView() {
 
         <div className={DESKTOP_PAGE_CONTENT_CLASSNAME}>
           <div className="mx-auto max-w-[76rem] px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
-            <section
-              data-testid="wallet-overview-card"
-              className={`${WALLET_PANEL_CLASS} px-5 py-5 sm:px-6`}
-            >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div className="min-w-0">
-                  <h1 className="text-2xl font-semibold text-txt-strong">
-                    {overviewTitle}
-                  </h1>
-                  <p className="mt-1 text-sm text-muted">
-                    {t("wallet.overviewSubtitle")}
-                  </p>
-                </div>
-                {inventoryView === "tokens" ? (
-                  <div
-                    data-testid="wallet-overview-sort-block"
-                    className="w-full sm:w-auto sm:min-w-40"
-                  >
-                    <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/60">
-                      {t("wallet.sort")}
-                    </div>
-                    <Select
-                      value={inventorySort}
-                      onValueChange={(nextSort) => {
-                        if (isInventorySortKey(nextSort)) {
-                          setState("inventorySort", nextSort);
-                        }
-                      }}
-                    >
-                      <SelectTrigger
-                        data-testid="wallet-sort-select"
-                        aria-label={t("wallet.sort")}
-                        className="h-10 w-full rounded-xl border border-border/60 bg-card/88 px-3 text-sm text-txt shadow-sm"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="value">
-                          {t("wallet.value")}
-                        </SelectItem>
-                        <SelectItem value="chain">
-                          {t("wallet.chain")}
-                        </SelectItem>
-                        <SelectItem value="symbol">
-                          {t("wallet.name")}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : null}
-              </div>
-            </section>
-
             <div className="mt-4 grid gap-3">
               {stewardStatus?.connected && (
                 <div
@@ -769,12 +665,47 @@ export function InventoryView() {
               )}
             </div>
 
+
+
             <div
               data-testid="wallet-assets-header"
-              className="mt-4 mb-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"
+              className="mt-4 mb-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-end"
             >
-              <div className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/60">
-                assets
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                {inventoryView === "tokens" ? (
+                  <div
+                    data-testid="wallet-overview-sort-block"
+                    className="w-full sm:w-auto sm:min-w-40"
+                  >
+                    <Select
+                      value={inventorySort}
+                      onValueChange={(nextSort) => {
+                        if (isInventorySortKey(nextSort)) {
+                          setState("inventorySort", nextSort);
+                        }
+                      }}
+                    >
+                      <SelectTrigger
+                        data-testid="wallet-sort-select"
+                        aria-label={t("wallet.sort")}
+                        className="h-10 w-full rounded-xl border border-border/60 bg-card/88 px-3 text-sm text-txt shadow-sm"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="value">
+                          {t("wallet.value")}
+                        </SelectItem>
+                        <SelectItem value="chain">
+                          {t("wallet.chain")}
+                        </SelectItem>
+                        <SelectItem value="symbol">
+                          {t("wallet.name")}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
               </div>
             </div>
             <div
