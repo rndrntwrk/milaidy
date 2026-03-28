@@ -88,6 +88,10 @@ const FETCH_TIMEOUT_MS = 15_000;
 export const MANAGED_EVM_ADDRESS_ENV_KEY = "ELIZA_MANAGED_EVM_ADDRESS";
 export const MANAGED_SOLANA_ADDRESS_ENV_KEY = "ELIZA_MANAGED_SOLANA_ADDRESS";
 
+/** Module-level cache for steward wallet addresses (avoids process.env mutation). */
+let stewardAddressCache: { evm: string | null; solana: string | null } | null =
+  null;
+
 // ── EVM key derivation (secp256k1 via @noble/curves + keccak-256) ─────
 
 function generateEvmPrivateKey(): string {
@@ -407,14 +411,14 @@ export async function initStewardWalletCache(): Promise<void> {
       null;
     const stewardSolana = agent?.walletAddresses?.solana?.trim() || null;
 
+    stewardAddressCache = { evm: stewardEvm, solana: stewardSolana };
+
     if (stewardEvm) {
-      process.env[STEWARD_EVM_ADDRESS_ENV_KEY] = stewardEvm;
       logger.info(
         `[wallet] Steward EVM address cached: ${stewardEvm}`,
       );
     }
     if (stewardSolana) {
-      process.env[STEWARD_SOLANA_ADDRESS_ENV_KEY] = stewardSolana;
       logger.info(
         `[wallet] Steward Solana address cached: ${stewardSolana}`,
       );
@@ -437,12 +441,12 @@ export function getWalletAddresses(): WalletAddresses {
   let solanaAddress: string | null = null;
 
   // ── 1. Steward cached addresses (primary) ──────────────────────────
-  const stewardEvm = process.env[STEWARD_EVM_ADDRESS_ENV_KEY]?.trim();
+  const stewardEvm = stewardAddressCache?.evm?.trim();
   if (stewardEvm && /^0x[0-9a-fA-F]{40}$/.test(stewardEvm)) {
     evmAddress = stewardEvm;
   }
 
-  const stewardSolana = process.env[STEWARD_SOLANA_ADDRESS_ENV_KEY]?.trim();
+  const stewardSolana = stewardAddressCache?.solana?.trim();
   if (stewardSolana) {
     try {
       const decoded = base58Decode(stewardSolana);

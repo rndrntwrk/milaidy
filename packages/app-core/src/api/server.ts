@@ -2854,15 +2854,14 @@ async function handleMiladyCompatRoute(
       const limit = parseInt(url.searchParams.get("limit") || "50", 10);
       const offset = parseInt(url.searchParams.get("offset") || "0", 10);
       const history = await getStewardHistory(agentId, {
-        limit: 200,
-        offset: 0,
+        limit,
+        offset,
       });
       const filtered = status
         ? history.filter((h: { status: string }) => h.status === status)
         : history;
-      const paginated = filtered.slice(offset, offset + limit);
       sendJsonResponse(res, 200, {
-        records: paginated,
+        records: filtered,
         total: filtered.length,
         offset,
         limit,
@@ -2959,7 +2958,15 @@ async function handleMiladyCompatRoute(
 
   if (method === "POST" && url.pathname === "/api/wallet/steward-webhook") {
     // Webhook endpoint — steward pushes tx lifecycle events here.
-    // No auth required (steward is trusted on loopback), but we validate shape.
+    // Only accept from loopback (steward runs on localhost).
+    if (!isLoopbackRemoteAddress(req.socket?.remoteAddress)) {
+      logger.warn(
+        `[steward-webhook] Rejected non-loopback request from ${req.socket?.remoteAddress}`,
+      );
+      sendJsonErrorResponse(res, 403, "Webhook only accepted from localhost");
+      return true;
+    }
+
     const body = await readCompatJsonBody(req, res);
     if (!body) return true;
 

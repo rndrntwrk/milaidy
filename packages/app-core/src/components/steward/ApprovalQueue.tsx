@@ -56,19 +56,20 @@ export function ApprovalQueue({
       setItems(pending);
       setError(null);
 
-      // Notify parent of count changes
-      if (pending.length !== prevCountRef.current) {
-        prevCountRef.current = pending.length;
-        onPendingCountChange?.(pending.length);
-      }
-
-      // Toast when new items arrive
-      if (pending.length > prevCountRef.current && prevCountRef.current > 0) {
+      // Toast when new items arrive (check BEFORE updating ref)
+      const prevCount = prevCountRef.current;
+      if (pending.length > prevCount && prevCount > 0) {
         setActionNotice(
-          `${pending.length - prevCountRef.current} new approval${pending.length - prevCountRef.current > 1 ? "s" : ""} pending`,
+          `${pending.length - prevCount} new approval${pending.length - prevCount > 1 ? "s" : ""} pending`,
           "info",
           3000,
         );
+      }
+
+      // Notify parent of count changes (update ref AFTER toast check)
+      if (pending.length !== prevCount) {
+        prevCountRef.current = pending.length;
+        onPendingCountChange?.(pending.length);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load approvals");

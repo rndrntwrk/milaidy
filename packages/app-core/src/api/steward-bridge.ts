@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type {
   StewardSignRequest,
   StewardSignResponse,
@@ -102,7 +103,7 @@ export async function getStewardBridgeStatus(
   if (!baseUrl || !client) {
     // Check persisted credentials as fallback
     const persisted = resolveEffectiveStewardConfig(env);
-    if (!persisted) {
+    if (!persisted || !persisted.apiUrl) {
       return {
         configured: false,
         available: false,
@@ -113,18 +114,87 @@ export async function getStewardBridgeStatus(
         error: null,
       };
     }
-  }
 
-  if (!baseUrl || !client) {
-    return {
-      configured: false,
-      available: false,
-      connected: false,
-      baseUrl,
-      agentId,
-      evmAddress,
-      error: null,
-    };
+    // Re-derive from persisted credentials
+    const fallbackClient = new StewardClient({
+      baseUrl: persisted.apiUrl,
+      bearerToken: persisted.agentToken || undefined,
+      apiKey: persisted.apiKey || undefined,
+      tenantId: persisted.tenantId || undefined,
+    });
+    const fallbackAgentId = persisted.agentId || agentId;
+
+    if (!fallbackClient || !fallbackAgentId) {
+      return {
+        configured: false,
+        available: false,
+        connected: false,
+        baseUrl: persisted.apiUrl,
+        agentId: fallbackAgentId,
+        evmAddress,
+        error: null,
+      };
+    }
+
+    // Use persisted values for the rest of this function
+    try {
+      type AgentDataShape = {
+        walletAddress?: string;
+        walletAddresses?: { evm?: string; solana?: string };
+        name?: string;
+      };
+      let agentData: AgentDataShape | null = null;
+
+      if (fallbackAgentId) {
+        try {
+          agentData = (await fallbackClient.getAgent(
+            fallbackAgentId,
+          )) as unknown as AgentDataShape;
+        } catch (error: unknown) {
+          if (
+            !(error instanceof StewardApiError) ||
+            ((error as StewardApiError).status !== 404 &&
+              (error as StewardApiError).status !== 400)
+          ) {
+            throw error;
+          }
+        }
+      }
+
+      const walletAddresses = agentData
+        ? {
+            evm:
+              agentData.walletAddresses?.evm?.trim() ||
+              agentData.walletAddress?.trim() ||
+              null,
+            solana: agentData.walletAddresses?.solana?.trim() || null,
+          }
+        : undefined;
+
+      return {
+        configured: true,
+        available: true,
+        connected: true,
+        baseUrl: persisted.apiUrl,
+        agentId: fallbackAgentId,
+        evmAddress: walletAddresses?.evm ?? evmAddress,
+        error: null,
+        walletAddresses,
+        agentName: agentData?.name || undefined,
+        vaultHealth: fallbackAgentId && !agentData ? "degraded" : "ok",
+      };
+    } catch (error) {
+      return {
+        configured: true,
+        available: false,
+        connected: false,
+        baseUrl: persisted.apiUrl,
+        agentId: fallbackAgentId,
+        evmAddress,
+        error: formatStewardError(error),
+        vaultHealth: "error",
+      };
+    }
   }
 
   try {
@@ -408,7 +478,7 @@ export async function getStewardTokenBalances(
  * Build auth headers for direct steward API calls.
  * Used for endpoints not yet exposed in the SDK (pending, approve, deny).
  */
-function buildStewardHeaders(env: NodeJS.ProcessEnv = process.env): Headers {
+export function buildStewardHeaders(env: NodeJS.ProcessEnv = process.env): Headers {
   const headers = new Headers();
   headers.set("Content-Type", "application/json");
   headers.set("Accept", "application/json");
@@ -792,8 +862,9 @@ export async function tryRegisterStewardWebhook(
 
 // ── Steward Auto-Setup (first launch) ────────────────────────────────────────
 
-/** Tracks whether ensureStewardAgent has already run this process. */
-let stewardAgentEnsured = false;
+/** Promise-based lock to prevent concurrent ensureStewardAgent calls. */
+let ensureStewardAgentPromise: Promise<EnsureStewardAgentResult | null> | null =
+  null;
 
 export interface EnsureStewardAgentResult {
   agentId: string;
@@ -810,17 +881,26 @@ export interface EnsureStewardAgentResult {
  *
  * If steward setup fails, logs a warning and returns null (does not throw).
  */
-export async function ensureStewardAgent(
+export function ensureStewardAgent(
   options: {
     agentId?: string;
     agentName?: string;
     env?: NodeJS.ProcessEnv;
   } = {},
 ): Promise<EnsureStewardAgentResult | null> {
-  if (stewardAgentEnsured) {
-    return null;
+  if (!ensureStewardAgentPromise) {
+    ensureStewardAgentPromise = doEnsureStewardAgent(options);
   }
+  return ensureStewardAgentPromise;
+}
 
+async function doEnsureStewardAgent(
+  options: {
+    agentId?: string;
+    agentName?: string;
+    env?: NodeJS.ProcessEnv;
+  } = {},
+): Promise<EnsureStewardAgentResult | null> {
   const env = options.env ?? process.env;
   const baseUrl = normalizeEnvValue(env.STEWARD_API_URL);
   if (!baseUrl) {
@@ -849,8 +929,6 @@ export async function ensureStewardAgent(
         walletAddress?: string;
         walletAddresses?: { evm?: string; solana?: string };
       };
-
-      stewardAgentEnsured = true;
 
       const result: EnsureStewardAgentResult = {
         agentId,
@@ -896,7 +974,10 @@ export async function ensureStewardAgent(
           body: JSON.stringify({
             id: tenantId,
             name: "Milady Desktop",
-            apiKeyHash: apiKey,
+            apiKeyHash: crypto
+              .createHash("sha256")
+              .update(apiKey)
+              .digest("hex"),
           }),
         });
 
@@ -932,7 +1013,6 @@ export async function ensureStewardAgent(
       console.warn(
         `[steward] Agent creation failed (${agentRes.status}): ${errText}`,
       );
-      stewardAgentEnsured = true;
       return null;
     }
 
@@ -947,7 +1027,6 @@ export async function ensureStewardAgent(
 
     if (!agentBody.ok || !agentBody.data) {
       console.warn("[steward] Agent creation returned unexpected response");
-      stewardAgentEnsured = true;
       return null;
     }
 
@@ -969,7 +1048,6 @@ export async function ensureStewardAgent(
       console.warn("[steward] Token generation failed (non-fatal)");
     }
 
-    stewardAgentEnsured = true;
 
     const result: EnsureStewardAgentResult = {
       agentId,
@@ -998,7 +1076,6 @@ export async function ensureStewardAgent(
         err instanceof Error ? err.message : String(err)
       }`,
     );
-    stewardAgentEnsured = true;
     return null;
   }
 }
@@ -1039,5 +1116,5 @@ function persistAgentCredentials(
 
 /** Reset the ensured flag (for testing). */
 export function __resetStewardAgentEnsured(): void {
-  stewardAgentEnsured = false;
+  ensureStewardAgentPromise = null;
 }

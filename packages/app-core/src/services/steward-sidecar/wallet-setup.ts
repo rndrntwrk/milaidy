@@ -2,6 +2,7 @@
  * Steward Sidecar — first-launch wallet creation and verification.
  */
 
+import crypto from "node:crypto";
 import { generateApiKey, generateMasterPassword } from "./helpers";
 import type { StewardCredentials, StewardSidecarStatus } from "./types";
 import {
@@ -92,7 +93,10 @@ async function performFirstLaunchSetup(
     body: JSON.stringify({
       id: DEFAULT_TENANT_ID,
       name: DEFAULT_TENANT_NAME,
-      apiKeyHash: tenantApiKey,
+      apiKeyHash: crypto
+        .createHash("sha256")
+        .update(tenantApiKey)
+        .digest("hex"),
     }),
   });
 
@@ -153,14 +157,14 @@ async function performFirstLaunchSetup(
     agentToken = tokenResult.data?.token ?? "";
   }
 
-  // 4. Save credentials
+  // 4. Save credentials (never persist masterPassword to disk)
   const credentials: StewardCredentials = {
     tenantId: DEFAULT_TENANT_ID,
     tenantApiKey,
     agentId: DEFAULT_AGENT_ID,
     agentToken,
     walletAddress: agentResult.data.walletAddress,
-    masterPassword: masterPassword || generateMasterPassword(),
+    masterPassword: "",
   };
 
   const credPath = path.join(dataDir, CREDENTIALS_FILE);

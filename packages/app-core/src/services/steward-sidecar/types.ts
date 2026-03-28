@@ -52,7 +52,8 @@ export interface StewardCredentials {
   agentId: string;
   agentToken: string;
   walletAddress: string;
-  masterPassword: string;
+  /** @deprecated No longer persisted to disk. Only held in memory at runtime. */
+  masterPassword?: string;
 }
 
 // ---------------------------------------------------------------------------

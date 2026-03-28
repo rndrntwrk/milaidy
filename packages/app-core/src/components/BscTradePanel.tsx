@@ -17,6 +17,7 @@ import { Button, Input } from "@miladyai/ui";
 import { useCallback, useState } from "react";
 import { HEX_ADDRESS_RE } from "./companion/walletUtils";
 import { formatBalance, type TrackedToken } from "./inventory/constants";
+import { StewardLogo } from "./steward/StewardLogo";
 
 /* ── Constants ─────────────────────────────────────────────────────── */
 
@@ -499,7 +500,7 @@ export function TradePanel({
             className="text-purple-400 flex items-center gap-0.5"
             title="Trades routed through Steward vault policy enforcement"
           >
-            🛡️ Steward
+            <StewardLogo size={14} className="inline-block" /> Steward
           </span>
         )}
         <span className="text-muted">
