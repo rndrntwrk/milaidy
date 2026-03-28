@@ -184,7 +184,9 @@ export function DesktopTalkModePanel() {
         }
       } catch (err) {
         setError(
-          err instanceof Error ? err.message : "Talk mode action failed.",
+          err instanceof Error
+            ? err.message
+            : t("voiceconfigview.ActionFailed"),
         );
       } finally {
         setBusyAction(null);
@@ -197,8 +199,7 @@ export function DesktopTalkModePanel() {
     return (
       <Card className={VOICE_CARD_CLASSNAME}>
         <CardContent className="px-4 py-4 text-xs leading-5 text-muted">
-          Desktop talk mode controls are only available inside the Electrobun
-          runtime.
+          {t("voiceconfigview.DesktopTalkModeDesktopOnly")}
         </CardContent>
       </Card>
     );
@@ -209,10 +210,11 @@ export function DesktopTalkModePanel() {
       <CardHeader className="px-4 py-4 pb-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <CardTitle className="text-sm">Desktop Talk Mode</CardTitle>
+            <CardTitle className="text-sm">
+              {t("voiceconfigview.DesktopTalkMode")}
+            </CardTitle>
             <CardDescription className="mt-1 text-[11px] leading-5">
-              Native voice loop controls, speech output, and whisper
-              diagnostics.
+              {t("voiceconfigview.TalkModeDescription")}
             </CardDescription>
           </div>
           <Button
@@ -223,12 +225,12 @@ export function DesktopTalkModePanel() {
               void runAction(
                 "voice-talkmode-refresh",
                 async () => {},
-                "Talk mode state refreshed.",
+                t("voiceconfigview.TalkModeStateRefreshed"),
               )
             }
             disabled={loading || busyAction === "voice-talkmode-refresh"}
           >
-            Refresh
+            {t("common.refresh")}
           </Button>
         </div>
       </CardHeader>
@@ -249,33 +251,45 @@ export function DesktopTalkModePanel() {
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           <Card className="border-border/50 bg-bg-hover/60 shadow-none">
             <CardContent className="px-2.5 py-2 text-[11px]">
-              <div className="text-[10px] text-muted">State</div>
+              <div className="text-[10px] text-muted">
+                {t("voiceconfigview.State")}
+              </div>
               <div className="font-semibold text-txt">{panelState.state}</div>
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-bg-hover/60 shadow-none">
             <CardContent className="px-2.5 py-2 text-[11px]">
-              <div className="text-[10px] text-muted">Enabled</div>
+              <div className="text-[10px] text-muted">
+                {t("voiceconfigview.Enabled")}
+              </div>
               <div className="font-semibold text-txt">
-                {panelState.enabled ? "Yes" : "No"}
+                {panelState.enabled
+                  ? t("voiceconfigview.Yes")
+                  : t("voiceconfigview.No")}
               </div>
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-bg-hover/60 shadow-none">
             <CardContent className="px-2.5 py-2 text-[11px]">
-              <div className="text-[10px] text-muted">Speaking</div>
+              <div className="text-[10px] text-muted">
+                {t("voiceconfigview.Speaking")}
+              </div>
               <div className="font-semibold text-txt">
-                {panelState.speaking ? "Yes" : "No"}
+                {panelState.speaking
+                  ? t("voiceconfigview.Yes")
+                  : t("voiceconfigview.No")}
               </div>
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-bg-hover/60 shadow-none">
             <CardContent className="px-2.5 py-2 text-[11px]">
-              <div className="text-[10px] text-muted">Whisper</div>
+              <div className="text-[10px] text-muted">
+                {t("voiceconfigview.Whisper")}
+              </div>
               <div className="font-semibold text-txt">
                 {panelState.whisperAvailable
-                  ? panelState.whisperModel || "Available"
-                  : "Unavailable"}
+                  ? panelState.whisperModel || t("voiceconfigview.Available")
+                  : t("voiceconfigview.Unavailable")}
               </div>
             </CardContent>
           </Card>
@@ -286,7 +300,7 @@ export function DesktopTalkModePanel() {
           className="min-h-10 rounded-xl bg-bg text-xs"
           value={phrase}
           onChange={(event) => setPhrase(event.target.value)}
-          placeholder="Speech test phrase"
+          placeholder={t("voiceconfigview.testPhrase")}
         />
 
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
@@ -314,17 +328,21 @@ export function DesktopTalkModePanel() {
                     ipcChannel: "talkmode:start",
                   });
                   if (result?.available === false) {
-                    throw new Error(result.reason || "Talk mode unavailable.");
+                    throw new Error(
+                      result.reason || t("voiceconfigview.TalkModeUnavailable"),
+                    );
                   }
                 },
                 panelState.enabled
-                  ? "Talk mode stopped."
-                  : "Talk mode started.",
+                  ? t("voiceconfigview.TalkModeStopped")
+                  : t("voiceconfigview.TalkModeStarted"),
               )
             }
             disabled={busyAction === "voice-talkmode-start-stop" || loading}
           >
-            {panelState.enabled ? "Stop Talk Mode" : "Start Talk Mode"}
+            {panelState.enabled
+              ? t("voiceconfigview.StopTalkMode")
+              : t("voiceconfigview.StartTalkMode")}
           </Button>
           <Button
             variant="outline"
@@ -340,13 +358,13 @@ export function DesktopTalkModePanel() {
                     params: { text: phrase },
                   });
                 },
-                "Speech requested.",
+                t("voiceconfigview.SpeechRequested"),
                 false,
               )
             }
             disabled={!phrase.trim() || busyAction === "voice-talkmode-speak"}
           >
-            Speak Test Phrase
+            {t("voiceconfigview.SpeakTestPhrase")}
           </Button>
           <Button
             variant="outline"
@@ -361,12 +379,12 @@ export function DesktopTalkModePanel() {
                     ipcChannel: "talkmode:stopSpeaking",
                   });
                 },
-                "Stopped current speech output.",
+                t("voiceconfigview.StoppedCurrentSpeechOutput"),
               )
             }
             disabled={busyAction === "voice-talkmode-stop-speaking"}
           >
-            Stop Speaking
+            {t("voiceconfigview.StopSpeaking")}
           </Button>
         </div>
       </CardContent>

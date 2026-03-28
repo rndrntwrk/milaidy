@@ -98,7 +98,7 @@ function MarketplaceCard({
           {item.name}
         </div>
         <div className="text-[11px] text-[var(--muted)] mt-0.5 line-clamp-2">
-          {item.description || "No description."}
+          {item.description || t("skillsview.noDescription")}
         </div>
         <div className="flex items-center gap-2 mt-1.5 text-[10px] text-[var(--muted)]">
           <span className="font-mono">{sourceLabel}</span>
@@ -133,7 +133,9 @@ function MarketplaceCard({
           onClick={() => onUninstall(item.id, item.name)}
           disabled={isUninstalling}
         >
-          {isUninstalling ? "Removing..." : "Uninstall"}
+          {isUninstalling
+            ? t("skillsview.removing", { defaultValue: "Removing..." })
+            : t("skillsview.Uninstall", { defaultValue: "Uninstall" })}
         </Button>
       ) : (
         <Button
@@ -143,7 +145,9 @@ function MarketplaceCard({
           onClick={() => onInstall(item)}
           disabled={isInstalling}
         >
-          {isInstalling ? "Installing..." : "Install"}
+          {isInstalling
+            ? t("skillsview.installing", { defaultValue: "Installing..." })
+            : t("skillsview.Install")}
         </Button>
       )}
     </div>
@@ -186,8 +190,18 @@ function InstallModal({
   const { t } = useApp();
   const [tab, setTab] = useState<InstallTab>("search");
   const installTabs = [
-    { id: "search" as const, label: "MARKETPLACE" },
-    { id: "url" as const, label: "GITHUB URL" },
+    {
+      id: "search" as const,
+      label: t("skillsview.marketplaceTab", {
+        defaultValue: "Marketplace",
+      }),
+    },
+    {
+      id: "url" as const,
+      label: t("skillsview.githubUrlTab", {
+        defaultValue: "GitHub URL",
+      }),
+    },
   ] as const;
 
   return (
@@ -203,16 +217,22 @@ function InstallModal({
       >
         <DialogHeader className={ADMIN_DIALOG_HEADER_CLASSNAME}>
           <DialogTitle className="text-[13px] font-extrabold uppercase tracking-[0.14em]">
-            Install Skill
+            {t("skillsview.installSkillTitle", {
+              defaultValue: "Install Skill",
+            })}
           </DialogTitle>
           <DialogDescription className="mt-0.5 text-[11px] text-muted">
-            Add skills from the marketplace or a GitHub repository.
+            {t("skillsview.installSkillDescription", {
+              defaultValue: "Add skills from the marketplace or a GitHub repository.",
+            })}
           </DialogDescription>
         </DialogHeader>
         <div
           className={ADMIN_SEGMENTED_TABLIST_CLASSNAME}
           role="tablist"
-          aria-label="Install skill source"
+          aria-label={t("skillsview.installSkillSource", {
+            defaultValue: "Install skill source",
+          })}
         >
           {installTabs.map((t) => (
             <Button
@@ -268,7 +288,11 @@ function InstallModal({
                   onClick={() => searchSkillsMarketplace()}
                   disabled={skillsMarketplaceLoading}
                 >
-                  {skillsMarketplaceLoading ? "Searching..." : "Search"}
+                  {skillsMarketplaceLoading
+                    ? t("skillsview.searching", {
+                        defaultValue: "Searching...",
+                      })
+                    : t("skillsview.search", { defaultValue: "Search" })}
                 </Button>
               </div>
 
@@ -284,7 +308,9 @@ function InstallModal({
               {skillsMarketplaceResults.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="text-[12px] uppercase tracking-[0.1em] text-muted">
-                    Search above to discover skills.
+                    {t("skillsview.searchAboveToDiscoverSkills", {
+                      defaultValue: "Search above to discover skills.",
+                    })}
                   </div>
                 </div>
               ) : (
@@ -315,10 +341,15 @@ function InstallModal({
               aria-labelledby="skills-install-tab-url"
             >
               <div className="mb-1 text-[12px] font-semibold text-txt">
-                GitHub Repository URL
+                {t("skillsview.githubRepositoryUrl", {
+                  defaultValue: "GitHub Repository URL",
+                })}
               </div>
               <div className="mb-3 text-[11px] text-muted">
-                Paste a full GitHub repository URL to install a skill directly.
+                {t("skillsview.githubRepositoryDesc", {
+                  defaultValue:
+                    "Paste a full GitHub repository URL to install a skill directly.",
+                })}
               </div>
               <div className="flex gap-2 items-center">
                 <Input
@@ -326,7 +357,9 @@ function InstallModal({
                   className={ADMIN_DIALOG_INPUT_CLASSNAME}
                   style={{ flex: 1 }}
                   placeholder="https://github.com/org/repo"
-                  aria-label="GitHub repository URL"
+                  aria-label={t("skillsview.githubRepositoryUrl", {
+                    defaultValue: "GitHub Repository URL",
+                  })}
                   value={skillsMarketplaceManualGithubUrl}
                   onChange={(e) =>
                     setState("skillsMarketplaceManualGithubUrl", e.target.value)
@@ -348,8 +381,10 @@ function InstallModal({
                   }
                 >
                   {skillsMarketplaceAction === "install:manual"
-                    ? "Installing..."
-                    : "Install"}
+                    ? t("skillsview.installing", {
+                        defaultValue: "Installing...",
+                      })
+                    : t("skillsview.Install")}
                 </Button>
               </div>
 
@@ -433,7 +468,11 @@ function CreateSkillForm({
             onClick={onCreate}
             disabled={skillCreating || !skillCreateName.trim()}
           >
-            {skillCreating ? "Creating..." : "Create Skill"}
+            {skillCreating
+              ? t("skillsview.creating", { defaultValue: "Creating..." })
+              : t("skillsview.createSkill", {
+                  defaultValue: "Create Skill",
+                })}
           </Button>
         </div>
       </div>
@@ -471,7 +510,11 @@ function EditSkillModal({
       setOriginalContent(res.content);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load skill source",
+        err instanceof Error
+          ? err.message
+          : t("skillsview.failedToLoadSkillSource", {
+              defaultValue: "Failed to load skill source",
+            }),
       );
     }
     setLoading(false);
@@ -494,7 +537,13 @@ function EditSkillModal({
       onSaved();
       setTimeout(() => setSaveSuccess(false), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save");
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("skillsview.failedToSave", {
+              defaultValue: "Failed to save",
+            }),
+      );
     }
     setSaving(false);
   };
@@ -530,7 +579,10 @@ function EditSkillModal({
               {t("skillsview.SKILLMd")}
             </span>
             <DialogDescription className="sr-only">
-              Edit the Markdown source for this skill and save your changes.
+              {t("skillsview.editSkillSourceDescription", {
+                defaultValue:
+                  "Edit the Markdown source for this skill and save your changes.",
+              })}
             </DialogDescription>
             {hasChanges && (
               <span className="text-[10px] font-medium text-warn">
@@ -574,7 +626,9 @@ function EditSkillModal({
         </div>
         <div className="flex shrink-0 items-center justify-between border-t border-border px-5 py-3">
           <div className="text-[11px] text-muted">
-            {content ? `${content.split("\n").length} lines` : ""}
+            {content
+              ? `${content.split("\n").length} ${t("trajectorydetailview.lines")}`
+              : ""}
             {error && content ? (
               <span className="ml-3 text-danger">{error}</span>
             ) : null}
@@ -586,7 +640,9 @@ function EditSkillModal({
               className="text-xs"
               onClick={onClose}
             >
-              {hasChanges ? "Discard" : "Close"}
+              {hasChanges
+                ? t("skillsview.discard", { defaultValue: "Discard" })
+                : t("bugreportmodal.Close")}
             </Button>
             <Button
               variant="default"
@@ -599,7 +655,11 @@ function EditSkillModal({
               onClick={() => handleSave()}
               disabled={saving || !hasChanges}
             >
-              {saving ? "Saving..." : saveSuccess ? "Saved" : "Save"}
+              {saving
+                ? t("apikeyconfig.saving")
+                : saveSuccess
+                  ? t("apikeyconfig.saved")
+                  : t("apikeyconfig.save")}
             </Button>
           </div>
         </div>
@@ -677,9 +737,18 @@ function SkillsModalView() {
 
   const binanceCount = skills.filter((s) => BINANCE_SKILL_IDS.has(s.id)).length;
   const tabs: { key: typeof filterTab; label: string }[] = [
-    { key: "all", label: `ALL (${skills.length})` },
-    { key: "on", label: `ON (${skills.filter((s) => s.enabled).length})` },
-    { key: "off", label: `OFF (${skills.filter((s) => !s.enabled).length})` },
+    {
+      key: "all",
+      label: `${t("skillsview.all", { defaultValue: "All" })} (${skills.length})`,
+    },
+    {
+      key: "on",
+      label: `${t("common.on")} (${skills.filter((s) => s.enabled).length})`,
+    },
+    {
+      key: "off",
+      label: `${t("common.off")} (${skills.filter((s) => !s.enabled).length})`,
+    },
   ];
 
   return (
@@ -769,7 +838,7 @@ function SkillsModalView() {
                     <span
                       className={`plugins-game-badge ${skill.enabled ? "is-on" : "is-off"}`}
                     >
-                      {skill.enabled ? "ON" : "OFF"}
+                      {skill.enabled ? t("common.on") : t("common.off")}
                     </span>
                   </div>
                 </div>
@@ -806,13 +875,16 @@ function SkillsModalView() {
                   {skillToggleAction === selected.id
                     ? "..."
                     : selected.enabled
-                      ? "ON"
-                      : "OFF"}
+                      ? t("common.on")
+                      : t("common.off")}
                 </Button>
               </div>
             </div>
             <div className="plugins-game-detail-description">
-              {selected.description || "No description provided."}
+              {selected.description ||
+                t("skillsview.noDescriptionProvided", {
+                  defaultValue: "No description provided.",
+                })}
             </div>
             <div className="plugins-game-detail-actions">
               <Button
@@ -954,14 +1026,17 @@ function SkillsFullView() {
     BINANCE_SKILL_IDS.has(skill.id),
   ).length;
   const filterTabs: { key: typeof filterTab; label: string }[] = [
-    { key: "all", label: `ALL (${skills.length})` },
+    {
+      key: "all",
+      label: `${t("skillsview.all", { defaultValue: "All" })} (${skills.length})`,
+    },
     {
       key: "on",
-      label: `ON (${skills.filter((skill) => skill.enabled).length})`,
+      label: `${t("common.on")} (${skills.filter((skill) => skill.enabled).length})`,
     },
     {
       key: "off",
-      label: `OFF (${skills.filter((skill) => !skill.enabled).length})`,
+      label: `${t("common.off")} (${skills.filter((skill) => !skill.enabled).length})`,
     },
   ];
 
@@ -1076,8 +1151,13 @@ function SkillsFullView() {
               {filteredSkills.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-border/45 bg-bg/20 px-4 py-6 text-center text-sm text-muted">
                   {skills.length === 0
-                    ? "No Skills Installed"
-                    : `No skills match "${filterText}"`}
+                    ? t("skillsview.noSkillsInstalled", {
+                        defaultValue: "No Skills Installed",
+                      })
+                    : t("skillsview.noSkillsMatchFilter", {
+                        defaultValue: 'No skills match "{{filter}}"',
+                        filter: filterText,
+                      })}
                 </div>
               ) : (
                 filteredSkills.map((skill) => {
@@ -1135,7 +1215,7 @@ function SkillsFullView() {
                               : "border-border bg-transparent text-muted"
                           }`}
                         >
-                          {skill.enabled ? "ON" : "OFF"}
+                          {skill.enabled ? t("common.on") : t("common.off")}
                         </span>
                         {needsAttention && (
                           <span className="rounded-full border border-warn/30 bg-warn/12 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-warn">
@@ -1166,10 +1246,15 @@ function SkillsFullView() {
                   data-testid="skills-empty-state"
                   className="text-sm font-semibold text-txt"
                 >
-                  No Skills Installed
+                  {t("skillsview.noSkillsInstalled", {
+                    defaultValue: "No Skills Installed",
+                  })}
                 </div>
                 <div className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
-                  Install skills from the marketplace or create your own.
+                  {t("skillsview.noSkillsInstalledDesc", {
+                    defaultValue:
+                      "Install skills from the marketplace or create your own.",
+                  })}
                 </div>
                 <div className="mt-5 flex justify-center gap-3">
                   <Button
@@ -1178,7 +1263,7 @@ function SkillsFullView() {
                     className="h-10 rounded-full px-5 font-bold tracking-[0.12em]"
                     onClick={() => setInstallModalOpen(true)}
                   >
-                    Browse Marketplace
+                    {t("skillsview.BrowseMarketplace")}
                   </Button>
                   <Button
                     variant="outline"
@@ -1186,7 +1271,9 @@ function SkillsFullView() {
                     className="h-10 rounded-full px-5 font-bold tracking-[0.12em]"
                     onClick={() => setState("skillCreateFormOpen", true)}
                   >
-                    Create Skill
+                    {t("skillsview.createSkill", {
+                      defaultValue: "Create Skill",
+                    })}
                   </Button>
                 </div>
               </div>
@@ -1194,14 +1281,21 @@ function SkillsFullView() {
               <DesktopEmptyStatePanel
                 data-testid="skills-filter-empty"
                 className="px-6 py-12 text-center text-sm text-muted"
-                title="No matching skills"
-                description={`No skills match filtering "${filterText}"`}
+                title={t("skillsview.noMatchingSkills", {
+                  defaultValue: "No matching skills",
+                })}
+                description={t("skillsview.noSkillsMatchFilter", {
+                  defaultValue: 'No skills match "{{filter}}"',
+                  filter: filterText,
+                })}
               />
             ) : skillCreateFormOpen ? (
               <section className={DESKTOP_SECTION_SHELL_CLASSNAME}>
                 <div className="border-b border-border/35 px-5 py-4">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/60">
-                    Skill Builder
+                    {t("skillsview.skillBuilder", {
+                      defaultValue: "Skill Builder",
+                    })}
                   </div>
                   <div className="mt-1 text-sm font-semibold text-txt">
                     {t("skillsview.CreateNewSkill")}
@@ -1263,7 +1357,10 @@ function SkillsFullView() {
                       </span>
                     </div>
                     <div className="mt-3 max-w-3xl text-sm leading-relaxed text-muted">
-                      {selectedSkill.description || "No description provided."}
+                      {selectedSkill.description ||
+                        t("skillsview.noDescriptionProvided", {
+                          defaultValue: "No description provided.",
+                        })}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
@@ -1365,7 +1462,9 @@ function SkillsFullView() {
                                     : "bg-warn/12 text-warn"
                                 }`}
                               >
-                                {finding.severity}
+                                {finding.severity === "critical"
+                                  ? t("skillsview.critical")
+                                  : t("skillsview.statusWarning")}
                               </span>
                               <span className="min-w-0 flex-1 text-txt">
                                 {finding.message}

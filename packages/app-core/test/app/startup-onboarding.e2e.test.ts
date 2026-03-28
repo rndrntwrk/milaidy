@@ -624,6 +624,14 @@ function createHarnessState(): AppHarnessState {
   };
 }
 
+const TRANSLATIONS: Record<string, string> = {
+  "flaminaguide.FinishSetupLater": "Finish setup later",
+  "flaminaguide.FinishSetupLaterDescription":
+    "You can come back and complete these later.",
+  "flaminaguide.tasks.rpc.label": "RPC setup",
+  "flaminaguide.tasks.permissions.label": "Permissions",
+};
+
 function hasText(
   node: TestRenderer.ReactTestInstance,
   target: string,
@@ -668,8 +676,8 @@ describe("app startup onboarding flow (e2e)", () => {
       if (state.onboardingStep === "activate") {
         state.onboardingComplete = true;
         state.startupStatus = "ready";
-        state.uiShellMode = "native";
-        state.tab = "chat";
+        state.uiShellMode = "companion";
+        state.tab = "companion";
         return;
       }
       const idx = STEP_ORDER.indexOf(state.onboardingStep);
@@ -687,7 +695,7 @@ describe("app startup onboarding flow (e2e)", () => {
 
     mockUseApp.mockReset();
     mockUseApp.mockImplementation(() => ({
-      t: (k: string) => k,
+      t: (k: string) => TRANSLATIONS[k] ?? k,
       ...state,
       setState: (key: string, value: unknown) => {
         state[key] = value;
@@ -714,7 +722,7 @@ describe("app startup onboarding flow (e2e)", () => {
     }));
   });
 
-  it("progresses through onboarding and lands in chat", async () => {
+  it("progresses through onboarding and lands in companion mode", async () => {
     let tree: TestRenderer.ReactTestRenderer | null = null;
 
     await act(async () => {
@@ -755,7 +763,7 @@ describe("app startup onboarding flow (e2e)", () => {
 
     const renderedText = textOf(renderedTree.root);
 
-    expect(renderedText).toContain("ChatView");
+    expect(renderedText).toContain("CompanionShell:companion");
     expect(renderedText).not.toContain("OnboardingWizard");
   });
 

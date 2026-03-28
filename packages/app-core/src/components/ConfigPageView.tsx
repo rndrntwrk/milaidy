@@ -313,33 +313,33 @@ type CloudServiceKey = "inference" | "rpc" | "media" | "tts" | "embeddings";
 
 const CLOUD_SERVICE_DEFS: {
   key: CloudServiceKey;
-  label: string;
-  description: string;
+  labelKey: string;
+  descriptionKey: string;
 }[] = [
   {
     key: "inference",
-    label: "Model Inference",
-    description: `Use Eliza Cloud for LLM calls. Turn off to use your own API keys (Anthropic, OpenAI, etc.)`,
+    labelKey: "configpageview.ServiceInferenceLabel",
+    descriptionKey: "configpageview.ServiceInferenceDesc",
   },
   {
     key: "rpc",
-    label: "Blockchain RPC",
-    description: `Use Eliza Cloud RPC endpoints for EVM, BSC, and Solana`,
+    labelKey: "configpageview.ServiceRpcLabel",
+    descriptionKey: "configpageview.ServiceRpcDesc",
   },
   {
     key: "media",
-    label: "Media Generation",
-    description: `Use Eliza Cloud for image, video, audio, and vision`,
+    labelKey: "configpageview.ServiceMediaLabel",
+    descriptionKey: "configpageview.ServiceMediaDesc",
   },
   {
     key: "tts",
-    label: "Text-to-Speech",
-    description: `Use Eliza Cloud for TTS voice synthesis`,
+    labelKey: "configpageview.ServiceTtsLabel",
+    descriptionKey: "configpageview.ServiceTtsDesc",
   },
   {
     key: "embeddings",
-    label: "Embeddings",
-    description: `Use Eliza Cloud for text embedding generation`,
+    labelKey: "configpageview.ServiceEmbeddingsLabel",
+    descriptionKey: "configpageview.ServiceEmbeddingsDesc",
   },
 ];
 
@@ -432,7 +432,7 @@ function CloudServicesSection() {
         })}
       </p>
       <div className="flex flex-col gap-2">
-        {CLOUD_SERVICE_DEFS.map(({ key, label, description }) => (
+        {CLOUD_SERVICE_DEFS.map(({ key, labelKey, descriptionKey }) => (
           <div
             key={key}
             className={`flex items-center justify-between p-3 border border-border rounded-lg transition-colors ${
@@ -444,9 +444,11 @@ function CloudServicesSection() {
                 id={`cloud-service-${key}`}
                 className="text-[13px] font-medium text-txt"
               >
-                {label}
+                {t(labelKey)}
               </div>
-              <div className="text-[11px] text-muted mt-0.5">{description}</div>
+              <div className="text-[11px] text-muted mt-0.5">
+                {t(descriptionKey)}
+              </div>
             </div>
             <Switch
               checked={services[key]}
@@ -559,21 +561,27 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
     alchemy: [
       {
         configKey: "ALCHEMY_API_KEY",
-        label: "Alchemy API Key",
+        label: t("configpageview.AlchemyApiKey", {
+          defaultValue: "Alchemy API Key",
+        }),
         isSet: walletConfig?.alchemyKeySet ?? false,
       },
     ],
     infura: [
       {
         configKey: "INFURA_API_KEY",
-        label: "Infura API Key",
+        label: t("configpageview.InfuraApiKey", {
+          defaultValue: "Infura API Key",
+        }),
         isSet: walletConfig?.infuraKeySet ?? false,
       },
     ],
     ankr: [
       {
         configKey: "ANKR_API_KEY",
-        label: "Ankr API Key",
+        label: t("configpageview.AnkrApiKey", {
+          defaultValue: "Ankr API Key",
+        }),
         isSet: walletConfig?.ankrKeySet ?? false,
       },
     ],
@@ -583,28 +591,36 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
     alchemy: [
       {
         configKey: "ALCHEMY_API_KEY",
-        label: "Alchemy API Key",
+        label: t("configpageview.AlchemyApiKey", {
+          defaultValue: "Alchemy API Key",
+        }),
         isSet: walletConfig?.alchemyKeySet ?? false,
       },
     ],
     ankr: [
       {
         configKey: "ANKR_API_KEY",
-        label: "Ankr API Key",
+        label: t("configpageview.AnkrApiKey", {
+          defaultValue: "Ankr API Key",
+        }),
         isSet: walletConfig?.ankrKeySet ?? false,
       },
     ],
     nodereal: [
       {
         configKey: "NODEREAL_BSC_RPC_URL",
-        label: "NodeReal BSC RPC URL",
+        label: t("configpageview.NodeRealBscRpcUrl", {
+          defaultValue: "NodeReal BSC RPC URL",
+        }),
         isSet: walletConfig?.nodeRealBscRpcSet ?? false,
       },
     ],
     quicknode: [
       {
         configKey: "QUICKNODE_BSC_RPC_URL",
-        label: "QuickNode BSC RPC URL",
+        label: t("configpageview.QuickNodeBscRpcUrl", {
+          defaultValue: "QuickNode BSC RPC URL",
+        }),
         isSet: walletConfig?.quickNodeBscRpcSet ?? false,
       },
     ],
@@ -614,12 +630,16 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
     "helius-birdeye": [
       {
         configKey: "HELIUS_API_KEY",
-        label: "Helius API Key",
+        label: t("configpageview.HeliusApiKey", {
+          defaultValue: "Helius API Key",
+        }),
         isSet: walletConfig?.heliusKeySet ?? false,
       },
       {
         configKey: "BIRDEYE_API_KEY",
-        label: "Birdeye API Key",
+        label: t("configpageview.BirdeyeApiKey", {
+          defaultValue: "Birdeye API Key",
+        }),
         isSet: walletConfig?.birdeyeKeySet ?? false,
       },
     ],
@@ -638,7 +658,11 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
   const legacyRpcChains = walletConfig?.legacyCustomChains ?? [];
   const legacyRpcWarning =
     legacyRpcChains.length > 0
-      ? `Legacy raw RPC is still active for ${legacyRpcChains.join(", ")}. Re-save a supported provider selection to migrate fully.`
+      ? t("configpageview.LegacyRawRpcWarning", {
+          defaultValue:
+            "Legacy raw RPC is still active for {{chains}}. Re-save a supported provider selection to migrate fully.",
+          chains: legacyRpcChains.join(", "),
+        })
       : null;
 
   /* Filter out eliza-cloud from per-chain options in custom mode */
@@ -684,13 +708,23 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
               strokeLinejoin="round"
               className={rpcMode === "cloud" ? "text-accent" : "text-muted"}
             >
-              <title>Eliza Cloud managed RPC</title>
+              <title>
+                {t("configpageview.CloudModeSvgTitle", {
+                  defaultValue: "Eliza Cloud managed RPC",
+                })}
+              </title>
               <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
             </svg>
-            <span className="text-sm font-bold">Eliza Cloud</span>
+            <span className="text-sm font-bold">
+              {t("configpageview.CloudModeTitle", {
+                defaultValue: "Eliza Cloud",
+              })}
+            </span>
           </div>
           <span className="text-[11px] text-muted leading-snug">
-            Managed RPC for all chains. No API keys needed.
+            {t("configpageview.CloudModeDesc", {
+              defaultValue: "Managed RPC for all chains. No API keys needed.",
+            })}
           </span>
           {rpcMode === "cloud" && (
             <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-fg">
@@ -720,13 +754,23 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
               strokeLinejoin="round"
               className={rpcMode === "custom" ? "text-accent" : "text-muted"}
             >
-              <title>Custom RPC configuration</title>
+              <title>
+                {t("configpageview.CustomModeSvgTitle", {
+                  defaultValue: "Custom RPC configuration",
+                })}
+              </title>
               <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
             </svg>
-            <span className="text-sm font-bold">Custom RPC</span>
+            <span className="text-sm font-bold">
+              {t("configpageview.CustomModeTitle", {
+                defaultValue: "Custom RPC",
+              })}
+            </span>
           </div>
           <span className="text-[11px] text-muted leading-snug">
-            Bring your own API keys. Configure per chain.
+            {t("configpageview.CustomModeDesc", {
+              defaultValue: "Bring your own API keys. Configure per chain.",
+            })}
           </span>
           {rpcMode === "custom" && (
             <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-fg">
@@ -740,9 +784,15 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
           CLOUD MODE
           ═══════════════════════════════════════════════════════════════ */}
       <div className="mb-5 rounded-lg border border-border p-3">
-        <div className="text-xs font-bold mb-1">Wallet Network</div>
+        <div className="text-xs font-bold mb-1">
+          {t("configpageview.WalletNetwork", {
+            defaultValue: "Wallet Network",
+          })}
+        </div>
         <div className="text-[11px] text-muted mb-2">
-          Choose Mainnet for live funds or Testnet for practice.
+          {t("configpageview.WalletNetworkDesc", {
+            defaultValue: "Choose Mainnet for live funds or Testnet for practice.",
+          })}
         </div>
         <div className="flex flex-wrap gap-1.5">
           <Button
@@ -752,7 +802,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
             className="min-h-[40px] px-3 text-xs font-semibold"
             onClick={() => setSelectedWalletNetwork("mainnet")}
           >
-            Mainnet
+            {t("configpageview.Mainnet", { defaultValue: "Mainnet" })}
           </Button>
           <Button
             variant={
@@ -761,7 +811,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
             className="min-h-[40px] px-3 text-xs font-semibold"
             onClick={() => setSelectedWalletNetwork("testnet")}
           >
-            Testnet
+            {t("configpageview.Testnet", { defaultValue: "Testnet" })}
           </Button>
         </div>
       </div>
@@ -776,8 +826,12 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                 />
                 <span className="text-[13px] font-semibold text-txt">
                   {elizaCloudAuthRejected
-                    ? "Eliza Cloud key invalid"
-                    : "Connected to Eliza Cloud"}
+                    ? t("configpageview.ElizaCloudKeyInvalid", {
+                        defaultValue: "Eliza Cloud key invalid",
+                      })
+                    : t("configpageview.ConnectedToElizaCloud", {
+                        defaultValue: "Connected to Eliza Cloud",
+                      })}
                 </span>
                 {(elizaCloudCredits !== null || elizaCloudAuthRejected) && (
                   <span className="text-xs text-muted ml-auto flex items-center gap-1.5">
@@ -791,7 +845,9 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                       }
                     >
                       {elizaCloudAuthRejected
-                        ? "Fix in Cloud settings"
+                        ? t("configpageview.FixInCloudSettings", {
+                            defaultValue: "Fix in Cloud settings",
+                          })
                         : elizaCloudCredits !== null
                           ? `$${elizaCloudCredits.toFixed(2)}`
                           : ""}
@@ -803,7 +859,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                         rel="noopener noreferrer"
                         className="text-[11px] text-accent underline underline-offset-2"
                       >
-                        Top up
+                        {t("configpageview.TopUp")}
                       </a>
                     )}
                   </span>
@@ -812,9 +868,24 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
 
               <div className="space-y-2">
                 {[
-                  { label: "EVM", desc: "Ethereum, Base, Arbitrum" },
-                  { label: "BSC", desc: "BNB Smart Chain" },
-                  { label: "Solana", desc: "Solana mainnet" },
+                  {
+                    label: "EVM",
+                    desc: t("configpageview.EVMDesc", {
+                      defaultValue: "Ethereum, Base, Arbitrum",
+                    }),
+                  },
+                  {
+                    label: "BSC",
+                    desc: t("configpageview.BSCDesc", {
+                      defaultValue: "BNB Smart Chain",
+                    }),
+                  },
+                  {
+                    label: "Solana",
+                    desc: t("configpageview.SolanaDesc", {
+                      defaultValue: "Solana mainnet",
+                    }),
+                  },
                 ].map((chain) => (
                   <div
                     key={chain.label}
@@ -826,7 +897,9 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                     </span>
                     <span className="text-[11px] text-muted">{chain.desc}</span>
                     <span className="text-[10px] text-accent ml-auto font-medium">
-                      Eliza Cloud
+                      {t("configpageview.CloudModeTitle", {
+                        defaultValue: "Eliza Cloud",
+                      })}
                     </span>
                   </div>
                 ))}
@@ -847,16 +920,22 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                 strokeLinejoin="round"
                 className="text-muted"
               >
-                <title>Eliza Cloud login required</title>
+                <title>
+                  {t("configpageview.CloudLoginRequiredSvgTitle", {
+                    defaultValue: "Eliza Cloud login required",
+                  })}
+                </title>
                 <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
               </svg>
               <div>
                 <p className="text-sm font-semibold text-txt mb-1">
-                  Connect to Eliza Cloud
+                  {t("elizaclouddashboard.ConnectElizaCloud")}
                 </p>
                 <p className="text-xs text-muted max-w-sm">
-                  Get managed RPC endpoints for EVM, BSC, and Solana with no API
-                  keys required.
+                  {t("configpageview.ManagedRpcDesc", {
+                    defaultValue:
+                      "Get managed RPC endpoints for EVM, BSC, and Solana with no API keys required.",
+                  })}
                 </p>
               </div>
               <Button
@@ -867,8 +946,10 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                 disabled={elizaCloudLoginBusy}
               >
                 {elizaCloudLoginBusy
-                  ? "Connecting..."
-                  : "Log in to Eliza Cloud"}
+                  ? t("configpageview.Connecting", {
+                      defaultValue: "Connecting...",
+                    })
+                  : t("providerswitcher.logInToElizaCloud")}
               </Button>
             </div>
           )}
@@ -881,7 +962,9 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
               onClick={handleWalletSaveAll}
               disabled={walletApiKeySaving}
             >
-              {walletApiKeySaving ? "Saving..." : "Save"}
+              {walletApiKeySaving
+                ? t("apikeyconfig.saving")
+                : t("apikeyconfig.save")}
             </Button>
           </div>
         </div>
@@ -893,7 +976,11 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
       {rpcMode === "custom" && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <div className="font-bold text-sm">Custom RPC Providers</div>
+            <div className="font-bold text-sm">
+              {t("configpageview.CustomRpcProviders", {
+                defaultValue: "Custom RPC Providers",
+              })}
+            </div>
             <Button
               variant="outline"
               className="min-h-[2.625rem] px-4 rounded-[calc(var(--radius-lg)+2px)] flex items-center gap-1.5 text-[12px] text-muted hover:text-txt"
@@ -909,18 +996,20 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <title>Secrets</title>
+                <title>{t("configpageview.Secrets", { defaultValue: "Secrets" })}</title>
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
-              Secrets
+              {t("configpageview.Secrets", { defaultValue: "Secrets" })}
             </Button>
           </div>
 
           <div className="space-y-5">
             <RpcConfigSection
-              title="EVM"
-              description="Ethereum, Base, Arbitrum"
+              title={t("configpageview.EVM", { defaultValue: "EVM" })}
+              description={t("configpageview.EVMDesc", {
+                defaultValue: "Ethereum, Base, Arbitrum",
+              })}
               options={filterCloudOption(EVM_RPC_OPTIONS)}
               selectedProvider={
                 selectedEvmRpc === "eliza-cloud"
@@ -938,8 +1027,10 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
             />
             <hr className="border-border" />
             <RpcConfigSection
-              title="BSC"
-              description="BNB Smart Chain"
+              title={t("configpageview.BSC", { defaultValue: "BSC" })}
+              description={t("configpageview.BSCDesc", {
+                defaultValue: "BNB Smart Chain",
+              })}
               options={filterCloudOption(BSC_RPC_OPTIONS)}
               selectedProvider={
                 selectedBscRpc === "eliza-cloud"
@@ -957,8 +1048,10 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
             />
             <hr className="border-border" />
             <RpcConfigSection
-              title="Solana"
-              description="Solana mainnet"
+              title={t("configpageview.Solana", { defaultValue: "Solana" })}
+              description={t("configpageview.SolanaDesc", {
+                defaultValue: "Solana mainnet",
+              })}
               options={filterCloudOption(SOLANA_RPC_OPTIONS)}
               selectedProvider={
                 selectedSolanaRpc === "eliza-cloud"
@@ -990,7 +1083,9 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
               onClick={handleWalletSaveAll}
               disabled={walletApiKeySaving}
             >
-              {walletApiKeySaving ? "Saving..." : "Save"}
+              {walletApiKeySaving
+                ? t("apikeyconfig.saving")
+                : t("apikeyconfig.save")}
             </Button>
           </div>
         </div>

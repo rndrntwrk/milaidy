@@ -325,9 +325,13 @@ import { textOf } from "../../../../test/helpers/react-test";
 import { App } from "@miladyai/app-core/App";
 
 type HarnessState = {
+  cancelOnboardingHandoff: () => void;
   onboardingLoading: boolean;
   authRequired: boolean;
   onboardingComplete: boolean;
+  onboardingHandoffError: string | null;
+  onboardingHandoffPhase: string;
+  retryOnboardingHandoff: () => Promise<void>;
   tab: Tab;
   actionNotice: null;
   setTab: (tab: Tab) => void;
@@ -423,6 +427,8 @@ describe("pages navigation smoke (e2e)", () => {
       onboardingLoading: false,
       authRequired: false,
       onboardingComplete: true,
+      onboardingHandoffError: null,
+      onboardingHandoffPhase: "idle",
       tab: "chat",
       actionNotice: null,
       plugins: [],
@@ -442,6 +448,8 @@ describe("pages navigation smoke (e2e)", () => {
       startupStatus: "ready",
       startupError: null,
       retryStartup: vi.fn(),
+      retryOnboardingHandoff: vi.fn(async () => {}),
+      cancelOnboardingHandoff: vi.fn(),
       setActionNotice: vi.fn(),
       setTab: (tab: Tab) => {
         state.tab = tab;
@@ -620,6 +628,8 @@ describe("pages navigation smoke (e2e)", () => {
         onboardingLoading: false,
         authRequired: false,
         onboardingComplete: true,
+        onboardingHandoffError: null,
+        onboardingHandoffPhase: "idle",
         tab: "chat",
         actionNotice: null,
         plugins: [],
@@ -639,6 +649,8 @@ describe("pages navigation smoke (e2e)", () => {
         startupStatus: "ready",
         startupError: null,
         retryStartup: vi.fn(),
+        retryOnboardingHandoff: vi.fn(async () => {}),
+        cancelOnboardingHandoff: vi.fn(),
         setActionNotice: vi.fn(),
         setTab: (tab: Tab) => {
           state.tab = tab;
@@ -672,5 +684,56 @@ describe("pages navigation smoke (e2e)", () => {
 
     errorSpy.mockRestore();
     warnSpy.mockRestore();
+  });
+
+  it("renders onboarding handoff progress and retry overlays in companion mode", async () => {
+    const cases: Array<{
+      error: string | null;
+      phase: string;
+      tokens: string[];
+    }> = [
+      {
+        phase: "bootstrapping",
+        error: null,
+        tokens: [
+          "CompanionShell Ready: companion",
+          "Starting your first conversation",
+        ],
+      },
+      {
+        phase: "error",
+        error: "restart down",
+        tokens: [
+          "CompanionShell Ready: companion",
+          "Setup hit a problem",
+          "restart down",
+          "Retry",
+          "Back to setup",
+        ],
+      },
+    ];
+
+    for (const entry of cases) {
+      state = {
+        ...state,
+        onboardingComplete: false,
+        onboardingHandoffError: entry.error,
+        onboardingHandoffPhase: entry.phase,
+        tab: "companion",
+        uiShellMode: "companion",
+      };
+      mockUseApp.mockImplementation(() => state);
+
+      let tree: TestRenderer.ReactTestRenderer | null = null;
+      await act(async () => {
+        tree = TestRenderer.create(React.createElement(App));
+      });
+
+      const appText = textOf(requireTree(tree).root);
+      for (const token of entry.tokens) {
+        expect(appText).toContain(token);
+      }
+      expect(appText).not.toContain("OnboardingWizard");
+    }
   });
 });

@@ -2950,8 +2950,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
     subgroupTags.find((tag) => tag.id === subgroupFilter) ?? subgroupTags[0];
   const pluginSectionTitle =
     selectedSubgroupTag?.id === "all"
-      ? "Plugin Catalog"
-      : (selectedSubgroupTag?.label ?? "Plugin Catalog");
+      ? t("pluginsview.PluginCatalog", { defaultValue: "Plugin Catalog" })
+      : (selectedSubgroupTag?.label ??
+          t("pluginsview.PluginCatalog", { defaultValue: "Plugin Catalog" }));
 
   return (
     <DesktopPageFrame data-testid="plugins-view-page">
@@ -2960,7 +2961,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
           <aside
             className={APP_DESKTOP_SIDEBAR_RAIL_STANDARD_CLASSNAME}
             data-testid="plugins-subgroup-sidebar"
-            aria-label="Plugin types"
+            aria-label={t("pluginsview.PluginTypes", {
+              defaultValue: "Plugin types",
+            })}
           >
             <div className={APP_SIDEBAR_INNER_CLASSNAME}>
               <div
@@ -2979,14 +2982,17 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
             <section className={DESKTOP_SECTION_SHELL_CLASSNAME}>
               <div className="border-b border-border/35 px-5 py-4">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/60">
-                  Advanced
+                  {t("nav.advanced")}
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <div className="text-sm font-semibold text-txt">
                     {pluginSectionTitle}
                   </div>
                   <span className="rounded-full border border-border/45 px-2.5 py-1 text-[10px] font-bold tracking-[0.16em] text-muted">
-                    {visiblePlugins.length} shown
+                    {t("pluginsview.VisibleCount", {
+                      defaultValue: "{{count}} shown",
+                      count: visiblePlugins.length,
+                    })}
                   </span>
                 </div>
               </div>
@@ -3038,18 +3044,33 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                   {sorted.length === 0 ? (
                     <DesktopEmptyStatePanel
                       className="min-h-[18rem] rounded-[1.6rem] px-5 py-10"
-                      description={`No ${resultLabel} are available right now.`}
-                      title={`No ${label.toLowerCase()} available`}
+                      description={t("pluginsview.NoneAvailableDesc", {
+                        defaultValue: "No {{label}} are available right now.",
+                        label: resultLabel,
+                      })}
+                      title={t("pluginsview.NoneAvailableTitle", {
+                        defaultValue: "No {{label}} available",
+                        label: label.toLowerCase(),
+                      })}
                     />
                   ) : visiblePlugins.length === 0 ? (
                     <DesktopEmptyStatePanel
                       className="min-h-[16rem] rounded-[1.6rem] px-5 py-10"
                       description={
                         showSubgroupFilters
-                          ? "No plugins match the selected category."
-                          : `No ${resultLabel} match your filters.`
+                          ? t("pluginsview.NoPluginsMatchCategory", {
+                              defaultValue:
+                                "No plugins match the selected category.",
+                            })
+                          : t("pluginsview.NoPluginsMatchFilters", {
+                              defaultValue:
+                                "No {{label}} match your filters.",
+                              label: resultLabel,
+                            })
                       }
-                      title="Nothing to show"
+                      title={t("pluginsview.NothingToShow", {
+                        defaultValue: "Nothing to show",
+                      })}
                     />
                   ) : (
                     renderPluginGrid(visiblePlugins)

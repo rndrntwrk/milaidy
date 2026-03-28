@@ -207,7 +207,7 @@ export function RpcStep() {
           />
           <RpcModeCard
             title={t("onboarding.rpcBringKeys")}
-            description="Alchemy, QuickNode, Helius"
+            description={t("onboarding.rpcBringKeysProviders")}
             onClick={() => setMode("byok")}
           />
         </div>
@@ -313,7 +313,7 @@ export function RpcStep() {
             disabled={!elizaCloudReady}
             type="button"
           >
-            {t("onboarding.next") ?? "Next"}
+            {t("onboarding.next")}
           </Button>
         </div>
       </>
@@ -325,7 +325,7 @@ export function RpcStep() {
       <OnboardingStepHeader
         eyebrow={t("onboarding.rpcTitle")}
         title={t("onboarding.rpcBringKeys")}
-        description="Connect your preferred RPC providers for chains where you want direct control."
+        description={t("onboarding.rpcBringKeysDescription")}
         descriptionClassName="mx-auto mt-1 max-w-[35ch] text-balance"
       />
 
@@ -333,24 +333,24 @@ export function RpcStep() {
         <RpcKeyField
           id="rpc-alchemy"
           label={t("onboarding.rpcAlchemyKey")}
-          hint="Covers Ethereum, Base, Arbitrum, Optimism, Polygon, and BSC."
-          placeholder="Enter Alchemy API key"
+          hint={t("onboarding.rpcAlchemyHint")}
+          placeholder={t("onboarding.rpcAlchemyPlaceholder")}
           value={rpcKeys.ALCHEMY_API_KEY ?? ""}
           onChange={(value) => setRpcKey("ALCHEMY_API_KEY", value)}
         />
         <RpcKeyField
           id="rpc-helius"
           label={t("onboarding.rpcHeliusKey")}
-          hint="Solana mainnet RPC and token data."
-          placeholder="Enter Helius API key"
+          hint={t("onboarding.rpcHeliusHint")}
+          placeholder={t("onboarding.rpcHeliusPlaceholder")}
           value={rpcKeys.HELIUS_API_KEY ?? ""}
           onChange={(value) => setRpcKey("HELIUS_API_KEY", value)}
         />
         <RpcKeyField
           id="rpc-birdeye"
           label={t("onboarding.rpcBirdeyeKey")}
-          hint="Optional Solana market data for richer token coverage."
-          placeholder="Enter Birdeye API key (optional)"
+          hint={t("onboarding.rpcBirdeyeHint")}
+          placeholder={t("onboarding.rpcBirdeyePlaceholder")}
           value={rpcKeys.BIRDEYE_API_KEY ?? ""}
           onChange={(value) => setRpcKey("BIRDEYE_API_KEY", value)}
         />
@@ -385,7 +385,7 @@ export function RpcStep() {
           }}
           type="button"
         >
-          {t("onboarding.next") ?? "Next"}
+          {t("onboarding.next")}
         </Button>
       </div>
     </>

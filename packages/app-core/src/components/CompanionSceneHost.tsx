@@ -22,6 +22,7 @@ import {
   useState,
 } from "react";
 import type { VrmEngine } from "./avatar/VrmEngine";
+import { resolveCharacterGreetingAnimation } from "./character-greeting";
 import { CompanionSceneStatusContext } from "./companion-scene-status-context";
 import { SharedCompanionSceneContext } from "./shared-companion-scene-context";
 import { VrmStage } from "./VrmStage";
@@ -31,13 +32,6 @@ const COMPANION_ZOOM_PINCH_SENSITIVITY = 2.35;
 const COMPANION_ZOOM_STORAGE_KEY = "milady.companion.zoom.v1";
 const DEFAULT_COMPANION_ZOOM = 0.95;
 const COMPANION_TELEPORT_GREETING_DELAY_MS = 400;
-const COMPANION_TELEPORT_GREETING_EMOTE = {
-  emoteId: "greeting",
-  path: "/animations/emotes/greeting.fbx",
-  duration: 3,
-  loop: false,
-  showOverlay: false,
-} as const;
 const CAMERA_DRAG_IGNORE_SELECTOR =
   'button, a, label, input, textarea, select, option, [role="button"], [role="listbox"], [role="tab"], [aria-expanded], [aria-haspopup], [contenteditable="true"], [data-no-camera-drag="true"]';
 const CAMERA_ZOOM_IGNORE_SELECTOR = '[data-no-camera-zoom="true"]';
@@ -420,6 +414,9 @@ function CompanionSceneSurface({
     string | null
   >(null);
   const teleportKeyRef = useRef(teleportKey);
+  const greetingAnimationPathRef = useRef<string | null>(
+    resolveCharacterGreetingAnimation({ avatarIndex: selectedVrmIndex }),
+  );
   const greetingEmoteTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -433,7 +430,17 @@ function CompanionSceneSurface({
       // cross-fading into the greeting emote.
       greetingEmoteTimerRef.current = window.setTimeout(() => {
         greetingEmoteTimerRef.current = null;
-        dispatchAppEmoteEvent(COMPANION_TELEPORT_GREETING_EMOTE);
+        const greetingAnimationPath = greetingAnimationPathRef.current;
+        if (!greetingAnimationPath) {
+          return;
+        }
+        dispatchAppEmoteEvent({
+          emoteId: "greeting",
+          path: `/${greetingAnimationPath}`,
+          duration: 3,
+          loop: false,
+          showOverlay: false,
+        });
       }, COMPANION_TELEPORT_GREETING_DELAY_MS);
     };
     window.addEventListener(
@@ -543,6 +550,12 @@ function CompanionSceneSurface({
     }),
     [teleportCompletedKey, teleportKey],
   );
+
+  useEffect(() => {
+    greetingAnimationPathRef.current = resolveCharacterGreetingAnimation({
+      avatarIndex: selectedVrmIndex,
+    });
+  }, [selectedVrmIndex]);
 
   useEffect(() => {
     teleportKeyRef.current = teleportKey;

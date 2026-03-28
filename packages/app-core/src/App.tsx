@@ -107,6 +107,52 @@ function resolveAgentLoaderCopy(
   return { label: `Starting systems${elapsed}` };
 }
 
+function resolveOnboardingHandoffCopy(
+  phase: string,
+  error: string | null,
+): { detail: string; title: string } {
+  switch (phase) {
+    case "provisioning":
+      return {
+        title: "Provisioning your agent",
+        detail: "Preparing the runtime before your companion opens.",
+      };
+    case "starting-backend":
+      return {
+        title: "Starting the local agent",
+        detail:
+          "Waking up the embedded backend so companion mode can take over in place.",
+      };
+    case "saving":
+      return {
+        title: "Saving your setup",
+        detail: "Persisting the onboarding choices for the new agent session.",
+      };
+    case "restarting":
+      return {
+        title: "Restarting your agent",
+        detail: "Hot-swapping the runtime without reloading the companion shell.",
+      };
+    case "bootstrapping":
+      return {
+        title: "Starting your first conversation",
+        detail: "Creating a fresh chat thread and asking the agent to greet you.",
+      };
+    case "error":
+      return {
+        title: "Setup hit a problem",
+        detail:
+          error?.trim() || "The agent could not finish the onboarding handoff.",
+      };
+    case "fading":
+    default:
+      return {
+        title: "Opening your companion",
+        detail: "Handing off from onboarding into companion mode.",
+      };
+  }
+}
+
 /** Check if we're in pop-out mode (StreamView only, no chrome). */
 function useIsPopout(): boolean {
   const [popout] = useState(() => {
@@ -241,6 +287,8 @@ function ViewRouter({
 export function App() {
   const {
     onboardingLoading,
+    onboardingHandoffError,
+    onboardingHandoffPhase,
     startupPhase,
     startupError,
     authRequired,
@@ -257,6 +305,7 @@ export function App() {
     uiTheme,
     setUiTheme,
     chatAgentVoiceMuted,
+    cancelOnboardingHandoff,
     handleSaveCharacter,
     characterSaving,
     characterSaveSuccess,
@@ -264,10 +313,13 @@ export function App() {
     unreadConversations,
     activeGameViewerUrl,
     gameOverlayEnabled,
+    retryOnboardingHandoff,
     t,
   } = useApp();
 
   const isPopout = useIsPopout();
+  const onboardingHandoffActive =
+    onboardingHandoffPhase != null && onboardingHandoffPhase !== "idle";
   const shellMode =
     tab === "character" || tab === "character-select"
       ? "native"
@@ -422,7 +474,9 @@ export function App() {
   const agentStarting = agentStatus?.state === "starting";
 
   const showFullScreenLoader =
-    onboardingComplete && (onboardingLoading || agentStarting);
+    onboardingComplete &&
+    !onboardingHandoffActive &&
+    (onboardingLoading || agentStarting);
 
   const [startupElapsedSec, setStartupElapsedSec] = useState(0);
   useEffect(() => {
@@ -458,21 +512,32 @@ export function App() {
 
   // Crossfade state for onboarding -> chat
   const [fadingOutOnboarding, setFadingOutOnboarding] = useState(false);
+  const prevOnboardingHandoffActiveRef = useRef(onboardingHandoffActive);
   const prevOnboardingCompleteRef = useRef(onboardingComplete);
 
   useEffect(() => {
-    if (!prevOnboardingCompleteRef.current && onboardingComplete) {
+    const enteredHandoff =
+      !prevOnboardingHandoffActiveRef.current && onboardingHandoffActive;
+    const completedOnboarding =
+      !prevOnboardingCompleteRef.current && onboardingComplete;
+
+    if (enteredHandoff || completedOnboarding) {
       setFadingOutOnboarding(true);
       const timer = setTimeout(() => {
         setFadingOutOnboarding(false);
       }, 700);
+      prevOnboardingHandoffActiveRef.current = onboardingHandoffActive;
+      prevOnboardingCompleteRef.current = onboardingComplete;
       return () => clearTimeout(timer);
     }
-    if (!onboardingComplete) {
+
+    if (!onboardingHandoffActive && !onboardingComplete) {
       setFadingOutOnboarding(false);
     }
+
+    prevOnboardingHandoffActiveRef.current = onboardingHandoffActive;
     prevOnboardingCompleteRef.current = onboardingComplete;
-  }, [onboardingComplete]);
+  }, [onboardingComplete, onboardingHandoffActive]);
 
   useEffect(() => {
     if (showFullScreenLoader) {
@@ -512,7 +577,8 @@ export function App() {
 
   if (authRequired && !blockOnboardingForShell) return <PairingView />;
   const showOnboarding =
-    (!onboardingComplete || fadingOutOnboarding) && !blockOnboardingForShell;
+    ((!onboardingComplete && !onboardingHandoffActive) || fadingOutOnboarding) &&
+    !blockOnboardingForShell;
 
   // We conditionally skip returning early for onboarding so we can mount the app shell
   // behind it during the crossfade. If we are completely before the fade out, we can
@@ -635,6 +701,11 @@ export function App() {
     shellContent
   );
 
+  const onboardingHandoffCopy = resolveOnboardingHandoffCopy(
+    onboardingHandoffPhase,
+    onboardingHandoffError,
+  );
+
   return (
     <BugReportProvider value={bugReport}>
       {/* 
@@ -648,6 +719,51 @@ export function App() {
           style={{ opacity: fadingOutOnboarding ? 0 : 1 }}
         >
           <OnboardingWizard />
+        </div>
+      )}
+
+      {onboardingHandoffActive && (
+        <div
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-[90] flex justify-center px-4 pb-6 pt-20"
+          data-testid="onboarding-handoff-overlay"
+        >
+          <div className="pointer-events-auto w-full max-w-lg rounded-[24px] border border-border/50 bg-card/92 p-5 shadow-[0_18px_48px_rgba(15,23,42,0.24)] backdrop-blur-md">
+            <div className="flex items-start gap-3">
+              {onboardingHandoffPhase === "error" ? (
+                <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-danger" />
+              ) : (
+                <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-accent animate-pulse" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-txt">
+                  {onboardingHandoffCopy.title}
+                </p>
+                <p className="mt-1 text-sm text-muted">
+                  {onboardingHandoffCopy.detail}
+                </p>
+              </div>
+            </div>
+
+            {onboardingHandoffPhase === "error" && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  data-testid="onboarding-handoff-retry"
+                  onClick={() => {
+                    void retryOnboardingHandoff();
+                  }}
+                >
+                  Retry
+                </Button>
+                <Button
+                  variant="outline"
+                  data-testid="onboarding-handoff-back"
+                  onClick={cancelOnboardingHandoff}
+                >
+                  Back to setup
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

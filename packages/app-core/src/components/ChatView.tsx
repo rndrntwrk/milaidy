@@ -29,6 +29,7 @@ import {
 } from "@miladyai/app-core/hooks";
 import { getVrmPreviewUrl, useApp } from "@miladyai/app-core/state";
 import { miladyTtsDebug } from "@miladyai/app-core/utils";
+import { resolveCharacterVoiceConfigFromAppConfig } from "@miladyai/app-core/voice";
 import { Button } from "@miladyai/ui";
 import {
   type ChangeEvent,
@@ -44,6 +45,10 @@ import {
 import { AgentActivityBox } from "./AgentActivityBox";
 import { ChatComposer } from "./ChatComposer";
 import { ChatMessage, TypingIndicator } from "./ChatMessage";
+import {
+  DESKTOP_CHAT_BUBBLE_ASSISTANT_CLASSNAME,
+  DESKTOP_CHAT_BUBBLE_USER_CLASSNAME,
+} from "./desktop-surface-primitives";
 import { MessageContent } from "./MessageContent";
 import { PtyConsoleDrawer } from "./PtyConsoleDrawer";
 import { useCompanionSceneStatus } from "./companion-scene-status-context";
@@ -81,18 +86,17 @@ const COMPANION_MESSAGE_LAYER_BOTTOM_FALLBACK = "5.25rem";
 const COMPANION_COMPOSER_GAP_PX = 18;
 /** Companion dock composer: padding + min-height live here (not on the glass layer). */
 const COMPANION_COMPOSER_SHELL_LAYOUT_CLASSNAME =
-  "relative flex items-center min-h-[80px] max-[380px]:min-h-[72px] px-2.5 py-1.5 max-[380px]:px-2 max-[380px]:py-1";
+  "relative flex items-center px-3 py-2 max-[380px]:min-h-[78px] max-[380px]:px-2.5 max-[380px]:py-1.5";
 /** Frosted pill behind the game-modal composer; separate from content so padding stays obvious. */
 const COMPANION_COMPOSER_GLASS_LAYER_CLASSNAME =
-  "pointer-events-none absolute inset-0 rounded-[34px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] shadow-[0_20px_52px_rgba(0,0,0,0.17)] ring-1 ring-inset ring-white/6 backdrop-blur-[22px]";
+  "pointer-events-none absolute inset-0 rounded-[34px] border border-border/26 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_72%,transparent))] shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_20px_52px_rgba(15,23,42,0.18)] ring-1 ring-inset ring-white/8 backdrop-blur-[22px] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_24px_58px_rgba(0,0,0,0.36)]";
 const COMPANION_MESSAGE_LAYER_MASK =
   "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.28) 6%, rgba(0,0,0,0.82) 12%, black 17%, black 100%)";
-const COMPANION_ASSISTANT_BUBBLE_CLASSNAME =
-  "border border-[color:var(--onboarding-card-border)] bg-[color:var(--onboarding-card-bg)] text-[color:var(--onboarding-text-strong)] shadow-[0_14px_34px_rgba(0,0,0,0.16)] backdrop-blur-md";
-const COMPANION_USER_BUBBLE_CLASSNAME =
-  "border border-[color:var(--onboarding-accent-border)] bg-[color:var(--onboarding-accent-bg)] text-[color:var(--onboarding-text-strong)] shadow-[0_14px_34px_rgba(0,0,0,0.14)]";
-const COMPANION_TYPING_BUBBLE_CLASSNAME =
-  "border border-[color:var(--onboarding-card-border)] bg-[color:var(--onboarding-card-bg)] shadow-[0_12px_30px_rgba(0,0,0,0.14)] backdrop-blur-md";
+const COMPANION_ASSISTANT_BUBBLE_CLASSNAME = `${DESKTOP_CHAT_BUBBLE_ASSISTANT_CLASSNAME} backdrop-blur-md`;
+const COMPANION_USER_BUBBLE_CLASSNAME = `${DESKTOP_CHAT_BUBBLE_USER_CLASSNAME} backdrop-blur-md`;
+const COMPANION_TYPING_BUBBLE_CLASSNAME = `${DESKTOP_CHAT_BUBBLE_ASSISTANT_CLASSNAME} backdrop-blur-md`;
+const COMPANION_TYPING_DOT_CLASSNAME =
+  "h-1.5 w-1.5 rounded-full bg-[color:color-mix(in_srgb,var(--muted)_82%,transparent)] animate-bounce";
 
 type ChatViewVariant = "default" | "game-modal";
 
@@ -226,6 +230,22 @@ function useChatVoiceController(options: {
     text: string;
     unlockGen: number;
   } | null>(null);
+  const initialCompletedAssistantOnGameModalMountRef = useRef<{
+    messageId: string;
+    text: string;
+  } | null>(
+    isGameModal && !chatSending
+      ? (() => {
+          const latestAssistant =
+            findLatestAssistantMessage(conversationMessages);
+          if (!latestAssistant) return null;
+          return {
+            messageId: latestAssistant.id,
+            text: latestAssistant.text,
+          };
+        })()
+      : null,
+  );
   const voiceDraftBaseInputRef = useRef("");
   const prevIsGameModalRef = useRef(isGameModal);
   const gameModalJustActivatedRef = useRef(false);
@@ -233,18 +253,27 @@ function useChatVoiceController(options: {
   const loadVoiceConfig = useCallback(async () => {
     try {
       const cfg = await client.getConfig();
-      const messages = cfg.messages as
-        | Record<string, Record<string, string>>
-        | undefined;
-      const tts = messages?.tts as VoiceConfig | undefined;
-      setVoiceConfig(tts ?? null);
+      const resolved = resolveCharacterVoiceConfigFromAppConfig({
+        config: cfg,
+        uiLanguage,
+      });
+      setVoiceConfig(resolved.voiceConfig);
+      if (resolved.shouldPersist && resolved.voiceConfig) {
+        void client
+          .updateConfig({
+            messages: {
+              tts: resolved.voiceConfig,
+            },
+          })
+          .catch(() => {});
+      }
     } catch {
       /* ignore — will use browser TTS fallback */
       setVoiceConfig(null);
     } finally {
       setVoiceBootstrapTick((t) => t + 1);
     }
-  }, []);
+  }, [uiLanguage]);
 
   useEffect(() => {
     void loadVoiceConfig();
@@ -512,6 +541,26 @@ function useChatVoiceController(options: {
     const messageId = latestAssistant.id;
     const text = latestAssistant.text;
     const ug = voiceUnlockedGeneration;
+    const initialCompletedAssistant =
+      initialCompletedAssistantOnGameModalMountRef.current;
+    if (
+      initialCompletedAssistant &&
+      !chatSending &&
+      initialCompletedAssistant.messageId === messageId &&
+      initialCompletedAssistant.text === text
+    ) {
+      initialCompletedAssistantOnGameModalMountRef.current = null;
+      companionBootstrapAutoSpeakRef.current = {
+        tick,
+        messageId,
+        text,
+        unlockGen: ug,
+      };
+      return;
+    }
+    if (initialCompletedAssistant) {
+      initialCompletedAssistantOnGameModalMountRef.current = null;
+    }
     if (hasCompanionSpeechBeenPlayed(activeConversationId, messageId, text)) {
       companionBootstrapAutoSpeakRef.current = {
         tick,
@@ -1111,15 +1160,15 @@ export function ChatView({
                   className={`max-w-[min(85%,24rem)] rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1 ${COMPANION_TYPING_BUBBLE_CLASSNAME}`}
                 >
                   <span
-                    className="w-1.5 h-1.5 rounded-full bg-[color:var(--onboarding-text-muted)] animate-bounce"
+                    className={COMPANION_TYPING_DOT_CLASSNAME}
                     style={{ animationDelay: "0ms" }}
                   />
                   <span
-                    className="w-1.5 h-1.5 rounded-full bg-[color:var(--onboarding-text-muted)] animate-bounce"
+                    className={COMPANION_TYPING_DOT_CLASSNAME}
                     style={{ animationDelay: "150ms" }}
                   />
                   <span
-                    className="w-1.5 h-1.5 rounded-full bg-[color:var(--onboarding-text-muted)] animate-bounce"
+                    className={COMPANION_TYPING_DOT_CLASSNAME}
                     style={{ animationDelay: "300ms" }}
                   />
                 </div>
@@ -1275,7 +1324,11 @@ export function ChatView({
                 setPtyDrawerSessionId((prev) => (prev === id ? null : id)))
             }
           />
-          <div className="relative flex items-center px-3 py-2 max-[380px]:min-h-[78px] max-[380px]:px-2.5 max-[380px]:py-1.5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[34px] before:border before:border-white/8 before:bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] before:shadow-[0_20px_52px_rgba(0,0,0,0.17)] before:ring-1 before:ring-inset before:ring-white/6 before:backdrop-blur-[22px] before:content-['']">
+          <div className={COMPANION_COMPOSER_SHELL_LAYOUT_CLASSNAME}>
+            <div
+              aria-hidden
+              className={COMPANION_COMPOSER_GLASS_LAYER_CLASSNAME}
+            />
             <div className="relative z-[1] flex w-full items-center">
               <ChatComposer
                 variant="game-modal"

@@ -61,9 +61,9 @@ const COMPOSER_EMPHASIZED_BUTTON_CLASSNAME =
 const COMPOSER_DESTRUCTIVE_BUTTON_CLASSNAME =
   DESKTOP_CONTROL_SURFACE_DESTRUCTIVE_CLASSNAME;
 const COMPOSER_GAME_BUTTON_CLASSNAME =
-  "select-none rounded-full border border-transparent bg-transparent text-[color:var(--onboarding-text-primary)] shadow-none ring-0 backdrop-blur-none transition-[border-color,background-color,color,transform,box-shadow] duration-300 hover:text-[color:var(--onboarding-text-strong)] active:scale-95";
+  "select-none rounded-full border border-transparent bg-transparent text-muted-strong shadow-none ring-0 backdrop-blur-none transition-[border-color,background-color,color,transform,box-shadow] duration-300 hover:border-border/28 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_74%,transparent),color-mix(in_srgb,var(--bg)_58%,transparent))] hover:text-txt active:scale-95";
 const COMPOSER_GAME_BUTTON_ACTIVE_CLASSNAME =
-  "select-none rounded-full border border-transparent bg-transparent text-[color:var(--onboarding-text-strong)] shadow-none ring-0 backdrop-blur-none transition-all duration-300 active:scale-95";
+  "select-none rounded-full border border-border/28 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_82%,transparent),color-mix(in_srgb,var(--bg)_66%,transparent))] text-txt shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_16px_26px_-24px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-white/8 backdrop-blur-md transition-all duration-300 active:scale-95 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_28px_-24px_rgba(0,0,0,0.3)]";
 
 export function ChatComposer({
   variant,
@@ -123,7 +123,9 @@ export function ChatComposer({
           : `${COMPOSER_GAME_BUTTON_CLASSNAME} opacity-80`
       }`
     : `${COMPOSER_ACTION_BUTTON_CLASSNAME} ${DESKTOP_CONTROL_SURFACE_ACCENT_CLASSNAME} disabled:ring-0`;
-  const inputPlaceholder = isNarrow ? "Message..." : t("chat.inputPlaceholder");
+  const inputPlaceholder = isNarrow
+    ? t("chat.inputPlaceholderNarrow")
+    : t("chat.inputPlaceholder");
   const defaultTextareaPlaceholder = isAgentStarting
     ? t("chat.agentStarting")
     : voice.isListening
@@ -283,19 +285,19 @@ export function ChatComposer({
           data-testid="chat-composer-textarea"
           className={
             isGameModal
-              ? `${COMMON_TEXTAREA_CLASSNAME} relative z-[1] max-h-[150px] border-none bg-transparent px-4 py-2.5 text-[15px] leading-relaxed text-[color:var(--onboarding-text-strong)] placeholder:text-[color:color-mix(in_srgb,var(--onboarding-text-muted)_88%,white_12%)] max-[380px]:px-3.5`
+              ? `${COMMON_TEXTAREA_CLASSNAME} relative z-[1] max-h-[150px] border-none bg-transparent px-4 py-2.5 text-[15px] leading-relaxed text-txt-strong placeholder:text-muted max-[380px]:px-3.5`
               : `${COMMON_TEXTAREA_CLASSNAME} px-3.5 py-2 bg-transparent border-none text-[15px] leading-[1.7] text-txt-strong placeholder:text-muted`
           }
           style={{ fontFamily: "var(--font-chat)" }}
           rows={1}
-          aria-label="Chat message"
+          aria-label={t("aria.chatMessage")}
           placeholder={
             isGameModal
               ? isAgentStarting
                 ? t("chat.agentStarting")
                 : voice.isListening
                   ? voice.captureMode === "push-to-talk"
-                    ? "Release to send..."
+                    ? t("chat.releaseToSend")
                     : t("chat.listening")
                   : inputPlaceholder
               : defaultTextareaPlaceholder

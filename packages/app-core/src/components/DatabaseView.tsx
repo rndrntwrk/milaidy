@@ -707,10 +707,10 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                 className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} px-5 py-5 sm:px-6`}
               >
                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-                  Database
+                  {t("databaseview.Database")}
                 </div>
                 <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
-                  Table Browser
+                  {t("databaseview.TableBrowser")}
                 </h1>
               </section>
 
@@ -732,10 +732,10 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                     className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} px-5 py-5 sm:px-6`}
                   >
                     <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-                      Database
+                      {t("databaseview.Database")}
                     </div>
                     <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
-                      Table Browser
+                      {t("databaseview.TableBrowser")}
                     </h1>
                   </section>
 
@@ -763,7 +763,7 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-                          Database
+                          {t("databaseview.Database")}
                         </div>
                         <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
                           {selectedTable}
@@ -776,7 +776,8 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                           </span>
                         )}
                         <span className={APP_SIDEBAR_PILL_CLASSNAME}>
-                          {tableData.total.toLocaleString()} rows
+                          {tableData.total.toLocaleString()}{" "}
+                          {t("databaseview.Rows")}
                         </span>
                       </div>
                     </div>
@@ -790,7 +791,7 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                         <DesktopEmptyStatePanel
                           className="min-h-[14rem]"
                           title={t("databaseview.TableIsEmpty")}
-                          description="This table is connected and available, but it does not have any rows yet."
+                          description={t("databaseview.EmptyTableDescription")}
                         />
                       ) : (
                         <ResultsGrid
@@ -822,10 +823,10 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                 className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} px-5 py-5 sm:px-6`}
               >
                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-                  Database
+                  {t("databaseview.Database")}
                 </div>
                 <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
-                  SQL Workspace
+                  {t("databaseview.SQLEditor")}
                 </h1>
               </section>
 
@@ -870,8 +871,10 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                   {queryResult && (
                     <div className="text-xs text-muted ml-auto bg-bg/50 px-3 py-1.5 rounded-lg border border-border/30 font-medium shadow-inner tracking-wide">
                       <span className="text-txt">{queryResult.rowCount}</span>{" "}
-                      {t("databaseview.row")}
-                      {queryResult.rowCount !== 1 ? "s" : ""} ·{" "}
+                      {queryResult.rowCount === 1
+                        ? t("databaseview.row")
+                        : t("databaseview.Rows")}{" "}
+                      ·{" "}
                       <span className="text-txt">
                         {queryResult.durationMs}ms
                       </span>
@@ -896,7 +899,7 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                 <DesktopEmptyStatePanel
                   className="mt-4 min-h-[12rem]"
                   title={t("databaseview.QueryReturnedNoRo")}
-                  description="The query completed successfully but did not return any rows."
+                  description={t("databaseview.QueryNoRowsDescription")}
                 />
               ) : null}
             </div>

@@ -69,19 +69,27 @@ function DetachedChatView(): JSX.Element {
 }
 
 function OnboardingBlockedView(): JSX.Element {
+  const { t } = useApp();
   return (
     <div className="flex flex-col items-center justify-center flex-1 min-h-0 gap-4 text-center px-6">
       <div className="text-4xl">🎀</div>
-      <h2 className="text-lg font-semibold text-txt">Setup in progress</h2>
+      <h2 className="text-lg font-semibold text-txt">
+        {t("detachedshell.SetupInProgress", {
+          defaultValue: "Setup in progress",
+        })}
+      </h2>
       <p className="text-sm text-muted max-w-sm">
-        Complete onboarding in the main window first. This window will become
-        available once your agent is ready.
+        {t("detachedshell.SetupInProgressDesc", {
+          defaultValue:
+            "Complete onboarding in the main window first. This window will become available once your agent is ready.",
+        })}
       </p>
     </div>
   );
 }
 
 function DetachedShellContent({ route }: DetachedShellRootProps): JSX.Element {
+  const { t } = useApp();
   const target = resolveDetachedShellTarget(route);
 
   switch (target.tab) {
@@ -107,7 +115,10 @@ function DetachedShellContent({ route }: DetachedShellRootProps): JSX.Element {
       const _exhaustive: never = target.tab;
       return (
         <div className="flex flex-1 items-center justify-center text-sm text-muted">
-          Unknown view: {String(_exhaustive)}
+          {t("detachedshell.UnknownView", {
+            defaultValue: "Unknown view: {{view}}",
+            view: String(_exhaustive),
+          })}
         </div>
       );
     }

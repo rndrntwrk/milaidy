@@ -118,34 +118,34 @@ export const DESKTOP_MEDIA_CLICK_AUDIT: readonly DesktopClickAuditItem[] = [
 
 interface ProviderOption {
   id: string;
-  label: string;
+  labelKey: string;
   hint: string;
 }
 
 const IMAGE_PROVIDERS: ProviderOption[] = [
   {
     id: "cloud",
-    label: "Eliza Cloud",
+    labelKey: "provider.elizaCloud",
     hint: "elizaclouddashboard.NoSetupNeeded",
   },
   {
     id: "fal",
-    label: "FAL.ai",
+    labelKey: "provider.fal",
     hint: "mediasettingssection.ProviderHintFalImage",
   },
   {
     id: "openai",
-    label: "OpenAI",
+    labelKey: "provider.openai",
     hint: "mediasettingssection.DALLE3",
   },
   {
     id: "google",
-    label: "Google",
+    labelKey: "provider.google",
     hint: "mediasettingssection.ProviderHintGoogleImage",
   },
   {
     id: "xai",
-    label: "xAI",
+    labelKey: "provider.xai",
     hint: "mediasettingssection.ProviderHintXAIAurora",
   },
 ];
@@ -153,22 +153,22 @@ const IMAGE_PROVIDERS: ProviderOption[] = [
 const VIDEO_PROVIDERS: ProviderOption[] = [
   {
     id: "cloud",
-    label: "Eliza Cloud",
+    labelKey: "provider.elizaCloud",
     hint: "elizaclouddashboard.NoSetupNeeded",
   },
   {
     id: "fal",
-    label: "FAL.ai",
+    labelKey: "provider.fal",
     hint: "mediasettingssection.ProviderHintFalVideo",
   },
   {
     id: "openai",
-    label: "OpenAI",
+    labelKey: "provider.openai",
     hint: "mediasettingssection.ProviderHintOpenAIVideo",
   },
   {
     id: "google",
-    label: "Google",
+    labelKey: "provider.google",
     hint: "mediasettingssection.ProviderHintGoogleVideo",
   },
 ];
@@ -176,13 +176,17 @@ const VIDEO_PROVIDERS: ProviderOption[] = [
 const AUDIO_PROVIDERS: ProviderOption[] = [
   {
     id: "cloud",
-    label: "Eliza Cloud",
+    labelKey: "provider.elizaCloud",
     hint: "elizaclouddashboard.NoSetupNeeded",
   },
-  { id: "suno", label: "Suno", hint: "mediasettingssection.ProviderHintSuno" },
+  {
+    id: "suno",
+    labelKey: "provider.suno",
+    hint: "mediasettingssection.ProviderHintSuno",
+  },
   {
     id: "elevenlabs",
-    label: "ElevenLabs",
+    labelKey: "provider.elevenlabs",
     hint: "mediasettingssection.ProviderHintElevenLabs",
   },
 ];
@@ -190,27 +194,27 @@ const AUDIO_PROVIDERS: ProviderOption[] = [
 const VISION_PROVIDERS: ProviderOption[] = [
   {
     id: "cloud",
-    label: "Eliza Cloud",
+    labelKey: "provider.elizaCloud",
     hint: "elizaclouddashboard.NoSetupNeeded",
   },
   {
     id: "openai",
-    label: "OpenAI",
+    labelKey: "provider.openai",
     hint: "mediasettingssection.ProviderHintOpenAIVision",
   },
   {
     id: "google",
-    label: "Google",
+    labelKey: "provider.google",
     hint: "mediasettingssection.ProviderHintGoogleVision",
   },
   {
     id: "anthropic",
-    label: "Anthropic",
+    labelKey: "provider.anthropic",
     hint: "mediasettingssection.ProviderHintAnthropicVision",
   },
   {
     id: "xai",
-    label: "xAI",
+    labelKey: "provider.xai",
     hint: "mediasettingssection.ProviderHintXAIVision",
   },
 ];
@@ -351,6 +355,7 @@ function setNestedValue(
 }
 
 export function DesktopMediaControlPanel() {
+  const { t } = useApp();
   const desktopRuntime = isElectrobunRuntime();
   const [loading, setLoading] = useState(desktopRuntime);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -374,7 +379,17 @@ export function DesktopMediaControlPanel() {
   const [screenRecordingDuration, setScreenRecordingDuration] = useState(0);
   const [lastSavedPath, setLastSavedPath] = useState<string | null>(null);
   const [lastPhotoStatus, setLastPhotoStatus] = useState(
-    "No photo captured yet.",
+    t("mediasettingssection.NoPhotoCapturedYet", {
+      defaultValue: "No photo captured yet.",
+    }),
+  );
+
+  const formatPermissionStatus = useCallback(
+    (status: string) =>
+      t(`mediasettingssection.PermissionStatus.${status}`, {
+        defaultValue: status,
+      }),
+    [t],
   );
 
   const refresh = useCallback(async () => {
@@ -471,20 +486,26 @@ export function DesktopMediaControlPanel() {
         }
       } catch (err) {
         setError(
-          err instanceof Error ? err.message : "Native media action failed.",
+          err instanceof Error
+            ? err.message
+            : t("mediasettingssection.NativeMediaActionFailed", {
+                defaultValue: "Native media action failed.",
+              }),
         );
       } finally {
         setBusyAction(null);
       }
     },
-    [refresh],
+    [refresh, t],
   );
 
   if (!desktopRuntime) {
     return (
       <div className="rounded-xl border border-border bg-bg-muted px-3 py-3 text-xs text-muted">
-        Native camera and screen capture controls are only available inside the
-        Electrobun runtime.
+        {t("mediasettingssection.DesktopOnly", {
+          defaultValue:
+            "Native camera and screen capture controls are only available inside the Electrobun runtime.",
+        })}
       </div>
     );
   }
@@ -494,11 +515,15 @@ export function DesktopMediaControlPanel() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-xs font-semibold text-txt">
-            Native Capture Controls
+            {t("mediasettingssection.NativeCaptureControls", {
+              defaultValue: "Native Capture Controls",
+            })}
           </div>
           <div className="text-[10px] text-muted">
-            Camera preview, capture, recording, and screencapture tools owned by
-            the desktop runtime.
+            {t("mediasettingssection.NativeCaptureControlsDesc", {
+              defaultValue:
+                "Camera preview, capture, recording, and screencapture tools owned by the desktop runtime.",
+            })}
           </div>
         </div>
         <Button
@@ -508,12 +533,14 @@ export function DesktopMediaControlPanel() {
             void runAction(
               "media-refresh-native",
               async () => {},
-              "Native media state refreshed.",
+              t("mediasettingssection.NativeMediaStateRefreshed", {
+                defaultValue: "Native media state refreshed.",
+              }),
             )
           }
           disabled={loading || busyAction === "media-refresh-native"}
         >
-          Refresh
+          {t("common.refresh")}
         </Button>
       </div>
 
@@ -531,23 +558,40 @@ export function DesktopMediaControlPanel() {
 
       <div className="grid gap-3 lg:grid-cols-2">
         <div className="space-y-3 rounded-lg border border-border bg-card px-3 py-3">
-          <div className="text-xs font-semibold text-txt">Camera</div>
+          <div className="text-xs font-semibold text-txt">
+            {t("mediasettingssection.Camera", { defaultValue: "Camera" })}
+          </div>
           <div className="text-[10px] text-muted">
-            Permission: {cameraPermission} · Recording:{" "}
-            {cameraRecording ? "on" : "off"} · Duration:{" "}
-            {cameraRecordingDuration}s
+            {t("mediasettingssection.Permission", {
+              defaultValue: "Permission",
+            })}
+            : {formatPermissionStatus(cameraPermission)} ·{" "}
+            {t("mediasettingssection.Recording", {
+              defaultValue: "Recording",
+            })}
+            : {cameraRecording ? t("common.on") : t("common.off")} ·{" "}
+            {t("mediasettingssection.Duration", {
+              defaultValue: "Duration",
+            })}
+            : {cameraRecordingDuration}s
           </div>
           <Select
             value={selectedCameraId}
             onValueChange={(value) => setSelectedCameraId(value)}
           >
             <SelectTrigger className={SETTINGS_SOFT_SELECT_TRIGGER_CLASSNAME}>
-              <SelectValue placeholder="No camera devices" />
+              <SelectValue
+                placeholder={t("mediasettingssection.NoCameraDevices", {
+                  defaultValue: "No camera devices",
+                })}
+              />
             </SelectTrigger>
             <SelectContent>
               {cameraDevices.length === 0 ? (
                 <SelectItem value="__none__" disabled>
-                  No camera devices
+                  {t("mediasettingssection.NoCameraDevices", {
+                    defaultValue: "No camera devices",
+                  })}
                 </SelectItem>
               ) : (
                 cameraDevices
@@ -573,12 +617,16 @@ export function DesktopMediaControlPanel() {
                       ipcChannel: "camera:requestPermissions",
                     });
                   },
-                  "Camera permission request sent.",
+                  t("mediasettingssection.CameraPermissionRequestSent", {
+                    defaultValue: "Camera permission request sent.",
+                  }),
                 )
               }
               disabled={busyAction === "media-camera-permission"}
             >
-              Request Camera Permission
+              {t("mediasettingssection.RequestCameraPermission", {
+                defaultValue: "Request Camera Permission",
+              })}
             </Button>
             <Button
               variant="outline"
@@ -608,20 +656,32 @@ export function DesktopMediaControlPanel() {
                     });
                     if (result?.available === false) {
                       throw new Error(
-                        result.reason || "Camera preview unavailable.",
+                        t("mediasettingssection.CameraPreviewUnavailable", {
+                          defaultValue: "Camera preview unavailable.",
+                        }),
                       );
                     }
                     setCameraPreviewRunning(true);
                   },
                   cameraPreviewRunning
-                    ? "Camera preview stopped."
-                    : "Camera preview started.",
+                    ? t("mediasettingssection.CameraPreviewStopped", {
+                        defaultValue: "Camera preview stopped.",
+                      })
+                    : t("mediasettingssection.CameraPreviewStarted", {
+                        defaultValue: "Camera preview started.",
+                      }),
                   false,
                 )
               }
               disabled={busyAction === "media-camera-preview"}
             >
-              {cameraPreviewRunning ? "Stop Preview" : "Start Preview"}
+              {cameraPreviewRunning
+                ? t("mediasettingssection.StopPreview", {
+                    defaultValue: "Stop Preview",
+                  })
+                : t("mediasettingssection.StartPreview", {
+                    defaultValue: "Start Preview",
+                  })}
             </Button>
             <Button
               variant="outline"
@@ -631,7 +691,11 @@ export function DesktopMediaControlPanel() {
                   "media-camera-switch",
                   async () => {
                     if (!selectedCameraId) {
-                      throw new Error("Select a camera device first.");
+                      throw new Error(
+                        t("mediasettingssection.SelectCameraFirst", {
+                          defaultValue: "Select a camera device first.",
+                        }),
+                      );
                     }
                     await invokeDesktopBridgeRequest<{ available: boolean }>({
                       rpcMethod: "cameraSwitchCamera",
@@ -639,14 +703,18 @@ export function DesktopMediaControlPanel() {
                       params: { deviceId: selectedCameraId },
                     });
                   },
-                  "Camera switched.",
+                  t("mediasettingssection.CameraSwitched", {
+                    defaultValue: "Camera switched.",
+                  }),
                 )
               }
               disabled={
                 !selectedCameraId || busyAction === "media-camera-switch"
               }
             >
-              Switch Camera
+              {t("mediasettingssection.SwitchCamera", {
+                defaultValue: "Switch Camera",
+              })}
             </Button>
             <Button
               variant="outline"
@@ -663,21 +731,33 @@ export function DesktopMediaControlPanel() {
                       ipcChannel: "camera:capturePhoto",
                     });
                     if (result?.available === false) {
-                      throw new Error("Photo capture unavailable.");
+                      throw new Error(
+                        t("mediasettingssection.PhotoCaptureUnavailable", {
+                          defaultValue: "Photo capture unavailable.",
+                        }),
+                      );
                     }
                     setLastPhotoStatus(
                       result?.data
-                        ? "Photo captured in memory."
-                        : "Photo capture completed.",
+                        ? t("mediasettingssection.PhotoCapturedInMemory", {
+                            defaultValue: "Photo captured in memory.",
+                          })
+                        : t("mediasettingssection.PhotoCaptureCompleted", {
+                            defaultValue: "Photo capture completed.",
+                          }),
                     );
                   },
-                  "Photo capture requested.",
+                  t("mediasettingssection.PhotoCaptureRequested", {
+                    defaultValue: "Photo capture requested.",
+                  }),
                   false,
                 )
               }
               disabled={busyAction === "media-camera-capture"}
             >
-              Capture Photo
+              {t("mediasettingssection.CapturePhoto", {
+                defaultValue: "Capture Photo",
+              })}
             </Button>
             <Button
               variant="outline"
@@ -705,42 +785,78 @@ export function DesktopMediaControlPanel() {
                       ipcChannel: "camera:startRecording",
                     });
                     if (result?.available === false) {
-                      throw new Error("Camera recording unavailable.");
+                      throw new Error(
+                        t("mediasettingssection.CameraRecordingUnavailable", {
+                          defaultValue: "Camera recording unavailable.",
+                        }),
+                      );
                     }
                   },
                   cameraRecording
-                    ? "Camera recording stopped."
-                    : "Camera recording started.",
+                    ? t("mediasettingssection.CameraRecordingStopped", {
+                        defaultValue: "Camera recording stopped.",
+                      })
+                    : t("mediasettingssection.CameraRecordingStarted", {
+                        defaultValue: "Camera recording started.",
+                      }),
                 )
               }
               disabled={busyAction === "media-camera-recording"}
             >
               {cameraRecording
-                ? "Stop Camera Recording"
-                : "Start Camera Recording"}
+                ? t("mediasettingssection.StopCameraRecording", {
+                    defaultValue: "Stop Camera Recording",
+                  })
+                : t("mediasettingssection.StartCameraRecording", {
+                    defaultValue: "Start Camera Recording",
+                  })}
             </Button>
           </div>
           <div className="text-[11px] text-muted">{lastPhotoStatus}</div>
         </div>
 
         <div className="space-y-3 rounded-lg border border-border bg-card px-3 py-3">
-          <div className="text-xs font-semibold text-txt">Screen Capture</div>
+          <div className="text-xs font-semibold text-txt">
+            {t("mediasettingssection.ScreenCapture", {
+              defaultValue: "Screen Capture",
+            })}
+          </div>
           <div className="text-[10px] text-muted">
-            Permission: {screenPermission} · Recording:{" "}
-            {screenRecording ? "on" : "off"} · Duration:{" "}
-            {screenRecordingDuration}s{screenPaused ? " · paused" : ""}
+            {t("mediasettingssection.Permission", {
+              defaultValue: "Permission",
+            })}
+            : {formatPermissionStatus(screenPermission)} ·{" "}
+            {t("mediasettingssection.Recording", {
+              defaultValue: "Recording",
+            })}
+            : {screenRecording ? t("common.on") : t("common.off")} ·{" "}
+            {t("mediasettingssection.Duration", {
+              defaultValue: "Duration",
+            })}
+            : {screenRecordingDuration}s
+            {screenPaused
+              ? ` · ${t("mediasettingssection.Paused", {
+                  defaultValue: "paused",
+                })}`
+              : ""}
           </div>
           <Select
             value={selectedSourceId}
             onValueChange={(value) => setSelectedSourceId(value)}
           >
             <SelectTrigger className={SETTINGS_SOFT_SELECT_TRIGGER_CLASSNAME}>
-              <SelectValue placeholder="No screen sources" />
+              <SelectValue
+                placeholder={t("mediasettingssection.NoScreenSources", {
+                  defaultValue: "No screen sources",
+                })}
+              />
             </SelectTrigger>
             <SelectContent>
               {screenSources.length === 0 ? (
                 <SelectItem value="__none__" disabled>
-                  No screen sources
+                  {t("mediasettingssection.NoScreenSources", {
+                    defaultValue: "No screen sources",
+                  })}
                 </SelectItem>
               ) : (
                 screenSources
@@ -767,13 +883,17 @@ export function DesktopMediaControlPanel() {
                       params: { id: "screen-recording" },
                     });
                   },
-                  "Opened screen recording settings.",
+                  t("mediasettingssection.OpenedScreenRecordingSettings", {
+                    defaultValue: "Opened screen recording settings.",
+                  }),
                   false,
                 )
               }
               disabled={busyAction === "media-screen-open-settings"}
             >
-              Open Screen Permission Settings
+              {t("mediasettingssection.OpenScreenPermissionSettings", {
+                defaultValue: "Open Screen Permission Settings",
+              })}
             </Button>
             <Button
               variant="outline"
@@ -783,7 +903,11 @@ export function DesktopMediaControlPanel() {
                   "media-screen-switch-source",
                   async () => {
                     if (!selectedSourceId) {
-                      throw new Error("Select a screen source first.");
+                      throw new Error(
+                        t("mediasettingssection.SelectScreenSourceFirst", {
+                          defaultValue: "Select a screen source first.",
+                        }),
+                      );
                     }
                     await invokeDesktopBridgeRequest<{ available: boolean }>({
                       rpcMethod: "screencaptureSwitchSource",
@@ -791,14 +915,18 @@ export function DesktopMediaControlPanel() {
                       params: { sourceId: selectedSourceId },
                     });
                   },
-                  "Screen source switched.",
+                  t("mediasettingssection.ScreenSourceSwitched", {
+                    defaultValue: "Screen source switched.",
+                  }),
                 )
               }
               disabled={
                 !selectedSourceId || busyAction === "media-screen-switch-source"
               }
             >
-              Switch Source
+              {t("mediasettingssection.SwitchSource", {
+                defaultValue: "Switch Source",
+              })}
             </Button>
             <Button
               variant="outline"
@@ -815,7 +943,11 @@ export function DesktopMediaControlPanel() {
                       ipcChannel: "screencapture:takeScreenshot",
                     });
                     if (screenshot?.available === false || !screenshot?.data) {
-                      throw new Error("Screenshot unavailable.");
+                      throw new Error(
+                        t("mediasettingssection.ScreenshotUnavailable", {
+                          defaultValue: "Screenshot unavailable.",
+                        }),
+                      );
                     }
                     const saved = await invokeDesktopBridgeRequest<{
                       available: boolean;
@@ -827,16 +959,20 @@ export function DesktopMediaControlPanel() {
                         data: screenshot.data,
                         filename: "milady-desktop-screenshot.png",
                       },
-                    });
+                      });
                     setLastSavedPath(saved?.path ?? null);
                   },
-                  "Screenshot captured and saved.",
+                  t("mediasettingssection.ScreenshotCapturedAndSaved", {
+                    defaultValue: "Screenshot captured and saved.",
+                  }),
                   false,
                 )
               }
               disabled={busyAction === "media-screen-screenshot"}
             >
-              Take Screenshot
+              {t("mediasettingssection.TakeScreenshot", {
+                defaultValue: "Take Screenshot",
+              })}
             </Button>
             <Button
               variant="outline"
@@ -866,20 +1002,30 @@ export function DesktopMediaControlPanel() {
                     });
                     if (started?.available === false) {
                       throw new Error(
-                        started.reason || "Screen recording unavailable.",
+                        t("mediasettingssection.ScreenRecordingUnavailable", {
+                          defaultValue: "Screen recording unavailable.",
+                        }),
                       );
                     }
                   },
                   screenRecording
-                    ? "Screen recording stopped."
-                    : "Screen recording started.",
+                    ? t("mediasettingssection.ScreenRecordingStopped", {
+                        defaultValue: "Screen recording stopped.",
+                      })
+                    : t("mediasettingssection.ScreenRecordingStarted", {
+                        defaultValue: "Screen recording started.",
+                      }),
                 )
               }
               disabled={busyAction === "media-screen-recording"}
             >
               {screenRecording
-                ? "Stop Screen Recording"
-                : "Start Screen Recording"}
+                ? t("mediasettingssection.StopScreenRecording", {
+                    defaultValue: "Stop Screen Recording",
+                  })
+                : t("mediasettingssection.StartScreenRecording", {
+                    defaultValue: "Start Screen Recording",
+                  })}
             </Button>
             {screenRecording && (
               <Button
@@ -896,16 +1042,26 @@ export function DesktopMediaControlPanel() {
                         ipcChannel: screenPaused
                           ? "screencapture:resumeRecording"
                           : "screencapture:pauseRecording",
-                      });
-                    },
-                    screenPaused
-                      ? "Screen recording resumed."
-                      : "Screen recording paused.",
+                    });
+                  },
+                  screenPaused
+                      ? t("mediasettingssection.ScreenRecordingResumed", {
+                          defaultValue: "Screen recording resumed.",
+                        })
+                      : t("mediasettingssection.ScreenRecordingPaused", {
+                          defaultValue: "Screen recording paused.",
+                        }),
                   )
                 }
                 disabled={busyAction === "media-screen-pause-toggle"}
               >
-                {screenPaused ? "Resume Recording" : "Pause Recording"}
+                {screenPaused
+                  ? t("mediasettingssection.ResumeRecording", {
+                      defaultValue: "Resume Recording",
+                    })
+                  : t("mediasettingssection.PauseRecording", {
+                      defaultValue: "Pause Recording",
+                    })}
               </Button>
             )}
             {lastSavedPath && (
@@ -922,20 +1078,29 @@ export function DesktopMediaControlPanel() {
                         params: { path: lastSavedPath },
                       });
                     },
-                    "Opened saved capture.",
+                    t("mediasettingssection.OpenedSavedCapture", {
+                      defaultValue: "Opened saved capture.",
+                    }),
                     false,
                   )
                 }
                 disabled={busyAction === "media-open-saved-path"}
               >
-                Open Saved Capture
+                {t("mediasettingssection.OpenSavedCapture", {
+                  defaultValue: "Open Saved Capture",
+                })}
               </Button>
             )}
           </div>
           <div className="text-[11px] text-muted break-all">
             {lastSavedPath
-              ? `Last saved path: ${lastSavedPath}`
-              : "No saved capture path yet."}
+              ? t("mediasettingssection.LastSavedPath", {
+                  defaultValue: "Last saved path: {{path}}",
+                  path: lastSavedPath,
+                })
+              : t("mediasettingssection.NoSavedCapturePathYet", {
+                  defaultValue: "No saved capture path yet.",
+                })}
           </div>
         </div>
       </div>
@@ -1328,7 +1493,7 @@ export function MediaSettingsSection() {
                           <div className="font-semibold">
                             {p.id === "cloud"
                               ? t("providerswitcher.elizaCloud")
-                              : p.label}
+                              : t(p.labelKey)}
                           </div>
                           <div className="text-[10px] text-muted mt-0.5">
                             {p.id === "cloud"
@@ -1500,7 +1665,11 @@ export function MediaSettingsSection() {
                           <SelectItem value="standard">
                             {t("mediasettingssection.Standard")}
                           </SelectItem>
-                          <SelectItem value="hd">HD</SelectItem>
+                          <SelectItem value="hd">
+                            {t("mediasettingssection.HD", {
+                              defaultValue: "HD",
+                            })}
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

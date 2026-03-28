@@ -242,7 +242,9 @@ const LEGACY_ENGLISH_EXAMPLES: Partial<
       [
         {
           user: "{{user1}}",
-          content: { text: "I want to build an app but I don't know where to start" },
+          content: {
+            text: "I want to build an app but I don't know where to start",
+          },
         },
         {
           user: "{{agentName}}",
@@ -266,7 +268,9 @@ const LEGACY_ENGLISH_EXAMPLES: Partial<
       [
         {
           user: "{{user1}}",
-          content: { text: "I keep starting projects and never finishing them" },
+          content: {
+            text: "I keep starting projects and never finishing them",
+          },
         },
         {
           user: "{{agentName}}",
@@ -559,7 +563,9 @@ const LEGACY_ENGLISH_EXAMPLES: Partial<
         },
         {
           user: "{{agentName}}",
-          content: { text: "...you already know. you're looking for permission." },
+          content: {
+            text: "...you already know. you're looking for permission.",
+          },
         },
       ],
       [
@@ -607,7 +613,9 @@ const LEGACY_ENGLISH_EXAMPLES: Partial<
       [
         {
           user: "{{user1}}",
-          content: { text: "What's your actual philosophy on building things?" },
+          content: {
+            text: "What's your actual philosophy on building things?",
+          },
         },
         {
           user: "{{agentName}}",
@@ -1056,7 +1064,7 @@ const CHARACTER_DEFINITIONS: CharacterDefinition[] = [
     id: "jin",
     name: "Jin",
     avatarIndex: 2,
-    voicePresetId: "adam",
+    voicePresetId: "jin",
     greetingAnimation: "animations/greetings/greeting2.fbx.gz",
     bio: [
       "{{name}} moves fast, cuts fluff, and hates fake momentum.",
@@ -1217,7 +1225,7 @@ const CHARACTER_DEFINITIONS: CharacterDefinition[] = [
     id: "kei",
     name: "Kei",
     avatarIndex: 3,
-    voicePresetId: "josh",
+    voicePresetId: "kei",
     greetingAnimation: "animations/greetings/greeting3.fbx.gz",
     bio: [
       "{{name}} is dry, quick, and more helpful than they pretend to be.",
@@ -1378,7 +1386,7 @@ const CHARACTER_DEFINITIONS: CharacterDefinition[] = [
     id: "momo",
     name: "Momo",
     avatarIndex: 4,
-    voicePresetId: "alice",
+    voicePresetId: "momo",
     greetingAnimation: "animations/greetings/greeting4.fbx.gz",
     bio: [
       "{{name}} is composed, tidy, and extremely hard to rattle.",
@@ -1541,7 +1549,7 @@ const CHARACTER_DEFINITIONS: CharacterDefinition[] = [
     id: "rin",
     name: "Rin",
     avatarIndex: 5,
-    voicePresetId: "matilda",
+    voicePresetId: "rin",
     greetingAnimation: "animations/greetings/greeting5.fbx.gz",
     bio: [
       "{{name}} is playful, online, and creatively nosy in a good way.",
@@ -1700,7 +1708,7 @@ const CHARACTER_DEFINITIONS: CharacterDefinition[] = [
     id: "ryu",
     name: "Ryu",
     avatarIndex: 6,
-    voicePresetId: "daniel",
+    voicePresetId: "ryu",
     greetingAnimation: "animations/greetings/greeting6.fbx.gz",
     bio: [
       "{{name}} is quiet, blunt, and more perceptive than he lets on.",
@@ -1859,7 +1867,7 @@ const CHARACTER_DEFINITIONS: CharacterDefinition[] = [
     id: "satoshi",
     name: "Satoshi",
     avatarIndex: 7,
-    voicePresetId: "brian",
+    voicePresetId: "satoshi",
     greetingAnimation: "animations/greetings/greeting7.fbx.gz",
     bio: [
       "{{name}} is sharp, unserious on purpose, and very online.",
@@ -2024,7 +2032,7 @@ const CHARACTER_DEFINITIONS: CharacterDefinition[] = [
     id: "yuki",
     name: "Yuki",
     avatarIndex: 8,
-    voicePresetId: "lily",
+    voicePresetId: "yuki",
     greetingAnimation: "animations/greetings/greeting8.fbx.gz",
     bio: [
       "{{name}} is curious, exact, and annoyingly good at asking the right question.",

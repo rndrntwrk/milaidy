@@ -1212,7 +1212,9 @@ export function HeartbeatsView() {
                             )
                           }
                         >
-                          {trigger.enabled ? "Pause" : "Resume"}
+                          {trigger.enabled
+                            ? t("heartbeatsview.pause")
+                            : t("heartbeatsview.resume")}
                         </Button>
                         <Button
                           variant="outline"
@@ -1220,7 +1222,7 @@ export function HeartbeatsView() {
                           className="h-8 px-3 text-xs"
                           onClick={() => openEditEditor(trigger)}
                         >
-                          Edit
+                          {t("triggersview.Edit")}
                         </Button>
                         {/* Duplicate */}
                         <Button
@@ -1237,7 +1239,7 @@ export function HeartbeatsView() {
                             setSelectedTriggerId(null);
                           }}
                         >
-                          Duplicate
+                          {t("heartbeatsview.duplicate")}
                         </Button>
                         <Button
                           variant="outline"
@@ -1253,10 +1255,10 @@ export function HeartbeatsView() {
                     </div>
 
                     <dl className="mb-8 grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
-                      <div className={HEARTBEATS_STAT_CARD_CLASS}>
-                        <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-                          Schedule
-                        </dt>
+                        <div className={HEARTBEATS_STAT_CARD_CLASS}>
+                          <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                            {t("heartbeatsview.schedule")}
+                          </dt>
                         <dd className="mt-1 text-txt font-medium">
                           {scheduleLabel(trigger, t)}
                         </dd>
@@ -1285,10 +1287,14 @@ export function HeartbeatsView() {
                       {hasLoadedRuns && totalRuns > 0 && (
                         <div className={HEARTBEATS_STAT_CARD_CLASS}>
                           <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-                            Run Stats
+                            {t("heartbeatsview.runStats")}
                           </dt>
                           <dd className="mt-1 flex items-center gap-2 text-sm font-medium">
-                            <span className="text-txt">{totalRuns} runs</span>
+                            <span className="text-txt">
+                              {t("heartbeatsview.runCountPlural", {
+                                count: totalRuns,
+                              })}
+                            </span>
                             {successCount > 0 && (
                               <span className="text-ok">{successCount} ✓</span>
                             )}
@@ -1326,7 +1332,7 @@ export function HeartbeatsView() {
                         </div>
                       ) : runs.length === 0 ? (
                         <div className="py-8 text-center text-sm text-muted/60">
-                          No runs yet. Click "Run Now" to trigger manually.
+                          {t("heartbeatsview.noRunsYetMessage")}
                         </div>
                       ) : (
                         <div className="space-y-2">

@@ -36,7 +36,7 @@ export function ReleaseCenterView() {
   const { appUrl } = useBranding();
   const defaultReleaseNotesUrl = `${appUrl}/releases/`;
   const desktopRuntime = isElectrobunRuntime();
-  const { loadUpdateStatus, updateLoading, updateStatus } = useApp();
+  const { loadUpdateStatus, t, updateLoading, updateStatus } = useApp();
 
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -238,12 +238,17 @@ export function ReleaseCenterView() {
     return (
       <section className={`${RELEASE_PANEL_CLASSNAME} space-y-3 p-4`}>
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-txt">Release Center</h2>
+          <h2 className="text-sm font-semibold text-txt">
+            {t("releasecenterview.ReleaseCenter", {
+              defaultValue: "Release Center",
+            })}
+          </h2>
         </div>
         <div className="rounded-xl border border-border/40 bg-bg-hover/60 px-3 py-3 text-xs leading-5 text-muted">
-          This web session is read-only for release management. Open Milady in
-          the desktop shell to check for updates, apply downloaded builds, or
-          manage the detached release notes window.
+          {t("releasecenterview.WebReadOnly", {
+            defaultValue:
+              "This web session is read-only for release management. Open Milady in the desktop shell to check for updates, apply downloaded builds, or manage the detached release notes window.",
+          })}
         </div>
       </section>
     );
@@ -282,7 +287,9 @@ export function ReleaseCenterView() {
         ipcChannel: "desktop:openReleaseNotesWindow",
         params: {
           url: releaseNotesUrl,
-          title: "Release Notes",
+          title: t("releasecenterview.ReleaseNotesWindowTitle", {
+            defaultValue: "Release Notes",
+          }),
         },
       });
     setReleaseNotesWindow(info);
@@ -307,19 +314,19 @@ export function ReleaseCenterView() {
   const channel = nativeUpdater?.channel ?? "—";
   const latestVersion =
     (updateStatus as AppReleaseStatus | null | undefined)?.latestVersion ??
-    "Current";
+    t("releasecenterview.Current", { defaultValue: "Current" });
   const lastCheckAt = (updateStatus as AppReleaseStatus | null | undefined)
     ?.lastCheckAt;
   const lastChecked = lastCheckAt
     ? new Date(lastCheckAt).toLocaleString()
-    : "Not yet";
+    : t("releasecenterview.NotYet", { defaultValue: "Not yet" });
   const updaterStatus = nativeUpdater?.updateReady
-    ? "Update ready"
+    ? t("releasecenterview.UpdateReady", { defaultValue: "Update ready" })
     : nativeUpdater?.updateAvailable
-      ? "Update available"
-      : typeof nativeUpdater?.lastStatus === "string"
-        ? nativeUpdater.lastStatus
-        : "Idle";
+      ? t("releasecenterview.UpdateAvailable", {
+          defaultValue: "Update available",
+        })
+      : t("releasecenterview.Idle", { defaultValue: "Idle" });
   const autoUpdateDisabled =
     nativeUpdater != null && !nativeUpdater.canAutoUpdate;
 
@@ -347,37 +354,51 @@ export function ReleaseCenterView() {
         className={`${RELEASE_PANEL_CLASSNAME} grid gap-2 p-4 text-xs sm:grid-cols-2`}
       >
         <div className={RELEASE_KV_ROW_CLASSNAME}>
-          <span className="text-muted">App</span>
+          <span className="text-muted">
+            {t("releasecenterview.App", { defaultValue: "App" })}
+          </span>
           <span className="break-all text-right font-semibold text-txt">
             {appVersion}
           </span>
         </div>
         <div className={RELEASE_KV_ROW_CLASSNAME}>
-          <span className="text-muted">Desktop</span>
+          <span className="text-muted">
+            {t("releasecenterview.Desktop", { defaultValue: "Desktop" })}
+          </span>
           <span className="break-all text-right font-semibold text-txt">
             {desktopVersion}
           </span>
         </div>
         <div className={RELEASE_KV_ROW_CLASSNAME}>
-          <span className="text-muted">Channel</span>
+          <span className="text-muted">
+            {t("releasecenterview.Channel", { defaultValue: "Channel" })}
+          </span>
           <span className="break-all text-right font-semibold text-txt">
             {channel}
           </span>
         </div>
         <div className={RELEASE_KV_ROW_CLASSNAME}>
-          <span className="text-muted">Latest</span>
+          <span className="text-muted">
+            {t("releasecenterview.Latest", { defaultValue: "Latest" })}
+          </span>
           <span className="break-all text-right font-semibold text-txt">
             {latestVersion}
           </span>
         </div>
         <div className={RELEASE_KV_ROW_CLASSNAME}>
-          <span className="text-muted">Last checked</span>
+          <span className="text-muted">
+            {t("releasecenterview.LastChecked", {
+              defaultValue: "Last checked",
+            })}
+          </span>
           <span className="break-all text-right font-semibold text-txt">
             {lastChecked}
           </span>
         </div>
         <div className={RELEASE_KV_ROW_CLASSNAME}>
-          <span className="text-muted">Status</span>
+          <span className="text-muted">
+            {t("releasecenterview.Status", { defaultValue: "Status" })}
+          </span>
           <span className="break-all text-right font-semibold text-txt">
             {updaterStatus}
           </span>
@@ -396,7 +417,11 @@ export function ReleaseCenterView() {
       {/* ── Actions ───────────────────────────────────────────── */}
       <section className={`${RELEASE_PANEL_CLASSNAME} space-y-3 p-4`}>
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-txt">Update Actions</h2>
+          <h2 className="text-sm font-semibold text-txt">
+            {t("releasecenterview.UpdateActions", {
+              defaultValue: "Update Actions",
+            })}
+          </h2>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -411,11 +436,15 @@ export function ReleaseCenterView() {
               void runAction(
                 "check-updates",
                 checkForDesktopUpdate,
-                "Desktop update check started.",
+                t("releasecenterview.CheckStarted", {
+                  defaultValue: "Desktop update check started.",
+                }),
               )
             }
           >
-            Check / Download Update
+            {t("releasecenterview.CheckDownloadUpdate", {
+              defaultValue: "Check / Download Update",
+            })}
           </Button>
           {nativeUpdater?.updateReady && (
             <Button
@@ -426,11 +455,15 @@ export function ReleaseCenterView() {
                 void runAction(
                   "apply-update",
                   applyDesktopUpdate,
-                  "Applying downloaded update.",
+                  t("releasecenterview.ApplyStarted", {
+                    defaultValue: "Applying downloaded update.",
+                  }),
                 )
               }
             >
-              Apply Downloaded Update
+              {t("releasecenterview.ApplyDownloadedUpdate", {
+                defaultValue: "Apply Downloaded Update",
+              })}
             </Button>
           )}
           <Button
@@ -442,11 +475,13 @@ export function ReleaseCenterView() {
               void runAction(
                 "refresh",
                 refreshReleaseState,
-                "Release status refreshed.",
+                t("releasecenterview.ReleaseStatusRefreshed", {
+                  defaultValue: "Release status refreshed.",
+                }),
               )
             }
           >
-            Refresh
+            {t("common.refresh")}
           </Button>
           <Button
             size="sm"
@@ -457,11 +492,15 @@ export function ReleaseCenterView() {
               void runAction(
                 "detach-release",
                 detachReleaseCenter,
-                "Detached release center opened.",
+                t("releasecenterview.DetachedOpened", {
+                  defaultValue: "Detached release center opened.",
+                }),
               )
             }
           >
-            Open Detached Release Center
+            {t("releasecenterview.OpenDetachedReleaseCenter", {
+              defaultValue: "Open Detached Release Center",
+            })}
           </Button>
         </div>
       </section>
@@ -469,7 +508,11 @@ export function ReleaseCenterView() {
       {/* ── Release Notes ─────────────────────────────────────── */}
       <section className={`${RELEASE_PANEL_CLASSNAME} space-y-3 p-4`}>
         <div className="space-y-1">
-          <span className="text-sm font-semibold text-txt">Release Notes</span>
+          <span className="text-sm font-semibold text-txt">
+            {t("releasecenterview.ReleaseNotes", {
+              defaultValue: "Release Notes",
+            })}
+          </span>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Input
@@ -491,11 +534,15 @@ export function ReleaseCenterView() {
                 void runAction(
                   "open-release-notes",
                   openReleaseNotesWindow,
-                  "Release notes window opened.",
+                  t("releasecenterview.ReleaseNotesOpened", {
+                    defaultValue: "Release notes window opened.",
+                  }),
                 )
               }
             >
-              Open BrowserView Window
+              {t("releasecenterview.OpenBrowserViewWindow", {
+                defaultValue: "Open BrowserView Window",
+              })}
             </Button>
             <Button
               size="sm"
@@ -510,11 +557,15 @@ export function ReleaseCenterView() {
                       normalizeReleaseNotesUrl(nativeUpdater?.baseUrl),
                     );
                   },
-                  "Release notes URL reset.",
+                  t("releasecenterview.ReleaseNotesReset", {
+                    defaultValue: "Release notes URL reset.",
+                  }),
                 )
               }
             >
-              Reset URL
+              {t("releasecenterview.ResetUrl", {
+                defaultValue: "Reset URL",
+              })}
             </Button>
           </div>
         </div>

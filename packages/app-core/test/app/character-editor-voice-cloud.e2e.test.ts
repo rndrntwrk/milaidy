@@ -72,20 +72,57 @@ vi.mock("../../src/state/useApp", () => ({
 }));
 
 vi.mock("../../src/components/CharacterRoster", () => ({
-  CharacterRoster: () =>
-    React.createElement("div", { "data-testid": "roster" }),
+  CharacterRoster: ({
+    entries,
+    onSelect,
+  }: {
+    entries: Array<{ id: string; name: string }>;
+    onSelect: (entry: { id: string; name: string }) => void;
+  }) =>
+    React.createElement(
+      "div",
+      { "data-testid": "roster" },
+      entries.map((entry) =>
+        React.createElement(
+          "button",
+          {
+            key: entry.id,
+            type: "button",
+            "data-testid": `roster-${entry.id}`,
+            onClick: () => onSelect(entry),
+          },
+          entry.name,
+        ),
+      ),
+    ),
   resolveRosterEntries: () => [
     {
       id: "chen",
       name: "Chen",
       avatarIndex: 1,
       catchphrase: "Hello from Chen.",
-      greetingAnimation: "animations/emotes/greeting.fbx",
-      voicePresetId: "voice-preset-1",
+      greetingAnimation: "animations/greetings/greeting1.fbx.gz",
+      voicePresetId: "sarah",
       preset: {
         bio: ["bio"],
         system: "You are {{name}}",
         adjectives: ["curious"],
+        style: { all: [], chat: [], post: [] },
+        messageExamples: [],
+        postExamples: [],
+      },
+    },
+    {
+      id: "jin",
+      name: "Jin",
+      avatarIndex: 2,
+      catchphrase: "What are we shipping?",
+      greetingAnimation: "animations/greetings/greeting2.fbx.gz",
+      voicePresetId: "jin",
+      preset: {
+        bio: ["bio"],
+        system: "You are {{name}}",
+        adjectives: ["direct"],
         style: { all: [], chat: [], post: [] },
         messageExamples: [],
         postExamples: [],
@@ -280,12 +317,49 @@ describe("CharacterEditor voice cloud fallback (e2e)", () => {
     expect(url).toBe("/api/tts/cloud");
     expect(JSON.parse(String(init.body))).toMatchObject({
       text: "Hello from Chen.",
-      voiceId: "voice-123",
+      voiceId: "EXAVITQu4vr4xnSDxMaL",
       modelId: "eleven_flash_v2_5",
     });
 
     await act(async () => {
       await Promise.resolve();
+    });
+  });
+
+  it("switches the active voice config when a different character is selected", async () => {
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CharacterEditor));
+    });
+
+    await flushEffects();
+
+    const jinButton = tree?.root.findByProps({
+      "data-testid": "roster-jin",
+    });
+
+    await act(async () => {
+      jinButton?.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(dispatchWindowEventMock).toHaveBeenLastCalledWith(
+      "voice-config-updated",
+      expect.objectContaining({
+        provider: "elevenlabs",
+        elevenlabs: expect.objectContaining({
+          voiceId: "6IwYbsNENZgAB1dtBZDp",
+        }),
+      }),
+    );
+    expect(clientMock.updateConfig).toHaveBeenLastCalledWith({
+      messages: {
+        tts: expect.objectContaining({
+          provider: "elevenlabs",
+          elevenlabs: expect.objectContaining({
+            voiceId: "6IwYbsNENZgAB1dtBZDp",
+          }),
+        }),
+      },
     });
   });
 });

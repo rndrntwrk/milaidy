@@ -85,11 +85,16 @@ function asTrainingEvent(
   };
 }
 
-function summarizeAvailability(reason?: string): string {
-  if (!reason) return "Unavailable";
-  if (reason === "runtime_not_started") return "Agent runtime is not started.";
+function summarizeAvailability(
+  reason: string | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (!reason) return t("finetuningview.Unavailable");
+  if (reason === "runtime_not_started") {
+    return t("finetuningview.RuntimeNotStarted");
+  }
   if (reason === "trajectories_table_missing") {
-    return "No trajectories table found yet. Generate trajectories first.";
+    return t("finetuningview.NoTrajectoriesTableFound");
   }
   return reason;
 }
@@ -236,7 +241,7 @@ export function FineTuningView() {
       setErrorMessage(
         err instanceof Error
           ? err.message
-          : "Failed to refresh fine-tuning state.",
+          : t("finetuningview.FailedToRefreshState"),
       );
     } finally {
       setPageLoading(false);
@@ -253,7 +258,7 @@ export function FineTuningView() {
         const message =
           err instanceof Error
             ? err.message
-            : "Failed to load trajectory detail.";
+            : t("finetuningview.FailedToLoadTrajectoryDetail");
         setActionNotice(message, "error", 4200);
       } finally {
         setTrajectoryLoading(false);
@@ -277,13 +282,16 @@ export function FineTuningView() {
       setSelectedDatasetId(result.dataset.id);
       await Promise.all([loadDatasets(), loadStatus()]);
       setActionNotice(
-        `Built dataset ${result.dataset.id} (${result.dataset.sampleCount} samples).`,
+        t("finetuningview.BuiltDatasetMessage", {
+          id: result.dataset.id,
+          count: result.dataset.sampleCount,
+        }),
         "success",
         3800,
       );
     } catch (err) {
       setActionNotice(
-        err instanceof Error ? err.message : "Failed to build dataset.",
+        err instanceof Error ? err.message : t("finetuningview.FailedToBuildDataset"),
         "error",
         4200,
       );
@@ -307,13 +315,15 @@ export function FineTuningView() {
       setSelectedJobId(result.job.id);
       await Promise.all([loadJobs(), loadStatus()]);
       setActionNotice(
-        `Started training job ${result.job.id}.`,
+        t("finetuningview.StartedTrainingJobMessage", { id: result.job.id }),
         "success",
         3200,
       );
     } catch (err) {
       setActionNotice(
-        err instanceof Error ? err.message : "Failed to start training job.",
+        err instanceof Error
+          ? err.message
+          : t("finetuningview.FailedToStartTrainingJob"),
         "error",
         4200,
       );
@@ -338,10 +348,16 @@ export function FineTuningView() {
       try {
         await client.cancelTrainingJob(jobId);
         await Promise.all([loadJobs(), loadStatus()]);
-        setActionNotice(`Cancelled job ${jobId}.`, "success", 2600);
+        setActionNotice(
+          t("finetuningview.CancelledJobMessage", { id: jobId }),
+          "success",
+          2600,
+        );
       } catch (err) {
         setActionNotice(
-          err instanceof Error ? err.message : `Failed to cancel ${jobId}.`,
+          err instanceof Error
+            ? err.message
+            : t("finetuningview.FailedToCancelJob", { id: jobId }),
           "error",
           4200,
         );
@@ -370,7 +386,12 @@ export function FineTuningView() {
         result.model.ollamaModel ? `ollama/${result.model.ollamaModel}` : "",
       );
       setActionNotice(
-        `Imported model ${result.model.id} to Ollama${result.model.ollamaModel ? ` as ${result.model.ollamaModel}` : ""}.`,
+        t("finetuningview.ImportedModelToOllamaMessage", {
+          id: result.model.id,
+          ollamaModel: result.model.ollamaModel
+            ? ` as ${result.model.ollamaModel}`
+            : "",
+        }),
         "success",
         4200,
       );
@@ -378,7 +399,7 @@ export function FineTuningView() {
       setActionNotice(
         err instanceof Error
           ? err.message
-          : "Failed to import model to Ollama.",
+          : t("finetuningview.FailedToImportModelToOllama"),
         "error",
         4200,
       );
@@ -405,17 +426,19 @@ export function FineTuningView() {
       );
       await loadModels();
       setActionNotice(
-        `Activated model ${result.modelId} as ${result.providerModel}.`,
+        t("finetuningview.ActivatedModelMessage", {
+          id: result.modelId,
+          providerModel: result.providerModel,
+        }),
         "success",
         4200,
       );
       if (result.needsRestart) {
         const shouldRestart = await confirmDesktopAction({
-          title: "Restart Agent",
-          message:
-            "Model activation was saved. Restart the agent now to load the new model?",
-          confirmLabel: "Restart",
-          cancelLabel: "Later",
+          title: t("finetuningview.RestartAgentTitle"),
+          message: t("finetuningview.RestartAgentMessage"),
+          confirmLabel: t("finetuningview.Restart"),
+          cancelLabel: t("restartbanner.Later"),
           type: "question",
         });
         if (shouldRestart) {
@@ -424,7 +447,7 @@ export function FineTuningView() {
       }
     } catch (err) {
       setActionNotice(
-        err instanceof Error ? err.message : "Failed to activate model.",
+        err instanceof Error ? err.message : t("finetuningview.FailedToActivateModel"),
         "error",
         4200,
       );
@@ -447,13 +470,16 @@ export function FineTuningView() {
       const result = await client.benchmarkTrainingModel(selectedModel.id);
       await loadModels();
       setActionNotice(
-        `Benchmark ${result.status} for ${selectedModel.id}.`,
+        t("finetuningview.BenchmarkStatusMessage", {
+          status: result.status,
+          id: selectedModel.id,
+        }),
         result.status === "passed" ? "success" : "error",
         4200,
       );
     } catch (err) {
       setActionNotice(
-        err instanceof Error ? err.message : "Failed to benchmark model.",
+        err instanceof Error ? err.message : t("finetuningview.FailedToBenchmarkModel"),
         "error",
         4200,
       );
@@ -471,11 +497,11 @@ export function FineTuningView() {
         "Model smoke test. Reply with exactly: MODEL_OK",
       );
       setSmokeResult(result.text);
-      setActionNotice("Smoke test completed.", "success", 3200);
+      setActionNotice(t("finetuningview.SmokeTestCompleted"), "success", 3200);
     } catch (err) {
       setSmokeResult(null);
       setActionNotice(
-        err instanceof Error ? err.message : "Failed to run smoke test.",
+        err instanceof Error ? err.message : t("finetuningview.FailedToRunSmokeTest"),
         "error",
         4200,
       );
@@ -531,7 +557,9 @@ export function FineTuningView() {
       <section className={FINE_TUNING_SECTION_CLASS}>
         <div className={FINE_TUNING_SECTION_HEADER_CLASS}>
           <div className="space-y-2">
-            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>Fine Tuning</div>
+            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>
+              {t("finetuningview.FineTuning")}
+            </div>
             <h2 className="text-xl font-semibold text-txt">
               {t("finetuningview.FineTuning")}
             </h2>
@@ -560,7 +588,9 @@ export function FineTuningView() {
       <section className={FINE_TUNING_SECTION_CLASS}>
         <div className={FINE_TUNING_SECTION_HEADER_CLASS}>
           <div className="space-y-1">
-            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>Overview</div>
+            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>
+              {t("finetuningview.Overview")}
+            </div>
             <div className="text-lg font-semibold text-txt">
               {t("finetuningview.Status")}
             </div>
@@ -572,7 +602,9 @@ export function FineTuningView() {
               {t("finetuningview.Runtime")}
             </div>
             <div className="mt-2 text-base font-semibold text-txt">
-              {status?.runtimeAvailable ? "ready" : "offline"}
+              {status?.runtimeAvailable
+                ? t("finetuningview.Ready")
+                : t("finetuningview.Offline")}
             </div>
           </div>
           <div className={FINE_TUNING_STATUS_CARD_CLASS}>
@@ -621,7 +653,9 @@ export function FineTuningView() {
       <section className={FINE_TUNING_SECTION_CLASS}>
         <div className={FINE_TUNING_SECTION_HEADER_CLASS}>
           <div className="space-y-1">
-            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>Data Review</div>
+            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>
+              {t("finetuningview.DataReview")}
+            </div>
             <div className="text-lg font-semibold text-txt">
               {t("finetuningview.Trajectories")}
             </div>
@@ -641,7 +675,7 @@ export function FineTuningView() {
           <div
             className={`${FINE_TUNING_PANEL_CLASS} px-4 py-4 text-sm text-muted`}
           >
-            {summarizeAvailability(trajectoryList.reason)}
+            {summarizeAvailability(trajectoryList.reason, t)}
           </div>
         ) : (
           <div className="space-y-3">
@@ -735,7 +769,7 @@ export function FineTuningView() {
         <div className={FINE_TUNING_SECTION_HEADER_CLASS}>
           <div className="space-y-1">
             <div className={FINE_TUNING_SECTION_KICKER_CLASS}>
-              Dataset Build
+              {t("finetuningview.DatasetBuild")}
             </div>
             <div className="text-lg font-semibold text-txt">
               {t("finetuningview.Datasets1")}
@@ -764,7 +798,9 @@ export function FineTuningView() {
               void handleBuildDataset();
             }}
           >
-            {datasetBuilding ? "Building..." : "Build Dataset"}
+            {datasetBuilding
+              ? t("finetuningview.Building")
+              : t("finetuningview.BuildDataset")}
           </Button>
           <Button
             variant="outline"
@@ -817,7 +853,9 @@ export function FineTuningView() {
       <section className={FINE_TUNING_SECTION_CLASS}>
         <div className={FINE_TUNING_SECTION_HEADER_CLASS}>
           <div className="space-y-1">
-            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>Training</div>
+            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>
+              {t("finetuningview.Training")}
+            </div>
             <div className="text-lg font-semibold text-txt">
               {t("finetuningview.TrainingJobs")}
             </div>
@@ -896,7 +934,9 @@ export function FineTuningView() {
               void handleStartJob();
             }}
           >
-            {startingJob ? "Starting..." : "Start Training Job"}
+            {startingJob
+              ? t("finetuningview.Starting")
+              : t("finetuningview.StartTrainingJob")}
           </Button>
           <Button
             variant="outline"
@@ -949,8 +989,8 @@ export function FineTuningView() {
                         }}
                       >
                         {cancellingJobId === job.id
-                          ? "Cancelling..."
-                          : "Cancel"}
+                          ? t("finetuningview.Cancelling")
+                          : t("finetuningview.Cancel")}
                       </Button>
                     )}
                   </div>
@@ -1001,7 +1041,9 @@ export function FineTuningView() {
       <section className={FINE_TUNING_SECTION_CLASS}>
         <div className={FINE_TUNING_SECTION_HEADER_CLASS}>
           <div className="space-y-1">
-            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>Model Ops</div>
+            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>
+              {t("finetuningview.ModelOps")}
+            </div>
             <div className="text-lg font-semibold text-txt">
               {t("finetuningview.TrainedModels")}
             </div>
@@ -1026,7 +1068,8 @@ export function FineTuningView() {
                   onClick={() => setSelectedModelId(model.id)}
                 >
                   <div className="font-mono">
-                    {model.id} {model.active ? "· active" : ""}
+                    {model.id}{" "}
+                    {model.active ? t("finetuningview.ActiveIndicator") : ""}
                   </div>
                   <div className="mt-1 text-xs text-muted">
                     {t("finetuningview.backend")} {model.backend}
@@ -1095,8 +1138,8 @@ export function FineTuningView() {
                   }}
                 >
                   {modelAction === `import:${selectedModel.id}`
-                    ? "Importing..."
-                    : "Import To Ollama"}
+                    ? t("finetuningview.Importing")
+                    : t("finetuningview.ImportToOllama")}
                 </Button>
 
                 <Input
@@ -1118,8 +1161,8 @@ export function FineTuningView() {
                     }}
                   >
                     {modelAction === `activate:${selectedModel.id}`
-                      ? "Activating..."
-                      : "Activate Model"}
+                      ? t("finetuningview.Activating")
+                      : t("finetuningview.ActivateModel")}
                   </Button>
                   <Button
                     variant="outline"
@@ -1131,8 +1174,8 @@ export function FineTuningView() {
                     }}
                   >
                     {modelAction === `benchmark:${selectedModel.id}`
-                      ? "Benchmarking..."
-                      : "Benchmark"}
+                      ? t("finetuningview.Benchmarking")
+                      : t("finetuningview.BenchmarkAction")}
                   </Button>
                   <Button
                     variant="outline"
@@ -1144,8 +1187,8 @@ export function FineTuningView() {
                     }}
                   >
                     {modelAction === `smoke:${selectedModel.id}`
-                      ? "Testing..."
-                      : "Run Smoke Prompt"}
+                      ? t("finetuningview.Testing")
+                      : t("finetuningview.RunSmokePrompt")}
                   </Button>
                 </div>
                 {smokeResult && (
@@ -1164,7 +1207,9 @@ export function FineTuningView() {
       <section className={FINE_TUNING_SECTION_CLASS}>
         <div className={FINE_TUNING_SECTION_HEADER_CLASS}>
           <div className="space-y-1">
-            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>Streaming</div>
+            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>
+              {t("finetuningview.Streaming")}
+            </div>
             <div className="text-lg font-semibold text-txt">
               {t("finetuningview.LiveTrainingEvents")}
             </div>

@@ -3,80 +3,61 @@ import { useApp } from "../state";
 import type { AppState, FlaminaGuideTopic } from "../state/types";
 
 type GuideContent = {
-  title: string;
-  description: string;
-  whenToUse: string;
-  skipEffect: string;
-  characterImpact: string;
-  recommended: string;
+  titleKey: string;
+  descriptionKey: string;
+  whenToUseKey: string;
+  skipEffectKey: string;
+  characterImpactKey: string;
+  recommendedKey: string;
 };
 
 const GUIDE_CONTENT: Record<FlaminaGuideTopic, GuideContent> = {
   provider: {
-    title: "Model and provider",
-    description: "This picks the intelligence source behind your character.",
-    whenToUse:
-      "Choose it now if you care about reasoning style, latency, or subscription path.",
-    skipEffect:
-      "If you skip, the app uses the recommended route so you can get started first.",
-    characterImpact:
-      "This affects how the character reasons, how fast it replies, and the overall output quality.",
-    recommended:
-      "Recommended default: use the detected or top recommended provider, then refine it later in settings.",
+    titleKey: "flaminaguide.provider.title",
+    descriptionKey: "flaminaguide.provider.description",
+    whenToUseKey: "flaminaguide.provider.whenToUse",
+    skipEffectKey: "flaminaguide.provider.skipEffect",
+    characterImpactKey: "flaminaguide.provider.characterImpact",
+    recommendedKey: "flaminaguide.provider.recommended",
   },
   rpc: {
-    title: "RPC and chain access",
-    description:
-      "RPC settings decide whether your character can reach chains, wallets, and external onchain actions.",
-    whenToUse:
-      "Configure this if the character needs to inspect balances, sign actions, or work with chains directly.",
-    skipEffect:
-      "If you skip, the character still works for chat and setup, but chain-connected actions stay limited.",
-    characterImpact:
-      "This affects the character’s access to wallets, chains, and external execution.",
-    recommended:
-      "Recommended default: skip for now unless onchain access is part of the first-run experience you need.",
+    titleKey: "flaminaguide.rpc.title",
+    descriptionKey: "flaminaguide.rpc.description",
+    whenToUseKey: "flaminaguide.rpc.whenToUse",
+    skipEffectKey: "flaminaguide.rpc.skipEffect",
+    characterImpactKey: "flaminaguide.rpc.characterImpact",
+    recommendedKey: "flaminaguide.rpc.recommended",
   },
   permissions: {
-    title: "Permissions and system access",
-    description:
-      "Permissions control what your character can see or do on this machine.",
-    whenToUse:
-      "Grant them now if you want the character to inspect the screen, use devices, or control local capabilities.",
-    skipEffect:
-      "If you skip, the character still starts, but system-aware actions stay unavailable until you enable them.",
-    characterImpact:
-      "This affects what the character can see, hear, and control locally.",
-    recommended:
-      "Recommended default: grant only the permissions you need today and defer the rest.",
+    titleKey: "flaminaguide.permissions.title",
+    descriptionKey: "flaminaguide.permissions.description",
+    whenToUseKey: "flaminaguide.permissions.whenToUse",
+    skipEffectKey: "flaminaguide.permissions.skipEffect",
+    characterImpactKey: "flaminaguide.permissions.characterImpact",
+    recommendedKey: "flaminaguide.permissions.recommended",
   },
   voice: {
-    title: "Voice and presentation",
-    description:
-      "Voice settings shape how the character sounds, not whether the character itself is saved.",
-    whenToUse:
-      "Configure this when spoken output matters for the experience or you want a specific presentation style.",
-    skipEffect:
-      "If you skip, the character identity still saves and works; only the voice layer stays deferred.",
-    characterImpact:
-      "This affects how the character sounds and feels in spoken interactions.",
-    recommended:
-      "Recommended default: save the character first, then tune voice once the core profile feels right.",
+    titleKey: "flaminaguide.voice.title",
+    descriptionKey: "flaminaguide.voice.description",
+    whenToUseKey: "flaminaguide.voice.whenToUse",
+    skipEffectKey: "flaminaguide.voice.skipEffect",
+    characterImpactKey: "flaminaguide.voice.characterImpact",
+    recommendedKey: "flaminaguide.voice.recommended",
   },
 };
 
-const TASK_LABELS: Record<FlaminaGuideTopic, string> = {
-  provider: "Provider setup",
-  rpc: "RPC setup",
-  permissions: "Permissions",
-  voice: "Voice setup",
+const TASK_LABEL_KEYS: Record<FlaminaGuideTopic, string> = {
+  provider: "flaminaguide.tasks.provider.label",
+  rpc: "flaminaguide.tasks.rpc.label",
+  permissions: "flaminaguide.tasks.permissions.label",
+  voice: "flaminaguide.tasks.voice.label",
 };
 
-const TASK_DESCRIPTIONS: Record<FlaminaGuideTopic, string> = {
-  provider: "Pick or refine the model/provider that powers the character.",
-  rpc: "Add chain connectivity if the character needs wallet or onchain actions.",
-  permissions: "Grant only the local access needed for system-aware behavior.",
-  voice: "Tune how the character sounds without affecting its saved identity.",
+const TASK_DESCRIPTION_KEYS: Record<FlaminaGuideTopic, string> = {
+  provider: "flaminaguide.tasks.provider.description",
+  rpc: "flaminaguide.tasks.rpc.description",
+  permissions: "flaminaguide.tasks.permissions.description",
+  voice: "flaminaguide.tasks.voice.description",
 };
 
 export function FlaminaGuideCard({
@@ -86,6 +67,7 @@ export function FlaminaGuideCard({
   topic: FlaminaGuideTopic;
   className?: string;
 }) {
+  const { t } = useApp();
   const guide = GUIDE_CONTENT[topic];
 
   return (
@@ -96,26 +78,32 @@ export function FlaminaGuideCard({
         <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-txt">
           Flamina
         </span>
-        <h3 className="text-sm font-semibold text-txt-strong">{guide.title}</h3>
+        <h3 className="text-sm font-semibold text-txt-strong">
+          {t(guide.titleKey)}
+        </h3>
       </div>
-      <p className="mb-3 text-sm text-muted">{guide.description}</p>
+      <p className="mb-3 text-sm text-muted">{t(guide.descriptionKey)}</p>
       <div className="space-y-2 text-xs leading-5 text-txt">
         <p>
-          <span className="font-semibold text-txt-strong">When to use it:</span>{" "}
-          {guide.whenToUse}
-        </p>
-        <p>
-          <span className="font-semibold text-txt-strong">If you skip:</span>{" "}
-          {guide.skipEffect}
+          <span className="font-semibold text-txt-strong">
+            {t("flaminaguide.WhenToUseLabel")}
+          </span>{" "}
+          {t(guide.whenToUseKey)}
         </p>
         <p>
           <span className="font-semibold text-txt-strong">
-            How it affects the character:
+            {t("flaminaguide.IfYouSkipLabel")}
           </span>{" "}
-          {guide.characterImpact}
+          {t(guide.skipEffectKey)}
+        </p>
+        <p>
+          <span className="font-semibold text-txt-strong">
+            {t("flaminaguide.CharacterImpactLabel")}
+          </span>{" "}
+          {t(guide.characterImpactKey)}
         </p>
         <p className="rounded-xl border border-accent/20 bg-accent/5 px-3 py-2 text-[11px] text-txt">
-          {guide.recommended}
+          {t(guide.recommendedKey)}
         </p>
       </div>
     </section>
@@ -133,6 +121,7 @@ export function DeferredSetupChecklist({
     onboardingDeferredTasks,
     postOnboardingChecklistDismissed,
     setState,
+    t,
   } = useApp();
 
   if (
@@ -160,11 +149,10 @@ export function DeferredSetupChecklist({
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-txt-strong">
-            Finish setup later
+            {t("flaminaguide.FinishSetupLater")}
           </h3>
           <p className="text-xs text-muted">
-            Flamina kept the fast path open. These advanced items can be
-            completed any time.
+            {t("flaminaguide.FinishSetupLaterDescription")}
           </p>
         </div>
         <Button
@@ -173,7 +161,7 @@ export function DeferredSetupChecklist({
           className="rounded-full text-[11px] font-semibold uppercase tracking-[0.12em] text-muted"
           onClick={() => setState("postOnboardingChecklistDismissed", true)}
         >
-          Dismiss
+          {t("flaminaguide.Dismiss")}
         </Button>
       </div>
 
@@ -185,9 +173,11 @@ export function DeferredSetupChecklist({
           >
             <div>
               <div className="text-sm font-medium text-txt-strong">
-                {TASK_LABELS[task]}
+                {t(TASK_LABEL_KEYS[task])}
               </div>
-              <p className="text-xs text-muted">{TASK_DESCRIPTIONS[task]}</p>
+              <p className="text-xs text-muted">
+                {t(TASK_DESCRIPTION_KEYS[task])}
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -196,7 +186,7 @@ export function DeferredSetupChecklist({
                 className="rounded-full border-accent/30 bg-accent/10 text-[11px] font-semibold uppercase tracking-[0.12em]"
                 onClick={() => onOpenTask?.(task)}
               >
-                Open
+                {t("flaminaguide.Open")}
               </Button>
               <Button
                 variant="ghost"
@@ -204,7 +194,7 @@ export function DeferredSetupChecklist({
                 className="rounded-full text-[11px] font-semibold uppercase tracking-[0.12em] text-muted"
                 onClick={() => markDone(task as FlaminaGuideTopic)}
               >
-                Done
+                {t("flaminaguide.Done")}
               </Button>
             </div>
           </div>

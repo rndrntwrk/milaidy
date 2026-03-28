@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_KNOWLEDGE_DOCUMENTS,
   type DefaultKnowledgeDocumentDefinition,
+  ELIZA_HISTORY_TEXT,
+  MILADY_OVERVIEW_TEXT,
   seedBundledKnowledge,
 } from "./default-knowledge";
 
@@ -100,7 +102,7 @@ function createRuntimeHarness(
 }
 
 describe("seedBundledKnowledge", () => {
-  it("seeds the default knowledge document as a single fragment", async () => {
+  it("seeds the default knowledge documents as single fragments", async () => {
     const harness = createRuntimeHarness({ embeddingDimensions: 3 });
 
     await seedBundledKnowledge(harness.runtime as unknown as AgentRuntime);
@@ -108,37 +110,59 @@ describe("seedBundledKnowledge", () => {
     const documents = harness.listMemories("documents");
     const fragments = harness.listMemories("knowledge");
 
-    expect(documents).toHaveLength(1);
-    expect(fragments).toHaveLength(1);
+    expect(documents).toHaveLength(2);
+    expect(fragments).toHaveLength(2);
 
-    expect(documents[0].content.text).toBe("this is a test");
+    expect(documents[0].content.text).toContain(
+      "Milady is an autonomous agent",
+    );
     expect(documents[0].metadata).toMatchObject({
       type: "document",
-      filename: "milady-default-knowledge.txt",
+      filename: "milady-overview.txt",
       source: "milady-default-knowledge",
     });
 
-    expect(fragments[0].content.text).toBe("this is a test");
+    expect(documents[1].content.text).toContain(
+      "ELIZA was created by Joseph Weizenbaum",
+    );
+    expect(documents[1].metadata).toMatchObject({
+      type: "document",
+      filename: "eliza-history.txt",
+      source: "milady-default-knowledge",
+    });
+
+    expect(fragments[0].content.text).toContain(
+      "Milady is an autonomous agent",
+    );
     expect(fragments[0].metadata).toMatchObject({
       type: "fragment",
       position: 0,
       source: "milady-default-knowledge",
     });
-    expect(fragments[0].embedding).toEqual([14, 7, 1]);
-    expect(harness.getAddEmbeddingCalls()).toBe(1);
+
+    expect(fragments[1].content.text).toContain(
+      "ELIZA was created by Joseph Weizenbaum",
+    );
+    expect(fragments[1].metadata).toMatchObject({
+      type: "fragment",
+      position: 0,
+      source: "milady-default-knowledge",
+    });
+
+    expect(harness.getAddEmbeddingCalls()).toBe(2);
   });
 
   it("reuses persisted embeddings on subsequent startups", async () => {
     const harness = createRuntimeHarness({ embeddingDimensions: 3 });
 
     await seedBundledKnowledge(harness.runtime as unknown as AgentRuntime);
-    expect(harness.getAddEmbeddingCalls()).toBe(1);
+    expect(harness.getAddEmbeddingCalls()).toBe(2);
 
     await seedBundledKnowledge(harness.runtime as unknown as AgentRuntime);
 
-    expect(harness.listMemories("documents")).toHaveLength(1);
-    expect(harness.listMemories("knowledge")).toHaveLength(1);
-    expect(harness.getAddEmbeddingCalls()).toBe(1);
+    expect(harness.listMemories("documents")).toHaveLength(2);
+    expect(harness.listMemories("knowledge")).toHaveLength(2);
+    expect(harness.getAddEmbeddingCalls()).toBe(2);
   });
 
   it("accepts precomputed fragment embeddings when dimensions match", async () => {
@@ -170,12 +194,28 @@ describe("seedBundledKnowledge", () => {
   it("keeps the shipped default document definition stable", () => {
     expect(DEFAULT_KNOWLEDGE_DOCUMENTS).toEqual([
       {
-        key: "default-test",
+        key: "milady-overview",
         version: 1,
-        filename: "milady-default-knowledge.txt",
+        filename: "milady-overview.txt",
         contentType: "text/plain",
-        text: "this is a test",
-        fragments: [{ text: "this is a test" }],
+        text: MILADY_OVERVIEW_TEXT,
+        fragments: [
+          {
+            text: MILADY_OVERVIEW_TEXT,
+          },
+        ],
+      },
+      {
+        key: "eliza-history",
+        version: 1,
+        filename: "eliza-history.txt",
+        contentType: "text/plain",
+        text: ELIZA_HISTORY_TEXT,
+        fragments: [
+          {
+            text: ELIZA_HISTORY_TEXT,
+          },
+        ],
       },
     ]);
   });

@@ -179,7 +179,7 @@ describe("DetachedShellRoot", () => {
 
     const json = tree?.toJSON() as TestRenderer.ReactTestRendererJSON;
     const textContent = JSON.stringify(json);
-    expect(textContent).toContain("Setup in progress");
+    expect(textContent).toContain("detachedshell.SetupInProgress");
     expect(
       tree?.root.findAllByProps({ "data-testid": "chat-view" }),
     ).toHaveLength(0);

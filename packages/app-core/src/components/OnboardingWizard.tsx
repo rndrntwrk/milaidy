@@ -2,6 +2,11 @@ import {
   LANGUAGE_DROPDOWN_TRIGGER_CLASSNAME,
   LanguageDropdown,
 } from "@miladyai/app-core/components";
+import {
+  dispatchWindowEvent,
+  ONBOARDING_VOICE_PREVIEW_AWAIT_TELEPORT_EVENT,
+  VRM_TELEPORT_COMPLETE_EVENT,
+} from "@miladyai/app-core/events";
 import type { UiLanguage } from "@miladyai/app-core/i18n";
 import { normalizeLanguage } from "@miladyai/app-core/i18n";
 import {
@@ -11,22 +16,17 @@ import {
   useApp,
 } from "@miladyai/app-core/state";
 import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
-import {
-  dispatchWindowEvent,
-  ONBOARDING_VOICE_PREVIEW_AWAIT_TELEPORT_EVENT,
-  VRM_TELEPORT_COMPLETE_EVENT,
-} from "@miladyai/app-core/events";
 import { useEffect, useState } from "react";
 import { useBranding } from "../config/branding";
 import { COMPANION_ENABLED } from "../navigation";
 import { VrmStage } from "./companion/VrmStage";
 import { ActivateStep } from "./onboarding/ActivateStep";
+import { CloudLoginStep } from "./onboarding/CloudLoginStep";
 import { ConnectionStep } from "./onboarding/ConnectionStep";
 import { IdentityStep } from "./onboarding/IdentityStep";
 import { OnboardingPanel } from "./onboarding/OnboardingPanel";
 import { OnboardingStepNav } from "./onboarding/OnboardingStepNav";
 import { PermissionsStep } from "./onboarding/PermissionsStep";
-import { CloudLoginStep } from "./onboarding/CloudLoginStep";
 import { VoiceProviderStep } from "./onboarding/VoiceProviderStep";
 
 const FORCE_VRM =
@@ -228,7 +228,7 @@ export function OnboardingWizard() {
             <IdentityStep />
           </div>
         ) : (
-          <div className="absolute inset-0 z-20 pointer-events-none [&>*]:pointer-events-auto">
+          <div className="absolute inset-0 z-20 flex flex-col justify-end pointer-events-none [&>*]:pointer-events-auto">
             <OnboardingStepNav />
             <OnboardingPanel step={onboardingStep}>
               {renderStep()}

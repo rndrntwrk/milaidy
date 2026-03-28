@@ -28,6 +28,7 @@ import {
   type CharacterRosterEntry,
   resolveRosterEntries,
 } from "./CharacterRoster";
+import { resolveCharacterGreetingAnimation } from "./character-greeting";
 import { shouldApplyPresetDefaults } from "./character-editor-helpers";
 
 /* Inline SVG icon helpers – avoids adding lucide-react as a dependency. */
@@ -117,6 +118,78 @@ const CHARACTER_EDITOR_FOOTER_ACTION_CLASSNAME =
 /* ── Constants ─────────────────────────────────────────────────────── */
 
 const DEFAULT_ELEVEN_FAST_MODEL = "eleven_flash_v2_5";
+
+type CharacterEditorVoiceConfig = Record<
+  string,
+  Record<string, string> | string | undefined
+>;
+
+function buildVoiceConfigForCharacterEntry(args: {
+  entry: CharacterRosterEntry;
+  useElevenLabs: boolean;
+  voiceConfig: CharacterEditorVoiceConfig;
+}): {
+  nextVoiceConfig: CharacterEditorVoiceConfig;
+  persistedVoiceConfig: CharacterEditorVoiceConfig;
+  selectedVoicePresetId: string;
+} | null {
+  const presetVoice = args.entry.voicePresetId
+    ? PREMADE_VOICES.find((preset) => preset.id === args.entry.voicePresetId)
+    : undefined;
+  if (!presetVoice) {
+    return null;
+  }
+
+  if (args.useElevenLabs) {
+    const existingElevenlabs =
+      typeof args.voiceConfig.elevenlabs === "object"
+        ? args.voiceConfig.elevenlabs
+        : {};
+    const defaultVoiceMode =
+      typeof args.voiceConfig.mode === "string"
+        ? args.voiceConfig.mode
+        : hasConfiguredApiKey(existingElevenlabs.apiKey)
+          ? "own-key"
+          : "cloud";
+    const nextVoiceConfig: CharacterEditorVoiceConfig = {
+      ...args.voiceConfig,
+      provider: "elevenlabs",
+      mode: defaultVoiceMode,
+      elevenlabs: {
+        ...existingElevenlabs,
+        voiceId: presetVoice.voiceId,
+        modelId: existingElevenlabs.modelId ?? DEFAULT_ELEVEN_FAST_MODEL,
+      },
+    };
+    return {
+      nextVoiceConfig,
+      persistedVoiceConfig: nextVoiceConfig,
+      selectedVoicePresetId: presetVoice.id,
+    };
+  }
+
+  const edgeGender =
+    presetVoice.gender === "male" ? "edge-male" : "edge-female";
+  const edgeVoice = EDGE_BACKUP_VOICES.find((voice) => voice.id === edgeGender);
+  if (!edgeVoice) {
+    return null;
+  }
+  const existingEdge =
+    typeof args.voiceConfig.edge === "object" ? args.voiceConfig.edge : {};
+  const nextVoiceConfig: CharacterEditorVoiceConfig = {
+    ...args.voiceConfig,
+    provider: "edge",
+    edge: {
+      ...existingEdge,
+      voice: edgeVoice.voiceId,
+    },
+  };
+  return {
+    nextVoiceConfig,
+    persistedVoiceConfig: nextVoiceConfig,
+    selectedVoicePresetId: edgeVoice.id,
+  };
+}
 const CHARACTER_EDITOR_PAGES = ["identity", "style", "examples"] as const;
 const STYLE_SECTION_KEYS = ["all"] as const;
 const STYLE_SECTION_PLACEHOLDERS: Record<string, string> = {
@@ -325,7 +398,7 @@ export function CharacterEditor({
   const pendingGreetingRef = useRef<{
     characterId: string;
     catchphrase: string;
-    animationPath: string;
+    animationPath: string | null;
   } | null>(null);
   const onboardingPresetStyles = useMemo(
     () => getOnboardingPresetStyles(onboardingOptions),
@@ -336,11 +409,9 @@ export function CharacterEditor({
   ]);
 
   /* ── Voice config state ─────────────────────────────────────────── */
-  type VoiceConfig = Record<
-    string,
-    Record<string, string> | string | undefined
-  >;
-  const [voiceConfig, setVoiceConfig] = useState<VoiceConfig>({});
+  const [voiceConfig, setVoiceConfig] = useState<CharacterEditorVoiceConfig>(
+    {},
+  );
 
   const handleChatAvatarSpeakingChange = useCallback(
     (isSpeaking: boolean) => {
@@ -510,17 +581,41 @@ export function CharacterEditor({
       setVoiceLoading(true);
       try {
         const cfg = await client.getConfig();
-        type TtsConfig = Record<string, Record<string, string> | undefined>;
-        type MessagesConfig = { tts?: TtsConfig };
+        type MessagesConfig = { tts?: CharacterEditorVoiceConfig };
         const messages = cfg.messages as MessagesConfig | undefined;
         const tts = messages?.tts;
         if (tts) {
-          setVoiceConfig(tts);
+          const serverElevenlabsVoiceId =
+            typeof tts.elevenlabs === "object" ? tts.elevenlabs.voiceId : null;
+          setVoiceConfig((prev) => {
+            if (!voicePresetAppliedRef.current) {
+              return tts;
+            }
+            const serverElevenlabs =
+              typeof tts.elevenlabs === "object" ? tts.elevenlabs : {};
+            const currentElevenlabs =
+              typeof prev.elevenlabs === "object" ? prev.elevenlabs : {};
+            const serverEdge = typeof tts.edge === "object" ? tts.edge : {};
+            const currentEdge =
+              typeof prev.edge === "object" ? prev.edge : {};
+            return {
+              ...tts,
+              ...prev,
+              elevenlabs: {
+                ...serverElevenlabs,
+                ...currentElevenlabs,
+              },
+              edge: {
+                ...serverEdge,
+                ...currentEdge,
+              },
+            };
+          });
           // Only set the voice preset from server if a roster entry hasn't
           // already set one (roster voice takes precedence).
-          if (tts.elevenlabs?.voiceId && !voicePresetAppliedRef.current) {
+          if (serverElevenlabsVoiceId && !voicePresetAppliedRef.current) {
             const preset = PREMADE_VOICES.find(
-              (p) => p.voiceId === tts.elevenlabs?.voiceId,
+              (p) => p.voiceId === serverElevenlabsVoiceId,
             );
             setSelectedVoicePresetId(preset?.id ?? null);
           }
@@ -562,32 +657,18 @@ export function CharacterEditor({
   const applyVoicePresetForEntry = useCallback(
     (entry: CharacterRosterEntry) => {
       setVoiceSaveError(null);
-      if (!entry.voicePresetId) return;
-      // When cloud provides ElevenLabs, use the ElevenLabs preset voice.
-      // Otherwise fall back to matching edge backup voice by gender.
-      if (useElevenLabs) {
-        const voicePreset = PREMADE_VOICES.find(
-          (p) => p.id === entry.voicePresetId,
-        );
-        if (voicePreset) {
-          handleSelectPreset(voicePreset);
-          voicePresetAppliedRef.current = true;
-        }
-      } else {
-        // Pick male/female edge voice based on the ElevenLabs preset gender
-        const elPreset = PREMADE_VOICES.find(
-          (p) => p.id === entry.voicePresetId,
-        );
-        const edgeGender =
-          elPreset?.gender === "male" ? "edge-male" : "edge-female";
-        const edgeVoice = EDGE_BACKUP_VOICES.find((v) => v.id === edgeGender);
-        if (edgeVoice) {
-          handleSelectPreset(edgeVoice);
-          voicePresetAppliedRef.current = true;
-        }
-      }
+      const nextVoiceSelection = buildVoiceConfigForCharacterEntry({
+        entry,
+        useElevenLabs,
+        voiceConfig,
+      });
+      if (!nextVoiceSelection) return null;
+      setSelectedVoicePresetId(nextVoiceSelection.selectedVoicePresetId);
+      setVoiceConfig(nextVoiceSelection.nextVoiceConfig);
+      voicePresetAppliedRef.current = true;
+      return nextVoiceSelection.persistedVoiceConfig;
     },
-    [handleSelectPreset, useElevenLabs],
+    [useElevenLabs, voiceConfig],
   );
 
   /* ── Character defaults ─────────────────────────────────────────── */
@@ -612,22 +693,15 @@ export function CharacterEditor({
       setSelectedCharacterId(entry.id);
       setState("selectedVrmIndex", entry.avatarIndex);
       if (!voiceSelectionLocked && isNewCharacter) {
-        applyVoicePresetForEntry(entry);
-        // Persist voice config immediately so the server has the right TTS
-        // provider when streamVoiceSpeak is called for the catchphrase.
-        // We build a minimal payload inline to avoid referencing persistVoiceConfig
-        // (which is defined after this callback in the file).
-        const presetVoice = PREMADE_VOICES.find(
-          (p) => p.id === entry.voicePresetId,
-        );
-        if (presetVoice && useElevenLabs) {
+        const persistedVoiceConfig = applyVoicePresetForEntry(entry);
+        if (persistedVoiceConfig) {
+          dispatchWindowEvent(VOICE_CONFIG_UPDATED_EVENT, persistedVoiceConfig);
+          // Persist the voice switch immediately so the next assistant line
+          // uses the selected character's voice without waiting for Save.
           void client
             .updateConfig({
               messages: {
-                tts: {
-                  provider: "elevenlabs",
-                  elevenlabs: { voiceId: presetVoice.voiceId },
-                },
+                tts: persistedVoiceConfig,
               },
             })
             .catch(() => {});
@@ -652,8 +726,10 @@ export function CharacterEditor({
         pendingGreetingRef.current = {
           characterId: entry.id,
           catchphrase: entry.catchphrase,
-          animationPath:
-            entry.greetingAnimation ?? "animations/emotes/greeting.fbx",
+          animationPath: resolveCharacterGreetingAnimation({
+            avatarIndex: entry.avatarIndex,
+            greetingAnimation: entry.greetingAnimation,
+          }),
         };
       }
       activeCharacterIdRef.current = entry.id;
@@ -760,13 +836,15 @@ export function CharacterEditor({
         greetingTimerRef.current = null;
         if (greeting.characterId !== activeCharacterIdRef.current) return;
 
-        dispatchWindowEvent(APP_EMOTE_EVENT, {
-          emoteId: "greeting",
-          path: `/${greeting.animationPath}`,
-          duration: 3,
-          loop: false,
-          showOverlay: false,
-        });
+        if (greeting.animationPath) {
+          dispatchWindowEvent(APP_EMOTE_EVENT, {
+            emoteId: "greeting",
+            path: `/${greeting.animationPath}`,
+            duration: 3,
+            loop: false,
+            showOverlay: false,
+          });
+        }
         voice.speak(greeting.catchphrase);
       }, 400);
     };
@@ -1200,38 +1278,6 @@ export function CharacterEditor({
                 <RotateCcw className="h-4 w-4 mr-1" />
                 {t("charactereditor.Reset", { defaultValue: "Reset" })}
               </Button>
-            </div>
-
-            <div key={activePage} aria-live="polite">
-              <div className="text-sm font-semibold text-txt">
-                {activePage === "identity"
-                  ? t("charactereditor.PageContextTitle.identity", {
-                      defaultValue: "Profile & directions",
-                    })
-                  : activePage === "style"
-                    ? t("charactereditor.PageContextTitle.style", {
-                        defaultValue: "Speaking style",
-                      })
-                    : t("charactereditor.PageContextTitle.examples", {
-                        defaultValue: "Sample chats & posts",
-                      })}
-              </div>
-              <p className="text-xs text-muted mt-0.5">
-                {activePage === "identity"
-                  ? t("charactereditor.PageContextDesc.identity", {
-                      defaultValue:
-                        "Name, voice, bio, and system prompt — who the agent is and how it should behave.",
-                    })
-                  : activePage === "style"
-                    ? t("charactereditor.PageContextDesc.style", {
-                        defaultValue:
-                          "Short rules that steer tone and wording in chat and posts.",
-                      })
-                    : t("charactereditor.PageContextDesc.examples", {
-                        defaultValue:
-                          "Example conversations and posts the model can imitate.",
-                      })}
-              </p>
             </div>
 
             <div

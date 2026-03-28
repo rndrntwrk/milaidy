@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import type { CodingAgentSession } from "../api";
+import { useApp } from "../state";
 import "@xterm/xterm/css/xterm.css";
 import { PtyTerminalPane } from "./PtyTerminalPane";
 import { PULSE_STATUSES, STATUS_DOT } from "./pty-status-dots";
@@ -54,6 +55,7 @@ export function PtyConsoleBase({
   onClose,
   variant,
 }: PtyConsoleBaseProps) {
+  const { t } = useApp();
   const [selectedId, setSelectedId] = useState(activeSessionId);
 
   const resolvedId =
@@ -68,14 +70,18 @@ export function PtyConsoleBase({
 
   const isSidePanel = variant === "side-panel";
   const closeIcon = isSidePanel ? SidePanelCloseIcon : DrawerCloseIcon;
-  const closeLabel = isSidePanel ? "Close console panel" : "Close console";
+  const closeLabel = isSidePanel
+    ? t("aria.closeConsolePanel")
+    : t("aria.closeConsole");
 
   return (
     <>
       {/* Side-panel has a separate header row */}
       {isSidePanel && (
         <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0">
-          <span className="text-xs font-semibold text-txt">Agent Consoles</span>
+          <span className="text-xs font-semibold text-txt">
+            {t("ptyconsolebase.AgentConsoles")}
+          </span>
           <button
             type="button"
             onClick={onClose}

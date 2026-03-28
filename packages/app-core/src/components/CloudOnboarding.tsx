@@ -20,7 +20,7 @@ export function CloudOnboarding() {
   // Auto-complete onboarding once cloud is connected.
   useEffect(() => {
     if (elizaCloudConnected) {
-      handleCloudOnboardingFinish();
+      void handleCloudOnboardingFinish();
     }
   }, [elizaCloudConnected, handleCloudOnboardingFinish]);
 

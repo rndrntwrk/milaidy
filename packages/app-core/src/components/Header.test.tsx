@@ -143,6 +143,77 @@ describe("Header", () => {
     expect(mockUseApp.setState).toHaveBeenCalledWith("chatMode", "power");
   });
 
+  it("keeps mobile-left controls inside the right header control cluster", async () => {
+    const mockUseApp = {
+      t: (k: string) => k,
+      agentStatus: { state: "running", agentName: "Eliza" },
+      elizaCloudEnabled: true,
+      elizaCloudConnected: true,
+      elizaCloudCredits: 12.34,
+      elizaCloudCreditsCritical: false,
+      elizaCloudCreditsLow: false,
+      elizaCloudAuthRejected: false,
+      elizaCloudCreditsError: null,
+      elizaCloudTopUpUrl: "",
+      lifecycleBusy: false,
+      lifecycleAction: null,
+      handleRestart: vi.fn(),
+      handleStart: vi.fn(),
+      loadDropStatus: vi.fn().mockResolvedValue(undefined),
+      tab: "chat",
+      setTab: vi.fn(),
+      setState: vi.fn(),
+      plugins: [],
+      uiLanguage: "en",
+      setUiLanguage: vi.fn(),
+      uiTheme: "dark",
+      setUiTheme: vi.fn(),
+      uiShellMode: "native",
+      switchShellView: vi.fn(),
+      chatAgentVoiceMuted: false,
+      handleNewConversation: vi.fn(),
+      handleSaveCharacter: vi.fn(),
+      characterSaving: false,
+      characterSaveSuccess: false,
+      conversationMessages: [],
+      chatLastUsage: null,
+    };
+
+    // @ts-expect-error - test uses a narrowed subset of the full app context type.
+    vi.spyOn(AppContext, "useApp").mockReturnValue(mockUseApp);
+
+    let testRenderer: ReactTestRenderer | null = null;
+    await act(async () => {
+      testRenderer = create(
+        <Header
+          mobileLeft={
+            <button data-testid="mobile-left-stub" type="button">
+              Chats
+            </button>
+          }
+        />,
+      );
+    });
+    if (!testRenderer) {
+      throw new Error("Failed to render Header");
+    }
+
+    const root = (testRenderer as ReactTestRenderer).root;
+    const rightControls = root.findByProps({
+      "data-testid": "shell-header-right-controls",
+    });
+    expect(
+      root.findAllByProps({
+        "data-testid": "mobile-left-stub",
+      }),
+    ).toHaveLength(1);
+    expect(
+      rightControls.findByProps({
+        "data-testid": "mobile-left-stub",
+      }),
+    ).toBeDefined();
+  });
+
   it("uses minimal chrome for the character view and hides cloud pricing", async () => {
     const mockUseApp = {
       t: (k: string) => k,

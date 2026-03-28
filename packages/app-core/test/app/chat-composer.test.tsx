@@ -187,15 +187,10 @@ describe("ChatComposer mic controls", () => {
     });
     const textarea = findTextarea(renderer);
 
-    expect(sendButton.props.className).toContain("border-transparent");
-    expect(sendButton.props.className).toContain(
-      "text-[color:var(--onboarding-text-strong)]",
-    );
-    expect(String(textarea.props.className)).toContain(
-      "var(--onboarding-text-strong)",
-    );
-    expect(String(textarea.props.className)).toContain(
-      "var(--onboarding-text-muted)",
-    );
+    expect(sendButton.props.className).toContain("border-border/28");
+    expect(sendButton.props.className).toContain("bg-[linear-gradient");
+    expect(sendButton.props.className).toContain("text-txt");
+    expect(String(textarea.props.className)).toContain("text-txt-strong");
+    expect(String(textarea.props.className)).toContain("placeholder:text-muted");
   });
 });

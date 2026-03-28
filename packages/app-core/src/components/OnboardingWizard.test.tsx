@@ -208,6 +208,47 @@ describe("OnboardingWizard", () => {
     );
   });
 
+  it("bottom-aligns the non-identity onboarding chrome container", async () => {
+    mockUseApp.mockReturnValue({
+      onboardingStep: "cloud_login",
+      selectedVrmIndex: 1,
+      customVrmUrl: "",
+      uiLanguage: "en",
+      uiTheme: "light",
+      setState: vi.fn(),
+      t: (key: string) => key,
+      onboardingUiRevealNonce: 0,
+      companionVrmPowerMode: "balanced",
+      companionHalfFramerateMode: "when_saving_power",
+      companionAnimateWhenHidden: false,
+    });
+
+    let tree: ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(<OnboardingWizard />);
+    });
+
+    const overlayShells =
+      tree?.root.findAll(
+        (node) =>
+          typeof node.props.className === "string" &&
+          node.props.className.includes("absolute inset-0 z-20"),
+      ) ?? [];
+    const nonIdentityShell = overlayShells.find(
+      (node) =>
+        node.findAll(
+          (child) =>
+            child.type === "div" &&
+            child.children.some((value) => value === "OnboardingStepNav"),
+        ).length > 0,
+    );
+
+    expect(nonIdentityShell).toBeDefined();
+    expect(String(nonIdentityShell?.props.className)).toContain(
+      "flex flex-col justify-end",
+    );
+  });
+
   describe("onboarding overlay reveal fallback", () => {
     beforeEach(() => {
       vi.useFakeTimers();

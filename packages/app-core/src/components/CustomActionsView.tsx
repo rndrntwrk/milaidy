@@ -88,10 +88,10 @@ export function CustomActionsView() {
 
   const handleDelete = useCallback(async (id: string, name: string) => {
     const confirmed = await confirmDesktopAction({
-      title: "Delete Custom Action",
-      message: `Are you sure you want to delete "${name}"?`,
-      confirmLabel: "Delete",
-      cancelLabel: "Cancel",
+      title: t("customactionsview.DeleteCustomActionTitle"),
+      message: t("customactionsview.DeleteCustomActionMessage", { name }),
+      confirmLabel: t("customactionsview.Delete"),
+      cancelLabel: t("customactionsview.Cancel"),
       type: "warning",
     });
     if (!confirmed) {
@@ -104,7 +104,7 @@ export function CustomActionsView() {
     } catch (error) {
       console.error("Failed to delete action:", error);
     }
-  }, []);
+  }, [t]);
 
   const handleImport = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,13 +125,13 @@ export function CustomActionsView() {
       } catch (error) {
         console.error("Failed to import actions:", error);
         await alertDesktopMessage({
-          title: "Import Failed",
-          message: "Failed to import actions. Please check the file format.",
+          title: t("customactionsview.ImportFailedTitle"),
+          message: t("customactionsview.ImportFailedMessage"),
           type: "error",
         });
       }
     },
-    [loadActions],
+    [loadActions, t],
   );
 
   const handleExport = useCallback(() => {
@@ -155,7 +155,12 @@ export function CustomActionsView() {
     );
   });
 
-  const actionCountLabel = `${actions.length} action${actions.length === 1 ? "" : "s"}`;
+  const actionCountLabel = t(
+    actions.length === 1
+      ? "customactionsview.ActionCountOne"
+      : "customactionsview.ActionCountOther",
+    { count: actions.length },
+  );
 
   if (loading) {
     return (
@@ -175,17 +180,17 @@ export function CustomActionsView() {
     >
       <div className="max-w-md space-y-3">
         <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
-          Custom Actions
+          {t("customactionsview.CustomActions")}
         </div>
         <h2 className="text-xl font-semibold text-txt">
           {search
-            ? "No actions match your current filters."
-            : "Build reusable actions for power workflows."}
+            ? t("customactionsview.NoActionsMatchFiltersTitle")
+            : t("customactionsview.EmptyTitle")}
         </h2>
         <p className="text-sm leading-relaxed text-muted">
           {search
-            ? "Try a different name, handler type, or clear the search field to see every saved action."
-            : "Create, import, and manage custom actions from one place so repeated tasks stay consistent and easy to trigger."}
+            ? t("customactionsview.NoActionsMatchFiltersDescription")
+            : t("customactionsview.EmptyDescription")}
         </p>
         {!search && (
           <div className="pt-2">
@@ -211,14 +216,14 @@ export function CustomActionsView() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-2">
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
-            Custom Actions
+            {t("customactionsview.CustomActions")}
           </div>
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold text-txt">Action Registry</h1>
+            <h1 className="text-2xl font-semibold text-txt">
+              {t("customactionsview.ActionRegistry")}
+            </h1>
             <p className="max-w-2xl text-sm leading-relaxed text-muted">
-              Create reusable action definitions, keep handlers organized, and
-              quickly toggle or revise automation building blocks without
-              digging through config.
+              {t("customactionsview.ActionRegistryDescription")}
             </p>
           </div>
         </div>
@@ -227,7 +232,9 @@ export function CustomActionsView() {
             {actionCountLabel}
           </span>
           <span className="rounded-full border border-border/45 bg-bg/30 px-3 py-1.5 shadow-sm">
-            {search ? "Filtered" : "All actions"}
+            {search
+              ? t("customactionsview.Filtered")
+              : t("customactionsview.AllActions")}
           </span>
         </div>
       </div>
@@ -236,7 +243,7 @@ export function CustomActionsView() {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex-1 space-y-2">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
-              Search And Manage
+              {t("customactionsview.SearchAndManage")}
             </div>
             <Input
               type="text"
@@ -297,7 +304,7 @@ export function CustomActionsView() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/70">
-                        Handler
+                        {t("customactionsview.Handler")}
                       </div>
                       <h3 className="flex-1 break-words text-base font-semibold text-txt">
                         {action.name}
@@ -319,21 +326,23 @@ export function CustomActionsView() {
                     </p>
                   ) : (
                     <p className="text-sm leading-relaxed text-muted/75">
-                      No description yet. Open this action to document when it
-                      should run and what it should do.
+                      {t("customactionsview.NoDescriptionYet")}
                     </p>
                   )}
 
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
                     <span className="rounded-full border border-border/45 bg-bg/30 px-2.5 py-1">
-                      {action.parameters?.length || 0}{" "}
-                      {t("customactionsview.parameter")}
-                      {action.parameters?.length === 1 ? "" : "s"}
+                      {t(
+                        (action.parameters?.length || 0) === 1
+                          ? "customactionsview.ParameterCountOne"
+                          : "customactionsview.ParameterCountOther",
+                        { count: action.parameters?.length || 0 },
+                      )}
                     </span>
                     <span className="rounded-full border border-border/45 bg-bg/30 px-2.5 py-1">
                       {action.enabled
                         ? t("customactionsview.Enabled")
-                        : "Disabled"}
+                        : t("customactionsview.Disabled")}
                     </span>
                   </div>
                 </div>

@@ -2,8 +2,7 @@
 /**
  * End-to-end tests for the full onboarding journey:
  *
- * 1. Progress through every onboarding step and land on the character
- *    editor / avatar creator (character-select tab).
+ * 1. Progress through every onboarding step and land in companion mode.
  * 2. Reset the agent, return to onboarding, and complete a second pass
  *    cleanly — proving the full reset cycle works.
  */
@@ -664,8 +663,8 @@ function setupMock(state: AppHarnessState) {
     if (state.onboardingStep === "activate") {
       state.onboardingComplete = true;
       state.startupStatus = "ready";
-      state.uiShellMode = "native";
-      state.tab = "character-select";
+      state.uiShellMode = "companion";
+      state.tab = "companion";
       return;
     }
     const idx = STEP_ORDER.indexOf(state.onboardingStep);
@@ -772,7 +771,7 @@ async function driveOnboardingToCompletion(
 //  1. Full onboarding journey → avatar creator
 // =====================================================================
 
-describe("onboarding journey to avatar creator (e2e)", () => {
+describe("onboarding journey to companion mode (e2e)", () => {
   let state: AppHarnessState;
 
   beforeEach(() => {
@@ -780,7 +779,7 @@ describe("onboarding journey to avatar creator (e2e)", () => {
     setupMock(state);
   });
 
-  it("progresses through all onboarding steps and reaches the character editor", async () => {
+  it("progresses through all onboarding steps and reaches companion mode", async () => {
     let tree: TestRenderer.ReactTestRenderer | null = null;
 
     await act(async () => {
@@ -797,12 +796,10 @@ describe("onboarding journey to avatar creator (e2e)", () => {
     expect(state.onboardingComplete).toBe(true);
     expect(state.startupStatus).toBe("ready");
 
-    // After onboarding finishes, the tab should be character-select
-    // which renders the CharacterView (avatar creator / character editor)
-    expect(state.tab).toBe("character-select");
+    expect(state.tab).toBe("companion");
 
     const renderedText = textOf(tree.root);
-    expect(renderedText).toContain("CharacterEditor");
+    expect(renderedText).toContain("CompanionShell:companion");
     expect(renderedText).not.toContain("OnboardingWizard");
 
     tree.unmount();
@@ -939,7 +936,7 @@ describe("agent reset and re-onboarding (e2e)", () => {
     // Complete onboarding first
     await driveOnboardingToCompletion(tree, state);
     expect(state.onboardingComplete).toBe(true);
-    expect(state.tab).toBe("character-select");
+    expect(state.tab).toBe("companion");
 
     // Now reset the agent
     await act(async () => {
@@ -992,10 +989,10 @@ describe("agent reset and re-onboarding (e2e)", () => {
 
     expect(state.onboardingComplete).toBe(true);
     expect(state.startupStatus).toBe("ready");
-    expect(state.tab).toBe("character-select");
+    expect(state.tab).toBe("companion");
 
     const renderedText = textOf(tree.root);
-    expect(renderedText).toContain("CharacterEditor");
+    expect(renderedText).toContain("CompanionShell:companion");
 
     tree.unmount();
   });
@@ -1083,6 +1080,6 @@ describe("agent reset and re-onboarding (e2e)", () => {
     // One final completion to prove it still works
     await driveOnboardingToCompletion(tree, state);
     expect(state.onboardingComplete).toBe(true);
-    expect(textOf(tree.root)).toContain("CharacterEditor");
+    expect(textOf(tree.root)).toContain("CompanionShell:companion");
   });
 });

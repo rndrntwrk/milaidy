@@ -191,6 +191,9 @@ vi.mock(
 import { App } from "@miladyai/app-core/App";
 
 const ORIGINAL_INNER_WIDTH = window.innerWidth;
+const TRANSLATIONS: Record<string, string> = {
+  "conversations.chats": "Chats",
+};
 
 function setViewportWidth(width: number): void {
   Object.defineProperty(window, "innerWidth", {
@@ -211,12 +214,15 @@ describe("app startup routing (e2e)", () => {
     setViewportWidth(1280);
     mockUseApp.mockReset();
     mockUseApp.mockReturnValue({
-      t: (k: string) => k,
+      t: (k: string) => TRANSLATIONS[k] ?? k,
       onboardingLoading: false,
       authRequired: false,
       onboardingComplete: true,
+      onboardingHandoffError: null,
+      onboardingHandoffPhase: "idle",
       tab: "chat",
       actionNotice: null,
+      cancelOnboardingHandoff: vi.fn(),
       setActionNotice: vi.fn(),
       plugins: [],
       conversations: [],
@@ -226,6 +232,7 @@ describe("app startup routing (e2e)", () => {
       unreadConversations: new Set(),
       activeGameViewerUrl: null,
       gameOverlayEnabled: false,
+      retryOnboardingHandoff: vi.fn(async () => {}),
       startupPhase: "ready",
       startupStatus: "ready",
       startupError: null,
@@ -273,12 +280,15 @@ describe("app startup routing (e2e)", () => {
 
   it("renders wallets screen when wallets tab is active", async () => {
     mockUseApp.mockReturnValue({
-      t: (k: string) => k,
+      t: (k: string) => TRANSLATIONS[k] ?? k,
       onboardingLoading: false,
       authRequired: false,
       onboardingComplete: true,
+      onboardingHandoffError: null,
+      onboardingHandoffPhase: "idle",
       tab: "wallets",
       actionNotice: null,
+      cancelOnboardingHandoff: vi.fn(),
       setActionNotice: vi.fn(),
       plugins: [],
       conversations: [],
@@ -288,6 +298,7 @@ describe("app startup routing (e2e)", () => {
       unreadConversations: new Set(),
       activeGameViewerUrl: null,
       gameOverlayEnabled: false,
+      retryOnboardingHandoff: vi.fn(async () => {}),
       startupPhase: "ready",
       startupStatus: "ready",
       startupError: null,

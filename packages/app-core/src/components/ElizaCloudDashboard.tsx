@@ -443,7 +443,11 @@ export function CloudDashboard() {
     } catch (err) {
       if (!mountedRef.current) return;
       const msg =
-        err instanceof Error ? err.message : "Failed to load cloud agents";
+        err instanceof Error
+          ? err.message
+          : t("elizaclouddashboard.FailedToLoadCloudAgents", {
+              defaultValue: "Failed to load cloud agents",
+            });
       if (msg.includes("not available yet")) {
         setCloudNotReady(true);
       } else {
@@ -472,7 +476,11 @@ export function CloudDashboard() {
         const err = summaryResponse.__error;
         throw err instanceof Error
           ? err
-          : new Error("Billing summary unavailable.");
+          : new Error(
+              t("elizaclouddashboard.BillingSummaryUnavailable", {
+                defaultValue: "Billing summary unavailable.",
+              }),
+            );
       }
 
       setBillingSummary(normalizeBillingSummary(summaryResponse));
@@ -487,7 +495,11 @@ export function CloudDashboard() {
       setBillingSummary(null);
       setBillingSettings(null);
       setBillingError(
-        err instanceof Error ? err.message : "Failed to load billing data.",
+        err instanceof Error
+          ? err.message
+          : t("elizaclouddashboard.FailedToLoadBillingData", {
+              defaultValue: "Failed to load billing data.",
+            }),
       );
     } finally {
       if (mountedRef.current) {
@@ -546,7 +558,11 @@ export function CloudDashboard() {
       try {
         const response = await client.launchCloudCompatAgent(agentId);
         if (!response.success || !response.data?.connection?.apiBase) {
-          throw new Error("Eliza Cloud did not return a launch connection.");
+          throw new Error(
+            t("elizaclouddashboard.LaunchConnectionMissing", {
+              defaultValue: "Eliza Cloud did not return a launch connection.",
+            }),
+          );
         }
 
         const { connection } = response.data;
@@ -561,7 +577,9 @@ export function CloudDashboard() {
         setState("onboardingRemoteConnecting", false);
         setState("onboardingRemoteConnected", false);
         setActionNotice(
-          "Opened managed Eliza Cloud instance.",
+          t("elizaclouddashboard.OpenedManagedInstance", {
+            defaultValue: "Opened managed Eliza Cloud instance.",
+          }),
           "success",
           3000,
         );
@@ -571,7 +589,9 @@ export function CloudDashboard() {
         setActionNotice(
           err instanceof Error
             ? err.message
-            : "Failed to open Eliza Cloud instance.",
+            : t("elizaclouddashboard.FailedToOpenInstance", {
+                defaultValue: "Failed to open Eliza Cloud instance.",
+              }),
           "error",
           4200,
         );
@@ -611,7 +631,12 @@ export function CloudDashboard() {
 
     if (!Number.isFinite(amount) || amount < minAmount || amount > maxAmount) {
       setActionNotice(
-        `Auto top-up amount must be between $${minAmount} and $${maxAmount}.`,
+        t("elizaclouddashboard.AutoTopUpAmountRange", {
+          defaultValue:
+            "Auto top-up amount must be between ${{min}} and ${{max}}.",
+          min: minAmount,
+          max: maxAmount,
+        }),
         "error",
         3600,
       );
@@ -624,7 +649,12 @@ export function CloudDashboard() {
       threshold > maxThreshold
     ) {
       setActionNotice(
-        `Auto top-up threshold must be between $${minThreshold} and $${maxThreshold}.`,
+        t("elizaclouddashboard.AutoTopUpThresholdRange", {
+          defaultValue:
+            "Auto top-up threshold must be between ${{min}} and ${{max}}.",
+          min: minThreshold,
+          max: maxThreshold,
+        }),
         "error",
         3600,
       );
@@ -633,7 +663,10 @@ export function CloudDashboard() {
 
     if (autoTopUpEnabled && !hasPaymentMethod) {
       setActionNotice(
-        "Save a payment method through card checkout before enabling auto top-up.",
+        t("elizaclouddashboard.SavePaymentMethodBeforeAutoTopUp", {
+          defaultValue:
+            "Save a payment method through card checkout before enabling auto top-up.",
+        }),
         "info",
         4200,
       );
@@ -658,12 +691,20 @@ export function CloudDashboard() {
         force: true,
       });
       await fetchBillingData();
-      setActionNotice("Billing settings updated.", "success", 3200);
+      setActionNotice(
+        t("elizaclouddashboard.BillingSettingsUpdated", {
+          defaultValue: "Billing settings updated.",
+        }),
+        "success",
+        3200,
+      );
     } catch (err) {
       setActionNotice(
         err instanceof Error
           ? err.message
-          : "Failed to update billing settings.",
+          : t("elizaclouddashboard.FailedToUpdateBillingSettings", {
+              defaultValue: "Failed to update billing settings.",
+            }),
         "error",
         4200,
       );
@@ -690,7 +731,10 @@ export function CloudDashboard() {
     const amountUsd = Number(billingAmount);
     if (!Number.isFinite(amountUsd) || amountUsd < minimumTopUp) {
       setActionNotice(
-        `Enter a top-up amount of at least $${minimumTopUp}.`,
+        t("elizaclouddashboard.EnterTopUpAmountMinimum", {
+          defaultValue: "Enter a top-up amount of at least ${{amount}}.",
+          amount: minimumTopUp,
+        }),
         "error",
         3200,
       );
@@ -720,11 +764,17 @@ export function CloudDashboard() {
 
       throw new Error(
         readString(response.message) ??
-          "Eliza Cloud did not return a checkout session.",
+          t("elizaclouddashboard.CheckoutSessionMissing", {
+            defaultValue: "Eliza Cloud did not return a checkout session.",
+          }),
       );
     } catch (err) {
       setActionNotice(
-        err instanceof Error ? err.message : "Failed to start checkout.",
+        err instanceof Error
+          ? err.message
+          : t("elizaclouddashboard.FailedToStartCheckout", {
+              defaultValue: "Failed to start checkout.",
+            }),
         "error",
         4200,
       );
@@ -741,7 +791,10 @@ export function CloudDashboard() {
     const amountUsd = Number(billingAmount);
     if (!Number.isFinite(amountUsd) || amountUsd < minimumTopUp) {
       setActionNotice(
-        `Enter a top-up amount of at least $${minimumTopUp}.`,
+        t("elizaclouddashboard.EnterTopUpAmountMinimum", {
+          defaultValue: "Enter a top-up amount of at least ${{amount}}.",
+          amount: minimumTopUp,
+        }),
         "error",
         3200,
       );
@@ -762,7 +815,11 @@ export function CloudDashboard() {
     } catch (err) {
       setCryptoQuote(null);
       setActionNotice(
-        err instanceof Error ? err.message : "Failed to request crypto quote.",
+        err instanceof Error
+          ? err.message
+          : t("elizaclouddashboard.FailedToRequestCryptoQuote", {
+              defaultValue: "Failed to request crypto quote.",
+            }),
         "error",
         4200,
       );
@@ -784,7 +841,9 @@ export function CloudDashboard() {
 
     if (!network || network !== "bsc") {
       setActionNotice(
-        "Agent-wallet payment is currently wired for BSC quotes only.",
+        t("elizaclouddashboard.BscOnlyAgentWalletPayment", {
+          defaultValue: "Agent-wallet payment is currently wired for BSC quotes only.",
+        }),
         "info",
         4200,
       );
@@ -793,7 +852,9 @@ export function CloudDashboard() {
 
     if (!payToAddress || !amount) {
       setActionNotice(
-        "Crypto quote is missing transfer details.",
+        t("elizaclouddashboard.CryptoQuoteMissingTransferDetails", {
+          defaultValue: "Crypto quote is missing transfer details.",
+        }),
         "error",
         4200,
       );
@@ -812,22 +873,38 @@ export function CloudDashboard() {
 
       if (result.executed && result.execution?.hash) {
         const stewardNote =
-          result.mode === "steward" ? " (via Steward vault)" : "";
+          result.mode === "steward"
+            ? t("elizaclouddashboard.ViaStewardVault", {
+                defaultValue: " (via Steward vault)",
+              })
+            : "";
         setCryptoPayResult(
-          `Submitted ${currency} payment: ${result.execution.hash}${stewardNote}`,
+          t("elizaclouddashboard.SubmittedPayment", {
+            defaultValue: "Submitted {{currency}} payment: {{hash}}{{note}}",
+            currency,
+            hash: result.execution.hash,
+            note: stewardNote,
+          }),
         );
         setActionNotice(
-          `Crypto payment submitted from the agent wallet${stewardNote}.`,
+          t("elizaclouddashboard.CryptoPaymentSubmitted", {
+            defaultValue: "Crypto payment submitted from the agent wallet{{note}}.",
+            note: stewardNote,
+          }),
           "success",
         );
       } else if (result.mode === "steward" && !result.requiresUserSignature) {
         const execStatus = result.execution?.status;
         if (execStatus === "pending_approval") {
           setCryptoPayResult(
-            "Transfer is waiting for Steward policy approval.",
+            t("elizaclouddashboard.TransferAwaitingApproval", {
+              defaultValue: "Transfer is waiting for Steward policy approval.",
+            }),
           );
           setActionNotice(
-            "Transaction pending Steward policy approval.",
+            t("elizaclouddashboard.TransactionPendingApproval", {
+              defaultValue: "Transaction pending Steward policy approval.",
+            }),
             "info",
             6000,
           );
@@ -835,20 +912,35 @@ export function CloudDashboard() {
           const reason =
             result.execution?.policyResults?.find((p) => p.reason)?.reason ??
             result.error ??
-            "Policy rejected";
-          setCryptoPayResult(`Steward policy rejected: ${reason}`);
+            t("elizaclouddashboard.PolicyRejected", {
+              defaultValue: "Policy rejected",
+            });
+          setCryptoPayResult(
+            t("elizaclouddashboard.StewardPolicyRejected", {
+              defaultValue: "Steward policy rejected: {{reason}}",
+              reason,
+            }),
+          );
           setActionNotice(
-            `Steward policy rejected the transfer: ${reason}`,
+            t("elizaclouddashboard.StewardPolicyRejectedTransfer", {
+              defaultValue: "Steward policy rejected the transfer: {{reason}}",
+              reason,
+            }),
             "error",
             6000,
           );
         }
       } else if (result.requiresUserSignature) {
         setCryptoPayResult(
-          "Cloud returned an unsigned payment request. Sign it from the wallet flow to complete payment.",
+          t("elizaclouddashboard.UnsignedPaymentRequest", {
+            defaultValue:
+              "Cloud returned an unsigned payment request. Sign it from the wallet flow to complete payment.",
+          }),
         );
         setActionNotice(
-          "This wallet requires user-sign mode for crypto payment.",
+          t("elizaclouddashboard.RequiresUserSignMode", {
+            defaultValue: "This wallet requires user-sign mode for crypto payment.",
+          }),
           "info",
           4200,
         );
@@ -856,7 +948,11 @@ export function CloudDashboard() {
     } catch (err) {
       setCryptoPayResult(null);
       setActionNotice(
-        err instanceof Error ? err.message : "Crypto payment failed.",
+        err instanceof Error
+          ? err.message
+          : t("elizaclouddashboard.CryptoPaymentFailed", {
+              defaultValue: "Crypto payment failed.",
+            }),
         "error",
         4200,
       );
@@ -1048,7 +1144,9 @@ export function CloudDashboard() {
               onClick={() => setState("cloudDashboardView", "billing")}
             >
               <CircleDollarSign className="w-3.5 h-3.5" />
-              Billing
+              {t("elizaclouddashboard.Billing", {
+                defaultValue: "Billing",
+              })}
             </Button>
             <Button
               variant={activeView === "agents" ? "default" : "ghost"}
@@ -1061,7 +1159,9 @@ export function CloudDashboard() {
               onClick={() => setState("cloudDashboardView", "agents")}
             >
               <Server className="w-3.5 h-3.5" />
-              Agents
+              {t("elizaclouddashboard.Agents", {
+                defaultValue: "Agents",
+              })}
             </Button>
           </div>
           <Button
@@ -1107,7 +1207,11 @@ export function CloudDashboard() {
                   </span>
                 )}
               </span>
-              <span className="text-sm text-muted">credits</span>
+              <span className="text-sm text-muted">
+                {t("elizaclouddashboard.CreditsLabel", {
+                  defaultValue: "credits",
+                })}
+              </span>
               {billingLoading && (
                 <Loader2 className="h-4 w-4 animate-spin text-muted" />
               )}
@@ -1186,7 +1290,10 @@ export function CloudDashboard() {
                     value={billingAmount}
                     onChange={(e) => setBillingAmount(e.target.value)}
                     className="rounded-lg bg-bg text-sm h-9 flex-1"
-                    placeholder={`Min $${minimumTopUp.toFixed(2)}`}
+                    placeholder={t("elizaclouddashboard.MinAmountPlaceholder", {
+                      defaultValue: "Min ${{amount}}",
+                      amount: minimumTopUp.toFixed(2),
+                    })}
                   />
                   <Button
                     variant="default"
@@ -1197,7 +1304,7 @@ export function CloudDashboard() {
                     {checkoutBusy ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      "Pay"
+                      t("elizaclouddashboard.Pay", { defaultValue: "Pay" })
                     )}
                   </Button>
                 </div>
@@ -1224,7 +1331,10 @@ export function CloudDashboard() {
                         {readString(cryptoQuote.amount) ?? "0"}
                       </span>{" "}
                       <span className="text-muted">
-                        on {readString(cryptoQuote.network) ?? "—"}
+                        {t("elizaclouddashboard.OnNetwork", {
+                          defaultValue: "on {{network}}",
+                          network: readString(cryptoQuote.network) ?? "—",
+                        })}
                       </span>
                     </div>
                     {readString(cryptoQuote.payToAddress) && (
@@ -1245,7 +1355,9 @@ export function CloudDashboard() {
                           }
                         >
                           <ExternalLink className="mr-1 h-3 w-3" />
-                          Hosted
+                          {t("elizaclouddashboard.Hosted", {
+                            defaultValue: "Hosted",
+                          })}
                         </Button>
                       )}
                       <Button
@@ -1266,7 +1378,9 @@ export function CloudDashboard() {
                         {cryptoPayBusy ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
-                          "Pay from wallet"
+                          t("elizaclouddashboard.PayFromWallet", {
+                            defaultValue: "Pay from wallet",
+                          })
                         )}
                       </Button>
                     </div>
@@ -1320,7 +1434,9 @@ export function CloudDashboard() {
                   htmlFor="cloud-auto-topup-threshold"
                   className="text-[11px] text-muted"
                 >
-                  Refill when below
+                  {t("elizaclouddashboard.RefillWhenBelow", {
+                    defaultValue: "Refill when below",
+                  })}
                 </label>
                 <Input
                   id="cloud-auto-topup-threshold"
@@ -1343,7 +1459,9 @@ export function CloudDashboard() {
                   htmlFor="cloud-auto-topup-amount"
                   className="text-[11px] text-muted"
                 >
-                  Top-up amount
+                  {t("elizaclouddashboard.TopUpAmount", {
+                    defaultValue: "Top-up amount",
+                  })}
                 </label>
                 <Input
                   id="cloud-auto-topup-amount"
@@ -1372,7 +1490,7 @@ export function CloudDashboard() {
                 {billingSettingsBusy ? (
                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                 ) : null}
-                Save
+                {t("apikeyconfig.save")}
               </Button>
             </div>
           </div>
@@ -1415,11 +1533,15 @@ export function CloudDashboard() {
                 <Server className="w-5 h-5 text-accent" />
               </div>
               <p className="text-sm font-medium text-txt mb-1.5">
-                Cloud Agents Coming Soon
+                {t("elizaclouddashboard.CloudAgentsComingSoon", {
+                  defaultValue: "Cloud Agents Coming Soon",
+                })}
               </p>
               <p className="text-xs text-muted text-center max-w-xs leading-relaxed">
-                Eliza Cloud is being prepared for production. You'll be able to
-                deploy and manage cloud agents here shortly.
+                {t("elizaclouddashboard.CloudAgentsComingSoonDesc", {
+                  defaultValue:
+                    "Eliza Cloud is being prepared for production. You'll be able to deploy and manage cloud agents here shortly.",
+                })}
               </p>
             </div>
           )}
@@ -1458,7 +1580,9 @@ export function CloudDashboard() {
                 onClick={() => setState("cloudDashboardView", "billing")}
               >
                 <CircleDollarSign className="mr-1 h-3 w-3" />
-                Billing
+                {t("elizaclouddashboard.Billing", {
+                  defaultValue: "Billing",
+                })}
               </Button>
             </div>
           </div>
@@ -1659,13 +1783,17 @@ function AgentDetailSidebar({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl border border-border/40 bg-bg/40 p-3">
               <span className="text-[10px] text-muted uppercase font-bold tracking-wider mb-1 block">
-                Status
+                {t("elizaclouddashboard.Status", {
+                  defaultValue: "Status",
+                })}
               </span>
               <AgentStatusBadge status={statusDetail?.status || agent.status} />
             </div>
             <div className="rounded-xl border border-border/40 bg-bg/40 p-3">
               <span className="text-[10px] text-muted uppercase font-bold tracking-wider mb-1 block">
-                DB Status
+                {t("elizaclouddashboard.DatabaseStatus", {
+                  defaultValue: "DB Status",
+                })}
               </span>
               <span className="text-xs font-mono">
                 {statusDetail?.databaseStatus || agent.database_status || "—"}
@@ -1673,25 +1801,35 @@ function AgentDetailSidebar({
             </div>
             <div className="rounded-xl border border-border/40 bg-bg/40 p-3 sm:col-span-2">
               <span className="text-[10px] text-muted uppercase font-bold tracking-wider mb-1 block">
-                Heartbeat
+                {t("elizaclouddashboard.Heartbeat", {
+                  defaultValue: "Heartbeat",
+                })}
               </span>
               <span className="text-xs font-mono">
                 {statusDetail?.lastHeartbeat
                   ? new Date(statusDetail.lastHeartbeat).toLocaleString()
                   : agent.last_heartbeat_at
                     ? new Date(agent.last_heartbeat_at).toLocaleString()
-                    : "No heartbeat yet"}
+                    : t("elizaclouddashboard.NoHeartbeatYet", {
+                        defaultValue: "No heartbeat yet",
+                      })}
               </span>
             </div>
           </div>
 
           <div className="rounded-xl border border-border/40 bg-bg/80 p-3">
             <span className="text-[10px] text-muted uppercase font-bold tracking-wider mb-2 flex items-center gap-2">
-              <Terminal className="w-3 h-3" /> Live Logs
+              <Terminal className="w-3 h-3" />{" "}
+              {t("elizaclouddashboard.LiveLogs", {
+                defaultValue: "Live Logs",
+              })}
             </span>
             <div className="custom-scrollbar h-64 overflow-y-auto rounded-lg border border-border/30 bg-bg/65 p-3">
               <pre className="text-[10px] font-mono text-txt-strong/85 whitespace-pre-wrap break-all">
-                {logs || "No logs available. Deploying..."}
+                {logs ||
+                  t("elizaclouddashboard.NoLogsAvailableDeploying", {
+                    defaultValue: "No logs available. Deploying...",
+                  })}
                 <div ref={logsEndRef} />
               </pre>
             </div>

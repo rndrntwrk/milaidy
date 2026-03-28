@@ -249,6 +249,24 @@ const TASK_LABELS: Record<string, string> = {
   voice: "Voice setup",
 };
 
+const TRANSLATIONS: Record<string, string> = {
+  "flaminaguide.FinishSetupLater": "Finish setup later",
+  "flaminaguide.FinishSetupLaterDescription":
+    "You can come back and complete these later.",
+  "flaminaguide.Dismiss": "Dismiss",
+  "flaminaguide.Open": "Open",
+  "flaminaguide.Done": "Done",
+  "flaminaguide.tasks.provider.label": TASK_LABELS.provider,
+  "flaminaguide.tasks.rpc.label": TASK_LABELS.rpc,
+  "flaminaguide.tasks.permissions.label": TASK_LABELS.permissions,
+  "flaminaguide.tasks.voice.label": TASK_LABELS.voice,
+  "flaminaguide.tasks.provider.description": "Connect your model provider.",
+  "flaminaguide.tasks.rpc.description": "Configure RPC access.",
+  "flaminaguide.tasks.permissions.description":
+    "Grant desktop permissions.",
+  "flaminaguide.tasks.voice.description": "Pick a voice preset.",
+};
+
 vi.mock("@miladyai/app-core/components", async () => {
   const actual = await vi.importActual<
     typeof import("@miladyai/app-core/components")
@@ -676,8 +694,8 @@ function setupMockUseApp(state: AppHarnessState) {
       if (state.onboardingStep === "launch") {
         state.onboardingComplete = true;
         state.startupStatus = "ready";
-        state.uiShellMode = "native";
-        state.tab = "chat";
+        state.uiShellMode = "companion";
+        state.tab = "companion";
         return;
       }
       const idx = STEP_ORDER.indexOf(state.onboardingStep);
@@ -696,7 +714,7 @@ function setupMockUseApp(state: AppHarnessState) {
 
   mockUseApp.mockReset();
   mockUseApp.mockImplementation(() => ({
-    t: (k: string) => k,
+    t: (k: string) => TRANSLATIONS[k] ?? k,
     ...state,
     setState: (key: string, value: unknown) => {
       state[key] = value;
@@ -1071,7 +1089,7 @@ describe("Activate step", () => {
     expect(handleOnboardingNext).toHaveBeenCalled();
   });
 
-  it("after activation, app transitions to chat view", async () => {
+  it("after activation, app transitions to companion mode", async () => {
     const state = createHarnessState({
       onboardingStep: "launch",
       onboardingName: "Nova",
@@ -1092,7 +1110,7 @@ describe("Activate step", () => {
 
     expect(state.onboardingComplete).toBe(true);
     expect(state.startupStatus).toBe("ready");
-    expect(state.tab).toBe("chat");
+    expect(state.tab).toBe("companion");
   });
 
 
@@ -1103,7 +1121,7 @@ describe("Activate step", () => {
 // ===================================================================
 
 describe("full onboarding journey (e2e)", () => {
-  it("progresses through all steps and lands in chat view", async () => {
+  it("progresses through all steps and lands in companion mode", async () => {
     const state = createHarnessState();
     setupMockUseApp(state);
 
@@ -1134,7 +1152,7 @@ describe("full onboarding journey (e2e)", () => {
 
     expect(state.onboardingComplete).toBe(true);
     expect(state.startupStatus).toBe("ready");
-    expect(state.tab).toBe("chat");
+    expect(state.tab).toBe("companion");
   });
 });
 

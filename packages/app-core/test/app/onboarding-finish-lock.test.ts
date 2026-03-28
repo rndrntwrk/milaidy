@@ -55,6 +55,7 @@ const { mockClient } = vi.hoisted(() => ({
     })),
     getWalletAddresses: vi.fn(async () => null),
     getConfig: vi.fn(async () => ({})),
+    updateConfig: vi.fn(async () => ({ ok: true })),
     getCloudStatus: vi.fn(async () => ({ enabled: false, connected: false })),
     getCodingAgentStatus: vi.fn(async () => null),
     getWorkbenchOverview: vi.fn(async () => ({
@@ -138,17 +139,23 @@ import { AppProvider, useApp } from "@miladyai/app-core/state";
 import { createDeferred } from "../../../../test/helpers/test-utils";
 
 type ProbeApi = {
+  cancelOnboardingHandoff: () => void;
+  handleCloudOnboardingFinish: () => Promise<void>;
   handleOnboardingNext: (options?: {
     allowPermissionBypass?: boolean;
   }) => Promise<void>;
   hasOnboardingOptions: () => boolean;
   getOnboardingStep: () => string;
+  retryOnboardingHandoff: () => Promise<void>;
   setState: (key: string, value: unknown) => void;
   snapshot: () => {
     onboardingComplete: boolean;
+    onboardingHandoffError: string | null;
+    onboardingHandoffPhase: string;
     tab: string;
     uiShellMode: string;
     activeConversationId: string | null;
+    chatAwaitingGreeting: boolean;
     conversationMessages: Array<{
       role: "user" | "assistant";
       text: string;
@@ -163,15 +170,21 @@ function Probe(props: { onReady: (api: ProbeApi) => void }) {
 
   useEffect(() => {
     onReady({
+      cancelOnboardingHandoff: app.cancelOnboardingHandoff,
+      handleCloudOnboardingFinish: app.handleCloudOnboardingFinish,
       handleOnboardingNext: app.handleOnboardingNext,
       hasOnboardingOptions: () => Boolean(app.onboardingOptions),
       getOnboardingStep: () => app.onboardingStep,
+      retryOnboardingHandoff: app.retryOnboardingHandoff,
       setState: app.setState,
       snapshot: () => ({
         onboardingComplete: app.onboardingComplete,
+        onboardingHandoffError: app.onboardingHandoffError,
+        onboardingHandoffPhase: app.onboardingHandoffPhase,
         tab: app.tab,
         uiShellMode: app.uiShellMode,
         activeConversationId: app.activeConversationId,
+        chatAwaitingGreeting: app.chatAwaitingGreeting,
         conversationMessages: app.conversationMessages.map((message) => ({
           role: message.role,
           text: message.text,
@@ -427,6 +440,165 @@ describe("onboarding finish locking", () => {
     });
   });
 
+  it("switches into chat immediately while onboarding finish work is still in flight", async () => {
+    const restartDeferred = createDeferred<{
+      agentName: string;
+      model: undefined;
+      startedAt: undefined;
+      state: "running";
+      uptime: undefined;
+    }>();
+    mockClient.restartAgent.mockReturnValue(restartDeferred.promise);
+
+    let api: ProbeApi | null = null;
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          AppProvider,
+          null,
+          React.createElement(Probe, {
+            onReady: (nextApi) => {
+              api = nextApi;
+            },
+          }),
+        ),
+      );
+    });
+
+    expect(api).not.toBeNull();
+    const requireApi = () => {
+      if (!api) throw new Error("onboarding probe API was not initialized");
+      return api;
+    };
+
+    await waitForOnboardingOptions(requireApi);
+    await advanceToLaunch(requireApi);
+
+    await act(async () => {
+      void api?.handleOnboardingNext();
+      await Promise.resolve();
+    });
+
+    const snapshot = requireApi().snapshot();
+    expect(snapshot).toEqual(
+      expect.objectContaining({
+        onboardingComplete: false,
+        tab: "companion",
+      }),
+    );
+    expect(["fading", "saving", "restarting", "bootstrapping"]).toContain(
+      snapshot.onboardingHandoffPhase,
+    );
+
+    await act(async () => {
+      restartDeferred.resolve({
+        state: "running",
+        agentName: "Milady",
+        model: undefined,
+        startedAt: undefined,
+        uptime: undefined,
+      });
+      await restartDeferred.promise;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1100));
+    });
+
+    await waitForOnboardingCompletion(requireApi);
+
+    await act(async () => {
+      tree?.unmount();
+    });
+  });
+
+  it("uses the same seamless handoff for cloud onboarding completion", async () => {
+    const restartDeferred = createDeferred<{
+      agentName: string;
+      model: undefined;
+      startedAt: undefined;
+      state: "running";
+      uptime: undefined;
+    }>();
+    mockClient.restartAgent.mockReturnValue(restartDeferred.promise);
+
+    let api: ProbeApi | null = null;
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          AppProvider,
+          null,
+          React.createElement(Probe, {
+            onReady: (nextApi) => {
+              api = nextApi;
+            },
+          }),
+        ),
+      );
+    });
+
+    expect(api).not.toBeNull();
+    const requireApi = () => {
+      if (!api) throw new Error("onboarding probe API was not initialized");
+      return api;
+    };
+
+    await waitForOnboardingOptions(requireApi);
+
+    await act(async () => {
+      requireApi().setState("elizaCloudConnected", true);
+      void requireApi().handleCloudOnboardingFinish();
+      await Promise.resolve();
+    });
+
+    const handoffSnapshot = requireApi().snapshot();
+    expect(handoffSnapshot).toEqual(
+      expect.objectContaining({
+        onboardingComplete: false,
+        tab: "companion",
+      }),
+    );
+    expect(["saving", "restarting", "bootstrapping"]).toContain(
+      handoffSnapshot.onboardingHandoffPhase,
+    );
+
+    await act(async () => {
+      restartDeferred.resolve({
+        state: "running",
+        agentName: "Milady",
+        model: undefined,
+        startedAt: undefined,
+        uptime: undefined,
+      });
+      await restartDeferred.promise;
+    });
+
+    await waitForOnboardingCompletion(requireApi);
+
+    expect(mockClient.submitOnboarding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runMode: "cloud",
+        cloudProvider: "elizacloud",
+      }),
+    );
+    expect(mockClient.createConversation).toHaveBeenCalledWith(undefined, {
+      bootstrapGreeting: true,
+      lang: "en",
+    });
+    expect(requireApi().snapshot()).toEqual(
+      expect.objectContaining({
+        onboardingComplete: true,
+        tab: "companion",
+      }),
+    );
+
+    await act(async () => {
+      tree?.unmount();
+    });
+  });
+
   it("releases lock after failed onboarding finish so retry can run", async () => {
     mockClient.submitOnboarding
       .mockRejectedValueOnce(new Error("boom"))
@@ -460,6 +632,13 @@ describe("onboarding finish locking", () => {
     await act(async () => {
       await api?.handleOnboardingNext();
     });
+    expect(requireApi().snapshot()).toEqual(
+      expect.objectContaining({
+        onboardingComplete: false,
+        onboardingHandoffError: "boom",
+        onboardingHandoffPhase: "error",
+      }),
+    );
     await act(async () => {
       await api?.handleOnboardingNext();
     });
@@ -573,7 +752,7 @@ describe("onboarding finish locking", () => {
 
     const snapshot = requireApi().snapshot();
     expect(snapshot.onboardingComplete).toBe(true);
-    expect(snapshot.tab).toBe("character-select");
+    expect(snapshot.tab).toBe("companion");
     expect(mockClient.restartAgent).toHaveBeenCalled();
     expect(mockClient.createConversation).toHaveBeenCalledWith(undefined, {
       bootstrapGreeting: true,
@@ -589,7 +768,7 @@ describe("onboarding finish locking", () => {
     });
   });
 
-  it("waits for the restarted agent before restoring an empty conversation greeting", async () => {
+  it("waits for the restarted agent before creating a fresh onboarding conversation", async () => {
     let runtimeReady = false;
     mockClient.restartAgent.mockResolvedValue({
       state: "restarting",
@@ -668,14 +847,86 @@ describe("onboarding finish locking", () => {
 
     const snapshot = requireApi().snapshot();
     expect(snapshot.onboardingComplete).toBe(true);
-    expect(snapshot.tab).toBe("character-select");
-    expect(snapshot.activeConversationId).toBe("conv-restored");
+    expect(snapshot.tab).toBe("companion");
+    expect(snapshot.activeConversationId).toBe("conv-created");
     expect(mockClient.getStatus).toHaveBeenCalled();
-    expect(mockClient.createConversation).not.toHaveBeenCalled();
+    expect(mockClient.createConversation).toHaveBeenCalledWith(undefined, {
+      bootstrapGreeting: true,
+      lang: "en",
+    });
     expect(mockClient.sendWsMessage).toHaveBeenCalledWith({
       type: "active-conversation",
-      conversationId: "conv-restored",
+      conversationId: "conv-created",
     });
+
+    await act(async () => {
+      tree?.unmount();
+    });
+  });
+
+  it("retries from restart without resubmitting onboarding when submit already succeeded", async () => {
+    mockClient.restartAgent
+      .mockRejectedValueOnce(new Error("restart down"))
+      .mockResolvedValueOnce({
+        state: "running",
+        agentName: "Milady",
+        model: undefined,
+        startedAt: undefined,
+        uptime: undefined,
+      });
+
+    let api: ProbeApi | null = null;
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          AppProvider,
+          null,
+          React.createElement(Probe, {
+            onReady: (nextApi) => {
+              api = nextApi;
+            },
+          }),
+        ),
+      );
+    });
+
+    expect(api).not.toBeNull();
+    const requireApi = () => {
+      if (!api) throw new Error("onboarding probe API was not initialized");
+      return api;
+    };
+
+    await waitForOnboardingOptions(requireApi);
+    await advanceToLaunch(requireApi);
+
+    await act(async () => {
+      await api?.handleOnboardingNext();
+    });
+
+    expect(requireApi().snapshot()).toEqual(
+      expect.objectContaining({
+        onboardingComplete: false,
+        onboardingHandoffError: "restart down",
+        onboardingHandoffPhase: "error",
+      }),
+    );
+    expect(mockClient.submitOnboarding).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await api?.retryOnboardingHandoff();
+    });
+
+    await waitForOnboardingCompletion(requireApi);
+
+    expect(mockClient.submitOnboarding).toHaveBeenCalledTimes(1);
+    expect(mockClient.restartAgent).toHaveBeenCalledTimes(2);
+    expect(requireApi().snapshot()).toEqual(
+      expect.objectContaining({
+        onboardingComplete: true,
+        tab: "companion",
+      }),
+    );
 
     await act(async () => {
       tree?.unmount();

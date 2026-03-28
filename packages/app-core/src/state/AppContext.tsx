@@ -176,6 +176,7 @@ import {
   normalizeCompanionHalfFramerateMode,
   normalizeCompanionVrmPowerMode,
   normalizeCustomActionName,
+  type OnboardingHandoffPhase,
   normalizeUiShellMode,
   normalizeUiTheme,
   type OnboardingNextOptions,
@@ -220,6 +221,16 @@ import { useOnboardingState } from "./useOnboardingState";
 
 const AGENT_STATUS_POLL_INTERVAL_MS = 500;
 const ONBOARDING_GREETING_READY_TIMEOUT_MS = 15_000;
+
+type OnboardingHandoffMode = "full" | "cloud_fast_track";
+
+type OnboardingHandoffRetryState = {
+  mode: OnboardingHandoffMode;
+  onboardingSubmitted: boolean;
+  skipCloudProvisioning: boolean;
+  cloudApiBase?: string;
+  authToken?: string;
+};
 
 export {
   type ActionNotice,
@@ -828,6 +839,13 @@ function AppProviderInner({
   ]);
   // Compat: old code sometimes used a separate chatAwaitingGreeting state
   const [chatAwaitingGreeting, setChatAwaitingGreeting] = useState(false);
+  const [onboardingHandoffPhase, setOnboardingHandoffPhase] =
+    useState<OnboardingHandoffPhase>("idle");
+  const [onboardingHandoffError, setOnboardingHandoffError] = useState<
+    string | null
+  >(null);
+  const onboardingHandoffRetryStateRef =
+    useRef<OnboardingHandoffRetryState | null>(null);
   // addUnread / removeUnread wrappers for old setUnreadConversations patterns
   const setUnreadConversations = useCallback(
     (v: Set<string> | ((prev: Set<string>) => Set<string>)) => {
@@ -3223,6 +3241,7 @@ function AppProviderInner({
         }
 
         if (greetingText) {
+          setChatAwaitingGreeting(false);
           greetingFiredRef.current = true;
           const initMessages: ConversationMessage[] = [
             {
@@ -3283,12 +3302,43 @@ function AppProviderInner({
    * default thread (same as sidebar "new chat") so greeting/bootstrap can run.
    */
   const bootstrapConversationAfterAgentReady = useCallback(
-    async (context: string, options?: { skipAgentRunningWait?: boolean }) => {
+    async (
+      context: string,
+      options?: {
+        forceFreshConversation?: boolean;
+        skipAgentRunningWait?: boolean;
+      },
+    ) => {
       traceMiladyGreeting(`${context}:begin`, {
+        forceFreshConversation: options?.forceFreshConversation === true,
         skipAgentRunningWait: options?.skipAgentRunningWait === true,
       });
       if (options?.skipAgentRunningWait !== true) {
         await waitForOnboardingGreetingBootstrap();
+      }
+      if (options?.forceFreshConversation === true) {
+        try {
+          const { conversations: existingConversations } =
+            await client.listConversations();
+          setConversations(existingConversations);
+        } catch (err) {
+          console.warn(
+            "[milady][chat:init] failed to load existing conversations before onboarding handoff",
+            err,
+          );
+          setConversations([]);
+        }
+        greetingFiredRef.current = false;
+        conversationMessagesRef.current = [];
+        setConversationMessages([]);
+        setActiveConversationId(null);
+        activeConversationIdRef.current = null;
+        traceMiladyGreeting(`${context}:force_fresh_conversation`);
+        await handleNewConversation();
+        if (!activeConversationIdRef.current) {
+          throw new Error("Failed to create your first conversation.");
+        }
+        return;
       }
       const greetConvId = await hydrateInitialConversationState();
       traceMiladyGreeting(`${context}:hydrate`, {
@@ -3324,9 +3374,15 @@ function AppProviderInner({
       }
     },
     [
+      activeConversationIdRef,
+      conversationMessagesRef,
+      greetingFiredRef,
       handleNewConversation,
       hydrateInitialConversationState,
       requestGreetingWhenRunning,
+      setActiveConversationId,
+      setConversationMessages,
+      setConversations,
       waitForOnboardingGreetingBootstrap,
     ],
   );
@@ -5238,413 +5294,426 @@ function AppProviderInner({
 
   // ── Onboarding ─────────────────────────────────────────────────────
 
-  const handleOnboardingFinish = useCallback(async () => {
-    if (onboardingFinishBusyRef.current || onboardingRestarting) return;
-    if (!onboardingOptions) return;
-    if (onboardingFinishSavingRef.current || onboardingRestarting) return;
+  const completeOnboardingChatHandoff = useCallback(() => {
+    clearPersistedOnboardingStep();
+    onboardingResumeConnectionRef.current = null;
+    onboardingCompletionCommittedRef.current = true;
+    setOnboardingMode("basic");
+    setOnboardingActiveGuide(null);
+    setPostOnboardingChecklistDismissed(false);
+    setOnboardingDetectedProviders(
+      onboardingDetectedProviders.map((provider) => {
+        const { apiKey: _, ...rest } = provider;
+        return rest;
+      }) as AppState["onboardingDetectedProviders"],
+    );
+    setOnboardingComplete(true);
+    initialTabSetRef.current = true;
+    setTab(DEFAULT_LANDING_TAB);
+    setOnboardingHandoffPhase("idle");
+    setOnboardingHandoffError(null);
+    onboardingHandoffRetryStateRef.current = null;
+    void loadCharacter();
+  }, [
+    onboardingCompletionCommittedRef,
+    onboardingDetectedProviders,
+    onboardingResumeConnectionRef,
+    setOnboardingActiveGuide,
+    setOnboardingComplete,
+    setOnboardingDetectedProviders,
+    setOnboardingMode,
+    setPostOnboardingChecklistDismissed,
+    setTab,
+    loadCharacter,
+  ]);
 
-    // Cloud fast-track: if we got here from the 3-step onboarding,
-    // submit with cloud defaults directly.
-    if (elizaCloudConnected) {
-      const style = resolveSelectedOnboardingStyle({
-        styles: onboardingOptions?.styles,
-        onboardingStyle,
-        selectedVrmIndex,
-        uiLanguage,
+  const prepareOnboardingChatHandoffAttempt = useCallback(
+    (attempt: OnboardingHandoffRetryState) => {
+      onboardingHandoffRetryStateRef.current = attempt;
+      setOnboardingHandoffError(null);
+      setOnboardingHandoffPhase("fading");
+      setTab(DEFAULT_LANDING_TAB);
+      interruptActiveChatPipeline();
+      resetConversationDraftState();
+      setActiveConversationId(null);
+      setConversations([]);
+      setChatAwaitingGreeting(true);
+      setAgentStatus({
+        ...(agentStatus ?? {
+          agentName: onboardingName || "Milady",
+          model: undefined,
+          startedAt: undefined,
+          uptime: undefined,
+        }),
+        state: "starting",
       });
-      const defaultName = style.name ?? getDefaultStylePreset(uiLanguage).name;
+    },
+    [
+      agentStatus,
+      onboardingName,
+      interruptActiveChatPipeline,
+      resetConversationDraftState,
+      setActiveConversationId,
+      setAgentStatus,
+      setConversations,
+      setTab,
+    ],
+  );
+
+  const failOnboardingChatHandoff = useCallback((err: unknown) => {
+    console.error("[onboarding] Failed to hand off into chat", err);
+    setChatAwaitingGreeting(false);
+    setOnboardingHandoffError(
+      err instanceof Error ? err.message : "network error",
+    );
+    setOnboardingHandoffPhase("error");
+  }, []);
+
+  const runOnboardingChatHandoff = useCallback(
+    async (
+      mode: OnboardingHandoffMode,
+      retryState?: OnboardingHandoffRetryState | null,
+    ) => {
+      if (onboardingFinishBusyRef.current || onboardingRestarting) return;
+      if (!onboardingOptions) return;
+      if (onboardingFinishSavingRef.current || onboardingRestarting) return;
+
+      const attempt: OnboardingHandoffRetryState = retryState
+        ? { ...retryState }
+        : {
+            mode,
+            onboardingSubmitted: false,
+            skipCloudProvisioning: false,
+          };
+
+      prepareOnboardingChatHandoffAttempt(attempt);
+      onboardingFinishBusyRef.current = true;
+      setOnboardingRestarting(true);
+      onboardingFinishSavingRef.current = true;
 
       try {
-        await client.submitOnboarding({
-          name: onboardingName || defaultName,
-          bio: style?.bio ?? ["An autonomous AI agent."],
-          systemPrompt:
-            style?.system?.replace(
-              /\{\{name\}\}/g,
-              onboardingName || defaultName,
-            ) ??
-            `You are ${onboardingName || defaultName}, an autonomous AI agent powered by elizaOS.`,
-          style: style?.style,
-          adjectives: style?.adjectives,
-          postExamples: style?.postExamples,
-          messageExamples: style?.messageExamples,
-          topics: style?.topics,
-          avatarIndex: style?.avatarIndex ?? 1,
-          language: uiLanguage,
-          presetId: style?.id ?? "chen",
-          // Cloud onboarding: the API key was already persisted server-side
-          // by handleCloudLogin → persistCloudLoginStatus. We just need to
-          // tell the backend to enable cloud mode with default models.
-          runMode: "cloud",
-          cloudProvider: "elizacloud",
-          smallModel: "moonshotai/kimi-k2-turbo",
-          largeModel: "moonshotai/kimi-k2-0905",
-        } as unknown as Parameters<typeof client.submitOnboarding>[0]);
-        try {
-          await persistOnboardingStyleVoice(style);
-        } catch (err) {
-          console.warn(
-            "[onboarding] Failed to persist cloud voice preset",
-            err,
-          );
-        }
+        if (mode === "cloud_fast_track") {
+          const style = resolveSelectedOnboardingStyle({
+            styles: onboardingOptions.styles,
+            onboardingStyle,
+            selectedVrmIndex,
+            uiLanguage,
+          });
+          const defaultName =
+            style.name ?? getDefaultStylePreset(uiLanguage).name;
 
-        try {
-          setAgentStatus(await client.restartAgent());
-        } catch {
-          /* ignore */
-        }
-
-        await bootstrapConversationAfterAgentReady(
-          "onboarding:cloud_fast_track",
-        );
-
-        clearPersistedOnboardingStep();
-        onboardingResumeConnectionRef.current = null;
-        onboardingCompletionCommittedRef.current = true;
-        initialTabSetRef.current = true;
-        setOnboardingComplete(true);
-        setTab("companion");
-        return;
-      } catch (err) {
-        console.error("[onboarding] Cloud fast-track failed:", err);
-        // Fall through to existing logic as fallback
-      }
-    }
-
-    const style = resolveSelectedOnboardingStyle({
-      styles: onboardingOptions.styles,
-      onboardingStyle,
-      selectedVrmIndex,
-      uiLanguage,
-    });
-    const systemPrompt = style?.system
-      ? style.system.replace(/\{\{name\}\}/g, onboardingName)
-      : `You are ${onboardingName}, an autonomous AI agent powered by elizaOS. ${onboardingOptions.sharedStyleRules}`;
-    onboardingFinishBusyRef.current = true;
-    setOnboardingRestarting(true);
-    onboardingFinishSavingRef.current = true;
-
-    try {
-      let connection =
-        buildOnboardingConnectionConfig({
-          onboardingRunMode,
-          onboardingCloudProvider,
-          onboardingProvider,
-          onboardingApiKey,
-          onboardingVoiceProvider,
-          onboardingVoiceApiKey,
-          onboardingPrimaryModel,
-          onboardingOpenRouterModel,
-          onboardingRemoteConnected,
-          onboardingRemoteApiBase,
-          onboardingRemoteToken,
-          onboardingSmallModel,
-          onboardingLargeModel,
-        }) ?? onboardingResumeConnectionRef.current;
-
-      // If connection is still null (e.g. after a permissions restart wiped
-      // form state), try one more time by re-deriving from the server config.
-      if (!connection) {
-        try {
-          const freshConfig = await client.getConfig();
-          connection = deriveOnboardingResumeConnection(freshConfig);
-          if (connection) {
-            onboardingResumeConnectionRef.current = connection;
+          if (!attempt.onboardingSubmitted) {
+            setOnboardingHandoffPhase("saving");
+            await client.submitOnboarding({
+              name: onboardingName || defaultName,
+              bio: style?.bio ?? ["An autonomous AI agent."],
+              systemPrompt:
+                style?.system?.replace(
+                  /\{\{name\}\}/g,
+                  onboardingName || defaultName,
+                ) ??
+                `You are ${onboardingName || defaultName}, an autonomous AI agent powered by elizaOS.`,
+              style: style?.style,
+              adjectives: style?.adjectives,
+              postExamples: style?.postExamples,
+              messageExamples: style?.messageExamples,
+              topics: style?.topics,
+              avatarIndex: style?.avatarIndex ?? 1,
+              language: uiLanguage,
+              presetId: style?.id ?? "chen",
+              runMode: "cloud",
+              cloudProvider: "elizacloud",
+              smallModel: "moonshotai/kimi-k2-turbo",
+              largeModel: "moonshotai/kimi-k2-0905",
+            } as unknown as Parameters<typeof client.submitOnboarding>[0]);
+            attempt.onboardingSubmitted = true;
+            onboardingHandoffRetryStateRef.current = attempt;
+            try {
+              await persistOnboardingStyleVoice(style);
+            } catch (err) {
+              console.warn(
+                "[onboarding] Failed to persist cloud voice preset",
+                err,
+              );
+            }
           }
-        } catch {
-          /* config fetch failed — fall through to the error below */
-        }
-      }
 
-      if (!connection) {
-        const startOver = await confirmDesktopAction({
-          title: "Setup Incomplete",
-          message:
-            "Your connection settings could not be restored after restart.",
-          detail: 'Choose "Start Over" to begin setup again.',
-          type: "warning",
-          confirmLabel: "Start Over",
-          cancelLabel: "Cancel",
+          setOnboardingHandoffPhase("restarting");
+          setAgentStatus(await client.restartAgent());
+          setOnboardingHandoffPhase("bootstrapping");
+          await bootstrapConversationAfterAgentReady(
+            "onboarding:cloud_fast_track",
+            { forceFreshConversation: true },
+          );
+          completeOnboardingChatHandoff();
+          return;
+        }
+
+        const style = resolveSelectedOnboardingStyle({
+          styles: onboardingOptions.styles,
+          onboardingStyle,
+          selectedVrmIndex,
+          uiLanguage,
         });
-        if (startOver) {
-          clearPersistedOnboardingStep();
-          onboardingResumeConnectionRef.current = null;
-          setOnboardingStep("cloud_login");
-          setOnboardingMode("basic");
-          setOnboardingActiveGuide(null);
-          setOnboardingDeferredTasks([]);
-          setPostOnboardingChecklistDismissed(false);
-          setOnboardingName("Chen");
-          setOnboardingStyle("chen");
-          setSelectedVrmIndex(1);
-          setOnboardingRunMode("cloud");
-          setOnboardingCloudProvider("");
-          setOnboardingProvider("");
-          setOnboardingApiKey("");
-          setOnboardingVoiceProvider("");
-          setOnboardingVoiceApiKey("");
-          setOnboardingPrimaryModel("");
-          setOnboardingOpenRouterModel("");
-          setOnboardingRemoteConnected(false);
-          setOnboardingRemoteApiBase("");
-          setOnboardingRemoteToken("");
-          setOnboardingSmallModel("");
-          setOnboardingLargeModel("");
+        const systemPrompt = style?.system
+          ? style.system.replace(/\{\{name\}\}/g, onboardingName)
+          : `You are ${onboardingName}, an autonomous AI agent powered by elizaOS. ${onboardingOptions.sharedStyleRules}`;
+
+        let connection =
+          buildOnboardingConnectionConfig({
+            onboardingRunMode,
+            onboardingCloudProvider,
+            onboardingProvider,
+            onboardingApiKey,
+            onboardingVoiceProvider,
+            onboardingVoiceApiKey,
+            onboardingPrimaryModel,
+            onboardingOpenRouterModel,
+            onboardingRemoteConnected,
+            onboardingRemoteApiBase,
+            onboardingRemoteToken,
+            onboardingSmallModel,
+            onboardingLargeModel,
+          }) ?? onboardingResumeConnectionRef.current;
+
+        if (!connection) {
+          try {
+            const freshConfig = await client.getConfig();
+            connection = deriveOnboardingResumeConnection(freshConfig);
+            if (connection) {
+              onboardingResumeConnectionRef.current = connection;
+            }
+          } catch {
+            /* config fetch failed — fall through to the error below */
+          }
         }
-        return;
-      }
-      const rpcSel = onboardingRpcSelections as Record<string, string>;
-      const rpcK = onboardingRpcKeys as Record<string, string>;
-      const nextWalletConfig = buildWalletRpcUpdateRequest({
-        walletConfig,
-        rpcFieldValues: rpcK,
-        selectedProviders: {
-          evm: rpcSel.evm,
-          bsc: rpcSel.bsc,
-          solana: rpcSel.solana,
-        },
-      });
 
-      // For local mode: start the embedded agent first, then submit onboarding.
-      // For cloud/remote modes: the backend is already available via the cloud
-      // or remote connection.
-      const isSandboxMode =
-        onboardingRunMode === "cloud" &&
-        onboardingCloudProvider === "elizacloud";
-      const isLocalMode = onboardingRunMode === "local" || !onboardingRunMode;
-
-      if (isSandboxMode) {
-        // Provision a sandbox agent on Eliza Cloud
-        const cloudApiBase =
-          getBootConfig().cloudApiBase ?? "https://www.elizacloud.ai";
-
-        // Get the auth token from the cloud login state
-        const authToken = ((window as unknown as Record<string, unknown>)
-          .__ELIZA_CLOUD_AUTH_TOKEN__ ?? "") as string;
-
-        if (!authToken) {
+        if (!connection) {
           throw new Error(
-            "Eliza Cloud authentication required. Please log in first.",
+            "Your connection settings could not be restored after restart.",
           );
         }
 
-        await client.provisionCloudSandbox({
-          cloudApiBase,
-          authToken,
-          name: onboardingName,
-          bio: style?.bio ?? ["An autonomous AI agent."],
-          onProgress: (status, detail) => {
-            console.log(`[Sandbox] ${status}: ${detail ?? ""}`);
+        const rpcSel = onboardingRpcSelections as Record<string, string>;
+        const rpcK = onboardingRpcKeys as Record<string, string>;
+        const nextWalletConfig = buildWalletRpcUpdateRequest({
+          walletConfig,
+          rpcFieldValues: rpcK,
+          selectedProviders: {
+            evm: rpcSel.evm,
+            bsc: rpcSel.bsc,
+            solana: rpcSel.solana,
           },
         });
 
-        // Point the client at the cloud API (which proxies to the bridge)
-        client.setBaseUrl(cloudApiBase);
-        client.setToken(authToken);
+        const isSandboxMode =
+          onboardingRunMode === "cloud" &&
+          onboardingCloudProvider === "elizacloud";
+        const isLocalMode = onboardingRunMode === "local" || !onboardingRunMode;
 
-        // Persist connection for future restarts
-        savePersistedConnectionMode({
-          runMode: "cloud",
-          cloudApiBase,
-          cloudAuthToken: authToken,
-        });
-      } else if (isLocalMode) {
-        // Start the embedded agent via desktop RPC (Electrobun) or native plugin
-        try {
-          await invokeDesktopBridgeRequest({
-            rpcMethod: "agentStart",
-            ipcChannel: "agent:start",
+        if (isSandboxMode) {
+          if (!attempt.skipCloudProvisioning) {
+            setOnboardingHandoffPhase("provisioning");
+            const cloudApiBase =
+              getBootConfig().cloudApiBase ?? "https://www.elizacloud.ai";
+            const authToken = ((window as unknown as Record<string, unknown>)
+              .__ELIZA_CLOUD_AUTH_TOKEN__ ?? "") as string;
+
+            if (!authToken) {
+              throw new Error(
+                "Eliza Cloud authentication required. Please log in first.",
+              );
+            }
+
+            await client.provisionCloudSandbox({
+              cloudApiBase,
+              authToken,
+              name: onboardingName,
+              bio: style?.bio ?? ["An autonomous AI agent."],
+              onProgress: (status, detail) => {
+                console.log(`[Sandbox] ${status}: ${detail ?? ""}`);
+              },
+            });
+
+            client.setBaseUrl(cloudApiBase);
+            client.setToken(authToken);
+            savePersistedConnectionMode({
+              runMode: "cloud",
+              cloudApiBase,
+              cloudAuthToken: authToken,
+            });
+            attempt.skipCloudProvisioning = true;
+            attempt.cloudApiBase = cloudApiBase;
+            attempt.authToken = authToken;
+            onboardingHandoffRetryStateRef.current = attempt;
+          } else {
+            if (attempt.cloudApiBase) {
+              client.setBaseUrl(attempt.cloudApiBase);
+            }
+            if (attempt.authToken) {
+              client.setToken(attempt.authToken);
+            }
+            savePersistedConnectionMode({
+              runMode: "cloud",
+              cloudApiBase: attempt.cloudApiBase,
+              cloudAuthToken: attempt.authToken,
+            });
+          }
+        } else if (isLocalMode) {
+          setOnboardingHandoffPhase("starting-backend");
+          try {
+            await invokeDesktopBridgeRequest({
+              rpcMethod: "agentStart",
+              ipcChannel: "agent:start",
+            });
+          } catch {
+            try {
+              const agentPluginId = "@miladyai/capacitor-agent";
+              const { Agent } = await import(/* @vite-ignore */ agentPluginId);
+              await Agent.start();
+            } catch {
+              /* dev mode where agent is already running */
+            }
+          }
+
+          const localDeadline = Date.now() + 120_000;
+          let pollMs = 1000;
+          while (Date.now() < localDeadline) {
+            try {
+              await client.getAuthStatus();
+              break;
+            } catch {
+              await new Promise((r) => setTimeout(r, pollMs));
+              pollMs = Math.min(pollMs * 1.5, 5000);
+            }
+          }
+
+          savePersistedConnectionMode({ runMode: "local" });
+        } else if (
+          onboardingRunMode === "cloud" &&
+          onboardingCloudProvider === "remote"
+        ) {
+          savePersistedConnectionMode({
+            runMode: "remote",
+            remoteApiBase: onboardingRemoteApiBase,
+            remoteAccessToken: onboardingRemoteToken || undefined,
           });
-        } catch {
-          // May not be on desktop — try the Capacitor agent plugin fallback.
-          // Use a variable to prevent Vite static analysis from failing on
-          // this optional peer dependency (only available in milady app builds).
-          try {
-            const agentPluginId = "@miladyai/capacitor-agent";
-            const { Agent } = await import(/* @vite-ignore */ agentPluginId);
-            await Agent.start();
-          } catch {
-            // Not on desktop or native — dev mode where agent is already running
-          }
         }
 
-        // Wait for the local backend to become reachable.
-        // Use exponential backoff to avoid flooding the console with
-        // "access control checks" errors while the server starts.
-        const localDeadline = Date.now() + 120_000;
-        let pollMs = 1000;
-        while (Date.now() < localDeadline) {
+        if (!attempt.onboardingSubmitted) {
+          const sandboxMode = isSandboxMode ? "standard" : "off";
+          setOnboardingHandoffPhase("saving");
+          await client.submitOnboarding({
+            name: onboardingName,
+            sandboxMode: sandboxMode as "off",
+            bio: style?.bio ?? ["An autonomous AI agent."],
+            systemPrompt,
+            style: style?.style,
+            adjectives: style?.adjectives,
+            topics: style?.topics,
+            postExamples: style?.postExamples,
+            messageExamples: style?.messageExamples,
+            avatarIndex: style?.avatarIndex ?? selectedVrmIndex,
+            language: uiLanguage,
+            presetId: (style?.id ?? onboardingStyle) || "chen",
+            connection,
+            walletConfig: nextWalletConfig,
+          } as Parameters<typeof client.submitOnboarding>[0]);
+          attempt.onboardingSubmitted = true;
+          onboardingHandoffRetryStateRef.current = attempt;
           try {
-            await client.getAuthStatus();
-            break;
-          } catch {
-            await new Promise((r) => setTimeout(r, pollMs));
-            pollMs = Math.min(pollMs * 1.5, 5000);
+            await persistOnboardingStyleVoice(style);
+          } catch (err) {
+            console.warn(
+              "[onboarding] Failed to persist selected voice preset",
+              err,
+            );
           }
+
+          await new Promise((r) => setTimeout(r, 1000));
         }
 
-        savePersistedConnectionMode({ runMode: "local" });
-      } else if (
-        onboardingRunMode === "cloud" &&
-        onboardingCloudProvider === "remote"
-      ) {
-        // Remote mode — user provided a custom backend URL
-        savePersistedConnectionMode({
-          runMode: "remote",
-          remoteApiBase: onboardingRemoteApiBase,
-          remoteAccessToken: onboardingRemoteToken || undefined,
-        });
-      }
-
-      const sandboxMode = isSandboxMode ? "standard" : "off";
-
-      await client.submitOnboarding({
-        name: onboardingName,
-        sandboxMode: sandboxMode as "off",
-        bio: style?.bio ?? ["An autonomous AI agent."],
-        systemPrompt,
-        style: style?.style,
-        adjectives: style?.adjectives,
-        topics: style?.topics,
-        postExamples: style?.postExamples,
-        messageExamples: style?.messageExamples,
-        avatarIndex: style?.avatarIndex ?? selectedVrmIndex,
-        language: uiLanguage,
-        presetId: (style?.id ?? onboardingStyle) || "chen",
-        connection,
-        walletConfig: nextWalletConfig,
-      } as Parameters<typeof client.submitOnboarding>[0]);
-      try {
-        await persistOnboardingStyleVoice(style);
-      } catch (err) {
-        console.warn(
-          "[onboarding] Failed to persist selected voice preset",
-          err,
-        );
-      }
-
-      // Give the backend a moment to finish persisting the config updates
-      // (both from our compat interception and upstream ElizaOS core)
-      // before we abruptly restart the agent process.
-      await new Promise((r) => setTimeout(r, 1000));
-
-      try {
+        setOnboardingHandoffPhase("restarting");
         setAgentStatus(await client.restartAgent());
-      } catch {
-        /* ignore */
+        setOnboardingHandoffPhase("bootstrapping");
+        await bootstrapConversationAfterAgentReady("onboarding:full_finish", {
+          forceFreshConversation: true,
+        });
+        completeOnboardingChatHandoff();
+      } catch (err) {
+        failOnboardingChatHandoff(err);
+      } finally {
+        onboardingFinishSavingRef.current = false;
+        onboardingFinishBusyRef.current = false;
+        setOnboardingRestarting(false);
       }
-      await bootstrapConversationAfterAgentReady("onboarding:full_finish");
-      clearPersistedOnboardingStep();
-      onboardingResumeConnectionRef.current = null;
-      onboardingCompletionCommittedRef.current = true;
-      setOnboardingMode("basic");
-      setOnboardingActiveGuide(null);
-      setPostOnboardingChecklistDismissed(false);
-      setOnboardingDetectedProviders(
-        onboardingDetectedProviders.map((provider) => {
-          const { apiKey: _, ...rest } = provider;
-          return rest;
-        }) as AppState["onboardingDetectedProviders"],
-      );
-      setOnboardingComplete(true);
-      initialTabSetRef.current = true;
-      setTab("character-select");
-      void loadCharacter();
-    } catch (err) {
-      const startOver = await confirmDesktopAction({
-        title: "Setup Failed",
-        message: `${err instanceof Error ? err.message : "network error"}`,
-        detail:
-          'You can retry, or choose "Start Over" to begin setup from scratch.',
-        type: "warning",
-        confirmLabel: "Start Over",
-        cancelLabel: "Retry",
-      });
-      if (startOver) {
-        clearPersistedOnboardingStep();
-        onboardingResumeConnectionRef.current = null;
-        setOnboardingStep("cloud_login");
-        setOnboardingMode("basic");
-        setOnboardingActiveGuide(null);
-        setOnboardingDeferredTasks([]);
-        setPostOnboardingChecklistDismissed(false);
-        setOnboardingName("Chen");
-        setOnboardingStyle("chen");
-        setSelectedVrmIndex(1);
-        setOnboardingRunMode("cloud");
-        setOnboardingCloudProvider("");
-        setOnboardingProvider("");
-        setOnboardingApiKey("");
-        setOnboardingVoiceProvider("");
-        setOnboardingVoiceApiKey("");
-        setOnboardingPrimaryModel("");
-        setOnboardingOpenRouterModel("");
-        setOnboardingRemoteConnected(false);
-        setOnboardingRemoteApiBase("");
-        setOnboardingRemoteToken("");
-        setOnboardingSmallModel("");
-        setOnboardingLargeModel("");
-      }
-    } finally {
-      onboardingFinishSavingRef.current = false;
-      onboardingFinishBusyRef.current = false;
-      setOnboardingRestarting(false);
+    },
+    [
+      agentStatus,
+      onboardingRestarting,
+      onboardingOptions,
+      onboardingStyle,
+      onboardingName,
+      onboardingRunMode,
+      onboardingCloudProvider,
+      onboardingSmallModel,
+      onboardingLargeModel,
+      onboardingProvider,
+      onboardingApiKey,
+      onboardingRemoteApiBase,
+      onboardingRemoteConnected,
+      onboardingRemoteToken,
+      onboardingOpenRouterModel,
+      onboardingPrimaryModel,
+      onboardingVoiceProvider,
+      onboardingVoiceApiKey,
+      selectedVrmIndex,
+      uiLanguage,
+      onboardingRpcSelections,
+      onboardingRpcKeys,
+      walletConfig,
+      onboardingResumeConnectionRef,
+      onboardingFinishBusyRef,
+      onboardingFinishSavingRef,
+      setOnboardingRestarting,
+      prepareOnboardingChatHandoffAttempt,
+      bootstrapConversationAfterAgentReady,
+      completeOnboardingChatHandoff,
+      failOnboardingChatHandoff,
+    ],
+  );
+
+  const retryOnboardingHandoff = useCallback(async () => {
+    const retryState = onboardingHandoffRetryStateRef.current;
+    if (!retryState || onboardingRestarting) {
+      return;
     }
-  }, [
-    onboardingRestarting,
-    onboardingOptions,
-    onboardingStyle,
-    onboardingName,
-    onboardingRunMode,
-    onboardingCloudProvider,
-    onboardingSmallModel,
-    onboardingLargeModel,
-    onboardingProvider,
-    onboardingApiKey,
-    onboardingDetectedProviders,
-    onboardingRemoteApiBase,
-    onboardingRemoteConnected,
-    onboardingRemoteToken,
-    onboardingOpenRouterModel,
-    onboardingPrimaryModel,
-    selectedVrmIndex,
-    uiLanguage,
-    onboardingRpcSelections,
-    onboardingRpcKeys,
-    walletConfig,
-    bootstrapConversationAfterAgentReady,
-    setTab,
-    elizaCloudConnected,
-    onboardingCompletionCommittedRef,
-    onboardingFinishBusyRef,
-    onboardingFinishSavingRef,
-    onboardingResumeConnectionRef,
-    setAgentStatus,
-    setOnboardingActiveGuide,
-    setOnboardingApiKey,
-    setOnboardingCloudProvider,
-    setOnboardingComplete,
-    setOnboardingDeferredTasks,
-    setOnboardingDetectedProviders,
-    setOnboardingLargeModel,
-    setOnboardingMode,
-    setOnboardingName,
-    setOnboardingOpenRouterModel,
-    setOnboardingPrimaryModel,
-    setOnboardingProvider,
-    setOnboardingRemoteApiBase,
-    setOnboardingRemoteConnected,
-    setOnboardingRemoteToken,
-    setOnboardingRestarting,
-    setOnboardingRunMode,
-    setOnboardingSmallModel,
-    setOnboardingStep,
-    setOnboardingStyle,
-    setPostOnboardingChecklistDismissed,
-    setSelectedVrmIndex,
-    loadCharacter,
-  ]);
+    await runOnboardingChatHandoff(retryState.mode, retryState);
+  }, [onboardingRestarting, runOnboardingChatHandoff]);
+
+  const cancelOnboardingHandoff = useCallback(() => {
+    onboardingHandoffRetryStateRef.current = null;
+    setChatAwaitingGreeting(false);
+    setOnboardingHandoffError(null);
+    setOnboardingHandoffPhase("idle");
+    if (
+      agentStatus?.state === "starting" ||
+      agentStatus?.state === "restarting"
+    ) {
+      void client
+        .getStatus()
+        .then((status) => setAgentStatus(status))
+        .catch(() => {
+          /* ignore */
+        });
+    }
+  }, [agentStatus, setAgentStatus]);
+
+  const handleOnboardingFinish = useCallback(async () => {
+    await runOnboardingChatHandoff(
+      elizaCloudConnected ? "cloud_fast_track" : "full",
+    );
+  }, [elizaCloudConnected, runOnboardingChatHandoff]);
 
   // ── Onboarding motion (flow graph: packages/app-core/src/onboarding/flow.ts) ──
   // WHY split from flow.ts: advance/revert need handleCloudLoginRef, finish,
@@ -6248,10 +6317,9 @@ function AppProviderInner({
     }
   }, [pollCloudCredits, setActionNotice]);
 
-  const handleCloudOnboardingFinish = useCallback(() => {
-    setOnboardingComplete(true);
-    setTab("chat");
-  }, [setOnboardingComplete, setTab]);
+  const handleCloudOnboardingFinish = useCallback(async () => {
+    await runOnboardingChatHandoff("cloud_fast_track");
+  }, [runOnboardingChatHandoff]);
 
   // ── Updates ────────────────────────────────────────────────────────
 
@@ -7815,6 +7883,8 @@ function AppProviderInner({
     onboardingComplete,
     onboardingUiRevealNonce,
     onboardingLoading,
+    onboardingHandoffPhase,
+    onboardingHandoffError,
     startupPhase,
     startupStatus,
     startupError,
@@ -8143,6 +8213,8 @@ function AppProviderInner({
     handleCharacterMessageExamplesInput,
     handleOnboardingNext,
     handleOnboardingBack,
+    retryOnboardingHandoff,
+    cancelOnboardingHandoff,
     handleOnboardingJumpToStep,
     goToOnboardingStep,
     handleOnboardingRemoteConnect,

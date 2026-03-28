@@ -28,15 +28,37 @@ export interface DefaultKnowledgeDocumentDefinition {
   metadata?: Record<string, unknown>;
 }
 
+export const MILADY_OVERVIEW_TEXT =
+  "Milady is an autonomous agent powered by elizaOS, the agent framework. Users can ask Milady to write code, add new skills, and trigger recurring workflows with heartbeats that run at regular intervals. Eliza Cloud is an open source cloud backend that simplifies deploying and delivering Milady.";
+
+export const ELIZA_HISTORY_TEXT =
+  "ELIZA was created by Joseph Weizenbaum at MIT in the mid-1960s and is widely regarded as one of the earliest chatbots. Its best-known script, DOCTOR, used pattern matching to imitate a Rogerian psychotherapist and showed how simple language rules could feel surprisingly conversational. ELIZA helped define the history of chatbots and influenced later work on conversational agents.";
+
 export const DEFAULT_KNOWLEDGE_DOCUMENTS: readonly DefaultKnowledgeDocumentDefinition[] =
   [
     {
-      key: "default-test",
+      key: "milady-overview",
       version: 1,
-      filename: "milady-default-knowledge.txt",
+      filename: "milady-overview.txt",
       contentType: "text/plain",
-      text: "this is a test",
-      fragments: [{ text: "this is a test" }],
+      text: MILADY_OVERVIEW_TEXT,
+      fragments: [
+        {
+          text: MILADY_OVERVIEW_TEXT,
+        },
+      ],
+    },
+    {
+      key: "eliza-history",
+      version: 1,
+      filename: "eliza-history.txt",
+      contentType: "text/plain",
+      text: ELIZA_HISTORY_TEXT,
+      fragments: [
+        {
+          text: ELIZA_HISTORY_TEXT,
+        },
+      ],
     },
   ];
 

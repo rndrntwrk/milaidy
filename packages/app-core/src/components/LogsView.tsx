@@ -103,10 +103,11 @@ export function LogsView() {
       {/* Filters row — filters left, refresh right */}
       <section className={`${LOGS_PANEL_CLASSNAME} space-y-3 p-3 sm:p-4`}>
         <div className="space-y-1">
-          <div className="text-sm font-semibold text-txt">Filter logs</div>
+          <div className="text-sm font-semibold text-txt">
+            {t("logsview.FilterLogs")}
+          </div>
           <p className="max-w-3xl text-xs leading-5 text-muted">
-            Narrow the runtime stream by text, severity, source, or tag so the
-            current incident stands out without losing the surrounding context.
+            {t("logsview.FilterLogsDescription")}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -208,12 +209,20 @@ export function LogsView() {
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <div className="rounded-full border border-border/40 bg-bg-hover/60 px-2.5 py-1 text-muted tabular-nums">
-            Showing {filteredLogs.length}{" "}
-            {filteredLogs.length === 1 ? "entry" : "entries"}
+            {t(
+              filteredLogs.length === 1
+                ? "logsview.ShowingEntry"
+                : "logsview.ShowingEntries",
+              { count: filteredLogs.length },
+            )}
           </div>
           <div className="rounded-full border border-border/35 bg-bg/80 px-2.5 py-1 text-muted tabular-nums">
-            {activeFilterCount}{" "}
-            {activeFilterCount === 1 ? "active filter" : "active filters"}
+            {t(
+              activeFilterCount === 1
+                ? "logsview.ActiveFilter"
+                : "logsview.ActiveFilters",
+              { count: activeFilterCount },
+            )}
           </div>
         </div>
       </section>
@@ -228,21 +237,25 @@ export function LogsView() {
             className="m-1 min-h-[16rem] rounded-xl border-border/35 bg-bg-hover/60 px-6 py-10"
             description={
               hasActiveFilters
-                ? "Try broadening the current log filters to bring entries back into view."
-                : "New runtime and service events will appear here as the system emits them."
+                ? t("logsview.NoLogEntriesMatchingFiltersDescription")
+                : t("logsview.NoLogEntriesYetDescription")
             }
-            title={`${t("logsview.NoLogEntries")}${hasActiveFilters ? " matching filters" : " yet"}.`}
+            title={t(
+              hasActiveFilters
+                ? "logsview.NoLogEntriesMatchingFilters"
+                : "logsview.NoLogEntriesYet",
+            )}
           />
         ) : (
           <div
             className={`${DESKTOP_INSET_PANEL_CLASSNAME} overflow-hidden rounded-[18px]`}
           >
             <div className="hidden grid-cols-[5.75rem_3.5rem_5rem_14rem_minmax(0,1fr)] gap-3 border-b border-border/40 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted md:grid">
-              <span>Time</span>
-              <span>Level</span>
-              <span>Source</span>
-              <span>Tags</span>
-              <span>Message</span>
+              <span>{t("logsview.Time")}</span>
+              <span>{t("logsview.Level")}</span>
+              <span>{t("logsview.Source")}</span>
+              <span>{t("logsview.Tags")}</span>
+              <span>{t("logsview.Message")}</span>
             </div>
             {filteredLogs.map((entry: LogEntry) => (
               <div

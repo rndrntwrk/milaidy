@@ -76,10 +76,10 @@ describe("DesktopTalkModePanel", () => {
     const root = renderer.root;
 
     await act(async () => {
-      findButtonByText(root, "Start Talk Mode").props.onClick();
+      findButtonByText(root, "voiceconfigview.StartTalkMode").props.onClick();
     });
     await act(async () => {
-      findButtonByText(root, "Speak Test Phrase").props.onClick();
+      findButtonByText(root, "voiceconfigview.SpeakTestPhrase").props.onClick();
     });
 
     expect(invokeDesktopBridgeRequestMock).toHaveBeenCalledWith(

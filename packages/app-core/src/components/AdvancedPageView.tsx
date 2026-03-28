@@ -43,41 +43,56 @@ type SubTab =
   | "desktop"
   | "logs";
 
-const SUB_TABS: Array<{ id: SubTab; label: string; description: string }> = [
+const SUB_TABS: Array<{
+  id: SubTab;
+  labelKey: string;
+  descriptionKey: string;
+}> = [
   // {
   //   id: "actions",
-  //   label: "Actions",
-  //   description: "Custom agent commands and workflows",
+  //   labelKey: "advancedpageview.Actions",
+  //   descriptionKey: "advancedpageview.ActionsDescription",
   // },
-  { id: "plugins", label: "Plugins", description: "Features and connectors" },
-  { id: "skills", label: "Skills", description: "Custom agent skills" },
+  {
+    id: "plugins",
+    labelKey: "advancedpageview.Plugins",
+    descriptionKey: "advancedpageview.PluginsDescription",
+  },
+  {
+    id: "skills",
+    labelKey: "advancedpageview.Skills",
+    descriptionKey: "advancedpageview.SkillsDescription",
+  },
   // {
   //   id: "fine-tuning",
-  //   label: "Fine-Tuning",
-  //   description: "Dataset and model training workflows",
+  //   labelKey: "advancedpageview.FineTuning",
+  //   descriptionKey: "advancedpageview.FineTuningDescription",
   // },
   {
     id: "trajectories",
-    label: "Trajectories",
-    description: "LLM call history and analysis",
+    labelKey: "advancedpageview.Trajectories",
+    descriptionKey: "advancedpageview.TrajectoriesDescription",
   },
   {
     id: "runtime",
-    label: "Runtime",
-    description: "Deep runtime object introspection and load order",
+    labelKey: "advancedpageview.Runtime",
+    descriptionKey: "advancedpageview.RuntimeDescription",
   },
   {
     id: "database",
-    label: "Database",
-    description: "Tables, media, and vector browser",
+    labelKey: "advancedpageview.Database",
+    descriptionKey: "advancedpageview.DatabaseDescription",
   },
   {
     id: "desktop",
-    label: "Desktop",
-    description:
-      "Native runtime diagnostics, detached windows, file dialogs, clipboard, and shell controls",
+    labelKey: "advancedpageview.Desktop",
+    descriptionKey: "advancedpageview.DesktopDescription",
   },
-  { id: "logs", label: "Logs", description: "Runtime and service logs" },
+  {
+    id: "logs",
+    labelKey: "advancedpageview.Logs",
+    descriptionKey: "advancedpageview.LogsDescription",
+  },
 ];
 
 const MODAL_SUB_TABS = SUB_TABS.filter(
@@ -119,7 +134,7 @@ function mapTabToSubTab(tab: Tab): SubTab {
 }
 
 export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
-  const { tab, setTab } = useApp();
+  const { tab, setTab, t } = useApp();
   const [selectedTrajectoryId, setSelectedTrajectoryId] = useState<
     string | null
   >(null);
@@ -133,11 +148,13 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
   };
 
   const renderSubTabButton = (
-    subTab: { id: SubTab; label: string; description: string },
+    subTab: { id: SubTab; labelKey: string; descriptionKey: string },
     options?: { compact?: boolean },
   ) => {
     const isActive = currentSubTab === subTab.id;
     const compact = options?.compact ?? false;
+    const label = t(subTab.labelKey);
+    const description = t(subTab.descriptionKey);
 
     return (
       <Button
@@ -154,7 +171,7 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
             : ADVANCED_TAB_BUTTON_INACTIVE_CLASSNAME
         }`}
         onClick={() => handleSubTabChange(subTab.id)}
-        title={subTab.description}
+        title={description}
         data-testid={`advanced-subtab-${subTab.id}`}
       >
         <div className="text-left">
@@ -163,7 +180,7 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
               isActive ? "font-semibold text-txt" : "font-medium"
             }`}
           >
-            {subTab.label}
+            {label}
           </div>
         </div>
       </Button>
@@ -214,7 +231,7 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
         <div className={ADVANCED_SHELL_NAV_SURFACE_CLASSNAME}>
           <nav
             className={`${DESKTOP_SEGMENTED_GROUP_CLASSNAME} ${ADVANCED_SHELL_NAV_SCROLL_CLASSNAME}`}
-            aria-label="Advanced navigation"
+            aria-label={t("aria.advancedNavigation")}
             data-testid="advanced-subtab-nav"
           >
             {tabs.map((subTab) => renderSubTabButton(subTab))}

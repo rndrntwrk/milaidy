@@ -56,7 +56,7 @@ const HEADER_MOBILE_NAV_BUTTON_INACTIVE_CLASSNAME =
 
 export function Header({
   mobileLeft,
-  transparent = false,
+  transparent: _transparent = false,
   hideCloudCredits = false,
 }: HeaderProps) {
   const {
@@ -80,9 +80,6 @@ export function Header({
     setUiTheme,
     chatAgentVoiceMuted,
     handleNewConversation,
-    handleSaveCharacter,
-    characterSaving,
-    characterSaveSuccess,
     conversationMessages,
     chatLastUsage,
     t,
@@ -139,7 +136,6 @@ export function Header({
         ? "character"
         : "desktop";
   const isDesktopShell = activeShellView === "desktop";
-  const useMinimalHeaderChrome = transparent || !isDesktopShell;
   const showNavigationMenu = isDesktopShell;
   const showCloudStatus = isDesktopShell && !hideCloudCredits;
   const headerFrameClassName = "";
@@ -275,6 +271,9 @@ export function Header({
               }
               rightExtras={
                 <>
+                  {mobileLeft ? (
+                    <div className="shrink-0 sm:hidden">{mobileLeft}</div>
+                  ) : null}
                   {chatInferenceNotice ? (
                     <InferenceCloudAlertButton
                       notice={chatInferenceNotice}
@@ -325,9 +324,6 @@ export function Header({
                 ) : null
               }
             >
-              {mobileLeft ? (
-                <div className="flex sm:hidden">{mobileLeft}</div>
-              ) : null}
               {showNavigationMenu ? (
                 <nav className="scrollbar-hide hidden flex-1 items-center justify-start gap-1.5 overflow-x-auto whitespace-nowrap px-2 sm:flex sm:pl-4">
                   {tabGroups.map((group: TabGroup) => {

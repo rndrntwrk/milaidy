@@ -76,21 +76,15 @@ function renderControls(
 }
 
 describe("ShellHeaderControls", () => {
-  it("pins compact companion actions to the mobile header edges", () => {
+  it("keeps companion actions centered in the header on mobile", () => {
     mockUseMediaQuery.mockReturnValue(true);
 
     const tree = renderControls();
     const root = tree.root;
     const headerRoot = root.findByProps({ "data-no-camera-drag": "true" });
     const shellToggle = root.findByProps({ "data-testid": "ui-shell-toggle" });
-    const mobileVoice = root.findByProps({
-      "data-testid": "companion-header-mobile-voice",
-    });
-    const mobileNewChat = root.findByProps({
-      "data-testid": "companion-header-mobile-new-chat",
-    });
-    const mobileActions = root.findByProps({
-      "data-testid": "companion-header-mobile-actions",
+    const companionControls = root.findByProps({
+      "data-testid": "companion-header-chat-controls",
     });
     const rightControls = root.findByProps({
       "data-testid": "shell-header-right-controls",
@@ -103,23 +97,22 @@ describe("ShellHeaderControls", () => {
       (node) => node.props["aria-label"] === "companion.newChat",
     );
 
-    expect(String(headerRoot.props.className)).toContain("grid");
-    expect(String(shellToggle.parent?.props.className)).toContain(
-      "row-start-1",
+    expect(String(headerRoot.props.className)).toContain("flex");
+    expect(String(headerRoot.props.className)).not.toContain("grid");
+    expect(String(shellToggle.parent?.props.className)).toContain("shrink-0");
+    expect(String(companionControls.props.className)).toContain(
+      "justify-center",
     );
-    expect(String(rightControls.props.className)).toContain("row-start-1");
-    expect(String(mobileActions.props.className)).toContain("row-start-2");
-    expect(String(mobileActions.props.className)).toContain("justify-between");
-    expect(String(mobileVoice.props.className)).toContain("justify-start");
-    expect(String(mobileNewChat.props.className)).toContain("justify-end");
-    expect(String(voiceButton?.props.className)).toContain("rounded-xl");
-    expect(String(voiceButton?.props.className)).toContain(
-      "pointer-events-auto",
-    );
-    expect(String(newChatButton?.props.className)).toContain("rounded-xl");
-    expect(String(newChatButton?.props.className)).toContain(
-      "pointer-events-auto",
-    );
+    expect(
+      root.findAllByProps({
+        "data-testid": "companion-header-mobile-actions",
+      }),
+    ).toHaveLength(0);
+    expect(String(rightControls.props.className)).toContain("justify-end");
+    expect(String(voiceButton?.props.className)).toContain("w-11");
+    expect(String(voiceButton?.props.className)).not.toContain("gap-1.5");
+    expect(String(newChatButton?.props.className)).toContain("w-11");
+    expect(String(newChatButton?.props.className)).not.toContain("gap-1.5");
     expect(typeof voiceButton?.props.onPointerDown).toBe("function");
     expect(typeof newChatButton?.props.onPointerDown).toBe("function");
   });
@@ -184,9 +177,11 @@ describe("ShellHeaderControls", () => {
     expect(String(rightControls.props.className)).toContain("justify-end");
     expect(String(voiceButton?.props.className)).toContain("backdrop-blur-xl");
     expect(String(voiceButton?.props.className)).toContain("ring-white/6");
+    expect(String(voiceButton?.props.className)).toContain("var(--card)_72%");
     expect(String(newChatButton?.props.className)).toContain(
       "backdrop-blur-xl",
     );
+    expect(String(newChatButton?.props.className)).toContain("var(--bg)_44%");
     const rightChildrenIds = rightControls.children.map((child) =>
       typeof child === "object" && child !== null && "props" in child
         ? (child.props["data-testid"] ?? null)

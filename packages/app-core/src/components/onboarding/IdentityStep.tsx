@@ -19,6 +19,7 @@ import {
   type CharacterRosterEntry,
   resolveRosterEntries,
 } from "../CharacterRoster";
+import { resolveCharacterGreetingAnimation } from "../character-greeting";
 import { buildPreviewTtsRequestPlans } from "./identity-preview-tts";
 
 import {
@@ -88,15 +89,19 @@ export function IdentityStep({
       const requestId = ++previewRequestIdRef.current;
       const isCurrentRequest = () => previewRequestIdRef.current === requestId;
 
-      const animationPath =
-        entry.greetingAnimation?.trim() || "animations/emotes/greeting.fbx";
-      dispatchAppEmoteEvent({
-        emoteId: "greeting",
-        path: `/${animationPath.replace(/^\/+/, "")}`,
-        duration: 2.5,
-        loop: false,
-        showOverlay: false,
+      const animationPath = resolveCharacterGreetingAnimation({
+        avatarIndex: entry.avatarIndex,
+        greetingAnimation: entry.greetingAnimation,
       });
+      if (animationPath) {
+        dispatchAppEmoteEvent({
+          emoteId: "greeting",
+          path: `/${animationPath}`,
+          duration: 2.5,
+          loop: false,
+          showOverlay: false,
+        });
+      }
 
       const catchphrase = entry.catchphrase?.trim();
       if (!catchphrase || typeof window === "undefined") return;

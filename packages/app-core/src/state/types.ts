@@ -68,6 +68,15 @@ export type CompanionVrmPowerMode = "quality" | "balanced" | "efficiency";
 /** When to cap the companion VRM loop at ~half the display refresh rate. */
 export type CompanionHalfFramerateMode = "off" | "when_saving_power" | "always";
 export type ShellView = "companion" | "character" | "desktop";
+export type OnboardingHandoffPhase =
+  | "idle"
+  | "fading"
+  | "provisioning"
+  | "starting-backend"
+  | "saving"
+  | "restarting"
+  | "bootstrapping"
+  | "error";
 
 /** Emitted after each tab/shell-related layout commit (see `navigation` on app context). */
 export interface TabCommittedDetail {
@@ -284,6 +293,8 @@ export interface AppState {
   /** Incremented on agent reset so onboarding UI shows immediately (not stuck behind VRM reveal). */
   onboardingUiRevealNonce: number;
   onboardingLoading: boolean;
+  onboardingHandoffPhase: OnboardingHandoffPhase;
+  onboardingHandoffError: string | null;
   startupPhase: StartupPhase;
   startupError: StartupErrorState | null;
   authRequired: boolean;
@@ -757,6 +768,8 @@ export interface AppActions {
   // Onboarding
   handleOnboardingNext: (options?: OnboardingNextOptions) => Promise<void>;
   handleOnboardingBack: () => void;
+  retryOnboardingHandoff: () => Promise<void>;
+  cancelOnboardingHandoff: () => void;
   /** Jump to an earlier step in the active track (sidebar); backward-only. */
   handleOnboardingJumpToStep: (step: OnboardingStep) => void;
   /** Set onboarding step and sync Flamina guide (e.g. welcome → connection). */
@@ -767,7 +780,7 @@ export interface AppActions {
   // Cloud
   handleCloudLogin: () => Promise<void>;
   handleCloudDisconnect: () => Promise<void>;
-  handleCloudOnboardingFinish: () => void;
+  handleCloudOnboardingFinish: () => Promise<void>;
 
   // Updates
   loadUpdateStatus: (force?: boolean) => Promise<void>;

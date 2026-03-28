@@ -29,10 +29,12 @@ export function RestartBanner() {
   const reasons = pendingRestartReasons;
   const text =
     reasons.length === 1
-      ? `${reasons[0]} - restart to apply.`
+      ? t("restartbanner.SingleReasonPending", { reason: reasons[0] })
       : reasons.length > 1
-        ? `${reasons.length} changes pending - restart to apply.`
-        : "Restart required to apply changes.";
+        ? t("restartbanner.MultipleReasonsPending", {
+            count: reasons.length,
+          })
+        : t("restartbanner.RestartRequired");
 
   return (
     <div
@@ -67,7 +69,9 @@ export function RestartBanner() {
             color: "var(--accent-foreground)",
           }}
         >
-          {restarting ? "Restarting..." : "Restart Now"}
+          {restarting
+            ? t("restartbanner.Restarting")
+            : t("restartbanner.RestartNow")}
         </Button>
       </div>
     </div>

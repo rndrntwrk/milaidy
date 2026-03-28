@@ -46,6 +46,7 @@ interface StepSpec {
   label: string;
   /** Action to take BEFORE screenshotting this step. null = first step. */
   setup: ((page: Page) => Promise<void>) | null;
+  expectedContent: readonly (string | RegExp)[];
 }
 
 interface CaptureRecord {
@@ -137,31 +138,42 @@ const ONBOARDING_PERMISSION_FLOW =
 
 async function waitForVisibleTextFallback(
   page: Page,
-  labels: readonly string[],
+  labels: readonly (string | RegExp)[],
+  options?: { exact?: boolean },
 ): Promise<void> {
   for (const label of labels) {
-    const locator = page.getByText(label, { exact: true }).first();
+    const locator =
+      typeof label === "string"
+        ? page.getByText(label, { exact: options?.exact ?? true }).first()
+        : page.getByText(label).first();
     if (await locator.isVisible().catch(() => false)) {
       await locator.waitFor({ state: "visible", timeout: READY_TIMEOUT_MS });
       return;
     }
   }
-  throw new Error(`Could not find any of: ${labels.join(", ")}`);
+  throw new Error(
+    `Could not find any of: ${labels.map((label) => String(label)).join(", ")}`,
+  );
 }
 
 async function clickVisibleTextFallback(
   page: Page,
-  labels: readonly string[],
+  labels: readonly (string | RegExp)[],
 ): Promise<void> {
   for (const label of labels) {
-    const locator = page.getByText(label, { exact: true }).first();
+    const locator =
+      typeof label === "string"
+        ? page.getByText(label, { exact: true }).first()
+        : page.getByText(label).first();
     if (!(await locator.isVisible().catch(() => false))) {
       continue;
     }
     await locator.click();
     return;
   }
-  throw new Error(`Could not find any of: ${labels.join(", ")}`);
+  throw new Error(
+    `Could not find any of: ${labels.map((label) => String(label)).join(", ")}`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -170,49 +182,87 @@ async function clickVisibleTextFallback(
 
 const steps: StepSpec[] = [
   {
-    id: "01-wakeUp",
-    label: "Wake Up — Welcome",
+    id: "01-cloud-login",
+    label: "Eliza Cloud — Account",
     setup: null, // First step, just navigate
+    expectedContent: [/Log in with Eliza Cloud/i, /^Skip$/i],
   },
   {
-    id: "02-connection-hosting",
-    label: "Connection — Hosting Selection",
+    id: "02-identity",
+    label: "Identity — Choose Agent",
     setup: async (page) => {
-      // The welcome CTA has shifted to "Get Started"; keep the old copy as a fallback.
-      await clickVisibleTextFallback(page, ["Get Started", "Create New Agent"]);
+      // Use the stable offline path so the full onboarding flow stays local.
+      const skipButton = page
+        .getByRole("button", { name: /^(Skip|Continue Offline)$/i })
+        .first();
+      await skipButton.click();
       await page.waitForTimeout(600);
     },
+    expectedContent: [/Continue/i, /Chen/i],
   },
   {
-    id: "03-connection-provider",
+    id: "03-connection-hosting",
+    label: "Connection — Hosting Selection",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: /Continue/i })
+        .first()
+        .click();
+      await page.waitForTimeout(600);
+    },
+    expectedContent: [/Where should .* run\?/i, /^Local$/i],
+  },
+  {
+    id: "04-connection-provider",
     label: "Connection — Provider Selection",
     setup: async (page) => {
       // Select local hosting to advance into the provider list.
-      await page.getByText("Local").first().click();
+      await page
+        .getByRole("button", { name: /Local/i })
+        .first()
+        .click();
       await page.waitForTimeout(600);
     },
+    expectedContent: [/Choose your AI provider/i, /Ollama/i],
   },
   {
-    id: "04-connection-config",
+    id: "05-connection-config",
     label: "Connection — Provider Config",
     setup: async (page) => {
       // Select a stable provider so the detail/config panel renders.
-      await page.getByText("Ollama").first().click();
+      await page
+        .getByRole("button", { name: /Ollama/i })
+        .first()
+        .click();
       await page.waitForTimeout(600);
     },
+    expectedContent: [/Local models/i, /Confirm/i],
   },
   {
-    id: "05-permissions",
+    id: "06-voice",
+    label: "Voice — Provider",
+    setup: async (page) => {
+      // Confirm the provider choice to advance to voice setup.
+      await page
+        .getByRole("button", { name: /Confirm/i })
+        .first()
+        .click();
+      await page.waitForTimeout(600);
+    },
+    expectedContent: [/Choose your preferred voice provider/i, /^Skip$/i],
+  },
+  {
+    id: "07-permissions",
     label: "Permissions — System Access",
     setup: async (page) => {
-      // Confirm the provider choice to advance to permissions.
-      await page.getByText("Confirm").first().click();
+      await clickVisibleTextFallback(page, ["Skip", "Next"]);
       await page.waitForTimeout(600);
     },
+    expectedContent: [/Browser Permissions/i, /Continue/i],
   },
   {
-    id: "06-identity",
-    label: "Identity — Choose Agent",
+    id: "08-activate",
+    label: "Activate — Ready",
     setup: async (page) => {
       // Default to the stable skip path. Grant-path captures can be enabled via
       // MILADY_DESIGN_REVIEW_PERMISSIONS_PATH=grant when needed.
@@ -233,15 +283,7 @@ const steps: StepSpec[] = [
       }
       await page.waitForTimeout(600);
     },
-  },
-  {
-    id: "07-activate",
-    label: "Activate — Ready",
-    setup: async (page) => {
-      // Continue from identity into the final ready screen.
-      await page.getByText("Continue").first().click();
-      await page.waitForTimeout(600);
-    },
+    expectedContent: [/Setup is complete/i, /^Enter$/i],
   },
 ];
 
@@ -553,15 +595,14 @@ async function captureOnboardingFlow(
     await waitForPageLoaded(page);
     await waitForSettled(page);
 
-    // Wait for loading screen to disappear and welcome screen to appear.
-    // The AvatarLoader renders as a fixed overlay while onboardingLoading=true.
-    // Wait for the current welcome CTA to be visible and clickable, which
-    // means the loading overlay has been removed.
+    // Wait for loading screen to disappear and the first onboarding screen to appear.
+    // The flow now opens directly on Eliza Cloud login instead of a welcome CTA.
     await waitForSettled(page);
     try {
       await waitForVisibleTextFallback(page, [
-        "Get Started",
-        "Create New Agent",
+        "Log in with Eliza Cloud",
+        "Continue Offline",
+        "Skip",
       ]);
     } catch {
       // If Welcome text not found, take diagnostic screenshot
@@ -608,6 +649,10 @@ async function captureOnboardingFlow(
           await step.setup(page);
           await waitForSettled(page);
         }
+
+        await waitForVisibleTextFallback(page, step.expectedContent, {
+          exact: false,
+        });
 
         // Take the screenshot
         const relativePath = path.posix.join(

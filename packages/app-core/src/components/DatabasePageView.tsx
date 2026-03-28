@@ -37,7 +37,7 @@ export function DatabasePageView() {
     <div
       className={DESKTOP_SEGMENTED_GROUP_CLASSNAME}
       role="tablist"
-      aria-label="Database views"
+      aria-label={t("aria.databaseViews")}
     >
       {dbTabs.map((tab) => {
         const isActive = databaseSubTab === tab.id;

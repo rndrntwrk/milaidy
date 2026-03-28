@@ -514,8 +514,13 @@ function DocumentViewer({ documentId }: { documentId: string | null }) {
         {!loading && !error && !doc && (
           <DesktopInsetEmptyStatePanel
             className="px-6 py-16"
-            description="Upload a file or choose an item from the sidebar to start viewing fragments and metadata."
-            title="No document selected"
+            description={t("knowledgeview.NoDocumentSelectedDesc", {
+              defaultValue:
+                "Upload a file or choose an item from the sidebar to start viewing fragments and metadata.",
+            })}
+            title={t("knowledgeview.NoDocumentSelected", {
+              defaultValue: "No document selected",
+            })}
           />
         )}
 
@@ -524,7 +529,9 @@ function DocumentViewer({ documentId }: { documentId: string | null }) {
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.9fr)]">
               <div className={`${KNOWLEDGE_INSET_PANEL_CLASS} p-5`}>
                 <div className="mb-3 flex items-center justify-between gap-3 border-b border-border/25 pb-3">
-                  <div className="text-sm font-semibold text-txt">Preview</div>
+                  <div className="text-sm font-semibold text-txt">
+                    {t("knowledgeview.Preview", { defaultValue: "Preview" })}
+                  </div>
                   <span className="rounded-full border border-border/35 bg-bg/25 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/70">
                     {formatByteSize(doc.fileSize)}
                   </span>
@@ -536,14 +543,21 @@ function DocumentViewer({ documentId }: { documentId: string | null }) {
                 ) : (
                   <DesktopInsetEmptyStatePanel
                     className="min-h-[10rem] px-4 py-10 text-sm"
-                    description="Indexed fragments are still available below for this document type."
-                    title="Full text preview is not available"
+                    description={t("knowledgeview.NoPreviewDesc", {
+                      defaultValue:
+                        "Indexed fragments are still available below for this document type.",
+                    })}
+                    title={t("knowledgeview.NoPreview", {
+                      defaultValue: "Full text preview is not available",
+                    })}
                   />
                 )}
               </div>
 
               <div className={`${KNOWLEDGE_INSET_PANEL_CLASS} p-5`}>
-                <div className="text-sm font-semibold text-txt">Details</div>
+                <div className="text-sm font-semibold text-txt">
+                  {t("knowledgeview.Details", { defaultValue: "Details" })}
+                </div>
                 <div className="mt-4 grid gap-3 text-xs">
                   <div className="flex flex-col gap-1.5">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted/70">
@@ -563,7 +577,9 @@ function DocumentViewer({ documentId }: { documentId: string | null }) {
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted/70">
-                      Uploaded
+                      {t("knowledgeview.Uploaded", {
+                        defaultValue: "Uploaded",
+                      })}
                     </span>
                     <span className="inline-block w-fit rounded-md border border-border/25 bg-bg-hover px-2 py-1 font-medium text-txt">
                       {formatShortDate(doc.createdAt, { fallback: "—" })}

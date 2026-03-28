@@ -48,6 +48,7 @@ const {
 } = vi.hoisted(() => ({
   mockClient: {
     getConfig: vi.fn(),
+    updateConfig: vi.fn(),
   },
   mockUseApp: vi.fn(),
   mockUseCompanionSceneStatus: vi.fn(),
@@ -131,6 +132,7 @@ describe("ChatView game-modal variant", () => {
     mockUseCompanionSceneStatus.mockReset();
     mockUseVoiceChat.mockReset();
     mockClient.getConfig.mockReset();
+    mockClient.updateConfig.mockReset();
     Object.defineProperty(window, "dispatchEvent", {
       value: vi.fn(),
       configurable: true,
@@ -159,6 +161,7 @@ describe("ChatView game-modal variant", () => {
       teleportKey: "vrm-1",
     });
     mockClient.getConfig.mockResolvedValue({});
+    mockClient.updateConfig.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -287,7 +290,7 @@ describe("ChatView game-modal variant", () => {
     );
   });
 
-  it("queues companion auto-speak once under StrictMode (no duplicate greeting TTS)", async () => {
+  it("queues companion auto-speak once under StrictMode for a fresh message", async () => {
     const queueAssistantSpeech = vi.fn();
     mockUseVoiceChat.mockReturnValue({
       supported: true,
@@ -306,16 +309,30 @@ describe("ChatView game-modal variant", () => {
       voiceUnlockedGeneration: 0,
       assistantTtsQuality: "standard",
     });
-    mockUseApp.mockReturnValue(
-      createContext({
-        conversationMessages: [
-          { id: "assistant-1", role: "assistant", text: "hello", timestamp: 1 },
-        ],
-      }),
-    );
+    let currentContext = createContext({
+      conversationMessages: [],
+    });
+    mockUseApp.mockImplementation(() => currentContext);
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          React.StrictMode,
+          null,
+          React.createElement(ChatView, { variant: "game-modal" }),
+        ),
+      );
+    });
+
+    currentContext = createContext({
+      conversationMessages: [
+        { id: "assistant-1", role: "assistant", text: "hello", timestamp: 1 },
+      ],
+    });
 
     await act(async () => {
-      TestRenderer.create(
+      tree.update(
         React.createElement(
           React.StrictMode,
           null,
@@ -351,13 +368,10 @@ describe("ChatView game-modal variant", () => {
       voiceUnlockedGeneration: 0,
       assistantTtsQuality: "standard",
     });
-    mockUseApp.mockReturnValue(
-      createContext({
-        conversationMessages: [
-          { id: "assistant-1", role: "assistant", text: "hello", timestamp: 1 },
-        ],
-      }),
-    );
+    let currentContext = createContext({
+      conversationMessages: [],
+    });
+    mockUseApp.mockImplementation(() => currentContext);
     mockUseCompanionSceneStatus.mockReturnValue({
       avatarReady: false,
       teleportKey: "vrm-2",
@@ -368,6 +382,18 @@ describe("ChatView game-modal variant", () => {
       tree = TestRenderer.create(
         React.createElement(ChatView, { variant: "game-modal" }),
       );
+    });
+
+    expect(queueAssistantSpeech).not.toHaveBeenCalled();
+
+    currentContext = createContext({
+      conversationMessages: [
+        { id: "assistant-1", role: "assistant", text: "hello", timestamp: 1 },
+      ],
+    });
+
+    await act(async () => {
+      tree.update(React.createElement(ChatView, { variant: "game-modal" }));
     });
 
     expect(queueAssistantSpeech).not.toHaveBeenCalled();
@@ -389,7 +415,7 @@ describe("ChatView game-modal variant", () => {
     );
   });
 
-  it("does not replay the same companion line after remounting the dock", async () => {
+  it("does not replay the last completed assistant line when companion mounts", async () => {
     const queueAssistantSpeech = vi.fn();
     mockUseVoiceChat.mockReturnValue({
       supported: true,
@@ -417,6 +443,41 @@ describe("ChatView game-modal variant", () => {
       }),
     );
 
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(ChatView, { variant: "game-modal" }),
+      );
+    });
+
+    expect(queueAssistantSpeech).not.toHaveBeenCalled();
+  });
+
+  it("does not replay the same companion line after remounting the dock", async () => {
+    const queueAssistantSpeech = vi.fn();
+    mockUseVoiceChat.mockReturnValue({
+      supported: true,
+      isListening: false,
+      captureMode: "idle",
+      interimTranscript: "",
+      toggleListening: vi.fn(),
+      startListening: vi.fn(),
+      stopListening: vi.fn(),
+      mouthOpen: 0,
+      isSpeaking: false,
+      usingAudioAnalysis: false,
+      speak: vi.fn(),
+      queueAssistantSpeech,
+      stopSpeaking: vi.fn(),
+      voiceUnlockedGeneration: 0,
+      assistantTtsQuality: "standard",
+    });
+
+    let currentContext = createContext({
+      activeConversationId: "conv-1",
+      conversationMessages: [],
+    });
+    mockUseApp.mockImplementation(() => currentContext);
+
     let firstTree: TestRenderer.ReactTestRenderer | undefined;
     let secondTree: TestRenderer.ReactTestRenderer | undefined;
 
@@ -426,9 +487,31 @@ describe("ChatView game-modal variant", () => {
       );
     });
 
+    currentContext = createContext({
+      activeConversationId: "conv-1",
+      conversationMessages: [
+        { id: "assistant-1", role: "assistant", text: "hello", timestamp: 1 },
+      ],
+    });
+
+    await act(async () => {
+      firstTree?.update(
+        React.createElement(ChatView, { variant: "game-modal" }),
+      );
+    });
+
     await act(async () => {
       firstTree?.unmount();
     });
+
+    mockUseApp.mockImplementation(() =>
+      createContext({
+        activeConversationId: "conv-1",
+        conversationMessages: [
+          { id: "assistant-1", role: "assistant", text: "hello", timestamp: 1 },
+        ],
+      }),
+    );
 
     await act(async () => {
       secondTree = TestRenderer.create(
@@ -594,6 +677,61 @@ describe("ChatView game-modal variant", () => {
         interruptOnSpeech: true,
       }),
     );
+  });
+
+  it("uses the selected character voice for playback when the saved config is stale", async () => {
+    mockUseApp.mockReturnValue(createContext());
+    mockClient.getConfig.mockResolvedValue({
+      ui: {
+        presetId: "momo",
+        avatarIndex: 4,
+      },
+      messages: {
+        tts: {
+          provider: "elevenlabs",
+          mode: "cloud",
+          elevenlabs: {
+            voiceId: "Xb7hH8MSUJpSbSDYk0k2",
+            modelId: "eleven_flash_v2_5",
+          },
+        },
+      },
+    });
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(ChatView, { variant: "game-modal" }),
+      );
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockUseVoiceChat).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        voiceConfig: expect.objectContaining({
+          provider: "elevenlabs",
+          mode: "cloud",
+          elevenlabs: expect.objectContaining({
+            voiceId: "n7Wi4g1bhpw4Bs8HK5ph",
+            modelId: "eleven_flash_v2_5",
+          }),
+        }),
+      }),
+    );
+    expect(mockClient.updateConfig).toHaveBeenCalledWith({
+      messages: {
+        tts: expect.objectContaining({
+          provider: "elevenlabs",
+          mode: "cloud",
+          elevenlabs: expect.objectContaining({
+            voiceId: "n7Wi4g1bhpw4Bs8HK5ph",
+            modelId: "eleven_flash_v2_5",
+          }),
+        }),
+      },
+    });
   });
 
   it("treats an enabled cloud key as voice cloud access even without oauth", async () => {
@@ -989,9 +1127,10 @@ describe("ChatView game-modal variant", () => {
     expect(composer).toBeTruthy();
   });
 
-  it("uses theme-token surfaces for companion bubbles and composer spacing", async () => {
+  it("uses theme-aware surfaces for companion bubbles and composer glass", async () => {
     mockUseApp.mockReturnValue(
       createContext({
+        chatInput: "Theme me",
         chatSending: true,
         chatFirstTokenReceived: false,
         conversationMessages: [
@@ -1023,25 +1162,28 @@ describe("ChatView game-modal variant", () => {
     });
     const assistantBubble = rows[0]?.findAllByType("div").at(-2);
     const userBubble = rows[1]?.findAllByType("div").at(-2);
-    const composer = tree.root.findByProps({
+    const composerDock = tree.root.findByProps({
       "data-no-camera-drag": "true",
     });
+    const composerGlass = tree.root.find(
+      (node) =>
+        node.type === "div" &&
+        node.props["aria-hidden"] === true &&
+        typeof node.props.className === "string" &&
+        node.props.className.includes("backdrop-blur-[22px]"),
+    );
 
     expect(String(assistantBubble?.props.className)).toContain(
-      "var(--onboarding-card-bg)",
+      "border-border/32",
     );
-    expect(String(assistantBubble?.props.className)).toContain(
-      "var(--onboarding-card-border)",
-    );
-    expect(String(userBubble?.props.className)).toContain(
-      "var(--onboarding-accent-bg)",
-    );
-    expect(String(userBubble?.props.className)).toContain(
-      "var(--onboarding-accent-border)",
-    );
-    expect(String(composer.props.className)).toContain("px-1");
-    expect(String(composer.props.style.paddingBottom)).toContain(
+    expect(String(assistantBubble?.props.className)).toContain("text-txt");
+    expect(String(userBubble?.props.className)).toContain("border-accent/24");
+    expect(String(userBubble?.props.className)).toContain("text-txt-strong");
+    expect(String(composerDock.props.className)).toContain("px-1");
+    expect(String(composerDock.props.style.paddingBottom)).toContain(
       "safe-area-inset-bottom",
     );
+    expect(String(composerGlass.props.className)).toContain("var(--card)");
+    expect(String(composerGlass.props.className)).toContain("var(--bg)");
   });
 });

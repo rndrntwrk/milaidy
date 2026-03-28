@@ -40,10 +40,12 @@ export function PairingView() {
     if (!timestamp) return "";
     const now = Date.now();
     const diff = timestamp - now;
-    if (diff <= 0) return "Expired";
+    if (diff <= 0) return t("pairingview.Expired");
     const minutes = Math.floor(diff / 60000);
     const seconds = Math.floor((diff % 60000) / 1000);
-    return `Expires in ${minutes}:${seconds.toString().padStart(2, "0")}`;
+    return t("pairingview.ExpiresIn", {
+      time: `${minutes}:${seconds.toString().padStart(2, "0")}`,
+    });
   }
 
   const expiryText = formatExpiry(pairingExpiresAt);
@@ -162,7 +164,9 @@ export function PairingView() {
                   className="w-full sm:w-auto sm:min-w-[9rem]"
                   disabled={pairingBusy || !pairingCode}
                 >
-                  {pairingBusy ? "Pairing..." : "Submit"}
+                  {pairingBusy
+                    ? t("pairingview.PairingInProgress")
+                    : t("pairingview.Submit")}
                 </Button>
               </div>
             </form>

@@ -55,6 +55,7 @@ describe("ReleaseCenterView", () => {
 
     isElectrobunRuntimeMock.mockReturnValue(true);
     useAppMock.mockReturnValue({
+      t: (k: string) => k,
       loadUpdateStatus: vi.fn(() => Promise.resolve()),
       updateLoading: false,
       updateStatus: {

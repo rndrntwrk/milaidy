@@ -281,12 +281,12 @@ export function InventoryView() {
         label: config.name,
         hasAddress,
         description: !hasAddress
-          ? "No wallet address yet"
+          ? t("inventoryview.NoWalletAddressYet")
           : chainReady
             ? assetCount > 0
-              ? `${assetCount} visible assets`
-              : "Connected and ready"
-            : "Needs RPC setup",
+              ? t("inventoryview.VisibleAssets", { count: assetCount })
+              : t("inventoryview.ConnectedAndReady")
+            : t("inventoryview.NeedsRpcSetup"),
       });
     }
 
@@ -311,8 +311,13 @@ export function InventoryView() {
   const inlineError =
     singleChainFocus && focusedChainError
       ? {
-          message: `${focusedChainLabel ?? "Chain"}: ${focusedChainError}`,
-          retryTitle: `Retry fetching ${focusedChainLabel ?? "chain"} balances`,
+          message: t("inventoryview.ChainInlineError", {
+            chain: focusedChainLabel ?? t("inventoryview.Chain"),
+            message: focusedChainError,
+          }),
+          retryTitle: t("inventoryview.RetryFetchingBalances", {
+            chain: focusedChainLabel ?? t("inventoryview.chainLowercase"),
+          }),
         }
       : null;
 
@@ -324,15 +329,16 @@ export function InventoryView() {
     legacyRpcChain !== null &&
     cfg?.legacyCustomChains?.includes(legacyRpcChain)
       ? {
-          title: `${
-            focusedChainLabel ??
-            (singleChainFocus === "bsc"
-              ? "BSC"
-              : singleChainFocus === "solana"
-                ? "Solana"
-                : "EVM")
-          } is using legacy raw RPC config.`,
-          body: "Re-save a supported provider in Settings to migrate fully.",
+          title: t("inventoryview.LegacyRpcConfigTitle", {
+            chain:
+              focusedChainLabel ??
+              (singleChainFocus === "bsc"
+                ? "BSC"
+                : singleChainFocus === "solana"
+                  ? "Solana"
+                  : "EVM"),
+          }),
+          body: t("inventoryview.LegacyRpcConfigBody"),
           actionLabel: t("wallet.setup.configureRpc"),
         }
       : singleChainFocus === "bsc" && evmAddr && !bscReady
@@ -343,8 +349,8 @@ export function InventoryView() {
           }
         : singleChainFocus === "solana" && solAddr && !solanaReady
           ? {
-              title: "Solana RPC is not configured.",
-              body: "Connect via Eliza Cloud or configure HELIUS_API_KEY / SOLANA_RPC_URL in Settings to load Solana balances.",
+              title: t("inventoryview.SolanaRpcNotConfigured"),
+              body: t("inventoryview.SolanaRpcNotConfiguredBody"),
               actionLabel: t("wallet.setup.configureRpc"),
             }
           : singleChainFocus &&
@@ -359,8 +365,13 @@ export function InventoryView() {
                     ? avaxReady
                     : false)
             ? {
-                title: `${focusedChainLabel ?? "Chain"} access is not configured.`,
-                body: `Connect via Eliza Cloud or configure ${focusedChainLabel ?? "this chain"} RPC access in Settings to load balances.`,
+                title: t("inventoryview.ChainAccessNotConfiguredTitle", {
+                  chain: focusedChainLabel ?? t("inventoryview.Chain"),
+                }),
+                body: t("inventoryview.ChainAccessNotConfiguredBody", {
+                  chain:
+                    focusedChainLabel ?? t("inventoryview.ThisChainLowercase"),
+                }),
                 actionLabel: t("wallet.setup.configureRpc"),
               }
             : null;
@@ -611,8 +622,12 @@ export function InventoryView() {
                               disabled
                                 ? label
                                 : isOn
-                                  ? `${label} — shown (click to hide)`
-                                  : `${label} — hidden (click to show)`
+                                  ? t("inventoryview.ChainShownClickToHide", {
+                                      chain: label,
+                                    })
+                                  : t("inventoryview.ChainHiddenClickToShow", {
+                                      chain: label,
+                                    })
                             }
                             aria-disabled={disabled}
                             className={`flex aspect-square items-center justify-center rounded-2xl border transition-colors ${
@@ -632,10 +647,16 @@ export function InventoryView() {
                           className="px-2.5 py-1.5 text-xs font-medium"
                         >
                           {disabled
-                            ? `${label} — no wallet configured`
+                            ? t("inventoryview.ChainNoWalletConfigured", {
+                                chain: label,
+                              })
                             : isOn
-                              ? `${label} — visible`
-                              : `${label} — hidden`}
+                              ? t("inventoryview.ChainVisible", {
+                                  chain: label,
+                                })
+                              : t("inventoryview.ChainHidden", {
+                                  chain: label,
+                                })}
                         </TooltipContent>
                       </Tooltip>
                     );
@@ -674,7 +695,7 @@ export function InventoryView() {
                   data-testid="steward-status-badge"
                 >
                   <span>🔐</span>
-                  <span>Steward vault connected</span>
+                  <span>{t("inventoryview.StewardVaultConnected")}</span>
                   {stewardStatus.evmAddress && (
                     <span className="ml-1 font-mono text-muted">
                       {stewardStatus.evmAddress.slice(0, 6)}…

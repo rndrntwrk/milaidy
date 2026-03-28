@@ -203,9 +203,16 @@ export const DESKTOP_WORKSPACE_CLICK_AUDIT: readonly DesktopClickAuditItem[] = [
 const DESKTOP_ACTION_BUTTON_CLASSNAME =
   "min-h-9 justify-start whitespace-normal text-left sm:min-h-10";
 
-function renderPathList(paths: string[]) {
+function renderPathList(
+  paths: string[],
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   if (paths.length === 0) {
-    return <span className="text-muted-strong">No path selected yet.</span>;
+    return (
+      <span className="text-muted-strong">
+        {t("desktopworkspacesection.NoPathSelectedYet")}
+      </span>
+    );
   }
 
   return (
@@ -221,7 +228,7 @@ function renderPathList(paths: string[]) {
 
 export function DesktopWorkspaceSection() {
   const desktopRuntime = isElectrobunRuntime();
-  const { relaunchDesktop, restartBackend } = useApp();
+  const { relaunchDesktop, restartBackend, t } = useApp();
   const [snapshot, setSnapshot] = useState<DesktopWorkspaceSnapshot | null>(
     null,
   );
@@ -232,6 +239,11 @@ export function DesktopWorkspaceSection() {
   const [clipboardDraft, setClipboardDraft] = useState("");
   const [openPaths, setOpenPaths] = useState<string[]>([]);
   const [savePaths, setSavePaths] = useState<string[]>([]);
+  const getSurfaceLabel = useCallback(
+    (surfaceId: (typeof DESKTOP_WORKSPACE_SURFACES)[number]["id"]) =>
+      t(`desktopworkspacesection.surface.${surfaceId}.label`),
+    [t],
+  );
 
   const refreshSnapshot = useCallback(async () => {
     if (!desktopRuntime) {
@@ -274,18 +286,20 @@ export function DesktopWorkspaceSection() {
         }
       } catch (error) {
         setActionError(
-          error instanceof Error ? error.message : "Desktop action failed.",
+          error instanceof Error
+            ? error.message
+            : t("desktopworkspacesection.DesktopActionFailed"),
         );
       } finally {
         setBusyAction(null);
       }
     },
-    [refreshSnapshot],
+    [refreshSnapshot, t],
   );
 
   const diagnosticsText = useMemo(() => {
     if (!snapshot) {
-      return "Desktop diagnostics unavailable.";
+      return t("desktopworkspacesection.DesktopDiagnosticsUnavailable");
     }
 
     const displayLines =
@@ -312,14 +326,13 @@ export function DesktopWorkspaceSection() {
         ([name, path]) => `${name}:${path}`,
       ),
     ].join("\n");
-  }, [snapshot]);
+  }, [snapshot, t]);
 
   if (!desktopRuntime) {
     return (
       <Card className="text-sm text-muted">
         <CardContent className="pt-6">
-          Desktop workspace tools are only available inside the Electrobun
-          desktop runtime.
+          {t("desktopworkspacesection.DesktopToolsOnlyAvailable")}
         </CardContent>
       </Card>
     );
@@ -338,7 +351,7 @@ export function DesktopWorkspaceSection() {
           <RefreshCw
             className={`mr-1 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
           />
-          Refresh Diagnostics
+          {t("desktopworkspacesection.RefreshDiagnostics")}
         </Button>
         <Button
           variant="default"
@@ -348,14 +361,14 @@ export function DesktopWorkspaceSection() {
             void runAction(
               "desktop-open-settings-window",
               async () => openDesktopSettingsWindow("desktop"),
-              "Opened detached desktop settings window.",
+              t("desktopworkspacesection.OpenedDetachedDesktopSettingsWindow"),
               false,
             )
           }
           disabled={busyAction === "desktop-open-settings-window"}
         >
           <Monitor className="mr-1 h-3.5 w-3.5" />
-          Open Desktop Settings Window
+          {t("desktopworkspacesection.OpenDesktopSettingsWindow")}
         </Button>
       </div>
 
@@ -375,10 +388,11 @@ export function DesktopWorkspaceSection() {
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Diagnostics</CardTitle>
+            <CardTitle className="text-sm">
+              {t("desktopworkspacesection.Diagnostics")}
+            </CardTitle>
             <CardDescription>
-              Version, window, display, clipboard, and path state from the
-              desktop shell.
+              {t("desktopworkspacesection.DiagnosticsDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -390,10 +404,11 @@ export function DesktopWorkspaceSection() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Detached Surfaces</CardTitle>
+            <CardTitle className="text-sm">
+              {t("desktopworkspacesection.DetachedSurfaces")}
+            </CardTitle>
             <CardDescription>
-              Launch the native Electrobun surfaces without navigating away from
-              the main shell.
+              {t("desktopworkspacesection.DetachedSurfacesDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -408,13 +423,15 @@ export function DesktopWorkspaceSection() {
                     void runAction(
                       `desktop-surface-${surface.id}`,
                       async () => openDesktopSurfaceWindow(surface.id),
-                      `Opened ${surface.label.toLowerCase()}.`,
+                      t("desktopworkspacesection.SurfaceOpened", {
+                        surface: getSurfaceLabel(surface.id),
+                      }),
                       false,
                     )
                   }
                   disabled={busyAction === `desktop-surface-${surface.id}`}
                 >
-                  {surface.label}
+                  {getSurfaceLabel(surface.id)}
                 </Button>
               ))}
             </div>
@@ -425,9 +442,11 @@ export function DesktopWorkspaceSection() {
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Window Controls</CardTitle>
+            <CardTitle className="text-sm">
+              {t("desktopworkspacesection.WindowControls")}
+            </CardTitle>
             <CardDescription>
-              Control the main desktop window directly from settings.
+              {t("desktopworkspacesection.WindowControlsDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -446,7 +465,7 @@ export function DesktopWorkspaceSection() {
                 }
                 disabled={busyAction === "desktop-show-window"}
               >
-                Show Window
+                {t("desktopworkspacesection.ShowWindow")}
               </Button>
               <Button
                 variant="outline"
@@ -462,7 +481,7 @@ export function DesktopWorkspaceSection() {
                 }
                 disabled={busyAction === "desktop-hide-window"}
               >
-                Hide Window
+                {t("desktopworkspacesection.HideWindow")}
               </Button>
               <Button
                 variant="outline"
@@ -478,7 +497,7 @@ export function DesktopWorkspaceSection() {
                 }
                 disabled={busyAction === "desktop-focus-window"}
               >
-                Focus Window
+                {t("desktopworkspacesection.FocusWindow")}
               </Button>
               <Button
                 variant="outline"
@@ -501,8 +520,8 @@ export function DesktopWorkspaceSection() {
                 disabled={busyAction === "desktop-minimize-window"}
               >
                 {snapshot?.window.minimized
-                  ? "Restore Window"
-                  : "Minimize Window"}
+                  ? t("desktopworkspacesection.RestoreWindow")
+                  : t("desktopworkspacesection.MinimizeWindow")}
               </Button>
               <Button
                 variant="outline"
@@ -525,8 +544,8 @@ export function DesktopWorkspaceSection() {
                 disabled={busyAction === "desktop-maximize-toggle"}
               >
                 {snapshot?.window.maximized
-                  ? "Unmaximize Window"
-                  : "Maximize Window"}
+                  ? t("desktopworkspacesection.UnmaximizeWindow")
+                  : t("desktopworkspacesection.MaximizeWindow")}
               </Button>
             </div>
           </CardContent>
@@ -534,10 +553,11 @@ export function DesktopWorkspaceSection() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Lifecycle</CardTitle>
+            <CardTitle className="text-sm">
+              {t("desktopworkspacesection.Lifecycle")}
+            </CardTitle>
             <CardDescription>
-              Restart the backend, relaunch the app, or toggle auto-launch
-              behavior.
+              {t("desktopworkspacesection.LifecycleDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -554,19 +574,19 @@ export function DesktopWorkspaceSection() {
                         rpcMethod: "desktopShowNotification",
                         ipcChannel: "desktop:showNotification",
                         params: {
-                          title: "Desktop",
-                          body: "Desktop workspace notification test.",
+                          title: t("desktopworkspacesection.NotificationTitle"),
+                          body: t("desktopworkspacesection.NotificationBody"),
                           urgency: "normal",
                         },
                       });
                     },
-                    "Notification sent.",
+                    t("desktopworkspacesection.NotificationSent"),
                     false,
                   )
                 }
                 disabled={busyAction === "desktop-notify"}
               >
-                Send Test Notification
+                {t("desktopworkspacesection.SendTestNotification")}
               </Button>
               <Button
                 variant="outline"
@@ -576,12 +596,12 @@ export function DesktopWorkspaceSection() {
                   void runAction(
                     "desktop-restart-agent",
                     async () => restartBackend(),
-                    "Agent restart requested.",
+                    t("desktopworkspacesection.AgentRestartRequested"),
                   )
                 }
                 disabled={busyAction === "desktop-restart-agent"}
               >
-                Restart Agent
+                {t("desktopworkspacesection.RestartAgent")}
               </Button>
               <Button
                 variant="outline"
@@ -591,13 +611,13 @@ export function DesktopWorkspaceSection() {
                   void runAction(
                     "desktop-relaunch-app",
                     async () => relaunchDesktop(),
-                    "Desktop relaunch requested.",
+                    t("desktopworkspacesection.DesktopRelaunchRequested"),
                     false,
                   )
                 }
                 disabled={busyAction === "desktop-relaunch-app"}
               >
-                Relaunch
+                {t("desktopworkspacesection.Relaunch")}
               </Button>
               <Button
                 variant="outline"
@@ -619,8 +639,8 @@ export function DesktopWorkspaceSection() {
                 disabled={busyAction === "desktop-toggle-auto-launch"}
               >
                 {snapshot?.autoLaunch?.enabled
-                  ? "Disable Auto-launch"
-                  : "Enable Auto-launch"}
+                  ? t("desktopworkspacesection.DisableAutoLaunch")
+                  : t("desktopworkspacesection.EnableAutoLaunch")}
               </Button>
               <Button
                 variant="outline"
@@ -643,8 +663,8 @@ export function DesktopWorkspaceSection() {
                 disabled={busyAction === "desktop-toggle-hidden-launch"}
               >
                 {snapshot?.autoLaunch?.openAsHidden
-                  ? "Launch Visible on Login"
-                  : "Launch Hidden on Login"}
+                  ? t("desktopworkspacesection.LaunchVisibleOnLogin")
+                  : t("desktopworkspacesection.LaunchHiddenOnLogin")}
               </Button>
             </div>
           </CardContent>
@@ -654,10 +674,11 @@ export function DesktopWorkspaceSection() {
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Native File Dialogs</CardTitle>
+            <CardTitle className="text-sm">
+              {t("desktopworkspacesection.NativeFileDialogs")}
+            </CardTitle>
             <CardDescription>
-              Test file, folder, and save dialogs and inspect the returned
-              paths.
+              {t("desktopworkspacesection.NativeFileDialogsDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -677,7 +698,7 @@ export function DesktopWorkspaceSection() {
                         rpcMethod: "desktopShowOpenDialog",
                         ipcChannel: "desktop:showOpenDialog",
                         params: {
-                          title: "Select files",
+                          title: t("desktopworkspacesection.SelectFiles"),
                           defaultPath: snapshot?.paths.downloads,
                           canChooseFiles: true,
                           allowsMultipleSelection: true,
@@ -685,13 +706,13 @@ export function DesktopWorkspaceSection() {
                       });
                       setOpenPaths(result?.filePaths ?? []);
                     },
-                    "File dialog completed.",
+                    t("desktopworkspacesection.FileDialogCompleted"),
                     false,
                   )
                 }
                 disabled={busyAction === "desktop-open-file-dialog"}
               >
-                Open Files Dialog
+                {t("desktopworkspacesection.OpenFilesDialog")}
               </Button>
               <Button
                 variant="outline"
@@ -708,20 +729,20 @@ export function DesktopWorkspaceSection() {
                         rpcMethod: "desktopShowOpenDialog",
                         ipcChannel: "desktop:showOpenDialog",
                         params: {
-                          title: "Select folder",
+                          title: t("desktopworkspacesection.SelectFolder"),
                           defaultPath: snapshot?.paths.home,
                           canChooseDirectory: true,
                         },
                       });
                       setOpenPaths(result?.filePaths ?? []);
                     },
-                    "Folder dialog completed.",
+                    t("desktopworkspacesection.FolderDialogCompleted"),
                     false,
                   )
                 }
                 disabled={busyAction === "desktop-open-folder-dialog"}
               >
-                Open Folder Dialog
+                {t("desktopworkspacesection.OpenFolderDialog")}
               </Button>
               <Button
                 variant="outline"
@@ -738,34 +759,34 @@ export function DesktopWorkspaceSection() {
                         rpcMethod: "desktopShowSaveDialog",
                         ipcChannel: "desktop:showSaveDialog",
                         params: {
-                          title: "Save file",
+                          title: t("desktopworkspacesection.SaveFile"),
                           defaultPath: snapshot?.paths.documents,
                           allowedFileTypes: "txt,md,json",
                         },
                       });
                       setSavePaths(result?.filePaths ?? []);
                     },
-                    "Save dialog completed.",
+                    t("desktopworkspacesection.SaveDialogCompleted"),
                     false,
                   )
                 }
                 disabled={busyAction === "desktop-save-dialog"}
               >
-                Save File Dialog
+                {t("desktopworkspacesection.SaveFileDialog")}
               </Button>
             </div>
             <div className="space-y-2 rounded-xl border border-border bg-bg px-3 py-3 text-xs text-muted">
               <div>
                 <div className="mb-1 font-semibold text-txt">
-                  Open dialog result
+                  {t("desktopworkspacesection.OpenDialogResult")}
                 </div>
-                {renderPathList(openPaths)}
+                {renderPathList(openPaths, t)}
               </div>
               <div>
                 <div className="mb-1 font-semibold text-txt">
-                  Save dialog result
+                  {t("desktopworkspacesection.SaveDialogResult")}
                 </div>
-                {renderPathList(savePaths)}
+                {renderPathList(savePaths, t)}
               </div>
             </div>
           </CardContent>
@@ -773,10 +794,11 @@ export function DesktopWorkspaceSection() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Clipboard + Paths</CardTitle>
+            <CardTitle className="text-sm">
+              {t("desktopworkspacesection.ClipboardAndPaths")}
+            </CardTitle>
             <CardDescription>
-              Read, clear, and write clipboard text, then open or reveal saved
-              paths.
+              {t("desktopworkspacesection.ClipboardAndPathsDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -784,7 +806,7 @@ export function DesktopWorkspaceSection() {
               value={clipboardDraft}
               onChange={(event) => setClipboardDraft(event.target.value)}
               className="min-h-24 w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm text-txt outline-none"
-              placeholder="Clipboard draft"
+              placeholder={t("desktopworkspacesection.ClipboardDraft")}
             />
             <div className="grid gap-2 sm:grid-cols-2">
               <Button
@@ -804,7 +826,7 @@ export function DesktopWorkspaceSection() {
                 }
                 disabled={busyAction === "desktop-clipboard-read"}
               >
-                Read Clipboard
+                {t("desktopworkspacesection.ReadClipboard")}
               </Button>
               <Button
                 variant="outline"
@@ -817,7 +839,7 @@ export function DesktopWorkspaceSection() {
                 }
                 disabled={busyAction === "desktop-clipboard-copy"}
               >
-                Copy Draft
+                {t("desktopworkspacesection.CopyDraft")}
               </Button>
               <Button
                 variant="outline"
@@ -834,7 +856,7 @@ export function DesktopWorkspaceSection() {
                 }
                 disabled={busyAction === "desktop-clipboard-clear"}
               >
-                Clear Clipboard
+                {t("desktopworkspacesection.ClearClipboard")}
               </Button>
               {savePaths[0] && (
                 <>
@@ -852,13 +874,13 @@ export function DesktopWorkspaceSection() {
                             params: { path: savePaths[0] },
                           });
                         },
-                        "Opened saved path.",
+                        t("desktopworkspacesection.OpenedSavedPath"),
                         false,
                       )
                     }
                     disabled={busyAction === "desktop-open-path"}
                   >
-                    Open Saved Path
+                    {t("desktopworkspacesection.OpenSavedPath")}
                   </Button>
                   <Button
                     variant="outline"
@@ -874,13 +896,13 @@ export function DesktopWorkspaceSection() {
                             params: { path: savePaths[0] },
                           });
                         },
-                        "Revealed saved path.",
+                        t("desktopworkspacesection.RevealedSavedPath"),
                         false,
                       )
                     }
                     disabled={busyAction === "desktop-reveal-path"}
                   >
-                    Reveal Saved Path
+                    {t("desktopworkspacesection.RevealSavedPath")}
                   </Button>
                 </>
               )}
@@ -889,15 +911,17 @@ export function DesktopWorkspaceSection() {
               {snapshot?.clipboard ? (
                 <>
                   <div className="font-semibold text-txt">
-                    Formats:{" "}
-                    {snapshot.clipboard.formats.join(", ") || "plain-text"}
+                    {t("desktopworkspacesection.Formats")}{" "}
+                    {snapshot.clipboard.formats.join(", ") ||
+                      t("desktopworkspacesection.PlainText")}
                   </div>
                   <div className="mt-1 break-all">
-                    {snapshot.clipboard.text || "Clipboard text unavailable."}
+                    {snapshot.clipboard.text ||
+                      t("desktopworkspacesection.ClipboardTextUnavailable")}
                   </div>
                 </>
               ) : (
-                "Clipboard details unavailable."
+                t("desktopworkspacesection.ClipboardDetailsUnavailable")
               )}
             </div>
           </CardContent>
