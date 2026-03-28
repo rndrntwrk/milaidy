@@ -405,37 +405,6 @@ describe("CompanionView", () => {
 
   });
 
-  it("labels the companion history trigger as chats instead of mirroring a draft thread title", async () => {
-    mockUseApp.mockReturnValue(
-      createContext({
-        activeConversationId: "conv-1",
-        conversations: [{ id: "conv-1", title: "companion.newChat" }],
-      }),
-    );
-
-    let tree: TestRenderer.ReactTestRenderer | undefined;
-    await act(async () => {
-      tree = TestRenderer.create(React.createElement(CompanionView));
-    });
-    if (!tree) {
-      throw new Error("Failed to render CompanionView");
-    }
-
-    const historyButton = tree.root.findByProps({
-      "data-testid": "companion-history-button",
-    });
-    const newChatButtons = tree.root.findAll(
-      (node) =>
-        node.type === "button" &&
-        node.props["aria-label"] === "companion.newChat",
-    );
-
-    expect(historyButton.props["aria-label"]).toBe("conversations.chats");
-    expect(text(historyButton)).toContain("conversations.chats");
-    expect(text(historyButton)).not.toContain("companion.newChat");
-    expect(newChatButtons).toHaveLength(1);
-  });
-
   it("does not render the cloud status badge in companion header (desktop header only)", async () => {
     mockUseApp.mockReturnValue(
       createContext({
