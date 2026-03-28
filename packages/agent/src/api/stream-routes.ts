@@ -110,6 +110,311 @@ function formatErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+interface Stream555StatusLike {
+  active: boolean;
+  cfSessionId?: string;
+  cloudflare?: {
+    isConnected?: boolean;
+    state?: string;
+  };
+  startTime?: number;
+  platforms?: Record<string, { enabled: boolean; status: string; error?: string }>;
+  jobStatus?: {
+    state?: string;
+  };
+}
+
+interface Stream555SessionLike {
+  sessionId: string;
+}
+
+interface Stream555ConfigLike {
+  defaultSessionId?: string;
+}
+
+interface Stream555ServiceLike {
+  getBoundSessionId(): string | null;
+  getConfig(): Stream555ConfigLike | null;
+  createOrResumeSession(sessionId?: string): Promise<Stream555SessionLike>;
+  bindWebSocket(sessionId: string): Promise<void>;
+  getStreamStatus(sessionId?: string): Promise<Stream555StatusLike>;
+  startStream(
+    input: { type: string; url?: string },
+    options?: Record<string, unknown>,
+    sources?: unknown,
+    sessionId?: string,
+  ): Promise<unknown>;
+  stopStream(sessionId?: string): Promise<unknown>;
+  updatePlatform(
+    platformId: string,
+    config: { rtmpUrl?: string; streamKey?: string; enabled: boolean },
+    sessionId?: string,
+  ): Promise<unknown>;
+  togglePlatform(
+    platformId: string,
+    enabled: boolean,
+    sessionId?: string,
+  ): Promise<void>;
+}
+
+interface Stream555DestinationMapping {
+  platformId: string;
+  rtmpUrlEnv: string;
+  streamKeyEnv: string;
+  enabledEnv: string;
+}
+
+const STREAM555_DESTINATION = {
+  id: "555stream",
+  name: "555 Stream",
+} as const;
+
+const STREAM555_DESTINATION_MAPPINGS: Stream555DestinationMapping[] = [
+  {
+    platformId: "pumpfun",
+    rtmpUrlEnv: "STREAM555_DEST_PUMPFUN_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_PUMPFUN_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_PUMPFUN_ENABLED",
+  },
+  {
+    platformId: "x",
+    rtmpUrlEnv: "STREAM555_DEST_X_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_X_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_X_ENABLED",
+  },
+  {
+    platformId: "twitch",
+    rtmpUrlEnv: "STREAM555_DEST_TWITCH_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_TWITCH_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_TWITCH_ENABLED",
+  },
+  {
+    platformId: "kick",
+    rtmpUrlEnv: "STREAM555_DEST_KICK_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_KICK_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_KICK_ENABLED",
+  },
+  {
+    platformId: "youtube",
+    rtmpUrlEnv: "STREAM555_DEST_YOUTUBE_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_YOUTUBE_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_YOUTUBE_ENABLED",
+  },
+  {
+    platformId: "facebook",
+    rtmpUrlEnv: "STREAM555_DEST_FACEBOOK_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_FACEBOOK_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_FACEBOOK_ENABLED",
+  },
+  {
+    platformId: "custom",
+    rtmpUrlEnv: "STREAM555_DEST_CUSTOM_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_CUSTOM_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_CUSTOM_ENABLED",
+  },
+];
+
+const DEFAULT_STREAM555_READY_TIMEOUT_MS = 45_000;
+const DEFAULT_STREAM555_READY_POLL_MS = 5_000;
+
+function parseStream555Boolean(
+  value: string | undefined,
+): boolean | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on", "enabled"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off", "disabled"].includes(normalized)) {
+    return false;
+  }
+  return undefined;
+}
+
+function parseStream555PositiveInt(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function getStream555Service(state: StreamRouteState): Stream555ServiceLike | null {
+  const candidate = state.runtime?.getService("stream555");
+  if (!candidate || typeof candidate !== "object") return null;
+  const service = candidate as Partial<Stream555ServiceLike>;
+  if (
+    typeof service.getStreamStatus !== "function" ||
+    typeof service.startStream !== "function" ||
+    typeof service.stopStream !== "function"
+  ) {
+    return null;
+  }
+  return service as Stream555ServiceLike;
+}
+
+function getConfiguredStream555SessionId(
+  service: Stream555ServiceLike,
+): string | undefined {
+  const bound = service.getBoundSessionId()?.trim();
+  if (bound) return bound;
+  const configured = service.getConfig()?.defaultSessionId?.trim();
+  return configured || undefined;
+}
+
+async function ensureStream555SessionId(
+  service: Stream555ServiceLike,
+): Promise<string> {
+  const existing = getConfiguredStream555SessionId(service);
+  if (existing) {
+    if (service.getBoundSessionId()?.trim() !== existing) {
+      try {
+        await service.bindWebSocket(existing);
+      } catch {
+        // HTTP status/start calls still work with explicit session ids.
+      }
+    }
+    return existing;
+  }
+
+  const created = await service.createOrResumeSession();
+  const sessionId = created.sessionId?.trim();
+  if (!sessionId) {
+    throw new Error("555stream did not return a session id");
+  }
+  try {
+    await service.bindWebSocket(sessionId);
+  } catch {
+    // Non-fatal for the minimum current-runtime bridge.
+  }
+  return sessionId;
+}
+
+async function applyConfiguredStream555Destinations(
+  service: Stream555ServiceLike,
+  sessionId: string,
+): Promise<{
+  attempted: number;
+  enabled: number;
+  applied: string[];
+  skipped: string[];
+  failed: Array<{ platformId: string; error: string }>;
+}> {
+  const applied: string[] = [];
+  const skipped: string[] = [];
+  const failed: Array<{ platformId: string; error: string }> = [];
+  let attempted = 0;
+  let enabledCount = 0;
+
+  for (const mapping of STREAM555_DESTINATION_MAPPINGS) {
+    const rtmpUrl = process.env[mapping.rtmpUrlEnv]?.trim();
+    const streamKey = process.env[mapping.streamKeyEnv]?.trim();
+    const enabled = parseStream555Boolean(process.env[mapping.enabledEnv]) ?? false;
+    const hasConfig = Boolean(rtmpUrl) || Boolean(streamKey) || enabled;
+
+    if (!hasConfig) {
+      skipped.push(mapping.platformId);
+      continue;
+    }
+
+    attempted += 1;
+
+    try {
+      await service.updatePlatform(
+        mapping.platformId,
+        {
+          ...(rtmpUrl ? { rtmpUrl } : {}),
+          ...(streamKey ? { streamKey } : {}),
+          enabled,
+        },
+        sessionId,
+      );
+      await service.togglePlatform(mapping.platformId, enabled, sessionId);
+      applied.push(mapping.platformId);
+      if (enabled) enabledCount += 1;
+    } catch (err) {
+      failed.push({
+        platformId: mapping.platformId,
+        error: formatErrorMessage(err),
+      });
+    }
+  }
+
+  return {
+    attempted,
+    enabled: enabledCount,
+    applied,
+    skipped,
+    failed,
+  };
+}
+
+function mapStream555StatusToHealth(status?: Stream555StatusLike | null): {
+  running: boolean;
+  ffmpegAlive: boolean;
+  uptime: number;
+  frameCount: number;
+  volume: number;
+  muted: boolean;
+  audioSource: string;
+  inputMode: "screen";
+} {
+  const running = Boolean(status?.active);
+  const jobState = status?.jobStatus?.state?.trim().toLowerCase() ?? "";
+  const ffmpegAlive =
+    running ||
+    (jobState.length > 0 &&
+      !/(stopped|failed|error|terminated|offline)/.test(jobState));
+  const startTime = status?.startTime;
+  const uptime =
+    typeof startTime === "number" && Number.isFinite(startTime) && startTime > 0
+      ? Math.max(0, Math.floor((Date.now() - startTime) / 1000))
+      : 0;
+
+  return {
+    running,
+    ffmpegAlive,
+    uptime,
+    frameCount: 0,
+    volume: 100,
+    muted: false,
+    audioSource: "555stream",
+    inputMode: "screen",
+  };
+}
+
+function isStream555Ready(status: Stream555StatusLike): boolean {
+  return Boolean(
+    status.active && status.cfSessionId && status.cloudflare?.isConnected,
+  );
+}
+
+async function waitForStream555Readiness(
+  service: Stream555ServiceLike,
+  sessionId: string,
+  timeoutMs = parseStream555PositiveInt(
+    "STREAM555_ROUTE_READY_TIMEOUT_MS",
+    DEFAULT_STREAM555_READY_TIMEOUT_MS,
+  ),
+  pollMs = parseStream555PositiveInt(
+    "STREAM555_ROUTE_READY_POLL_MS",
+    DEFAULT_STREAM555_READY_POLL_MS,
+  ),
+): Promise<{ ready: boolean; lastStatus?: Stream555StatusLike }> {
+  const deadline = Date.now() + timeoutMs;
+  let lastStatus: Stream555StatusLike | undefined;
+
+  while (Date.now() <= deadline) {
+    lastStatus = await service.getStreamStatus(sessionId);
+    if (isStream555Ready(lastStatus)) {
+      return { ready: true, lastStatus };
+    }
+    if (Date.now() >= deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+
+  return { ready: false, lastStatus };
+}
+
 // ---------------------------------------------------------------------------
 // Capture mode detection
 // ---------------------------------------------------------------------------
@@ -503,6 +808,89 @@ export async function handleStreamRoute(
 
   // ── POST /api/stream/live -- start stream via destination ────────────
   if (method === "POST" && pathname === "/api/stream/live") {
+    const stream555 = getStream555Service(state);
+    if (stream555) {
+      try {
+        const existingSessionId = getConfiguredStream555SessionId(stream555);
+        if (existingSessionId) {
+          try {
+            const existingStatus = await stream555.getStreamStatus(
+              existingSessionId,
+            );
+            if (existingStatus.active) {
+              json(res, {
+                ok: true,
+                live: true,
+                message: "Already streaming",
+                ...mapStream555StatusToHealth(existingStatus),
+                destination: STREAM555_DESTINATION.id,
+              });
+              return true;
+            }
+          } catch (err) {
+            logger.warn(
+              `[stream] 555stream preflight status failed: ${formatErrorMessage(
+                err,
+              )}`,
+            );
+          }
+        }
+
+        const sessionId = await ensureStream555SessionId(stream555);
+        const destinationSync = await applyConfiguredStream555Destinations(
+          stream555,
+          sessionId,
+        );
+        if (destinationSync.failed.length > 0) {
+          error(
+            res,
+            `555stream destination sync failed for ${destinationSync.failed.length} platform(s)`,
+            500,
+          );
+          return true;
+        }
+        if (destinationSync.enabled === 0) {
+          error(res, "No 555stream destinations enabled", 400);
+          return true;
+        }
+
+        await stream555.startStream(
+          { type: "screen" },
+          { scene: "default" },
+          undefined,
+          sessionId,
+        );
+        const readiness = await waitForStream555Readiness(
+          stream555,
+          sessionId,
+        );
+        if (!readiness.ready) {
+          try {
+            await stream555.stopStream(sessionId);
+          } catch {
+            // Best-effort cleanup after failed readiness.
+          }
+          error(
+            res,
+            "555stream did not reach ready state before timeout",
+            502,
+          );
+          return true;
+        }
+
+        json(res, {
+          ok: true,
+          live: true,
+          sessionId,
+          ...mapStream555StatusToHealth(readiness.lastStatus),
+          destination: STREAM555_DESTINATION.id,
+        });
+      } catch (err) {
+        error(res, formatErrorMessage(err), 500);
+      }
+      return true;
+    }
+
     if (state.streamManager.isRunning()) {
       const health = state.streamManager.getHealth();
       json(res, {
@@ -544,6 +932,22 @@ export async function handleStreamRoute(
 
   // ── POST /api/stream/offline -- stop stream + notify destination ─────
   if (method === "POST" && pathname === "/api/stream/offline") {
+    const stream555 = getStream555Service(state);
+    if (stream555) {
+      try {
+        const sessionId = getConfiguredStream555SessionId(stream555);
+        if (!sessionId) {
+          json(res, { ok: true, live: false });
+          return true;
+        }
+        await stream555.stopStream(sessionId);
+        json(res, { ok: true, live: false });
+      } catch (err) {
+        error(res, formatErrorMessage(err), 500);
+      }
+      return true;
+    }
+
     try {
       // Stop browser capture
       try {
@@ -653,6 +1057,39 @@ export async function handleStreamRoute(
 
   // ── GET /api/stream/status -- local stream health ────────────────────
   if (method === "GET" && pathname === "/api/stream/status") {
+    const stream555 = getStream555Service(state);
+    if (stream555) {
+      const sessionId = getConfiguredStream555SessionId(stream555);
+      if (!sessionId) {
+        json(res, {
+          ok: true,
+          ...mapStream555StatusToHealth(null),
+          destination: STREAM555_DESTINATION,
+        });
+        return true;
+      }
+      try {
+        const status = await stream555.getStreamStatus(sessionId);
+        json(res, {
+          ok: true,
+          ...mapStream555StatusToHealth(status),
+          destination: STREAM555_DESTINATION,
+        });
+      } catch (err) {
+        logger.warn(
+          `[stream] 555stream status fallbacking to inactive payload: ${formatErrorMessage(
+            err,
+          )}`,
+        );
+        json(res, {
+          ok: true,
+          ...mapStream555StatusToHealth(null),
+          destination: STREAM555_DESTINATION,
+        });
+      }
+      return true;
+    }
+
     const health = state.streamManager.getHealth();
     const activeDest = getActiveDestination(state);
     const destInfo = activeDest

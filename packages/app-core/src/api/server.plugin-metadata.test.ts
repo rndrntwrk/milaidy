@@ -98,6 +98,23 @@ describe("plugin metadata discovery", () => {
     ).toBe(true);
   });
 
+  it.skipIf(!hasManifest)(
+    "classifies 555stream as a streaming plugin with a setup guide",
+    () => {
+      const plugins = manifestPlugins;
+      const stream = plugins.find((plugin) => plugin.id === "555stream");
+
+      expect(stream).toMatchObject({
+        id: "555stream",
+        category: "streaming",
+        setupGuideUrl: "https://docs.rndrntwrk.com/555stream",
+      });
+      expect(stream?.tags).toEqual(
+        expect.arrayContaining(["streaming", "broadcast", "555stream"]),
+      );
+    },
+  );
+
   it("enriches installed plugins with homepage, repository, and setup links", () => {
     const installPath = makeTempDir("plugin-twitch-");
     writeFileSync(

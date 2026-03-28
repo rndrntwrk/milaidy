@@ -114,6 +114,67 @@ function mockState(
   };
 }
 
+function mockStream555Service(
+  overrides: Partial<{
+    getBoundSessionId: () => string | null;
+    getConfig: () => { defaultSessionId?: string } | null;
+    createOrResumeSession: () => Promise<{ sessionId: string }>;
+    bindWebSocket: (sessionId: string) => Promise<void>;
+    getStreamStatus: (sessionId?: string) => Promise<{
+      sessionId: string;
+      active: boolean;
+      cfSessionId?: string;
+      cloudflare?: { isConnected?: boolean; state?: string };
+      startTime?: number;
+      platforms: Record<string, { enabled: boolean; status: string; error?: string }>;
+      serverFallbackActive: boolean;
+      jobStatus?: { state: string };
+    }>;
+    startStream: (
+      input: { type: string; url?: string },
+      options?: Record<string, unknown>,
+      sources?: unknown,
+      sessionId?: string,
+    ) => Promise<unknown>;
+    stopStream: (sessionId?: string) => Promise<unknown>;
+    updatePlatform: (
+      platformId: string,
+      config: { rtmpUrl?: string; streamKey?: string; enabled: boolean },
+      sessionId?: string,
+    ) => Promise<unknown>;
+    togglePlatform: (
+      platformId: string,
+      enabled: boolean,
+      sessionId?: string,
+    ) => Promise<void>;
+  }> = {},
+) {
+  return {
+    getBoundSessionId: vi.fn(() => null),
+    getConfig: vi.fn(() => null),
+    createOrResumeSession: vi.fn(async () => ({ sessionId: "session-555" })),
+    bindWebSocket: vi.fn(async () => {}),
+    getStreamStatus: vi.fn(async (sessionId = "session-555") => ({
+      sessionId,
+      active: false,
+      serverFallbackActive: false,
+      platforms: {},
+      jobStatus: { state: "idle" },
+    })),
+    startStream: vi.fn(async () => ({})),
+    stopStream: vi.fn(async () => ({ stopped: true })),
+    updatePlatform: vi.fn(
+      async (platformId, config) => ({
+        platformId,
+        enabled: config.enabled,
+        configured: Boolean(config.rtmpUrl || config.streamKey),
+      }),
+    ),
+    togglePlatform: vi.fn(async () => {}),
+    ...overrides,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // detectCaptureMode()
 // ---------------------------------------------------------------------------
@@ -457,6 +518,213 @@ describe("handleStreamRoute", () => {
       await handleStreamRoute(req, res, "/api/stream/status", "GET", state);
 
       expect(getJson()).toEqual(expect.objectContaining({ destination: null }));
+    });
+  });
+
+  describe("555stream bridge", () => {
+    let savedEnv: Record<string, string | undefined>;
+
+    beforeEach(() => {
+      savedEnv = { ...process.env };
+    });
+
+    afterEach(() => {
+      for (const key of Object.keys(process.env)) {
+        if (!(key in savedEnv)) delete process.env[key];
+      }
+      Object.assign(process.env, savedEnv);
+    });
+
+    it("returns an inactive 555stream payload when the service is loaded but no session is bound", async () => {
+      const { res, getStatus, getJson } = createMockHttpResponse();
+      const req = createMockIncomingMessage({
+        method: "GET",
+        url: "/api/stream/status",
+      });
+      const service = mockStream555Service();
+      const runtime = { getService: vi.fn(() => service) };
+
+      const handled = await handleStreamRoute(
+        req,
+        res,
+        "/api/stream/status",
+        "GET",
+        mockState({ runtime }),
+      );
+
+      expect(handled).toBe(true);
+      expect(getStatus()).toBe(200);
+      expect(service.getStreamStatus).not.toHaveBeenCalled();
+      expect(getJson()).toEqual(
+        expect.objectContaining({
+          ok: true,
+          running: false,
+          ffmpegAlive: false,
+          audioSource: "555stream",
+          inputMode: "screen",
+          destination: { id: "555stream", name: "555 Stream" },
+        }),
+      );
+    });
+
+    it("maps active 555stream status through the generic status route", async () => {
+      const { res, getJson } = createMockHttpResponse();
+      const req = createMockIncomingMessage({
+        method: "GET",
+        url: "/api/stream/status",
+      });
+      const service = mockStream555Service({
+        getBoundSessionId: vi.fn(() => "session-555"),
+        getStreamStatus: vi.fn(async () => ({
+          sessionId: "session-555",
+          active: true,
+          cfSessionId: "cf_123",
+          cloudflare: { isConnected: true, state: "connected" },
+          startTime: Date.now() - 3_000,
+          serverFallbackActive: false,
+          platforms: {
+            twitch: { enabled: true, status: "live" },
+          },
+          jobStatus: { state: "live" },
+        })),
+      });
+
+      await handleStreamRoute(
+        req,
+        res,
+        "/api/stream/status",
+        "GET",
+        mockState({ runtime: { getService: vi.fn(() => service) } }),
+      );
+
+      expect(getJson()).toEqual(
+        expect.objectContaining({
+          ok: true,
+          running: true,
+          ffmpegAlive: true,
+          audioSource: "555stream",
+          inputMode: "screen",
+          destination: { id: "555stream", name: "555 Stream" },
+        }),
+      );
+    });
+
+    it("starts streaming through 555stream and waits for ready status", async () => {
+      process.env.STREAM555_DEST_TWITCH_RTMP_URL = "rtmp://twitch.example/live";
+      process.env.STREAM555_DEST_TWITCH_STREAM_KEY = "stream-key";
+      process.env.STREAM555_DEST_TWITCH_ENABLED = "true";
+
+      const { res, getStatus, getJson } = createMockHttpResponse();
+      const req = createMockIncomingMessage({
+        method: "POST",
+        url: "/api/stream/live",
+      });
+      const service = mockStream555Service({
+        getStreamStatus: vi.fn(async () => ({
+          sessionId: "session-555",
+          active: true,
+          cfSessionId: "cf_123",
+          cloudflare: { isConnected: true, state: "connected" },
+          startTime: Date.now() - 2_000,
+          serverFallbackActive: false,
+          platforms: {
+            twitch: { enabled: true, status: "live" },
+          },
+          jobStatus: { state: "live" },
+        })),
+      });
+
+      const handled = await handleStreamRoute(
+        req,
+        res,
+        "/api/stream/live",
+        "POST",
+        mockState({ runtime: { getService: vi.fn(() => service) } }),
+      );
+
+      expect(handled).toBe(true);
+      expect(getStatus()).toBe(200);
+      expect(service.createOrResumeSession).toHaveBeenCalledOnce();
+      expect(service.bindWebSocket).toHaveBeenCalledWith("session-555");
+      expect(service.updatePlatform).toHaveBeenCalledWith(
+        "twitch",
+        {
+          rtmpUrl: "rtmp://twitch.example/live",
+          streamKey: "stream-key",
+          enabled: true,
+        },
+        "session-555",
+      );
+      expect(service.togglePlatform).toHaveBeenCalledWith(
+        "twitch",
+        true,
+        "session-555",
+      );
+      expect(service.startStream).toHaveBeenCalledWith(
+        { type: "screen" },
+        { scene: "default" },
+        undefined,
+        "session-555",
+      );
+      expect(getJson()).toEqual(
+        expect.objectContaining({
+          ok: true,
+          live: true,
+          destination: "555stream",
+          audioSource: "555stream",
+          inputMode: "screen",
+          sessionId: "session-555",
+        }),
+      );
+    });
+
+    it("rejects go-live when no 555stream destinations are enabled", async () => {
+      const { res, getStatus, getJson } = createMockHttpResponse();
+      const req = createMockIncomingMessage({
+        method: "POST",
+        url: "/api/stream/live",
+      });
+      const service = mockStream555Service();
+
+      await handleStreamRoute(
+        req,
+        res,
+        "/api/stream/live",
+        "POST",
+        mockState({ runtime: { getService: vi.fn(() => service) } }),
+      );
+
+      expect(getStatus()).toBe(400);
+      expect(service.startStream).not.toHaveBeenCalled();
+      expect(getJson()).toEqual(
+        expect.objectContaining({ error: "No 555stream destinations enabled" }),
+      );
+    });
+
+    it("stops a bound 555stream session through the generic offline route", async () => {
+      const { res, getStatus, getJson } = createMockHttpResponse();
+      const req = createMockIncomingMessage({
+        method: "POST",
+        url: "/api/stream/offline",
+      });
+      const service = mockStream555Service({
+        getBoundSessionId: vi.fn(() => "session-555"),
+      });
+
+      const handled = await handleStreamRoute(
+        req,
+        res,
+        "/api/stream/offline",
+        "POST",
+        mockState({ runtime: { getService: vi.fn(() => service) } }),
+      );
+
+      expect(handled).toBe(true);
+      expect(getStatus()).toBe(200);
+      expect(service.stopStream).toHaveBeenCalledWith("session-555");
+      expect(getJson()).toEqual(
+        expect.objectContaining({ ok: true, live: false }),
+      );
     });
   });
 

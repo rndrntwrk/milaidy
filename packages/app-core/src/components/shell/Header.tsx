@@ -57,6 +57,21 @@ const HEADER_MOBILE_NAV_BUTTON_ACTIVE_CLASSNAME =
 const HEADER_MOBILE_NAV_BUTTON_INACTIVE_CLASSNAME =
   "border-transparent bg-transparent text-txt hover:border-border/45 hover:bg-bg-hover/70";
 
+function isStreamingNavPlugin(plugin: {
+  id: string;
+  npmName?: string | null;
+  enabled?: boolean;
+  isActive?: boolean;
+}): boolean {
+  return Boolean(
+    plugin.enabled &&
+      plugin.isActive !== false &&
+      (plugin.id === "streaming-base" ||
+        plugin.id === "555stream" ||
+        plugin.npmName === "@rndrntwrk/plugin-555stream"),
+  );
+}
+
 export function Header({
   mobileLeft,
   transparent: _transparent = false,
@@ -112,10 +127,7 @@ export function Header({
   }, []);
 
   const streamingEnabled = useMemo(
-    () =>
-      plugins.some(
-        (plugin) => plugin.id === "streaming-base" && plugin.enabled,
-      ),
+    () => plugins.some((plugin) => isStreamingNavPlugin(plugin)),
     [plugins],
   );
   const tabGroups = useMemo(

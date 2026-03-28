@@ -24,20 +24,24 @@ import process from "node:process";
 import * as readline from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-// ---------------------------------------------------------------------------
-// Extracted modules — re-exported for backward compatibility
-// ---------------------------------------------------------------------------
-import { runFirstTimeSetup } from "./first-time-setup.js";
-import { resolvePlugins } from "./plugin-resolver.js";
-
-export {
-  CHANNEL_PLUGIN_MAP,
-  collectPluginNames,
-  OPTIONAL_PLUGIN_MAP,
-  PROVIDER_PLUGIN_MAP,
-} from "./plugin-collector.js";
-
-// resolvePlugins is re-exported via index.ts from ./plugin-resolver
+// @clack/prompts is loaded lazily inside runFirstTimeSetup() so the
+// packaged desktop app (which never runs interactive onboarding) does
+// not crash when the package is unavailable.
+type ClackModule = typeof import("@clack/prompts");
+let _clack: ClackModule | null = null;
+async function loadClack(): Promise<ClackModule> {
+  if (!_clack) {
+    try {
+      _clack = await import("@clack/prompts");
+    } catch (err) {
+      throw new Error(
+        `@clack/prompts is required for first-time setup but could not be loaded: ${(err as Error).message ?? err}. ` +
+          `Install it with: bun add @clack/prompts`,
+      );
+    }
+  }
+  return _clack;
+}
 
 import {
   AgentRuntime,
@@ -59,95 +63,68 @@ import {
   type TargetInfo,
   type UUID,
 } from "@elizaos/core";
+import {
+  isMiladySettingsDebugEnabled,
+  settingsDebugCloudSummary,
+} from "@miladyai/shared";
+import * as pluginAgentOrchestrator from "@elizaos/plugin-agent-orchestrator";
 import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
 import * as pluginAnthropic from "@elizaos/plugin-anthropic";
-import * as pluginCommands from "@elizaos/plugin-commands";
 import * as pluginCron from "@elizaos/plugin-cron";
 import * as pluginElizacloud from "@elizaos/plugin-elizacloud";
 import * as pluginExperience from "@elizaos/plugin-experience";
 import * as pluginForm from "@elizaos/plugin-form";
+import * as pluginKnowledge from "@elizaos/plugin-knowledge";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
 import * as pluginOllama from "@elizaos/plugin-ollama";
 import * as pluginOpenai from "@elizaos/plugin-openai";
 import * as pluginPdf from "@elizaos/plugin-pdf";
 import * as pluginPersonality from "@elizaos/plugin-personality";
 import * as pluginPluginManager from "@elizaos/plugin-plugin-manager";
+import * as pluginRolodex from "@elizaos/plugin-rolodex";
 import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
 import * as pluginShell from "@elizaos/plugin-shell";
 import * as pluginSql from "@elizaos/plugin-sql";
+import * as pluginTodo from "@elizaos/plugin-todo";
+import * as pluginTrajectoryLogger from "@elizaos/plugin-trajectory-logger";
 import * as pluginTrust from "@elizaos/plugin-trust";
-import rolesPlugin from "./roles/src/index.js";
-import * as pluginSelfControl from "@miladyai/plugin-selfcontrol";
-import {
-  isMiladySettingsDebugEnabled,
-  settingsDebugCloudSummary,
-} from "@miladyai/shared";
-import { resolveElizaCloudTopology } from "@miladyai/shared/contracts";
-import {
-  getOnboardingProviderOption,
-  migrateLegacyRuntimeConfig,
-  normalizeOnboardingProviderId,
-  resolveDeploymentTargetInConfig,
-  resolveServiceRoutingInConfig,
-} from "@miladyai/shared/contracts/onboarding";
 import {
   debugLogResolvedContext,
   validateRuntimeContext,
-} from "../api/plugin-validation.js";
-import { getWalletAddresses, syncSolanaPublicKeyEnv } from "../api/wallet.js";
+} from "../api/plugin-validation";
 import {
   configFileExists,
   type ElizaConfig,
   loadElizaConfig,
-} from "../config/config.js";
-import { CONNECTOR_ENV_MAP, collectConfigEnvVars } from "../config/env-vars.js";
-import { resolveStateDir, resolveUserPath } from "../config/paths.js";
-import { resolveServerOnlyPort } from "../config/runtime-env.js";
-import type { PluginInstallRecord } from "../config/types.eliza.js";
+  saveElizaConfig,
+} from "../config/config";
+import { collectConfigEnvVars } from "../config/env-vars";
+import { resolveServerOnlyPort } from "../config/runtime-env";
+import { resolveStateDir, resolveUserPath } from "../config/paths";
+import {
+  type ApplyPluginAutoEnableParams,
+  applyPluginAutoEnable,
+} from "../config/plugin-auto-enable";
+import type { AgentConfig } from "../config/types.agents";
+import type { PluginInstallRecord } from "../config/types.eliza";
 import {
   createHookEvent,
   type LoadHooksOptions,
   loadHooks,
   triggerHook,
-} from "../hooks/index.js";
-import {
-  getDefaultStylePreset,
-  normalizeCharacterLanguage,
-  resolveStylePresetByAvatarIndex,
-  resolveStylePresetById,
-  resolveStylePresetByName,
-} from "../onboarding-presets.js";
+} from "../hooks/index";
 import {
   ensureAgentWorkspace,
   resolveDefaultAgentWorkspaceDir,
-} from "../providers/workspace.js";
-import { SandboxAuditLog } from "../security/audit-log.js";
-import {
-  SandboxManager,
-  type SandboxMode,
-} from "../services/sandbox-manager.js";
-import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
-import { seedBundledKnowledge } from "./default-knowledge.js";
-import { createElizaPlugin } from "./eliza-plugin.js";
-import { detectEmbeddingPreset } from "./embedding-presets.js";
-import {
-  runtimeKnowledgeEnabled,
-  runtimeTrajectoriesEnabled,
-} from "./native-runtime-features.js";
-import { installRuntimePluginLifecycle } from "./plugin-lifecycle.js";
-import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence.js";
-
-const require = createRequire(import.meta.url);
-// Keep the orchestrator plugin behind a runtime require of the local compat
-// wrapper. A static ESM import here causes tsdown/rolldown to inline the
-// workspace-linked plugin source and emit a broken synthetic `default2`
-// re-export in cloud bundles.
-let pluginAgentOrchestrator: unknown = null;
-try {
-  pluginAgentOrchestrator = require("./agent-orchestrator-compat");
-} catch {
-  pluginAgentOrchestrator = null;
-}
+} from "../providers/workspace";
+import { SandboxAuditLog } from "../security/audit-log";
+import { SandboxManager, type SandboxMode } from "../services/sandbox-manager";
+import { diagnoseNoAIProvider } from "../services/version-compat";
+import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins";
+import { seedBundledKnowledge } from "./default-knowledge";
+import { createElizaPlugin } from "./eliza-plugin";
+import { detectEmbeddingPreset } from "./embedding-presets";
+import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence";
 
 type SignalShutdownContext = {
   getRuntime: () => AgentRuntime;
@@ -159,7 +136,9 @@ let activeSignalShutdownContext: SignalShutdownContext | null = null;
 let signalHandlersRegistered = false;
 let signalShutdownPromise: Promise<void> | null = null;
 
-function registerSignalShutdownHandlers(context: SignalShutdownContext): void {
+function registerSignalShutdownHandlers(
+  context: SignalShutdownContext,
+): void {
   activeSignalShutdownContext = context;
   if (signalHandlersRegistered) {
     return;
@@ -227,26 +206,26 @@ function registerSignalShutdownHandlers(context: SignalShutdownContext): void {
  * ship a smaller baseline bundle. Those plugins fall through to dynamic
  * import() and can be installed later via the plugin installer.
  */
-export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
+const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-sql": pluginSql,
   "@elizaos/plugin-local-embedding": pluginLocalEmbedding,
   "@elizaos/plugin-secrets-manager": pluginSecretsManager,
   "@elizaos/plugin-form": pluginForm,
-  ...(pluginAgentOrchestrator
-    ? { "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator }
-    : {}),
+  "@elizaos/plugin-knowledge": pluginKnowledge,
+  "@elizaos/plugin-rolodex": pluginRolodex,
+  "@elizaos/plugin-trajectory-logger": pluginTrajectoryLogger,
+  "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator,
   "@elizaos/plugin-cron": pluginCron,
   "@elizaos/plugin-shell": pluginShell,
   "@elizaos/plugin-plugin-manager": pluginPluginManager,
   "@elizaos/plugin-agent-skills": pluginAgentSkills,
-  "@elizaos/plugin-commands": pluginCommands,
   "@elizaos/plugin-pdf": pluginPdf,
   "@elizaos/plugin-openai": pluginOpenai,
   "@elizaos/plugin-anthropic": pluginAnthropic,
   "@elizaos/plugin-ollama": pluginOllama,
   "@elizaos/plugin-elizacloud": pluginElizacloud,
   "@elizaos/plugin-trust": pluginTrust,
-  "@miladyai/plugin-selfcontrol": pluginSelfControl,
+  "@elizaos/plugin-todo": pluginTodo,
   "@elizaos/plugin-personality": pluginPersonality,
   "@elizaos/plugin-experience": pluginExperience,
 };
@@ -282,12 +261,41 @@ if (_rootModules) {
   }
 }
 
+function findMilaidyProjectRoot(startDir: string): string {
+  let dir = startDir;
+  const { root } = path.parse(dir);
+
+  while (dir !== root) {
+    const pkgPath = path.join(dir, "package.json");
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
+        name?: string;
+        workspaces?: unknown;
+      };
+      if (typeof pkg.name === "string" && pkg.name.toLowerCase() === "miladyai") {
+        return dir;
+      }
+      if (
+        Array.isArray(pkg.workspaces) &&
+        existsSync(path.join(dir, "packages", "agent"))
+      ) {
+        return dir;
+      }
+    } catch {
+      // Keep walking until we reach the workspace root.
+    }
+    dir = path.dirname(dir);
+  }
+
+  return startDir;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 /** A successfully resolved plugin ready for AgentRuntime registration. */
-export interface ResolvedPlugin {
+interface ResolvedPlugin {
   /** npm package name (e.g. "@elizaos/plugin-anthropic"). */
   name: string;
   /** The Plugin instance extracted from the module. */
@@ -300,7 +308,7 @@ export interface ResolvedPlugin {
  * It preserves the runtime shape used by `sandboxAuditHandler`:
  * - `direction` and `url` are required
  * - `tokenIds` tracks tokens associated with the audit payload
- * Remove this local shim once the dependency line used here re-exports it.
+ * TODO(elizaos): replace/remove when upstream re-exports this type.
  */
 type SandboxFetchAuditEvent = {
   direction: "inbound" | "outbound";
@@ -309,7 +317,7 @@ type SandboxFetchAuditEvent = {
 };
 
 /** Shape we expect from a dynamically-imported plugin package. */
-export interface PluginModuleShape {
+interface PluginModuleShape {
   default?: Plugin;
   plugin?: Plugin;
   [key: string]: Plugin | undefined;
@@ -321,7 +329,12 @@ export function configureLocalEmbeddingPlugin(
 ): void {
   const detectedPreset = detectEmbeddingPreset();
   const SQL_COMPATIBLE_EMBEDDING_DIMENSIONS = new Set([
-    384, 512, 768, 1024, 1536, 3072,
+    384,
+    512,
+    768,
+    1024,
+    1536,
+    3072,
   ]);
 
   const normalizeEmbeddingDimensions = (
@@ -340,8 +353,8 @@ export function configureLocalEmbeddingPlugin(
   const configuredRepo = embeddingConfig?.modelRepo?.trim();
   const configuredDimensions = normalizeEmbeddingDimensions(
     typeof embeddingConfig?.dimensions === "number" &&
-      Number.isInteger(embeddingConfig.dimensions) &&
-      embeddingConfig.dimensions > 0
+    Number.isInteger(embeddingConfig.dimensions) &&
+    embeddingConfig.dimensions > 0
       ? String(embeddingConfig.dimensions)
       : undefined,
   );
@@ -391,7 +404,10 @@ export function configureLocalEmbeddingPlugin(
   if (configuredDimensions) {
     setEnvFromConfig("LOCAL_EMBEDDING_DIMENSIONS", configuredDimensions);
   } else if (!configuredModel) {
-    setEnvIfMissing("LOCAL_EMBEDDING_DIMENSIONS", detectedDimensions);
+    setEnvIfMissing(
+      "LOCAL_EMBEDDING_DIMENSIONS",
+      detectedDimensions,
+    );
   }
   if (configuredContextSize) {
     setEnvFromConfig("LOCAL_EMBEDDING_CONTEXT_SIZE", configuredContextSize);
@@ -434,26 +450,6 @@ export function configureLocalEmbeddingPlugin(
   setEnvIfMissing("GOOGLE_SMALL_MODEL", "gemini-3-flash-preview");
   setEnvIfMissing("GOOGLE_LARGE_MODEL", "gemini-3.1-pro-preview");
 
-  // Default Groq model names — plugin-groq still ships a deprecated large-model
-  // fallback. Seed runtime defaults before plugin init so direct Groq provider
-  // sessions do not inherit the retired qwen-qwq-32b default.
-  const currentSharedSmallModel =
-    process.env.OPENAI_SMALL_MODEL ?? process.env.SMALL_MODEL;
-  const currentSharedLargeModel =
-    process.env.OPENAI_LARGE_MODEL ?? process.env.LARGE_MODEL;
-  setEnvIfMissing(
-    "GROQ_SMALL_MODEL",
-    currentSharedSmallModel && !isLikelyOpenAiTextModel(currentSharedSmallModel)
-      ? currentSharedSmallModel
-      : "llama-3.1-8b-instant",
-  );
-  setEnvIfMissing(
-    "GROQ_LARGE_MODEL",
-    currentSharedLargeModel && !isLikelyOpenAiTextModel(currentSharedLargeModel)
-      ? currentSharedLargeModel
-      : "qwen/qwen3-32b",
-  );
-
   logger.info(
     `[eliza] Configured local embedding env: ${process.env.LOCAL_EMBEDDING_MODEL} (repo: ${process.env.LOCAL_EMBEDDING_MODEL_REPO ?? "auto"}, dims: ${process.env.LOCAL_EMBEDDING_DIMENSIONS ?? "auto"}, ctx: ${process.env.LOCAL_EMBEDDING_CONTEXT_SIZE ?? "auto"}, GPU: ${process.env.LOCAL_EMBEDDING_GPU_LAYERS}, mmap: ${process.env.LOCAL_EMBEDDING_USE_MMAP})`,
   );
@@ -479,19 +475,13 @@ type MutableConfigEnv = Record<string, unknown> & {
 };
 
 function getMutableConfigEnv(config: ElizaConfig): MutableConfigEnv | null {
-  if (
-    !config.env ||
-    typeof config.env !== "object" ||
-    Array.isArray(config.env)
-  ) {
+  if (!config.env || typeof config.env !== "object" || Array.isArray(config.env)) {
     return null;
   }
   return config.env as MutableConfigEnv;
 }
 
-function getMutableConfigEnvVars(
-  configEnv: MutableConfigEnv,
-): Record<string, unknown> | null {
+function getMutableConfigEnvVars(configEnv: MutableConfigEnv): Record<string, unknown> | null {
   if (
     !configEnv.vars ||
     typeof configEnv.vars !== "object" ||
@@ -502,10 +492,7 @@ function getMutableConfigEnvVars(
   return configEnv.vars as Record<string, unknown>;
 }
 
-function readConfigEnvValue(
-  config: ElizaConfig,
-  key: string,
-): string | undefined {
+function readConfigEnvValue(config: ElizaConfig, key: string): string | undefined {
   const configEnv = getMutableConfigEnv(config);
   if (!configEnv) return undefined;
   const vars = getMutableConfigEnvVars(configEnv);
@@ -525,11 +512,7 @@ function setConfigEnvValue(
   key: string,
   value: string,
 ): void {
-  if (
-    !config.env ||
-    typeof config.env !== "object" ||
-    Array.isArray(config.env)
-  ) {
+  if (!config.env || typeof config.env !== "object" || Array.isArray(config.env)) {
     config.env = {};
   }
   const configEnv = config.env as MutableConfigEnv;
@@ -584,8 +567,8 @@ function isLikelyOpenAiTextModel(value: string | undefined): boolean {
  * Normalize known-bad provider compatibility shims before plugin resolution.
  *
  * A common failure mode is routing the OpenAI plugin through Groq's
- * OpenAI-compatible base URL while leaving OpenAI defaults (`gpt-5.4`,
- * `gpt-5.4-mini`) in place. Structured XML/object generation then fails during
+ * OpenAI-compatible base URL while leaving OpenAI defaults (`gpt-5`,
+ * `gpt-5-mini`) in place. Structured XML/object generation then fails during
  * message handling because Groq does not serve those model IDs.
  *
  * When we can confidently detect that state, rewrite the effective runtime
@@ -596,9 +579,10 @@ export function normalizeOpenAiCompatibleProviderConfig(
   config: ElizaConfig,
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  const cloudInferenceEnabled = resolveElizaCloudTopology(
-    config as Record<string, unknown>,
-  ).services.inference;
+  const cloudInferenceEnabled =
+    config.cloud?.enabled === true &&
+    (config.cloud?.inferenceMode ?? "cloud") === "cloud" &&
+    config.cloud?.services?.inference !== false;
   if (cloudInferenceEnabled) {
     return false;
   }
@@ -615,8 +599,7 @@ export function normalizeOpenAiCompatibleProviderConfig(
   const openaiApiKey = readEffectiveEnvValue(config, "OPENAI_API_KEY", env);
   const groqApiKey = readEffectiveEnvValue(config, "GROQ_API_KEY", env);
   const inheritedGroqApiKey =
-    groqApiKey ??
-    (looksLikeGroqApiKey(openaiApiKey) ? openaiApiKey : undefined);
+    groqApiKey ?? (looksLikeGroqApiKey(openaiApiKey) ? openaiApiKey : undefined);
   if (!inheritedGroqApiKey) {
     return false;
   }
@@ -640,16 +623,14 @@ export function normalizeOpenAiCompatibleProviderConfig(
 
   const normalizedGroqSmallModel =
     currentGroqSmallModel ??
-    (currentSharedSmallModel &&
-    !isLikelyOpenAiTextModel(currentSharedSmallModel)
+    (currentSharedSmallModel && !isLikelyOpenAiTextModel(currentSharedSmallModel)
       ? currentSharedSmallModel
       : "llama-3.1-8b-instant");
   const normalizedGroqLargeModel =
     currentGroqLargeModel ??
-    (currentSharedLargeModel &&
-    !isLikelyOpenAiTextModel(currentSharedLargeModel)
+    (currentSharedLargeModel && !isLikelyOpenAiTextModel(currentSharedLargeModel)
       ? currentSharedLargeModel
-      : "qwen/qwen3-32b");
+      : "qwen-qwq-32b");
 
   env.GROQ_API_KEY = inheritedGroqApiKey;
   env.GROQ_SMALL_MODEL = normalizedGroqSmallModel;
@@ -693,9 +674,12 @@ export function normalizeOpenAiCompatibleProviderConfig(
 }
 
 /** Redact username segments from filesystem paths to avoid leaking user info in logs. */
-function _redactUserSegments(filepath: string): string {
+function redactUserSegments(filepath: string): string {
   // Replace /Users/<name>/ or /home/<name>/ with /Users/<redacted>/ etc.
-  return filepath.replace(/\/(Users|home)\/[^/]+\//g, "/$1/<redacted>/");
+  return filepath.replace(
+    /\/(Users|home)\/[^/]+\//g,
+    "/$1/<redacted>/",
+  );
 }
 
 type RuntimeAdapterWithClose = {
@@ -789,26 +773,22 @@ type TrajectoryLoggerRuntimeLike = {
   ) => TrajectoryLoggerRegistrationStatus;
 };
 
-async function waitForTrajectoriesService(
+async function waitForTrajectoryLoggerService(
   runtime: AgentRuntime,
   context: string,
   timeoutMs = 3000,
 ): Promise<void> {
-  if (!runtimeTrajectoriesEnabled(runtime)) {
-    return;
-  }
-
   const runtimeLike = runtime as unknown as TrajectoryLoggerRuntimeLike;
 
   // Check if already available
   if (typeof runtimeLike.getService === "function") {
-    const existing = runtimeLike.getService("trajectories");
+    const existing = runtimeLike.getService("trajectory_logger");
     if (existing) return;
   }
 
   const registrationStatus =
     typeof runtimeLike.getServiceRegistrationStatus === "function"
-      ? runtimeLike.getServiceRegistrationStatus("trajectories")
+      ? runtimeLike.getServiceRegistrationStatus("trajectory_logger")
       : "unknown";
 
   if (
@@ -831,17 +811,17 @@ async function waitForTrajectoriesService(
 
   try {
     await Promise.race([
-      runtimeLike.getServiceLoadPromise("trajectories").then(() => {}),
+      runtimeLike.getServiceLoadPromise("trajectory_logger").then(() => {}),
       timeoutPromise,
     ]);
     if (timedOut) {
       logger.debug(
-        `[eliza] trajectories still ${registrationStatus} after ${timeoutMs}ms (${context})`,
+        `[eliza] trajectory_logger still ${registrationStatus} after ${timeoutMs}ms (${context})`,
       );
     }
   } catch (err) {
     logger.debug(
-      `[eliza] trajectories registration failed while waiting (${context}): ${formatError(err)}`,
+      `[eliza] trajectory_logger registration failed while waiting (${context}): ${formatError(err)}`,
     );
   } finally {
     if (timeoutHandle) clearTimeout(timeoutHandle);
@@ -852,19 +832,14 @@ function ensureTrajectoryLoggerEnabled(
   runtime: AgentRuntime,
   context: string,
 ): void {
-  if (!runtimeTrajectoriesEnabled(runtime)) {
-    logger.info(`[eliza] Native trajectories disabled (${context})`);
-    return;
-  }
-
-  const trajectoryLogger = runtime.getService("trajectories") as
+  const trajectoryLogger = runtime.getService("trajectory_logger") as
     | TrajectoryLoggerControl
     | null
     | undefined;
 
   if (!trajectoryLogger) {
     logger.warn(
-      `[eliza] trajectories service unavailable (${context}); trajectory capture disabled`,
+      `[eliza] trajectory_logger service unavailable (${context}); trajectory capture disabled`,
     );
     return;
   }
@@ -880,34 +855,19 @@ function ensureTrajectoryLoggerEnabled(
   ) {
     trajectoryLogger.setEnabled(shouldEnable);
     logger.info(
-      `[eliza] trajectories defaulted ${shouldEnable ? "on" : "off"} (${context})`,
+      `[eliza] trajectory_logger defaulted ${shouldEnable ? "on" : "off"} (${context})`,
     );
   }
 }
 
-async function installPromptOptimizationLayer(
-  runtime: AgentRuntime,
-  context: string,
-): Promise<void> {
-  try {
-    const { installPromptOptimizations } = await import(
-      "./prompt-optimization.js"
-    );
-    installPromptOptimizations(runtime);
-  } catch (err) {
-    logger.warn(
-      `[eliza] Failed to install prompt optimizations (${context}): ${err instanceof Error ? err.message : err}`,
-    );
-  }
-}
-
-async function prepareRuntimeForTrajectoryCapture(
-  runtime: AgentRuntime,
-  context: string,
-): Promise<void> {
-  await waitForTrajectoriesService(runtime, context);
-  ensureTrajectoryLoggerEnabled(runtime, context);
-  await installPromptOptimizationLayer(runtime, context);
+/**
+ * Cancel the onboarding flow and exit cleanly.
+ * Extracted to avoid duplicating the cancel+exit pattern 7 times.
+ */
+function cancelOnboarding(): never {
+  // _clack is guaranteed to be loaded by the time onboarding calls this.
+  _clack?.cancel("Maybe next time!");
+  process.exit(0);
 }
 
 // ---------------------------------------------------------------------------
@@ -921,7 +881,47 @@ async function prepareRuntimeForTrajectoryCapture(
  * Eliza stores channel credentials under `config.channels.<name>.<field>`,
  * while elizaOS plugins read them from process.env.
  */
-const CHANNEL_ENV_MAP = CONNECTOR_ENV_MAP;
+const CHANNEL_ENV_MAP: Readonly<
+  Record<string, Readonly<Record<string, string>>>
+> = {
+  discord: {
+    token: "DISCORD_API_TOKEN",
+    botToken: "DISCORD_API_TOKEN",
+    applicationId: "DISCORD_APPLICATION_ID",
+  },
+  telegram: {
+    botToken: "TELEGRAM_BOT_TOKEN",
+  },
+  slack: {
+    botToken: "SLACK_BOT_TOKEN",
+    appToken: "SLACK_APP_TOKEN",
+    userToken: "SLACK_USER_TOKEN",
+  },
+  signal: {
+    authDir: "SIGNAL_AUTH_DIR",
+    account: "SIGNAL_ACCOUNT_NUMBER",
+    httpUrl: "SIGNAL_HTTP_URL",
+    cliPath: "SIGNAL_CLI_PATH",
+  },
+  msteams: {
+    appId: "MSTEAMS_APP_ID",
+    appPassword: "MSTEAMS_APP_PASSWORD",
+  },
+  mattermost: {
+    botToken: "MATTERMOST_BOT_TOKEN",
+    baseUrl: "MATTERMOST_BASE_URL",
+  },
+  googlechat: {
+    serviceAccountKey: "GOOGLE_CHAT_SERVICE_ACCOUNT_KEY",
+  },
+  blooio: {
+    apiKey: "BLOOIO_API_KEY",
+    fromNumber: "BLOOIO_PHONE_NUMBER",
+    webhookSecret: "BLOOIO_WEBHOOK_SECRET",
+    webhookUrl: "BLOOIO_WEBHOOK_URL",
+    webhookPort: "BLOOIO_WEBHOOK_PORT",
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Plugin resolution
@@ -940,9 +940,88 @@ const _OPTIONAL_NATIVE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-computeruse", // requires platform-specific binaries
 ];
 
-// CHANNEL_PLUGIN_MAP, PROVIDER_PLUGIN_MAP, OPTIONAL_PLUGIN_MAP, PI_AI_PLUGIN_PACKAGE,
-// and isPiAiEnabledFromEnv have been moved to ./plugin-collector.ts and are
-// re-exported from this module for backward compatibility.
+/** Maps Eliza channel names to plugin package names. */
+export const CHANNEL_PLUGIN_MAP: Readonly<Record<string, string>> = {
+  discord: "@elizaos/plugin-discord",
+  telegram: "@elizaos/plugin-telegram",
+  slack: "@elizaos/plugin-slack",
+  twitter: "@elizaos/plugin-twitter",
+  // Internal connector built from src/plugins/whatsapp (not an npm package).
+  whatsapp: "@elizaos/plugin-whatsapp",
+  // Internal connector built from src/plugins/signal (not an npm package).
+  signal: "@elizaos/plugin-signal",
+  imessage: "@elizaos/plugin-imessage",
+  bluebubbles: "@elizaos/plugin-bluebubbles",
+  farcaster: "@elizaos/plugin-farcaster",
+  lens: "@elizaos/plugin-lens",
+  msteams: "@elizaos/plugin-msteams",
+  mattermost: "@elizaos/plugin-mattermost",
+  googlechat: "@elizaos/plugin-google-chat",
+  feishu: "@elizaos/plugin-feishu",
+  matrix: "@elizaos/plugin-matrix",
+  nostr: "@elizaos/plugin-nostr",
+  blooio: "@elizaos/plugin-blooio",
+  twitch: "@elizaos/plugin-twitch",
+};
+
+const PI_AI_PLUGIN_PACKAGE = "@elizaos/plugin-pi-ai";
+
+function isPiAiEnabledFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env.ELIZA_USE_PI_AI;
+  if (!raw) return false;
+  const value = String(raw).trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
+/** Maps environment variable names to model-provider plugin packages. */
+const PROVIDER_PLUGIN_MAP: Readonly<Record<string, string>> = {
+  ANTHROPIC_API_KEY: "@elizaos/plugin-anthropic",
+  OPENAI_API_KEY: "@elizaos/plugin-openai",
+  GEMINI_API_KEY: "@elizaos/plugin-google-genai",
+  GOOGLE_API_KEY: "@elizaos/plugin-google-genai",
+  GOOGLE_GENERATIVE_AI_API_KEY: "@elizaos/plugin-google-genai",
+  GROQ_API_KEY: "@elizaos/plugin-groq",
+  XAI_API_KEY: "@elizaos/plugin-xai",
+  OPENROUTER_API_KEY: "@elizaos/plugin-openrouter",
+  AI_GATEWAY_API_KEY: "@elizaos/plugin-vercel-ai-gateway",
+  AIGATEWAY_API_KEY: "@elizaos/plugin-vercel-ai-gateway",
+  OLLAMA_BASE_URL: "@elizaos/plugin-ollama",
+  ZAI_API_KEY: "@homunculuslabs/plugin-zai",
+  ELIZA_USE_PI_AI: PI_AI_PLUGIN_PACKAGE,
+  // ElizaCloud — loaded when API key is present OR cloud is explicitly enabled
+  ELIZAOS_CLOUD_API_KEY: "@elizaos/plugin-elizacloud",
+  ELIZAOS_CLOUD_ENABLED: "@elizaos/plugin-elizacloud",
+};
+
+/**
+ * Optional feature plugins keyed by feature name.
+ *
+ * Mappings here support short IDs in allow-lists and feature toggles.
+ * Keep this map in sync with optional plugin registration and tests.
+ */
+const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
+  browser: "@elizaos/plugin-browser",
+  vision: "@elizaos/plugin-vision",
+  cron: "@elizaos/plugin-cron",
+  cua: "@elizaos/plugin-cua",
+  computeruse: "@elizaos/plugin-computeruse",
+  obsidian: "@elizaos/plugin-obsidian",
+  repoprompt: "@elizaos/plugin-repoprompt",
+  repoPrompt: "@elizaos/plugin-repoprompt",
+  "pi-ai": PI_AI_PLUGIN_PACKAGE,
+  piAi: PI_AI_PLUGIN_PACKAGE,
+  x402: "@elizaos/plugin-x402",
+  "coding-agent": "@elizaos/plugin-agent-orchestrator",
+  "streaming-base": "@elizaos/plugin-streaming-base",
+  "twitch-streaming": "@elizaos/plugin-twitch-streaming",
+  "youtube-streaming": "@elizaos/plugin-youtube-streaming",
+  "custom-rtmp": "@elizaos/plugin-custom-rtmp",
+  "pumpfun-streaming": "@elizaos/plugin-pumpfun-streaming",
+  "x-streaming": "@elizaos/plugin-x-streaming",
+  "stream555-canonical": "@rndrntwrk/plugin-555stream",
+  "555stream": "@rndrntwrk/plugin-555stream",
+  "five55-games": "@miladyai/agent/plugins/five55-games",
+};
 
 function looksLikePlugin(value: unknown): value is Plugin {
   if (!value || typeof value !== "object") return false;
@@ -1009,6 +1088,317 @@ export function findRuntimePluginExport(mod: PluginModuleShape): Plugin | null {
   if (looksLikePluginBasic(modPlugin)) return modPlugin as Plugin;
 
   return null;
+}
+
+/**
+ * Collect the set of plugin package names that should be loaded
+ * based on config, environment variables, and feature flags.
+ */
+/** @internal Exported for testing. */
+export function collectPluginNames(config: ElizaConfig): Set<string> {
+  const shellPluginDisabled = config.features?.shellEnabled === false;
+  const localEmbeddingsExplicitlyDisabled = (() => {
+    const raw = process.env.ELIZA_DISABLE_LOCAL_EMBEDDINGS;
+    if (!raw) return false;
+    const normalized = raw.trim().toLowerCase();
+    return normalized === "1" || normalized === "true" || normalized === "yes";
+  })();
+  const cloudMode = config.cloud?.enabled;
+  const cloudHasApiKey = Boolean(config.cloud?.apiKey);
+  const cloudExplicitlyDisabled = cloudMode === false;
+  // Note: this is intentionally broader than the inference-path check in
+  // applyCloudConfigToEnv (which requires explicit `enabled: true`).  Here
+  // hasApiKey acts as an implicit enable signal so the cloud *plugin* gets
+  // loaded for RPC/services (auth, credits, billing) even when inference
+  // itself is handled by the user's own keys (BYOK).  The inference and
+  // persistence paths gate on `cloud.enabled === true` separately.
+  const cloudEffectivelyEnabled =
+    cloudMode === true || (!cloudExplicitlyDisabled && cloudHasApiKey);
+  // When inferenceMode is "byok" or "local", OR services.inference is false,
+  // the user wants their own AI provider keys — cloud stays enabled for
+  // RPC/services but does NOT hijack model inference.
+  //
+  // If the user chose a subscription provider (e.g. anthropic-subscription)
+  // during onboarding and never explicitly set inferenceMode, treat that as
+  // "byok" — the subscription IS the user's inference choice.
+  const hasSubscriptionProvider = Boolean(
+    config.agents?.defaults?.subscriptionProvider,
+  );
+  const explicitInferenceMode = config.cloud?.inferenceMode;
+  const cloudInferenceMode =
+    explicitInferenceMode ?? (hasSubscriptionProvider ? "byok" : "cloud");
+  const cloudInferenceToggle = config.cloud?.services?.inference ?? true;
+  const cloudHandlesInference =
+    cloudEffectivelyEnabled &&
+    cloudInferenceMode === "cloud" &&
+    cloudInferenceToggle !== false;
+  const configEnv = config.env as
+    | (Record<string, unknown> & { vars?: Record<string, unknown> })
+    | undefined;
+  const configPiAiFlag =
+    (configEnv?.vars &&
+    typeof configEnv.vars === "object" &&
+    !Array.isArray(configEnv.vars)
+      ? (configEnv.vars as Record<string, unknown>).ELIZA_USE_PI_AI
+      : undefined) ?? configEnv?.ELIZA_USE_PI_AI;
+  const piAiEnabled =
+    isPiAiEnabledFromEnv(process.env) ||
+    (typeof configPiAiFlag === "string" &&
+      isPiAiEnabledFromEnv({
+        ELIZA_USE_PI_AI: configPiAiFlag,
+      } as NodeJS.ProcessEnv));
+
+  const pluginEntries = (config.plugins as Record<string, unknown> | undefined)
+    ?.entries as Record<string, { enabled?: boolean }> | undefined;
+
+  const isPluginExplicitlyDisabled = (pluginPackageName: string): boolean => {
+    const marker = "/plugin-";
+    const markerIndex = pluginPackageName.lastIndexOf(marker);
+    const pluginId =
+      markerIndex >= 0
+        ? pluginPackageName.slice(markerIndex + marker.length)
+        : pluginPackageName;
+    return pluginEntries?.[pluginId]?.enabled === false;
+  };
+
+  const providerPluginIdSet = new Set(
+    Object.values(PROVIDER_PLUGIN_MAP).map((pluginPackageName) => {
+      const marker = "/plugin-";
+      const markerIndex = pluginPackageName.lastIndexOf(marker);
+      return markerIndex >= 0
+        ? pluginPackageName.slice(markerIndex + marker.length)
+        : pluginPackageName;
+    }),
+  );
+  const explicitProviderEntries = Object.entries(pluginEntries ?? {}).filter(
+    ([pluginId]) => providerPluginIdSet.has(pluginId),
+  );
+  const hasExplicitEnabledProvider = explicitProviderEntries.some(
+    ([, entry]) => entry?.enabled === true,
+  );
+
+  // Allow-list entries are additive (extra plugins), not exclusive.
+  const allowList = config.plugins?.allow;
+  const pluginsToLoad = new Set<string>(CORE_PLUGINS);
+  if (localEmbeddingsExplicitlyDisabled) {
+    pluginsToLoad.delete("@elizaos/plugin-local-embedding");
+  }
+
+  // Allow list is additive — extra plugins on top of auto-detection,
+  // not an exclusive whitelist that blocks everything else.
+  if (allowList && allowList.length > 0) {
+    for (const item of allowList) {
+      const pluginName =
+        CHANNEL_PLUGIN_MAP[item] ?? OPTIONAL_PLUGIN_MAP[item] ?? item;
+      pluginsToLoad.add(pluginName);
+    }
+  }
+
+  // Connector plugins — load when connector has config entries
+  // Prefer config.connectors, fall back to config.channels for backward compatibility
+  const connectors =
+    config.connectors ??
+    ((config as Record<string, unknown>).channels as Record<
+      string,
+      unknown
+    >) ??
+    {};
+  for (const [channelName, channelConfig] of Object.entries(connectors)) {
+    if (channelConfig && typeof channelConfig === "object") {
+      const pluginName = CHANNEL_PLUGIN_MAP[channelName];
+      if (pluginName) {
+        pluginsToLoad.add(pluginName);
+      }
+    }
+  }
+
+  // Model-provider plugins — load when env key is present
+  for (const [envKey, pluginName] of Object.entries(PROVIDER_PLUGIN_MAP)) {
+    if (envKey === "ELIZA_USE_PI_AI") {
+      // pi-ai enablement uses dedicated boolean parsing + precedence logic below.
+      continue;
+    }
+    if (
+      cloudExplicitlyDisabled &&
+      (envKey === "ELIZAOS_CLOUD_API_KEY" || envKey === "ELIZAOS_CLOUD_ENABLED")
+    ) {
+      continue;
+    }
+    if (isPluginExplicitlyDisabled(pluginName)) {
+      continue;
+    }
+    if (hasExplicitEnabledProvider) {
+      const marker = "/plugin-";
+      const markerIndex = pluginName.lastIndexOf(marker);
+      const pluginId =
+        markerIndex >= 0
+          ? pluginName.slice(markerIndex + marker.length)
+          : pluginName;
+      if (pluginEntries?.[pluginId]?.enabled !== true) {
+        continue;
+      }
+    }
+    if (process.env[envKey]?.trim()) {
+      pluginsToLoad.add(pluginName);
+    }
+  }
+
+  const shouldEnablePiAi =
+    piAiEnabled && pluginEntries?.["pi-ai"]?.enabled !== false;
+
+  const applyProviderPrecedence = (): void => {
+    // Provider precedence:
+    // 1) ElizaCloud for inference (when enabled AND inferenceMode is "cloud")
+    // 2) pi-ai (when enabled and cloud inference is not active)
+    // 3) direct provider plugins (api-key/env based)
+    //
+    // When inferenceMode is "byok" or "local", cloud stays loaded for
+    // RPC/services but direct AI provider plugins are preserved so the
+    // user's own API keys (e.g. Anthropic) handle model inference.
+    if (cloudEffectivelyEnabled) {
+      pluginsToLoad.add("@elizaos/plugin-elizacloud");
+
+      if (cloudHandlesInference) {
+        // Cloud handles ALL model calls — remove direct AI provider plugins.
+        const directProviders = new Set(Object.values(PROVIDER_PLUGIN_MAP));
+        directProviders.delete("@elizaos/plugin-elizacloud");
+        for (const p of directProviders) {
+          pluginsToLoad.delete(p);
+        }
+        return;
+      }
+      // inferenceMode is "byok" or "local" — keep direct provider plugins.
+      // Cloud plugin stays loaded for non-inference cloud services (RPC, media, etc.)
+      // Pi-ai takes priority over direct providers when cloud inference is disabled.
+      if (shouldEnablePiAi) {
+        pluginsToLoad.add(PI_AI_PLUGIN_PACKAGE);
+        // Remove direct provider plugins — pi-ai handles inference selection.
+        const directProviders = new Set(Object.values(PROVIDER_PLUGIN_MAP));
+        directProviders.delete(PI_AI_PLUGIN_PACKAGE);
+        directProviders.delete("@elizaos/plugin-elizacloud");
+        for (const p of directProviders) {
+          pluginsToLoad.delete(p);
+        }
+      }
+      return;
+    }
+
+    if (shouldEnablePiAi) {
+      pluginsToLoad.add(PI_AI_PLUGIN_PACKAGE);
+
+      // When pi-ai is active, remove direct provider plugins + cloud plugin.
+      // pi-ai performs the upstream provider selection itself.
+      const directProviders = new Set(Object.values(PROVIDER_PLUGIN_MAP));
+      directProviders.delete(PI_AI_PLUGIN_PACKAGE);
+      for (const p of directProviders) {
+        pluginsToLoad.delete(p);
+      }
+      pluginsToLoad.delete("@elizaos/plugin-elizacloud");
+      return;
+    }
+
+    if (cloudExplicitlyDisabled) {
+      // Cloud was explicitly disabled — remove elizacloud even though it's
+      // in CORE_PLUGINS, so it cannot intercept model calls.
+      pluginsToLoad.delete("@elizaos/plugin-elizacloud");
+    }
+  };
+
+  // Apply once before additive plugin-entry/feature paths.
+  applyProviderPrecedence();
+
+  // Optional feature plugins from config.plugins.entries
+  const pluginsConfig = config.plugins as
+    | Record<string, Record<string, unknown>>
+    | undefined;
+  if (pluginsConfig?.entries) {
+    for (const [key, entry] of Object.entries(pluginsConfig.entries)) {
+      if (
+        entry &&
+        typeof entry === "object" &&
+        (entry as Record<string, unknown>).enabled !== false
+      ) {
+        // Connector keys (telegram, discord, etc.) must use CHANNEL_PLUGIN_MAP
+        // so the correct variant loads.
+        const pluginName =
+          CHANNEL_PLUGIN_MAP[key] ??
+          OPTIONAL_PLUGIN_MAP[key] ??
+          (key.includes("/") ? key : `@elizaos/plugin-${key}`);
+        pluginsToLoad.add(pluginName);
+      }
+    }
+  }
+
+  // Feature flags (config.features)
+  const features = config.features;
+  if (features && typeof features === "object") {
+    for (const [featureName, featureValue] of Object.entries(features)) {
+      const isEnabled =
+        featureValue === true ||
+        (typeof featureValue === "object" &&
+          featureValue !== null &&
+          (featureValue as Record<string, unknown>).enabled !== false);
+      if (isEnabled) {
+        const pluginName = OPTIONAL_PLUGIN_MAP[featureName];
+        if (pluginName) {
+          pluginsToLoad.add(pluginName);
+        }
+      }
+    }
+  }
+
+  // x402 plugin — auto-load when config section enabled
+  if (config.x402?.enabled) {
+    pluginsToLoad.add("@elizaos/plugin-x402");
+  }
+
+  // Opinion plugin — auto-load when API key is present.
+  // NOT in PROVIDER_PLUGIN_MAP because it is a feature plugin, not a model
+  // provider, and would be incorrectly removed during provider precedence.
+  if (process.env.OPINION_API_KEY?.trim()) {
+    pluginsToLoad.add("@elizaos/plugin-opinion");
+  }
+
+  // Five55 games runtime — auto-load only when the current stream/agent-v1
+  // control plane is configured. This keeps the feature dormant on ordinary
+  // builds while restoring Alice-era runtime capabilities on integration
+  // branches that wire stream+games together.
+  if (
+    process.env.STREAM555_BASE_URL?.trim() &&
+    (
+      process.env.STREAM555_AGENT_API_KEY?.trim() ||
+      process.env.STREAM555_AGENT_TOKEN?.trim() ||
+      process.env.STREAM_API_BEARER_TOKEN?.trim()
+    )
+  ) {
+    pluginsToLoad.add("@miladyai/agent/plugins/five55-games");
+  }
+
+  // User-installed plugins from config.plugins.installs
+  // These are plugins that were installed via the plugin-manager at runtime
+  // and tracked in eliza.json so they persist across restarts.
+  const installs = config.plugins?.installs;
+  if (installs && typeof installs === "object") {
+    for (const [packageName, record] of Object.entries(installs)) {
+      if (record && typeof record === "object") {
+        pluginsToLoad.add(packageName);
+      }
+    }
+  }
+
+  // Re-apply provider precedence so later additive paths (entries, features,
+  // installs) cannot accidentally re-introduce suppressed providers.
+  applyProviderPrecedence();
+
+  // Enforce feature gating last so allow-list entries cannot bypass it.
+  if (shellPluginDisabled) {
+    pluginsToLoad.delete("@elizaos/plugin-shell");
+  }
+  if (isPluginExplicitlyDisabled("@elizaos/plugin-agent-orchestrator")) {
+    pluginsToLoad.delete("@elizaos/plugin-agent-orchestrator");
+  }
+
+  return pluginsToLoad;
 }
 
 // ---------------------------------------------------------------------------
@@ -1108,6 +1498,54 @@ export function mergeDropInPlugins(params: {
   return { accepted, skipped };
 }
 
+const WORKSPACE_PLUGIN_OVERRIDES = new Set<string>([
+  // "@elizaos/plugin-trajectory-logger",
+  // "@elizaos/plugin-plugin-manager",
+  // "@elizaos/plugin-media-generation",
+  "@elizaos/plugin-twitch-streaming",
+  "@elizaos/plugin-youtube-streaming",
+  "@rndrntwrk/plugin-555stream",
+]);
+
+function getWorkspacePluginOverridePath(pluginName: string): string | null {
+  if (process.env.ELIZA_DISABLE_WORKSPACE_PLUGIN_OVERRIDES === "1") {
+    return null;
+  }
+  if (!WORKSPACE_PLUGIN_OVERRIDES.has(pluginName)) {
+    return null;
+  }
+
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  const milaidyRoot = findMilaidyProjectRoot(thisDir);
+  const elizaRoot = path.resolve(thisDir, "..", "..");
+  const workspaceRoot = path.resolve(elizaRoot, "..");
+  const explicitCandidates =
+    pluginName === "@rndrntwrk/plugin-555stream"
+      ? [path.join(milaidyRoot, "packages", "plugin-555stream")]
+      : [];
+  const pluginSegmentMatch = pluginName.match(/^@[^/]+\/(plugin-[^/]+)$/);
+  const pluginSegment = pluginSegmentMatch?.[1];
+  const candidates = pluginSegment
+    ? [
+        ...explicitCandidates,
+        path.join(elizaRoot, "plugins", pluginSegment, "typescript"),
+        path.join(workspaceRoot, "plugins", pluginSegment, "typescript"),
+        path.join(elizaRoot, "plugins", pluginSegment),
+        path.join(workspaceRoot, "plugins", pluginSegment),
+        path.join(elizaRoot, "packages", pluginSegment),
+        path.join(workspaceRoot, "packages", pluginSegment),
+      ]
+    : explicitCandidates;
+
+  for (const candidate of candidates) {
+    if (existsSync(path.join(candidate, "package.json"))) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 export function resolveElizaPluginImportSpecifier(
   pluginName: string,
   runtimeModuleUrl = import.meta.url,
@@ -1139,13 +1577,23 @@ export function shouldIgnoreMissingPluginExport(pluginName: string): boolean {
 // ---------------------------------------------------------------------------
 
 /**
+ * The `@elizaos/plugin-browser` npm package expects a `dist/server/` directory
+ * containing the compiled stagehand-server, but the npm publish doesn't include
+ * it.  The actual source/build lives in the workspace at
+ * `plugins/plugin-browser/stagehand-server/`.
+ *
+ * This function checks whether the server is reachable from the installed
+ * package and, if not, creates a symlink so the plugin's process-manager can
+ * find it.  Returns `true` when the server index.js is available (or was made
+ * available via symlink), `false` otherwise.
+ */
+/**
  * Returns true if the given env var key is safe to forward to runtime.settings.
  * Blocks blockchain private keys, secrets, passwords, tokens, credentials,
  * mnemonics, and seed phrases while allowing API keys that plugins need.
  */
 export function isEnvKeyAllowedForForwarding(key: string): boolean {
   const upper = key.toUpperCase();
-  if (upper === "ALLOW_NO_DATABASE") return false;
   // Block blockchain private keys
   if (upper.includes("PRIVATE_KEY")) return false;
   if (upper.startsWith("EVM_") || upper.startsWith("SOLANA_")) return false;
@@ -1162,38 +1610,11 @@ export function isEnvKeyAllowedForForwarding(key: string): boolean {
     upper === "ELIZAOS_CLOUD_API_KEY" ||
     upper === "ELIZAOS_CLOUD_ENABLED" ||
     upper === "ELIZAOS_CLOUD_BASE_URL" ||
-    upper === "ELIZAOS_CLOUD_NANO_MODEL" ||
-    upper === "ELIZAOS_CLOUD_MEDIUM_MODEL" ||
     upper === "ELIZAOS_CLOUD_SMALL_MODEL" ||
-    upper === "ELIZAOS_CLOUD_LARGE_MODEL" ||
-    upper === "ELIZAOS_CLOUD_MEGA_MODEL" ||
-    upper === "ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL" ||
-    upper === "ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL" ||
-    upper === "ELIZAOS_CLOUD_ACTION_PLANNER_MODEL" ||
-    upper === "ELIZAOS_CLOUD_PLANNER_MODEL"
+    upper === "ELIZAOS_CLOUD_LARGE_MODEL"
   )
     return false;
   return true;
-}
-
-function assertPersistentDatabaseRequired(
-  runtime: Pick<AgentRuntime, "getSetting" | "agentId">,
-): void {
-  const raw =
-    runtime.getSetting("ALLOW_NO_DATABASE") ?? process.env.ALLOW_NO_DATABASE;
-  const normalized = String(raw ?? "")
-    .trim()
-    .toLowerCase();
-  if (
-    normalized === "true" ||
-    normalized === "1" ||
-    normalized === "yes" ||
-    normalized === "on"
-  ) {
-    throw new Error(
-      `Milady requires persistent database storage and does not permit ALLOW_NO_DATABASE (agent ${runtime.agentId}). Remove ALLOW_NO_DATABASE from config/env and use @elizaos/plugin-sql.`,
-    );
-  }
 }
 
 function isElizaCloudManagedProcessEnvKey(key: string): boolean {
@@ -1202,62 +1623,11 @@ function isElizaCloudManagedProcessEnvKey(key: string): boolean {
     upper === "ELIZAOS_CLOUD_API_KEY" ||
     upper === "ELIZAOS_CLOUD_ENABLED" ||
     upper === "ELIZAOS_CLOUD_BASE_URL" ||
-    upper === "ELIZAOS_CLOUD_NANO_MODEL" ||
-    upper === "ELIZAOS_CLOUD_MEDIUM_MODEL" ||
     upper === "ELIZAOS_CLOUD_SMALL_MODEL" ||
-    upper === "ELIZAOS_CLOUD_LARGE_MODEL" ||
-    upper === "ELIZAOS_CLOUD_MEGA_MODEL" ||
-    upper === "ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL" ||
-    upper === "ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL" ||
-    upper === "ELIZAOS_CLOUD_ACTION_PLANNER_MODEL" ||
-    upper === "ELIZAOS_CLOUD_PLANNER_MODEL"
+    upper === "ELIZAOS_CLOUD_LARGE_MODEL"
   );
 }
 
-/**
- * Locate `plugins/plugin-browser/stagehand-server` by walking parents of
- * `startDir`. Supports both Milady (`milady/packages/agent/...`) and upstream
- * eliza (`<workspace>/eliza/packages/agent/...` → stagehand under workspace).
- *
- * **Why walk parents:** A fixed number of `../` segments fails when the agent
- * runtime lives under `eliza/packages/agent` vs `milady/packages/agent`; the
- * checkout is always at `<workspace>/plugins/plugin-browser/stagehand-server`.
- *
- * @internal Exported for unit tests.
- */
-export function findPluginBrowserStagehandDir(startDir: string): string | null {
-  let dir = path.resolve(startDir);
-  for (let depth = 0; depth < 14; depth++) {
-    const candidate = path.join(
-      dir,
-      "plugins",
-      "plugin-browser",
-      "stagehand-server",
-    );
-    const distIndex = path.join(candidate, "dist", "index.js");
-    const srcEntry = path.join(candidate, "src", "index.ts");
-    if (existsSync(distIndex) || existsSync(srcEntry)) {
-      return candidate;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
-}
-
-/**
- * `@elizaos/plugin-browser` expects `dist/server/` with the stagehand binary
- * tree inside the npm package, but the published tarball does not ship it.
- * When missing, symlink to a repo checkout at `plugins/plugin-browser/stagehand-server`
- * (discovered via {@link findPluginBrowserStagehandDir}) so the plugin's
- * process-manager can spawn the server.
- *
- * **Why:** Without the symlink, browser automation fails at runtime even when
- * the user built stagehand locally — the plugin only looks under its package root.
- *
- * @returns `true` when `dist/server` already resolves or symlink succeeded.
- */
 export function ensureBrowserServerLink(): boolean {
   try {
     // Resolve the plugin-browser package root via its package.json.
@@ -1270,15 +1640,16 @@ export function ensureBrowserServerLink(): boolean {
     // Already linked / available — nothing to do.
     if (existsSync(serverIndex)) return true;
 
+    // Walk upward from this file to find the eliza-workspace root.
+    // Layout: <workspace>/eliza/packages/agent/src/runtime/eliza.ts
     const thisDir = path.dirname(fileURLToPath(import.meta.url));
-    const stagehandDir = findPluginBrowserStagehandDir(thisDir);
-    if (!stagehandDir) {
-      logger.debug(
-        "[eliza] plugin-browser: no stagehand-server under plugins/plugin-browser — " +
-          "run node scripts/link-browser-server.mjs or add the plugin checkout",
-      );
-      return false;
-    }
+    const workspaceRoot = path.resolve(thisDir, "..", "..", "..", "..", "..");
+    const stagehandDir = path.join(
+      workspaceRoot,
+      "plugins",
+      "plugin-browser",
+      "stagehand-server",
+    );
     const stagehandIndex = path.join(stagehandDir, "dist", "index.js");
 
     // Auto-build if source exists but dist doesn't
@@ -1315,8 +1686,9 @@ export function ensureBrowserServerLink(): boolean {
     }
 
     if (!existsSync(stagehandIndex)) {
-      logger.debug(
-        "[eliza] plugin-browser: stagehand-server present but dist/index.js missing — build it",
+      logger.info(
+        `[eliza] Browser server not found at ${stagehandDir} — ` +
+          `@elizaos/plugin-browser will not be loaded`,
       );
       return false;
     }
@@ -1337,6 +1709,317 @@ export function ensureBrowserServerLink(): boolean {
 // Plugin resolution
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolve Eliza plugins from config and auto-enable logic.
+ * Returns an array of elizaOS Plugin instances ready for AgentRuntime.
+ *
+ * Handles three categories of plugins:
+ * 1. Built-in/npm plugins — imported by package name
+ * 2. User-installed plugins — from ~/.eliza/plugins/installed/
+ * 3. Custom/drop-in plugins — from ~/.eliza/plugins/custom/ and plugins.load.paths
+ *
+ * Each plugin is loaded inside an error boundary so a single failing plugin
+ * cannot crash the entire agent startup.
+ */
+/**
+ * Resolve a statically-imported @elizaos plugin by name.
+ * Returns the module if found in STATIC_ELIZA_PLUGINS, otherwise null.
+ */
+function resolveStaticElizaPlugin(pluginName: string): unknown | null {
+  return STATIC_ELIZA_PLUGINS[pluginName] ?? null;
+}
+
+async function resolvePlugins(
+  config: ElizaConfig,
+  opts?: { quiet?: boolean },
+): Promise<ResolvedPlugin[]> {
+  const plugins: ResolvedPlugin[] = [];
+  const failedPlugins: Array<{ name: string; error: string }> = [];
+  const repairedInstallRecords = new Set<string>();
+
+  // NOTE: Auto-enable runs before dependency validation intentionally.
+  // It mutates config.plugins.allow based on env vars and connector config
+  // so that collectPluginNames() includes auto-enabled plugins. Dependency
+  // validation happens later during plugin init when the runtime is available.
+  applyPluginAutoEnable({
+    config,
+    env: process.env,
+  } satisfies ApplyPluginAutoEnableParams);
+
+  const pluginsToLoad = collectPluginNames(config);
+  const corePluginSet = new Set<string>(CORE_PLUGINS);
+
+  // Build a mutable map of install records so we can merge drop-in discoveries
+  const installRecords: Record<string, PluginInstallRecord> = {
+    ...(config.plugins?.installs ?? {}),
+  };
+
+  const denyList = new Set<string>((config.plugins?.deny || []) as string[]);
+
+  // ── Auto-discover ejected plugins ───────────────────────────────────────
+  // Ejected plugins override npm/core versions, so they are tracked
+  // separately and consulted first at import time.
+  const ejectedRecords = await scanDropInPlugins(
+    path.join(resolveStateDir(), EJECTED_PLUGINS_DIRNAME),
+  );
+  const ejectedPluginNames: string[] = [];
+  for (const [name, _record] of Object.entries(ejectedRecords)) {
+    if (denyList.has(name)) continue;
+    pluginsToLoad.add(name);
+    ejectedPluginNames.push(name);
+  }
+  if (ejectedPluginNames.length > 0) {
+    logger.info(
+      `[eliza] Discovered ${ejectedPluginNames.length} ejected plugin(s): ${ejectedPluginNames.join(", ")}`,
+    );
+  }
+
+  // ── Auto-discover drop-in custom plugins ────────────────────────────────
+  // Scan well-known dir + any extra dirs from plugins.load.paths (first wins).
+  const scanDirs = [
+    path.join(resolveStateDir(), CUSTOM_PLUGINS_DIRNAME),
+    ...(config.plugins?.load?.paths ?? []).map(resolveUserPath),
+  ];
+  const dropInRecords: Record<string, PluginInstallRecord> = {};
+  for (const dir of scanDirs) {
+    for (const [name, record] of Object.entries(await scanDropInPlugins(dir))) {
+      if (!dropInRecords[name]) dropInRecords[name] = record;
+    }
+  }
+
+  // Merge into load set — deny list and core collisions are filtered out.
+  const { accepted: customPluginNames, skipped } = mergeDropInPlugins({
+    dropInRecords,
+    installRecords,
+    corePluginNames: corePluginSet,
+    denyList,
+    pluginsToLoad,
+  });
+
+  for (const msg of skipped) logger.warn(msg);
+  if (customPluginNames.length > 0) {
+    logger.info(
+      `[eliza] Discovered ${customPluginNames.length} custom plugin(s): ${customPluginNames.join(", ")}`,
+    );
+  }
+
+  logger.info(`[eliza] Resolving ${pluginsToLoad.size} plugins...`);
+  const loadStartTime = Date.now();
+
+  // Built once so we don't rebuild on every optional plugin failure.
+  const optionalPluginNames = new Set([
+    ...Object.values(OPTIONAL_PLUGIN_MAP),
+    ...Object.values(CHANNEL_PLUGIN_MAP),
+    ...OPTIONAL_CORE_PLUGINS,
+  ]);
+
+  // Load a single plugin - returns result or null on skip/failure
+  async function loadSinglePlugin(pluginName: string): Promise<{
+    name: string;
+    plugin: Plugin;
+  } | null> {
+    const isCore = corePluginSet.has(pluginName);
+    const ejectedRecord = ejectedRecords[pluginName];
+    const installRecord = installRecords[pluginName];
+    const workspaceOverridePath = getWorkspacePluginOverridePath(pluginName);
+
+    // Pre-flight: ensure native dependencies are available for special plugins.
+    if (pluginName === "@elizaos/plugin-browser") {
+      if (!ensureBrowserServerLink()) {
+        failedPlugins.push({
+          name: pluginName,
+          error: "browser server binary not found",
+        });
+        logger.warn(
+          `[eliza] Skipping ${pluginName}: browser server not available. ` +
+            `Build the stagehand-server or remove the plugin from plugins.allow.`,
+        );
+        return null;
+      }
+    }
+
+    try {
+      let mod: PluginModuleShape;
+
+      if (ejectedRecord?.installPath) {
+        // Ejected plugin — always prefer local source over npm/core.
+        logger.debug(
+          `[eliza] Loading ejected plugin: ${pluginName} from ${ejectedRecord.installPath}`,
+        );
+        mod = await importFromPath(ejectedRecord.installPath, pluginName);
+      } else if (workspaceOverridePath) {
+        logger.debug(
+          `[eliza] Loading workspace plugin override: ${pluginName} from ${workspaceOverridePath}`,
+        );
+        mod = await importFromPath(workspaceOverridePath, pluginName);
+      } else if (installRecord?.installPath) {
+        // Prefer bundled/node_modules copies for official Eliza plugins.
+        const isOfficialElizaPlugin = pluginName.startsWith("@elizaos/plugin-");
+
+        if (isOfficialElizaPlugin) {
+          try {
+            const staticMod = await resolveStaticElizaPlugin(pluginName);
+            mod = staticMod
+              ? (staticMod as PluginModuleShape)
+              : ((await import(pluginName)) as PluginModuleShape);
+            if (repairBrokenInstallRecord(config, pluginName)) {
+              repairedInstallRecords.add(pluginName);
+            }
+          } catch (npmErr) {
+            logger.warn(
+              `[eliza] Node_modules resolution failed for ${pluginName} (${formatError(npmErr)}). Trying installed path at ${redactUserSegments(installRecord.installPath)}.`,
+            );
+            mod = await importFromPath(installRecord.installPath, pluginName);
+          }
+        } else {
+          // User-installed plugin — load from its install directory on disk.
+          try {
+            mod = await importFromPath(installRecord.installPath, pluginName);
+          } catch (installErr) {
+            logger.warn(
+              `[eliza] Installed plugin ${pluginName} failed at ${redactUserSegments(installRecord.installPath)} (${formatError(installErr)}). Falling back to node_modules resolution.`,
+            );
+            const staticMod = await resolveStaticElizaPlugin(pluginName);
+            mod = staticMod
+              ? (staticMod as PluginModuleShape)
+              : ((await import(pluginName)) as PluginModuleShape);
+            if (repairBrokenInstallRecord(config, pluginName)) {
+              repairedInstallRecords.add(pluginName);
+            }
+          }
+        }
+      } else if (pluginName.startsWith("@elizaos/plugin-")) {
+        // Eliza plugins can resolve either from bundled local wrappers
+        // under eliza-dist/plugins/* or from packaged node_modules.
+        mod = (await import(
+          resolveElizaPluginImportSpecifier(pluginName)
+        )) as PluginModuleShape;
+      } else {
+        // Built-in/npm plugin — try bundled static import first, then
+        // fall back to bare node_modules resolution.
+        const staticMod = pluginName.startsWith("@elizaos/plugin-")
+          ? await resolveStaticElizaPlugin(pluginName)
+          : null;
+        mod = staticMod
+          ? (staticMod as PluginModuleShape)
+          : ((await import(pluginName)) as PluginModuleShape);
+      }
+
+      const pluginInstance = findRuntimePluginExport(mod);
+
+      if (pluginInstance) {
+        // Wrap the plugin's init function with an error boundary.
+        // Core plugins re-throw on init failure; optional plugins degrade gracefully.
+        const wrappedPlugin = wrapPluginWithErrorBoundary(
+          pluginName,
+          pluginInstance,
+          { isCore },
+        );
+        logger.debug(`[eliza] ✓ Loaded plugin: ${pluginName}`);
+        return { name: pluginName, plugin: wrappedPlugin };
+      } else {
+        if (shouldIgnoreMissingPluginExport(pluginName)) {
+          logger.info(
+            `[eliza] Skipping helper package ${pluginName}: no Plugin export is expected`,
+          );
+          return null;
+        }
+
+        const msg = `[eliza] Plugin ${pluginName} did not export a valid Plugin object`;
+        failedPlugins.push({
+          name: pluginName,
+          error: "no valid Plugin export",
+        });
+        if (isCore) {
+          logger.error(msg);
+        } else {
+          logger.warn(msg);
+        }
+        return null;
+      }
+    } catch (err) {
+      const msg = formatError(err);
+
+      failedPlugins.push({ name: pluginName, error: msg });
+      if (isCore) {
+        logger.error(
+          `[eliza] Failed to load core plugin ${pluginName}: ${msg}`,
+        );
+      } else {
+        if (optionalPluginNames.has(pluginName)) {
+          logger.debug(
+            `[eliza] Optional plugin ${pluginName} not available: ${msg}`,
+          );
+        } else {
+          logger.info(`[eliza] Could not load plugin ${pluginName}: ${msg}`);
+        }
+      }
+      return null;
+    }
+  }
+
+  // Load all plugins in parallel for faster startup.
+  // SECURITY NOTE: Plugins that modify process.env during import or init
+  // may race with each other. This is an accepted trade-off for startup
+  // performance. Critical env vars (database, AI provider keys) are set
+  // before this point in buildCharacterFromConfig / resolveDbEnv.
+  logger.info(`[eliza] Loading ${pluginsToLoad.size} plugins...`);
+  const pluginResults = await Promise.all(
+    Array.from(pluginsToLoad).map(loadSinglePlugin),
+  );
+
+  // Collect successful loads
+  for (const result of pluginResults) {
+    if (result) {
+      plugins.push(result);
+    }
+  }
+
+  const loadDuration = Date.now() - loadStartTime;
+  logger.info(`[eliza] Plugin loading took ${loadDuration}ms`);
+
+  // Summary logging
+  logger.info(
+    `[eliza] Plugin resolution complete: ${plugins.length}/${pluginsToLoad.size} loaded` +
+      (failedPlugins.length > 0 ? `, ${failedPlugins.length} failed` : ""),
+  );
+  if (failedPlugins.length > 0) {
+    logger.info(
+      `[eliza] Failed plugins: ${failedPlugins.map((f) => `${f.name} (${f.error})`).join(", ")}`,
+    );
+  }
+
+  // Diagnose version-skew issues when AI providers failed to load (#10)
+  const loadedNames = plugins.map((p) => p.name);
+  const diagnostic = diagnoseNoAIProvider(loadedNames, failedPlugins);
+  if (diagnostic) {
+    if (opts?.quiet) {
+      // In headless/GUI mode before onboarding, this is expected — the user
+      // will configure a provider through the onboarding wizard and restart.
+      logger.info(`[eliza] ${diagnostic}`);
+    } else {
+      logger.error(`[eliza] ${diagnostic}`);
+    }
+  }
+
+  // Persist repaired install records so future startups do not keep trying
+  // to import from stale install directories.
+  if (repairedInstallRecords.size > 0) {
+    try {
+      saveElizaConfig(config);
+      logger.info(
+        `[eliza] Repaired ${repairedInstallRecords.size} plugin install record(s): ${Array.from(repairedInstallRecords).join(", ")}`,
+      );
+    } catch (err) {
+      logger.warn(
+        `[eliza] Failed to persist plugin install repairs: ${formatError(err)}`,
+      );
+    }
+  }
+
+  return plugins;
+}
+
 /** @internal Exported for testing. */
 export function repairBrokenInstallRecord(
   config: ElizaConfig,
@@ -1350,6 +2033,112 @@ export function repairBrokenInstallRecord(
   record.installPath = "";
   record.source = "npm";
   return true;
+}
+
+/**
+ * Wrap a plugin's `init` and `providers` with error boundaries so that a
+ * crash in any single plugin does not take down the entire agent or GUI.
+ *
+ * NOTE: Actions are NOT wrapped here because elizaOS's action dispatch
+ * already has its own error boundary.  Only `init` (startup) and
+ * `providers` (called every turn) need protection at this layer.
+ *
+ * The wrapper catches errors, logs them with the plugin name for easy
+ * debugging, and continues execution.
+ */
+function wrapPluginWithErrorBoundary(
+  pluginName: string,
+  plugin: Plugin,
+  options?: { isCore?: boolean },
+): Plugin {
+  const wrapped: Plugin = { ...plugin };
+
+  // Wrap init if present
+  if (plugin.init) {
+    const originalInit = plugin.init;
+    wrapped.init = async (...args: Parameters<typeof originalInit>) => {
+      try {
+        return await originalInit(...args);
+      } catch (err) {
+        logger.error(
+          `[eliza] Plugin "${pluginName}" crashed during init: ${formatError(err)}`,
+        );
+        // Core plugins are essential — re-throw so the agent does not
+        // start in an undefined state (e.g. missing database adapter).
+        if (options?.isCore) {
+          throw err;
+        }
+        // Optional plugins continue in degraded mode.
+        logger.warn(
+          `[eliza] Plugin "${pluginName}" will run in degraded mode (init failed)`,
+        );
+      }
+    };
+  }
+
+  // Wrap providers with error boundaries
+  if (plugin.providers && plugin.providers.length > 0) {
+    wrapped.providers = plugin.providers.map((provider) => ({
+      ...provider,
+      get: async (...args: Parameters<typeof provider.get>) => {
+        try {
+          return await provider.get(...args);
+        } catch (err) {
+          const msg = formatError(err);
+          logger.error(
+            `[eliza] Provider "${provider.name}" (plugin: ${pluginName}) crashed: ${msg}`,
+          );
+          // Return an error marker so downstream consumers can detect
+          // the failure rather than silently using empty data.
+          return {
+            text: `[Provider ${provider.name} error: ${msg}]`,
+            data: { _providerError: true },
+          };
+        }
+      },
+    }));
+  }
+
+  return wrapped;
+}
+
+/**
+ * Import a plugin module from its install directory on disk.
+ *
+ * Handles two install layouts:
+ *   1. npm layout:  <installPath>/node_modules/@scope/package/  (from `bun add`)
+ *   2. git layout:  <installPath>/ is the package root directly  (from `git clone`)
+ *
+ * @param installPath  Root directory of the installation (e.g. ~/.eliza/plugins/installed/foo/).
+ * @param packageName  The npm package name (e.g. "@elizaos/plugin-discord") — used
+ *                     to navigate directly into node_modules when present.
+ */
+async function importFromPath(
+  installPath: string,
+  packageName: string,
+): Promise<PluginModuleShape> {
+  const absPath = path.resolve(installPath);
+
+  // npm/bun layout:  installPath/node_modules/@scope/name/
+  // git layout:      installPath/ is the package itself
+  const nmCandidate = path.join(
+    absPath,
+    "node_modules",
+    ...packageName.split("/"),
+  );
+  let pkgRoot = absPath;
+  try {
+    if ((await fs.stat(nmCandidate)).isDirectory()) pkgRoot = nmCandidate;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw err;
+    }
+    /* git layout — pkgRoot stays as absPath */
+  }
+
+  // Resolve entry point from package.json
+  const entryPoint = await resolvePackageEntry(pkgRoot);
+  return (await import(pathToFileURL(entryPoint).href)) as PluginModuleShape;
 }
 
 /** Read package.json exports/main to find the importable entry file. */
@@ -1444,8 +2233,12 @@ export function applyConnectorSecretsToEnv(config: ElizaConfig): void {
         (typeof configObj.botToken === "string" && configObj.botToken.trim()) ||
         "";
       if (tokenValue) {
-        process.env.DISCORD_API_TOKEN = tokenValue;
-        process.env.DISCORD_BOT_TOKEN = tokenValue;
+        if (!process.env.DISCORD_API_TOKEN) {
+          process.env.DISCORD_API_TOKEN = tokenValue;
+        }
+        if (!process.env.DISCORD_BOT_TOKEN) {
+          process.env.DISCORD_BOT_TOKEN = tokenValue;
+        }
       }
     }
 
@@ -1455,59 +2248,10 @@ export function applyConnectorSecretsToEnv(config: ElizaConfig): void {
     for (const [configField, envKey] of Object.entries(envMap)) {
       const value = configObj[configField];
       if (typeof value === "string" && value.trim()) {
-        process.env[envKey] = value;
-      }
-    }
-
-    if (channelName === "whatsapp") {
-      const allowFrom = configObj.allowFrom;
-      if (Array.isArray(allowFrom) && allowFrom.length > 0) {
-        const normalized = allowFrom
-          .map((value) => String(value).trim())
-          .filter(Boolean);
-        if (normalized.length > 0) {
-          process.env.WHATSAPP_ALLOW_FROM = normalized.join(",");
-        }
-      }
-
-      const groupAllowFrom = configObj.groupAllowFrom;
-      if (Array.isArray(groupAllowFrom) && groupAllowFrom.length > 0) {
-        const normalized = groupAllowFrom
-          .map((value) => String(value).trim())
-          .filter(Boolean);
-        if (normalized.length > 0) {
-          process.env.WHATSAPP_GROUP_ALLOW_FROM = normalized.join(",");
-        }
-      }
-
-      const accounts = configObj.accounts;
-      if (
-        accounts &&
-        typeof accounts === "object" &&
-        !Array.isArray(accounts)
-      ) {
-        const firstEnabledAccount = Object.values(
-          accounts as Record<string, unknown>,
-        ).find((account) => {
-          if (
-            !account ||
-            typeof account !== "object" ||
-            Array.isArray(account)
-          ) {
-            return false;
-          }
-          const candidate = account as Record<string, unknown>;
-          return (
-            candidate.enabled !== false && typeof candidate.authDir === "string"
-          );
-        }) as Record<string, unknown> | undefined;
-
-        if (
-          firstEnabledAccount &&
-          typeof firstEnabledAccount.authDir === "string" &&
-          firstEnabledAccount.authDir.trim()
-        ) {
-          process.env.WHATSAPP_AUTH_DIR = firstEnabledAccount.authDir.trim();
+        // Set if unset, or overwrite stale [REDACTED] placeholders
+        const existing = process.env[envKey];
+        if (!existing || existing.startsWith("[REDACT")) {
+          process.env[envKey] = value;
         }
       }
     }
@@ -1552,119 +2296,30 @@ export async function autoResolveDiscordAppId(): Promise<void> {
 }
 
 /**
- * Fetch GitHub OAuth token from cloud if available and no local token is set.
- * Called during async runtime init after cloud config is applied.
- *
- * Flow: If the agent has a managed GitHub connection in the cloud, and no
- * local GITHUB_TOKEN is set, fetch the OAuth token from the cloud API and
- * inject it into process.env so plugins (plugin-github, git-workspace-service)
- * can use it for API calls and git credential helpers.
- */
-/** @internal Exported for testing. */
-export async function autoFetchCloudGithubToken(
-  agentId?: string,
-): Promise<void> {
-  // Skip if a local token is already configured
-  if (process.env.GITHUB_TOKEN || process.env.GITHUB_PAT) return;
-
-  // Need cloud credentials and an agent ID
-  const cloudApiKey = process.env.ELIZAOS_CLOUD_API_KEY?.trim();
-  const cloudBaseUrl =
-    process.env.ELIZAOS_CLOUD_BASE_URL?.trim() || "https://api.elizacloud.ai";
-  if (!cloudApiKey || !agentId) return;
-
-  try {
-    const url = `${cloudBaseUrl}/api/v1/milady/agents/${encodeURIComponent(agentId)}/github/token`;
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${cloudApiKey}`,
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(10_000),
-    });
-
-    if (!res.ok) {
-      // 404 = no GitHub connection for this agent, which is fine
-      if (res.status !== 404) {
-        logger.warn(
-          `[eliza] Failed to fetch cloud GitHub token: ${res.status}`,
-        );
-      }
-      return;
-    }
-
-    const body = (await res.json()) as {
-      success?: boolean;
-      data?: { accessToken?: string; githubUsername?: string };
-    };
-    if (!body.success || !body.data?.accessToken) return;
-
-    process.env.GITHUB_TOKEN = body.data.accessToken;
-    logger.info(
-      `[eliza] Fetched GitHub token from cloud for @${body.data.githubUsername || "unknown"}`,
-    );
-  } catch (err) {
-    logger.warn(`[eliza] Could not fetch cloud GitHub token: ${err}`);
-  }
-}
-
-/**
  * Propagate cloud config from Eliza config into process.env so the
  * ElizaCloud plugin can discover settings at startup.
  */
 /** @internal Exported for testing. */
 export function applyCloudConfigToEnv(config: ElizaConfig): void {
-  migrateLegacyRuntimeConfig(config as Record<string, unknown>);
   const cloud = config.cloud;
+  if (!cloud) return;
 
-  const isCloudContainer =
-    process.env.MILADY_CLOUD_PROVISIONED === "1" ||
-    process.env.ELIZA_CLOUD_PROVISIONED === "1";
-  if (!cloud && !isCloudContainer) return;
-  const topology = resolveElizaCloudTopology(config as Record<string, unknown>);
-
-  // Cloud inference is selected from the canonical onboarding connection, not
-  // just from raw cloud flags. This keeps linked cloud auth from re-enabling
-  // Eliza Cloud after the user has switched to a local or remote provider.
-  const effectivelyEnabled = topology.services.inference || isCloudContainer;
-  const shouldLoadCloudPlugin = topology.shouldLoadPlugin || isCloudContainer;
-
-  const setCloudUsageEnv = (key: string, enabled: boolean): void => {
-    if (enabled) {
-      process.env[key] = "true";
-    } else {
-      delete process.env[key];
-    }
-  };
+  const cloudMode = cloud.enabled;
+  // Require explicit cloud.enabled = true. Previously, undefined + apiKey
+  // would count as enabled, causing the model to revert to cloud on restart.
+  const effectivelyEnabled = cloudMode === true;
 
   if (isMiladySettingsDebugEnabled()) {
-    const c = (cloud ?? {}) as Record<string, unknown>;
+    const c = cloud as Record<string, unknown>;
     logger.debug(
-      `[milady][settings][runtime] applyCloudConfigToEnv inference=${effectivelyEnabled} shouldLoadPlugin=${shouldLoadCloudPlugin} isCloudContainer=${isCloudContainer} cloud=${JSON.stringify(settingsDebugCloudSummary(c))}`,
+      `[milady][settings][runtime] applyCloudConfigToEnv effectivelyEnabled=${effectivelyEnabled} cloud=${JSON.stringify(settingsDebugCloudSummary(c))} inferenceMode=${String(cloud.inferenceMode ?? "")} servicesInference=${String(cloud.services?.inference ?? "")}`,
     );
   }
 
-  setCloudUsageEnv("ELIZAOS_CLOUD_USE_INFERENCE", effectivelyEnabled);
-  setCloudUsageEnv(
-    "ELIZAOS_CLOUD_USE_TTS",
-    topology.services.tts || isCloudContainer,
-  );
-  setCloudUsageEnv("ELIZAOS_CLOUD_USE_MEDIA", topology.services.media);
-  setCloudUsageEnv(
-    "ELIZAOS_CLOUD_USE_EMBEDDINGS",
-    topology.services.embeddings,
-  );
-  setCloudUsageEnv("ELIZAOS_CLOUD_USE_RPC", topology.services.rpc);
-
   if (effectivelyEnabled) {
     process.env.ELIZAOS_CLOUD_ENABLED = "true";
-  } else {
-    delete process.env.ELIZAOS_CLOUD_ENABLED;
-  }
-
-  if (shouldLoadCloudPlugin) {
     logger.info(
-      `[eliza] Cloud config: inference=${topology.services.inference}, runtime=${topology.runtime}, hasApiKey=${Boolean(cloud?.apiKey || process.env.ELIZAOS_CLOUD_API_KEY)}, baseUrl=${cloud?.baseUrl ?? "(default)"}, isCloudContainer=${isCloudContainer}`,
+      `[eliza] Cloud config: enabled=${cloud.enabled}, hasApiKey=${Boolean(cloud.apiKey)}, baseUrl=${cloud.baseUrl ?? "(default)"}`,
     );
     // Only propagate the API key when cloud is enabled AND it is a real
     // credential — never set the literal "[REDACTED]" placeholder (which can
@@ -1673,124 +2328,86 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
     // in process.env still auto-loads @elizaos/plugin-elizacloud and steals
     // TEXT_LARGE even if the JSON says cloud is off.
     const isRealApiKey =
-      cloud?.apiKey && cloud.apiKey.trim().toUpperCase() !== "[REDACTED]";
+      cloud.apiKey && cloud.apiKey.trim().toUpperCase() !== "[REDACTED]";
     if (isRealApiKey) {
       process.env.ELIZAOS_CLOUD_API_KEY = cloud.apiKey;
-    } else if (!isCloudContainer) {
+    } else {
       delete process.env.ELIZAOS_CLOUD_API_KEY;
     }
-    if (cloud?.baseUrl) {
+    if (cloud.baseUrl) {
       process.env.ELIZAOS_CLOUD_BASE_URL = cloud.baseUrl;
-    } else if (!isCloudContainer) {
+    } else {
       delete process.env.ELIZAOS_CLOUD_BASE_URL;
     }
   } else {
-    delete process.env.ELIZAOS_CLOUD_NANO_MODEL;
-    delete process.env.ELIZAOS_CLOUD_MEDIUM_MODEL;
+    delete process.env.ELIZAOS_CLOUD_ENABLED;
     delete process.env.ELIZAOS_CLOUD_SMALL_MODEL;
     delete process.env.ELIZAOS_CLOUD_LARGE_MODEL;
-    delete process.env.ELIZAOS_CLOUD_MEGA_MODEL;
-    delete process.env.ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL;
-    delete process.env.ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL;
-    delete process.env.ELIZAOS_CLOUD_ACTION_PLANNER_MODEL;
-    delete process.env.ELIZAOS_CLOUD_PLANNER_MODEL;
     delete process.env.ELIZAOS_CLOUD_API_KEY;
     delete process.env.ELIZAOS_CLOUD_BASE_URL;
   }
 
-  // Propagate model names so the cloud plugin picks them up. Falls back to
+  // Propagate model names so the cloud plugin picks them up.  Falls back to
   // sensible defaults when cloud is enabled but no explicit selection exists.
   // Skip when inferenceMode is "byok"/"local" or services.inference is off —
   // user's own keys handle models.
   // If the user chose a subscription provider, treat that as "byok" unless
   // they explicitly set inferenceMode to "cloud".
-  const llmText = resolveServiceRoutingInConfig(config as Record<string, unknown>)
-    ?.llmText;
+  const hasSubProvider = Boolean(config.agents?.defaults?.subscriptionProvider);
+  const explicitMode = cloud.inferenceMode;
+  const inferenceMode = explicitMode ?? (hasSubProvider ? "byok" : "cloud");
+  const inferenceToggle = cloud.services?.inference ?? true;
+  const cloudDoesInference =
+    inferenceMode === "cloud" && inferenceToggle !== false;
   const models = (config as Record<string, unknown>).models as
-    | {
-        nano?: string;
-        small?: string;
-        medium?: string;
-        large?: string;
-        mega?: string;
-      }
+    | { small?: string; large?: string }
     | undefined;
-  if (effectivelyEnabled) {
-    const nano = llmText?.nanoModel || models?.nano || "openai/gpt-5.4-nano";
-    const small = llmText?.smallModel || models?.small || "minimax/minimax-m2.7";
-    const medium =
-      llmText?.mediumModel || models?.medium || small;
-    const large =
-      llmText?.largeModel || models?.large || "anthropic/claude-sonnet-4.6";
-    const mega = llmText?.megaModel || models?.mega || large;
-    const responseHandlerModel =
-      llmText?.responseHandlerModel || llmText?.shouldRespondModel;
-    const actionPlannerModel =
-      llmText?.actionPlannerModel || llmText?.plannerModel;
+  if (effectivelyEnabled && cloudDoesInference) {
+    const small = models?.small || "openai/gpt-5-mini";
+    const large = models?.large || "anthropic/claude-sonnet-4.5";
     process.env.SMALL_MODEL = small;
-    process.env.NANO_MODEL = nano;
-    process.env.MEDIUM_MODEL = medium;
     process.env.LARGE_MODEL = large;
-    process.env.MEGA_MODEL = mega;
-    if (responseHandlerModel) {
-      process.env.ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL = responseHandlerModel;
-      process.env.ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL = responseHandlerModel;
-    } else {
-      delete process.env.ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL;
-      delete process.env.ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL;
-    }
-    if (actionPlannerModel) {
-      process.env.ELIZAOS_CLOUD_ACTION_PLANNER_MODEL = actionPlannerModel;
-      process.env.ELIZAOS_CLOUD_PLANNER_MODEL = actionPlannerModel;
-    } else {
-      delete process.env.ELIZAOS_CLOUD_ACTION_PLANNER_MODEL;
-      delete process.env.ELIZAOS_CLOUD_PLANNER_MODEL;
-    }
-    process.env.ELIZAOS_CLOUD_NANO_MODEL = nano;
-    process.env.ELIZAOS_CLOUD_MEDIUM_MODEL = medium;
     process.env.ELIZAOS_CLOUD_SMALL_MODEL = small;
     process.env.ELIZAOS_CLOUD_LARGE_MODEL = large;
-    process.env.ELIZAOS_CLOUD_MEGA_MODEL = mega;
-  } else if (shouldLoadCloudPlugin) {
-    // Cloud plugin may still be active for non-inference services; keep model
-    // routing local by clearing the cloud model aliases.
-    delete process.env.ELIZAOS_CLOUD_NANO_MODEL;
-    delete process.env.ELIZAOS_CLOUD_MEDIUM_MODEL;
+  } else if (effectivelyEnabled) {
+    // Cloud enabled but inference handled by user's own keys — clean cloud
+    // model env vars so the cloud plugin doesn't intercept model calls.
     delete process.env.ELIZAOS_CLOUD_SMALL_MODEL;
     delete process.env.ELIZAOS_CLOUD_LARGE_MODEL;
-    delete process.env.ELIZAOS_CLOUD_MEGA_MODEL;
-    delete process.env.ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL;
-    delete process.env.ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL;
-    delete process.env.ELIZAOS_CLOUD_ACTION_PLANNER_MODEL;
-    delete process.env.ELIZAOS_CLOUD_PLANNER_MODEL;
-    delete process.env.NANO_MODEL;
-    delete process.env.MEDIUM_MODEL;
-    delete process.env.SMALL_MODEL;
-    delete process.env.LARGE_MODEL;
-    delete process.env.MEGA_MODEL;
   }
 
   // Propagate per-service disable flags so downstream code can check them
   // without needing direct access to the ElizaConfig object.
-  if (!topology.services.tts) {
-    process.env.ELIZA_CLOUD_TTS_DISABLED = "true";
-  } else {
-    delete process.env.ELIZA_CLOUD_TTS_DISABLED;
-  }
-  if (!topology.services.media) {
-    process.env.ELIZA_CLOUD_MEDIA_DISABLED = "true";
-  } else {
-    delete process.env.ELIZA_CLOUD_MEDIA_DISABLED;
-  }
-  if (!topology.services.embeddings) {
-    process.env.ELIZA_CLOUD_EMBEDDINGS_DISABLED = "true";
-  } else {
-    delete process.env.ELIZA_CLOUD_EMBEDDINGS_DISABLED;
-  }
-  if (!topology.services.rpc) {
-    process.env.ELIZA_CLOUD_RPC_DISABLED = "true";
-  } else {
-    delete process.env.ELIZA_CLOUD_RPC_DISABLED;
+  const services = cloud.services;
+  if (services) {
+    if (services.tts === false) {
+      process.env.ELIZA_CLOUD_TTS_DISABLED = "true";
+      process.env.ELIZA_CLOUD_TTS_DISABLED = "true";
+    } else {
+      delete process.env.ELIZA_CLOUD_TTS_DISABLED;
+      delete process.env.ELIZA_CLOUD_TTS_DISABLED;
+    }
+    if (services.media === false) {
+      process.env.ELIZA_CLOUD_MEDIA_DISABLED = "true";
+      process.env.ELIZA_CLOUD_MEDIA_DISABLED = "true";
+    } else {
+      delete process.env.ELIZA_CLOUD_MEDIA_DISABLED;
+      delete process.env.ELIZA_CLOUD_MEDIA_DISABLED;
+    }
+    if (services.embeddings === false) {
+      process.env.ELIZA_CLOUD_EMBEDDINGS_DISABLED = "true";
+      process.env.ELIZA_CLOUD_EMBEDDINGS_DISABLED = "true";
+    } else {
+      delete process.env.ELIZA_CLOUD_EMBEDDINGS_DISABLED;
+      delete process.env.ELIZA_CLOUD_EMBEDDINGS_DISABLED;
+    }
+    if (services.rpc === false) {
+      process.env.ELIZA_CLOUD_RPC_DISABLED = "true";
+      process.env.ELIZA_CLOUD_RPC_DISABLED = "true";
+    } else {
+      delete process.env.ELIZA_CLOUD_RPC_DISABLED;
+      delete process.env.ELIZA_CLOUD_RPC_DISABLED;
+    }
   }
 }
 
@@ -1872,8 +2489,8 @@ export function applyDatabaseConfigToEnv(config: ElizaConfig): void {
       );
 
       // Remove stale postmaster.pid left by a crashed process. Without this,
-      // PGlite sees the lock and either fails or, with explicit destructive
-      // recovery enabled, triggers the resetPgliteDataDir path.
+      // PGlite sees the lock and either fails or triggers the destructive
+      // resetPgliteDataDir path, wiping all conversation history.
       cleanStalePglitePid(dataDir);
     }
   }
@@ -1890,8 +2507,8 @@ type PglitePidFileStatus =
 type PgliteRecoveryAction =
   | "none"
   | "retry-without-reset"
-  | "fail-active-lock"
-  | "fail-manual-reset";
+  | "reset-data-dir"
+  | "fail-active-lock";
 
 function reconcilePglitePidFile(dataDir: string): PglitePidFileStatus {
   const pidPath = path.join(dataDir, "postmaster.pid");
@@ -1905,7 +2522,7 @@ function reconcilePglitePidFile(dataDir: string): PglitePidFileStatus {
     if (Number.isNaN(pid) || pid <= 0) {
       // Malformed pid file — remove it
       unlinkSync(pidPath);
-      logger.info(`[eliza] Removed malformed PGlite postmaster.pid`);
+      logger.warn(`[eliza] Removed malformed PGlite postmaster.pid`);
       return "cleared-malformed";
     }
 
@@ -1922,7 +2539,7 @@ function reconcilePglitePidFile(dataDir: string): PglitePidFileStatus {
       if (code === "ESRCH") {
         // Process doesn't exist — stale pid file, safe to remove
         unlinkSync(pidPath);
-        logger.info(
+        logger.warn(
           `[eliza] Removed stale PGlite postmaster.pid (process ${pid} not running)`,
         );
         return "cleared-stale";
@@ -2007,15 +2624,6 @@ function isPgliteLockError(err: unknown): boolean {
 
 /** @internal Exported for testing. */
 export function isRecoverablePgliteInitError(err: unknown): boolean {
-  const code = pluginSql.getPgliteErrorCode(err);
-  if (
-    code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK ||
-    code === pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA ||
-    code === pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED
-  ) {
-    return true;
-  }
-
   const haystack = collectErrorMessages(err).join("\n").toLowerCase();
   if (!haystack) return false;
 
@@ -2035,15 +2643,11 @@ export function isRecoverablePgliteInitError(err: unknown): boolean {
     "checkpoint failed",
     "checksum mismatch",
     "corrupt",
-    "could not read blocks",
-    "read only ",
-    "unreachable code should not be executed",
-    "_pgl_backend",
   ].some((needle) => haystack.includes(needle));
 
   if (hasMigrationsSchema) return true;
   if (hasAbort && hasPglite) return true;
-  if (hasRecoverableStorageSignal) return true;
+  if (hasRecoverableStorageSignal && (hasPglite || hasSqlite)) return true;
   return false;
 }
 
@@ -2052,28 +2656,13 @@ export function getPgliteRecoveryAction(
   err: unknown,
   dataDir: string,
 ): PgliteRecoveryAction {
-  const code = pluginSql.getPgliteErrorCode(err);
-  if (code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK) {
-    return "fail-active-lock";
-  }
-  if (
-    code === pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA ||
-    code === pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED
-  ) {
-    return "fail-manual-reset";
-  }
-
   if (!isRecoverablePgliteInitError(err)) return "none";
+  if (!isPgliteLockError(err)) return "reset-data-dir";
 
   const pidStatus = reconcilePglitePidFile(dataDir);
-  const treatPidAsActiveLock =
-    code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK || isPgliteLockError(err);
   if (
-    treatPidAsActiveLock &&
     pidStatus === "active" ||
-    treatPidAsActiveLock &&
     pidStatus === "active-unconfirmed" ||
-    treatPidAsActiveLock &&
     pidStatus === "check-failed"
   ) {
     return "fail-active-lock";
@@ -2081,62 +2670,13 @@ export function getPgliteRecoveryAction(
   if (pidStatus === "cleared-stale" || pidStatus === "cleared-malformed") {
     return "retry-without-reset";
   }
-  return "fail-manual-reset";
+  return "reset-data-dir";
 }
 
 function createActivePgliteLockError(dataDir: string, err: unknown): Error {
-  if (
-    pluginSql.getPgliteErrorCode(err) === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK &&
-    err instanceof Error
-  ) {
-    return err;
-  }
-  return pluginSql.createPgliteInitError(
-    pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK,
-    `PGLite data dir is already in use at ${dataDir}. Close the other Milady or Eliza process, or set a different PGLITE_DATA_DIR before retrying.`,
-    { cause: err, dataDir },
-  );
-}
-
-function formatPgliteFailure(err: unknown): string {
-  return collectErrorMessages(err)[0] ?? formatError(err);
-}
-
-function createManualResetRequiredPgliteError(
-  dataDir: string,
-  err: unknown,
-): Error {
-  if (
-    pluginSql.getPgliteErrorCode(err) ===
-      pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED &&
-    err instanceof Error
-  ) {
-    return err;
-  }
-
-  const errorText = formatPgliteFailure(err);
-  const cause =
-    pluginSql.getPgliteErrorCode(err) === pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA
-      ? err
-      : pluginSql.createPgliteInitError(
-          pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA,
-          `PGlite data dir at ${dataDir} appears corrupt or unreadable: ${errorText}`,
-          { cause: err, dataDir },
-        );
-
-  return pluginSql.createPgliteInitError(
-    pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED,
-    `PGlite initialization failed for ${dataDir}: ${errorText}. Stop Milady, then rename or delete only this directory before retrying: ${dataDir}`,
-    { cause, dataDir },
-  );
-}
-
-export function isFatalPgliteStartupError(err: unknown): boolean {
-  const code = pluginSql.getPgliteErrorCode(err);
-  return (
-    code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK ||
-    code === pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA ||
-    code === pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED
+  return new Error(
+    `PGLite data dir is already in use at ${dataDir}. Close the other Eliza process or set a different PGLITE_DATA_DIR before retrying.`,
+    { cause: err },
   );
 }
 
@@ -2149,10 +2689,37 @@ function resolveActivePgliteDataDir(config: ElizaConfig): string | null {
   return resolveUserPath(dataDir);
 }
 
+async function resetPgliteDataDir(dataDir: string): Promise<void> {
+  const normalized = path.resolve(dataDir);
+  const root = path.parse(normalized).root;
+  if (normalized === root) {
+    throw new Error(`Refusing to reset unsafe PGLite path: ${normalized}`);
+  }
+
+  const stamp = new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\..*$/, "")
+    .replace("T", "-");
+  const backupDir = `${normalized}.corrupt-${stamp}`;
+
+  if (existsSync(normalized)) {
+    try {
+      await fs.rename(normalized, backupDir);
+      logger.warn(`[eliza] Backed up existing PGLite data dir to ${backupDir}`);
+    } catch (err) {
+      logger.warn(
+        `[eliza] Failed to back up PGLite data dir (${formatError(err)}); deleting ${normalized} instead`,
+      );
+      await fs.rm(normalized, { recursive: true, force: true });
+    }
+  }
+
+  await fs.mkdir(normalized, { recursive: true });
+}
+
 /** Call whichever init method the adapter exposes (.init or .initialize). */
-async function callAdapterInit(
-  adapter: AgentRuntime["adapter"],
-): Promise<void> {
+async function callAdapterInit(adapter: AgentRuntime["adapter"]): Promise<void> {
   const fn =
     (adapter as unknown as Record<string, unknown>).init ?? adapter.initialize;
   if (typeof fn === "function") await fn.call(adapter);
@@ -2182,17 +2749,24 @@ async function initializeDatabaseAdapter(
     if (recoveryAction === "fail-active-lock") {
       throw createActivePgliteLockError(pgliteDataDir, err);
     }
-    if (recoveryAction === "fail-manual-reset") {
-      throw createManualResetRequiredPgliteError(pgliteDataDir, err);
-    }
 
-    logger.warn(
-      `[eliza] PGLite init failed (${formatError(err)}). Cleared a stale PGLite lock in ${pgliteDataDir} and retrying without resetting data.`,
-    );
+    if (recoveryAction === "retry-without-reset") {
+      logger.warn(
+        `[eliza] PGLite init failed (${formatError(err)}). Cleared a stale PGLite lock in ${pgliteDataDir} and retrying without resetting data.`,
+      );
+    } else {
+      logger.warn(
+        `[eliza] PGLite init failed (${formatError(err)}). Resetting local DB at ${pgliteDataDir} and retrying once.`,
+      );
+      await resetPgliteDataDir(pgliteDataDir);
+      process.env.PGLITE_DATA_DIR = pgliteDataDir;
+    }
 
     await callAdapterInit(runtime.adapter);
     logger.info(
-      "[eliza] Database adapter recovered after clearing a stale PGLite lock",
+      recoveryAction === "retry-without-reset"
+        ? "[eliza] Database adapter recovered after clearing a stale PGLite lock"
+        : "[eliza] Database adapter recovered after resetting PGLite data",
     );
   }
 
@@ -2347,8 +2921,6 @@ export function installRuntimeMethodBindings(runtime: AgentRuntime): void {
     return;
   }
 
-  installRuntimePluginLifecycle(runtime);
-
   // Some plugin builds store this method and invoke it later without the
   // runtime receiver, which breaks private-field access in AgentRuntime.
   runtime.getConversationLength = runtime.getConversationLength.bind(runtime);
@@ -2400,7 +2972,7 @@ export function installRuntimeMethodBindings(runtime: AgentRuntime): void {
     return result;
   };
 
-  // Add targeted diagnostics around component writes. Relationships reflection and
+  // Add targeted diagnostics around component writes. Rolodex reflection and
   // relationship extraction rely heavily on components; when inserts fail,
   // upstream logs often hide the concrete DB cause/constraint.
   if (!runtimeWithBindings.__elizaComponentWriteDiagnosticsInstalled) {
@@ -2637,13 +3209,18 @@ async function registerSqlPluginWithRecovery(
     if (recoveryAction === "fail-active-lock") {
       throw createActivePgliteLockError(pgliteDataDir, registerError);
     }
-    if (recoveryAction === "fail-manual-reset") {
-      throw createManualResetRequiredPgliteError(pgliteDataDir, registerError);
-    }
 
-    logger.warn(
-      `[eliza] SQL plugin registration failed (${formatError(registerError)}). Cleared a stale PGLite lock in ${pgliteDataDir} and retrying without resetting data.`,
-    );
+    if (recoveryAction === "retry-without-reset") {
+      logger.warn(
+        `[eliza] SQL plugin registration failed (${formatError(registerError)}). Cleared a stale PGLite lock in ${pgliteDataDir} and retrying without resetting data.`,
+      );
+    } else {
+      logger.warn(
+        `[eliza] SQL plugin registration failed (${formatError(registerError)}). Resetting local PGLite DB at ${pgliteDataDir} and retrying once.`,
+      );
+      await resetPgliteDataDir(pgliteDataDir);
+      process.env.PGLITE_DATA_DIR = pgliteDataDir;
+    }
 
     try {
       await runtime.registerPlugin(sqlPlugin.plugin);
@@ -2677,20 +3254,13 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
     presetId?: string;
   };
   const language = normalizeCharacterLanguage(uiConfig.language);
-  const configuredUiName = uiConfig.assistant?.name?.trim();
-  const configuredAgentName = agentEntry?.name?.trim();
-  // Prefer the UI-level assistant name when it diverges from the bundled
-  // preset entry so renames take effect immediately across prompts/logging.
-  const configuredName = configuredUiName || configuredAgentName;
+  const configuredName = agentEntry?.name ?? uiConfig.assistant?.name;
   const bundledPreset =
     resolveStylePresetById(uiConfig.presetId, language) ??
     resolveStylePresetByAvatarIndex(uiConfig.avatarIndex, language) ??
     resolveStylePresetByName(configuredName, language) ??
     (configuredName ? undefined : getDefaultStylePreset(language));
-  const name =
-    configuredName ??
-    bundledPreset?.name ??
-    getDefaultStylePreset(language).name;
+  const name = configuredName ?? bundledPreset?.name ?? getDefaultStylePreset(language).name;
 
   // Read personality fields from the agent config entry (set during
   // onboarding from the chosen style preset).  Fall back to generic
@@ -2715,10 +3285,6 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
   const postExamples = agentEntry?.postExamples ?? bundledPreset?.postExamples;
   const messageExamples =
     agentEntry?.messageExamples ?? bundledPreset?.messageExamples;
-  const advancedMemory =
-    agentEntry?.advancedMemory ??
-    config.agents?.defaults?.advancedMemory ??
-    true;
 
   // Collect secrets from process.env (API keys the plugins need)
   const secretKeys = [
@@ -2744,21 +3310,6 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
     "DISCORD_APPLICATION_ID",
     "DISCORD_BOT_TOKEN",
     "TELEGRAM_BOT_TOKEN",
-    "WHATSAPP_ACCESS_TOKEN",
-    "WHATSAPP_PHONE_NUMBER_ID",
-    "WHATSAPP_AUTH_DIR",
-    "WHATSAPP_SESSION_PATH",
-    "WHATSAPP_WEBHOOK_VERIFY_TOKEN",
-    "WHATSAPP_API_VERSION",
-    "WHATSAPP_DM_POLICY",
-    "WHATSAPP_GROUP_POLICY",
-    "WHATSAPP_ALLOW_FROM",
-    "WHATSAPP_GROUP_ALLOW_FROM",
-    "TELEGRAM_ACCOUNT_PHONE",
-    "TELEGRAM_ACCOUNT_APP_ID",
-    "TELEGRAM_ACCOUNT_APP_HASH",
-    "TELEGRAM_ACCOUNT_DEVICE_MODEL",
-    "TELEGRAM_ACCOUNT_SYSTEM_VERSION",
     "SLACK_BOT_TOKEN",
     "SLACK_APP_TOKEN",
     "SLACK_USER_TOKEN",
@@ -2838,7 +3389,6 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
     ...(adjectives ? { adjectives } : {}),
     ...(postExamples ? { postExamples } : {}),
     ...(mappedExamples ? { messageExamples: mappedExamples } : {}),
-    advancedMemory,
     secrets,
   });
 }
@@ -2860,61 +3410,6 @@ export function resolvePrimaryModel(config: ElizaConfig): string | undefined {
   return modelConfig.primary;
 }
 
-function resolveProviderIdFromSelectionHint(
-  value: string | undefined,
-): string | undefined {
-  const trimmed = trimEnvString(value);
-  if (!trimmed) return undefined;
-
-  return (
-    normalizeOnboardingProviderId(trimmed) ??
-    normalizeOnboardingProviderId(trimmed.split("/", 1)[0]) ??
-    undefined
-  );
-}
-
-/** @internal Exported for testing. */
-export function resolvePreferredProviderId(
-  config: ElizaConfig,
-): string | undefined {
-  const llmText = resolveServiceRoutingInConfig(
-    config as Record<string, unknown>,
-  )?.llmText;
-  const backend = normalizeOnboardingProviderId(llmText?.backend);
-
-  if (llmText?.transport === "cloud-proxy" && backend === "elizacloud") {
-    return "elizacloud";
-  }
-
-  if (llmText?.transport === "direct") {
-    const directProvider =
-      backend && backend !== "elizacloud" ? backend : undefined;
-    return (
-      directProvider ?? resolveProviderIdFromSelectionHint(llmText.primaryModel)
-    );
-  }
-
-  if (llmText?.transport === "remote") {
-    const remoteProvider =
-      backend && backend !== "elizacloud" ? backend : undefined;
-    return (
-      remoteProvider ?? resolveProviderIdFromSelectionHint(llmText.primaryModel)
-    );
-  }
-
-  return resolveProviderIdFromSelectionHint(resolvePrimaryModel(config));
-}
-
-/** @internal Exported for testing. */
-export function resolvePreferredProviderPluginName(
-  config: ElizaConfig,
-): string | undefined {
-  const providerId = resolvePreferredProviderId(config);
-  return providerId
-    ? getOnboardingProviderOption(providerId)?.pluginName
-    : undefined;
-}
-
 /**
  * Vision is a heavy optional plugin. When Eliza enables it, keep the service
  * loaded but idle until the user explicitly selects CAMERA, SCREEN, or BOTH.
@@ -2930,56 +3425,556 @@ export function resolveVisionModeSetting(
   return undefined;
 }
 
-/** @internal Exported for testing. */
-export function resolveWalletRuntimeSettings(
-  config?: Partial<ElizaConfig>,
-  env: NodeJS.ProcessEnv = process.env,
-): Record<string, string> {
-  const directRpcUrl = trimEnvString(env.SOLANA_RPC_URL);
-  const solanaNoActions = trimEnvString(env.SOLANA_NO_ACTIONS);
-  const configEnv = config?.env as
-    | (Record<string, unknown> & { vars?: Record<string, unknown> })
-    | undefined;
-  const configVars =
-    configEnv?.vars &&
-    typeof configEnv.vars === "object" &&
-    !Array.isArray(configEnv.vars)
-      ? (configEnv.vars as Record<string, unknown>)
-      : undefined;
-  const getConfigEnvString = (key: string): string | undefined => {
-    const value = configVars?.[key] ?? configEnv?.[key];
-    return typeof value === "string" && value.trim() ? value.trim() : undefined;
-  };
-  const explicitSolanaPublicKey =
-    trimEnvString(env.SOLANA_PUBLIC_KEY) ??
-    trimEnvString(env.WALLET_PUBLIC_KEY) ??
-    getConfigEnvString("SOLANA_PUBLIC_KEY") ??
-    getConfigEnvString("WALLET_PUBLIC_KEY");
-  const derivedSolanaPublicKey =
-    trimEnvString(getWalletAddresses().solanaAddress) ??
-    trimEnvString(
-      syncSolanaPublicKeyEnv(getConfigEnvString("SOLANA_PRIVATE_KEY")),
+// ---------------------------------------------------------------------------
+// First-run onboarding
+// ---------------------------------------------------------------------------
+
+// Name pool + random picker shared with the web UI API server.
+// See src/runtime/onboarding-names.ts for the canonical list.
+import { pickRandomNames } from "./onboarding-names";
+
+// ---------------------------------------------------------------------------
+// Style presets — shared between CLI and GUI onboarding
+// ---------------------------------------------------------------------------
+
+import type { StylePreset } from "../contracts/onboarding";
+import {
+  getDefaultStylePreset,
+  getStylePresets,
+  normalizeCharacterLanguage,
+  resolveStylePresetByAvatarIndex,
+  resolveStylePresetById,
+  resolveStylePresetByName,
+} from "../onboarding-presets";
+
+/**
+ * Detect whether this is the first run (no agent name configured)
+ * and run the onboarding flow:
+ *
+ *   1. Welcome banner
+ *   2. Name selector (4 random + Custom)
+ *   3. Catchphrase / writing-style selector
+ *   4. Persist agent name to `agents.list[0]` in config
+ *
+ * Character personality (bio, system prompt, style) is stored in the
+ * database at runtime — only the agent name lives in config.
+ *
+ * Subsequent runs skip this entirely.
+ */
+async function runFirstTimeSetup(config: ElizaConfig): Promise<ElizaConfig> {
+  const agentEntry = config.agents?.list?.[0];
+  const hasName = Boolean(agentEntry?.name || config.ui?.assistant?.name);
+  if (hasName) return config;
+
+  // Only prompt when stdin is a TTY (interactive terminal)
+  if (!process.stdin.isTTY) return config;
+
+  // Load @clack/prompts lazily — only needed for interactive CLI onboarding.
+  const clack = await loadClack();
+
+  // ── Step 1: Welcome ────────────────────────────────────────────────────
+  clack.intro("WELCOME TO MILADY!");
+
+  // ── Step 2: Name ───────────────────────────────────────────────────────
+  const randomNames = pickRandomNames(4);
+
+  const nameChoice = await clack.select({
+    message: "♡♡chen♡♡: hey, quick check, what was my name again?",
+    options: [
+      ...randomNames.map((n) => ({ value: n, label: n })),
+      { value: "_custom_", label: "Custom...", hint: "type your own" },
+    ],
+  });
+
+  if (clack.isCancel(nameChoice)) cancelOnboarding();
+
+  let name: string;
+
+  if (nameChoice === "_custom_") {
+    const customName = await clack.text({
+      message: "OK, what should I be called?",
+      placeholder: "Chen",
+    });
+
+    if (clack.isCancel(customName)) cancelOnboarding();
+
+    name = customName.trim() || "Chen";
+  } else {
+    name = nameChoice;
+  }
+
+  clack.log.message(`♡♡${name}♡♡: Oh that's right, I'm ${name}!`);
+
+  // ── Step 3: Catchphrase / writing style ────────────────────────────────
+  const styleChoice = await clack.select({
+    message: `${name}: Now... how do I like to talk again?`,
+    options: getStylePresets().map((preset: StylePreset) => ({
+      value: preset.id,
+      label: preset.catchphrase,
+      hint: preset.hint,
+    })),
+  });
+
+  if (clack.isCancel(styleChoice)) cancelOnboarding();
+
+  const chosenTemplate = getStylePresets().find(
+    (p: StylePreset) => p.id === styleChoice,
+  );
+
+  // ── Step 3.5: Runtime selection (Cloud vs Local) ───────────────────────
+  // Present the user with a choice of where to run their agent. Cloud mode
+  // skips the local AI provider, wallet, and GitHub steps.
+  let cloudOnboardingResult:
+    | import("./cloud-onboarding").CloudOnboardingResult
+    | null = null;
+  let isCloudMode = false;
+
+  const runtimeChoice = await clack.select({
+    message: `${name}: Where should I live?`,
+    options: [
+      {
+        value: "cloud",
+        label: "☁️  Eliza Cloud (recommended)",
+        hint: "zero setup — hosted, always online",
+      },
+      {
+        value: "local",
+        label: "💻  Run locally",
+        hint: "full control — runs on this machine",
+      },
+      {
+        value: "later",
+        label: "⏭️  Decide later",
+        hint: "start local, switch to cloud anytime",
+      },
+    ],
+  });
+
+  if (clack.isCancel(runtimeChoice)) cancelOnboarding();
+
+  if (runtimeChoice === "later") {
+    // User deferred the decision — continue with local setup (steps 4–7).
+    clack.log.info(
+      "No problem! Starting with local setup. You can switch to cloud anytime with `eliza cloud connect`.",
     );
-  const solanaPublicKey = explicitSolanaPublicKey ?? derivedSolanaPublicKey;
+  } else if (runtimeChoice === "cloud") {
+    const { runCloudOnboarding } = await import("./cloud-onboarding");
+    cloudOnboardingResult = await runCloudOnboarding(
+      clack,
+      name,
+      chosenTemplate,
+    );
 
-  const settings: Record<string, string> = {};
-
-  if (directRpcUrl) {
-    settings.SOLANA_RPC_URL = directRpcUrl;
+    if (cloudOnboardingResult?.agentId) {
+      isCloudMode = true;
+      clack.log.success(`${name} is now running in the cloud! ☁️`);
+    } else if (cloudOnboardingResult) {
+      // Auth succeeded but no agent provisioned — save auth for later
+      clack.log.info(
+        "Cloud auth saved. You can provision later with `eliza cloud connect`.",
+      );
+    } else {
+      // Cloud flow cancelled / failed — fall back to local
+      clack.log.info("No worries! Setting up locally instead.");
+    }
   }
 
-  if (solanaNoActions) {
-    settings.SOLANA_NO_ACTIONS = solanaNoActions;
+  // ── Steps 4–7: Local-only setup ─────────────────────────────────────────
+  // These steps are skipped when the user chose Eliza Cloud, since the cloud
+  // handles inference, wallets can be configured via the dashboard, and
+  // GitHub access is not needed for the initial cloud agent.
+  let providerEnvKey: string | undefined;
+  let providerApiKey: string | undefined;
+
+  // Snapshot whether wallet keys already exist BEFORE onboarding touches
+  // process.env, so the persistence block later can guard against
+  // overwriting pre-existing values.
+  const hasEvmKey = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
+  const hasSolKey = Boolean(process.env.SOLANA_PRIVATE_KEY?.trim());
+
+  if (!isCloudMode) {
+    // ── Step 4: Model provider ───────────────────────────────────────────────
+    // Skip provider selection in cloud mode — Eliza Cloud handles inference.
+    // Check whether an API key is already set in the environment (from .env or
+    // shell).  If none is found, ask the user to pick a provider and enter a key.
+    const PROVIDER_OPTIONS = [
+      {
+        id: "anthropic",
+        label: "Anthropic (Claude)",
+        envKey: "ANTHROPIC_API_KEY",
+        detectKeys: ["ANTHROPIC_API_KEY"],
+        hint: "sk-ant-...",
+      },
+      {
+        id: "openai",
+        label: "OpenAI (GPT)",
+        envKey: "OPENAI_API_KEY",
+        detectKeys: ["OPENAI_API_KEY"],
+        hint: "sk-...",
+      },
+      {
+        id: "openrouter",
+        label: "OpenRouter",
+        envKey: "OPENROUTER_API_KEY",
+        detectKeys: ["OPENROUTER_API_KEY"],
+        hint: "sk-or-...",
+      },
+      {
+        id: "vercel-ai-gateway",
+        label: "Vercel AI Gateway",
+        envKey: "AI_GATEWAY_API_KEY",
+        detectKeys: ["AI_GATEWAY_API_KEY", "AIGATEWAY_API_KEY"],
+        hint: "aigw_...",
+      },
+      {
+        id: "gemini",
+        label: "Google Gemini",
+        envKey: "GOOGLE_GENERATIVE_AI_API_KEY",
+        detectKeys: [
+          "GOOGLE_GENERATIVE_AI_API_KEY",
+          "GOOGLE_API_KEY",
+          "GEMINI_API_KEY",
+        ],
+        hint: "AI...",
+      },
+      {
+        id: "grok",
+        label: "xAI (Grok)",
+        envKey: "XAI_API_KEY",
+        detectKeys: ["XAI_API_KEY"],
+        hint: "xai-...",
+      },
+      {
+        id: "groq",
+        label: "Groq",
+        envKey: "GROQ_API_KEY",
+        detectKeys: ["GROQ_API_KEY"],
+        hint: "gsk_...",
+      },
+      {
+        id: "deepseek",
+        label: "DeepSeek",
+        envKey: "DEEPSEEK_API_KEY",
+        detectKeys: ["DEEPSEEK_API_KEY"],
+        hint: "sk-...",
+      },
+      {
+        id: "mistral",
+        label: "Mistral",
+        envKey: "MISTRAL_API_KEY",
+        detectKeys: ["MISTRAL_API_KEY"],
+        hint: "",
+      },
+      {
+        id: "together",
+        label: "Together AI",
+        envKey: "TOGETHER_API_KEY",
+        detectKeys: ["TOGETHER_API_KEY"],
+        hint: "",
+      },
+      {
+        id: "ollama",
+        label: "Ollama (local, free)",
+        envKey: "OLLAMA_BASE_URL",
+        detectKeys: ["OLLAMA_BASE_URL"],
+        hint: "http://localhost:11434",
+      },
+    ] as const;
+
+    // Detect if any provider key is already configured
+    const detectedProvider = PROVIDER_OPTIONS.find((p) =>
+      p.detectKeys.some((key) => process.env[key]?.trim()),
+    );
+
+    if (detectedProvider) {
+      clack.log.success(
+        `Found existing ${detectedProvider.label} key in environment (${detectedProvider.envKey})`,
+      );
+    } else {
+      const providerChoice = await clack.select({
+        message: `${name}: One more thing — which AI provider should I use?`,
+        options: [
+          ...PROVIDER_OPTIONS.map((p) => ({
+            value: p.id,
+            label: p.label,
+            hint: p.id === "ollama" ? "no API key needed" : undefined,
+          })),
+          {
+            value: "_skip_",
+            label: "Skip for now",
+            hint: "set an API key later via env or config",
+          },
+        ],
+      });
+
+      if (clack.isCancel(providerChoice)) cancelOnboarding();
+
+      if (providerChoice !== "_skip_") {
+        const chosen = PROVIDER_OPTIONS.find((p) => p.id === providerChoice);
+        if (chosen) {
+          providerEnvKey = chosen.envKey;
+
+          if (chosen.id === "ollama") {
+            // Ollama just needs a base URL, default to localhost
+            const ollamaUrl = await clack.text({
+              message: "Ollama base URL:",
+              placeholder: "http://localhost:11434",
+              defaultValue: "http://localhost:11434",
+            });
+
+            if (clack.isCancel(ollamaUrl)) cancelOnboarding();
+
+            providerApiKey = ollamaUrl.trim() || "http://localhost:11434";
+          } else {
+            const apiKeyInput = await clack.password({
+              message: `Paste your ${chosen.label} API key:`,
+            });
+
+            if (clack.isCancel(apiKeyInput)) cancelOnboarding();
+
+            providerApiKey = apiKeyInput.trim();
+          }
+        }
+      }
+    }
+
+    // ── Step 4b: Embedding model preset ────────────────────────────────────
+    // (Simplified: always use the standard/reliable model preset. No user choice.)
+
+    // ── Step 5: Wallet setup ───────────────────────────────────────────────
+    // Offer to generate or import wallets for EVM and Solana. Keys are
+    // stored in config.env and process.env, making them available to
+    // plugins at runtime.
+    const { generateWalletKeys, importWallet } = await import("../api/wallet");
+
+    // hasEvmKey and hasSolKey are hoisted above the if (!isCloudMode) block
+    // so they're also available in the persistence section.
+    if (!hasEvmKey || !hasSolKey) {
+      const walletAction = await clack.select({
+        message: `${name}: Do you want me to set up crypto wallets? (for trading, NFTs, DeFi)`,
+        options: [
+          {
+            value: "generate",
+            label: "Generate new wallets",
+            hint: "creates fresh EVM + Solana keypairs",
+          },
+          {
+            value: "import",
+            label: "Import existing wallets",
+            hint: "paste your private keys",
+          },
+          {
+            value: "skip",
+            label: "Skip for now",
+            hint: "wallets can be added later",
+          },
+        ],
+      });
+
+      if (clack.isCancel(walletAction)) cancelOnboarding();
+
+      if (walletAction === "generate") {
+        const keys = generateWalletKeys();
+
+        if (!hasEvmKey) {
+          process.env.EVM_PRIVATE_KEY = keys.evmPrivateKey;
+          clack.log.success(`Generated EVM wallet: ${keys.evmAddress}`);
+        }
+        if (!hasSolKey) {
+          process.env.SOLANA_PRIVATE_KEY = keys.solanaPrivateKey;
+          clack.log.success(`Generated Solana wallet: ${keys.solanaAddress}`);
+        }
+      } else if (walletAction === "import") {
+        // EVM import
+        if (!hasEvmKey) {
+          const evmKeyInput = await clack.password({
+            message: "Paste your EVM private key (0x... hex, or skip):",
+          });
+
+          if (!clack.isCancel(evmKeyInput) && evmKeyInput.trim()) {
+            const result = importWallet("evm", evmKeyInput.trim());
+            if (result.success) {
+              clack.log.success(`Imported EVM wallet: ${result.address}`);
+            } else {
+              clack.log.warn(`EVM import failed: ${result.error}`);
+            }
+          }
+        }
+
+        // Solana import
+        if (!hasSolKey) {
+          const solKeyInput = await clack.password({
+            message: "Paste your Solana private key (base58, or skip):",
+          });
+
+          if (!clack.isCancel(solKeyInput) && solKeyInput.trim()) {
+            const result = importWallet("solana", solKeyInput.trim());
+            if (result.success) {
+              clack.log.success(`Imported Solana wallet: ${result.address}`);
+            } else {
+              clack.log.warn(`Solana import failed: ${result.error}`);
+            }
+          }
+        }
+      }
+      // "skip" — do nothing
+    }
+
+    // ── Step 6: Skills Registry (ClawHub default) ──────────────────────────
+    const hasSkillsRegistry = Boolean(
+      process.env.SKILLS_REGISTRY?.trim() ||
+        process.env.CLAWHUB_REGISTRY?.trim(),
+    );
+    const _hasSkillsmpKey = Boolean(process.env.SKILLSMP_API_KEY?.trim());
+    if (!hasSkillsRegistry) {
+      process.env.SKILLS_REGISTRY = "https://clawhub.ai";
+    }
+
+    // ── Step 7: GitHub access (for coding agents, issue management) ─────────
+    const hasGithubToken = Boolean(process.env.GITHUB_TOKEN?.trim());
+    const hasGithubOAuth = Boolean(process.env.GITHUB_OAUTH_CLIENT_ID?.trim());
+    if (!hasGithubToken) {
+      const options: Array<{ value: string; label: string; hint?: string }> = [
+        {
+          value: "skip",
+          label: "Skip for now",
+          hint: "you can add this later",
+        },
+        {
+          value: "pat",
+          label: "Paste a Personal Access Token",
+          hint: "github.com/settings/tokens",
+        },
+      ];
+      if (hasGithubOAuth) {
+        options.push({
+          value: "oauth",
+          label: "Use OAuth (authorize in browser)",
+          hint: "recommended",
+        });
+      }
+
+      const githubChoice = await clack.select({
+        message:
+          "Configure GitHub access? (needed for coding agents, issue management, PRs)",
+        options,
+      });
+
+      if (!clack.isCancel(githubChoice) && githubChoice === "pat") {
+        const tokenInput = await clack.password({
+          message: "Paste your GitHub token (or skip):",
+        });
+        if (!clack.isCancel(tokenInput) && tokenInput.trim()) {
+          process.env.GITHUB_TOKEN = tokenInput.trim();
+          clack.log.success("GitHub token configured.");
+        }
+      } else if (!clack.isCancel(githubChoice) && githubChoice === "oauth") {
+        clack.log.info(
+          "GitHub OAuth will activate when coding agents need access.",
+        );
+      }
+    }
+  } // end if (!isCloudMode)
+
+  // ── Step 8: Persist agent + style + provider + embedding config ─────────
+  // Save the agent name and chosen personality template into config so that
+  // the same character data is used regardless of whether the user onboarded
+  // via CLI or GUI.  This ensures full parity between onboarding surfaces.
+  const existingList: AgentConfig[] = config.agents?.list ?? [];
+  const mainEntry: AgentConfig = existingList[0] ?? {
+    id: "main",
+    default: true,
+  };
+  const agentConfigEntry: AgentConfig = { ...mainEntry, name };
+
+  // Apply the chosen style template to the agent config entry so the
+  // personality is persisted — not just the name.
+  if (chosenTemplate) {
+    agentConfigEntry.bio = chosenTemplate.bio;
+    agentConfigEntry.system = chosenTemplate.system;
+    agentConfigEntry.style = chosenTemplate.style;
+    agentConfigEntry.adjectives = chosenTemplate.adjectives;
+    agentConfigEntry.postExamples = chosenTemplate.postExamples;
+    agentConfigEntry.messageExamples = chosenTemplate.messageExamples;
   }
 
-  if (!solanaPublicKey) {
-    return settings;
+  const updatedList: AgentConfig[] = [
+    agentConfigEntry,
+    ...existingList.slice(1),
+  ];
+
+  const updated: ElizaConfig = {
+    ...config,
+    agents: {
+      ...config.agents,
+      list: updatedList,
+    },
+  };
+
+  // Persist the provider API key and wallet keys in config.env so they
+  // survive restarts.  Initialise the env bucket once to avoid the
+  // repeated `if (!updated.env)` pattern.
+  if (!updated.env) updated.env = {};
+  const envBucket = updated.env as Record<string, string>;
+
+  // Only persist local-mode env vars when not in cloud mode (those vars
+  // were never prompted for / set during cloud onboarding).
+  if (!isCloudMode) {
+    if (providerEnvKey && providerApiKey) {
+      envBucket[providerEnvKey] = providerApiKey;
+      // Also set immediately in process.env for the current run
+      process.env[providerEnvKey] = providerApiKey;
+    }
+    if (process.env.EVM_PRIVATE_KEY && !hasEvmKey) {
+      envBucket.EVM_PRIVATE_KEY = process.env.EVM_PRIVATE_KEY;
+    }
+    if (process.env.SOLANA_PRIVATE_KEY && !hasSolKey) {
+      envBucket.SOLANA_PRIVATE_KEY = process.env.SOLANA_PRIVATE_KEY;
+    }
+    if (process.env.SKILLS_REGISTRY) {
+      envBucket.SKILLS_REGISTRY = process.env.SKILLS_REGISTRY;
+    }
+    if (process.env.SKILLSMP_API_KEY) {
+      envBucket.SKILLSMP_API_KEY = process.env.SKILLSMP_API_KEY;
+    }
+    if (process.env.GITHUB_TOKEN) {
+      envBucket.GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+    }
+    if (process.env.GITHUB_OAUTH_CLIENT_ID) {
+      envBucket.GITHUB_OAUTH_CLIENT_ID = process.env.GITHUB_OAUTH_CLIENT_ID;
+    }
   }
 
-  settings.SOLANA_PUBLIC_KEY = solanaPublicKey;
-  settings.WALLET_PUBLIC_KEY = solanaPublicKey;
+  // ── Cloud config persistence ───────────────────────────────────────────
+  // If the user completed cloud onboarding, persist the cloud credentials
+  // and agent ID so subsequent `eliza start` connects directly.
+  if (cloudOnboardingResult) {
+    updated.cloud = {
+      ...updated.cloud,
+      enabled: isCloudMode,
+      provider: "elizacloud",
+      apiKey: cloudOnboardingResult.apiKey,
+      baseUrl: cloudOnboardingResult.baseUrl,
+      inferenceMode: isCloudMode ? "cloud" : updated.cloud?.inferenceMode,
+      runtime: isCloudMode ? "cloud" : "local",
+    };
+    if (cloudOnboardingResult.agentId) {
+      updated.cloud.agentId = cloudOnboardingResult.agentId;
+    }
+  }
 
-  return settings;
+  try {
+    saveElizaConfig(updated);
+  } catch (err) {
+    // Non-fatal: the agent can still start, but choices won't persist.
+    clack.log.warn(`Could not save config: ${formatError(err)}`);
+  }
+  clack.log.message(`${name}: ${styleChoice} Alright, that's me.`);
+  clack.outro(
+    isCloudMode ? "Your agent is live in the cloud! ☁️" : "Let's get started!",
+  );
+
+  return updated;
 }
 
 // ---------------------------------------------------------------------------
@@ -3080,9 +4075,7 @@ export const logToChatListener = (entry: LogEntry) => {
           },
         )
         .catch((err) => {
-          logger.debug(
-            `[runtime] failed to send log message to target: ${err}`,
-          );
+          logger.debug(`[runtime] failed to send log message to target: ${err}`);
         });
     }
   }
@@ -3098,7 +4091,7 @@ export async function startEliza(
   opts?: StartElizaOptions,
 ): Promise<AgentRuntime | undefined> {
   // Start buffering logs early so startup messages appear in the UI log viewer
-  const { captureEarlyLogs } = await import("../api/early-logs.js");
+  const { captureEarlyLogs } = await import("../api/early-logs");
   captureEarlyLogs();
 
   // Register log listener for chat mirroring
@@ -3165,26 +4158,7 @@ export async function startEliza(
         process.env[key] = value;
       }
     }
-    // Also hydrate from config.env.vars — setEnvValue writes API keys to
-    // both config.env["KEY"] and config.env.vars["KEY"]. If the top-level
-    // key was lost (e.g. pruneEnv, config migration), the nested form is
-    // the authoritative source.
-    const vars = (config.env as Record<string, unknown>).vars;
-    if (vars && typeof vars === "object" && !Array.isArray(vars)) {
-      for (const [key, value] of Object.entries(
-        vars as Record<string, unknown>,
-      )) {
-        if (isElizaCloudManagedProcessEnvKey(key)) continue;
-        if (typeof value === "string" && !process.env[key]) {
-          process.env[key] = value;
-        }
-      }
-    }
   }
-
-  // Keep the canonical public key env in sync for Solana plugins that still
-  // read process.env directly instead of runtime settings.
-  syncSolanaPublicKeyEnv();
 
   normalizeOpenAiCompatibleProviderConfig(config);
 
@@ -3206,7 +4180,7 @@ export async function startEliza(
 
   // 2d-iii. OG tracking code initialization
   try {
-    const { initializeOGCode } = await import("../api/og-tracker.js");
+    const { initializeOGCode } = await import("../api/og-tracker");
     initializeOGCode();
   } catch {
     // Silent — OG tracking is non-critical
@@ -3252,7 +4226,7 @@ export async function startEliza(
   //     Config is NOT rolled back on failure; partial mutations may persist in
   //     the in-memory config but are not saved to disk until explicit save.
   try {
-    const { applySubscriptionCredentials } = await import("../auth/index.js");
+    const { applySubscriptionCredentials } = await import("../auth/index");
     await applySubscriptionCredentials(config);
   } catch (err) {
     logger.warn(
@@ -3263,14 +4237,11 @@ export async function startEliza(
   // 2g. Cloud mode — if the user chose cloud during onboarding (or on a
   //     subsequent start with cloud config), skip local runtime setup and
   //     connect via the thin client instead.
-  const deploymentTarget = resolveDeploymentTargetInConfig(
-    config as Record<string, unknown>,
-  );
   if (
-    deploymentTarget.runtime === "cloud" &&
-    deploymentTarget.provider === "elizacloud" &&
+    config.cloud?.enabled &&
     config.cloud?.apiKey &&
-    config.cloud?.agentId?.trim()
+    config.cloud?.agentId?.trim() &&
+    config.cloud?.runtime === "cloud"
   ) {
     return startInCloudMode(config, config.cloud.agentId, opts);
   }
@@ -3279,9 +4250,6 @@ export async function startEliza(
   const character = buildCharacterFromConfig(config);
 
   const primaryModel = resolvePrimaryModel(config);
-  const preferredProviderId = resolvePreferredProviderId(config);
-  const preferredProviderPluginName =
-    resolvePreferredProviderPluginName(config);
 
   // 4. Ensure workspace exists with required files
   const workspaceDir =
@@ -3295,10 +4263,6 @@ export async function startEliza(
 
   // 5. Create the Eliza bridge plugin (workspace context + session keys + compaction)
   const agentId = character.name?.toLowerCase().replace(/\s+/g, "-") ?? "main";
-
-  // 5a. If cloud is configured and no local GitHub token, try fetching from cloud
-  await autoFetchCloudGithubToken(config.cloud?.agentId?.trim() || agentId);
-
   const elizaPlugin = createElizaPlugin({
     workspaceDir,
 
@@ -3342,7 +4306,6 @@ export async function startEliza(
       pluginCount: resolvedPlugins.length,
       providerCount: providerNames.length,
       primaryModel: primaryModel ?? "(auto-detect)",
-      preferredProvider: preferredProviderId ?? "(auto-detect)",
       workspaceDir,
     };
     debugLogResolvedContext(pluginNames, providerNames, contextSummary, (msg) =>
@@ -3490,58 +4453,23 @@ export async function startEliza(
   }
   // ── End sandbox setup ───────────────────────────────────────────────────
 
-  // ── Boost preferred provider plugin priority ──────────────────────────
+  // ── Boost preferred model plugin priority ─────────────────────────────
   // elizaOS selects the model handler with the highest `priority` for each
   // ModelType.  All provider plugins default to priority 0, so whichever
   // registers first wins — essentially random when using Promise.all.
-  // When the user has explicitly selected a provider or model, prefer that
-  // provider's plugin so its handlers are selected over registration order.
+  // When the user has explicitly chosen a primary model provider (via
+  // `model.primary` in config), we bump that plugin's priority so its
+  // handlers are always selected over other providers.
   const pluginsForRuntime = otherPlugins.map((p) => p.plugin);
   const visionModeSetting = resolveVisionModeSetting(config);
-  if (preferredProviderPluginName) {
+  if (primaryModel) {
     for (const plugin of pluginsForRuntime) {
-      if (plugin.name === preferredProviderPluginName) {
+      if (plugin.name === primaryModel) {
         plugin.priority = (plugin.priority ?? 0) + 10;
         logger.info(
-          `[eliza] Boosted plugin "${plugin.name}" priority to ${plugin.priority} (preferred provider: ${preferredProviderId ?? "unknown"})`,
+          `[eliza] Boosted plugin "${plugin.name}" priority to ${plugin.priority} (model.primary)`,
         );
         break;
-      }
-    }
-  }
-
-  // ── Strip upstream skill providers ──────────────────────────────────────
-  // The upstream @elizaos/plugin-agent-skills registers providers that dump
-  // ALL loaded skills into every prompt (~2000-4000 tokens).  Milady replaces
-  // them with a BM25-lite dynamic provider (see providers/skill-provider.ts)
-  // that injects only the most relevant skills per turn.
-  //
-  // We keep:
-  //   - agent_skills_overview  (lightweight stats, ~50 tokens)
-  //   - all actions (GET_SKILL_GUIDANCE, SEARCH_SKILLS, INSTALL_SKILL, …)
-  //   - the AGENT_SKILLS_SERVICE itself
-  {
-    const UPSTREAM_SKILL_PROVIDERS_TO_STRIP = new Set([
-      "agent_skills",
-      "agent_skill_instructions",
-      "agent_skills_catalog",
-    ]);
-    for (const plugin of pluginsForRuntime) {
-      if (
-        plugin.name === "@elizaos/plugin-agent-skills" &&
-        Array.isArray(plugin.providers)
-      ) {
-        const before = plugin.providers.length;
-        plugin.providers = plugin.providers.filter(
-          (p: { name?: string }) =>
-            !UPSTREAM_SKILL_PROVIDERS_TO_STRIP.has(p.name ?? ""),
-        );
-        const removed = before - plugin.providers.length;
-        if (removed > 0) {
-          logger.info(
-            `[eliza] Stripped ${removed} upstream skill provider(s) — using dynamic BM25-lite provider instead`,
-          );
-        }
       }
     }
   }
@@ -3573,7 +4501,7 @@ export async function startEliza(
     character,
     // advancedCapabilities: true,
     actionPlanning: true,
-    // advancedMemory is enabled via character.advancedMemory
+    // advancedMemory: true, // Not supported in this version of AgentRuntime
     plugins: [elizaPlugin, ...pluginsForRuntime],
     ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
     // Sandbox options — only active when mode != "off"
@@ -3608,29 +4536,8 @@ export async function startEliza(
         ),
       ),
       // Forward Eliza config env vars as runtime settings
-      ...(preferredProviderId ? { MODEL_PROVIDER: preferredProviderId } : {}),
+      ...(primaryModel ? { MODEL_PROVIDER: primaryModel } : {}),
       ...(visionModeSetting ? { VISION_MODE: visionModeSetting } : {}),
-      ...resolveWalletRuntimeSettings(config),
-      ...(typeof config.agents?.defaults?.adminEntityId === "string" &&
-      config.agents.defaults.adminEntityId.trim().length > 0
-        ? {
-            ELIZA_ADMIN_ENTITY_ID: config.agents.defaults.adminEntityId.trim(),
-          }
-        : {}),
-      ...(config.agents?.defaults?.ownerContacts
-        ? {
-            ELIZA_OWNER_CONTACTS_JSON: JSON.stringify(
-              config.agents.defaults.ownerContacts,
-            ),
-          }
-        : {}),
-      ...(config.roles?.connectorAdmins
-        ? {
-            ELIZA_ROLES_CONNECTOR_ADMINS_JSON: JSON.stringify(
-              config.roles.connectorAdmins,
-            ),
-          }
-        : {}),
       // Forward skills config so plugin-agent-skills can apply allow/deny filtering
       ...(config.skills?.allowBundled
         ? { SKILLS_ALLOWLIST: config.skills.allowBundled.join(",") }
@@ -3704,16 +4611,6 @@ export async function startEliza(
   //     Each registerPlugin() call runs the plugin's init() before proceeding
   //     to the next, guaranteeing that cross-plugin getService() calls resolve.
   {
-    try {
-      logger.info("[eliza] Pre-registering internal roles capability...");
-      await runtime.registerPlugin(rolesPlugin);
-      logger.info("[eliza] ✓ internal roles capability pre-registered");
-    } catch (err) {
-      logger.warn(
-        `[eliza] Internal roles capability pre-registration failed: ${formatError(err)}`,
-      );
-    }
-
     const alreadyPreRegistered = new Set([
       "@elizaos/plugin-sql",
       "@elizaos/plugin-local-embedding",
@@ -3825,55 +4722,28 @@ export async function startEliza(
   };
 
   const initializeRuntimeServices = async (): Promise<void> => {
+    // 8. Initialize the runtime (registers remaining plugins, starts services)
+    await runtime.initialize();
+    await waitForTrajectoryLoggerService(runtime, "runtime.initialize()");
+    ensureTrajectoryLoggerEnabled(runtime, "runtime.initialize()");
+
+    // 8a. Install prompt optimization / capture layer (wraps runtime.useModel)
     try {
-      const { stewardEvmPreBoot } = await import(
-        "../services/steward-evm-bridge.js"
+      const { installPromptOptimizations } = await import(
+        "./prompt-optimization.js"
       );
-      await stewardEvmPreBoot(runtime);
+      installPromptOptimizations(runtime);
     } catch (err) {
-      logger.debug(
-        `[eliza] Steward EVM pre-boot skipped: ${formatError(err)}`,
+      logger.warn(
+        `[eliza] Failed to install prompt optimizations: ${err instanceof Error ? err.message : err}`,
       );
     }
 
-    // 8. Initialize the runtime (registers remaining plugins, starts services)
-    assertPersistentDatabaseRequired(runtime);
-    await runtime.initialize();
-    await prepareRuntimeForTrajectoryCapture(runtime, "runtime.initialize()");
-
     try {
-      if (runtimeKnowledgeEnabled(runtime)) {
-        await seedBundledKnowledge(runtime);
-      } else {
-        logger.info(
-          "[eliza] Native knowledge disabled; skipping bundled knowledge seeding",
-        );
-      }
+      await seedBundledKnowledge(runtime);
     } catch (err) {
       logger.warn(
         `[eliza] Failed to seed bundled knowledge: ${formatError(err)}`,
-      );
-    }
-
-    try {
-      const { stewardEvmPostBoot } = await import(
-        "../services/steward-evm-bridge.js"
-      );
-      await stewardEvmPostBoot(runtime);
-    } catch (err) {
-      logger.debug(
-        `[eliza] Steward EVM post-boot skipped: ${formatError(err)}`,
-      );
-    }
-
-    try {
-      const { installAnthropicWebSearch } = await import(
-        "./web-search-tools.js"
-      );
-      installAnthropicWebSearch(runtime);
-    } catch (err) {
-      logger.debug(
-        `[eliza] Anthropic web search setup skipped: ${formatError(err)}`,
       );
     }
 
@@ -3894,7 +4764,9 @@ export async function startEliza(
         );
       }
     } else if (!autonomyEnabled) {
-      logger.info("[eliza] AutonomyService skipped — ENABLE_AUTONOMY=false");
+      logger.info(
+        "[eliza] AutonomyService skipped — ENABLE_AUTONOMY=false",
+      );
     }
 
     // Enable the autonomy loop so trigger/heartbeat instructions are
@@ -3941,17 +4813,21 @@ export async function startEliza(
     if (recoveryAction === "fail-active-lock") {
       throw createActivePgliteLockError(pgliteDataDir, err);
     }
-    if (recoveryAction === "fail-manual-reset") {
-      throw createManualResetRequiredPgliteError(pgliteDataDir, err);
-    }
 
     logger.warn(
-      `[eliza] Runtime migrations failed (${formatError(err)}). Cleared a stale PGLite lock in ${pgliteDataDir} and retrying startup once without resetting data.`,
+      recoveryAction === "retry-without-reset"
+        ? `[eliza] Runtime migrations failed (${formatError(err)}). Cleared a stale PGLite lock in ${pgliteDataDir} and retrying startup once without resetting data.`
+        : `[eliza] Runtime migrations failed (${formatError(err)}). Resetting local PGLite DB at ${pgliteDataDir} and retrying startup once.`,
     );
     try {
       await shutdownRuntime(runtime, "PGLite recovery");
     } catch {
       // Ignore cleanup errors — retry creates a fresh runtime anyway.
+    }
+
+    if (recoveryAction === "reset-data-dir") {
+      await resetPgliteDataDir(pgliteDataDir);
+      process.env.PGLITE_DATA_DIR = pgliteDataDir;
     }
 
     return await startEliza({
@@ -4016,7 +4892,7 @@ export async function startEliza(
   // desktop app, the API server is always available for the GUI admin
   // surface.
   try {
-    const { startApiServer } = await import("../api/server.js");
+    const { startApiServer } = await import("../api/server");
     const apiPort = resolveServerOnlyPort(process.env);
     const { port: actualApiPort } = await startApiServer({
       port: apiPort,
@@ -4047,15 +4923,12 @@ export async function startEliza(
           applyCloudConfigToEnv(freshConfig);
           applyX402ConfigToEnv(freshConfig);
           applyDatabaseConfigToEnv(freshConfig);
-          await autoFetchCloudGithubToken(
-            freshConfig.cloud?.agentId?.trim() || agentId,
-          );
 
           // Apply subscription-based credentials (Claude Max, Codex Max)
           // that may have been set up during onboarding.
           try {
             const { applySubscriptionCredentials } = await import(
-              "../auth/index.js"
+              "../auth/index"
             );
             await applySubscriptionCredentials(freshConfig);
           } catch (subErr) {
@@ -4084,19 +4957,16 @@ export async function startEliza(
           // Filter out pre-registered plugins so they aren't double-loaded
           // inside initialize()'s Promise.all — same pattern as the initial
           // startup to avoid the TEXT_EMBEDDING race condition.
-          const freshPreferredProviderId =
-            resolvePreferredProviderId(freshConfig);
-          const freshPreferredProviderPluginName =
-            resolvePreferredProviderPluginName(freshConfig);
+          const freshPrimaryModel = resolvePrimaryModel(freshConfig);
           const freshOtherPlugins = resolvedPlugins.filter(
             (p) => !PREREGISTER_PLUGINS.has(p.name),
           );
-          // Boost the preferred provider plugin priority (same as initial startup)
+          // Boost preferred model plugin priority (same as initial startup)
           const freshPluginsForRuntime = freshOtherPlugins.map((p) => p.plugin);
           const freshVisionModeSetting = resolveVisionModeSetting(freshConfig);
-          if (freshPreferredProviderPluginName) {
+          if (freshPrimaryModel) {
             for (const plugin of freshPluginsForRuntime) {
-              if (plugin.name === freshPreferredProviderPluginName) {
+              if (plugin.name === freshPrimaryModel) {
                 plugin.priority = (plugin.priority ?? 0) + 10;
                 break;
               }
@@ -4107,8 +4977,8 @@ export async function startEliza(
             plugins: [freshElizaPlugin, ...freshPluginsForRuntime],
             ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
             settings: {
-              ...(freshPreferredProviderId
-                ? { MODEL_PROVIDER: freshPreferredProviderId }
+              ...(freshPrimaryModel
+                ? { MODEL_PROVIDER: freshPrimaryModel }
                 : {}),
               ...(freshVisionModeSetting
                 ? { VISION_MODE: freshVisionModeSetting }
@@ -4148,14 +5018,6 @@ export async function startEliza(
 
           // Pre-register remaining core plugins sequentially (same as startup)
           {
-            try {
-              await newRuntime.registerPlugin(rolesPlugin);
-            } catch (err) {
-              logger.warn(
-                `[eliza] Hot-reload: internal roles capability pre-registration failed: ${formatError(err)}`,
-              );
-            }
-
             const alreadyPreRegistered = new Set([
               "@elizaos/plugin-sql",
               "@elizaos/plugin-local-embedding",
@@ -4174,30 +5036,15 @@ export async function startEliza(
             }
           }
 
-          assertPersistentDatabaseRequired(newRuntime);
-          try {
-            const { stewardEvmPreBoot: preBootHR } = await import(
-              "../services/steward-evm-bridge.js"
-            );
-            await preBootHR(newRuntime);
-          } catch {
-            // non-fatal
-          }
-          assertPersistentDatabaseRequired(newRuntime);
           await newRuntime.initialize();
-          await prepareRuntimeForTrajectoryCapture(
+          await waitForTrajectoryLoggerService(
             newRuntime,
             "hot-reload runtime.initialize()",
           );
-
-          try {
-            const { stewardEvmPostBoot: postBootHR } = await import(
-              "../services/steward-evm-bridge.js"
-            );
-            await postBootHR(newRuntime);
-          } catch {
-            // non-fatal
-          }
+          ensureTrajectoryLoggerEnabled(
+            newRuntime,
+            "hot-reload runtime.initialize()",
+          );
 
           // Ensure AutonomyService survives hot-reload (respects ENABLE_AUTONOMY)
           const hotReloadAutonomyEnabled =
@@ -4471,7 +5318,7 @@ export async function startInCloudMode(
   agentId: string,
   opts?: StartElizaOptions,
 ): Promise<AgentRuntime | undefined> {
-  const { CloudManager } = await import("../cloud/cloud-manager.js");
+  const { CloudManager } = await import("../cloud/cloud-manager");
 
   const cloudConfig = config.cloud;
   if (!cloudConfig) {
@@ -4499,8 +5346,8 @@ export async function startInCloudMode(
       logger.info(
         `[eliza] Cloud agent connected (headless). Agent: ${proxy.agentName}`,
       );
-      // Return undefined here; GUI cloud mode is handled through the
-      // dedicated cloud proxy routes instead of a local AgentRuntime.
+      // Return undefined — the cloud proxy handles everything.
+      // TODO: Wire proxy into the API server for GUI mode.
       return undefined;
     }
 
@@ -4561,7 +5408,7 @@ export async function startInCloudMode(
     logger.error(`[eliza] Failed to connect to cloud agent: ${msg}`);
     throw new Error(
       `Failed to connect to cloud agent: ${msg}\n` +
-        "You can retry with `eliza start`, or switch to local mode by setting `deploymentTarget.runtime` to `local`",
+        "You can retry with `eliza start`, or switch to local mode with `eliza config set cloud.runtime local`",
     );
   }
 }
@@ -4570,7 +5417,11 @@ const isDirectRun = (() => {
   const scriptArg = process.argv[1];
   if (!scriptArg) return false;
   const normalised = path.resolve(scriptArg);
-  return import.meta.url === pathToFileURL(normalised).href;
+  // Exact match against this module's file URL
+  if (import.meta.url === pathToFileURL(normalised).href) return true;
+  // Fallback: match the specific filename (handles tsx rewriting)
+  const base = path.basename(normalised);
+  return base === "eliza.ts" || base === "eliza";
 })();
 
 if (isDirectRun) {
