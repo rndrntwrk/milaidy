@@ -534,6 +534,8 @@ export function HeartbeatsView() {
         form.enabled)
       : form.enabled;
   const hasHeartbeats = triggers.length > 0;
+  const showFirstRunEmptyState =
+    !triggersLoading && !triggerError && !hasHeartbeats;
 
   return (
     <DesktopPageFrame>
@@ -1370,11 +1372,11 @@ export function HeartbeatsView() {
                     className="text-2xl font-semibold tracking-tight text-txt"
                     data-testid="heartbeats-empty-state-title"
                   >
-                    {hasHeartbeats
-                      ? t("heartbeatsview.selectAHeartbeat")
-                      : t("heartbeatsview.createFirstHeartbeat")}
+                    {showFirstRunEmptyState
+                      ? t("heartbeatsview.createFirstHeartbeat")
+                      : t("heartbeatsview.selectAHeartbeat")}
                   </h2>
-                  {hasHeartbeats && (
+                  {!showFirstRunEmptyState && (
                     <p className="max-w-md text-sm leading-relaxed text-muted">
                       {t("heartbeatsview.emptyStateDescription")}
                     </p>

@@ -123,6 +123,8 @@ describe("HeartbeatsView UI states", () => {
 
     const snapshot = JSON.stringify(tree?.toJSON());
     expect(snapshot).toContain("Loading");
+    expect(snapshot).toContain("Select a Heartbeat");
+    expect(snapshot).not.toContain("Create your first heartbeat");
   });
 
   it("renders the rounded shared shell without a nested detail panel wrapper", async () => {
