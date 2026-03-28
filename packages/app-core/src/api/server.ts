@@ -95,7 +95,7 @@ import {
   resolveBscApprovalSpender,
   resolvePrimaryBscRpcUrl,
 } from "@miladyai/agent/api/bsc-trade";
-import { getWalletAddresses } from "@miladyai/agent/api/wallet";
+import { getWalletAddresses, initStewardWalletCache } from "@miladyai/agent/api/wallet";
 import { fetchEvmNfts } from "@miladyai/agent/api/wallet-evm-balance";
 import { resolveWalletRpcReadiness } from "@miladyai/agent/api/wallet-rpc";
 import { recordWalletTradeLedgerEntry } from "@miladyai/agent/api/wallet-trading-profile";
@@ -4195,6 +4195,10 @@ export async function startApiServer(
   // passes through to upstream which checks this env var).
   ensureCloudTtsApiKeyAlias();
   await hydrateWalletKeysFromNodePlatformSecureStore();
+
+  // Pre-load steward wallet addresses so getWalletAddresses() has them
+  // available synchronously from the start.
+  await initStewardWalletCache();
   const compatState: CompatRuntimeState = {
     current: (args[0]?.runtime as AgentRuntime | null) ?? null,
     pendingAgentName: null,

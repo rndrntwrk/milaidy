@@ -2,6 +2,7 @@
  * Settings view — two-panel layout with section navigator and active section.
  */
 
+import type { StewardStatusResponse } from "@miladyai/shared/contracts/wallet";
 import {
   Button,
   Checkbox,
@@ -19,8 +20,9 @@ import {
   SelectValue,
   Spinner,
 } from "@miladyai/ui";
-import { AlertTriangle, Download, Upload } from "lucide-react";
+import { AlertTriangle, ChevronDown, Copy, Download, Shield, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { client } from "../api";
 import { useApp } from "../state";
 import { CodingAgentSettingsSection } from "./CodingAgentSettingsSection";
 import { ConfigPageView } from "./ConfigPageView";
@@ -664,6 +666,171 @@ function AdvancedSection() {
   );
 }
 
+/* ── Steward Wallet Section ───────────────────────────────────────────── */
+
+function CopyableAddress({
+  label,
+  address,
+}: {
+  label: string;
+  address: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    void navigator.clipboard.writeText(address).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [address]);
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-bg/50 px-3 py-2.5">
+      <div className="min-w-0 flex-1">
+        <div className="text-[11px] font-medium text-muted">{label}</div>
+        <div className="mt-0.5 truncate font-mono text-xs text-txt">
+          {address}
+        </div>
+      </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 shrink-0 text-muted hover:text-txt"
+        onClick={handleCopy}
+        aria-label={`Copy ${label} address`}
+      >
+        {copied ? (
+          <span className="text-ok text-xs">✓</span>
+        ) : (
+          <Copy className="h-3.5 w-3.5" />
+        )}
+      </Button>
+    </div>
+  );
+}
+
+function StewardWalletInfo({
+  stewardStatus,
+  onScrollToPolicies,
+}: {
+  stewardStatus: StewardStatusResponse;
+  onScrollToPolicies: () => void;
+}) {
+  const { t } = useApp();
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const evmAddress =
+    stewardStatus.walletAddresses?.evm ?? stewardStatus.evmAddress ?? null;
+  const solanaAddress = stewardStatus.walletAddresses?.solana ?? null;
+
+  return (
+    <div className="space-y-4">
+      {/* Steward status banner */}
+      <div className="flex items-center gap-3 rounded-lg border border-accent/20 bg-accent/5 p-3">
+        <Shield className="h-5 w-5 shrink-0 text-accent" />
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-txt">
+            {t("settings.stewardWalletManaged", {
+              defaultValue: "Your agent's wallet is managed by Steward",
+            })}
+          </div>
+          <div className="mt-0.5 text-[11px] text-muted">
+            {stewardStatus.vaultHealth === "ok"
+              ? t("settings.stewardVaultHealthy", {
+                  defaultValue: "Vault connected and healthy",
+                })
+              : stewardStatus.vaultHealth === "degraded"
+                ? t("settings.stewardVaultDegraded", {
+                    defaultValue: "Vault connected — degraded",
+                  })
+                : t("settings.stewardVaultError", {
+                    defaultValue: "Vault connected — error state",
+                  })}
+          </div>
+        </div>
+        <span
+          className={`h-2 w-2 shrink-0 rounded-full ${
+            stewardStatus.vaultHealth === "ok"
+              ? "bg-ok"
+              : stewardStatus.vaultHealth === "degraded"
+                ? "bg-warn"
+                : "bg-danger"
+          }`}
+        />
+      </div>
+
+      {/* Wallet addresses */}
+      <div className="space-y-2">
+        {evmAddress && (
+          <CopyableAddress label="EVM Address" address={evmAddress} />
+        )}
+        {solanaAddress && (
+          <CopyableAddress label="Solana Address" address={solanaAddress} />
+        )}
+        {!evmAddress && !solanaAddress && (
+          <div className="rounded-lg border border-border/50 bg-bg/50 px-3 py-2.5 text-xs text-muted">
+            {t("settings.stewardNoAddresses", {
+              defaultValue:
+                "No vault addresses available yet. Check steward configuration.",
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Link to Wallet Policies */}
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full justify-center gap-2 text-xs"
+        onClick={onScrollToPolicies}
+      >
+        <Shield className="h-3.5 w-3.5" />
+        {t("settings.viewWalletPolicies", {
+          defaultValue: "View Wallet Policies",
+        })}
+      </Button>
+
+      {/* RPC configuration — always visible */}
+      <div className="border-t border-border/50 pt-4">
+        <div className="text-xs font-semibold text-txt mb-2">
+          {t("settings.rpcConfiguration", {
+            defaultValue: "RPC Configuration",
+          })}
+        </div>
+        <ConfigPageView embedded />
+      </div>
+
+      {/* Advanced: show local key import */}
+      <div className="border-t border-border/50 pt-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-between text-xs text-muted hover:text-txt"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+        >
+          {t("settings.showAdvancedKeyManagement", {
+            defaultValue: "Advanced key management",
+          })}
+          <ChevronDown
+            className={`h-3.5 w-3.5 transition-transform ${showAdvanced ? "rotate-180" : ""}`}
+          />
+        </Button>
+        {showAdvanced && (
+          <div className="mt-3 rounded-lg border border-warn/20 bg-warn/5 p-3">
+            <div className="mb-2 flex items-center gap-2 text-[11px] text-warn">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {t("settings.advancedKeyWarning", {
+                defaultValue:
+                  "Local keys are not needed when Steward manages your wallet. Only use this if you know what you're doing.",
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── SettingsView ─────────────────────────────────────────────────────── */
 
 export function SettingsView({
@@ -682,12 +849,46 @@ export function SettingsView({
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
 
+  /* ── Steward status ─────────────────────────────────────────────────── */
+  const [stewardStatus, setStewardStatus] =
+    useState<StewardStatusResponse | null>(null);
+  const stewardConnected = stewardStatus?.connected === true;
+
+  useEffect(() => {
+    let cancelled = false;
+    client
+      .getStewardStatus()
+      .then((status) => {
+        if (!cancelled) setStewardStatus(status);
+      })
+      .catch(() => {
+        /* steward not available — leave null */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* Dynamic section definitions based on steward status */
+  const effectiveSections = useMemo(() => {
+    if (!stewardConnected) return SETTINGS_SECTIONS;
+    return SETTINGS_SECTIONS.map((section) =>
+      section.id === "wallet-rpc"
+        ? {
+            ...section,
+            label: "settings.sections.wallet.label" as const,
+            description: "settings.sections.wallet.stewardDesc" as const,
+          }
+        : section,
+    );
+  }, [stewardConnected]);
+
   const visibleSections = useMemo(
     () =>
-      SETTINGS_SECTIONS.filter((section) =>
+      effectiveSections.filter((section) =>
         matchesSettingsSection(section, searchQuery, t),
       ),
-    [searchQuery, t],
+    [effectiveSections, searchQuery, t],
   );
   const visibleSectionIds = useMemo(
     () => new Set(visibleSections.map((section) => section.id)),
@@ -726,6 +927,10 @@ export function SettingsView({
       }
     }
   }, []);
+
+  const scrollToPolicies = useCallback(() => {
+    handleSectionChange("wallet-policies");
+  }, [handleSectionChange]);
 
   useEffect(() => {
     if (visibleSections.length === 0) return;
@@ -822,11 +1027,30 @@ export function SettingsView({
       {visibleSectionIds.has("wallet-rpc") && (
         <SectionCard
           id="wallet-rpc"
-          title={t("settings.sections.walletrpc.label")}
-          description={t("settings.walletRpcDescription")}
+          title={
+            stewardConnected
+              ? t("settings.sections.wallet.label", {
+                  defaultValue: "Wallet",
+                })
+              : t("settings.sections.walletrpc.label")
+          }
+          description={
+            stewardConnected
+              ? t("settings.sections.wallet.stewardDesc", {
+                  defaultValue: "Managed by Steward vault",
+                })
+              : t("settings.walletRpcDescription")
+          }
           className={SETTINGS_SECTION_CARD_CLASS}
         >
-          <ConfigPageView embedded />
+          {stewardConnected && stewardStatus ? (
+            <StewardWalletInfo
+              stewardStatus={stewardStatus}
+              onScrollToPolicies={scrollToPolicies}
+            />
+          ) : (
+            <ConfigPageView embedded />
+          )}
         </SectionCard>
       )}
 

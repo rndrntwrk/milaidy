@@ -263,9 +263,20 @@ export function InventoryView() {
   const bnbBalance = Number.parseFloat(focusedNativeBalance ?? "0") || 0;
   const tradeReady =
     singleChainFocus === "bsc" ? bnbBalance >= BSC_GAS_READY_THRESHOLD : true;
+  // When steward is connected, use steward addresses for copy buttons
+  const stewardEvmAddr =
+    stewardStatus?.connected
+      ? stewardStatus.walletAddresses?.evm ?? stewardStatus.evmAddress ?? null
+      : null;
+  const stewardSolAddr =
+    stewardStatus?.connected
+      ? stewardStatus.walletAddresses?.solana ?? null
+      : null;
+  const displayEvmAddr = stewardEvmAddr ?? evmAddr;
+  const displaySolAddr = stewardSolAddr ?? solAddr;
   const addresses = [
-    evmAddr ? { label: "EVM", address: evmAddr } : null,
-    solAddr ? { label: "Solana", address: solAddr } : null,
+    displayEvmAddr ? { label: "EVM", address: displayEvmAddr } : null,
+    displaySolAddr ? { label: "Solana", address: displaySolAddr } : null,
   ].filter((item): item is { label: string; address: string } => Boolean(item));
   const chainItemMeta = useMemo(() => {
     const items: Array<{
@@ -745,63 +756,58 @@ export function InventoryView() {
               <div className="grid gap-3">
                 {stewardStatus?.connected && (
                   <div
-                    className="flex flex-col gap-1 rounded-2xl border border-accent/25 bg-accent/10 px-3 py-2 text-[11px] text-accent-fg shadow-sm"
+                    className="flex items-center gap-2 rounded-2xl border border-accent/25 bg-accent/10 px-3 py-2 text-[11px] text-accent-fg shadow-sm"
                     data-testid="steward-status-badge"
                   >
-                    <div className="inline-flex items-center gap-1.5">
-                      <StewardLogo size={14} />
-                      <span>
-                        Vault connected
-                        {stewardStatus.agentName && (
-                          <span className="ml-1 text-muted">
-                            ({stewardStatus.agentName})
+                    <StewardLogo size={14} className="shrink-0" />
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <div className="inline-flex items-center gap-1.5">
+                        <span className="font-mono truncate">
+                          {displayEvmAddr
+                            ? `${displayEvmAddr.slice(0, 6)}…${displayEvmAddr.slice(-4)}`
+                            : "Vault connected"}
+                        </span>
+                        <button
+                          type="button"
+                          className="shrink-0 text-muted hover:text-accent transition-colors"
+                          aria-label="Copy EVM address"
+                          onClick={() =>
+                            displayEvmAddr &&
+                            void handleCopyAddress(displayEvmAddr)
+                          }
+                        >
+                          <Copy className="h-3 w-3" />
+                        </button>
+                        {stewardStatus.vaultHealth &&
+                          stewardStatus.vaultHealth !== "ok" && (
+                            <span
+                              className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase ${
+                                stewardStatus.vaultHealth === "error"
+                                  ? "bg-danger/20 text-danger"
+                                  : "bg-warning/20 text-warning"
+                              }`}
+                            >
+                              {stewardStatus.vaultHealth}
+                            </span>
+                          )}
+                      </div>
+                      {displaySolAddr && (
+                        <div className="inline-flex items-center gap-1.5 font-mono text-muted">
+                          <span className="truncate">
+                            {displaySolAddr.slice(0, 6)}…
+                            {displaySolAddr.slice(-4)}
                           </span>
-                        )}
-                      </span>
-                      {stewardStatus.vaultHealth &&
-                        stewardStatus.vaultHealth !== "ok" && (
-                          <span
-                            className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase ${
-                              stewardStatus.vaultHealth === "error"
-                                ? "bg-danger/20 text-danger"
-                                : "bg-warning/20 text-warning"
-                            }`}
+                          <button
+                            type="button"
+                            className="shrink-0 text-muted hover:text-accent transition-colors"
+                            aria-label="Copy Solana address"
+                            onClick={() =>
+                              void handleCopyAddress(displaySolAddr)
+                            }
                           >
-                            {stewardStatus.vaultHealth}
-                          </span>
-                        )}
-                    </div>
-                    {/* Show wallet addresses — local vs steward vault */}
-                    <div className="flex flex-col gap-0.5 pl-5 font-mono text-muted">
-                      {evmAddr && (
-                        <span>
-                          Local wallet: {evmAddr.slice(0, 6)}…
-                          {evmAddr.slice(-4)}
-                        </span>
-                      )}
-                      {stewardStatus.walletAddresses?.evm &&
-                        stewardStatus.walletAddresses.evm !== evmAddr && (
-                          <span>
-                            Vault:{" "}
-                            {stewardStatus.walletAddresses.evm.slice(0, 6)}…
-                            {stewardStatus.walletAddresses.evm.slice(-4)}
-                          </span>
-                        )}
-                      {!stewardStatus.walletAddresses?.evm &&
-                        stewardStatus.evmAddress &&
-                        stewardStatus.evmAddress !== evmAddr && (
-                          <span>
-                            Vault:{" "}
-                            {stewardStatus.evmAddress.slice(0, 6)}…
-                            {stewardStatus.evmAddress.slice(-4)}
-                          </span>
-                        )}
-                      {stewardStatus.walletAddresses?.solana && (
-                        <span>
-                          Solana:{" "}
-                          {stewardStatus.walletAddresses.solana.slice(0, 6)}…
-                          {stewardStatus.walletAddresses.solana.slice(-4)}
-                        </span>
+                            <Copy className="h-3 w-3" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>

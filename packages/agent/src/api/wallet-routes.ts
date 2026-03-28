@@ -309,6 +309,11 @@ export async function handleWalletRoutes(
       chain = detection.chain;
     }
 
+    // When steward is configured, warn that keys should be imported via vault
+    const stewardWarning = process.env.STEWARD_API_URL?.trim()
+      ? "Steward vault is configured. Consider importing keys directly into the vault instead of storing plaintext keys locally."
+      : undefined;
+
     const result = deps.importWallet(chain, body.privateKey.trim());
 
     if (!result.success) {
@@ -329,11 +334,15 @@ export async function handleWalletRoutes(
       configSaveWarning = msg;
     }
 
+    const warnings: string[] = [];
+    if (configSaveWarning) warnings.push(configSaveWarning);
+    if (stewardWarning) warnings.push(stewardWarning);
+
     json(res, {
       ok: true,
       chain,
       address: result.address,
-      ...(configSaveWarning ? { warnings: [configSaveWarning] } : {}),
+      ...(warnings.length > 0 ? { warnings } : {}),
     });
     return true;
   }
@@ -356,6 +365,119 @@ export async function handleWalletRoutes(
 
     const targetChain = (chain ?? "both") as WalletChain | "both";
 
+    // ── Steward-first: delegate wallet generation to steward ──────────
+    const stewardApiUrl = process.env.STEWARD_API_URL?.trim();
+    if (stewardApiUrl) {
+      try {
+        const agentId =
+          process.env.STEWARD_AGENT_ID?.trim() ||
+          process.env.MILADY_STEWARD_AGENT_ID?.trim() ||
+          process.env.ELIZA_STEWARD_AGENT_ID?.trim() ||
+          null;
+
+        if (!agentId) {
+          error(res, "Steward is configured but no agent ID is set (STEWARD_AGENT_ID).", 500);
+          return true;
+        }
+
+        // Build auth headers
+        const headers: Record<string, string> = {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        };
+        const bearerToken = process.env.STEWARD_AGENT_TOKEN?.trim();
+        const apiKey = process.env.STEWARD_API_KEY?.trim();
+        const tenantId = process.env.STEWARD_TENANT_ID?.trim();
+        if (bearerToken) {
+          headers.Authorization = `Bearer ${bearerToken}`;
+        } else if (apiKey) {
+          headers["X-Steward-Key"] = apiKey;
+        }
+        if (tenantId) {
+          headers["X-Steward-Tenant"] = tenantId;
+        }
+
+        // Check if agent already exists (has wallets)
+        let agentEvm: string | null = null;
+        let agentSolana: string | null = null;
+        let agentExists = false;
+
+        try {
+          const agentRes = await fetch(
+            `${stewardApiUrl}/agents/${encodeURIComponent(agentId)}`,
+            { headers: { ...headers }, signal: AbortSignal.timeout(15_000) },
+          );
+          if (agentRes.ok) {
+            agentExists = true;
+            const agentBody = (await agentRes.json()) as {
+              data?: {
+                walletAddress?: string;
+                walletAddresses?: { evm?: string; solana?: string };
+              };
+            };
+            const agent = agentBody.data ?? (agentBody as unknown as typeof agentBody.data);
+            agentEvm = agent?.walletAddresses?.evm?.trim() || agent?.walletAddress?.trim() || null;
+            agentSolana = agent?.walletAddresses?.solana?.trim() || null;
+          }
+        } catch {
+          // agent doesn't exist or fetch failed — will try to create
+        }
+
+        // If agent doesn't exist, create it (steward auto-generates wallets)
+        if (!agentExists) {
+          const createRes = await fetch(`${stewardApiUrl}/agents`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ id: agentId, name: agentId }),
+            signal: AbortSignal.timeout(15_000),
+          });
+
+          if (!createRes.ok) {
+            const errText = await createRes.text().catch(() => "Unknown error");
+            error(res, `Steward agent creation failed: ${errText}`, 502);
+            return true;
+          }
+
+          const createBody = (await createRes.json()) as {
+            ok?: boolean;
+            data?: {
+              walletAddress?: string;
+              walletAddresses?: { evm?: string; solana?: string };
+            };
+          };
+          const created = createBody.data ?? (createBody as unknown as typeof createBody.data);
+          agentEvm = created?.walletAddresses?.evm?.trim() || created?.walletAddress?.trim() || null;
+          agentSolana = created?.walletAddresses?.solana?.trim() || null;
+
+          logger.info(`[wallet] Created steward agent "${agentId}" with wallets`);
+        }
+
+        // Cache steward addresses in env for synchronous access
+        const generated: Array<{ chain: WalletChain; address: string }> = [];
+        if (agentEvm && (targetChain === "both" || targetChain === "evm")) {
+          process.env.STEWARD_EVM_ADDRESS = agentEvm;
+          generated.push({ chain: "evm", address: agentEvm });
+          logger.info(`[wallet] Steward EVM wallet: ${agentEvm}`);
+        }
+        if (agentSolana && (targetChain === "both" || targetChain === "solana")) {
+          process.env.STEWARD_SOLANA_ADDRESS = agentSolana;
+          generated.push({ chain: "solana", address: agentSolana });
+          logger.info(`[wallet] Steward Solana wallet: ${agentSolana}`);
+        }
+
+        json(res, {
+          ok: true,
+          wallets: generated,
+          source: "steward",
+        });
+        return true;
+      } catch (err) {
+        logger.warn(`[wallet] Steward wallet generation failed, falling back to local: ${err}`);
+        // Fall through to local generation
+      }
+    }
+
+    // ── Legacy local key generation (fallback) ────────────────────────
     if (!config.env) config.env = {};
 
     const generated: Array<{ chain: WalletChain; address: string }> = [];
