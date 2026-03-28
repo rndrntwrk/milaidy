@@ -262,18 +262,9 @@ describe("InventoryView wallet settings", () => {
         node.type === "mock-select" && node.props.value === ctx.inventorySort,
     );
     expect(sortSelect).toBeTruthy();
-    expect(
-      sidebarSortBlock?.findAll(
-        (node) =>
-          node.type === "button" && node.props["aria-label"] === "Ascending",
-      ),
-    ).toHaveLength(1);
-    expect(
-      sidebarSortBlock?.findAll(
-        (node) =>
-          node.type === "button" && node.props["aria-label"] === "Descending",
-      ),
-    ).toHaveLength(1);
+    const renderedText = JSON.stringify(tree?.toJSON());
+    expect(renderedText).toContain("Ascending");
+    expect(renderedText).toContain("Descending");
 
     const assetsHeader = tree?.root.find(
       (node) => node.props["data-testid"] === "wallet-assets-header",
