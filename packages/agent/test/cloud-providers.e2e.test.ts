@@ -12,8 +12,8 @@
  * Set OPENAI_API_KEY, ANTHROPIC_API_KEY, etc. in env to enable live tests.
  *
  * Run:
- *   pnpm test:e2e -- test/cloud-providers.e2e.test.ts
- *   ELIZA_LIVE_TEST=1 OPENAI_API_KEY=sk-... pnpm test:e2e -- test/cloud-providers.e2e.test.ts
+ *   pnpm test:e2e -- packages/agent/test/cloud-providers.e2e.test.ts
+ *   ELIZA_LIVE_TEST=1 OPENAI_API_KEY=sk-... pnpm test:e2e -- packages/agent/test/cloud-providers.e2e.test.ts
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ElizaConfig } from "../src/config/config";
