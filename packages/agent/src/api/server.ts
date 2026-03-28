@@ -19558,6 +19558,34 @@ export async function startApiServer(opts?: {
         );
       }
     })();
+
+    // ── Dynamic Five55 games route loading ────────────────────────────────
+    void (async () => {
+      try {
+        const { handleFive55GamesRoutes } = await import(
+          "./five55-games-routes.js"
+        );
+        state.connectorRouteHandlers.push((req, res, pathname, method) =>
+          handleFive55GamesRoutes({
+            req,
+            res,
+            method,
+            pathname,
+            json,
+            error,
+            readJsonBody,
+          }),
+        );
+        addLog("info", "Five55 games routes registered", "system", [
+          "system",
+          "games",
+        ]);
+      } catch (err) {
+        logger.warn(
+          `[eliza-api] Failed to load five55 games routes: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    })();
   };
 
   // ── WebSocket Server ─────────────────────────────────────────────────────

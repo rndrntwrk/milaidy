@@ -24,6 +24,7 @@ export * from "./database";
 export * from "./diagnostics-routes";
 export * from "./drop-service";
 export * from "./early-logs";
+export * from "./five55-games-routes";
 export * from "./http-helpers";
 export * from "./knowledge-routes";
 export * from "./knowledge-service-loader";
