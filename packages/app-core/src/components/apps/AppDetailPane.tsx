@@ -1,17 +1,15 @@
 import { Button } from "@miladyai/ui";
-import type { RegistryAppInfo } from "../../api";
+import React from "react";
+import { type RegistryAppInfo } from "../../api";
 import { useApp } from "../../state";
+import { AliceArcadeOperator } from "../operator/AliceArcadeOperator";
 import { getAppDetailExtension } from "./extensions/registry";
-import {
-  CATEGORY_LABELS,
-  getAppEmoji,
-  getAppSessionFeatureLabels,
-  getAppSessionModeLabel,
-} from "./helpers";
+import { CATEGORY_LABELS, getAppEmoji } from "./helpers";
 
 interface AppDetailPaneProps {
   app: RegistryAppInfo;
   busy: boolean;
+  compact?: boolean;
   hasActiveViewer: boolean;
   isActive: boolean;
   onBack: () => void;
@@ -20,9 +18,50 @@ interface AppDetailPaneProps {
   onOpenCurrentGameInNewTab: () => void;
 }
 
+function DetailBadge({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: "neutral" | "accent" | "success";
+}) {
+  const toneClassName =
+    tone === "success"
+      ? "border-ok/30 bg-ok/10 text-ok"
+      : tone === "accent"
+        ? "border-accent/25 bg-accent/10 text-accent"
+        : "border-border/35 bg-bg-hover/70 text-muted-strong";
+
+  return (
+    <span
+      className={`inline-flex min-h-6 items-center rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] ${toneClassName}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function MetadataRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="grid gap-1 rounded-2xl border border-border/35 bg-card/72 px-3 py-2.5 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-start sm:gap-3">
+      <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+        {label}
+      </span>
+      <span className="min-w-0 text-[12px] leading-5 text-txt">{value}</span>
+    </div>
+  );
+}
+
 export function AppDetailPane({
   app,
   busy,
+  compact = false,
   hasActiveViewer,
   isActive,
   onBack,
@@ -37,113 +76,283 @@ export function AppDetailPane({
     t("appsview.NoDescriptionAvailable", {
       defaultValue: "No description available.",
     });
-  const backLabel = t("appsview.Back", { defaultValue: "Back" });
-  const sessionModeLabel = getAppSessionModeLabel(app);
-  const sessionFeatures = getAppSessionFeatureLabels(app);
-  const allTags = [...sessionFeatures, ...(app.capabilities ?? [])];
   const launchLabel = busy
     ? t("appsview.Launching", { defaultValue: "Launching..." })
-    : t("appsview.Launch", { defaultValue: "Launch" });
+    : t("appsview.Launch", { defaultValue: "Launch app" });
+  const backLabel = t("appsview.Back", { defaultValue: "Back to catalog" });
 
-  return (
-    <div className="space-y-4" data-testid="apps-detail-panel">
-      <button
-        type="button"
-        className="text-[12px] font-medium text-muted-strong transition-colors hover:text-txt"
-        onClick={onBack}
-      >
-        ← {backLabel}
-      </button>
+  if (compact) {
+    return (
+      <div className="phone-inline-detail space-y-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="min-h-10 justify-start rounded-xl border border-border/35 bg-card/72 px-3 text-[12px] font-medium text-muted-strong shadow-sm hover:bg-bg-hover/80 hover:text-txt"
+          onClick={onBack}
+        >
+          ← {backLabel}
+        </Button>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border/35 bg-bg/80 text-xl">
-            {getAppEmoji(app)}
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-txt">
-              {app.displayName ?? app.name}
-            </h2>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-strong">
-              {isActive ? <span className="text-ok">Active</span> : null}
-              {app.category ? (
-                <span>{CATEGORY_LABELS[app.category] ?? app.category}</span>
-              ) : null}
-              {sessionModeLabel ? (
-                <span className="text-accent">{sessionModeLabel}</span>
-              ) : null}
-              {app.latestVersion ? (
-                <span className="font-mono">v{app.latestVersion}</span>
-              ) : null}
+        <div className="rounded-[1.5rem] border border-border/35 bg-card/74 p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.35rem] border border-border/35 bg-bg/80 text-[1.75rem] shadow-sm">
+              {getAppEmoji(app)}
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="text-base font-semibold tracking-[0.01em] text-txt">
+                {app.displayName ?? app.name}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <DetailBadge tone={isActive ? "success" : "neutral"}>
+                  {isActive
+                    ? t("appsview.Active", { defaultValue: "Active" })
+                    : t("appsview.Inactive", { defaultValue: "Inactive" })}
+                </DetailBadge>
+                {app.category ? (
+                  <DetailBadge>
+                    {CATEGORY_LABELS[app.category] ?? app.category}
+                  </DetailBadge>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
-        <div className="flex gap-2 sm:shrink-0">
+
+        <div className="rounded-[1.25rem] border border-border/35 bg-bg/55 px-4 py-3">
+          <p className="text-[12px] leading-6 text-muted-strong">
+            {description}
+          </p>
+        </div>
+
+        <div className="grid gap-2">
           <Button
             variant="default"
             size="sm"
-            data-testid="apps-detail-launch"
-            className="rounded-xl px-4"
+            className="min-h-11 w-full rounded-xl px-4 shadow-sm"
             disabled={busy}
             onClick={onLaunch}
           >
             {launchLabel}
           </Button>
           {hasActiveViewer ? (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                data-testid="apps-detail-resume"
-                className="rounded-xl px-4"
-                onClick={onOpenCurrentGame}
-              >
-                Resume
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                data-testid="apps-detail-open-tab"
-                className="rounded-xl px-4"
-                onClick={onOpenCurrentGameInNewTab}
-              >
-                {t("appsview.OpenInTab", { defaultValue: "Open in tab" })}
-              </Button>
-            </>
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-11 w-full rounded-xl px-4 shadow-sm"
+              onClick={onOpenCurrentGame}
+            >
+              {t("appsview.ResumeSession", {
+                defaultValue: "Resume session",
+              })}
+            </Button>
           ) : null}
         </div>
+
+        <AliceArcadeOperator
+          subject={{
+            name: app.name,
+            displayName: app.displayName,
+            category: app.category,
+          }}
+          compact
+        />
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <MetadataRow
+            label={t("appsview.LaunchType", { defaultValue: "Launch type" })}
+            value={<span className="break-words">{app.launchType || "—"}</span>}
+          />
+          <MetadataRow
+            label={t("common.version", { defaultValue: "Version" })}
+            value={
+              <span className="font-mono text-[11px] text-muted-strong">
+                {app.latestVersion ? `v${app.latestVersion}` : "—"}
+              </span>
+            }
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-h-10 rounded-xl border-border/35 bg-card/72 px-3 shadow-sm"
+          onClick={onBack}
+        >
+          ← {backLabel}
+        </Button>
+        {app.latestVersion ? (
+          <span className="font-mono text-[11px] text-muted-strong">
+            v{app.latestVersion}
+          </span>
+        ) : null}
       </div>
 
-      <p className="max-w-prose text-[13px] leading-6 text-muted-strong">
-        {description}
-      </p>
-
-      {allTags.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {allTags.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full border border-border/30 bg-bg-hover/70 px-2 py-0.5 text-[10px] text-muted-strong"
-            >
-              {tag}
-            </span>
-          ))}
+      <section className="rounded-[1.75rem] border border-border/35 bg-card/78 p-5 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start">
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[1.6rem] border border-border/35 bg-bg/80 text-[2rem] shadow-sm">
+            {getAppEmoji(app)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xl font-semibold tracking-[0.01em] text-txt">
+              {app.displayName ?? app.name}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <DetailBadge tone={isActive ? "success" : "neutral"}>
+                {isActive
+                  ? t("appsview.Active", { defaultValue: "Active" })
+                  : t("appsview.Inactive", { defaultValue: "Inactive" })}
+              </DetailBadge>
+              {app.category ? (
+                <DetailBadge>
+                  {CATEGORY_LABELS[app.category] ?? app.category}
+                </DetailBadge>
+              ) : null}
+              {app.latestVersion ? (
+                <DetailBadge tone="accent">v{app.latestVersion}</DetailBadge>
+              ) : null}
+            </div>
+            <div className="mt-4 rounded-[1.25rem] border border-border/35 bg-bg/55 px-4 py-3">
+              <p className="max-w-[62ch] text-[13px] leading-6 text-muted-strong">
+                {description}
+              </p>
+            </div>
+          </div>
         </div>
+      </section>
+
+      <div
+        className={`grid gap-2 ${hasActiveViewer ? "md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]" : "md:grid-cols-2"}`}
+      >
+        <Button
+          variant="default"
+          size="sm"
+          className="min-h-11 rounded-xl px-5 shadow-sm"
+          disabled={busy}
+          onClick={onLaunch}
+        >
+          {launchLabel}
+        </Button>
+        {hasActiveViewer ? (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-11 rounded-xl px-5 shadow-sm"
+              onClick={onOpenCurrentGame}
+            >
+              {t("appsview.ResumeSession", {
+                defaultValue: "Resume session",
+              })}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-11 rounded-xl px-5 shadow-sm"
+              onClick={onOpenCurrentGameInNewTab}
+            >
+              {t("appsview.OpenInTab", { defaultValue: "Open in browser tab" })}
+            </Button>
+          </>
+        ) : null}
+      </div>
+
+      <AliceArcadeOperator
+        subject={{
+          name: app.name,
+          displayName: app.displayName,
+          category: app.category,
+        }}
+      />
+
+      <section className="space-y-2.5">
+        <MetadataRow
+          label={t("appsview.LaunchType", { defaultValue: "Launch type" })}
+          value={<span className="break-words">{app.launchType || "—"}</span>}
+        />
+        {app.launchUrl ? (
+          <MetadataRow
+            label={t("appsview.URL", { defaultValue: "URL" })}
+            value={
+              <span className="break-all text-muted-strong">
+                {app.launchUrl}
+              </span>
+            }
+          />
+        ) : null}
+        {app.repository ? (
+          <MetadataRow
+            label={t("appsview.Repository", { defaultValue: "Repository" })}
+            value={
+              <a
+                href={app.repository}
+                target="_blank"
+                rel="noreferrer"
+                className="break-all text-accent underline-offset-4 transition-colors hover:text-txt hover:underline"
+              >
+                {app.repository}
+              </a>
+            }
+          />
+        ) : null}
+      </section>
+
+      {app.capabilities?.length ? (
+        <section className="space-y-2.5">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+            {t("appsview.Capabilities", { defaultValue: "Capabilities" })}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {app.capabilities.map((capability) => (
+              <DetailBadge key={capability}>{capability}</DetailBadge>
+            ))}
+          </div>
+        </section>
       ) : null}
 
-      {app.repository ? (
-        <a
-          href={app.repository}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-block text-[12px] text-accent underline-offset-4 transition-colors hover:underline"
-        >
-          {app.repository}
-        </a>
+      {app.viewer ? (
+        <section className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+            {t("appsview.Viewer", { defaultValue: "Viewer" })}
+          </div>
+          <div className="space-y-2">
+            <MetadataRow
+              label={t("appsview.URL", { defaultValue: "URL" })}
+              value={
+                <span className="break-all text-muted-strong">
+                  {app.viewer.url}
+                </span>
+              }
+            />
+            <MetadataRow
+              label={t("appsview.Auth", { defaultValue: "Auth" })}
+              value={
+                <span className="text-muted-strong">
+                  {app.viewer.postMessageAuth
+                    ? t("appsview.Enabled", { defaultValue: "Enabled" })
+                    : t("appsview.Disabled", { defaultValue: "Disabled" })}
+                </span>
+              }
+            />
+            <MetadataRow
+              label={t("appsview.Sandbox", { defaultValue: "Sandbox" })}
+              value={
+                <span className="break-all text-muted-strong">
+                  {app.viewer.sandbox || "—"}
+                </span>
+              }
+            />
+          </div>
+        </section>
       ) : null}
 
       {DetailExtension ? (
-        <div className="border-t border-border/30 pt-4">
+        <div className="border-t border-border/35 pt-4">
           <DetailExtension app={app} />
         </div>
       ) : null}

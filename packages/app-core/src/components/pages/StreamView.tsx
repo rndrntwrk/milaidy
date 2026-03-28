@@ -28,6 +28,14 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
   const [streamAvailable, setStreamAvailable] = useState(true);
   const [uptime, setUptime] = useState(0);
   const [frameCount, setFrameCount] = useState(0);
+  const [destinations, setDestinations] = useState<Array<{
+    id: string;
+    name: string;
+  }>>([]);
+  const [activeDestination, setActiveDestination] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   // Poll stream status
   useEffect(() => {
@@ -56,6 +64,35 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
       clearInterval(id);
     };
   }, [streamAvailable, docVisible]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadDestinations = async () => {
+      if (!streamAvailable) return;
+      try {
+        const [list, status] = await Promise.all([
+          client.getStreamingDestinations(),
+          client.streamStatus().catch(() => null),
+        ]);
+        if (!mounted) return;
+        setDestinations(list.destinations ?? []);
+        const current = status?.destination ?? null;
+        if (current) {
+          setActiveDestination(current);
+          return;
+        }
+        setActiveDestination(list.destinations?.[0] ?? null);
+      } catch {
+        if (!mounted) return;
+        setDestinations([]);
+        setActiveDestination(null);
+      }
+    };
+    void loadDestinations();
+    return () => {
+      mounted = false;
+    };
+  }, [streamAvailable]);
 
   const toggleStream = useCallback(async () => {
     if (loadingRef.current) return;
@@ -101,6 +138,18 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
     }
   }, [isElectrobun, streamLive]);
 
+  const handleDestinationChange = useCallback(async (destinationId: string) => {
+    if (!destinationId.trim()) return;
+    try {
+      const result = await client.setActiveDestination(destinationId);
+      if (result.ok && result.destination) {
+        setActiveDestination(result.destination);
+      }
+    } catch (err) {
+      console.warn("[stream] Failed to change destination:", err);
+    }
+  }, []);
+
   return (
     <div
       data-stream-view
@@ -114,6 +163,9 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
         streamLive={streamLive}
         streamLoading={streamLoading}
         onToggleStream={toggleStream}
+        destinations={destinations}
+        activeDestination={activeDestination}
+        onDestinationChange={handleDestinationChange}
         uptime={uptime}
         frameCount={frameCount}
       />
@@ -167,6 +219,11 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
                     defaultValue: "Press Go Live to start streaming.",
                   })}
             </p>
+            {activeDestination ? (
+              <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-strong">
+                Destination: {activeDestination.name}
+              </p>
+            ) : null}
           </div>
         )}
       </div>
