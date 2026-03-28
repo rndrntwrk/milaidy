@@ -150,6 +150,7 @@
     "@miladyai/plugin-wechat": "github:milady-ai/plugin-wechat",
     "@miladyai/shared": "workspace:*",
     "@noble/curves": "^2.0.1",
+    "@rndrntwrk/plugin-555stream": "workspace:*",
     "@whiskeysockets/baileys": "7.0.0-rc.9",
     "coding-agent-adapters": "0.16.3",
     "dotenv": "^17.2.3",

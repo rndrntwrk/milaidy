@@ -6,6 +6,17 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 import { Header } from "./Header";
 
+const { mockGetTabGroups } = vi.hoisted(() => ({
+  mockGetTabGroups: vi.fn(() => [
+    {
+      label: "Chat",
+      tabs: ["chat"],
+      icon: () => React.createElement("span", null, "💬"),
+      description: "Chat",
+    },
+  ]),
+}));
+
 // Mock the AppContext
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: vi.fn(),
@@ -17,14 +28,7 @@ vi.mock("@miladyai/app-core/hooks", () => ({
 }));
 
 vi.mock("@miladyai/app-core/navigation", () => ({
-  getTabGroups: () => [
-    {
-      label: "Chat",
-      tabs: ["chat"],
-      icon: () => React.createElement("span", null, "💬"),
-      description: "Chat",
-    },
-  ],
+  getTabGroups: (...args: unknown[]) => mockGetTabGroups(...args),
 }));
 
 vi.mock("@miladyai/app-core/components", () => ({
@@ -86,6 +90,54 @@ vi.mock("lucide-react", () => ({
 }));
 
 describe("Header", () => {
+  it("treats 555stream as a real streaming nav capability", async () => {
+    mockGetTabGroups.mockClear();
+
+    const mockUseApp = {
+      t: (k: string) => k,
+      agentStatus: { state: "running", agentName: "Eliza" },
+      elizaCloudEnabled: false,
+      elizaCloudConnected: false,
+      elizaCloudCredits: null,
+      elizaCloudCreditsCritical: false,
+      elizaCloudCreditsLow: false,
+      elizaCloudAuthRejected: false,
+      elizaCloudCreditsError: null,
+      elizaCloudTopUpUrl: "",
+      lifecycleBusy: false,
+      lifecycleAction: null,
+      handleRestart: vi.fn(),
+      handleStart: vi.fn(),
+      loadDropStatus: vi.fn().mockResolvedValue(undefined),
+      tab: "chat",
+      setTab: vi.fn(),
+      setState: vi.fn(),
+      plugins: [
+        {
+          id: "555stream",
+          npmName: "@rndrntwrk/plugin-555stream",
+          enabled: true,
+          isActive: true,
+        },
+      ],
+      uiLanguage: "en",
+      setUiLanguage: vi.fn(),
+      uiTheme: "dark",
+      setUiTheme: vi.fn(),
+      uiShellMode: "native",
+      switchShellView: vi.fn(),
+    };
+
+    // @ts-expect-error - test uses a narrowed subset of the full app context type.
+    vi.spyOn(AppContext, "useApp").mockReturnValue(mockUseApp);
+
+    await act(async () => {
+      create(<Header />);
+    });
+
+    expect(mockGetTabGroups).toHaveBeenCalledWith(true);
+  });
+
   it("hides the shell toggle pill outside the companion overlay", async () => {
     // Mock the useApp hook return value
     const mockUseApp = {

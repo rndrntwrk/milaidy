@@ -12,6 +12,8 @@ const BASELINE_PROVIDER_PLUGINS = [
   "@elizaos/plugin-ollama",
 ] as const;
 
+const BASELINE_STREAMING_PLUGINS = ["@rndrntwrk/plugin-555stream"] as const;
+
 const DESKTOP_RUNTIME_ONLY_PLUGINS = new Set<string>([
   "@elizaos/plugin-browser",
   "@elizaos/plugin-computeruse",
@@ -39,6 +41,7 @@ export const BASELINE_BUNDLED_RUNTIME_PACKAGES: readonly string[] = [
   ...CORE_PLUGINS,
   ...OPTIONAL_CORE_PLUGINS,
   ...BASELINE_PROVIDER_PLUGINS,
+  ...BASELINE_STREAMING_PLUGINS,
 ];
 
 export function derivePluginIdFromPackageName(packageName: string): string {
