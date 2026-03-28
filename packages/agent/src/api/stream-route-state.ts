@@ -51,4 +51,7 @@ export interface StreamRouteState {
    * `config.ui`, while avatar taps only hit `/api/stream/settings` today.
    */
   mirrorStreamAvatarToElizaConfig?: (avatarIndex: number) => void;
+  runtime?: {
+    getService(serviceType: string): unknown | null | undefined;
+  };
 }

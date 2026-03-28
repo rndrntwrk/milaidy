@@ -1450,6 +1450,7 @@ function categorizePlugin(
   ];
   const streamingDests = [
     "streaming-base",
+    "555stream",
     "custom-rtmp",
     "youtube",
     "youtube-streaming",
@@ -19475,6 +19476,7 @@ export async function startApiServer(opts?: {
           streamManager,
           port,
           screenCapture,
+          runtime: state.runtime,
           captureUrl: undefined as string | undefined,
           destinations,
           activeDestinationId,
