@@ -18,34 +18,24 @@ vi.mock("@miladyai/app-core/state", () => ({
 
 import { StatusBar } from "../../src/components/stream/StatusBar";
 
-function renderStatusBar() {
+function renderStatusBar(
+  overrides: Partial<React.ComponentProps<typeof StatusBar>> = {},
+) {
   let tree: TestRenderer.ReactTestRenderer | null = null;
   act(() => {
     tree = TestRenderer.create(
       React.createElement(StatusBar, {
         agentName: "Eliza",
-        mode: "idle",
-        viewerCount: null,
-        isPip: false,
-        onTogglePip: vi.fn(),
         streamAvailable: true,
         streamLive: false,
         streamLoading: false,
         onToggleStream: vi.fn(),
-        volume: 100,
-        muted: false,
-        onVolumeChange: vi.fn(),
-        onToggleMute: vi.fn(),
         destinations: [],
         activeDestination: null,
         onDestinationChange: vi.fn(),
         uptime: 0,
         frameCount: 0,
-        audioSource: "",
-        streamSource: { type: "stream-tab" },
-        activeGameViewerUrl: "",
-        onSourceChange: vi.fn(),
-        onOpenSettings: vi.fn(),
+        ...overrides,
       }),
     );
   });
@@ -85,5 +75,26 @@ describe("StatusBar stream popout button", () => {
           node.props.title === "statusbar.PopOutStreamView",
       ),
     ).toHaveLength(1);
+  });
+
+  it("renders a destination selector when streaming destinations exist", () => {
+    const onDestinationChange = vi.fn();
+    const tree = renderStatusBar({
+      destinations: [
+        { id: "twitch", name: "Twitch" },
+        { id: "youtube", name: "YouTube" },
+      ],
+      activeDestination: { id: "twitch", name: "Twitch" },
+      onDestinationChange,
+    });
+
+    const select = tree.root.findByType("select");
+    expect(select.props.value).toBe("twitch");
+
+    act(() => {
+      select.props.onChange({ target: { value: "youtube" } });
+    });
+
+    expect(onDestinationChange).toHaveBeenCalledWith("youtube");
   });
 });

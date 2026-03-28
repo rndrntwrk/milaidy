@@ -30,6 +30,9 @@ export function StatusBar({
   streamLive,
   streamLoading,
   onToggleStream,
+  destinations,
+  activeDestination,
+  onDestinationChange,
   uptime,
   frameCount,
 }: {
@@ -38,6 +41,9 @@ export function StatusBar({
   streamLive: boolean;
   streamLoading: boolean;
   onToggleStream: () => void;
+  destinations: Array<{ id: string; name: string }>;
+  activeDestination: { id: string; name: string } | null;
+  onDestinationChange: (destinationId: string) => void;
   uptime: number;
   frameCount: number;
 }) {
@@ -95,6 +101,34 @@ export function StatusBar({
             <span className="text-txt">{frameCount.toLocaleString()}f</span>
           </span>
         )}
+
+        {!IS_POPOUT && destinations.length > 0 ? (
+          <label className="relative">
+            <select
+              aria-label="Streaming destination"
+              className={`${STATUS_PILL_CLASSNAME} max-w-[12rem] cursor-pointer appearance-none pr-8 text-left text-[11px] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60`}
+              value={activeDestination?.id ?? destinations[0]?.id ?? ""}
+              disabled={streamLive || !streamAvailable}
+              title={
+                !streamAvailable
+                  ? "Install and enable the streaming plugin to change destinations"
+                  : streamLive
+                    ? "Stop stream to change destination"
+                    : "Select destination"
+              }
+              onChange={(event) => onDestinationChange(event.target.value)}
+            >
+              {destinations.map((destination) => (
+                <option key={destination.id} value={destination.id}>
+                  {destination.name}
+                </option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[10px] text-muted-strong">
+              ▾
+            </span>
+          </label>
+        ) : null}
 
         <Button
           size="sm"

@@ -1620,6 +1620,31 @@ export interface AppStopResult {
   message: string;
 }
 
+export interface Arcade555CatalogGame {
+  id: string;
+  name?: string;
+  title?: string;
+  label?: string;
+  category?: string;
+  viewerUrl?: string | null;
+  [key: string]: unknown;
+}
+
+export interface Arcade555GamesCatalogResponse {
+  games: Arcade555CatalogGame[];
+  [key: string]: unknown;
+}
+
+export interface Arcade555GameActionResponse {
+  ok?: boolean;
+  started?: boolean;
+  stopped?: boolean;
+  switched?: boolean;
+  gameId?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
 export type HyperscapeScriptedRole =
   | "combat"
   | "woodcutting"
@@ -3784,6 +3809,32 @@ export class MiladyClient {
     return this.fetch(`/api/cloud/compat/jobs/${encodeURIComponent(jobId)}`);
   }
 
+  private getOrCreateArcade555SessionId(preferredSessionId?: string): string {
+    const explicit = preferredSessionId?.trim();
+    if (explicit) return explicit;
+
+    const fallback =
+      globalThis.crypto?.randomUUID?.() ??
+      `arcade555-${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2, 10)}`;
+
+    if (typeof localStorage === "undefined") {
+      return fallback;
+    }
+
+    try {
+      const stored = localStorage
+        .getItem("milady.arcade555.sessionId")
+        ?.trim();
+      if (stored) return stored;
+      localStorage.setItem("milady.arcade555.sessionId", fallback);
+    } catch {
+      // localStorage may be unavailable in private mode or test shims
+    }
+    return fallback;
+  }
+
   // Apps & Registry
   async listApps(): Promise<RegistryAppInfo[]> {
     return this.fetch("/api/apps");
@@ -3809,6 +3860,67 @@ export class MiladyClient {
       method: "POST",
       body: JSON.stringify({ name }),
     });
+  }
+  async getArcade555GamesCatalog(input?: {
+    sessionId?: string;
+    includeBeta?: boolean;
+  }): Promise<Arcade555GamesCatalogResponse> {
+    const sessionId = this.getOrCreateArcade555SessionId(input?.sessionId);
+    return this.fetch(
+      `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/catalog`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          includeBeta: input?.includeBeta ?? true,
+        }),
+      },
+    );
+  }
+  async playArcade555Game(input: {
+    gameId: string;
+    mode?: "standard" | "ranked" | "spectate" | "solo" | "agent";
+    sessionId?: string;
+  }): Promise<Arcade555GameActionResponse> {
+    const sessionId = this.getOrCreateArcade555SessionId(input.sessionId);
+    return this.fetch(
+      `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/play`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          gameId: input.gameId,
+          mode: input.mode ?? "agent",
+        }),
+      },
+    );
+  }
+  async switchArcade555Game(input: {
+    gameId: string;
+    mode?: "standard" | "ranked" | "spectate" | "solo" | "agent";
+    sessionId?: string;
+  }): Promise<Arcade555GameActionResponse> {
+    const sessionId = this.getOrCreateArcade555SessionId(input.sessionId);
+    return this.fetch(
+      `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/switch`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          gameId: input.gameId,
+          mode: input.mode ?? "agent",
+        }),
+      },
+    );
+  }
+  async stopArcade555Game(input?: {
+    sessionId?: string;
+  }): Promise<Arcade555GameActionResponse> {
+    const sessionId = this.getOrCreateArcade555SessionId(input?.sessionId);
+    return this.fetch(
+      `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/stop`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    );
   }
   async listRegistryPlugins(): Promise<RegistryPluginItem[]> {
     return this.fetch("/api/apps/plugins");
