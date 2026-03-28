@@ -215,7 +215,9 @@ function UploadZone({
         onChange={handleFileSelect}
       />
       <div className="px-1">
-        <div className={KNOWLEDGE_SECTION_LABEL_CLASS}>add</div>
+        <div className={KNOWLEDGE_SECTION_LABEL_CLASS}>
+          {t("knowledgeview.Add")}
+        </div>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2">

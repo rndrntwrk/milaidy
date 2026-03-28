@@ -147,6 +147,8 @@ function t(
     "wallet.tokens": "Tokens",
     "wallet.nfts": "NFTs",
     "wallet.sort": "Sort",
+    "wallet.sortAscending": "Ascending",
+    "wallet.sortDescending": "Descending",
     "wallet.value": "Value",
     "wallet.chain": "Chain",
     "wallet.name": "Name",
@@ -260,6 +262,18 @@ describe("InventoryView wallet settings", () => {
         node.type === "mock-select" && node.props.value === ctx.inventorySort,
     );
     expect(sortSelect).toBeTruthy();
+    expect(
+      sidebarSortBlock?.findAll(
+        (node) =>
+          node.type === "button" && node.props["aria-label"] === "Ascending",
+      ),
+    ).toHaveLength(1);
+    expect(
+      sidebarSortBlock?.findAll(
+        (node) =>
+          node.type === "button" && node.props["aria-label"] === "Descending",
+      ),
+    ).toHaveLength(1);
 
     const assetsHeader = tree?.root.find(
       (node) => node.props["data-testid"] === "wallet-assets-header",

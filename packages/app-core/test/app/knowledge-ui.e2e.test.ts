@@ -684,8 +684,10 @@ describe("KnowledgeView UI", () => {
     expect(searchButton?.props.className).toContain("h-10");
     expect(searchButton?.props.className).toContain("text-txt");
     expect(refreshButton).toBeDefined();
+    expect(allText).toContain("knowledgeview.Add");
     expect(allText).toContain("knowledgeview.IncludeAIImageDes");
     expect(allText).toContain("knowledgeview.Documents");
+    expect(allText).not.toContain("add");
     expect(allText).not.toContain("upload files");
     expect(allText).not.toContain("add url");
     expect(allText).not.toContain('"go"');
