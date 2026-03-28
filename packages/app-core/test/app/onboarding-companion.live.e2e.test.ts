@@ -348,17 +348,14 @@ async function newLivePage(
     viewport: { height: 900, width: 1440 },
   });
   await context.addInitScript(
-    (init) => {
+    () => {
       localStorage.clear();
       sessionStorage.clear();
       localStorage.setItem("eliza:ui-language", "en");
       localStorage.setItem("milady:ui-language", "en");
       localStorage.setItem("eliza:ui-theme", "dark");
       localStorage.setItem("milady:ui-theme", "dark");
-      sessionStorage.setItem("milady_api_base", init.apiBase);
-      Object.assign(window, { __MILADY_API_BASE__: init.apiBase });
     },
-    { apiBase: stack.apiBase },
   );
 
   const page = await context.newPage();
