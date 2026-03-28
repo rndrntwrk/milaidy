@@ -3,6 +3,46 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-03-28" description="Week of March 22–28" tags={["Feature", "Update", "Fix"]}>
+## Binance skills
+
+Your agent can now interact with Binance Smart Chain through 25 new skills — check trending tokens, run rug-pull checks, look up wallet balances, and execute trades using natural language. Six skills support live execution with built-in safety checks. A new Binance tab in the [skills UI](/plugins/skills) lets you browse and enable them individually.
+
+## Cloud TTS proxy and streaming voice
+
+Voice output in cloud mode now routes through a dedicated TTS proxy, so your agent speaks reliably without requiring local provider credentials. Streaming responses are batched before being sent to the TTS engine, eliminating garbled playback from partial chunks. ElevenLabs and Eliza Cloud are both supported as voice backends. See [talk mode](/apps/dashboard/talk-mode) for configuration details.
+
+## Remote bug reports
+
+You can now share bug reports and startup failure diagnostics remotely. If your agent fails to start, the error details can be submitted directly from the desktop app for faster troubleshooting.
+
+## Updates
+
+- **Character selection moved earlier in onboarding** — You now choose your agent's character right after the welcome screen instead of midway through setup, so your agent's personality is established before you configure providers. See the [onboarding guide](/guides/beginners-user-guide).
+- **Wallet routing and network mode** — Wallet transactions now support provider fallback routing and explicit network mode selection, making token transfers and trades more reliable across chains. See the [wallet guide](/guides/wallet).
+- **Cloud container configuration** — Cloud-provisioned containers now accept `ELIZAOS_CLOUD_BASE_URL`, `ENABLE_AUTONOMY`, and `CORS_ORIGINS` environment variables, removing the need for post-boot file patching. Server-side authentication is also enforced by default on all cloud container endpoints.
+- **Immediate language sync on desktop** — Changing your dashboard language now applies to chat responses immediately without a restart. Windows desktop menus also include working About, Quit, and Update Check actions.
+- **Activity indicator unified** — The swarm activity indicator is now a single status box above the chat composer with color-coded states, replacing scattered per-agent indicators.
+
+## Bug fixes
+
+- Fixed voice output ignoring the selected UI language and defaulting to English after switching locales
+- Fixed swarm actions dropping parameters and occasionally spawning duplicate agents
+- Fixed the model selector dropdown in cloud settings being invisible due to overflow clipping — dropdowns now show human-readable model names
+- Fixed the Windows installer requiring an extra extraction step and missing the Milady icon on Start Menu shortcuts
+- Fixed the Release Center crashing when a desktop bridge call fails, and missing preview images in packaged Windows builds
+- Fixed Railway deployments failing at startup due to missing GPU detection tools in slim Linux images
+- Fixed WebSocket connectivity breaking for clients that authenticate after the socket opens rather than during the HTTP upgrade
+- Fixed onboarding text being hard to read due to inconsistent panel styling — all screens now use a consistent glass treatment
+- Fixed timed-out backup imports during onboarding continuing to run in the background instead of aborting cleanly
+- Fixed a duplicate Save button appearing in the character editor header
+- Fixed a redundant "Connectors" title showing in the sidebar when the page is already selected
+- Fixed white-on-gold text contrast issues across buttons, toasts, and onboarding screens
+- Fixed checkmarks overlapping text in settings dropdowns and a one-frame flicker when opening searchable dropdowns
+- Fixed the wallet chain rail collapsing into unreadable icon pills instead of showing full chain cards
+- Fixed trajectory steps generating disconnected IDs, which caused incorrect data in the [trajectory view](/advanced/trajectories)
+- Fixed the desktop reset flow not verifying that onboarding actually restarted after a reset
+- Fixed a decorative gold border appearing permanently on the generation settings section
 <Update label="2026-03-27" description="Prompt optimization, desktop background mode, heartbeat execution fix" tags={["Feature", "Update", "Fix"]}>
 ## Smart prompt optimization
 
