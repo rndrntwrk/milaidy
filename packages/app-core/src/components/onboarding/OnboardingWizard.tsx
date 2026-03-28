@@ -11,10 +11,12 @@ import type { UiLanguage } from "@miladyai/app-core/i18n";
 import { normalizeLanguage } from "@miladyai/app-core/i18n";
 import {
   applyUiTheme,
+  getDefaultBundledVrmIndex,
   getVrmPreviewUrl,
   getVrmUrl,
   useApp,
 } from "@miladyai/app-core/state";
+import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
 import { useEffect, useState } from "react";
 import { useBranding } from "../../config/branding";
 import { COMPANION_ENABLED } from "../../navigation";
@@ -62,7 +64,8 @@ export function OnboardingWizard() {
     setState("uiLanguage", normalizeLanguage(lang));
 
   // Use same VRM resolution logic as CompanionView for character unification
-  const safeSelectedVrmIndex = selectedVrmIndex > 0 ? selectedVrmIndex : 1;
+  const safeSelectedVrmIndex =
+    selectedVrmIndex > 0 ? selectedVrmIndex : getDefaultBundledVrmIndex();
   const vrmPath =
     selectedVrmIndex === 0 && customVrmUrl
       ? customVrmUrl
@@ -70,7 +73,9 @@ export function OnboardingWizard() {
   const fallbackPreview =
     selectedVrmIndex > 0
       ? getVrmPreviewUrl(safeSelectedVrmIndex)
-      : getVrmPreviewUrl(1);
+      : getVrmPreviewUrl(getDefaultBundledVrmIndex());
+  const worldUrl = resolveAppAssetUrl("worlds/companion-day.spz");
+
   useEffect(() => {
     // Onboarding keeps a fixed "light" chrome; companion mode owns day/night scenes.
     applyUiTheme("light");
@@ -159,7 +164,7 @@ export function OnboardingWizard() {
       ) : (
         <VrmStage
           vrmPath={vrmPath}
-          environmentTheme="light"
+          worldUrl={worldUrl}
           fallbackPreviewUrl={fallbackPreview}
           cameraProfile="companion"
           initialCompanionZoomNormalized={1}

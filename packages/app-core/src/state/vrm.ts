@@ -1,6 +1,7 @@
 import { type BundledVrmAsset, getBootConfig } from "../config/boot-config";
 import { resolveAppAssetUrl } from "../utils/asset-url";
 import type { UiTheme } from "./ui-preferences";
+import { DEFAULT_VISUAL_AVATAR_INDEX } from "@miladyai/shared/onboarding-presets";
 
 // ---------------------------------------------------------------------------
 // Bundled VRM asset roster
@@ -26,21 +27,29 @@ function getAssets(): BundledVrmAsset[] {
   return [];
 }
 
+export const DEFAULT_BUNDLED_VRM_INDEX = DEFAULT_VISUAL_AVATAR_INDEX;
+
+export function getDefaultBundledVrmIndex(): number {
+  const count = getAssets().length;
+  if (count <= 0) return 1;
+  return Math.min(DEFAULT_BUNDLED_VRM_INDEX, count);
+}
+
 /** Number of bundled VRM avatars shipped with the app. */
 export function getVrmCount(): number {
   return getAssets().length;
 }
 
 // Legacy constant — prefer getVrmCount() for dynamic rosters.
-// Returns 0 if no boot config has been set yet.
-export const VRM_COUNT = 8;
+export const VRM_COUNT = DEFAULT_BUNDLED_VRM_INDEX;
 
 export function normalizeAvatarIndex(index: number): number {
-  if (!Number.isFinite(index)) return 1;
+  if (!Number.isFinite(index)) return getDefaultBundledVrmIndex();
   const n = Math.trunc(index);
   if (n === 0) return 0;
   const count = getAssets().length;
-  if (n < 1 || n > count) return 1;
+  if (count <= 0) return 1;
+  if (n < 1 || n > count) return getDefaultBundledVrmIndex();
   return n;
 }
 
@@ -50,7 +59,7 @@ export function getVrmUrl(index: number): string {
   if (assets.length === 0)
     return resolveAppAssetUrl(`vrms/${BUNDLED_VRM_FALLBACK_SLUG}.vrm.gz`);
   const n = normalizeAvatarIndex(index);
-  const safe = n > 0 ? n : 1;
+  const safe = n > 0 ? n : getDefaultBundledVrmIndex();
   const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? "default";
   return resolveAppAssetUrl(`vrms/${slug}.vrm.gz`);
 }
@@ -61,7 +70,7 @@ export function getVrmPreviewUrl(index: number): string {
   if (assets.length === 0)
     return resolveAppAssetUrl(`vrms/previews/${BUNDLED_VRM_FALLBACK_SLUG}.png`);
   const n = normalizeAvatarIndex(index);
-  const safe = n > 0 ? n : 1;
+  const safe = n > 0 ? n : getDefaultBundledVrmIndex();
   const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? "default";
   return resolveAppAssetUrl(`vrms/previews/${slug}.png`);
 }
@@ -74,7 +83,7 @@ export function getVrmBackgroundUrl(index: number): string {
       `vrms/backgrounds/${BUNDLED_VRM_FALLBACK_SLUG}.png`,
     );
   const n = normalizeAvatarIndex(index);
-  const safe = n > 0 ? n : 1;
+  const safe = n > 0 ? n : getDefaultBundledVrmIndex();
   const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? "default";
   return resolveAppAssetUrl(`vrms/backgrounds/${slug}.png`);
 }
@@ -94,7 +103,7 @@ export function getVrmTitle(index: number): string {
   const assets = getAssets();
   if (assets.length === 0) return "Avatar";
   const n = normalizeAvatarIndex(index);
-  const safe = n > 0 ? n : 1;
+  const safe = n > 0 ? n : getDefaultBundledVrmIndex();
   return assets[safe - 1]?.title ?? assets[0]?.title ?? "Avatar";
 }
 

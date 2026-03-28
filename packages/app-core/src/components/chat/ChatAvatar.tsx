@@ -9,7 +9,12 @@ import {
   type AppEmoteEventDetail,
   STOP_EMOTE_EVENT,
 } from "@miladyai/app-core/events";
-import { getVrmPreviewUrl, getVrmUrl, useApp } from "@miladyai/app-core/state";
+import {
+  getDefaultBundledVrmIndex,
+  getVrmPreviewUrl,
+  getVrmUrl,
+  useApp,
+} from "@miladyai/app-core/state";
 import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AvatarLoader } from "../character/AvatarLoader";
@@ -31,11 +36,11 @@ export function ChatAvatar(_props: ChatAvatarProps) {
   const vrmPath =
     selectedVrmIndex === 0 && customVrmUrl
       ? customVrmUrl
-      : getVrmUrl(selectedVrmIndex || 1);
+      : getVrmUrl(selectedVrmIndex || getDefaultBundledVrmIndex());
   const fallbackPreviewUrl =
     selectedVrmIndex > 0
       ? getVrmPreviewUrl(selectedVrmIndex)
-      : getVrmPreviewUrl(1);
+      : getVrmPreviewUrl(getDefaultBundledVrmIndex());
 
   const vrmEngineRef = useRef<VrmEngine | null>(null);
   const [engineReady, setEngineReady] = useState(false);

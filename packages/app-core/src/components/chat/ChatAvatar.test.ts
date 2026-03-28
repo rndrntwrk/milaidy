@@ -14,6 +14,7 @@ vi.mock("@miladyai/app-core/events", () => ({
 }));
 
 vi.mock("@miladyai/app-core/state", () => ({
+  getDefaultBundledVrmIndex: vi.fn(() => 9),
   getVrmPreviewUrl: vi.fn(() => "/vrms/previews/eliza-1.png"),
   getVrmUrl: vi.fn(() => "/vrms/eliza-1.vrm.gz"),
   useApp: () => ({

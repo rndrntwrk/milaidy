@@ -15,6 +15,8 @@ const { latestEngineRef } = vi.hoisted(() => ({
 
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
+  getDefaultBundledVrmIndex: () => 9,
+  getVrmCount: () => 24,
   getVrmPreviewUrl: () => "/vrms/previews/milady-1.png",
   getVrmUrl: () => "/vrms/milady-1.vrm.gz",
   getVrmBackgroundUrl: (index: number) =>

@@ -112,6 +112,8 @@ export {
 } from "./types";
 export { AppContext, useApp } from "./useApp";
 export {
+  DEFAULT_BUNDLED_VRM_INDEX,
+  getDefaultBundledVrmIndex,
   getCompanionBackgroundUrl,
   getVrmBackgroundUrl,
   getVrmPreviewUrl,
