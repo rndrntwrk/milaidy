@@ -261,6 +261,35 @@ if (_rootModules) {
   }
 }
 
+function findMilaidyProjectRoot(startDir: string): string {
+  let dir = startDir;
+  const { root } = path.parse(dir);
+
+  while (dir !== root) {
+    const pkgPath = path.join(dir, "package.json");
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
+        name?: string;
+        workspaces?: unknown;
+      };
+      if (typeof pkg.name === "string" && pkg.name.toLowerCase() === "miladyai") {
+        return dir;
+      }
+      if (
+        Array.isArray(pkg.workspaces) &&
+        existsSync(path.join(dir, "packages", "agent"))
+      ) {
+        return dir;
+      }
+    } catch {
+      // Keep walking until we reach the workspace root.
+    }
+    dir = path.dirname(dir);
+  }
+
+  return startDir;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
