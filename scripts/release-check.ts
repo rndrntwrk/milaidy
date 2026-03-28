@@ -39,6 +39,7 @@ const requiredWorkflowSnippets = [
   "run: bun run test:e2e:heavy",
   "name: Run cloud live regression suite",
   "run: bun run test:live:cloud",
+  "name: Restore build metadata after test rebuilds",
   "name: Release readiness checks",
   "run: bun run release:check",
   "for attempt in 1 2 3; do",

@@ -167,6 +167,9 @@ jobs:
           ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
           ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
+      - name: Restore build metadata after test rebuilds
+        run: node --import tsx scripts/write-build-info.ts
+
       - name: Release readiness checks
         run: bun run release:check
 

@@ -156,12 +156,16 @@ describe("Electrobun release workflow drift", () => {
     );
     const heavyE2EIndex = workflow.indexOf("run: bun run test:e2e:heavy");
     const liveCloudIndex = workflow.indexOf("run: bun run test:live:cloud");
+    const restoreBuildInfoIndex = workflow.indexOf(
+      "name: Restore build metadata after test rebuilds",
+    );
     const releaseCheckIndex = workflow.indexOf("run: bun run release:check");
 
     expect(regressionIndex).toBeGreaterThan(-1);
     expect(heavyE2EIndex).toBeGreaterThan(regressionIndex);
     expect(liveCloudIndex).toBeGreaterThan(heavyE2EIndex);
-    expect(releaseCheckIndex).toBeGreaterThan(liveCloudIndex);
+    expect(restoreBuildInfoIndex).toBeGreaterThan(liveCloudIndex);
+    expect(releaseCheckIndex).toBeGreaterThan(restoreBuildInfoIndex);
   });
 
   it("requires an explicit tag for manual non-tag runs", () => {
