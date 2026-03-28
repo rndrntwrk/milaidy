@@ -303,20 +303,6 @@ export function ConversationsSidebar({
             </div>
           ) : (
             <>
-              <div className="ml-auto mr-0">
-                {canCollapse ? (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    data-testid="chat-sidebar-collapse-toggle"
-                    className={`h-9 w-9 rounded-[11px] ${DESKTOP_CONTROL_SURFACE_CLASSNAME}`}
-                    aria-label={t("conversations.closePanel")}
-                    onClick={() => setCollapsed(true)}
-                  >
-                    <PanelLeftClose className="h-4 w-4" />
-                  </Button>
-                ) : null}
-              </div>
               <Button
                 variant="outline"
                 className={
@@ -336,49 +322,65 @@ export function ConversationsSidebar({
         </div>
 
         {!isCollapsed ? (
-          <div className={listRegionClassName}>
-            <div className={listPanelClassName}>
-              {sortedConversations.length === 0 ? (
-                <div
-                  className={`${EMPTY_STATE_CLASS} ${isGameModal
-                    ? "border-white/10 bg-black/15 font-medium italic text-[color:var(--onboarding-text-muted)]"
-                    : "border-border/50 bg-bg/35 text-muted"
-                    }`}
-                >
-                  {t("conversations.none")}
-                </div>
-              ) : (
-                sortedConversations.map((conv) => (
-                  <ConversationListItem
-                    key={conv.id}
-                    conv={conv}
-                    isActive={conv.id === activeConversationId}
-                    isUnread={unreadConversations.has(conv.id)}
-                    isGameModal={isGameModal}
-                    confirmDeleteId={confirmDeleteId}
-                    deletingId={deletingId}
-                    t={t}
-                    mobile={mobile}
-                    onSelect={(id) => {
-                      setConfirmDeleteId(null);
-                      setMenuConversation(null);
-                      void handleSelectConversation(id);
-                      onClose?.();
-                    }}
-                    onConfirmDelete={(id) => void handleConfirmDelete(id)}
-                    onCancelDelete={() => setConfirmDeleteId(null)}
-                    onRequestDeleteConfirm={(id) => {
-                      setMenuConversation(null);
-                      setRenameTarget(null);
-                      setConfirmDeleteId(id);
-                    }}
-                    onRequestRename={(c) => openRenameDialog(c)}
-                    onOpenActions={openActionsMenu}
-                  />
-                ))
-              )}
+          <>
+            <div className={listRegionClassName}>
+              <div className={listPanelClassName}>
+                {sortedConversations.length === 0 ? (
+                  <div
+                    className={`${EMPTY_STATE_CLASS} ${isGameModal
+                      ? "border-white/10 bg-black/15 font-medium italic text-[color:var(--onboarding-text-muted)]"
+                      : "border-border/50 bg-bg/35 text-muted"
+                      }`}
+                  >
+                    {t("conversations.none")}
+                  </div>
+                ) : (
+                  sortedConversations.map((conv) => (
+                    <ConversationListItem
+                      key={conv.id}
+                      conv={conv}
+                      isActive={conv.id === activeConversationId}
+                      isUnread={unreadConversations.has(conv.id)}
+                      isGameModal={isGameModal}
+                      confirmDeleteId={confirmDeleteId}
+                      deletingId={deletingId}
+                      t={t}
+                      mobile={mobile}
+                      onSelect={(id) => {
+                        setConfirmDeleteId(null);
+                        setMenuConversation(null);
+                        void handleSelectConversation(id);
+                        onClose?.();
+                      }}
+                      onConfirmDelete={(id) => void handleConfirmDelete(id)}
+                      onCancelDelete={() => setConfirmDeleteId(null)}
+                      onRequestDeleteConfirm={(id) => {
+                        setMenuConversation(null);
+                        setRenameTarget(null);
+                        setConfirmDeleteId(id);
+                      }}
+                      onRequestRename={(c) => openRenameDialog(c)}
+                      onOpenActions={openActionsMenu}
+                    />
+                  ))
+                )}
+              </div>
             </div>
-          </div>
+            {canCollapse ? (
+              <div className="shrink-0 border-t border-border/25 bg-[linear-gradient(0deg,color-mix(in_srgb,var(--card)_34%,transparent),transparent)] px-3.5 pb-3.5 pt-2 shadow-[inset_0_-1px_0_rgba(255,255,255,0.03)] flex justify-end">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  data-testid="chat-sidebar-collapse-toggle"
+                  className={`h-9 w-9 rounded-[11px] ${DESKTOP_CONTROL_SURFACE_CLASSNAME}`}
+                  aria-label={t("conversations.closePanel")}
+                  onClick={() => setCollapsed(true)}
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : null}
+          </>
         ) : null}
       </TooltipProvider>
     </aside>

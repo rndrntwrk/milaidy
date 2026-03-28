@@ -120,6 +120,8 @@
   "wallet.chain": "Chain",
   "wallet.name": "Name",
   "wallet.sort": "Sort",
+  "wallet.sortAscending": "Ascending",
+  "wallet.sortDescending": "Descending",
   "wallet.tokens": "Tokens",
   "wallet.nfts": "NFTs",
   "wallet.all": "All",

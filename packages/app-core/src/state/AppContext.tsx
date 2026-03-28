@@ -207,6 +207,7 @@ import {
   getTabForShellView,
   shouldStartAtCharacterSelectOnLaunch,
 } from "./shell-routing";
+import type { InventoryChainFilters } from "./types";
 import { TranslationProvider, useTranslation } from "./TranslationContext";
 import { useChatState } from "./useChatState";
 import { useLifecycleState } from "./useLifecycleState";
@@ -865,7 +866,17 @@ function AppProviderInner({
   const [inventorySort, setInventorySort] = useState<
     "chain" | "symbol" | "value"
   >("value");
-  const [inventoryChainFocus, setInventoryChainFocus] = useState<string>("all");
+  const [inventorySortDirection, setInventorySortDirection] = useState<
+    "asc" | "desc"
+  >("desc");
+  const [inventoryChainFilters, setInventoryChainFilters] =
+    useState<InventoryChainFilters>({
+      ethereum: true,
+      base: true,
+      bsc: true,
+      avax: true,
+      solana: true,
+    });
   const [walletError, setWalletError] = useState<string | null>(null);
 
   // --- ERC-8004 Registry ---
@@ -6400,7 +6411,8 @@ function AppProviderInner({
         logSourceFilter: setLogSourceFilter,
         inventoryView: setInventoryView,
         inventorySort: setInventorySort,
-        inventoryChainFocus: setInventoryChainFocus,
+        inventorySortDirection: setInventorySortDirection,
+        inventoryChainFilters: setInventoryChainFilters,
         exportPassword: setExportPassword,
         exportIncludeLogs: setExportIncludeLogs,
         exportError: setExportError,
@@ -7810,7 +7822,8 @@ function AppProviderInner({
     walletExportVisible,
     walletApiKeySaving,
     inventorySort,
-    inventoryChainFocus,
+    inventorySortDirection,
+    inventoryChainFilters,
     walletError,
     registryStatus,
     registryLoading,

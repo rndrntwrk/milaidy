@@ -173,7 +173,9 @@ vi.mock("../../src/components/inventory/TokensTable", async () => {
 
 vi.mock("../../src/components/inventory/useInventoryData", () => ({
   useInventoryData: () => ({
-    chainFocus: "all",
+    singleChainFocus: null,
+    tokenRows: [],
+    tokenRowsAllChains: [],
     allNfts: [],
     focusedChainError: null,
     focusedChainName: null,
@@ -265,7 +267,14 @@ describe("Knowledge and inventory polish", () => {
       walletNftsLoading: false,
       inventoryView: "tokens",
       inventorySort: "value",
-      inventoryChainFocus: "all",
+      inventorySortDirection: "desc",
+      inventoryChainFilters: {
+        ethereum: true,
+        base: true,
+        bsc: true,
+        avax: true,
+        solana: true,
+      },
       walletError: null,
       loadBalances: vi.fn(),
       loadNfts: vi.fn(),

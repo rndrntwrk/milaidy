@@ -254,6 +254,15 @@ export interface ChatTurnUsage extends ChatTokenUsage {
 
 // ── Context value type ─────────────────────────────────────────────────
 
+/** One toggle per primary chain in the wallet inventory filter strip. */
+export type InventoryChainFilters = {
+  ethereum: boolean;
+  base: boolean;
+  bsc: boolean;
+  avax: boolean;
+  solana: boolean;
+};
+
 export interface AppState {
   // Core
   tab: Tab;
@@ -385,7 +394,9 @@ export interface AppState {
   walletExportVisible: boolean;
   walletApiKeySaving: boolean;
   inventorySort: "chain" | "symbol" | "value";
-  inventoryChainFocus: string;
+  /** Ascending vs descending for the active `inventorySort` key. */
+  inventorySortDirection: "asc" | "desc";
+  inventoryChainFilters: InventoryChainFilters;
   walletError: string | null;
 
   // ERC-8004 Registry

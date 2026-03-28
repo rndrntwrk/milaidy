@@ -91,36 +91,50 @@ vi.mock("../inventory/TokensTable", () => ({
 
 vi.mock("../inventory/useInventoryData", () => ({
   useInventoryData: ({
-    inventoryChainFocus,
+    inventoryChainFilters,
   }: {
-    inventoryChainFocus: string;
-  }) => ({
-    chainFocus: inventoryChainFocus ?? "all",
-    tokenRows: [
+    inventoryChainFilters: {
+      ethereum: boolean;
+      base: boolean;
+      bsc: boolean;
+      avax: boolean;
+      solana: boolean;
+    };
+  }) => {
+    const keys = (
+      ["ethereum", "base", "bsc", "avax", "solana"] as const
+    ).filter((k) => inventoryChainFilters[k]);
+    const singleChainFocus = keys.length === 1 ? keys[0] : null;
+    const tokenRowsAllChains = [
       { chain: "ethereum", balanceRaw: 1, valueUsd: 10 },
       { chain: "base", balanceRaw: 1, valueUsd: 5 },
       { chain: "bsc", balanceRaw: 1, valueUsd: 3 },
       { chain: "solana", balanceRaw: 1, valueUsd: 2 },
-    ],
-    allNfts: [],
-    focusedChainError: null,
-    focusedChainName:
-      inventoryChainFocus === "all"
-        ? null
-        : ((
-            {
-              ethereum: "Ethereum",
-              base: "Base",
-              bsc: "BSC",
-              avax: "Avalanche",
-              solana: "Solana",
-            } as Record<string, string>
-          )[inventoryChainFocus] ?? inventoryChainFocus),
-    visibleRows: [],
-    totalUsd: 20,
-    visibleChainErrors: [],
-    focusedNativeBalance: "1.0",
-  }),
+    ];
+    return {
+      singleChainFocus,
+      tokenRows: tokenRowsAllChains,
+      tokenRowsAllChains,
+      allNfts: [],
+      focusedChainError: null,
+      focusedChainName:
+        singleChainFocus === null
+          ? null
+          : ((
+              {
+                ethereum: "Ethereum",
+                base: "Base",
+                bsc: "BSC",
+                avax: "Avalanche",
+                solana: "Solana",
+              } as Record<string, string>
+            )[singleChainFocus] ?? singleChainFocus),
+      visibleRows: [],
+      totalUsd: 20,
+      visibleChainErrors: [],
+      focusedNativeBalance: "1.0",
+    };
+  },
 }));
 
 import { InventoryView } from "../InventoryView";
@@ -195,7 +209,14 @@ function createContext(
     walletNftsLoading: false,
     inventoryView: "tokens",
     inventorySort: "value",
-    inventoryChainFocus: "all",
+    inventorySortDirection: "desc",
+    inventoryChainFilters: {
+      ethereum: true,
+      base: true,
+      bsc: true,
+      avax: true,
+      solana: true,
+    },
     walletError: null,
     elizaCloudConnected: false,
     loadBalances: vi.fn(async () => {}),
@@ -284,6 +305,7 @@ describe("InventoryView wallet settings", () => {
     });
 
     expect(ctx.setState).toHaveBeenCalledWith("inventorySort", "chain");
+    expect(ctx.setState).toHaveBeenCalledWith("inventorySortDirection", "asc");
   });
 
   it("hides the sort control in NFT view", async () => {
@@ -334,7 +356,10 @@ describe("InventoryView wallet settings", () => {
     ).toHaveLength(0);
 
     const baseButton = tree?.root.find(
-      (node) => node.type === "button" && node.props["aria-label"] === "Base",
+      (node) =>
+        node.type === "button" &&
+        typeof node.props["aria-label"] === "string" &&
+        node.props["aria-label"].startsWith("Base"),
     );
     expect(baseButton).toBeTruthy();
 
@@ -342,11 +367,25 @@ describe("InventoryView wallet settings", () => {
       baseButton?.props.onClick();
     });
 
-    expect(ctx.setState).toHaveBeenCalledWith("inventoryChainFocus", "base");
+    expect(ctx.setState).toHaveBeenCalledWith("inventoryChainFilters", {
+      ethereum: true,
+      base: false,
+      bsc: true,
+      avax: true,
+      solana: true,
+    });
   });
 
   it("restores a chain-aware overview heading for focused wallets", async () => {
-    const ctx = createContext({ inventoryChainFocus: "base" });
+    const ctx = createContext({
+      inventoryChainFilters: {
+        ethereum: false,
+        base: true,
+        bsc: false,
+        avax: false,
+        solana: false,
+      },
+    });
     mockUseApp.mockImplementation(() => ctx);
 
     let tree: TestRenderer.ReactTestRenderer | undefined;

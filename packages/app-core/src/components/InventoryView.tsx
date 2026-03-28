@@ -20,6 +20,8 @@ import {
   TooltipTrigger,
 } from "@miladyai/ui";
 import {
+  ArrowDown,
+  ArrowUp,
   Coins,
   Copy,
   Image as ImageIcon,
@@ -49,6 +51,10 @@ import {
   saveTrackedTokens,
   type TrackedToken,
 } from "./inventory";
+import {
+  type PrimaryInventoryChainKey,
+  toggleInventoryChainFilter,
+} from "./inventory/inventory-chain-filters";
 import { ChainIcon } from "./inventory/ChainIcon";
 import { NftGrid } from "./inventory/NftGrid";
 import { TokensTable } from "./inventory/TokensTable";
@@ -75,7 +81,7 @@ const WALLET_SORT_PILL_CLASS = `${APP_SIDEBAR_COMPACT_PILL_CLASSNAME} text-[10px
 type InventorySortKey = "chain" | "symbol" | "value";
 
 function countVisibleAssetsForFocus(
-  focus: string,
+  focus: ChainKey,
   rows:
     | Array<{
       chain: string;
@@ -88,7 +94,6 @@ function countVisibleAssetsForFocus(
   return (rows ?? []).filter((row) => {
     const hasBalance = row.isTracked || row.balanceRaw > 0 || row.valueUsd > 0;
     if (!hasBalance) return false;
-    if (focus === "all") return true;
     return resolveChainKey(row.chain) === focus;
   }).length;
 }
@@ -116,7 +121,8 @@ export function InventoryView() {
     walletNftsLoading,
     inventoryView,
     inventorySort,
-    inventoryChainFocus,
+    inventorySortDirection,
+    inventoryChainFilters,
     walletError,
     loadBalances,
     loadNfts,
@@ -181,13 +187,12 @@ export function InventoryView() {
 
   // ── Derived data (hook) ───────────────────────────────────────────
   const {
-    chainFocus,
-    tokenRows,
+    singleChainFocus,
+    tokenRowsAllChains,
     allNfts,
     focusedChainError,
     focusedChainName,
     visibleRows,
-    totalUsd,
     visibleChainErrors,
     focusedNativeBalance,
   } = useInventoryData({
@@ -196,7 +201,8 @@ export function InventoryView() {
     walletConfig,
     walletNfts,
     inventorySort,
-    inventoryChainFocus,
+    inventorySortDirection,
+    inventoryChainFilters,
     trackedBscTokens,
     trackedTokens,
   });
@@ -255,7 +261,9 @@ export function InventoryView() {
   );
   const bnbBalance = Number.parseFloat(focusedNativeBalance ?? "0") || 0;
   const tradeReady =
-    chainFocus === "bsc" ? bnbBalance >= BSC_GAS_READY_THRESHOLD : true;
+    singleChainFocus === "bsc"
+      ? bnbBalance >= BSC_GAS_READY_THRESHOLD
+      : true;
   const addresses = [
     evmAddr ? { label: "EVM", address: evmAddr } : null,
     solAddr ? { label: "Solana", address: solAddr } : null,
@@ -268,22 +276,17 @@ export function InventoryView() {
         : t("wallet.managedWalletOverview");
 
   const chainItemMeta = useMemo(() => {
-    const totalAssetCount = countVisibleAssetsForFocus("all", tokenRows);
-    const items = [
-      {
-        key: "all",
-        label: "All Assets",
-        hasAddress: true,
-        description:
-          totalAssetCount > 0
-            ? `${totalAssetCount} assets across connected wallets`
-            : "Browse every connected chain from one place",
-      },
-    ];
+    const items: Array<{
+      key: PrimaryInventoryChainKey;
+      label: string;
+      hasAddress: boolean;
+      description: string;
+    }> = [];
 
     for (const key of PRIMARY_CHAIN_KEYS) {
+      const pk = key as PrimaryInventoryChainKey;
       const config = CHAIN_CONFIGS[key];
-      const assetCount = countVisibleAssetsForFocus(key, tokenRows);
+      const assetCount = countVisibleAssetsForFocus(key, tokenRowsAllChains);
       const chainReady =
         key === "ethereum"
           ? ethereumReady
@@ -299,7 +302,7 @@ export function InventoryView() {
       const hasAddress = key === "solana" ? Boolean(solAddr) : Boolean(evmAddr);
 
       items.push({
-        key,
+        key: pk,
         label: config.name,
         hasAddress,
         description: !hasAddress
@@ -321,64 +324,66 @@ export function InventoryView() {
     evmAddr,
     solAddr,
     solanaReady,
-    tokenRows,
+    tokenRowsAllChains,
   ]);
 
   const focusedChainLabel =
     focusedChainName ??
-    (chainFocus !== "all"
-      ? (CHAIN_CONFIGS[chainFocus as keyof typeof CHAIN_CONFIGS]?.name ??
-        chainFocus)
+    (singleChainFocus
+      ? (CHAIN_CONFIGS[singleChainFocus as keyof typeof CHAIN_CONFIGS]?.name ??
+        singleChainFocus)
       : null);
   const overviewTitle =
-    chainFocus !== "all" && focusedChainLabel
+    singleChainFocus && focusedChainLabel
       ? t("wallet.overviewTitleChain", { chain: focusedChainLabel })
       : t("wallet.overviewTitle");
   const inlineError =
-    chainFocus !== "all" && focusedChainError
+    singleChainFocus && focusedChainError
       ? {
         message: `${focusedChainLabel ?? "Chain"}: ${focusedChainError}`,
         retryTitle: `Retry fetching ${focusedChainLabel ?? "chain"} balances`,
       }
       : null;
 
-  const legacyRpcChain = chainKeyToWalletRpcChain(chainFocus);
+  const legacyRpcChain = singleChainFocus
+    ? chainKeyToWalletRpcChain(singleChainFocus)
+    : null;
   const headerWarning =
-    chainFocus !== "all" &&
+    singleChainFocus &&
       legacyRpcChain !== null &&
       cfg?.legacyCustomChains?.includes(legacyRpcChain)
       ? {
         title: `${focusedChainLabel ??
-          (chainFocus === "bsc"
+          (singleChainFocus === "bsc"
             ? "BSC"
-            : chainFocus === "solana"
+            : singleChainFocus === "solana"
               ? "Solana"
               : "EVM")
           } is using legacy raw RPC config.`,
         body: "Re-save a supported provider in Settings to migrate fully.",
         actionLabel: t("wallet.setup.configureRpc"),
       }
-      : chainFocus === "bsc" && evmAddr && !bscReady
+      : singleChainFocus === "bsc" && evmAddr && !bscReady
         ? {
           title: t("wallet.setup.rpcNotConfigured"),
           body: t("portfolioheader.ConnectViaElizaCl"),
           actionLabel: t("wallet.setup.configureRpc"),
         }
-        : chainFocus === "solana" && solAddr && !solanaReady
+        : singleChainFocus === "solana" && solAddr && !solanaReady
           ? {
             title: "Solana RPC is not configured.",
             body: "Connect via Eliza Cloud or configure HELIUS_API_KEY / SOLANA_RPC_URL in Settings to load Solana balances.",
             actionLabel: t("wallet.setup.configureRpc"),
           }
-          : chainFocus !== "all" &&
-            chainFocus !== "bsc" &&
-            chainFocus !== "solana" &&
+          : singleChainFocus &&
+            singleChainFocus !== "bsc" &&
+            singleChainFocus !== "solana" &&
             evmAddr &&
-            !(chainFocus === "ethereum"
+            !(singleChainFocus === "ethereum"
               ? ethereumReady
-              : chainFocus === "base"
+              : singleChainFocus === "base"
                 ? baseReady
-                : chainFocus === "avax"
+                : singleChainFocus === "avax"
                   ? avaxReady
                   : false)
             ? {
@@ -515,9 +520,8 @@ export function InventoryView() {
               <TooltipProvider delayDuration={200} skipDelayDuration={100}>
                 <div className="mt-3 grid grid-cols-5 gap-2">
                   {chainItemMeta.map((item) => {
-                    const isActive = chainFocus === item.key;
-                    const label =
-                      item.key === "all" ? "All chains" : item.label;
+                    const isOn = inventoryChainFilters[item.key];
+                    const label = item.label;
                     const disabled = !item.hasAddress;
                     return (
                       <Tooltip key={item.key}>
@@ -528,25 +532,31 @@ export function InventoryView() {
                               disabled
                                 ? undefined
                                 : () =>
-                                  setState("inventoryChainFocus", item.key)
+                                  setState(
+                                    "inventoryChainFilters",
+                                    toggleInventoryChainFilter(
+                                      inventoryChainFilters,
+                                      item.key,
+                                    ),
+                                  )
                             }
-                            aria-current={isActive ? "page" : undefined}
-                            aria-label={label}
+                            aria-pressed={disabled ? undefined : isOn}
+                            aria-label={
+                              disabled
+                                ? label
+                                : isOn
+                                  ? `${label} — shown (click to hide)`
+                                  : `${label} — hidden (click to show)`
+                            }
                             aria-disabled={disabled}
                             className={`flex aspect-square items-center justify-center rounded-2xl border transition-colors ${disabled
                               ? "opacity-25 cursor-not-allowed border-border/20 bg-bg/10 text-muted"
-                              : isActive
+                              : isOn
                                 ? "border-accent/30 bg-accent/14 text-txt-strong"
-                                : "border-border/40 bg-bg/20 text-muted hover:border-border/60 hover:text-txt"
+                                : "border-border/40 bg-bg/20 text-muted opacity-45 hover:border-border/60 hover:opacity-70 hover:text-txt"
                               }`}
                           >
-                            {item.key === "all" ? (
-                              <span className="text-[11px] font-bold uppercase">
-                                {t("wallet.all")}
-                              </span>
-                            ) : (
-                              <ChainIcon chain={item.key} size="lg" />
-                            )}
+                            <ChainIcon chain={item.key} size="lg" />
                           </button>
                         </TooltipTrigger>
                         <TooltipContent
@@ -554,7 +564,11 @@ export function InventoryView() {
                           sideOffset={6}
                           className="px-2.5 py-1.5 text-xs font-medium"
                         >
-                          {disabled ? `${label} — no wallet configured` : label}
+                          {disabled
+                            ? `${label} — no wallet configured`
+                            : isOn
+                              ? `${label} — visible`
+                              : `${label} — hidden`}
                         </TooltipContent>
                       </Tooltip>
                     );
@@ -563,7 +577,7 @@ export function InventoryView() {
               </TooltipProvider>
             </div>
 
-            {/* ── Copy + Refresh (stacked under chains) ── */}
+            {/* ── Copy addresses (stacked under chains) ── */}
             <div className="mt-4 space-y-2">
               {addresses.map((item) => (
                 <Button
@@ -580,17 +594,6 @@ export function InventoryView() {
                     : t("wallet.copySolanaAddress")}
                 </Button>
               ))}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-11 w-full justify-start rounded-xl px-4 text-xs font-semibold shadow-sm"
-                onClick={() =>
-                  inventoryView === "tokens" ? loadBalances() : loadNfts()
-                }
-              >
-                <RefreshCw className="h-4 w-4" />
-                {t("common.refresh")}
-              </Button>
             </div>
           </div>
         </aside>
@@ -652,7 +655,7 @@ export function InventoryView() {
                 </div>
               )}
 
-              {chainFocus === "bsc" && evmAddr && (
+              {singleChainFocus === "bsc" && evmAddr && (
                 <TradePanel
                   tradeReady={tradeReady}
                   bnbBalance={bnbBalance}
@@ -668,21 +671,50 @@ export function InventoryView() {
 
 
             <div
-              data-testid="wallet-assets-header"
-              className="mt-4 mb-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-end"
+              data-testid="wallet-overview-card"
+              className="mt-4 flex flex-col gap-4 sm:gap-5"
             >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                {inventoryView === "tokens" ? (
-                  <div
-                    data-testid="wallet-overview-sort-block"
-                    className="w-full sm:w-auto sm:min-w-40"
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h1 className="text-xl font-semibold text-txt-strong">
+                    {overviewTitle}
+                  </h1>
+                  <p className="mt-1 text-sm text-muted">
+                    {t("wallet.overviewSubtitle")}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    data-testid="wallet-funding-route-pill"
+                    className="inline-flex rounded-full border border-border/50 bg-bg/24 px-3 py-1 text-[11px] font-medium text-muted"
                   >
+                    {fundingRouteLabel}
+                  </span>
+                  {inventoryView === "tokens" ? (
+                    <span
+                      data-testid="wallet-summary-sort-pill"
+                      className="inline-flex rounded-full border border-border/50 bg-bg/24 px-3 py-1 text-[11px] font-medium text-muted"
+                    >
+                      {t("wallet.sort")} {currentSortLabel}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              {inventoryView === "tokens" ? (
+                <div
+                  data-testid="wallet-overview-sort-block"
+                  className="flex w-full flex-wrap items-center justify-end gap-2"
+                >
+                  <div className="min-w-0 flex-1 sm:max-w-[min(100%,14rem)]">
                     <Select
                       value={inventorySort}
                       onValueChange={(nextSort) => {
-                        if (isInventorySortKey(nextSort)) {
-                          setState("inventorySort", nextSort);
-                        }
+                        if (!isInventorySortKey(nextSort)) return;
+                        setState("inventorySort", nextSort);
+                        setState(
+                          "inventorySortDirection",
+                          nextSort === "value" ? "desc" : "asc",
+                        );
                       }}
                     >
                       <SelectTrigger
@@ -692,7 +724,7 @@ export function InventoryView() {
                       >
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper">
                         <SelectItem value="value">
                           {t("wallet.value")}
                         </SelectItem>
@@ -705,8 +737,84 @@ export function InventoryView() {
                       </SelectContent>
                     </Select>
                   </div>
-                ) : null}
-              </div>
+                  <TooltipProvider delayDuration={200} skipDelayDuration={100}>
+                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 items-stretch overflow-hidden rounded-xl border border-border/60 bg-bg/24">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={`h-10 w-10 shrink-0 rounded-none ${inventorySortDirection === "asc" ? "bg-accent/14 text-txt-strong" : "text-muted"}`}
+                            aria-label={t("wallet.sortAscending")}
+                            aria-pressed={inventorySortDirection === "asc"}
+                            onClick={() =>
+                              setState("inventorySortDirection", "asc")
+                            }
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="text-xs">
+                          {t("wallet.sortAscending")}
+                        </TooltipContent>
+                      </Tooltip>
+                      <div
+                        className="w-px shrink-0 self-stretch bg-border/45"
+                        aria-hidden
+                      />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={`h-10 w-10 shrink-0 rounded-none ${inventorySortDirection === "desc" ? "bg-accent/14 text-txt-strong" : "text-muted"}`}
+                            aria-label={t("wallet.sortDescending")}
+                            aria-pressed={inventorySortDirection === "desc"}
+                            onClick={() =>
+                              setState("inventorySortDirection", "desc")
+                            }
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="text-xs">
+                          {t("wallet.sortDescending")}
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          data-testid="wallet-refresh-balances"
+                          className="h-10 w-10 shrink-0 rounded-xl border-border/60 bg-card/88 shadow-sm"
+                          aria-label={t("common.refresh")}
+                          onClick={() =>
+                            inventoryView === "tokens"
+                              ? void loadBalances()
+                              : void loadNfts()
+                          }
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">
+                        {t("common.refresh")}
+                      </TooltipContent>
+                    </Tooltip>
+                    </div>
+                  </TooltipProvider>
+                </div>
+              ) : null}
+              <div
+                data-testid="wallet-assets-header"
+                className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-end"
+              />
             </div>
             <div
               className={`min-h-[58vh] ${WALLET_PANEL_CLASS} overflow-hidden`}
@@ -718,7 +826,7 @@ export function InventoryView() {
                   walletBalances={walletBalances}
                   visibleRows={visibleRows}
                   visibleChainErrors={visibleChainErrors}
-                  inventoryChainFocus={inventoryChainFocus ?? "all"}
+                  showChainColumn={singleChainFocus === null}
                   handleUntrackToken={handleUntrackToken}
                 />
               ) : (

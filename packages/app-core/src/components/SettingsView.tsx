@@ -267,7 +267,6 @@ function SettingsSidebar({
     >
       <div className={APP_SIDEBAR_INNER_CLASSNAME}>
 
-        <div className="mt-4">
           <Input
             type="search"
             value={searchQuery}
@@ -276,7 +275,6 @@ function SettingsSidebar({
             aria-label={searchLabel}
             className={`w-full ${APP_SIDEBAR_SEARCH_INPUT_CLASSNAME}`}
           />
-        </div>
 
         <nav
           className={`mt-4 space-y-1.5 ${APP_SIDEBAR_SCROLL_REGION_CLASSNAME}`}
