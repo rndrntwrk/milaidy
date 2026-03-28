@@ -181,6 +181,16 @@
         "tab": "Advanced",
         "groups": [
           {
+            "group": "Operators",
+            "pages": [
+              "operators/alice-operator-bootstrap",
+              "operators/alice-system-boundary",
+              "operators/stack-lifecycle-glossary",
+              "agents/runtime-and-lifecycle",
+              "deployment"
+            ]
+          },
+          {
             "group": "Plugins",
             "pages": [
               "plugins/overview",
