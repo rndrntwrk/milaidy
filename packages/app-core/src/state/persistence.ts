@@ -11,7 +11,7 @@ import type {
   OnboardingStep,
 } from "./types";
 import type { UiShellMode, UiTheme } from "./ui-preferences";
-import { normalizeAvatarIndex } from "./vrm";
+import { getDefaultBundledVrmIndex, normalizeAvatarIndex } from "./vrm";
 
 /* ── Shared localStorage helper ──────────────────────────────────────── */
 
@@ -456,8 +456,8 @@ export function loadAvatarIndex(): number {
       const n = parseInt(stored, 10);
       return normalizeAvatarIndex(n);
     }
-    return 1;
-  }, 1);
+    return getDefaultBundledVrmIndex();
+  }, getDefaultBundledVrmIndex());
 }
 
 export function saveAvatarIndex(index: number): void {

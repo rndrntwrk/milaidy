@@ -12,6 +12,8 @@ vi.mock("@miladyai/app-core/hooks", () => ({
 
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
+  getDefaultBundledVrmIndex: () => 9,
+  getVrmCount: () => 24,
   getVrmPreviewUrl: () => "/vrms/previews/milady-1.png",
   getVrmUrl: () => "/vrms/milady-1.vrm.gz",
   VRM_COUNT: 24,
