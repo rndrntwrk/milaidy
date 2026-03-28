@@ -418,49 +418,56 @@ function DocumentListItem({
   const { t } = useApp();
   return (
     <div
-      className={`${KNOWLEDGE_SIDEBAR_ITEM_BASE_CLASS} ${
+      className={`${KNOWLEDGE_SIDEBAR_ITEM_BASE_CLASS} relative cursor-pointer ${
         active
           ? KNOWLEDGE_SIDEBAR_ITEM_ACTIVE_CLASS
           : KNOWLEDGE_SIDEBAR_ITEM_INACTIVE_CLASS
       }`}
+      onClick={() => onSelect(doc.id)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(doc.id);
+        }
+      }}
+      aria-label={t("knowledgeview.OpenDocument", {
+        defaultValue: "Open {{filename}}",
+        filename: doc.filename,
+      })}
+      aria-current={active ? "page" : undefined}
     >
-      <span
-        className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-[11px] font-semibold ${
-          active
-            ? "border-accent/30 bg-accent/18 text-txt-strong"
-            : "border-border/50 bg-bg-accent/80 text-muted"
-        }`}
-      >
-        {getKnowledgeTypeLabel(doc.contentType).slice(0, 3)}
-      </span>
-      <Button
-        variant="ghost"
-        className="h-auto min-w-0 flex-1 rounded-sm p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        onClick={() => onSelect(doc.id)}
-        aria-label={t("knowledgeview.OpenDocument", {
-          defaultValue: "Open {{filename}}",
-          filename: doc.filename,
-        })}
-        aria-current={active ? "page" : undefined}
-      >
-        <div className="truncate text-sm font-semibold text-txt transition-colors">
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold leading-snug text-txt">
           {doc.filename}
         </div>
-        <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted/85">
-          {getKnowledgeDocumentSummary(doc, t)}
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted/70">
-          <span className="rounded-full border border-border/45 bg-bg/30 px-2 py-0.5">
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span
+            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wider ${
+              active
+                ? "border-accent/30 bg-accent/18 text-txt-strong"
+                : "border-border/45 bg-bg/30 text-muted/80"
+            }`}
+          >
+            {getKnowledgeTypeLabel(doc.contentType)}
+          </span>
+          <span className="inline-flex items-center rounded-md border border-border/45 bg-bg/30 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wider text-muted/80">
             {getKnowledgeSourceLabel(doc.source, t)}
           </span>
-          <span>{formatShortDate(doc.createdAt, { fallback: "—" })}</span>
+          <span className="text-[10px] text-muted/50 opacity-0 transition-opacity group-hover:opacity-100">
+            {formatShortDate(doc.createdAt, { fallback: "—" })}
+          </span>
         </div>
-      </Button>
-      <div className="flex shrink-0 items-center pl-1 opacity-70 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      </div>
+      <div
+        className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+        onClick={(e) => e.stopPropagation()}
+      >
         <ConfirmDeleteControl
-          triggerClassName="h-8 rounded-lg border border-transparent px-3 text-xs font-bold !bg-transparent text-danger transition-all hover:!bg-danger/12 hover:border-danger/25 hover:text-danger"
-          confirmClassName="h-8 rounded-lg border border-danger/25 bg-danger/14 px-3 text-xs font-bold text-danger transition-all hover:bg-danger/20"
-          cancelClassName="h-8 rounded-lg border border-border/35 px-3 text-xs font-bold text-muted-strong transition-all hover:border-border-strong hover:text-txt"
+          triggerClassName="h-7 rounded-lg border border-transparent px-2 text-[10px] font-bold !bg-transparent text-danger/70 transition-all hover:!bg-danger/12 hover:border-danger/25 hover:text-danger"
+          confirmClassName="h-7 rounded-lg border border-danger/25 bg-danger/14 px-2 text-[10px] font-bold text-danger transition-all hover:bg-danger/20"
+          cancelClassName="h-7 rounded-lg border border-border/35 px-2 text-[10px] font-bold text-muted-strong transition-all hover:border-border-strong hover:text-txt"
           disabled={deleting}
           busyLabel="..."
           onConfirm={() => onDelete(doc.id)}
