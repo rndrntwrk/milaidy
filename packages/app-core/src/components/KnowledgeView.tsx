@@ -1229,7 +1229,7 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
                 <div className="mb-2 flex items-center justify-between gap-2 px-1">
                   <div className={KNOWLEDGE_SECTION_LABEL_CLASS}>
                     {isShowingSearchResults
-                      ? t("knowledgeview.SearchResults").replace(/\($/, "")
+                      ? t("knowledgeview.SearchResultsLabel")
                       : t("knowledgeview.Documents")}
                   </div>
                   <div className="flex items-center gap-2">
@@ -1272,7 +1272,7 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
                     visibleSearchResults.length === 0 && (
                       <DesktopEmptyStatePanel
                         className="min-h-[12rem] px-4 py-8"
-                        description="Try a filename, topic, or phrase from the document body."
+                        description={t("knowledgeview.NoResultsFoundHint")}
                         title={t("knowledgeview.NoResultsFound")}
                       />
                     )}

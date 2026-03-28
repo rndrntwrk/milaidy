@@ -853,6 +853,41 @@ describe("KnowledgeView UI", () => {
     expect(searchButton?.props.disabled).toBe(true);
   });
 
+  it("uses translated search-result labels when a search returns no matches", async () => {
+    vi.mocked(client.searchKnowledge).mockResolvedValueOnce({ results: [] });
+
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(KnowledgeView));
+      await flushPromises();
+    });
+
+    const searchInput = tree?.root.find(
+      (node) => node.type === "input" && node.props.type === "text",
+    );
+
+    await act(async () => {
+      searchInput?.props.onChange({ target: { value: "missing" } });
+    });
+
+    await act(async () => {
+      tree?.root.findAllByType("form")[0]?.props.onSubmit({
+        preventDefault: () => {},
+      });
+      await flushPromises();
+    });
+
+    const allText = getRenderedText(tree);
+
+    expect(allText).toContain("knowledgeview.SearchResultsLabel");
+    expect(allText).toContain("knowledgeview.NoResultsFound");
+    expect(allText).toContain("knowledgeview.NoResultsFoundHint");
+    expect(allText).not.toContain(
+      "Try a filename, topic, or phrase from the document body.",
+    );
+  });
+
   it("clears stale search state when the last document disappears", async () => {
     let documentsResponse = [...state.knowledgeDocuments];
     vi.mocked(client.listKnowledgeDocuments).mockImplementation(async () => ({
