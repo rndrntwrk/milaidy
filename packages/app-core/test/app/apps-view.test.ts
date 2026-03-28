@@ -159,6 +159,9 @@ describe("AppsView", () => {
   beforeEach(() => {
     // Prevent jsdom mock leakages between files
     delete (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__;
+    vi.spyOn(electrobunRpc, "getElectrobunRendererRpc").mockReturnValue(
+      undefined,
+    );
     mockClientFns.listApps.mockReset();
     mockClientFns.listInstalledApps.mockReset();
     mockClientFns.launchApp.mockReset();

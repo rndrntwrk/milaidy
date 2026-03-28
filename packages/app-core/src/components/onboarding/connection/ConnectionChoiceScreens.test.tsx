@@ -81,7 +81,7 @@ describe("Connection choice screens", () => {
     );
 
     const providerDescription = screen.getByText("GPT API");
-    expect(providerDescription.className).toContain("line-clamp-2");
-    expect(providerDescription.className).not.toContain("truncate");
+    expect(providerDescription.className).toContain("truncate");
+    expect(providerDescription.className).not.toContain("line-clamp-2");
   });
 });

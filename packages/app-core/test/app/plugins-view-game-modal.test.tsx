@@ -244,6 +244,9 @@ describe("PluginsView game modal", () => {
   beforeEach(() => {
     ensureWindowGlobals();
     delete (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__;
+    vi.spyOn(electrobunRpc, "getElectrobunRendererRpc").mockReturnValue(
+      undefined,
+    );
     mockUseApp.mockReset();
     mockOnWsEvent.mockReset();
     mockHandlePluginToggle.mockReset();

@@ -73,6 +73,9 @@ function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
 describe("GameView", () => {
   beforeEach(() => {
     delete (window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__;
+    vi.spyOn(electrobunRpc, "getElectrobunRendererRpc").mockReturnValue(
+      undefined,
+    );
     mockClientFns.stopApp.mockReset();
     mockUseApp.mockReset();
   });

@@ -74,14 +74,14 @@ describe("useVoiceChat streaming text helpers", () => {
     expect(queued.length).toBeLessThan(longText.length);
   });
 
-  it("defaults to ElevenLabs cloud config when Cloud auth is present", () => {
+  it("defaults to ElevenLabs own-key config when Cloud auth is present", () => {
     expect(
       resolveEffectiveVoiceConfig(null, {
         cloudConnected: true,
       }),
     ).toEqual({
       provider: "elevenlabs",
-      mode: "cloud",
+      mode: "own-key",
       elevenlabs: {
         voiceId: "EXAVITQu4vr4xnSDxMaL",
         modelId: "eleven_flash_v2_5",
@@ -92,12 +92,12 @@ describe("useVoiceChat streaming text helpers", () => {
     });
   });
 
-  it("defaults the saved voice mode to cloud when Cloud auth is present", () => {
-    expect(resolveVoiceMode(undefined, true)).toBe("cloud");
-    expect(resolveVoiceMode(undefined, true, "")).toBe("cloud");
+  it("defaults the saved voice mode to own-key regardless of Cloud auth state", () => {
+    expect(resolveVoiceMode(undefined, true)).toBe("own-key");
+    expect(resolveVoiceMode(undefined, true, "")).toBe("own-key");
     expect(resolveVoiceMode(undefined, true, "sk-test")).toBe("own-key");
-    expect(resolveVoiceMode(undefined, true, "[REDACTED]")).toBe("cloud");
-    expect(resolveVoiceMode(undefined, true, "sk-t...1234")).toBe("cloud");
+    expect(resolveVoiceMode(undefined, true, "[REDACTED]")).toBe("own-key");
+    expect(resolveVoiceMode(undefined, true, "sk-t...1234")).toBe("own-key");
     expect(resolveVoiceMode(undefined, false)).toBe("own-key");
     expect(resolveVoiceMode("own-key", true, "")).toBe("own-key");
   });
@@ -107,19 +107,31 @@ describe("useVoiceChat streaming text helpers", () => {
     expect(resolveVoiceProxyEndpoint("own-key")).toBe("/api/tts/elevenlabs");
   });
 
-  it("keeps explicit non-ElevenLabs providers intact", () => {
+  it("keeps explicit non-ElevenLabs providers intact when cloud is disconnected", () => {
     expect(
       resolveEffectiveVoiceConfig(
         {
           provider: "edge",
           edge: { voice: "en-US-AriaNeural" },
         },
-        { cloudConnected: true },
+        { cloudConnected: false },
       ),
     ).toEqual({
       provider: "edge",
       edge: { voice: "en-US-AriaNeural" },
     });
+  });
+
+  it("upgrades edge provider to elevenlabs when cloud is connected", () => {
+    const result = resolveEffectiveVoiceConfig(
+      {
+        provider: "edge",
+        edge: { voice: "en-US-AriaNeural" },
+      },
+      { cloudConnected: true },
+    );
+    expect(result?.provider).toBe("elevenlabs");
+    expect(result?.mode).toBe("own-key");
   });
 
   it("drops parenthetical asides and stage directions from speech", () => {

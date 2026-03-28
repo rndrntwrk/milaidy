@@ -8,9 +8,9 @@ describe("monitorChildExit stale-exit guard", () => {
   const source = fs.readFileSync(AGENT_PATH, "utf8");
 
   it("re-checks childProcess after clearing the exiting process reference", () => {
-    const unexpectedExitIdx = source.indexOf(
-      "this.childProcess = null;\n          if (this.childProcess !== null) return;",
+    const staleExitGuardIdx = source.indexOf(
+      "if (this.childProcess !== proc) return;",
     );
-    expect(unexpectedExitIdx).toBeGreaterThan(-1);
+    expect(staleExitGuardIdx).toBeGreaterThan(-1);
   });
 });

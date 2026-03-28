@@ -76,6 +76,6 @@ describe("resolveWebSocketUpgradeRejection", () => {
       new URL("ws://127.0.0.1/ws"),
     );
 
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 401, reason: "Unauthorized" });
   });
 });

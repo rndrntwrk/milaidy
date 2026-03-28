@@ -11,6 +11,9 @@ describe("openExternalUrl", () => {
   beforeEach(() => {
     // Ensure no desktop bridge is present by default (web environment)
     delete (window as BridgeWindow).__MILADY_ELECTROBUN_RPC__;
+    vi.spyOn(electrobunRpc, "getElectrobunRendererRpc").mockReturnValue(
+      undefined,
+    );
   });
 
   afterEach(() => {

@@ -154,6 +154,15 @@ const _requiredPatchedElectrobunCliSnippets = [
   "const installedBinPath = path.join(",
   "const installedCachePath = path.join(",
 ];
+
+export function findMissingPatchedElectrobunCliSnippets(
+  source: string,
+): string[] {
+  return _requiredPatchedElectrobunCliSnippets.filter(
+    (snippet) => !source.includes(snippet),
+  );
+}
+
 const forbiddenWorkflowSnippets = [
   ' -name "*.exe" -o \\',
   'bun install -g "rcedit@4.0.1"',
