@@ -1,20 +1,19 @@
 /**
- * PolicyControlsView — user-friendly policy management for Steward agent wallets.
- *
- * Renders spending limits, approved addresses, rate limits, time windows,
- * and auto-approve threshold as toggleable, collapsible cards.
+ * PolicyControlsView — wallet policy settings for Steward.
+ * Simple settings rows that match the rest of the Settings page.
  */
 
-import { Button, ConfirmDialog, Spinner } from "@miladyai/ui";
 import {
-  AlertTriangle,
-  Clock,
-  DollarSign,
-  Gauge,
-  UserCheck,
-  Zap,
-} from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+  Button,
+  ConfirmDialog,
+  Input,
+  Label,
+  Slider,
+  Spinner,
+  Switch,
+} from "@miladyai/ui";
+import { AlertTriangle } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { client } from "../api";
 import type {
   ApprovedAddressesConfig,
@@ -26,27 +25,18 @@ import type {
   TimeWindowConfig,
 } from "./policy-controls";
 import {
-  ApprovedAddressesSection,
-  AutoApproveSection,
-  addressSummary,
-  autoApproveSummary,
+  DAY_NAMES,
   DEFAULT_APPROVED_ADDRESSES,
   DEFAULT_AUTO_APPROVE,
   DEFAULT_RATE_LIMIT,
   DEFAULT_SPENDING,
   DEFAULT_TIME_WINDOW,
+  TIMEZONES,
   findPolicy,
-  PolicyToggle,
-  RateLimitSection,
-  rateLimitSummary,
-  SpendingLimitSection,
-  spendingSummary,
-  TimeWindowSection,
-  timeWindowSummary,
 } from "./policy-controls";
 import { StewardLogo } from "./steward/StewardLogo";
 
-/* ── Main Component ──────────────────────────────────────────────────── */
+const asRecord = (v: unknown) => v as unknown as Record<string, unknown>;
 
 export function PolicyControlsView() {
   const [policies, setPolicies] = useState<PolicyRule[]>([]);
@@ -56,14 +46,11 @@ export function PolicyControlsView() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [stewardConnected, setStewardConnected] = useState(false);
   const [dirty, setDirty] = useState(false);
-
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmCallback, setConfirmCallback] = useState<(() => void) | null>(
     null,
   );
-
-  /* ── Load ──────────────────────────────────────────────────────────── */
 
   useEffect(() => {
     let cancelled = false;
@@ -93,8 +80,6 @@ export function PolicyControlsView() {
       cancelled = true;
     };
   }, []);
-
-  /* ── Policy helpers ────────────────────────────────────────────────── */
 
   const getPolicy = useCallback(
     (type: PolicyType) => findPolicy(policies, type),
@@ -136,9 +121,7 @@ export function PolicyControlsView() {
         setConfirmMessage(
           "Disabling this removes a safety guardrail. Are you sure?",
         );
-        setConfirmCallback(() => () => {
-          updatePolicy(type, { enabled: false });
-        });
+        setConfirmCallback(() => () => updatePolicy(type, { enabled: false }));
         setConfirmOpen(true);
         return;
       }
@@ -150,8 +133,6 @@ export function PolicyControlsView() {
     [policies, updatePolicy],
   );
 
-  /* ── Save ──────────────────────────────────────────────────────────── */
-
   const handleSave = useCallback(async () => {
     setSaving(true);
     setError(null);
@@ -160,40 +141,20 @@ export function PolicyControlsView() {
       setSaveSuccess(true);
       setDirty(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save policies");
+      setError(
+        err instanceof Error ? err.message : "Failed to save policies",
+      );
     } finally {
       setSaving(false);
     }
   }, [policies]);
 
-  /* ── Render ────────────────────────────────────────────────────────── */
+  // Extract configs (must be before early returns so hooks are unconditional)
+  const autoApprovePolicy = getPolicy("auto-approve-threshold");
+  const autoApproveConfig =
+    (autoApprovePolicy?.config as unknown as AutoApproveConfig) ??
+    DEFAULT_AUTO_APPROVE;
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Spinner size={24} />
-        <span className="ml-3 text-sm text-muted">Loading…</span>
-      </div>
-    );
-  }
-
-  if (!stewardConnected) {
-    return (
-      <div className="flex flex-col items-center gap-4 py-8 text-center">
-        <StewardLogo size={48} className="opacity-30" />
-        <div>
-          <p className="text-sm font-semibold text-txt mb-1">
-            Steward Not Connected
-          </p>
-          <p className="text-xs text-muted max-w-sm">
-            Connect your Steward instance to manage wallet policies.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Extract configs with fallbacks
   const spendingPolicy = getPolicy("spending-limit");
   const spendingConfig =
     (spendingPolicy?.config as unknown as SpendingLimitConfig) ??
@@ -214,152 +175,219 @@ export function PolicyControlsView() {
     (timeWindowPolicy?.config as unknown as TimeWindowConfig) ??
     DEFAULT_TIME_WINDOW;
 
-  const autoApprovePolicy = getPolicy("auto-approve-threshold");
-  const autoApproveConfig =
-    (autoApprovePolicy?.config as unknown as AutoApproveConfig) ??
-    DEFAULT_AUTO_APPROVE;
+  const normalizedAddresses = useMemo(
+    () =>
+      (addressConfig.addresses ?? []).map((addr) => {
+        if (typeof addr === "object" && addr !== null && "address" in addr) {
+          return (addr as unknown as { address: string }).address;
+        }
+        return String(addr);
+      }),
+    [addressConfig.addresses],
+  );
 
-  const asRecord = (v: unknown) => v as unknown as Record<string, unknown>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Spinner size={24} />
+        <span className="ml-3 text-sm text-muted">Loading…</span>
+      </div>
+    );
+  }
+
+  if (!stewardConnected) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-8 text-center">
+        <StewardLogo size={48} className="opacity-30" />
+        <p className="text-sm font-semibold text-txt">
+          Steward Not Connected
+        </p>
+        <p className="text-xs text-muted max-w-sm">
+          Connect your Steward instance to manage wallet policies.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="relative">
-      <div className="space-y-2">
-        {error && (
-          <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2">
-            <AlertTriangle className="h-4 w-4 text-danger shrink-0" />
-            <span className="text-[12px] text-danger">{error}</span>
-          </div>
-        )}
+    <div className="space-y-0 divide-y divide-border/20">
+      {error && (
+        <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 mb-4">
+          <AlertTriangle className="h-4 w-4 text-danger shrink-0" />
+          <span className="text-xs text-danger">{error}</span>
+        </div>
+      )}
 
-        {/* Auto-Approve — first, most common */}
-        <PolicyToggle
-          icon={Zap}
-          title="Auto-Approve"
-          summary={
-            autoApprovePolicy?.enabled
-              ? autoApproveSummary(autoApproveConfig)
-              : undefined
-          }
-          enabled={autoApprovePolicy?.enabled ?? false}
-          onToggle={(enabled) =>
-            togglePolicy(
-              "auto-approve-threshold",
-              enabled,
-              asRecord(DEFAULT_AUTO_APPROVE),
-            )
-          }
-        >
-          <AutoApproveSection
-            config={autoApproveConfig}
-            onChange={(cfg) =>
+      {/* Auto-Approve */}
+      <PolicyRow
+        title="Auto-Approve"
+        desc={
+          autoApprovePolicy?.enabled
+            ? `Under ${autoApproveConfig.threshold ?? "0.01"} ETH`
+            : "Off"
+        }
+        enabled={autoApprovePolicy?.enabled ?? false}
+        onToggle={(v) =>
+          togglePolicy(
+            "auto-approve-threshold",
+            v,
+            asRecord(DEFAULT_AUTO_APPROVE),
+          )
+        }
+      >
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted whitespace-nowrap">
+            Threshold
+          </Label>
+          <EthField
+            value={autoApproveConfig.threshold ?? "0.01"}
+            onChange={(v) =>
               updatePolicy("auto-approve-threshold", {
-                config: asRecord(cfg),
+                config: asRecord({ threshold: v }),
               })
             }
           />
-        </PolicyToggle>
+        </div>
+      </PolicyRow>
 
-        {/* Spending Limits */}
-        <PolicyToggle
-          icon={DollarSign}
-          title="Spending Limits"
-          summary={
-            spendingPolicy?.enabled
-              ? spendingSummary(spendingConfig)
-              : undefined
-          }
-          enabled={spendingPolicy?.enabled ?? false}
-          onToggle={(enabled) =>
-            togglePolicy("spending-limit", enabled, asRecord(DEFAULT_SPENDING))
-          }
-        >
-          <SpendingLimitSection
-            config={spendingConfig}
-            onChange={(cfg) =>
-              updatePolicy("spending-limit", { config: asRecord(cfg) })
+      {/* Spending Limits */}
+      <PolicyRow
+        title="Spending Limits"
+        desc={
+          spendingPolicy?.enabled
+            ? `${spendingConfig.maxPerTx}/tx · ${spendingConfig.maxPerDay}/day · ${spendingConfig.maxPerWeek}/wk`
+            : "Off"
+        }
+        enabled={spendingPolicy?.enabled ?? false}
+        onToggle={(v) =>
+          togglePolicy("spending-limit", v, asRecord(DEFAULT_SPENDING))
+        }
+      >
+        <div className="grid grid-cols-3 gap-3">
+          <EthFieldLabeled
+            label="Per Tx"
+            value={spendingConfig.maxPerTx}
+            onChange={(v) =>
+              updatePolicy("spending-limit", {
+                config: asRecord({ ...spendingConfig, maxPerTx: v }),
+              })
             }
           />
-        </PolicyToggle>
-
-        {/* Address Controls */}
-        <PolicyToggle
-          icon={UserCheck}
-          title="Address Controls"
-          summary={
-            addressPolicy?.enabled ? addressSummary(addressConfig) : undefined
-          }
-          enabled={addressPolicy?.enabled ?? false}
-          onToggle={(enabled) =>
-            togglePolicy(
-              "approved-addresses",
-              enabled,
-              asRecord(DEFAULT_APPROVED_ADDRESSES),
-            )
-          }
-        >
-          <ApprovedAddressesSection
-            config={addressConfig}
-            onChange={(cfg) =>
-              updatePolicy("approved-addresses", { config: asRecord(cfg) })
+          <EthFieldLabeled
+            label="Daily"
+            value={spendingConfig.maxPerDay}
+            onChange={(v) =>
+              updatePolicy("spending-limit", {
+                config: asRecord({ ...spendingConfig, maxPerDay: v }),
+              })
             }
           />
-        </PolicyToggle>
-
-        {/* Rate Limits */}
-        <PolicyToggle
-          icon={Gauge}
-          title="Rate Limits"
-          summary={
-            rateLimitPolicy?.enabled
-              ? rateLimitSummary(rateLimitConfig)
-              : undefined
-          }
-          enabled={rateLimitPolicy?.enabled ?? false}
-          onToggle={(enabled) =>
-            togglePolicy("rate-limit", enabled, asRecord(DEFAULT_RATE_LIMIT))
-          }
-        >
-          <RateLimitSection
-            config={rateLimitConfig}
-            onChange={(cfg) =>
-              updatePolicy("rate-limit", { config: asRecord(cfg) })
+          <EthFieldLabeled
+            label="Weekly"
+            value={spendingConfig.maxPerWeek}
+            onChange={(v) =>
+              updatePolicy("spending-limit", {
+                config: asRecord({ ...spendingConfig, maxPerWeek: v }),
+              })
             }
           />
-        </PolicyToggle>
+        </div>
+      </PolicyRow>
 
-        {/* Time Restrictions */}
-        <PolicyToggle
-          icon={Clock}
-          title="Time Restrictions"
-          summary={
-            timeWindowPolicy?.enabled
-              ? timeWindowSummary(timeWindowConfig)
-              : undefined
-          }
-          enabled={timeWindowPolicy?.enabled ?? false}
-          onToggle={(enabled) =>
-            togglePolicy("time-window", enabled, asRecord(DEFAULT_TIME_WINDOW))
-          }
-        >
-          <TimeWindowSection
-            config={timeWindowConfig}
-            onChange={(cfg) =>
-              updatePolicy("time-window", { config: asRecord(cfg) })
+      {/* Rate Limits */}
+      <PolicyRow
+        title="Rate Limits"
+        desc={
+          rateLimitPolicy?.enabled
+            ? `${rateLimitConfig.maxTxPerHour}/hr · ${rateLimitConfig.maxTxPerDay}/day`
+            : "Off"
+        }
+        enabled={rateLimitPolicy?.enabled ?? false}
+        onToggle={(v) =>
+          togglePolicy("rate-limit", v, asRecord(DEFAULT_RATE_LIMIT))
+        }
+      >
+        <div className="grid grid-cols-2 gap-4">
+          <SliderField
+            label="Per Hour"
+            value={rateLimitConfig.maxTxPerHour}
+            min={1}
+            max={100}
+            onChange={(v) =>
+              updatePolicy("rate-limit", {
+                config: asRecord({ ...rateLimitConfig, maxTxPerHour: v }),
+              })
             }
           />
-        </PolicyToggle>
-      </div>
+          <SliderField
+            label="Per Day"
+            value={rateLimitConfig.maxTxPerDay}
+            min={1}
+            max={500}
+            onChange={(v) =>
+              updatePolicy("rate-limit", {
+                config: asRecord({ ...rateLimitConfig, maxTxPerDay: v }),
+              })
+            }
+          />
+        </div>
+      </PolicyRow>
 
-      {/* Sticky save footer — only visible when dirty */}
+      {/* Address Controls */}
+      <PolicyRow
+        title="Address Controls"
+        desc={
+          addressPolicy?.enabled
+            ? `${normalizedAddresses.length} ${addressConfig.mode === "whitelist" ? "allowed" : "blocked"}`
+            : "Off"
+        }
+        enabled={addressPolicy?.enabled ?? false}
+        onToggle={(v) =>
+          togglePolicy(
+            "approved-addresses",
+            v,
+            asRecord(DEFAULT_APPROVED_ADDRESSES),
+          )
+        }
+      >
+        <AddressSection
+          config={addressConfig}
+          addresses={normalizedAddresses}
+          onUpdate={(cfg) =>
+            updatePolicy("approved-addresses", { config: asRecord(cfg) })
+          }
+        />
+      </PolicyRow>
+
+      {/* Time Restrictions */}
+      <PolicyRow
+        title="Time Restrictions"
+        desc={
+          timeWindowPolicy?.enabled
+            ? `${timeWindowConfig.allowedDays?.length ?? 0} days`
+            : "Off"
+        }
+        enabled={timeWindowPolicy?.enabled ?? false}
+        onToggle={(v) =>
+          togglePolicy("time-window", v, asRecord(DEFAULT_TIME_WINDOW))
+        }
+      >
+        <TimeSection
+          config={timeWindowConfig}
+          onUpdate={(cfg) =>
+            updatePolicy("time-window", { config: asRecord(cfg) })
+          }
+        />
+      </PolicyRow>
+
+      {/* Save */}
       {dirty && (
-        <div className="sticky bottom-0 mt-3 flex items-center justify-between rounded-xl border border-accent/30 bg-bg/95 backdrop-blur-sm px-4 py-2.5">
-          <span className="text-[12px] text-accent font-medium">
-            Unsaved changes
-          </span>
+        <div className="flex items-center justify-end gap-3 pt-4 border-t-0">
+          <span className="text-xs text-accent">Unsaved changes</span>
           <Button
             variant="default"
             size="sm"
-            className="text-[11px] min-w-[80px]"
+            className="text-xs"
             onClick={() => void handleSave()}
             disabled={saving}
           >
@@ -369,28 +397,23 @@ export function PolicyControlsView() {
                 <span className="ml-1.5">Saving…</span>
               </>
             ) : (
-              "Save Policies"
+              "Save"
             )}
           </Button>
         </div>
       )}
-
-      {/* Non-dirty save success */}
       {saveSuccess && !dirty && (
-        <div className="mt-3 text-center">
-          <span className="text-[12px] text-ok font-medium">
-            ✓ Policies saved
-          </span>
+        <div className="pt-3 text-right border-t-0">
+          <span className="text-xs text-ok">✓ Saved</span>
         </div>
       )}
 
-      {/* Confirm dialog */}
       <ConfirmDialog
         open={confirmOpen}
-        title="Disable Safety Policy"
+        title="Disable Policy"
         message={confirmMessage}
         confirmLabel="Disable"
-        cancelLabel="Keep Enabled"
+        cancelLabel="Keep"
         tone="warn"
         onConfirm={() => {
           confirmCallback?.();
@@ -398,6 +421,307 @@ export function PolicyControlsView() {
         }}
         onCancel={() => setConfirmOpen(false)}
       />
+    </div>
+  );
+}
+
+/* ── Sub-components ──────────────────────────────────────────────────── */
+
+function PolicyRow({
+  title,
+  desc,
+  enabled,
+  onToggle,
+  children,
+}: {
+  title: string;
+  desc: string;
+  enabled: boolean;
+  onToggle: (v: boolean) => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="py-3.5">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-sm font-medium text-txt">{title}</div>
+          <div className="text-xs text-muted mt-0.5">{desc}</div>
+        </div>
+        <Switch
+          checked={enabled}
+          onCheckedChange={onToggle}
+          aria-label={title}
+        />
+      </div>
+      {enabled && children && <div className="mt-3">{children}</div>}
+    </div>
+  );
+}
+
+function EthField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="relative w-28">
+      <Input
+        type="text"
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => {
+          if (/^\d*\.?\d*$/.test(e.target.value)) onChange(e.target.value);
+        }}
+        className="h-8 text-xs pr-10 tabular-nums"
+        placeholder="0.0"
+      />
+      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted pointer-events-none">
+        ETH
+      </span>
+    </div>
+  );
+}
+
+function EthFieldLabeled({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-[11px] text-muted">{label}</Label>
+      <EthField value={value} onChange={onChange} />
+    </div>
+  );
+}
+
+function SliderField({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex justify-between">
+        <Label className="text-xs text-muted">{label}</Label>
+        <span className="text-xs font-medium text-txt tabular-nums">
+          {value}
+        </span>
+      </div>
+      <Slider
+        value={[value]}
+        min={min}
+        max={max}
+        step={1}
+        onValueChange={([v]) => onChange(v)}
+      />
+    </div>
+  );
+}
+
+function AddressSection({
+  config,
+  addresses,
+  onUpdate,
+}: {
+  config: ApprovedAddressesConfig;
+  addresses: string[];
+  onUpdate: (cfg: ApprovedAddressesConfig) => void;
+}) {
+  const [newAddr, setNewAddr] = useState("");
+
+  const handleAdd = () => {
+    const trimmed = newAddr.trim();
+    if (!trimmed || !/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return;
+    if (config.addresses.includes(trimmed)) return;
+    onUpdate({ ...config, addresses: [...config.addresses, trimmed] });
+    setNewAddr("");
+  };
+
+  const handleRemove = (addr: string) => {
+    const labels = { ...config.labels };
+    delete labels[addr];
+    onUpdate({
+      ...config,
+      addresses: config.addresses.filter((a) => String(a) !== addr),
+      labels,
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <Button
+          variant={config.mode === "whitelist" ? "default" : "ghost"}
+          size="sm"
+          className="text-[11px] h-7"
+          onClick={() => onUpdate({ ...config, mode: "whitelist" })}
+        >
+          Allowlist
+        </Button>
+        <Button
+          variant={config.mode === "blacklist" ? "default" : "ghost"}
+          size="sm"
+          className="text-[11px] h-7"
+          onClick={() => onUpdate({ ...config, mode: "blacklist" })}
+        >
+          Blocklist
+        </Button>
+      </div>
+
+      {addresses.length > 0 && (
+        <div className="space-y-1">
+          {addresses.map((addr) => (
+            <div
+              key={addr}
+              className="flex items-center justify-between group text-[11px] font-mono text-muted py-1"
+            >
+              <span className="truncate">{addr}</span>
+              <button
+                type="button"
+                className="text-danger opacity-0 group-hover:opacity-100 text-[10px] ml-2"
+                onClick={() => handleRemove(addr)}
+              >
+                remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <Input
+          type="text"
+          value={newAddr}
+          onChange={(e) => setNewAddr(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+          placeholder="0x..."
+          className="h-8 text-xs font-mono flex-1"
+        />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-xs h-8"
+          onClick={handleAdd}
+        >
+          Add
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function TimeSection({
+  config,
+  onUpdate,
+}: {
+  config: TimeWindowConfig;
+  onUpdate: (cfg: TimeWindowConfig) => void;
+}) {
+  const hours = config.allowedHours?.[0] ?? { start: 9, end: 17 };
+  const days = config.allowedDays ?? [1, 2, 3, 4, 5];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="space-y-1">
+          <Label className="text-[11px] text-muted">From</Label>
+          <select
+            value={hours.start}
+            onChange={(e) =>
+              onUpdate({
+                ...config,
+                allowedHours: [
+                  { start: Number(e.target.value), end: hours.end },
+                ],
+              })
+            }
+            className="h-8 rounded-md border border-input bg-bg px-2 text-xs text-txt"
+          >
+            {Array.from({ length: 24 }, (_, i) => (
+              <option key={`from-${i}`} value={i}>
+                {String(i).padStart(2, "0")}:00
+              </option>
+            ))}
+          </select>
+        </div>
+        <span className="text-muted text-xs mt-5">→</span>
+        <div className="space-y-1">
+          <Label className="text-[11px] text-muted">To</Label>
+          <select
+            value={hours.end}
+            onChange={(e) =>
+              onUpdate({
+                ...config,
+                allowedHours: [
+                  { start: hours.start, end: Number(e.target.value) },
+                ],
+              })
+            }
+            className="h-8 rounded-md border border-input bg-bg px-2 text-xs text-txt"
+          >
+            {Array.from({ length: 24 }, (_, i) => (
+              <option key={`to-${i + 1}`} value={i + 1}>
+                {String(i + 1).padStart(2, "0")}:00
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex gap-1">
+        {DAY_NAMES.map((name, i) => (
+          <button
+            key={name}
+            type="button"
+            className={`h-7 w-9 rounded text-[10px] font-medium transition-colors ${
+              days.includes(i)
+                ? "bg-accent/20 text-accent border border-accent/30"
+                : "bg-bg text-muted border border-border/30 hover:border-border/50"
+            }`}
+            onClick={() => {
+              const next = days.includes(i)
+                ? days.filter((d) => d !== i)
+                : [...days, i].sort();
+              onUpdate({ ...config, allowedDays: next });
+            }}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-[11px] text-muted">Timezone</Label>
+        <select
+          value={
+            config.timezone ??
+            Intl.DateTimeFormat().resolvedOptions().timeZone
+          }
+          onChange={(e) => onUpdate({ ...config, timezone: e.target.value })}
+          className="h-8 rounded-md border border-input bg-bg px-2 text-xs text-txt w-full"
+        >
+          {TIMEZONES.map((tz) => (
+            <option key={tz} value={tz}>
+              {tz}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }
