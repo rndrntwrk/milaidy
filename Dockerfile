@@ -179,6 +179,9 @@ RUN if [ -n "$MILADY_DOCKER_APT_PACKAGES" ]; then \
 # Copy production node_modules (no devDependencies)
 COPY --from=builder /app/node_modules ./node_modules
 
+# Ensure tsx is available (bun symlinks don't survive docker COPY)
+RUN cd /app && npm install tsx 2>/dev/null || true
+
 # Copy build outputs
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/apps/app/dist ./apps/app/dist

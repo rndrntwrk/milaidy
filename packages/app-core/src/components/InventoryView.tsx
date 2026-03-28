@@ -443,7 +443,8 @@ export function InventoryView() {
     );
   }
 
-  if (!evmAddr && !solAddr) {
+  const stewardHasAddresses = stewardStatus?.connected && (stewardStatus.walletAddresses?.evm || stewardStatus.evmAddress);
+  if (!evmAddr && !solAddr && !stewardHasAddresses) {
     return (
       <DesktopPageFrame>
         <div className={`${WALLET_SHELL_CLASS} items-center justify-center`}>
