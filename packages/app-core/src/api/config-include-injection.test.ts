@@ -19,6 +19,8 @@ import type { ElizaConfig } from "../config/types";
 
 // Mock resolveConfigPath so we can write to a temp file
 let tmpConfigPath: string;
+let tmpPersistConfigPath: string;
+let originalMiladyPersistConfigPath: string | undefined;
 
 vi.mock("@miladyai/agent/config/paths", () => ({
   resolveConfigPath: () => tmpConfigPath,
@@ -27,15 +29,31 @@ vi.mock("@miladyai/agent/config/paths", () => ({
 
 describe("$include config injection — saveElizaConfig defense-in-depth", () => {
   beforeEach(() => {
+    originalMiladyPersistConfigPath = process.env.MILADY_PERSIST_CONFIG_PATH;
+    delete process.env.MILADY_PERSIST_CONFIG_PATH;
     tmpConfigPath = path.join(
       os.tmpdir(),
       `eliza-test-config-${Date.now()}.json`,
     );
+    tmpPersistConfigPath = path.join(
+      os.tmpdir(),
+      `eliza-test-config-persist-${Date.now()}.json`,
+    );
   });
 
   afterEach(() => {
+    if (originalMiladyPersistConfigPath === undefined) {
+      delete process.env.MILADY_PERSIST_CONFIG_PATH;
+    } else {
+      process.env.MILADY_PERSIST_CONFIG_PATH = originalMiladyPersistConfigPath;
+    }
     try {
       fs.unlinkSync(tmpConfigPath);
+    } catch {
+      /* already cleaned */
+    }
+    try {
+      fs.unlinkSync(tmpPersistConfigPath);
     } catch {
       /* already cleaned */
     }
@@ -120,5 +138,22 @@ describe("$include config injection — saveElizaConfig defense-in-depth", () =>
     expect(written.env.include).toBe("this-is-fine");
     expect(written.env.INCLUDE).toBe("also-fine");
     expect(written.env.$other).toBe("fine-too");
+  });
+
+  it("writes to MILADY_PERSIST_CONFIG_PATH when present", () => {
+    process.env.MILADY_PERSIST_CONFIG_PATH = tmpPersistConfigPath;
+
+    const config = {
+      logging: { level: "error" },
+      cloud: { enabled: true, apiKey: "ck-test" },
+    } as Partial<ElizaConfig> as ElizaConfig;
+
+    saveElizaConfig(config);
+
+    expect(fs.existsSync(tmpConfigPath)).toBe(false);
+    expect(fs.existsSync(tmpPersistConfigPath)).toBe(true);
+
+    const written = JSON.parse(fs.readFileSync(tmpPersistConfigPath, "utf-8"));
+    expect(written.cloud).toEqual({ enabled: true, apiKey: "ck-test" });
   });
 });

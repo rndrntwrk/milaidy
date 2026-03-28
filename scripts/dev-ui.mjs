@@ -510,6 +510,7 @@ function createOnchainDevConfig({
   evmPrivateKey,
   solanaRpcUrl,
 }) {
+  const baseConfigPath = resolveMiladyConfigPath();
   const base = loadMiladyConfigForDev();
   const config =
     base && typeof base === "object" && !Array.isArray(base) ? { ...base } : {};
@@ -550,7 +551,7 @@ function createOnchainDevConfig({
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "eliza-dev-onchain-"));
   const configPath = path.join(tempDir, "eliza.json");
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
-  return { configPath, tempDir };
+  return { baseConfigPath, configPath, tempDir };
 }
 
 function spawnWithBufferedLogs(cmd, args, options = {}) {
@@ -832,7 +833,7 @@ async function bootstrapOnchainDev() {
     }
   }
 
-  const { configPath, tempDir } = createOnchainDevConfig({
+  const { baseConfigPath, configPath, tempDir } = createOnchainDevConfig({
     rpcUrl: ANVIL_RPC_URL,
     registryAddress,
     collectionAddress,
@@ -843,10 +844,12 @@ async function bootstrapOnchainDev() {
   return {
     env: {
       ELIZA_CONFIG_PATH: configPath,
+      ELIZA_PERSIST_CONFIG_PATH: baseConfigPath,
       ELIZA_DEV_CHAIN_ID: String(ANVIL_CHAIN_ID),
       ELIZA_DEV_CHAIN_RPC: ANVIL_RPC_URL,
       ELIZA_DEV_REGISTRY_ADDRESS: registryAddress,
       ELIZA_DEV_COLLECTION_ADDRESS: collectionAddress,
+      MILADY_PERSIST_CONFIG_PATH: baseConfigPath,
       ...(anchorConfigured ? { SOLANA_RPC_URL: ANCHOR_RPC_URL } : {}),
     },
     anvil,

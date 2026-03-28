@@ -430,6 +430,215 @@ function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function trimEnvString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+type MutableConfigEnv = Record<string, unknown> & {
+  vars?: Record<string, unknown>;
+};
+
+function getMutableConfigEnv(config: ElizaConfig): MutableConfigEnv | null {
+  if (!config.env || typeof config.env !== "object" || Array.isArray(config.env)) {
+    return null;
+  }
+  return config.env as MutableConfigEnv;
+}
+
+function getMutableConfigEnvVars(configEnv: MutableConfigEnv): Record<string, unknown> | null {
+  if (
+    !configEnv.vars ||
+    typeof configEnv.vars !== "object" ||
+    Array.isArray(configEnv.vars)
+  ) {
+    return null;
+  }
+  return configEnv.vars as Record<string, unknown>;
+}
+
+function readConfigEnvValue(config: ElizaConfig, key: string): string | undefined {
+  const configEnv = getMutableConfigEnv(config);
+  if (!configEnv) return undefined;
+  const vars = getMutableConfigEnvVars(configEnv);
+  return trimEnvString(vars?.[key]) ?? trimEnvString(configEnv[key]);
+}
+
+function readEffectiveEnvValue(
+  config: ElizaConfig,
+  key: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  return trimEnvString(env[key]) ?? readConfigEnvValue(config, key);
+}
+
+function setConfigEnvValue(
+  config: ElizaConfig,
+  key: string,
+  value: string,
+): void {
+  if (!config.env || typeof config.env !== "object" || Array.isArray(config.env)) {
+    config.env = {};
+  }
+  const configEnv = config.env as MutableConfigEnv;
+  const vars = getMutableConfigEnvVars(configEnv);
+  if (vars) {
+    vars[key] = value;
+    delete configEnv[key];
+    return;
+  }
+  configEnv[key] = value;
+}
+
+function deleteConfigEnvValue(config: ElizaConfig, key: string): void {
+  const configEnv = getMutableConfigEnv(config);
+  if (!configEnv) return;
+
+  const vars = getMutableConfigEnvVars(configEnv);
+  if (vars) {
+    delete vars[key];
+    if (Object.keys(vars).length === 0) {
+      delete configEnv.vars;
+    }
+  }
+
+  delete configEnv[key];
+}
+
+function detectOpenAiBaseUrlProvider(baseUrl: string): "groq" | null {
+  try {
+    const hostname = new URL(baseUrl).hostname.trim().toLowerCase();
+    if (hostname === "api.groq.com" || hostname.endsWith(".groq.com")) {
+      return "groq";
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function looksLikeGroqApiKey(value: string | undefined): boolean {
+  return Boolean(value && /^gsk[-_]/i.test(value));
+}
+
+function isLikelyOpenAiTextModel(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized.startsWith("gpt-") || normalized.startsWith("openai/");
+}
+
+/**
+ * Normalize known-bad provider compatibility shims before plugin resolution.
+ *
+ * A common failure mode is routing the OpenAI plugin through Groq's
+ * OpenAI-compatible base URL while leaving OpenAI defaults (`gpt-5`,
+ * `gpt-5-mini`) in place. Structured XML/object generation then fails during
+ * message handling because Groq does not serve those model IDs.
+ *
+ * When we can confidently detect that state, rewrite the effective runtime
+ * config to use the Groq plugin directly.
+ */
+/** @internal Exported for testing. */
+export function normalizeOpenAiCompatibleProviderConfig(
+  config: ElizaConfig,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const cloudInferenceEnabled =
+    config.cloud?.enabled === true &&
+    (config.cloud?.inferenceMode ?? "cloud") === "cloud" &&
+    config.cloud?.services?.inference !== false;
+  if (cloudInferenceEnabled) {
+    return false;
+  }
+
+  const openaiBaseUrl = readEffectiveEnvValue(config, "OPENAI_BASE_URL", env);
+  if (!openaiBaseUrl) {
+    return false;
+  }
+
+  if (detectOpenAiBaseUrlProvider(openaiBaseUrl) !== "groq") {
+    return false;
+  }
+
+  const openaiApiKey = readEffectiveEnvValue(config, "OPENAI_API_KEY", env);
+  const groqApiKey = readEffectiveEnvValue(config, "GROQ_API_KEY", env);
+  const inheritedGroqApiKey =
+    groqApiKey ?? (looksLikeGroqApiKey(openaiApiKey) ? openaiApiKey : undefined);
+  if (!inheritedGroqApiKey) {
+    return false;
+  }
+
+  const currentGroqSmallModel = readEffectiveEnvValue(
+    config,
+    "GROQ_SMALL_MODEL",
+    env,
+  );
+  const currentGroqLargeModel = readEffectiveEnvValue(
+    config,
+    "GROQ_LARGE_MODEL",
+    env,
+  );
+  const currentSharedSmallModel =
+    readEffectiveEnvValue(config, "OPENAI_SMALL_MODEL", env) ??
+    readEffectiveEnvValue(config, "SMALL_MODEL", env);
+  const currentSharedLargeModel =
+    readEffectiveEnvValue(config, "OPENAI_LARGE_MODEL", env) ??
+    readEffectiveEnvValue(config, "LARGE_MODEL", env);
+
+  const normalizedGroqSmallModel =
+    currentGroqSmallModel ??
+    (currentSharedSmallModel && !isLikelyOpenAiTextModel(currentSharedSmallModel)
+      ? currentSharedSmallModel
+      : "llama-3.1-8b-instant");
+  const normalizedGroqLargeModel =
+    currentGroqLargeModel ??
+    (currentSharedLargeModel && !isLikelyOpenAiTextModel(currentSharedLargeModel)
+      ? currentSharedLargeModel
+      : "qwen-qwq-32b");
+
+  env.GROQ_API_KEY = inheritedGroqApiKey;
+  env.GROQ_SMALL_MODEL = normalizedGroqSmallModel;
+  env.GROQ_LARGE_MODEL = normalizedGroqLargeModel;
+  setConfigEnvValue(config, "GROQ_API_KEY", inheritedGroqApiKey);
+  setConfigEnvValue(config, "GROQ_SMALL_MODEL", normalizedGroqSmallModel);
+  setConfigEnvValue(config, "GROQ_LARGE_MODEL", normalizedGroqLargeModel);
+
+  delete env.OPENAI_BASE_URL;
+  deleteConfigEnvValue(config, "OPENAI_BASE_URL");
+
+  const shouldDisableOpenAiKey =
+    !openaiApiKey ||
+    openaiApiKey === groqApiKey ||
+    looksLikeGroqApiKey(openaiApiKey);
+  if (shouldDisableOpenAiKey) {
+    delete env.OPENAI_API_KEY;
+    deleteConfigEnvValue(config, "OPENAI_API_KEY");
+  }
+
+  const primaryModel = trimEnvString(config.agents?.defaults?.model?.primary);
+  if (
+    shouldDisableOpenAiKey &&
+    primaryModel &&
+    (primaryModel.toLowerCase() === "openai" ||
+      isLikelyOpenAiTextModel(primaryModel))
+  ) {
+    config.agents ??= {};
+    config.agents.defaults ??= {};
+    config.agents.defaults.model = {
+      ...config.agents.defaults.model,
+      primary: "groq",
+    };
+  }
+
+  logger.warn(
+    "[eliza] Detected Groq routed through OPENAI_BASE_URL; normalizing runtime settings to use @elizaos/plugin-groq",
+  );
+
+  return true;
+}
+
 /** Redact username segments from filesystem paths to avoid leaking user info in logs. */
 function redactUserSegments(filepath: string): string {
   // Replace /Users/<name>/ or /home/<name>/ with /Users/<redacted>/ etc.
@@ -638,8 +847,6 @@ function cancelOnboarding(): never {
  * Eliza stores channel credentials under `config.channels.<name>.<field>`,
  * while elizaOS plugins read them from process.env.
  */
-const RETAKE_CHANNEL_ACCESS_TOKEN_ENV = "RETAKE_AGENT_TOKEN";
-
 const CHANNEL_ENV_MAP: Readonly<
   Record<string, Readonly<Record<string, string>>>
 > = {
@@ -680,10 +887,6 @@ const CHANNEL_ENV_MAP: Readonly<
     webhookUrl: "BLOOIO_WEBHOOK_URL",
     webhookPort: "BLOOIO_WEBHOOK_PORT",
   },
-  retake: {
-    accessToken: RETAKE_CHANNEL_ACCESS_TOKEN_ENV,
-    apiUrl: "RETAKE_API_URL",
-  },
 };
 
 // ---------------------------------------------------------------------------
@@ -723,7 +926,6 @@ export const CHANNEL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   feishu: "@elizaos/plugin-feishu",
   matrix: "@elizaos/plugin-matrix",
   nostr: "@elizaos/plugin-nostr",
-  retake: "@elizaos/plugin-retake",
   blooio: "@elizaos/plugin-blooio",
   twitch: "@elizaos/plugin-twitch",
 };
@@ -1250,7 +1452,6 @@ const WORKSPACE_PLUGIN_OVERRIDES = new Set<string>([
   // "@elizaos/plugin-media-generation",
   "@elizaos/plugin-twitch-streaming",
   "@elizaos/plugin-youtube-streaming",
-  "@elizaos/plugin-retake",
 ]);
 
 function getWorkspacePluginOverridePath(pluginName: string): string | null {
@@ -3873,6 +4074,8 @@ export async function startEliza(
       }
     }
   }
+
+  normalizeOpenAiCompatibleProviderConfig(config);
 
   // Log active database configuration for debugging persistence issues
   {

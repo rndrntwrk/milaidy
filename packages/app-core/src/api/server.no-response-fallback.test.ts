@@ -1,4 +1,4 @@
-import type { AgentRuntime, UUID } from "@elizaos/core";
+import { logger, type AgentRuntime, type UUID } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { req } from "../../../../test/helpers/http";
 import { startApiServer } from "./server";
@@ -109,6 +109,80 @@ describe("conversation no-response fallback", () => {
     expect(response.status).toBe(200);
     expect(response.data).toMatchObject({
       text: "Sorry, I'm having a provider issue",
+      agentName: "Reimu",
+    });
+  });
+
+  it("surfaces an Eliza Cloud credits reply when generation fails for insufficient funds", async () => {
+    updateRuntime(runtime);
+    createMemory.mockClear();
+    getMemories.mockClear();
+    handleMessage.mockRejectedValueOnce(
+      Object.assign(new Error("Insufficient funds. Please add credits."), {
+        status: 402,
+        error: { type: "insufficient_funds" },
+      }),
+    );
+
+    const created = await req(port, "POST", "/api/conversations", {
+      title: "Insufficient funds fallback thread",
+    });
+    expect(created.status).toBe(200);
+    const conversationId = String(
+      (created.data.conversation as { id?: string } | undefined)?.id ?? "",
+    );
+    expect(conversationId).not.toBe("");
+
+    const response = await req(
+      port,
+      "POST",
+      `/api/conversations/${conversationId}/messages`,
+      {
+        text: "hello cloud",
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data).toMatchObject({
+      text: "Eliza Cloud credits are depleted. Top up the cloud balance and try again.",
+      agentName: "Reimu",
+    });
+  });
+
+  it("replaces the generic provider issue reply when recent logs show insufficient funds", async () => {
+    updateRuntime(runtime);
+    createMemory.mockClear();
+    getMemories.mockClear();
+    handleMessage.mockResolvedValueOnce({
+      responseContent: { text: "Sorry, I'm having a provider issue" },
+      responseMessages: [],
+    });
+
+    logger.error(
+      "#Chen Model call failed: Error: Insufficient funds. Please add credits.",
+    );
+
+    const created = await req(port, "POST", "/api/conversations", {
+      title: "Insufficient funds logged thread",
+    });
+    expect(created.status).toBe(200);
+    const conversationId = String(
+      (created.data.conversation as { id?: string } | undefined)?.id ?? "",
+    );
+    expect(conversationId).not.toBe("");
+
+    const response = await req(
+      port,
+      "POST",
+      `/api/conversations/${conversationId}/messages`,
+      {
+        text: "hello credits",
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data).toMatchObject({
+      text: "Eliza Cloud credits are depleted. Top up the cloud balance and try again.",
       agentName: "Reimu",
     });
   });

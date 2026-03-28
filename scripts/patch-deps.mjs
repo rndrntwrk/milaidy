@@ -161,6 +161,322 @@ function patchPluginPdfBrokenDefault() {
 patchPluginPdfBrokenDefault();
 
 /**
+ * Patch @elizaos/plugin-elizacloud alpha.7 text/object inference handlers.
+ *
+ * The published bundle routes TEXT_* / OBJECT_* through @ai-sdk/openai chat
+ * completions. As of March 28, 2026, Eliza Cloud's `/chat/completions`
+ * endpoint returns an empty HTTP 500 for otherwise valid requests, and
+ * `/responses` returns a different 500 when `input` is a plain string:
+ * `n.map is not a function`.
+ *
+ * The working request shape is `/responses` with array-form `input`, e.g.:
+ *   { input: [{ role, content: [{ type: "input_text", text }] }] }
+ *
+ * We patch the node bundle to use that path directly so runtime text/object
+ * generation surfaces the real upstream error (for example 402 insufficient
+ * funds) and works again once the cloud account is funded.
+ *
+ * Remove once a fixed @elizaos/plugin-elizacloud is published.
+ */
+function patchPluginElizaCloudResponsesCompat() {
+  const relPaths = ["dist/node/index.node.js"];
+  const searchDirs = [resolve(root, "node_modules/@elizaos/plugin-elizacloud")];
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith("@elizaos+plugin-elizacloud@")) {
+          searchDirs.push(
+            resolve(
+              bunCacheDir,
+              entry,
+              "node_modules/@elizaos/plugin-elizacloud",
+            ),
+          );
+        }
+      }
+    } catch {}
+  }
+
+  const oldGenerateObject = String.raw`async function generateObjectByModelType(runtime, params, modelType, getModelFn) {
+  const openai = createOpenAIClient(runtime);
+  const modelName = getModelFn(runtime);
+  logger8.log(\`[ELIZAOS_CLOUD] Using \${modelType} model: \${modelName}\`);
+  const reasoning = isReasoningModel(modelName);
+  try {
+    const model = openai.chat(modelName);
+    const { object, usage } = await generateObject({
+      model,
+      output: "no-schema",
+      prompt: params.prompt,
+      ...reasoning ? {} : { temperature: params.temperature ?? 0 },
+      experimental_repairText: getJsonRepairFunction()
+    });
+    if (usage) {
+      emitModelUsageEvent(runtime, modelType, params.prompt, usage);
+    }
+    return object;
+  } catch (error) {
+    if (error instanceof JSONParseError2) {
+      logger8.error(\`[generateObject] Failed to parse JSON: \${error.message}\`);
+      const repairFunction = getJsonRepairFunction();
+      const repairedJsonString = await repairFunction({
+        text: error.text,
+        error
+      });
+      if (repairedJsonString) {
+        try {
+          const repairedObject = JSON.parse(repairedJsonString);
+          logger8.info("[generateObject] Successfully repaired JSON.");
+          return repairedObject;
+        } catch (repairParseError) {
+          const message = repairParseError instanceof Error ? repairParseError.message : String(repairParseError);
+          logger8.error(\`[generateObject] Failed to parse repaired JSON: \${message}\`);
+          throw repairParseError;
+        }
+      } else {
+        logger8.error("[generateObject] JSON repair failed.");
+        throw error;
+      }
+    } else {
+      const message = error instanceof Error ? error.message : String(error);
+      logger8.error(\`[generateObject] Error: \${message}\`);
+      throw error;
+    }
+  }
+}`
+    .replaceAll("\\`", "`")
+    .replaceAll("\\${", "${");
+  const newGenerateObject = String.raw`async function generateObjectByModelType(runtime, params, modelType, getModelFn) {
+  const modelName = getModelFn(runtime);
+  logger8.log(\`[ELIZAOS_CLOUD] Using \${modelType} model: \${modelName}\`);
+  const reasoning = isReasoningModel(modelName);
+  const prompt = params.prompt;
+  const input = [];
+  if (runtime.character.system) {
+    input.push({
+      role: "system",
+      content: [{ type: "input_text", text: runtime.character.system }]
+    });
+  }
+  input.push({
+    role: "user",
+    content: [{ type: "input_text", text: prompt }]
+  });
+  const requestBody = {
+    model: modelName,
+    input,
+    max_output_tokens: params.maxTokens ?? 8192
+  };
+  if (!reasoning && typeof params.temperature === "number") {
+    requestBody.temperature = params.temperature;
+  }
+  const response = await fetch(\`\${getBaseURL(runtime)}/responses\`, {
+    method: "POST",
+    headers: {
+      ...getAuthHeader(runtime),
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(requestBody)
+  });
+  const responseText = await response.text();
+  let data = {};
+  if (responseText) {
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseErr) {
+      logger8.error(\`[generateObject] Failed to parse Eliza Cloud JSON: \${parseErr instanceof Error ? parseErr.message : String(parseErr)}\`);
+    }
+  }
+  if (!response.ok) {
+    const errorBody = typeof data === "object" && data ? data.error : undefined;
+    const errorMessage = typeof errorBody?.message === "string" && errorBody.message.trim() ? errorBody.message.trim() : \`ElizaOS Cloud error \${response.status}\`;
+    const requestError = new Error(errorMessage);
+    requestError.status = response.status;
+    if (errorBody) {
+      requestError.error = errorBody;
+    }
+    throw requestError;
+  }
+  if (data?.usage) {
+    emitModelUsageEvent(runtime, modelType, prompt, {
+      inputTokens: data.usage.input_tokens ?? 0,
+      outputTokens: data.usage.output_tokens ?? 0,
+      totalTokens: data.usage.total_tokens ?? 0
+    });
+  }
+  let jsonText = typeof data?.output_text === "string" ? data.output_text : "";
+  if (!jsonText && Array.isArray(data?.output)) {
+    jsonText = data.output.flatMap((item) => Array.isArray(item?.content) ? item.content : []).map((part) => typeof part?.text === "string" ? part.text : "").join("");
+  }
+  if (!jsonText.trim()) {
+    throw new Error("Object generation returned empty response");
+  }
+  try {
+    return JSON.parse(jsonText);
+  } catch (error) {
+    const repairFunction = getJsonRepairFunction();
+    const repairedJsonString = await repairFunction({
+      text: jsonText,
+      error
+    });
+    if (repairedJsonString) {
+      try {
+        const repairedObject = JSON.parse(repairedJsonString);
+        logger8.info("[generateObject] Successfully repaired JSON.");
+        return repairedObject;
+      } catch (repairParseError) {
+        const message = repairParseError instanceof Error ? repairParseError.message : String(repairParseError);
+        logger8.error(\`[generateObject] Failed to parse repaired JSON: \${message}\`);
+        throw repairParseError;
+      }
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    logger8.error(\`[generateObject] Failed to parse JSON: \${message}\`);
+    throw error;
+  }
+}`
+    .replaceAll("\\`", "`")
+    .replaceAll("\\${", "${");
+
+  const oldGenerateText = String.raw`async function generateTextWithModel(runtime, modelType, params) {
+  const { generateParams, modelName, prompt } = buildGenerateParams(runtime, modelType, params);
+  logger11.debug(\`[ELIZAOS_CLOUD] Generating text with \${modelType} model: \${modelName}\`);
+  if (params.stream) {
+    return handleStreamingGeneration(runtime, modelType, generateParams, prompt);
+  }
+  logger11.log(\`[ELIZAOS_CLOUD] Using \${modelType} model: \${modelName}\`);
+  logger11.log(prompt);
+  const response = await generateText(generateParams);
+  if (response.usage) {
+    emitModelUsageEvent(runtime, modelType, prompt, response.usage);
+  }
+  return response.text;
+}`
+    .replaceAll("\\`", "`")
+    .replaceAll("\\${", "${");
+  const newGenerateText = String.raw`async function generateTextWithModel(runtime, modelType, params) {
+  const { modelName, prompt } = buildGenerateParams(runtime, modelType, params);
+  logger11.debug(\`[ELIZAOS_CLOUD] Generating text with \${modelType} model: \${modelName}\`);
+  if (params.stream) {
+    logger11.warn("[ELIZAOS_CLOUD] Streaming text disabled for responses compatibility; falling back to buffered response.");
+  }
+  logger11.log(\`[ELIZAOS_CLOUD] Using \${modelType} model: \${modelName}\`);
+  logger11.log(prompt);
+  const reasoning = isReasoningModel2(modelName) || modelType === ModelType5.TEXT_REASONING_SMALL || modelType === ModelType5.TEXT_REASONING_LARGE;
+  const input = [];
+  if (runtime.character.system) {
+    input.push({
+      role: "system",
+      content: [{ type: "input_text", text: runtime.character.system }]
+    });
+  }
+  input.push({
+    role: "user",
+    content: [{ type: "input_text", text: prompt }]
+  });
+  const requestBody = {
+    model: modelName,
+    input,
+    max_output_tokens: params.maxTokens ?? 8192
+  };
+  if (!reasoning && typeof params.temperature === "number") {
+    requestBody.temperature = params.temperature;
+  }
+  const response = await fetch(\`\${getBaseURL(runtime)}/responses\`, {
+    method: "POST",
+    headers: {
+      ...getAuthHeader(runtime),
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(requestBody)
+  });
+  const responseText = await response.text();
+  let data = {};
+  if (responseText) {
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseErr) {
+      logger11.error(\`[ELIZAOS_CLOUD] Failed to parse responses JSON: \${parseErr instanceof Error ? parseErr.message : String(parseErr)}\`);
+    }
+  }
+  if (!response.ok) {
+    const errorBody = typeof data === "object" && data ? data.error : undefined;
+    const errorMessage = typeof errorBody?.message === "string" && errorBody.message.trim() ? errorBody.message.trim() : \`ElizaOS Cloud error \${response.status}\`;
+    const requestError = new Error(errorMessage);
+    requestError.status = response.status;
+    if (errorBody) {
+      requestError.error = errorBody;
+    }
+    throw requestError;
+  }
+  if (data?.usage) {
+    emitModelUsageEvent(runtime, modelType, prompt, {
+      inputTokens: data.usage.input_tokens ?? 0,
+      outputTokens: data.usage.output_tokens ?? 0,
+      totalTokens: data.usage.total_tokens ?? 0
+    });
+  }
+  let text = typeof data?.output_text === "string" ? data.output_text : "";
+  if (!text && Array.isArray(data?.output)) {
+    text = data.output.flatMap((item) => Array.isArray(item?.content) ? item.content : []).map((part) => typeof part?.text === "string" ? part.text : "").join("");
+  }
+  if (!text.trim()) {
+    throw new Error("ElizaOS Cloud returned no text response");
+  }
+  return text;
+}`
+    .replaceAll("\\`", "`")
+    .replaceAll("\\${", "${");
+
+  let patched = 0;
+  const seenTargets = new Set();
+  const objectCompatPattern =
+    /async function generateObjectByModelType\(runtime, params, modelType, getModelFn\) \{[\s\S]*?\n\}(?=\nasync function handleObjectSmall)/;
+  const textCompatPattern =
+    /async function generateTextWithModel\(runtime, modelType, params\) \{[\s\S]*?\n\}(?=\nasync function handleTextSmall)/;
+  for (const dir of searchDirs) {
+    const packageDir = existsSync(dir) ? realpathSync(dir) : dir;
+    for (const relPath of relPaths) {
+      const target = resolve(packageDir, relPath);
+      if (!existsSync(target) || seenTargets.has(target)) continue;
+      seenTargets.add(target);
+
+      let src = readFileSync(target, "utf8");
+      const original = src;
+      if (src.includes(oldGenerateObject)) {
+        src = src.replace(oldGenerateObject, newGenerateObject);
+      } else if (objectCompatPattern.test(src)) {
+        src = src.replace(objectCompatPattern, newGenerateObject);
+      }
+      if (src.includes(oldGenerateText)) {
+        src = src.replace(oldGenerateText, newGenerateText);
+      } else if (textCompatPattern.test(src)) {
+        src = src.replace(textCompatPattern, newGenerateText);
+      }
+      if (src.includes("Streaming text disabled for responses compatibility")) {
+        src = src.replaceAll("\\${", "${");
+        src = src.replaceAll("\\`", "`");
+      }
+      if (src === original) continue;
+
+      writeFileSync(target, src, "utf8");
+      patched++;
+      console.log(
+        `[patch-deps] Applied plugin-elizacloud responses compatibility fix: ${target}`,
+      );
+    }
+  }
+
+  if (patched > 0) {
+    console.log(
+      `[patch-deps] plugin-elizacloud: fixed ${patched} text/object inference bundle(s).`,
+    );
+  }
+}
+patchPluginElizaCloudResponsesCompat();
+
+/**
  * Patch @elizaos/plugin-sql UUID validation regex.
  *
  * The upstream plugin strictly checks for UUID versions 1-5, but ElizaOS

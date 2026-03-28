@@ -108,6 +108,48 @@ function findLatestAssistantMessage(messages: ConversationMessage[]) {
     .find((message) => message.role === "assistant" && message.text.trim());
 }
 
+type CompanionSpeechMemoryEntry = {
+  messageId: string;
+  text: string;
+};
+
+const companionSpeechMemoryByConversation = new Map<
+  string,
+  CompanionSpeechMemoryEntry
+>();
+
+function rememberCompanionSpeech(
+  conversationId: string | null,
+  messageId: string,
+  text: string,
+): void {
+  if (!conversationId) return;
+  companionSpeechMemoryByConversation.set(conversationId, { messageId, text });
+  if (companionSpeechMemoryByConversation.size <= 100) return;
+  const oldestConversationId =
+    companionSpeechMemoryByConversation.keys().next().value;
+  if (oldestConversationId) {
+    companionSpeechMemoryByConversation.delete(oldestConversationId);
+  }
+}
+
+function hasCompanionSpeechBeenPlayed(
+  conversationId: string | null,
+  messageId: string,
+  text: string,
+): boolean {
+  if (!conversationId) return false;
+  const remembered = companionSpeechMemoryByConversation.get(conversationId);
+  return (
+    remembered?.messageId === messageId &&
+    remembered.text === text
+  );
+}
+
+export function __resetCompanionSpeechMemoryForTests(): void {
+  companionSpeechMemoryByConversation.clear();
+}
+
 /**
  * Chat assistant TTS pipeline — order matters for cloud-backed voice:
  * 1. Server exposes Eliza Cloud via `GET /api/cloud/status` (`hasApiKey`, `enabled`, `connected`).
@@ -127,6 +169,7 @@ function useChatVoiceController(options: {
   elizaCloudEnabled: boolean;
   elizaCloudHasPersistedKey: boolean;
   conversationMessages: ConversationMessage[];
+  activeConversationId: string | null;
   handleChatEdit: (messageId: string, text: string) => Promise<boolean>;
   handleChatSend: (channelType?: ConversationChannelType) => Promise<void>;
   isComposerLocked: boolean;
@@ -144,6 +187,7 @@ function useChatVoiceController(options: {
     elizaCloudEnabled,
     elizaCloudHasPersistedKey,
     conversationMessages,
+    activeConversationId,
     handleChatEdit,
     handleChatSend,
     isComposerLocked,
@@ -409,9 +453,10 @@ function useChatVoiceController(options: {
     (messageId: string, text: string) => {
       if (!text.trim()) return;
       suppressedAssistantSpeechIdRef.current = messageId;
+      rememberCompanionSpeech(activeConversationId, messageId, text);
       speak(text);
     },
-    [speak],
+    [activeConversationId, speak],
   );
 
   const handleEditMessage = useCallback(
@@ -461,6 +506,15 @@ function useChatVoiceController(options: {
     const messageId = latestAssistant.id;
     const text = latestAssistant.text;
     const ug = voiceUnlockedGeneration;
+    if (hasCompanionSpeechBeenPlayed(activeConversationId, messageId, text)) {
+      companionBootstrapAutoSpeakRef.current = {
+        tick,
+        messageId,
+        text,
+        unlockGen: ug,
+      };
+      return;
+    }
     const prev = companionBootstrapAutoSpeakRef.current;
     if (
       prev &&
@@ -485,6 +539,7 @@ function useChatVoiceController(options: {
     }
 
     queueAssistantSpeech(messageId, text, !chatSending);
+    rememberCompanionSpeech(activeConversationId, messageId, text);
     suppressedAssistantSpeechIdRef.current = null;
     companionBootstrapAutoSpeakRef.current = {
       tick,
@@ -494,6 +549,7 @@ function useChatVoiceController(options: {
     };
   }, [
     agentVoiceMuted,
+    activeConversationId,
     chatSending,
     conversationMessages,
     isGameModal,
@@ -733,6 +789,7 @@ export function ChatView({
     elizaCloudEnabled,
     elizaCloudHasPersistedKey,
     conversationMessages,
+    activeConversationId,
     handleChatEdit,
     handleChatSend,
     isComposerLocked,

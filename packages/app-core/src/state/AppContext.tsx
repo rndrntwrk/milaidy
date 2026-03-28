@@ -110,7 +110,9 @@ import {
 import type { UiLanguage } from "../i18n";
 import {
   COMPANION_ENABLED,
+  isRouteRootPath,
   pathForTab,
+  resolveInitialTabForPath,
   type Tab,
   tabFromPath,
 } from "../navigation";
@@ -131,6 +133,7 @@ import {
   yieldMiladyHttpAfterNativeMessageBox,
 } from "../utils";
 import { isMiladyTtsDebugEnabled } from "../utils/milady-tts-debug";
+import { PREMADE_VOICES } from "../voice/types";
 import {
   computeAgentDeadlineExtensions,
   getAgentReadyTimeoutMs,
@@ -207,8 +210,8 @@ import {
   getTabForShellView,
   shouldStartAtCharacterSelectOnLaunch,
 } from "./shell-routing";
-import type { InventoryChainFilters } from "./types";
 import { TranslationProvider, useTranslation } from "./TranslationContext";
+import type { InventoryChainFilters } from "./types";
 import { useChatState } from "./useChatState";
 import { useLifecycleState } from "./useLifecycleState";
 import { useOnboardingState } from "./useOnboardingState";
@@ -316,6 +319,14 @@ const GREETING_WAVE_EMOTE: AppEmoteEventDetail = {
 const ELIZA_CLOUD_LOGIN_POLL_INTERVAL_MS = 1000;
 const ELIZA_CLOUD_LOGIN_TIMEOUT_MS = 300_000;
 const ELIZA_CLOUD_LOGIN_MAX_CONSECUTIVE_ERRORS = 3;
+const DEFAULT_LANDING_TAB: Tab = COMPANION_ENABLED ? "companion" : "chat";
+
+function getNavigationPathFromWindow(): string {
+  if (typeof window === "undefined") return "/";
+  return window.location.protocol === "file:"
+    ? window.location.hash.replace(/^#/, "") || "/"
+    : window.location.pathname;
+}
 
 function normalizeAppEmoteEvent(
   data: Record<string, unknown>,
@@ -350,6 +361,57 @@ function filterRenderableConversationMessages(
   messages: ConversationMessage[],
 ): ConversationMessage[] {
   return messages.filter((message) => shouldKeepConversationMessage(message));
+}
+
+function hasConversationBootstrapMessage(
+  messages: ConversationMessage[],
+): boolean {
+  return messages.some(
+    (message) =>
+      message.role === "assistant" && shouldKeepConversationMessage(message),
+  );
+}
+
+function resolveSelectedOnboardingStyle(args: {
+  styles: readonly StylePreset[] | undefined;
+  onboardingStyle: string;
+  selectedVrmIndex: number;
+  uiLanguage: UiLanguage;
+}): StylePreset {
+  const styles = args.styles ?? [];
+  return (
+    styles.find((style) => style.id === args.onboardingStyle) ??
+    styles.find(
+      (style) =>
+        typeof style.avatarIndex === "number" &&
+        style.avatarIndex === args.selectedVrmIndex,
+    ) ??
+    styles[0] ??
+    getDefaultStylePreset(args.uiLanguage)
+  );
+}
+
+async function persistOnboardingStyleVoice(
+  style: StylePreset | undefined,
+): Promise<void> {
+  const voicePresetId = style?.voicePresetId?.trim();
+  if (!voicePresetId) {
+    return;
+  }
+  const presetVoice = PREMADE_VOICES.find((voice) => voice.id === voicePresetId);
+  if (!presetVoice) {
+    return;
+  }
+  await client.updateConfig({
+    messages: {
+      tts: {
+        provider: "elevenlabs",
+        elevenlabs: {
+          voiceId: presetVoice.voiceId,
+        },
+      },
+    },
+  });
 }
 
 const COMPANION_STALE_THREAD_MAX_AGE_MS = 30 * 60 * 1000;
@@ -573,8 +635,8 @@ function AppProviderInner({
   const [lastNativeTab, setLastNativeTabState] =
     useState<Tab>(loadLastNativeTab);
   // --- Core state ---
-  const [tab, _setTabRawInner] = useState<Tab>(
-    COMPANION_ENABLED ? "companion" : "chat",
+  const [tab, _setTabRawInner] = useState<Tab>(() =>
+    resolveInitialTabForPath(getNavigationPathFromWindow(), DEFAULT_LANDING_TAB),
   );
   const initialTabSetRef = useRef(false);
   const setTabRaw = useCallback((t: Tab) => {
@@ -1929,7 +1991,8 @@ function AppProviderInner({
       try {
         const { messages } = await client.getConversationMessages(convId);
         const nextMessages = filterRenderableConversationMessages(messages);
-        greetingFiredRef.current = nextMessages.length > 0;
+        greetingFiredRef.current =
+          hasConversationBootstrapMessage(nextMessages);
         conversationMessagesRef.current = nextMessages;
         setConversationMessages(nextMessages);
         return { ok: true };
@@ -2503,7 +2566,8 @@ function AppProviderInner({
             return null;
           }
           const nextMessages = filterRenderableConversationMessages(messages);
-          greetingFiredRef.current = nextMessages.length > 0;
+          greetingFiredRef.current =
+            hasConversationBootstrapMessage(nextMessages);
           conversationMessagesRef.current = nextMessages;
           setConversationMessages(nextMessages);
           return nextMessages.length === 0 ? restoredConversation.id : null;
@@ -3240,7 +3304,8 @@ function AppProviderInner({
         activeConversationIdRef.current = previousConversationId;
         setConversationMessages(previousMessages);
         setCompanionMessageCutoffTs(previousCutoffTs);
-        greetingFiredRef.current = previousMessages.length > 0;
+        greetingFiredRef.current =
+          hasConversationBootstrapMessage(previousMessages);
         if (previousConversationId) {
           client.sendWsMessage({
             type: "active-conversation",
@@ -5238,9 +5303,13 @@ function AppProviderInner({
     // Cloud fast-track: if we got here from the 3-step onboarding,
     // submit with cloud defaults directly.
     if (elizaCloudConnected) {
-      const style =
-        onboardingOptions?.styles?.[0] ?? getDefaultStylePreset(uiLanguage);
-      const defaultName = style?.name ?? getDefaultStylePreset(uiLanguage).name;
+      const style = resolveSelectedOnboardingStyle({
+        styles: onboardingOptions?.styles,
+        onboardingStyle,
+        selectedVrmIndex,
+        uiLanguage,
+      });
+      const defaultName = style.name ?? getDefaultStylePreset(uiLanguage).name;
 
       try {
         await client.submitOnboarding({
@@ -5268,6 +5337,11 @@ function AppProviderInner({
           smallModel: "moonshotai/kimi-k2-turbo",
           largeModel: "moonshotai/kimi-k2-0905",
         } as unknown as Parameters<typeof client.submitOnboarding>[0]);
+        try {
+          await persistOnboardingStyleVoice(style);
+        } catch (err) {
+          console.warn("[onboarding] Failed to persist cloud voice preset", err);
+        }
 
         try {
           setAgentStatus(await client.restartAgent());
@@ -5295,9 +5369,12 @@ function AppProviderInner({
       }
     }
 
-    const style = onboardingOptions.styles.find(
-      (s: StylePreset) => s.id === onboardingStyle,
-    );
+    const style = resolveSelectedOnboardingStyle({
+      styles: onboardingOptions.styles,
+      onboardingStyle,
+      selectedVrmIndex,
+      uiLanguage,
+    });
     const systemPrompt = style?.system
       ? style.system.replace(/\{\{name\}\}/g, onboardingName)
       : `You are ${onboardingName}, an autonomous AI agent powered by elizaOS. ${onboardingOptions.sharedStyleRules}`;
@@ -5495,6 +5572,11 @@ function AppProviderInner({
         connection,
         walletConfig: nextWalletConfig,
       } as Parameters<typeof client.submitOnboarding>[0]);
+      try {
+        await persistOnboardingStyleVoice(style);
+      } catch (err) {
+        console.warn("[onboarding] Failed to persist selected voice preset", err);
+      }
 
       // Give the backend a moment to finish persisting the config updates
       // (both from our compat interception and upstream ElizaOS core)
@@ -7238,11 +7320,10 @@ function AppProviderInner({
             setUnreadConversations((prev) => new Set([...prev, convId]));
           }
 
-          // Synthesize agent_event for non-retake sources (e.g. discord)
+          // Synthesize agent_event for non-client_chat sources (e.g. discord)
           // so they appear in the StreamView activity feed
           if (
             msg.source &&
-            msg.source !== "retake" &&
             msg.source !== "client_chat" &&
             msg.role === "user"
           ) {
@@ -7494,11 +7575,9 @@ function AppProviderInner({
       void pollCloudCredits();
 
       // Load tab from URL — use hash in file:// mode (packaged desktop builds)
-      const navPath =
-        window.location.protocol === "file:"
-          ? window.location.hash.replace(/^#/, "") || "/"
-          : window.location.pathname;
+      const navPath = getNavigationPathFromWindow();
       const urlTab = tabFromPath(navPath);
+      const isRootNavPath = isRouteRootPath(navPath);
 
       // If the user navigates directly to /character while onboarding is incomplete,
       // override the persisted step to show them the connection step.
@@ -7522,11 +7601,8 @@ function AppProviderInner({
           onboardingCompletionCommittedRef.current = false;
           setTab("character-select");
           void loadCharacter();
-        } else if (
-          !onboardingNeedsOptions &&
-          (!urlTab || urlTab === "chat" || urlTab === "companion")
-        ) {
-          setTab("companion");
+        } else if (!onboardingNeedsOptions && isRootNavPath) {
+          setTab(DEFAULT_LANDING_TAB);
         }
       }
       if (urlTab && urlTab !== "chat" && urlTab !== "companion") {
@@ -7558,9 +7634,7 @@ function AppProviderInner({
     // Navigation listener — use hashchange in file:// mode (packaged desktop builds)
     const isFileProtocol = window.location.protocol === "file:";
     const handleNavChange = () => {
-      const navPath = isFileProtocol
-        ? window.location.hash.replace(/^#/, "") || "/"
-        : window.location.pathname;
+      const navPath = getNavigationPathFromWindow();
       const navTab = tabFromPath(navPath);
       if (navTab) setTabRaw(navTab);
     };

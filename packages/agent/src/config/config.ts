@@ -8,6 +8,15 @@ import type { ElizaConfig } from "./types";
 
 export * from "./types";
 
+function resolveConfigWritePath(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const persistPath =
+    env.MILADY_PERSIST_CONFIG_PATH?.trim() ??
+    env.ELIZA_PERSIST_CONFIG_PATH?.trim();
+  return persistPath ? resolveUserPath(persistPath) : resolveConfigPath();
+}
+
 export function loadElizaConfig(): ElizaConfig {
   const configPath = resolveConfigPath();
 
@@ -110,7 +119,7 @@ function stripIncludeDirectives(value: unknown): unknown {
 }
 
 export function saveElizaConfig(config: ElizaConfig): void {
-  const configPath = resolveConfigPath();
+  const configPath = resolveConfigWritePath();
   const dir = path.dirname(configPath);
 
   if (!fs.existsSync(dir)) {

@@ -372,9 +372,11 @@ function normalizeLastNativeTab(tab: unknown): Tab {
     case "actions":
     case "advanced":
     case "fine-tuning":
+    case "trajectories":
     case "voice":
     case "runtime":
     case "database":
+    case "desktop":
     case "settings":
     case "logs":
     case "security":

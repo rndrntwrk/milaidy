@@ -7,6 +7,7 @@ import {
 describe("isInsufficientCreditsMessage", () => {
   const shouldMatch = [
     "insufficient credits",
+    "insufficient funds",
     "insufficient_credits",
     "insufficient quota",
     "insufficient_quota",

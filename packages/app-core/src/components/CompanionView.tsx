@@ -5,10 +5,10 @@ import { PanelLeftOpen } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { ChatModalView } from "./ChatModalView";
 import { CloudStatusBadge } from "./CloudStatusBadge";
+import { useCompanionSceneStatus } from "./companion-scene-status-context";
 import { CompanionHeader } from "./companion/CompanionHeader";
 import {
   CompanionSceneHost,
-  hasCompanionTeleportCompletedOnce,
   useSharedCompanionScene,
 } from "./companion/CompanionSceneHost";
 import { InferenceCloudAlertButton } from "./companion/InferenceCloudAlertButton";
@@ -55,31 +55,28 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
     string | null
   >(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const { avatarReady: sceneAvatarReady, teleportKey } =
+    useCompanionSceneStatus();
 
   // Gate chat + header behind avatar load — don't show chat or play
   // greeting speech until the VRM finishes its teleport-in animation.
-  // When the shared scene already completed teleport while this overlay was
-  // unmounted (e.g. coming back from character edit), reveal immediately.
-  const [avatarReady, setAvatarReady] = useState(() =>
-    hasCompanionTeleportCompletedOnce(),
-  );
+  // When the shared scene is already ready (e.g. coming back from character
+  // edit without changing avatars), reveal immediately from scene context.
+  const [avatarReadyFallback, setAvatarReadyFallback] = useState(false);
   useEffect(() => {
-    if (hasCompanionTeleportCompletedOnce()) {
-      setAvatarReady(true);
+    if (sceneAvatarReady) {
+      setAvatarReadyFallback(false);
       return;
     }
-    const handler = () => {
-      setAvatarReady(true);
-    };
+    setAvatarReadyFallback(false);
     const fallbackTimer = window.setTimeout(() => {
-      setAvatarReady((prev) => (prev ? prev : true));
+      setAvatarReadyFallback(true);
     }, COMPANION_UI_REVEAL_FALLBACK_MS);
-    window.addEventListener("eliza:vrm-teleport-complete", handler);
     return () => {
       window.clearTimeout(fallbackTimer);
-      window.removeEventListener("eliza:vrm-teleport-complete", handler);
     };
-  }, []);
+  }, [sceneAvatarReady, teleportKey]);
+  const avatarReady = sceneAvatarReady || avatarReadyFallback;
 
   const handleShellViewChange = useCallback(
     (view: "companion" | "character" | "desktop") => {

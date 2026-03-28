@@ -182,7 +182,10 @@ import {
 } from "./compat-utils.js";
 import { ConnectorHealthMonitor } from "./connector-health.js";
 import { wireCoordinatorBridgesWhenReady } from "./coordinator-wiring.js";
-import { isInsufficientCreditsMessage } from "./credit-detection.js";
+import {
+  isInsufficientCreditsError,
+  isInsufficientCreditsMessage,
+} from "./credit-detection.js";
 import { handleDatabaseRoute } from "./database.js";
 import { handleDiagnosticsRoutes } from "./diagnostics-routes.js";
 import { DropService } from "./drop-service.js";
@@ -446,6 +449,18 @@ function resolveConversationGreetingText(
   lang: string,
   uiConfig?: ElizaConfig["ui"],
 ): string {
+  const pickRandom = (values: string[] | undefined): string => {
+    const choices = (values ?? [])
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+
+    if (choices.length === 0) {
+      return "";
+    }
+
+    return choices[Math.floor(Math.random() * choices.length)] ?? "";
+  };
+
   const normalizedLanguage = normalizeCharacterLanguage(lang);
   const characterName = runtime.character.name?.trim();
   const assistantName = uiConfig?.assistant?.name?.trim();
@@ -462,12 +477,12 @@ function resolveConversationGreetingText(
     resolveStylePresetByName(characterName, normalizedLanguage) ??
     resolveStylePresetByName(assistantName, normalizedLanguage);
 
-  if (preset?.catchphrase?.trim()) {
-    return preset.catchphrase.trim();
+  const presetGreeting = pickRandom(preset?.postExamples);
+  if (presetGreeting) {
+    return presetGreeting;
   }
 
-  const postExamples = runtime.character.postExamples ?? [];
-  return postExamples[Math.floor(Math.random() * postExamples.length)] ?? "";
+  return pickRandom(runtime.character.postExamples);
 }
 
 interface AgentStartupDiagnostics {
@@ -969,10 +984,8 @@ export const AGENT_EVENT_ALLOWED_STREAMS = new Set([
   "game",
   "autonomy",
 
-  "retake",
   "stream",
   "system",
-  // Retake plugin event streams (chat-poll.ts emits these)
   "message",
   "new_viewer",
   "assistant",
@@ -1431,7 +1444,6 @@ function categorizePlugin(
   ];
   const streamingDests = [
     "streaming-base",
-    "retake",
     "custom-rtmp",
     "youtube",
     "youtube-streaming",
@@ -1551,7 +1563,6 @@ const PLUGIN_SETUP_GUIDE_ANCHORS: Record<string, string> = {
   mcp: "#mcp-model-context-protocol",
   iq: "#iq-solana-on-chain",
   "gmail-watch": "#gmail-watch",
-  retake: "#retaketv",
   "streaming-base": "#enable-streaming-streaming-base",
   "twitch-streaming": "#twitch-streaming",
   "youtube-streaming": "#youtube-streaming",
@@ -2733,6 +2744,8 @@ function maybeAugmentChatMessageWithLanguage(
 }
 
 const PROVIDER_ISSUE_CHAT_REPLY = "Sorry, I'm having a provider issue";
+const INSUFFICIENT_CREDITS_CHAT_REPLY =
+  "Eliza Cloud credits are depleted. Top up the cloud balance and try again.";
 const GENERIC_NO_RESPONSE_CHAT_REPLY = PROVIDER_ISSUE_CHAT_REPLY;
 
 function getErrorMessage(err: unknown, fallback = "generation failed"): string {
@@ -2742,7 +2755,7 @@ function getErrorMessage(err: unknown, fallback = "generation failed"): string {
 }
 
 function pickInsufficientCreditsChatReply(): string {
-  return PROVIDER_ISSUE_CHAT_REPLY;
+  return INSUFFICIENT_CREDITS_CHAT_REPLY;
 }
 
 function findRecentInsufficientCreditsLog(
@@ -2773,6 +2786,16 @@ function resolveNoResponseFallback(
 
 function getProviderIssueChatReply(): string {
   return PROVIDER_ISSUE_CHAT_REPLY;
+}
+
+function getChatFailureReply(err: unknown, logBuffer: LogEntry[]): string {
+  if (
+    isInsufficientCreditsError(err) ||
+    findRecentInsufficientCreditsLog(logBuffer)
+  ) {
+    return pickInsufficientCreditsChatReply();
+  }
+  return getProviderIssueChatReply();
 }
 
 const STAGE_DIRECTION_FIRST_WORDS = new Set([
@@ -2963,6 +2986,12 @@ function normalizeChatResponseText(
   logBuffer: LogEntry[],
   runtime?: AgentRuntime | null,
 ): string {
+  if (
+    text.trim() === PROVIDER_ISSUE_CHAT_REPLY &&
+    findRecentInsufficientCreditsLog(logBuffer)
+  ) {
+    return pickInsufficientCreditsChatReply();
+  }
   if (!isClientVisibleNoResponse(text)) return text;
   return resolveNoResponseFallback(logBuffer, runtime);
 }
@@ -16284,17 +16313,22 @@ async function handleRequest(
       );
 
       if (!aborted) {
+        const resolvedText = normalizeChatResponseText(
+          result.text,
+          state.logBuffer,
+          runtime,
+        );
         await persistAssistantConversationMemory(
           runtime,
           conv.roomId,
-          result.text,
+          resolvedText,
           channelType,
           turnStartedAt,
         );
         conv.updatedAt = new Date().toISOString();
         writeSseJson(res, {
           type: "done",
-          fullText: result.text,
+          fullText: resolvedText,
           agentName: result.agentName,
           ...(result.usage ? { estimatedUsage: result.usage } : {}),
         });
@@ -16302,9 +16336,9 @@ async function handleRequest(
         // Fire-and-forget background title generation has been removed in favor
         // of explicit frontend triggers via the PATCH endpoint with `generate: true`
       }
-    } catch {
+    } catch (err) {
       if (!aborted) {
-        const providerIssueReply = getProviderIssueChatReply();
+        const providerIssueReply = getChatFailureReply(err, state.logBuffer);
         try {
           await persistAssistantConversationMemory(
             runtime,
@@ -16419,23 +16453,28 @@ async function handleRequest(
         },
       );
 
+      const resolvedText = normalizeChatResponseText(
+        result.text,
+        state.logBuffer,
+        runtime,
+      );
       await persistAssistantConversationMemory(
         runtime,
         conv.roomId,
-        result.text,
+        resolvedText,
         channelType,
         turnStartedAt,
       );
       conv.updatedAt = new Date().toISOString();
       json(res, {
-        text: result.text,
+        text: resolvedText,
         agentName: result.agentName,
       });
     } catch (err) {
       logger.warn(
         `[conversations] POST /messages failed: ${err instanceof Error ? err.message : String(err)}`,
       );
-      const providerIssueReply = getProviderIssueChatReply();
+      const providerIssueReply = getChatFailureReply(err, state.logBuffer);
       try {
         await persistAssistantConversationMemory(
           runtime,
@@ -16706,18 +16745,23 @@ async function handleRequest(
       );
 
       if (!aborted) {
+        const resolvedText = normalizeChatResponseText(
+          result.text,
+          state.logBuffer,
+          runtime,
+        );
         writeSseJson(res, {
           type: "done",
-          fullText: result.text,
+          fullText: resolvedText,
           agentName: result.agentName,
           ...(result.usage ? { estimatedUsage: result.usage } : {}),
         });
       }
-    } catch {
+    } catch (err) {
       if (!aborted) {
         writeSse(res, {
           type: "done",
-          fullText: getProviderIssueChatReply(),
+          fullText: getChatFailureReply(err, state.logBuffer),
           agentName: state.agentName,
         });
       }
@@ -16810,12 +16854,12 @@ async function handleRequest(
       );
 
       json(res, {
-        text: result.text,
+        text: normalizeChatResponseText(result.text, state.logBuffer, runtime),
         agentName: result.agentName,
       });
-    } catch {
+    } catch (err) {
       json(res, {
-        text: getProviderIssueChatReply(),
+        text: getChatFailureReply(err, state.logBuffer),
         agentName: state.agentName,
       });
     } finally {
@@ -18016,7 +18060,7 @@ async function handleRequest(
 
   // ── POST /api/agent/event ──────────────────────────────────────────────
   // Push an event into the agent event stream (WebSocket + buffer).
-  // Used by plugins (e.g. retake) to surface activity in the StreamView.
+  // Used by plugins to surface activity in the StreamView.
   // Auth: protected by the isAuthorized(req) gate at L5631.
   if (method === "POST" && pathname === "/api/agent/event") {
     const body = await readJsonBody<{
@@ -18797,18 +18841,6 @@ export async function startApiServer(opts?: {
     connectorHealthMonitor: null,
   };
 
-  // Closure-captured refs for auto-TTS triggering in the event pipeline.
-  // Set when the streaming connector initializes its route state.
-  let streamRouteStateRef:
-    | import("./stream-routes.js").StreamRouteState
-    | null = null;
-  let onAgentMessageFn:
-    | ((
-        text: string,
-        state: import("./stream-routes.js").StreamRouteState,
-      ) => Promise<void>)
-    | null = null;
-
   const trainingServiceCtor = await resolveTrainingServiceCtor();
   const trainingServiceOptions = {
     getRuntime: () => state.runtime,
@@ -19087,24 +19119,6 @@ export async function startApiServer(opts?: {
         );
       });
 
-      // Auto-trigger TTS for assistant messages on the stream
-      const srs = streamRouteStateRef;
-      const ttsHandler = onAgentMessageFn;
-      if (event.stream === "assistant" && srs && ttsHandler) {
-        const payload =
-          event.data && typeof event.data === "object"
-            ? (event.data as Record<string, unknown>)
-            : null;
-        const text =
-          typeof payload?.text === "string" ? payload.text.trim() : "";
-        if (text) {
-          void ttsHandler(text, srs).catch((err) => {
-            logger.warn(
-              `[stream-voice] Auto-TTS trigger failed: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          });
-        }
-      }
     });
 
     const unsubHeartbeat = svc.subscribeHeartbeat((event) => {
@@ -19243,10 +19257,9 @@ export async function startApiServer(opts?: {
     // configured, inject it so /api/stream/live can fetch credentials.
     void (async () => {
       try {
-        const { handleStreamRoute, onAgentMessage } = await import(
+        const { handleStreamRoute } = await import(
           "./stream-routes.js"
         );
-        onAgentMessageFn = onAgentMessage;
         // Screen capture manager is injected by the desktop host via globalThis
         const screenCapture = (globalThis as Record<string, unknown>)
           .__elizaScreenCapture as
@@ -19269,26 +19282,6 @@ export async function startApiServer(opts?: {
           string,
           import("./stream-routes.js").StreamingDestination
         >();
-
-        // Retake (API-driven, full integration)
-        if (isConnectorConfigured("retake", connectors.retake)) {
-          try {
-            const retakeMod = "@elizaos/plugin-retake";
-            const { createRetakeDestination } = await import(retakeMod);
-            destinations.set(
-              "retake",
-              createRetakeDestination(
-                connectors.retake as
-                  | { accessToken?: string; apiUrl?: string }
-                  | undefined,
-              ),
-            );
-          } catch (err) {
-            logger.warn(
-              `[eliza-api] Failed to load retake destination: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          }
-        }
 
         // Custom RTMP
         if (
@@ -19397,8 +19390,7 @@ export async function startApiServer(opts?: {
           streamManager,
           port,
           screenCapture,
-          captureUrl: (connectors.retake as Record<string, unknown> | undefined)
-            ?.captureUrl as string | undefined,
+          captureUrl: undefined as string | undefined,
           destinations,
           activeDestinationId,
           activeStreamSource: { type: "stream-tab" as const },
@@ -19458,8 +19450,6 @@ export async function startApiServer(opts?: {
               : undefined;
           },
         };
-        // Capture streamState in closure for auto-TTS triggering and route handling
-        streamRouteStateRef = streamState;
         state.connectorRouteHandlers.push((req, res, pathname, method) =>
           handleStreamRoute(req, res, pathname, method, streamState),
         );

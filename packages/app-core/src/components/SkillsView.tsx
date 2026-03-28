@@ -18,6 +18,7 @@ import {
   Switch,
   Textarea,
 } from "@miladyai/ui";
+import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const BINANCE_SKILL_IDS = new Set([
@@ -28,6 +29,7 @@ const BINANCE_SKILL_IDS = new Set([
   "binance-query-token-info",
   "binance-trading-signal",
 ]);
+
 import type { SkillInfo, SkillMarketplaceResult } from "../api";
 import { client } from "../api";
 import { useApp } from "../state";
@@ -222,10 +224,11 @@ function InstallModal({
               id={`skills-install-tab-${t.id}`}
               aria-selected={tab === t.id}
               aria-controls={`skills-install-panel-${t.id}`}
-              className={`${ADMIN_SEGMENTED_TAB_CLASSNAME} ${tab === t.id
+              className={`${ADMIN_SEGMENTED_TAB_CLASSNAME} ${
+                tab === t.id
                   ? ADMIN_SEGMENTED_TAB_ACTIVE_CLASSNAME
                   : ADMIN_SEGMENTED_TAB_INACTIVE_CLASSNAME
-                }`}
+              }`}
               onClick={() => setTab(t.id)}
             >
               {t.label}
@@ -588,10 +591,11 @@ function EditSkillModal({
             <Button
               variant="default"
               size="sm"
-              className={`text-xs font-medium ${saveSuccess
+              className={`text-xs font-medium ${
+                saveSuccess
                   ? "border-ok/40 bg-ok text-white hover:bg-ok/90"
                   : ""
-                }`}
+              }`}
               onClick={() => handleSave()}
               disabled={saving || !hasChanges}
             >
@@ -676,7 +680,6 @@ function SkillsModalView() {
     { key: "all", label: `ALL (${skills.length})` },
     { key: "on", label: `ON (${skills.filter((s) => s.enabled).length})` },
     { key: "off", label: `OFF (${skills.filter((s) => !s.enabled).length})` },
-    { key: "binance", label: `BINANCE (${binanceCount})` },
   ];
 
   return (
@@ -960,7 +963,6 @@ function SkillsFullView() {
       key: "off",
       label: `OFF (${skills.filter((skill) => !skill.enabled).length})`,
     },
-    { key: "binance", label: `BINANCE (${binanceSkillCount})` },
   ];
 
   const handleDismissReview = () => {
@@ -993,10 +995,11 @@ function SkillsFullView() {
                 variant={skillCreateFormOpen ? "outline" : "default"}
                 size="sm"
                 type="button"
-                className={`h-9 flex-1 rounded-full px-4 text-[11px] font-bold tracking-[0.12em] ${skillCreateFormOpen
+                className={`h-9 flex-1 rounded-full px-4 text-[11px] font-bold tracking-[0.12em] ${
+                  skillCreateFormOpen
                     ? "border-border/50 bg-bg/25 text-txt"
                     : "text-txt-strong"
-                  }`}
+                }`}
                 onClick={() => {
                   setState("skillCreateFormOpen", !skillCreateFormOpen);
                   if (skillCreateFormOpen) {
@@ -1030,15 +1033,18 @@ function SkillsFullView() {
               />
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon"
                 type="button"
-                className="h-10 rounded-full px-3 text-[10px] font-bold tracking-[0.14em] text-muted hover:text-txt"
+                className="h-10 w-10 shrink-0 rounded-full text-muted hover:text-txt"
                 onClick={() => void refreshSkills()}
                 title={t("skillsview.RefreshSkillsList", {
                   defaultValue: "Refresh Skills List",
                 })}
+                aria-label={t("skillsview.RefreshSkillsList", {
+                  defaultValue: "Refresh Skills List",
+                })}
               >
-                {t("common.refresh")}
+                <RefreshCw className="h-4 w-4" />
               </Button>
             </div>
 
@@ -1049,10 +1055,11 @@ function SkillsFullView() {
                   size="sm"
                   key={tab.key}
                   type="button"
-                  className={`h-8 rounded-full border px-3 text-[10px] font-bold tracking-[0.14em] ${filterTab === tab.key
+                  className={`h-8 rounded-full border px-3 text-[10px] font-bold tracking-[0.14em] ${
+                    filterTab === tab.key
                       ? "border-accent/30 bg-accent/10 text-txt"
                       : "border-border/45 text-muted hover:border-border/70 hover:bg-bg/35 hover:text-txt"
-                    }`}
+                  }`}
                   onClick={() => setFilterTab(tab.key)}
                 >
                   {tab.label}
@@ -1083,10 +1090,11 @@ function SkillsFullView() {
                     <div
                       key={skill.id}
                       data-testid={`skill-row-${skill.id}`}
-                      className={`${APP_SIDEBAR_CARD_BASE_CLASSNAME} items-start gap-2 ${selectedSkillId === skill.id
+                      className={`${APP_SIDEBAR_CARD_BASE_CLASSNAME} items-start gap-2 ${
+                        selectedSkillId === skill.id
                           ? APP_SIDEBAR_CARD_ACTIVE_CLASSNAME
                           : APP_SIDEBAR_CARD_INACTIVE_CLASSNAME
-                        }`}
+                      }`}
                     >
                       <Button
                         variant="ghost"
@@ -1102,10 +1110,11 @@ function SkillsFullView() {
                         }
                       >
                         <span
-                          className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border p-2 text-sm font-bold ${selectedSkillId === skill.id
+                          className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border p-2 text-sm font-bold ${
+                            selectedSkillId === skill.id
                               ? "border-accent/30 bg-accent/18 text-txt-strong"
                               : "border-border/50 bg-bg-accent/80 text-muted"
-                            }`}
+                          }`}
                         >
                           {skill.name.charAt(0).toUpperCase()}
                         </span>
@@ -1120,10 +1129,11 @@ function SkillsFullView() {
                       </Button>
                       <div className="flex shrink-0 flex-col items-end gap-2">
                         <span
-                          className={`rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-[0.16em] ${skill.enabled
+                          className={`rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-[0.16em] ${
+                            skill.enabled
                               ? "border-accent bg-accent text-accent-fg"
                               : "border-border bg-transparent text-muted"
-                            }`}
+                          }`}
                         >
                           {skill.enabled ? "ON" : "OFF"}
                         </span>
@@ -1228,7 +1238,7 @@ function SkillsFullView() {
                       <StatusBadge
                         label={
                           selectedSkill.scanStatus === "blocked" ||
-                            selectedSkill.scanStatus === "critical"
+                          selectedSkill.scanStatus === "critical"
                             ? t("skillsview.statusBlocked")
                             : selectedSkill.scanStatus === "warning"
                               ? t("skillsview.statusWarning")
@@ -1240,7 +1250,7 @@ function SkillsFullView() {
                           selectedSkill.scanStatus === "warning"
                             ? "warning"
                             : selectedSkill.scanStatus === "blocked" ||
-                              selectedSkill.scanStatus === "critical"
+                                selectedSkill.scanStatus === "critical"
                               ? "danger"
                               : selectedSkill.enabled
                                 ? "success"
@@ -1301,11 +1311,14 @@ function SkillsFullView() {
                     </Button>
                     <Button
                       variant="ghost"
-                      size="sm"
-                      className="h-9 rounded-full px-4 text-[11px] font-bold tracking-[0.12em] text-muted hover:text-txt"
+                      size="icon"
+                      type="button"
+                      className="h-9 w-9 rounded-full text-muted hover:text-txt"
                       onClick={() => void refreshSkills()}
+                      title={t("common.refresh")}
+                      aria-label={t("common.refresh")}
                     >
-                      {t("common.refresh")}
+                      <RefreshCw className="h-4 w-4" />
                     </Button>
                     <ConfirmDeleteControl
                       triggerClassName="h-9 rounded-full px-4 text-[11px] font-bold tracking-[0.12em] !bg-transparent text-danger hover:!bg-danger/15 hover:text-danger-foreground transition-colors border border-danger/30"
@@ -1341,14 +1354,16 @@ function SkillsFullView() {
                           {skillReviewReport.findings.map((finding, idx) => (
                             <div
                               key={`${finding.file}:${finding.line}:${finding.message}`}
-                              className={`flex items-start gap-2 px-3 py-2 text-[11px] ${idx > 0 ? "border-t border-border/30" : ""
-                                }`}
+                              className={`flex items-start gap-2 px-3 py-2 text-[11px] ${
+                                idx > 0 ? "border-t border-border/30" : ""
+                              }`}
                             >
                               <span
-                                className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] ${finding.severity === "critical"
+                                className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] ${
+                                  finding.severity === "critical"
                                     ? "bg-danger/12 text-danger"
                                     : "bg-warn/12 text-warn"
-                                  }`}
+                                }`}
                               >
                                 {finding.severity}
                               </span>

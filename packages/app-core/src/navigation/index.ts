@@ -43,7 +43,6 @@ export type Tab =
   | "advanced"
   | "fine-tuning"
   | "trajectories"
-  | "lifo"
   | "voice"
   | "runtime"
   | "database"
@@ -118,7 +117,6 @@ export const ALL_TAB_GROUPS: TabGroup[] = [
       "actions",
       "fine-tuning",
       "trajectories",
-      "lifo",
       "runtime",
       "database",
       "logs",
@@ -155,7 +153,6 @@ const TAB_PATHS: Record<Tab, string> = {
   advanced: "/advanced",
   "fine-tuning": "/fine-tuning",
   trajectories: "/trajectories",
-  lifo: "/lifo",
   voice: "/voice",
   runtime: "/runtime",
   database: "/database",
@@ -180,13 +177,7 @@ const PATH_TO_TAB = new Map(
   Object.entries(TAB_PATHS).map(([tab, p]) => [p, tab as Tab]),
 );
 
-export function pathForTab(tab: Tab, basePath = ""): string {
-  const base = normalizeBasePath(basePath);
-  const p = TAB_PATHS[tab];
-  return base ? `${base}${p}` : p;
-}
-
-export function tabFromPath(pathname: string, basePath = ""): Tab | null {
+function normalizePathForLookup(pathname: string, basePath = ""): string {
   const base = normalizeBasePath(basePath);
   let p = pathname || "/";
   if (base) {
@@ -195,6 +186,32 @@ export function tabFromPath(pathname: string, basePath = ""): Tab | null {
   }
   let normalized = normalizePath(p).toLowerCase();
   if (normalized.endsWith("/index.html")) normalized = "/";
+  return normalized;
+}
+
+export function pathForTab(tab: Tab, basePath = ""): string {
+  const base = normalizeBasePath(basePath);
+  const p = TAB_PATHS[tab];
+  return base ? `${base}${p}` : p;
+}
+
+export function isRouteRootPath(pathname: string, basePath = ""): boolean {
+  return normalizePathForLookup(pathname, basePath) === "/";
+}
+
+export function resolveInitialTabForPath(
+  pathname: string,
+  fallbackTab: Tab,
+  basePath = "",
+): Tab {
+  if (isRouteRootPath(pathname, basePath)) {
+    return fallbackTab;
+  }
+  return tabFromPath(pathname, basePath) ?? fallbackTab;
+}
+
+export function tabFromPath(pathname: string, basePath = ""): Tab | null {
+  const normalized = normalizePathForLookup(pathname, basePath);
   if (normalized === "/") return "chat";
   if (normalized === "/voice") return "settings";
   // Companion disabled unless explicitly feature-flagged
@@ -263,8 +280,6 @@ export function titleForTab(tab: Tab): string {
       return "Fine-Tuning";
     case "trajectories":
       return "Trajectories";
-    case "lifo":
-      return "Lifo";
     case "voice":
       return "Voice";
     case "runtime":

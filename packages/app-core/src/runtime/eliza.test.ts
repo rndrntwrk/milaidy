@@ -76,6 +76,7 @@ import {
   isEnvKeyAllowedForForwarding,
   isRecoverablePgliteInitError,
   mergeDropInPlugins,
+  normalizeOpenAiCompatibleProviderConfig,
   repairBrokenInstallRecord,
   resolvePackageEntry,
   resolvePrimaryModel,
@@ -2163,14 +2164,14 @@ describe.skipIf(!resolvePluginImportSpecifier)(
     it("prefers a bundled local plugin wrapper when one exists", async () => {
       const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "eliza-plugin-"));
       const runtimeDir = path.join(tmpDir, "runtime");
-      const pluginIndex = path.join(tmpDir, "plugins", "retake", "index.js");
+      const pluginIndex = path.join(tmpDir, "plugins", "twitch", "index.js");
 
       await fs.mkdir(runtimeDir, { recursive: true });
       await fs.mkdir(path.dirname(pluginIndex), { recursive: true });
       await fs.writeFile(pluginIndex, "export default {};\n");
 
       const specifier = resolvePluginImportSpecifier?.(
-        "@elizaos/plugin-retake",
+        "@elizaos/plugin-twitch",
         pathToFileURL(path.join(runtimeDir, "eliza.ts")).href,
       );
 
@@ -2608,6 +2609,104 @@ describe("Gemini API key normalization", () => {
         process.env.GEMINI_API_KEY || "";
     }
     expect(process.env.GOOGLE_GENERATIVE_AI_API_KEY).toBe("canonical-key");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OpenAI-compatible Groq normalization
+// ---------------------------------------------------------------------------
+
+describe("OpenAI-compatible Groq normalization", () => {
+  const envKeys = [
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "OPENAI_SMALL_MODEL",
+    "OPENAI_LARGE_MODEL",
+    "GROQ_API_KEY",
+    "GROQ_SMALL_MODEL",
+    "GROQ_LARGE_MODEL",
+    "SMALL_MODEL",
+    "LARGE_MODEL",
+  ];
+  const snap = envSnapshot(envKeys);
+
+  beforeEach(() => {
+    snap.save();
+    for (const key of envKeys) delete process.env[key];
+  });
+
+  afterEach(() => snap.restore());
+
+  it("rewrites Groq endpoints configured through OPENAI_BASE_URL into Groq settings", () => {
+    const config = {
+      env: {
+        vars: {
+          OPENAI_API_KEY: "gsk-test-groq",
+          OPENAI_BASE_URL: "https://api.groq.com/openai/v1",
+        },
+      },
+      agents: {
+        defaults: {
+          model: {
+            primary: "openai",
+          },
+        },
+      },
+    } as Partial<ElizaConfig> as ElizaConfig;
+
+    const changed = normalizeOpenAiCompatibleProviderConfig(config);
+
+    expect(changed).toBe(true);
+    expect(process.env.OPENAI_API_KEY).toBeUndefined();
+    expect(process.env.OPENAI_BASE_URL).toBeUndefined();
+    expect(process.env.GROQ_API_KEY).toBe("gsk-test-groq");
+    expect(process.env.GROQ_SMALL_MODEL).toBe("llama-3.1-8b-instant");
+    expect(process.env.GROQ_LARGE_MODEL).toBe("qwen-qwq-32b");
+    expect(config.agents?.defaults?.model?.primary).toBe("groq");
+    expect(
+      (config.env as { vars?: Record<string, string> }).vars?.OPENAI_API_KEY,
+    ).toBeUndefined();
+    expect(
+      (config.env as { vars?: Record<string, string> }).vars?.OPENAI_BASE_URL,
+    ).toBeUndefined();
+    expect(
+      (config.env as { vars?: Record<string, string> }).vars?.GROQ_API_KEY,
+    ).toBe("gsk-test-groq");
+    expect(
+      (config.env as { vars?: Record<string, string> }).vars?.GROQ_SMALL_MODEL,
+    ).toBe("llama-3.1-8b-instant");
+    expect(
+      (config.env as { vars?: Record<string, string> }).vars?.GROQ_LARGE_MODEL,
+    ).toBe("qwen-qwq-32b");
+
+    const names = collectPluginNames(config);
+    expect(names.has("@elizaos/plugin-groq")).toBe(true);
+    expect(names.has("@elizaos/plugin-openai")).toBe(false);
+  });
+
+  it("preserves explicit Groq-compatible shared model overrides", () => {
+    const config = {
+      env: {
+        vars: {
+          OPENAI_API_KEY: "gsk-test-groq",
+          OPENAI_BASE_URL: "https://api.groq.com/openai/v1",
+          SMALL_MODEL: "llama-3.3-70b-versatile",
+          LARGE_MODEL: "qwen/qwen3-32b",
+        },
+      },
+    } as Partial<ElizaConfig> as ElizaConfig;
+
+    const changed = normalizeOpenAiCompatibleProviderConfig(config);
+
+    expect(changed).toBe(true);
+    expect(process.env.GROQ_SMALL_MODEL).toBe("llama-3.3-70b-versatile");
+    expect(process.env.GROQ_LARGE_MODEL).toBe("qwen/qwen3-32b");
+    expect(
+      (config.env as { vars?: Record<string, string> }).vars?.GROQ_SMALL_MODEL,
+    ).toBe("llama-3.3-70b-versatile");
+    expect(
+      (config.env as { vars?: Record<string, string> }).vars?.GROQ_LARGE_MODEL,
+    ).toBe("qwen/qwen3-32b");
   });
 });
 

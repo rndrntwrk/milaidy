@@ -8,7 +8,6 @@ import { useApp } from "@miladyai/app-core/state";
 import { getStylePresets } from "@miladyai/shared/onboarding-presets";
 import { Button, Input } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getElizaApiToken, resolveAppAssetUrl } from "../../utils";
 import {
   fetchWithTimeout,
   resolveCompatApiToken,
@@ -20,7 +19,7 @@ import {
   type CharacterRosterEntry,
   resolveRosterEntries,
 } from "../CharacterRoster";
-import { resolvePreviewTtsEndpoints } from "./identity-preview-tts";
+import { buildPreviewTtsRequestPlans } from "./identity-preview-tts";
 
 import {
   OnboardingStepHeader,
@@ -35,6 +34,7 @@ import {
 } from "./onboarding-step-chrome";
 
 const IMPORT_AGENT_FETCH_TIMEOUT_MS = 60_000;
+const PREVIEW_TTS_FETCH_TIMEOUT_MS = 15_000;
 
 export interface IdentityStepProps {
   /**
@@ -66,10 +66,13 @@ export function IdentityStep({
   const importBusyRef = useRef(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const previewObjectUrlRef = useRef<string | null>(null);
+  const previewAbortControllerRef = useRef<AbortController | null>(null);
   const previewRequestIdRef = useRef(0);
   const pendingPreviewEntryRef = useRef<CharacterRosterEntry | null>(null);
 
   const stopPreviewAudio = useCallback(() => {
+    previewAbortControllerRef.current?.abort();
+    previewAbortControllerRef.current = null;
     if (previewAudioRef.current) {
       previewAudioRef.current.pause();
       previewAudioRef.current = null;
@@ -79,21 +82,6 @@ export function IdentityStep({
       previewObjectUrlRef.current = null;
     }
   }, []);
-
-  const playPreviewFromUrl = useCallback(
-    async (url: string) => {
-      stopPreviewAudio();
-      const audio = new Audio(url);
-      previewAudioRef.current = audio;
-      try {
-        await audio.play();
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    [stopPreviewAudio],
-  );
 
   const playSelectionPreview = useCallback(
     async (entry: CharacterRosterEntry) => {
@@ -116,24 +104,71 @@ export function IdentityStep({
       const selectedPreset = entry.voicePresetId
         ? PREMADE_VOICES.find((voice) => voice.id === entry.voicePresetId)
         : undefined;
+      const apiToken = resolveCompatApiToken();
+      const controller = new AbortController();
+      previewAbortControllerRef.current = controller;
+      const requestPlans = buildPreviewTtsRequestPlans({
+        text: catchphrase,
+        voiceId: selectedPreset?.voiceId,
+        // Prefer the cloud proxy first during onboarding so Eliza Cloud logins
+        // can synthesize the selected preset voice without requiring a browser key.
+        preferCloudProxy: true,
+      });
 
-      if (selectedPreset?.previewUrl) {
-        const played = await playPreviewFromUrl(selectedPreset.previewUrl);
-        if (played && isCurrentRequest()) return;
+      for (const plan of requestPlans) {
+        if (!isCurrentRequest()) return;
+        try {
+          const response = await fetchWithTimeout(
+            resolveApiUrl(plan.endpoint),
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "audio/mpeg",
+                ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
+              },
+              body: JSON.stringify(plan.body),
+              signal: controller.signal,
+            },
+            PREVIEW_TTS_FETCH_TIMEOUT_MS,
+          );
+          if (!response.ok) {
+            continue;
+          }
+          const audioBlob = await response.blob();
+          if (!audioBlob.size || !isCurrentRequest()) {
+            return;
+          }
+          stopPreviewAudio();
+          const objectUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(objectUrl);
+          previewAudioRef.current = audio;
+          previewObjectUrlRef.current = objectUrl;
+          try {
+            await audio.play();
+            if (isCurrentRequest()) return;
+          } catch {
+            previewAudioRef.current = null;
+            URL.revokeObjectURL(objectUrl);
+            if (previewObjectUrlRef.current === objectUrl) {
+              previewObjectUrlRef.current = null;
+            }
+          }
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            error.message === "Request aborted"
+          ) {
+            return;
+          }
+        }
       }
 
-      if (entry.id) {
-        // Use offline preset MP3s for onboarding
-        const offlineUrl = resolveAppAssetUrl(`audio/previews/${entry.id}.mp3`);
-        const played = await playPreviewFromUrl(offlineUrl);
-        if (played && isCurrentRequest()) return;
-      }
-
-      // Intentionally do not fall back to generic system/browser TTS voices for
-      // onboarding previews. If preset sample + ElevenLabs are unavailable, stay
-      // silent instead of degrading character identity quality.
+      // Intentionally do not fall back to canned vendor preview clips or generic
+      // system voices here. If the selected preset catchphrase cannot be
+      // synthesized, stay silent instead of playing the wrong line.
     },
-    [playPreviewFromUrl],
+    [stopPreviewAudio],
   );
 
   const handleSelect = useCallback(
@@ -171,7 +206,7 @@ export function IdentityStep({
   );
   useEffect(() => {
     if (!onboardingStyle && firstEntry) {
-      handleSelect(firstEntry, false);
+      handleSelect(firstEntry, true);
     }
   }, [onboardingStyle, handleSelect, firstEntry]);
 

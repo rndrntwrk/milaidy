@@ -77,7 +77,10 @@ vi.mock("@miladyai/app-core/api", () => ({
 }));
 
 import { textOf } from "../../../../test/helpers/react-test";
-import { ChatView } from "../../src/components/ChatView";
+import {
+  __resetCompanionSpeechMemoryForTests,
+  ChatView,
+} from "../../src/components/ChatView";
 
 function createContext(
   overrides?: Partial<ChatViewContextStub>,
@@ -113,6 +116,7 @@ function createContext(
 
 describe("ChatView game-modal variant", () => {
   beforeEach(() => {
+    __resetCompanionSpeechMemoryForTests();
     mockUseApp.mockReset();
     mockUseVoiceChat.mockReset();
     mockClient.getConfig.mockReset();
@@ -143,6 +147,7 @@ describe("ChatView game-modal variant", () => {
   });
 
   afterEach(() => {
+    __resetCompanionSpeechMemoryForTests();
     vi.useRealTimers();
   });
 
@@ -310,6 +315,60 @@ describe("ChatView game-modal variant", () => {
       "hello",
       true,
     );
+  });
+
+  it("does not replay the same companion line after remounting the dock", async () => {
+    const queueAssistantSpeech = vi.fn();
+    mockUseVoiceChat.mockReturnValue({
+      supported: true,
+      isListening: false,
+      captureMode: "idle",
+      interimTranscript: "",
+      toggleListening: vi.fn(),
+      startListening: vi.fn(),
+      stopListening: vi.fn(),
+      mouthOpen: 0,
+      isSpeaking: false,
+      usingAudioAnalysis: false,
+      speak: vi.fn(),
+      queueAssistantSpeech,
+      stopSpeaking: vi.fn(),
+      voiceUnlockedGeneration: 0,
+      assistantTtsQuality: "standard",
+    });
+    mockUseApp.mockReturnValue(
+      createContext({
+        activeConversationId: "conv-1",
+        conversationMessages: [
+          { id: "assistant-1", role: "assistant", text: "hello", timestamp: 1 },
+        ],
+      }),
+    );
+
+    let firstTree: TestRenderer.ReactTestRenderer | undefined;
+    let secondTree: TestRenderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      firstTree = TestRenderer.create(
+        React.createElement(ChatView, { variant: "game-modal" }),
+      );
+    });
+
+    await act(async () => {
+      firstTree?.unmount();
+    });
+
+    await act(async () => {
+      secondTree = TestRenderer.create(
+        React.createElement(ChatView, { variant: "game-modal" }),
+      );
+    });
+
+    expect(queueAssistantSpeech).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      secondTree?.unmount();
+    });
   });
 
   it("hides companion messages older than the cutoff timestamp", async () => {

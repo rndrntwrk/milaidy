@@ -13,6 +13,7 @@ import {
   loadCompanionAnimateWhenHidden,
   loadCompanionHalfFramerateMode,
   loadCompanionVrmPowerMode,
+  loadLastNativeTab,
   loadPersistedOnboardingStep,
   loadUiTheme,
   normalizeCompanionHalfFramerateMode,
@@ -20,6 +21,7 @@ import {
   saveCompanionAnimateWhenHidden,
   saveCompanionHalfFramerateMode,
   saveCompanionVrmPowerMode,
+  saveLastNativeTab,
   saveOnboardingStep,
   saveUiTheme,
 } from "./persistence";
@@ -293,6 +295,18 @@ describe("companion animate when hidden persistence", () => {
       expect(localStorage.getItem("eliza:companion-animate-when-hidden")).toBe(
         "0",
       );
+    });
+  });
+});
+
+describe("last native tab persistence", () => {
+  it("round-trips advanced routed tabs that should remain addressable", () => {
+    withLocalStorageStub(() => {
+      saveLastNativeTab("trajectories");
+      expect(loadLastNativeTab()).toBe("trajectories");
+
+      saveLastNativeTab("desktop");
+      expect(loadLastNativeTab()).toBe("desktop");
     });
   });
 });

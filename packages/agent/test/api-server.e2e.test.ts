@@ -27,6 +27,10 @@ import { Wallet } from "ethers";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { startApiServer } from "../src/api/server";
+import {
+  resolveStylePresetByAvatarIndex,
+  resolveStylePresetById,
+} from "../src/onboarding-presets";
 import { agentAutoDailyTrades } from "../src/api/trade-safety";
 import { AGENT_NAME_POOL } from "../src/runtime/onboarding-names";
 import { req } from "../../../test/helpers/http";
@@ -2225,7 +2229,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("uses the configured preset catchphrase for intro greetings", async () => {
+    it("uses a configured preset post example for intro greetings", async () => {
       const runtime = createRuntimeForChatSseTests();
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
@@ -2245,10 +2249,13 @@ describe("API Server E2E (no runtime)", () => {
           },
         );
         expect(create.status).toBe(200);
+        const preset = resolveStylePresetById("chen", "en");
+        expect(preset).toBeDefined();
         expect(create.data.greeting).toMatchObject({
-          text: "you good?",
           generated: true,
         });
+        expect(preset?.postExamples).toContain(create.data.greeting.text);
+        expect(create.data.greeting.text).not.toBe(preset?.catchphrase);
       } finally {
         await streamServer.close();
       }
@@ -2274,10 +2281,13 @@ describe("API Server E2E (no runtime)", () => {
           },
         );
         expect(create.status).toBe(200);
+        const preset = resolveStylePresetByAvatarIndex(2, "en");
+        expect(preset).toBeDefined();
         expect(create.data.greeting).toMatchObject({
-          text: "what are we shipping?",
           generated: true,
         });
+        expect(preset?.postExamples).toContain(create.data.greeting.text);
+        expect(create.data.greeting.text).not.toBe(preset?.catchphrase);
       } finally {
         await streamServer.close();
       }

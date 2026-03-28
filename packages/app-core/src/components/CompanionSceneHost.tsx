@@ -15,8 +15,10 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import type { VrmEngine } from "./avatar/VrmEngine";
+import { CompanionSceneStatusContext } from "./companion-scene-status-context";
 import { SharedCompanionSceneContext } from "./shared-companion-scene-context";
 import { VrmStage } from "./VrmStage";
 
@@ -388,9 +390,29 @@ function CompanionSceneSurface({
     [],
   );
 
+  const safeSelectedVrmIndex = selectedVrmIndex > 0 ? selectedVrmIndex : 1;
+  const vrmPath =
+    selectedVrmIndex === 0 && customVrmUrl
+      ? customVrmUrl
+      : getVrmUrl(safeSelectedVrmIndex);
+  const fallbackPreviewUrl =
+    selectedVrmIndex > 0
+      ? getVrmPreviewUrl(safeSelectedVrmIndex)
+      : getVrmPreviewUrl(1);
+  const teleportKey = vrmPath;
+  const worldUrl =
+    uiTheme === "dark"
+      ? resolveAppAssetUrl("worlds/companion-night.spz")
+      : resolveAppAssetUrl("worlds/companion-day.spz");
+  const [teleportCompletedKey, setTeleportCompletedKey] = useState<
+    string | null
+  >(null);
+  const teleportKeyRef = useRef(teleportKey);
+
   useEffect(() => {
     const handleTeleportComplete = () => {
       _companionTeleportCompletedOnce = true;
+      setTeleportCompletedKey(teleportKeyRef.current);
     };
     window.addEventListener(
       "eliza:vrm-teleport-complete",
@@ -487,20 +509,20 @@ function CompanionSceneSurface({
     return () =>
       window.removeEventListener("eliza:editor-camera-offset", handler);
   }, []);
+  const sceneStatus = useMemo(
+    () => ({
+      avatarReady: teleportCompletedKey === teleportKey,
+      teleportKey,
+    }),
+    [teleportCompletedKey, teleportKey],
+  );
 
-  const safeSelectedVrmIndex = selectedVrmIndex > 0 ? selectedVrmIndex : 1;
-  const vrmPath =
-    selectedVrmIndex === 0 && customVrmUrl
-      ? customVrmUrl
-      : getVrmUrl(safeSelectedVrmIndex);
-  const fallbackPreviewUrl =
-    selectedVrmIndex > 0
-      ? getVrmPreviewUrl(safeSelectedVrmIndex)
-      : getVrmPreviewUrl(1);
-  const worldUrl =
-    uiTheme === "dark"
-      ? resolveAppAssetUrl("worlds/companion-night.spz")
-      : resolveAppAssetUrl("worlds/companion-day.spz");
+  useEffect(() => {
+    teleportKeyRef.current = teleportKey;
+    _companionTeleportCompletedOnce = false;
+    setTeleportCompletedKey(null);
+  }, [teleportKey]);
+
   const preloadAvatars = useMemo(() => {
     if (tab !== "character" && tab !== "character-select") {
       return [];
@@ -578,7 +600,9 @@ function CompanionSceneSurface({
         )}
       </div>
 
-      {children}
+      <CompanionSceneStatusContext.Provider value={sceneStatus}>
+        {children}
+      </CompanionSceneStatusContext.Provider>
     </div>
   );
 }
