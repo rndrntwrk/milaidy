@@ -563,9 +563,7 @@ export async function fetchSolanaBalances(
     if (data.error?.message) throw new Error(data.error.message);
     solBalance = ((data.result?.value ?? 0) / 1e9).toFixed(9);
   } catch (err) {
-    logger.warn(
-      `SOL balance fetch failed: ${String(err)}`,
-    );
+    logger.warn(`SOL balance fetch failed: ${String(err)}`);
   }
 
   const tokens: SolanaTokenBalance[] = [];
@@ -612,9 +610,7 @@ export async function fetchSolanaBalances(
       });
     }
   } catch (err) {
-    logger.warn(
-      `Solana token fetch failed: ${String(err)}`,
-    );
+    logger.warn(`Solana token fetch failed: ${String(err)}`);
   }
 
   return { solBalance, solValueUsd: "0", tokens };
