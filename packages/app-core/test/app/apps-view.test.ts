@@ -33,6 +33,10 @@ const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
     listApps: vi.fn(),
     listInstalledApps: vi.fn(),
     launchApp: vi.fn(),
+    getArcade555GamesCatalog: vi.fn(),
+    playArcade555Game: vi.fn(),
+    switchArcade555Game: vi.fn(),
+    stopArcade555Game: vi.fn(),
     listHyperscapeEmbeddedAgents: vi.fn(),
     getHyperscapeAgentGoal: vi.fn(),
     getHyperscapeAgentQuickActions: vi.fn(),
@@ -165,6 +169,10 @@ describe("AppsView", () => {
     mockClientFns.listApps.mockReset();
     mockClientFns.listInstalledApps.mockReset();
     mockClientFns.launchApp.mockReset();
+    mockClientFns.getArcade555GamesCatalog.mockReset();
+    mockClientFns.playArcade555Game.mockReset();
+    mockClientFns.switchArcade555Game.mockReset();
+    mockClientFns.stopArcade555Game.mockReset();
     mockClientFns.listHyperscapeEmbeddedAgents.mockReset();
     mockClientFns.getHyperscapeAgentGoal.mockReset();
     mockClientFns.getHyperscapeAgentQuickActions.mockReset();
@@ -207,6 +215,18 @@ describe("AppsView", () => {
     mockClientFns.sendHyperscapeEmbeddedAgentCommand.mockResolvedValue({
       success: true,
       message: "command sent",
+    });
+    mockClientFns.getArcade555GamesCatalog.mockResolvedValue({
+      games: [],
+    });
+    mockClientFns.playArcade555Game.mockResolvedValue({
+      message: "Alice started the selected game.",
+    });
+    mockClientFns.switchArcade555Game.mockResolvedValue({
+      message: "Alice switched the active game.",
+    });
+    mockClientFns.stopArcade555Game.mockResolvedValue({
+      message: "Alice arcade session stopped.",
     });
     mockClientFns.listInstalledApps.mockResolvedValue([]);
   });
@@ -678,6 +698,60 @@ describe("AppsView", () => {
     // The extension panel ID is not registered, so no extension UI should render.
     // Hyperscape API calls should NOT be made when the extension is absent.
     expect(mockClientFns.listHyperscapeEmbeddedAgents).not.toHaveBeenCalled();
+  });
+
+  it("surfaces Alice arcade controls for game apps when the runtime is active", async () => {
+    const setState = vi.fn<AppsContextStub["setState"]>();
+    const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
+    mockUseApp.mockReturnValue({
+      uiLanguage: "en",
+      t: tStub,
+      plugins: [{ id: "five55-games", enabled: true, isActive: true }],
+      setState,
+      setActionNotice,
+    });
+    const app = createApp("@elizaos/app-clawbal", "Clawbal", "Arcade game", {
+      category: "game",
+    });
+    mockClientFns.listApps.mockResolvedValue([app]);
+    mockClientFns.getArcade555GamesCatalog.mockResolvedValue({
+      games: [{ id: "ninja", title: "Ninja" }],
+    });
+    mockClientFns.playArcade555Game.mockResolvedValue({
+      message: "Alice started ninja.",
+    });
+
+    let tree: TestRenderer.ReactTestRenderer = null as any;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(AppsView));
+    });
+    await flush();
+
+    await act(async () => {
+      findButtonByTitle(tree?.root, "Open Clawbal").props.onClick();
+    });
+    await flush();
+
+    expect(
+      tree?.root.findAll((node) => text(node).includes("Alice Arcade")).length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(mockClientFns.getArcade555GamesCatalog).toHaveBeenCalledWith({
+      includeBeta: true,
+    });
+
+    await act(async () => {
+      await findButtonByText(tree?.root, "Start with Alice").props.onClick();
+    });
+
+    expect(mockClientFns.playArcade555Game).toHaveBeenCalledWith({
+      gameId: "ninja",
+      mode: "agent",
+    });
+    expect(setActionNotice).toHaveBeenCalledWith(
+      "Alice started ninja.",
+      "success",
+      3200,
+    );
   });
 
   it("applies the selected launcher tile treatment after opening an app", async () => {

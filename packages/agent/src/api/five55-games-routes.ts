@@ -4,6 +4,7 @@ import {
   isAgentAuthConfigured,
 } from "../plugins/five55-shared/agent-auth.js";
 import {
+  ensureGamesAgentSessionId,
   extractGamesUpstreamError,
   requestGamesAgentJson,
 } from "../plugins/five55-games/agent-client.js";
@@ -44,9 +45,25 @@ export async function handleFive55GamesRoutes(
     return true;
   }
 
-  const body = (await readJsonBody<Record<string, unknown>>(req, res)) ?? {};
   const requestId = createAgentRequestId(`api-five55-games-${operation}`);
-  const endpoint = `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/${operation}`;
+  let ensuredSessionId = sessionId;
+  try {
+    ensuredSessionId = await ensureGamesAgentSessionId(
+      upstreamBase,
+      sessionId,
+      `${requestId}-bootstrap`,
+    );
+  } catch (err) {
+    error(
+      res,
+      err instanceof Error ? err.message : "Session bootstrap failed",
+      502,
+    );
+    return true;
+  }
+
+  const body = (await readJsonBody<Record<string, unknown>>(req, res)) ?? {};
+  const endpoint = `/api/agent/v1/sessions/${encodeURIComponent(ensuredSessionId)}/games/${operation}`;
   const upstream = await requestGamesAgentJson(
     upstreamBase,
     requestId,
