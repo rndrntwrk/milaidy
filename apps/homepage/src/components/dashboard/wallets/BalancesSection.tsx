@@ -35,7 +35,7 @@ export function BalancesSection({
         <SectionHeader title="BALANCES" />
         <div className="border border-border bg-surface p-6 text-center">
           <span className="font-mono text-xs text-text-muted">
-            No balance data available
+            No balances found
           </span>
         </div>
       </div>

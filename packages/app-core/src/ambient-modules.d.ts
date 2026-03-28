@@ -1,3 +1,8 @@
+declare module "*.svg" {
+  const src: string;
+  export default src;
+}
+
 declare module "electrobun/view" {
   type WebviewEventHandler = (...args: unknown[]) => void;
 

@@ -210,10 +210,10 @@ export function TransactionHistory({
         <div
           className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} px-6 py-16 text-center`}
         >
-          <ArrowUpRight className="mx-auto h-8 w-8 text-muted/40" />
-          <p className="mt-3 text-sm text-muted">No transactions found</p>
-          <p className="mt-1 text-xs text-muted/70">
-            Transactions will appear here once your agent starts signing.
+          <ArrowUpRight className="mx-auto h-8 w-8 text-muted/30" />
+          <p className="mt-3 text-sm text-muted">No transactions yet</p>
+          <p className="mt-1 text-xs text-muted/60">
+            History appears once your agent starts signing.
           </p>
         </div>
       )}

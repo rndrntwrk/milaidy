@@ -3,7 +3,8 @@
  * Switches between Balances, Transactions, and Approvals.
  */
 
-import { FileText, Shield, Wallet } from "lucide-react";
+import { FileText, Wallet } from "lucide-react";
+import { StewardLogo } from "../steward/StewardLogo";
 
 export type WalletSubTab = "balances" | "transactions" | "approvals";
 
@@ -16,11 +17,12 @@ interface WalletTabBarProps {
 const TABS: Array<{
   key: WalletSubTab;
   label: string;
-  icon: typeof Wallet;
+  icon?: typeof Wallet;
+  useStewardLogo?: boolean;
 }> = [
   { key: "balances", label: "Balances", icon: Wallet },
   { key: "transactions", label: "Transactions", icon: FileText },
-  { key: "approvals", label: "Approvals", icon: Shield },
+  { key: "approvals", label: "Approvals", useStewardLogo: true },
 ];
 
 export function WalletTabBar({
@@ -30,7 +32,7 @@ export function WalletTabBar({
 }: WalletTabBarProps) {
   return (
     <div className="flex items-center gap-1 rounded-2xl border border-border/30 bg-card/40 p-1 backdrop-blur-sm">
-      {TABS.map(({ key, label, icon: Icon }) => {
+      {TABS.map(({ key, label, icon: Icon, useStewardLogo }) => {
         const isActive = activeTab === key;
         return (
           <button
@@ -43,7 +45,11 @@ export function WalletTabBar({
                 : "border border-transparent text-muted hover:bg-card/60 hover:text-txt"
             }`}
           >
-            <Icon className="h-3.5 w-3.5" />
+            {useStewardLogo ? (
+              <StewardLogo size={14} className="opacity-80" />
+            ) : Icon ? (
+              <Icon className="h-3.5 w-3.5" />
+            ) : null}
             {label}
             {key === "approvals" && pendingCount > 0 && (
               <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">

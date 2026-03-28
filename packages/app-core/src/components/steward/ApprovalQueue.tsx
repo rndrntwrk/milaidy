@@ -9,18 +9,11 @@ import type {
   StewardPolicyResult,
 } from "@miladyai/shared/contracts/wallet";
 import { Button, Spinner } from "@miladyai/ui";
-import {
-  Check,
-  Clock,
-  Copy,
-  RefreshCw,
-  Shield,
-  ShieldAlert,
-  X,
-} from "lucide-react";
+import { Check, Clock, Copy, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DESKTOP_SURFACE_PANEL_CLASSNAME } from "../desktop-surface-primitives";
 import { formatWeiValue, getChainName, truncateAddress } from "./chain-utils";
+import { StewardLogo } from "./StewardLogo";
 
 interface ApprovalQueueProps {
   getStewardPending: () => Promise<StewardPendingApproval[]>;
@@ -185,10 +178,8 @@ export function ApprovalQueue({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Shield className="h-4 w-4 text-accent" />
-          <span className="text-sm font-semibold text-txt">
-            Pending Approvals
-          </span>
+          <StewardLogo size={16} className="opacity-80" />
+          <span className="text-sm font-semibold text-txt">Pending</span>
           {items.length > 0 && (
             <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold text-accent-fg">
               {items.length}
@@ -233,16 +224,10 @@ export function ApprovalQueue({
         <div
           className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} px-6 py-12 text-center`}
         >
-          <ShieldAlert className="mx-auto h-8 w-8 text-muted/40" />
-          <p className="mt-3 text-sm font-medium text-txt">
-            No pending approvals
-          </p>
-          <p className="mt-1 text-xs text-muted/70">
-            Transactions exceeding auto-approve thresholds will appear here for
-            review.
-          </p>
-          <p className="mt-3 text-[10px] text-muted/50">
-            Auto-refreshing every {POLL_INTERVAL_MS / 1000}s
+          <StewardLogo size={32} className="mx-auto opacity-30" />
+          <p className="mt-3 text-sm font-medium text-txt">All clear</p>
+          <p className="mt-1 text-xs text-muted/60">
+            Transactions that exceed auto-approve limits will show up here.
           </p>
         </div>
       )}

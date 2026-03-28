@@ -157,7 +157,7 @@ export function WalletsPanel({ managedAgent }: WalletsPanelProps) {
       <div className="flex items-center gap-2 pt-2">
         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-[status-pulse_2s_ease-in-out_infinite]" />
         <span className="font-mono text-[10px] text-text-subtle tracking-wide">
-          AUTO-REFRESH EVERY 30S
+          LIVE · 30S
         </span>
       </div>
     </div>

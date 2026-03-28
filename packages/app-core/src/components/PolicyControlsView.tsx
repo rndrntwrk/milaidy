@@ -21,13 +21,13 @@ import {
   DollarSign,
   Gauge,
   Plus,
-  Shield,
   ShieldCheck,
   Trash2,
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { client } from "../api";
+import { StewardLogo } from "./steward/StewardLogo";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
 
@@ -127,7 +127,10 @@ const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
 
-function findPolicy(policies: PolicyRule[], type: PolicyType): PolicyRule | undefined {
+function findPolicy(
+  policies: PolicyRule[],
+  type: PolicyType,
+): PolicyRule | undefined {
   return policies.find((p) => p.type === type);
 }
 
@@ -176,9 +179,7 @@ function PolicyToggle({
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div
             className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-              enabled
-                ? "bg-accent/15 text-accent"
-                : "bg-muted/10 text-muted"
+              enabled ? "bg-accent/15 text-accent" : "bg-muted/10 text-muted"
             }`}
           >
             <Icon className="h-4 w-4" />
@@ -255,9 +256,7 @@ function SpendingLimitSection({
         max={10}
         step={0.001}
         unit="ETH"
-        onChange={(v) =>
-          onChange({ ...config, maxPerTx: v.toString() })
-        }
+        onChange={(v) => onChange({ ...config, maxPerTx: v.toString() })}
       />
       <LabeledSlider
         label="Daily Limit"
@@ -266,9 +265,7 @@ function SpendingLimitSection({
         max={50}
         step={0.01}
         unit="ETH"
-        onChange={(v) =>
-          onChange({ ...config, maxPerDay: v.toString() })
-        }
+        onChange={(v) => onChange({ ...config, maxPerDay: v.toString() })}
       />
       <LabeledSlider
         label="Weekly Limit"
@@ -277,13 +274,10 @@ function SpendingLimitSection({
         max={100}
         step={0.1}
         unit="ETH"
-        onChange={(v) =>
-          onChange({ ...config, maxPerWeek: v.toString() })
-        }
+        onChange={(v) => onChange({ ...config, maxPerWeek: v.toString() })}
       />
       <div className="mt-2 rounded-lg bg-bg/50 px-3 py-2 text-[11px] text-muted">
-        <span className="font-medium text-txt">Tip:</span> Set conservative
-        limits. You can always increase them later.
+        Start conservative — you can always raise limits later.
       </div>
     </div>
   );
@@ -302,10 +296,17 @@ function ApprovedAddressesSection({
 
   const entries: ApprovedAddressEntry[] = useMemo(
     () =>
-      (config.addresses ?? []).map((addr) => ({
-        address: addr,
-        label: config.labels?.[addr] ?? "",
-      })),
+      (config.addresses ?? []).map((addr) => {
+        // Handle both string addresses and {address, label} objects from API
+        if (typeof addr === "object" && addr !== null && "address" in addr) {
+          const obj = addr as unknown as { address: string; label?: string };
+          return { address: obj.address, label: obj.label ?? "" };
+        }
+        return {
+          address: String(addr),
+          label: config.labels?.[String(addr)] ?? "",
+        };
+      }),
     [config],
   );
 
@@ -406,11 +407,10 @@ function ApprovedAddressesSection({
           ))}
         </div>
       ) : (
-        <div className="text-[11px] text-muted italic py-2">
-          No addresses added yet.{" "}
+        <div className="text-[11px] text-muted/60 py-2">
           {config.mode === "whitelist"
-            ? "Agent won't be able to send to any address."
-            : "No addresses are blocked."}
+            ? "No addresses — agent can't send anywhere yet."
+            : "No addresses blocked."}
         </div>
       )}
 
@@ -555,9 +555,7 @@ function TimeWindowSection({
                 variant={active ? "default" : "outline"}
                 size="sm"
                 className={`h-8 w-10 text-[11px] font-medium p-0 ${
-                  active
-                    ? ""
-                    : "border-border/50 text-muted hover:text-txt"
+                  active ? "" : "border-border/50 text-muted hover:text-txt"
                 }`}
                 onClick={() => {
                   const days = active
@@ -578,9 +576,7 @@ function TimeWindowSection({
         <Label className="text-[12px] text-muted">Timezone</Label>
         <select
           value={config.timezone ?? "UTC"}
-          onChange={(e) =>
-            onChange({ ...config, timezone: e.target.value })
-          }
+          onChange={(e) => onChange({ ...config, timezone: e.target.value })}
           className="w-full h-9 rounded-lg border border-border bg-bg px-2 text-[12px] text-txt"
         >
           {TIMEZONES.map((tz) => (
@@ -617,9 +613,8 @@ function AutoApproveSection({
       <div className="flex items-start gap-2 rounded-lg bg-accent/5 border border-accent/15 px-3 py-2">
         <ShieldCheck className="h-3.5 w-3.5 text-accent mt-0.5 shrink-0" />
         <div className="text-[11px] text-muted">
-          Transactions under{" "}
-          <span className="font-semibold text-txt">{value} ETH</span> will be
-          auto-approved. Larger transactions require manual approval.
+          Under <span className="font-semibold text-txt">{value} ETH</span> →
+          auto-approved. Above → requires manual sign-off.
         </div>
       </div>
     </div>
@@ -693,9 +688,7 @@ export function PolicyControlsView() {
       setPolicies((prev) => {
         const existing = prev.find((p) => p.type === type);
         if (existing) {
-          return prev.map((p) =>
-            p.type === type ? { ...p, ...updates } : p,
-          );
+          return prev.map((p) => (p.type === type ? { ...p, ...updates } : p));
         }
         const newPolicy: PolicyRule = {
           id: `${type}-${Date.now()}`,
@@ -713,12 +706,16 @@ export function PolicyControlsView() {
   );
 
   const togglePolicy = useCallback(
-    (type: PolicyType, enabled: boolean, defaultConfig: Record<string, unknown>) => {
+    (
+      type: PolicyType,
+      enabled: boolean,
+      defaultConfig: Record<string, unknown>,
+    ) => {
       const existing = findPolicy(policies, type);
       if (!enabled && existing?.enabled) {
         // Disabling a safety policy — confirm
         setConfirmMessage(
-          `Are you sure you want to disable this policy? Your agent will operate without this safeguard.`,
+          "Disabling this removes a safety guardrail. Are you sure?",
         );
         setConfirmCallback(() => () => {
           updatePolicy(type, { enabled: false });
@@ -756,7 +753,7 @@ export function PolicyControlsView() {
     return (
       <div className="flex items-center justify-center py-12">
         <Spinner size={24} />
-        <span className="ml-3 text-sm text-muted">Loading policies...</span>
+        <span className="ml-3 text-sm text-muted">Loading…</span>
       </div>
     );
   }
@@ -764,16 +761,13 @@ export function PolicyControlsView() {
   if (!stewardConnected) {
     return (
       <div className="flex flex-col items-center gap-4 py-8 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted/10">
-          <Shield className="h-6 w-6 text-muted" />
-        </div>
+        <StewardLogo size={48} className="opacity-30" />
         <div>
           <p className="text-sm font-semibold text-txt mb-1">
             Steward Not Connected
           </p>
           <p className="text-xs text-muted max-w-sm">
-            Policy controls require a connected Steward instance. Configure your
-            Steward API URL and credentials to manage agent wallet policies.
+            Connect your Steward instance to manage wallet policies.
           </p>
         </div>
       </div>
@@ -819,7 +813,7 @@ export function PolicyControlsView() {
       <PolicyToggle
         icon={DollarSign}
         title="Spending Limits"
-        description="Set maximum transaction amounts and daily/weekly budgets"
+        description="Max per tx, daily, and weekly caps"
         enabled={spendingPolicy?.enabled ?? false}
         onToggle={(enabled) =>
           togglePolicy(
@@ -841,9 +835,9 @@ export function PolicyControlsView() {
 
       {/* Approved Addresses */}
       <PolicyToggle
-        icon={Shield}
+        icon={DollarSign}
         title="Address Controls"
-        description="Manage which addresses your agent can interact with"
+        description="Allowlist or blocklist recipient addresses"
         enabled={addressPolicy?.enabled ?? false}
         onToggle={(enabled) =>
           togglePolicy(
@@ -867,7 +861,7 @@ export function PolicyControlsView() {
       <PolicyToggle
         icon={Gauge}
         title="Rate Limits"
-        description="Control how frequently your agent can submit transactions"
+        description="Cap transactions per hour and per day"
         enabled={rateLimitPolicy?.enabled ?? false}
         onToggle={(enabled) =>
           togglePolicy(
@@ -891,7 +885,7 @@ export function PolicyControlsView() {
       <PolicyToggle
         icon={Clock}
         title="Time Restrictions"
-        description="Limit when your agent can execute transactions"
+        description="Only allow transactions during set hours and days"
         enabled={timeWindowPolicy?.enabled ?? false}
         onToggle={(enabled) =>
           togglePolicy(
@@ -914,8 +908,8 @@ export function PolicyControlsView() {
       {/* Auto-Approve Threshold */}
       <PolicyToggle
         icon={Zap}
-        title="Auto-Approve Threshold"
-        description="Automatically approve small transactions below a threshold"
+        title="Auto-Approve"
+        description="Skip manual approval for small transactions"
         enabled={autoApprovePolicy?.enabled ?? false}
         onToggle={(enabled) =>
           togglePolicy(

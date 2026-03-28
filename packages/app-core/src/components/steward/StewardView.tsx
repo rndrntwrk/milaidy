@@ -5,7 +5,7 @@
 
 import type { StewardStatusResponse } from "@miladyai/shared/contracts/wallet";
 import { Button } from "@miladyai/ui";
-import { ArrowUpRight, FileText, Shield } from "lucide-react";
+import { FileText } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../../state";
 import {
@@ -25,6 +25,7 @@ import {
   APP_SIDEBAR_STICKY_HEADER_CLASSNAME,
 } from "../sidebar-shell-styles";
 import { ApprovalQueue } from "./ApprovalQueue";
+import { StewardLogo } from "./StewardLogo";
 import { TransactionHistory } from "./TransactionHistory";
 
 type StewardTab = "history" | "approvals";
@@ -74,13 +75,13 @@ export function StewardView() {
           <div
             className={`mx-4 w-full max-w-xl ${DESKTOP_SURFACE_PANEL_CLASSNAME} px-6 py-10 text-center`}
           >
-            <Shield className="mx-auto h-10 w-10 text-muted/40" />
+            <StewardLogo size={40} className="mx-auto opacity-40" />
             <h2 className="mt-4 text-lg font-semibold text-txt-strong">
               Steward Not Connected
             </h2>
-            <p className="mt-2 max-w-md mx-auto text-sm text-muted leading-relaxed">
-              Configure STEWARD_API_URL and STEWARD_API_KEY in your agent
-              settings to enable transaction history and approval management.
+            <p className="mx-auto mt-2 max-w-md text-sm text-muted leading-relaxed">
+              Set STEWARD_API_URL and STEWARD_API_KEY in agent settings to
+              enable vault management.
             </p>
             {stewardStatus.error && (
               <p className="mt-3 rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
@@ -102,11 +103,9 @@ export function StewardView() {
         >
           <div className={APP_SIDEBAR_INNER_CLASSNAME}>
             <div className={APP_SIDEBAR_STICKY_HEADER_CLASSNAME}>
-              <div className={APP_SIDEBAR_KICKER_CLASSNAME}>Steward Vault</div>
+              <div className={APP_SIDEBAR_KICKER_CLASSNAME}>Steward</div>
               <div className={APP_SIDEBAR_META_CLASSNAME}>
-                {stewardStatus?.connected
-                  ? "Transaction management and approvals"
-                  : "Connecting…"}
+                {stewardStatus?.connected ? "Vault management" : "Connecting…"}
               </div>
             </div>
 
@@ -129,7 +128,7 @@ export function StewardView() {
                       : "border-border/50 bg-bg-accent/80 text-muted"
                   }`}
                 >
-                  <Shield className="h-4 w-4" />
+                  <StewardLogo size={16} />
                   {pendingCount > 0 && (
                     <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
                       {pendingCount > 99 ? "99+" : pendingCount}
@@ -142,8 +141,8 @@ export function StewardView() {
                   </span>
                   <span className="mt-1 block text-[11px] leading-relaxed text-muted/85">
                     {pendingCount > 0
-                      ? `${pendingCount} pending review`
-                      : "No pending items"}
+                      ? `${pendingCount} pending`
+                      : "None pending"}
                   </span>
                 </span>
               </Button>
@@ -170,21 +169,21 @@ export function StewardView() {
                 </span>
                 <span className="min-w-0 flex-1 text-left">
                   <span className="block text-sm font-semibold leading-snug">
-                    Transaction History
+                    History
                   </span>
                   <span className="mt-1 block text-[11px] leading-relaxed text-muted/85">
-                    All vault transactions
+                    All transactions
                   </span>
                 </span>
               </Button>
             </nav>
 
-            {/* Steward status badge */}
+            {/* Steward status */}
             {stewardStatus?.connected && (
               <div className="mt-auto pt-4">
                 <div className="inline-flex items-center gap-1.5 rounded-2xl border border-accent/25 bg-accent/10 px-3 py-2 text-[11px] text-accent-fg">
-                  <span>🔐</span>
-                  <span>Vault connected</span>
+                  <StewardLogo size={12} />
+                  <span>Connected</span>
                 </div>
                 {stewardStatus.evmAddress && (
                   <p className="mt-1.5 font-mono text-[10px] text-muted/60">
@@ -204,27 +203,20 @@ export function StewardView() {
             <section
               className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} px-5 py-5 sm:px-6`}
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-                    Steward
-                  </div>
-                  <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
-                    {activeTab === "approvals"
-                      ? "Approval Queue"
-                      : "Transaction History"}
-                  </h1>
-                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-                    {activeTab === "approvals"
-                      ? "Review and approve transactions that exceed your agent's auto-approve thresholds."
-                      : "Complete history of all signed, broadcast, and pending transactions from the vault."}
-                  </p>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                  Steward
                 </div>
-                {activeTab === "history" && (
-                  <div className="flex items-center gap-1 text-muted/50">
-                    <ArrowUpRight className="h-5 w-5" />
-                  </div>
-                )}
+                <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
+                  {activeTab === "approvals"
+                    ? "Approvals"
+                    : "Transaction History"}
+                </h1>
+                <p className="mt-1.5 max-w-2xl text-sm text-muted">
+                  {activeTab === "approvals"
+                    ? "Transactions that need your sign-off."
+                    : "All signed and broadcast transactions from the vault."}
+                </p>
               </div>
             </section>
 

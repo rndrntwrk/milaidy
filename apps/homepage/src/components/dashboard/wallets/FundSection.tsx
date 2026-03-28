@@ -53,12 +53,12 @@ export function FundSection({
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="FUND YOUR AGENT" />
+      <SectionHeader title="FUND WALLET" />
 
       <div className="border border-brand/20 bg-brand/5 overflow-hidden">
         <div className="px-4 py-2.5 bg-brand/8 border-b border-brand/20">
           <span className="font-mono text-[10px] tracking-wider text-brand font-semibold">
-            SEND {isEvm ? "ETH / TOKENS" : "SOL / SPL TOKENS"} TO THIS ADDRESS
+            SEND {isEvm ? "ETH / TOKENS" : "SOL / SPL"} HERE
           </span>
         </div>
 
