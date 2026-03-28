@@ -331,6 +331,20 @@ let pairingCode: string | null = null;
 let pairingExpiresAt = 0;
 const pairingAttempts = new Map<string, { count: number; resetAt: number }>();
 
+// Periodic sweep to prevent unbounded memory growth (mirrors wallet-export-guard.ts pattern)
+const PAIRING_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+const pairingSweepTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of pairingAttempts) {
+    if (now > entry.resetAt) {
+      pairingAttempts.delete(key);
+    }
+  }
+}, PAIRING_SWEEP_INTERVAL_MS);
+if (typeof pairingSweepTimer === "object" && "unref" in pairingSweepTimer) {
+  pairingSweepTimer.unref();
+}
+
 // tokenMatches — now imported from ./auth
 
 function pairingEnabled(): boolean {
@@ -1926,6 +1940,40 @@ type TradePermissionMode = "user-sign-only" | "manual-local-key" | "agent-auto";
 
 const AGENT_AUTOMATION_HEADER = "x-milady-agent-action";
 
+/**
+ * Build the set of localhost ports allowed for CORS.
+ * Reads from env vars at call time so tests can override.
+ */
+export function buildCorsAllowedPorts(): Set<string> {
+  return new Set([
+    String(process.env.MILADY_API_PORT ?? process.env.ELIZA_PORT ?? "31337"),
+    String(process.env.MILADY_PORT ?? "2138"),
+    String(process.env.MILADY_GATEWAY_PORT ?? "18789"),
+    String(process.env.MILADY_HOME_PORT ?? "2142"),
+  ]);
+}
+
+/**
+ * Check whether a URL string is an allowed localhost origin for CORS.
+ */
+export function isAllowedLocalOrigin(
+  urlStr: string,
+  allowedPorts?: Set<string>,
+): boolean {
+  const ports = allowedPorts ?? buildCorsAllowedPorts();
+  try {
+    const u = new URL(urlStr);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    const h = u.hostname.toLowerCase();
+    const isLocal =
+      h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1";
+    const port = u.port || (u.protocol === "https:" ? "443" : "80");
+    return isLocal && ports.has(port);
+  } catch {
+    return false;
+  }
+}
+
 export function resolveTradePermissionMode(config: {
   features?: { tradePermissionMode?: unknown } | null;
 }): TradePermissionMode {
@@ -2206,7 +2254,6 @@ async function handleMiladyCompatRoute(
     } catch (err) {
       sendJsonResponse(res, 502, {
         error: "screenshot proxy error",
-        message: err instanceof Error ? err.message : String(err),
       });
       return true;
     }
@@ -3625,35 +3672,22 @@ export function patchHttpCreateServerForMiladyCompat(
       // WKWebView sometimes omits `Origin` on cross-port fetches; allow Referer
       // only when Origin is absent so we never reflect an arbitrary Origin.
       const originHeader = req.headers.origin ?? "";
+      // Build allowed origins from configured ports (API, UI, gateway, home)
+      const corsAllowedPorts = buildCorsAllowedPorts();
       const allowOrigin = (() => {
-        if (
-          /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(
-            originHeader,
-          )
-        ) {
-          return originHeader;
-        }
         if (originHeader !== "") {
-          return null;
+          return isAllowedLocalOrigin(originHeader, corsAllowedPorts)
+            ? originHeader
+            : null;
         }
         const ref = req.headers.referer;
         if (!ref) return null;
         try {
           const u = new URL(ref);
-          if (u.protocol !== "http:" && u.protocol !== "https:") return null;
-          const h = u.hostname.toLowerCase();
-          if (
-            h === "localhost" ||
-            h === "127.0.0.1" ||
-            h === "[::1]" ||
-            h === "::1"
-          ) {
-            return u.origin;
-          }
+          return isAllowedLocalOrigin(ref, corsAllowedPorts) ? u.origin : null;
         } catch {
           return null;
         }
-        return null;
       })();
 
       if (allowOrigin) {
