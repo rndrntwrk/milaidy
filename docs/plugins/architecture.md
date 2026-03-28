@@ -175,7 +175,6 @@ const CONNECTOR_PLUGINS = {
   feishu:      "@elizaos/plugin-feishu",
   matrix:      "@elizaos/plugin-matrix",
   nostr:       "@elizaos/plugin-nostr",
-  retake:      "@elizaos/plugin-retake",
   blooio:      "@elizaos/plugin-blooio",
   twitch:      "@elizaos/plugin-twitch",
   wechat:      "@miladyai/plugin-wechat",  // Milady-specific (added in app-core)
@@ -230,7 +229,6 @@ const FEATURE_PLUGINS = {
 
 ```typescript
 const STREAMING_PLUGINS = {
-  retake:     "@elizaos/plugin-retake",
   twitch:     "@elizaos/plugin-twitch-streaming",
   youtube:    "@elizaos/plugin-youtube-streaming",
   customRtmp: "@elizaos/plugin-custom-rtmp",
