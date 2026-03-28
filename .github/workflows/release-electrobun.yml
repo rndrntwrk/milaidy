@@ -653,6 +653,10 @@ jobs:
           Remove-Item $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE -Force -ErrorAction SilentlyContinue
 
           bun run test:desktop:packaged:windows
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Packaged Windows smoke test exited with code $LASTEXITCODE."
+            exit $LASTEXITCODE
+          }
 
           if (-not (Test-Path $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE)) {
             Write-Error "Smoke test did not emit a reusable Windows launcher path."

@@ -679,6 +679,15 @@ describe("Electrobun release workflow drift", () => {
       "$persistLauncherPathFile = $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE",
     );
     expect(smokeScript).toContain("Set-Content -Path $persistLauncherPathFile");
+    expect(smokeScript).toContain(
+      '$stopProtectedProcessIds = [System.Collections.Generic.HashSet[int]]::new()',
+    );
+    expect(smokeScript).toContain(
+      'Get-CimInstance Win32_Process -Filter "ProcessId = $PID"',
+    );
+    expect(smokeScript).toContain(
+      "-not $stopProtectedProcessIds.Contains([int]$_.Id)",
+    );
     const tarballBranchIndex = smokeScript.indexOf(
       'Get-ChildItem -Path $resolvedArtifactsDir -File -Filter "*.tar.zst"',
     );
@@ -703,6 +712,9 @@ describe("Electrobun release workflow drift", () => {
     expect(workflow).toContain("MILADY_TEST_WINDOWS_INSTALL_DIR: C:\\mi");
     expect(workflow).toContain(
       'Add-Content -Path $env:GITHUB_ENV -Value "MILADY_TEST_WINDOWS_LAUNCHER_PATH=$launcherPath"',
+    );
+    expect(workflow).toContain(
+      'Write-Error "Packaged Windows smoke test exited with code $LASTEXITCODE."',
     );
   });
 

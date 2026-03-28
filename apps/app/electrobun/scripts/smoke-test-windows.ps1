@@ -25,6 +25,17 @@ $startupSessionId = "milady-windows-smoke-" + [Guid]::NewGuid().ToString("N")
 $startupStateFile = Join-Path $env:RUNNER_TEMP ($startupSessionId + ".state.json")
 $startupEventsFile = Join-Path $env:RUNNER_TEMP ($startupSessionId + ".events.jsonl")
 $startupBootstrapFile = $null
+$stopProtectedProcessIds = [System.Collections.Generic.HashSet[int]]::new()
+[void]$stopProtectedProcessIds.Add([int]$PID)
+try {
+  $invoker = Get-CimInstance Win32_Process -Filter "ProcessId = $PID"
+  if ($invoker -and $invoker.ParentProcessId) {
+    # When the smoke script is launched via `bun run`, keep the Bun host alive.
+    [void]$stopProtectedProcessIds.Add([int]$invoker.ParentProcessId)
+  }
+} catch {
+  # Best effort only; on failure we still protect the current PowerShell host.
+}
 
 function Find-Launcher([string]$Root) {
   if (-not (Test-Path $Root)) {
@@ -81,9 +92,12 @@ function Write-ReusableLauncherPath([System.IO.FileInfo]$Launcher, [string]$Temp
 function Stop-MiladyProcesses() {
   Get-Process -ErrorAction SilentlyContinue |
     Where-Object {
-      $_.ProcessName -in @("launcher", "bun") -or
-      $_.ProcessName -like "Milady*" -or
-      $_.ProcessName -like "Milady-Setup*"
+      -not $stopProtectedProcessIds.Contains([int]$_.Id) -and
+      (
+        $_.ProcessName -in @("launcher", "bun") -or
+        $_.ProcessName -like "Milady*" -or
+        $_.ProcessName -like "Milady-Setup*"
+      )
     } |
     Stop-Process -Force
 }

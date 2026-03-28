@@ -135,6 +135,7 @@ const requiredWorkflowSnippets = [
   "ELIZAOS_CLOUD_API_KEY: $" + "{{ secrets.ELIZAOS_CLOUD_API_KEY }}",
   "ELIZAOS_CLOUD_BASE_URL: $" + "{{ secrets.ELIZAOS_CLOUD_BASE_URL }}",
   "bun run test:desktop:packaged:windows",
+  'Write-Error "Packaged Windows smoke test exited with code $LASTEXITCODE."',
   "bun run test:desktop:playwright",
 ];
 const _requiredPatchedElectrobunCliSnippets = [
@@ -746,6 +747,9 @@ function assertWindowsSmokeScriptHasLeadingParamBlock() {
     "$startupStateFile = Join-Path $env:RUNNER_TEMP",
     '$startupBootstrapFile = Join-Path $startupBundleRoot "startup-session.json"',
     "Write-StartupBootstrap",
+    '$stopProtectedProcessIds = [System.Collections.Generic.HashSet[int]]::new()',
+    'Get-CimInstance Win32_Process -Filter "ProcessId = $PID"',
+    "-not $stopProtectedProcessIds.Contains([int]$_.Id)",
     "if ($state.session_id -ne $startupSessionId)",
     "$handler.UseProxy = $false",
     '--noproxy "127.0.0.1"',
