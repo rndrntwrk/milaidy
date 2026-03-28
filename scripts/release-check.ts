@@ -893,6 +893,7 @@ function assertMacSmokeScriptLaunchesPackagedLauncherDirectly() {
     "launch_packaged_app_with_open()",
     'OPEN_LAUNCH_ATTEMPTED="1"',
     'STARTUP_BOOTSTRAP_FILE="$LAUNCH_APP_BUNDLE/Contents/Resources/startup-session.json"',
+    "while IFS= read -r startup_state_line; do",
     "const [filePath, expectedSession] = process.argv.slice(1);",
     'TERM="$' + "{TERM:-dumb}" + '"',
     "attach_dmg_with_retry()",
@@ -920,6 +921,13 @@ function assertMacSmokeScriptLaunchesPackagedLauncherDirectly() {
     for (const snippet of missing) {
       console.error(`  - ${snippet}`);
     }
+    process.exit(1);
+  }
+
+  if (script.includes("mapfile -t startup_state_parts")) {
+    console.error(
+      "release-check: smoke-test.sh must stay compatible with macOS Bash 3.2 and cannot use mapfile.",
+    );
     process.exit(1);
   }
 }

@@ -579,6 +579,10 @@ describe("Electrobun release workflow drift", () => {
 
     expect(smokeScript).toContain("assert_packaged_archive_asset()");
     expect(smokeScript).toContain(
+      "while IFS= read -r startup_state_line; do",
+    );
+    expect(smokeScript).not.toContain("mapfile -t startup_state_parts");
+    expect(smokeScript).toContain(
       'echo "Packaged renderer asset check PASSED (wrapper archive)."',
     );
     expect(smokeScript).toContain(

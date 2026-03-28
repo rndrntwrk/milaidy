@@ -192,7 +192,11 @@ load_startup_state() {
   fi
 
   local -a startup_state_parts=()
-  mapfile -t startup_state_parts < <(
+  local startup_state_line=""
+  # macOS runners still default to Bash 3.2, so avoid Bash-4-only mapfile.
+  while IFS= read -r startup_state_line; do
+    startup_state_parts+=("$startup_state_line")
+  done < <(
     node -e '
       const fs = require("node:fs");
       const [filePath, expectedSession] = process.argv.slice(1);
