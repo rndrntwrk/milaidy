@@ -4,9 +4,9 @@
  */
 
 import type {
+  StewardApprovalActionResponse,
   StewardPendingApproval,
   StewardPolicyResult,
-  StewardApprovalActionResponse,
 } from "@miladyai/shared/contracts/wallet";
 import { Button, Spinner } from "@miladyai/ui";
 import {
@@ -19,21 +19,22 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  DESKTOP_SURFACE_PANEL_CLASSNAME,
-} from "../desktop-surface-primitives";
-import {
-  formatWeiValue,
-  getChainName,
-  truncateAddress,
-} from "./chain-utils";
+import { DESKTOP_SURFACE_PANEL_CLASSNAME } from "../desktop-surface-primitives";
+import { formatWeiValue, getChainName, truncateAddress } from "./chain-utils";
 
 interface ApprovalQueueProps {
   getStewardPending: () => Promise<StewardPendingApproval[]>;
   approveStewardTx: (txId: string) => Promise<StewardApprovalActionResponse>;
-  rejectStewardTx: (txId: string, reason?: string) => Promise<StewardApprovalActionResponse>;
+  rejectStewardTx: (
+    txId: string,
+    reason?: string,
+  ) => Promise<StewardApprovalActionResponse>;
   copyToClipboard: (text: string) => Promise<void>;
-  setActionNotice: (text: string, tone?: "info" | "success" | "error", ttlMs?: number) => void;
+  setActionNotice: (
+    text: string,
+    tone?: "info" | "success" | "error",
+    ttlMs?: number,
+  ) => void;
   onPendingCountChange?: (count: number) => void;
 }
 
@@ -97,7 +98,9 @@ export function ApprovalQueue({
         const result = await approveStewardTx(txId);
         if (result.ok !== false) {
           setActionNotice("Transaction approved ✓", "success", 3000);
-          setItems((prev) => prev.filter((item) => item.transaction.id !== txId));
+          setItems((prev) =>
+            prev.filter((item) => item.transaction.id !== txId),
+          );
           onPendingCountChange?.(items.length - 1);
         } else {
           setActionNotice(result.error ?? "Approval failed", "error", 4000);
@@ -122,7 +125,9 @@ export function ApprovalQueue({
         const result = await rejectStewardTx(txId, reason);
         if (result.ok !== false) {
           setActionNotice("Transaction rejected", "info", 3000);
-          setItems((prev) => prev.filter((item) => item.transaction.id !== txId));
+          setItems((prev) =>
+            prev.filter((item) => item.transaction.id !== txId),
+          );
           onPendingCountChange?.(items.length - 1);
         } else {
           setActionNotice(result.error ?? "Rejection failed", "error", 4000);
@@ -169,8 +174,10 @@ export function ApprovalQueue({
   const getPolicyReasons = (policyResults: StewardPolicyResult[]): string[] => {
     if (!Array.isArray(policyResults)) return [];
     return policyResults
-      .filter((r) => r.reason && (r.status === "rejected" || r.status === "pending"))
-      .map((r) => r.reason!)
+      .filter(
+        (r) => r.reason && (r.status === "rejected" || r.status === "pending"),
+      )
+      .map((r) => r.reason as string)
       .filter(Boolean);
   };
 
@@ -198,7 +205,9 @@ export function ApprovalQueue({
           }}
           disabled={loading}
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+          />
           Refresh
         </Button>
       </div>
@@ -210,18 +219,27 @@ export function ApprovalQueue({
       )}
 
       {loading && items.length === 0 && (
-        <div className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} flex items-center justify-center px-6 py-12`}>
+        <div
+          className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} flex items-center justify-center px-6 py-12`}
+        >
           <Spinner className="h-5 w-5 text-muted" />
-          <span className="ml-3 text-sm text-muted">Checking for pending approvals…</span>
+          <span className="ml-3 text-sm text-muted">
+            Checking for pending approvals…
+          </span>
         </div>
       )}
 
       {!loading && items.length === 0 && !error && (
-        <div className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} px-6 py-12 text-center`}>
+        <div
+          className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} px-6 py-12 text-center`}
+        >
           <ShieldAlert className="mx-auto h-8 w-8 text-muted/40" />
-          <p className="mt-3 text-sm font-medium text-txt">No pending approvals</p>
+          <p className="mt-3 text-sm font-medium text-txt">
+            No pending approvals
+          </p>
           <p className="mt-1 text-xs text-muted/70">
-            Transactions exceeding auto-approve thresholds will appear here for review.
+            Transactions exceeding auto-approve thresholds will appear here for
+            review.
           </p>
           <p className="mt-3 text-[10px] text-muted/50">
             Auto-refreshing every {POLL_INTERVAL_MS / 1000}s
@@ -257,11 +275,15 @@ export function ApprovalQueue({
                   {/* Destination + amount */}
                   <div className="flex flex-wrap items-center gap-3">
                     <div>
-                      <span className="text-[10px] uppercase tracking-wider text-muted/60">To</span>
+                      <span className="text-[10px] uppercase tracking-wider text-muted/60">
+                        To
+                      </span>
                       <button
                         type="button"
                         className="flex items-center gap-1 font-mono text-sm text-txt hover:text-accent transition-colors cursor-pointer"
-                        onClick={() => void handleCopy(tx.request?.to ?? "", "Address")}
+                        onClick={() =>
+                          void handleCopy(tx.request?.to ?? "", "Address")
+                        }
                         title={tx.request?.to}
                       >
                         {truncateAddress(tx.request?.to ?? "")}
@@ -269,9 +291,14 @@ export function ApprovalQueue({
                       </button>
                     </div>
                     <div>
-                      <span className="text-[10px] uppercase tracking-wider text-muted/60">Amount</span>
+                      <span className="text-[10px] uppercase tracking-wider text-muted/60">
+                        Amount
+                      </span>
                       <p className="text-sm font-semibold text-txt">
-                        {formatWeiValue(tx.request?.value ?? "0", tx.request?.chainId ?? 8453)}
+                        {formatWeiValue(
+                          tx.request?.value ?? "0",
+                          tx.request?.chainId ?? 8453,
+                        )}
                       </p>
                     </div>
                   </div>
@@ -282,9 +309,9 @@ export function ApprovalQueue({
                       <span className="text-[10px] uppercase tracking-wider text-muted/60">
                         Policy reason
                       </span>
-                      {reasons.map((reason, i) => (
+                      {reasons.map((reason) => (
                         <p
-                          key={i}
+                          key={reason}
                           className="rounded-lg border border-yellow-500/15 bg-yellow-500/5 px-2.5 py-1.5 text-xs text-yellow-300"
                         >
                           {reason}
@@ -329,20 +356,22 @@ export function ApprovalQueue({
                   <div className="flex-1">
                     <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted/60 mb-1">
                       Rejection reason (optional)
+                      <input
+                        type="text"
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        placeholder="e.g., Unauthorized recipient"
+                        className="mt-1 h-9 w-full rounded-lg border border-border/40 bg-card/60 px-3 text-sm text-txt placeholder:text-muted/40 focus:border-accent/40 focus:outline-none"
+                      />
                     </label>
-                    <input
-                      type="text"
-                      value={rejectReason}
-                      onChange={(e) => setRejectReason(e.target.value)}
-                      placeholder="e.g., Unauthorized recipient"
-                      className="h-9 w-full rounded-lg border border-border/40 bg-card/60 px-3 text-sm text-txt placeholder:text-muted/40 focus:border-accent/40 focus:outline-none"
-                    />
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
                     className="h-9 rounded-lg border-red-500/30 px-3 text-xs text-red-400 hover:bg-red-500/10"
-                    onClick={() => void handleReject(tx.id, rejectReason || undefined)}
+                    onClick={() =>
+                      void handleReject(tx.id, rejectReason || undefined)
+                    }
                   >
                     Confirm Reject
                   </Button>

@@ -1,111 +1,34 @@
 import { clearToken } from "./auth";
 import { CLOUD_BASE } from "./runtime-config";
 
-// ── Wallet types (mirrored from @miladyai/shared/contracts/wallet) ──────
+// ── Wallet types (re-exported from @miladyai/shared/contracts/wallet) ────
+export type {
+  EvmChainBalance,
+  EvmTokenBalance,
+  SolanaTokenBalance,
+  StewardApprovalActionResponse,
+  StewardPendingApproval,
+  StewardPolicyResult,
+  StewardStatusResponse,
+  StewardTxRecord,
+  StewardTxStatus,
+  WalletBalancesResponse,
+} from "@miladyai/shared/contracts/wallet";
 
-export interface WalletAddressesResponse {
-  evmAddress: string | null;
-  solanaAddress: string | null;
-}
+import type {
+  StewardApprovalActionResponse,
+  StewardPendingApproval,
+  StewardStatusResponse,
+  StewardTxRecord,
+  WalletBalancesResponse,
+} from "@miladyai/shared/contracts/wallet";
 
-export interface EvmTokenBalance {
-  symbol: string;
-  name: string;
-  contractAddress: string;
-  balance: string;
-  decimals: number;
-  valueUsd: string;
-  logoUrl: string;
-}
+// Wallet addresses response (same shape as WalletAddresses but with Response suffix for API clarity)
+export type { WalletAddresses as WalletAddressesResponse } from "@miladyai/shared/contracts/wallet";
 
-export interface EvmChainBalance {
-  chain: string;
-  chainId: number;
-  nativeBalance: string;
-  nativeSymbol: string;
-  nativeValueUsd: string;
-  tokens: EvmTokenBalance[];
-  error: string | null;
-}
+import type { WalletAddresses as WalletAddressesResponse } from "@miladyai/shared/contracts/wallet";
 
-export interface SolanaTokenBalance {
-  symbol: string;
-  name: string;
-  mint: string;
-  balance: string;
-  decimals: number;
-  valueUsd: string;
-  logoUrl: string;
-}
-
-export interface WalletBalancesResponse {
-  evm: { address: string; chains: EvmChainBalance[] } | null;
-  solana: {
-    address: string;
-    solBalance: string;
-    solValueUsd: string;
-    tokens: SolanaTokenBalance[];
-  } | null;
-}
-
-export interface StewardStatusResponse {
-  configured: boolean;
-  available: boolean;
-  connected: boolean;
-  baseUrl?: string;
-  agentId?: string;
-  evmAddress?: string;
-  error?: string | null;
-}
-
-export type StewardTxStatus =
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "signed"
-  | "broadcast"
-  | "confirmed"
-  | "failed";
-
-export interface StewardPolicyResult {
-  policyId?: string;
-  name?: string;
-  status: "approved" | "rejected" | "pending";
-  reason?: string;
-}
-
-export interface StewardTxRecord {
-  id: string;
-  agentId: string;
-  status: StewardTxStatus;
-  request: {
-    agentId: string;
-    tenantId: string;
-    to: string;
-    value: string;
-    data?: string;
-    chainId: number;
-  };
-  txHash?: string;
-  policyResults: StewardPolicyResult[];
-  createdAt: string;
-  signedAt?: string;
-  confirmedAt?: string;
-}
-
-export interface StewardPendingApproval {
-  queueId: string;
-  status: "pending" | "approved" | "rejected";
-  requestedAt: string;
-  transaction: StewardTxRecord;
-}
-
-export interface StewardApprovalActionResponse {
-  ok: boolean;
-  txHash?: string;
-  error?: string;
-}
-
+// Steward policy types (not in shared — these are UI-specific config shapes)
 export type StewardPolicyType =
   | "spending-limit"
   | "approved-addresses"
@@ -779,16 +702,20 @@ export class CloudApiClient {
     status?: string;
     limit?: number;
     offset?: number;
-  }): Promise<{ records: StewardTxRecord[]; total: number; offset: number; limit: number }> {
+  }): Promise<{
+    records: StewardTxRecord[];
+    total: number;
+    offset: number;
+    limit: number;
+  }> {
     const params = new URLSearchParams();
     if (options?.status) params.set("status", options.status);
     if (options?.limit) params.set("limit", String(options.limit));
     if (options?.offset) params.set("offset", String(options.offset));
     const qs = params.toString();
-    return this.request(
-      `/api/wallet/steward-tx-records${qs ? `?${qs}` : ""}`,
-      { method: "GET" },
-    );
+    return this.request(`/api/wallet/steward-tx-records${qs ? `?${qs}` : ""}`, {
+      method: "GET",
+    });
   }
 
   async getStewardPendingApprovals(): Promise<StewardPendingApproval[]> {
@@ -804,10 +731,13 @@ export class CloudApiClient {
     });
   }
 
-  async denyStewardTx(txId: string): Promise<StewardApprovalActionResponse> {
+  async denyStewardTx(
+    txId: string,
+    reason?: string,
+  ): Promise<StewardApprovalActionResponse> {
     return this.request("/api/wallet/steward-deny-tx", {
       method: "POST",
-      body: JSON.stringify({ txId }),
+      body: JSON.stringify({ txId, ...(reason ? { reason } : {}) }),
     });
   }
 
@@ -815,7 +745,9 @@ export class CloudApiClient {
     return this.request("/api/wallet/steward-policies", { method: "GET" });
   }
 
-  async setStewardPolicies(policies: StewardPolicyRule[]): Promise<{ ok: boolean }> {
+  async setStewardPolicies(
+    policies: StewardPolicyRule[],
+  ): Promise<{ ok: boolean }> {
     return this.request("/api/wallet/steward-policies", {
       method: "PUT",
       body: JSON.stringify({ policies }),

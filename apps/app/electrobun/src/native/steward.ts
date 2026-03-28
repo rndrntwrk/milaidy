@@ -216,9 +216,19 @@ export async function resetSteward(): Promise<StewardSidecarStatus> {
   const dataDir =
     process.env.STEWARD_DATA_DIR || path.join(home, ".milady", "steward");
 
-  if (fs.existsSync(dataDir)) {
-    console.log(`[Steward] Removing data directory: ${dataDir}`);
-    fs.rmSync(dataDir, { recursive: true, force: true });
+  // Safety: ensure dataDir resolves inside ~/.milady/ to prevent accidental
+  // deletion of unrelated directories via env var manipulation.
+  const resolvedDataDir = path.resolve(dataDir);
+  const miladyBase = path.resolve(path.join(home, ".milady"));
+  if (!resolvedDataDir.startsWith(miladyBase + path.sep) && resolvedDataDir !== miladyBase) {
+    throw new Error(
+      `[Steward] Refusing to delete dataDir outside ~/.milady/: ${resolvedDataDir}`,
+    );
+  }
+
+  if (fs.existsSync(resolvedDataDir)) {
+    console.log(`[Steward] Removing data directory: ${resolvedDataDir}`);
+    fs.rmSync(resolvedDataDir, { recursive: true, force: true });
   }
 
   // Clear env vars

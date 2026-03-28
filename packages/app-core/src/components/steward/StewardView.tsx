@@ -5,11 +5,7 @@
 
 import type { StewardStatusResponse } from "@miladyai/shared/contracts/wallet";
 import { Button } from "@miladyai/ui";
-import {
-  ArrowUpRight,
-  FileText,
-  Shield,
-} from "lucide-react";
+import { ArrowUpRight, FileText, Shield } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../../state";
 import {
@@ -22,11 +18,11 @@ import {
   APP_SIDEBAR_CARD_ACTIVE_CLASSNAME,
   APP_SIDEBAR_CARD_BASE_CLASSNAME,
   APP_SIDEBAR_CARD_INACTIVE_CLASSNAME,
-  APP_SIDEBAR_HEADER_CLASSNAME,
   APP_SIDEBAR_INNER_CLASSNAME,
   APP_SIDEBAR_KICKER_CLASSNAME,
   APP_SIDEBAR_META_CLASSNAME,
   APP_SIDEBAR_RAIL_CLASSNAME,
+  APP_SIDEBAR_STICKY_HEADER_CLASSNAME,
 } from "../sidebar-shell-styles";
 import { ApprovalQueue } from "./ApprovalQueue";
 import { TransactionHistory } from "./TransactionHistory";
@@ -45,7 +41,8 @@ export function StewardView() {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<StewardTab>("approvals");
-  const [stewardStatus, setStewardStatus] = useState<StewardStatusResponse | null>(null);
+  const [stewardStatus, setStewardStatus] =
+    useState<StewardStatusResponse | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
@@ -55,8 +52,12 @@ export function StewardView() {
       .then((s) => {
         if (!cancelled) setStewardStatus(s);
       })
-      .catch(() => { /* steward not available */ });
-    return () => { cancelled = true; };
+      .catch(() => {
+        /* steward not available */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [getStewardStatus]);
 
   const handlePendingCountChange = useCallback((count: number) => {
@@ -67,13 +68,19 @@ export function StewardView() {
   if (stewardStatus && !stewardStatus.connected) {
     return (
       <DesktopPageFrame>
-        <div className={`${APP_PANEL_SHELL_CLASSNAME} items-center justify-center`}>
-          <div className={`mx-4 w-full max-w-xl ${DESKTOP_SURFACE_PANEL_CLASSNAME} px-6 py-10 text-center`}>
+        <div
+          className={`${APP_PANEL_SHELL_CLASSNAME} items-center justify-center`}
+        >
+          <div
+            className={`mx-4 w-full max-w-xl ${DESKTOP_SURFACE_PANEL_CLASSNAME} px-6 py-10 text-center`}
+          >
             <Shield className="mx-auto h-10 w-10 text-muted/40" />
-            <h2 className="mt-4 text-lg font-semibold text-txt-strong">Steward Not Connected</h2>
+            <h2 className="mt-4 text-lg font-semibold text-txt-strong">
+              Steward Not Connected
+            </h2>
             <p className="mt-2 max-w-md mx-auto text-sm text-muted leading-relaxed">
-              Configure STEWARD_API_URL and STEWARD_API_KEY in your agent settings to enable
-              transaction history and approval management.
+              Configure STEWARD_API_URL and STEWARD_API_KEY in your agent
+              settings to enable transaction history and approval management.
             </p>
             {stewardStatus.error && (
               <p className="mt-3 rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
@@ -90,9 +97,11 @@ export function StewardView() {
     <DesktopPageFrame>
       <div className={APP_PANEL_SHELL_CLASSNAME}>
         {/* Sidebar */}
-        <aside className={`lg:w-[18rem] lg:max-w-[280px] ${APP_SIDEBAR_RAIL_CLASSNAME}`}>
+        <aside
+          className={`lg:w-[18rem] lg:max-w-[280px] ${APP_SIDEBAR_RAIL_CLASSNAME}`}
+        >
           <div className={APP_SIDEBAR_INNER_CLASSNAME}>
-            <div className={APP_SIDEBAR_HEADER_CLASSNAME}>
+            <div className={APP_SIDEBAR_STICKY_HEADER_CLASSNAME}>
               <div className={APP_SIDEBAR_KICKER_CLASSNAME}>Steward Vault</div>
               <div className={APP_SIDEBAR_META_CLASSNAME}>
                 {stewardStatus?.connected
@@ -192,14 +201,18 @@ export function StewardView() {
         <div className={DESKTOP_PAGE_CONTENT_CLASSNAME}>
           <div className="mx-auto max-w-[76rem] px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
             {/* Header */}
-            <section className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} px-5 py-5 sm:px-6`}>
+            <section
+              className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} px-5 py-5 sm:px-6`}
+            >
               <div className="flex items-start justify-between">
                 <div>
                   <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
                     Steward
                   </div>
                   <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
-                    {activeTab === "approvals" ? "Approval Queue" : "Transaction History"}
+                    {activeTab === "approvals"
+                      ? "Approval Queue"
+                      : "Transaction History"}
                   </h1>
                   <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
                     {activeTab === "approvals"

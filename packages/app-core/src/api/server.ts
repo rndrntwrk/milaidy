@@ -22,11 +22,11 @@ import {
   isAuthorized,
   normalizeWsClientId,
   persistConversationRoomTitle,
-  resolvePluginConfigMutationRejections,
   resolveMcpServersRejection,
+  resolvePluginConfigMutationRejections,
   routeAutonomyTextToUser,
-  startApiServer as upstreamStartApiServer,
   streamResponseBodyWithByteLimit,
+  startApiServer as upstreamStartApiServer,
   validateMcpServerConfig,
 } from "@miladyai/agent/api/server";
 import { type PolicyResult, StewardApiError } from "@stwd/sdk";
@@ -42,25 +42,16 @@ import {
 } from "./response";
 
 export {
-  AGENT_EVENT_ALLOWED_STREAMS,
-  CONFIG_WRITE_ALLOWED_TOP_KEYS,
-  type ConversationMeta,
-  cloneWithoutBlockedObjectKeys,
-  discoverInstalledPlugins,
-  discoverPluginsFromManifest,
-  extractAuthToken,
-  fetchWithTimeoutGuard,
-  isAllowedHost,
-  isAuthorized,
-  normalizeWsClientId,
-  persistConversationRoomTitle,
-  resolvePluginConfigMutationRejections,
-  resolveMcpServersRejection,
-  routeAutonomyTextToUser,
-  streamResponseBodyWithByteLimit,
-  validateMcpServerConfig,
-};
-
+  __resetCloudBaseUrlCache,
+  ensureCloudTtsApiKeyAlias,
+  resolveCloudTtsBaseUrl,
+  resolveElevenLabsApiKeyForCloudMode,
+} from "./server-cloud-tts";
+export {
+  filterConfigEnvForResponse,
+  SENSITIVE_ENV_RESPONSE_KEYS,
+} from "./server-config-filter";
+export { injectApiBaseIntoHtml } from "./server-html";
 // Re-export helpers from split-out modules so tests can import from "./server"
 export {
   ensureApiTokenForBindHost,
@@ -75,18 +66,26 @@ export {
   isSafeResetStateDir,
   resolveCorsOrigin,
 } from "./server-startup";
-export { injectApiBaseIntoHtml } from "./server-html";
 export { resolveWalletExportRejection } from "./server-wallet-trade";
 export {
-  SENSITIVE_ENV_RESPONSE_KEYS,
-  filterConfigEnvForResponse,
-} from "./server-config-filter";
-export {
-  __resetCloudBaseUrlCache,
-  ensureCloudTtsApiKeyAlias,
-  resolveCloudTtsBaseUrl,
-  resolveElevenLabsApiKeyForCloudMode,
-} from "./server-cloud-tts";
+  AGENT_EVENT_ALLOWED_STREAMS,
+  CONFIG_WRITE_ALLOWED_TOP_KEYS,
+  type ConversationMeta,
+  cloneWithoutBlockedObjectKeys,
+  discoverInstalledPlugins,
+  discoverPluginsFromManifest,
+  extractAuthToken,
+  fetchWithTimeoutGuard,
+  isAllowedHost,
+  isAuthorized,
+  normalizeWsClientId,
+  persistConversationRoomTitle,
+  resolveMcpServersRejection,
+  resolvePluginConfigMutationRejections,
+  routeAutonomyTextToUser,
+  streamResponseBodyWithByteLimit,
+  validateMcpServerConfig,
+};
 
 import {
   buildBscApproveUnsignedTx,
@@ -209,8 +208,8 @@ import {
 // ---------------------------------------------------------------------------
 
 import {
-  ensureCloudTtsApiKeyAlias,
   handleCloudTtsPreviewRoute as _handleCloudTtsPreviewRoute,
+  ensureCloudTtsApiKeyAlias,
   mirrorCompatHeaders,
 } from "./server-cloud-tts";
 import { filterConfigEnvForResponse as _filterConfigEnvForResponse } from "./server-config-filter";
@@ -2742,10 +2741,7 @@ async function handleMiladyCompatRoute(
     }
 
     const addresses = getWalletAddresses();
-    const agentId = resolveStewardAgentId(
-      process.env,
-      addresses.evmAddress,
-    );
+    const agentId = resolveStewardAgentId(process.env, addresses.evmAddress);
     const stewardClient = createStewardClient();
 
     if (!stewardClient || !agentId) {
@@ -2791,10 +2787,7 @@ async function handleMiladyCompatRoute(
     }
 
     const addresses = getWalletAddresses();
-    const agentId = resolveStewardAgentId(
-      process.env,
-      addresses.evmAddress,
-    );
+    const agentId = resolveStewardAgentId(process.env, addresses.evmAddress);
     const stewardClient = createStewardClient();
 
     if (!stewardClient || !agentId) {
@@ -2826,10 +2819,7 @@ async function handleMiladyCompatRoute(
     }
 
     const addresses = getWalletAddresses();
-    const agentId = resolveStewardAgentId(
-      process.env,
-      addresses.evmAddress,
-    );
+    const agentId = resolveStewardAgentId(process.env, addresses.evmAddress);
 
     if (!agentId || !createStewardClient()) {
       sendJsonResponse(res, 503, {
@@ -2845,7 +2835,7 @@ async function handleMiladyCompatRoute(
       // getStewardHistory returns full TxRecord[] from the steward API
       const history = await getStewardHistory(agentId);
       const filtered = status
-        ? history.filter((h: any) => h.status === status)
+        ? history.filter((h: { status: string }) => h.status === status)
         : history;
       const paginated = filtered.slice(offset, offset + limit);
       sendJsonResponse(res, 200, {
@@ -2873,10 +2863,7 @@ async function handleMiladyCompatRoute(
     }
 
     const addresses = getWalletAddresses();
-    const agentId = resolveStewardAgentId(
-      process.env,
-      addresses.evmAddress,
-    );
+    const agentId = resolveStewardAgentId(process.env, addresses.evmAddress);
 
     if (!agentId || !createStewardClient()) {
       sendJsonResponse(res, 503, {
@@ -2919,10 +2906,7 @@ async function handleMiladyCompatRoute(
     }
 
     const addresses = getWalletAddresses();
-    const agentId = resolveStewardAgentId(
-      process.env,
-      addresses.evmAddress,
-    );
+    const agentId = resolveStewardAgentId(process.env, addresses.evmAddress);
 
     if (!agentId || !createStewardClient()) {
       sendJsonResponse(res, 503, {
@@ -2941,9 +2925,7 @@ async function handleMiladyCompatRoute(
     } catch (err) {
       const action = isApprove ? "approve" : "deny";
       const message =
-        err instanceof Error
-          ? err.message
-          : `Failed to ${action} transaction`;
+        err instanceof Error ? err.message : `Failed to ${action} transaction`;
       sendJsonResponse(res, 500, { error: message });
     }
     return true;

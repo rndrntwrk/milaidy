@@ -4,7 +4,10 @@
 
 import type { StewardTxStatus } from "@miladyai/shared/contracts/wallet";
 
-const STATUS_STYLES: Record<StewardTxStatus, { bg: string; text: string; label: string }> = {
+const STATUS_STYLES: Record<
+  StewardTxStatus,
+  { bg: string; text: string; label: string }
+> = {
   pending: {
     bg: "bg-yellow-500/15 border-yellow-500/25",
     text: "text-yellow-400",

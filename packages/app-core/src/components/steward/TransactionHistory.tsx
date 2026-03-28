@@ -2,18 +2,14 @@
  * Transaction history table — lists all transactions for the agent from Steward vault.
  */
 
-import type { StewardTxRecord, StewardTxStatus } from "@miladyai/shared/contracts/wallet";
+import type {
+  StewardTxRecord,
+  StewardTxStatus,
+} from "@miladyai/shared/contracts/wallet";
 import { Button, Spinner } from "@miladyai/ui";
-import {
-  ArrowUpRight,
-  Copy,
-  ExternalLink,
-  RefreshCw,
-} from "lucide-react";
+import { ArrowUpRight, Copy, ExternalLink, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  DESKTOP_SURFACE_PANEL_CLASSNAME,
-} from "../desktop-surface-primitives";
+import { DESKTOP_SURFACE_PANEL_CLASSNAME } from "../desktop-surface-primitives";
 import {
   formatWeiValue,
   getChainName,
@@ -27,9 +23,18 @@ interface TransactionHistoryProps {
     status?: string;
     limit?: number;
     offset?: number;
-  }) => Promise<{ records: StewardTxRecord[]; total: number; offset: number; limit: number }>;
+  }) => Promise<{
+    records: StewardTxRecord[];
+    total: number;
+    offset: number;
+    limit: number;
+  }>;
   copyToClipboard: (text: string) => Promise<void>;
-  setActionNotice: (text: string, tone?: "info" | "success" | "error", ttlMs?: number) => void;
+  setActionNotice: (
+    text: string,
+    tone?: "info" | "success" | "error",
+    ttlMs?: number,
+  ) => void;
 }
 
 const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
@@ -58,7 +63,7 @@ export function TransactionHistory({
   setActionNotice,
 }: TransactionHistoryProps) {
   const [records, setRecords] = useState<StewardTxRecord[]>([]);
-  const [total, setTotal] = useState(0);
+  const [_total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
@@ -78,7 +83,9 @@ export function TransactionHistory({
       setRecords(result.records ?? []);
       setTotal(result.total ?? 0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load transactions");
+      setError(
+        err instanceof Error ? err.message : "Failed to load transactions",
+      );
       setRecords([]);
     } finally {
       setLoading(false);
@@ -170,7 +177,9 @@ export function TransactionHistory({
           onClick={() => void loadData()}
           disabled={loading}
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+          />
           Refresh
         </Button>
 
@@ -188,7 +197,9 @@ export function TransactionHistory({
 
       {/* Loading */}
       {loading && records.length === 0 && (
-        <div className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} flex items-center justify-center px-6 py-16`}>
+        <div
+          className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} flex items-center justify-center px-6 py-16`}
+        >
           <Spinner className="h-5 w-5 text-muted" />
           <span className="ml-3 text-sm text-muted">Loading transactions…</span>
         </div>
@@ -196,7 +207,9 @@ export function TransactionHistory({
 
       {/* Empty */}
       {!loading && filtered.length === 0 && (
-        <div className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} px-6 py-16 text-center`}>
+        <div
+          className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} px-6 py-16 text-center`}
+        >
           <ArrowUpRight className="mx-auto h-8 w-8 text-muted/40" />
           <p className="mt-3 text-sm text-muted">No transactions found</p>
           <p className="mt-1 text-xs text-muted/70">
@@ -236,7 +249,9 @@ export function TransactionHistory({
                       <button
                         type="button"
                         className="inline-flex items-center gap-1 font-mono text-xs text-txt hover:text-accent transition-colors cursor-pointer"
-                        onClick={() => void handleCopy(tx.request?.to ?? "", "Address")}
+                        onClick={() =>
+                          void handleCopy(tx.request?.to ?? "", "Address")
+                        }
                         title={tx.request?.to}
                       >
                         {truncateAddress(tx.request?.to ?? "")}
@@ -244,7 +259,10 @@ export function TransactionHistory({
                       </button>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-xs font-medium text-txt">
-                      {formatWeiValue(tx.request?.value ?? "0", tx.request?.chainId ?? 8453)}
+                      {formatWeiValue(
+                        tx.request?.value ?? "0",
+                        tx.request?.chainId ?? 8453,
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-muted">
                       {getChainName(tx.request?.chainId ?? 0)}
@@ -252,7 +270,12 @@ export function TransactionHistory({
                     <td className="px-4 py-3">
                       {tx.txHash ? (
                         <a
-                          href={getExplorerTxUrl(tx.request?.chainId ?? 8453, tx.txHash) ?? "#"}
+                          href={
+                            getExplorerTxUrl(
+                              tx.request?.chainId ?? 8453,
+                              tx.txHash,
+                            ) ?? "#"
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 font-mono text-xs text-accent hover:text-accent/80 transition-colors"
