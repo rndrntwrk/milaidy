@@ -627,14 +627,6 @@ Monitors Gmail via Google Pub/Sub push notifications.
 **Setup:** Requires Google Cloud service account with Gmail API access.
 **Tips:** Uses `gog gmail watch serve` internally. Requires Google Cloud project with Gmail API enabled and Pub/Sub configured.
 
-### Retake.tv
-Live video streaming connector.
-**Minimum required:** `RETAKE_AGENT_TOKEN`
-**Variables:**
-- `RETAKE_AGENT_TOKEN` — From your retake.tv account
-- `RETAKE_API_URL` — API endpoint (default provided)
-- `RETAKE_CAPTURE_URL` — Screen capture endpoint
-
 ---
 
 ## Streaming (Live Broadcasting)
