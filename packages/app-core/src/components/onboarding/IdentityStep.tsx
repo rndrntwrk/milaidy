@@ -155,10 +155,7 @@ export function IdentityStep({
             }
           }
         } catch (error) {
-          if (
-            error instanceof Error &&
-            error.message === "Request aborted"
-          ) {
+          if (error instanceof Error && error.message === "Request aborted") {
             return;
           }
         }

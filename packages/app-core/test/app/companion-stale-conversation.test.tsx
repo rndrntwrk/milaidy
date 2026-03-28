@@ -46,6 +46,9 @@ const { mockClient } = vi.hoisted(() => ({
         persisted: true,
       },
     })),
+    getStreamSettings: vi.fn(async () => ({
+      settings: { avatarIndex: 1 },
+    })),
     getConversationMessages: vi.fn(async () => ({
       messages: [],
     })),
@@ -188,6 +191,7 @@ describe("companion stale conversation rollover", () => {
       "eliza:connection-mode",
       JSON.stringify({ runMode: "local" }),
     );
+    localStorage.setItem(UI_SHELL_MODE_STORAGE_KEY, "companion");
     window.history.replaceState({}, "", "/chat");
     Object.assign(window, {
       setTimeout: globalThis.setTimeout,
@@ -220,6 +224,9 @@ describe("companion stale conversation rollover", () => {
           updatedAt: "2026-02-01T00:00:00.000Z",
         },
       ],
+    });
+    mockClient.getStreamSettings.mockResolvedValue({
+      settings: { avatarIndex: 1 },
     });
     mockClient.createConversation.mockResolvedValue({
       conversation: {
@@ -330,6 +337,7 @@ describe("companion stale conversation rollover", () => {
       ],
     });
 
+    let api: ProbeApi | null = null;
     let snapshot: Snapshot | null = null;
     const events: AppEmoteEventDetail[] = [];
     const handler = (event: Event) => {
@@ -343,7 +351,9 @@ describe("companion stale conversation rollover", () => {
           AppProvider,
           null,
           React.createElement(Probe, {
-            onReady: () => {},
+            onReady: (nextApi) => {
+              api = nextApi;
+            },
             onChange: (nextSnapshot) => {
               snapshot = nextSnapshot;
             },
@@ -352,8 +362,18 @@ describe("companion stale conversation rollover", () => {
       );
     });
 
-    // The app starts in companion mode, so the stale conversation effect
-    // fires automatically and creates a fresh conversation.
+    await waitFor(() => {
+      expect(api).not.toBeNull();
+    });
+
+    if (!api) {
+      throw new Error("App probe did not initialize");
+    }
+
+    await act(async () => {
+      api.switchShellView("companion");
+    });
+
     await waitFor(() => {
       expect(mockClient.createConversation).toHaveBeenCalledTimes(1);
       expect(mockClient.createConversation).toHaveBeenCalledWith(undefined, {

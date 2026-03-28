@@ -1159,59 +1159,56 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
               </div>
             </div>
 
-              <div className="mt-3 min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-3">
-                {loading &&
-                  !isShowingSearchResults &&
-                  documents.length === 0 && (
-                    <div
-                      className={`${DESKTOP_INSET_EMPTY_PANEL_CLASSNAME} px-4 py-10 text-center text-sm font-medium text-muted`}
-                    >
-                      {t("knowledgeview.LoadingDocuments")}
-                    </div>
-                  )}
+            <div className="mt-3 min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-3">
+              {loading && !isShowingSearchResults && documents.length === 0 && (
+                <div
+                  className={`${DESKTOP_INSET_EMPTY_PANEL_CLASSNAME} px-4 py-10 text-center text-sm font-medium text-muted`}
+                >
+                  {t("knowledgeview.LoadingDocuments")}
+                </div>
+              )}
 
-                {!loading &&
-                  !isShowingSearchResults &&
-                  documents.length === 0 && (
-                    <DesktopEmptyStatePanel
-                      className="min-h-[12rem] px-4 py-8"
-                      description={t("knowledgeview.UploadFilesOrImpo")}
-                      title={t("knowledgeview.NoDocumentsYet")}
+              {!loading &&
+                !isShowingSearchResults &&
+                documents.length === 0 && (
+                  <DesktopEmptyStatePanel
+                    className="min-h-[12rem] px-4 py-8"
+                    description={t("knowledgeview.UploadFilesOrImpo")}
+                    title={t("knowledgeview.NoDocumentsYet")}
+                  />
+                )}
+
+              {isShowingSearchResults && visibleSearchResults.length === 0 && (
+                <DesktopEmptyStatePanel
+                  className="min-h-[12rem] px-4 py-8"
+                  description="Try a filename, topic, or phrase from the document body."
+                  title={t("knowledgeview.NoResultsFound")}
+                />
+              )}
+
+              {isShowingSearchResults
+                ? visibleSearchResults.map((result) => (
+                    <SearchResultListItem
+                      key={result.id}
+                      result={result}
+                      active={
+                        selectedDocId === (result.documentId || result.id)
+                      }
+                      onSelect={setSelectedDocId}
                     />
-                  )}
-
-                {isShowingSearchResults &&
-                  visibleSearchResults.length === 0 && (
-                    <DesktopEmptyStatePanel
-                      className="min-h-[12rem] px-4 py-8"
-                      description="Try a filename, topic, or phrase from the document body."
-                      title={t("knowledgeview.NoResultsFound")}
+                  ))
+                : documents.map((doc) => (
+                    <DocumentListItem
+                      key={doc.id}
+                      doc={doc}
+                      active={selectedDocId === doc.id}
+                      onSelect={setSelectedDocId}
+                      onDelete={handleDelete}
+                      deleting={deleting === doc.id}
                     />
-                  )}
-
-                {isShowingSearchResults
-                  ? visibleSearchResults.map((result) => (
-                      <SearchResultListItem
-                        key={result.id}
-                        result={result}
-                        active={
-                          selectedDocId === (result.documentId || result.id)
-                        }
-                        onSelect={setSelectedDocId}
-                      />
-                    ))
-                  : documents.map((doc) => (
-                      <DocumentListItem
-                        key={doc.id}
-                        doc={doc}
-                        active={selectedDocId === doc.id}
-                        onSelect={setSelectedDocId}
-                        onDelete={handleDelete}
-                        deleting={deleting === doc.id}
-                      />
-                    ))}
-              </div>
+                  ))}
             </div>
+          </div>
         </aside>
 
         <div className={DESKTOP_PAGE_CONTENT_CLASSNAME}>

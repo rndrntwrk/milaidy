@@ -302,7 +302,7 @@ export function ConversationsSidebar({
                   size="icon"
                   data-testid="chat-sidebar-expand-toggle"
                   className={`h-11 w-11 rounded-[14px] ${DESKTOP_CONTROL_SURFACE_CLASSNAME}`}
-                  aria-label="Expand chats panel"
+                  aria-label={t("aria.expandChatsPanel")}
                   onClick={() => setCollapsed(false)}
                 >
                   <PanelLeftOpen className="h-4 w-4" />

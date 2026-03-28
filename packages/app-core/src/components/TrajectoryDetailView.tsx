@@ -119,7 +119,9 @@ function LlmCallCard({
               {call.model}
             </span>
             <span className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-              {call.purpose || call.actionType || "response"}
+              {call.purpose ||
+                call.actionType ||
+                t("trajectorydetailview.Response")}
             </span>
           </div>
           <div className="mt-2 text-xs text-muted">
@@ -131,7 +133,7 @@ function LlmCallCard({
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-3`}>
           <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-            Tokens
+            {t("trajectorydetailview.Tokens")}
           </div>
           <div className="mt-2 text-sm font-semibold text-txt">
             {formatTrajectoryTokenCount(totalTokens, { emptyLabel: "—" })}
@@ -146,7 +148,7 @@ function LlmCallCard({
         </div>
         <div className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-3`}>
           <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-            Cost
+            {t("trajectorydetailview.Cost")}
           </div>
           <div className="mt-2 text-sm font-semibold text-txt">
             {estimateCost(promptTokens, completionTokens, call.model)}
@@ -154,7 +156,7 @@ function LlmCallCard({
         </div>
         <div className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-3`}>
           <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-            Temp
+            {t("trajectorydetailview.Temp")}
           </div>
           <div className="mt-2 text-sm font-semibold text-txt">
             {call.temperature}
@@ -162,7 +164,7 @@ function LlmCallCard({
         </div>
         <div className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-3`}>
           <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-            Max
+            {t("trajectorydetailview.Max")}
           </div>
           <div className="mt-2 text-sm font-semibold text-txt">
             {call.maxTokens > 0 ? call.maxTokens : "—"}
@@ -243,7 +245,7 @@ export function TrajectoryDetailView({
     return (
       <DesktopEmptyStatePanel
         className="min-h-[22rem]"
-        description="Pulling prompt, response, token, and metadata detail for the selected run."
+        description={t("trajectorydetailview.LoadingDescription")}
         title={t("trajectorydetailview.LoadingTrajectory")}
       />
     );
@@ -254,7 +256,7 @@ export function TrajectoryDetailView({
       <DesktopEmptyStatePanel
         className="min-h-[22rem] border-danger/25 bg-danger/10 text-danger"
         description={error}
-        title="Unable to load trajectory"
+        title={t("trajectorydetailview.UnableToLoad")}
       />
     );
   }
@@ -264,7 +266,7 @@ export function TrajectoryDetailView({
       <DesktopEmptyStatePanel
         className="min-h-[22rem]"
         description={t("trajectorydetailview.TrajectoryNotFound")}
-        title="Trajectory unavailable"
+        title={t("trajectorydetailview.Unavailable")}
       />
     );
   }
@@ -291,15 +293,13 @@ export function TrajectoryDetailView({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
-              Trajectory
+              {t("trajectorydetailview.Trajectory")}
             </div>
             <div className="mt-2 text-[1.8rem] font-semibold leading-tight text-txt">
               {formatTrajectoryTimestamp(trajectory.createdAt, "detailed")}
             </div>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
-              Review the exact prompt and response chain for this run, including
-              cost, latency, source, and any orchestration context captured with
-              the call.
+              {t("trajectorydetailview.OverviewDescription")}
             </p>
           </div>
           {onBack ? (
@@ -318,7 +318,7 @@ export function TrajectoryDetailView({
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-4`}>
             <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-              Source
+              {t("trajectorydetailview.Source")}
             </div>
             <div className="mt-2 text-sm font-semibold text-txt">
               {trajectory.source}
@@ -326,7 +326,7 @@ export function TrajectoryDetailView({
           </div>
           <div className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-4`}>
             <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-              Status
+              {t("trajectorydetailview.Status")}
             </div>
             <div className="mt-2 text-sm font-semibold text-txt">
               {trajectory.status}
@@ -334,7 +334,7 @@ export function TrajectoryDetailView({
           </div>
           <div className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-4`}>
             <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-              Duration
+              {t("trajectorydetailview.Duration")}
             </div>
             <div className="mt-2 text-sm font-semibold text-txt">
               {formatTrajectoryDuration(trajectory.durationMs)}
@@ -355,7 +355,7 @@ export function TrajectoryDetailView({
 
         <div className="mt-4 flex flex-wrap gap-2">
           <span className="rounded-full border border-border/28 bg-bg/55 px-3 py-1 text-[11px] font-medium text-muted">
-            {llmCalls.length} LLM calls
+            {t("trajectorydetailview.LlmCalls", { count: llmCalls.length })}
           </span>
           <span className="rounded-full border border-border/28 bg-bg/55 px-3 py-1 text-[11px] font-mono text-muted">
             {trajectory.id}
@@ -366,12 +366,12 @@ export function TrajectoryDetailView({
       {orchestratorData ? (
         <section className={`${DESKTOP_SECTION_SHELL_CLASSNAME} p-5`}>
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
-            Orchestrator
+            {t("trajectorydetailview.Orchestrator")}
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <div className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-3`}>
               <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-                Decision Type
+                {t("trajectorydetailview.DecisionType")}
               </div>
               <div className="mt-2 text-sm font-semibold text-txt">
                 {String(orchestratorData.decisionType ?? "—")}
@@ -379,7 +379,7 @@ export function TrajectoryDetailView({
             </div>
             <div className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-3`}>
               <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-                Task
+                {t("trajectorydetailview.Task")}
               </div>
               <div className="mt-2 text-sm font-semibold text-txt">
                 {String(orchestratorData.taskLabel ?? "—")}
@@ -387,7 +387,7 @@ export function TrajectoryDetailView({
             </div>
             <div className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-3`}>
               <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-                Session
+                {t("trajectorydetailview.Session1")}
               </div>
               <div className="mt-2 break-all font-mono text-[11px] text-txt">
                 {String(orchestratorData.sessionId ?? "—")}
@@ -403,7 +403,7 @@ export function TrajectoryDetailView({
             <DesktopEmptyStatePanel
               className="min-h-[18rem]"
               description={t("trajectorydetailview.NoLLMCallsRecorde")}
-              title="No captured calls"
+              title={t("trajectorydetailview.NoCapturedCalls")}
             />
           ) : (
             llmCalls.map((call, index) => (

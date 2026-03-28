@@ -245,9 +245,9 @@ export function ShellHeaderControls({
           className={SHELL_SEGMENTED_CONTROL_CLASSNAME}
           data-testid="ui-shell-toggle"
           data-no-camera-drag="true"
-          aria-label="Switch shell view"
+          aria-label={t("aria.switchShellView")}
         >
-          <legend className="sr-only">Switch shell view</legend>
+          <legend className="sr-only">{t("aria.switchShellView")}</legend>
           {shellOptions.map(({ view, label, Icon }, index) => {
             const selected = activeShellView === view;
             const edgeClass =

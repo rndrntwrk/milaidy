@@ -538,7 +538,9 @@ export function InventoryView() {
                             onClick={() =>
                               setState(
                                 "inventorySortDirection",
-                                inventorySortDirection === "asc" ? "desc" : "asc",
+                                inventorySortDirection === "asc"
+                                  ? "desc"
+                                  : "asc",
                               )
                             }
                           >

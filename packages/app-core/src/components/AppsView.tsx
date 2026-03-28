@@ -22,10 +22,12 @@ import {
 export { shouldShowAppInAppsView } from "./apps/helpers";
 
 function AppsEmptyState() {
+  const { t } = useApp();
+
   return (
     <DesktopEmptyStatePanel
-      description="Browse the catalog, inspect launch details, and resume active sessions from one place."
-      title="Select an app to view details"
+      description={t("appsview.EmptyStateDescription")}
+      title={t("appsview.EmptyStateTitle")}
     />
   );
 }
@@ -37,6 +39,7 @@ export function AppsView() {
     activeGameViewerUrl,
     setState,
     setActionNotice,
+    t,
   } = useApp();
   const [apps, setApps] = useState<RegistryAppInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,7 +84,10 @@ export function AppsView() {
       });
     } catch (err) {
       setError(
-        `Failed to load apps: ${err instanceof Error ? err.message : "network error"}`,
+        t("appsview.LoadError", {
+          message:
+            err instanceof Error ? err.message : t("appsview.NetworkError"),
+        }),
       );
     } finally {
       setLoading(false);
@@ -129,7 +135,9 @@ export function AppsView() {
           );
           if (result.viewer.postMessageAuth && !result.viewer.authMessage) {
             setActionNotice(
-              `${app.displayName ?? app.name} requires iframe auth, but no auth payload is configured.`,
+              t("appsview.IframeAuthMissing", {
+                name: app.displayName ?? app.name,
+              }),
               "error",
               4800,
             );
@@ -144,13 +152,17 @@ export function AppsView() {
           try {
             await openExternalUrl(targetUrl);
             setActionNotice(
-              `${app.displayName ?? app.name} opened in a new tab.`,
+              t("appsview.OpenedInNewTab", {
+                name: app.displayName ?? app.name,
+              }),
               "success",
               2600,
             );
           } catch {
             setActionNotice(
-              `Popup blocked while opening ${app.displayName ?? app.name}. Allow popups and try again.`,
+              t("appsview.PopupBlockedOpen", {
+                name: app.displayName ?? app.name,
+              }),
               "error",
               4200,
             );
@@ -158,13 +170,18 @@ export function AppsView() {
           return;
         }
         setActionNotice(
-          `${app.displayName ?? app.name} launched, but no viewer or URL is configured.`,
+          t("appsview.LaunchedNoViewer", {
+            name: app.displayName ?? app.name,
+          }),
           "error",
           4000,
         );
       } catch (err) {
         setActionNotice(
-          `Failed to launch ${app.displayName ?? app.name}: ${err instanceof Error ? err.message : "error"}`,
+          t("appsview.LaunchFailed", {
+            name: app.displayName ?? app.name,
+            message: err instanceof Error ? err.message : t("common.error"),
+          }),
           "error",
           4000,
         );
@@ -185,15 +202,11 @@ export function AppsView() {
     if (!hasCurrentGame) return;
     try {
       await openExternalUrl(currentGameViewerUrl);
-      setActionNotice("Current game opened in a new tab.", "success", 2600);
+      setActionNotice(t("appsview.CurrentGameOpened"), "success", 2600);
     } catch {
-      setActionNotice(
-        "Popup blocked. Allow popups and try again.",
-        "error",
-        4200,
-      );
+      setActionNotice(t("appsview.PopupBlocked"), "error", 4200);
     }
-  }, [currentGameViewerUrl, hasCurrentGame, setActionNotice]);
+  }, [currentGameViewerUrl, hasCurrentGame, setActionNotice, t]);
 
   const visibleApps = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();

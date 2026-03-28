@@ -27,9 +27,11 @@ describe("resolvePreviewTtsEndpoints", () => {
   });
 
   it("can prefer the cloud proxy first for preset voices during onboarding", () => {
-    expect(resolvePreviewTtsEndpoints("EXAVITQu4vr4xnSDxMaL", {
-      preferCloudProxy: true,
-    })).toEqual(["/api/tts/cloud", "/api/tts/elevenlabs"]);
+    expect(
+      resolvePreviewTtsEndpoints("EXAVITQu4vr4xnSDxMaL", {
+        preferCloudProxy: true,
+      }),
+    ).toEqual(["/api/tts/cloud", "/api/tts/elevenlabs"]);
   });
 });
 

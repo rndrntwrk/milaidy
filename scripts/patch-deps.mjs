@@ -198,7 +198,8 @@ function patchPluginElizaCloudResponsesCompat() {
     } catch {}
   }
 
-  const oldGenerateObject = String.raw`async function generateObjectByModelType(runtime, params, modelType, getModelFn) {
+  const oldGenerateObject =
+    String.raw`async function generateObjectByModelType(runtime, params, modelType, getModelFn) {
   const openai = createOpenAIClient(runtime);
   const modelName = getModelFn(runtime);
   logger8.log(\`[ELIZAOS_CLOUD] Using \${modelType} model: \${modelName}\`);
@@ -245,9 +246,10 @@ function patchPluginElizaCloudResponsesCompat() {
     }
   }
 }`
-    .replaceAll("\\`", "`")
-    .replaceAll("\\${", "${");
-  const newGenerateObject = String.raw`async function generateObjectByModelType(runtime, params, modelType, getModelFn) {
+      .replaceAll("\\`", "`")
+      .replaceAll("\\${", "${");
+  const newGenerateObject =
+    String.raw`async function generateObjectByModelType(runtime, params, modelType, getModelFn) {
   const modelName = getModelFn(runtime);
   logger8.log(\`[ELIZAOS_CLOUD] Using \${modelType} model: \${modelName}\`);
   const reasoning = isReasoningModel(modelName);
@@ -336,10 +338,11 @@ function patchPluginElizaCloudResponsesCompat() {
     throw error;
   }
 }`
-    .replaceAll("\\`", "`")
-    .replaceAll("\\${", "${");
+      .replaceAll("\\`", "`")
+      .replaceAll("\\${", "${");
 
-  const oldGenerateText = String.raw`async function generateTextWithModel(runtime, modelType, params) {
+  const oldGenerateText =
+    String.raw`async function generateTextWithModel(runtime, modelType, params) {
   const { generateParams, modelName, prompt } = buildGenerateParams(runtime, modelType, params);
   logger11.debug(\`[ELIZAOS_CLOUD] Generating text with \${modelType} model: \${modelName}\`);
   if (params.stream) {
@@ -353,9 +356,10 @@ function patchPluginElizaCloudResponsesCompat() {
   }
   return response.text;
 }`
-    .replaceAll("\\`", "`")
-    .replaceAll("\\${", "${");
-  const newGenerateText = String.raw`async function generateTextWithModel(runtime, modelType, params) {
+      .replaceAll("\\`", "`")
+      .replaceAll("\\${", "${");
+  const newGenerateText =
+    String.raw`async function generateTextWithModel(runtime, modelType, params) {
   const { modelName, prompt } = buildGenerateParams(runtime, modelType, params);
   logger11.debug(\`[ELIZAOS_CLOUD] Generating text with \${modelType} model: \${modelName}\`);
   if (params.stream) {
@@ -426,8 +430,8 @@ function patchPluginElizaCloudResponsesCompat() {
   }
   return text;
 }`
-    .replaceAll("\\`", "`")
-    .replaceAll("\\${", "${");
+      .replaceAll("\\`", "`")
+      .replaceAll("\\${", "${");
 
   let patched = 0;
   const seenTargets = new Set();

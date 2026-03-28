@@ -132,8 +132,9 @@ function rememberCompanionSpeech(
   if (!conversationId) return;
   companionSpeechMemoryByConversation.set(conversationId, { messageId, text });
   if (companionSpeechMemoryByConversation.size <= 100) return;
-  const oldestConversationId =
-    companionSpeechMemoryByConversation.keys().next().value;
+  const oldestConversationId = companionSpeechMemoryByConversation
+    .keys()
+    .next().value;
   if (oldestConversationId) {
     companionSpeechMemoryByConversation.delete(oldestConversationId);
   }
@@ -146,10 +147,7 @@ function hasCompanionSpeechBeenPlayed(
 ): boolean {
   if (!conversationId) return false;
   const remembered = companionSpeechMemoryByConversation.get(conversationId);
-  return (
-    remembered?.messageId === messageId &&
-    remembered.text === text
-  );
+  return remembered?.messageId === messageId && remembered.text === text;
 }
 
 export function __resetCompanionSpeechMemoryForTests(): void {
@@ -1277,9 +1275,7 @@ export function ChatView({
                 setPtyDrawerSessionId((prev) => (prev === id ? null : id)))
             }
           />
-          <div
-            className="relative flex items-center px-3 py-2 max-[380px]:min-h-[78px] max-[380px]:px-2.5 max-[380px]:py-1.5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[34px] before:border before:border-white/8 before:bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] before:shadow-[0_20px_52px_rgba(0,0,0,0.17)] before:ring-1 before:ring-inset before:ring-white/6 before:backdrop-blur-[22px] before:content-['']"
-          >
+          <div className="relative flex items-center px-3 py-2 max-[380px]:min-h-[78px] max-[380px]:px-2.5 max-[380px]:py-1.5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[34px] before:border before:border-white/8 before:bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] before:shadow-[0_20px_52px_rgba(0,0,0,0.17)] before:ring-1 before:ring-inset before:ring-white/6 before:backdrop-blur-[22px] before:content-['']">
             <div className="relative z-[1] flex w-full items-center">
               <ChatComposer
                 variant="game-modal"

@@ -392,7 +392,9 @@ async function persistOnboardingStyleVoice(
   if (!voicePresetId) {
     return;
   }
-  const presetVoice = PREMADE_VOICES.find((voice) => voice.id === voicePresetId);
+  const presetVoice = PREMADE_VOICES.find(
+    (voice) => voice.id === voicePresetId,
+  );
   if (!presetVoice) {
     return;
   }
@@ -630,7 +632,10 @@ function AppProviderInner({
     useState<Tab>(loadLastNativeTab);
   // --- Core state ---
   const [tab, _setTabRawInner] = useState<Tab>(() =>
-    resolveInitialTabForPath(getNavigationPathFromWindow(), DEFAULT_LANDING_TAB),
+    resolveInitialTabForPath(
+      getNavigationPathFromWindow(),
+      DEFAULT_LANDING_TAB,
+    ),
   );
   const initialTabSetRef = useRef(false);
   const setTabRaw = useCallback((t: Tab) => {
@@ -3278,10 +3283,7 @@ function AppProviderInner({
    * default thread (same as sidebar "new chat") so greeting/bootstrap can run.
    */
   const bootstrapConversationAfterAgentReady = useCallback(
-    async (
-      context: string,
-      options?: { skipAgentRunningWait?: boolean },
-    ) => {
+    async (context: string, options?: { skipAgentRunningWait?: boolean }) => {
       traceMiladyGreeting(`${context}:begin`, {
         skipAgentRunningWait: options?.skipAgentRunningWait === true,
       });
@@ -5281,7 +5283,10 @@ function AppProviderInner({
         try {
           await persistOnboardingStyleVoice(style);
         } catch (err) {
-          console.warn("[onboarding] Failed to persist cloud voice preset", err);
+          console.warn(
+            "[onboarding] Failed to persist cloud voice preset",
+            err,
+          );
         }
 
         try {
@@ -5290,7 +5295,9 @@ function AppProviderInner({
           /* ignore */
         }
 
-        await bootstrapConversationAfterAgentReady("onboarding:cloud_fast_track");
+        await bootstrapConversationAfterAgentReady(
+          "onboarding:cloud_fast_track",
+        );
 
         clearPersistedOnboardingStep();
         onboardingResumeConnectionRef.current = null;
@@ -5511,7 +5518,10 @@ function AppProviderInner({
       try {
         await persistOnboardingStyleVoice(style);
       } catch (err) {
-        console.warn("[onboarding] Failed to persist selected voice preset", err);
+        console.warn(
+          "[onboarding] Failed to persist selected voice preset",
+          err,
+        );
       }
 
       // Give the backend a moment to finish persisting the config updates
@@ -6784,7 +6794,7 @@ function AppProviderInner({
       setOnboardingExistingInstallDetected(
         Boolean(
           persistedOnboardingCompleteAtStartup ||
-          desktopExistingInstall?.detected ||
+            desktopExistingInstall?.detected ||
             probedConnection?.detectedExistingInstall,
         ),
       );

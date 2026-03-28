@@ -468,11 +468,11 @@ export function ConnectionProviderDetailScreen({
                             className={onboardingLinkActionClass}
                             onClick={() => openExternalUrl(urlMatch[1])}
                           >
-                            Open login page in browser
+                            {t("onboarding.openLoginPageInBrowser")}
                           </Button>
                         }
                       >
-                        Open the login page in your browser to continue.
+                        {t("onboarding.openLoginPageInBrowserDesc")}
                       </OnboardingStatusBanner>
                     );
                   }
@@ -700,7 +700,7 @@ export function ConnectionProviderDetailScreen({
               </div>
               <OnboardingField
                 controlId="openai-callback-url"
-                label="Redirect URL"
+                label={t("onboarding.redirectUrl")}
                 description={t("onboarding.copyEntireUrl")}
                 message={openaiError}
                 messageTone="danger"
@@ -713,7 +713,7 @@ export function ConnectionProviderDetailScreen({
                     aria-describedby={describedBy}
                     aria-invalid={invalid}
                     className={onboardingInputClassName}
-                    placeholder="http://localhost:1455/..."
+                    placeholder={t("onboarding.redirectUrlPlaceholder")}
                     value={openaiCallbackUrl}
                     onChange={(e) => {
                       setOpenaiCallbackUrl(e.target.value);
@@ -857,7 +857,7 @@ export function ConnectionProviderDetailScreen({
                       onChange={(e) =>
                         setState("onboardingPrimaryModel", e.target.value)
                       }
-                      placeholder="provider/model (e.g. anthropic/claude-3.5-sonnet)"
+                      placeholder={t("onboarding.modelPlaceholder")}
                     />
                   ) : null}
                 </>
@@ -883,7 +883,7 @@ export function ConnectionProviderDetailScreen({
                   onChange={(e) =>
                     setState("onboardingPrimaryModel", e.target.value)
                   }
-                  placeholder="provider/model (e.g. anthropic/claude-3.5-sonnet)"
+                  placeholder={t("onboarding.modelPlaceholder")}
                 />
               )}
             </OnboardingField>

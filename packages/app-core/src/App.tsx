@@ -321,7 +321,7 @@ export function App() {
         onClick={() => {
           setMobileConversationsOpen(true);
         }}
-        aria-label="Open chats panel"
+        aria-label={t("aria.openChatsPanel")}
       >
         <svg
           width="14"
@@ -334,10 +334,10 @@ export function App() {
           strokeLinejoin="round"
           aria-hidden
         >
-          <title>Chats</title>
+          <title>{t("conversations.chats")}</title>
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
-        Chats
+        {t("conversations.chats")}
         {unreadCount > 0 && (
           <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-accent text-accent-fg text-[10px] font-bold px-1">
             {unreadCount > 99 ? "99+" : unreadCount}

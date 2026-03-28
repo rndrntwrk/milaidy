@@ -6,6 +6,7 @@ import {
   DrawerSheetTitle,
 } from "@miladyai/ui";
 import { memo } from "react";
+import { useTranslation } from "../state";
 import { ChatView } from "./ChatView.js";
 import { ConversationsSidebar } from "./ConversationsSidebar.js";
 
@@ -41,6 +42,7 @@ export const ChatModalView = memo(function ChatModalView({
   onPtySessionClick,
 }: ChatModalViewProps) {
   useRenderGuard("ChatModalView");
+  const { t } = useTranslation();
 
   const isNarrow = useMediaQuery(CHAT_MODAL_MEDIA_QUERY);
   const isCompanionDock = variant === "companion-dock";
@@ -77,7 +79,7 @@ export const ChatModalView = memo(function ChatModalView({
               showCloseButton={false}
             >
               <DrawerSheetHeader className="sr-only">
-                <DrawerSheetTitle>Chats</DrawerSheetTitle>
+                <DrawerSheetTitle>{t("conversations.chats")}</DrawerSheetTitle>
               </DrawerSheetHeader>
               <ConversationsSidebar mobile onClose={onSidebarClose} />
             </DrawerSheetContent>

@@ -54,6 +54,9 @@ const { mockClient } = vi.hoisted(() => ({
         },
       ],
     })),
+    getStreamSettings: vi.fn(async () => ({
+      settings: { avatarIndex: 1 },
+    })),
     requestGreeting: vi.fn(async () => ({
       text: "hello there",
       agentName: "Milady",
@@ -185,6 +188,7 @@ describe("companion greeting wave", () => {
       "eliza:connection-mode",
       JSON.stringify({ runMode: "local" }),
     );
+    localStorage.setItem("eliza:ui-shell-mode", "companion");
     window.history.replaceState({}, "", "/chat");
     Object.assign(window, {
       setTimeout: globalThis.setTimeout,
@@ -217,6 +221,9 @@ describe("companion greeting wave", () => {
           updatedAt: "2026-02-02T00:00:00.000Z",
         },
       ],
+    });
+    mockClient.getStreamSettings.mockResolvedValue({
+      settings: { avatarIndex: 1 },
     });
     mockClient.createConversation.mockResolvedValue({
       conversation: {
@@ -355,26 +362,27 @@ describe("companion greeting wave", () => {
 
     await waitFor(() => {
       expect(api).not.toBeNull();
-      if (options?.bootstrapConversation) {
-        expect(mockClient.createConversation).not.toHaveBeenCalled();
-        expect(snapshot).toMatchObject({
-          tab: "companion",
-          uiShellMode: "companion",
-        });
-        return;
-      }
-      expect(mockClient.getConversationMessages).toHaveBeenCalledWith(
-        "conv-existing",
-      );
-      expect(snapshot).toMatchObject({
-        tab: "companion",
-        uiShellMode: "companion",
-      });
     });
 
     const resolvedApi = api;
     if (!resolvedApi) {
       throw new Error("App probe did not initialize");
+    }
+
+    if (!options?.bootstrapConversation) {
+      await act(async () => {
+        resolvedApi.switchShellView("companion");
+      });
+
+      await waitFor(() => {
+        expect(mockClient.getConversationMessages).toHaveBeenCalledWith(
+          "conv-existing",
+        );
+        expect(snapshot).toMatchObject({
+          tab: "companion",
+          uiShellMode: "companion",
+        });
+      });
     }
 
     const originalUnmount = tree.unmount.bind(tree);

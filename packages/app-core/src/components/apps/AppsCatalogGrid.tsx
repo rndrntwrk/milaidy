@@ -44,18 +44,17 @@ export function AppsCatalogGrid({
         <Input
           type="text"
           aria-label={t("appsview.Search", { defaultValue: "Search apps" })}
-          placeholder="Search by name or description"
+          placeholder={t("appsview.SearchPlaceholder")}
           value={searchQuery}
           onChange={(event) => onSearchQueryChange(event.target.value)}
           className="rounded-xl border-border/50 bg-card/86 text-[12px] text-txt placeholder:text-muted focus:border-accent"
         />
         <p className="text-[11px] leading-5 text-muted-strong">
-          Choose an app tile to inspect launch details, current session state,
-          and available viewer actions.
+          {t("appsview.HelperText")}
         </p>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="rounded-full border border-border/30 bg-bg-hover px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-strong">
-            {visibleApps.length} results
+            {t("appsview.Results", { count: visibleApps.length })}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -86,9 +85,11 @@ export function AppsCatalogGrid({
         >
           <span className="h-2.5 w-2.5 rounded-full bg-ok animate-pulse" />
           <span className="min-w-0 flex-1 text-left text-[11px] font-semibold text-txt">
-            {activeGameDisplayName || "Game running"}
+            {activeGameDisplayName || t("appsview.GameRunning")}
           </span>
-          <span className="text-[10px] text-muted-strong">Resume</span>
+          <span className="text-[10px] text-muted-strong">
+            {t("appsview.Resume")}
+          </span>
         </Button>
       ) : null}
 
@@ -100,17 +101,19 @@ export function AppsCatalogGrid({
 
       {loading ? (
         <div className="rounded-2xl border border-border/30 bg-card/72 py-16 text-center text-[12px] text-muted">
-          Loading...
+          {t("appsview.Loading")}
         </div>
       ) : visibleApps.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/35 bg-card/72 px-6 py-16 text-center">
           <div className="text-[12px] font-medium text-muted-strong">
-            {searchQuery ? "No apps match this search" : "No apps available"}
+            {searchQuery
+              ? t("appsview.NoAppsMatchSearch")
+              : t("appsview.NoAppsAvailable")}
           </div>
           <div className="mt-2 text-[11px] leading-5 text-muted">
             {searchQuery
-              ? "Try a broader search, or clear the filter to browse everything in the catalog."
-              : "Refresh the catalog or check back after more app packages are installed."}
+              ? t("appsview.EmptySearchHint")
+              : t("appsview.EmptyCatalogHint")}
           </div>
         </div>
       ) : (
@@ -129,8 +132,8 @@ export function AppsCatalogGrid({
                     ? "is-selected border-accent/35 bg-accent/10 shadow-sm"
                     : "border-transparent hover:border-border/40 hover:bg-bg-hover/70"
                 }`}
-                title={`Open ${displayName}`}
-                aria-label={`Open ${displayName}`}
+                title={t("appsview.Open", { name: displayName })}
+                aria-label={t("appsview.Open", { name: displayName })}
                 onClick={() => onSelectApp(app.name)}
               >
                 <div className="phone-app-icon relative flex h-16 w-16 items-center justify-center rounded-[1.35rem] border border-border/35 bg-card/92 shadow-sm transition-transform group-hover:scale-[1.02]">

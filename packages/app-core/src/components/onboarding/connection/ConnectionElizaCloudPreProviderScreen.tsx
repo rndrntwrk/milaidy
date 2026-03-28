@@ -128,11 +128,11 @@ export function ConnectionElizaCloudPreProviderScreen({
                           type="button"
                           onClick={() => openExternalUrl(urlMatch[1])}
                         >
-                          Open login page in browser
+                          {t("onboarding.openLoginPageInBrowser")}
                         </OnboardingLinkActionButton>
                       }
                     >
-                      Open the login page in your browser to continue.
+                      {t("onboarding.openLoginPageInBrowserDesc")}
                     </OnboardingStatusBanner>
                   );
                 }

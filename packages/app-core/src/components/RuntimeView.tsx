@@ -67,59 +67,45 @@ const RUNTIME_SECTION_BUTTON_CLASSNAME = APP_SIDEBAR_COMPACT_CARD_CLASSNAME;
 const SECTION_TAB_KEYS: Array<{
   key: RuntimeSectionKey;
   i18nKey: string;
-  description: string;
 }> = [
   {
     key: "summary",
     i18nKey: "runtimeview.Summary",
-    description: "Health, counts, and current load order.",
   },
   {
     key: "runtime",
     i18nKey: "runtimeview.tabRuntime",
-    description: "Full serialized runtime object.",
   },
   {
     key: "actions",
     i18nKey: "runtimeview.tabActions",
-    description: "Registered actions and order.",
   },
   {
     key: "providers",
     i18nKey: "runtimeview.tabProviders",
-    description: "Loaded providers and precedence.",
   },
   {
     key: "plugins",
     i18nKey: "runtimeview.tabPlugins",
-    description: "Plugin registration and order.",
   },
   {
     key: "services",
     i18nKey: "runtimeview.tabServices",
-    description: "Grouped service implementations.",
   },
   {
     key: "evaluators",
     i18nKey: "runtimeview.tabEvaluators",
-    description: "Evaluator registration and order.",
   },
 ];
 
-const SECTION_DESCRIPTIONS: Record<RuntimeSectionKey, string> = {
-  summary:
-    "Start here to confirm runtime availability, check the active model, and scan the current registration totals before opening a specific section.",
-  runtime:
-    "Inspect the full serialized runtime object and expand into the raw state tree.",
-  actions:
-    "Review registered actions and their load order in the active runtime.",
-  providers:
-    "Check loaded providers, execution precedence, and what contexts are available.",
-  plugins:
-    "Verify plugin registration order and confirm what the runtime has loaded.",
-  services: "Inspect grouped services and their instantiated implementations.",
-  evaluators:
-    "Review evaluator registration and ordering for agent decision loops.",
+const SECTION_DESCRIPTION_KEYS: Record<RuntimeSectionKey, string> = {
+  summary: "runtimeview.summaryDescription",
+  runtime: "runtimeview.runtimeDescription",
+  actions: "runtimeview.actionsDescription",
+  providers: "runtimeview.providersDescription",
+  plugins: "runtimeview.pluginsDescription",
+  services: "runtimeview.servicesDescription",
+  evaluators: "runtimeview.evaluatorsDescription",
 };
 
 function nodeSummary(value: unknown): string {
@@ -207,6 +193,7 @@ function TreeNode(props: {
   expanded: Set<string>;
   onToggle: (path: string) => void;
 }) {
+  const { t } = useApp();
   const { label, value, path, depth, expanded, onToggle } = props;
   const canExpand = isExpandable(value);
   const open = expanded.has(path);
@@ -225,7 +212,7 @@ function TreeNode(props: {
             type="button"
             onClick={() => onToggle(path)}
             className="h-5 w-5 shrink-0 rounded-md p-0 text-left text-muted hover:bg-bg-hover hover:text-txt"
-            title={open ? "Collapse" : "Expand"}
+            title={open ? t("runtimeview.Collapse") : t("runtimeview.Expand")}
           >
             {open ? "▾" : "▸"}
           </Button>
@@ -600,7 +587,7 @@ export function RuntimeView() {
             </DesktopRailSummaryCard>
 
             <div className={`mt-3 ${APP_SIDEBAR_SECTION_HEADING_CLASSNAME}`}>
-              Sections
+              {t("runtimeview.sections")}
             </div>
             <div className={`mt-2 ${APP_SIDEBAR_SCROLL_REGION_CLASSNAME}`}>
               <div className="space-y-1.5">
@@ -662,7 +649,7 @@ export function RuntimeView() {
             {!snapshot ? (
               <DesktopEmptyStatePanel
                 className="min-h-[24rem]"
-                description="Refresh the inspector after the desktop runtime boots to pull the current object tree and registration data."
+                description={t("runtimeview.loadingDescription")}
                 title={
                   loading
                     ? t("runtimeview.loadingSnapshot")
@@ -672,7 +659,7 @@ export function RuntimeView() {
             ) : !snapshot.runtimeAvailable ? (
               <DesktopEmptyStatePanel
                 className="min-h-[24rem] border-warning/25 bg-warning/10 text-warning"
-                description="The runtime inspector becomes available after the desktop agent finishes loading its core services."
+                description={t("runtimeview.runtimePendingDescription")}
                 title={t("runtimeview.AgentRuntimeIsNot")}
               />
             ) : activeSection === "summary" ? (
@@ -704,7 +691,7 @@ export function RuntimeView() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
-                        Runtime Section
+                        {t("runtimeview.sectionLabel")}
                       </div>
                       <div className="mt-2 text-[2rem] font-semibold leading-tight text-txt">
                         {t(
@@ -714,7 +701,7 @@ export function RuntimeView() {
                         )}
                       </div>
                       <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
-                        {SECTION_DESCRIPTIONS[activeSection]}
+                        {t(SECTION_DESCRIPTION_KEYS[activeSection])}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -748,7 +735,7 @@ export function RuntimeView() {
                       className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-4`}
                     >
                       <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-                        Path
+                        {t("runtimeview.path")}
                       </div>
                       <div className="mt-2 font-mono text-sm text-txt">
                         {rootPath}
@@ -758,7 +745,7 @@ export function RuntimeView() {
                       className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-4`}
                     >
                       <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-                        Last Updated
+                        {t("runtimeview.lastUpdated")}
                       </div>
                       <div className="mt-2 text-sm font-semibold text-txt">
                         {formatDateTime(snapshot.generatedAt, {
@@ -770,7 +757,7 @@ export function RuntimeView() {
                       className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-4`}
                     >
                       <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-                        Depth
+                        {t("runtimeview.depth")}
                       </div>
                       <div className="mt-2 text-sm font-semibold text-txt">
                         {depth}
@@ -780,7 +767,7 @@ export function RuntimeView() {
                       className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-4`}
                     >
                       <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-                        Object Cap
+                        {t("runtimeview.objectCap")}
                       </div>
                       <div className="mt-2 text-sm font-semibold text-txt">
                         {maxObjectEntries}
@@ -795,8 +782,8 @@ export function RuntimeView() {
                   {sectionData == null ? (
                     <DesktopEmptyStatePanel
                       className={`min-h-[18rem] ${DESKTOP_INSET_EMPTY_PANEL_CLASSNAME}`}
-                      description="No data was returned for this section in the current snapshot."
-                      title="Section unavailable"
+                      description={t("runtimeview.noSectionData")}
+                      title={t("runtimeview.sectionUnavailable")}
                     />
                   ) : (
                     <TreeNode

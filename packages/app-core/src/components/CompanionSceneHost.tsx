@@ -436,7 +436,10 @@ function CompanionSceneSurface({
         dispatchAppEmoteEvent(COMPANION_TELEPORT_GREETING_EMOTE);
       }, COMPANION_TELEPORT_GREETING_DELAY_MS);
     };
-    window.addEventListener(VRM_TELEPORT_COMPLETE_EVENT, handleTeleportComplete);
+    window.addEventListener(
+      VRM_TELEPORT_COMPLETE_EVENT,
+      handleTeleportComplete,
+    );
     return () => {
       window.removeEventListener(
         VRM_TELEPORT_COMPLETE_EVENT,

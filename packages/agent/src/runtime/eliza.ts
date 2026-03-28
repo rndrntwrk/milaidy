@@ -117,6 +117,7 @@ import { SandboxAuditLog } from "../security/audit-log";
 import { SandboxManager, type SandboxMode } from "../services/sandbox-manager";
 import { diagnoseNoAIProvider } from "../services/version-compat";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins";
+import { seedBundledKnowledge } from "./default-knowledge";
 import { createElizaPlugin } from "./eliza-plugin";
 import { detectEmbeddingPreset } from "./embedding-presets";
 import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence";
@@ -4651,6 +4652,14 @@ export async function startEliza(
     } catch (err) {
       logger.warn(
         `[eliza] Failed to install prompt optimizations: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    try {
+      await seedBundledKnowledge(runtime);
+    } catch (err) {
+      logger.warn(
+        `[eliza] Failed to seed bundled knowledge: ${formatError(err)}`,
       );
     }
 

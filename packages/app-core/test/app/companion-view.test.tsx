@@ -250,6 +250,7 @@ describe("CompanionView", () => {
   beforeEach(() => {
     viewerPropsRef.current = null;
     const storage = new Map<string, string>();
+    const windowListeners = new Map<string, Set<EventListener>>();
     Object.defineProperty(globalThis, "localStorage", {
       value: {
         getItem: vi.fn((key: string) => storage.get(String(key)) ?? null),
@@ -273,8 +274,27 @@ describe("CompanionView", () => {
         innerHeight: 900,
         setTimeout: globalThis.setTimeout.bind(globalThis),
         clearTimeout: globalThis.clearTimeout.bind(globalThis),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
+        addEventListener: vi.fn(
+          (type: string, listener: EventListenerOrEventListenerObject) => {
+            if (typeof listener !== "function") return;
+            const listeners =
+              windowListeners.get(type) ?? new Set<EventListener>();
+            listeners.add(listener);
+            windowListeners.set(type, listeners);
+          },
+        ),
+        removeEventListener: vi.fn(
+          (type: string, listener: EventListenerOrEventListenerObject) => {
+            if (typeof listener !== "function") return;
+            windowListeners.get(type)?.delete(listener);
+          },
+        ),
+        dispatchEvent: vi.fn((event: Event) => {
+          for (const listener of windowListeners.get(event.type) ?? []) {
+            listener(event);
+          }
+          return true;
+        }),
       },
       configurable: true,
     });
@@ -375,7 +395,8 @@ describe("CompanionView", () => {
     const events: Array<{ emoteId?: string; path?: string }> = [];
     const handleEmote = (event: Event) => {
       events.push(
-        (event as CustomEvent<{ emoteId?: string; path?: string }>).detail ?? {},
+        (event as CustomEvent<{ emoteId?: string; path?: string }>).detail ??
+          {},
       );
     };
     window.addEventListener(APP_EMOTE_EVENT, handleEmote);
@@ -449,7 +470,6 @@ describe("CompanionView", () => {
       voiceButton?.props.onClick();
     });
     expect(setState).toHaveBeenCalledWith("chatAgentVoiceMuted", true);
-
   });
 
   it("does not render the cloud status badge in companion header (desktop header only)", async () => {
