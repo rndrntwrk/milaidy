@@ -611,6 +611,28 @@ export function isLocalProviderConnection(
   return connection?.kind === "local-provider";
 }
 
+export function isOnboardingConnectionComplete(
+  connection: OnboardingConnection | null | undefined,
+): boolean {
+  if (isLocalProviderConnection(connection)) {
+    return true;
+  }
+
+  if (isRemoteProviderConnection(connection)) {
+    return Boolean(connection.remoteApiBase.trim());
+  }
+
+  if (isCloudManagedConnection(connection)) {
+    return Boolean(
+      connection.apiKey?.trim() &&
+        connection.smallModel?.trim() &&
+        connection.largeModel?.trim(),
+    );
+  }
+
+  return false;
+}
+
 const REDACTED_SECRET = "[REDACTED]";
 const PI_AI_ENV_SIGNAL_KEYS = [
   "ELIZA_USE_PI_AI",

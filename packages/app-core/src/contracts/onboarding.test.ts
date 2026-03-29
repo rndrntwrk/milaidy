@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   inferOnboardingConnectionFromConfig,
   getStoredOnboardingProviderId,
+  isOnboardingConnectionComplete,
   getSubscriptionProviderFamily,
   normalizeOnboardingProviderId,
   normalizePersistedOnboardingConnection,
@@ -150,5 +151,49 @@ describe("onboarding provider catalog", () => {
       kind: "local-provider",
       provider: "ollama",
     });
+  });
+
+  it("treats local providers as complete onboarding state", () => {
+    expect(
+      isOnboardingConnectionComplete({
+        kind: "local-provider",
+        provider: "openai",
+      }),
+    ).toBe(true);
+  });
+
+  it("requires remote selections to keep a non-empty API base", () => {
+    expect(
+      isOnboardingConnectionComplete({
+        kind: "remote-provider",
+        remoteApiBase: "https://remote.example/api",
+      }),
+    ).toBe(true);
+    expect(
+      isOnboardingConnectionComplete({
+        kind: "remote-provider",
+        remoteApiBase: "",
+      }),
+    ).toBe(false);
+  });
+
+  it("requires full cloud-managed model selection before onboarding is complete", () => {
+    expect(
+      isOnboardingConnectionComplete({
+        kind: "cloud-managed",
+        cloudProvider: "elizacloud",
+        apiKey: "ck-ready",
+        smallModel: "openai/gpt-5-mini",
+        largeModel: "anthropic/claude-sonnet-4.5",
+      }),
+    ).toBe(true);
+
+    expect(
+      isOnboardingConnectionComplete({
+        kind: "cloud-managed",
+        cloudProvider: "elizacloud",
+        apiKey: "ck-partial",
+      }),
+    ).toBe(false);
   });
 });

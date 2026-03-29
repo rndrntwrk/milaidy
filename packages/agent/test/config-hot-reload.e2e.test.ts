@@ -164,4 +164,22 @@ describe("config updates", () => {
     const after = (await req(port, "GET", "/api/config")).data;
     expect(after.connection).toEqual(before.connection);
   });
+
+  it("does not mark partial cloud-managed selection as onboarding-complete", async () => {
+    const { status } = await req(port, "PUT", "/api/config", {
+      connection: {
+        kind: "cloud-managed",
+        cloudProvider: "elizacloud",
+      },
+      cloud: {
+        enabled: true,
+        apiKey: "ck-partial-cloud",
+      },
+    });
+    expect(status).toBe(200);
+
+    const onboarding = await req(port, "GET", "/api/onboarding/status");
+    expect(onboarding.status).toBe(200);
+    expect(onboarding.data).toEqual({ complete: false });
+  });
 });
