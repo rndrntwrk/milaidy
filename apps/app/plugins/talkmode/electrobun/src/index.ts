@@ -28,6 +28,7 @@ import type {
   TalkModeErrorEvent,
   TalkModePermissionStatus,
   TalkModePlugin,
+  TalkModeSpeechLevelEvent,
   TalkModeState,
   TalkModeStateEvent,
   TalkModeTranscriptEvent,
@@ -40,6 +41,7 @@ type TalkModeEvent =
   | TalkModeTranscriptEvent
   | TTSSpeakingEvent
   | TTSCompleteEvent
+  | TalkModeSpeechLevelEvent
   | TalkModeErrorEvent;
 
 interface ListenerEntry {
@@ -63,6 +65,11 @@ const isTalkModeState = (value: unknown): value is TalkModeState =>
   value === "processing" ||
   value === "speaking" ||
   value === "error";
+
+function clampSpeechLevel(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
 
 const getStatusTextForState = (
   state: TalkModeState,
@@ -137,6 +144,7 @@ export class TalkModeElectrobun implements TalkModePlugin {
   private captureSampleRate = 16000;
 
   private bridgeSubscriptions: Array<() => void> = [];
+  private nativeSpeechPulseCount = 0;
 
   constructor() {
     if (typeof window !== "undefined" && window.speechSynthesis) {
@@ -342,6 +350,24 @@ export class TalkModeElectrobun implements TalkModePlugin {
           this.notifyListeners("error", data as TalkModeErrorEvent);
         },
       },
+      {
+        rpcMessage: "talkmodeSpeakComplete",
+        ipcChannel: "talkmode:speakComplete",
+        listener: () => {
+          this.isSpeakingValue = false;
+          this.notifyListeners("speechLevel", { level: 0 });
+          this.notifyListeners("speakComplete", { completed: true });
+        },
+      },
+      {
+        rpcMessage: "talkmodeAudioChunkPush",
+        ipcChannel: "talkmode:audioChunkPush",
+        listener: (data: unknown) => {
+          this.notifyListeners("speechLevel", {
+            level: this.estimateSpeechLevelFromChunk(data),
+          });
+        },
+      },
     ];
 
     for (const entry of bridgeHandlers) {
@@ -359,6 +385,21 @@ export class TalkModeElectrobun implements TalkModePlugin {
       unsubscribe();
     }
     this.bridgeSubscriptions = [];
+    this.nativeSpeechPulseCount = 0;
+  }
+
+  private estimateSpeechLevelFromChunk(data: unknown): number {
+    const encoded =
+      isObjectRecord(data) && typeof data.data === "string" ? data.data : "";
+    if (!encoded) {
+      return 0;
+    }
+
+    this.nativeSpeechPulseCount += 1;
+    const sizeSignal = Math.min(1, encoded.length / 24_000);
+    const rhythmicSignal =
+      0.55 + Math.sin(this.nativeSpeechPulseCount * 0.85) * 0.2;
+    return clampSpeechLevel(Math.max(0.25, sizeSignal * 0.5 + rhythmicSignal));
   }
 
   async stop(): Promise<void> {
@@ -888,6 +929,10 @@ export class TalkModeElectrobun implements TalkModePlugin {
   async addListener(
     eventName: "speakComplete",
     listenerFunc: (event: TTSCompleteEvent) => void,
+  ): Promise<PluginListenerHandle>;
+  async addListener(
+    eventName: "speechLevel",
+    listenerFunc: (event: TalkModeSpeechLevelEvent) => void,
   ): Promise<PluginListenerHandle>;
   async addListener(
     eventName: "error",

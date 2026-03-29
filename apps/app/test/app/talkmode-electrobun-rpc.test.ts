@@ -155,8 +155,12 @@ describe("TalkModeElectrobun direct Electrobun RPC bridge", () => {
 
     const stateListener = vi.fn();
     const transcriptListener = vi.fn();
+    const speechLevelListener = vi.fn();
+    const speakCompleteListener = vi.fn();
     await plugin.addListener("stateChange", stateListener);
     await plugin.addListener("transcript", transcriptListener);
+    await plugin.addListener("speechLevel", speechLevelListener);
+    await plugin.addListener("speakComplete", speakCompleteListener);
 
     await expect(
       plugin.start({
@@ -215,6 +219,18 @@ describe("TalkModeElectrobun direct Electrobun RPC bridge", () => {
       isFinal: false,
     });
 
+    directListeners.get("talkmodeAudioChunkPush")?.forEach((listener) => {
+      listener({ data: "ZmFrZS1hdWRpby1jaHVuaw==" });
+    });
+    expect(speechLevelListener).toHaveBeenCalledWith({
+      level: expect.any(Number),
+    });
+
+    directListeners.get("talkmodeSpeakComplete")?.forEach((listener) => {
+      listener(undefined);
+    });
+    expect(speakCompleteListener).toHaveBeenCalledWith({ completed: true });
+
     await expect(plugin.isEnabled()).resolves.toEqual({ enabled: true });
     await expect(plugin.getState()).resolves.toEqual({
       state: "processing",
@@ -257,6 +273,8 @@ describe("TalkModeElectrobun direct Electrobun RPC bridge", () => {
     expect(invokeBridge).toHaveBeenCalledWith("talkmodeStop", "talkmode:stop");
     expect(directListeners.get("talkmodeStateChanged")?.size ?? 0).toBe(0);
     expect(directListeners.get("talkmodeTranscript")?.size ?? 0).toBe(0);
+    expect(directListeners.get("talkmodeAudioChunkPush")?.size ?? 0).toBe(0);
+    expect(directListeners.get("talkmodeSpeakComplete")?.size ?? 0).toBe(0);
   });
 
   it("uses direct talkmode error push messages when Electrobun exposes them", async () => {

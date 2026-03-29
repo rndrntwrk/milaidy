@@ -19,6 +19,7 @@ export interface CompanionHeaderProps {
   onSave?: () => void;
   isSaving?: boolean;
   saveSuccess?: boolean;
+  companionControlsExtras?: ReactNode;
   /** Shown in the shell header right cluster (e.g. inference / cloud alert). */
   rightExtras?: ReactNode;
   rightTrailingExtras?: ReactNode;
@@ -43,6 +44,7 @@ export const CompanionHeader = memo(function CompanionHeader(
     onSave,
     isSaving,
     saveSuccess,
+    companionControlsExtras,
     rightExtras,
     rightTrailingExtras,
   } = props;
@@ -80,6 +82,7 @@ export const CompanionHeader = memo(function CompanionHeader(
             onSave={onSave}
             isSaving={isSaving}
             saveSuccess={saveSuccess}
+            companionControlsExtras={companionControlsExtras}
             rightExtras={rightExtras}
             rightTrailingExtras={rightTrailingExtras}
           >

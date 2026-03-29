@@ -292,6 +292,7 @@ async function ensureStream555SessionId(
 async function applyConfiguredStream555Destinations(
   service: Stream555ServiceLike,
   sessionId: string,
+  selectedPlatformIds?: string[],
 ): Promise<{
   attempted: number;
   enabled: number;
@@ -304,11 +305,19 @@ async function applyConfiguredStream555Destinations(
   const failed: Array<{ platformId: string; error: string }> = [];
   let attempted = 0;
   let enabledCount = 0;
+  const selectedSet =
+    Array.isArray(selectedPlatformIds) && selectedPlatformIds.length > 0
+      ? new Set(selectedPlatformIds.map((entry) => entry.trim().toLowerCase()))
+      : null;
 
   for (const mapping of STREAM555_DESTINATION_MAPPINGS) {
     const rtmpUrl = process.env[mapping.rtmpUrlEnv]?.trim();
     const streamKey = process.env[mapping.streamKeyEnv]?.trim();
-    const enabled = parseStream555Boolean(process.env[mapping.enabledEnv]) ?? false;
+    const configuredEnabled =
+      parseStream555Boolean(process.env[mapping.enabledEnv]) ?? false;
+    const enabled = selectedSet
+      ? configuredEnabled && selectedSet.has(mapping.platformId)
+      : configuredEnabled;
     const hasConfig = Boolean(rtmpUrl) || Boolean(streamKey) || enabled;
 
     if (!hasConfig) {
@@ -811,6 +820,24 @@ export async function handleStreamRoute(
     const stream555 = getStream555Service(state);
     if (stream555) {
       try {
+        const rawBody = await readRequestBody(req);
+        const parsedBody =
+          typeof rawBody === "string" && rawBody.trim().length > 0
+            ? JSON.parse(rawBody)
+            : rawBody;
+        const requestedDestinationIds = Array.isArray(parsedBody?.destinationIds)
+          ? parsedBody.destinationIds
+              .map((value: unknown) =>
+                typeof value === "string" ? value.trim().toLowerCase() : "",
+              )
+              .filter((value: string) => value.length > 0)
+          : undefined;
+        const sceneId =
+          typeof parsedBody?.sceneId === "string" &&
+          parsedBody.sceneId.trim().length > 0
+            ? parsedBody.sceneId.trim()
+            : "default";
+
         const existingSessionId = getConfiguredStream555SessionId(stream555);
         if (existingSessionId) {
           try {
@@ -840,6 +867,7 @@ export async function handleStreamRoute(
         const destinationSync = await applyConfiguredStream555Destinations(
           stream555,
           sessionId,
+          requestedDestinationIds,
         );
         if (destinationSync.failed.length > 0) {
           error(
@@ -856,7 +884,7 @@ export async function handleStreamRoute(
 
         await stream555.startStream(
           { type: "screen" },
-          { scene: "default" },
+          { scene: sceneId },
           undefined,
           sessionId,
         );

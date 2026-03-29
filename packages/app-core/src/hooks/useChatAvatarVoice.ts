@@ -41,6 +41,9 @@ export interface ChatAvatarVoiceBridgeOptions {
   isSpeaking: boolean;
   usingAudioAnalysis?: boolean;
   onSpeakingChange?: (isSpeaking: boolean) => void;
+  avatarKey?: string;
+  speechCapabilities?: unknown;
+  enableAdvancedFaceFrames?: boolean;
 }
 
 export function useChatAvatarVoiceBridge({
@@ -48,10 +51,15 @@ export function useChatAvatarVoiceBridge({
   isSpeaking,
   usingAudioAnalysis = false,
   onSpeakingChange,
+  avatarKey: _avatarKey,
+  speechCapabilities: _speechCapabilities,
+  enableAdvancedFaceFrames: _enableAdvancedFaceFrames = false,
 }: ChatAvatarVoiceBridgeOptions): void {
   const voice = normalizeChatAvatarVoice({
     mouthOpen,
-    isSpeaking: isSpeaking && !usingAudioAnalysis,
+    // Preserve speaking lifecycle even when mouth shape is driven by real
+    // audio analysis so body speech motion can stay active alongside lip sync.
+    isSpeaking,
   });
   const lastVoiceRef = useRef<ChatAvatarVoiceEventDetail>(CHAT_AVATAR_SILENCE);
   const emitSpeakingChange = useEffectEvent((nextIsSpeaking: boolean) => {
@@ -81,6 +89,12 @@ export function useChatAvatarVoiceBridge({
       dispatchWindowEvent(CHAT_AVATAR_VOICE_EVENT, CHAT_AVATAR_SILENCE);
     };
   }, []);
+}
+
+export function useAvatarVoicePublisher(
+  options: ChatAvatarVoiceBridgeOptions,
+): void {
+  useChatAvatarVoiceBridge(options);
 }
 
 export function useChatAvatarVoiceState(): ChatAvatarVoiceEventDetail {

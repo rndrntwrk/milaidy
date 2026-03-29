@@ -22,6 +22,7 @@
     "./env-utils": "./src/env-utils.ts",
     "./runtime-env": "./src/runtime-env.ts",
     "./contracts": "./src/contracts/index.ts",
+    "./contracts/avatar-speech": "./src/contracts/avatar-speech.ts",
     "./contracts/apps": "./src/contracts/apps.ts",
     "./contracts/awareness": "./src/contracts/awareness.ts",
     "./contracts/config": "./src/contracts/config.ts",

@@ -160,6 +160,14 @@ export interface TTSCompleteEvent {
 }
 
 /**
+ * Lightweight normalized speech-level signal for avatar lip sync.
+ */
+export interface TalkModeSpeechLevelEvent {
+  /** Instantaneous mouth-open hint in the range [0, 1]. */
+  level: number;
+}
+
+/**
  * Talk mode error event
  */
 export interface TalkModeErrorEvent {
@@ -293,6 +301,14 @@ export interface TalkModePlugin {
   addListener(
     eventName: "speakComplete",
     listenerFunc: (event: TTSCompleteEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Add listener for normalized speech-level updates during playback
+   */
+  addListener(
+    eventName: "speechLevel",
+    listenerFunc: (event: TalkModeSpeechLevelEvent) => void,
   ): Promise<PluginListenerHandle>;
 
   /**

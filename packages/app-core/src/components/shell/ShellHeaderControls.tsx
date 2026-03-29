@@ -53,6 +53,7 @@ interface ShellHeaderControlsProps {
   rightTrailingExtras?: ReactNode;
   trailingExtras?: ReactNode;
   className?: string;
+  companionControlsExtras?: ReactNode;
   controlsVariant?: "native" | "companion";
   languageDropdownClassName?: string;
   languageDropdownWrapperTestId?: string;
@@ -83,6 +84,7 @@ export function ShellHeaderControls({
   rightTrailingExtras,
   trailingExtras,
   className,
+  companionControlsExtras,
   controlsVariant = "native",
   languageDropdownClassName,
   languageDropdownWrapperTestId,
@@ -295,6 +297,7 @@ export function ShellHeaderControls({
               <div className="inline-flex items-center gap-2">
                 {renderVoiceButton(isMobileViewport)}
                 {renderActionButton(isMobileViewport)}
+                {companionControlsExtras}
               </div>
             </div>
           )

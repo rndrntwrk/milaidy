@@ -6,6 +6,7 @@
  * reaching for window globals.
  */
 import { createContext, useContext } from "react";
+import type { AvatarSpeechCapabilities } from "@miladyai/shared/contracts";
 import type { BrandingConfig } from "./branding";
 
 // ---------------------------------------------------------------------------
@@ -16,6 +17,7 @@ import type { BrandingConfig } from "./branding";
 export interface BundledVrmAsset {
   title: string;
   slug: string;
+  speechCapabilities?: AvatarSpeechCapabilities;
 }
 
 /** Lightweight character catalog data passed from the host app. */
@@ -29,6 +31,7 @@ export interface CharacterAssetEntry {
   slug: string;
   title: string;
   sourceName: string;
+  speechCapabilities?: AvatarSpeechCapabilities;
 }
 
 export interface InjectedCharacterEntry {
@@ -36,6 +39,7 @@ export interface InjectedCharacterEntry {
   name: string;
   avatarAssetId: number;
   voicePresetId?: string;
+  speechCapabilities?: AvatarSpeechCapabilities;
 }
 
 /** Resolved character asset with computed paths. */

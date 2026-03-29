@@ -1,40 +1,141 @@
-import { useRenderGuard } from "@miladyai/app-core/hooks";
-import { useApp, usePtySessions } from "@miladyai/app-core/state";
+import { useMediaQuery, useRenderGuard } from "@miladyai/app-core/hooks";
+import { useApp } from "@miladyai/app-core/state";
 import { Button } from "@miladyai/ui";
-import { PanelLeftOpen } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, type SVGProps } from "react";
 import { ChatModalView } from "./ChatModalView";
-import { useCompanionSceneStatus } from "../companion/companion-scene-status-context";
-import { CompanionHeader } from "../companion/CompanionHeader";
-import { CompanionSceneHost } from "../companion/CompanionSceneHost";
-import { useSharedCompanionScene } from "../companion/shared-companion-scene-context";
-import { InferenceCloudAlertButton } from "../companion/InferenceCloudAlertButton";
-import { resolveCompanionInferenceNotice } from "../companion/resolve-companion-inference-notice";
-import { PtyConsoleSidePanel } from "../coding/PtyConsoleSidePanel";
+import { useCompanionSceneStatus } from "./companion-scene-status-context";
+import { CompanionHeader } from "./companion/CompanionHeader";
+import { HEADER_BUTTON_STYLE } from "./companion/ShellHeaderControls";
+import {
+  CompanionSceneHost,
+  useSharedCompanionScene,
+} from "./companion/CompanionSceneHost";
+import { InferenceCloudAlertButton } from "./companion/InferenceCloudAlertButton";
+import { resolveCompanionInferenceNotice } from "./companion/resolve-companion-inference-notice";
+import { CompanionGoLiveModal } from "./operator/CompanionGoLiveModal";
+import { CompanionStageOperatorOverlay } from "./operator/CompanionStageOperatorOverlay";
+import { useCompanionStageOperator } from "./operator/useCompanionStageOperator";
+import { PtyConsoleSidePanel } from "./PtyConsoleSidePanel";
 
 const COMPANION_UI_REVEAL_FALLBACK_MS = 1400;
 const COMPANION_DOCK_HEIGHT = "min(42vh, 24rem)";
+const SHELL_MODE_MOBILE_MEDIA_QUERY = "(max-width: 639px)";
+const ALICE_STAGE_BUBBLE_HIDE_MEDIA_QUERY = "(max-width: 767px)";
+const ALICE_GO_LIVE_STRIP_CLASSNAME =
+  "pointer-events-auto inline-flex h-11 min-h-[44px] max-w-full items-center !rounded-xl border border-white/10 bg-black/52 p-1 shadow-[0_10px_30px_rgba(0,0,0,0.24)] ring-1 ring-inset ring-white/6 backdrop-blur-2xl";
+const ALICE_GO_LIVE_BUTTON_CLASSNAME =
+  "h-9 min-h-9 !rounded-[10px] px-3.5 text-sm font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]";
+const ALICE_GO_LIVE_IDLE_CLASSNAME =
+  "border-accent/40 bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.22),rgba(var(--accent-rgb),0.12))] text-txt-strong hover:border-accent/65 hover:bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.28),rgba(var(--accent-rgb),0.16))]";
+const ALICE_GO_LIVE_LIVE_CLASSNAME =
+  "border-danger/45 bg-[linear-gradient(180deg,rgba(239,68,68,0.92),rgba(220,38,38,0.86))] text-white hover:border-danger/70 hover:bg-[linear-gradient(180deg,rgba(239,68,68,0.98),rgba(220,38,38,0.92))]";
 
-/**
- * Isolated wrapper for the PTY side panel so that CompanionViewOverlay doesn't
- * need to subscribe to ptySessions (which polls every 5 s) for a panel that is
- * only visible when the user has explicitly clicked a session.
- */
-const CompanionPtyPanel = memo(function CompanionPtyPanel({
-  sessionId,
-  onClose,
-}: {
-  sessionId: string;
-  onClose: () => void;
-}) {
-  const { ptySessions } = usePtySessions();
-  if (ptySessions.length === 0) return null;
+function AliceConnectionIcon(props: SVGProps<SVGSVGElement>) {
   return (
-    <PtyConsoleSidePanel
-      activeSessionId={sessionId}
-      sessions={ptySessions}
-      onClose={onClose}
-    />
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M5 12a7 7 0 0 1 14 0" />
+      <path d="M2.5 12a9.5 9.5 0 0 1 19 0" />
+    </svg>
+  );
+}
+
+function AliceStopIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <rect x="7" y="7" width="10" height="10" rx="2" />
+    </svg>
+  );
+}
+
+const AliceGoLiveHeaderControl = memo(function AliceGoLiveHeaderControl({
+  operator,
+}: {
+  operator: ReturnType<typeof useCompanionStageOperator>;
+}) {
+  const { t } = useApp();
+  const [open, setOpen] = useState(false);
+  const [preferredMode, setPreferredMode] = useState<"camera" | "screen-share" | "play-games" | "reaction" | "radio">("camera");
+  const isMobileViewport = useMediaQuery(SHELL_MODE_MOBILE_MEDIA_QUERY);
+  const liveActionLabel = operator.stream.live
+    ? t("aliceoperator.action.endLive", { defaultValue: "End Live" })
+    : t("statusbar.GoLive");
+  const buttonTitle = operator.stream.live
+    ? liveActionLabel
+    : operator.stream.available
+      ? liveActionLabel
+      : t("statusbar.InstallStreamingPlugin");
+  const buttonClassName = `${ALICE_GO_LIVE_BUTTON_CLASSNAME} ${
+    operator.stream.live
+      ? ALICE_GO_LIVE_LIVE_CLASSNAME
+      : ALICE_GO_LIVE_IDLE_CLASSNAME
+  } ${isMobileViewport ? "!w-9 min-w-9 px-0" : ""}`;
+
+  const handleClick = () => {
+    if (operator.stream.live) {
+      void operator.stream.endLive();
+      return;
+    }
+    setOpen(true);
+  };
+
+  return (
+    <>
+      <div
+        className={ALICE_GO_LIVE_STRIP_CLASSNAME}
+        data-no-camera-drag="true"
+        data-no-camera-zoom="true"
+      >
+        <Button
+          type="button"
+          size="sm"
+          variant={operator.stream.live ? "destructive" : "secondary"}
+          aria-label={liveActionLabel}
+          title={buttonTitle}
+          className={buttonClassName}
+          onClick={handleClick}
+          onPointerDown={(event) => event.stopPropagation()}
+          style={HEADER_BUTTON_STYLE}
+          data-no-camera-drag="true"
+          data-no-camera-zoom="true"
+          data-testid="companion-header-go-live"
+        >
+          {operator.stream.live ? (
+            <AliceStopIcon className="pointer-events-none h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <AliceConnectionIcon className="pointer-events-none h-3.5 w-3.5 shrink-0" />
+          )}
+          {isMobileViewport ? null : (
+            <span className="pointer-events-none">{liveActionLabel}</span>
+          )}
+        </Button>
+      </div>
+      <CompanionGoLiveModal
+        open={open}
+        onOpenChange={setOpen}
+        preferredMode={preferredMode}
+        onPreferredModeChange={setPreferredMode}
+        operator={operator}
+      />
+    </>
   );
 });
 
@@ -61,26 +162,20 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
     elizaCloudEnabled,
     handleNewConversation,
     navigation,
+    onboardingHandoffPhase,
+    ptySessions,
     setState,
     setTab,
     switchShellView,
     t,
   } = useApp();
+  const operator = useCompanionStageOperator();
+  const hideAliceStageBubble = useMediaQuery(ALICE_STAGE_BUBBLE_HIDE_MEDIA_QUERY);
 
   const [ptySidePanelSessionId, setPtySidePanelSessionId] = useState<
     string | null
   >(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const handleSidebarClose = useCallback(() => setHistoryOpen(false), []);
-  const handlePtySessionClick = useCallback(
-    (id: string) =>
-      setPtySidePanelSessionId((prev) => (prev === id ? null : id)),
-    [],
-  );
-  const handlePtyPanelClose = useCallback(
-    () => setPtySidePanelSessionId(null),
-    [],
-  );
   const { avatarReady: sceneAvatarReady, teleportKey } =
     useCompanionSceneStatus();
 
@@ -102,7 +197,12 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
       window.clearTimeout(fallbackTimer);
     };
   }, [sceneAvatarReady, teleportKey]);
-  const avatarReady = sceneAvatarReady || avatarReadyFallback;
+  const onboardingHandoffActive =
+    onboardingHandoffPhase != null && onboardingHandoffPhase !== "idle";
+  const avatarReady =
+    sceneAvatarReady || avatarReadyFallback || onboardingHandoffActive;
+  const showAliceGoLiveControl = avatarReady && operator.isAliceActive;
+  const showAliceStageBubble = showAliceGoLiveControl && !hideAliceStageBubble;
 
   const handleShellViewChange = useCallback(
     (view: "companion" | "character" | "desktop") => {
@@ -112,11 +212,8 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
   );
 
   useEffect(() => {
-    setState(
-      "chatMode",
-      elizaCloudEnabled || elizaCloudConnected ? "power" : "simple",
-    );
-  }, [elizaCloudConnected, elizaCloudEnabled, setState]);
+    setState("chatMode", "simple");
+  }, [setState]);
 
   const hasInterruptedAssistant = useMemo(
     () =>
@@ -193,9 +290,18 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
             setState("chatAgentVoiceMuted", !chatAgentVoiceMuted)
           }
           onNewChat={() => void handleNewConversation()}
+          companionControlsExtras={
+            showAliceGoLiveControl ? (
+              <AliceGoLiveHeaderControl operator={operator} />
+            ) : null
+          }
           rightExtras={companionHeaderRightExtras}
         />
       </div>
+
+      {showAliceStageBubble ? (
+        <CompanionStageOperatorOverlay operator={operator} />
+      ) : null}
 
       {avatarReady && (
         <div
@@ -211,20 +317,23 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
             <ChatModalView
               variant="companion-dock"
               showSidebar={historyOpen}
-              onSidebarClose={handleSidebarClose}
-              onPtySessionClick={handlePtySessionClick}
+              onSidebarClose={() => setHistoryOpen(false)}
+              showAgentActivityBox
+              onPtySessionClick={(id) =>
+                setPtySidePanelSessionId((prev) => (prev === id ? null : id))
+              }
             />
           </div>
         </div>
       )}
 
-      {/* PTY console side panel — rendered in a child so ptySessions subscription
-          doesn't live in CompanionViewOverlay and cause re-renders on every poll. */}
-      {ptySidePanelSessionId && (
+      {/* PTY console side panel */}
+      {ptySidePanelSessionId && ptySessions.length > 0 && (
         <div className="pointer-events-auto">
-          <CompanionPtyPanel
-            sessionId={ptySidePanelSessionId}
-            onClose={handlePtyPanelClose}
+          <PtyConsoleSidePanel
+            activeSessionId={ptySidePanelSessionId}
+            sessions={ptySessions}
+            onClose={() => setPtySidePanelSessionId(null)}
           />
         </div>
       )}

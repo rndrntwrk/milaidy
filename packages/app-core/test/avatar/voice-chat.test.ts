@@ -6,6 +6,7 @@
  */
 
 import { nextIdleMouthOpen } from "@miladyai/app-core/hooks";
+import { __voiceChatInternals } from "@miladyai/app-core/hooks/useVoiceChat";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -256,6 +257,30 @@ describe("Voice Chat — Speech Synthesis", () => {
     expect(synth.cancel).toHaveBeenCalledOnce();
     expect(synth.spoken).toHaveLength(2);
     expect(synth.spoken[1]?.text).toBe("Second");
+  });
+});
+
+describe("Voice Chat — Native speech helpers", () => {
+  it("normalizes native speech levels into the supported mouth-open range", () => {
+    expect(__voiceChatInternals.normalizeNativeSpeechLevel(-1)).toBe(0);
+    expect(__voiceChatInternals.normalizeNativeSpeechLevel(0.333)).toBeGreaterThan(0);
+    expect(__voiceChatInternals.normalizeNativeSpeechLevel(4)).toBe(1);
+  });
+
+  it("derives a bounded speech level from native audio chunk pushes", () => {
+    const level = __voiceChatInternals.estimateNativeSpeechLevelFromChunkPayload(
+      { data: "ZmFrZS1hdWRpby1jaHVuaw==" },
+      3,
+    );
+
+    expect(level).toBeGreaterThan(0);
+    expect(level).toBeLessThanOrEqual(1);
+  });
+
+  it("treats missing native audio chunk payloads as silence", () => {
+    expect(
+      __voiceChatInternals.estimateNativeSpeechLevelFromChunkPayload({}, 1),
+    ).toBe(0);
   });
 });
 

@@ -151,13 +151,20 @@ installDesktopPermissionsClientPatch(client as never);
 window.__MILADY_CHARACTER_EDITOR__ = CharacterEditor;
 
 import { getStylePresets } from "@miladyai/shared/onboarding-presets";
+import { resolveDefaultSpeechCapabilitiesForAvatarIndex } from "@miladyai/shared/onboarding-presets";
 
 // Derive VRM roster from STYLE_PRESETS so character names stay in one place.
 const MILADY_STYLE_PRESETS = getStylePresets();
 
 const MILADY_VRM_ASSETS = MILADY_STYLE_PRESETS.slice()
   .sort((a, b) => a.avatarIndex - b.avatarIndex)
-  .map((p) => ({ title: p.name, slug: `milady-${p.avatarIndex}` }));
+  .map((p) => ({
+    title: p.name,
+    slug: `milady-${p.avatarIndex}`,
+    speechCapabilities: resolveDefaultSpeechCapabilitiesForAvatarIndex(
+      p.avatarIndex,
+    ),
+  }));
 
 const miladyBootConfig: AppBootConfig = {
   branding: MILADY_BRANDING,

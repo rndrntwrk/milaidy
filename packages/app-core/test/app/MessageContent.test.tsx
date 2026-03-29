@@ -90,6 +90,41 @@ describe("looksLikePatch", () => {
   });
 });
 
+describe("MessageContent — operator action blocks", () => {
+  it("renders Alice operator action pills from message blocks", () => {
+    let tree!: TestRenderer.ReactTestRenderer;
+    TestRenderer.act(() => {
+      tree = TestRenderer.create(
+        React.createElement(MessageContent, {
+          message: {
+            id: "m-action",
+            role: "user",
+            text: "Go Live",
+            timestamp: 1,
+            blocks: [
+              {
+                type: "action-pill",
+                label: "Go Live",
+                kind: "launch",
+                detail: "Camera launch queued",
+              },
+            ],
+          },
+        }),
+      );
+    });
+
+    const rendered = tree.root
+      .findAll((node) => typeof node.type === "string")
+      .flatMap((node) => node.children)
+      .filter((child): child is string => typeof child === "string")
+      .join(" ");
+
+    expect(rendered).toContain("Go Live");
+    expect(rendered).toContain("Camera launch queued");
+  });
+});
+
 describe("tryParsePatch", () => {
   it("parses compact add patch", () => {
     const p = tryParsePatch('{"op":"add","path":"/root","value":"card-1"}');

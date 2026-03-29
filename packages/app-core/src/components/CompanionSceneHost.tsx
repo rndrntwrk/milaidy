@@ -1,0 +1,689 @@
+import {
+  useAvatarSpeechCapabilities,
+  useRenderGuard,
+} from "@miladyai/app-core/hooks";
+import {
+  dispatchAppEmoteEvent,
+  VRM_TELEPORT_COMPLETE_EVENT,
+} from "@miladyai/app-core/events";
+import {
+  getDefaultBundledVrmIndex,
+  getVrmCount,
+  getVrmPreviewUrl,
+  getVrmUrl,
+  useCompanionSceneConfig,
+  useTranslation,
+} from "@miladyai/app-core/state";
+import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
+import {
+  memo,
+  type ReactNode,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { VrmEngine } from "./avatar/VrmEngine";
+import { resolveCharacterGreetingAnimation } from "./character-greeting";
+import { CompanionSceneStatusContext } from "./companion-scene-status-context";
+import { SharedCompanionSceneContext } from "./shared-companion-scene-context";
+import { VrmStage } from "./VrmStage";
+
+const COMPANION_ZOOM_WHEEL_SENSITIVITY = 1 / 720;
+const COMPANION_ZOOM_PINCH_SENSITIVITY = 2.35;
+const COMPANION_ZOOM_STORAGE_KEY = "milady.companion.zoom.v1";
+const DEFAULT_COMPANION_ZOOM = 0.95;
+const COMPANION_TELEPORT_GREETING_DELAY_MS = 400;
+const CAMERA_DRAG_IGNORE_SELECTOR =
+  'button, a, label, input, textarea, select, option, [role="button"], [role="listbox"], [role="tab"], [aria-expanded], [aria-haspopup], [contenteditable="true"], [data-no-camera-drag="true"]';
+const CAMERA_ZOOM_IGNORE_SELECTOR = '[data-no-camera-zoom="true"]';
+const NON_TEXT_INPUT_TYPES = new Set([
+  "button",
+  "checkbox",
+  "color",
+  "file",
+  "hidden",
+  "image",
+  "radio",
+  "range",
+  "reset",
+  "submit",
+]);
+
+// SharedCompanionSceneContext is imported from ./shared-companion-scene-context
+// to keep the hook importable without pulling in the 3D stack.
+
+type TouchPoint = {
+  x: number;
+  y: number;
+};
+
+type CompanionWheelEvent = Pick<
+  WheelEvent,
+  "ctrlKey" | "deltaMode" | "deltaY" | "preventDefault" | "target"
+>;
+
+let _companionTeleportCompletedOnce = false;
+
+export function hasCompanionTeleportCompletedOnce(): boolean {
+  return _companionTeleportCompletedOnce;
+}
+
+function getTouchDistance(points: Map<number, TouchPoint>): number {
+  const touchPoints = [...points.values()];
+  if (touchPoints.length < 2) return 0;
+  const [firstPoint, secondPoint] = touchPoints;
+  if (!firstPoint || !secondPoint) return 0;
+  return Math.hypot(secondPoint.x - firstPoint.x, secondPoint.y - firstPoint.y);
+}
+
+function getWheelPixels(
+  event: Pick<WheelEvent, "deltaMode" | "deltaY">,
+): number {
+  if (event.deltaMode === 1) return event.deltaY * 16;
+  if (event.deltaMode === 2) {
+    return event.deltaY * (window.innerHeight || 1);
+  }
+  return event.deltaY;
+}
+
+function hasFocusedTextEntry(): boolean {
+  if (typeof document === "undefined") return false;
+  const activeElement = document.activeElement;
+  if (activeElement instanceof HTMLTextAreaElement) {
+    return true;
+  }
+  if (activeElement instanceof HTMLInputElement) {
+    return !NON_TEXT_INPUT_TYPES.has(activeElement.type.toLowerCase());
+  }
+  return activeElement instanceof HTMLElement
+    ? activeElement.isContentEditable
+    : false;
+}
+
+function shouldIgnoreCameraDrag(target: EventTarget | null): boolean {
+  return target instanceof Element
+    ? Boolean(target.closest(CAMERA_DRAG_IGNORE_SELECTOR))
+    : false;
+}
+
+function shouldIgnoreCameraZoom(target: EventTarget | null): boolean {
+  return target instanceof Element
+    ? Boolean(target.closest(CAMERA_ZOOM_IGNORE_SELECTOR))
+    : false;
+}
+
+function clampCompanionZoom(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function loadStoredCompanionZoom(): number {
+  if (typeof localStorage === "undefined") return DEFAULT_COMPANION_ZOOM;
+  try {
+    const raw = localStorage.getItem(COMPANION_ZOOM_STORAGE_KEY);
+    if (raw === null) return DEFAULT_COMPANION_ZOOM;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed)
+      ? clampCompanionZoom(parsed)
+      : DEFAULT_COMPANION_ZOOM;
+  } catch (err) {
+    console.warn(
+      "[CompanionSceneHost] Failed to load stored companion zoom:",
+      err,
+    );
+    return DEFAULT_COMPANION_ZOOM;
+  }
+}
+
+function persistCompanionZoom(value: number): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(
+      COMPANION_ZOOM_STORAGE_KEY,
+      String(clampCompanionZoom(value)),
+    );
+  } catch (err) {
+    console.warn("[CompanionSceneHost] Failed to persist companion zoom:", err);
+  }
+}
+
+function CompanionSceneSurface({
+  active,
+  interactive = true,
+  children,
+}: {
+  active: boolean;
+  interactive?: boolean;
+  children?: ReactNode;
+}) {
+  useRenderGuard("CompanionSceneHost");
+  const {
+    selectedVrmIndex,
+    customVrmUrl,
+    uiTheme,
+    tab,
+    companionVrmPowerMode,
+    companionHalfFramerateMode,
+    companionAnimateWhenHidden,
+  } = useCompanionSceneConfig();
+  const { t } = useTranslation();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const stageEnginesRef = useRef(new Set<VrmEngine>());
+  const companionZoomRef = useRef(DEFAULT_COMPANION_ZOOM);
+  const companionZoomHydratedRef = useRef(false);
+  const dragOrbitRef = useRef({ yaw: 0, pitch: 0 });
+  const dragStateRef = useRef<{
+    active: boolean;
+    pointerId: number | null;
+    startX: number;
+    startY: number;
+  }>({
+    active: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+  });
+  const touchPointsRef = useRef(new Map<number, TouchPoint>());
+  const pinchStateRef = useRef<{
+    active: boolean;
+    startDistance: number;
+    startZoom: number;
+  }>({
+    active: false,
+    startDistance: 0,
+    startZoom: 0,
+  });
+
+  if (!companionZoomHydratedRef.current) {
+    companionZoomRef.current = loadStoredCompanionZoom();
+    companionZoomHydratedRef.current = true;
+  }
+
+  // Lazy-mount VrmStage: only initialize the 3D engine once the scene is
+  // actually needed (first time active becomes true). This prevents the WebGL
+  // context and asset loads from firing in native/chat mode on startup.
+  const hasEverBeenActiveRef = useRef(active);
+  if (active) hasEverBeenActiveRef.current = true;
+  const shouldMountVrm = hasEverBeenActiveRef.current;
+
+  const setCompanionZoom = useCallback((value: number) => {
+    const nextZoom = clampCompanionZoom(value);
+    companionZoomRef.current = nextZoom;
+    persistCompanionZoom(nextZoom);
+    for (const engine of stageEnginesRef.current) {
+      engine.setCompanionZoomNormalized(nextZoom);
+    }
+  }, []);
+
+  const handleStageEngineReady = useCallback((engine: VrmEngine) => {
+    stageEnginesRef.current.add(engine);
+    engine.setCompanionZoomNormalized(companionZoomRef.current);
+    engine.setDragOrbitTarget(
+      dragOrbitRef.current.yaw,
+      dragOrbitRef.current.pitch,
+    );
+  }, []);
+
+  const handleStageLayerEngineReady = useCallback(
+    (_vrmPath: string, engine: VrmEngine) => {
+      stageEnginesRef.current.add(engine);
+      engine.setCompanionZoomNormalized(companionZoomRef.current);
+      engine.setDragOrbitTarget(
+        dragOrbitRef.current.yaw,
+        dragOrbitRef.current.pitch,
+      );
+    },
+    [],
+  );
+
+  const handlePointerDownCapture = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!active || !interactive || shouldIgnoreCameraDrag(event.target)) {
+        return;
+      }
+      /* Stop event from reaching children — this is a camera drag */
+      event.stopPropagation();
+      if (typeof window.getSelection === "function") {
+        window.getSelection()?.removeAllRanges();
+      }
+      if (event.pointerType === "touch") {
+        touchPointsRef.current.set(event.pointerId, {
+          x: event.clientX,
+          y: event.clientY,
+        });
+      }
+      event.currentTarget.setPointerCapture(event.pointerId);
+      if (event.pointerType === "touch" && touchPointsRef.current.size >= 2) {
+        pinchStateRef.current = {
+          active: true,
+          startDistance: getTouchDistance(touchPointsRef.current),
+          startZoom: companionZoomRef.current,
+        };
+        dragStateRef.current = {
+          active: false,
+          pointerId: null,
+          startX: 0,
+          startY: 0,
+        };
+        dragOrbitRef.current = { yaw: 0, pitch: 0 };
+        for (const engine of stageEnginesRef.current) {
+          engine.resetDragOrbit();
+        }
+        event.preventDefault?.();
+        return;
+      }
+      dragStateRef.current = {
+        active: true,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+      };
+      event.preventDefault?.();
+    },
+    [active, interactive],
+  );
+
+  const handlePointerMoveCapture = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!active || !interactive) return;
+      if (
+        event.pointerType === "touch" &&
+        touchPointsRef.current.has(event.pointerId)
+      ) {
+        touchPointsRef.current.set(event.pointerId, {
+          x: event.clientX,
+          y: event.clientY,
+        });
+        if (
+          pinchStateRef.current.active &&
+          touchPointsRef.current.size >= 2 &&
+          pinchStateRef.current.startDistance > 0
+        ) {
+          const viewportSpan = Math.max(
+            1,
+            Math.min(
+              window.innerWidth || event.currentTarget.clientWidth || 1,
+              window.innerHeight || event.currentTarget.clientHeight || 1,
+            ),
+          );
+          const pinchDistance = getTouchDistance(touchPointsRef.current);
+          const zoomDelta =
+            ((pinchDistance - pinchStateRef.current.startDistance) /
+              viewportSpan) *
+            COMPANION_ZOOM_PINCH_SENSITIVITY;
+          setCompanionZoom(pinchStateRef.current.startZoom + zoomDelta);
+          event.preventDefault();
+          return;
+        }
+      }
+      const dragState = dragStateRef.current;
+      if (!dragState.active || dragState.pointerId !== event.pointerId) {
+        return;
+      }
+      const width = window.innerWidth || event.currentTarget.clientWidth || 1;
+      const height =
+        window.innerHeight || event.currentTarget.clientHeight || 1;
+      const deltaX = event.clientX - dragState.startX;
+      const deltaY = event.clientY - dragState.startY;
+      const yaw = (deltaX / width) * 1.35;
+      const pitch = (-deltaY / height) * 0.85;
+      dragOrbitRef.current = { yaw, pitch };
+      for (const engine of stageEnginesRef.current) {
+        engine.setDragOrbitTarget(yaw, pitch);
+      }
+      event.preventDefault();
+    },
+    [active, interactive, setCompanionZoom],
+  );
+
+  const handleWheelCapture = useCallback(
+    (event: CompanionWheelEvent) => {
+      if (!active || !interactive) return;
+      const wheelPixels = getWheelPixels(event);
+      if (Math.abs(wheelPixels) < 0.01) return;
+      setCompanionZoom(
+        companionZoomRef.current -
+          wheelPixels * COMPANION_ZOOM_WHEEL_SENSITIVITY,
+      );
+      event.preventDefault();
+    },
+    [active, interactive, setCompanionZoom],
+  );
+
+  const handleRootWheelCapture = useCallback(
+    (event: CompanionWheelEvent) => {
+      if (!active || !interactive) return;
+      if (shouldIgnoreCameraZoom(event.target)) {
+        return;
+      }
+      if (hasFocusedTextEntry()) {
+        if (event.ctrlKey) {
+          event.preventDefault();
+        }
+        return;
+      }
+      handleWheelCapture(event);
+    },
+    [active, interactive, handleWheelCapture],
+  );
+
+  const releaseCameraDrag = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.pointerType === "touch") {
+        touchPointsRef.current.delete(event.pointerId);
+        if (touchPointsRef.current.size < 2) {
+          pinchStateRef.current = {
+            active: false,
+            startDistance: 0,
+            startZoom: companionZoomRef.current,
+          };
+        }
+      }
+      const dragState = dragStateRef.current;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      if (dragState.pointerId !== event.pointerId) return;
+      dragStateRef.current = {
+        active: false,
+        pointerId: null,
+        startX: 0,
+        startY: 0,
+      };
+      dragOrbitRef.current = { yaw: 0, pitch: 0 };
+      for (const engine of stageEnginesRef.current) {
+        engine.resetDragOrbit();
+      }
+    },
+    [],
+  );
+
+  const safeSelectedVrmIndex =
+    selectedVrmIndex > 0 ? selectedVrmIndex : getDefaultBundledVrmIndex();
+  const vrmPath =
+    selectedVrmIndex === 0 && customVrmUrl
+      ? customVrmUrl
+      : getVrmUrl(safeSelectedVrmIndex);
+  const avatarSpeech = useAvatarSpeechCapabilities({
+    selectedVrmIndex,
+    customVrmUrl,
+  });
+  const fallbackPreviewUrl =
+    selectedVrmIndex > 0
+      ? getVrmPreviewUrl(safeSelectedVrmIndex)
+      : getVrmPreviewUrl(getDefaultBundledVrmIndex());
+  const teleportKey = vrmPath;
+  const worldUrl =
+    uiTheme === "dark"
+      ? resolveAppAssetUrl("worlds/companion-night.spz")
+      : resolveAppAssetUrl("worlds/companion-day.spz");
+  const [teleportCompletedKey, setTeleportCompletedKey] = useState<
+    string | null
+  >(null);
+  const teleportKeyRef = useRef(teleportKey);
+  const greetingAnimationPathRef = useRef<string | null>(
+    resolveCharacterGreetingAnimation({ avatarIndex: selectedVrmIndex }),
+  );
+  const greetingEmoteTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const handleTeleportComplete = () => {
+      _companionTeleportCompletedOnce = true;
+      setTeleportCompletedKey(teleportKeyRef.current);
+      if (greetingEmoteTimerRef.current != null) {
+        window.clearTimeout(greetingEmoteTimerRef.current);
+      }
+      // Give the idle blend a moment to settle after the dissolve before
+      // cross-fading into the greeting emote.
+      greetingEmoteTimerRef.current = window.setTimeout(() => {
+        greetingEmoteTimerRef.current = null;
+        const greetingAnimationPath = greetingAnimationPathRef.current;
+        if (!greetingAnimationPath) {
+          return;
+        }
+        dispatchAppEmoteEvent({
+          emoteId: "greeting",
+          path: `/${greetingAnimationPath}`,
+          duration: 3,
+          loop: false,
+          showOverlay: false,
+        });
+      }, COMPANION_TELEPORT_GREETING_DELAY_MS);
+    };
+    window.addEventListener(
+      VRM_TELEPORT_COMPLETE_EVENT,
+      handleTeleportComplete,
+    );
+    return () => {
+      window.removeEventListener(
+        VRM_TELEPORT_COMPLETE_EVENT,
+        handleTeleportComplete,
+      );
+      if (greetingEmoteTimerRef.current != null) {
+        window.clearTimeout(greetingEmoteTimerRef.current);
+        greetingEmoteTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const handleNativeWheel = (event: WheelEvent) => {
+      handleRootWheelCapture(event);
+    };
+
+    root.addEventListener("wheel", handleNativeWheel, {
+      capture: true,
+      passive: false,
+    });
+
+    return () => {
+      root.removeEventListener("wheel", handleNativeWheel, {
+        capture: true,
+      });
+    };
+  }, [handleRootWheelCapture]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const preventGestureZoom = (event: Event) => {
+      event.preventDefault();
+    };
+
+    root.addEventListener("gesturestart", preventGestureZoom, {
+      passive: false,
+    });
+    root.addEventListener("gesturechange", preventGestureZoom, {
+      passive: false,
+    });
+    root.addEventListener("gestureend", preventGestureZoom, {
+      passive: false,
+    });
+
+    return () => {
+      root.removeEventListener("gesturestart", preventGestureZoom);
+      root.removeEventListener("gesturechange", preventGestureZoom);
+      root.removeEventListener("gestureend", preventGestureZoom);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (active && interactive) return;
+    touchPointsRef.current.clear();
+    pinchStateRef.current = {
+      active: false,
+      startDistance: 0,
+      startZoom: companionZoomRef.current,
+    };
+    dragStateRef.current = {
+      active: false,
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+    };
+    dragOrbitRef.current = { yaw: 0, pitch: 0 };
+    for (const engine of stageEnginesRef.current) {
+      engine.resetDragOrbit();
+    }
+  }, [active, interactive]);
+
+  useEffect(() => {
+    return () => {
+      stageEnginesRef.current.clear();
+    };
+  }, []);
+
+  /* ── Camera X-offset for CharacterEditor panel ──────────────────── */
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ offset: number }>).detail;
+      const offset = detail?.offset ?? 0;
+      for (const engine of stageEnginesRef.current) {
+        engine.setCameraXOffset(offset);
+      }
+    };
+    window.addEventListener("eliza:editor-camera-offset", handler);
+    return () =>
+      window.removeEventListener("eliza:editor-camera-offset", handler);
+  }, []);
+  const sceneStatus = useMemo(
+    () => ({
+      avatarReady: teleportCompletedKey === teleportKey,
+      teleportKey,
+    }),
+    [teleportCompletedKey, teleportKey],
+  );
+
+  useEffect(() => {
+    greetingAnimationPathRef.current = resolveCharacterGreetingAnimation({
+      avatarIndex: selectedVrmIndex,
+    });
+  }, [selectedVrmIndex]);
+
+  useEffect(() => {
+    teleportKeyRef.current = teleportKey;
+    _companionTeleportCompletedOnce = false;
+    setTeleportCompletedKey(null);
+    if (greetingEmoteTimerRef.current != null) {
+      window.clearTimeout(greetingEmoteTimerRef.current);
+      greetingEmoteTimerRef.current = null;
+    }
+  }, [teleportKey]);
+
+  const preloadAvatars = useMemo(() => {
+    if (tab !== "character" && tab !== "character-select") {
+      return [];
+    }
+    return Array.from({ length: getVrmCount() }, (_, index) => {
+      const avatarIndex = index + 1;
+      return {
+        vrmPath: getVrmUrl(avatarIndex),
+        fallbackPreviewUrl: getVrmPreviewUrl(avatarIndex),
+      };
+    });
+  }, [tab]);
+
+  /* ── Preload all VRM files into browser cache for instant character swaps ── */
+  const preloadedRef = useRef(false);
+  useEffect(() => {
+    if (preloadedRef.current || preloadAvatars.length === 0) return;
+    preloadedRef.current = true;
+    for (const entry of preloadAvatars) {
+      // Fire-and-forget fetch to warm browser cache; low priority.
+      void fetch(entry.vrmPath, { priority: "low" } as RequestInit).catch(
+        (err: unknown) => {
+          console.warn(
+            "[CompanionSceneHost] VRM preload fetch failed:",
+            entry.vrmPath,
+            err,
+          );
+        },
+      );
+    }
+  }, [preloadAvatars]);
+
+  return (
+    <div
+      ref={rootRef}
+      data-testid="companion-root"
+      data-no-window-drag=""
+      className={`relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden text-white font-display ${interactive ? "cursor-grab" : ""}`}
+      style={{
+        overscrollBehavior: "none",
+        touchAction: interactive ? "none" : undefined,
+      }}
+      onPointerDownCapture={handlePointerDownCapture}
+      onPointerMoveCapture={handlePointerMoveCapture}
+      onPointerUpCapture={releaseCameraDrag}
+      onPointerCancelCapture={releaseCameraDrag}
+      onLostPointerCaptureCapture={releaseCameraDrag}
+    >
+      <div
+        aria-hidden={!active}
+        className={`fixed inset-0 z-0 overflow-hidden rounded-2xl bg-[radial-gradient(circle_at_50%_120%,#212942_0%,#12151e_80%)] transition-opacity duration-200 ${
+          active ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+        style={{
+          visibility: active ? "visible" : "hidden",
+        }}
+      >
+        <div className="absolute inset-0 z-0 bg-cover opacity-60 bg-[radial-gradient(circle_at_10%_20%,rgba(255,255,255,0.03)_0%,transparent_40%),radial-gradient(circle_at_80%_80%,rgba(0,225,255,0.05)_0%,transparent_40%)] pointer-events-none" />
+
+        {shouldMountVrm && (
+          <VrmStage
+            active={active}
+            vrmPath={vrmPath}
+            worldUrl={worldUrl}
+            speechMotionPath={avatarSpeech.capabilities.speechMotionPath ?? null}
+            speechCapabilities={avatarSpeech.capabilities}
+            avatarSpeechKey={avatarSpeech.avatarKey}
+            fallbackPreviewUrl={fallbackPreviewUrl}
+            cameraProfile="companion"
+            companionVrmPowerMode={companionVrmPowerMode}
+            companionHalfFramerateMode={companionHalfFramerateMode}
+            companionAnimateWhenHidden={companionAnimateWhenHidden}
+            onEngineReady={handleStageEngineReady}
+            onLayerEngineReady={handleStageLayerEngineReady}
+            playWaveOnAvatarChange={false}
+            onSpeechCapabilitiesDetected={avatarSpeech.saveDetectedCapabilities}
+            t={t}
+          />
+        )}
+      </div>
+
+      <CompanionSceneStatusContext.Provider value={sceneStatus}>
+        {children}
+      </CompanionSceneStatusContext.Provider>
+    </div>
+  );
+}
+
+// Do NOT use a custom memo comparator that ignores children here.
+// shellContent (which includes ViewRouter / tab content) is passed as
+// children — ignoring children changes blocks all tab navigation.
+// If keystroke re-renders are a concern, memoize shellContent in App.tsx.
+export const CompanionSceneHost = memo(CompanionSceneSurface);
+
+export function SharedCompanionScene({
+  active,
+  interactive = true,
+  children,
+}: {
+  active: boolean;
+  interactive?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <SharedCompanionSceneContext.Provider value={true}>
+      <CompanionSceneHost active={active} interactive={interactive}>
+        {children}
+      </CompanionSceneHost>
+    </SharedCompanionSceneContext.Provider>
+  );
+}

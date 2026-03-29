@@ -4,14 +4,15 @@ import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { APP_EMOTE_EVENT } from "@miladyai/app-core/events";
 import { textOf as text } from "../../../../test/helpers/react-test";
+import { createInlineUiMock } from "./mockInlineUi";
 
-const mockUseApp = vi.fn();
-const viewerPropsRef: { current: null | Record<string, unknown> } = {
-  current: null,
-};
-const { latestEngineRef } = vi.hoisted(() => ({
-  latestEngineRef: { current: null as null | Record<string, unknown> },
-}));
+const mockUseApp = vi.hoisted(() => vi.fn());
+const viewerPropsRef = vi.hoisted(
+  () =>
+    ({
+      current: null,
+    }) as { current: null | Record<string, unknown> },
+);
 
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
@@ -39,128 +40,67 @@ vi.mock("@miladyai/app-core/state", () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
 
-function vrmStageStub() {
-  return {
-    VrmStage: (props: Record<string, unknown>) => {
-      viewerPropsRef.current = props;
-      React.useEffect(() => {
-        const engine = {
-          setPaused: vi.fn(),
-          setCameraAnimation: vi.fn(),
-          setPointerParallaxEnabled: vi.fn(),
-          setDragOrbitTarget: vi.fn(),
-          resetDragOrbit: vi.fn(),
-          setCompanionZoomNormalized: vi.fn(),
-          attachOverlayManager: vi.fn(),
-        };
-        latestEngineRef.current = engine;
-
-        const onEngineReady = props.onEngineReady;
-        if (typeof onEngineReady === "function") {
-          onEngineReady(engine);
-        }
-
-        const onLayerEngineReady = props.onLayerEngineReady;
-        if (typeof onLayerEngineReady === "function") {
-          onLayerEngineReady(String(props.vrmPath ?? ""), engine);
-        }
-      }, [props]);
-      return React.createElement("div", null, "VrmViewer");
-    },
-  };
-}
-
-vi.mock("../../src/components/companion/VrmStage", vrmStageStub);
-vi.mock("../../src/components/companion/VrmStage.tsx", vrmStageStub);
-
-function chatModalViewStub() {
-  return {
-    ChatModalView: () =>
-      React.createElement(
-        "div",
-        { "data-testid": "companion-chat-modal-stub" },
-        "ChatModalView",
-      ),
-  };
-}
-
-vi.mock("../../src/components/pages/ChatModalView", chatModalViewStub);
-vi.mock("../../src/components/pages/ChatModalView.tsx", chatModalViewStub);
-
-function vrmViewerStub() {
-  return {
-    VrmViewer: (props: Record<string, unknown>) => {
-      viewerPropsRef.current = props;
-      return React.createElement("div", null, "VrmViewer");
-    },
-  };
-}
-
-vi.mock("../../src/components/avatar/VrmViewer", vrmViewerStub);
-vi.mock("../../src/components/avatar/VrmViewer.tsx", vrmViewerStub);
-
-vi.mock("../../src/components/avatar/VrmEngine", () => {
-  class MockVrmEngine {
-    initialized = false;
-    setup = vi.fn(() => {
-      this.initialized = true;
-    });
-    isInitialized = vi.fn(() => this.initialized);
-    whenReady = vi.fn(async () => {});
-    setPaused = vi.fn();
-    setMinimalBackgroundMode = vi.fn();
-    setCameraProfile = vi.fn();
-    setInteractionMode = vi.fn();
-    setInteractionEnabled = vi.fn();
-    setPointerParallaxEnabled = vi.fn();
-    resetPointerParallax = vi.fn();
-    resize = vi.fn();
-    getState = vi.fn(() => ({
-      vrmLoaded: true,
-      vrmName: "Milady",
-      loadError: null,
-      idlePlaying: false,
-      idleTime: 0,
-      idleTracks: 0,
-      revealStarted: true,
-    }));
-    setWorldUrl = vi.fn(async () => {});
-    loadVrmFromUrl = vi.fn(async () => {});
-    dispose = vi.fn();
-    setCompanionZoomNormalized = vi.fn();
-    setDragOrbitTarget = vi.fn();
-    resetDragOrbit = vi.fn();
-    attachOverlayManager = vi.fn();
-    setCameraAnimation = vi.fn();
-    constructor() {
-      latestEngineRef.current = this as unknown as Record<string, unknown>;
-    }
-  }
-
-  return {
-    VrmEngine: MockVrmEngine,
-  };
+vi.mock("@miladyai/ui", async () => {
+  const actual = await vi.importActual<Record<string, unknown>>("@miladyai/ui");
+  return createInlineUiMock(actual);
 });
 
-vi.mock("../../src/components/coding/PtyConsoleDrawer", () => ({
+vi.mock("../../src/components/avatar/VrmViewer", () => ({
+  VrmViewer: (props: Record<string, unknown>) => {
+    viewerPropsRef.current = props;
+    return React.createElement("div", null, "VrmViewer");
+  },
+}));
+
+vi.mock("../../src/components/ChatModalView", () => ({
+  ChatModalView: (props: Record<string, unknown>) =>
+    React.createElement(
+      "div",
+      {
+        "data-testid": "companion-chat-modal-stub",
+        "data-show-agent-activity-box": String(
+          props.showAgentActivityBox ?? true,
+        ),
+      },
+      "ChatModalView",
+    ),
+}));
+
+vi.mock("../../src/components/PtyConsoleDrawer", () => ({
   PtyConsoleDrawer: () => React.createElement("div", null, "PtyConsoleDrawer"),
 }));
 
-vi.mock("../../src/components/coding/PtyConsoleSidePanel", () => ({
+vi.mock("../../src/components/PtyConsoleSidePanel", () => ({
   PtyConsoleSidePanel: () =>
     React.createElement("div", null, "PtyConsoleSidePanel"),
 }));
 
-const mockUploadCustomVrm = vi.fn(async () => {});
-const mockUploadCustomBackground = vi.fn(async () => {});
+const mockClientFns = vi.hoisted(() => ({
+  uploadCustomVrm: vi.fn(async () => {}),
+  uploadCustomBackground: vi.fn(async () => {}),
+  onWsEvent: vi.fn(() => () => {}),
+  streamStatus: vi.fn(),
+  getStreamingDestinations: vi.fn(),
+  streamGoLive: vi.fn(),
+  streamGoOffline: vi.fn(),
+  setActiveDestination: vi.fn(),
+  getArcade555GamesCatalog: vi.fn(),
+  getArcade555GameState: vi.fn(),
+  playArcade555Game: vi.fn(),
+  switchArcade555Game: vi.fn(),
+  stopArcade555Game: vi.fn(),
+  getEmotes: vi.fn(),
+  executeAliceOperatorPlan: vi.fn(),
+  listHyperscapeEmbeddedAgents: vi.fn(),
+  getHyperscapeAgentGoal: vi.fn(),
+  getHyperscapeAgentQuickActions: vi.fn(),
+  sendHyperscapeAgentMessage: vi.fn(),
+}));
 
 vi.mock("@miladyai/app-core/api", () => ({
-  client: {
-    uploadCustomVrm: (...args: unknown[]) => mockUploadCustomVrm(...args),
-    uploadCustomBackground: (...args: unknown[]) =>
-      mockUploadCustomBackground(...args),
-    onWsEvent: vi.fn(() => () => {}),
-  },
+  client: mockClientFns,
+  isApiError: (err: unknown) =>
+    Boolean(err && typeof err === "object" && "status" in (err as object)),
 }));
 
 vi.mock("@miladyai/app-core/utils", () => ({
@@ -168,11 +108,10 @@ vi.mock("@miladyai/app-core/utils", () => ({
   resolveAppAssetUrl: (p: string) => p,
   DESKTOP_WORKSPACE_SURFACES: [],
   modelLooksLikeElizaCloudHosted: () => false,
-  miladyTtsDebug: vi.fn(),
 }));
 
-import { CompanionSceneHost } from "../../src/components/companion/CompanionSceneHost";
-import { CompanionView } from "../../src/components/pages/CompanionView";
+import { CompanionSceneHost } from "../../src/components/CompanionSceneHost";
+import { CompanionView } from "../../src/components/CompanionView";
 
 const COMPANION_ZOOM_STORAGE_KEY = "milady.companion.zoom.v1";
 
@@ -180,37 +119,23 @@ function createContext(overrides: Record<string, unknown> = {}) {
   return {
     t: (k: string) => k,
     chatMode: "simple",
-    chatInput: "",
-    chatSending: false,
-    chatFirstTokenReceived: false,
-    companionMessageCutoffTs: 0,
     chatAgentVoiceMuted: false,
     conversations: [{ id: "conv-1", title: "Chat", status: "completed" }],
     conversationMessages: [],
+    conversations: [],
     activeConversationId: null,
-    activeInboxChat: null,
-    characterData: null,
     chatLastUsage: null,
     elizaCloudAuthRejected: false,
     elizaCloudCreditsError: null,
     elizaCloudEnabled: false,
     elizaCloudConnected: false,
-    elizaCloudVoiceProxyAvailable: false,
-    elizaCloudHasPersistedKey: false,
+    onboardingHandoffPhase: "idle",
     setState: vi.fn(),
-    handleChatSend: vi.fn(async () => {}),
-    handleChatStop: vi.fn(),
-    handleChatEdit: vi.fn(async () => true),
     handleStartDraftConversation: vi.fn(async () => {}),
     handleNewConversation: vi.fn(async () => {}),
     selectedVrmIndex: 1,
     customVrmUrl: "",
     customBackgroundUrl: "",
-    droppedFiles: [],
-    shareIngestNotice: "",
-    chatPendingImages: [],
-    setChatPendingImages: vi.fn(),
-    sendChatText: vi.fn(async () => {}),
     walletAddresses: null,
     walletBalances: null,
     walletNfts: null,
@@ -277,7 +202,11 @@ function createContext(overrides: Record<string, unknown> = {}) {
       execution: null,
       requiresUserSignature: false,
     })),
+    logConversationOperatorAction: vi.fn(async () => true),
     setActionNotice: vi.fn(),
+    loadPlugins: vi.fn(async () => {}),
+    handlePluginConfigSave: vi.fn(async () => {}),
+    pluginSaving: new Set<string>(),
     agentStatus: {
       state: "running",
       agentName: "Milady",
@@ -358,16 +287,19 @@ function renderWithCompanionRootMock(
   });
 }
 
-function createMockStageEngine() {
-  return {
-    setPaused: vi.fn(),
-    setCameraAnimation: vi.fn(),
-    setPointerParallaxEnabled: vi.fn(),
-    setDragOrbitTarget: vi.fn(),
-    resetDragOrbit: vi.fn(),
-    setCompanionZoomNormalized: vi.fn(),
-    attachOverlayManager: vi.fn(),
-  };
+function createMatchMedia(
+  matchesFor: (query: string) => boolean = () => false,
+) {
+  return vi.fn((query: string) => ({
+    matches: matchesFor(query),
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
 }
 
 describe("CompanionView", () => {
@@ -376,7 +308,102 @@ describe("CompanionView", () => {
 
   beforeEach(() => {
     viewerPropsRef.current = null;
-    latestEngineRef.current = null;
+    mockClientFns.streamStatus.mockReset();
+    mockClientFns.getStreamingDestinations.mockReset();
+    mockClientFns.streamGoLive.mockReset();
+    mockClientFns.streamGoOffline.mockReset();
+    mockClientFns.setActiveDestination.mockReset();
+    mockClientFns.getArcade555GamesCatalog.mockReset();
+    mockClientFns.getArcade555GameState.mockReset();
+    mockClientFns.playArcade555Game.mockReset();
+    mockClientFns.switchArcade555Game.mockReset();
+    mockClientFns.stopArcade555Game.mockReset();
+    mockClientFns.getEmotes.mockReset();
+    mockClientFns.executeAliceOperatorPlan.mockReset();
+    mockClientFns.listHyperscapeEmbeddedAgents.mockReset();
+    mockClientFns.getHyperscapeAgentGoal.mockReset();
+    mockClientFns.getHyperscapeAgentQuickActions.mockReset();
+    mockClientFns.sendHyperscapeAgentMessage.mockReset();
+
+    mockClientFns.streamStatus.mockResolvedValue({
+      running: false,
+      ffmpegAlive: false,
+      uptime: 0,
+      frameCount: 0,
+      destination: { id: "dest-1", name: "555 TV" },
+    });
+    mockClientFns.getStreamingDestinations.mockResolvedValue({
+      destinations: [{ id: "dest-1", name: "555 TV" }],
+    });
+    mockClientFns.streamGoLive.mockResolvedValue({ ok: true, live: true });
+    mockClientFns.streamGoOffline.mockResolvedValue({ ok: true, live: false });
+    mockClientFns.setActiveDestination.mockResolvedValue({
+      ok: true,
+      destination: { id: "dest-1", name: "555 TV" },
+    });
+    mockClientFns.getArcade555GamesCatalog.mockResolvedValue({
+      games: [{ id: "space-quest", title: "Space Quest" }],
+    });
+    mockClientFns.getArcade555GameState.mockResolvedValue({
+      sessionId: null,
+      activeGameId: null,
+      activeGameLabel: null,
+      mode: null,
+      phase: null,
+      live: false,
+      destination: null,
+    });
+    mockClientFns.playArcade555Game.mockResolvedValue({ ok: true });
+    mockClientFns.switchArcade555Game.mockResolvedValue({ ok: true });
+    mockClientFns.stopArcade555Game.mockResolvedValue({ ok: true });
+    mockClientFns.getEmotes.mockResolvedValue({
+      emotes: [
+        {
+          id: "wave",
+          name: "Wave",
+          description: "Wave",
+          path: "/animations/emotes/wave.fbx.gz",
+          duration: 2,
+          loop: false,
+          category: "greeting",
+        },
+        {
+          id: "dance-happy",
+          name: "Happy Dance",
+          description: "Dance",
+          path: "/animations/emotes/dance.fbx.gz",
+          duration: 3,
+          loop: false,
+          category: "dance",
+        },
+      ],
+    });
+    mockClientFns.executeAliceOperatorPlan.mockResolvedValue({
+      ok: true,
+      allSucceeded: true,
+      results: [],
+    });
+    mockClientFns.listHyperscapeEmbeddedAgents.mockResolvedValue({
+      success: true,
+      agents: [],
+      count: 0,
+    });
+    mockClientFns.getHyperscapeAgentGoal.mockResolvedValue({
+      success: true,
+      goal: null,
+    });
+    mockClientFns.getHyperscapeAgentQuickActions.mockResolvedValue({
+      success: true,
+      quickCommands: [],
+      nearbyLocations: [],
+      availableGoals: [],
+      inventory: [],
+      playerPosition: null,
+    });
+    mockClientFns.sendHyperscapeAgentMessage.mockResolvedValue({
+      success: true,
+    });
+
     const storage = new Map<string, string>();
     const windowListeners = new Map<string, Set<EventListener>>();
     Object.defineProperty(globalThis, "localStorage", {
@@ -404,6 +431,7 @@ describe("CompanionView", () => {
         clearTimeout: globalThis.clearTimeout.bind(globalThis),
         setInterval: globalThis.setInterval.bind(globalThis),
         clearInterval: globalThis.clearInterval.bind(globalThis),
+        matchMedia: createMatchMedia(),
         addEventListener: vi.fn(
           (type: string, listener: EventListenerOrEventListenerObject) => {
             if (typeof listener !== "function") return;
@@ -463,10 +491,9 @@ describe("CompanionView", () => {
       tree = TestRenderer.create(React.createElement(CompanionView));
     });
 
-    const companionRoot = tree?.root.findAllByProps({
-      "data-testid": "companion-root",
-    });
-    expect(companionRoot).toHaveLength(1);
+    const content = text(tree?.root);
+    // Should render the mock VrmViewer text
+    expect(content).toContain("VrmViewer");
     // ChatModalView is gated behind avatarReady (VRM teleport), so it won't
     // render until the avatar finishes loading. Verify the header overlay is
     // present instead (rendered with opacity 0 while waiting).
@@ -497,25 +524,14 @@ describe("CompanionView", () => {
           "data-testid": "companion-chat-modal-stub",
         }),
       ).toHaveLength(0);
-      expect(
-        tree?.root.findAll((node) => {
-          const style = node.props?.style as
-            | { opacity?: number; pointerEvents?: string }
-            | undefined;
-          return style?.opacity === 0 && style.pointerEvents === "none";
-        }),
-      ).toHaveLength(1);
 
       await act(async () => {
         vi.advanceTimersByTime(1400);
       });
 
       expect(
-        tree?.root.findAll((node) => {
-          const style = node.props?.style as
-            | { opacity?: number; pointerEvents?: string }
-            | undefined;
-          return style?.opacity === 1 && style.pointerEvents === "auto";
+        tree?.root.findAllByProps({
+          "data-testid": "companion-chat-modal-stub",
         }),
       ).toHaveLength(1);
     } finally {
@@ -526,6 +542,285 @@ describe("CompanionView", () => {
       window.setTimeout = globalThis.setTimeout.bind(globalThis);
       window.clearTimeout = globalThis.clearTimeout.bind(globalThis);
     }
+  });
+
+  it("reveals the companion dock immediately during onboarding handoff", async () => {
+    mockUseApp.mockReturnValue(
+      createContext({
+        onboardingHandoffPhase: "bootstrapping",
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+    });
+
+    expect(
+      tree?.root.findAllByProps({
+        "data-testid": "companion-chat-modal-stub",
+      }),
+    ).toHaveLength(1);
+  });
+
+  it("renders the Alice go live control and collapsed stage launcher for Alice", async () => {
+    mockUseApp.mockReturnValue(
+      createContext({
+        onboardingHandoffPhase: "bootstrapping",
+        selectedVrmIndex: 9,
+        plugins: [{ id: "five55-games", enabled: true, isActive: true }],
+        ptySessions: [
+          {
+            sessionId: "pty-1",
+            label: "Alice Ops",
+            status: "active",
+            lastActivity: "Running",
+          },
+        ],
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+      await Promise.resolve();
+    });
+
+    expect(
+      tree?.root.findAll(
+        (node) =>
+          node.type === "button" &&
+          node.props["data-testid"] === "companion-header-go-live",
+      ),
+    ).toHaveLength(1);
+    expect(
+      tree?.root.findByProps({
+        "data-testid": "companion-header-go-live",
+      }).props["data-no-camera-zoom"],
+    ).toBe("true");
+    expect(
+      tree?.root.findAllByProps({
+        "data-testid": "companion-stage-actions-launcher",
+      }).length ?? 0,
+    ).toBeGreaterThan(0);
+    expect(
+      tree?.root.findByProps({
+        "data-testid": "companion-stage-actions-launcher",
+      }).props["data-no-camera-zoom"],
+    ).toBe("true");
+    expect(
+      tree?.root.findAllByProps({
+        "data-testid": "companion-stage-actions-bubble",
+      }),
+    ).toHaveLength(0);
+    expect(
+      tree?.root.findByProps({
+        "data-testid": "companion-chat-modal-stub",
+      }).props["data-show-agent-activity-box"],
+    ).toBe("true");
+  });
+
+  it("keeps the Alice go live control hidden for non-Alice avatars", async () => {
+    mockUseApp.mockReturnValue(
+      createContext({
+        onboardingHandoffPhase: "bootstrapping",
+        selectedVrmIndex: 1,
+        ptySessions: [
+          {
+            sessionId: "pty-1",
+            label: "Generic Ops",
+            status: "active",
+            lastActivity: "Running",
+          },
+        ],
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+      await Promise.resolve();
+    });
+
+    expect(
+      tree?.root.findAllByProps({
+        "data-testid": "companion-header-go-live",
+      }),
+    ).toHaveLength(0);
+    expect(
+      tree?.root.findAllByProps({
+        "data-testid": "companion-stage-actions-launcher",
+      }),
+    ).toHaveLength(0);
+    expect(
+      tree?.root.findByProps({
+        "data-testid": "companion-chat-modal-stub",
+      }).props["data-show-agent-activity-box"],
+    ).toBe("true");
+    expect(viewerPropsRef.current?.speechMotionPath).toBeNull();
+  });
+
+  it("keeps the Alice stage launcher off narrow screens while preserving the header go live control", async () => {
+    window.matchMedia = createMatchMedia(
+      (query) => query === "(max-width: 767px)",
+    );
+    mockUseApp.mockReturnValue(
+      createContext({
+        onboardingHandoffPhase: "bootstrapping",
+        selectedVrmIndex: 9,
+        plugins: [{ id: "five55-games", enabled: true, isActive: true }],
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+      await Promise.resolve();
+    });
+
+    expect(
+      tree?.root.findAllByProps({
+        "data-testid": "companion-header-go-live",
+      }).length ?? 0,
+    ).toBeGreaterThan(0);
+    expect(
+      tree?.root.findAllByProps({
+        "data-testid": "companion-stage-actions-launcher",
+      }),
+    ).toHaveLength(0);
+  });
+
+  it("expands the Alice stage launcher into a scrollable action panel", async () => {
+    mockUseApp.mockReturnValue(
+      createContext({
+        onboardingHandoffPhase: "bootstrapping",
+        selectedVrmIndex: 9,
+        plugins: [{ id: "five55-games", enabled: true, isActive: true }],
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+      await Promise.resolve();
+    });
+
+    const launcher = tree?.root.findByProps({
+      "data-testid": "companion-stage-actions-launcher",
+    });
+
+    await act(async () => {
+      launcher?.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(
+      tree?.root.findAllByProps({
+        "data-testid": "companion-stage-actions-bubble",
+      }).length ?? 0,
+    ).toBeGreaterThan(0);
+    expect(
+      tree?.root.findByProps({
+        "data-testid": "companion-stage-actions-bubble",
+      }).props["data-no-camera-zoom"],
+    ).toBe("true");
+  });
+
+  it("logs Alice stage actions and collapses the sheet when bubble actions are triggered", async () => {
+    const logConversationOperatorAction = vi.fn(async () => true);
+    mockClientFns.streamStatus.mockResolvedValue({
+      running: true,
+      ffmpegAlive: true,
+      uptime: 12,
+      frameCount: 48,
+      destination: { id: "dest-1", name: "555 TV" },
+    });
+    mockUseApp.mockReturnValue(
+      createContext({
+        onboardingHandoffPhase: "bootstrapping",
+        selectedVrmIndex: 9,
+        logConversationOperatorAction,
+        plugins: [{ id: "five55-games", enabled: true, isActive: true }],
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+      await Promise.resolve();
+    });
+
+    const launcher = tree?.root.findByProps({
+      "data-testid": "companion-stage-actions-launcher",
+    });
+
+    await act(async () => {
+      launcher?.props.onClick();
+      await Promise.resolve();
+    });
+
+    const screenShareButton = tree?.root.find(
+      (node) =>
+        node.type === "button" &&
+        node.props.title === "aliceoperator.action.screenShare",
+    );
+
+    await act(async () => {
+      await screenShareButton?.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(logConversationOperatorAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "aliceoperator.action.screenShare",
+        kind: "stream",
+      }),
+    );
+    expect(
+      tree?.root.findAllByProps({
+        "data-testid": "companion-stage-actions-bubble",
+      }),
+    ).toHaveLength(0);
+  });
+
+  it("opens the Alice go live modal from the header control", async () => {
+    mockUseApp.mockReturnValue(
+      createContext({
+        onboardingHandoffPhase: "bootstrapping",
+        selectedVrmIndex: 9,
+        ptySessions: [
+          {
+            sessionId: "pty-1",
+            label: "Alice Ops",
+            status: "active",
+            lastActivity: "Running",
+          },
+        ],
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+      await Promise.resolve();
+    });
+
+    const button = tree?.root.find(
+      (node) =>
+        node.type === "button" &&
+        node.props["data-testid"] === "companion-header-go-live",
+    );
+
+    await act(async () => {
+      button?.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(
+      tree?.root.findAllByProps({
+        "data-go-live-stepper": true,
+      }),
+    ).toHaveLength(1);
   });
 
   it("plays the greeting emote only after teleport completion", async () => {
@@ -705,21 +1000,22 @@ describe("CompanionView", () => {
       tree = TestRenderer.create(React.createElement(CompanionView));
     });
 
-    const engine = createMockStageEngine();
+    const setDragOrbitTarget = vi.fn();
+    const resetDragOrbit = vi.fn();
+    const setCompanionZoomNormalized = vi.fn();
     await act(async () => {
       const ready = viewerPropsRef.current?.onEngineReady as
         | ((value: unknown) => void)
         | undefined;
-      ready?.(engine);
+      ready?.({
+        setPaused: vi.fn(),
+        setCameraAnimation: vi.fn(),
+        setPointerParallaxEnabled: vi.fn(),
+        setDragOrbitTarget,
+        resetDragOrbit,
+        setCompanionZoomNormalized,
+      });
     });
-    const readyEngine = engine as {
-      setDragOrbitTarget: ReturnType<typeof vi.fn>;
-      resetDragOrbit: ReturnType<typeof vi.fn>;
-      setCompanionZoomNormalized: ReturnType<typeof vi.fn>;
-    };
-    const setDragOrbitTarget = readyEngine.setDragOrbitTarget;
-    const resetDragOrbit = readyEngine.resetDragOrbit;
-    const setCompanionZoomNormalized = readyEngine.setCompanionZoomNormalized;
 
     expect(setCompanionZoomNormalized).toHaveBeenCalledWith(0.95);
     setDragOrbitTarget.mockClear();
@@ -793,7 +1089,6 @@ describe("CompanionView", () => {
         setDragOrbitTarget,
         resetDragOrbit: vi.fn(),
         setCompanionZoomNormalized: vi.fn(),
-        attachOverlayManager: vi.fn(),
       });
     });
     setDragOrbitTarget.mockClear();
@@ -841,14 +1136,20 @@ describe("CompanionView", () => {
       renderWithCompanionRootMock(rootMock);
     });
 
-    const engine = createMockStageEngine();
+    const setCompanionZoomNormalized = vi.fn();
     await act(async () => {
       const ready = viewerPropsRef.current?.onEngineReady as
         | ((value: unknown) => void)
         | undefined;
-      ready?.(engine);
+      ready?.({
+        setPaused: vi.fn(),
+        setCameraAnimation: vi.fn(),
+        setPointerParallaxEnabled: vi.fn(),
+        setDragOrbitTarget: vi.fn(),
+        resetDragOrbit: vi.fn(),
+        setCompanionZoomNormalized,
+      });
     });
-    const setCompanionZoomNormalized = engine.setCompanionZoomNormalized;
     setCompanionZoomNormalized.mockClear();
 
     const wheelListener = rootMock.getListener("wheel");
@@ -894,7 +1195,6 @@ describe("CompanionView", () => {
         setDragOrbitTarget: vi.fn(),
         resetDragOrbit: vi.fn(),
         setCompanionZoomNormalized,
-        attachOverlayManager: vi.fn(),
       });
     });
     setCompanionZoomNormalized.mockClear();
@@ -941,7 +1241,6 @@ describe("CompanionView", () => {
         setDragOrbitTarget: vi.fn(),
         resetDragOrbit: vi.fn(),
         setCompanionZoomNormalized,
-        attachOverlayManager: vi.fn(),
       });
     });
     setCompanionZoomNormalized.mockClear();
@@ -973,15 +1272,8 @@ describe("CompanionView", () => {
       tree = TestRenderer.create(React.createElement(CompanionView));
     });
 
-    const engine = createMockStageEngine();
-    await act(async () => {
-      const ready = viewerPropsRef.current?.onEngineReady as
-        | ((value: unknown) => void)
-        | undefined;
-      ready?.(engine);
-    });
-    const setCompanionZoomNormalized = engine.setCompanionZoomNormalized;
-    const resetDragOrbit = engine.resetDragOrbit;
+    const setCompanionZoomNormalized = vi.fn();
+    const resetDragOrbit = vi.fn();
     const currentTarget = {
       setPointerCapture: vi.fn(),
       releasePointerCapture: vi.fn(),
@@ -989,6 +1281,20 @@ describe("CompanionView", () => {
       clientWidth: 1440,
       clientHeight: 900,
     };
+
+    await act(async () => {
+      const ready = viewerPropsRef.current?.onEngineReady as
+        | ((value: unknown) => void)
+        | undefined;
+      ready?.({
+        setPaused: vi.fn(),
+        setCameraAnimation: vi.fn(),
+        setPointerParallaxEnabled: vi.fn(),
+        setDragOrbitTarget: vi.fn(),
+        resetDragOrbit,
+        setCompanionZoomNormalized,
+      });
+    });
 
     const root = tree?.root.findByProps({
       "data-testid": "companion-root",
@@ -1039,14 +1345,20 @@ describe("CompanionView", () => {
       tree = TestRenderer.create(React.createElement(CompanionView));
     });
 
-    const engine = createMockStageEngine();
+    const setCompanionZoomNormalized = vi.fn();
     await act(async () => {
       const ready = viewerPropsRef.current?.onEngineReady as
         | ((value: unknown) => void)
         | undefined;
-      ready?.(engine);
+      ready?.({
+        setPaused: vi.fn(),
+        setCameraAnimation: vi.fn(),
+        setPointerParallaxEnabled: vi.fn(),
+        setDragOrbitTarget: vi.fn(),
+        resetDragOrbit: vi.fn(),
+        setCompanionZoomNormalized,
+      });
     });
-    const setCompanionZoomNormalized = engine.setCompanionZoomNormalized;
 
     expect(tree).not.toBeNull();
     expect(setCompanionZoomNormalized).toHaveBeenCalledWith(0.62);

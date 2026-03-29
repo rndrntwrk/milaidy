@@ -11,6 +11,7 @@
 
 import type { PluginListenerHandle } from "@capacitor/core";
 import { Capacitor } from "@capacitor/core";
+import { sanitizeSpeechText } from "@miladyai/shared/spoken-text";
 import {
   useCallback,
   useEffect,
@@ -19,7 +20,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { VoiceConfig } from "../api/client";
+import type { VoiceConfig, VoiceMode } from "../api/client";
 import {
   getElectrobunRendererRpc,
   invokeDesktopBridgeRequest,
@@ -37,95 +38,644 @@ import {
   miladyTtsDebug,
   miladyTtsDebugTextPreview,
 } from "../utils/milady-tts-debug";
+import { mergeStreamingText } from "../utils/streaming-text";
 import { hasConfiguredApiKey } from "../voice";
-import {
-  collapseWhitespace,
-  nextIdleMouthOpen,
-  normalizeCacheText,
-  normalizeMouthOpen,
-  queueableSpeechPrefix,
-  remainderAfter,
-  splitFirstSentence,
-  toSpeakableText,
-} from "./voice-chat-playback";
-import { mergeTranscriptWindows } from "./voice-chat-recording";
-import {
-  ASSISTANT_TTS_DEBOUNCE_MS,
-  ASSISTANT_TTS_FINAL_ONLY,
-  ASSISTANT_TTS_FIRST_FLUSH_CHARS,
-  ASSISTANT_TTS_MIN_CHUNK_CHARS,
-  DEFAULT_ELEVEN_MODEL,
-  DEFAULT_ELEVEN_VOICE,
-  MAX_CACHED_SEGMENTS,
-  TALKMODE_STOP_SETTLE_MS,
-  describeTtsCloudFetchTargetForDebug,
-  getSpeechRecognitionCtor,
-  globalAudioCache,
-  isAbortError,
-  localePrefix,
-  matchesVoiceLocale,
-  normalizeSpeechLocale,
-  resolveEffectiveVoiceConfig,
-  resolveVoiceMode,
-  resolveVoiceProxyEndpoint,
-  toArrayBuffer,
-  webSpeechVoiceDebugFields,
-  type AssistantSpeechState,
-  type SpeakTask,
-  type SpeechRecognitionInstance,
-  type SpeechRecognitionResultEvent,
-  type VoiceCaptureMode,
-  type VoiceChatOptions,
-  type VoiceChatState,
-  type VoicePlaybackStartEvent,
-  type VoiceTranscriptPreviewEvent,
-} from "./voice-chat-types";
 
-// ── Re-exports (public API) ──────────────────────────────────────────
+// ── Speech Recognition types ──────────────────────────────────────────
 
-export type {
-  VoiceCaptureMode,
-  VoiceChatOptions,
-  VoiceChatState,
-  VoicePlaybackStartEvent,
-  VoiceTranscriptPreviewEvent,
-} from "./voice-chat-types";
-export { nextIdleMouthOpen } from "./voice-chat-playback";
+interface SpeechRecognitionInstance extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+  onresult: ((event: SpeechRecognitionResultEvent) => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
 
-// ── Shared mutable state ─────────────────────────────────────────────
+interface SpeechRecognitionResultEvent {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  [index: number]: {
+    isFinal: boolean;
+    0: { transcript: string; confidence: number };
+  };
+}
 
 let sharedAudioCtx: AudioContext | null = null;
 
-// ── Internal helpers ─────────────────────────────────────────────────
+type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
 
-function shouldPreferNativeTalkMode(): boolean {
-  if (typeof window === "undefined") return false;
-  return Capacitor.isNativePlatform() || !!getElectrobunRendererRpc();
+interface WindowWithSpeechRecognition extends Window {
+  SpeechRecognition?: SpeechRecognitionCtor;
+  webkitSpeechRecognition?: SpeechRecognitionCtor;
 }
 
-function isWindowsElectrobunRenderer(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    !!getElectrobunRendererRpc() &&
-    typeof process !== "undefined" &&
-    process.platform === "win32"
+/** Access browser SpeechRecognition APIs which may live under a vendor prefix. */
+function getSpeechRecognitionCtor(): SpeechRecognitionCtor | undefined {
+  const w = window as WindowWithSpeechRecognition;
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition;
+}
+
+// ── Public types ──────────────────────────────────────────────────────
+
+type SpeechSegmentKind = "full" | "first-sentence" | "remainder";
+type SpeechProviderKind = "elevenlabs" | "browser";
+export type VoiceCaptureMode = "idle" | "compose" | "push-to-talk";
+
+export interface VoicePlaybackStartEvent {
+  text: string;
+  segment: SpeechSegmentKind;
+  provider: SpeechProviderKind;
+  cached: boolean;
+  startedAtMs: number;
+}
+
+export interface VoiceTranscriptPreviewEvent {
+  mode: Exclude<VoiceCaptureMode, "idle">;
+  isFinal: boolean;
+}
+
+export interface VoiceChatOptions {
+  /** Called when a final transcript is ready to send */
+  onTranscript: (text: string) => void;
+  /** Called whenever the live transcript buffer changes */
+  onTranscriptPreview?: (
+    text: string,
+    event: VoiceTranscriptPreviewEvent,
+  ) => void;
+  /** Called when playback of a speech segment starts */
+  onPlaybackStart?: (event: VoicePlaybackStartEvent) => void;
+  /** True when Eliza Cloud-managed voice access is available */
+  cloudConnected?: boolean;
+  /** Whether user speech should immediately interrupt assistant playback */
+  interruptOnSpeech?: boolean;
+  /** Language for speech recognition (default: "en-US") */
+  lang?: string;
+  /** Saved voice configuration — switches TTS provider when set */
+  voiceConfig?: VoiceConfig | null;
+}
+
+export interface VoiceChatState {
+  /** Whether voice input is currently active */
+  isListening: boolean;
+  /** Current mic capture mode */
+  captureMode: VoiceCaptureMode;
+  /** Whether the agent is currently speaking */
+  isSpeaking: boolean;
+  /** Current mouth openness (0-1) for lip sync */
+  mouthOpen: number;
+  /** Current interim transcript being recognized */
+  interimTranscript: string;
+  /** Whether Web Speech API is supported */
+  supported: boolean;
+  /** True when using real audio analysis (ElevenLabs) for mouth */
+  usingAudioAnalysis: boolean;
+  /** True when the current speech path can drive normalized advanced face frames. */
+  advancedFaceFramesEnabled: boolean;
+  /** Toggle voice listening on/off */
+  toggleListening: () => void;
+  /** Begin voice capture in compose or push-to-talk mode */
+  startListening: (mode?: Exclude<VoiceCaptureMode, "idle">) => Promise<void>;
+  /** End voice capture and optionally submit the transcript */
+  stopListening: (options?: { submit?: boolean }) => Promise<void>;
+  /** Speak text aloud with mouth animation */
+  speak: (text: string, options?: { append?: boolean }) => void;
+  /** Progressively speak an assistant message while it streams */
+  queueAssistantSpeech: (
+    messageId: string,
+    text: string,
+    isFinal: boolean,
+  ) => void;
+  /** Stop any current speech */
+  stopSpeaking: () => void;
+  /** Increments when AudioContext is unlocked by a user gesture, allowing callers to retry speech that was silently blocked by autoplay policy. */
+  voiceUnlockedGeneration: number;
+  /**
+   * Assistant reply TTS: `enhanced` = ElevenLabs path (own key, cloud proxy, or direct);
+   * `standard` = browser / Edge voices or non-ElevenLabs provider.
+   */
+  assistantTtsQuality: "enhanced" | "standard";
+}
+
+interface SpeakTask {
+  text: string;
+  append: boolean;
+  segment: SpeechSegmentKind;
+  cacheKey?: string;
+  /** Milady-only: sent as `x-milady-tts-*` headers on `/api/tts/*` when debug is on (never forwarded to Eliza Cloud). */
+  debugUtteranceContext?: {
+    messageId: string;
+    fullAssistTextPreview: string;
+  };
+}
+
+interface AssistantSpeechState {
+  messageId: string;
+  /** Speakable text already submitted to the playback queue (prefix of current stream). */
+  queuedSpeakablePrefix: string;
+  /** Latest speakable from the stream (debounce flush reads this). */
+  latestSpeakable: string;
+  finalQueued: boolean;
+}
+
+const DEFAULT_ELEVEN_MODEL = "eleven_flash_v2_5";
+const DEFAULT_ELEVEN_VOICE = "EXAVITQu4vr4xnSDxMaL";
+const MAX_SPOKEN_CHARS = 360;
+const MAX_CACHED_SEGMENTS = 128;
+/** First assistant clip: start synthesis after this much speakable text (avoids one-word TTS). */
+const ASSISTANT_TTS_FIRST_FLUSH_CHARS = 24;
+/** Later clips: batch for better prosody (avoid token-thin slices). */
+const ASSISTANT_TTS_MIN_CHUNK_CHARS = 88;
+/** Merge rapid stream deltas into one request after a short pause. */
+const ASSISTANT_TTS_DEBOUNCE_MS = 170;
+/**
+ * Temporary safety switch:
+ * only speak assistant replies once the final text has arrived.
+ *
+ * This avoids garbled overlap when cloud text streaming and speech playback
+ * race each other on partial chunks.
+ */
+const ASSISTANT_TTS_FINAL_ONLY = true;
+const TALKMODE_STOP_SETTLE_MS = 120;
+const REDACTED_SECRET = "[REDACTED]";
+const MOUTH_OPEN_STEP = 0.02;
+
+const globalAudioCache = new Map<string, Uint8Array>();
+
+function resolveVoiceMode(
+  mode: VoiceMode | undefined,
+  _cloudConnected: boolean,
+  _apiKey?: string | null,
+): VoiceMode {
+  if (mode) return mode;
+  // Always use the ElevenLabs proxy path ("own-key") — the server aliases the
+  // cloud API key to ELEVENLABS_API_KEY at startup so upstream Eliza can use
+  // it.  The "cloud" path converts ElevenLabs voice IDs to OpenAI-style names
+  // (nova, alloy, etc.) which produces wrong audio (default sample clips).
+  return "own-key";
+}
+
+function resolveVoiceProxyEndpoint(mode: VoiceMode): string {
+  return resolveApiUrl(
+    mode === "cloud" ? "/api/tts/cloud" : "/api/tts/elevenlabs",
   );
 }
 
-function shouldAutoRestartBrowserRecognition(): boolean {
-  if (typeof window === "undefined") return false;
-  if (isWindowsElectrobunRenderer()) {
-    return false;
+/** For MILADY_TTS_DEBUG: shows whether cloud TTS hits the API or the wrong (page) origin. */
+function describeTtsCloudFetchTargetForDebug(): string {
+  const target = resolveApiUrl("/api/tts/cloud");
+  if (/^https?:\/\//i.test(target)) {
+    try {
+      return `${new URL(target).origin} (absolute)`;
+    } catch {
+      return target.slice(0, 120);
+    }
   }
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "(no-window)";
+  const path = target.startsWith("/") ? target : `/${target}`;
+  return `${origin}${path} — relative URL (TTS fetch goes to the UI host, not the Milady API). Set __MILADY_API_BASE__ / session milady_api_base / boot apiBase to http://127.0.0.1:<apiPort>`;
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const out = new Uint8Array(bytes.byteLength);
+  out.set(bytes);
+  return out.buffer;
+}
+
+function collapseWhitespace(input: string): string {
+  return input.replace(/\s+/g, " ").trim();
+}
+
+function normalizeTranscriptWord(word: string): string {
+  return word
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+}
+
+function mergeTranscriptWindows(existing: string, incoming: string): string {
+  const left = collapseWhitespace(existing);
+  const right = collapseWhitespace(incoming);
+
+  if (!left) return right;
+  if (!right) return left;
+
+  const exactMerged = mergeStreamingText(left, right);
+  if (
+    exactMerged === right ||
+    exactMerged === left ||
+    exactMerged === `${left}${right}`
+  ) {
+    const leftWords = left.split(" ");
+    const rightWords = right.split(" ");
+    const maxOverlap = Math.min(leftWords.length, rightWords.length);
+
+    for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
+      let matches = true;
+      for (let index = 0; index < overlap; index += 1) {
+        const leftWord = normalizeTranscriptWord(
+          leftWords[leftWords.length - overlap + index] ?? "",
+        );
+        const rightWord = normalizeTranscriptWord(rightWords[index] ?? "");
+        if (!leftWord || !rightWord || leftWord !== rightWord) {
+          matches = false;
+          break;
+        }
+      }
+      if (!matches) continue;
+
+      if (overlap === rightWords.length) {
+        return left;
+      }
+      return [...leftWords, ...rightWords.slice(overlap)].join(" ");
+    }
+  }
+
+  return exactMerged;
+}
+
+function normalizeMouthOpen(value: number): number {
+  const clamped = Math.max(0, Math.min(1, value));
+  const stepped = Math.round(clamped / MOUTH_OPEN_STEP) * MOUTH_OPEN_STEP;
+  return stepped < MOUTH_OPEN_STEP ? 0 : Math.min(1, stepped);
+}
+
+export function nextIdleMouthOpen(currentValue: number): number {
+  const current = normalizeMouthOpen(currentValue);
+  if (current <= MOUTH_OPEN_STEP) {
+    return 0;
+  }
+  return Math.max(0, Math.min(current * 0.85, current - MOUTH_OPEN_STEP));
+}
+
+function normalizeCacheText(input: string): string {
+  // Preserve punctuation while normalizing spacing/casing.
+  return collapseWhitespace(input.normalize("NFKC")).toLowerCase();
+}
+
+function isRedactedSecret(value: unknown): boolean {
+  return (
+    typeof value === "string" && value.trim().toUpperCase() === REDACTED_SECRET
+  );
+}
+
+function capSpeechLength(input: string): string {
+  if (input.length <= MAX_SPOKEN_CHARS) return input;
+  const clipped = input.slice(0, MAX_SPOKEN_CHARS);
+  const splitAt = clipped.lastIndexOf(" ");
+  const body = splitAt > 120 ? clipped.slice(0, splitAt) : clipped;
+  return `${body.trim()}...`;
+}
+
+/**
+ * Hidden XML block tags whose content should never be spoken.  During
+ * streaming the closing tag may not have arrived yet, so we strip from
+ * the opening tag to end-of-string (matching the display path's
+ * `HIDDEN_XML_BLOCK_RE` which uses `(?:</tag>|$)`).
+ *
+ * The upstream `sanitizeSpeechText` only strips *closed* `<think>` blocks,
+ * so an in-progress `<think>reasoning so far` leaks "reasoning so far"
+ * into the voice output.  We handle it here before sanitization.
+ */
+const HIDDEN_VOICE_BLOCK_RE =
+  /<(think|thought|analysis|reasoning|scratchpad|tool_calls?|tools?)\b[^>]*>[\s\S]*?(?:<\/\1>|$)/gi;
+
+function extractVoiceText(input: string): string {
+  let text = input;
+
+  // Extract <text> content from <response> wrappers the same way the display
+  // path does — otherwise the voice may try to speak tag names like "response".
+  if (text.includes("<response>")) {
+    const openTag = "<text>";
+    const closeTag = "</text>";
+    const start = text.indexOf(openTag);
+    if (start >= 0) {
+      const contentStart = start + openTag.length;
+      const end = text.indexOf(closeTag, contentStart);
+      text =
+        end >= 0 ? text.slice(contentStart, end) : text.slice(contentStart);
+    } else {
+      // <response> present but no <text> yet — nothing speakable.
+      return "";
+    }
+  }
+
+  // Strip hidden blocks (think, thought, analysis, etc.) even when unclosed
+  // during streaming — prevents the voice from speaking internal LLM reasoning.
+  text = text.replace(HIDDEN_VOICE_BLOCK_RE, " ");
+
+  // Strip ElizaOS action/params blocks.
+  text = text.replace(/\s*<actions>[\s\S]*?(?:<\/actions>|$)\s*/g, " ");
+  text = text.replace(/\s*<params>[\s\S]*?(?:<\/params>|$)\s*/g, " ");
+
+  // Strip incomplete XML tags at the end of a streaming chunk (e.g. "<thi",
+  // "</respon") so partial tags don't become spoken words.
+  text = text.replace(/<\/?[a-zA-Z][^>]*$|<\/?$/s, "");
+
+  return text;
+}
+
+function toSpeakableText(input: string): string {
+  const extracted = extractVoiceText(input);
+  if (!extracted) return "";
+  const normalized = sanitizeSpeechText(extracted);
+  if (!normalized) return "";
+  return capSpeechLength(normalized);
+}
+
+/** Common abbreviations that end with a period but are not sentence endings. */
+const ABBREV_RE =
+  /(?:Mr|Mrs|Ms|Dr|Jr|Sr|St|vs|etc|approx|Prof|Rev|Gen|Sgt|Lt|Col|Maj|Capt|Corp|Pvt|Ave|Blvd|dept|est|govt|assn)$/;
+
+/**
+ * Replace URLs with placeholders so their internal dots are not treated as
+ * sentence boundaries.  Returns the cleaned string and a restore function.
+ */
+function shelterUrls(input: string): {
+  text: string;
+  restore: (s: string) => string;
+} {
+  const urls: string[] = [];
+  const text = input.replace(/https?:\/\/\S+/g, (m) => {
+    urls.push(m);
+    return `__URL${urls.length - 1}__`;
+  });
+  return {
+    text,
+    restore: (s: string) =>
+      s.replace(/__URL(\d+)__/g, (_, i) => urls[Number(i)] ?? _),
+  };
+}
+
+/**
+ * Test whether a period match at `index` inside `value` is a real sentence
+ * boundary (not an abbreviation or decimal).
+ */
+function isRealSentenceEnd(value: string, matchIndex: number): boolean {
+  // Decimal: digit immediately before the period → not a sentence end.
+  if (matchIndex > 0 && /\d/.test(value[matchIndex - 1]!)) {
+    // Check if a digit also follows the period (e.g. "3.14")
+    if (matchIndex + 1 < value.length && /\d/.test(value[matchIndex + 1]!)) {
+      return false;
+    }
+  }
+
+  // Known abbreviation before the period.
+  const before = value.slice(0, matchIndex);
+  if (ABBREV_RE.test(before)) return false;
+
   return true;
 }
 
-// ── Test-visible internals ───────────────────────────────────────────
+function splitFirstSentence(text: string): {
+  complete: boolean;
+  firstSentence: string;
+  remainder: string;
+} {
+  const value = collapseWhitespace(text);
+  if (!value) return { complete: false, firstSentence: "", remainder: "" };
+
+  // Shelter URLs so their dots don't trigger splits.
+  const { text: sheltered, restore } = shelterUrls(value);
+
+  // Match sentence-ending punctuation (. ! ?) with optional closing quotes/brackets.
+  const boundary = /([.!?]+(?:["')\]]+)?)(?:\s|$)/g;
+  let match: RegExpExecArray | null = null;
+  while (true) {
+    match = boundary.exec(sheltered);
+    if (!match || typeof match.index !== "number") break;
+
+    const punctChar = match[1]?.[0];
+
+    // For periods, apply extra heuristics to skip abbreviations, decimals,
+    // and ellipses.
+    if (punctChar === ".") {
+      // Ellipsis ("...") is a mid-sentence pause, not a sentence boundary.
+      if (match[1]?.length >= 3) continue;
+      // Single period: skip abbreviations and decimals.
+      if (!isRealSentenceEnd(sheltered, match.index)) continue;
+    }
+
+    const endIndex = match.index + match[0].length;
+    const firstSentence = restore(sheltered.slice(0, endIndex).trim());
+    const remainder = restore(sheltered.slice(endIndex).trim());
+    if (firstSentence.length > 0) {
+      return { complete: true, firstSentence, remainder };
+    }
+  }
+
+  // Fallback for long content with no punctuation yet.
+  if (value.length >= 180) {
+    const window = value.slice(0, 180);
+    const splitAt = window.lastIndexOf(" ");
+    if (splitAt > 100) {
+      return {
+        complete: true,
+        firstSentence: window.slice(0, splitAt).trim(),
+        remainder: value.slice(splitAt).trim(),
+      };
+    }
+  }
+
+  return { complete: false, firstSentence: value, remainder: "" };
+}
+
+function remainderAfter(fullText: string, firstSentence: string): string {
+  const full = collapseWhitespace(fullText);
+  const first = collapseWhitespace(firstSentence);
+  if (!full || !first) return full;
+  if (full.startsWith(first)) return full.slice(first.length).trim();
+
+  const lowerFull = full.toLowerCase();
+  const lowerFirst = first.toLowerCase();
+  if (lowerFull.startsWith(lowerFirst)) {
+    return full.slice(first.length).trim();
+  }
+
+  const idx = lowerFull.indexOf(lowerFirst);
+  if (idx >= 0) {
+    return full.slice(idx + first.length).trim();
+  }
+
+  return "";
+}
+
+function queueableSpeechPrefix(text: string, isFinal: boolean): string {
+  const value = collapseWhitespace(text);
+  if (!value) return "";
+  if (isFinal) return value;
+
+  const { text: sheltered, restore } = shelterUrls(value);
+
+  let lastSentenceEnd = 0;
+  const boundary = /([.!?]+(?:["')\]]+)?)(?:\s|$)/g;
+  let match: RegExpExecArray | null = null;
+  while (true) {
+    match = boundary.exec(sheltered);
+    if (!match || typeof match.index !== "number") break;
+
+    const punctChar = match[1]?.[0];
+    if (punctChar === ".") {
+      if (match[1]?.length >= 3) continue; // Ellipsis — not a sentence boundary.
+      if (!isRealSentenceEnd(sheltered, match.index)) continue;
+    }
+
+    lastSentenceEnd = match.index + match[0].length;
+  }
+  if (lastSentenceEnd > 0) {
+    return restore(sheltered.slice(0, lastSentenceEnd).trim());
+  }
+
+  // Fallback for long content with no punctuation yet.
+  if (value.length >= 180) {
+    const window = value.slice(0, 180);
+    const splitAt = window.lastIndexOf(" ");
+    if (splitAt > 100) {
+      return window.slice(0, splitAt).trim();
+    }
+  }
+  return "";
+}
+
+function cloneVoiceConfig(
+  config:
+    | (VoiceConfig & {
+        provider?: VoiceConfig["provider"] | "openai";
+        openai?: {
+          apiKey?: string;
+          voice?: string;
+          model?: string;
+        };
+      })
+    | null
+    | undefined,
+):
+  | (VoiceConfig & {
+      provider?: VoiceConfig["provider"] | "openai";
+      openai?: {
+        apiKey?: string;
+        voice?: string;
+        model?: string;
+      };
+    })
+  | null {
+  if (!config) return null;
+  return {
+    ...config,
+    elevenlabs: config.elevenlabs ? { ...config.elevenlabs } : undefined,
+    edge: config.edge ? { ...config.edge } : undefined,
+    openai: config.openai ? { ...config.openai } : undefined,
+  };
+}
+
+function resolveEffectiveVoiceConfig(
+  config:
+    | (VoiceConfig & {
+        provider?: VoiceConfig["provider"] | "openai";
+        openai?: {
+          apiKey?: string;
+          voice?: string;
+          model?: string;
+        };
+      })
+    | null
+    | undefined,
+  options?: { cloudConnected?: boolean },
+):
+  | (VoiceConfig & {
+      provider?: VoiceConfig["provider"] | "openai";
+      openai?: {
+        apiKey?: string;
+        voice?: string;
+        model?: string;
+      };
+    })
+  | null {
+  const cloudConnected = options?.cloudConnected === true;
+  const base = cloneVoiceConfig(config) ?? {};
+  const rawProvider = base.provider as
+    | VoiceConfig["provider"]
+    | "openai"
+    | undefined;
+  const hasLegacyOpenAiProvider = rawProvider === "openai";
+  let provider: VoiceConfig["provider"] | undefined =
+    (hasLegacyOpenAiProvider ? undefined : rawProvider) ??
+    (base.elevenlabs ? "elevenlabs" : base.edge ? "edge" : undefined) ??
+    (cloudConnected ? "elevenlabs" : undefined);
+
+  // Saved characters often use browser/local TTS (`edge`, `simple-voice`, or
+  // legacy `openai`), which skips the ElevenLabs fetch path. When Eliza Cloud
+  // is available for voice, prefer cloud-backed synthesis instead of Web Speech
+  // (often labeled Microsoft / Edge in the OS).
+  if (
+    cloudConnected &&
+    (provider === "edge" ||
+      hasLegacyOpenAiProvider ||
+      provider === "simple-voice")
+  ) {
+    miladyTtsDebug("voiceConfig:upgrade_provider_for_cloud", {
+      fromProvider: hasLegacyOpenAiProvider ? "openai" : provider,
+    });
+    provider = "elevenlabs";
+  }
+
+  if (!provider) return null;
+  if (provider !== "elevenlabs") {
+    return { ...base, provider };
+  }
+
+  const currentElevenLabs = base.elevenlabs ?? {};
+  const mode = resolveVoiceMode(
+    base.mode,
+    cloudConnected,
+    currentElevenLabs.apiKey,
+  );
+  const elevenlabs: NonNullable<VoiceConfig["elevenlabs"]> = {
+    ...currentElevenLabs,
+    voiceId: currentElevenLabs.voiceId ?? DEFAULT_ELEVEN_VOICE,
+    modelId: currentElevenLabs.modelId ?? DEFAULT_ELEVEN_MODEL,
+    stability:
+      typeof currentElevenLabs.stability === "number"
+        ? currentElevenLabs.stability
+        : 0.5,
+    similarityBoost:
+      typeof currentElevenLabs.similarityBoost === "number"
+        ? currentElevenLabs.similarityBoost
+        : 0.75,
+    speed:
+      typeof currentElevenLabs.speed === "number"
+        ? currentElevenLabs.speed
+        : 1.0,
+  };
+  const apiKey =
+    typeof currentElevenLabs.apiKey === "string"
+      ? currentElevenLabs.apiKey.trim()
+      : "";
+
+  if (mode === "own-key" && apiKey && !isRedactedSecret(apiKey)) {
+    elevenlabs.apiKey = currentElevenLabs.apiKey;
+  } else {
+    delete elevenlabs.apiKey;
+  }
+
+  return {
+    ...base,
+    provider,
+    mode,
+    elevenlabs,
+  };
+}
 
 export const __voiceChatInternals = {
-  isWindowsElectrobunRenderer,
-  shouldPreferNativeTalkMode,
-  shouldAutoRestartBrowserRecognition,
   splitFirstSentence,
   remainderAfter,
   queueableSpeechPrefix,
@@ -135,10 +685,112 @@ export const __voiceChatInternals = {
   toSpeakableText,
   mergeTranscriptWindows,
   webSpeechVoiceDebugFields,
+  normalizeNativeSpeechLevel,
+  estimateNativeSpeechLevelFromChunkPayload,
   ASSISTANT_TTS_FINAL_ONLY,
   ASSISTANT_TTS_FIRST_FLUSH_CHARS,
   ASSISTANT_TTS_MIN_CHUNK_CHARS,
 };
+
+function isAbortError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (error instanceof Error && error.name === "AbortError") return true;
+  return false;
+}
+
+function shouldPreferNativeTalkMode(): boolean {
+  if (typeof window === "undefined") return false;
+  if (getElectrobunRendererRpc()) return true;
+  return Capacitor.isNativePlatform();
+}
+
+/** MILADY_TTS_DEBUG fields for OS/browser SpeechSynthesis (often Microsoft Edge on Windows). */
+function webSpeechVoiceDebugFields(
+  voice: SpeechSynthesisVoice | undefined,
+): Record<string, string | boolean | undefined> {
+  if (!voice) {
+    return {
+      voiceName: "(engine default)",
+      voiceURI: "(none)",
+      engineGuess: "unknown",
+    };
+  }
+  const blob = `${voice.voiceURI} ${voice.name}`.toLowerCase();
+  let engineGuess = "unknown";
+  if (
+    blob.includes("microsoft") ||
+    blob.includes("msedge") ||
+    blob.includes("edge-tts")
+  ) {
+    engineGuess = "microsoft-edge-family";
+  } else if (blob.includes("com.apple")) {
+    engineGuess = "apple-webkit";
+  } else if (blob.includes("google")) {
+    engineGuess = "google";
+  }
+  const extended = voice as SpeechSynthesisVoice & { localService?: boolean };
+  return {
+    voiceName: voice.name,
+    voiceURI: voice.voiceURI,
+    voiceLang: voice.lang,
+    voiceDefault: voice.default,
+    voiceLocalService:
+      typeof extended.localService === "boolean"
+        ? extended.localService
+        : undefined,
+    engineGuess,
+  };
+}
+
+function normalizeSpeechLocale(input: string | undefined): string {
+  const trimmed = input?.trim();
+  return trimmed || "en-US";
+}
+
+function localePrefix(locale: string): string {
+  return locale.toLowerCase().split("-")[0] || "en";
+}
+
+function matchesVoiceLocale(
+  voice: SpeechSynthesisVoice,
+  targetLocale: string,
+): boolean {
+  const target = targetLocale.toLowerCase();
+  const voiceLang = voice.lang.toLowerCase();
+  if (voiceLang === target) return true;
+  const base = localePrefix(targetLocale);
+  return voiceLang.startsWith(`${base}-`) || voiceLang === base;
+}
+
+function normalizeNativeSpeechLevel(level: number | undefined): number {
+  if (!Number.isFinite(level)) {
+    return 0;
+  }
+  const clamped = Math.max(0, Math.min(1, level ?? 0));
+  return normalizeMouthOpen(clamped);
+}
+
+function estimateNativeSpeechLevelFromChunkPayload(
+  payload: unknown,
+  sequence: number,
+): number {
+  const encoded =
+    typeof payload === "object" &&
+    payload !== null &&
+    "data" in payload &&
+    typeof (payload as { data?: unknown }).data === "string"
+      ? ((payload as { data: string }).data ?? "")
+      : "";
+  if (!encoded) {
+    return 0;
+  }
+
+  const sizeSignal = Math.min(1, encoded.length / 24_000);
+  const rhythmicSignal = 0.55 + Math.sin(sequence * 0.85) * 0.2;
+  return normalizeNativeSpeechLevel(
+    Math.max(0.25, sizeSignal * 0.5 + rhythmicSignal),
+  );
+}
 
 // ── Hook ──────────────────────────────────────────────────────────────
 
@@ -150,6 +802,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
   const [interimTranscript, setInterimTranscript] = useState("");
   const [supported, setSupported] = useState(false);
   const [usingAudioAnalysis, setUsingAudioAnalysis] = useState(false);
+  const advancedFaceFramesEnabled = false;
   const [voiceUnlockedGeneration, setVoiceUnlockedGeneration] = useState(0);
 
   // Refs — stable across renders, read from animation loop & callbacks
@@ -306,39 +959,16 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
   // ── Init ──────────────────────────────────────────────────────────
 
   useEffect(() => {
-    let cancelled = false;
-
-    const syncVoiceSupport = async () => {
-      const browserSpeechSupported = !!getSpeechRecognitionCtor();
-      if (!shouldPreferNativeTalkMode()) {
-        if (!cancelled) {
-          setSupported(browserSpeechSupported);
-        }
-        return;
-      }
-
-      try {
-        const permissions = await getTalkModePlugin().checkPermissions();
-        if (cancelled) {
-          return;
-        }
-        setSupported(
-          permissions.speechRecognition !== "not_supported" ||
-            browserSpeechSupported,
-        );
-      } catch {
-        if (!cancelled) {
-          setSupported(browserSpeechSupported);
-        }
-      }
-    };
-
-    void syncVoiceSupport();
+    const SpeechRecognitionAPI = getSpeechRecognitionCtor();
+    void (
+      typeof navigator !== "undefined" &&
+      typeof navigator.mediaDevices?.getUserMedia === "function"
+    );
+    // On Electrobun/native platforms, always show the mic button — the
+    // native TalkMode (Whisper) plugin handles STT even when the browser
+    // doesn't expose SpeechRecognition or getUserMedia.
+    setSupported(shouldPreferNativeTalkMode() ? true : !!SpeechRecognitionAPI);
     synthRef.current = window.speechSynthesis ?? null;
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   // ── Mouth animation loop ──────────────────────────────────────────
@@ -348,9 +978,9 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
 
     const animate = () => {
       if (!isSpeaking) {
-        const nextMouth = nextIdleMouthOpen(mouthOpenRef.current);
-        updateMouthOpen(nextMouth);
-        if (nextMouth > 0) {
+        const nextMouthOpen = nextIdleMouthOpen(mouthOpenRef.current);
+        updateMouthOpen(nextMouthOpen);
+        if (nextMouthOpen > 0) {
           frameId = requestAnimationFrame(animate);
           animFrameRef.current = frameId;
         } else {
@@ -461,22 +1091,10 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
     );
   }, []);
 
-  const resetListeningState = useCallback(() => {
-    transcriptBufferRef.current = "";
-    recognitionRef.current = null;
-    sttBackendRef.current = null;
-    enabledRef.current = false;
-    listeningModeRef.current = "idle";
-    setIsListening(false);
-    setCaptureMode("idle");
-    setInterimTranscript("");
-  }, []);
-
   const ensureTalkModeListeners = useCallback(async () => {
     if (talkModeHandlesRef.current.length > 0) return;
 
     const talkMode = getTalkModePlugin();
-
     const transcriptHandle = await talkMode.addListener(
       "transcript",
       (event: TalkModeTranscriptEvent) => {
@@ -487,33 +1105,30 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
       "error",
       (event: TalkModeErrorEvent) => {
         if (
-          sttBackendRef.current === "talkmode" ||
           event.code === "not-allowed" ||
           event.code === "service-not-allowed"
         ) {
-          resetListeningState();
-          if (
-            event.code === "not-allowed" ||
-            event.code === "service-not-allowed"
-          ) {
-            setSupported(false);
-          }
+          enabledRef.current = false;
+          listeningModeRef.current = "idle";
+          sttBackendRef.current = null;
+          setCaptureMode("idle");
+          setIsListening(false);
         }
       },
     );
     const stateHandle = await talkMode.addListener(
       "stateChange",
       (event: TalkModeStateEvent) => {
-        if (
-          (event.state === "error" || event.state === "idle") &&
-          sttBackendRef.current === "talkmode"
-        ) {
-          resetListeningState();
+        if (event.state === "error" || event.state === "idle") {
+          if (!enabledRef.current) {
+            setIsListening(false);
+            setCaptureMode("idle");
+          }
         }
       },
     );
     talkModeHandlesRef.current = [transcriptHandle, errorHandle, stateHandle];
-  }, [applyTranscriptUpdate, resetListeningState]);
+  }, [applyTranscriptUpdate]);
 
   const startBrowserRecognition = useCallback(
     (mode: Exclude<VoiceCaptureMode, "idle">) => {
@@ -557,11 +1172,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
       };
 
       recognition.onend = () => {
-        if (
-          shouldAutoRestartBrowserRecognition() &&
-          enabledRef.current &&
-          listeningModeRef.current === mode
-        ) {
+        if (enabledRef.current && listeningModeRef.current === mode) {
           try {
             recognition.start();
           } catch {
@@ -589,33 +1200,15 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
 
   const startTalkModeRecognition = useCallback(
     async (mode: Exclude<VoiceCaptureMode, "idle">) => {
-      if (!shouldPreferNativeTalkMode()) {
-        return false;
-      }
-
       await ensureTalkModeListeners();
 
       try {
         const talkMode = getTalkModePlugin();
-        const browserSpeechSupported = !!getSpeechRecognitionCtor();
-        let permissions = await talkMode.checkPermissions().catch(() => null);
-        const nativeSpeechSupported =
-          permissions?.speechRecognition !== "not_supported";
-        if (!nativeSpeechSupported && !browserSpeechSupported) {
-          console.warn(
-            "[useVoiceChat] No desktop or browser speech backend is available.",
-          );
-          setSupported(false);
-          return false;
-        }
-
-        if (permissions?.microphone === "prompt" && nativeSpeechSupported) {
+        const permissions = await talkMode.checkPermissions().catch(() => null);
+        if (permissions?.microphone === "prompt") {
           await talkMode.requestPermissions().catch(() => {
             /* ignore */
           });
-          permissions = await talkMode
-            .checkPermissions()
-            .catch(() => permissions);
         }
 
         const directRpc = getElectrobunRendererRpc();
@@ -632,42 +1225,37 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
           },
         });
         if (!result.started) {
-          console.warn("[useVoiceChat] TalkMode start returned not started.", {
-            browserSpeechSupported,
-            error: result.error,
-          });
-          if (!browserSpeechSupported) {
-            setSupported(false);
-          }
           return false;
         }
 
-        setSupported(true);
         enabledRef.current = true;
         listeningModeRef.current = mode;
         sttBackendRef.current = "talkmode";
         setCaptureMode(mode);
         setIsListening(true);
         return true;
-      } catch (error) {
-        console.warn("[useVoiceChat] TalkMode start failed.", error);
+      } catch {
         return false;
       }
     },
     [ensureTalkModeListeners, options.lang],
   );
 
-  const finalizeRecognition = useCallback(
-    (submit: boolean) => {
-      const transcript = collapseWhitespace(transcriptBufferRef.current);
-      if (submit && transcript) {
-        emitTranscript(transcript);
-      }
+  const finalizeRecognition = useCallback((submit: boolean) => {
+    const transcript = collapseWhitespace(transcriptBufferRef.current);
+    if (submit && transcript) {
+      emitTranscript(transcript);
+    }
 
-      resetListeningState();
-    },
-    [resetListeningState],
-  );
+    transcriptBufferRef.current = "";
+    recognitionRef.current = null;
+    sttBackendRef.current = null;
+    enabledRef.current = false;
+    listeningModeRef.current = "idle";
+    setIsListening(false);
+    setCaptureMode("idle");
+    setInterimTranscript("");
+  }, []);
 
   const startListening = useCallback(
     async (mode: Exclude<VoiceCaptureMode, "idle"> = "compose") => {
@@ -686,12 +1274,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
         }
       }
 
-      const startedInBrowser = startBrowserRecognition(mode);
-      if (!startedInBrowser) {
-        console.warn(
-          "[useVoiceChat] Voice capture failed to start in both desktop and browser backends.",
-        );
-      }
+      startBrowserRecognition(mode);
     },
     [startBrowserRecognition, startTalkModeRecognition],
   );
@@ -1612,6 +2195,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
     interimTranscript,
     supported,
     usingAudioAnalysis,
+    advancedFaceFramesEnabled,
     toggleListening,
     startListening,
     stopListening,

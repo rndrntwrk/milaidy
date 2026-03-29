@@ -10,7 +10,11 @@
  *   3. Everything else → plain text
  */
 
-import type { ConversationMessage, PluginInfo } from "@miladyai/app-core/api";
+import type {
+  ContentBlock,
+  ConversationMessage,
+  PluginInfo,
+} from "@miladyai/app-core/api";
 import { client } from "@miladyai/app-core/api";
 import { paramsToSchema } from "@miladyai/app-core/components";
 import {
@@ -59,6 +63,138 @@ function isSafeNormalizedPluginId(id: string): boolean {
 
 interface MessageContentProps {
   message: ConversationMessage;
+}
+
+function ActivityGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+    >
+      <path d="M4 13h4l2-5 4 10 2-5h4" />
+    </svg>
+  );
+}
+
+function LaunchGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+    >
+      <path d="M5 12h6" />
+      <path d="m11 8 4 4-4 4" />
+      <path d="M4 19h16" />
+    </svg>
+  );
+}
+
+function StreamGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+    >
+      <rect x="4" y="7" width="11" height="10" rx="2" />
+      <path d="m15 10 5-3v10l-5-3" />
+    </svg>
+  );
+}
+
+function AvatarGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+    >
+      <path d="M12 3v4" />
+      <path d="m8.5 8.5 7 7" />
+      <path d="M6 14a6 6 0 0 0 12 0" />
+    </svg>
+  );
+}
+
+function resolveOperatorActionPresentation(kind: "stream" | "avatar" | "launch") {
+  if (kind === "avatar") {
+    return {
+      eyebrow: "Avatar Action",
+      AccentIcon: AvatarGlyph,
+      EyebrowIcon: ActivityGlyph,
+      accentClass:
+        "border-[rgba(236,201,75,0.18)] bg-[linear-gradient(135deg,rgba(255,193,7,0.14),rgba(255,255,255,0.02))] text-[#ffe7a2]",
+    };
+  }
+  if (kind === "launch") {
+    return {
+      eyebrow: "Launch",
+      AccentIcon: LaunchGlyph,
+      EyebrowIcon: LaunchGlyph,
+      accentClass:
+        "border-[rgba(125,211,252,0.18)] bg-[linear-gradient(135deg,rgba(56,189,248,0.14),rgba(255,255,255,0.02))] text-[#d5f2ff]",
+    };
+  }
+  return {
+    eyebrow: "Stream Action",
+    AccentIcon: StreamGlyph,
+    EyebrowIcon: StreamGlyph,
+    accentClass:
+      "border-[rgba(16,185,129,0.22)] bg-[linear-gradient(135deg,rgba(16,185,129,0.14),rgba(255,255,255,0.02))] text-[#d2fff1]",
+  };
+}
+
+function OperatorActionBlock({
+  label,
+  kind,
+  detail,
+}: {
+  label: string;
+  kind: "stream" | "avatar" | "launch";
+  detail?: string;
+}) {
+  const { eyebrow, AccentIcon, EyebrowIcon, accentClass } =
+    resolveOperatorActionPresentation(kind);
+
+  return (
+    <div className="my-0.5 flex flex-col items-start gap-1.5">
+      <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.24em] text-white/42">
+        <EyebrowIcon />
+        {eyebrow}
+      </div>
+      <div
+        className={`inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-[13px] font-medium shadow-[0_12px_30px_rgba(0,0,0,0.24)] backdrop-blur-xl ${accentClass}`}
+      >
+        <span className="inline-flex h-5.5 w-5.5 items-center justify-center rounded-full border border-white/10 bg-black/24">
+          <AccentIcon />
+        </span>
+        <span className="truncate">{label}</span>
+      </div>
+      {detail ? <div className="text-[11px] text-white/54">{detail}</div> : null}
+    </div>
+  );
 }
 
 // ── Segment types ───────────────────────────────────────────────────
@@ -884,21 +1020,63 @@ function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
   );
 }
 
+function renderMessageBlock(block: ContentBlock, key: string) {
+  switch (block.type) {
+    case "text":
+      return (
+        <div key={key} className="whitespace-pre-wrap">
+          {block.text}
+        </div>
+      );
+    case "config-form":
+      if (!isSafeNormalizedPluginId(normalizePluginId(block.pluginId))) {
+        return null;
+      }
+      return <InlinePluginConfig key={key} pluginId={block.pluginId} />;
+    case "ui-spec":
+      return <UiSpecBlock key={key} spec={block.spec as UiSpec} raw={block.raw ?? ""} />;
+    case "action-pill":
+      return (
+        <OperatorActionBlock
+          key={key}
+          label={block.label}
+          kind={block.kind}
+          detail={block.detail}
+        />
+      );
+    default:
+      return null;
+  }
+}
+
 // ── Main component ──────────────────────────────────────────────────
 
 export function MessageContent({ message }: MessageContentProps) {
+  const hasBlocks = Array.isArray(message.blocks) && message.blocks.length > 0;
+
   // Parse segments — memoize to avoid re-parsing on every render
   const segments = useMemo(() => {
+    if (hasBlocks) return null;
     try {
       return parseSegments(message.text);
     } catch {
       // If parsing fails, just show plain text
       return [{ kind: "text" as const, text: message.text }];
     }
-  }, [message.text]);
+  }, [hasBlocks, message.text]);
+
+  if (hasBlocks) {
+    return (
+      <div>
+        {message.blocks?.map((block, index) =>
+          renderMessageBlock(block, `${block.type}:${index}`),
+        )}
+      </div>
+    );
+  }
 
   // Fast path: single plain-text segment (most messages)
-  if (segments.length === 1 && segments[0].kind === "text") {
+  if (segments && segments.length === 1 && segments[0].kind === "text") {
     return <div className="whitespace-pre-wrap">{segments[0].text}</div>;
   }
 
@@ -912,7 +1090,7 @@ export function MessageContent({ message }: MessageContentProps) {
           return `${base}:${nextCount}`;
         };
 
-        return segments.map((seg) => {
+        return (segments ?? []).map((seg) => {
           const baseKey =
             seg.kind === "text"
               ? `text:${seg.text.slice(0, 80)}`
@@ -923,21 +1101,19 @@ export function MessageContent({ message }: MessageContentProps) {
 
           switch (seg.kind) {
             case "text":
-              return (
-                <div key={segmentKey} className="whitespace-pre-wrap">
-                  {seg.text}
-                </div>
+              return renderMessageBlock(
+                { type: "text", text: seg.text },
+                segmentKey,
               );
             case "config":
-              if (!isSafeNormalizedPluginId(normalizePluginId(seg.pluginId))) {
-                return null;
-              }
-              return (
-                <InlinePluginConfig key={segmentKey} pluginId={seg.pluginId} />
+              return renderMessageBlock(
+                { type: "config-form", pluginId: seg.pluginId, schema: {} },
+                segmentKey,
               );
             case "ui-spec":
-              return (
-                <UiSpecBlock key={segmentKey} spec={seg.spec} raw={seg.raw} />
+              return renderMessageBlock(
+                { type: "ui-spec", spec: seg.spec, raw: seg.raw },
+                segmentKey,
               );
             default:
               return null;

@@ -73,6 +73,23 @@ describe("VrmStage", () => {
     expect(opacityNodes).toHaveLength(0);
   });
 
+  it("forwards an explicit speech motion path to the viewer", async () => {
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(VrmStage, {
+          vrmPath: "/vrms/alice.vrm.gz",
+          speechMotionPath: "/animations/emotes/talk.glb.gz",
+          fallbackPreviewUrl: "/vrms/previews/alice.png",
+          t: (key: string) => key,
+        }),
+      );
+    });
+
+    expect(viewerPropsRef.current?.speechMotionPath).toBe(
+      "/animations/emotes/talk.glb.gz",
+    );
+  });
+
 
 
   it("disables canvas parallax and forwards the ready engine callback", async () => {

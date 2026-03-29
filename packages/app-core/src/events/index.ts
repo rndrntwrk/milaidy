@@ -1,7 +1,4 @@
-import type {
-  LifeOpsConnectorMode,
-  LifeOpsConnectorSide,
-} from "@miladyai/shared/contracts/lifeops";
+import type { AvatarFaceFrame } from "@miladyai/shared/contracts";
 
 /**
  * Typed constants for eliza:* custom events dispatched across the app.
@@ -30,37 +27,22 @@ export const CONNECT_EVENT = "eliza:connect" as const;
 // ── Voice / config ───────────────────────────────────────────────────────
 export const VOICE_CONFIG_UPDATED_EVENT = "eliza:voice-config-updated" as const;
 export const CHAT_AVATAR_VOICE_EVENT = "eliza:chat-avatar-voice" as const;
+export const CHAT_AVATAR_FACE_FRAME_EVENT =
+  "eliza:chat-avatar-face-frame" as const;
 export const APP_EMOTE_EVENT = "eliza:app-emote" as const;
 /** After `/api/cloud/status` — chat voice reloads config so cloud-backed TTS mode matches the server snapshot. */
 export const ELIZA_CLOUD_STATUS_UPDATED_EVENT =
   "eliza:cloud-status-updated" as const;
-export const LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT =
-  "eliza:lifeops-google-connector-refresh" as const;
 
 export interface ElizaCloudStatusUpdatedDetail {
   /** Same as cloud status `connected` (auth or API key on server). */
   connected: boolean;
-  /** True only when Eliza Cloud inference is the active connection. */
+  /** Config `cloud.enabled` (and related flags) from the server snapshot. */
   enabled: boolean;
   /** Server reports a persisted Eliza Cloud API key. */
   hasPersistedApiKey: boolean;
-  /** True only when cloud voice/chat routing should actively use the proxy. */
+  /** Prefer for `useVoiceChat` `cloudConnected`: key, enabled, or connected. */
   cloudVoiceProxyAvailable: boolean;
-}
-
-export interface LifeOpsGoogleConnectorRefreshDetail {
-  origin?: string;
-  side?: LifeOpsConnectorSide;
-  mode?: LifeOpsConnectorMode;
-  source?:
-    | "callback"
-    | "connect"
-    | "disconnect"
-    | "mode_change"
-    | "refresh"
-    | "focus"
-    | "visibility"
-    | "resume";
 }
 
 // ── Avatar / VRM ─────────────────────────────────────────────────────────
@@ -86,6 +68,8 @@ export interface ChatAvatarVoiceEventDetail {
   isSpeaking: boolean;
 }
 
+export type ChatAvatarFaceFrameEventDetail = AvatarFaceFrame;
+
 export type ElizaDocumentEventName =
   | typeof COMMAND_PALETTE_EVENT
   | typeof EMOTE_PICKER_EVENT
@@ -101,9 +85,9 @@ export type ElizaDocumentEventName =
 export type ElizaWindowEventName =
   | typeof VOICE_CONFIG_UPDATED_EVENT
   | typeof CHAT_AVATAR_VOICE_EVENT
+  | typeof CHAT_AVATAR_FACE_FRAME_EVENT
   | typeof APP_EMOTE_EVENT
   | typeof ELIZA_CLOUD_STATUS_UPDATED_EVENT
-  | typeof LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT
   | typeof VRM_TELEPORT_COMPLETE_EVENT
   | typeof ONBOARDING_VOICE_PREVIEW_AWAIT_TELEPORT_EVENT
   | typeof SELF_STATUS_SYNC_EVENT;
@@ -134,16 +118,16 @@ export function dispatchAppEmoteEvent(detail: AppEmoteEventDetail): void {
   dispatchWindowEvent(APP_EMOTE_EVENT, detail);
 }
 
+export function dispatchChatAvatarFaceFrameEvent(
+  detail: ChatAvatarFaceFrameEventDetail,
+): void {
+  dispatchWindowEvent(CHAT_AVATAR_FACE_FRAME_EVENT, detail);
+}
+
 export function dispatchElizaCloudStatusUpdated(
   detail: ElizaCloudStatusUpdatedDetail,
 ): void {
   dispatchWindowEvent(ELIZA_CLOUD_STATUS_UPDATED_EVENT, detail);
-}
-
-export function dispatchLifeOpsGoogleConnectorRefresh(
-  detail?: LifeOpsGoogleConnectorRefreshDetail,
-): void {
-  dispatchWindowEvent(LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT, detail);
 }
 
 // ── Generic app aliases (preferred) ──────────────────────────────────────
