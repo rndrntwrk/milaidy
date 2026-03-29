@@ -58,7 +58,7 @@ milady start --connection-key my-secret-key
 When you run `milady start`:
 
 1. The CLI calls `startEliza({ serverOnly: true })` from the elizaOS runtime.
-2. The API server starts on port `2138` by default (override with `MILADY_PORT` or `ELIZA_PORT`).
+2. In production (`milady start`), the API server starts on port `2138` by default (override with `MILADY_PORT` or `ELIZA_PORT`). In dev mode (`bun run dev`), the API runs on port `31337` (`MILADY_API_PORT`) while the dashboard UI uses `2138` (`MILADY_PORT`).
 3. The agent loop begins processing messages from connected clients and messaging platforms.
 4. No interactive interface is launched -- the process runs headlessly.
 

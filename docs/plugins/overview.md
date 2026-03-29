@@ -36,7 +36,7 @@ A plugin is a self-contained module that registers one or more of:
 </Card>
 
 <Card title="Feature Plugins" icon="wand-magic-sparkles" href="/plugin-registry/browser">
-  Extended capabilities — browser control, image generation, text-to-speech, speech-to-text, computer use, cron scheduling, vision, shell, webhooks, FAL media generation, Suno music, OpenTelemetry diagnostics, x402 payments, and more.
+  Extended capabilities — browser control, image generation, text-to-speech, speech-to-text, computer use, cron scheduling, vision, shell, webhooks, FAL media generation, Suno music, OpenTelemetry diagnostics, x402 payments, Obsidian vault sync, Gmail Watch, personality tuning, experience tracking, agent skills, Claude Code workbench, RepoPrompt, and more.
 </Card>
 
 </CardGroup>
@@ -48,7 +48,7 @@ Plugins are loaded during runtime initialization in this order:
 1. **Milady plugin** — The bridge plugin (`createElizaPlugin()`) providing workspace context, session keys, emotes, custom actions, and lifecycle actions. Always first in the plugins array.
 2. **Pre-registered plugins** — `@elizaos/plugin-sql` and `@elizaos/plugin-local-embedding` are pre-registered before `runtime.initialize()` to prevent race conditions.
 3. **Core plugins** — Always loaded: `sql`, `local-embedding`, `form`, `knowledge`, `trajectory-logger`, `agent-orchestrator`, `cron`, `shell`, `agent-skills` (see `packages/agent/src/runtime/core-plugins.ts`). Additional plugins like `pdf`, `cua`, `browser`, `computeruse`, `obsidian`, `code`, `repoprompt`, `claude-code-workbench`, `vision`, `cli`, `edge-tts`, `elevenlabs`, `discord`, `telegram`, and `twitch` are optional and loaded when their feature flags or environment variables are configured.
-4. **Auto-enabled plugins** — Connector, provider, feature, and streaming plugins are auto-enabled based on config and environment variables (see [Architecture](/plugins/architecture) for the full maps).
+4. **Auto-enabled plugins** — Connector, provider, feature, streaming, subscription, hooks (webhooks + Gmail Watch), and media generation plugins are auto-enabled based on config and environment variables (see [Architecture](/plugins/architecture) for the full maps).
 5. **Ejected plugins** — Local overrides discovered from `~/.milady/plugins/ejected/`. When an ejected copy exists, it takes priority over the npm-published version.
 6. **User-installed plugins** — Tracked in `plugins.installs` in `milady.json`. Collected before drop-in plugins; any plugin name already present here takes precedence.
 7. **Custom/drop-in plugins** — Scanned from `~/.milady/plugins/custom/` and any extra paths in `plugins.load.paths`. Plugins whose names already exist in `plugins.installs` are skipped (`mergeDropInPlugins` precedence rule).

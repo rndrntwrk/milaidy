@@ -27,7 +27,7 @@ Two environment variables control where Milady looks for configuration:
 | `MILADY_STATE_DIR` | Override the entire state directory | `~/.milady` |
 | `MILADY_CONFIG_PATH` | Override the config file path directly | `~/.milady/milady.json` |
 
-`MILADY_CONFIG_PATH` takes precedence over `MILADY_STATE_DIR`. Both support `~` expansion for the home directory.
+`MILADY_CONFIG_PATH` takes precedence over `MILADY_STATE_DIR`. Both support `~` expansion for the home directory. For backwards compatibility, the legacy names `ELIZA_STATE_DIR` and `ELIZA_CONFIG_PATH` are also accepted as fallbacks.
 
 ```bash
 # Use a custom state directory (config lives at /opt/milady/milady.json)
@@ -1212,8 +1212,11 @@ Key environment variables that affect Milady behavior:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `MILADY_GATEWAY_PORT` | `18789` | Gateway (API + WebSocket) port |
-| `MILADY_PORT` | `2138` | Dashboard (Web UI) port |
+| `MILADY_API_PORT` | `31337` | API + WebSocket port (dev mode only; in production the API is served on `MILADY_PORT`) |
+| `MILADY_PORT` | `2138` | Dashboard (Web UI) port — also serves the API in production |
+| `MILADY_GATEWAY_PORT` | `18789` | Gateway port |
+| `MILADY_HOME_PORT` | `2142` | Home Dashboard port |
+| `MILADY_WECHAT_WEBHOOK_PORT` | `18790` | WeChat Webhook port |
 
 ```bash
 # Custom ports
