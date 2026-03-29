@@ -3,13 +3,15 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { text } from "../../../../test/helpers/react-test";
 
 type TestWindow = Window & {
   __electrobunWindowId?: number;
 };
 
 const mockUseApp = vi.fn(() => ({
-  t: (key: string) => key,
+  t: (key: string, opts?: Record<string, unknown>) =>
+    typeof opts?.defaultValue === "string" ? opts.defaultValue : key,
 }));
 
 vi.mock("@miladyai/app-core/state", () => ({
@@ -28,11 +30,7 @@ function renderStatusBar(
         agentName: "Eliza",
         streamAvailable: true,
         streamLive: false,
-        streamLoading: false,
-        onToggleStream: vi.fn(),
-        destinations: [],
         activeDestination: null,
-        onDestinationChange: vi.fn(),
         uptime: 0,
         frameCount: 0,
         ...overrides,
@@ -45,56 +43,40 @@ function renderStatusBar(
   return tree;
 }
 
-describe("StatusBar stream popout button", () => {
+describe("StatusBar passive stream pills", () => {
   afterEach(() => {
     delete (window as TestWindow).__electrobunWindowId;
     vi.restoreAllMocks();
   });
 
-  it("hides the browser popout control inside Electrobun", () => {
-    (window as TestWindow).__electrobunWindowId = 1;
-
+  it("renders passive status pills instead of interactive controls", () => {
     const tree = renderStatusBar();
 
+    expect(
+      tree.root.findAll((node) => node.type === "select"),
+    ).toHaveLength(0);
     expect(
       tree.root.findAll(
         (node) =>
           node.type === "button" &&
-          node.props.title === "statusbar.PopOutStreamView",
+          String(node.props.children ?? "").includes("Go Live"),
       ),
     ).toHaveLength(0);
   });
 
-  it("keeps the browser popout control on the web", () => {
-    const tree = renderStatusBar();
+  it("shows destination and live health as passive pills", () => {
+    const tree = renderStatusBar({
+      streamLive: true,
+      activeDestination: { id: "twitch", name: "Twitch" },
+      uptime: 65,
+      frameCount: 144,
+    });
 
     expect(
-      tree.root.findAll(
-        (node) =>
-          node.type === "button" &&
-          node.props.title === "statusbar.PopOutStreamView",
-      ),
-    ).toHaveLength(1);
-  });
-
-  it("renders a destination selector when streaming destinations exist", () => {
-    const onDestinationChange = vi.fn();
-    const tree = renderStatusBar({
-      destinations: [
-        { id: "twitch", name: "Twitch" },
-        { id: "youtube", name: "YouTube" },
-      ],
-      activeDestination: { id: "twitch", name: "Twitch" },
-      onDestinationChange,
-    });
-
-    const select = tree.root.findByType("select");
-    expect(select.props.value).toBe("twitch");
-
-    act(() => {
-      select.props.onChange({ target: { value: "youtube" } });
-    });
-
-    expect(onDestinationChange).toHaveBeenCalledWith("youtube");
+      tree.root.findAll((node) => text(node).includes("Twitch")).length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      tree.root.findAll((node) => text(node).includes("00:01:05 · 144f")).length,
+    ).toBeGreaterThanOrEqual(1);
   });
 });

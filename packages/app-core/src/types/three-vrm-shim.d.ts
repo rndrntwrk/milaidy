@@ -28,6 +28,12 @@ declare module "@pixiv/three-vrm" {
   export interface VRMExpressionManager {
     setValue: (name: string, value: number) => void;
     update: () => void;
+    expressionMap?: Record<string, unknown> | Map<string, unknown>;
+    presetExpressionMap?: Record<string, unknown> | Map<string, unknown>;
+    _expressionMap?: Record<string, unknown> | Map<string, unknown>;
+    _presetExpressionMap?: Record<string, unknown> | Map<string, unknown>;
+    expressions?: Record<string, unknown>;
+    presets?: Record<string, unknown>;
   }
 
   export interface VRM {

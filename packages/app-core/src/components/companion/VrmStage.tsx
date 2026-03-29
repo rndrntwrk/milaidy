@@ -5,6 +5,7 @@ import {
 } from "@miladyai/app-core/events";
 import { useRenderGuard } from "@miladyai/app-core/hooks";
 import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
+import type { AvatarSpeechCapabilities } from "@miladyai/shared/contracts";
 import {
   memo,
   type ReactElement,
@@ -43,6 +44,9 @@ export const VrmStage = memo(function VrmStage({
   active = true,
   vrmPath,
   environmentTheme,
+  speechMotionPath,
+  speechCapabilities,
+  avatarSpeechKey,
   fallbackPreviewUrl,
   cameraProfile = "companion",
   initialCompanionZoomNormalized,
@@ -54,11 +58,15 @@ export const VrmStage = memo(function VrmStage({
   companionHalfFramerateMode = "when_saving_power",
   companionAnimateWhenHidden = false,
   viewerComponent: ViewerComponent = VrmViewer,
+  onSpeechCapabilitiesDetected,
   t,
 }: {
   active?: boolean;
   vrmPath: string;
   environmentTheme?: "light" | "dark";
+  speechMotionPath?: string | null;
+  speechCapabilities?: AvatarSpeechCapabilities | null;
+  avatarSpeechKey?: string;
   fallbackPreviewUrl: string;
   cameraProfile?: CameraProfile;
   initialCompanionZoomNormalized?: number;
@@ -70,6 +78,7 @@ export const VrmStage = memo(function VrmStage({
   companionHalfFramerateMode?: CompanionHalfFramerateMode;
   companionAnimateWhenHidden?: boolean;
   viewerComponent?: (props: VrmViewerProps) => ReactElement;
+  onSpeechCapabilitiesDetected?: (capabilities: AvatarSpeechCapabilities) => void;
   t: TranslateFn;
 }) {
   useRenderGuard("VrmStage");
@@ -277,6 +286,9 @@ export const VrmStage = memo(function VrmStage({
           active={active}
           vrmPath={vrmPath}
           environmentTheme={environmentTheme}
+          speechMotionPath={speechMotionPath}
+          speechCapabilities={speechCapabilities}
+          avatarSpeechKey={avatarSpeechKey}
           cameraProfile={cameraProfile}
           companionVrmPowerMode={companionVrmPowerMode}
           companionHalfFramerateMode={companionHalfFramerateMode}
@@ -284,6 +296,7 @@ export const VrmStage = memo(function VrmStage({
           onEngineReady={handleEngineReady}
           onEngineState={handleEngineState}
           onRevealStart={handleRevealStart}
+          onSpeechCapabilitiesDetected={onSpeechCapabilitiesDetected}
         />
       </div>
 

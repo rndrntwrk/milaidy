@@ -74,6 +74,15 @@ export type CompanionVrmPowerMode = "quality" | "balanced" | "efficiency";
 /** When to cap the companion VRM loop at ~half the display refresh rate. */
 export type CompanionHalfFramerateMode = "off" | "when_saving_power" | "always";
 export type ShellView = "companion" | "character" | "desktop";
+export type OnboardingHandoffPhase =
+  | "idle"
+  | "fading"
+  | "provisioning"
+  | "starting-backend"
+  | "saving"
+  | "restarting"
+  | "bootstrapping"
+  | "error";
 
 /** Emitted after each tab/shell-related layout commit (see `navigation` on app context). */
 export interface TabCommittedDetail {
@@ -95,7 +104,14 @@ export interface NavigationEventsApi {
   scheduleAfterTabCommit: (fn: () => void) => void;
 }
 
-export type OnboardingStep = "identity" | "providers";
+export type OnboardingStep =
+  | "cloud_login"
+  | "identity"
+  | "hosting"
+  | "providers"
+  | "voice"
+  | "permissions"
+  | "launch";
 
 export interface OnboardingStepMeta {
   id: OnboardingStep;
@@ -103,17 +119,42 @@ export interface OnboardingStepMeta {
   subtitle: string;
 }
 
-/** 2-step onboarding flow — server selection is on the splash page, permissions are lazy. */
+/** Unified 7-step onboarding flow — cloud check is first, identity is second. */
 export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
+  {
+    id: "cloud_login",
+    name: "onboarding.stepName.cloudLogin",
+    subtitle: "onboarding.stepSub.cloudLogin",
+  },
   {
     id: "identity",
     name: "onboarding.stepName.identity",
     subtitle: "onboarding.stepSub.identity",
   },
   {
+    id: "hosting",
+    name: "onboarding.stepName.hosting",
+    subtitle: "onboarding.stepSub.hosting",
+  },
+  {
     id: "providers",
     name: "onboarding.stepName.providers",
     subtitle: "onboarding.stepSub.providers",
+  },
+  {
+    id: "voice",
+    name: "onboarding.stepName.voice",
+    subtitle: "onboarding.stepSub.voice",
+  },
+  {
+    id: "permissions",
+    name: "onboarding.stepName.permissions",
+    subtitle: "onboarding.stepSub.permissions",
+  },
+  {
+    id: "launch",
+    name: "onboarding.stepName.launch",
+    subtitle: "onboarding.stepSub.launch",
   },
 ];
 
@@ -134,7 +175,6 @@ export const ONBOARDING_PERMISSION_LABELS: Record<SystemPermissionId, string> =
     microphone: "Microphone",
     camera: "Camera",
     shell: "Shell Access",
-    "website-blocking": "Website Blocking",
   };
 
 export interface ActionNotice {
@@ -206,8 +246,7 @@ export type StartupErrorReason =
   | "backend-unreachable"
   | "agent-timeout"
   | "agent-error"
-  | "asset-missing"
-  | "unknown";
+  | "asset-missing";
 
 export interface StartupErrorState {
   reason: StartupErrorReason;
@@ -264,6 +303,8 @@ export interface AppState {
   /** Incremented on agent reset so onboarding UI shows immediately (not stuck behind VRM reveal). */
   onboardingUiRevealNonce: number;
   onboardingLoading: boolean;
+  onboardingHandoffPhase: OnboardingHandoffPhase;
+  onboardingHandoffError: string | null;
   startupPhase: StartupPhase;
   startupError: StartupErrorState | null;
   /** StartupCoordinator handle — the sole startup authority. */
@@ -301,6 +342,7 @@ export interface AppState {
   chatInput: string;
   chatSending: boolean;
   chatFirstTokenReceived: boolean;
+  chatAwaitingGreeting: boolean;
   chatLastUsage: ChatTurnUsage | null;
   chatAvatarVisible: boolean;
   chatAgentVoiceMuted: boolean;
@@ -402,6 +444,11 @@ export interface AppState {
 
   whitelistStatus: WhitelistStatus | null;
   whitelistLoading: boolean;
+
+  // Twitter verification
+  twitterVerifyMessage: string | null;
+  twitterVerifyUrl: string;
+  twitterVerifying: boolean;
 
   // Character
   characterData: CharacterData | null;
@@ -512,6 +559,8 @@ export interface AppState {
   onboardingName: string;
   onboardingOwnerName: string;
   onboardingStyle: string;
+  onboardingRunMode: "local" | "cloud" | "";
+  onboardingCloudProvider: string;
   onboardingServerTarget: OnboardingServerTarget;
   onboardingCloudApiKey: string;
   onboardingSmallModel: string;
@@ -551,6 +600,7 @@ export interface AppState {
   onboardingRpcSelections: Record<string, string>;
   onboardingRpcKeys: Record<string, string>;
   onboardingAvatar: number;
+  onboardingRestarting: boolean;
 
   // Command palette
   commandPaletteOpen: boolean;
@@ -695,6 +745,13 @@ export interface AppActions {
       metadata?: Record<string, unknown>;
     },
   ) => Promise<void>;
+  /** Log an Alice operator action into the active conversation feed. */
+  logConversationOperatorAction: (payload: {
+    label: string;
+    kind: "stream" | "avatar" | "launch";
+    detail?: string;
+    fallbackText?: string;
+  }) => Promise<boolean>;
 
   // Triggers
   loadTriggers: (options?: { silent?: boolean }) => Promise<void>;
@@ -809,6 +866,8 @@ export interface AppActions {
   // Onboarding
   handleOnboardingNext: (options?: OnboardingNextOptions) => Promise<void>;
   handleOnboardingBack: () => void;
+  retryOnboardingHandoff: () => Promise<void>;
+  cancelOnboardingHandoff: () => void;
   /** Jump to an earlier step in the active track (sidebar); backward-only. */
   handleOnboardingJumpToStep: (step: OnboardingStep) => void;
   /** Set onboarding step and sync Flamina guide (e.g. welcome → connection). */

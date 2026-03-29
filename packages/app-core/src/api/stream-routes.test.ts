@@ -678,6 +678,69 @@ describe("handleStreamRoute", () => {
       );
     });
 
+    it("limits 555stream launch to selected destinations and scene", async () => {
+      process.env.STREAM555_DEST_TWITCH_RTMP_URL = "rtmp://twitch.example/live";
+      process.env.STREAM555_DEST_TWITCH_STREAM_KEY = "stream-key";
+      process.env.STREAM555_DEST_TWITCH_ENABLED = "true";
+      process.env.STREAM555_DEST_YOUTUBE_RTMP_URL = "rtmp://youtube.example/live";
+      process.env.STREAM555_DEST_YOUTUBE_STREAM_KEY = "yt-key";
+      process.env.STREAM555_DEST_YOUTUBE_ENABLED = "true";
+
+      const { res, getStatus } = createMockHttpResponse();
+      const req = createMockIncomingMessage({
+        method: "POST",
+        url: "/api/stream/live",
+        body: JSON.stringify({
+          destinationIds: ["youtube"],
+          sceneId: "active-pip",
+        }),
+      });
+      const service = mockStream555Service({
+        getStreamStatus: vi.fn(async () => ({
+          sessionId: "session-555",
+          active: true,
+          cfSessionId: "cf_123",
+          cloudflare: { isConnected: true, state: "connected" },
+          startTime: Date.now() - 2_000,
+          serverFallbackActive: false,
+          platforms: {
+            youtube: { enabled: true, status: "live" },
+          },
+          jobStatus: { state: "live" },
+        })),
+      });
+
+      await handleStreamRoute(
+        req,
+        res,
+        "/api/stream/live",
+        "POST",
+        mockState({ runtime: { getService: vi.fn(() => service) } }),
+      );
+
+      expect(getStatus()).toBe(200);
+      expect(service.updatePlatform).toHaveBeenCalledWith(
+        "twitch",
+        expect.objectContaining({ enabled: false }),
+        "session-555",
+      );
+      expect(service.updatePlatform).toHaveBeenCalledWith(
+        "youtube",
+        {
+          rtmpUrl: "rtmp://youtube.example/live",
+          streamKey: "yt-key",
+          enabled: true,
+        },
+        "session-555",
+      );
+      expect(service.startStream).toHaveBeenCalledWith(
+        { type: "screen" },
+        { scene: "active-pip" },
+        undefined,
+        "session-555",
+      );
+    });
+
     it("rejects go-live when no 555stream destinations are enabled", async () => {
       const { res, getStatus, getJson } = createMockHttpResponse();
       const req = createMockIncomingMessage({

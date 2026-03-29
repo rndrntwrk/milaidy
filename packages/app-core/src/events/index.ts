@@ -1,3 +1,4 @@
+import type { AvatarFaceFrame } from "@miladyai/shared/contracts";
 import type {
   LifeOpsConnectorMode,
   LifeOpsConnectorSide,
@@ -30,6 +31,8 @@ export const CONNECT_EVENT = "eliza:connect" as const;
 // ── Voice / config ───────────────────────────────────────────────────────
 export const VOICE_CONFIG_UPDATED_EVENT = "eliza:voice-config-updated" as const;
 export const CHAT_AVATAR_VOICE_EVENT = "eliza:chat-avatar-voice" as const;
+export const CHAT_AVATAR_FACE_FRAME_EVENT =
+  "eliza:chat-avatar-face-frame" as const;
 export const APP_EMOTE_EVENT = "eliza:app-emote" as const;
 /** After `/api/cloud/status` — chat voice reloads config so cloud-backed TTS mode matches the server snapshot. */
 export const ELIZA_CLOUD_STATUS_UPDATED_EVENT =
@@ -42,11 +45,11 @@ export const LIFEOPS_GITHUB_CALLBACK_EVENT =
 export interface ElizaCloudStatusUpdatedDetail {
   /** Same as cloud status `connected` (auth or API key on server). */
   connected: boolean;
-  /** True only when Eliza Cloud inference is the active connection. */
+  /** Config `cloud.enabled` (and related flags) from the server snapshot. */
   enabled: boolean;
   /** Server reports a persisted Eliza Cloud API key. */
   hasPersistedApiKey: boolean;
-  /** True only when cloud voice/chat routing should actively use the proxy. */
+  /** Prefer for `useVoiceChat` `cloudConnected`: key, enabled, or connected. */
   cloudVoiceProxyAvailable: boolean;
 }
 
@@ -99,6 +102,8 @@ export interface ChatAvatarVoiceEventDetail {
   isSpeaking: boolean;
 }
 
+export type ChatAvatarFaceFrameEventDetail = AvatarFaceFrame;
+
 export type ElizaDocumentEventName =
   | typeof COMMAND_PALETTE_EVENT
   | typeof EMOTE_PICKER_EVENT
@@ -114,6 +119,7 @@ export type ElizaDocumentEventName =
 export type ElizaWindowEventName =
   | typeof VOICE_CONFIG_UPDATED_EVENT
   | typeof CHAT_AVATAR_VOICE_EVENT
+  | typeof CHAT_AVATAR_FACE_FRAME_EVENT
   | typeof APP_EMOTE_EVENT
   | typeof ELIZA_CLOUD_STATUS_UPDATED_EVENT
   | typeof LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT
@@ -146,6 +152,12 @@ export function dispatchWindowEvent(
 /** Dispatch a normalized app-wide emote event on `window`. */
 export function dispatchAppEmoteEvent(detail: AppEmoteEventDetail): void {
   dispatchWindowEvent(APP_EMOTE_EVENT, detail);
+}
+
+export function dispatchChatAvatarFaceFrameEvent(
+  detail: ChatAvatarFaceFrameEventDetail,
+): void {
+  dispatchWindowEvent(CHAT_AVATAR_FACE_FRAME_EVENT, detail);
 }
 
 export function dispatchElizaCloudStatusUpdated(

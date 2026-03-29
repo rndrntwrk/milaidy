@@ -63,180 +63,23 @@ export interface TalkModeStateEvent {
   state?: string;
 }
 
-export interface MobileSignalsSnapshot {
-  source: "mobile_device";
-  platform: "ios" | "android" | "web";
-  state: "active" | "idle" | "background" | "locked" | "sleeping";
-  observedAt: number;
-  idleState: "active" | "idle" | "locked" | "unknown" | null;
-  idleTimeSeconds: number | null;
-  onBattery: boolean | null;
-  metadata: Record<string, unknown>;
+export interface TalkModeSpeakingEvent {
+  text?: string;
+  isSystemTts?: boolean;
 }
 
-export interface MobileSignalsHealthSnapshot {
-  source: "mobile_health";
-  platform: "ios" | "android" | "web";
-  state: "idle" | "sleeping";
-  observedAt: number;
-  idleState: "active" | "idle" | "locked" | "unknown" | null;
-  idleTimeSeconds: number | null;
-  onBattery: boolean | null;
-  healthSource: "healthkit" | "health_connect";
-  permissions: {
-    sleep: boolean;
-    biometrics: boolean;
-  };
-  sleep: {
-    available: boolean;
-    isSleeping: boolean;
-    asleepAt: number | null;
-    awakeAt: number | null;
-    durationMinutes: number | null;
-    stage: string | null;
-  };
-  biometrics: {
-    sampleAt: number | null;
-    heartRateBpm: number | null;
-    restingHeartRateBpm: number | null;
-    heartRateVariabilityMs: number | null;
-    respiratoryRate: number | null;
-    bloodOxygenPercent: number | null;
-  };
-  warnings: string[];
-  metadata: Record<string, unknown>;
+export interface TalkModeSpeakCompleteEvent {
+  completed?: boolean;
+  interruptedAt?: number;
 }
 
-export type MobileSignalsSignal =
-  | MobileSignalsSnapshot
-  | MobileSignalsHealthSnapshot;
-
-export interface MobileSignalsPluginLike extends NativePlugin {
-  checkPermissions(): Promise<{
-    status: "granted" | "denied" | "not-determined" | "not-applicable";
-    canRequest: boolean;
-    reason?: string;
-    permissions: {
-      sleep: boolean;
-      biometrics: boolean;
-    };
-  }>;
-  requestPermissions(): Promise<{
-    status: "granted" | "denied" | "not-determined" | "not-applicable";
-    canRequest: boolean;
-    reason?: string;
-    permissions: {
-      sleep: boolean;
-      biometrics: boolean;
-    };
-  }>;
-  startMonitoring(options?: { emitInitial?: boolean }): Promise<{
-    enabled: boolean;
-    supported: boolean;
-    platform: "ios" | "android" | "web";
-    snapshot: MobileSignalsSnapshot | null;
-    healthSnapshot: MobileSignalsHealthSnapshot | null;
-  }>;
-  stopMonitoring(): Promise<{ stopped: boolean }>;
-  getSnapshot(): Promise<{
-    supported: boolean;
-    snapshot: MobileSignalsSnapshot | null;
-    healthSnapshot: MobileSignalsHealthSnapshot | null;
-  }>;
-  addListener(
-    eventName: "signal",
-    listenerFunc: (event: MobileSignalsSignal) => void,
-  ): Promise<PluginListenerHandle>;
+export interface TalkModeSpeechLevelEvent {
+  level?: number;
 }
 
 export interface TalkModePermissionStatus {
   microphone?: "granted" | "denied" | "prompt";
   speechRecognition?: "granted" | "denied" | "prompt" | "not_supported";
-}
-
-export interface WebsiteBlockerPermissionResult {
-  status: "granted" | "denied" | "not-determined" | "not-applicable";
-  canRequest: boolean;
-  reason?: string;
-}
-
-export interface WebsiteBlockerStatusResult {
-  available: boolean;
-  active: boolean;
-  hostsFilePath: string | null;
-  endsAt: string | null;
-  websites: string[];
-  canUnblockEarly: boolean;
-  requiresElevation: boolean;
-  engine: "hosts-file" | "vpn-dns" | "network-extension" | "content-blocker";
-  platform: string;
-  supportsElevationPrompt: boolean;
-  elevationPromptMethod:
-    | "osascript"
-    | "pkexec"
-    | "powershell-runas"
-    | "vpn-consent"
-    | "system-settings"
-    | null;
-  permissionStatus?: "granted" | "denied" | "not-determined" | "not-applicable";
-  canRequestPermission?: boolean;
-  canOpenSystemSettings?: boolean;
-  reason?: string;
-}
-
-export interface WebsiteBlockerPluginLike extends NativePlugin {
-  getStatus(): Promise<WebsiteBlockerStatusResult>;
-  startBlock(options: {
-    websites?: string[] | string;
-    durationMinutes?: number | string | null;
-    text?: string;
-  }): Promise<
-    | {
-        success: true;
-        endsAt: string | null;
-        request: {
-          websites: string[];
-          durationMinutes: number | null;
-        };
-      }
-    | {
-        success: false;
-        error: string;
-        status?: {
-          active: boolean;
-          endsAt: string | null;
-          websites: string[];
-          requiresElevation: boolean;
-        };
-      }
-  >;
-  stopBlock(): Promise<
-    | {
-        success: true;
-        removed: boolean;
-        status: {
-          active: boolean;
-          endsAt: string | null;
-          websites: string[];
-          canUnblockEarly: boolean;
-          requiresElevation: boolean;
-        };
-      }
-    | {
-        success: false;
-        error: string;
-        status?: {
-          active: boolean;
-          endsAt: string | null;
-          websites: string[];
-          canUnblockEarly: boolean;
-          requiresElevation: boolean;
-        };
-      }
-  >;
-  checkPermissions(): Promise<WebsiteBlockerPermissionResult>;
-  requestPermissions(): Promise<WebsiteBlockerPermissionResult>;
-  openSettings(): Promise<{ opened: boolean }>;
 }
 
 export interface TalkModePluginLike extends NativePlugin {
@@ -251,6 +94,18 @@ export interface TalkModePluginLike extends NativePlugin {
   addListener(
     eventName: "stateChange",
     listenerFunc: (event: TalkModeStateEvent) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: "speaking",
+    listenerFunc: (event: TalkModeSpeakingEvent) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: "speakComplete",
+    listenerFunc: (event: TalkModeSpeakCompleteEvent) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: "speechLevel",
+    listenerFunc: (event: TalkModeSpeechLevelEvent) => void,
   ): Promise<PluginListenerHandle>;
   checkPermissions(): Promise<TalkModePermissionStatus>;
   requestPermissions(): Promise<TalkModePermissionStatus>;
@@ -283,13 +138,8 @@ export function getTalkModePlugin(): TalkModePluginLike {
   return getNativePlugin<TalkModePluginLike>("TalkMode");
 }
 
-export function getMobileSignalsPlugin(): MobileSignalsPluginLike {
-  return getNativePlugin<MobileSignalsPluginLike>("MobileSignals");
-}
-
 export function getCameraPlugin(): GenericNativePlugin {
-  const plugins = getCapacitorPlugins();
-  return (plugins.MiladyCamera ?? plugins.Camera ?? {}) as GenericNativePlugin;
+  return getNativePlugin<GenericNativePlugin>("Camera");
 }
 
 export function getLocationPlugin(): GenericNativePlugin {
@@ -306,11 +156,4 @@ export function getCanvasPlugin(): GenericNativePlugin {
 
 export function getDesktopPlugin(): GenericNativePlugin {
   return getNativePlugin<GenericNativePlugin>("Desktop");
-}
-
-export function getWebsiteBlockerPlugin(): WebsiteBlockerPluginLike {
-  const plugins = getCapacitorPlugins();
-  return (plugins.MiladyWebsiteBlocker ??
-    plugins.WebsiteBlocker ??
-    {}) as WebsiteBlockerPluginLike;
 }

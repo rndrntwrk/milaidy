@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RouteRequestContext } from "../../src/api/route-helpers";
-import { handleFive55GamesRoutes } from "../../src/api/five55-games-routes";
+import {
+  __resetFive55GamesRouteStateForTests,
+  handleFive55GamesRoutes,
+} from "../../src/api/five55-games-routes";
 import {
   createMockHttpResponse,
   createMockIncomingMessage,
@@ -11,7 +14,7 @@ const originalEnv = { ...process.env };
 function buildCtx(
   method: string,
   pathname: string,
-  overrides: Partial<RouteRequestContext> = {},
+  overrides: (Partial<RouteRequestContext> & Record<string, unknown>) = {},
 ) {
   const { res, getStatus, getJson } = createMockHttpResponse();
   const req = createMockIncomingMessage({ method, url: pathname });
@@ -40,6 +43,7 @@ function buildCtx(
 describe("five55-games-routes", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    __resetFive55GamesRouteStateForTests();
     process.env = { ...originalEnv };
     process.env.STREAM555_BASE_URL = "https://stream555.example";
     process.env.STREAM555_AGENT_TOKEN = "static-token";
@@ -151,6 +155,123 @@ describe("five55-games-routes", () => {
     expect(getStatus()).toBe(401);
     expect(getJson()).toEqual({
       error: expect.stringMatching(/^Unauthorized \[requestId: api-five55-games-stop-/),
+    });
+  });
+
+  it("returns cached game state with local live and destination fallback", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ sessionId: "session-1" }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ ok: true, gameId: "ninja", gameTitle: "Ninja" }),
+          {
+            status: 200,
+          },
+        ),
+      );
+
+    const { ctx: playCtx } = buildCtx(
+      "POST",
+      "/api/agent/v1/sessions/session-1/games/play",
+      {
+        readJsonBody: vi.fn(async () => ({ gameId: "ninja", mode: "agent" })),
+      },
+    );
+
+    await handleFive55GamesRoutes(playCtx);
+
+    delete process.env.STREAM555_BASE_URL;
+    delete process.env.STREAM555_AGENT_TOKEN;
+
+    const { ctx, getStatus, getJson } = buildCtx(
+      "GET",
+      "/api/agent/v1/sessions/session-1/games/state",
+      {
+        streamState: {
+          streamManager: {
+            isRunning: () => true,
+            writeFrame: () => true,
+            start: vi.fn(),
+            stop: vi.fn(),
+            getHealth: () => ({
+              running: true,
+              ffmpegAlive: true,
+              uptime: 12,
+              frameCount: 24,
+              volume: 1,
+              muted: false,
+              audioSource: "system",
+              inputMode: null,
+            }),
+            getVolume: () => 1,
+            isMuted: () => false,
+            setVolume: vi.fn(),
+            mute: vi.fn(),
+            unmute: vi.fn(),
+          },
+          destinations: new Map([
+            ["twitch", { id: "twitch", name: "Twitch" }],
+          ]),
+          activeDestinationId: "twitch",
+          activeStreamSource: { type: "stream-tab" },
+        } as any,
+      },
+    );
+
+    const handled = await handleFive55GamesRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual({
+      ok: true,
+      sessionId: "session-1",
+      activeGameId: "ninja",
+      activeGameLabel: "Ninja",
+      mode: "agent",
+      phase: "live",
+      live: true,
+      destination: { id: "twitch", name: "Twitch" },
+    });
+  });
+
+  it("prefers upstream game state when the dedicated state route is available", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          sessionId: "session-1",
+          activeGameId: "ninja",
+          activeGameLabel: "Ninja",
+          mode: "agent",
+          phase: "live",
+          live: true,
+          destination: { id: "kick", name: "Kick" },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const { ctx, getStatus, getJson } = buildCtx(
+      "GET",
+      "/api/agent/v1/sessions/session-1/games/state",
+    );
+
+    const handled = await handleFive55GamesRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual({
+      ok: true,
+      sessionId: "session-1",
+      activeGameId: "ninja",
+      activeGameLabel: "Ninja",
+      mode: "agent",
+      phase: "live",
+      live: true,
+      destination: { id: "kick", name: "Kick" },
     });
   });
 });

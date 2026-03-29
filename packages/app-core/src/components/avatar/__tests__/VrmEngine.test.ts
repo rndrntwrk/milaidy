@@ -1005,6 +1005,42 @@ describe("VrmEngine", () => {
       expect(() => engine.setSpeaking(false)).not.toThrow();
     });
 
+    it("setSpeechMotionPath stores and clears the speech animation path", () => {
+      const engineAny = engine as unknown as { speechMotionPath: string | null };
+
+      engine.setSpeechMotionPath("/animations/emotes/talk.glb.gz");
+      expect(engineAny.speechMotionPath).toBe("/animations/emotes/talk.glb.gz");
+
+      engine.setSpeechMotionPath(null);
+      expect(engineAny.speechMotionPath).toBeNull();
+    });
+
+    it("keeps mouth values authoritative while speaking", () => {
+      const engineAny = engine as unknown as {
+        mouthSmoothed: number;
+        mouthValue: number;
+        speaking: boolean;
+        elapsedTime: number;
+        speakingStartTime: number;
+        applyMouthToVrm: (vrm: {
+          expressionManager: { setValue: (name: string, value: number) => void };
+        }) => void;
+      };
+      const setValue = vi.fn();
+
+      engineAny.mouthSmoothed = 0;
+      engineAny.mouthValue = 1;
+      engineAny.speaking = true;
+      engineAny.elapsedTime = 0;
+      engineAny.speakingStartTime = 0;
+
+      engineAny.applyMouthToVrm({
+        expressionManager: { setValue },
+      });
+
+      expect(setValue).toHaveBeenCalledWith("aa", 0.3);
+    });
+
     it("setCameraAnimation merges partial config", () => {
       expect(() => engine.setCameraAnimation({ enabled: false })).not.toThrow();
       expect(() =>
@@ -1135,12 +1171,14 @@ describe("VrmEngine", () => {
           removeEventListener: ReturnType<typeof vi.fn>;
         } | null;
         idleAction: ReturnType<typeof createMockAction> | null;
+        speechAction: ReturnType<typeof createMockAction> | null;
         emoteAction: ReturnType<typeof createMockAction> | null;
         loadEmoteClipCached: ReturnType<typeof vi.fn>;
       };
       const nextEmoteAction = createMockAction();
       const currentEmoteAction = createMockAction();
       const idleAction = createMockAction();
+      const speechAction = createMockAction();
 
       engineAny.vrm = {
         scene: {
@@ -1153,6 +1191,7 @@ describe("VrmEngine", () => {
         removeEventListener: vi.fn(),
       };
       engineAny.idleAction = idleAction;
+      engineAny.speechAction = speechAction;
       engineAny.emoteAction = currentEmoteAction;
       engineAny.loadEmoteClipCached = vi.fn().mockResolvedValue({});
 
@@ -1160,10 +1199,43 @@ describe("VrmEngine", () => {
 
       // Previous emote and idle should both be faded out
       expect(currentEmoteAction.fadeOut).toHaveBeenCalledWith(0.4);
+      expect(speechAction.fadeOut).toHaveBeenCalledWith(0.4);
       expect(idleAction.fadeOut).toHaveBeenCalledWith(0.4);
       // New emote should be faded in (not crossFadeFrom)
       expect(nextEmoteAction.fadeIn).toHaveBeenCalledWith(0.4);
       expect(engineAny.emoteAction).toBe(nextEmoteAction);
+    });
+
+    it("stopEmote restores the speech lane when Alice is still speaking", () => {
+      const fakeEmoteAction = createMockAction();
+      const restoreBaseAfterAction = vi.fn();
+      const vrm = { scene: { parent: null } };
+      const mixer = { clipAction: vi.fn() };
+      const engineAny = engine as unknown as {
+        emoteAction: ReturnType<typeof createMockAction> | null;
+        speaking: boolean;
+        speechMotionPath: string | null;
+        vrm: typeof vrm | null;
+        mixer: typeof mixer | null;
+        restoreBaseAfterAction: ReturnType<typeof vi.fn>;
+      };
+
+      engineAny.emoteAction = fakeEmoteAction;
+      engineAny.speaking = true;
+      engineAny.speechMotionPath = "/animations/emotes/talk.glb.gz";
+      engineAny.vrm = vrm;
+      engineAny.mixer = mixer;
+      engineAny.restoreBaseAfterAction = restoreBaseAfterAction;
+
+      engine.stopEmote();
+
+      expect(restoreBaseAfterAction).toHaveBeenCalledWith(
+        fakeEmoteAction,
+        0.4,
+        vrm,
+        mixer,
+      );
+      expect(engineAny.emoteAction).toBeNull();
     });
 
     it("restores idle as soon as a one-shot emote finishes", async () => {

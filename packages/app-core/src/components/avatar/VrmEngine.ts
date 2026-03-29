@@ -6,6 +6,14 @@ type LookingGlassWebXRPolyfillType = new (
 ) => unknown;
 
 import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
+import type {
+  AvatarFaceFrame,
+  AvatarSpeechCapabilities,
+} from "@miladyai/shared/contracts";
+import {
+  AVATAR_FACE_EXPRESSIONS,
+  AVATAR_FACE_VISEMES,
+} from "@miladyai/shared/contracts";
 import {
   MToonMaterialLoaderPlugin,
   type VRM,
@@ -56,6 +64,7 @@ import {
   type InteractionMode,
   VrmCameraManager,
 } from "./VrmCameraManager";
+import { createFallbackSpeechCapabilities } from "./avatar-speech";
 
 export type { CameraAnimationConfig, CameraProfile, InteractionMode };
 
@@ -188,6 +197,63 @@ function isElectrobunAvatarRuntime(): boolean {
     typeof runtimeWindow.__electrobunWindowId === "number" ||
     typeof runtimeWindow.__electrobunWebviewId === "number"
   );
+}
+
+function normalizeSpeechCapabilities(
+  capabilities: AvatarSpeechCapabilities | null | undefined,
+): AvatarSpeechCapabilities {
+  const fallback = createFallbackSpeechCapabilities();
+  if (!capabilities) {
+    return fallback;
+  }
+  return {
+    speechMotionPath:
+      typeof capabilities.speechMotionPath === "string" &&
+      capabilities.speechMotionPath.trim().length > 0
+        ? capabilities.speechMotionPath.trim()
+        : null,
+    supportedVisemes:
+      capabilities.supportedVisemes.length > 0
+        ? capabilities.supportedVisemes
+        : fallback.supportedVisemes,
+    supportedExpressions: capabilities.supportedExpressions ?? [],
+    advancedFaceDriver: capabilities.advancedFaceDriver === true,
+  };
+}
+
+function extractExpressionNames(expressionManager: unknown): string[] {
+  if (!expressionManager || typeof expressionManager !== "object") {
+    return [];
+  }
+  const source = expressionManager as Record<string, unknown>;
+  const candidates = [
+    source.expressionMap,
+    source.presetExpressionMap,
+    source._expressionMap,
+    source._presetExpressionMap,
+    source.expressions,
+    source.presets,
+  ];
+  const names = new Set<string>();
+  for (const candidate of candidates) {
+    if (candidate instanceof Map) {
+      for (const key of candidate.keys()) {
+        if (typeof key === "string" && key.trim().length > 0) {
+          names.add(key.trim());
+        }
+      }
+      continue;
+    }
+    if (!candidate || typeof candidate !== "object") {
+      continue;
+    }
+    for (const key of Object.keys(candidate)) {
+      if (key.trim().length > 0) {
+        names.add(key.trim());
+      }
+    }
+  }
+  return [...names];
 }
 
 function getPreferredAvatarRendererBackend(): RendererBackend {
@@ -539,9 +605,13 @@ export class VrmEngine {
   private revealStarted = false;
   private mouthValue = 0;
   private mouthSmoothed = 0;
+  private speechCapabilities: AvatarSpeechCapabilities =
+    createFallbackSpeechCapabilities();
+  private avatarFaceFrame: AvatarFaceFrame | null = null;
   private vrmName: string | null = null;
   private lookAtTarget = new THREE.Vector3(0, 0.5, 0);
   private readonly idleGlbUrl = resolveAppAssetUrl("animations/idle.glb.gz");
+  private speechMotionPath: string | null = null;
 
   private outgoingVrm: VRM | null = null;
   private outgoingMixer: THREE.AnimationMixer | null = null;
@@ -555,6 +625,9 @@ export class VrmEngine {
   private readonly blinkController = new VrmBlinkController();
 
   private readonly cameraManager = new VrmCameraManager();
+  private speechAction: THREE.AnimationAction | null = null;
+  private speechRequestId = 0;
+  private speechSyncInFlight = false;
   private emoteAction: THREE.AnimationAction | null = null;
   private emoteTimeout: ReturnType<typeof setTimeout> | null = null;
   private emoteCompletionCleanup: (() => void) | null = null;
@@ -658,6 +731,137 @@ export class VrmEngine {
     action.setEffectiveTimeScale(1);
     action.setEffectiveWeight(1);
     action.play();
+  }
+
+  private getSpeechMotionPath(): string | null {
+    const trimmed = this.speechMotionPath?.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  private stopSpeechMotion(options?: { restoreBase?: boolean }): void {
+    const activeSpeech = this.speechAction;
+    this.speechAction = null;
+    if (activeSpeech) {
+      activeSpeech.fadeOut(0.25);
+    }
+    if (!options?.restoreBase) {
+      return;
+    }
+    if (this.emoteAction) {
+      return;
+    }
+    if (this.idleAction && this.idleAction !== activeSpeech) {
+      this.activateAction(this.idleAction);
+      this.idleAction.fadeIn(0.25);
+    }
+  }
+
+  private async restoreBaseAfterAction(
+    activeAction: THREE.AnimationAction | null,
+    fadeDuration: number,
+    vrm: VRM,
+    mixer: THREE.AnimationMixer,
+  ): Promise<void> {
+    if (this.speaking && this.getSpeechMotionPath()) {
+      const speechAction = await this.ensureSpeechAction(vrm, mixer);
+      if (
+        speechAction &&
+        !this.loadingAborted &&
+        this.vrm === vrm &&
+        this.mixer === mixer &&
+        this.speaking &&
+        !this.emoteAction
+      ) {
+        this.activateAction(speechAction);
+        if (this.idleAction && this.idleAction !== speechAction) {
+          this.idleAction.fadeOut(fadeDuration);
+        }
+        if (activeAction && activeAction !== speechAction) {
+          speechAction.crossFadeFrom(activeAction, fadeDuration, false);
+        } else {
+          speechAction.fadeIn(fadeDuration);
+        }
+        this.speechAction = speechAction;
+        return;
+      }
+    }
+    this.restoreIdleAfterEmote(activeAction, fadeDuration, vrm, mixer);
+  }
+
+  private async ensureSpeechAction(
+    vrm: VRM,
+    mixer: THREE.AnimationMixer,
+  ): Promise<THREE.AnimationAction | null> {
+    const speechMotionPath = this.getSpeechMotionPath();
+    if (!speechMotionPath) {
+      return null;
+    }
+    const clip = await this.loadEmoteClipCached(speechMotionPath, vrm);
+    if (!clip || this.loadingAborted || this.vrm !== vrm || this.mixer !== mixer) {
+      return null;
+    }
+    const action = mixer.clipAction(clip);
+    action.reset();
+    action.setLoop(THREE.LoopRepeat, Infinity);
+    action.clampWhenFinished = false;
+    return action;
+  }
+
+  private async syncSpeechMotion(): Promise<void> {
+    if (this.speechSyncInFlight) {
+      return;
+    }
+    const vrm = this.vrm;
+    const mixer = this.mixer;
+    const speechMotionPath = this.getSpeechMotionPath();
+    if (!vrm || !mixer || !speechMotionPath || !this.speaking) {
+      this.stopSpeechMotion({ restoreBase: !this.emoteAction });
+      return;
+    }
+    if (this.emoteAction) {
+      this.stopSpeechMotion({ restoreBase: false });
+      return;
+    }
+
+    const POST_TELEPORT_COOLDOWN = 0.3;
+    if (
+      this.teleportProgress < 1.0 ||
+      this.elapsedTime - this.teleportCompleteTime < POST_TELEPORT_COOLDOWN
+    ) {
+      return;
+    }
+
+    this.speechSyncInFlight = true;
+    try {
+      const requestId = ++this.speechRequestId;
+      const action = await this.ensureSpeechAction(vrm, mixer);
+      if (
+        !action ||
+        this.loadingAborted ||
+        this.vrm !== vrm ||
+        this.mixer !== mixer ||
+        this.speechRequestId !== requestId ||
+        !this.speaking ||
+        this.emoteAction ||
+        this.getSpeechMotionPath() !== speechMotionPath
+      ) {
+        return;
+      }
+
+      const fadeDuration = 0.3;
+      const previousSpeech = this.speechAction;
+      if (previousSpeech && previousSpeech !== action) {
+        previousSpeech.fadeOut(fadeDuration);
+      }
+      if (this.idleAction && this.idleAction !== action) {
+        this.idleAction.fadeOut(fadeDuration);
+      }
+      this.activateAction(action);
+      action.fadeIn(fadeDuration);
+      this.speechAction = action;
+    } finally {
+      this.speechSyncInFlight = false;
+    }
   }
 
   private async ensureIdleAction(
@@ -1368,6 +1572,10 @@ export class VrmEngine {
     this.idleAction = null;
     this.idleLoadPromise = null;
     this.clearPendingEmoteCompletion();
+    this.speechAction = null;
+    this.speechRequestId = 0;
+    this.speechSyncInFlight = false;
+    this.avatarFaceFrame = null;
     this.emoteAction = null;
     this.emoteClipCache.clear();
     this.teleportProgress = 1.0;
@@ -1673,11 +1881,70 @@ export class VrmEngine {
   setMouthOpen(value: number): void {
     this.mouthValue = Math.max(0, Math.min(1, value));
   }
+  setSpeechCapabilities(
+    capabilities: AvatarSpeechCapabilities | null | undefined,
+  ): void {
+    const normalized = normalizeSpeechCapabilities(capabilities);
+    this.speechCapabilities = normalized;
+    this.setSpeechMotionPath(normalized.speechMotionPath ?? null);
+    this.avatarFaceFrame = null;
+  }
+  setAvatarFaceFrame(_frame: AvatarFaceFrame | null): void {
+    this.avatarFaceFrame = null;
+  }
+  getDetectedSpeechCapabilities(): AvatarSpeechCapabilities {
+    const names = extractExpressionNames(this.vrm?.expressionManager ?? null);
+    if (names.length === 0) {
+      return {
+        ...normalizeSpeechCapabilities(this.speechCapabilities),
+        advancedFaceDriver: false,
+      };
+    }
+    const supportedVisemes = AVATAR_FACE_VISEMES.filter((name) =>
+      names.includes(name),
+    );
+    const supportedExpressions = AVATAR_FACE_EXPRESSIONS.filter((name) =>
+      names.includes(name),
+    );
+    return {
+      speechMotionPath: this.speechCapabilities.speechMotionPath ?? null,
+      supportedVisemes:
+        supportedVisemes.length > 0 ? supportedVisemes : ["aa"],
+      supportedExpressions,
+      advancedFaceDriver: false,
+    };
+  }
+  setSpeechMotionPath(path: string | null): void {
+    const nextPath = path?.trim() ? path : null;
+    if (nextPath === this.speechMotionPath) {
+      return;
+    }
+    this.speechMotionPath = nextPath;
+    this.speechRequestId += 1;
+    if (!nextPath) {
+      this.stopSpeechMotion({ restoreBase: this.speaking && !this.emoteAction });
+      return;
+    }
+    if (this.speaking && !this.emoteAction) {
+      void this.syncSpeechMotion();
+    }
+  }
   setSpeaking(speaking: boolean): void {
+    if (speaking === this.speaking) {
+      return;
+    }
     if (speaking && !this.speaking) {
       this.speakingStartTime = this.elapsedTime;
     }
     this.speaking = speaking;
+    this.speechRequestId += 1;
+    if (!speaking) {
+      this.stopSpeechMotion({ restoreBase: !this.emoteAction });
+      return;
+    }
+    if (!this.emoteAction) {
+      void this.syncSpeechMotion();
+    }
   }
   attachOverlayManager(manager: SceneOverlayManager): void {
     this.overlayManager = manager;
@@ -1773,6 +2040,10 @@ export class VrmEngine {
     if (currentEmote && currentEmote !== action) {
       currentEmote.fadeOut(fadeDuration);
     }
+    if (this.speechAction && this.speechAction !== action) {
+      this.speechAction.fadeOut(fadeDuration);
+      this.speechAction = null;
+    }
     if (this.idleAction && this.idleAction !== action) {
       this.idleAction.fadeOut(fadeDuration);
     }
@@ -1791,6 +2062,15 @@ export class VrmEngine {
     const fadeDuration = 0.4;
     const activeEmote = this.emoteAction;
     this.emoteAction = null;
+    if (this.speaking && this.getSpeechMotionPath() && this.vrm && this.mixer) {
+      void this.restoreBaseAfterAction(
+        activeEmote,
+        fadeDuration,
+        this.vrm,
+        this.mixer,
+      );
+      return;
+    }
     if (this.idleAction) {
       this.activateAction(this.idleAction);
       if (activeEmote && activeEmote !== this.idleAction) {
@@ -1843,6 +2123,10 @@ export class VrmEngine {
       this.idleLoadPromise = null;
       this.revealStarted = false;
       this.clearPendingEmoteCompletion();
+      this.speechAction = null;
+      this.speechRequestId = 0;
+      this.speechSyncInFlight = false;
+      this.avatarFaceFrame = null;
       this.emoteAction = null;
       this.emoteClipCache.clear();
     }
@@ -2428,6 +2712,15 @@ ${isOutgoing ? "if (teleportNoise >= teleportRatio) discard;" : "if (teleportNoi
       this.applyMouthToVrm(this.vrm);
       const blinkValue = this.blinkController.update(rawDelta);
       this.vrm.expressionManager?.setValue("blink", blinkValue);
+      if (
+        this.speaking &&
+        this.getSpeechMotionPath() &&
+        !this.speechAction &&
+        !this.emoteAction &&
+        !this.speechSyncInFlight
+      ) {
+        void this.syncSpeechMotion();
+      }
     }
 
     // Process camera transition
@@ -2597,6 +2890,9 @@ ${isOutgoing ? "if (teleportNoise >= teleportRatio) discard;" : "if (teleportNoi
     action.fadeIn(0.25);
     action.play();
     mixer.update(1 / 60);
+    if (this.speaking && this.getSpeechMotionPath()) {
+      void this.syncSpeechMotion();
+    }
   }
   private async loadEmoteClipCached(
     path: string,
@@ -2613,16 +2909,7 @@ ${isOutgoing ? "if (teleportNoise >= teleportRatio) discard;" : "if (teleportNoi
   private applyMouthToVrm(vrm: VRM): void {
     const manager = vrm.expressionManager;
     if (!manager) return;
-    let target: number;
-    if (this.speaking) {
-      const elapsed = this.elapsedTime - this.speakingStartTime;
-      const base = Math.sin(elapsed * 12) * 0.3 + 0.4;
-      const detail = Math.sin(elapsed * 18.7) * 0.15;
-      const slow = Math.sin(elapsed * 4.2) * 0.1;
-      target = Math.max(0, Math.min(1, base + detail + slow));
-    } else {
-      target = this.mouthValue;
-    }
+    const target = this.mouthValue;
     const next = Math.max(0, Math.min(1, target));
     const alpha = next > this.mouthSmoothed ? 0.3 : 0.2;
     this.mouthSmoothed = this.mouthSmoothed * (1 - alpha) + next * alpha;

@@ -2,7 +2,10 @@ import {
   dispatchAppEmoteEvent,
   VRM_TELEPORT_COMPLETE_EVENT,
 } from "@miladyai/app-core/events";
-import { useRenderGuard } from "@miladyai/app-core/hooks";
+import {
+  useAvatarSpeechCapabilities,
+  useRenderGuard,
+} from "@miladyai/app-core/hooks";
 import {
   getVrmPreviewUrl,
   getVrmUrl,
@@ -405,6 +408,10 @@ function CompanionSceneSurface({
     selectedVrmIndex > 0
       ? getVrmPreviewUrl(safeSelectedVrmIndex)
       : getVrmPreviewUrl(1);
+  const avatarSpeech = useAvatarSpeechCapabilities({
+    selectedVrmIndex,
+    customVrmUrl,
+  });
   const teleportKey = vrmPath;
   const [teleportCompletedKey, setTeleportCompletedKey] = useState<
     string | null
@@ -638,6 +645,9 @@ function CompanionSceneSurface({
           <VrmStage
             active={active}
             vrmPath={vrmPath}
+            speechMotionPath={avatarSpeech.capabilities.speechMotionPath ?? null}
+            speechCapabilities={avatarSpeech.capabilities}
+            avatarSpeechKey={avatarSpeech.avatarKey}
             fallbackPreviewUrl={fallbackPreviewUrl}
             environmentTheme={uiTheme === "dark" ? "dark" : "light"}
             cameraProfile="companion"
@@ -646,6 +656,7 @@ function CompanionSceneSurface({
             companionAnimateWhenHidden={companionAnimateWhenHidden}
             onEngineReady={handleStageEngineReady}
             onLayerEngineReady={handleStageLayerEngineReady}
+            onSpeechCapabilitiesDetected={avatarSpeech.saveDetectedCapabilities}
             playWaveOnAvatarChange={false}
             t={t}
           />

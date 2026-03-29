@@ -4,6 +4,10 @@ import {
   ONBOARDING_VOICE_PREVIEW_AWAIT_TELEPORT_EVENT,
   VRM_TELEPORT_COMPLETE_EVENT,
 } from "@miladyai/app-core/events";
+import {
+  useAvatarSpeechCapabilities,
+  useAvatarVoicePublisher,
+} from "@miladyai/app-core/hooks";
 import { useApp } from "@miladyai/app-core/state";
 import { getStylePresets } from "@miladyai/shared/onboarding-presets";
 import { Button, Input } from "@miladyai/ui";
@@ -13,20 +17,21 @@ import {
   resolveCompatApiToken,
 } from "../../utils/api-request";
 import { resolveApiUrl } from "../../utils/asset-url";
+import { PREMADE_VOICES } from "../../voice/types";
 import {
   CharacterRoster,
-  createCustomPackRosterEntry,
   type CharacterRosterEntry,
   resolveRosterEntries,
 } from "../character/CharacterRoster";
 import { resolveCharacterGreetingAnimation } from "../character/character-greeting";
 import { preloadOnboardingCharacterAssets } from "./onboarding-asset-preload";
 import { buildPreviewTtsRequestPlans } from "./identity-preview-tts";
-import { PREMADE_VOICES } from "../../voice/types";
 
 import {
   OnboardingStepHeader,
+  onboardingBodyTextShadowStyle,
   onboardingFooterClass,
+  onboardingLinkActionClass,
   onboardingPrimaryActionClass,
   onboardingPrimaryActionTextShadowStyle,
   onboardingSecondaryActionClass,
@@ -55,58 +60,74 @@ export function IdentityStep({
     setState,
     t,
     uiLanguage,
-    activePackId,
+    selectedVrmIndex,
     customVrmUrl,
-    customVrmPreviewUrl,
-    onboardingName,
-    customCatchphrase,
-    customVoicePresetId,
   } = useApp();
 
-  const entries = useMemo(() => {
-    const base = resolveRosterEntries(getStylePresets(uiLanguage));
-    if (activePackId && customVrmUrl) {
-      if (!base.some((entry) => entry.id === activePackId)) {
-        base.unshift(
-          createCustomPackRosterEntry({
-            id: activePackId,
-            name: onboardingName || "Custom",
-            previewUrl: customVrmPreviewUrl || undefined,
-            catchphrase: customCatchphrase || undefined,
-            voicePresetId: customVoicePresetId || undefined,
-          }),
-        );
-      }
-    }
-    return base;
-  }, [
-    uiLanguage,
-    activePackId,
-    customCatchphrase,
-    customVoicePresetId,
-    customVrmPreviewUrl,
-    customVrmUrl,
-    onboardingName,
-  ]);
-
+  const entries = useMemo(
+    () => resolveRosterEntries(getStylePresets(uiLanguage)),
+    [uiLanguage],
+  );
   const firstEntry = entries[0];
   const selectedId = onboardingStyle || entries[0]?.id || "";
-  const selectedEntry =
-    entries.find((entry) => entry.id === selectedId) ?? firstEntry ?? null;
   const [showImport, setShowImport] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importPassword, setImportPassword] = useState("");
   const [importBusy, setImportBusy] = useState(false);
-  const [_importError, setImportError] = useState<string | null>(null);
-  const [_importSuccess, setImportSuccess] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const importBusyRef = useRef(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const previewObjectUrlRef = useRef<string | null>(null);
-  const previewRequestIdRef = useRef(0);
   const previewAbortControllerRef = useRef<AbortController | null>(null);
+  const previewRequestIdRef = useRef(0);
   const pendingPreviewEntryRef = useRef<CharacterRosterEntry | null>(null);
+  const previewVoiceAnimationFrameRef = useRef(0);
+  const previewVoiceAudioContextRef = useRef<AudioContext | null>(null);
+  const previewVoiceAnalyserRef = useRef<AnalyserNode | null>(null);
+  const previewVoiceSourceRef = useRef<MediaElementAudioSourceNode | null>(
+    null,
+  );
+  const [previewVoice, setPreviewVoice] = useState({
+    mouthOpen: 0,
+    isSpeaking: false,
+  });
+
+  const avatarSpeech = useAvatarSpeechCapabilities({
+    selectedVrmIndex,
+    customVrmUrl,
+  });
+
+  useAvatarVoicePublisher({
+    ...previewVoice,
+    avatarKey: avatarSpeech.avatarKey,
+    speechCapabilities: avatarSpeech.capabilities,
+    enableAdvancedFaceFrames: true,
+  });
+
+  const stopPreviewVoice = useCallback(() => {
+    if (previewVoiceAnimationFrameRef.current !== 0) {
+      window.cancelAnimationFrame(previewVoiceAnimationFrameRef.current);
+      previewVoiceAnimationFrameRef.current = 0;
+    }
+    previewVoiceSourceRef.current?.disconnect();
+    previewVoiceSourceRef.current = null;
+    previewVoiceAnalyserRef.current?.disconnect();
+    previewVoiceAnalyserRef.current = null;
+    const audioContext = previewVoiceAudioContextRef.current;
+    previewVoiceAudioContextRef.current = null;
+    if (audioContext) {
+      void audioContext.close().catch(() => {
+        /* ignore */
+      });
+    }
+    setPreviewVoice({ mouthOpen: 0, isSpeaking: false });
+  }, []);
 
   const stopPreviewAudio = useCallback(() => {
+    previewAbortControllerRef.current?.abort();
+    previewAbortControllerRef.current = null;
+    stopPreviewVoice();
     if (previewAudioRef.current) {
       previewAudioRef.current.pause();
       previewAudioRef.current = null;
@@ -115,7 +136,79 @@ export function IdentityStep({
       URL.revokeObjectURL(previewObjectUrlRef.current);
       previewObjectUrlRef.current = null;
     }
-  }, []);
+  }, [stopPreviewVoice]);
+
+  const startPreviewVoice = useCallback(
+    (audio: HTMLAudioElement) => {
+      stopPreviewVoice();
+      setPreviewVoice({ mouthOpen: 0, isSpeaking: true });
+
+      let analyser: AnalyserNode | null = null;
+      let data: Float32Array | null = null;
+      try {
+        const audioContext = new AudioContext();
+        const source = audioContext.createMediaElementSource(audio);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.82;
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
+        previewVoiceAudioContextRef.current = audioContext;
+        previewVoiceSourceRef.current = source;
+        previewVoiceAnalyserRef.current = analyser;
+        data = new Float32Array(analyser.fftSize);
+        void audioContext.resume().catch(() => {
+          /* ignore */
+        });
+      } catch {
+        analyser = null;
+        data = null;
+      }
+
+      const tick = () => {
+        if (previewAudioRef.current !== audio) {
+          return;
+        }
+        if (audio.ended) {
+          stopPreviewVoice();
+          return;
+        }
+        let nextMouthOpen = 0;
+        if (analyser && data) {
+          analyser.getFloatTimeDomainData(data);
+          let sum = 0;
+          for (let index = 0; index < data.length; index += 1) {
+            const value = data[index] ?? 0;
+            sum += value * value;
+          }
+          const rms = Math.sqrt(sum / data.length);
+          nextMouthOpen = Math.max(
+            0,
+            Math.min(1, 1 / (1 + Math.exp(-(rms * 30 - 2)))),
+          );
+        } else {
+          const elapsed = audio.currentTime;
+          const base = Math.sin(elapsed * 12) * 0.3 + 0.4;
+          const detail = Math.sin(elapsed * 18.7) * 0.15;
+          const slow = Math.sin(elapsed * 4.2) * 0.1;
+          nextMouthOpen = Math.max(0, Math.min(1, base + detail + slow));
+        }
+        setPreviewVoice({ mouthOpen: nextMouthOpen, isSpeaking: true });
+        previewVoiceAnimationFrameRef.current = window.requestAnimationFrame(
+          tick,
+        );
+      };
+
+      const handleEnded = () => {
+        if (previewAudioRef.current === audio) {
+          stopPreviewVoice();
+        }
+      };
+      audio.addEventListener("ended", handleEnded, { once: true });
+      previewVoiceAnimationFrameRef.current = window.requestAnimationFrame(tick);
+    },
+    [stopPreviewVoice],
+  );
 
   const playSelectionPreview = useCallback(
     async (entry: CharacterRosterEntry) => {
@@ -139,53 +232,12 @@ export function IdentityStep({
       const catchphrase = entry.catchphrase?.trim();
       if (!catchphrase || typeof window === "undefined") return;
 
-      const controller = new AbortController();
-      previewAbortControllerRef.current = controller;
-
-      // Try pre-generated static voiceline first (instant, no API call).
-      // Use a relative URL — static assets are served by Vite, not the API server.
-      const lang = uiLanguage || "en";
-      const staticUrl = `/audio/onboarding/${entry.id}-${lang}.mp3`;
-      try {
-        const staticRes = await fetchWithTimeout(
-          staticUrl,
-          { signal: controller.signal },
-          5_000,
-        );
-        if (staticRes.ok && isCurrentRequest()) {
-          const contentType = staticRes.headers.get("content-type") || "";
-          if (contentType.includes("text/html")) {
-            throw new Error("Intercepted by SPA fallback");
-          }
-          const audioBlob = await staticRes.blob();
-          if (audioBlob.size && isCurrentRequest()) {
-            stopPreviewAudio();
-            const objectUrl = URL.createObjectURL(audioBlob);
-            const audio = new Audio(objectUrl);
-            previewAudioRef.current = audio;
-            previewObjectUrlRef.current = objectUrl;
-            try {
-              await audio.play();
-            } catch {
-              previewAudioRef.current = null;
-              URL.revokeObjectURL(objectUrl);
-              if (previewObjectUrlRef.current === objectUrl) {
-                previewObjectUrlRef.current = null;
-              }
-            }
-            return;
-          }
-        }
-      } catch {
-        // Static file not available — fall through to TTS API chain
-      }
-
-      if (!isCurrentRequest()) return;
-
       const selectedPreset = entry.voicePresetId
         ? PREMADE_VOICES.find((voice) => voice.id === entry.voicePresetId)
         : undefined;
       const apiToken = resolveCompatApiToken();
+      const controller = new AbortController();
+      previewAbortControllerRef.current = controller;
       const requestPlans = buildPreviewTtsRequestPlans({
         text: catchphrase,
         voiceId: selectedPreset?.voiceId,
@@ -223,10 +275,12 @@ export function IdentityStep({
           const audio = new Audio(objectUrl);
           previewAudioRef.current = audio;
           previewObjectUrlRef.current = objectUrl;
+          startPreviewVoice(audio);
           try {
             await audio.play();
             if (isCurrentRequest()) return;
           } catch {
+            stopPreviewVoice();
             previewAudioRef.current = null;
             URL.revokeObjectURL(objectUrl);
             if (previewObjectUrlRef.current === objectUrl) {
@@ -244,7 +298,7 @@ export function IdentityStep({
       // system voices here. If the selected preset catchphrase cannot be
       // synthesized, stay silent instead of playing the wrong line.
     },
-    [stopPreviewAudio, uiLanguage],
+    [startPreviewVoice, stopPreviewAudio, stopPreviewVoice],
   );
 
   const handleSelect = useCallback(
@@ -280,56 +334,11 @@ export function IdentityStep({
       stopPreviewAudio,
     ],
   );
-  // Fresh onboarding (no pre-existing selection): auto-select first character.
-  useEffect(() => {
-    preloadOnboardingCharacterAssets(entries, {
-      voiceEntry: selectedEntry,
-    });
-  }, [entries, selectedEntry]);
-
   useEffect(() => {
     if (!onboardingStyle && firstEntry) {
       handleSelect(firstEntry, true);
     }
   }, [onboardingStyle, handleSelect, firstEntry]);
-
-  // Pre-existing selection: queue the preview for the teleport-complete event
-  // so the voiceline plays when the avatar is visually ready, not before.
-  // Uses a ref to capture the initial value — doesn't re-fire on user clicks.
-  const initialOnboardingStyleRef = useRef(onboardingStyle);
-  useEffect(() => {
-    const style = initialOnboardingStyleRef.current;
-    if (!style) return;
-    const entry = entries.find((e) => e.id === style);
-    if (!entry) return;
-    pendingPreviewEntryRef.current = entry;
-    // Defer dispatch so parent effects (OnboardingWizard's no-VRM bridge) mount first.
-    // Desktop: VrmStage fires TELEPORT_COMPLETE when the avatar is visible.
-    // Browser (no VRM): the bridge converts AWAIT_TELEPORT → TELEPORT_COMPLETE.
-    const rafId = requestAnimationFrame(() => {
-      if (pendingPreviewEntryRef.current === entry) {
-        dispatchWindowEvent(ONBOARDING_VOICE_PREVIEW_AWAIT_TELEPORT_EVENT);
-      }
-    });
-    return () => {
-      cancelAnimationFrame(rafId);
-      if (pendingPreviewEntryRef.current === entry) {
-        pendingPreviewEntryRef.current = null;
-      }
-    };
-  }, [entries]);
-
-  // Replay voiceline when UI language changes (entries update with new catchphrases).
-  const prevLanguageRef = useRef(uiLanguage);
-  useEffect(() => {
-    if (prevLanguageRef.current === uiLanguage) return;
-    prevLanguageRef.current = uiLanguage;
-    if (!onboardingStyle) return;
-    const entry = entries.find((e) => e.id === onboardingStyle);
-    if (entry) {
-      void playSelectionPreview(entry);
-    }
-  }, [uiLanguage, onboardingStyle, entries, playSelectionPreview]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -508,6 +517,7 @@ export function IdentityStep({
       </div>
     );
   }
+  const selected = entries.find((e) => e.id === selectedId);
 
   return (
     <div

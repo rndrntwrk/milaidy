@@ -1,6 +1,7 @@
 import type {
   AgentStartupDiagnostics,
   AgentStatus,
+  ContentBlock,
   ConversationMessage,
   CustomActionDef,
   StreamEventEnvelope,
@@ -163,6 +164,10 @@ export function parseConversationMessageEvent(
     return null;
   }
   const parsed: ConversationMessage = { id, role, text, timestamp };
+  const blocks = parseContentBlocks(value.blocks);
+  if (blocks) {
+    parsed.blocks = blocks;
+  }
   if (typeof source === "string" && source.length > 0) {
     parsed.source = source;
   }
@@ -246,6 +251,66 @@ export function parseProactiveMessageEvent(
   const message = parseConversationMessageEvent(data.message);
   if (!message) return null;
   return { conversationId, message };
+}
+
+function parseContentBlock(value: unknown): ContentBlock | null {
+  if (!isRecord(value) || typeof value.type !== "string") return null;
+
+  if (value.type === "text" && typeof value.text === "string") {
+    return { type: "text", text: value.text };
+  }
+
+  if (
+    value.type === "config-form" &&
+    typeof value.pluginId === "string" &&
+    isRecord(value.schema)
+  ) {
+    return {
+      type: "config-form",
+      pluginId: value.pluginId,
+      ...(typeof value.pluginName === "string"
+        ? { pluginName: value.pluginName }
+        : {}),
+      schema: value.schema,
+      ...(isRecord(value.hints) ? { hints: value.hints } : {}),
+      ...(isRecord(value.values) ? { values: value.values } : {}),
+    };
+  }
+
+  if (value.type === "ui-spec" && isRecord(value.spec)) {
+    return {
+      type: "ui-spec",
+      spec: value.spec,
+      ...(typeof value.raw === "string" ? { raw: value.raw } : {}),
+    };
+  }
+
+  if (
+    value.type === "action-pill" &&
+    typeof value.label === "string" &&
+    (value.kind === "stream" ||
+      value.kind === "avatar" ||
+      value.kind === "launch")
+  ) {
+    return {
+      type: "action-pill",
+      label: value.label,
+      kind: value.kind,
+      ...(typeof value.detail === "string" && value.detail.trim().length > 0
+        ? { detail: value.detail.trim() }
+        : {}),
+    };
+  }
+
+  return null;
+}
+
+function parseContentBlocks(value: unknown): ContentBlock[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const next = value
+    .map((entry) => parseContentBlock(entry))
+    .filter((entry): entry is ContentBlock => entry != null);
+  return next.length > 0 ? next : undefined;
 }
 
 export { mergeStreamingText };

@@ -1,14 +1,10 @@
-import { Button, Input, Z_SYSTEM_CRITICAL } from "@miladyai/ui";
+import { Button, Input } from "@miladyai/ui";
 import { Menu, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { client } from "../../api";
-import {
-  dispatchAppEvent,
-  EMOTE_PICKER_EVENT,
-  STOP_EMOTE_EVENT,
-} from "../../events";
-import { useTimeout } from "../../hooks";
-import { useApp } from "../../state";
+import { client, type EmoteInfo } from "../api";
+import { EMOTE_PICKER_EVENT } from "../events";
+import { useApp } from "../state";
+import { playAppEmote, stopAppEmote } from "../utils/app-emote-runtime";
 
 // Types
 interface EmoteItem {
@@ -205,15 +201,15 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export function EmotePicker() {
-  const { setTimeout } = useTimeout();
-
   const { emotePickerOpen, openEmotePicker, closeEmotePicker, t } = useApp();
+  const [emoteCatalog, setEmoteCatalog] = useState<EmoteInfo[]>([]);
   const [search, setSearch] = useState("");
   const [playing, setPlaying] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const playingResetRef = useRef<number | null>(null);
   const posRef = useRef({ x: 0, y: 0 });
   const dragOrigin = useRef<{
     startX: number;
@@ -290,8 +286,35 @@ export function EmotePicker() {
   }, [emotePickerOpen]);
 
   // Filter emotes
+  const clearPendingPlayingReset = useCallback(() => {
+    if (playingResetRef.current != null) {
+      window.clearTimeout(playingResetRef.current);
+      playingResetRef.current = null;
+    }
+  }, []);
+
+  const displayEmotes = useMemo(() => {
+    const catalogIds = new Set(emoteCatalog.map((emote) => emote.id));
+    const preferred = ALL_EMOTES.filter(
+      (emote) => emoteCatalog.length === 0 || catalogIds.has(emote.id),
+    );
+    const preferredIds = new Set(preferred.map((emote) => emote.id));
+    const supplemental = emoteCatalog
+      .filter((emote) => !preferredIds.has(emote.id))
+      .map((emote) => ({
+        id: emote.id,
+        name: emote.name,
+        category: emote.category,
+        icon:
+          EMOTE_ICONS[emote.id] ??
+          CATEGORY_ICONS[emote.category] ??
+          CATEGORY_ICONS.other,
+      }));
+    return [...preferred, ...supplemental];
+  }, [emoteCatalog]);
+
   const filteredEmotes = useMemo(() => {
-    let emotes = ALL_EMOTES;
+    let emotes = displayEmotes;
 
     if (activeCategory) {
       emotes = emotes.filter((e) => e.category === activeCategory);
@@ -307,28 +330,44 @@ export function EmotePicker() {
     }
 
     return emotes;
-  }, [search, activeCategory]);
+  }, [activeCategory, displayEmotes, search]);
 
   // Play emote
   const playEmote = useCallback(
     async (emoteId: string) => {
+      const nextEmote = emoteCatalog.find((emote) => emote.id === emoteId);
+      if (!nextEmote) {
+        console.error(`Failed to resolve emote metadata for ${emoteId}`);
+        setPlaying(null);
+        return;
+      }
+      clearPendingPlayingReset();
       setPlaying(emoteId);
       try {
-        await client.playEmote(emoteId);
+        const detail = await playAppEmote(nextEmote, {
+          showOverlay: false,
+          singleCycle: true,
+        });
+        if (!detail.loop) {
+          playingResetRef.current = window.setTimeout(() => {
+            playingResetRef.current = null;
+            setPlaying((current) => (current === emoteId ? null : current));
+          }, Math.max(0, Math.round(detail.duration * 1000) + 450));
+        }
       } catch (err) {
         console.error("Failed to play emote:", err);
-      } finally {
-        setTimeout(() => setPlaying(null), 1000);
+        setPlaying(null);
       }
     },
-    [setTimeout],
+    [clearPendingPlayingReset, emoteCatalog],
   );
 
   // Stop emote
   const stopEmote = useCallback(() => {
-    dispatchAppEvent(STOP_EMOTE_EVENT);
+    clearPendingPlayingReset();
+    stopAppEmote();
     setPlaying(null);
-  }, []);
+  }, [clearPendingPlayingReset]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -375,12 +414,39 @@ export function EmotePicker() {
     }
   }, [emotePickerOpen]);
 
+  useEffect(() => {
+    if (!emotePickerOpen) return;
+    let cancelled = false;
+    void client
+      .getEmotes()
+      .then((response) => {
+        if (cancelled) return;
+        setEmoteCatalog(Array.isArray(response.emotes) ? response.emotes : []);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("Failed to load emotes:", err);
+          setEmoteCatalog([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [emotePickerOpen]);
+
+  useEffect(
+    () => () => {
+      clearPendingPlayingReset();
+    },
+    [clearPendingPlayingReset],
+  );
+
   if (!emotePickerOpen) return null;
 
   return (
     <div
       ref={panelRef}
-      className={`fixed bottom-4 left-4 z-[${Z_SYSTEM_CRITICAL}] w-[320px] rounded-xl shadow-2xl`}
+      className="fixed bottom-4 left-4 z-[9999] w-[320px] rounded-xl shadow-2xl"
       style={{
         background: "rgba(18, 22, 32, 0.96)",
         border: "1px solid rgba(240, 178, 50, 0.18)",

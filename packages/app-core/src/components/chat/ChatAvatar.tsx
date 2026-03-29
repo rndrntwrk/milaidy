@@ -17,9 +17,10 @@ import {
 } from "@miladyai/app-core/state";
 import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AvatarLoader } from "../character/AvatarLoader";
-import type { VrmEngine, VrmEngineState } from "../avatar/VrmEngine";
-import { VrmViewer } from "../avatar/VrmViewer";
+import { AvatarLoader } from "./AvatarLoader";
+import { useAvatarSpeechCapabilities } from "../hooks";
+import type { VrmEngine, VrmEngineState } from "./avatar/VrmEngine";
+import { VrmViewer } from "./avatar/VrmViewer";
 
 export type ChatAvatarProps = Record<string, never>;
 
@@ -41,6 +42,10 @@ export function ChatAvatar(_props: ChatAvatarProps) {
     selectedVrmIndex > 0
       ? getVrmPreviewUrl(selectedVrmIndex)
       : getVrmPreviewUrl(getDefaultBundledVrmIndex());
+  const avatarSpeech = useAvatarSpeechCapabilities({
+    selectedVrmIndex,
+    customVrmUrl,
+  });
 
   const vrmEngineRef = useRef<VrmEngine | null>(null);
   const [engineReady, setEngineReady] = useState(false);
@@ -125,6 +130,9 @@ export function ChatAvatar(_props: ChatAvatarProps) {
           >
             <VrmViewer
               vrmPath={vrmPath}
+              speechMotionPath={avatarSpeech.capabilities.speechMotionPath ?? null}
+              speechCapabilities={avatarSpeech.capabilities}
+              avatarSpeechKey={avatarSpeech.avatarKey}
               interactive
               interactiveMode="orbitZoom"
               companionVrmPowerMode={companionVrmPowerMode}
@@ -132,6 +140,9 @@ export function ChatAvatar(_props: ChatAvatarProps) {
               companionAnimateWhenHidden={companionAnimateWhenHidden}
               onEngineReady={handleEngineReady}
               onEngineState={handleEngineState}
+              onSpeechCapabilitiesDetected={
+                avatarSpeech.saveDetectedCapabilities
+              }
             />
           </div>
 

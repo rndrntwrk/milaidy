@@ -53,6 +53,11 @@ export function normalizeAvatarIndex(index: number): number {
   return n;
 }
 
+export function isAliceBundledAvatarIndex(index: number): boolean {
+  if (!Number.isFinite(index)) return false;
+  return Math.trunc(index) === DEFAULT_VISUAL_AVATAR_INDEX;
+}
+
 /** Resolve a bundled VRM index (1–N) to its public asset URL. */
 export function getVrmUrl(index: number): string {
   const assets = getAssets();

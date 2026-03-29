@@ -5,6 +5,7 @@
  * the `mouthOpen` prop. Sized to fill its parent container.
  */
 
+import type { AvatarSpeechCapabilities } from "@miladyai/shared/contracts";
 import { useEffect, useEffectEvent, useRef } from "react";
 import {
   CHAT_AVATAR_VOICE_EVENT,
@@ -26,6 +27,7 @@ import {
   type VrmEngineDebugInfo,
   type VrmEngineState,
 } from "./VrmEngine";
+import { resolveSpeechMotionPathForCapabilities } from "./avatar-speech";
 import {
   refreshVrmDesktopBatteryPixelPolicy,
   VRM_DESKTOP_BATTERY_POLL_MS,
@@ -49,6 +51,12 @@ export type VrmViewerProps = {
   interactiveMode?: InteractionMode;
   /** Theme for the mathematical environment behind the avatar */
   environmentTheme?: "light" | "dark";
+  /** Optional Gaussian splat world behind the avatar */
+  worldUrl?: string;
+  /** Optional speech motion clip layered below manual emotes and above idle. */
+  speechMotionPath?: string | null;
+  /** Per-avatar speech capability contract for advanced face driving. */
+  speechCapabilities?: AvatarSpeechCapabilities | null;
   /** User Settings: quality / balanced / efficiency for VRM power policy. */
   companionVrmPowerMode?: CompanionVrmPowerMode;
   /** When to apply ~half display FPS. */
@@ -60,7 +68,7 @@ export type VrmViewerProps = {
   onEngineState?: (state: VrmEngineState) => void;
   onEngineReady?: (engine: VrmEngine) => void;
   onRevealStart?: () => void;
-  createEngine?: () => VrmEngine;
+  onSpeechCapabilitiesDetected?: (capabilities: AvatarSpeechCapabilities) => void;
 };
 
 type VrmEngineDebugRegistryEntry = {
@@ -187,6 +195,9 @@ export function VrmViewer(props: VrmViewerProps) {
   const onEngineReadyRef = useRef(props.onEngineReady);
   const onEngineStateRef = useRef(props.onEngineState);
   const onRevealStartRef = useRef(props.onRevealStart);
+  const onSpeechCapabilitiesDetectedRef = useRef(
+    props.onSpeechCapabilitiesDetected,
+  );
   const companionVrmPowerModeRef = useRef<CompanionVrmPowerMode>(
     props.companionVrmPowerMode ?? "balanced",
   );
@@ -209,6 +220,7 @@ export function VrmViewer(props: VrmViewerProps) {
   onEngineReadyRef.current = props.onEngineReady;
   onEngineStateRef.current = props.onEngineState;
   onRevealStartRef.current = props.onRevealStart;
+  onSpeechCapabilitiesDetectedRef.current = props.onSpeechCapabilitiesDetected;
   companionVrmPowerModeRef.current = props.companionVrmPowerMode ?? "balanced";
   companionAnimateWhenHiddenRef.current =
     props.companionAnimateWhenHidden ?? false;
@@ -295,7 +307,7 @@ export function VrmViewer(props: VrmViewerProps) {
 
     let engine = engineRef.current;
     if (!engine || !engine.isInitialized()) {
-      engine = props.createEngine ? props.createEngine() : new VrmEngine();
+      engine = new VrmEngine();
       engineRef.current = engine;
     }
 
@@ -349,6 +361,11 @@ export function VrmViewer(props: VrmViewerProps) {
     engine.setInteractionMode(interactionModeRef.current);
     engine.setInteractionEnabled(interactiveRef.current);
     engine.setPointerParallaxEnabled(pointerParallaxRef.current);
+    engine.setSpeechCapabilities(props.speechCapabilities ?? null);
+    engine.setSpeechMotionPath(
+      props.speechMotionPath ??
+        resolveSpeechMotionPathForCapabilities(props.speechCapabilities),
+    );
 
     const resize = () => {
       const el = canvasRef.current;
@@ -430,6 +447,16 @@ export function VrmViewer(props: VrmViewerProps) {
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
+    engine.setSpeechCapabilities(props.speechCapabilities ?? null);
+    engine.setSpeechMotionPath(
+      props.speechMotionPath ??
+        resolveSpeechMotionPathForCapabilities(props.speechCapabilities),
+    );
+  }, [props.speechCapabilities, props.speechMotionPath]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
     engine.setInteractionEnabled(props.interactive ?? false);
   }, [props.interactive]);
 
@@ -475,6 +502,9 @@ export function VrmViewer(props: VrmViewerProps) {
           vrmUrl.split("/").pop() ?? "avatar.vrm",
         );
         if (!mountedRef.current || abortController.signal.aborted) return;
+        onSpeechCapabilitiesDetectedRef.current?.(
+          engine.getDetectedSpeechCapabilities(),
+        );
         const state = engine.getState();
         if (state.revealStarted && !revealStartedRef.current) {
           revealStartedRef.current = true;

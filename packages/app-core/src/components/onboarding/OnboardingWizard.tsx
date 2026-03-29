@@ -18,13 +18,18 @@ import {
 } from "@miladyai/app-core/state";
 import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
 import { useEffect, useState } from "react";
-import { useBranding } from "../../config/branding";
-import { COMPANION_ENABLED } from "../../navigation";
-import { VrmStage } from "../companion/VrmStage";
-import { ConnectionStep } from "./ConnectionStep";
-import { IdentityStep } from "./IdentityStep";
-import { OnboardingPanel } from "./OnboardingPanel";
-import { OnboardingStepNav } from "./OnboardingStepNav";
+import { useAvatarSpeechCapabilities } from "../hooks";
+import { useBranding } from "../config/branding";
+import { COMPANION_ENABLED } from "../navigation";
+import { VrmStage } from "./companion/VrmStage";
+import { ActivateStep } from "./onboarding/ActivateStep";
+import { CloudLoginStep } from "./onboarding/CloudLoginStep";
+import { ConnectionStep } from "./onboarding/ConnectionStep";
+import { IdentityStep } from "./onboarding/IdentityStep";
+import { OnboardingPanel } from "./onboarding/OnboardingPanel";
+import { OnboardingStepNav } from "./onboarding/OnboardingStepNav";
+import { PermissionsStep } from "./onboarding/PermissionsStep";
+import { VoiceProviderStep } from "./onboarding/VoiceProviderStep";
 
 const FORCE_VRM =
   typeof window !== "undefined" &&
@@ -53,7 +58,10 @@ export function OnboardingWizard() {
     t,
     onboardingUiRevealNonce,
   } = useApp();
-  const revealWelcomeUiImmediately = disableVrm || onboardingUiRevealNonce > 0;
+  const revealWelcomeUiImmediately =
+    disableVrm ||
+    onboardingStep === "cloud_login" ||
+    onboardingUiRevealNonce > 0;
   // After Reset Agent from chat/companion, nonce bumps: show cloud ui immediately instead
   // of waiting for VrmStage reveal (often missing when remounting after an active session).
   const [revealStarted, setRevealStarted] = useState(
@@ -74,6 +82,10 @@ export function OnboardingWizard() {
     selectedVrmIndex > 0
       ? getVrmPreviewUrl(safeSelectedVrmIndex)
       : getVrmPreviewUrl(getDefaultBundledVrmIndex());
+  const avatarSpeech = useAvatarSpeechCapabilities({
+    selectedVrmIndex,
+    customVrmUrl,
+  });
   const worldUrl = resolveAppAssetUrl("worlds/companion-day.spz");
 
   useEffect(() => {
@@ -140,10 +152,19 @@ export function OnboardingWizard() {
 
   function renderStep() {
     switch (onboardingStep) {
-      case "identity":
-        return <IdentityStep gateVoicePreviewOnTeleport={!disableVrm} />;
+      case "cloud_login":
+        return <CloudLoginStep />;
+      case "hosting":
       case "providers":
         return <ConnectionStep />;
+      case "voice":
+        return <VoiceProviderStep />;
+      case "permissions":
+        return <PermissionsStep />;
+      case "identity":
+        return <IdentityStep gateVoicePreviewOnTeleport={!disableVrm} />;
+      case "launch":
+        return <ActivateStep />;
       default:
         return null;
     }
@@ -165,10 +186,14 @@ export function OnboardingWizard() {
         <VrmStage
           vrmPath={vrmPath}
           worldUrl={worldUrl}
+          speechMotionPath={avatarSpeech.capabilities.speechMotionPath ?? null}
+          speechCapabilities={avatarSpeech.capabilities}
+          avatarSpeechKey={avatarSpeech.avatarKey}
           fallbackPreviewUrl={fallbackPreview}
           cameraProfile="companion"
           initialCompanionZoomNormalized={1}
           onRevealStart={() => setRevealStarted((prev) => (prev ? prev : true))}
+          onSpeechCapabilitiesDetected={avatarSpeech.saveDetectedCapabilities}
           t={t}
         />
       )}

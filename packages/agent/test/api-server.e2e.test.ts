@@ -919,6 +919,133 @@ describe("API Server E2E (no runtime)", () => {
     });
   });
 
+  describe("custom avatar speech manifest and face frames", () => {
+    it("seeds a fallback speech manifest after custom VRM upload", async () => {
+      const glbPayload = Buffer.from([
+        0x67,
+        0x6c,
+        0x54,
+        0x46,
+        0x02,
+        0x00,
+        0x00,
+        0x00,
+      ]);
+      const response = await fetch(`http://127.0.0.1:${port}/api/avatar/vrm`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/octet-stream",
+        },
+        body: glbPayload,
+      });
+      expect(response.status).toBe(200);
+
+      const manifest = await req(port, "GET", "/api/avatar/manifest");
+      expect(manifest.status).toBe(200);
+      expect(manifest.data.avatarKey).toBe("custom");
+      expect(manifest.data.version).toBe(1);
+      expect(manifest.data.capabilities).toMatchObject({
+        speechMotionPath: null,
+        supportedVisemes: ["aa"],
+        supportedExpressions: [],
+        advancedFaceDriver: false,
+      });
+    });
+
+    it("persists a custom avatar speech manifest", async () => {
+      const manifestPayload = {
+        avatarKey: "custom",
+        version: 1,
+        capabilities: {
+          speechMotionPath: "/animations/emotes/talk.glb.gz",
+          supportedVisemes: ["aa", "oh"],
+          supportedExpressions: ["happy", "relaxed"],
+          advancedFaceDriver: true,
+        },
+      };
+      const update = await req(
+        port,
+        "POST",
+        "/api/avatar/manifest",
+        manifestPayload,
+      );
+      expect(update.status).toBe(200);
+      expect(update.data.ok).toBe(true);
+
+      const manifest = await req(port, "GET", "/api/avatar/manifest");
+      expect(manifest.status).toBe(200);
+      expect(manifest.data).toMatchObject(manifestPayload);
+    });
+
+    it("echoes avatar face frames only to the originating websocket client", async () => {
+      const wsPrimary = new WebSocket(
+        `ws://127.0.0.1:${port}/ws?clientId=face-client-a`,
+      );
+      const wsSecondary = new WebSocket(
+        `ws://127.0.0.1:${port}/ws?clientId=face-client-b`,
+      );
+      let secondaryReceivedFrame = false;
+      const secondaryMessageHandler = (raw: WebSocket.RawData) => {
+        try {
+          const text = Buffer.isBuffer(raw) ? raw.toString("utf-8") : String(raw);
+          const message = JSON.parse(text) as { type?: string };
+          if (message.type === "avatar-face-frame") {
+            secondaryReceivedFrame = true;
+          }
+        } catch {
+          // Ignore malformed test frames.
+        }
+      };
+      wsSecondary.on("message", secondaryMessageHandler);
+      try {
+        await waitForWsMessage(wsPrimary, (message) => message.type === "status");
+        await waitForWsMessage(
+          wsSecondary,
+          (message) => message.type === "status",
+        );
+
+        const echoedFrame = waitForWsMessage(
+          wsPrimary,
+          (message) =>
+            message.type === "avatar-face-frame" &&
+            typeof (message.frame as Record<string, unknown> | undefined)
+              ?.sessionId === "string",
+        );
+
+        wsPrimary.send(
+          JSON.stringify({
+            type: "avatar-face-frame",
+            frame: {
+              avatarKey: "bundled:9",
+              sessionId: "speech-session-1",
+              sequence: 1,
+              speaking: true,
+              mouthOpen: 0.64,
+              visemes: { aa: 0.64, oh: 0.22 },
+              expressions: { relaxed: 0.18, happy: 0.12 },
+            },
+          }),
+        );
+
+        const message = await echoedFrame;
+        expect(message.type).toBe("avatar-face-frame");
+        expect(message.frame).toMatchObject({
+          avatarKey: "bundled:9",
+          sessionId: "speech-session-1",
+          sequence: 1,
+          speaking: true,
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(secondaryReceivedFrame).toBe(false);
+      } finally {
+        wsSecondary.off("message", secondaryMessageHandler);
+        wsPrimary.close();
+        wsSecondary.close();
+      }
+    });
+  });
+
   describe("trade-mode capability routes", () => {
     it("does not consume agent-auto quota when reporting permissions", async () => {
       agentAutoDailyTrades.count = 0;
@@ -2525,6 +2652,79 @@ describe("API Server E2E (no runtime)", () => {
         expect(Array.isArray(response.data.messages)).toBe(true);
         expect((response.data.messages as unknown[]).length).toBe(0);
         expect(typeof response.data.error).toBe("string");
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("logs operator actions into conversation memory and returns action-pill blocks", async () => {
+      const runtime = createRuntimeForChatSseTests();
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const create = await req(
+          streamServer.port,
+          "POST",
+          "/api/conversations",
+          {
+            title: "Operator action logging test",
+          },
+        );
+        expect(create.status).toBe(200);
+        const conversation = create.data.conversation as { id?: string };
+        const conversationId = conversation.id ?? "";
+        expect(conversationId.length).toBeGreaterThan(0);
+
+        const logged = await req(
+          streamServer.port,
+          "POST",
+          `/api/conversations/${conversationId}/operator-action`,
+          {
+            label: "Go Live",
+            kind: "launch",
+            detail: "Camera launch queued",
+            fallbackText: "Go Live",
+          },
+        );
+
+        expect(logged.status).toBe(200);
+        expect(logged.data.message).toEqual(
+          expect.objectContaining({
+            role: "user",
+            text: "Go Live",
+            source: "operator_action",
+            blocks: [
+              expect.objectContaining({
+                type: "action-pill",
+                label: "Go Live",
+                kind: "launch",
+                detail: "Camera launch queued",
+              }),
+            ],
+          }),
+        );
+
+        const messagesResponse = await req(
+          streamServer.port,
+          "GET",
+          `/api/conversations/${conversationId}/messages`,
+        );
+        expect(messagesResponse.status).toBe(200);
+        expect(messagesResponse.data.messages).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              role: "user",
+              text: "Go Live",
+              source: "operator_action",
+              blocks: [
+                expect.objectContaining({
+                  type: "action-pill",
+                  label: "Go Live",
+                  kind: "launch",
+                }),
+              ],
+            }),
+          ]),
+        );
       } finally {
         await streamServer.close();
       }
@@ -4307,13 +4507,16 @@ describe("API Server E2E (no runtime)", () => {
         expect(typeof p.description).toBe("string");
         expect(typeof p.enabled).toBe("boolean");
         expect(typeof p.configured).toBe("boolean");
-        expect([
-          "ai-provider",
-          "app",
-          "connector",
-          "database",
-          "feature",
-        ]).toContain(p.category);
+        expect(
+          [
+            "ai-provider",
+            "app",
+            "connector",
+            "database",
+            "feature",
+            "streaming",
+          ],
+        ).toContain(p.category);
         expect(Array.isArray(p.configKeys)).toBe(true);
       }
     });

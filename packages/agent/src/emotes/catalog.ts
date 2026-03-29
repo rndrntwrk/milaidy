@@ -135,7 +135,7 @@ const RAW_EMOTE_CATALOG: readonly EmoteDef[] = [
     id: "talk",
     name: "Talk",
     description: "Talks animatedly",
-    path: "/animations/emotes/talk.glb",
+    path: "/animations/emotes/talk.glb.gz",
     duration: 3,
     loop: true,
     category: "idle",
