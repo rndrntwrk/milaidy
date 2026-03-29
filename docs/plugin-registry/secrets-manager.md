@@ -26,7 +26,9 @@ Navigate to **Agent → Settings → Secrets** and add key-value pairs.
 ### Via the CLI
 
 ```bash
-milady config set secrets.OPENAI_API_KEY sk-...
+# Open the config file in your editor
+$EDITOR "$(milady config path)"
+# Add the key under the "secrets" section
 ```
 
 ### Via Configuration File

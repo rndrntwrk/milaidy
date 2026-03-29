@@ -309,7 +309,8 @@ milady --debug            # enable debug-level runtime logs
 milady setup              # first-time setup / refresh workspace after update
 milady configure          # interactive config wizard
 milady config get <key>   # read a config value
-milady config set <k> <v> # set a config value
+milady config path        # print resolved config file path
+milady config show        # display all config values grouped by section
 ```
 
 ### Dashboard & UI
@@ -323,8 +324,6 @@ milady dashboard --port 3000  # custom port
 
 ```bash
 milady models             # list configured model providers
-milady models add         # add a new provider
-milady models test        # test if your API keys work
 ```
 
 ### Plugins

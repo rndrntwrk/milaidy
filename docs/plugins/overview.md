@@ -108,10 +108,10 @@ Enable or disable a plugin by setting its `enabled` flag in `milady.json`:
 }
 ```
 
-Or use the config command:
+Or edit the config file directly (`milady config path` shows the file location):
 
 ```bash
-milady config set plugins.entries.browser.enabled true
+$EDITOR "$(milady config path)"
 ```
 
 ### Eject (Copy to Local)
