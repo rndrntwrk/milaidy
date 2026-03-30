@@ -42,7 +42,6 @@ import {
   client,
   type ExtensionStatus,
   type ImageAttachment,
-  type LogEntry,
   type McpMarketplaceResult,
   type McpRegistryServerDetail,
   type McpServerConfig,
@@ -208,6 +207,9 @@ import { useChatState } from "./useChatState";
 import { useLifecycleState } from "./useLifecycleState";
 import { useTriggersState } from "./useTriggersState";
 import { usePairingState } from "./usePairingState";
+import { useExportImportState } from "./useExportImportState";
+import { useLogsState } from "./useLogsState";
+import { useMiscUiState } from "./useMiscUiState";
 import { useDisplayPreferences } from "./useDisplayPreferences";
 import { useOnboardingState } from "./useOnboardingState";
 import { useCharacterState } from "./useCharacterState";
@@ -1000,13 +1002,23 @@ function AppProviderInner({
     setCatalogUninstalling,
   } = pluginsSkillsHook;
 
-  // --- Logs ---
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [logSources, setLogSources] = useState<string[]>([]);
-  const [logTags, setLogTags] = useState<string[]>([]);
-  const [logTagFilter, setLogTagFilter] = useState("");
-  const [logLevelFilter, setLogLevelFilter] = useState("");
-  const [logSourceFilter, setLogSourceFilter] = useState("");
+  // --- Logs (extracted to useLogsState) ---
+  const logsHook = useLogsState();
+  const {
+    state: {
+      logs,
+      logSources,
+      logTags,
+      logTagFilter,
+      logLevelFilter,
+      logSourceFilter,
+    },
+    setLogs,
+    setLogTagFilter,
+    setLogLevelFilter,
+    setLogSourceFilter,
+    loadLogs,
+  } = logsHook;
 
   // Dead state — setters were never destructured. These never change.
   const twitterVerifyMessage: string | null = null;
@@ -1066,17 +1078,32 @@ function AppProviderInner({
     useState(false);
   const [workbenchTodosAvailable, setWorkbenchTodosAvailable] = useState(false);
 
-  // --- Agent export/import ---
-  const [exportBusy, setExportBusy] = useState(false);
-  const [exportPassword, setExportPassword] = useState("");
-  const [exportIncludeLogs, setExportIncludeLogs] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
-  const [exportSuccess, setExportSuccess] = useState<string | null>(null);
-  const [importBusy, setImportBusy] = useState(false);
-  const [importPassword, setImportPassword] = useState("");
-  const [importFile, setImportFile] = useState<File | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  // --- Agent export/import (extracted to useExportImportState) ---
+  const exportImportHook = useExportImportState();
+  const {
+    state: {
+      exportBusy,
+      exportPassword,
+      exportIncludeLogs,
+      exportError,
+      exportSuccess,
+      importBusy,
+      importPassword,
+      importFile,
+      importError,
+      importSuccess,
+    },
+    setExportPassword,
+    setExportIncludeLogs,
+    setExportError,
+    setExportSuccess,
+    setImportPassword,
+    setImportFile,
+    setImportError,
+    setImportSuccess,
+    handleAgentExport,
+    handleAgentImport,
+  } = exportImportHook;
 
   // ── Onboarding state (consolidated from 35+ useState hooks) ──
   const onboarding = useOnboardingState(brandingOverride?.cloudOnly);
@@ -1304,54 +1331,62 @@ function AppProviderInner({
 
   // startupStatus is now derived in useLifecycleState
 
-  // --- Command palette ---
-  const [commandPaletteOpen, _setCommandPaletteOpen] = useState(false);
-  const [commandQuery, setCommandQuery] = useState("");
-  const [commandActiveIndex, setCommandActiveIndex] = useState(0);
-
-  // --- Emote picker ---
-  const [emotePickerOpen, setEmotePickerOpen] = useState(false);
-
-  // --- MCP ---
-  const [mcpConfiguredServers, setMcpConfiguredServers] = useState<
-    Record<string, McpServerConfig>
-  >({});
-  const [mcpServerStatuses, setMcpServerStatuses] = useState<McpServerStatus[]>(
-    [],
-  );
-  const [mcpMarketplaceQuery, setMcpMarketplaceQuery] = useState("");
-  const [mcpMarketplaceResults, setMcpMarketplaceResults] = useState<
-    McpMarketplaceResult[]
-  >([]);
-  const [mcpMarketplaceLoading, setMcpMarketplaceLoading] = useState(false);
-  const [mcpAction, setMcpAction] = useState("");
-  const [mcpAddingServer, setMcpAddingServer] =
-    useState<McpRegistryServerDetail | null>(null);
-  const [mcpAddingResult, setMcpAddingResult] =
-    useState<McpMarketplaceResult | null>(null);
-  const [mcpEnvInputs, setMcpEnvInputs] = useState<Record<string, string>>({});
-  const [mcpHeaderInputs, setMcpHeaderInputs] = useState<
-    Record<string, string>
-  >({});
-
-  // --- Share ingest ---
-  const [droppedFiles, setDroppedFiles] = useState<string[]>([]);
-  const [shareIngestNotice, setShareIngestNotice] = useState("");
+  // --- Command palette / emote picker / MCP / game / dropped files (extracted to useMiscUiState) ---
+  const miscUiHook = useMiscUiState();
+  const {
+    state: {
+      commandPaletteOpen,
+      commandQuery,
+      commandActiveIndex,
+      emotePickerOpen,
+      mcpConfiguredServers,
+      mcpServerStatuses,
+      mcpMarketplaceQuery,
+      mcpMarketplaceResults,
+      mcpMarketplaceLoading,
+      mcpAction,
+      mcpAddingServer,
+      mcpAddingResult,
+      mcpEnvInputs,
+      mcpHeaderInputs,
+      droppedFiles,
+      shareIngestNotice,
+      activeGameApp,
+      activeGameDisplayName,
+      activeGameViewerUrl,
+      activeGameSandbox,
+      activeGamePostMessageAuth,
+      activeGamePostMessagePayload,
+      gameOverlayEnabled,
+    },
+    setCommandQuery,
+    setCommandActiveIndex,
+    setEmotePickerOpen,
+    setMcpConfiguredServers,
+    setMcpServerStatuses,
+    setMcpMarketplaceQuery,
+    setMcpMarketplaceResults,
+    setMcpMarketplaceLoading,
+    setMcpAction,
+    setMcpAddingServer,
+    setMcpAddingResult,
+    setMcpEnvInputs,
+    setMcpHeaderInputs,
+    setDroppedFiles,
+    setShareIngestNotice,
+    setActiveGameApp,
+    setActiveGameDisplayName,
+    setActiveGameViewerUrl,
+    setActiveGameSandbox,
+    setActiveGamePostMessageAuth,
+    setActiveGamePostMessagePayload,
+    setGameOverlayEnabled,
+    closeCommandPalette,
+    openEmotePicker,
+    closeEmotePicker,
+  } = miscUiHook;
 
   // chatPendingImages now comes from useChatState
-
-  // --- Game ---
-  const [activeGameApp, setActiveGameApp] = useState("");
-  const [activeGameDisplayName, setActiveGameDisplayName] = useState("");
-  const [activeGameViewerUrl, setActiveGameViewerUrl] = useState("");
-  const [activeGameSandbox, setActiveGameSandbox] = useState(
-    "allow-scripts allow-same-origin allow-popups",
-  );
-  const [activeGamePostMessageAuth, setActiveGamePostMessageAuth] =
-    useState(false);
-  const [activeGamePostMessagePayload, setActiveGamePostMessagePayload] =
-    useState<GamePostMessageAuthPayload | null>(null);
-  const [gameOverlayEnabled, setGameOverlayEnabled] = useState(false);
 
   // --- Admin ---
   const [appsSubTab, setAppsSubTab] = useState<"browse" | "games">("browse");
@@ -1386,10 +1421,7 @@ function AppProviderInner({
     onboardingCompletionCommittedRefFromHook;
   const forceLocalBootstrapRef = forceLocalBootstrapRefFromHook;
   const onboardingFinishSavingRef = onboardingFinishSavingRefFromHook;
-  /** Synchronous lock for export action to prevent duplicate clicks in the same tick. */
-  const exportBusyRef = useRef(false);
-  /** Synchronous lock for import action to prevent duplicate clicks in the same tick. */
-  const importBusyRef = useRef(false);
+  // exportBusyRef and importBusyRef are now managed inside useExportImportState (exportImportHook)
   // walletApiKeySavingRef is now managed inside useWalletState (walletHook)
   // elizaCloudLoginBusyRef, elizaCloudAuthNoticeSentRef, handleCloudLoginRef
   // are now managed inside useCloudState (cloudHook)
@@ -1649,24 +1681,9 @@ function AppProviderInner({
     }
   }, [tab, uiShellMode]);
 
-  // ── Data loading ───────────────────────────────────────────────────
+  // loadLogs is now in useLogsState (logsHook)
 
-  const loadLogs = useCallback(async () => {
-    try {
-      const filter: Record<string, string> = {};
-      if (logTagFilter) filter.tag = logTagFilter;
-      if (logLevelFilter) filter.level = logLevelFilter;
-      if (logSourceFilter) filter.source = logSourceFilter;
-      const data = await client.getLogs(
-        Object.keys(filter).length > 0 ? filter : undefined,
-      );
-      setLogs(data.entries);
-      if (data.sources?.length) setLogSources(data.sources);
-      if (data.tags?.length) setLogTags(data.tags);
-    } catch {
-      /* ignore */
-    }
-  }, [logTagFilter, logLevelFilter, logSourceFilter]);
+  // ── Data loading ───────────────────────────────────────────────────
 
   const applyAutonomyEventMerge = useCallback(
     (incomingEvents: StreamEventEnvelope[], replay = false) => {
@@ -5078,114 +5095,9 @@ function AppProviderInner({
     [updateChannelSaving, updateStatus, loadUpdateStatus],
   );
 
-  // ── Agent export/import ────────────────────────────────────────────
+  // handleAgentExport and handleAgentImport are now in useExportImportState (exportImportHook)
 
-  const handleAgentExport = useCallback(async () => {
-    if (exportBusyRef.current || exportBusy) return;
-    if (!exportPassword) {
-      setExportError("Password is required.");
-      setExportSuccess(null);
-      return;
-    }
-    if (exportPassword.length < AGENT_TRANSFER_MIN_PASSWORD_LENGTH) {
-      setExportError(
-        `Password must be at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters.`,
-      );
-      setExportSuccess(null);
-      return;
-    }
-    try {
-      exportBusyRef.current = true;
-      setExportBusy(true);
-      setExportError(null);
-      setExportSuccess(null);
-      const resp = await client.exportAgent(exportPassword, exportIncludeLogs);
-      const blob = await resp.blob();
-      const disposition = resp.headers.get("Content-Disposition") ?? "";
-      const filenameMatch = /filename="?([^"]+)"?/.exec(disposition);
-      const filename = filenameMatch?.[1] ?? "agent-export.eliza-agent";
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      setExportSuccess(
-        `Exported successfully (${(blob.size / 1024).toFixed(0)} KB)`,
-      );
-      setExportPassword("");
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : "Export failed");
-    } finally {
-      exportBusyRef.current = false;
-      setExportBusy(false);
-    }
-  }, [exportBusy, exportPassword, exportIncludeLogs]);
-
-  const handleAgentImport = useCallback(async () => {
-    if (importBusyRef.current || importBusy) return;
-    if (!importFile) {
-      setImportError("Select an export file before importing.");
-      setImportSuccess(null);
-      return;
-    }
-    if (!importPassword) {
-      setImportError("Password is required.");
-      setImportSuccess(null);
-      return;
-    }
-    if (importPassword.length < AGENT_TRANSFER_MIN_PASSWORD_LENGTH) {
-      setImportError(
-        `Password must be at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters.`,
-      );
-      setImportSuccess(null);
-      return;
-    }
-    try {
-      importBusyRef.current = true;
-      setImportBusy(true);
-      setImportError(null);
-      setImportSuccess(null);
-      const fileBuffer = await importFile.arrayBuffer();
-      const result = await client.importAgent(importPassword, fileBuffer);
-      const counts = result.counts;
-      const summary = [
-        counts.memories ? `${counts.memories} memories` : null,
-        counts.entities ? `${counts.entities} entities` : null,
-        counts.rooms ? `${counts.rooms} rooms` : null,
-      ]
-        .filter(Boolean)
-        .join(", ");
-      setImportSuccess(
-        `Imported "${result.agentName}" successfully: ${summary || "no data"}. Restart the agent to activate.`,
-      );
-      setImportPassword("");
-      setImportFile(null);
-    } catch (err) {
-      setImportError(err instanceof Error ? err.message : "Import failed");
-    } finally {
-      importBusyRef.current = false;
-      setImportBusy(false);
-    }
-  }, [importBusy, importFile, importPassword]);
-
-  // ── Emote picker ────────────────────────────────────────────────────
-
-  const closeCommandPalette = useCallback(() => {
-    _setCommandPaletteOpen(false);
-    setCommandQuery("");
-    setCommandActiveIndex(0);
-  }, []);
-
-  const openEmotePicker = useCallback(() => {
-    setEmotePickerOpen(true);
-  }, []);
-
-  const closeEmotePicker = useCallback(() => {
-    setEmotePickerOpen(false);
-  }, []);
+  // closeCommandPalette, openEmotePicker, closeEmotePicker are now in useMiscUiState (miscUiHook)
 
   const applyDetectedProviders = useCallback(
     (detected: Awaited<ReturnType<typeof scanProviderCredentials>>) => {
