@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import { createRequire } from "node:module";
@@ -34,7 +33,6 @@ import {
   ensureCompatApiAuthorized,
   ensureCompatSensitiveRouteAuthorized,
   getCompatApiToken,
-  tokenMatches,
 } from "./auth";
 import {
   sendJsonError as sendJsonErrorResponse,
@@ -128,6 +126,8 @@ import {
   isAllowedDevConsoleLogPath,
   readDevConsoleLogTail,
 } from "./dev-console-log";
+import { handleAuthPairingCompatRoutes } from "./auth-pairing-compat-routes";
+import { handleDevCompatRoutes } from "./dev-compat-routes";
 import { resolveDevStackFromEnv } from "./dev-stack";
 import {
   approveStewardTransaction,
@@ -250,7 +250,7 @@ type PluginCategory =
   | "app"
   | "feature";
 
-interface CompatRuntimeState {
+export interface CompatRuntimeState {
   current: AgentRuntime | null;
   pendingAgentName: string | null;
 }
@@ -338,95 +338,13 @@ const CAPABILITY_FEATURE_IDS = new Set([
 // ---------------------------------------------------------------------------
 
 // extractHeaderValue, getCompatApiToken — now imported from ./auth
-
-const PAIRING_TTL_MS = 10 * 60 * 1000;
-const PAIRING_WINDOW_MS = 10 * 60 * 1000;
-const PAIRING_MAX_ATTEMPTS = 5;
-const PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-let pairingCode: string | null = null;
-let pairingExpiresAt = 0;
-const pairingAttempts = new Map<string, { count: number; resetAt: number }>();
-
-// Periodic sweep to prevent unbounded memory growth (mirrors wallet-export-guard.ts pattern)
-const PAIRING_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
-const pairingSweepTimer = setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of pairingAttempts) {
-    if (now > entry.resetAt) {
-      pairingAttempts.delete(key);
-    }
-  }
-}, PAIRING_SWEEP_INTERVAL_MS);
-if (typeof pairingSweepTimer === "object" && "unref" in pairingSweepTimer) {
-  pairingSweepTimer.unref();
-}
-
 // tokenMatches — now imported from ./auth
-
-function pairingEnabled(): boolean {
-  return (
-    Boolean(getCompatApiToken()) &&
-    process.env.MILADY_PAIRING_DISABLED !== "1" &&
-    process.env.ELIZA_PAIRING_DISABLED !== "1"
-  );
-}
-
-function normalizePairingCode(code: string): string {
-  return code.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-}
-
-function generatePairingCode(): string {
-  const bytes = crypto.randomBytes(12);
-  let raw = "";
-  for (let i = 0; i < bytes.length; i += 1) {
-    raw += PAIRING_ALPHABET[bytes[i] % PAIRING_ALPHABET.length];
-  }
-  return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
-}
-
-function ensurePairingCode(): string | null {
-  if (!pairingEnabled()) {
-    return null;
-  }
-
-  const now = Date.now();
-  if (!pairingCode || now > pairingExpiresAt) {
-    pairingCode = generatePairingCode();
-    pairingExpiresAt = now + PAIRING_TTL_MS;
-    // Pairing still requires an operator to read the server logs and enter the
-    // full code, so masking it here breaks auth bootstrap.
-    console.warn(
-      `[milady-api] Pairing code: ${pairingCode} (valid for 10 minutes)`,
-    );
-  }
-
-  return pairingCode;
-}
-
-function rateLimitPairing(ip: string | null): boolean {
-  const key = ip ?? "unknown";
-  const now = Date.now();
-  const current = pairingAttempts.get(key);
-
-  if (!current || now > current.resetAt) {
-    pairingAttempts.set(key, { count: 1, resetAt: now + PAIRING_WINDOW_MS });
-    return true;
-  }
-
-  if (current.count >= PAIRING_MAX_ATTEMPTS) {
-    return false;
-  }
-
-  current.count += 1;
-  return true;
-}
-
+// Pairing infrastructure — now in ./auth-pairing-compat-routes
 // getProvidedApiToken, ensureCompatApiAuthorized, isDevEnvironment,
 // ensureCompatSensitiveRouteAuthorized — now imported from ./auth
 
 const MAX_BODY_BYTES = 1_048_576;
-async function readCompatJsonBody(
+export async function readCompatJsonBody(
   req: http.IncomingMessage,
   res: http.ServerResponse,
 ): Promise<Record<string, unknown> | null> {
@@ -673,7 +591,7 @@ async function clearCompatPgliteDataDir(
   }
 }
 
-function hasCompatPersistedOnboardingState(config: ElizaConfig): boolean {
+export function hasCompatPersistedOnboardingState(config: ElizaConfig): boolean {
   if ((config.meta as Record<string, unknown>)?.onboardingComplete === true) {
     return true;
   }
@@ -719,7 +637,7 @@ function isStewardPolicyRejection(error: unknown): error is StewardApiError {
   return error instanceof StewardApiError && error.status === 403;
 }
 
-function getConfiguredCompatAgentName(): string | null {
+export function getConfiguredCompatAgentName(): string | null {
   const config = loadElizaConfig();
   const listAgent = config.agents?.list?.[0];
   const listAgentName =
@@ -2171,224 +2089,11 @@ async function handleMiladyCompatRoute(
     });
   }
 
-  // Milady dev observability routes (loopback where noted). WHY: agents cannot see the Electrobun
-  // window; these endpoints mirror orchestrator state (stack JSON), proxied screenshot, and log
-  // tail — see docs/apps/desktop-local-development.md and dev-stack.ts / dev-console-log.ts.
-  if (url.pathname.startsWith("/api/dev/")) {
-    if (process.env.NODE_ENV === "production") {
-      sendJsonErrorResponse(res, 404, "Not found");
-      return true;
-    }
-  }
+  // Dev observability routes — extracted to dev-compat-routes.ts
+  if (await handleDevCompatRoutes(req, res, state)) return true;
 
-  if (method === "GET" && url.pathname === "/api/dev/stack") {
-    if (!isLoopbackRemoteAddress(req.socket.remoteAddress)) {
-      sendJsonErrorResponse(res, 403, "loopback only");
-      return true;
-    }
-    if (!ensureCompatApiAuthorized(req, res)) {
-      return true;
-    }
-    const payload = resolveDevStackFromEnv();
-    const localPort = (req.socket as { localPort?: number } | null)?.localPort;
-    if (typeof localPort === "number" && localPort > 0) {
-      payload.api.listenPort = localPort;
-      payload.api.baseUrl = `http://127.0.0.1:${localPort}`;
-    }
-    sendJsonResponse(res, 200, payload);
-    return true;
-  }
-
-  // Proxies Electrobun dev screenshot server (full-screen PNG via OS capture tools).
-  if (method === "GET" && url.pathname === "/api/dev/cursor-screenshot") {
-    if (!isLoopbackRemoteAddress(req.socket.remoteAddress)) {
-      sendJsonErrorResponse(res, 403, "loopback only");
-      return true;
-    }
-    const upstream = process.env.MILADY_ELECTROBUN_SCREENSHOT_URL?.trim();
-    if (!upstream) {
-      sendJsonResponse(res, 404, {
-        error: "desktop screenshot server not enabled",
-        hint: "Desktop dev enables the screenshot server by default; use dev-platform or set MILADY_ELECTROBUN_SCREENSHOT_URL. Disable with MILADY_DESKTOP_SCREENSHOT_SERVER=0.",
-      });
-      return true;
-    }
-    // SSRF guard: reject non-loopback upstream URLs to prevent env-injection SSRF.
-    try {
-      const upstreamUrl = new URL(upstream);
-      const h = upstreamUrl.hostname.toLowerCase();
-      if (
-        h !== "127.0.0.1" &&
-        h !== "localhost" &&
-        h !== "[::1]" &&
-        h !== "::1"
-      ) {
-        sendJsonErrorResponse(res, 403, "screenshot upstream must be loopback");
-        return true;
-      }
-    } catch {
-      sendJsonErrorResponse(res, 400, "invalid screenshot upstream URL");
-      return true;
-    }
-    const token = process.env.MILADY_SCREENSHOT_SERVER_TOKEN?.trim() ?? "";
-    const base = upstream.replace(/\/$/, "");
-    const target = `${base}/cursor-screenshot.png`;
-    try {
-      const r = await fetch(target, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        redirect: "error",
-      });
-      if (!r.ok) {
-        const text = await r.text().catch(() => "");
-        sendJsonResponse(
-          res,
-          r.status === 401 || r.status === 403 ? r.status : 502,
-          {
-            error: "upstream screenshot failed",
-            status: r.status,
-            detail: text.slice(0, 200),
-          },
-        );
-        return true;
-      }
-      const buf = Buffer.from(await r.arrayBuffer());
-      res.writeHead(200, {
-        "Content-Type": "image/png",
-        "Cache-Control": "no-store",
-      });
-      res.end(buf);
-      return true;
-    } catch (err) {
-      sendJsonResponse(res, 502, {
-        error: "screenshot proxy error",
-      });
-      return true;
-    }
-  }
-
-  // Tail of desktop dev orchestrator log (vite / api / electrobun), loopback only.
-  if (method === "GET" && url.pathname === "/api/dev/console-log") {
-    if (!isLoopbackRemoteAddress(req.socket.remoteAddress)) {
-      sendJsonErrorResponse(res, 403, "loopback only");
-      return true;
-    }
-    const logPath = process.env.MILADY_DESKTOP_DEV_LOG_PATH?.trim();
-    if (!logPath || !isAllowedDevConsoleLogPath(logPath)) {
-      sendJsonResponse(res, 404, {
-        error: "desktop dev log not configured",
-        hint: "Run via dev-platform (dev:desktop); disable file with MILADY_DESKTOP_DEV_LOG=0.",
-      });
-      return true;
-    }
-    const maxLinesRaw = url.searchParams.get("maxLines");
-    const maxBytesRaw = url.searchParams.get("maxBytes");
-    const maxLines = maxLinesRaw ? Number(maxLinesRaw) : undefined;
-    const maxBytes = maxBytesRaw ? Number(maxBytesRaw) : undefined;
-    const result = readDevConsoleLogTail(logPath, {
-      maxLines: Number.isFinite(maxLines) ? maxLines : undefined,
-      maxBytes: Number.isFinite(maxBytes) ? maxBytes : undefined,
-    });
-    if (!result.ok) {
-      sendJsonResponse(res, 404, { error: result.error });
-      return true;
-    }
-    res.writeHead(200, {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-store",
-    });
-    res.end(result.body);
-    return true;
-  }
-
-  // Cloud-provisioned containers skip onboarding — the platform handles setup.
-  // Return { complete: true } so the frontend goes directly to chat.
-  if (method === "GET" && url.pathname === "/api/onboarding/status") {
-    if (!ensureCompatApiAuthorized(req, res)) {
-      return true;
-    }
-
-    if (_isCloudProvisioned()) {
-      sendJsonResponse(res, 200, { complete: true });
-      return true;
-    }
-    const config = loadElizaConfig();
-    sendJsonResponse(res, 200, {
-      complete: hasCompatPersistedOnboardingState(config),
-    });
-    return true;
-  }
-
-  if (method === "GET" && url.pathname === "/api/auth/status") {
-    if (_isCloudProvisioned()) {
-      sendJsonResponse(res, 200, {
-        required: false,
-        pairingEnabled: false,
-        expiresAt: null,
-      });
-      return true;
-    }
-    const required = Boolean(getCompatApiToken());
-    const enabled = pairingEnabled();
-    if (enabled) {
-      ensurePairingCode();
-    }
-    sendJsonResponse(res, 200, {
-      required,
-      pairingEnabled: enabled,
-      expiresAt: enabled ? pairingExpiresAt : null,
-    });
-    return true;
-  }
-
-  if (method === "POST" && url.pathname === "/api/auth/pair") {
-    const body = await readCompatJsonBody(req, res);
-    if (body == null) {
-      return true;
-    }
-
-    const token = getCompatApiToken();
-    if (!token) {
-      sendJsonErrorResponse(res, 400, "Pairing not enabled");
-      return true;
-    }
-    if (!pairingEnabled()) {
-      sendJsonErrorResponse(res, 403, "Pairing disabled");
-      return true;
-    }
-    const remoteAddress = req.socket.remoteAddress;
-    if (!remoteAddress) {
-      sendJsonErrorResponse(res, 403, "Cannot determine client address");
-      return true;
-    }
-    if (!rateLimitPairing(remoteAddress)) {
-      sendJsonErrorResponse(res, 429, "Too many attempts. Try again later.");
-      return true;
-    }
-
-    const provided = normalizePairingCode(
-      typeof body.code === "string" ? body.code : "",
-    );
-    const current = ensurePairingCode();
-    if (!current || Date.now() > pairingExpiresAt) {
-      ensurePairingCode();
-      sendJsonErrorResponse(
-        res,
-        410,
-        "Pairing code expired. Check server logs for a new code.",
-      );
-      return true;
-    }
-
-    if (!tokenMatches(normalizePairingCode(current), provided)) {
-      sendJsonErrorResponse(res, 403, "Invalid pairing code");
-      return true;
-    }
-
-    pairingCode = null;
-    pairingExpiresAt = 0;
-    sendJsonResponse(res, 200, { token });
-    return true;
-  }
+  // Auth / pairing / onboarding status — extracted to auth-pairing-compat-routes.ts
+  if (await handleAuthPairingCompatRoutes(req, res, state)) return true;
 
   if (method === "POST" && url.pathname === "/api/tts/cloud") {
     if (!ensureCompatApiAuthorized(req, res)) return true;
