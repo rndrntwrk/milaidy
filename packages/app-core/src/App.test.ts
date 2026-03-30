@@ -153,4 +153,68 @@ describe("App", () => {
         .children,
     ).toContain("backend died");
   });
+
+  it("mounts advanced-family tabs in the full-height shell instead of the padded default shell", async () => {
+    const makeState = (tab: string) => ({
+      onboardingLoading: false,
+      onboardingHandoffError: null,
+      onboardingHandoffPhase: "idle",
+      startupPhase: "ready",
+      startupError: null,
+      authRequired: false,
+      onboardingComplete: true,
+      retryStartup: vi.fn(),
+      tab,
+      setTab: vi.fn(),
+      setState: vi.fn(),
+      actionNotice: null,
+      uiShellMode: "native",
+      switchShellView: vi.fn(),
+      uiLanguage: "en",
+      setUiLanguage: vi.fn(),
+      uiTheme: "dark",
+      setUiTheme: vi.fn(),
+      chatAgentVoiceMuted: false,
+      cancelOnboardingHandoff: vi.fn(),
+      handleSaveCharacter: vi.fn(),
+      characterSaving: false,
+      characterSaveSuccess: false,
+      agentStatus: { state: "running" },
+      unreadConversations: new Set(),
+      activeGameViewerUrl: null,
+      gameOverlayEnabled: false,
+      retryOnboardingHandoff: vi.fn(),
+      t: (key: string) => key,
+    });
+
+    for (const tab of ["plugins", "skills", "trajectories"] as const) {
+      useAppMock.mockImplementation(() => makeState(tab));
+
+      let renderer!: TestRenderer.ReactTestRenderer;
+      await act(async () => {
+        renderer = TestRenderer.create(React.createElement(App));
+      });
+
+      renderer.root.findByProps({
+        "data-testid": "AdvancedPageView",
+      });
+      const fullHeightShells = renderer.root.findAll(
+        (node) =>
+          node.type === "div" &&
+          typeof node.props.className === "string" &&
+          node.props.className.includes(
+            "flex flex-1 min-h-0 min-w-0 overflow-hidden",
+          ),
+      );
+      const paddedMain = renderer.root.findAll(
+        (node) =>
+          node.type === "main" &&
+          typeof node.props.className === "string" &&
+          node.props.className.includes("px-3 xl:px-5 py-4 xl:py-6"),
+      );
+
+      expect(fullHeightShells.length).toBeGreaterThan(0);
+      expect(paddedMain.length).toBe(0);
+    }
+  });
 });

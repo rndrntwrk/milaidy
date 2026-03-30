@@ -14,7 +14,10 @@ export { CustomActionEditor } from "./components/CustomActionEditor";
 export { CustomActionsPanel } from "./components/CustomActionsPanel";
 export { GameViewOverlay } from "./components/GameViewOverlay";
 export { Header } from "./components/Header";
-export { HeartbeatsView } from "./components/HeartbeatsView";
+export {
+  HeartbeatsDesktopShell,
+  HeartbeatsView,
+} from "./components/HeartbeatsView";
 export { InventoryView } from "./components/InventoryView";
 export { KnowledgeView } from "./components/KnowledgeView";
 export { OnboardingWizard } from "./components/OnboardingWizard";
