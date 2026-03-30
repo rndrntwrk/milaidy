@@ -219,6 +219,7 @@ import type { InventoryChainFilters } from "./types";
 import { useChatState } from "./useChatState";
 import { useLifecycleState } from "./useLifecycleState";
 import { useTriggersState } from "./useTriggersState";
+import { usePairingState } from "./usePairingState";
 import { useOnboardingState } from "./useOnboardingState";
 
 const AGENT_STATUS_POLL_INTERVAL_MS = 500;
@@ -756,11 +757,21 @@ function AppProviderInner({
   const uiShellMode = deriveUiShellModeForTab(tab);
 
   // --- Pairing ---
-  const [pairingEnabled, setPairingEnabled] = useState(false);
-  const [pairingExpiresAt, setPairingExpiresAt] = useState<number | null>(null);
-  const [pairingCodeInput, setPairingCodeInput] = useState("");
-  const [pairingError, setPairingError] = useState<string | null>(null);
-  const [pairingBusy, setPairingBusy] = useState(false);
+  // --- Pairing (extracted to usePairingState) ---
+  const pairingHook = usePairingState();
+  const {
+    state: {
+      pairingEnabled,
+      pairingExpiresAt,
+      pairingCodeInput,
+      pairingError,
+      pairingBusy,
+    },
+    setPairingEnabled,
+    setPairingExpiresAt,
+    setPairingCodeInput,
+    handlePairingSubmit,
+  } = pairingHook;
 
   // ── Chat state (consolidated from 18+ useState + 10 useEffect hooks) ──
   const chatState = useChatState();
@@ -1440,7 +1451,6 @@ function AppProviderInner({
     onboardingCompletionCommittedRefFromHook;
   const forceLocalBootstrapRef = forceLocalBootstrapRefFromHook;
   const onboardingFinishSavingRef = onboardingFinishSavingRefFromHook;
-  const pairingBusyRef = useRef(false);
   /** Synchronous lock for export action to prevent duplicate clicks in the same tick. */
   const exportBusyRef = useRef(false);
   /** Synchronous lock for import action to prevent duplicate clicks in the same tick. */
@@ -4572,33 +4582,6 @@ function AppProviderInner({
   );
 
   // ── Pairing ────────────────────────────────────────────────────────
-
-  const handlePairingSubmit = useCallback(async () => {
-    if (pairingBusyRef.current || pairingBusy) return;
-    const code = pairingCodeInput.trim();
-    if (!code) {
-      setPairingError("Enter the pairing code from the server logs.");
-      return;
-    }
-    setPairingError(null);
-    pairingBusyRef.current = true;
-    setPairingBusy(true);
-    try {
-      const { token } = await client.pair(code);
-      client.setToken(token);
-      window.location.reload();
-    } catch (err) {
-      const status = (err as { status?: number }).status;
-      if (status === 410)
-        setPairingError("Pairing code expired. Check logs for a new code.");
-      else if (status === 429)
-        setPairingError("Too many attempts. Try again later.");
-      else setPairingError("Pairing failed. Check the code and try again.");
-    } finally {
-      pairingBusyRef.current = false;
-      setPairingBusy(false);
-    }
-  }, [pairingBusy, pairingCodeInput]);
 
   // ── Plugin actions ─────────────────────────────────────────────────
 
