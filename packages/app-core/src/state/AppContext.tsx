@@ -218,6 +218,7 @@ import { TranslationProvider, useTranslation } from "./TranslationContext";
 import type { InventoryChainFilters } from "./types";
 import { useChatState } from "./useChatState";
 import { useLifecycleState } from "./useLifecycleState";
+import { useTriggersState } from "./useTriggersState";
 import { useOnboardingState } from "./useOnboardingState";
 
 const AGENT_STATUS_POLL_INTERVAL_MS = 500;
@@ -861,16 +862,25 @@ function AppProviderInner({
     [chatState],
   );
 
-  // --- Triggers ---
-  const [triggers, setTriggers] = useState<TriggerSummary[]>([]);
-  const [triggersLoading, setTriggersLoading] = useState(false);
-  const [triggersSaving, setTriggersSaving] = useState(false);
-  const [triggerRunsById, setTriggerRunsById] = useState<
-    Record<string, TriggerRunRecord[]>
-  >({});
-  const [triggerHealth, setTriggerHealth] =
-    useState<TriggerHealthSnapshot | null>(null);
-  const [triggerError, setTriggerError] = useState<string | null>(null);
+  // --- Triggers (extracted to useTriggersState) ---
+  const triggersHook = useTriggersState();
+  const {
+    state: {
+      triggers,
+      triggersLoading,
+      triggersSaving,
+      triggerRunsById,
+      triggerHealth,
+      triggerError,
+    },
+    loadTriggers,
+    loadTriggerHealth,
+    loadTriggerRuns,
+    createTrigger,
+    updateTrigger,
+    deleteTrigger,
+    runTriggerNow,
+  } = triggersHook;
 
   // --- Plugins ---
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
@@ -1641,18 +1651,6 @@ function AppProviderInner({
     }
   }, [tab, uiShellMode]);
 
-  const sortTriggersByNextRun = useCallback(
-    (items: TriggerSummary[]): TriggerSummary[] => {
-      return [...items].sort((a: TriggerSummary, b: TriggerSummary) => {
-        const aNext = a.nextRunAtMs ?? Number.MAX_SAFE_INTEGER;
-        const bNext = b.nextRunAtMs ?? Number.MAX_SAFE_INTEGER;
-        if (aNext !== bNext) return aNext - bNext;
-        return a.displayName.localeCompare(b.displayName);
-      });
-    },
-    [],
-  );
-
   // ── Data loading ───────────────────────────────────────────────────
 
   const loadPlugins = useCallback(async () => {
@@ -1703,171 +1701,6 @@ function AppProviderInner({
       /* ignore */
     }
   }, [logTagFilter, logLevelFilter, logSourceFilter]);
-
-  const loadTriggerHealth = useCallback(async () => {
-    try {
-      const health = await client.getTriggerHealth();
-      setTriggerHealth(health);
-    } catch {
-      setTriggerHealth(null);
-    }
-  }, []);
-
-  const loadTriggers = useCallback(async () => {
-    setTriggersLoading(true);
-    try {
-      const data = await client.getTriggers();
-      setTriggers(sortTriggersByNextRun(data.triggers));
-      setTriggerError(null);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to load triggers";
-      setTriggerError(message);
-      setTriggers([]);
-    } finally {
-      setTriggersLoading(false);
-    }
-  }, [sortTriggersByNextRun]);
-
-  const loadTriggerRuns = useCallback(async (id: string) => {
-    try {
-      const data = await client.getTriggerRuns(id);
-      setTriggerRunsById((prev: Record<string, TriggerRunRecord[]>) => ({
-        ...prev,
-        [id]: data.runs,
-      }));
-      setTriggerError(null);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to load trigger runs";
-      setTriggerError(message);
-    }
-  }, []);
-
-  const createTrigger = useCallback(
-    async (request: CreateTriggerRequest): Promise<TriggerSummary | null> => {
-      setTriggersSaving(true);
-      try {
-        const response = await client.createTrigger(request);
-        const created = response.trigger;
-        setTriggers((prev: TriggerSummary[]) => {
-          const merged = prev.filter(
-            (item: TriggerSummary) => item.id !== created.id,
-          );
-          merged.push(created);
-          return sortTriggersByNextRun(merged);
-        });
-        setTriggerError(null);
-        void loadTriggerHealth();
-        return created;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to create trigger";
-        setTriggerError(message);
-        return null;
-      } finally {
-        setTriggersSaving(false);
-      }
-    },
-    [loadTriggerHealth, sortTriggersByNextRun],
-  );
-
-  const updateTrigger = useCallback(
-    async (
-      id: string,
-      request: UpdateTriggerRequest,
-    ): Promise<TriggerSummary | null> => {
-      setTriggersSaving(true);
-      try {
-        const response = await client.updateTrigger(id, request);
-        const updated = response.trigger;
-        setTriggers((prev: TriggerSummary[]) => {
-          const merged = prev.map((item: TriggerSummary) =>
-            item.id === updated.id ? updated : item,
-          );
-          return sortTriggersByNextRun(merged);
-        });
-        setTriggerError(null);
-        void loadTriggerHealth();
-        return updated;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to update trigger";
-        setTriggerError(message);
-        return null;
-      } finally {
-        setTriggersSaving(false);
-      }
-    },
-    [loadTriggerHealth, sortTriggersByNextRun],
-  );
-
-  const deleteTrigger = useCallback(
-    async (id: string): Promise<boolean> => {
-      setTriggersSaving(true);
-      try {
-        await client.deleteTrigger(id);
-        setTriggers((prev: TriggerSummary[]) =>
-          prev.filter((item: TriggerSummary) => item.id !== id),
-        );
-        setTriggerRunsById((prev: Record<string, TriggerRunRecord[]>) => {
-          const next: Record<string, TriggerRunRecord[]> = {};
-          for (const [key, runs] of Object.entries(prev)) {
-            if (key !== id) next[key] = runs;
-          }
-          return next;
-        });
-        setTriggerError(null);
-        void loadTriggerHealth();
-        return true;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to delete trigger";
-        setTriggerError(message);
-        return false;
-      } finally {
-        setTriggersSaving(false);
-      }
-    },
-    [loadTriggerHealth],
-  );
-
-  const runTriggerNow = useCallback(
-    async (id: string): Promise<boolean> => {
-      setTriggersSaving(true);
-      try {
-        const response = await client.runTriggerNow(id);
-        if (response.trigger) {
-          const trigger = response.trigger;
-          setTriggers((prev: TriggerSummary[]) => {
-            const idx = prev.findIndex(
-              (item: TriggerSummary) => item.id === id,
-            );
-            if (idx === -1) {
-              return sortTriggersByNextRun([...prev, trigger]);
-            }
-            const updated = [...prev];
-            updated[idx] = trigger;
-            return sortTriggersByNextRun(updated);
-          });
-        } else {
-          await loadTriggers();
-        }
-        await loadTriggerRuns(id);
-        void loadTriggerHealth();
-        setTriggerError(null);
-        return response.ok;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to run trigger";
-        setTriggerError(message);
-        return false;
-      } finally {
-        setTriggersSaving(false);
-      }
-    },
-    [loadTriggerHealth, loadTriggerRuns, loadTriggers, sortTriggersByNextRun],
-  );
 
   const applyAutonomyEventMerge = useCallback(
     (incomingEvents: StreamEventEnvelope[], replay = false) => {
