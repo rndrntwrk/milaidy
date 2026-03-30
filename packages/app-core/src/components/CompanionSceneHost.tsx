@@ -1,8 +1,8 @@
-import { useRenderGuard } from "@miladyai/app-core/hooks";
 import {
   dispatchAppEmoteEvent,
   VRM_TELEPORT_COMPLETE_EVENT,
 } from "@miladyai/app-core/events";
+import { useRenderGuard } from "@miladyai/app-core/hooks";
 import {
   getVrmPreviewUrl,
   getVrmUrl,
@@ -354,12 +354,9 @@ function CompanionSceneSurface({
       if (shouldIgnoreCameraZoom(event.target)) {
         return;
       }
-      if (hasFocusedTextEntry()) {
-        if (event.ctrlKey) {
-          event.preventDefault();
-        }
-        return;
-      }
+      // Allow zoom even when a text entry is focused — the companion
+      // chat input doesn't use scroll, so wheel events should always
+      // control the camera zoom (trackpad pinch, mouse wheel, etc.).
       handleWheelCapture(event);
     },
     [active, interactive, handleWheelCapture],
