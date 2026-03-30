@@ -218,6 +218,7 @@ import { useChatState } from "./useChatState";
 import { useLifecycleState } from "./useLifecycleState";
 import { useTriggersState } from "./useTriggersState";
 import { usePairingState } from "./usePairingState";
+import { useDisplayPreferences } from "./useDisplayPreferences";
 import { useOnboardingState } from "./useOnboardingState";
 import { useCharacterState } from "./useCharacterState";
 
@@ -656,13 +657,20 @@ function AppProviderInner({
   }, []);
   // uiLanguage + t live in TranslationContext; consumed via useTranslation()
   const { t, uiLanguage, setUiLanguage } = useTranslation();
-  const [uiTheme, setUiThemeState] = useState<UiTheme>(loadUiTheme);
-  const [companionVrmPowerMode, setCompanionVrmPowerModeState] =
-    useState<CompanionVrmPowerMode>(loadCompanionVrmPowerMode);
-  const [companionAnimateWhenHidden, setCompanionAnimateWhenHiddenState] =
-    useState<boolean>(loadCompanionAnimateWhenHidden);
-  const [companionHalfFramerateMode, setCompanionHalfFramerateModeState] =
-    useState<CompanionHalfFramerateMode>(loadCompanionHalfFramerateMode);
+  // --- Display preferences (extracted to useDisplayPreferences) ---
+  const displayPrefs = useDisplayPreferences();
+  const {
+    state: {
+      uiTheme,
+      companionVrmPowerMode,
+      companionAnimateWhenHidden,
+      companionHalfFramerateMode,
+    },
+    setUiTheme,
+    setCompanionVrmPowerMode,
+    setCompanionAnimateWhenHidden,
+    setCompanionHalfFramerateMode,
+  } = displayPrefs;
 
   // ── Lifecycle state (consolidated from 20+ useState hooks) ──
   const lifecycle = useLifecycleState();
@@ -1488,49 +1496,6 @@ function AppProviderInner({
   useEffect(() => {
     saveLastNativeTab(lastNativeTab);
   }, [lastNativeTab]);
-
-  // ── Theme ──────────────────────────────────────────────────────────
-
-  const setUiTheme = useCallback((theme: UiTheme) => {
-    setUiThemeState(normalizeUiTheme(theme));
-  }, []);
-
-  useEffect(() => {
-    saveUiTheme(uiTheme);
-    applyUiTheme(uiTheme);
-  }, [uiTheme]);
-
-  const setCompanionVrmPowerMode = useCallback(
-    (mode: CompanionVrmPowerMode) => {
-      setCompanionVrmPowerModeState(normalizeCompanionVrmPowerMode(mode));
-    },
-    [],
-  );
-
-  useEffect(() => {
-    saveCompanionVrmPowerMode(companionVrmPowerMode);
-  }, [companionVrmPowerMode]);
-
-  const setCompanionAnimateWhenHidden = useCallback((enabled: boolean) => {
-    setCompanionAnimateWhenHiddenState(enabled);
-  }, []);
-
-  useEffect(() => {
-    saveCompanionAnimateWhenHidden(companionAnimateWhenHidden);
-  }, [companionAnimateWhenHidden]);
-
-  const setCompanionHalfFramerateMode = useCallback(
-    (mode: CompanionHalfFramerateMode) => {
-      setCompanionHalfFramerateModeState(
-        normalizeCompanionHalfFramerateMode(mode),
-      );
-    },
-    [],
-  );
-
-  useEffect(() => {
-    saveCompanionHalfFramerateMode(companionHalfFramerateMode);
-  }, [companionHalfFramerateMode]);
 
   // ── Navigation ─────────────────────────────────────────────────────
 
