@@ -213,6 +213,7 @@ import { useOnboardingState } from "./useOnboardingState";
 import { useCharacterState } from "./useCharacterState";
 import { useWalletState } from "./useWalletState";
 import { usePluginsSkillsState } from "./usePluginsSkillsState";
+import { useCloudState } from "./useCloudState";
 
 const AGENT_STATUS_POLL_INTERVAL_MS = 500;
 const ONBOARDING_GREETING_READY_TIMEOUT_MS = 15_000;
@@ -316,9 +317,8 @@ import {
 } from "@miladyai/ui";
 import { buildWalletRpcUpdateRequest } from "../wallet-rpc";
 
-const ELIZA_CLOUD_LOGIN_POLL_INTERVAL_MS = 1000;
-const ELIZA_CLOUD_LOGIN_TIMEOUT_MS = 300_000;
-const ELIZA_CLOUD_LOGIN_MAX_CONSECUTIVE_ERRORS = 3;
+// ELIZA_CLOUD_LOGIN_POLL_INTERVAL_MS, ELIZA_CLOUD_LOGIN_TIMEOUT_MS,
+// ELIZA_CLOUD_LOGIN_MAX_CONSECUTIVE_ERRORS are now in useCloudState.ts
 const DEFAULT_LANDING_TAB: Tab = COMPANION_ENABLED ? "companion" : "chat";
 
 function getNavigationPathFromWindow(): string {
@@ -1042,40 +1042,12 @@ function AppProviderInner({
     handleCharacterMessageExamplesInput,
   } = characterHook;
 
-  // --- Eliza Cloud ---
-  const [elizaCloudEnabled, setElizaCloudEnabled] = useState(false);
-  const [elizaCloudConnected, setElizaCloudConnected] = useState(false);
-  const [elizaCloudHasPersistedKey, setElizaCloudHasPersistedKey] =
-    useState(false);
-  const [elizaCloudCredits, setElizaCloudCredits] = useState<number | null>(
-    null,
-  );
-  const [elizaCloudCreditsLow, setElizaCloudCreditsLow] = useState(false);
-  const [elizaCloudCreditsCritical, setElizaCloudCreditsCritical] =
-    useState(false);
-  const [elizaCloudAuthRejected, setElizaCloudAuthRejected] = useState(false);
-  const [elizaCloudCreditsError, setElizaCloudCreditsError] = useState<
-    string | null
-  >(null);
-  const [elizaCloudTopUpUrl, setElizaCloudTopUpUrl] =
-    useState("/cloud/billing");
-  const [elizaCloudUserId, setElizaCloudUserId] = useState<string | null>(null);
+  // elizaCloud* state, refs, and callbacks are now provided by useCloudState (cloudHook above).
+
   const [ownerName, setOwnerNameState] = useState<string | null>(null);
   const [ownerNameHydrated, setOwnerNameHydrated] = useState(false);
   const [pendingOwnerNamePrompt, setPendingOwnerNamePrompt] = useState(false);
   const [showOwnerNamePrompt, setShowOwnerNamePrompt] = useState(false);
-  const [elizaCloudStatusReason, setElizaCloudStatusReason] = useState<
-    string | null
-  >(null);
-  const [cloudDashboardView, setCloudDashboardView] = useState<
-    "billing" | "agents"
-  >("billing");
-  const [elizaCloudLoginBusy, setElizaCloudLoginBusy] = useState(false);
-  const [elizaCloudLoginError, setElizaCloudLoginError] = useState<
-    string | null
-  >(null);
-  const [elizaCloudDisconnecting, setElizaCloudDisconnecting] = useState(false);
-
   // --- Updates ---
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [updateLoading, setUpdateLoading] = useState(false);
@@ -1400,17 +1372,9 @@ function AppProviderInner({
   // --- Refs for timers ---
   // actionNoticeTimer, shownOnceNotices, agentStatusRef, lifecycleBusyRef,
   // lifecycleActionRef, setAgentStatusIfChanged are now in useLifecycleState
-  const elizaCloudPollInterval = useRef<number | null>(null);
-  /** While true, ignore stale poll results (in-flight GETs may predate POST /api/cloud/disconnect). */
-  const elizaCloudDisconnectInFlightRef = useRef(false);
-  /**
-   * After the user disconnects, keep the “Connect Eliza Cloud” screen until they start login again,
-   * even if GET /api/cloud/status still reports `connected: true` (laggy snapshot or proxy mismatch).
-   */
-  const elizaCloudPreferDisconnectedUntilLoginRef = useRef(false);
-  /** Last `connected` applied by pollCloudCredits; used when a poll is skipped mid-flight. */
-  const lastElizaCloudPollConnectedRef = useRef(false);
-  const elizaCloudLoginPollTimer = useRef<number | null>(null);
+  // elizaCloudPollInterval, elizaCloudDisconnectInFlightRef,
+  // elizaCloudPreferDisconnectedUntilLoginRef, lastElizaCloudPollConnectedRef,
+  // elizaCloudLoginPollTimer are now in useCloudState (cloudHook)
   const prevAgentStateRef = useRef<string | null>(null);
   const restartNotificationSignatureRef = useRef<string | null>(null);
   const heartbeatNotificationKeyRef = useRef<string | null>(null);
@@ -1427,11 +1391,8 @@ function AppProviderInner({
   /** Synchronous lock for import action to prevent duplicate clicks in the same tick. */
   const importBusyRef = useRef(false);
   // walletApiKeySavingRef is now managed inside useWalletState (walletHook)
-  /** Synchronous lock for cloud login action to prevent duplicate clicks in the same tick. */
-  const elizaCloudLoginBusyRef = useRef(false);
-  const elizaCloudAuthNoticeSentRef = useRef(false);
-  /** Forward ref so handleOnboardingNext (defined earlier) can call handleCloudLogin (defined later). */
-  const handleCloudLoginRef = useRef<() => Promise<void>>(async () => {});
+  // elizaCloudLoginBusyRef, elizaCloudAuthNoticeSentRef, handleCloudLoginRef
+  // are now managed inside useCloudState (cloudHook)
   /** Synchronous lock for update channel changes to prevent duplicate submits. */
   const updateChannelSavingRef = useRef(false);
 
@@ -1499,6 +1460,47 @@ function AppProviderInner({
   } = walletHook;
 
   // setActionNotice is now provided by useLifecycleState
+
+  // ── Cloud state (extracted to useCloudState) ───────────────────────
+  // Placed after walletHook so loadWalletConfig is available.
+  const cloudHook = useCloudState({ setActionNotice, loadWalletConfig, t });
+  const {
+    elizaCloudEnabled,
+    setElizaCloudEnabled,
+    elizaCloudConnected,
+    setElizaCloudConnected,
+    elizaCloudHasPersistedKey,
+    setElizaCloudHasPersistedKey,
+    elizaCloudCredits,
+    setElizaCloudCredits,
+    elizaCloudCreditsLow,
+    setElizaCloudCreditsLow,
+    elizaCloudCreditsCritical,
+    setElizaCloudCreditsCritical,
+    elizaCloudAuthRejected,
+    setElizaCloudAuthRejected,
+    elizaCloudCreditsError,
+    setElizaCloudCreditsError,
+    elizaCloudTopUpUrl,
+    setElizaCloudTopUpUrl,
+    elizaCloudUserId,
+    setElizaCloudUserId,
+    elizaCloudStatusReason,
+    setElizaCloudStatusReason,
+    cloudDashboardView,
+    setCloudDashboardView,
+    elizaCloudLoginBusy,
+    elizaCloudLoginError,
+    setElizaCloudLoginError,
+    elizaCloudDisconnecting,
+    elizaCloudPollInterval,
+    elizaCloudPreferDisconnectedUntilLoginRef,
+    elizaCloudLoginPollTimer,
+    pollCloudCredits,
+    handleCloudLogin,
+    handleCloudDisconnect,
+    handleCloudLoginRef,
+  } = cloudHook;
 
   // ── Clipboard ──────────────────────────────────────────────────────
 
@@ -2060,124 +2062,7 @@ function AppProviderInner({
     setExtensionChecking(false);
   }, []);
 
-  const pollCloudCredits = useCallback(async (): Promise<boolean> => {
-    if (elizaCloudDisconnectInFlightRef.current) {
-      return lastElizaCloudPollConnectedRef.current;
-    }
-    const cloudStatus = await client.getCloudStatus().catch(() => null);
-    if (elizaCloudDisconnectInFlightRef.current) {
-      return lastElizaCloudPollConnectedRef.current;
-    }
-    if (!cloudStatus) {
-      setElizaCloudConnected(false);
-      publishElizaCloudVoiceSnapshot(setElizaCloudHasPersistedKey, {
-        apiConnected: false,
-        enabled: false,
-        hasPersistedApiKey: false,
-      });
-      setElizaCloudCredits(null);
-      setElizaCloudCreditsLow(false);
-      setElizaCloudCreditsCritical(false);
-      setElizaCloudAuthRejected(false);
-      setElizaCloudCreditsError(null);
-      setElizaCloudStatusReason(null);
-      lastElizaCloudPollConnectedRef.current = false;
-      return false;
-    }
-    const enabled = Boolean(cloudStatus.enabled ?? false);
-    const hasPersistedApiKey = Boolean(cloudStatus.hasApiKey);
-    // Trust `connected` from the server snapshot (it already folds in API key + CLOUD_AUTH).
-    const isConnected = Boolean(cloudStatus.connected);
-    if (isConnected && elizaCloudPreferDisconnectedUntilLoginRef.current) {
-      publishElizaCloudVoiceSnapshot(setElizaCloudHasPersistedKey, {
-        apiConnected: isConnected,
-        enabled,
-        hasPersistedApiKey,
-      });
-      lastElizaCloudPollConnectedRef.current = false;
-      return false;
-    }
-    if (!isConnected) {
-      elizaCloudPreferDisconnectedUntilLoginRef.current = false;
-    }
-    setElizaCloudEnabled(enabled);
-    setElizaCloudConnected(isConnected);
-    publishElizaCloudVoiceSnapshot(setElizaCloudHasPersistedKey, {
-      apiConnected: isConnected,
-      enabled,
-      hasPersistedApiKey,
-    });
-    setElizaCloudUserId(cloudStatus.userId ?? null);
-    setElizaCloudStatusReason(
-      isConnected &&
-        typeof cloudStatus.reason === "string" &&
-        cloudStatus.reason.trim()
-        ? cloudStatus.reason.trim()
-        : null,
-    );
-    if (cloudStatus.topUpUrl) setElizaCloudTopUpUrl(cloudStatus.topUpUrl);
-    if (isConnected) {
-      const credits = await client.getCloudCredits().catch(() => null);
-      if (elizaCloudDisconnectInFlightRef.current) {
-        return lastElizaCloudPollConnectedRef.current;
-      }
-      if (credits?.authRejected) {
-        setElizaCloudAuthRejected(true);
-        setElizaCloudCreditsError(null);
-        setElizaCloudCredits(null);
-        setElizaCloudCreditsLow(false);
-        setElizaCloudCreditsCritical(false);
-        if (credits.topUpUrl) setElizaCloudTopUpUrl(credits.topUpUrl);
-      } else {
-        setElizaCloudAuthRejected(false);
-        const apiErr =
-          credits &&
-          typeof credits.error === "string" &&
-          credits.error.trim() &&
-          typeof credits.balance !== "number"
-            ? credits.error.trim()
-            : null;
-        setElizaCloudCreditsError(apiErr);
-        if (credits && typeof credits.balance === "number") {
-          setElizaCloudCredits(credits.balance);
-          setElizaCloudCreditsLow(credits.low ?? false);
-          setElizaCloudCreditsCritical(credits.critical ?? false);
-          if (credits.topUpUrl) setElizaCloudTopUpUrl(credits.topUpUrl);
-        } else {
-          setElizaCloudCredits(null);
-          setElizaCloudCreditsLow(false);
-          setElizaCloudCreditsCritical(false);
-          if (credits?.topUpUrl) setElizaCloudTopUpUrl(credits.topUpUrl);
-        }
-      }
-    } else {
-      setElizaCloudCredits(null);
-      setElizaCloudCreditsLow(false);
-      setElizaCloudCreditsCritical(false);
-      setElizaCloudAuthRejected(false);
-      setElizaCloudCreditsError(null);
-      setElizaCloudStatusReason(null);
-    }
-    lastElizaCloudPollConnectedRef.current = isConnected;
-    // Self-manage the recurring poll interval: start when connected, stop when not.
-    // This covers login during onboarding (interval wasn't started at mount) and
-    // disconnect (interval should stop to avoid useless API calls).
-    if (isConnected && !elizaCloudPollInterval.current) {
-      elizaCloudPollInterval.current = window.setInterval(() => {
-        if (
-          typeof document !== "undefined" &&
-          document.visibilityState !== "visible"
-        ) {
-          return;
-        }
-        void pollCloudCredits();
-      }, 60_000);
-    } else if (!isConnected && elizaCloudPollInterval.current) {
-      clearInterval(elizaCloudPollInterval.current);
-      elizaCloudPollInterval.current = null;
-    }
-    return isConnected;
-  }, []);
+  // pollCloudCredits is now provided by useCloudState (cloudHook — wired below)
 
   // ── Lifecycle actions ──────────────────────────────────────────────
 
@@ -5166,331 +5051,8 @@ function AppProviderInner({
     setOnboardingRunMode,
   ]);
 
-  // ── Cloud ──────────────────────────────────────────────────────────
-
-  const handleCloudLogin = useCallback(async () => {
-    // Already connected (existing API key) — no need to re-authenticate.
-    if (elizaCloudConnected) return;
-    if (elizaCloudLoginBusyRef.current || elizaCloudLoginBusy) return;
-    elizaCloudLoginBusyRef.current = true;
-    setElizaCloudLoginBusy(true);
-    setElizaCloudLoginError(null);
-    elizaCloudPreferDisconnectedUntilLoginRef.current = false;
-
-    // Determine if we should use direct cloud auth (no local backend) or
-    // go through the local agent's proxy. During sandbox onboarding there is
-    // no local backend, so we talk to Eliza Cloud directly.
-    const hasBackend = Boolean(client.getBaseUrl());
-    const cloudApiBase =
-      getBootConfig().cloudApiBase ?? "https://www.elizacloud.ai";
-    const useDirectAuth = !hasBackend;
-
-    try {
-      let resp: {
-        ok: boolean;
-        browserUrl?: string;
-        sessionId?: string;
-        error?: string;
-      };
-      if (useDirectAuth) {
-        resp = await client.cloudLoginDirect(cloudApiBase);
-      } else {
-        resp = await client.cloudLogin();
-      }
-      if (!resp.ok) {
-        setElizaCloudLoginError(
-          resp.error || "Failed to start Eliza Cloud login",
-        );
-        elizaCloudLoginBusyRef.current = false;
-        setElizaCloudLoginBusy(false);
-        return;
-      }
-
-      // Try to open the login URL in the system browser (uses desktop bridge
-      // in Electrobun, falls back to window.open in web contexts).
-      if (resp.browserUrl) {
-        try {
-          await openExternalUrl(resp.browserUrl);
-        } catch {
-          // Popup was blocked (common when window.open runs after an async
-          // gap and loses user-gesture context). Surface the URL so the user
-          // can open it manually — the polling loop below still runs.
-          setElizaCloudLoginError(
-            `Open this link to log in: ${resp.browserUrl}`,
-          );
-        }
-      }
-
-      const sessionId = resp.sessionId ?? "";
-
-      let pollInFlight = false;
-      let consecutivePollErrors = 0;
-      const pollDeadline = Date.now() + ELIZA_CLOUD_LOGIN_TIMEOUT_MS;
-      const stopCloudLoginPolling = (error: string | null = null) => {
-        if (elizaCloudLoginPollTimer.current !== null) {
-          clearInterval(elizaCloudLoginPollTimer.current);
-          elizaCloudLoginPollTimer.current = null;
-        }
-        elizaCloudLoginBusyRef.current = false;
-        setElizaCloudLoginBusy(false);
-        if (error !== null) {
-          setElizaCloudLoginError(error);
-        }
-      };
-
-      // Start polling
-      elizaCloudLoginPollTimer.current = window.setInterval(async () => {
-        if (!elizaCloudLoginPollTimer.current || pollInFlight) return;
-        if (Date.now() >= pollDeadline) {
-          stopCloudLoginPolling(
-            "Eliza Cloud login timed out. Please try again.",
-          );
-          return;
-        }
-
-        pollInFlight = true;
-        try {
-          if (!elizaCloudLoginPollTimer.current) return;
-          let poll: {
-            status: string;
-            token?: string;
-            userId?: string;
-            error?: string;
-          };
-          if (useDirectAuth) {
-            poll = await client.cloudLoginPollDirect(cloudApiBase, sessionId);
-          } else {
-            poll = await client.cloudLoginPoll(sessionId);
-          }
-          if (!elizaCloudLoginPollTimer.current) return;
-
-          consecutivePollErrors = 0;
-          if (poll.status === "authenticated") {
-            stopCloudLoginPolling();
-            setElizaCloudConnected(true);
-            setElizaCloudEnabled(true);
-            setElizaCloudLoginError(null);
-            if (poll.userId) {
-              setElizaCloudUserId(poll.userId);
-            }
-
-            // Store the cloud auth token for provisioning
-            if (poll.token && typeof window !== "undefined") {
-              (
-                window as unknown as Record<string, unknown>
-              ).__ELIZA_CLOUD_AUTH_TOKEN__ = poll.token;
-              // Also update boot config so subsequent reads use the resolved cloud base.
-              const cfg = getBootConfig();
-              setBootConfig({ ...cfg, cloudApiBase });
-            }
-
-            setActionNotice(
-              "Logged in to Eliza Cloud successfully.",
-              "success",
-              6000,
-            );
-            if (useDirectAuth && poll.token) {
-              // Direct auth bypasses the backend's login/status handler, so
-              // the API key was never persisted server-side. Send it now so
-              // billing/compat routes can authenticate with Eliza Cloud.
-              void fetch("/api/cloud/login/persist", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ apiKey: poll.token }),
-              }).catch(() => {
-                // Non-fatal: credits/billing will fail but core chat works
-              });
-            }
-            void loadWalletConfig();
-            // Delay the credit fetch slightly so the backend has time to
-            // persist the API key before we query cloud status / credits.
-            setTimeout(() => void pollCloudCredits(), 2000);
-          } else if (poll.status === "expired" || poll.status === "error") {
-            stopCloudLoginPolling(
-              poll.error ?? "Login session expired. Please try again.",
-            );
-          }
-        } catch (pollErr) {
-          console.error("Eliza Cloud login poll error:", pollErr);
-          if (!elizaCloudLoginPollTimer.current) return;
-
-          consecutivePollErrors += 1;
-          if (
-            consecutivePollErrors >= ELIZA_CLOUD_LOGIN_MAX_CONSECUTIVE_ERRORS
-          ) {
-            const detail =
-              pollErr instanceof Error && pollErr.message
-                ? ` Last error: ${pollErr.message}`
-                : "";
-            stopCloudLoginPolling(
-              `Eliza Cloud login check failed after repeated errors.${detail}`,
-            );
-          }
-        } finally {
-          pollInFlight = false;
-        }
-      }, ELIZA_CLOUD_LOGIN_POLL_INTERVAL_MS);
-    } catch (err) {
-      setElizaCloudLoginError(
-        err instanceof Error ? err.message : "Eliza Cloud login failed",
-      );
-      elizaCloudLoginBusyRef.current = false;
-      setElizaCloudLoginBusy(false);
-    }
-  }, [
-    elizaCloudConnected,
-    elizaCloudLoginBusy,
-    setActionNotice,
-    pollCloudCredits,
-    loadWalletConfig,
-  ]);
-
-  // Keep forward ref in sync so handleOnboardingNext can call it.
-  handleCloudLoginRef.current = handleCloudLogin;
-
-  const handleCloudDisconnect = useCallback(async () => {
-    const MAIN_CONFIRM_DISCONNECT_MS = 300_000;
-    const MAIN_POST_ONLY_MS = 12_000;
-    const RENDERER_DISCONNECT_MS = 12_000;
-
-    elizaCloudDisconnectInFlightRef.current = true;
-    setElizaCloudDisconnecting(true);
-
-    try {
-      let needRendererDisconnect = true;
-
-      if (isElectrobunRuntime()) {
-        const combined = await invokeDesktopBridgeRequestWithTimeout<
-          { cancelled: true } | { ok: true } | { ok: false; error?: string }
-        >({
-          rpcMethod: "agentCloudDisconnectWithConfirm",
-          ipcChannel: "agent:cloudDisconnectWithConfirm",
-          params: {
-            apiBase: client.getBaseUrl().trim() || undefined,
-            bearerToken: client.getRestAuthToken() ?? undefined,
-          },
-          timeoutMs: MAIN_CONFIRM_DISCONNECT_MS,
-        });
-
-        if (combined.status === "ok" && combined.value) {
-          const v = combined.value;
-          if ("cancelled" in v && v.cancelled) {
-            return;
-          }
-          if ("ok" in v) {
-            if (
-              v.ok === false &&
-              typeof v.error === "string" &&
-              v.error.trim()
-            ) {
-              throw new Error(v.error.trim());
-            }
-            if (v.ok === true) {
-              needRendererDisconnect = false;
-            }
-          }
-        }
-
-        if (needRendererDisconnect) {
-          if (
-            !(await confirmDesktopAction({
-              title: "Disconnect from Eliza Cloud",
-              message:
-                "The agent will need a local AI provider to continue working.",
-              confirmLabel: "Disconnect",
-              cancelLabel: "Cancel",
-              type: "warning",
-            }))
-          ) {
-            return;
-          }
-          await yieldMiladyHttpAfterNativeMessageBox();
-
-          const postOutcome = await invokeDesktopBridgeRequestWithTimeout<{
-            ok: boolean;
-            error?: string;
-          }>({
-            rpcMethod: "agentPostCloudDisconnect",
-            ipcChannel: "agent:postCloudDisconnect",
-            params: {
-              apiBase: client.getBaseUrl().trim() || undefined,
-              bearerToken: client.getRestAuthToken() ?? undefined,
-            },
-            timeoutMs: MAIN_POST_ONLY_MS,
-          });
-
-          if (postOutcome.status === "ok" && postOutcome.value) {
-            const mr = postOutcome.value;
-            if (mr.ok === true) {
-              needRendererDisconnect = false;
-            } else if (
-              mr.ok === false &&
-              typeof mr.error === "string" &&
-              mr.error.trim()
-            ) {
-              throw new Error(mr.error.trim());
-            }
-          }
-        }
-      } else if (
-        !(await confirmDesktopAction({
-          title: "Disconnect from Eliza Cloud",
-          message:
-            "The agent will need a local AI provider to continue working.",
-          confirmLabel: "Disconnect",
-          cancelLabel: "Cancel",
-          type: "warning",
-        }))
-      ) {
-        return;
-      } else {
-        await yieldMiladyHttpAfterNativeMessageBox();
-      }
-
-      if (needRendererDisconnect) {
-        await Promise.race([
-          client.cloudDisconnect(),
-          new Promise<never>((_, reject) => {
-            window.setTimeout(() => {
-              reject(
-                new Error(
-                  `Disconnect timed out after ${RENDERER_DISCONNECT_MS / 1000}s`,
-                ),
-              );
-            }, RENDERER_DISCONNECT_MS);
-          }),
-        ]);
-      }
-
-      setElizaCloudEnabled(false);
-      setElizaCloudConnected(false);
-      publishElizaCloudVoiceSnapshot(setElizaCloudHasPersistedKey, {
-        apiConnected: false,
-        enabled: false,
-        hasPersistedApiKey: false,
-      });
-      setElizaCloudCredits(null);
-      setElizaCloudCreditsLow(false);
-      setElizaCloudCreditsCritical(false);
-      setElizaCloudAuthRejected(false);
-      setElizaCloudCreditsError(null);
-      setElizaCloudUserId(null);
-      setElizaCloudStatusReason(null);
-      lastElizaCloudPollConnectedRef.current = false;
-      elizaCloudPreferDisconnectedUntilLoginRef.current = true;
-      setActionNotice("Disconnected from Eliza Cloud.", "success");
-    } catch (err) {
-      setActionNotice(
-        `Failed to disconnect: ${err instanceof Error ? err.message : err}`,
-        "error",
-      );
-    } finally {
-      elizaCloudDisconnectInFlightRef.current = false;
-      setElizaCloudDisconnecting(false);
-      void pollCloudCredits();
-    }
-  }, [pollCloudCredits, setActionNotice]);
-
+  // handleCloudOnboardingFinish — one-liner kept here because runOnboardingChatHandoff
+  // is defined above (line ~4546) and cloud hook is instantiated earlier.
   const handleCloudOnboardingFinish = useCallback(async () => {
     await runOnboardingChatHandoff("cloud_fast_track");
   }, [runOnboardingChatHandoff]);
@@ -7013,16 +6575,7 @@ function AppProviderInner({
 
   // t is provided by TranslationContext (useTranslation() above)
 
-  useEffect(() => {
-    if (elizaCloudAuthRejected) {
-      if (!elizaCloudAuthNoticeSentRef.current) {
-        elizaCloudAuthNoticeSentRef.current = true;
-        setActionNotice(t("notice.elizaCloudAuthRejected"), "error", 14_000);
-      }
-    } else {
-      elizaCloudAuthNoticeSentRef.current = false;
-    }
-  }, [elizaCloudAuthRejected, setActionNotice, t]);
+  // Cloud auth-rejected effect is now inside useCloudState.
 
   const companionSceneConfig = useMemo(
     () => ({
