@@ -16,14 +16,14 @@ function levelColor(level: string): string {
   switch (level.toLowerCase()) {
     case "error":
     case "err":
-      return "text-red-400/90";
+      return "text-status-stopped/90";
     case "warn":
     case "warning":
       return "text-yellow-400/90";
     case "debug":
       return "text-text-subtle";
     default:
-      return "text-emerald-400/70";
+      return "text-status-running/70";
   }
 }
 
@@ -185,7 +185,7 @@ export function LogsPanel() {
               }
               className={`font-mono text-[9px] tracking-wider px-2 py-1 border transition-colors ${
                 autoRefresh
-                  ? "border-emerald-400/40 text-emerald-400/80 bg-emerald-400/5"
+                  ? "border-status-running/40 text-status-running/80 bg-status-running/5"
                   : "border-border text-text-subtle"
               }`}
             >
@@ -209,7 +209,7 @@ export function LogsPanel() {
                   fetching
                     ? "bg-yellow-400/60 animate-pulse"
                     : isConnected && hasLogs
-                      ? "bg-emerald-400/80 animate-pulse"
+                      ? "bg-status-running/80 animate-pulse"
                       : "bg-text-muted/30"
                 }`}
               />
@@ -248,7 +248,7 @@ export function LogsPanel() {
             <div className="text-center py-8">
               {error ? (
                 <>
-                  <p className="text-red-400/80 mb-1">Error: {error}</p>
+                  <p className="text-status-stopped/80 mb-1">Error: {error}</p>
                   <p className="text-text-subtle text-[10px]">
                     This agent may not expose a logs endpoint.
                   </p>

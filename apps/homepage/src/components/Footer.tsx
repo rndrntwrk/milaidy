@@ -7,7 +7,10 @@ export function Footer() {
         {/* Left: Brand + description */}
         <div className="relative">
           {/* Hidden characters — Easter egg, visible on hover */}
-          <div className="absolute inset-0 w-full h-full pointer-events-none">
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 w-full h-full pointer-events-none"
+          >
             <img
               src="/black-asset-1.png"
               alt=""
