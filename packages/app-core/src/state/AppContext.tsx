@@ -19,7 +19,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { prepareDraftForSave } from "../actions/character";
 import {
   type AgentStartupDiagnostics,
   type AgentStatus,
@@ -99,7 +98,6 @@ import {
   normalizeSlashCommandName,
 } from "../chat";
 import { mapServerTasksToSessions } from "../coding";
-import { replaceNameTokens } from "../components/character-editor-helpers";
 import { getBootConfig, setBootConfig } from "../config/boot-config";
 import { BrandingContext, DEFAULT_BRANDING } from "../config/branding";
 import {
@@ -221,6 +219,7 @@ import { useLifecycleState } from "./useLifecycleState";
 import { useTriggersState } from "./useTriggersState";
 import { usePairingState } from "./usePairingState";
 import { useOnboardingState } from "./useOnboardingState";
+import { useCharacterState } from "./useCharacterState";
 
 const AGENT_STATUS_POLL_INTERVAL_MS = 500;
 const ONBOARDING_GREETING_READY_TIMEOUT_MS = 15_000;
@@ -1005,31 +1004,34 @@ function AppProviderInner({
   const twitterVerifyUrl = "";
   const twitterVerifying = false;
 
-  // --- Character ---
-  const [characterData, setCharacterData] = useState<CharacterData | null>(
-    null,
-  );
-  const [characterLoading, setCharacterLoading] = useState(false);
-  const [characterSaving, setCharacterSaving] = useState(false);
-  const [characterSaveSuccess, setCharacterSaveSuccess] = useState<
-    string | null
-  >(null);
-  const [characterSaveError, setCharacterSaveError] = useState<string | null>(
-    null,
-  );
-  const [characterDraft, setCharacterDraft] = useState<CharacterData>({});
-  const [selectedVrmIndex, setSelectedVrmIndexRaw] = useState(loadAvatarIndex);
-  const [customVrmUrl, setCustomVrmUrl] = useState("");
-  const [customBackgroundUrl, setCustomBackgroundUrl] = useState("");
-
-  // Wrap setter to also persist to localStorage
-  const setSelectedVrmIndex = useCallback((v: number) => {
-    const normalized = normalizeAvatarIndex(v);
-    setSelectedVrmIndexRaw(normalized);
-    saveAvatarIndex(normalized);
-    // Sync to server so headless stream capture uses the same avatar
-    client.saveStreamSettings({ avatarIndex: normalized }).catch(() => {});
-  }, []);
+  // --- Character (extracted to useCharacterState) ---
+  const characterHook = useCharacterState({ agentStatus, setAgentStatus });
+  const {
+    state: {
+      characterData,
+      characterLoading,
+      characterSaving,
+      characterSaveSuccess,
+      characterSaveError,
+      characterDraft,
+      selectedVrmIndex,
+      customVrmUrl,
+      customBackgroundUrl,
+    },
+    setCharacterData,
+    setCharacterDraft,
+    setCharacterSaveSuccess,
+    setCharacterSaveError,
+    setSelectedVrmIndex,
+    setCustomVrmUrl,
+    setCustomBackgroundUrl,
+    loadCharacter,
+    handleSaveCharacter,
+    handleCharacterFieldInput,
+    handleCharacterArrayInput,
+    handleCharacterStyleInput,
+    handleCharacterMessageExamplesInput,
+  } = characterHook;
 
   // --- Eliza Cloud ---
   const [elizaCloudEnabled, setElizaCloudEnabled] = useState(false);
@@ -1988,40 +1990,7 @@ function AppProviderInner({
     await loadWalletConfig();
   }, [loadWalletConfig]);
 
-  const loadCharacter = useCallback(async () => {
-    setCharacterLoading(true);
-    setCharacterSaveError(null);
-    setCharacterSaveSuccess(null);
-    try {
-      const { character } = await client.getCharacter();
-      setCharacterData(character);
-      // Replace any un-substituted {{name}} tokens that may have been persisted
-      // to the server before the fix (onboarding saved raw templates).
-      const savedName = character.name ?? "";
-      const clean = (s: string) => replaceNameTokens(s, savedName);
-      setCharacterDraft({
-        name: savedName,
-        username: character.username ?? "",
-        bio: Array.isArray(character.bio)
-          ? character.bio.map(clean).join("\n")
-          : clean(character.bio ?? ""),
-        system: clean(character.system ?? ""),
-        adjectives: character.adjectives ?? [],
-        topics: character.topics ?? [],
-        style: {
-          all: character.style?.all ?? [],
-          chat: character.style?.chat ?? [],
-          post: character.style?.post ?? [],
-        },
-        messageExamples: character.messageExamples ?? [],
-        postExamples: character.postExamples ?? [],
-      });
-    } catch {
-      setCharacterData(null);
-      setCharacterDraft({});
-    }
-    setCharacterLoading(false);
-  }, []);
+  // loadCharacter is provided by useCharacterState (characterHook)
 
   // Hydrate ownerName from config on startup
   useEffect(() => {
@@ -5104,110 +5073,7 @@ function AppProviderInner({
     }
   }, []);
 
-  // ── Character actions ──────────────────────────────────────────────
-
-  const handleSaveCharacter = useCallback(async () => {
-    setCharacterSaving(true);
-    setCharacterSaveError(null);
-    setCharacterSaveSuccess(null);
-    try {
-      const draft = prepareDraftForSave(characterDraft);
-      if (!(draft.name as string | undefined)?.trim()) {
-        throw new Error("Character name is required before saving.");
-      }
-      const { agentName } = await client.updateCharacter(draft);
-      // Also persist avatar selection to config (under "ui" which is allowlisted)
-      try {
-        await client.updateConfig({
-          ui: { avatarIndex: selectedVrmIndex },
-        });
-      } catch {
-        /* non-fatal */
-      }
-      setCharacterSaveSuccess("Character saved successfully.");
-      if (agentName && agentStatus) {
-        setAgentStatus({ ...agentStatus, agentName });
-      }
-      await loadCharacter();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "unknown error";
-      const finalMessage =
-        message === "Character name is required before saving."
-          ? message
-          : `Failed to save: ${message}`;
-      setCharacterSaveError(finalMessage);
-      setCharacterSaving(false);
-      throw new Error(finalMessage);
-    }
-    setCharacterSaving(false);
-  }, [
-    characterDraft,
-    agentStatus,
-    loadCharacter,
-    selectedVrmIndex,
-    setAgentStatus,
-  ]);
-
-  const handleCharacterFieldInput = useCallback(
-    <K extends keyof CharacterData>(field: K, value: CharacterData[K]) => {
-      setCharacterDraft((prev: CharacterData) => ({ ...prev, [field]: value }));
-    },
-    [],
-  );
-
-  const handleCharacterArrayInput = useCallback(
-    (field: "adjectives" | "postExamples", value: string) => {
-      const items = value
-        .split("\n")
-        .map((s: string) => s.trim())
-        .filter((s: string) => s.length > 0);
-      setCharacterDraft((prev: CharacterData) => ({ ...prev, [field]: items }));
-    },
-    [],
-  );
-
-  const handleCharacterStyleInput = useCallback(
-    (subfield: "all" | "chat" | "post", value: string) => {
-      const items = value
-        .split("\n")
-        .map((s: string) => s.trim())
-        .filter((s: string) => s.length > 0);
-      setCharacterDraft((prev: CharacterData) => ({
-        ...prev,
-        style: { ...(prev.style ?? {}), [subfield]: items },
-      }));
-    },
-    [],
-  );
-
-  const handleCharacterMessageExamplesInput = useCallback((value: string) => {
-    if (!value.trim()) {
-      setCharacterDraft((prev: CharacterData) => ({
-        ...prev,
-        messageExamples: [],
-      }));
-      return;
-    }
-    const blocks = value.split(/\n\s*\n/).filter((b) => b.trim().length > 0);
-    const parsed = blocks.map((block) => {
-      const lines = block.split("\n").filter((l) => l.trim().length > 0);
-      const examples = lines.map((line) => {
-        const colonIdx = line.indexOf(":");
-        if (colonIdx > 0) {
-          return {
-            name: line.slice(0, colonIdx).trim(),
-            content: { text: line.slice(colonIdx + 1).trim() },
-          };
-        }
-        return { name: "User", content: { text: line.trim() } };
-      });
-      return { examples };
-    });
-    setCharacterDraft((prev: CharacterData) => ({
-      ...prev,
-      messageExamples: parsed,
-    }));
-  }, []);
+  // ── Character actions are provided by useCharacterState (characterHook) ──
 
   // ── Onboarding ─────────────────────────────────────────────────────
 
