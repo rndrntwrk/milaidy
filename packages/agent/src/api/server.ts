@@ -9527,36 +9527,6 @@ async function handleRequest(
     return;
   }
 
-  // ── Provider inference helpers ────────────────────────────────────────
-  const disableCloudInference = (): void => {
-    const configuredCloudApiKey =
-      typeof state.config?.cloud?.apiKey === "string"
-        ? state.config.cloud.apiKey.trim()
-        : "";
-
-    delete process.env.ANTHROPIC_BASE_URL;
-    delete process.env.OPENAI_BASE_URL;
-    // Only clear proxied cloud credentials. Preserve direct provider keys so
-    // switching local providers does not discard previously configured BYOK state.
-    if (configuredCloudApiKey) {
-      if (process.env.ANTHROPIC_API_KEY === configuredCloudApiKey) {
-        delete process.env.ANTHROPIC_API_KEY;
-      }
-      if (process.env.OPENAI_API_KEY === configuredCloudApiKey) {
-        delete process.env.OPENAI_API_KEY;
-      }
-    }
-  };
-
-  const enableCloudInference = (cloudApiKey: string, baseUrl: string): void => {
-    // Configure coding agent CLIs to proxy through ElizaCloud /api/v1
-    process.env.ANTHROPIC_BASE_URL = `${baseUrl}/api/v1`;
-    process.env.ANTHROPIC_API_KEY = cloudApiKey;
-    process.env.OPENAI_BASE_URL = `${baseUrl}/api/v1`;
-    process.env.OPENAI_API_KEY = cloudApiKey;
-    // Gemini CLI and Aider — no proxy support via ElizaCloud inference
-  };
-
   // ── POST /api/provider/switch ─────────────────────────────────────────
   // Atomically switch the active AI provider selection while preserving
   // previously configured credentials and cloud auth as capability state.
@@ -9607,7 +9577,11 @@ async function handleRequest(
           apiKey: trimmedApiKey,
         };
         if (trimmedApiKey) {
-          // Configure coding agent CLIs to proxy through ElizaCloud /api/v1
+          // Configure coding agent CLIs to proxy through ElizaCloud /api/v1.
+          // Persisted cloud.* + ELIZAOS_* come from applyOnboardingConnectionConfig
+          // (enableCloudInference there); this block is process-only for SDK-compatible CLIs.
+          // Omitting trimmedApiKey leaves existing direct keys (E2E: switch to elizacloud
+          // without apiKey preserves OPENAI_API_KEY).
           const cloudApiKey = trimmedApiKey;
           const cloudBaseUrl = "https://www.elizacloud.ai";
           process.env.ANTHROPIC_BASE_URL = `${cloudBaseUrl}/api/v1`;
@@ -9625,7 +9599,6 @@ async function handleRequest(
               ? body.primaryModel.trim()
               : undefined,
         });
-        disableCloudInference();
       } else {
         connection = null;
       }
