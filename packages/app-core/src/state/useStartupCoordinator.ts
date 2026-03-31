@@ -25,9 +25,7 @@ import {
   type StreamEventEnvelope,
   client,
 } from "../api";
-import {
-  scanProviderCredentials,
-} from "../bridge";
+import { scanProviderCredentials } from "../bridge";
 import { mapServerTasksToSessions } from "../coding";
 import {
   type deriveOnboardingResumeConnection,
@@ -38,10 +36,7 @@ import {
   loadPersistedOnboardingComplete,
 } from "./persistence";
 import { resolveApiUrl } from "../utils";
-import {
-  COMPANION_ENABLED,
-  type Tab,
-} from "../navigation";
+import { COMPANION_ENABLED, type Tab } from "../navigation";
 import {
   INITIAL_STARTUP_STATE,
   connectionModeToTarget,
@@ -59,7 +54,10 @@ import {
 import { isElectrobunRuntime } from "../bridge";
 import type { UiLanguage } from "../i18n";
 import type { OnboardingMode, OnboardingStep } from "./types";
-import { runRestoringSession, type RestoringSessionCtx } from "./startup-phase-restore";
+import {
+  runRestoringSession,
+  type RestoringSessionCtx,
+} from "./startup-phase-restore";
 import { runPollingBackend } from "./startup-phase-poll";
 import { runStartingRuntime } from "./startup-phase-runtime";
 import { runHydrating, bindReadyPhase } from "./startup-phase-hydrate";
@@ -313,7 +311,9 @@ export function useStartupCoordinator(
     if (wsBindingsActiveRef.current) return; // Already bound
     wsBindingsActiveRef.current = true;
 
-    const cleanup = bindReadyPhase(depsRef as React.MutableRefObject<StartupCoordinatorDeps | undefined>);
+    const cleanup = bindReadyPhase(
+      depsRef as React.MutableRefObject<StartupCoordinatorDeps | undefined>,
+    );
 
     return () => {
       wsBindingsActiveRef.current = false;

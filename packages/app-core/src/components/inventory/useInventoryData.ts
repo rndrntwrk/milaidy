@@ -412,7 +412,12 @@ export function useInventoryData({
     }
 
     return sorted;
-  }, [walletNfts, inventoryChainFilters, inventorySort, inventorySortDirection]);
+  }, [
+    walletNfts,
+    inventoryChainFilters,
+    inventorySort,
+    inventorySortDirection,
+  ]);
 
   // ── Derived values ────────────────────────────────────────────────
   const focusedChain = useMemo(() => {

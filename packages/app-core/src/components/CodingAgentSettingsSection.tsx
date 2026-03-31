@@ -470,7 +470,7 @@ export function CodingAgentSettingsSection() {
                 ? t("codingagentsettingssection.Installed")
                 : installState === "missing"
                   ? t("codingagentsettingssection.NotInstalled")
-                : t("codingagentsettingssection.Unknown");
+                  : t("codingagentsettingssection.Unknown");
             return `${AGENT_LABELS[agent]}: ${label}`;
           }).join(" · ")}
         </SettingsControls.MutedText>

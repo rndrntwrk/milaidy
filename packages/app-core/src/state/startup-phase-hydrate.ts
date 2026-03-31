@@ -82,8 +82,7 @@ export async function runHydrating(
   const greetConvId = await deps.hydrateInitialConversationState();
   deps.setStartupPhase("ready");
   deps.setOnboardingLoading(false);
-  if (greetConvId)
-    void deps.requestGreetingWhenRunningRef.current(greetConvId);
+  if (greetConvId) void deps.requestGreetingWhenRunningRef.current(greetConvId);
 
   void deps.loadWorkbench();
   void deps.loadPlugins();
@@ -336,8 +335,7 @@ export function bindReadyPhase(
           const u = prev.map((c) => (c.id === conv.id ? conv : c));
           return u.sort(
             (a, b) =>
-              new Date(b.updatedAt).getTime() -
-              new Date(a.updatedAt).getTime(),
+              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
           );
         });
     },
@@ -408,8 +406,7 @@ export function bindReadyPhase(
             );
           }
           if (eventType === "blocked_auto_resolved") {
-            const p =
-              (dd?.prompt as string) ?? (dd?.reasoning as string) ?? "";
+            const p = (dd?.prompt as string) ?? (dd?.reasoning as string) ?? "";
             return prev.map((s) =>
               s.sessionId === sid
                 ? {
@@ -424,8 +421,7 @@ export function bindReadyPhase(
             );
           }
           if (eventType === "coordination_decision") {
-            const r =
-              (dd?.reasoning as string) ?? (dd?.action as string) ?? "";
+            const r = (dd?.reasoning as string) ?? (dd?.action as string) ?? "";
             const esc = (dd?.action as string) === "escalate";
             return prev.map((s) =>
               s.sessionId === sid
@@ -481,8 +477,7 @@ export function bindReadyPhase(
     const t = tabFromPath(getNavigationPathFromWindow());
     if (t) depsRef.current?.setTabRaw(t);
   };
-  if (typeof window !== "undefined")
-    window.addEventListener(navEvt, handleNav);
+  if (typeof window !== "undefined") window.addEventListener(navEvt, handleNav);
 
   return () => {
     if (typeof window !== "undefined")
@@ -506,8 +501,7 @@ export function bindReadyPhase(
     unbindConvUp();
     unbindPty();
     if (ptyPollInterval) clearInterval(ptyPollInterval);
-    if (handleVis)
-      document.removeEventListener("visibilitychange", handleVis);
+    if (handleVis) document.removeEventListener("visibilitychange", handleVis);
     client.disconnectWs();
   };
 }

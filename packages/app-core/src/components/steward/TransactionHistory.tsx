@@ -185,7 +185,9 @@ export function TransactionHistory({
             <select
               value={chainFilter}
               onChange={(e) => {
-                setChainFilter(e.target.value === "" ? "" : Number(e.target.value));
+                setChainFilter(
+                  e.target.value === "" ? "" : Number(e.target.value),
+                );
                 setPage(0);
               }}
               className="h-9 rounded-xl border border-border/50 bg-card/80 px-3 text-sm text-txt shadow-sm focus:border-accent/40 focus:outline-none"
@@ -215,112 +217,114 @@ export function TransactionHistory({
             </span>
           </PagePanel.Toolbar>
 
-        <div
-          className={embedded ? "overflow-hidden" : undefined}
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border/20 text-left text-xs font-semibold uppercase tracking-wider text-muted/70">
-                  <th className="px-4 py-3">Time</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">To</th>
-                  <th className="px-4 py-3">Amount</th>
-                  <th className="px-4 py-3">Chain</th>
-                  <th className="px-4 py-3">Tx Hash</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/10">
-                {paginated.map((tx) => (
-                  <tr
-                    key={tx.id}
-                    className="group transition-colors hover:bg-accent/4"
-                  >
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-muted">
-                      {formatTime(tx.createdAt)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge
-                        label={statusLabelForState(tx.status as StewardTxStatus)}
-                        tone={statusToneForState(tx.status as StewardTxStatus)}
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 font-mono text-xs text-txt hover:text-accent transition-colors cursor-pointer"
-                        onClick={() =>
-                          void handleCopy(tx.request?.to ?? "", "Address")
-                        }
-                        title={tx.request?.to}
-                      >
-                        {truncateAddress(tx.request?.to ?? "")}
-                        <Copy className="h-3 w-3 opacity-0 group-hover:opacity-60" />
-                      </button>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-xs font-medium text-txt">
-                      {formatWeiValue(
-                        tx.request?.value ?? "0",
-                        tx.request?.chainId ?? 8453,
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-muted">
-                      {getChainName(tx.request?.chainId ?? 0)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {tx.txHash ? (
-                        <a
-                          href={
-                            getExplorerTxUrl(
-                              tx.request?.chainId ?? 8453,
-                              tx.txHash,
-                            ) ?? "#"
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 font-mono text-xs text-accent hover:text-accent/80 transition-colors"
-                          title={tx.txHash}
-                        >
-                          {truncateAddress(tx.txHash, 4)}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      ) : (
-                        <span className="text-xs text-muted/50">—</span>
-                      )}
-                    </td>
+          <div className={embedded ? "overflow-hidden" : undefined}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/20 text-left text-xs font-semibold uppercase tracking-wider text-muted/70">
+                    <th className="px-4 py-3">Time</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">To</th>
+                    <th className="px-4 py-3">Amount</th>
+                    <th className="px-4 py-3">Chain</th>
+                    <th className="px-4 py-3">Tx Hash</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          {pageCount > 1 && (
-            <div className="flex items-center justify-between border-t border-border/20 px-4 py-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={page === 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                className="h-8 rounded-lg px-3 text-xs"
-              >
-                Previous
-              </Button>
-              <span className="text-xs text-muted">
-                Page {page + 1} of {pageCount}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={page >= pageCount - 1}
-                onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-                className="h-8 rounded-lg px-3 text-xs"
-              >
-                Next
-              </Button>
+                </thead>
+                <tbody className="divide-y divide-border/10">
+                  {paginated.map((tx) => (
+                    <tr
+                      key={tx.id}
+                      className="group transition-colors hover:bg-accent/4"
+                    >
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-muted">
+                        {formatTime(tx.createdAt)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge
+                          label={statusLabelForState(
+                            tx.status as StewardTxStatus,
+                          )}
+                          tone={statusToneForState(
+                            tx.status as StewardTxStatus,
+                          )}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 font-mono text-xs text-txt hover:text-accent transition-colors cursor-pointer"
+                          onClick={() =>
+                            void handleCopy(tx.request?.to ?? "", "Address")
+                          }
+                          title={tx.request?.to}
+                        >
+                          {truncateAddress(tx.request?.to ?? "")}
+                          <Copy className="h-3 w-3 opacity-0 group-hover:opacity-60" />
+                        </button>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs font-medium text-txt">
+                        {formatWeiValue(
+                          tx.request?.value ?? "0",
+                          tx.request?.chainId ?? 8453,
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-muted">
+                        {getChainName(tx.request?.chainId ?? 0)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {tx.txHash ? (
+                          <a
+                            href={
+                              getExplorerTxUrl(
+                                tx.request?.chainId ?? 8453,
+                                tx.txHash,
+                              ) ?? "#"
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 font-mono text-xs text-accent hover:text-accent/80 transition-colors"
+                            title={tx.txHash}
+                          >
+                            {truncateAddress(tx.txHash, 4)}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : (
+                          <span className="text-xs text-muted/50">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>
+
+            {/* Pagination */}
+            {pageCount > 1 && (
+              <div className="flex items-center justify-between border-t border-border/20 px-4 py-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  className="h-8 rounded-lg px-3 text-xs"
+                >
+                  Previous
+                </Button>
+                <span className="text-xs text-muted">
+                  Page {page + 1} of {pageCount}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={page >= pageCount - 1}
+                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                  className="h-8 rounded-lg px-3 text-xs"
+                >
+                  Next
+                </Button>
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>

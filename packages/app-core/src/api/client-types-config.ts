@@ -3,7 +3,11 @@
 // Update*, Extension*, Workbench*, Character*, Voice*, Skill*
 // ---------------------------------------------------------------------------
 
-import type { TriggerLastStatus, TriggerType, TriggerWakeMode } from "./client-types-core";
+import type {
+  TriggerLastStatus,
+  TriggerType,
+  TriggerWakeMode,
+} from "./client-types-core";
 import type { ReleaseChannel } from "@miladyai/agent/contracts/config";
 import type { ConfigUiHint } from "../types";
 import type { MessageExampleContent } from "@miladyai/shared/contracts/onboarding";

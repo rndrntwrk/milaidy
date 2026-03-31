@@ -68,7 +68,9 @@ describe("HeartbeatsView form interactions", () => {
 
     render(<HeartbeatsView />);
 
-    fireEvent.click(screen.getAllByRole("button", { name: "New Heartbeat" })[0]);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "New Heartbeat" })[0],
+    );
 
     fireEvent.change(screen.getByPlaceholderText("Daily Digest"), {
       target: { value: "Nightly Heartbeat" },
@@ -97,7 +99,9 @@ describe("HeartbeatsView form interactions", () => {
 
     render(<HeartbeatsView />);
 
-    fireEvent.click(screen.getAllByRole("button", { name: "New Heartbeat" })[0]);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "New Heartbeat" })[0],
+    );
 
     fireEvent.change(screen.getByPlaceholderText("Daily Digest"), {
       target: { value: "Nightly Heartbeat" },

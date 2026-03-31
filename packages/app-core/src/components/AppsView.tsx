@@ -258,10 +258,7 @@ export function AppsView() {
             />
           </div>
 
-          <PagePanel
-            variant="inset"
-            className="order-1 p-4 lg:order-2"
-          >
+          <PagePanel variant="inset" className="order-1 p-4 lg:order-2">
             {selectedApp ? (
               <AppDetailPane
                 app={selectedApp}

@@ -100,7 +100,10 @@ describe("onboarding completion through coordinator", () => {
   });
 
   it("coordinator reaches hydrating phase which creates conversations", () => {
-    let state: StartupState = { phase: "onboarding-required", serverReachable: true };
+    let state: StartupState = {
+      phase: "onboarding-required",
+      serverReachable: true,
+    };
     state = startupReducer(state, { type: "ONBOARDING_COMPLETE" });
     state = startupReducer(state, { type: "AGENT_RUNNING" });
     expect(state.phase).toBe("hydrating");
@@ -110,10 +113,16 @@ describe("onboarding completion through coordinator", () => {
 
   it("completed onboarding with existing install goes to starting-runtime not onboarding", () => {
     let state: StartupState = { phase: "restoring-session" };
-    state = startupReducer(state, { type: "SESSION_RESTORED", target: "embedded-local" });
+    state = startupReducer(state, {
+      type: "SESSION_RESTORED",
+      target: "embedded-local",
+    });
     // resolving-target auto-advances
     state = startupReducer(state, { type: "RETRY" });
-    state = startupReducer(state, { type: "BACKEND_REACHED", onboardingComplete: true });
+    state = startupReducer(state, {
+      type: "BACKEND_REACHED",
+      onboardingComplete: true,
+    });
     expect(state.phase).toBe("starting-runtime");
   });
 });

@@ -5,10 +5,7 @@
  * Probes for an existing install/connection and dispatches the result.
  */
 
-import {
-  type OnboardingOptions,
-  client,
-} from "../api";
+import { type OnboardingOptions, client } from "../api";
 import {
   getBackendStartupTimeoutMs,
   inspectExistingElizaInstall,
@@ -22,14 +19,15 @@ import {
   deriveOnboardingResumeConnection,
   type StartupErrorState,
 } from "./internal";
-import {
-  detectExistingOnboardingConnection,
-} from "./onboarding-bootstrap";
+import { detectExistingOnboardingConnection } from "./onboarding-bootstrap";
 import {
   loadPersistedConnectionMode,
   loadPersistedOnboardingComplete,
 } from "./persistence";
-import { connectionModeToTarget, type StartupEvent } from "./startup-coordinator";
+import {
+  connectionModeToTarget,
+  type StartupEvent,
+} from "./startup-coordinator";
 import type { StartupCoordinatorDeps } from "./useStartupCoordinator";
 
 export interface RestoringSessionCtx {
@@ -95,9 +93,7 @@ export async function runRestoringSession(
 
   deps.setOnboardingExistingInstallDetected(
     Boolean(
-      hadPrior ||
-        desktopInstall?.detected ||
-        probed?.detectedExistingInstall,
+      hadPrior || desktopInstall?.detected || probed?.detectedExistingInstall,
     ),
   );
 
@@ -155,8 +151,7 @@ export async function runRestoringSession(
     if (restored.cloudAuthToken) client.setToken(restored.cloudAuthToken);
   } else if (restored.runMode === "remote" && restored.remoteApiBase) {
     client.setBaseUrl(restored.remoteApiBase);
-    if (restored.remoteAccessToken)
-      client.setToken(restored.remoteAccessToken);
+    if (restored.remoteAccessToken) client.setToken(restored.remoteAccessToken);
   } else if (restored.runMode === "local") {
     try {
       await invokeDesktopBridgeRequest({
