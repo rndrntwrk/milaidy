@@ -20,11 +20,9 @@ import {
   useRef,
   useState,
 } from "react";
-import type { AgentStartupDiagnostics } from "./api/client";
 import {
   AdvancedPageView,
   AppsPageView,
-  AvatarLoader,
   BugReportModal,
   CharacterEditor,
   ChatView,
@@ -68,47 +66,6 @@ const CHAT_MOBILE_BREAKPOINT_PX = 820;
 const CHAT_DESKTOP_COMPOSER_UNDERLAY_CLASS =
   "pointer-events-none absolute inset-x-0 bottom-0 h-[5.75rem]";
 
-function formatStartupElapsed(sec: number): string {
-  if (sec <= 0) return "";
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-function resolveAgentLoaderCopy(
-  agentStarting: boolean,
-  onboardingLoading: boolean,
-  elapsedSec: number,
-  startup: AgentStartupDiagnostics | undefined,
-): { label: string; progress?: number } {
-  const elapsed =
-    elapsedSec > 0 ? ` · ${formatStartupElapsed(elapsedSec)} elapsed` : "";
-  if (startup?.embeddingPhase === "downloading") {
-    const detail = startup.embeddingDetail?.trim();
-    const base = `Downloading embedding model (GGUF)${elapsed}`;
-    return {
-      label: detail
-        ? `${base} · ${detail}`
-        : `${base} · first run can take several minutes`,
-      progress: startup.embeddingProgressPct,
-    };
-  }
-  if (startup?.embeddingPhase === "loading") {
-    return {
-      label: `Loading embedding model${elapsed}`,
-      progress: startup.embeddingProgressPct,
-    };
-  }
-  if (startup?.embeddingPhase === "checking") {
-    return { label: `Checking embedding model${elapsed}` };
-  }
-  if (agentStarting || onboardingLoading) {
-    return {
-      label: `Starting agent${elapsed} · plugins and local models may take a while`,
-    };
-  }
-  return { label: `Starting systems${elapsed}` };
-}
 
 function resolveOnboardingHandoffCopy(
   phase: string,
@@ -476,26 +433,7 @@ export function App() {
   }, []);
 
   const bugReport = useBugReportState();
-  const agentStarting = agentStatus?.state === "starting";
-
-  const showFullScreenLoader =
-    onboardingComplete &&
-    !onboardingHandoffActive &&
-    (onboardingLoading || agentStarting);
-
-  const [startupElapsedSec, setStartupElapsedSec] = useState(0);
-  useEffect(() => {
-    if (!showFullScreenLoader) {
-      setStartupElapsedSec(0);
-      return;
-    }
-    const t0 = Date.now();
-    setStartupElapsedSec(0);
-    const id = window.setInterval(() => {
-      setStartupElapsedSec(Math.floor((Date.now() - t0) / 1000));
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [showFullScreenLoader]);
+  // Loading is handled entirely by StartupShell — no separate loader needed.
 
   useEffect(() => {
     // Safety-net watchdog: the coordinator has its own timeouts per phase, but
@@ -519,9 +457,6 @@ export function App() {
   // to "starting" while we need to show the wizard immediately.
   const blockOnboardingForShell = onboardingLoading;
 
-  const [loaderFadingOut, setLoaderFadingOut] = useState(false);
-  const showLoaderRef = useRef(true);
-  const [showLoader, setShowLoader] = useState(true);
 
   // Crossfade state for onboarding -> chat
   const [fadingOutOnboarding, setFadingOutOnboarding] = useState(false);
@@ -552,21 +487,6 @@ export function App() {
     prevOnboardingCompleteRef.current = onboardingComplete;
   }, [onboardingComplete, onboardingHandoffActive]);
 
-  useEffect(() => {
-    if (showFullScreenLoader) {
-      showLoaderRef.current = true;
-      setShowLoader(true);
-      setLoaderFadingOut(false);
-    } else if (showLoaderRef.current) {
-      showLoaderRef.current = false;
-      setLoaderFadingOut(true);
-      const timer = setTimeout(() => {
-        setShowLoader(false);
-        setLoaderFadingOut(false);
-      }, 800);
-      return () => clearTimeout(timer);
-    }
-  }, [showFullScreenLoader]);
 
   // Pop-out mode — render only StreamView, skip startup gates.
   // Platform init is skipped in main.tsx; AppProvider hydrates WS in background.
@@ -846,21 +766,6 @@ export function App() {
       />
       <ConnectionFailedBanner />
       <SystemWarningBanner />
-      {showLoader && (
-        <AvatarLoader
-          {...(() => {
-            const { label, progress } = resolveAgentLoaderCopy(
-              agentStarting,
-              onboardingLoading,
-              startupElapsedSec,
-              agentStatus?.startup,
-            );
-            return { label, progress };
-          })()}
-          fullScreen
-          fadingOut={loaderFadingOut}
-        />
-      )}
     </BugReportProvider>
   );
 }

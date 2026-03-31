@@ -21,6 +21,35 @@ function dispatch(
 }
 
 describe("StartupCoordinator", () => {
+  describe("splash phase", () => {
+    it("starts at splash with loaded=false", () => {
+      expect(INITIAL_STARTUP_STATE).toEqual({ phase: "splash", loaded: false });
+    });
+
+    it("SPLASH_LOADED sets loaded=true", () => {
+      const state = startupReducer(INITIAL_STARTUP_STATE, { type: "SPLASH_LOADED" });
+      expect(state).toEqual({ phase: "splash", loaded: true });
+    });
+
+    it("SPLASH_CONTINUE transitions to restoring-session", () => {
+      const loaded: StartupState = { phase: "splash", loaded: true };
+      const next = startupReducer(loaded, { type: "SPLASH_CONTINUE" });
+      expect(next.phase).toBe("restoring-session");
+    });
+
+    it("ignores unrelated events while on splash", () => {
+      const state = INITIAL_STARTUP_STATE;
+      expect(startupReducer(state, { type: "AGENT_RUNNING" })).toBe(state);
+      expect(startupReducer(state, { type: "BACKEND_TIMEOUT" })).toBe(state);
+    });
+
+    it("RETRY from splash resets to splash", () => {
+      const loaded: StartupState = { phase: "splash", loaded: true };
+      const next = startupReducer(loaded, { type: "RETRY" });
+      expect(next).toEqual({ phase: "splash", loaded: false });
+    });
+  });
+
   describe("happy path — local runtime", () => {
     it("boots → restoring → resolving → polling → starting → hydrating → ready", () => {
       let state: StartupState = { phase: "restoring-session" };
