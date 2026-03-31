@@ -17,7 +17,6 @@ export function ActivateStep() {
     handleOnboardingNext,
     handleOnboardingBack,
     t,
-    onboardingRestarting,
   } = useApp();
 
   return (

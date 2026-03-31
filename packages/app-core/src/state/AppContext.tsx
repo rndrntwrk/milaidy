@@ -1152,7 +1152,6 @@ function AppProviderInner({
       selectedChains: onboardingSelectedChains,
       rpcSelections: onboardingRpcSelections,
       rpcKeys: onboardingRpcKeys,
-      restarting: onboardingRestarting,
     },
     setStep: setOnboardingStep,
     setMode: setOnboardingMode,
@@ -1322,10 +1321,6 @@ function AppProviderInner({
   );
   const setOnboardingAvatar = useCallback(
     (v: number) => setOnboardingField("avatar", v),
-    [setOnboardingField],
-  );
-  const setOnboardingRestarting = useCallback(
-    (v: boolean) => setOnboardingField("restarting", v),
     [setOnboardingField],
   );
   const setPostOnboardingChecklistDismissed = useCallback(
@@ -4298,9 +4293,9 @@ function AppProviderInner({
       mode: OnboardingHandoffMode,
       retryState?: OnboardingHandoffRetryState | null,
     ) => {
-      if (onboardingFinishBusyRef.current || onboardingRestarting) return;
+      if (onboardingFinishBusyRef.current) return;
       if (!onboardingOptions) return;
-      if (onboardingFinishSavingRef.current || onboardingRestarting) return;
+      if (onboardingFinishSavingRef.current) return;
 
       const attempt: OnboardingHandoffRetryState = retryState
         ? { ...retryState }
@@ -4312,7 +4307,6 @@ function AppProviderInner({
 
       prepareOnboardingChatHandoffAttempt(attempt);
       onboardingFinishBusyRef.current = true;
-      setOnboardingRestarting(true);
       onboardingFinishSavingRef.current = true;
 
       try {
@@ -4556,11 +4550,10 @@ function AppProviderInner({
       } finally {
         onboardingFinishSavingRef.current = false;
         onboardingFinishBusyRef.current = false;
-        setOnboardingRestarting(false);
+        
       }
     },
     [
-      onboardingRestarting,
       onboardingOptions,
       onboardingStyle,
       onboardingName,
@@ -4585,7 +4578,6 @@ function AppProviderInner({
       onboardingResumeConnectionRef,
       onboardingFinishBusyRef,
       onboardingFinishSavingRef,
-      setOnboardingRestarting,
       prepareOnboardingChatHandoffAttempt,
       completeOnboardingChatHandoff,
       failOnboardingChatHandoff,
@@ -4594,11 +4586,11 @@ function AppProviderInner({
 
   const retryOnboardingHandoff = useCallback(async () => {
     const retryState = onboardingHandoffRetryStateRef.current;
-    if (!retryState || onboardingRestarting) {
+    if (!retryState) {
       return;
     }
     await runOnboardingChatHandoff(retryState.mode, retryState);
-  }, [onboardingRestarting, runOnboardingChatHandoff]);
+  }, [runOnboardingChatHandoff]);
 
   const cancelOnboardingHandoff = useCallback(() => {
     onboardingHandoffRetryStateRef.current = null;
@@ -5039,7 +5031,6 @@ function AppProviderInner({
         onboardingElizaCloudTab: setOnboardingElizaCloudTab,
         onboardingRpcKeys: setOnboardingRpcKeys,
         onboardingAvatar: setOnboardingAvatar,
-        onboardingRestarting: setOnboardingRestarting,
         elizaCloudEnabled: setElizaCloudEnabled,
         cloudDashboardView: setCloudDashboardView,
         selectedVrmIndex: setSelectedVrmIndex,
@@ -5133,7 +5124,6 @@ function AppProviderInner({
       setOnboardingRemoteConnecting,
       setOnboardingRemoteError,
       setOnboardingRemoteToken,
-      setOnboardingRestarting,
       setOnboardingRpcKeys,
       setOnboardingRpcSelections,
       setOnboardingRunMode,
@@ -5582,7 +5572,6 @@ function AppProviderInner({
     onboardingRpcSelections,
     onboardingRpcKeys,
     onboardingAvatar,
-    onboardingRestarting,
     commandPaletteOpen,
     commandQuery,
     commandActiveIndex,

@@ -567,7 +567,6 @@ export interface AppState {
   onboardingRpcSelections: Record<string, string>;
   onboardingRpcKeys: Record<string, string>;
   onboardingAvatar: number;
-  onboardingRestarting: boolean;
 
   // Command palette
   commandPaletteOpen: boolean;
