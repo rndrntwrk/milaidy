@@ -135,7 +135,6 @@
     "apps/app/public/worlds/companion-night.spz"
   ],
   "homepage": [
-    "apps/homepage/public/.DS_Store",
     "apps/homepage/public/404.html",
     "apps/homepage/public/CNAME",
     "apps/homepage/public/animations/idle.glb",

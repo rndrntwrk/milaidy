@@ -442,8 +442,7 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
 
   const notifyHeartbeatEvent = useCallback(
     (event: StreamEventEnvelope) => {
-      // biome-ignore lint/suspicious/noExplicitAny: heartbeat payloads are loosely typed
-      const payload = event.payload as any;
+      const payload = event.payload as Record<string, unknown>;
       const status =
         typeof payload.status === "string"
           ? payload.status.trim().toLowerCase()
