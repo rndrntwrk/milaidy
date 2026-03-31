@@ -415,6 +415,7 @@ export function clearPersistedOnboardingConfig(
     }
   }
 
+  // Clear voice settings so presets apply their correct voice on re-onboarding.
   const messages = asRecord(config.messages);
   if (messages) {
     delete messages.tts;
@@ -422,6 +423,11 @@ export function clearPersistedOnboardingConfig(
       delete config.messages;
     }
   }
+
+  // Clear UI state (avatar, preset selection) so the full character resets.
+  // Without this, the avatar survives a reset but the voice doesn't,
+  // causing mismatched character state (e.g. male preset with female voice).
+  delete config.ui;
 
   delete config.connection;
 
