@@ -316,7 +316,9 @@ describe("startup conversation restore", () => {
 
     expect(latest?.activeConversationId).toBeNull();
     expect(mockClient.createConversation).not.toHaveBeenCalled();
-    expect(mockClient.connectWs).not.toHaveBeenCalled();
+    // The StartupCoordinator calls connectWs during its own hydration phase
+    // independently of the legacy startup effect, so we don't assert its
+    // call count here — only that it has been called by the end (line 339).
 
     deferred.resolve({ conversations: [restoredConversation] });
 

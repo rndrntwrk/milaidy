@@ -15,7 +15,6 @@
  */
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import type { AgentStatus } from "../api";
 import { client } from "../api";
 import { isElectrobunRuntime } from "../bridge/electrobun-runtime";
 import {
@@ -46,7 +45,6 @@ import {
   type StartupEvent,
   type StartupState,
 } from "./startup-coordinator";
-import type { StartupErrorState, StartupPhase } from "./types";
 
 // ── Platform detection ───────────────────────────────────────────────
 
@@ -60,14 +58,9 @@ function detectPlatformPolicy(): PlatformPolicy {
 
 export interface StartupCoordinatorDeps {
   setConnected: (v: boolean) => void;
-  setStartupPhase: (v: StartupPhase) => void;
-  setStartupError: (v: StartupErrorState | null) => void;
   setAuthRequired: (v: boolean) => void;
   setOnboardingComplete: (v: boolean) => void;
   setOnboardingLoading: (v: boolean) => void;
-  setAgentStatus: (v: AgentStatus | null) => void;
-  setPairingEnabled: (v: boolean) => void;
-  setPairingExpiresAt: (v: number | null) => void;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────
@@ -419,53 +412,42 @@ export function useStartupCoordinator(
     // Only fire on actual phase transitions (or first mount)
     if (prev === cur && prev !== "restoring-session") return;
 
+    // The bridge intentionally does NOT call setStartupPhase or
+    // setStartupError — the legacy startup effect owns those and sets
+    // them with richer context (error details, correct timing). The
+    // coordinator's StartupShell reads from its own state; the legacy
+    // StartupFailureView reads from lifecycle state. We only bridge
+    // fields where the coordinator reaches the state first and the
+    // legacy effect won't contradict.
     switch (cur) {
       case "restoring-session":
       case "resolving-target":
-        // Early phases — no legacy setters needed beyond initial state
+      case "error":
+      case "ready":
         break;
 
       case "polling-backend":
-        deps.setStartupPhase("starting-backend");
         deps.setConnected(false);
         break;
 
       case "pairing-required":
         deps.setAuthRequired(true);
-        deps.setStartupPhase("ready");
         break;
 
       case "onboarding-required":
-        deps.setOnboardingComplete(false);
+        // Do NOT call setOnboardingComplete(false) here — the legacy startup
+        // effect owns onboardingComplete and applies the full resolution
+        // logic (including the shouldPreserveCompletedOnboarding localStorage
+        // override). Calling setOnboardingComplete(false) from the coordinator
+        // would clobber that decision when the backend reports incomplete but
+        // the user has a locally-persisted completion flag.
         deps.setOnboardingLoading(false);
-        deps.setStartupPhase("ready");
         break;
 
       case "starting-runtime":
-        deps.setStartupPhase("initializing-agent");
-        deps.setConnected(true);
-        break;
-
       case "hydrating":
-        // Agent is running — bridge to legacy
-        deps.setAgentStatus({ state: "running" } as AgentStatus);
-        break;
-
-      case "ready":
-        deps.setStartupPhase("ready");
-        deps.setOnboardingLoading(false);
         deps.setConnected(true);
         break;
-
-      case "error": {
-        const errState = state as Extract<StartupState, { phase: "error" }>;
-        deps.setStartupError({
-          reason: errState.reason,
-          message: errState.message,
-          phase: toLegacyStartupPhase(state),
-        });
-        break;
-      }
     }
   }, [state, deps]);
 

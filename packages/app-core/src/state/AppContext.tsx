@@ -783,14 +783,9 @@ function AppProviderInner({
   // components that depend on the old state shape stay in sync.
   const startupCoordinator = useStartupCoordinator({
     setConnected,
-    setStartupPhase,
-    setStartupError,
     setAuthRequired,
     setOnboardingComplete,
     setOnboardingLoading,
-    setAgentStatus,
-    setPairingEnabled,
-    setPairingExpiresAt,
   });
 
   // ── Chat state (consolidated from 18+ useState + 10 useEffect hooks) ──
