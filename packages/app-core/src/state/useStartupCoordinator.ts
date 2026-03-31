@@ -182,7 +182,10 @@ export function useStartupCoordinator(
 
       try {
         const probed = await Promise.race([
-          detectExistingOnboardingConnection({ client, timeoutMs: probeTimeout }),
+          detectExistingOnboardingConnection({
+            client,
+            timeoutMs: probeTimeout,
+          }),
           new Promise<null>((resolve) =>
             setTimeout(() => resolve(null), probeTimeout),
           ),
@@ -327,18 +330,12 @@ export function useStartupCoordinator(
           if (cancelled) return;
 
           // Slide deadline while agent is starting (embedding download)
-          if (
-            status.state === "starting" &&
-            Date.now() - startedAt > 15_000
-          ) {
+          if (status.state === "starting" && Date.now() - startedAt > 15_000) {
             const extended = Date.now() + 180_000;
             deadline = Math.min(extended, absoluteMax);
           }
 
-          if (
-            status.state === "not_started" ||
-            status.state === "stopped"
-          ) {
+          if (status.state === "not_started" || status.state === "stopped") {
             status = await client.startAgent();
             if (cancelled) return;
           }
@@ -349,8 +346,7 @@ export function useStartupCoordinator(
           }
 
           if (status.state === "error") {
-            const msg =
-              status.startup?.lastError ?? "Agent failed to start";
+            const msg = status.startup?.lastError ?? "Agent failed to start";
             dispatch({ type: "AGENT_ERROR", message: msg });
             return;
           }

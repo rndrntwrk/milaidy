@@ -304,7 +304,10 @@ export interface AppState {
   startupError: StartupErrorState | null;
   /** StartupCoordinator state — exposed for debugging/incremental migration. */
   startupCoordinator: import("./startup-coordinator").StartupState;
-  startupCoordinatorLegacyPhase: "starting-backend" | "initializing-agent" | "ready";
+  startupCoordinatorLegacyPhase:
+    | "starting-backend"
+    | "initializing-agent"
+    | "ready";
   authRequired: boolean;
   actionNotice: ActionNotice | null;
   lifecycleBusy: boolean;

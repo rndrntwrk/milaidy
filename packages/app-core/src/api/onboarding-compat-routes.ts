@@ -65,7 +65,10 @@ export async function handleOnboardingCompatRoute(
   let capturedCloudApiKey: string | undefined;
 
   try {
-    const body = JSON.parse(rawBody.toString("utf8")) as Record<string, unknown>;
+    const body = JSON.parse(rawBody.toString("utf8")) as Record<
+      string,
+      unknown
+    >;
     await extractAndPersistOnboardingApiKey(body);
     persistCompatOnboardingDefaults(body);
     if (typeof body.name === "string" && body.name.trim()) {
@@ -148,9 +151,7 @@ export async function handleOnboardingCompatRoute(
       const enriched = {
         ...replayBodyRecord,
         runMode: "cloud" as const,
-        ...(resolvedCloudApiKey
-          ? { providerApiKey: resolvedCloudApiKey }
-          : {}),
+        ...(resolvedCloudApiKey ? { providerApiKey: resolvedCloudApiKey } : {}),
       };
       replayBody = Buffer.from(JSON.stringify(enriched), "utf8");
     } else if (body.runMode !== "cloud" && replayBodyRecord !== body) {

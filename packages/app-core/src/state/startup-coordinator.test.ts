@@ -13,11 +13,11 @@ import {
   type StartupState,
 } from "./startup-coordinator";
 
-function dispatch(state: StartupState, ...events: StartupEvent[]): StartupState {
-  return events.reduce(
-    (s, e) => startupReducer(s, e),
-    state,
-  );
+function dispatch(
+  state: StartupState,
+  ...events: StartupEvent[]
+): StartupState {
+  return events.reduce((s, e) => startupReducer(s, e), state);
 }
 
 describe("StartupCoordinator", () => {
@@ -32,7 +32,9 @@ describe("StartupCoordinator", () => {
       expect(state.phase).toBe("resolving-target");
 
       // resolving-target auto-advances to polling-backend (driven by effect)
-      state = startupReducer(state, { type: "BACKEND_POLL_RETRY" } as StartupEvent);
+      state = startupReducer(state, {
+        type: "BACKEND_POLL_RETRY",
+      } as StartupEvent);
       // resolving-target doesn't handle BACKEND_POLL_RETRY — need to advance manually
       // The transition from resolving-target to polling-backend is automatic in the reducer
       expect(state).toEqual({
@@ -68,7 +70,9 @@ describe("StartupCoordinator", () => {
         target: "cloud-managed",
       });
 
-      state = startupReducer(state, { type: "BACKEND_POLL_RETRY" } as StartupEvent);
+      state = startupReducer(state, {
+        type: "BACKEND_POLL_RETRY",
+      } as StartupEvent);
       expect(state.phase).toBe("polling-backend");
 
       state = startupReducer(state, {
@@ -218,27 +222,62 @@ describe("StartupCoordinator", () => {
     it("isStartupLoading is true for all intermediate phases", () => {
       expect(isStartupLoading({ phase: "booting" })).toBe(true);
       expect(isStartupLoading({ phase: "restoring-session" })).toBe(true);
-      expect(isStartupLoading({ phase: "polling-backend", target: "embedded-local", attempts: 0 })).toBe(true);
-      expect(isStartupLoading({ phase: "starting-runtime", attempts: 0 })).toBe(true);
+      expect(
+        isStartupLoading({
+          phase: "polling-backend",
+          target: "embedded-local",
+          attempts: 0,
+        }),
+      ).toBe(true);
+      expect(isStartupLoading({ phase: "starting-runtime", attempts: 0 })).toBe(
+        true,
+      );
       expect(isStartupLoading({ phase: "hydrating" })).toBe(true);
       expect(isStartupLoading({ phase: "ready" })).toBe(false);
       expect(isStartupLoading({ phase: "pairing-required" })).toBe(false);
-      expect(isStartupLoading({ phase: "onboarding-required", serverReachable: false })).toBe(false);
+      expect(
+        isStartupLoading({
+          phase: "onboarding-required",
+          serverReachable: false,
+        }),
+      ).toBe(false);
     });
 
     it("isStartupTerminal is true only for ready and error", () => {
       expect(isStartupTerminal({ phase: "ready" })).toBe(true);
-      expect(isStartupTerminal({ phase: "error", reason: "unknown", message: "", timedOut: false })).toBe(true);
+      expect(
+        isStartupTerminal({
+          phase: "error",
+          reason: "unknown",
+          message: "",
+          timedOut: false,
+        }),
+      ).toBe(true);
       expect(isStartupTerminal({ phase: "booting" })).toBe(false);
     });
 
     it("toLegacyStartupPhase maps to the three legacy phases", () => {
-      expect(toLegacyStartupPhase({ phase: "booting" })).toBe("starting-backend");
-      expect(toLegacyStartupPhase({ phase: "polling-backend", target: "embedded-local", attempts: 0 })).toBe("starting-backend");
-      expect(toLegacyStartupPhase({ phase: "starting-runtime", attempts: 0 })).toBe("initializing-agent");
+      expect(toLegacyStartupPhase({ phase: "booting" })).toBe(
+        "starting-backend",
+      );
+      expect(
+        toLegacyStartupPhase({
+          phase: "polling-backend",
+          target: "embedded-local",
+          attempts: 0,
+        }),
+      ).toBe("starting-backend");
+      expect(
+        toLegacyStartupPhase({ phase: "starting-runtime", attempts: 0 }),
+      ).toBe("initializing-agent");
       expect(toLegacyStartupPhase({ phase: "ready" })).toBe("ready");
       expect(toLegacyStartupPhase({ phase: "pairing-required" })).toBe("ready");
-      expect(toLegacyStartupPhase({ phase: "onboarding-required", serverReachable: false })).toBe("ready");
+      expect(
+        toLegacyStartupPhase({
+          phase: "onboarding-required",
+          serverReachable: false,
+        }),
+      ).toBe("ready");
     });
   });
 
@@ -270,7 +309,9 @@ describe("StartupCoordinator", () => {
     it("ignores all events once ready", () => {
       const ready: StartupState = { phase: "ready" };
       expect(startupReducer(ready, { type: "BACKEND_TIMEOUT" })).toBe(ready);
-      expect(startupReducer(ready, { type: "AGENT_ERROR", message: "x" })).toBe(ready);
+      expect(startupReducer(ready, { type: "AGENT_ERROR", message: "x" })).toBe(
+        ready,
+      );
       expect(startupReducer(ready, { type: "RETRY" })).toBe(ready);
     });
   });

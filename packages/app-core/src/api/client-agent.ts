@@ -280,7 +280,9 @@ declare module "./client-base" {
       durationMs: number;
     }>;
     getLogs(filter?: LogsFilter): Promise<LogsResponse>;
-    getSecurityAudit(filter?: SecurityAuditFilter): Promise<SecurityAuditResponse>;
+    getSecurityAudit(
+      filter?: SecurityAuditFilter,
+    ): Promise<SecurityAuditResponse>;
     streamSecurityAudit(
       onEvent: (event: SecurityAuditStreamEvent) => void,
       filter?: SecurityAuditFilter,
@@ -639,9 +641,7 @@ MiladyClient.prototype.switchProvider = async function (
   return result;
 };
 
-MiladyClient.prototype.startOpenAILogin = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.startOpenAILogin = async function (this: MiladyClient) {
   return this.fetch("/api/subscription/openai/start", { method: "POST" });
 };
 
@@ -913,19 +913,13 @@ MiladyClient.prototype.updateTrigger = async function (
   });
 };
 
-MiladyClient.prototype.deleteTrigger = async function (
-  this: MiladyClient,
-  id,
-) {
+MiladyClient.prototype.deleteTrigger = async function (this: MiladyClient, id) {
   return this.fetch(`/api/triggers/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
 };
 
-MiladyClient.prototype.runTriggerNow = async function (
-  this: MiladyClient,
-  id,
-) {
+MiladyClient.prototype.runTriggerNow = async function (this: MiladyClient, id) {
   return this.fetch(`/api/triggers/${encodeURIComponent(id)}/execute`, {
     method: "POST",
   });
@@ -938,15 +932,11 @@ MiladyClient.prototype.getTriggerRuns = async function (
   return this.fetch(`/api/triggers/${encodeURIComponent(id)}/runs`);
 };
 
-MiladyClient.prototype.getTriggerHealth = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getTriggerHealth = async function (this: MiladyClient) {
   return this.fetch("/api/triggers/health");
 };
 
-MiladyClient.prototype.getTrainingStatus = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getTrainingStatus = async function (this: MiladyClient) {
   return this.fetch("/api/training/status");
 };
 
@@ -987,9 +977,7 @@ MiladyClient.prototype.buildTrainingDataset = async function (
   });
 };
 
-MiladyClient.prototype.listTrainingJobs = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.listTrainingJobs = async function (this: MiladyClient) {
   return this.fetch("/api/training/jobs");
 };
 
@@ -1014,10 +1002,9 @@ MiladyClient.prototype.cancelTrainingJob = async function (
   this: MiladyClient,
   jobId,
 ) {
-  return this.fetch(
-    `/api/training/jobs/${encodeURIComponent(jobId)}/cancel`,
-    { method: "POST" },
-  );
+  return this.fetch(`/api/training/jobs/${encodeURIComponent(jobId)}/cancel`, {
+    method: "POST",
+  });
 };
 
 MiladyClient.prototype.listTrainingModels = async function (
@@ -1150,10 +1137,7 @@ MiladyClient.prototype.testPluginConnection = async function (
   });
 };
 
-MiladyClient.prototype.getLogs = async function (
-  this: MiladyClient,
-  filter?,
-) {
+MiladyClient.prototype.getLogs = async function (this: MiladyClient, filter?) {
   const params = new URLSearchParams();
   if (filter?.source) params.set("source", filter.source);
   if (filter?.level) params.set("level", filter.level);
@@ -1388,10 +1372,7 @@ MiladyClient.prototype.getPermissions = async function (this: MiladyClient) {
   return this.fetch("/api/permissions");
 };
 
-MiladyClient.prototype.getPermission = async function (
-  this: MiladyClient,
-  id,
-) {
+MiladyClient.prototype.getPermission = async function (this: MiladyClient, id) {
   return this.fetch(`/api/permissions/${id}`);
 };
 
@@ -1529,13 +1510,10 @@ MiladyClient.prototype.promoteCodingAgentScratchWorkspace = async function (
     const response = await this.fetch<{
       success: boolean;
       scratch?: CodingAgentScratchWorkspace;
-    }>(
-      `/api/coding-agents/${encodeURIComponent(sessionId)}/scratch/promote`,
-      {
-        method: "POST",
-        body: JSON.stringify(name ? { name } : {}),
-      },
-    );
+    }>(`/api/coding-agents/${encodeURIComponent(sessionId)}/scratch/promote`, {
+      method: "POST",
+      body: JSON.stringify(name ? { name } : {}),
+    });
     return response.scratch ?? null;
   } catch {
     return null;
@@ -1591,9 +1569,7 @@ MiladyClient.prototype.streamGoLive = async function (this: MiladyClient) {
   return this.fetch("/api/stream/live", { method: "POST" });
 };
 
-MiladyClient.prototype.streamGoOffline = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.streamGoOffline = async function (this: MiladyClient) {
   return this.fetch("/api/stream/offline", { method: "POST" });
 };
 
@@ -1683,9 +1659,7 @@ MiladyClient.prototype.saveOverlayLayout = async function (
   });
 };
 
-MiladyClient.prototype.getStreamSource = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getStreamSource = async function (this: MiladyClient) {
   return this.fetch("/api/stream/source");
 };
 
@@ -1700,9 +1674,7 @@ MiladyClient.prototype.setStreamSource = async function (
   });
 };
 
-MiladyClient.prototype.getStreamSettings = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getStreamSettings = async function (this: MiladyClient) {
   return this.fetch("/api/stream/settings");
 };
 

@@ -298,6 +298,8 @@ describe("app startup routing (e2e)", () => {
       startupPhase: "ready",
       startupStatus: "ready",
       startupError: null,
+      startupCoordinator: { phase: "ready" },
+      startupCoordinatorLegacyPhase: "ready" as const,
       retryStartup: vi.fn(),
     });
   });
@@ -358,6 +360,8 @@ describe("app startup routing (e2e)", () => {
       startupPhase: "ready",
       startupStatus: "ready",
       startupError: null,
+      startupCoordinator: { phase: "ready" },
+      startupCoordinatorLegacyPhase: "ready" as const,
       retryStartup: vi.fn(),
     });
 

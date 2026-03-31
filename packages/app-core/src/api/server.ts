@@ -403,7 +403,6 @@ async function clearCompatPgliteDataDir(
 
 // sendJsonResponse, sendJsonErrorResponse — now imported from ./response
 
-
 function resolveCompatStatusAgentName(
   state: CompatRuntimeState,
 ): string | null {

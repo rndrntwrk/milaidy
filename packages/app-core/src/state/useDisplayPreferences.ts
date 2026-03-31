@@ -20,7 +20,10 @@ import {
   saveCompanionVrmPowerMode,
   saveUiTheme,
 } from "./persistence";
-import type { CompanionHalfFramerateMode, CompanionVrmPowerMode } from "./types";
+import type {
+  CompanionHalfFramerateMode,
+  CompanionVrmPowerMode,
+} from "./types";
 import type { UiTheme } from "./ui-preferences";
 
 export function useDisplayPreferences() {

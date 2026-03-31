@@ -1,6 +1,9 @@
 import http from "node:http";
 import { ensureCompatApiAuthorized } from "./auth";
-import { isAllowedDevConsoleLogPath, readDevConsoleLogTail } from "./dev-console-log";
+import {
+  isAllowedDevConsoleLogPath,
+  readDevConsoleLogTail,
+} from "./dev-console-log";
 import { resolveDevStackFromEnv } from "./dev-stack";
 import {
   sendJsonError as sendJsonErrorResponse,

@@ -74,7 +74,9 @@ export async function readCompatJsonBody(
   }
 }
 
-export function hasCompatPersistedOnboardingState(config: ElizaConfig): boolean {
+export function hasCompatPersistedOnboardingState(
+  config: ElizaConfig,
+): boolean {
   if ((config.meta as Record<string, unknown>)?.onboardingComplete === true) {
     return true;
   }

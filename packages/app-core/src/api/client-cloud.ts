@@ -234,9 +234,7 @@ MiladyClient.prototype.getCloudStatus = async function (this: MiladyClient) {
   return this.fetch("/api/cloud/status");
 };
 
-MiladyClient.prototype.getCloudCredits = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getCloudCredits = async function (this: MiladyClient) {
   return this.fetch("/api/cloud/credits");
 };
 
@@ -307,9 +305,7 @@ MiladyClient.prototype.cloudLoginPoll = async function (
   );
 };
 
-MiladyClient.prototype.cloudDisconnect = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.cloudDisconnect = async function (this: MiladyClient) {
   return this.fetch("/api/cloud/disconnect", { method: "POST" });
 };
 
@@ -333,19 +329,16 @@ MiladyClient.prototype.getCloudCompatAgent = async function (
   this: MiladyClient,
   agentId,
 ) {
-  return this.fetch(
-    `/api/cloud/compat/agents/${encodeURIComponent(agentId)}`,
-  );
+  return this.fetch(`/api/cloud/compat/agents/${encodeURIComponent(agentId)}`);
 };
 
 MiladyClient.prototype.deleteCloudCompatAgent = async function (
   this: MiladyClient,
   agentId,
 ) {
-  return this.fetch(
-    `/api/cloud/compat/agents/${encodeURIComponent(agentId)}`,
-    { method: "DELETE" },
-  );
+  return this.fetch(`/api/cloud/compat/agents/${encodeURIComponent(agentId)}`, {
+    method: "DELETE",
+  });
 };
 
 MiladyClient.prototype.getCloudCompatAgentStatus = async function (
@@ -449,9 +442,7 @@ MiladyClient.prototype.exportAgent = async function (
   });
 };
 
-MiladyClient.prototype.getExportEstimate = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getExportEstimate = async function (this: MiladyClient) {
   return this.fetch("/api/agent/export/estimate");
 };
 
@@ -506,9 +497,7 @@ MiladyClient.prototype.getSandboxPlatform = async function (
   return this.fetch("/api/sandbox/platform");
 };
 
-MiladyClient.prototype.getSandboxBrowser = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getSandboxBrowser = async function (this: MiladyClient) {
   return this.fetch("/api/sandbox/browser");
 };
 
@@ -528,9 +517,7 @@ MiladyClient.prototype.getSandboxScreenshot = async function (
   });
 };
 
-MiladyClient.prototype.getSandboxWindows = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getSandboxWindows = async function (this: MiladyClient) {
   return this.fetch("/api/sandbox/screen/windows");
 };
 

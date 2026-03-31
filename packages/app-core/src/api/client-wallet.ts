@@ -97,16 +97,12 @@ declare module "./client-base" {
       limit: number;
     }>;
     getStewardPending(): Promise<StewardPendingResponse>;
-    approveStewardTx(
-      txId: string,
-    ): Promise<StewardApprovalActionResponse>;
+    approveStewardTx(txId: string): Promise<StewardApprovalActionResponse>;
     rejectStewardTx(
       txId: string,
       reason?: string,
     ): Promise<StewardApprovalActionResponse>;
-    signViaSteward(
-      request: StewardSignRequest,
-    ): Promise<StewardSignResponse>;
+    signViaSteward(request: StewardSignRequest): Promise<StewardSignResponse>;
     getWalletTradingProfile(
       window?: WalletTradingProfileWindow,
       source?: WalletTradingProfileSourceFilter,
@@ -154,9 +150,7 @@ MiladyClient.prototype.getWalletAddresses = async function (
   return this.fetch("/api/wallet/addresses");
 };
 
-MiladyClient.prototype.getWalletBalances = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getWalletBalances = async function (this: MiladyClient) {
   return this.fetch("/api/wallet/balances");
 };
 
@@ -164,9 +158,7 @@ MiladyClient.prototype.getWalletNfts = async function (this: MiladyClient) {
   return this.fetch("/api/wallet/nfts");
 };
 
-MiladyClient.prototype.getWalletConfig = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getWalletConfig = async function (this: MiladyClient) {
   return this.fetch("/api/wallet/config");
 };
 
@@ -241,9 +233,7 @@ MiladyClient.prototype.getBscTradeTxStatus = async function (
   );
 };
 
-MiladyClient.prototype.getStewardStatus = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getStewardStatus = async function (this: MiladyClient) {
   return this.fetch("/api/wallet/steward-status");
 };
 
@@ -275,9 +265,7 @@ MiladyClient.prototype.getStewardHistory = async function (
   return this.fetch(`/api/wallet/steward-tx-records${qs ? `?${qs}` : ""}`);
 };
 
-MiladyClient.prototype.getStewardPending = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getStewardPending = async function (this: MiladyClient) {
   return this.fetch("/api/wallet/steward-pending-approvals");
 };
 
@@ -330,9 +318,7 @@ MiladyClient.prototype.applyProductionWalletDefaults = async function (
   });
 };
 
-MiladyClient.prototype.getRegistryStatus = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getRegistryStatus = async function (this: MiladyClient) {
   return this.fetch("/api/registry/status");
 };
 
@@ -366,9 +352,7 @@ MiladyClient.prototype.syncRegistryProfile = async function (
   });
 };
 
-MiladyClient.prototype.getRegistryConfig = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getRegistryConfig = async function (this: MiladyClient) {
   return this.fetch("/api/registry/config");
 };
 

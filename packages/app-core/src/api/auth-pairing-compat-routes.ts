@@ -1,7 +1,11 @@
 import crypto from "node:crypto";
 import http from "node:http";
 import { loadElizaConfig } from "@miladyai/agent/config/config";
-import { ensureCompatApiAuthorized, getCompatApiToken, tokenMatches } from "./auth";
+import {
+  ensureCompatApiAuthorized,
+  getCompatApiToken,
+  tokenMatches,
+} from "./auth";
 import {
   sendJsonError as sendJsonErrorResponse,
   sendJson as sendJsonResponse,

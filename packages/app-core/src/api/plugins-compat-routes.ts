@@ -116,12 +116,7 @@ const CAPABILITY_FEATURE_IDS = new Set([
 
 // Key prefixes that contain wallet private keys or other high-value secrets
 // require the hardened sensitive-route auth (loopback + elevated checks).
-const SENSITIVE_KEY_PREFIXES = [
-  "SOLANA_",
-  "ETHEREUM_",
-  "EVM_",
-  "WALLET_",
-];
+const SENSITIVE_KEY_PREFIXES = ["SOLANA_", "ETHEREUM_", "EVM_", "WALLET_"];
 
 const REVEALABLE_KEY_PREFIXES = [
   "OPENAI_",

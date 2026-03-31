@@ -90,8 +90,7 @@ export class MiladyClient {
     // Injected global (window.__MILADY_API_BASE__) must beat stale sessionStorage
     // from a prior cloud/remote session so the desktop always connects to the
     // correct local agent.
-    this._baseUrl =
-      baseUrl ?? injectedBase ?? bootBase ?? storedBase ?? "";
+    this._baseUrl = baseUrl ?? injectedBase ?? bootBase ?? storedBase ?? "";
   }
 
   /**

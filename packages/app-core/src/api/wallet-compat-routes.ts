@@ -12,7 +12,10 @@ import { logger } from "@elizaos/core";
 import { getWalletAddresses } from "@miladyai/agent/api/wallet";
 import { fetchEvmNfts } from "@miladyai/agent/api/wallet-evm-balance";
 import { resolveWalletRpcReadiness } from "@miladyai/agent/api/wallet-rpc";
-import { type ElizaConfig, loadElizaConfig } from "@miladyai/agent/config/config";
+import {
+  type ElizaConfig,
+  loadElizaConfig,
+} from "@miladyai/agent/config/config";
 import { deriveAgentVaultId } from "../security/agent-vault-id";
 import {
   createNodePlatformSecureStore,

@@ -79,9 +79,7 @@ declare module "./client-base" {
       count: number;
       plugins: RegistryPlugin[];
     }>;
-    getRegistryPluginInfo(
-      name: string,
-    ): Promise<{ plugin: RegistryPlugin }>;
+    getRegistryPluginInfo(name: string): Promise<{ plugin: RegistryPlugin }>;
     getInstalledPlugins(): Promise<{
       count: number;
       plugins: InstalledPlugin[];
@@ -105,9 +103,7 @@ declare module "./client-base" {
       limit: number,
     ): Promise<{ results: SkillMarketplaceResult[] }>;
     getSkillsMarketplaceConfig(): Promise<{ keySet: boolean }>;
-    updateSkillsMarketplaceConfig(
-      apiKey: string,
-    ): Promise<{ keySet: boolean }>;
+    updateSkillsMarketplaceConfig(apiKey: string): Promise<{ keySet: boolean }>;
     installMarketplaceSkill(data: {
       slug?: string;
       githubUrl?: string;
@@ -131,9 +127,7 @@ declare module "./client-base" {
       description: string,
     ): Promise<{ ok: boolean; skill: SkillInfo; path: string }>;
     openSkill(id: string): Promise<{ ok: boolean; path: string }>;
-    getSkillSource(
-      id: string,
-    ): Promise<{
+    getSkillSource(id: string): Promise<{
       ok: boolean;
       skillId: string;
       content: string;
@@ -426,10 +420,7 @@ MiladyClient.prototype.createSkill = async function (
   });
 };
 
-MiladyClient.prototype.openSkill = async function (
-  this: MiladyClient,
-  id,
-) {
+MiladyClient.prototype.openSkill = async function (this: MiladyClient, id) {
   return this.fetch(`/api/skills/${encodeURIComponent(id)}/open`, {
     method: "POST",
   });
@@ -453,10 +444,7 @@ MiladyClient.prototype.saveSkillSource = async function (
   });
 };
 
-MiladyClient.prototype.deleteSkill = async function (
-  this: MiladyClient,
-  id,
-) {
+MiladyClient.prototype.deleteSkill = async function (this: MiladyClient, id) {
   return this.fetch(`/api/skills/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
@@ -484,40 +472,26 @@ MiladyClient.prototype.listApps = async function (this: MiladyClient) {
   return this.fetch("/api/apps");
 };
 
-MiladyClient.prototype.searchApps = async function (
-  this: MiladyClient,
-  query,
-) {
+MiladyClient.prototype.searchApps = async function (this: MiladyClient, query) {
   return this.fetch(`/api/apps/search?q=${encodeURIComponent(query)}`);
 };
 
-MiladyClient.prototype.listInstalledApps = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.listInstalledApps = async function (this: MiladyClient) {
   return this.fetch("/api/apps/installed");
 };
 
-MiladyClient.prototype.stopApp = async function (
-  this: MiladyClient,
-  name,
-) {
+MiladyClient.prototype.stopApp = async function (this: MiladyClient, name) {
   return this.fetch("/api/apps/stop", {
     method: "POST",
     body: JSON.stringify({ name }),
   });
 };
 
-MiladyClient.prototype.getAppInfo = async function (
-  this: MiladyClient,
-  name,
-) {
+MiladyClient.prototype.getAppInfo = async function (this: MiladyClient, name) {
   return this.fetch(`/api/apps/info/${encodeURIComponent(name)}`);
 };
 
-MiladyClient.prototype.launchApp = async function (
-  this: MiladyClient,
-  name,
-) {
+MiladyClient.prototype.launchApp = async function (this: MiladyClient, name) {
   return this.fetch("/api/apps/launch", {
     method: "POST",
     body: JSON.stringify({ name }),
@@ -534,9 +508,7 @@ MiladyClient.prototype.searchRegistryPlugins = async function (
   this: MiladyClient,
   query,
 ) {
-  return this.fetch(
-    `/api/apps/plugins/search?q=${encodeURIComponent(query)}`,
-  );
+  return this.fetch(`/api/apps/plugins/search?q=${encodeURIComponent(query)}`);
 };
 
 MiladyClient.prototype.listHyperscapeEmbeddedAgents = async function (
@@ -613,9 +585,7 @@ MiladyClient.prototype.getHyperscapeAgentQuickActions = async function (
   );
 };
 
-MiladyClient.prototype.listCustomActions = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.listCustomActions = async function (this: MiladyClient) {
   const data = await this.fetch<{ actions: CustomActionDef[] }>(
     "/api/custom-actions",
   );

@@ -449,6 +449,8 @@ function makeState(overrides?: Partial<HarnessState>): HarnessState {
     startupPhase: "ready",
     startupStatus: "ready",
     startupError: null,
+    startupCoordinator: { phase: "ready" },
+    startupCoordinatorLegacyPhase: "ready" as const,
     retryStartup: vi.fn(),
     setActionNotice: vi.fn(),
     setTab: (tab: Tab) => {

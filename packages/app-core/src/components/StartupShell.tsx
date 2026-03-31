@@ -14,9 +14,7 @@ import { OnboardingWizard } from "./OnboardingWizard";
 import { PairingView } from "./PairingView";
 import { StartupFailureView } from "./StartupFailureView";
 
-function phaseToStatusText(
-  phase: string,
-): string {
+function phaseToStatusText(phase: string): string {
   switch (phase) {
     case "booting":
     case "restoring-session":
@@ -34,11 +32,7 @@ function phaseToStatusText(
 }
 
 export function StartupShell() {
-  const {
-    startupCoordinator,
-    startupError,
-    retryStartup,
-  } = useApp();
+  const { startupCoordinator, startupError, retryStartup } = useApp();
   const branding = useBranding();
   const phase = startupCoordinator.phase;
 
@@ -112,7 +106,8 @@ export function StartupShell() {
         {/* Elapsed time */}
         {elapsedSec > 0 && (
           <p className="text-xs text-black/50 tabular-nums pl-8">
-            {Math.floor(elapsedSec / 60)}:{(elapsedSec % 60).toString().padStart(2, "0")} elapsed
+            {Math.floor(elapsedSec / 60)}:
+            {(elapsedSec % 60).toString().padStart(2, "0")} elapsed
           </p>
         )}
 

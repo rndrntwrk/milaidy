@@ -244,9 +244,7 @@ declare module "./client-base" {
     getTrajectories(
       options?: TrajectoryListOptions,
     ): Promise<TrajectoryListResult>;
-    getTrajectoryDetail(
-      trajectoryId: string,
-    ): Promise<TrajectoryDetailResult>;
+    getTrajectoryDetail(trajectoryId: string): Promise<TrajectoryDetailResult>;
     getTrajectoryStats(): Promise<TrajectoryStats>;
     getTrajectoryConfig(): Promise<TrajectoryConfig>;
     updateTrajectoryConfig(
@@ -306,10 +304,7 @@ declare module "./client-base" {
       table: string,
       where: Record<string, unknown>,
     ): Promise<{ deleted: boolean; row: Record<string, unknown> }>;
-    executeDatabaseQuery(
-      sql: string,
-      readOnly?: boolean,
-    ): Promise<QueryResult>;
+    executeDatabaseQuery(sql: string, readOnly?: boolean): Promise<QueryResult>;
   }
 }
 
@@ -359,9 +354,7 @@ MiladyClient.prototype.sendChatStream = async function (
   );
 };
 
-MiladyClient.prototype.listConversations = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.listConversations = async function (this: MiladyClient) {
   return this.fetch("/api/conversations");
 };
 
@@ -525,9 +518,7 @@ MiladyClient.prototype.deleteConversation = async function (
   });
 };
 
-MiladyClient.prototype.getKnowledgeStats = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getKnowledgeStats = async function (this: MiladyClient) {
   return this.fetch("/api/knowledge/stats");
 };
 
@@ -600,8 +591,7 @@ MiladyClient.prototype.searchKnowledge = async function (
   const params = new URLSearchParams({ q: query });
   if (options?.threshold !== undefined)
     params.set("threshold", String(options.threshold));
-  if (options?.limit !== undefined)
-    params.set("limit", String(options.limit));
+  if (options?.limit !== undefined) params.set("limit", String(options.limit));
   return this.fetch(`/api/knowledge/search?${params}`);
 };
 
@@ -630,8 +620,7 @@ MiladyClient.prototype.searchMemory = async function (
   options?,
 ) {
   const params = new URLSearchParams({ q: query });
-  if (options?.limit !== undefined)
-    params.set("limit", String(options.limit));
+  if (options?.limit !== undefined) params.set("limit", String(options.limit));
   return this.fetch(`/api/memory/search?${params}`);
 };
 
@@ -641,8 +630,7 @@ MiladyClient.prototype.quickContext = async function (
   options?,
 ) {
   const params = new URLSearchParams({ q: query });
-  if (options?.limit !== undefined)
-    params.set("limit", String(options.limit));
+  if (options?.limit !== undefined) params.set("limit", String(options.limit));
   return this.fetch(`/api/context/quick?${params}`);
 };
 
@@ -812,9 +800,7 @@ MiladyClient.prototype.deleteWorkbenchTodo = async function (
   });
 };
 
-MiladyClient.prototype.refreshRegistry = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.refreshRegistry = async function (this: MiladyClient) {
   await this.fetch("/api/apps/refresh", { method: "POST" });
 };
 
@@ -896,15 +882,11 @@ MiladyClient.prototype.clearAllTrajectories = async function (
   });
 };
 
-MiladyClient.prototype.getDatabaseStatus = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getDatabaseStatus = async function (this: MiladyClient) {
   return this.fetch("/api/database/status");
 };
 
-MiladyClient.prototype.getDatabaseConfig = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getDatabaseConfig = async function (this: MiladyClient) {
   return this.fetch("/api/database/config");
 };
 
@@ -928,9 +910,7 @@ MiladyClient.prototype.testDatabaseConnection = async function (
   });
 };
 
-MiladyClient.prototype.getDatabaseTables = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.getDatabaseTables = async function (this: MiladyClient) {
   return this.fetch("/api/database/tables");
 };
 
@@ -956,13 +936,10 @@ MiladyClient.prototype.insertDatabaseRow = async function (
   table,
   data,
 ) {
-  return this.fetch(
-    `/api/database/tables/${encodeURIComponent(table)}/rows`,
-    {
-      method: "POST",
-      body: JSON.stringify({ data }),
-    },
-  );
+  return this.fetch(`/api/database/tables/${encodeURIComponent(table)}/rows`, {
+    method: "POST",
+    body: JSON.stringify({ data }),
+  });
 };
 
 MiladyClient.prototype.updateDatabaseRow = async function (
@@ -971,13 +948,10 @@ MiladyClient.prototype.updateDatabaseRow = async function (
   where,
   data,
 ) {
-  return this.fetch(
-    `/api/database/tables/${encodeURIComponent(table)}/rows`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ where, data }),
-    },
-  );
+  return this.fetch(`/api/database/tables/${encodeURIComponent(table)}/rows`, {
+    method: "PUT",
+    body: JSON.stringify({ where, data }),
+  });
 };
 
 MiladyClient.prototype.deleteDatabaseRow = async function (
@@ -985,13 +959,10 @@ MiladyClient.prototype.deleteDatabaseRow = async function (
   table,
   where,
 ) {
-  return this.fetch(
-    `/api/database/tables/${encodeURIComponent(table)}/rows`,
-    {
-      method: "DELETE",
-      body: JSON.stringify({ where }),
-    },
-  );
+  return this.fetch(`/api/database/tables/${encodeURIComponent(table)}/rows`, {
+    method: "DELETE",
+    body: JSON.stringify({ where }),
+  });
 };
 
 MiladyClient.prototype.executeDatabaseQuery = async function (
