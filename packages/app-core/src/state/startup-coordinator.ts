@@ -37,7 +37,6 @@ export interface PlatformPolicy {
 // ── State ────────────────────────────────────────────────────────────
 
 export type StartupState =
-  | { phase: "booting" }
   | { phase: "restoring-session" }
   | {
       phase: "resolving-target";
@@ -117,11 +116,6 @@ export function startupReducer(
   event: StartupEvent,
 ): StartupState {
   switch (state.phase) {
-    case "booting":
-      // Only transition: move to restoring-session (driven by effect, not event)
-      // The effect dispatches SESSION_RESTORED or NO_SESSION after probing.
-      return state;
-
     case "restoring-session":
       switch (event.type) {
         case "SESSION_RESTORED":
@@ -181,9 +175,9 @@ export function startupReducer(
     case "pairing-required":
       switch (event.type) {
         case "PAIRING_SUCCESS":
-          return { phase: "booting" }; // Full restart after pairing
+          return { phase: "restoring-session" }; // Full restart after pairing
         case "RETRY":
-          return { phase: "booting" };
+          return { phase: "restoring-session" };
         default:
           return state;
       }
@@ -195,7 +189,7 @@ export function startupReducer(
         case "ONBOARDING_COMPLETE":
           return { phase: "starting-runtime", attempts: 0 };
         case "RETRY":
-          return { phase: "booting" };
+          return { phase: "restoring-session" };
         default:
           return state;
       }
@@ -244,7 +238,7 @@ export function startupReducer(
     case "error":
       switch (event.type) {
         case "RETRY":
-          return { phase: "booting" };
+          return { phase: "restoring-session" };
         default:
           return state;
       }
@@ -256,7 +250,9 @@ export function startupReducer(
 
 // ── Initial state ────────────────────────────────────────────────────
 
-export const INITIAL_STARTUP_STATE: StartupState = { phase: "booting" };
+export const INITIAL_STARTUP_STATE: StartupState = {
+  phase: "restoring-session",
+};
 
 // ── Policy factories ─────────────────────────────────────────────────
 
@@ -309,7 +305,6 @@ export function connectionModeToTarget(
 /** True when the coordinator is in a phase where the UI should show loading. */
 export function isStartupLoading(state: StartupState): boolean {
   return (
-    state.phase === "booting" ||
     state.phase === "restoring-session" ||
     state.phase === "resolving-target" ||
     state.phase === "polling-backend" ||
@@ -336,7 +331,6 @@ export function toLegacyStartupPhase(
   state: StartupState,
 ): "starting-backend" | "initializing-agent" | "ready" {
   switch (state.phase) {
-    case "booting":
     case "restoring-session":
     case "resolving-target":
     case "polling-backend":

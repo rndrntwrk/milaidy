@@ -510,7 +510,6 @@ export function App() {
     const STARTUP_TIMEOUT_MS = 300_000;
     const coordinatorPolling =
       startupCoordinator.phase === "polling-backend" ||
-      startupCoordinator.phase === "booting" ||
       startupCoordinator.phase === "restoring-session";
     if (
       (startupPhase === "starting-backend" || coordinatorPolling) &&

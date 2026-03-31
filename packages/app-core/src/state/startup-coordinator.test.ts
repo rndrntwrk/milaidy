@@ -121,7 +121,7 @@ describe("StartupCoordinator", () => {
       expect(state.phase).toBe("pairing-required");
 
       state = startupReducer(state, { type: "PAIRING_SUCCESS" });
-      expect(state.phase).toBe("booting");
+      expect(state.phase).toBe("restoring-session");
     });
   });
 
@@ -152,7 +152,7 @@ describe("StartupCoordinator", () => {
         serverReachable: true,
       };
       const next = startupReducer(state, { type: "RETRY" });
-      expect(next.phase).toBe("booting");
+      expect(next.phase).toBe("restoring-session");
     });
   });
 
@@ -191,7 +191,7 @@ describe("StartupCoordinator", () => {
         timedOut: true,
       };
       state = startupReducer(state, { type: "RETRY" });
-      expect(state.phase).toBe("booting");
+      expect(state.phase).toBe("restoring-session");
     });
   });
 
@@ -227,7 +227,7 @@ describe("StartupCoordinator", () => {
     });
 
     it("isStartupLoading is true for all intermediate phases", () => {
-      expect(isStartupLoading({ phase: "booting" })).toBe(true);
+      expect(isStartupLoading({ phase: "restoring-session" })).toBe(true);
       expect(isStartupLoading({ phase: "restoring-session" })).toBe(true);
       expect(
         isStartupLoading({
@@ -260,11 +260,11 @@ describe("StartupCoordinator", () => {
           timedOut: false,
         }),
       ).toBe(true);
-      expect(isStartupTerminal({ phase: "booting" })).toBe(false);
+      expect(isStartupTerminal({ phase: "restoring-session" })).toBe(false);
     });
 
     it("toLegacyStartupPhase maps to the three legacy phases", () => {
-      expect(toLegacyStartupPhase({ phase: "booting" })).toBe(
+      expect(toLegacyStartupPhase({ phase: "restoring-session" })).toBe(
         "starting-backend",
       );
       expect(

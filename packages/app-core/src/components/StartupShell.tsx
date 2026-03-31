@@ -7,7 +7,6 @@
  */
 
 import { useEffect, useState } from "react";
-import { useBranding } from "../config/branding";
 import { useApp } from "../state";
 import type { StartupErrorState } from "../state/types";
 import { OnboardingWizard } from "./OnboardingWizard";
@@ -16,7 +15,6 @@ import { StartupFailureView } from "./StartupFailureView";
 
 function phaseToStatusKey(phase: string): string {
   switch (phase) {
-    case "booting":
     case "restoring-session":
       return "startupshell.Starting";
     case "resolving-target":
@@ -33,7 +31,6 @@ function phaseToStatusKey(phase: string): string {
 
 export function StartupShell() {
   const { startupCoordinator, startupError, retryStartup, t } = useApp();
-  const branding = useBranding();
   const phase = startupCoordinator.phase;
 
   // Elapsed time counter

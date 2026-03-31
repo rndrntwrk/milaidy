@@ -107,7 +107,7 @@ export function useStartupCoordinator(
 
   // Phase: booting → restoring-session (immediate transition)
   useEffect(() => {
-    if (state.phase !== "booting") return;
+    if (state.phase !== "restoring-session") return;
     // Reset cancellation for new run
     cancelledRef.current = false;
     effectRunRef.current += 1;
@@ -417,10 +417,9 @@ export function useStartupCoordinator(
     prevPhaseRef.current = cur;
 
     // Only fire on actual phase transitions (or first mount)
-    if (prev === cur && prev !== "booting") return;
+    if (prev === cur && prev !== "restoring-session") return;
 
     switch (cur) {
-      case "booting":
       case "restoring-session":
       case "resolving-target":
         // Early phases — no legacy setters needed beyond initial state
