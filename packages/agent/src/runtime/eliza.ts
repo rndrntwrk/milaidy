@@ -4112,6 +4112,21 @@ export async function startEliza(
         process.env[key] = value;
       }
     }
+    // Also hydrate from config.env.vars — setEnvValue writes API keys to
+    // both config.env["KEY"] and config.env.vars["KEY"]. If the top-level
+    // key was lost (e.g. pruneEnv, config migration), the nested form is
+    // the authoritative source.
+    const vars = (config.env as Record<string, unknown>).vars;
+    if (vars && typeof vars === "object" && !Array.isArray(vars)) {
+      for (const [key, value] of Object.entries(
+        vars as Record<string, unknown>,
+      )) {
+        if (isElizaCloudManagedProcessEnvKey(key)) continue;
+        if (typeof value === "string" && !process.env[key]) {
+          process.env[key] = value;
+        }
+      }
+    }
   }
 
   normalizeOpenAiCompatibleProviderConfig(config);
