@@ -1,16 +1,32 @@
 /**
- * StartupShell — renders the correct startup UI based on the coordinator state.
+ * StartupShell — the front door to the app.
  *
- * When the coordinator is in a loading phase, shows a branded loading screen.
- * When in error/pairing/onboarding phases, delegates to the existing views.
- * When ready, renders nothing (children pass through in App.tsx).
+ * Shows a branded splash with retro progress bar during ALL startup phases.
+ * New users see "Press Start" first. Returning users see the progress bar
+ * immediately. The splash stays visible until the app is FULLY loaded
+ * (including a brief settle delay after coordinator reaches ready).
+ *
+ * Non-loading phases (error, pairing, onboarding) delegate to their views.
  */
 
+import { useEffect, useState } from "react";
 import { useApp } from "../state";
 import type { StartupErrorState } from "../state/types";
 import { OnboardingWizard } from "./OnboardingWizard";
 import { PairingView } from "./PairingView";
 import { StartupFailureView } from "./StartupFailureView";
+
+const FONT = "'Press Start 2P', 'Courier New', monospace";
+
+const PHASE_PROGRESS: Record<string, number> = {
+  splash: 0,
+  "restoring-session": 10,
+  "resolving-target": 20,
+  "polling-backend": 40,
+  "starting-runtime": 60,
+  hydrating: 85,
+  ready: 100,
+};
 
 function phaseToStatusKey(phase: string): string {
   switch (phase) {
@@ -22,6 +38,7 @@ function phaseToStatusKey(phase: string): string {
     case "starting-runtime":
       return "startupshell.InitializingAgent";
     case "hydrating":
+    case "ready":
       return "startupshell.Loading";
     default:
       return "startupshell.Starting";
@@ -29,15 +46,22 @@ function phaseToStatusKey(phase: string): string {
 }
 
 export function StartupShell() {
-  const {
-    startupCoordinator,
-    startupError,
-    retryStartup,
-    t,
-  } = useApp();
+  const { startupCoordinator, startupError, retryStartup, t } = useApp();
   const phase = startupCoordinator.phase;
 
-  // Error phase — delegate to StartupFailureView
+  // Keep splash visible for 1.5s after coordinator reaches ready
+  // so the app has time to mount the companion scene + VRM
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (phase !== "ready") {
+      setSettled(false);
+      return;
+    }
+    const timer = setTimeout(() => setSettled(true), 1500);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
+  // Error — delegate
   if (phase === "error") {
     const coordState = startupCoordinator.state;
     const errState = coordState.phase === "error" ? coordState : null;
@@ -50,55 +74,88 @@ export function StartupShell() {
     return <StartupFailureView error={errorState} onRetry={retryStartup} />;
   }
 
-  // Pairing required — delegate to PairingView
+  // Pairing — delegate
   if (phase === "pairing-required") {
     return <PairingView />;
   }
 
-  // Onboarding required — delegate to OnboardingWizard
+  // Onboarding — delegate
   if (phase === "onboarding-required") {
     return <OnboardingWizard />;
   }
 
-  // Ready — render nothing (App.tsx will render children)
-  if (phase === "ready") {
+  // Ready AND settled — let the app through
+  if (phase === "ready" && settled) {
     return null;
   }
 
-  // All other intermediate phases (restoring-session, polling-backend, etc.)
-  // stay on the splash screen — show status text where the button was.
-  const isLoading = phase !== "splash";
-  const splashLoaded = phase === "splash"
+  // Everything else: splash with progress bar
+  const isSplash = phase === "splash";
+  const splashLoaded = isSplash
     ? (startupCoordinator.state as { loaded?: boolean }).loaded
     : false;
+  const progress = PHASE_PROGRESS[phase] ?? 50;
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-[#ffe600] font-body text-black overflow-hidden">
+    <div className="flex items-center justify-center h-full w-full bg-[#ffe600] text-black overflow-hidden">
       <img
         src="/splash-bg.png"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 h-full w-full object-contain object-right-bottom"
+        className="pointer-events-none absolute inset-0 h-full w-full object-contain object-right-bottom opacity-40"
       />
-      <div className="relative z-10 flex flex-col items-center gap-6 px-8 text-center max-w-md">
-        <h1 style={{ fontFamily: "'Press Start 2P', 'Courier New', monospace" }} className="text-3xl text-black drop-shadow-sm">
+      <div
+        className="relative z-10 flex flex-col items-center gap-5 px-6 text-center w-full"
+        style={{ maxWidth: 360 }}
+      >
+        <h1 style={{ fontFamily: FONT }} className="text-2xl text-black">
           MILADY
         </h1>
-        <p style={{ fontFamily: "'Press Start 2P', 'Courier New', monospace" }} className="text-[8px] text-black/50 uppercase leading-relaxed">
-          {t("startupshell.SplashTagline", { defaultValue: "Your local-first AI assistant" })}
+        <p
+          style={{ fontFamily: FONT }}
+          className="text-[7px] text-black/40 uppercase leading-relaxed"
+        >
+          {t("startupshell.SplashTagline", {
+            defaultValue: "Your local-first AI assistant",
+          })}
         </p>
 
-        {isLoading ? (
-          <p style={{ fontFamily: "'Press Start 2P', 'Courier New', monospace" }} className="mt-4 text-[10px] text-black/60 uppercase tracking-wider animate-pulse">
-            {t(phaseToStatusKey(phase))}
-          </p>
-        ) : (
+        {/* Retro segmented progress bar */}
+        {!isSplash && (
+          <div className="w-full mt-2">
+            <div className="h-5 w-full border-2 border-black/70 bg-black/5 overflow-hidden">
+              <div
+                className="h-full bg-black/70 transition-all duration-700 ease-out"
+                style={{ width: `${progress}%` }}
+              >
+                <div
+                  className="h-full w-full"
+                  style={{
+                    backgroundImage:
+                      "repeating-linear-gradient(90deg, transparent, transparent 6px, rgba(255,230,0,0.5) 6px, rgba(255,230,0,0.5) 8px)",
+                  }}
+                />
+              </div>
+            </div>
+            <p
+              style={{ fontFamily: FONT }}
+              className="mt-2 text-[8px] text-black/50 uppercase animate-pulse"
+            >
+              {t(phaseToStatusKey(phase))}
+            </p>
+          </div>
+        )}
+
+        {/* Press Start button — only on splash phase */}
+        {isSplash && (
           <button
             type="button"
             disabled={!splashLoaded}
-            onClick={() => startupCoordinator.dispatch({ type: "SPLASH_CONTINUE" })}
-            style={{ fontFamily: "'Press Start 2P', 'Courier New', monospace" }}
-            className="mt-4 border-2 border-black bg-black px-6 py-3 text-[10px] uppercase text-[#ffe600] shadow-lg hover:bg-black/80 disabled:opacity-40 disabled:cursor-wait transition-all"
+            onClick={() =>
+              startupCoordinator.dispatch({ type: "SPLASH_CONTINUE" })
+            }
+            style={{ fontFamily: FONT }}
+            className="mt-3 border-2 border-black bg-black px-5 py-2.5 text-[9px] uppercase text-[#ffe600] hover:bg-black/80 disabled:opacity-30 disabled:cursor-wait transition-all"
           >
             {splashLoaded
               ? t("startupshell.GetStarted", { defaultValue: "Press Start" })
