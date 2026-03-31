@@ -46,14 +46,12 @@ export function StartupShell() {
 
   // Error phase — delegate to StartupFailureView
   if (phase === "error") {
-    const errPhase = startupCoordinator as Extract<
-      typeof startupCoordinator,
-      { phase: "error" }
-    >;
+    const coordState = startupCoordinator.state;
+    const errState = coordState.phase === "error" ? coordState : null;
     const errorState: StartupErrorState = startupError ?? {
-      reason: errPhase.reason ?? "unknown",
+      reason: errState?.reason ?? "unknown",
       message:
-        errPhase.message ?? "An unexpected error occurred during startup.",
+        errState?.message ?? "An unexpected error occurred during startup.",
       phase: "starting-backend" as const,
     };
     return <StartupFailureView error={errorState} onRetry={retryStartup} />;

@@ -81,6 +81,23 @@ vi.mock("./app-shell-components", () => {
         { "data-testid": "StartupFailureView" },
         error.message,
       ),
+    StartupShell: () => {
+      const app = useAppMock();
+      const coordPhase = app?.startupCoordinator?.phase ?? "restoring-session";
+      if (coordPhase === "error") {
+        const err = app?.startupError ?? {
+          message: "Startup error",
+          reason: "unknown",
+          phase: "starting-backend",
+        };
+        return React.createElement(
+          "div",
+          { "data-testid": "StartupFailureView" },
+          err.message,
+        );
+      }
+      return React.createElement("div", { "data-testid": "StartupShell" });
+    },
     StreamView: stub("StreamView"),
     SystemWarningBanner: stub("SystemWarningBanner"),
   };
@@ -136,6 +153,18 @@ describe("App", () => {
       renderer = TestRenderer.create(React.createElement(App));
     });
 
+    // Transition the coordinator to the error phase — StartupShell renders
+    // StartupFailureView when the coordinator is in the error phase.
+    appState.startupCoordinator = {
+      phase: "error",
+      state: {
+        phase: "error",
+        reason: "agent-error",
+        message: "backend died",
+        timedOut: false,
+      },
+      retry: vi.fn(),
+    };
     appState.startupError = {
       reason: "agent-error",
       phase: "ready",

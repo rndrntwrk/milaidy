@@ -41,12 +41,10 @@ import {
   InventoryView,
   KnowledgeView,
   OnboardingWizard,
-  PairingView,
   SaveCommandModal,
   SettingsView,
   SharedCompanionScene,
   ShellOverlays,
-  StartupFailureView,
   StartupShell,
   StreamView,
   SystemWarningBanner,
@@ -295,12 +293,9 @@ export function App() {
     onboardingLoading,
     onboardingHandoffError,
     onboardingHandoffPhase,
-    startupPhase,
     startupError,
     startupCoordinator,
-    authRequired,
     onboardingComplete,
-    retryStartup,
     tab,
     setTab,
     setState,
@@ -503,24 +498,22 @@ export function App() {
   }, [showFullScreenLoader]);
 
   useEffect(() => {
-    // Safety-net watchdog: the coordinator has its own timeouts, but this
-    // catches any edge case where the legacy startupPhase gets stuck on
-    // "starting-backend". During "initializing-agent" the agent-wait loop
-    // has its own sliding deadline (up to 900s for embedding downloads).
+    // Safety-net watchdog: the coordinator has its own timeouts per phase, but
+    // this catches any edge case where the coordinator gets stuck in a loading
+    // phase. During "starting-runtime" the agent-wait loop has its own sliding
+    // deadline (up to 900s for embedding downloads), so we only watch the
+    // pre-runtime phases.
     const STARTUP_TIMEOUT_MS = 300_000;
     const coordinatorPolling =
       startupCoordinator.phase === "polling-backend" ||
       startupCoordinator.phase === "restoring-session";
-    if (
-      (startupPhase === "starting-backend" || coordinatorPolling) &&
-      !startupError
-    ) {
+    if (coordinatorPolling && !startupError) {
       const timer = setTimeout(() => {
-        retryStartup();
+        startupCoordinator.retry();
       }, STARTUP_TIMEOUT_MS);
       return () => clearTimeout(timer);
     }
-  }, [startupPhase, startupCoordinator.phase, startupError, retryStartup]);
+  }, [startupCoordinator.phase, startupError, startupCoordinator.retry]);
 
   // Agent startup must not hide onboarding: after reset the runtime often goes
   // to "starting" while we need to show the wizard immediately.
@@ -585,9 +578,9 @@ export function App() {
     );
   }
 
-  // StartupCoordinator gates — delegate to StartupShell for non-ready phases.
-  // The legacy startupError / authRequired / onboardingComplete checks below
-  // remain as a safety net during the transition period.
+  // StartupCoordinator gate — the coordinator is the sole startup authority.
+  // Non-ready phases are handled by StartupShell (which renders the appropriate
+  // view for each coordinator phase: loading, pairing, onboarding, or error).
   if (startupCoordinator.phase !== "ready") {
     return (
       <BugReportProvider value={bugReport}>
@@ -597,18 +590,8 @@ export function App() {
     );
   }
 
-  // Legacy safety nets — kept during transition. Once the coordinator is fully
-  // validated these can be removed.
-  if (startupError) {
-    return (
-      <BugReportProvider value={bugReport}>
-        <StartupFailureView error={startupError} onRetry={retryStartup} />
-        <BugReportModal />
-      </BugReportProvider>
-    );
-  }
-
-  if (authRequired && !blockOnboardingForShell) return <PairingView />;
+  // After the coordinator reaches "ready", the legacy lifecycle state is still
+  // used for rendering the onboarding crossfade and detecting post-ready states.
   const showOnboarding =
     ((!onboardingComplete && !onboardingHandoffActive) ||
       fadingOutOnboarding) &&

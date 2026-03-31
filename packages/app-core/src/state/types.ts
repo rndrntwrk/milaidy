@@ -302,12 +302,8 @@ export interface AppState {
   onboardingHandoffError: string | null;
   startupPhase: StartupPhase;
   startupError: StartupErrorState | null;
-  /** StartupCoordinator state — exposed for debugging/incremental migration. */
-  startupCoordinator: import("./startup-coordinator").StartupState;
-  startupCoordinatorLegacyPhase:
-    | "starting-backend"
-    | "initializing-agent"
-    | "ready";
+  /** StartupCoordinator handle — the sole startup authority. */
+  startupCoordinator: import("./useStartupCoordinator").StartupCoordinatorHandle;
   authRequired: boolean;
   actionNotice: ActionNotice | null;
   lifecycleBusy: boolean;

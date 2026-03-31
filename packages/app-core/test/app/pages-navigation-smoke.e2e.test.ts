@@ -176,6 +176,15 @@ vi.mock("@miladyai/app-core/src/app-shell-components", () => ({
   ShellOverlays: () => null,
   StartupFailureView: ({ error }: { error: { message: string } }) =>
     React.createElement("div", null, error.message),
+  StartupShell: () => {
+    // Delegate to the correct sub-mock based on coordinator phase
+    const app = mockUseApp();
+    const phase = app?.startupCoordinator?.phase;
+    if (phase === "pairing-required") return React.createElement("div", null, "PairingView");
+    if (phase === "onboarding-required") return React.createElement("div", null, "OnboardingWizard");
+    if (phase === "error") return React.createElement("div", null, "StartupError");
+    return React.createElement("div", null, "StartupLoading");
+  },
   StreamView: () => React.createElement("section", null, "StreamView Ready"),
   SystemWarningBanner: () =>
     React.createElement("div", null, "SystemWarningBanner"),
@@ -223,6 +232,15 @@ vi.mock("../../src/app-shell-components", () => ({
   ShellOverlays: () => null,
   StartupFailureView: ({ error }: { error: { message: string } }) =>
     React.createElement("div", null, error.message),
+  StartupShell: () => {
+    // Delegate to the correct sub-mock based on coordinator phase
+    const app = mockUseApp();
+    const phase = app?.startupCoordinator?.phase;
+    if (phase === "pairing-required") return React.createElement("div", null, "PairingView");
+    if (phase === "onboarding-required") return React.createElement("div", null, "OnboardingWizard");
+    if (phase === "error") return React.createElement("div", null, "StartupError");
+    return React.createElement("div", null, "StartupLoading");
+  },
   StreamView: () => React.createElement("section", null, "StreamView Ready"),
   SystemWarningBanner: () =>
     React.createElement("div", null, "SystemWarningBanner"),
@@ -546,8 +564,7 @@ describe("pages navigation smoke (e2e)", () => {
       startupPhase: "ready",
       startupStatus: "ready",
       startupError: null,
-      startupCoordinator: { phase: "ready" },
-      startupCoordinatorLegacyPhase: "ready" as const,
+      startupCoordinator: { phase: "ready", state: { phase: "ready" }, retry: vi.fn(), pairingSuccess: vi.fn(), onboardingComplete: vi.fn(), dispatch: vi.fn(), policy: {}, legacyPhase: "ready", loading: false, terminal: true, target: null },
       retryStartup: vi.fn(),
       retryOnboardingHandoff: vi.fn(async () => {}),
       cancelOnboardingHandoff: vi.fn(),
@@ -682,8 +699,9 @@ describe("pages navigation smoke (e2e)", () => {
           onboardingLoading: true,
           onboardingComplete: false,
           startupStatus: "loading",
+          startupCoordinator: { phase: "polling-backend", state: { phase: "polling-backend", target: "embedded-local", attempts: 0 }, retry: vi.fn(), pairingSuccess: vi.fn(), onboardingComplete: vi.fn(), dispatch: vi.fn(), policy: {}, legacyPhase: "starting-backend", loading: true, terminal: false, target: "embedded-local" },
         },
-        token: "AvatarLoader",
+        token: "StartupLoading",
       },
       {
         name: "pairing",
@@ -692,6 +710,7 @@ describe("pages navigation smoke (e2e)", () => {
           onboardingComplete: true,
           authRequired: true,
           startupStatus: "auth-blocked",
+          startupCoordinator: { phase: "pairing-required", state: { phase: "pairing-required" }, retry: vi.fn(), pairingSuccess: vi.fn(), onboardingComplete: vi.fn(), dispatch: vi.fn(), policy: {}, legacyPhase: "ready", loading: false, terminal: false, target: null },
         },
         token: "PairingView",
       },
@@ -702,6 +721,7 @@ describe("pages navigation smoke (e2e)", () => {
           authRequired: false,
           onboardingComplete: false,
           startupStatus: "onboarding",
+          startupCoordinator: { phase: "onboarding-required", state: { phase: "onboarding-required", serverReachable: true }, retry: vi.fn(), pairingSuccess: vi.fn(), onboardingComplete: vi.fn(), dispatch: vi.fn(), policy: {}, legacyPhase: "ready", loading: false, terminal: false, target: null },
         },
         token: "OnboardingWizard",
       },
