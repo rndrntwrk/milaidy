@@ -79,13 +79,13 @@ export function StartupShell() {
   const showSlow = elapsedSec >= 10;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end justify-start bg-[#ffe600] font-body text-black overflow-hidden">
+    <div className="absolute inset-0 flex items-end justify-start bg-[#ffe600] font-body text-black overflow-hidden">
       {/* Branded splash background — see CLAUDE.md § Startup Splash */}
       <img
         src="/splash-bg.png"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover object-right"
+        className="pointer-events-none absolute inset-0 h-full w-full object-contain object-right-bottom"
       />
 
       {/* Status overlay — bottom-left, over the MILADY text area */}

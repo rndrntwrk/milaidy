@@ -786,6 +786,9 @@ function AppProviderInner({
     setAuthRequired,
     setOnboardingComplete,
     setOnboardingLoading,
+    legacyStartupStatus: startupStatus,
+    legacyAuthRequired: authRequired,
+    legacyOnboardingComplete: onboardingComplete,
   });
 
   // ── Chat state (consolidated from 18+ useState + 10 useEffect hooks) ──

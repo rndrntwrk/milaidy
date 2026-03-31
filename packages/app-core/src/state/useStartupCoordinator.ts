@@ -61,6 +61,10 @@ export interface StartupCoordinatorDeps {
   setAuthRequired: (v: boolean) => void;
   setOnboardingComplete: (v: boolean) => void;
   setOnboardingLoading: (v: boolean) => void;
+  /** Legacy startup status — the coordinator syncs to ready when this reaches "ready". */
+  legacyStartupStatus: string | null;
+  legacyAuthRequired: boolean;
+  legacyOnboardingComplete: boolean;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────
@@ -97,9 +101,15 @@ export function useStartupCoordinator(
   const effectRunRef = useRef(0);
 
   // ── Phase-driven side effects ────────────────────────────────────
+  // DISABLED: These effects independently poll the backend, racing
+  // the legacy startup effect. The coordinator now follows the legacy
+  // effect via the "Legacy sync" effect below. These will be re-enabled
+  // when the legacy startup effect is fully removed.
+  const COORDINATOR_INDEPENDENT_POLLING = false;
 
-  // Phase: booting → restoring-session (immediate transition)
+  // Phase: restoring-session — probe for existing connection
   useEffect(() => {
+    if (!COORDINATOR_INDEPENDENT_POLLING) return;
     if (state.phase !== "restoring-session") return;
     // Reset cancellation for new run
     cancelledRef.current = false;
@@ -226,9 +236,8 @@ export function useStartupCoordinator(
   }, [state.phase, policy]);
 
   // Phase: resolving-target → polling-backend (auto-advance)
-  // The reducer handles this transition when it sees any event in resolving-target.
-  // We need to kick it forward since resolving-target is a transient state.
   useEffect(() => {
+    if (!COORDINATOR_INDEPENDENT_POLLING) return;
     if (state.phase !== "resolving-target") return;
     // Auto-advance by dispatching a poll retry to enter polling-backend
     dispatch({ type: "BACKEND_POLL_RETRY" });
@@ -236,6 +245,7 @@ export function useStartupCoordinator(
 
   // Phase: polling-backend — poll auth + onboarding status
   useEffect(() => {
+    if (!COORDINATOR_INDEPENDENT_POLLING) return;
     if (state.phase !== "polling-backend") return;
     const runId = effectRunRef.current;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -301,6 +311,7 @@ export function useStartupCoordinator(
 
   // Phase: starting-runtime — poll agent status until running
   useEffect(() => {
+    if (!COORDINATOR_INDEPENDENT_POLLING) return;
     if (state.phase !== "starting-runtime") return;
     const runId = effectRunRef.current;
     let cancelled = false;
@@ -372,6 +383,7 @@ export function useStartupCoordinator(
 
   // Phase: hydrating — load initial data, connect WS
   useEffect(() => {
+    if (!COORDINATOR_INDEPENDENT_POLLING) return;
     if (state.phase !== "hydrating") return;
     let cancelled = false;
 
@@ -450,6 +462,45 @@ export function useStartupCoordinator(
         break;
     }
   }, [state, deps]);
+
+  // ── Legacy sync — coordinator follows the legacy startup effect ──
+  // The legacy startup effect is the authoritative startup flow. The
+  // coordinator mirrors its progress so the StartupShell renders correctly.
+  // This avoids the dual-polling race condition where both systems
+  // independently probe the backend and reach different conclusions.
+  useEffect(() => {
+    if (!deps) return;
+    const { legacyStartupStatus, legacyAuthRequired, legacyOnboardingComplete } =
+      deps;
+
+    if (legacyStartupStatus === "ready" && state.phase !== "ready") {
+      dispatch({ type: "HYDRATION_COMPLETE" });
+      // Force to ready if not already there
+      if (state.phase !== "hydrating") {
+        dispatch({ type: "AGENT_RUNNING" });
+        dispatch({ type: "HYDRATION_COMPLETE" });
+      }
+    } else if (
+      legacyStartupStatus === "auth-blocked" &&
+      state.phase !== "pairing-required"
+    ) {
+      dispatch({ type: "BACKEND_AUTH_REQUIRED" });
+    } else if (
+      legacyStartupStatus === "onboarding" &&
+      state.phase !== "onboarding-required"
+    ) {
+      dispatch({
+        type: "NO_SESSION",
+        hadPriorOnboarding: false,
+      });
+    } else if (legacyStartupStatus === "recoverable-error") {
+      // Error is handled by the legacy StartupFailureView
+      // The coordinator should also reflect this
+      if (state.phase !== "error") {
+        dispatch({ type: "AGENT_ERROR", message: "Startup failed" });
+      }
+    }
+  }, [deps, state.phase]);
 
   // ── Public interface ─────────────────────────────────────────────
 
