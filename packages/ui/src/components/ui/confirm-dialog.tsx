@@ -50,7 +50,7 @@ export function ConfirmDialog({
         if (!nextOpen) onCancel();
       }}
     >
-      <DialogContent className="max-w-md rounded-2xl border-border/60 bg-card/96 shadow-[var(--shadow-lg)] backdrop-blur-xl">
+      <DialogContent className="max-w-md rounded-2xl border-border/60 bg-bg shadow-[var(--shadow-lg)] backdrop-blur-xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription className="whitespace-pre-line text-muted-strong">
@@ -111,7 +111,7 @@ export function PromptDialog({
         if (!nextOpen) onCancel();
       }}
     >
-      <DialogContent className="max-w-md rounded-2xl border-border/60 bg-card/96 shadow-[var(--shadow-lg)] backdrop-blur-xl">
+      <DialogContent className="max-w-md rounded-2xl border-border/60 bg-bg shadow-[var(--shadow-lg)] backdrop-blur-xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription className="whitespace-pre-line text-muted-strong">
