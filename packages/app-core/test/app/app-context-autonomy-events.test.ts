@@ -319,6 +319,7 @@ describe("AppContext autonomy replay", () => {
       "eliza:connection-mode",
       JSON.stringify({ runMode: "local" }),
     );
+    localStorage.setItem("eliza:onboarding-complete", "1");
     window.history.replaceState({}, "", "/chat");
     Object.assign(window, {
       setTimeout: globalThis.setTimeout,

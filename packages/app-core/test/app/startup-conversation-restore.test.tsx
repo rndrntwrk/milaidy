@@ -172,6 +172,7 @@ describe("startup conversation restore", () => {
       "eliza:connection-mode",
       JSON.stringify({ runMode: "local" }),
     );
+    localStorage.setItem("eliza:onboarding-complete", "1");
 
     for (const fn of Object.values(mockClient)) {
       if (typeof fn === "function" && "mockReset" in fn) {
