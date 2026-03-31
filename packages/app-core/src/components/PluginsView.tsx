@@ -1048,21 +1048,22 @@ type PluginsViewMode =
   | "social";
 type SubgroupTag = { id: string; label: string; count: number };
 
+function isPluginReady(plugin: PluginInfo): boolean {
+  if (!plugin.enabled) return false;
+  const needsConfig =
+    plugin.parameters?.some(
+      (param: PluginParamDef) => param.required && !param.isSet,
+    ) ?? false;
+  return !needsConfig;
+}
+
 function comparePlugins(left: PluginInfo, right: PluginInfo): number {
+  // Ready plugins (enabled + fully configured) float to the top
+  const leftReady = isPluginReady(left);
+  const rightReady = isPluginReady(right);
+  if (leftReady !== rightReady) return leftReady ? -1 : 1;
+  // Then enabled-but-needs-config
   if (left.enabled !== right.enabled) return left.enabled ? -1 : 1;
-  if (left.enabled && right.enabled) {
-    const leftNeedsConfig =
-      left.parameters?.some(
-        (param: PluginParamDef) => param.required && !param.isSet,
-      ) ?? false;
-    const rightNeedsConfig =
-      right.parameters?.some(
-        (param: PluginParamDef) => param.required && !param.isSet,
-      ) ?? false;
-    if (leftNeedsConfig !== rightNeedsConfig) {
-      return leftNeedsConfig ? -1 : 1;
-    }
-  }
   return (left.name ?? "").localeCompare(right.name ?? "");
 }
 
