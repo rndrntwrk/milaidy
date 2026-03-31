@@ -40,6 +40,7 @@ export const ChatMessage = memo(function ChatMessage({
   onDelete,
 }: ChatMessageProps) {
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showActions, setShowActions] = useState(false);
   const [supportsHover, setSupportsHover] = useState(() =>
     typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -64,8 +65,22 @@ export const ChatMessage = memo(function ChatMessage({
   const handleCopy = useCallback(() => {
     onCopy?.(message.text);
     setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current !== null) {
+      clearTimeout(copiedTimerRef.current);
+    }
+    copiedTimerRef.current = setTimeout(() => {
+      setCopied(false);
+      copiedTimerRef.current = null;
+    }, 2000);
   }, [message.text, onCopy]);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current !== null) {
+        clearTimeout(copiedTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleStartEditing = useCallback(() => {
     if (!canEdit || savingEdit) return;

@@ -1,6 +1,6 @@
 import { PencilLine, X } from "lucide-react";
 import type React from "react";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Z_OVERLAY } from "../../../lib/floating-layers";
 import { Button } from "../../ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip";
@@ -141,21 +141,25 @@ export function ChatConversationItem({
   onSelect,
   variant = "default",
 }: ChatConversationItemProps) {
-  const longPressTimerRef = useRef<number | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressClickRef = useRef(false);
   const isGameModal = variant === "game-modal";
 
-  const clearLongPressTimer = () => {
+  const clearLongPressTimer = useCallback(() => {
     if (longPressTimerRef.current !== null) {
-      window.clearTimeout(longPressTimerRef.current);
+      clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    return () => clearLongPressTimer();
+  }, [clearLongPressTimer]);
 
   const handleTouchStart = (event: React.TouchEvent<HTMLButtonElement>) => {
     if (!mobile || !onOpenActions) return;
     clearLongPressTimer();
-    longPressTimerRef.current = window.setTimeout(() => {
+    longPressTimerRef.current = setTimeout(() => {
       suppressClickRef.current = true;
       onOpenActions(event, conversation);
       clearLongPressTimer();
