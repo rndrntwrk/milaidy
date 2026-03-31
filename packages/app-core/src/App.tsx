@@ -510,12 +510,9 @@ export function App() {
     );
   }
 
-  // After the coordinator reaches "ready", the legacy lifecycle state is still
-  // used for rendering the onboarding crossfade and detecting post-ready states.
-  const showOnboarding =
-    ((!onboardingComplete && !onboardingHandoffActive) ||
-      fadingOutOnboarding) &&
-    !blockOnboardingForShell;
+  // Coordinator is at "ready" — the app shell renders. No legacy onboarding
+  // overlays — the coordinator handled all of that before reaching ready.
+  const showOnboarding = false;
 
   // We conditionally skip returning early for onboarding so we can mount the app shell
   // behind it during the crossfade. If we are completely before the fade out, we can
@@ -689,60 +686,6 @@ export function App() {
         If we are in the crossfade phase, mount the shell but cover it with the fading onboarding layer.
       */}
       {appShell}
-
-      {showOnboarding && (
-        <div
-          className={`fixed inset-0 z-[${Z_MODAL}] transition-opacity duration-700`}
-          style={{ opacity: fadingOutOnboarding ? 0 : 1 }}
-        >
-          <OnboardingWizard />
-        </div>
-      )}
-
-      {onboardingHandoffActive && (
-        <div
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-[90] flex justify-center px-4 pb-6 pt-20"
-          data-testid="onboarding-handoff-overlay"
-        >
-          <div className="pointer-events-auto w-full max-w-lg rounded-[24px] border border-border/50 bg-card/92 p-5 shadow-[0_18px_48px_rgba(15,23,42,0.24)] backdrop-blur-md">
-            <div className="flex items-start gap-3">
-              {onboardingHandoffPhase === "error" ? (
-                <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-danger" />
-              ) : (
-                <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-accent animate-pulse" />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-txt">
-                  {onboardingHandoffCopy.title}
-                </p>
-                <p className="mt-1 text-sm text-muted">
-                  {onboardingHandoffCopy.detail}
-                </p>
-              </div>
-            </div>
-
-            {onboardingHandoffPhase === "error" && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button
-                  data-testid="onboarding-handoff-retry"
-                  onClick={() => {
-                    void retryOnboardingHandoff();
-                  }}
-                >
-                  Retry
-                </Button>
-                <Button
-                  variant="outline"
-                  data-testid="onboarding-handoff-back"
-                  onClick={cancelOnboardingHandoff}
-                >
-                  Back to setup
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Persistent game overlay — stays visible across all tabs */}
       {activeGameViewerUrl && gameOverlayEnabled && tab !== "apps" && (
