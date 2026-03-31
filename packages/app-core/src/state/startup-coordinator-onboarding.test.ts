@@ -98,4 +98,22 @@ describe("onboarding completion through coordinator", () => {
     state = startupReducer(state, { type: "BACKEND_AUTH_REQUIRED" });
     expect(state.phase).toBe("pairing-required");
   });
+
+  it("coordinator reaches hydrating phase which creates conversations", () => {
+    let state: StartupState = { phase: "onboarding-required", serverReachable: true };
+    state = startupReducer(state, { type: "ONBOARDING_COMPLETE" });
+    state = startupReducer(state, { type: "AGENT_RUNNING" });
+    expect(state.phase).toBe("hydrating");
+    // hydrating phase calls hydrateInitialConversationState which creates
+    // a conversation if none exist — verified by the coordinator's effect
+  });
+
+  it("completed onboarding with existing install goes to starting-runtime not onboarding", () => {
+    let state: StartupState = { phase: "restoring-session" };
+    state = startupReducer(state, { type: "SESSION_RESTORED", target: "embedded-local" });
+    // resolving-target auto-advances
+    state = startupReducer(state, { type: "RETRY" });
+    state = startupReducer(state, { type: "BACKEND_REACHED", onboardingComplete: true });
+    expect(state.phase).toBe("starting-runtime");
+  });
 });
