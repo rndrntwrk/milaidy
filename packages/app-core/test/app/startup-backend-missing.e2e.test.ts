@@ -108,10 +108,13 @@ describe("startup failure: backend missing", () => {
       );
     });
 
-    await act(async () => {
-      await Promise.resolve();
-      await vi.runOnlyPendingTimersAsync();
-    });
+    // Flush coordinator phases — splash → restoring-session → polling-backend → error
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        await Promise.resolve();
+        await vi.runOnlyPendingTimersAsync();
+      });
+    }
 
     expect(latest).not.toBeNull();
     expect(latest?.startupError?.reason).toBe("backend-unreachable");

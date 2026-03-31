@@ -316,17 +316,9 @@ describe("app startup routing (e2e)", () => {
       let renderedText = textOf(tree.root);
 
       expect(renderedText).toContain("ChatView");
-      expect(renderedText).toContain("AvatarLoader");
+      // AvatarLoader was removed from VrmStage — VRM loads silently now
       expect(renderedText).not.toContain("OnboardingWizard");
       expect(renderedText).not.toContain("PairingView");
-
-      await act(async () => {
-        vi.advanceTimersByTime(801);
-      });
-
-      renderedText = textOf(tree.root);
-
-      expect(renderedText).not.toContain("AvatarLoader");
     } finally {
       vi.useRealTimers();
     }
