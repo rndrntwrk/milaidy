@@ -1,10 +1,15 @@
 /**
  * Server-side credential resolver — scans local credential stores
- * to resolve real API keys when the renderer only has masked hints.
+ * and auto-populates milady.json as the single source of truth.
  *
- * This mirrors the Electrobun native credential scanner but runs in
- * the API server process, avoiding the need to pass unmasked keys
- * over IPC.
+ * Credential sources:
+ *   1. Claude Code OAuth → ~/.claude/.credentials.json or macOS Keychain
+ *      (uses subscription auth flow, NOT direct api.anthropic.com)
+ *   2. OpenAI Codex → ~/.codex/auth.json
+ *   3. Environment variables → process.env
+ *
+ * The OAuth token from Claude Code is an "anthropic-subscription" credential
+ * that goes through applySubscriptionCredentials(), not a direct API key.
  */
 import { execSync } from "node:child_process";
 import fs from "node:fs";
@@ -12,11 +17,7 @@ import os from "node:os";
 import path from "node:path";
 import { logger } from "@elizaos/core";
 
-interface CredentialSource {
-  providerId: string;
-  envVar: string;
-  resolve: () => string | null;
-}
+// ── File/Keychain readers ────────────────────────────────────────────
 
 function readJsonSafe<T>(filePath: string): T | null {
   try {
@@ -55,14 +56,19 @@ function readKeychainValue(service: string): string | null {
   }
 }
 
-/** Resolve Claude OAuth token from ~/.claude/.credentials.json or macOS Keychain. */
+// ── Provider-specific resolvers ──────────────────────────────────────
+
+/** Resolve Claude OAuth token — this is a SUBSCRIPTION token, not a direct API key. */
 function resolveClaudeOAuthToken(): string | null {
   const home = os.homedir();
+
+  // 1. File-based credentials
   const credPath = path.join(home, ".claude", ".credentials.json");
   const data = readJsonSafe<Record<string, unknown>>(credPath);
   const fileToken = extractOauthAccessToken(data);
   if (fileToken) return fileToken;
 
+  // 2. macOS Keychain
   const keychainData = readKeychainValue("Claude Code-credentials");
   if (!keychainData) return null;
   try {
@@ -73,41 +79,55 @@ function resolveClaudeOAuthToken(): string | null {
   }
 }
 
-/** Resolve OpenAI API key from ~/.codex/auth.json. */
+/** Resolve OpenAI API key from Codex auth file. */
 function resolveCodexApiKey(): string | null {
   const authPath = path.join(os.homedir(), ".codex", "auth.json");
   const data = readJsonSafe<{ OPENAI_API_KEY?: string }>(authPath);
   return data?.OPENAI_API_KEY?.trim() || null;
 }
 
-/**
- * All credential sources, ordered by provider.
- * Each source knows how to resolve the real key from the local filesystem.
- */
+// ── Credential source registry ───────────────────────────────────────
+
+interface CredentialSource {
+  providerId: string;
+  envVar: string;
+  /** "subscription" means the value is an OAuth token for the subscription flow. */
+  authType: "api-key" | "subscription";
+  resolve: () => string | null;
+}
+
 const CREDENTIAL_SOURCES: CredentialSource[] = [
+  // Claude Code OAuth — subscription flow, NOT direct API key
   {
     providerId: "anthropic-subscription",
     envVar: "ANTHROPIC_API_KEY",
+    authType: "subscription",
     resolve: resolveClaudeOAuthToken,
   },
+  // Direct API keys
   {
     providerId: "anthropic",
     envVar: "ANTHROPIC_API_KEY",
+    authType: "api-key",
     resolve: () => process.env.ANTHROPIC_API_KEY?.trim() || null,
   },
   {
     providerId: "openai",
     envVar: "OPENAI_API_KEY",
-    resolve: () => resolveCodexApiKey() || process.env.OPENAI_API_KEY?.trim() || null,
+    authType: "api-key",
+    resolve: () =>
+      resolveCodexApiKey() || process.env.OPENAI_API_KEY?.trim() || null,
   },
   {
     providerId: "groq",
     envVar: "GROQ_API_KEY",
+    authType: "api-key",
     resolve: () => process.env.GROQ_API_KEY?.trim() || null,
   },
   {
     providerId: "gemini",
     envVar: "GOOGLE_GENERATIVE_AI_API_KEY",
+    authType: "api-key",
     resolve: () =>
       process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
       process.env.GOOGLE_API_KEY?.trim() ||
@@ -116,67 +136,93 @@ const CREDENTIAL_SOURCES: CredentialSource[] = [
   {
     providerId: "openrouter",
     envVar: "OPENROUTER_API_KEY",
+    authType: "api-key",
     resolve: () => process.env.OPENROUTER_API_KEY?.trim() || null,
   },
   {
     providerId: "grok",
     envVar: "XAI_API_KEY",
+    authType: "api-key",
     resolve: () => process.env.XAI_API_KEY?.trim() || null,
   },
   {
     providerId: "deepseek",
     envVar: "DEEPSEEK_API_KEY",
+    authType: "api-key",
     resolve: () => process.env.DEEPSEEK_API_KEY?.trim() || null,
   },
   {
     providerId: "mistral",
     envVar: "MISTRAL_API_KEY",
+    authType: "api-key",
     resolve: () => process.env.MISTRAL_API_KEY?.trim() || null,
   },
   {
     providerId: "together",
     envVar: "TOGETHER_API_KEY",
+    authType: "api-key",
     resolve: () => process.env.TOGETHER_API_KEY?.trim() || null,
   },
   {
     providerId: "zai",
     envVar: "ZAI_API_KEY",
+    authType: "api-key",
     resolve: () => process.env.ZAI_API_KEY?.trim() || null,
   },
 ];
 
+// ── Public API ───────────────────────────────────────────────────────
+
+export interface ResolvedCredential {
+  providerId: string;
+  envVar: string;
+  apiKey: string;
+  authType: "api-key" | "subscription";
+}
+
 /**
- * Resolve the real API key for a provider from local credential stores.
- * Used by the onboarding endpoint when the renderer sends a masked key.
+ * Resolve the real credential for a specific provider.
  */
 export function resolveProviderCredential(
   providerId: string,
-): { envVar: string; apiKey: string } | null {
+): ResolvedCredential | null {
   for (const source of CREDENTIAL_SOURCES) {
     if (source.providerId !== providerId) continue;
     const key = source.resolve();
     if (key) {
       logger.info(
-        `[credential-resolver] Resolved ${source.envVar} for ${providerId} (${key.length} chars)`,
+        `[credential-resolver] Resolved ${source.envVar} for ${providerId} (${key.length} chars, ${source.authType})`,
       );
-      return { envVar: source.envVar, apiKey: key };
+      return {
+        providerId: source.providerId,
+        envVar: source.envVar,
+        apiKey: key,
+        authType: source.authType,
+      };
     }
   }
   return null;
 }
 
 /**
- * Scan all available credential sources and return a summary.
- * Does NOT mask keys — this is server-side only.
+ * Scan all credential sources. Returns every provider that has a
+ * resolvable credential on this machine.
  */
-export function scanAllCredentials(): Array<{
-  providerId: string;
-  envVar: string;
-  available: boolean;
-}> {
-  return CREDENTIAL_SOURCES.map((source) => ({
-    providerId: source.providerId,
-    envVar: source.envVar,
-    available: source.resolve() !== null,
-  }));
+export function scanAllCredentials(): ResolvedCredential[] {
+  const results: ResolvedCredential[] = [];
+  const seen = new Set<string>();
+  for (const source of CREDENTIAL_SOURCES) {
+    if (seen.has(source.envVar)) continue;
+    const key = source.resolve();
+    if (key) {
+      seen.add(source.envVar);
+      results.push({
+        providerId: source.providerId,
+        envVar: source.envVar,
+        apiKey: key,
+        authType: source.authType,
+      });
+    }
+  }
+  return results;
 }

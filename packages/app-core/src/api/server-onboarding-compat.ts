@@ -139,7 +139,20 @@ export async function extractAndPersistOnboardingApiKey(
       persistedConnection.apiKey.startsWith("****"))
   ) {
     const resolved = resolveProviderCredential(persistedConnection.provider);
-    if (resolved) {
+    if (resolved && resolved.authType === "subscription") {
+      // OAuth tokens (e.g. Claude Code) go through the subscription auth
+      // flow — they can't be used as direct API keys. Rewrite the
+      // connection to use the subscription path.
+      (persistedConnection as unknown as Record<string, unknown>).kind =
+        "local-provider";
+      (persistedConnection as unknown as Record<string, unknown>).provider =
+        "anthropic-subscription";
+      (persistedConnection as unknown as Record<string, unknown>).apiKey =
+        resolved.apiKey;
+      logger.info(
+        `[onboarding] Using subscription auth for ${resolved.providerId}`,
+      );
+    } else if (resolved) {
       (persistedConnection as unknown as Record<string, unknown>).apiKey =
         resolved.apiKey;
       logger.info(
