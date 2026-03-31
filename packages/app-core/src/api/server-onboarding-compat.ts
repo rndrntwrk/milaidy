@@ -14,6 +14,7 @@ import {
   normalizeCharacterLanguage,
 } from "@miladyai/shared/onboarding-presets";
 import { loadElizaConfig, saveElizaConfig } from "../config/config";
+import { resolveProviderCredential } from "./credential-resolver";
 import { PREMADE_VOICES } from "../voice/types";
 import {
   applyOnboardingConnectionConfig,
@@ -130,10 +131,28 @@ export async function extractAndPersistOnboardingApiKey(
     `[onboarding] Resolved connection: kind=${persistedConnection.kind}, provider=${"provider" in persistedConnection ? persistedConnection.provider : "N/A"}, hasKey=${Boolean("apiKey" in persistedConnection && persistedConnection.apiKey)}`,
   );
 
-  if (persistedConnection.kind === "local-provider") {
-    const envKey = getPersistableLocalProviderEnvKey(persistedConnection);
-    if (envKey && !persistedConnection.apiKey) {
-      return null;
+  // If the key is masked (from IPC) or missing, try to resolve the real
+  // key from local credential stores (files, keychain, env).
+  if (
+    persistedConnection.kind === "local-provider" &&
+    (!persistedConnection.apiKey ||
+      persistedConnection.apiKey.startsWith("****"))
+  ) {
+    const resolved = resolveProviderCredential(persistedConnection.provider);
+    if (resolved) {
+      (persistedConnection as unknown as Record<string, unknown>).apiKey =
+        resolved.apiKey;
+      logger.info(
+        `[onboarding] Resolved real key for ${persistedConnection.provider} via credential-resolver`,
+      );
+    } else {
+      const envKey = getPersistableLocalProviderEnvKey(persistedConnection);
+      if (envKey && !persistedConnection.apiKey) {
+        logger.warn(
+          `[onboarding] No key found for ${persistedConnection.provider} — cannot persist`,
+        );
+        return null;
+      }
     }
   }
 

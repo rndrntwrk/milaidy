@@ -606,9 +606,15 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
           "";
         if (fallbackProvider) {
           setOnboardingProvider(fallbackProvider);
+          // Only auto-fill API key if it's a real (unmasked) value.
+          // Keys from the credential scanner are masked ("****xxxx") for
+          // IPC security — the server re-scans natively when persisting.
+          // OAuth providers don't need the key field at all.
           if (
             detectedProvider?.id === fallbackProvider &&
-            detectedProvider.apiKey
+            detectedProvider.apiKey &&
+            !detectedProvider.apiKey.startsWith("****") &&
+            detectedProvider.authMode !== "oauth"
           ) {
             setOnboardingApiKey(detectedProvider.apiKey);
           }
@@ -836,7 +842,10 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
 
   const applyDetectedProviders = useCallback(
     (detected: Awaited<ReturnType<typeof scanProviderCredentials>>) => {
-      setOnboardingDetectedProviders(detected);
+      setOnboardingDetectedProviders(
+        detected as typeof detected &
+          AppState["onboardingDetectedProviders"],
+      );
       const prefill = deriveDetectedProviderPrefill(detected);
       if (!prefill) {
         return;

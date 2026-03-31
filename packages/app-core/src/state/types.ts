@@ -532,6 +532,7 @@ export interface AppState {
     source: string;
     apiKey?: string;
     authMode?: string;
+    status?: "valid" | "invalid" | "unchecked" | "error";
     cliInstalled: boolean;
   }>;
   onboardingRemoteApiBase: string;
