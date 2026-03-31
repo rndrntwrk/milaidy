@@ -49,40 +49,6 @@ export function StartupShell() {
     return () => window.clearInterval(id);
   }, [phase]);
 
-  // Splash phase — branded welcome screen with "Get Started" button
-  if (phase === "splash") {
-    const splashState = startupCoordinator.state as { phase: "splash"; loaded: boolean };
-    return (
-      <div className="absolute inset-0 flex items-center justify-center bg-[#ffe600] font-body text-black overflow-hidden">
-        <img
-          src="/splash-bg.png"
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 h-full w-full object-contain object-right-bottom"
-        />
-        <div className="relative z-10 flex flex-col items-center gap-6 px-8 text-center max-w-md">
-          <h1 style={{ fontFamily: "'Press Start 2P', 'Courier New', monospace" }} className="text-3xl text-black drop-shadow-sm">
-            MILADY
-          </h1>
-          <p style={{ fontFamily: "'Press Start 2P', 'Courier New', monospace" }} className="text-[8px] text-black/50 uppercase leading-relaxed">
-            {t("startupshell.SplashTagline", { defaultValue: "Your local-first AI assistant" })}
-          </p>
-          <button
-            type="button"
-            disabled={!splashState.loaded}
-            onClick={() => startupCoordinator.dispatch({ type: "SPLASH_CONTINUE" })}
-            style={{ fontFamily: "'Press Start 2P', 'Courier New', monospace" }}
-            className="mt-4 border-2 border-black bg-black px-6 py-3 text-[10px] uppercase text-[#ffe600] shadow-lg hover:bg-black/80 disabled:opacity-40 disabled:cursor-wait transition-all"
-          >
-            {splashState.loaded
-              ? t("startupshell.GetStarted", { defaultValue: "Press Start" })
-              : t("startupshell.Loading", { defaultValue: "Loading..." })}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // Error phase — delegate to StartupFailureView
   if (phase === "error") {
     const coordState = startupCoordinator.state;
@@ -112,7 +78,12 @@ export function StartupShell() {
   }
 
   // All other intermediate phases (restoring-session, polling-backend, etc.)
-  // show the splash with a status indicator — no separate loading screen.
+  // stay on the splash screen — show status text where the button was.
+  const isLoading = phase !== "splash";
+  const splashLoaded = phase === "splash"
+    ? (startupCoordinator.state as { loaded?: boolean }).loaded
+    : false;
+
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-[#ffe600] font-body text-black overflow-hidden">
       <img
@@ -121,13 +92,31 @@ export function StartupShell() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 h-full w-full object-contain object-right-bottom"
       />
-      <div className="relative z-10 flex flex-col items-center gap-4 px-8 text-center">
+      <div className="relative z-10 flex flex-col items-center gap-6 px-8 text-center max-w-md">
         <h1 style={{ fontFamily: "'Press Start 2P', 'Courier New', monospace" }} className="text-3xl text-black drop-shadow-sm">
           MILADY
         </h1>
-        <p style={{ fontFamily: "'Press Start 2P', 'Courier New', monospace" }} className="text-[10px] text-black/60 uppercase tracking-wider animate-pulse">
-          {t(phaseToStatusKey(phase))}
+        <p style={{ fontFamily: "'Press Start 2P', 'Courier New', monospace" }} className="text-[8px] text-black/50 uppercase leading-relaxed">
+          {t("startupshell.SplashTagline", { defaultValue: "Your local-first AI assistant" })}
         </p>
+
+        {isLoading ? (
+          <p style={{ fontFamily: "'Press Start 2P', 'Courier New', monospace" }} className="mt-4 text-[10px] text-black/60 uppercase tracking-wider animate-pulse">
+            {t(phaseToStatusKey(phase))}
+          </p>
+        ) : (
+          <button
+            type="button"
+            disabled={!splashLoaded}
+            onClick={() => startupCoordinator.dispatch({ type: "SPLASH_CONTINUE" })}
+            style={{ fontFamily: "'Press Start 2P', 'Courier New', monospace" }}
+            className="mt-4 border-2 border-black bg-black px-6 py-3 text-[10px] uppercase text-[#ffe600] shadow-lg hover:bg-black/80 disabled:opacity-40 disabled:cursor-wait transition-all"
+          >
+            {splashLoaded
+              ? t("startupshell.GetStarted", { defaultValue: "Press Start" })
+              : t("startupshell.Loading", { defaultValue: "Loading..." })}
+          </button>
+        )}
       </div>
     </div>
   );
