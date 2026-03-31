@@ -102,7 +102,6 @@ export interface NavigationEventsApi {
 }
 
 export type OnboardingStep =
-  | "cloud_login"
   | "identity"
   | "hosting"
   | "providers"
@@ -116,13 +115,8 @@ export interface OnboardingStepMeta {
   subtitle: string;
 }
 
-/** Unified 7-step onboarding flow — cloud check is first, identity is second. */
+/** Unified 6-step onboarding flow — identity is first (cloud login is on the splash page). */
 export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
-  {
-    id: "cloud_login",
-    name: "onboarding.stepName.cloudLogin",
-    subtitle: "onboarding.stepSub.cloudLogin",
-  },
   {
     id: "identity",
     name: "onboarding.stepName.identity",

@@ -32,8 +32,24 @@ function phaseToStatusKey(phase: string): string {
 }
 
 export function StartupShell() {
-  const { startupCoordinator, startupError, retryStartup, t } = useApp();
+  const {
+    startupCoordinator,
+    startupError,
+    retryStartup,
+    t,
+    handleCloudLogin,
+    elizaCloudConnected,
+    elizaCloudLoginBusy,
+    elizaCloudLoginError,
+  } = useApp();
   const phase = startupCoordinator.phase;
+
+  // When cloud login completes, advance the coordinator out of cloud-login-required.
+  useEffect(() => {
+    if (elizaCloudConnected && phase === "cloud-login-required") {
+      startupCoordinator.dispatch({ type: "CLOUD_LOGIN_SUCCESS" });
+    }
+  }, [elizaCloudConnected, phase, startupCoordinator]);
 
   // Elapsed time counter
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -135,14 +151,20 @@ export function StartupShell() {
         {/* Cloud login button — shown when cloud auth is needed */}
         {phase === "cloud-login-required" && (
           <div className="flex flex-col items-center gap-3 mt-4">
+            {elizaCloudLoginError && (
+              <p className="text-xs text-red-700 font-medium text-center max-w-[20rem]">
+                {elizaCloudLoginError}
+              </p>
+            )}
             <button
               type="button"
-              onClick={() => {
-                // TODO: wire to actual cloud OAuth flow (handleCloudLogin)
-                startupCoordinator.dispatch({ type: "CLOUD_LOGIN_SUCCESS" });
-              }}
-              className="rounded-md bg-black px-6 py-2.5 text-sm font-semibold text-[#ffe600] shadow hover:bg-black/80 transition-colors"
+              disabled={elizaCloudLoginBusy}
+              onClick={() => void handleCloudLogin()}
+              className="flex items-center gap-2 rounded-md bg-black px-6 py-2.5 text-sm font-semibold text-[#ffe600] shadow hover:bg-black/80 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
+              {elizaCloudLoginBusy && (
+                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#ffe600] border-t-transparent" />
+              )}
               {t("startupshell.SignInCloud", { defaultValue: "Sign in with Eliza Cloud" })}
             </button>
             <button

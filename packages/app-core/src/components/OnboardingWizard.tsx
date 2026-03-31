@@ -21,7 +21,6 @@ import { useBranding } from "../config/branding";
 import { COMPANION_ENABLED } from "../navigation";
 import { VrmStage } from "./companion/VrmStage";
 import { ActivateStep } from "./onboarding/ActivateStep";
-import { CloudLoginStep } from "./onboarding/CloudLoginStep";
 import { ConnectionStep } from "./onboarding/ConnectionStep";
 import { IdentityStep } from "./onboarding/IdentityStep";
 import { OnboardingPanel } from "./onboarding/OnboardingPanel";
@@ -58,7 +57,6 @@ export function OnboardingWizard() {
   } = useApp();
   const revealWelcomeUiImmediately =
     disableVrm ||
-    onboardingStep === "cloud_login" ||
     onboardingUiRevealNonce > 0;
   // After Reset Agent from chat/companion, nonce bumps: show cloud ui immediately instead
   // of waiting for VrmStage reveal (often missing when remounting after an active session).
@@ -145,8 +143,6 @@ export function OnboardingWizard() {
 
   function renderStep() {
     switch (onboardingStep) {
-      case "cloud_login":
-        return <CloudLoginStep />;
       case "hosting":
       case "providers":
         return <ConnectionStep />;

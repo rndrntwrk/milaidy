@@ -119,7 +119,7 @@ const EMPTY_TOKENS: Record<ConnectorTokenKey, string> = {
 function createInitialState(cloudOnly?: boolean): OnboardingState {
   const savedApiBase = loadSessionApiBase();
   return {
-    step: loadPersistedOnboardingStep() ?? "cloud_login",
+    step: loadPersistedOnboardingStep() ?? "identity",
     mode: "basic",
     activeGuide: null,
     deferredTasks: [],

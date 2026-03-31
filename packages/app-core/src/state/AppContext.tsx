@@ -2602,7 +2602,7 @@ function AppProviderInner({
           setOnboardingLoading(false);
           setOnboardingComplete(false);
           onboardingResumeConnectionRef.current = null;
-          setOnboardingStep("cloud_login");
+          setOnboardingStep("identity");
           setOnboardingMode("basic");
           setOnboardingActiveGuide(null);
           setOnboardingDeferredTasks([]);
