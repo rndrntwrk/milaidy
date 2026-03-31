@@ -85,8 +85,6 @@ describe("startup failure: bundled assets missing", () => {
     const state = {
       t: (key: string) => key,
       onboardingLoading: false,
-      onboardingHandoffError: null,
-      onboardingHandoffPhase: "idle",
       startupPhase: "initializing-agent",
       startupCoordinator: {
         phase: "error",
@@ -115,7 +113,6 @@ describe("startup failure: bundled assets missing", () => {
       uiTheme: "light",
       setUiTheme: vi.fn(),
       chatAgentVoiceMuted: false,
-      cancelOnboardingHandoff: vi.fn(),
       handleSaveCharacter: vi.fn(),
       characterSaving: false,
       characterSaveSuccess: false,
@@ -123,7 +120,6 @@ describe("startup failure: bundled assets missing", () => {
       unreadConversations: new Set(),
       activeGameViewerUrl: null,
       gameOverlayEnabled: false,
-      retryOnboardingHandoff: vi.fn(async () => {}),
     };
 
     let tree: TestRenderer.ReactTestRenderer | null = null;

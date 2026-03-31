@@ -17,8 +17,6 @@ type AppHarnessState = {
   startupError: null;
   authRequired: boolean;
   onboardingComplete: boolean;
-  onboardingHandoffError: string | null;
-  onboardingHandoffPhase: string;
   tab: string;
   actionNotice: null;
   onboardingStep: OnboardingStep;
@@ -775,8 +773,6 @@ function createHarnessState(): AppHarnessState {
     startupError: null,
     authRequired: false,
     onboardingComplete: false,
-    onboardingHandoffError: null,
-    onboardingHandoffPhase: "idle",
     tab: "chat",
     actionNotice: null,
     onboardingStep: "identity",
@@ -921,7 +917,6 @@ describe("app startup onboarding flow (e2e)", () => {
     mockUseApp.mockImplementation(() => ({
       t: (k: string) => TRANSLATIONS[k] ?? k,
       ...state,
-      cancelOnboardingHandoff: vi.fn(),
       setState: (key: string, value: unknown) => {
         state[key] = value;
       },
@@ -944,7 +939,6 @@ describe("app startup onboarding flow (e2e)", () => {
         generated: true,
         persisted: false,
       })),
-      retryOnboardingHandoff: vi.fn(async () => {}),
       retryStartup: vi.fn(),
       startupPhase:
         state.startupStatus === "ready" ? "ready" : "starting-backend",

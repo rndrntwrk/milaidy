@@ -164,7 +164,6 @@ import {
   normalizeCompanionHalfFramerateMode,
   normalizeCompanionVrmPowerMode,
   normalizeCustomActionName,
-  type OnboardingHandoffPhase,
   normalizeUiShellMode,
   normalizeUiTheme,
   type OnboardingNextOptions,
@@ -217,16 +216,6 @@ import { useCharacterState } from "./useCharacterState";
 import { useWalletState } from "./useWalletState";
 import { usePluginsSkillsState } from "./usePluginsSkillsState";
 import { useCloudState } from "./useCloudState";
-
-type OnboardingHandoffMode = "full" | "cloud_fast_track";
-
-type OnboardingHandoffRetryState = {
-  mode: OnboardingHandoffMode;
-  onboardingSubmitted: boolean;
-  skipCloudProvisioning: boolean;
-  cloudApiBase?: string;
-  authToken?: string;
-};
 
 export {
   type ActionNotice,
@@ -862,15 +851,6 @@ function AppProviderInner({
     setChatFirstTokenReceived,
     setChatSending,
   ]);
-  // Compat: old code sometimes used a separate chatAwaitingGreeting state
-  const [chatAwaitingGreeting, setChatAwaitingGreeting] = useState(false);
-  const [onboardingHandoffPhase, setOnboardingHandoffPhase] =
-    useState<OnboardingHandoffPhase>("idle");
-  const [onboardingHandoffError, setOnboardingHandoffError] = useState<
-    string | null
-  >(null);
-  const onboardingHandoffRetryStateRef =
-    useRef<OnboardingHandoffRetryState | null>(null);
   // addUnread / removeUnread wrappers for old setUnreadConversations patterns
   const setUnreadConversations = useCallback(
     (v: Set<string> | ((prev: Set<string>) => Set<string>)) => {
@@ -1162,11 +1142,9 @@ function AppProviderInner({
     setConnectorToken,
     setRemoteStatus: setOnboardingRemoteStatus,
     setDetectedProviders: setOnboardingDetectedProviders,
-    finishBusyRef: onboardingFinishBusyRefFromHook,
     resumeConnectionRef: onboardingResumeConnectionRefFromHook,
     completionCommittedRef: onboardingCompletionCommittedRefFromHook,
     forceLocalBootstrapRef: forceLocalBootstrapRefFromHook,
-    finishSavingRef: onboardingFinishSavingRefFromHook,
   } = onboarding;
 
   // Compat aliases for old onboarding variable names
@@ -1422,12 +1400,10 @@ function AppProviderInner({
   const heartbeatNotificationKeyRef = useRef<string | null>(null);
   const localizedCharacterLanguageRef = useRef<UiLanguage>(uiLanguage);
   // Onboarding refs now come from useOnboardingState
-  const onboardingFinishBusyRef = onboardingFinishBusyRefFromHook;
   const onboardingResumeConnectionRef = onboardingResumeConnectionRefFromHook;
   const onboardingCompletionCommittedRef =
     onboardingCompletionCommittedRefFromHook;
   const forceLocalBootstrapRef = forceLocalBootstrapRefFromHook;
-  const onboardingFinishSavingRef = onboardingFinishSavingRefFromHook;
   // exportBusyRef and importBusyRef are now managed inside useExportImportState (exportImportHook)
   // walletApiKeySavingRef is now managed inside useWalletState (walletHook)
   // elizaCloudLoginBusyRef, elizaCloudAuthNoticeSentRef, handleCloudLoginRef
@@ -2056,7 +2032,6 @@ function AppProviderInner({
         return false;
       }
       greetingInFlightConversationRef.current = convId;
-      setChatAwaitingGreeting(true);
       traceMiladyGreeting("fetchGreeting:request", { convId });
       try {
         const data = await client.requestGreeting(convId, uiLanguage);
@@ -2105,7 +2080,6 @@ function AppProviderInner({
         greetingFiredRef.current = false;
         /* greeting failed silently — user can still chat */
       } finally {
-        setChatAwaitingGreeting(false);
         if (greetingInFlightConversationRef.current === convId) {
           greetingInFlightConversationRef.current = null;
         }
@@ -2894,7 +2868,6 @@ function AppProviderInner({
         }
 
         if (greetingText) {
-          setChatAwaitingGreeting(false);
           greetingFiredRef.current = true;
           const initMessages: ConversationMessage[] = [
             {
@@ -4212,7 +4185,7 @@ function AppProviderInner({
 
   // ── Onboarding ─────────────────────────────────────────────────────
 
-  const completeOnboardingChatHandoff = useCallback(() => {
+  const completeOnboarding = useCallback(() => {
     clearPersistedOnboardingStep();
     onboardingResumeConnectionRef.current = null;
     onboardingCompletionCommittedRef.current = true;
@@ -4229,9 +4202,6 @@ function AppProviderInner({
     coordinatorOnboardingCompleteRef.current?.();
     initialTabSetRef.current = true;
     setTab(DEFAULT_LANDING_TAB);
-    setOnboardingHandoffPhase("idle");
-    setOnboardingHandoffError(null);
-    onboardingHandoffRetryStateRef.current = null;
     void loadCharacter();
   }, [
     onboardingCompletionCommittedRef,
@@ -4246,71 +4216,17 @@ function AppProviderInner({
     loadCharacter,
   ]);
 
-  const prepareOnboardingChatHandoffAttempt = useCallback(
-    (attempt: OnboardingHandoffRetryState) => {
-      onboardingHandoffRetryStateRef.current = attempt;
-      setOnboardingHandoffError(null);
-      setOnboardingHandoffPhase("fading");
-      setTab(DEFAULT_LANDING_TAB);
-      interruptActiveChatPipeline();
-      resetConversationDraftState();
-      setActiveConversationId(null);
-      setConversations([]);
-      setChatAwaitingGreeting(true);
-      setAgentStatus({
-        ...(agentStatus ?? {
-          agentName: onboardingName || "Milady",
-          model: undefined,
-          startedAt: undefined,
-          uptime: undefined,
-        }),
-        state: "starting",
-      });
-    },
-    [
-      agentStatus,
-      onboardingName,
-      interruptActiveChatPipeline,
-      resetConversationDraftState,
-      setActiveConversationId,
-      setAgentStatus,
-      setConversations,
-      setTab,
-    ],
-  );
-
-  const failOnboardingChatHandoff = useCallback((err: unknown) => {
-    console.error("[onboarding] Failed to hand off into chat", err);
-    setChatAwaitingGreeting(false);
-    setOnboardingHandoffError(
-      err instanceof Error ? err.message : "network error",
-    );
-    setOnboardingHandoffPhase("error");
-  }, []);
-
   const runOnboardingChatHandoff = useCallback(
-    async (
-      mode: OnboardingHandoffMode,
-      retryState?: OnboardingHandoffRetryState | null,
-    ) => {
-      if (onboardingFinishBusyRef.current) return;
+    async () => {
       if (!onboardingOptions) return;
-      if (onboardingFinishSavingRef.current) return;
-
-      const attempt: OnboardingHandoffRetryState = retryState
-        ? { ...retryState }
-        : {
-            mode,
-            onboardingSubmitted: false,
-            skipCloudProvisioning: false,
-          };
-
-      prepareOnboardingChatHandoffAttempt(attempt);
-      onboardingFinishBusyRef.current = true;
-      onboardingFinishSavingRef.current = true;
 
       try {
-        if (mode === "cloud_fast_track") {
+        // Cloud fast-track: submit minimal config for elizacloud-hosted agent.
+        const useCloudFastTrack =
+          elizaCloudConnected &&
+          !(onboardingRunMode === "local" && onboardingProvider && onboardingProvider !== "elizacloud");
+
+        if (useCloudFastTrack) {
           const style = resolveSelectedOnboardingStyle({
             styles: onboardingOptions.styles,
             onboardingStyle,
@@ -4320,43 +4236,38 @@ function AppProviderInner({
           const defaultName =
             style.name ?? getDefaultStylePreset(uiLanguage).name;
 
-          if (!attempt.onboardingSubmitted) {
-            setOnboardingHandoffPhase("saving");
-            await client.submitOnboarding({
-              name: onboardingName || defaultName,
-              bio: style?.bio ?? ["An autonomous AI agent."],
-              systemPrompt:
-                style?.system?.replace(
-                  /\{\{name\}\}/g,
-                  onboardingName || defaultName,
-                ) ??
-                `You are ${onboardingName || defaultName}, an autonomous AI agent powered by elizaOS.`,
-              style: style?.style,
-              adjectives: style?.adjectives,
-              postExamples: style?.postExamples,
-              messageExamples: style?.messageExamples,
-              topics: style?.topics,
-              avatarIndex: style?.avatarIndex ?? 1,
-              language: uiLanguage,
-              presetId: style?.id ?? "chen",
-              runMode: "cloud",
-              cloudProvider: "elizacloud",
-              smallModel: "moonshotai/kimi-k2-turbo",
-              largeModel: "moonshotai/kimi-k2-0905",
-            } as unknown as Parameters<typeof client.submitOnboarding>[0]);
-            attempt.onboardingSubmitted = true;
-            onboardingHandoffRetryStateRef.current = attempt;
-            try {
-              await persistOnboardingStyleVoice(style);
-            } catch (err) {
-              console.warn(
-                "[onboarding] Failed to persist cloud voice preset",
-                err,
-              );
-            }
+          await client.submitOnboarding({
+            name: onboardingName || defaultName,
+            bio: style?.bio ?? ["An autonomous AI agent."],
+            systemPrompt:
+              style?.system?.replace(
+                /\{\{name\}\}/g,
+                onboardingName || defaultName,
+              ) ??
+              `You are ${onboardingName || defaultName}, an autonomous AI agent powered by elizaOS.`,
+            style: style?.style,
+            adjectives: style?.adjectives,
+            postExamples: style?.postExamples,
+            messageExamples: style?.messageExamples,
+            topics: style?.topics,
+            avatarIndex: style?.avatarIndex ?? 1,
+            language: uiLanguage,
+            presetId: style?.id ?? "chen",
+            runMode: "cloud",
+            cloudProvider: "elizacloud",
+            smallModel: "moonshotai/kimi-k2-turbo",
+            largeModel: "moonshotai/kimi-k2-0905",
+          } as unknown as Parameters<typeof client.submitOnboarding>[0]);
+          try {
+            await persistOnboardingStyleVoice(style);
+          } catch (err) {
+            console.warn(
+              "[onboarding] Failed to persist cloud voice preset",
+              err,
+            );
           }
 
-          completeOnboardingChatHandoff();
+          completeOnboarding();
           return;
         }
 
@@ -4423,55 +4334,35 @@ function AppProviderInner({
         const isLocalMode = onboardingRunMode === "local" || !onboardingRunMode;
 
         if (isSandboxMode) {
-          if (!attempt.skipCloudProvisioning) {
-            setOnboardingHandoffPhase("provisioning");
-            const cloudApiBase =
-              getBootConfig().cloudApiBase ?? "https://www.elizacloud.ai";
-            const authToken = ((window as unknown as Record<string, unknown>)
-              .__ELIZA_CLOUD_AUTH_TOKEN__ ?? "") as string;
+          const cloudApiBase =
+            getBootConfig().cloudApiBase ?? "https://www.elizacloud.ai";
+          const authToken = ((window as unknown as Record<string, unknown>)
+            .__ELIZA_CLOUD_AUTH_TOKEN__ ?? "") as string;
 
-            if (!authToken) {
-              throw new Error(
-                "Eliza Cloud authentication required. Please log in first.",
-              );
-            }
-
-            await client.provisionCloudSandbox({
-              cloudApiBase,
-              authToken,
-              name: onboardingName,
-              bio: style?.bio ?? ["An autonomous AI agent."],
-              onProgress: (status, detail) => {
-                console.log(`[Sandbox] ${status}: ${detail ?? ""}`);
-              },
-            });
-
-            client.setBaseUrl(cloudApiBase);
-            client.setToken(authToken);
-            savePersistedConnectionMode({
-              runMode: "cloud",
-              cloudApiBase,
-              cloudAuthToken: authToken,
-            });
-            attempt.skipCloudProvisioning = true;
-            attempt.cloudApiBase = cloudApiBase;
-            attempt.authToken = authToken;
-            onboardingHandoffRetryStateRef.current = attempt;
-          } else {
-            if (attempt.cloudApiBase) {
-              client.setBaseUrl(attempt.cloudApiBase);
-            }
-            if (attempt.authToken) {
-              client.setToken(attempt.authToken);
-            }
-            savePersistedConnectionMode({
-              runMode: "cloud",
-              cloudApiBase: attempt.cloudApiBase,
-              cloudAuthToken: attempt.authToken,
-            });
+          if (!authToken) {
+            throw new Error(
+              "Eliza Cloud authentication required. Please log in first.",
+            );
           }
+
+          await client.provisionCloudSandbox({
+            cloudApiBase,
+            authToken,
+            name: onboardingName,
+            bio: style?.bio ?? ["An autonomous AI agent."],
+            onProgress: (status, detail) => {
+              console.log(`[Sandbox] ${status}: ${detail ?? ""}`);
+            },
+          });
+
+          client.setBaseUrl(cloudApiBase);
+          client.setToken(authToken);
+          savePersistedConnectionMode({
+            runMode: "cloud",
+            cloudApiBase,
+            cloudAuthToken: authToken,
+          });
         } else if (isLocalMode) {
-          setOnboardingHandoffPhase("starting-backend");
           try {
             await invokeDesktopBridgeRequest({
               rpcMethod: "agentStart",
@@ -4511,46 +4402,35 @@ function AppProviderInner({
           });
         }
 
-        if (!attempt.onboardingSubmitted) {
-          const sandboxMode = isSandboxMode ? "standard" : "off";
-          setOnboardingHandoffPhase("saving");
-          await client.submitOnboarding({
-            name: onboardingName,
-            sandboxMode: sandboxMode as "off",
-            bio: style?.bio ?? ["An autonomous AI agent."],
-            systemPrompt,
-            style: style?.style,
-            adjectives: style?.adjectives,
-            topics: style?.topics,
-            postExamples: style?.postExamples,
-            messageExamples: style?.messageExamples,
-            avatarIndex: style?.avatarIndex ?? selectedVrmIndex,
-            language: uiLanguage,
-            presetId: (style?.id ?? onboardingStyle) || "chen",
-            connection,
-            walletConfig: nextWalletConfig,
-          } as Parameters<typeof client.submitOnboarding>[0]);
-          attempt.onboardingSubmitted = true;
-          onboardingHandoffRetryStateRef.current = attempt;
-          try {
-            await persistOnboardingStyleVoice(style);
-          } catch (err) {
-            console.warn(
-              "[onboarding] Failed to persist selected voice preset",
-              err,
-            );
-          }
-
-          await new Promise((r) => setTimeout(r, 1000));
+        const sandboxMode = isSandboxMode ? "standard" : "off";
+        await client.submitOnboarding({
+          name: onboardingName,
+          sandboxMode: sandboxMode as "off",
+          bio: style?.bio ?? ["An autonomous AI agent."],
+          systemPrompt,
+          style: style?.style,
+          adjectives: style?.adjectives,
+          topics: style?.topics,
+          postExamples: style?.postExamples,
+          messageExamples: style?.messageExamples,
+          avatarIndex: style?.avatarIndex ?? selectedVrmIndex,
+          language: uiLanguage,
+          presetId: (style?.id ?? onboardingStyle) || "chen",
+          connection,
+          walletConfig: nextWalletConfig,
+        } as Parameters<typeof client.submitOnboarding>[0]);
+        try {
+          await persistOnboardingStyleVoice(style);
+        } catch (err) {
+          console.warn(
+            "[onboarding] Failed to persist selected voice preset",
+            err,
+          );
         }
 
-        completeOnboardingChatHandoff();
+        completeOnboarding();
       } catch (err) {
-        failOnboardingChatHandoff(err);
-      } finally {
-        onboardingFinishSavingRef.current = false;
-        onboardingFinishBusyRef.current = false;
-        
+        console.error("[onboarding] Failed to complete onboarding", err);
       }
     },
     [
@@ -4576,53 +4456,14 @@ function AppProviderInner({
       onboardingRpcKeys,
       walletConfig,
       onboardingResumeConnectionRef,
-      onboardingFinishBusyRef,
-      onboardingFinishSavingRef,
-      prepareOnboardingChatHandoffAttempt,
-      completeOnboardingChatHandoff,
-      failOnboardingChatHandoff,
+      elizaCloudConnected,
+      completeOnboarding,
     ],
   );
 
-  const retryOnboardingHandoff = useCallback(async () => {
-    const retryState = onboardingHandoffRetryStateRef.current;
-    if (!retryState) {
-      return;
-    }
-    await runOnboardingChatHandoff(retryState.mode, retryState);
-  }, [runOnboardingChatHandoff]);
-
-  const cancelOnboardingHandoff = useCallback(() => {
-    onboardingHandoffRetryStateRef.current = null;
-    setChatAwaitingGreeting(false);
-    setOnboardingHandoffError(null);
-    setOnboardingHandoffPhase("idle");
-    if (
-      agentStatus?.state === "starting" ||
-      agentStatus?.state === "restarting"
-    ) {
-      void client
-        .getStatus()
-        .then((status) => setAgentStatus(status))
-        .catch(() => {
-          /* ignore */
-        });
-    }
-  }, [agentStatus, setAgentStatus]);
-
   const handleOnboardingFinish = useCallback(async () => {
-    // If the user explicitly chose a local provider with their own API key,
-    // use the full onboarding flow even if cloud is connected. Cloud login
-    // on the splash provides account access, but the provider selection in
-    // onboarding determines which LLM is used for inference.
-    const userChoseLocalProvider =
-      onboardingRunMode === "local" && onboardingProvider && onboardingProvider !== "elizacloud";
-    const mode =
-      elizaCloudConnected && !userChoseLocalProvider
-        ? "cloud_fast_track"
-        : "full";
-    await runOnboardingChatHandoff(mode);
-  }, [elizaCloudConnected, onboardingRunMode, onboardingProvider, runOnboardingChatHandoff]);
+    await runOnboardingChatHandoff();
+  }, [runOnboardingChatHandoff]);
 
   // ── Onboarding motion (flow graph: packages/app-core/src/onboarding/flow.ts) ──
   // WHY split from flow.ts: advance/revert need handleCloudLoginRef, finish,
@@ -4902,9 +4743,9 @@ function AppProviderInner({
   ]);
 
   // handleCloudOnboardingFinish — one-liner kept here because runOnboardingChatHandoff
-  // is defined above (line ~4546) and cloud hook is instantiated earlier.
+  // is defined above and cloud hook is instantiated earlier.
   const handleCloudOnboardingFinish = useCallback(async () => {
-    await runOnboardingChatHandoff("cloud_fast_track");
+    await runOnboardingChatHandoff();
   }, [runOnboardingChatHandoff]);
 
   // ── Updates ────────────────────────────────────────────────────────
@@ -5362,8 +5203,6 @@ function AppProviderInner({
     onboardingComplete,
     onboardingUiRevealNonce,
     onboardingLoading,
-    onboardingHandoffPhase,
-    onboardingHandoffError,
     startupPhase,
     startupStatus,
     startupError,
@@ -5386,7 +5225,6 @@ function AppProviderInner({
     chatInput,
     chatSending,
     chatFirstTokenReceived,
-    chatAwaitingGreeting,
     chatLastUsage,
     chatAvatarVisible,
     chatAgentVoiceMuted,
@@ -5699,8 +5537,6 @@ function AppProviderInner({
     handleCharacterMessageExamplesInput,
     handleOnboardingNext,
     handleOnboardingBack,
-    retryOnboardingHandoff,
-    cancelOnboardingHandoff,
     handleOnboardingJumpToStep,
     goToOnboardingStep,
     handleOnboardingRemoteConnect,
