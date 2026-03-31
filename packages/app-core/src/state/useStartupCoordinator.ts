@@ -240,6 +240,7 @@ export function useStartupCoordinator(
     persistedConnection: ReturnType<typeof loadPersistedConnectionMode>;
     restoredConnection: any;
     shouldPreserveCompletedOnboarding: boolean;
+    hadPriorOnboarding: boolean;
   } | null>(null);
 
   // Track whether the ready-phase WS bindings have been set up
@@ -273,18 +274,28 @@ export function useStartupCoordinator(
           : null;
       if (cancelled) return;
 
-      const preferLocal = forceLocal || isElectrobunRuntime() || Boolean(desktopInstall?.detected);
-      const probed = persisted
-        ? null
-        : await detectExistingOnboardingConnection({
-            client,
-            timeoutMs: preferLocal
-              ? Math.min(getBackendStartupTimeoutMs(), 30_000)
-              : Math.min(getBackendStartupTimeoutMs(), 3_500),
-          });
+      // Determine if there's real evidence of a prior install — persisted
+      // onboarding completion OR desktop install inspection found something.
+      // Without evidence, this is a fresh install and must show onboarding.
+      const isDesktop = forceLocal || isElectrobunRuntime();
+      const hasExistingEvidence = hadPrior || Boolean(desktopInstall?.detected);
+
+      // Only probe the API when we have evidence of a prior install but no
+      // persisted connection mode. A fresh install (no config, no prior
+      // onboarding) skips the probe entirely — the running API with default
+      // config is NOT evidence of a completed setup.
+      const probed =
+        !persisted && hasExistingEvidence
+          ? await detectExistingOnboardingConnection({
+              client,
+              timeoutMs: isDesktop
+                ? Math.min(getBackendStartupTimeoutMs(), 30_000)
+                : Math.min(getBackendStartupTimeoutMs(), 3_500),
+            })
+          : null;
       if (cancelled) return;
 
-      const restored = persisted ?? probed?.connection ?? (preferLocal ? { runMode: "local" } : null);
+      const restored = persisted ?? probed?.connection ?? null;
       const preserveCompleted = hadPrior && !d.onboardingCompletionCommittedRef.current;
 
       d.setOnboardingExistingInstallDetected(
@@ -324,7 +335,7 @@ export function useStartupCoordinator(
         try { await invokeDesktopBridgeRequest({ rpcMethod: "agentStart", ipcChannel: "agent:start" }); } catch {}
       }
 
-      _ctx.current = { persistedConnection: persisted, restoredConnection: restored, shouldPreserveCompletedOnboarding: preserveCompleted };
+      _ctx.current = { persistedConnection: persisted, restoredConnection: restored, shouldPreserveCompletedOnboarding: preserveCompleted, hadPriorOnboarding: hadPrior };
       dispatch({ type: "SESSION_RESTORED", target: connectionModeToTarget(restored.runMode) });
     })();
 
@@ -375,8 +386,30 @@ export function useStartupCoordinator(
           }
           const { complete } = await client.getOnboardingStatus();
           if (cancelled) return;
-          const sessionComplete = complete || d.onboardingCompletionCommittedRef.current || (ctx?.shouldPreserveCompletedOnboarding ?? false);
-          if (complete) { clearPersistedOnboardingStep(); d.onboardingResumeConnectionRef.current = null; }
+          let sessionComplete = complete || d.onboardingCompletionCommittedRef.current || (ctx?.shouldPreserveCompletedOnboarding ?? false);
+
+          // If the backend says onboarding is "complete" but there's no
+          // persisted connection mode AND no cloud auth, force re-onboarding.
+          // This catches the case where the upstream runtime auto-creates a
+          // default agent (onboarding: complete) but the user never actually
+          // went through the setup flow.
+          if (sessionComplete && !ctx?.persistedConnection && !ctx?.hadPriorOnboarding) {
+            try {
+              const cloudStatus = await client.getCloudStatus();
+              if (!cloudStatus.connected && !cloudStatus.hasApiKey) {
+                console.log("[milady][startup] Backend reports complete but no cloud auth — requiring cloud login");
+                d.setOnboardingLoading(false);
+                dispatch({ type: "CLOUD_LOGIN_REQUIRED" });
+                return;
+              }
+            } catch {
+              d.setOnboardingLoading(false);
+              dispatch({ type: "CLOUD_LOGIN_REQUIRED" });
+              return;
+            }
+          }
+
+          if (complete && sessionComplete) { clearPersistedOnboardingStep(); d.onboardingResumeConnectionRef.current = null; }
           if (sessionComplete && !ctx?.persistedConnection && ctx?.restoredConnection)
             savePersistedConnectionMode(ctx.restoredConnection);
           if (!complete && ctx?.shouldPreserveCompletedOnboarding)

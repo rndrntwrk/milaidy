@@ -2159,5 +2159,10 @@
   "startupshell.InitializingAgent": "Initializing agent…",
   "startupshell.Loading": "Loading…",
   "startupshell.Elapsed": "elapsed",
-  "startupshell.TakingLonger": "Taking longer than expected…"
+  "startupshell.TakingLonger": "Taking longer than expected…",
+  "startupshell.SignInRequired": "Sign in to continue",
+  "startupshell.SignInCloud": "Sign in with Eliza Cloud",
+  "startupshell.SkipCloudLogin": "Continue without cloud",
+  "startupshell.WelcomeTitle": "Welcome to Milady",
+  "startupshell.WelcomeSubtitle": "Sign in with Eliza Cloud to get started"
 }
