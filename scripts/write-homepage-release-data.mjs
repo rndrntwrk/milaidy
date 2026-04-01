@@ -12,7 +12,7 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 const OUTPUT_PATH = path.resolve(
   REPO_ROOT,
-  "apps/homepage/src/generated/release-data.ts",
+  "apps/web/src/generated/release-data.ts",
 );
 const RELEASES_URL = `https://api.github.com/repos/${REPOSITORY}/releases?per_page=20`;
 const RELEASES_PAGE_URL = `https://github.com/${REPOSITORY}/releases`;
@@ -238,7 +238,7 @@ function buildPayload(release, allReleases = []) {
           ? ""
           : buildRawGitHubAssetBase({
               releaseTag: tagName,
-              assetRoot: "apps/homepage/public",
+              assetRoot: "apps/web/public",
             }),
     },
     release: buildRelease(release, allReleases),

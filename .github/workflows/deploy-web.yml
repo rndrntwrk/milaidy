@@ -1,4 +1,4 @@
-name: Deploy Homepage
+name: Deploy Web
 
 on:
   push:
@@ -6,8 +6,8 @@ on:
       - main
       - develop
     paths:
-      - ".github/workflows/deploy-homepage.yml"
-      - "apps/homepage/**"
+      - ".github/workflows/deploy-web.yml"
+      - "apps/web/**"
       - "scripts/write-homepage-release-data.mjs"
       - "install.sh"
       - "install.ps1"
@@ -65,16 +65,16 @@ jobs:
         run: node scripts/write-homepage-release-data.mjs
 
       - name: Build homepage
-        run: bun run build:homepage
+        run: bun run build:web
 
       - name: Stage GitHub Pages files
         run: |
-          cp install.sh apps/homepage/dist/install.sh
-          cp install.ps1 apps/homepage/dist/install.ps1
+          cp install.sh apps/web/dist/install.sh
+          cp install.ps1 apps/web/dist/install.ps1
 
       - name: Publish to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: ./apps/homepage/dist
+          publish_dir: ./apps/web/dist
