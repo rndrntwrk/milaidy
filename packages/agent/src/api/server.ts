@@ -166,6 +166,8 @@ import { parseClampedInteger } from "../utils/number-parsing.js";
 import { sanitizeSpeechText } from "../utils/spoken-text.js";
 import { handleAgentAdminRoutes } from "./agent-admin-routes.js";
 import { handleAgentLifecycleRoutes } from "./agent-lifecycle-routes.js";
+import { handleChatRoutes } from "./chat-routes.js";
+import { handleConversationRoutes } from "./conversation-routes.js";
 import { detectRuntimeModel, resolveProviderFromModel } from "./agent-model.js";
 import { handleAgentTransferRoutes } from "./agent-transfer-routes.js";
 import { handleAppsRoutes } from "./apps-routes.js";
@@ -344,7 +346,7 @@ function requireCoreManager(runtime: AgentRuntime | null): CoreManagerLike {
   return service;
 }
 
-function isUuidLike(value: string): value is UUID {
+export function isUuidLike(value: string): value is UUID {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     value,
   );
@@ -505,7 +507,7 @@ function patchTouchesProviderSelection(
   );
 }
 
-function resolveConversationGreetingText(
+export function resolveConversationGreetingText(
   runtime: AgentRuntime,
   lang: string,
   uiConfig?: ElizaConfig["ui"],
@@ -2297,14 +2299,14 @@ function scanSkillsDir(
 // ---------------------------------------------------------------------------
 
 /** Maximum request body size (1 MB) — prevents memory-based DoS. */
-const MAX_BODY_BYTES = 1_048_576;
+export const MAX_BODY_BYTES = 1_048_576;
 
 /**
  * Raised body limit for chat endpoints that accept base64-encoded image
  * attachments. A single smartphone JPEG is typically 2–5 MB binary
  * (~3–7 MB base64); 20 MB accommodates up to 4 images with room to spare.
  */
-const CHAT_MAX_BODY_BYTES = 20 * 1_048_576;
+export const CHAT_MAX_BODY_BYTES = 20 * 1_048_576;
 const ELEVENLABS_FETCH_TIMEOUT_MS = 20_000;
 const ELEVENLABS_AUDIO_MAX_BYTES = 20 * 1_048_576;
 
@@ -2788,7 +2790,7 @@ const CHAT_LANGUAGE_INSTRUCTION: Record<string, string> = {
   tl: "Reply in natural Tagalog unless the user explicitly requests another language.",
 };
 
-function maybeAugmentChatMessageWithLanguage(
+export function maybeAugmentChatMessageWithLanguage(
   message: ReturnType<typeof createMessageMemory>,
   preferredLanguage?: string,
 ): ReturnType<typeof createMessageMemory> {
@@ -2813,7 +2815,7 @@ const INSUFFICIENT_CREDITS_CHAT_REPLY =
   "Eliza Cloud credits are depleted. Top up the cloud balance and try again.";
 const GENERIC_NO_RESPONSE_CHAT_REPLY = PROVIDER_ISSUE_CHAT_REPLY;
 
-function getErrorMessage(err: unknown, fallback = "generation failed"): string {
+export function getErrorMessage(err: unknown, fallback = "generation failed"): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
   return fallback;
@@ -2983,7 +2985,7 @@ const STAGE_DIRECTION_FIRST_WORDS = new Set([
   "yawning",
 ]);
 
-function isNoResponsePlaceholder(text: string): boolean {
+export function isNoResponsePlaceholder(text: string): boolean {
   const trimmed = text.trim();
   return trimmed.length === 0 || /^\(?no response\)?$/i.test(trimmed);
 }
@@ -3034,14 +3036,14 @@ function tidyAssistantTextSpacing(input: string): string {
     .replace(/\s+\)/g, ")");
 }
 
-function stripAssistantStageDirections(input: string): string {
+export function stripAssistantStageDirections(input: string): string {
   let normalized = input;
   normalized = stripWrappedStageDirections(normalized, /\*([^*\n]+)\*/g);
   normalized = stripWrappedStageDirections(normalized, /_([^_\n]+)_/g);
   return tidyAssistantTextSpacing(normalized);
 }
 
-function isClientVisibleNoResponse(text: string): boolean {
+export function isClientVisibleNoResponse(text: string): boolean {
   if (isNoResponsePlaceholder(text)) return true;
   return isNoResponsePlaceholder(stripAssistantStageDirections(text));
 }
@@ -3109,7 +3111,7 @@ type FallbackParsedAction = {
   parameters: Record<string, string>;
 };
 
-function inferBalanceChainFromText(
+export function inferBalanceChainFromText(
   input: string,
 ): "all" | "solana" | "bsc" | "base" | "ethereum" {
   const normalized = input.toLowerCase();
@@ -3120,7 +3122,7 @@ function inferBalanceChainFromText(
   return "all";
 }
 
-function shouldForceCheckBalanceFallback(
+export function shouldForceCheckBalanceFallback(
   parsedActions: FallbackParsedAction[],
   userText: string,
   responseText: string,
@@ -3137,7 +3139,7 @@ function shouldForceCheckBalanceFallback(
   return balanceIntent;
 }
 
-function isBalanceIntent(input: string): boolean {
+export function isBalanceIntent(input: string): boolean {
   const normalized = input.toLowerCase();
   return /\b(balance|wallet|holdings|portfolio|funds|how much)\b/.test(
     normalized,
@@ -3218,7 +3220,7 @@ export function parseFallbackActionBlocks(
   return parsed;
 }
 
-async function executeFallbackParsedActions(
+export async function executeFallbackParsedActions(
   runtime: AgentRuntime,
   message: ReturnType<typeof createMessageMemory>,
   parsedActions: FallbackParsedAction[],
@@ -3931,7 +3933,7 @@ async function summarizeDirectBinanceSkillResult(
   }
 }
 
-async function maybeHandleDirectBinanceSkillRequest(
+export async function maybeHandleDirectBinanceSkillRequest(
   runtime: AgentRuntime,
   message: ReturnType<typeof createMessageMemory>,
   appendIncomingText: (incoming: string) => void,
@@ -4189,7 +4191,7 @@ function buildWalletContextPrompt(
   ].join("\n");
 }
 
-function maybeAugmentChatMessageWithWalletContext(
+export function maybeAugmentChatMessageWithWalletContext(
   runtime: AgentRuntime,
   message: ReturnType<typeof createMessageMemory>,
 ): ReturnType<typeof createMessageMemory> {
@@ -4205,7 +4207,7 @@ function maybeAugmentChatMessageWithWalletContext(
   };
 }
 
-async function maybeAugmentChatMessageWithKnowledge(
+export async function maybeAugmentChatMessageWithKnowledge(
   runtime: AgentRuntime,
   message: ReturnType<typeof createMessageMemory>,
 ): Promise<ReturnType<typeof createMessageMemory>> {
@@ -5269,7 +5271,7 @@ function isBlockedObjectKey(key: string): boolean {
   );
 }
 
-function hasBlockedObjectKeyDeep(value: unknown): boolean {
+export function hasBlockedObjectKeyDeep(value: unknown): boolean {
   if (value === null || value === undefined) return false;
   if (Array.isArray(value)) return value.some(hasBlockedObjectKeyDeep);
   if (typeof value !== "object") return false;
@@ -6897,7 +6899,7 @@ function buildPluginEvmDiagnosticEntry(
 const WALLET_CHAT_INTENT_RE =
   /\b(wallet|privy|onchain|on-chain|address|balance|swap|trade|transfer|token|bnb|t?bnb|eth|sol)\b|(?:\bsend\b(?=[\s\S]{0,40}\b(?:token|eth|sol|t?bnb|wallet|crypto|coin)\b))/i;
 
-const WALLET_EXECUTION_INTENT_RE =
+export const WALLET_EXECUTION_INTENT_RE =
   /\b(swap|trade|transfer|buy|sell|execute|approve)\b|(?:\bsend\b(?=[\s\S]{0,40}\b(?:token|eth|sol|t?bnb|wallet|crypto|coin)\b))/i;
 
 const WALLET_IDENTITY_INTENT_RE = /\b(wallet\s*address|address)\b/i;
@@ -6905,13 +6907,13 @@ const WALLET_IDENTITY_INTENT_RE = /\b(wallet\s*address|address)\b/i;
 const WALLET_ACTION_REQUIRED_INTENT_RE =
   /\b(balance|portfolio|holdings|funds|swap|trade|transfer|send|buy|sell|execute|approve)\b/i;
 
-const WALLET_PROGRESS_ONLY_RE =
+export const WALLET_PROGRESS_ONLY_RE =
   /\b(let me|i(?:'| wi)ll|checking|fetching|looking up|pulling|one moment|just a second|hold on)\b[\s\S]{0,80}\b(check|look|fetch|pull|get|verify|see|review)\b/i;
 
 const WALLET_PROGRESS_PREFIX_RE =
   /^\s*(?:let me|i(?:'ll| will)|checking|fetching|looking up|pulling|one moment|just a second|hold on)[\s\S]{0,120}?(?:now|\.{3}|…)?\s*/i;
 
-function isWalletActionRequiredIntent(prompt: string): boolean {
+export function isWalletActionRequiredIntent(prompt: string): boolean {
   return (
     WALLET_CHAT_INTENT_RE.test(prompt) &&
     !WALLET_IDENTITY_INTENT_RE.test(prompt) &&
@@ -7068,7 +7070,7 @@ function inferTradeFallbackAction(prompt: string): WalletIntentFallback | null {
   };
 }
 
-function inferWalletExecutionFallback(
+export function inferWalletExecutionFallback(
   prompt: string,
 ): WalletIntentFallback | null {
   return (
@@ -7076,7 +7078,7 @@ function inferWalletExecutionFallback(
   );
 }
 
-function hasUsableWalletFallbackParams(action: FallbackParsedAction): boolean {
+export function hasUsableWalletFallbackParams(action: FallbackParsedAction): boolean {
   if (action.name === "TRANSFER_TOKEN") {
     return (
       typeof action.parameters.toAddress === "string" &&
@@ -7101,7 +7103,7 @@ function hasUsableWalletFallbackParams(action: FallbackParsedAction): boolean {
   return true;
 }
 
-function buildWalletActionNotExecutedReply(
+export function buildWalletActionNotExecutedReply(
   runtime: AgentRuntime,
   userPrompt: string,
 ): string {
@@ -7137,7 +7139,7 @@ function buildWalletActionNotExecutedReply(
   ].join("\n");
 }
 
-function trimWalletProgressPrefix(text: string): string {
+export function trimWalletProgressPrefix(text: string): string {
   const balanceIdx = text.indexOf("Wallet Balances:");
   if (balanceIdx > 0) {
     return text.slice(balanceIdx).trimStart();
@@ -7199,9 +7201,9 @@ const PLUGIN_PARAMS: Record<string, Array<{ key: string; label: string; secret: 
   ollama: [{ key: "OLLAMA_BASE_URL", label: "Ollama URL (e.g. http://localhost:11434)", secret: false }],
 };
 
-async function resolvePluginConfigReply(
+export async function resolvePluginConfigReply(
   prompt: string,
-  _state: ServerState,
+  _state: Pick<ServerState, "config" | "runtime">,
 ): Promise<string | null> {
   const match = prompt.match(PLUGIN_CONFIG_RE);
   if (!match) return null;
@@ -7253,8 +7255,8 @@ async function resolvePluginConfigReply(
   return `here's the config form for ${displayName} — fill in your credentials and hit save:\n\n\`\`\`json-render\n${spec}\n\`\`\``;
 }
 
-function resolveWalletModeGuidanceReply(
-  state: ServerState,
+export function resolveWalletModeGuidanceReply(
+  state: Pick<ServerState, "config" | "runtime">,
   prompt: string,
 ): string | null {
   if (!WALLET_CHAT_INTENT_RE.test(prompt)) {
@@ -8058,7 +8060,7 @@ function rejectWebSocketUpgrade(
   );
 }
 
-function decodePathComponent(
+export function decodePathComponent(
   raw: string,
   res: http.ServerResponse,
   fieldName: string,
@@ -13878,7 +13880,49 @@ async function handleRequest(
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Conversation routes (/api/conversations/*)
+  // Conversation routes (/api/conversations/*) — delegated to conversation-routes.ts
+  // ═══════════════════════════════════════════════════════════════════════
+
+  if (pathname.startsWith("/api/conversations")) {
+    // Cast state — ConversationRouteState is a compatible subset of ServerState
+    const handled = await handleConversationRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      readJsonBody,
+      json,
+      error,
+      state: state as any,
+    });
+    if (handled) return;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Chat + compat routes — delegated to chat-routes.ts
+  // ═══════════════════════════════════════════════════════════════════════
+
+  if (
+    pathname === "/api/chat" ||
+    pathname === "/api/chat/stream" ||
+    pathname.startsWith("/v1/")
+  ) {
+    // Cast state — ChatRouteState is a compatible subset of ServerState
+    const handled = await handleChatRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      readJsonBody,
+      json,
+      error,
+      state: state as any,
+    });
+    if (handled) return;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Legacy conversation + chat routes (fallthrough from above)
   // ═══════════════════════════════════════════════════════════════════════
 
   const ensureAdminEntityId = (): UUID => {
