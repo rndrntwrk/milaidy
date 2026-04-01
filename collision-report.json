@@ -803,10 +803,10 @@
             "name": "ErrorBoundary",
             "kind": "class",
             "exported": true,
-            "file": "apps/homepage/src/ErrorBoundary.tsx",
+            "file": "apps/web/src/ErrorBoundary.tsx",
             "line": 12,
             "packageName": "@miladyai/homepage",
-            "packageDir": "apps/homepage",
+            "packageDir": "apps/web",
             "sourceName": "ErrorBoundary"
           },
           {
@@ -1385,10 +1385,10 @@
             "name": "cloudLogin",
             "kind": "function",
             "exported": true,
-            "file": "apps/homepage/src/lib/auth.ts",
+            "file": "apps/web/src/lib/auth.ts",
             "line": 32,
             "packageName": "@miladyai/homepage",
-            "packageDir": "apps/homepage",
+            "packageDir": "apps/web",
             "sourceName": "cloudLogin"
           },
           {
@@ -5464,10 +5464,10 @@
             "name": "AgentStatus",
             "kind": "interface",
             "exported": true,
-            "file": "apps/homepage/src/lib/cloud-api.ts",
+            "file": "apps/web/src/lib/cloud-api.ts",
             "line": 369,
             "packageName": "@miladyai/homepage",
-            "packageDir": "apps/homepage",
+            "packageDir": "apps/web",
             "sourceName": "AgentStatus"
           },
           {
@@ -5909,10 +5909,10 @@
             "name": "AuthState",
             "kind": "interface",
             "exported": true,
-            "file": "apps/homepage/src/lib/useAuth.ts",
+            "file": "apps/web/src/lib/useAuth.ts",
             "line": 10,
             "packageName": "@miladyai/homepage",
-            "packageDir": "apps/homepage",
+            "packageDir": "apps/web",
             "sourceName": "AuthState"
           },
           {
@@ -6134,10 +6134,10 @@
             "name": "CloudAgent",
             "kind": "interface",
             "exported": true,
-            "file": "apps/homepage/src/lib/auth.ts",
+            "file": "apps/web/src/lib/auth.ts",
             "line": 64,
             "packageName": "@miladyai/homepage",
-            "packageDir": "apps/homepage",
+            "packageDir": "apps/web",
             "sourceName": "CloudAgent"
           },
           {
@@ -6459,10 +6459,10 @@
             "name": "LogEntry",
             "kind": "interface",
             "exported": true,
-            "file": "apps/homepage/src/lib/cloud-api.ts",
+            "file": "apps/web/src/lib/cloud-api.ts",
             "line": 384,
             "packageName": "@miladyai/homepage",
-            "packageDir": "apps/homepage",
+            "packageDir": "apps/web",
             "sourceName": "LogEntry"
           },
           {
