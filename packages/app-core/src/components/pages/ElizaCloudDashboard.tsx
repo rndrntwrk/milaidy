@@ -5,7 +5,6 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  SectionCard,
   Switch,
 } from "@miladyai/ui";
 import {
@@ -18,10 +17,7 @@ import {
   RefreshCw,
   Server,
   Shield,
-  Terminal,
-  Trash2,
   Wallet,
-  X,
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
@@ -32,367 +28,34 @@ import {
   type CloudCompatAgent,
   client,
 } from "../../api";
-import { useIntervalWhenDocumentVisible } from "../../hooks/useDocumentVisibility";
-import { getVrmPreviewUrl, useApp } from "../../state";
+import { useApp } from "../../state";
 import { openExternalUrl } from "../../utils";
 import { StripeEmbeddedCheckout } from "../cloud/StripeEmbeddedCheckout";
-
-const ELIZA_CLOUD_INSTANCES_URL = "https://www.elizacloud.ai/dashboard/eliza";
-/** Marketing / docs site — “Learn more” when not connected (in-app browser on desktop). */
-const ELIZA_CLOUD_WEB_URL = "https://elizacloud.ai";
-const BILLING_PRESET_AMOUNTS = [10, 25, 100];
-const CLOUD_PANEL_CLASSNAME =
-  "rounded-2xl border border-border/60 bg-card/88 p-4 shadow-sm";
-const CLOUD_INSET_PANEL_CLASSNAME =
-  "rounded-xl border border-border/50 bg-bg/30 p-4";
-const CLOUD_ACCENT_CONTROL_TEXT_CLASSNAME =
-  "text-txt-strong hover:text-txt-strong";
-const CLOUD_STATUS_API_KEY_ONLY_REASONS: ReadonlySet<string> = new Set([
-  "api_key_present_not_authenticated",
-  "api_key_present_runtime_not_started",
-]);
-
-const STATUS_BADGE: Record<string, { i18nKey: string; className: string }> = {
-  running: {
-    i18nKey: "elizaclouddashboard.statusRunning",
-    className: "bg-ok/10 text-ok border-ok/20",
-  },
-  queued: {
-    i18nKey: "elizaclouddashboard.statusQueued",
-    className: "bg-warn/10 text-warn border-warn/20",
-  },
-  provisioning: {
-    i18nKey: "elizaclouddashboard.statusProvisioning",
-    className: "bg-accent/10 text-txt border-accent/20",
-  },
-  stopped: {
-    i18nKey: "elizaclouddashboard.statusStopped",
-    className: "bg-muted/10 text-muted border-border/40",
-  },
-  failed: {
-    i18nKey: "elizaclouddashboard.statusFailed",
-    className: "bg-danger/10 text-danger border-danger/20",
-  },
-};
-
-function getCloudAuthToken(): string {
-  if (typeof window === "undefined") return "";
-  return (
-    ((window as unknown as Record<string, unknown>)
-      .__ELIZA_CLOUD_AUTH_TOKEN__ as string) || ""
-  );
-}
-
-function AgentStatusBadge({ status }: { status: string }) {
-  const { t } = useApp();
-  const badge = STATUS_BADGE[status] ?? STATUS_BADGE.stopped;
-  return (
-    <span
-      className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${badge?.className}`}
-    >
-      {t(badge?.i18nKey)}
-    </span>
-  );
-}
-
-function CloudAgentCard({
-  agent,
-  onDelete,
-  deleting,
-  launching,
-  onLaunch,
-  onOpenUI,
-  openingUI,
-  onSelect,
-  selected = false,
-}: {
-  agent: CloudCompatAgent;
-  onDelete: (id: string) => void;
-  deleting: boolean;
-  launching: boolean;
-  onLaunch: (id: string) => void;
-  onOpenUI: (id: string) => void;
-  openingUI: boolean;
-  onSelect?: (id: string) => void;
-  selected?: boolean;
-}) {
-  const { t } = useApp();
-  return (
-    // biome-ignore lint/a11y/useSemanticElements: cannot use button due to nested buttons
-    <div
-      className={`flex cursor-pointer flex-col justify-between gap-4 rounded-2xl border p-5 transition-all duration-200 ${
-        selected
-          ? "border-accent/45 bg-accent/8 shadow-[0_0_0_1px_rgba(var(--accent-rgb),0.12),0_14px_30px_rgba(0,0,0,0.12)]"
-          : "border-border/60 bg-card/88 shadow-sm hover:border-accent/30"
-      }`}
-      onClick={() => onSelect?.(agent.agent_id)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect?.(agent.agent_id);
-        }
-      }}
-      role="button"
-      tabIndex={0}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          {(() => {
-            const agentName = agent.agent_name ?? "";
-            const avatarIndex =
-              (agentName
-                .split("")
-                .reduce((acc, c) => acc + c.charCodeAt(0), 0) %
-                8) +
-              1;
-            return (
-              <img
-                src={getVrmPreviewUrl(avatarIndex)}
-                alt={agentName}
-                className="w-7 h-7 rounded-full object-cover shrink-0 border border-border/40"
-              />
-            );
-          })()}
-          <span className="max-w-[16rem] truncate text-sm font-bold text-txt-strong">
-            {agent.agent_name || t("elizaclouddashboard.unnamedAgent")}
-          </span>
-        </div>
-        <AgentStatusBadge status={agent.status} />
-      </div>
-
-      <div className="space-y-1 text-[11px] text-muted">
-        <div className="flex items-center justify-between gap-3">
-          <span>{t("elizaclouddashboard.node")}</span>
-          <span className="truncate font-mono text-txt-strong/70">
-            {agent.node_id?.slice(0, 8) ?? "—"}
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <span>{t("elizaclouddashboard.created")}</span>
-          <span className="text-right text-txt-strong/70">
-            {new Date(agent.created_at).toLocaleDateString()}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-1 flex flex-col gap-2 sm:flex-row">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 flex-1 rounded-xl border-border/40 text-xs"
-          onClick={(event) => {
-            event.stopPropagation();
-            onLaunch(agent.agent_id);
-          }}
-          disabled={launching}
-        >
-          {launching ? (
-            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-          ) : (
-            <ExternalLink className="w-3 h-3 mr-1" />
-          )}
-          {t("elizaclouddashboard.open")}
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 rounded-xl border-danger/30 px-0 text-xs text-danger hover:bg-danger/10 sm:w-10"
-          onClick={(event) => {
-            event.stopPropagation();
-            onDelete(agent.agent_id);
-          }}
-          disabled={deleting || launching}
-        >
-          {deleting ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
-          ) : (
-            <Trash2 className="w-3 h-3" />
-          )}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isCloudStatusReasonApiKeyOnly(
-  reason: string | null | undefined,
-): boolean {
-  return (
-    typeof reason === "string" && CLOUD_STATUS_API_KEY_ONLY_REASONS.has(reason)
-  );
-}
-
-function resolveCloudAccountIdDisplay(
-  userId: string | null,
-  statusReason: string | null,
-  t: (key: string) => string,
-): { mono: boolean; text: string } {
-  if (userId) {
-    return { mono: true, text: userId };
-  }
-  if (isCloudStatusReasonApiKeyOnly(statusReason)) {
-    return { mono: false, text: t("elizaclouddashboard.AccountIdApiKeyOnly") };
-  }
-  return {
-    mono: false,
-    text: t("elizaclouddashboard.AccountIdSessionNoUserId"),
-  };
-}
-
-function unwrapBillingData<T extends Record<string, unknown>>(value: T): T {
-  if (isRecord(value.data)) {
-    return value.data as T;
-  }
-  return value;
-}
-
-function readString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value : undefined;
-}
-
-function readNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function readBoolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
-}
-
-function normalizeBillingSummary(
-  raw: CloudBillingSummary,
-): CloudBillingSummary {
-  const source = unwrapBillingData(raw);
-  return {
-    ...raw,
-    ...source,
-    balance:
-      readNumber(source.balance) ??
-      readNumber((source as Record<string, unknown>).creditBalance) ??
-      null,
-    currency:
-      readString(source.currency) ??
-      readString((source as Record<string, unknown>).balanceCurrency),
-    topUpUrl:
-      readString(source.topUpUrl) ??
-      readString((source as Record<string, unknown>).billingUrl),
-    embeddedCheckoutEnabled:
-      readBoolean(source.embeddedCheckoutEnabled) ??
-      readBoolean((source as Record<string, unknown>).embedded),
-    hostedCheckoutEnabled:
-      readBoolean(source.hostedCheckoutEnabled) ??
-      readBoolean((source as Record<string, unknown>).hosted),
-    cryptoEnabled:
-      readBoolean(source.cryptoEnabled) ??
-      readBoolean((source as Record<string, unknown>).crypto),
-    low: readBoolean(source.low),
-    critical: readBoolean(source.critical),
-  };
-}
-
-function normalizeBillingSettings(
-  raw: CloudBillingSettings,
-): CloudBillingSettings {
-  const source = unwrapBillingData(raw);
-  return {
-    ...raw,
-    ...source,
-    settings: isRecord(source.settings) ? source.settings : raw.settings,
-  };
-}
-
-function getBillingAutoTopUp(
-  settings: CloudBillingSettings | null,
-): Record<string, unknown> {
-  const rawSettings = isRecord(settings?.settings) ? settings.settings : null;
-  return isRecord(rawSettings?.autoTopUp) ? rawSettings.autoTopUp : {};
-}
-
-function getBillingLimits(
-  settings: CloudBillingSettings | null,
-): Record<string, unknown> {
-  const rawSettings = isRecord(settings?.settings) ? settings.settings : null;
-  return isRecord(rawSettings?.limits) ? rawSettings.limits : {};
-}
-
-function resolveCheckoutUrl(
-  response: CloudBillingCheckoutResponse,
-): string | null {
-  return (
-    readString(response.checkoutUrl) ??
-    readString(response.url) ??
-    readString((response as Record<string, unknown>).hostedUrl) ??
-    null
-  );
-}
-
-interface AutoTopUpFormState {
-  amount: string;
-  dirty: boolean;
-  enabled: boolean;
-  sourceKey: string;
-  threshold: string;
-}
-
-type AutoTopUpFormAction =
-  | { type: "hydrate"; next: AutoTopUpFormState; force?: boolean }
-  | { type: "setAmount"; value: string }
-  | { type: "setEnabled"; value: boolean }
-  | { type: "setThreshold"; value: string };
-
-function buildAutoTopUpFormState(
-  billingSummary: CloudBillingSummary | null,
-  billingSettings: CloudBillingSettings | null,
-): AutoTopUpFormState {
-  const autoTopUp = getBillingAutoTopUp(billingSettings);
-  const minimumTopUp =
-    readNumber(
-      (billingSummary as Record<string, unknown> | null)?.minimumTopUp,
-    ) ?? 1;
-  const enabled = readBoolean(autoTopUp.enabled) ?? false;
-  const amount = String(readNumber(autoTopUp.amount) ?? minimumTopUp);
-  const threshold = String(readNumber(autoTopUp.threshold) ?? 5);
-  return {
-    amount,
-    dirty: false,
-    enabled,
-    sourceKey: JSON.stringify([enabled, amount, threshold]),
-    threshold,
-  };
-}
-
-function autoTopUpFormReducer(
-  state: AutoTopUpFormState,
-  action: AutoTopUpFormAction,
-): AutoTopUpFormState {
-  switch (action.type) {
-    case "hydrate":
-      if (!action.force && state.dirty) {
-        return state;
-      }
-      if (state.sourceKey === action.next.sourceKey && !state.dirty) {
-        return state;
-      }
-      return action.next;
-    case "setAmount":
-      return { ...state, amount: action.value, dirty: true };
-    case "setEnabled":
-      return { ...state, enabled: action.value, dirty: true };
-    case "setThreshold":
-      return { ...state, threshold: action.value, dirty: true };
-    default:
-      return state;
-  }
-}
+import {
+  AgentDetailSidebar,
+  CloudAgentCard,
+} from "./cloud-dashboard-panels";
+import {
+  autoTopUpFormReducer,
+  BILLING_PRESET_AMOUNTS,
+  buildAutoTopUpFormState,
+  CLOUD_ACCENT_CONTROL_TEXT_CLASSNAME,
+  CLOUD_INSET_PANEL_CLASSNAME,
+  CLOUD_PANEL_CLASSNAME,
+  ELIZA_CLOUD_INSTANCES_URL,
+  ELIZA_CLOUD_WEB_URL,
+  getBillingAutoTopUp,
+  getBillingLimits,
+  getCloudAuthToken,
+  isRecord,
+  normalizeBillingSettings,
+  normalizeBillingSummary,
+  readBoolean,
+  readNumber,
+  readString,
+  resolveCheckoutUrl,
+  resolveCloudAccountIdDisplay,
+} from "./cloud-dashboard-utils";
 
 export function CloudDashboard() {
   const {
@@ -1735,145 +1398,6 @@ export function CloudDashboard() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-interface StatusDetail {
-  status?: string;
-  databaseStatus?: string;
-  lastHeartbeat?: string | number | Date | null;
-}
-
-function AgentDetailSidebar({
-  agent,
-  onClose,
-}: {
-  agent: CloudCompatAgent | undefined;
-  onClose: () => void;
-}) {
-  const { t } = useApp();
-  const [logs, setLogs] = useState<string>("");
-  const [statusDetail, setStatusDetail] = useState<StatusDetail | null>(null);
-  const logsEndRef = useRef<HTMLDivElement>(null);
-  const aliveRef = useRef(true);
-
-  useEffect(() => {
-    aliveRef.current = true;
-    return () => {
-      aliveRef.current = false;
-    };
-  }, []);
-
-  const fetchDetails = useCallback(async () => {
-    if (!agent) return;
-    try {
-      const [statusRes, logsRes] = await Promise.all([
-        client.getCloudCompatAgentStatus(agent.agent_id),
-        client.getCloudCompatAgentLogs(agent.agent_id, 100),
-      ]);
-
-      if (!aliveRef.current) return;
-      setStatusDetail(statusRes.data);
-      setLogs(typeof logsRes.data === "string" ? logsRes.data : "");
-    } catch {
-      // Silently retry next tick
-    }
-  }, [agent]);
-
-  useEffect(() => {
-    void fetchDetails();
-  }, [fetchDetails]);
-
-  useIntervalWhenDocumentVisible(
-    () => {
-      void fetchDetails();
-    },
-    5000,
-    Boolean(agent),
-  );
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: rerun when logs update
-  useEffect(() => {
-    if (logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [logs]);
-
-  if (!agent) return null;
-
-  return (
-    <div className="space-y-4 animate-in slide-in-from-right-8 duration-300">
-      <SectionCard
-        title={t("elizaclouddashboard.agentDetails")}
-        className="relative overflow-hidden rounded-3xl border-accent/30 bg-card/92 shadow-sm backdrop-blur-xl"
-      >
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute top-4 right-4 p-1 rounded-full text-muted hover:text-txt-strong"
-          onClick={onClose}
-        >
-          <X className="w-5 h-5" />
-        </Button>
-
-        <div className="mt-4 space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl border border-border/40 bg-bg/40 p-3">
-              <span className="text-[10px] text-muted uppercase font-bold tracking-wider mb-1 block">
-                {t("elizaclouddashboard.Status", {
-                  defaultValue: "Status",
-                })}
-              </span>
-              <AgentStatusBadge status={statusDetail?.status || agent.status} />
-            </div>
-            <div className="rounded-xl border border-border/40 bg-bg/40 p-3">
-              <span className="text-[10px] text-muted uppercase font-bold tracking-wider mb-1 block">
-                {t("elizaclouddashboard.DatabaseStatus", {
-                  defaultValue: "DB Status",
-                })}
-              </span>
-              <span className="text-xs font-mono">
-                {statusDetail?.databaseStatus || agent.database_status || "—"}
-              </span>
-            </div>
-            <div className="rounded-xl border border-border/40 bg-bg/40 p-3 sm:col-span-2">
-              <span className="text-[10px] text-muted uppercase font-bold tracking-wider mb-1 block">
-                {t("elizaclouddashboard.Heartbeat", {
-                  defaultValue: "Heartbeat",
-                })}
-              </span>
-              <span className="text-xs font-mono">
-                {statusDetail?.lastHeartbeat
-                  ? new Date(statusDetail.lastHeartbeat).toLocaleString()
-                  : agent.last_heartbeat_at
-                    ? new Date(agent.last_heartbeat_at).toLocaleString()
-                    : t("elizaclouddashboard.NoHeartbeatYet", {
-                        defaultValue: "No heartbeat yet",
-                      })}
-              </span>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-border/40 bg-bg/80 p-3">
-            <span className="text-[10px] text-muted uppercase font-bold tracking-wider mb-2 flex items-center gap-2">
-              <Terminal className="w-3 h-3" />{" "}
-              {t("elizaclouddashboard.LiveLogs", {
-                defaultValue: "Live Logs",
-              })}
-            </span>
-            <div className="custom-scrollbar h-64 overflow-y-auto rounded-lg border border-border/30 bg-bg/65 p-3">
-              <pre className="text-[10px] font-mono text-txt-strong/85 whitespace-pre-wrap break-all">
-                {logs ||
-                  t("elizaclouddashboard.NoLogsAvailableDeploying", {
-                    defaultValue: "No logs available. Deploying...",
-                  })}
-                <div ref={logsEndRef} />
-              </pre>
-            </div>
-          </div>
-        </div>
-      </SectionCard>
     </div>
   );
 }
