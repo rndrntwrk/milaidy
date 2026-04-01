@@ -6,7 +6,16 @@
  *  - SQL editor: code textarea with run button and results grid
  */
 
-import { Badge, Button, Input, Textarea } from "@miladyai/ui";
+import {
+  Badge,
+  Button,
+  Input,
+  PageLayout,
+  Sidebar,
+  SidebarPanel,
+  SidebarScrollRegion,
+  Textarea,
+} from "@miladyai/ui";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -342,7 +351,10 @@ function PaginationBar({
   );
 }
 
-export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
+export function DatabaseView({
+  leftNav,
+  contentHeader,
+}: { leftNav?: ReactNode; contentHeader?: ReactNode }) {
   const { t } = useApp();
   const showExternalSidebar = Boolean(leftNav);
   const [dbStatus, setDbStatus] = useState<DatabaseStatus | null>(null);
@@ -604,10 +616,9 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
   );
 
   if (showExternalSidebar) {
-    return (
-      <div className={DATABASE_SHELL_CLASS}>
-        <aside className={DATABASE_SIDEBAR_CLASS}>
-          <div className={APP_SIDEBAR_INNER_CLASSNAME}>
+    const dbSidebar = (
+      <Sidebar testId="database-sidebar">
+        <SidebarPanel>
             <div className="space-y-3 pt-4">
               {leftNav}
               {viewToggle}
@@ -720,12 +731,13 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                 ) : null}
               </>
             )}
-          </div>
-        </aside>
+        </SidebarPanel>
+      </Sidebar>
+    );
 
-        <div
-          className={`${DESKTOP_PAGE_CONTENT_CLASSNAME} flex flex-col bg-transparent`}
-        >
+    return (
+      <PageLayout sidebar={dbSidebar} contentHeader={contentHeader}>
+        <div className="flex flex-1 flex-col min-h-0">
           {errorMessage ? (
             <div className="m-5 rounded-xl border border-danger/35 bg-danger/10 px-4 py-3 text-sm text-danger">
               {errorMessage}
@@ -936,14 +948,13 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
             </div>
           )}
         </div>
-
-        {cellInspect !== null && (
-          <CellPopover
-            value={cellInspect}
-            onClose={() => setCellInspect(null)}
-          />
-        )}
-      </div>
+          {cellInspect !== null && (
+            <CellPopover
+              value={cellInspect}
+              onClose={() => setCellInspect(null)}
+            />
+          )}
+      </PageLayout>
     );
   }
 

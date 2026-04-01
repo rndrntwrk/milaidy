@@ -69,9 +69,20 @@ export function DatabasePageView({
     </div>
   );
 
+  // Tables sub-tab uses PageLayout internally (with its own sidebar),
+  // so it receives contentHeader directly. Media/Vectors are single-pane
+  // and need ContentLayout wrapping.
+  if (databaseSubTab === "tables") {
+    return (
+      <DatabaseView
+        leftNav={leftNav}
+        contentHeader={contentHeader}
+      />
+    );
+  }
+
   return (
     <ContentLayout contentHeader={contentHeader} inModal={inModal}>
-      {databaseSubTab === "tables" && <DatabaseView leftNav={leftNav} />}
       {databaseSubTab === "media" && <MediaGalleryView leftNav={leftNav} />}
       {databaseSubTab === "vectors" && (
         <VectorBrowserView leftNav={leftNav} />
