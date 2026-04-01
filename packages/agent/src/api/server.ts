@@ -11940,8 +11940,21 @@ async function handleRequest(
   }
 
   // ── POST /api/skills/catalog/refresh ───────────────────────────────────
+  // First triggers the remote registry sync (via AgentSkillsService), then
+  // re-reads the local catalog file. This ensures the UI gets fresh data
+  // from the remote marketplace (clawhub.ai or configured registryUrl).
   if (method === "POST" && pathname === "/api/skills/catalog/refresh") {
     try {
+      // Trigger remote sync if the runtime + skills service are available
+      if (state.runtime) {
+        const svc = state.runtime.getService("AGENT_SKILLS_SERVICE") as
+          | { syncCatalog?: () => Promise<unknown> }
+          | undefined;
+        if (svc?.syncCatalog) {
+          await svc.syncCatalog();
+        }
+      }
+      // Then re-read the now-updated local catalog file
       const { refreshCatalog } = await import(
         "../services/skill-catalog-client.js"
       );
