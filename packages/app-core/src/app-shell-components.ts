@@ -4,7 +4,7 @@ export { AvatarLoader } from "./components/character/AvatarLoader";
 export { BugReportModal } from "./components/shell/BugReportModal";
 export { CharacterEditor } from "./components/character/CharacterEditor";
 export { ChatView } from "./components/pages/ChatView";
-export { SharedCompanionScene } from "./components/CompanionSceneHost";
+export { SharedCompanionScene } from "./components/companion/CompanionSceneHost";
 export { CompanionShell } from "./components/shell/CompanionShell";
 export { CompanionView } from "./components/pages/CompanionView";
 export { ConnectionFailedBanner } from "./components/shell/ConnectionFailedBanner";

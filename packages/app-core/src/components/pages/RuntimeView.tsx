@@ -20,9 +20,9 @@ import {
   type RuntimeDebugSnapshot,
   type RuntimeOrderItem,
   type RuntimeServiceOrderItem,
-} from "../api";
-import { useApp } from "../state";
-import { formatDateTime } from "../utils/format";
+} from "../../api";
+import { useApp } from "../../state";
+import { formatDateTime } from "../../utils/format";
 
 type RuntimeSectionKey =
   | "summary"

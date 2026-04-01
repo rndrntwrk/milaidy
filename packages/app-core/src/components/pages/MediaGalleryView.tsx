@@ -19,9 +19,9 @@ import {
 } from "@miladyai/ui";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { client, type QueryResult } from "../api";
-import { useApp } from "../state";
-import { resolveAppAssetUrl } from "../utils";
+import { client, type QueryResult } from "../../api";
+import { useApp } from "../../state";
+import { resolveAppAssetUrl } from "../../utils";
 
 type MediaType = "all" | "image" | "video" | "audio";
 

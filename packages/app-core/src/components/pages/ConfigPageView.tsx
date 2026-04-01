@@ -31,7 +31,7 @@ import {
   buildWalletRpcUpdateRequest,
   resolveInitialWalletRpcSelections,
 } from "../../wallet-rpc";
-import { SecretsView } from "../SecretsView";
+import { SecretsView } from "./SecretsView";
 
 type RpcProviderOption<T extends string> = {
   id: T;

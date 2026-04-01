@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@miladyai/ui";
-import { CHAIN_CONFIGS, PRIMARY_CHAIN_KEYS } from "../chainConfig";
+import { CHAIN_CONFIGS, PRIMARY_CHAIN_KEYS } from "./chainConfig";
 
 type InventoryToolbarStateKey = "inventoryView" | "inventorySort";
 type InventorySort = AppState["inventorySort"];

@@ -16,14 +16,14 @@ import type React from "react";
 import { useState } from "react";
 import type { Tab } from "../../navigation";
 import { useApp } from "../../state";
-import { DatabasePageView } from "../DatabasePageView";
+import { DatabasePageView } from "./DatabasePageView";
 import { DesktopWorkspaceSection } from "../settings/DesktopWorkspaceSection";
 import { FineTuningView } from "../settings/FineTuningView";
 import { LogsPageView } from "./LogsPageView";
 import { PluginsPageView } from "./PluginsPageView";
-import { RuntimeView } from "../RuntimeView";
-import { SecretsView } from "../SecretsView";
-import { SkillsView } from "../SkillsView";
+import { RuntimeView } from "./RuntimeView";
+import { SecretsView } from "./SecretsView";
+import { SkillsView } from "./SkillsView";
 import { TrajectoriesView } from "./TrajectoriesView";
 
 type SubTab =

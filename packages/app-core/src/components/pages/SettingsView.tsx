@@ -38,7 +38,7 @@ import { CloudDashboard } from "./ElizaCloudDashboard";
 import { MediaSettingsSection } from "../settings/MediaSettingsSection";
 import { PermissionsSection } from "../settings/PermissionsSection";
 import { ProviderSwitcher } from "../settings/ProviderSwitcher";
-import { ReleaseCenterView } from "../ReleaseCenterView";
+import { ReleaseCenterView } from "./ReleaseCenterView";
 
 interface SettingsSectionDef {
   id: string;

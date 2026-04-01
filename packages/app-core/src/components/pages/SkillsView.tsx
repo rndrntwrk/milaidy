@@ -42,9 +42,9 @@ const BINANCE_SKILL_IDS = new Set([
   "binance-trading-signal",
 ]);
 
-import type { SkillInfo, SkillMarketplaceResult } from "../api";
-import { client } from "../api";
-import { useApp } from "../state";
+import type { SkillInfo, SkillMarketplaceResult } from "../../api";
+import { client } from "../../api";
+import { useApp } from "../../state";
 import {
   AdminCodeEditor,
   AdminDialog,

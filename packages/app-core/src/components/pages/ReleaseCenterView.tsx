@@ -4,13 +4,13 @@ import {
   invokeDesktopBridgeRequest,
   isElectrobunRuntime,
   subscribeDesktopBridgeEvent,
-} from "../bridge";
-import { useApp } from "../state";
-import { openDesktopSurfaceWindow } from "../utils/desktop-workspace";
+} from "../../bridge";
+import { useApp } from "../../state";
+import { openDesktopSurfaceWindow } from "../../utils/desktop-workspace";
 import {
   normalizeReleaseNotesUrl,
   summarizeError,
-} from "./release-center/shared";
+} from "../release-center/shared";
 import {
   type AppReleaseStatus,
   type DesktopBuildInfo,
@@ -21,7 +21,7 @@ import {
   SESSION_PARTITIONS,
   type WebGpuBrowserStatus,
   type WgpuTagElement,
-} from "./release-center/types";
+} from "../release-center/types";
 
 const RELEASE_PANEL_CLASSNAME =
   "rounded-2xl border border-border/50 bg-card/92 shadow-sm";
@@ -574,4 +574,4 @@ export function ReleaseCenterView() {
   );
 }
 
-import { useBranding } from "../config/branding";
+import { useBranding } from "../../config/branding";

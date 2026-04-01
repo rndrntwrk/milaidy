@@ -1,6 +1,6 @@
 import { ContentLayout } from "@miladyai/ui";
 import type { ReactNode } from "react";
-import { LogsView } from "../LogsView";
+import { LogsView } from "./LogsView";
 
 export function LogsPageView({
   contentHeader,

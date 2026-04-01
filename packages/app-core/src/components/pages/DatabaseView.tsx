@@ -30,8 +30,8 @@ import {
   type QueryResult,
   type TableInfo,
   type TableRowsResponse,
-} from "../api";
-import { useApp } from "../state";
+} from "../../api";
+import { useApp } from "../../state";
 
 type DbView = "tables" | "query";
 type SortDir = "asc" | "desc" | null;

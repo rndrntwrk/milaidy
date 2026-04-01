@@ -13,7 +13,7 @@ import {
   getStablecoinAddress,
   PRIMARY_CHAIN_KEYS,
   resolveChainKey,
-} from "../chainConfig";
+} from "../inventory/chainConfig";
 
 describe("chainConfig", () => {
   // ── CHAIN_CONFIGS registry ──────────────────────────────────────

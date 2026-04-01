@@ -5,7 +5,7 @@ export {
   getChainConfig,
   PRIMARY_CHAIN_KEYS,
   resolveChainKey,
-} from "../chainConfig";
+} from "./chainConfig";
 export { CopyableAddress } from "./CopyableAddress";
 export {
   BSC_GAS_READY_THRESHOLD,

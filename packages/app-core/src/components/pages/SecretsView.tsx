@@ -18,9 +18,9 @@ import {
 } from "@miladyai/ui";
 import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { SecretInfo } from "../api";
-import { client } from "../api";
-import { useApp } from "../state";
+import type { SecretInfo } from "../../api";
+import { client } from "../../api";
+import { useApp } from "../../state";
 
 /* ── Constants ──────────────────────────────────────────────────────── */
 

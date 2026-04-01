@@ -40,7 +40,7 @@ import {
   chainKeyToWalletRpcChain,
   PRIMARY_CHAIN_KEYS,
   resolveChainKey,
-} from "../chainConfig";
+} from "../inventory/chainConfig";
 import {
   BSC_GAS_READY_THRESHOLD,
   loadTrackedBscTokens,

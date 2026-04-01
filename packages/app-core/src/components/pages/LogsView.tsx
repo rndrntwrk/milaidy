@@ -13,10 +13,10 @@ import {
   SelectValue,
 } from "@miladyai/ui";
 import { useEffect, useMemo, useState } from "react";
-import type { LogEntry } from "../api";
-import { useApp } from "../state";
-import { formatTime } from "../utils/format";
-import { SETTINGS_FILTER_CONTROL_CLASSNAME } from "./settings/settings-control-primitives";
+import type { LogEntry } from "../../api";
+import { useApp } from "../../state";
+import { formatTime } from "../../utils/format";
+import { SETTINGS_FILTER_CONTROL_CLASSNAME } from "../settings/settings-control-primitives";
 
 const TAG_TONE_CLASSNAMES: Record<string, string> = {
   agent: "border-accent/25 bg-accent/10 text-accent-fg",

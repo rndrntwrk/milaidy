@@ -1,5 +1,5 @@
 import type { BscTradeTxStatusResponse } from "@miladyai/app-core/api";
-import { getExplorerTokenUrl } from "../chainConfig";
+import { getExplorerTokenUrl } from "../inventory/chainConfig";
 import {
   BSC_GAS_READY_THRESHOLD,
   HEX_ADDRESS_RE,

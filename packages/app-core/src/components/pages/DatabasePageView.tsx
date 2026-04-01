@@ -8,7 +8,7 @@
 
 import { SegmentedControl } from "@miladyai/ui";
 import type { ReactNode } from "react";
-import { useApp } from "../state";
+import { useApp } from "../../state";
 import { DatabaseView } from "./DatabaseView";
 import { MediaGalleryView } from "./MediaGalleryView";
 import { VectorBrowserView } from "./VectorBrowserView";

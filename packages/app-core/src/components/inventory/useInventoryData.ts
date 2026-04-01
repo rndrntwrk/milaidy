@@ -20,7 +20,7 @@ import {
   PRIMARY_CHAIN_KEYS,
   resolveChainKey,
   type ChainKey,
-} from "../chainConfig";
+} from "./chainConfig";
 import {
   computeSingleChainFocus,
   matchesInventoryChainFilter,

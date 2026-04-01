@@ -3,7 +3,7 @@
  */
 
 import { useState } from "react";
-import { getContractLogoUrl, getNativeLogoUrl } from "../chainConfig";
+import { getContractLogoUrl, getNativeLogoUrl } from "./chainConfig";
 import { chainIcon } from "./constants";
 import { normalizeInventoryImageUrl } from "./media-url";
 
