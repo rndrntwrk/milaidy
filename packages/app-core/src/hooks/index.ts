@@ -6,7 +6,6 @@ export * from "./useContextMenu";
 export * from "./useDocumentVisibility";
 export * from "./useKeyboardShortcuts";
 export * from "./useMediaQuery";
-export * from "./useMemoryMonitor";
 export * from "./useRenderGuard";
 export * from "./useStreamPopoutNavigation";
 export * from "./useTimeout";
