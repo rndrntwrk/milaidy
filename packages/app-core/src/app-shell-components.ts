@@ -1,3 +1,9 @@
+/**
+ * Shell component subset — curated re-exports consumed by App.tsx.
+ *
+ * When adding a new shell/page component, add it here AND in
+ * `./components/index.ts`. Both files must stay in sync.
+ */
 export { AdvancedPageView } from "./components/pages/AdvancedPageView";
 export { AppsPageView } from "./components/pages/AppsPageView";
 export { AvatarLoader } from "./components/character/AvatarLoader";

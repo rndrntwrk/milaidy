@@ -36,7 +36,8 @@ export function resolveStateDir(env = process.env, home = homedir) {
   if (override) {
     return resolveUserPath(override, home);
   }
-  return join(home(), ".eliza");
+  const namespace = env.ELIZA_NAMESPACE?.trim();
+  return join(home(), `.${namespace || "eliza"}`);
 }
 
 export function resolveSkillsDir(env = process.env, home = homedir) {
