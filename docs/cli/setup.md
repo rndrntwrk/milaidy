@@ -17,6 +17,10 @@ milady setup [options]
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--workspace <dir>` | string | (from config or `~/.milady/workspace/`) | Custom agent workspace directory to create or verify |
+| `--provider <name>` | string | (interactive wizard) | Set a model provider non-interactively |
+| `--key <value>` | string | (none) | Provider API key or URL passed on argv. Prefer `--key-stdin` for secrets |
+| `--key-stdin` | boolean | false | Read the provider API key or URL from stdin |
+| `--no-wizard` | boolean | false | Skip the interactive provider wizard entirely |
 
 Global flags:
 
@@ -44,6 +48,19 @@ milady --profile staging setup
 
 # Setup with an absolute path
 milady setup --workspace /srv/milady/workspace
+
+# Non-interactive Ollama setup for an isolated operator profile
+milady --profile alice setup \
+  --workspace ~/.milady-alice/workspace \
+  --provider ollama \
+  --key http://localhost:11434 \
+  --no-wizard
+
+# Read a provider key from stdin instead of argv
+printf '%s\n' "$ANTHROPIC_API_KEY" | milady setup \
+  --provider anthropic \
+  --key-stdin \
+  --no-wizard
 ```
 
 ## Behavior
@@ -59,13 +76,25 @@ milady setup --workspace /srv/milady/workspace
 
 3. **Ensure the workspace** -- creates the workspace directory if it does not exist and writes all required bootstrap files (character definition, default settings, etc.). This step is idempotent -- running setup on an existing workspace is safe.
 
-4. **Report success** -- prints the resolved workspace path and a "Setup complete." message.
+4. **Optionally persist provider config** -- if `--provider` and `--key` / `--key-stdin` are supplied, setup writes the resolved provider value into the config `env` section before continuing.
+
+5. **Report success** -- prints the resolved workspace path and a "Setup complete." message.
 
 ## Output
 
 ```
 → No config found, using defaults
 ✓ Agent workspace ready: /Users/you/.milady/workspace
+Setup complete.
+```
+
+When a provider is set non-interactively, setup prints an extra confirmation first:
+
+```
+✓ Saved OLLAMA_BASE_URL
+✓ Config loaded
+✓ Agent workspace ready: /Users/you/.milady/workspace
+
 Setup complete.
 ```
 
@@ -98,6 +127,25 @@ The agent workspace is the directory where Milady stores:
 - Plugin data
 
 Bootstrap files are only written on first setup or if they are missing. Existing files are not overwritten.
+
+In a fresh workspace, Milady bootstraps these operator-facing files:
+
+- `AGENTS.md`
+- `BOOTSTRAP.md`
+- `HEARTBEAT.md`
+- `IDENTITY.md`
+- `TOOLS.md`
+- `USER.md`
+
+## Important Notes
+
+- `milady setup` prepares config and workspace state, but it does **not** set the agent name by itself. If `agents.list[].name` is missing, the first `milady start` still opens onboarding.
+- `MILADY_STATE_DIR` changes where `milady.json` lives, but the workspace path still follows the normal resolution order. In isolated environments, pass `--workspace` explicitly or set `agents.defaults.workspace` in config so setup, start, and doctor all point at the same directory.
+- For source-checkout verification before the CLI is installed globally, use the repo runner:
+
+```bash
+bun scripts/run-node.mjs setup --no-wizard
+```
 
 ## Related
 
