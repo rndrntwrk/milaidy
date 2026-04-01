@@ -8,6 +8,7 @@
 
 import {
   Button,
+  ContentLayout,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -100,7 +101,10 @@ function savePinnedKeys(keys: Set<string>) {
 
 /* ── Component ──────────────────────────────────────────────────────── */
 
-export function SecretsView() {
+export function SecretsView({
+  contentHeader,
+  inModal,
+}: { contentHeader?: React.ReactNode; inModal?: boolean } = {}) {
   const { t } = useApp();
   const [allSecrets, setAllSecrets] = useState<SecretInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -229,31 +233,36 @@ export function SecretsView() {
 
   if (loading) {
     return (
-      <div
-        className={`${VAULT_PANEL_CLASSNAME} py-8 text-center text-[13px] italic text-muted`}
-      >
-        {t("secretsview.LoadingSecrets")}
-      </div>
+      <ContentLayout contentHeader={contentHeader} inModal={inModal}>
+        <div
+          className={`${VAULT_PANEL_CLASSNAME} py-8 text-center text-[13px] italic text-muted`}
+        >
+          {t("secretsview.LoadingSecrets")}
+        </div>
+      </ContentLayout>
     );
   }
 
   if (error) {
     return (
-      <div className={`${VAULT_PANEL_CLASSNAME} px-4 py-8 text-center`}>
-        <div className="mb-2 text-[13px] text-danger">{error}</div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 px-3 text-[13px]"
-          onClick={load}
-        >
-          {t("common.retry")}
-        </Button>
-      </div>
+      <ContentLayout contentHeader={contentHeader} inModal={inModal}>
+        <div className={`${VAULT_PANEL_CLASSNAME} px-4 py-8 text-center`}>
+          <div className="mb-2 text-[13px] text-danger">{error}</div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-3 text-[13px]"
+            onClick={load}
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      </ContentLayout>
     );
   }
 
   return (
+    <ContentLayout contentHeader={contentHeader} inModal={inModal}>
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="m-0 max-w-2xl text-[13px] leading-6 text-muted" />
@@ -369,6 +378,7 @@ export function SecretsView() {
         </div>
       )}
     </div>
+    </ContentLayout>
   );
 }
 

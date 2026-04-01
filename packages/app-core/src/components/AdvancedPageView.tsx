@@ -221,7 +221,7 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
       case "logs":
         return <LogsPageView contentHeader={advancedContentHeader} />;
       case "security":
-        return <SecretsView />;
+        return <SecretsView contentHeader={advancedContentHeader} />;
       default:
         return <PluginsPageView contentHeader={advancedContentHeader} />;
     }

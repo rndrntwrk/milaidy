@@ -16,7 +16,7 @@ import { useApp } from "@miladyai/app-core/state";
 import { confirmDesktopAction } from "@miladyai/app-core/utils";
 import {
   Button,
-  PageLayoutHeader,
+  ContentLayout,
   Select,
   SelectContent,
   SelectItem,
@@ -559,22 +559,16 @@ export function FineTuningView({
 
   if (pageLoading) {
     return (
-      <div className={FINE_TUNING_PAGE_CLASS}>
-        {contentHeader ? (
-          <PageLayoutHeader>{contentHeader}</PageLayoutHeader>
-        ) : null}
+      <ContentLayout contentHeader={contentHeader}>
         <div className="text-sm text-muted">
           {t("finetuningview.LoadingFineTuning")}
         </div>
-      </div>
+      </ContentLayout>
     );
   }
 
   return (
-    <div className={FINE_TUNING_PAGE_CLASS}>
-      {contentHeader ? (
-        <PageLayoutHeader>{contentHeader}</PageLayoutHeader>
-      ) : null}
+    <ContentLayout contentHeader={contentHeader} contentClassName="space-y-6 pb-8">
       <section className={FINE_TUNING_SECTION_CLASS}>
         <div className={FINE_TUNING_SECTION_HEADER_CLASS}>
           <div className="space-y-2">
@@ -1266,6 +1260,6 @@ export function FineTuningView({
           )}
         </div>
       </section>
-    </div>
+    </ContentLayout>
   );
 }

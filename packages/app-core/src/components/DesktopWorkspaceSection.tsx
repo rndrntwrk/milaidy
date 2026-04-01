@@ -5,7 +5,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  PageLayoutHeader,
+  ContentLayout,
   Textarea,
 } from "@miladyai/ui";
 import { Monitor, RefreshCw } from "lucide-react";
@@ -341,19 +341,18 @@ export function DesktopWorkspaceSection({
 
   if (!desktopRuntime) {
     return (
-      <Card className="text-sm text-muted">
-        <CardContent className="pt-6">
-          {t("desktopworkspacesection.DesktopToolsOnlyAvailable")}
-        </CardContent>
-      </Card>
+      <ContentLayout contentHeader={contentHeader}>
+        <Card className="text-sm text-muted">
+          <CardContent className="pt-6">
+            {t("desktopworkspacesection.DesktopToolsOnlyAvailable")}
+          </CardContent>
+        </Card>
+      </ContentLayout>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {contentHeader ? (
-        <PageLayoutHeader>{contentHeader}</PageLayoutHeader>
-      ) : null}
+    <ContentLayout contentHeader={contentHeader} contentClassName="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <Button
           variant="outline"
@@ -941,6 +940,6 @@ export function DesktopWorkspaceSection({
           </CardContent>
         </Card>
       </div>
-    </div>
+    </ContentLayout>
   );
 }
