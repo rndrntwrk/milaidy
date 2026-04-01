@@ -49,7 +49,7 @@ export interface HeartbeatFormProps {
   /** All triggers (used for looking up the editing trigger's metadata). */
   triggers: TriggerSummary[];
   /** Run history keyed by trigger ID. */
-  triggerRunsById: Record<string, Array<{ triggerRunId: string; status: string; startedAt?: string; finishedAt?: string; latencyMs?: number; source: string; error?: string }>>;
+  triggerRunsById: Record<string, import("../../api").TriggerRunRecord[]>;
   /** Translation function. */
   t: TranslateFn;
   /** Currently selected trigger ID. */

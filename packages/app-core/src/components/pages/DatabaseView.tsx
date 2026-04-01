@@ -7,7 +7,6 @@
  */
 
 import {
-  Badge,
   Button,
   Input,
   MetaPill,
@@ -18,11 +17,10 @@ import {
   SidebarContent,
   SidebarPanel,
   SidebarScrollRegion,
-  Textarea,
 } from "@miladyai/ui";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   client,
   type ColumnInfo,
@@ -32,296 +30,14 @@ import {
   type TableRowsResponse,
 } from "../../api";
 import { useApp } from "../../state";
-
-type DbView = "tables" | "query";
-type SortDir = "asc" | "desc" | null;
-
-/** Format a cell value for display. */
-function formatCell(val: unknown): string {
-  if (val === null || val === undefined) return "NULL";
-  if (typeof val === "boolean") return val ? "true" : "false";
-  if (typeof val === "object") {
-    try {
-      return JSON.stringify(val);
-    } catch {
-      return String(val);
-    }
-  }
-  return String(val);
-}
-
-/** Abbreviated type label for column badges. */
-function typeLabel(type: string): string {
-  const t = type.toLowerCase();
-  if (t.includes("int")) return "int";
-  if (t.includes("serial")) return "serial";
-  if (t.includes("bool")) return "bool";
-  if (
-    t.includes("float") ||
-    t.includes("double") ||
-    t.includes("numeric") ||
-    t.includes("real")
-  )
-    return "float";
-  if (t.includes("json")) return "json";
-  if (t.includes("uuid")) return "uuid";
-  if (t.includes("timestamp")) return "time";
-  if (t.includes("date")) return "date";
-  if (t.includes("text") || t.includes("char") || t.includes("varchar"))
-    return "text";
-  if (t.includes("vector")) return "vector";
-  if (t.includes("bytea")) return "bytes";
-  return type.slice(0, 6);
-}
-
-/** Color for column type badge. */
-function typeBadgeColor(type: string): string {
-  const t = type.toLowerCase();
-  if (
-    t.includes("int") ||
-    t.includes("serial") ||
-    t.includes("float") ||
-    t.includes("numeric") ||
-    t.includes("real") ||
-    t.includes("double")
-  )
-    return "text-accent-fg bg-accent/12";
-  if (t.includes("bool")) return "text-ok bg-ok/10";
-  if (t.includes("json")) return "text-warn bg-warn/10";
-  if (t.includes("uuid")) return "text-accent bg-accent/10";
-  if (t.includes("timestamp") || t.includes("date"))
-    return "text-danger bg-danger/10";
-  if (t.includes("text") || t.includes("char"))
-    return "text-muted-strong bg-bg-hover";
-  if (t.includes("vector")) return "text-accent bg-accent/12";
-  return "text-muted-strong bg-bg-hover";
-}
-
-function CellPopover({
-  value,
-  onClose,
-}: {
-  value: string;
-  onClose: () => void;
-}) {
-  const { t } = useApp();
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
-
-  return (
-    <div
-      ref={ref}
-      className="fixed z-50 bg-card/60 backdrop-blur-md border border-border/40 shadow-[0_8px_30px_rgba(var(--accent-rgb),0.15)] rounded-xl p-4 max-w-[500px] max-h-[300px] overflow-auto"
-      style={{ top: "50%", left: "50%", transform: "translate(-50%, -50%)" }}
-    >
-      <div className="flex items-center justify-between mb-3 border-b border-border/40 pb-2">
-        <span className="text-xs text-muted uppercase font-bold tracking-wider">
-          {t("databaseview.CellValue")}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="w-6 h-6 rounded-full transition-[background-color,color,box-shadow] hover:bg-bg-hover hover:text-txt hover:shadow-[0_0_10px_rgba(var(--accent-rgb),0.2)]"
-          onClick={onClose}
-        >
-          ×
-        </Button>
-      </div>
-      <pre className="text-xs text-txt font-mono whitespace-pre-wrap break-all m-0 bg-bg/40 p-3 rounded-lg border border-border/40">
-        {value}
-      </pre>
-    </div>
-  );
-}
-
-function ResultsGrid({
-  columns,
-  rows,
-  columnMeta,
-  sortCol,
-  sortDir,
-  onSort,
-  onCellClick,
-}: {
-  columns: string[];
-  rows: Record<string, unknown>[];
-  columnMeta?: Map<string, ColumnInfo>;
-  sortCol?: string;
-  sortDir?: SortDir;
-  onSort?: (col: string) => void;
-  onCellClick?: (value: string) => void;
-}) {
-  const { t } = useApp();
-  return (
-    <div
-      className="overflow-auto border border-border/40 bg-card/40 backdrop-blur-md rounded-2xl shadow-inner"
-      style={{ maxHeight: "calc(100vh - 340px)" }}
-    >
-      <table className="w-full border-collapse text-[12px] font-mono">
-        <thead className="sticky top-0 z-10 backdrop-blur-xl bg-bg/80 border-b border-border/40 shadow-sm">
-          <tr>
-            {/* Row number column */}
-            <th className="w-[50px] min-w-[50px] px-3 py-2.5 text-[10px] text-muted font-medium text-right border-r border-border/40">
-              #
-            </th>
-            {columns.map((col) => {
-              const meta = columnMeta?.get(col);
-              const isSorted = sortCol === col;
-              return (
-                <th
-                  key={col}
-                  className="px-4 py-2.5 text-left border-r border-border/40 whitespace-nowrap cursor-pointer select-none hover:bg-bg-hover transition-colors group"
-                  onClick={() => onSort?.(col)}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-txt font-semibold group-hover:text-txt transition-colors">
-                      {col}
-                    </span>
-                    {meta && (
-                      <Badge
-                        variant="outline"
-                        className={`text-[9px] px-1.5 py-0 border-none font-medium ${typeBadgeColor(meta.type)}`}
-                      >
-                        {typeLabel(meta.type)}
-                      </Badge>
-                    )}
-                    {meta?.isPrimaryKey && (
-                      <Badge
-                        variant="outline"
-                        className="border-none bg-accent/16 px-1.5 py-0 text-[9px] font-bold text-accent-fg shadow-sm"
-                      >
-                        PK
-                      </Badge>
-                    )}
-                    {isSorted && (
-                      <span className="text-[10px] text-[var(--accent)]">
-                        {sortDir === "asc" ? "↑" : "↓"}
-                      </span>
-                    )}
-                  </div>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr
-              key={JSON.stringify(row)}
-              className="border-b border-border/20 hover:bg-accent/10 transition-colors group"
-            >
-              <td className="px-3 py-2 text-[10px] text-muted text-right border-r border-border/30 bg-bg/20 tabular-nums group-hover:text-txt/70 transition-colors">
-                {i + 1}
-              </td>
-              {columns.map((col) => {
-                const raw = row[col];
-                const display = formatCell(raw);
-                const isNull = raw === null || raw === undefined;
-                const isExpandable = display.length > 40 && !!onCellClick;
-                return (
-                  <td
-                    key={col}
-                    className="px-4 py-2 border-r border-border/20 max-w-[280px] truncate cursor-default transition-colors"
-                    title={display}
-                    onClick={() => {
-                      if (isExpandable) onCellClick(display);
-                    }}
-                    onKeyDown={(e) => {
-                      if (!isExpandable) return;
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onCellClick(display);
-                      }
-                    }}
-                    role={isExpandable ? "button" : undefined}
-                    tabIndex={isExpandable ? 0 : undefined}
-                  >
-                    {isNull ? (
-                      <span className="text-[var(--muted)] italic opacity-50">
-                        {t("databaseview.NULL")}
-                      </span>
-                    ) : (
-                      <span className="text-[var(--txt)]">{display}</span>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function PaginationBar({
-  total,
-  offset,
-  limit,
-  onPrev,
-  onNext,
-}: {
-  total: number;
-  offset: number;
-  limit: number;
-  onPrev: () => void;
-  onNext: () => void;
-}) {
-  const { t } = useApp();
-  const start = offset + 1;
-  const end = Math.min(offset + limit, total);
-  const hasPrev = offset > 0;
-  const hasNext = offset + limit < total;
-
-  return (
-    <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/40 bg-card/60 backdrop-blur-md rounded-b-2xl text-[11px] text-muted">
-      <span className="font-medium">
-        {t("databaseview.RowCountSummary", {
-          count: total.toLocaleString(),
-          rowLabel:
-            total === 1
-              ? t("databaseview.row")
-              : t("databaseview.rows", { defaultValue: "rows" }),
-          range:
-            total > 0
-              ? t("databaseview.ShowingRange", {
-                  start,
-                  end,
-                  defaultValue: " · showing {{start}}-{{end}}",
-                })
-              : "",
-          defaultValue: "{{count}} {{rowLabel}}{{range}}",
-        })}
-      </span>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-auto min-h-[1.75rem] whitespace-normal break-words rounded-lg border-border/50 bg-bg/50 py-1 text-left text-[11px] backdrop-blur-sm transition-[border-color,color,box-shadow] hover:border-accent hover:text-txt hover:shadow-[0_0_10px_rgba(var(--accent-rgb),0.2)]"
-          disabled={!hasPrev}
-          onClick={onPrev}
-        >
-          {t("databaseview.Prev")}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-auto min-h-[1.75rem] whitespace-normal break-words rounded-lg border-border/50 bg-bg/50 py-1 text-left text-[11px] backdrop-blur-sm transition-[border-color,color,box-shadow] hover:border-accent hover:text-txt hover:shadow-[0_0_10px_rgba(var(--accent-rgb),0.2)]"
-          disabled={!hasNext}
-          onClick={onNext}
-        >
-          {t("onboarding.next")}
-        </Button>
-      </div>
-    </div>
-  );
-}
+import {
+  CellPopover,
+  type DbView,
+  PaginationBar,
+  ResultsGrid,
+  type SortDir,
+} from "./database-utils";
+import { SqlEditorPanel } from "./SqlEditorPanel";
 
 export function DatabaseView({
   leftNav,
@@ -563,6 +279,33 @@ export function DatabaseView({
     </PagePanel.SummaryCard>
   );
 
+  const refreshButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-10 w-full justify-start rounded-[18px] px-4 text-xs font-semibold border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 disabled:hover:border-border/32 disabled:hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] disabled:hover:text-muted-strong dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_24px_-20px_rgba(0,0,0,0.24)]"
+      onClick={async () => {
+        const status = await loadStatus();
+        if (status?.connected) {
+          await loadTables();
+        }
+      }}
+    >
+      {t("common.refresh")}
+    </Button>
+  );
+
+  // Shared SQL editor props
+  const sqlEditorProps = {
+    queryText,
+    setQueryText,
+    queryResult,
+    queryLoading,
+    runQuery,
+    queryHistory,
+    onCellClick: (v: string) => setCellInspect(v),
+  };
+
   if (showExternalSidebar) {
     const dbSidebar = (
       <Sidebar testId="database-sidebar">
@@ -571,19 +314,7 @@ export function DatabaseView({
               {leftNav}
               {viewToggle}
               {sidebarSummary}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-10 w-full justify-start rounded-[18px] px-4 text-xs font-semibold border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 disabled:hover:border-border/32 disabled:hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] disabled:hover:text-muted-strong dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_24px_-20px_rgba(0,0,0,0.24)]"
-                onClick={async () => {
-                  const status = await loadStatus();
-                  if (status?.connected) {
-                    await loadTables();
-                  }
-                }}
-              >
-                {t("common.refresh")}
-              </Button>
+              {refreshButton}
             </div>
 
             <div className="mt-4 h-px bg-border/30" />
@@ -796,89 +527,7 @@ export function DatabaseView({
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-auto p-6">
-              <PagePanel variant="surface" as="section"
-                className="px-5 py-5 sm:px-6"
-              >
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-                  {t("databaseview.Database")}
-                </div>
-                <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
-                  {t("databaseview.SQLEditor")}
-                </h1>
-              </PagePanel>
-
-              <PagePanel variant="surface"
-                className="mt-4 flex flex-col p-4"
-              >
-                <div className="relative group">
-                  <div className="absolute -inset-[1px] bg-gradient-to-r from-accent/0 via-accent/30 to-accent/0 rounded-2xl opacity-0 group-focus-within:opacity-100 blur transition-opacity duration-500" />
-                  <Textarea
-                    value={queryText}
-                    onChange={(e) => setQueryText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                        e.preventDefault();
-                        runQuery();
-                      }
-                    }}
-                    placeholder={t("databaseview.SELECTFROMMemori")}
-                    rows={6}
-                    className="w-full relative bg-bg/80 backdrop-blur-md border-border/50 text-txt text-sm font-mono resize-y leading-relaxed rounded-xl focus-visible:ring-accent focus-visible:border-accent custom-scrollbar shadow-inner"
-                    spellCheck={false}
-                  />
-                </div>
-                <div className="flex items-center gap-3 mt-3">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="h-auto min-h-[2.25rem] whitespace-normal break-words rounded-xl bg-accent px-6 py-1.5 text-left text-xs font-bold text-accent-fg shadow-[0_0_15px_rgba(var(--accent-rgb),0.4)] transition-[opacity,transform,box-shadow] hover:scale-[1.02] hover:opacity-90 disabled:opacity-40"
-                    disabled={queryLoading || !queryText.trim()}
-                    onClick={runQuery}
-                  >
-                    {queryLoading
-                      ? t("common.running", { defaultValue: "Running..." })
-                      : t("databaseview.runQuery", {
-                          defaultValue: "Run Query",
-                        })}
-                  </Button>
-                  <kbd className="text-[10px] text-muted font-mono bg-bg/50 px-2 py-1 rounded-md border border-border/30 shadow-inner tracking-wider">
-                    {navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}{" "}
-                    {t("onboarding.enter")}
-                  </kbd>
-                  {queryResult && (
-                    <div className="text-xs text-muted ml-auto bg-bg/50 px-3 py-1.5 rounded-lg border border-border/30 font-medium shadow-inner tracking-wide">
-                      <span className="text-txt">{queryResult.rowCount}</span>{" "}
-                      {queryResult.rowCount === 1
-                        ? t("databaseview.row")
-                        : t("databaseview.Rows")}{" "}
-                      ·{" "}
-                      <span className="text-txt">
-                        {queryResult.durationMs}ms
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </PagePanel>
-
-              {queryResult && queryResult.rows.length > 0 ? (
-                <PagePanel variant="surface"
-                  className="mt-4 flex flex-1 min-h-0 flex-col overflow-hidden p-3"
-                >
-                  <ResultsGrid
-                    columns={queryResult.columns}
-                    rows={queryResult.rows}
-                    onCellClick={(v) => setCellInspect(v)}
-                  />
-                </PagePanel>
-              ) : null}
-
-              {queryResult && queryResult.rows.length === 0 ? (
-                <PagePanel.Empty
-                  className="mt-4 min-h-[12rem]"
-                  title={t("databaseview.QueryReturnedNoRo")}
-                  description={t("databaseview.QueryNoRowsDescription")}
-                />
-              ) : null}
+              <SqlEditorPanel {...sqlEditorProps} showHistory={false} />
             </div>
           )}
         </div>
@@ -1171,19 +820,7 @@ export function DatabaseView({
                 <div className="space-y-3 pt-4">
                   {viewToggle}
                   {leftNav}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-10 w-full justify-start rounded-[18px] px-4 text-xs font-semibold border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 disabled:hover:border-border/32 disabled:hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] disabled:hover:text-muted-strong dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_24px_-20px_rgba(0,0,0,0.24)]"
-                    onClick={async () => {
-                      const status = await loadStatus();
-                      if (status?.connected) {
-                        await loadTables();
-                      }
-                    }}
-                  >
-                    {t("common.refresh")}
-                  </Button>
+                  {refreshButton}
                 </div>
                 <div className="h-px bg-border/30" />
                 <PagePanel variant="inset" className="rounded-[18px] px-3 py-3 text-[11px] text-muted">
@@ -1239,96 +876,7 @@ export function DatabaseView({
               </div>
             </PagePanel>
 
-            <PagePanel variant="surface"
-              className="flex flex-col p-4"
-            >
-              <div className="relative group">
-                <div className="absolute -inset-[1px] bg-gradient-to-r from-accent/0 via-accent/30 to-accent/0 rounded-2xl opacity-0 group-focus-within:opacity-100 blur transition-opacity duration-500" />
-                <Textarea
-                  value={queryText}
-                  onChange={(e) => setQueryText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                      e.preventDefault();
-                      runQuery();
-                    }
-                  }}
-                  placeholder={t("databaseview.SELECTFROMMemori")}
-                  rows={6}
-                  className="w-full relative bg-bg/80 backdrop-blur-md border-border/50 text-txt text-sm font-mono resize-y leading-relaxed rounded-xl focus-visible:ring-accent focus-visible:border-accent custom-scrollbar shadow-inner"
-                  spellCheck={false}
-                />
-              </div>
-              <div className="flex items-center gap-3 mt-3">
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="h-auto min-h-[2.25rem] whitespace-normal break-words rounded-xl bg-accent px-6 py-1.5 text-left text-xs font-bold text-accent-fg shadow-[0_0_15px_rgba(var(--accent-rgb),0.4)] transition-[opacity,transform,box-shadow] hover:scale-[1.02] hover:opacity-90 disabled:opacity-40"
-                  disabled={queryLoading || !queryText.trim()}
-                  onClick={runQuery}
-                >
-                  {queryLoading
-                    ? t("common.running", { defaultValue: "Running..." })
-                    : t("databaseview.runQuery", { defaultValue: "Run Query" })}
-                </Button>
-                <kbd className="text-[10px] text-muted font-mono bg-bg/50 px-2 py-1 rounded-md border border-border/30 shadow-inner tracking-wider">
-                  {navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}{" "}
-                  {t("onboarding.enter")}
-                </kbd>
-                {queryResult && (
-                  <div className="text-xs text-muted ml-auto bg-bg/50 px-3 py-1.5 rounded-lg border border-border/30 font-medium shadow-inner tracking-wide">
-                    <span className="text-txt">{queryResult.rowCount}</span>{" "}
-                    {t("databaseview.row")}
-                    {queryResult.rowCount !== 1 ? "s" : ""} ·{" "}
-                    <span className="text-txt">{queryResult.durationMs}ms</span>
-                  </div>
-                )}
-              </div>
-            </PagePanel>
-
-            {/* Query history dropdown */}
-            {queryHistory.length > 0 &&
-              !queryResult &&
-              !showExternalSidebar && (
-                <div className="border border-border/40 bg-card/40 backdrop-blur-xl rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-4 py-2.5 text-[10px] text-muted uppercase font-bold tracking-widest bg-bg/60 border-b border-border/40 shadow-inner">
-                    {t("databaseview.RecentQueries")}
-                  </div>
-                  <div className="flex flex-col">
-                    {queryHistory.slice(0, 5).map((q) => (
-                      <Button
-                        variant="ghost"
-                        key={q}
-                        className="w-full px-4 py-3 h-auto justify-start text-[11px] font-mono text-txt text-left rounded-none border-b border-border/20 hover:bg-accent/10 hover:text-txt transition-colors truncate"
-                        onClick={() => setQueryText(q)}
-                      >
-                        <span className="truncate opacity-80 group-hover:opacity-100">
-                          {q}
-                        </span>
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-            {/* Results */}
-            {queryResult && queryResult.rows.length > 0 && (
-              <div className="flex-1 min-h-0">
-                <ResultsGrid
-                  columns={queryResult.columns}
-                  rows={queryResult.rows}
-                  onCellClick={(v) => setCellInspect(v)}
-                />
-              </div>
-            )}
-
-            {queryResult && queryResult.rows.length === 0 && (
-              <div className="flex items-center justify-center p-8 border border-border/40 bg-card/60 backdrop-blur-xl rounded-2xl shadow-sm text-muted text-sm tracking-wide font-medium">
-                <div className="px-6 py-4 bg-bg/50 shadow-inner rounded-xl border border-border/30">
-                  {t("databaseview.QueryReturnedNoRo")}
-                </div>
-              </div>
-            )}
+            <SqlEditorPanel {...sqlEditorProps} showHistory={!showExternalSidebar} />
           </div>
         </div>
       )}
