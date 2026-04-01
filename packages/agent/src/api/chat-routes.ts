@@ -42,6 +42,11 @@ import {
 import { detectRuntimeModel } from "./agent-model.js";
 import { normalizeCharacterLanguage } from "../onboarding-presets.js";
 import {
+  isClientVisibleNoResponse,
+  isNoResponsePlaceholder,
+  stripAssistantStageDirections,
+} from "./chat-text-helpers.js";
+import {
   resolveAppUserName,
   type ConversationMeta,
   // Deep dependencies of generateChatResponse that stay in server.ts
@@ -51,9 +56,6 @@ import {
   maybeAugmentChatMessageWithLanguage,
   executeFallbackParsedActions,
   parseFallbackActionBlocks,
-  isClientVisibleNoResponse,
-  isNoResponsePlaceholder,
-  stripAssistantStageDirections,
   shouldForceCheckBalanceFallback,
   isBalanceIntent,
   inferBalanceChainFromText,
@@ -76,9 +78,10 @@ import {
   normalizeIncomingChatPrompt,
   IMAGE_ONLY_CHAT_FALLBACK_PROMPT,
   decodePathComponent,
-  MAX_BODY_BYTES,
-  CHAT_MAX_BODY_BYTES,
 } from "./server.js";
+
+const MAX_BODY_BYTES = 1024 * 1024; // 1 MB
+const CHAT_MAX_BODY_BYTES = 20 * 1024 * 1024; // 20 MB (image-capable)
 
 // ---------------------------------------------------------------------------
 // Exported types
