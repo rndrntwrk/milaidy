@@ -758,7 +758,7 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
           ) : view === "tables" ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-auto p-6">
               {!selectedTable ? (
-                <>
+                <div className="flex flex-1 flex-col">
                   <section
                     className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} px-5 py-5 sm:px-6`}
                   >
@@ -779,7 +779,7 @@ export function DatabaseView({ leftNav }: { leftNav?: ReactNode }) {
                       description={t("databaseview.ChooseATableFrom")}
                     />
                   </div>
-                </>
+                </div>
               ) : loading && !tableData ? (
                 <div
                   className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} flex flex-1 items-center justify-center px-6 py-10 text-sm font-medium italic text-muted`}
