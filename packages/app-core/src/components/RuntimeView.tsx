@@ -3,7 +3,14 @@
  * a focused summary/detail pane.
  */
 
-import { Button, ContentLayout, Input } from "@miladyai/ui";
+import {
+  Button,
+  Input,
+  PageLayout,
+  Sidebar,
+  SidebarPanel,
+  SidebarScrollRegion,
+} from "@miladyai/ui";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   client,
@@ -29,8 +36,6 @@ import {
 } from "./desktop-surface-primitives";
 import { formatDateTime } from "./format";
 import {
-  APP_DESKTOP_SIDEBAR_RAIL_STANDARD_CLASSNAME,
-  APP_DESKTOP_SPLIT_SHELL_CLASSNAME,
   APP_SIDEBAR_CARD_ACTIVE_CLASSNAME,
   APP_SIDEBAR_CARD_INACTIVE_CLASSNAME,
   APP_SIDEBAR_COMPACT_CARD_CLASSNAME,
@@ -39,7 +44,6 @@ import {
   APP_SIDEBAR_COMPACT_META_CLASSNAME,
   APP_SIDEBAR_COMPACT_PILL_CLASSNAME,
   APP_SIDEBAR_COMPACT_TITLE_CLASSNAME,
-  APP_SIDEBAR_INNER_CLASSNAME,
   APP_SIDEBAR_PILL_CLASSNAME,
   APP_SIDEBAR_SCROLL_REGION_CLASSNAME,
   APP_SIDEBAR_SECTION_HEADING_CLASSNAME,
@@ -56,8 +60,6 @@ type RuntimeSectionKey =
 
 type RuntimeTreeSectionKey = Exclude<RuntimeSectionKey, "summary">;
 
-const RUNTIME_SHELL_CLASSNAME = APP_DESKTOP_SPLIT_SHELL_CLASSNAME;
-const RUNTIME_PANE_CLASSNAME = `${DESKTOP_PAGE_CONTENT_CLASSNAME} min-h-0`;
 const RUNTIME_TOOLBAR_BUTTON_CLASSNAME = `${DESKTOP_CONTROL_SURFACE_COMPACT_CLASSNAME} ${DESKTOP_CONTROL_SURFACE_CLASSNAME}`;
 const RUNTIME_TOOLBAR_BUTTON_ACCENT_CLASSNAME = `${DESKTOP_CONTROL_SURFACE_COMPACT_CLASSNAME} ${DESKTOP_CONTROL_SURFACE_ACCENT_CLASSNAME}`;
 const RUNTIME_INPUT_CLASSNAME = `${DESKTOP_INPUT_SHELL_CLASSNAME} h-9 rounded-[16px] px-3 text-sm text-txt`;
@@ -488,11 +490,9 @@ export function RuntimeView({
     }
   };
 
-  return (
-    <ContentLayout contentHeader={contentHeader} className="p-0 lg:p-1">
-      <div data-testid="runtime-view" className={RUNTIME_SHELL_CLASSNAME}>
-        <aside className={APP_DESKTOP_SIDEBAR_RAIL_STANDARD_CLASSNAME}>
-          <div className={APP_SIDEBAR_INNER_CLASSNAME}>
+  const runtimeSidebar = (
+    <Sidebar testId="runtime-sidebar">
+      <SidebarPanel>
             <DesktopRailSummaryCard
               className={`mt-2 space-y-2 ${DESKTOP_RAIL_SUMMARY_CARD_COMPACT_CLASSNAME}`}
             >
@@ -637,11 +637,17 @@ export function RuntimeView({
                 })}
               </div>
             </div>
-          </div>
-        </aside>
+      </SidebarPanel>
+    </Sidebar>
+  );
 
-        <div className={RUNTIME_PANE_CLASSNAME}>
-          <div className="flex min-h-0 flex-1 flex-col gap-4 p-3 lg:p-4">
+  return (
+    <PageLayout
+      sidebar={runtimeSidebar}
+      contentHeader={contentHeader}
+      data-testid="runtime-view"
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
             {error ? (
               <div className="rounded-[18px] border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
                 {error}
@@ -798,9 +804,7 @@ export function RuntimeView({
                 </section>
               </>
             )}
-          </div>
-        </div>
       </div>
-    </ContentLayout>
+    </PageLayout>
   );
 }
