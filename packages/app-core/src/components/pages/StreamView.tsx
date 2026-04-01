@@ -11,6 +11,7 @@ import { getBootConfig } from "@miladyai/app-core/config";
 import { useDocumentVisibility } from "@miladyai/app-core/hooks";
 import { useApp } from "@miladyai/app-core/state";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatUptime } from "../../utils/format";
 import { IS_POPOUT } from "../stream/helpers";
 import { StatusBar } from "../stream/StatusBar";
 
@@ -173,9 +174,3 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
   );
 }
 
-function formatUptime(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}

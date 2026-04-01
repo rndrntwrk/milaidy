@@ -1,10 +1,7 @@
 import { logger } from "@elizaos/core";
-import { parseBooleanValue } from "../benchmark/server-utils.js";
 import { theme } from "../terminal/theme";
 
-export function isTruthyEnvValue(value: string | undefined): boolean {
-  return parseBooleanValue(value);
-}
+export { isTruthyEnvValue } from "@miladyai/shared/env-utils";
 
 const LOG_LEVEL_PRIORITY: Record<string, number> = {
   trace: 10,

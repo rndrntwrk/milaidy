@@ -3,7 +3,7 @@
  * Enable with MILADY_SETTINGS_DEBUG=1 (and Vite: same env at build time, or VITE_MILADY_SETTINGS_DEBUG=1).
  */
 
-const TRUTHY = new Set(["1", "true", "yes", "on"]);
+import { isTruthyEnvValue } from "./env-utils.js";
 
 /** Keys whose values are always redacted in debug dumps. */
 const SENSITIVE_KEY_RE =
@@ -12,11 +12,6 @@ const SENSITIVE_KEY_RE =
 const MAX_DEPTH = 14;
 const MAX_ARRAY = 40;
 const MAX_STRING = 120;
-
-function isTruthyEnv(v: string | undefined): boolean {
-  if (v == null) return false;
-  return TRUTHY.has(v.trim().toLowerCase());
-}
 
 /**
  * True when settings debug is enabled (Node: process.env; browser: import.meta.env from Vite define).
@@ -29,18 +24,18 @@ export function isMiladySettingsDebugEnabled(options?: {
 }): boolean {
   const im = options?.importMetaEnv;
   if (im) {
-    if (isTruthyEnv(String(im.MILADY_SETTINGS_DEBUG ?? "").trim())) return true;
-    if (isTruthyEnv(String(im.VITE_MILADY_SETTINGS_DEBUG ?? "").trim()))
+    if (isTruthyEnvValue(String(im.MILADY_SETTINGS_DEBUG ?? "").trim())) return true;
+    if (isTruthyEnvValue(String(im.VITE_MILADY_SETTINGS_DEBUG ?? "").trim()))
       return true;
   }
   const e = options?.env;
   if (e) {
-    if (isTruthyEnv(e.MILADY_SETTINGS_DEBUG)) return true;
-    if (isTruthyEnv(e.VITE_MILADY_SETTINGS_DEBUG)) return true;
+    if (isTruthyEnvValue(e.MILADY_SETTINGS_DEBUG)) return true;
+    if (isTruthyEnvValue(e.VITE_MILADY_SETTINGS_DEBUG)) return true;
   }
   if (typeof process !== "undefined" && process.env) {
-    if (isTruthyEnv(process.env.MILADY_SETTINGS_DEBUG)) return true;
-    if (isTruthyEnv(process.env.VITE_MILADY_SETTINGS_DEBUG)) return true;
+    if (isTruthyEnvValue(process.env.MILADY_SETTINGS_DEBUG)) return true;
+    if (isTruthyEnvValue(process.env.VITE_MILADY_SETTINGS_DEBUG)) return true;
   }
   return false;
 }

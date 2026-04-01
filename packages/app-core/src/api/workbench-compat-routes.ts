@@ -14,12 +14,7 @@ import {
   type CompatRuntimeState,
   readCompatJsonBody,
 } from "./compat-route-shared";
-
-// ---------------------------------------------------------------------------
-// Constants & types
-// ---------------------------------------------------------------------------
-
-const WORKBENCH_TODO_TAG = "workbench-todo";
+import { WORKBENCH_TODO_TAG } from "@miladyai/agent/api/workbench-helpers";
 
 type WorkbenchTodoResponse = {
   id: string;

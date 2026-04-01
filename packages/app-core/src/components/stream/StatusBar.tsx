@@ -8,14 +8,8 @@ import { useApp } from "@miladyai/app-core/state";
 import { Button } from "@miladyai/ui";
 import { ExternalLink } from "lucide-react";
 import { type CSSProperties, useEffect, useRef } from "react";
+import { formatUptime } from "../../utils/format";
 import { IS_POPOUT } from "./helpers";
-
-function formatUptime(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
 
 const STATUS_PILL_CLASSNAME =
   "inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-border/45 bg-card/92 px-2.5 py-1.5 text-[11px] text-muted-strong shadow-sm";

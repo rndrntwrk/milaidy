@@ -161,7 +161,7 @@ function drawStatusDot(
   ctx.restore();
 }
 
-function formatUptime(ms: number | undefined): string {
+function formatUptimeMs(ms: number | undefined): string {
   if (ms == null || ms <= 0) return "--";
   const totalSeconds = Math.floor(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
@@ -387,7 +387,7 @@ export function renderStatusPanel(
   // Uptime right-aligned
   ctx.font = `400 ${fsMono}px ${FONT_MONO}`;
   ctx.fillStyle = TEXT_SECONDARY;
-  const uptimeStr = formatUptime(status.uptime);
+  const uptimeStr = formatUptimeMs(status.uptime);
   const uptimeW = ctx.measureText(uptimeStr).width;
   ctx.fillText(uptimeStr, w - pad - uptimeW - 8, y + 9);
   y += 18;

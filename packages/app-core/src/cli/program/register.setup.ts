@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import type { Command } from "commander";
 import JSON5 from "json5";
+import { resolveConfigPath } from "@miladyai/agent/config/paths";
 import { formatDocsLink } from "../../terminal/links";
 import { theme } from "../../terminal/theme";
 import { runCommandWithRuntime } from "../cli-utils";
@@ -132,15 +132,7 @@ async function readStdinValue(): Promise<string> {
 // Config read/write
 // ---------------------------------------------------------------------------
 
-export function resolveConfigPath(env = process.env): string {
-  if (env.ELIZA_CONFIG_PATH?.trim()) {
-    return env.ELIZA_CONFIG_PATH;
-  }
-
-  const stateDir =
-    env.ELIZA_STATE_DIR?.trim() || path.join(os.homedir(), ".eliza");
-  return path.join(stateDir, "eliza.json");
-}
+export { resolveConfigPath };
 
 export function loadConfig(configPath: string): Record<string, unknown> {
   if (!fs.existsSync(configPath)) return {};

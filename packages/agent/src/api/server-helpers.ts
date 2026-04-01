@@ -43,12 +43,12 @@ import {
 // Pi AI plugin lazy loader
 // ---------------------------------------------------------------------------
 
-// @ts-expect-error
+// @ts-ignore — plugin-pi-ai may not be installed
 type PiAiPluginModule = typeof import("@elizaos/plugin-pi-ai");
 let _piAiPluginModule: PiAiPluginModule | null = null;
 export async function loadPiAiPluginModule(): Promise<PiAiPluginModule> {
   if (!_piAiPluginModule) {
-    // @ts-expect-error
+    // @ts-ignore — plugin-pi-ai may not be installed
     _piAiPluginModule = await import("@elizaos/plugin-pi-ai");
   }
   return _piAiPluginModule;

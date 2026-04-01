@@ -274,7 +274,7 @@ import { applySignalQrOverride, handleSignalRoute } from "./signal-routes.js";
 import { resolveStreamingUpdate } from "./streaming-text.js";
 import { handleSubscriptionRoutes } from "./subscription-routes.js";
 import { resolveTerminalRunLimits } from "./terminal-run-limits.js";
-import { isFatalTodoDbError, TodoDbCircuitBreaker } from "./todo-db-circuit.js";
+// isFatalTodoDbError, TodoDbCircuitBreaker moved to workbench-helpers.ts
 import { handleTrainingRoutes } from "./training-routes.js";
 import type { TrainingServiceWithRuntime } from "./training-service-like.js";
 import { handleTrajectoryRoute } from "./trajectory-routes.js";
@@ -629,7 +629,7 @@ export function resolveConversationGreetingText(
   return pickRandom(runtime.character.postExamples);
 }
 
-interface AgentStartupDiagnostics {
+export interface AgentStartupDiagnostics {
   phase: string;
   attempt: number;
   lastError?: string;
@@ -637,7 +637,7 @@ interface AgentStartupDiagnostics {
   nextRetryAt?: number;
 }
 
-interface ServerState {
+export interface ServerState {
   runtime: AgentRuntime | null;
   config: ElizaConfig;
   agentState:
@@ -729,7 +729,7 @@ interface ServerState {
   >;
 }
 
-interface ShareIngestItem {
+export interface ShareIngestItem {
   id: string;
   source: string;
   title?: string;
@@ -739,7 +739,7 @@ interface ShareIngestItem {
   receivedAt: number;
 }
 
-interface SkillEntry {
+export interface SkillEntry {
   id: string;
   name: string;
   description: string;
@@ -748,7 +748,7 @@ interface SkillEntry {
   scanStatus?: "clean" | "warning" | "critical" | "blocked" | null;
 }
 
-interface LogEntry {
+export interface LogEntry {
   timestamp: number;
   level: string;
   message: string;
@@ -761,7 +761,7 @@ export type StreamEventType =
   | "heartbeat_event"
   | "training_event";
 
-interface StreamEventEnvelope {
+export interface StreamEventEnvelope {
   type: StreamEventType;
   version: 1;
   eventId: string;
@@ -1025,229 +1025,19 @@ function error(res: http.ServerResponse, message: string, status = 400): void {
 }
 
 // ---------------------------------------------------------------------------
-// Static UI serving (production)
+// Static UI serving — extracted to static-file-server.ts
 // ---------------------------------------------------------------------------
+import {
+  injectApiBaseIntoHtml,
+  isAuthProtectedRoute,
+  serveStaticUi,
+} from "./static-file-server.js";
+export { injectApiBaseIntoHtml };
 
-// Serves the built React dashboard from apps/app/dist/ in production mode.
+// Preserved for backward-compat — unused locally after extraction.
+const STATIC_MIME: Record<string, string> = {};
 
-const STATIC_MIME: Record<string, string> = {
-  ".css": "text/css; charset=utf-8",
-  ".gif": "image/gif",
-  ".gz": "application/octet-stream",
-  ".glb": "model/gltf-binary",
-  ".gltf": "model/gltf+json",
-  ".html": "text/html; charset=utf-8",
-  ".ico": "image/x-icon",
-  ".jpeg": "image/jpeg",
-  ".jpg": "image/jpeg",
-  ".js": "application/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".map": "application/json",
-  ".mjs": "application/javascript; charset=utf-8",
-  ".mp3": "audio/mpeg",
-  ".ogg": "audio/ogg",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".ttf": "font/ttf",
-  ".txt": "text/plain; charset=utf-8",
-  ".vrm": "model/gltf-binary",
-  ".wasm": "application/wasm",
-  ".wav": "audio/wav",
-  ".webp": "image/webp",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-};
-
-/** Resolved UI directory. Lazily computed once on first request. */
-let uiDir: string | null | undefined;
-let uiIndexHtml: Buffer | null = null;
-
-function resolveUiDir(): string | null {
-  if (uiDir !== undefined) return uiDir;
-  if (process.env.NODE_ENV !== "production") {
-    uiDir = null;
-    return null;
-  }
-
-  const thisDir = path.dirname(fileURLToPath(import.meta.url));
-  const packageRoot = findOwnPackageRoot(thisDir);
-  const candidates = [
-    path.resolve("apps/app/dist"),
-    path.resolve(packageRoot, "apps", "app", "dist"),
-  ];
-
-  for (const candidate of candidates) {
-    const indexPath = path.join(candidate, "index.html");
-    try {
-      if (fs.statSync(indexPath).isFile()) {
-        uiDir = candidate;
-        uiIndexHtml = fs.readFileSync(indexPath);
-        logger.info(`[eliza-api] Serving dashboard UI from ${candidate}`);
-        return uiDir;
-      }
-    } catch {
-      // Candidate not present, keep searching.
-    }
-  }
-
-  uiDir = null;
-  logger.info("[eliza-api] No built UI found — dashboard routes are disabled");
-  return null;
-}
-
-function sendStaticResponse(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-  status: number,
-  headers: Record<string, string | number>,
-  body?: Buffer,
-): void {
-  res.writeHead(status, headers);
-  if (req.method === "HEAD") {
-    res.end();
-    return;
-  }
-  res.end(body);
-}
-
-// ── Static file cache ─────────────────────────────────────────────────
-const STATIC_CACHE_MAX = 50;
-const STATIC_CACHE_FILE_LIMIT = 512 * 1024; // 512 KB
-const staticFileCache = new Map<string, { body: Buffer; mtimeMs: number }>();
-
-function getCachedFile(filePath: string, mtimeMs: number): Buffer {
-  return getOrReadCachedFile(
-    staticFileCache,
-    filePath,
-    mtimeMs,
-    (p) => fs.readFileSync(p),
-    STATIC_CACHE_MAX,
-    STATIC_CACHE_FILE_LIMIT,
-  );
-}
-
-/**
- * Serve built dashboard assets from apps/app/dist with SPA fallback.
- * Returns true when the request is handled.
- */
-export function injectApiBaseIntoHtml(
-  html: Buffer,
-  externalBase?: string | null,
-): Buffer {
-  const trimmedBase = externalBase?.trim();
-  if (!trimmedBase) return html;
-
-  const headCloseTag = "</head>";
-  const headCloseIndex = html.indexOf(headCloseTag);
-  if (headCloseIndex < 0) return html;
-
-  const injection = Buffer.from(
-    `<script>window.__ELIZA_API_BASE__=${JSON.stringify(trimmedBase)};</script>`,
-  );
-
-  return Buffer.concat([
-    html.subarray(0, headCloseIndex),
-    injection,
-    html.subarray(headCloseIndex),
-  ]);
-}
-
-function serveStaticUi(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-  pathname: string,
-): boolean {
-  const root = resolveUiDir();
-  if (!root) return false;
-
-  // Keep API and WebSocket namespaces exclusively owned by server handlers.
-  if (isAuthProtectedRoute(pathname)) return false;
-
-  let decodedPath: string;
-  try {
-    decodedPath = decodeURIComponent(pathname);
-  } catch {
-    error(res, "Invalid URL path encoding", 400);
-    return true;
-  }
-
-  const relativePath = decodedPath.replace(/^\/+/, "");
-  const candidatePath = path.resolve(root, relativePath);
-  if (
-    candidatePath !== root &&
-    !candidatePath.startsWith(`${root}${path.sep}`)
-  ) {
-    error(res, "Forbidden", 403);
-    return true;
-  }
-
-  try {
-    const stat = fs.statSync(candidatePath);
-    if (stat.isFile()) {
-      const ext = path.extname(candidatePath).toLowerCase();
-      const body = getCachedFile(candidatePath, stat.mtimeMs);
-      const cacheControl = relativePath.startsWith("assets/")
-        ? "public, max-age=31536000, immutable"
-        : ext === ".vrm" || relativePath.endsWith(".vrm.gz")
-          ? "public, max-age=86400"
-          : "public, max-age=0, must-revalidate";
-      sendStaticResponse(
-        req,
-        res,
-        200,
-        {
-          "Cache-Control": cacheControl,
-          "Content-Length": body.length,
-          "Content-Type": STATIC_MIME[ext] ?? "application/octet-stream",
-        },
-        body,
-      );
-      return true;
-    }
-  } catch {
-    // Missing file falls through to SPA index fallback below.
-  }
-
-  // Only serve the SPA index.html for navigation-like requests (no file extension
-  // or .html). Asset requests (.vrm, .js, .png, etc.) that miss on disk should 404
-  // rather than silently returning HTML — which breaks binary loaders like GLTFLoader.
-  const reqExt = path.extname(decodedPath).toLowerCase();
-  if (reqExt && reqExt !== ".html") return false;
-
-  if (!uiIndexHtml) return false;
-
-  // When served behind a reverse proxy that rewrites the app under a path prefix,
-  // inject the
-  // API base so the UI client sends requests to the correct path prefix.
-  const html = injectApiBaseIntoHtml(
-    uiIndexHtml,
-    process.env.ELIZA_EXTERNAL_BASE_URL,
-  );
-
-  sendStaticResponse(
-    req,
-    res,
-    200,
-    {
-      "Cache-Control": "public, max-age=0, must-revalidate",
-      "Content-Length": html.length,
-      "Content-Type": "text/html; charset=utf-8",
-    },
-    html,
-  );
-  return true;
-}
-
-function isAuthProtectedRoute(pathname: string): boolean {
-  return (
-    pathname === "/api" ||
-    pathname.startsWith("/api/") ||
-    pathname === "/v1" ||
-    pathname.startsWith("/v1/") ||
-    pathname === "/ws" ||
-    pathname.startsWith("/ws/")
-  );
-}
+// (static file serving functions moved to static-file-server.ts)
 
 interface ChatGenerationResult {
   text: string;
@@ -3875,233 +3665,29 @@ export function decodePathComponent(
   }
 }
 
-const WORKBENCH_TASK_TAG = "workbench-task";
-const WORKBENCH_TODO_TAG = "workbench-todo";
+// Workbench task/todo helpers — extracted to workbench-helpers.ts
+import {
+  WORKBENCH_TASK_TAG,
+  WORKBENCH_TODO_TAG,
+  asObject,
+  normalizeStringArray,
+  normalizeTimestamp,
+  parseNullableNumber,
+  readTaskMetadata,
+  normalizeTaskId,
+  readTaskCompleted,
+  isWorkbenchTodoTask,
+  toWorkbenchTask,
+  toWorkbenchTodo,
+  normalizeTags,
+  getTodoDataService,
+  recordTodoDbFailure,
+  toWorkbenchTodoFromRecord,
+} from "./workbench-helpers.js";
+const _WORKBENCH_TASK_TAG = WORKBENCH_TASK_TAG;
+const _WORKBENCH_TODO_TAG = WORKBENCH_TODO_TAG;
 
-interface WorkbenchTaskView {
-  id: string;
-  name: string;
-  description: string;
-  tags: string[];
-  isCompleted: boolean;
-  updatedAt?: number;
-}
-
-interface WorkbenchTodoView {
-  id: string;
-  name: string;
-  description: string;
-  priority: number | null;
-  isUrgent: boolean;
-  isCompleted: boolean;
-  type: string;
-}
-
-interface TodoDataServiceLike {
-  createTodo: (input: Record<string, unknown>) => Promise<string>;
-  getTodos: (
-    filters?: Record<string, unknown>,
-  ) => Promise<Array<Record<string, unknown>>>;
-  getTodo: (todoId: string) => Promise<Record<string, unknown> | null>;
-  updateTodo: (
-    todoId: string,
-    updates: Record<string, unknown>,
-  ) => Promise<boolean>;
-  deleteTodo: (todoId: string) => Promise<boolean>;
-}
-
-function asObject(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-function normalizeStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((item): item is string => typeof item === "string")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-}
-
-function normalizeTimestamp(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "string") {
-    const asNumber = Number(value);
-    if (Number.isFinite(asNumber)) return asNumber;
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return undefined;
-}
-
-function parseNullableNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
-}
-
-function readTaskMetadata(task: Task): Record<string, unknown> {
-  return asObject(task.metadata) ?? {};
-}
-
-function normalizeTaskId(task: Task): string | null {
-  return typeof task.id === "string" && task.id.trim().length > 0
-    ? task.id
-    : null;
-}
-
-function readTaskCompleted(task: Task): boolean {
-  const metadata = readTaskMetadata(task);
-  if (typeof metadata.isCompleted === "boolean") return metadata.isCompleted;
-  const todoMeta =
-    asObject(metadata.workbenchTodo) ?? asObject(metadata.todo) ?? null;
-  if (todoMeta && typeof todoMeta.isCompleted === "boolean") {
-    return todoMeta.isCompleted;
-  }
-  return false;
-}
-
-function isWorkbenchTodoTask(task: Task): boolean {
-  if (readTriggerConfig(task)) return false;
-  const tags = new Set(normalizeStringArray(task.tags));
-  if (tags.has(WORKBENCH_TODO_TAG) || tags.has("todo")) return true;
-  const metadata = readTaskMetadata(task);
-  return (
-    asObject(metadata.workbenchTodo) !== null ||
-    asObject(metadata.todo) !== null
-  );
-}
-
-function toWorkbenchTask(task: Task): WorkbenchTaskView | null {
-  if (readTriggerConfig(task) || isWorkbenchTodoTask(task)) return null;
-  const id = normalizeTaskId(task);
-  if (!id) return null;
-  const metadata = readTaskMetadata(task);
-  const updatedAt =
-    normalizeTimestamp(
-      (task as unknown as Record<string, unknown>).updatedAt,
-    ) ?? normalizeTimestamp(metadata.updatedAt);
-  return {
-    id,
-    name:
-      typeof task.name === "string" && task.name.trim().length > 0
-        ? task.name
-        : "Task",
-    description: typeof task.description === "string" ? task.description : "",
-    tags: normalizeStringArray(task.tags),
-    isCompleted: readTaskCompleted(task),
-    ...(updatedAt !== undefined ? { updatedAt } : {}),
-  };
-}
-
-function toWorkbenchTodo(task: Task): WorkbenchTodoView | null {
-  if (!isWorkbenchTodoTask(task)) return null;
-  const id = normalizeTaskId(task);
-  if (!id) return null;
-  const metadata = readTaskMetadata(task);
-  const todoMeta =
-    asObject(metadata.workbenchTodo) ?? asObject(metadata.todo) ?? {};
-  return {
-    id,
-    name:
-      typeof task.name === "string" && task.name.trim().length > 0
-        ? task.name
-        : "Todo",
-    description:
-      typeof todoMeta.description === "string"
-        ? todoMeta.description
-        : typeof task.description === "string"
-          ? task.description
-          : "",
-    priority: parseNullableNumber(todoMeta.priority),
-    isUrgent: todoMeta.isUrgent === true,
-    isCompleted: readTaskCompleted(task),
-    type:
-      typeof todoMeta.type === "string" && todoMeta.type.trim().length > 0
-        ? todoMeta.type
-        : "task",
-  };
-}
-
-function normalizeTags(value: unknown, required: string[] = []): string[] {
-  const next = new Set<string>([
-    ...normalizeStringArray(value),
-    ...required.map((tag) => tag.trim()).filter((tag) => tag.length > 0),
-  ]);
-  return [...next];
-}
-
-async function getTodoDataService(
-  runtime: AgentRuntime,
-): Promise<TodoDataServiceLike | null> {
-  const runtimeKey = String(runtime.agentId ?? "unknown");
-  if (todoDbCircuitBreaker.isOpen(runtimeKey)) {
-    return null;
-  }
-  try {
-    const todoModule = (await import("@elizaos/plugin-todo")) as Record<
-      string,
-      unknown
-    >;
-    const createTodoDataService = todoModule.createTodoDataService as
-      | ((rt: AgentRuntime) => TodoDataServiceLike)
-      | undefined;
-    if (!createTodoDataService) return null;
-    return createTodoDataService(runtime);
-  } catch {
-    return null;
-  }
-}
-
-const todoDbCircuitBreaker = new TodoDbCircuitBreaker();
-
-function recordTodoDbFailure(
-  runtime: AgentRuntime,
-  operation: string,
-  err: unknown,
-): void {
-  if (!isFatalTodoDbError(err)) return;
-  const runtimeKey = String(runtime.agentId ?? "unknown");
-  if (!todoDbCircuitBreaker.open(runtimeKey)) return;
-  runtime.logger?.warn(
-    {
-      src: "eliza-api",
-      operation,
-      err,
-      agentId: runtime.agentId,
-    },
-    "[eliza-api] Disabling plugin-todo DB integration after fatal todo query failure",
-  );
-}
-
-function toWorkbenchTodoFromRecord(
-  todo: Record<string, unknown>,
-): WorkbenchTodoView | null {
-  const id =
-    typeof todo.id === "string" && todo.id.trim().length > 0 ? todo.id : null;
-  const name =
-    typeof todo.name === "string" && todo.name.trim().length > 0
-      ? todo.name
-      : null;
-  if (!id || !name) return null;
-  return {
-    id,
-    name,
-    description: typeof todo.description === "string" ? todo.description : "",
-    priority: parseNullableNumber(todo.priority),
-    isUrgent: todo.isUrgent === true,
-    isCompleted: todo.isCompleted === true,
-    type:
-      typeof todo.type === "string" && todo.type.trim().length > 0
-        ? todo.type
-        : "task",
-  };
-}
+// (workbench helpers moved to workbench-helpers.ts)
 
 // ── Autonomy → User message routing ──────────────────────────────────
 

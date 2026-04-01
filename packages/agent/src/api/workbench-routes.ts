@@ -1,13 +1,7 @@
 import type http from "node:http";
 import { logger, type AgentRuntime, stringToUuid, type Task, type UUID } from "@elizaos/core";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
-
-// ---------------------------------------------------------------------------
-// Types (re-declared here to avoid circular deps with server.ts)
-// ---------------------------------------------------------------------------
-
-const WORKBENCH_TASK_TAG = "workbench-task";
-const WORKBENCH_TODO_TAG = "workbench-todo";
+import { WORKBENCH_TASK_TAG, WORKBENCH_TODO_TAG } from "./workbench-helpers.js";
 
 interface WorkbenchTaskView {
   id: string;

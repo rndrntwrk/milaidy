@@ -1,5 +1,4 @@
 import { StatusBadge, type StatusVariant } from "@miladyai/ui";
-import { formatDateTime } from "../../utils/format";
 import { useApp } from "../../state";
 
 export function summarizeError(error: unknown): string {
@@ -13,17 +12,6 @@ export function normalizeReleaseNotesUrl(url?: string | null): string {
   } catch {
     return "https://milady.ai/releases/";
   }
-}
-
-/**
- * Delegates to the canonical {@link formatDateTime} from `../format.ts`,
- * preserving the original "Not yet" fallback used in release-center views.
- */
-export function formatTimestamp(
-  timestamp?: number | null,
-  fallback = "Not yet",
-): string {
-  return formatDateTime(timestamp, { fallback });
 }
 
 const PILL_TONE_MAP: Record<string, StatusVariant> = {

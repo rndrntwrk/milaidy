@@ -3,6 +3,7 @@
  */
 
 import type { WalletConfigUpdateRequest } from "./wallet.js";
+import { isTruthyEnvValue } from "../env-utils.js";
 
 export const CHARACTER_LANGUAGES = [
   "en",
@@ -699,18 +700,8 @@ export function readOnboardingEnvSecret(
   return normalizeSecretString(readOnboardingEnvString(config, key));
 }
 
-function isTruthyEnvFlag(value: string | undefined): boolean {
-  if (!value) {
-    return false;
-  }
-  const normalized = value.trim().toLowerCase();
-  return (
-    normalized.length > 0 &&
-    normalized !== "0" &&
-    normalized !== "false" &&
-    normalized !== "no"
-  );
-}
+/** Alias to keep call-sites unchanged. */
+const isTruthyEnvFlag = isTruthyEnvValue;
 
 export function isPiAiEnabledInConfig(
   config: Record<string, unknown> | null | undefined,

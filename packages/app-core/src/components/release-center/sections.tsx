@@ -1,10 +1,10 @@
 import { Button, Input } from "@miladyai/ui";
 import { createElement } from "react";
 import { useApp } from "../../state";
+import { formatDateTime } from "../../utils/format";
 import { useBranding } from "../../config/branding";
 import {
   DefinitionRow,
-  formatTimestamp,
   partitionDescription,
   StatusPill,
 } from "./shared";
@@ -182,9 +182,9 @@ export function ReleaseStatusSection({
           />
           <DefinitionRow
             label={tr(t, "releasecenter.StatusTime", "Status time")}
-            value={formatTimestamp(
+            value={formatDateTime(
               nativeUpdater?.lastStatus?.timestamp,
-              tr(t, "releasecenter.NotYet", "Not yet"),
+              { fallback: tr(t, "releasecenter.NotYet", "Not yet") },
             )}
           />
           {autoUpdateDisabled && nativeUpdater?.autoUpdateDisabledReason ? (
