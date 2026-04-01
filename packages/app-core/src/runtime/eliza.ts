@@ -370,35 +370,6 @@ export function buildCharacterFromConfig(
     }
   }
 
-  // Append plugin UI capability to the system prompt so the agent knows
-  // it can spawn interactive config forms in chat via json-render blocks.
-  const pluginUiInstructions = `
-
-## Interactive Plugin Configuration
-
-When a user asks to configure, connect, or set up a plugin or connector (e.g. Telegram, Discord, Twitter), you can spawn an interactive configuration form directly in chat using a \`json-render\` fenced code block.
-
-To get the configuration form for a plugin, mentally construct a UiSpec with:
-- Input fields for each required parameter (API keys, tokens, URLs)
-- A "Save Configuration" button with action "plugin:save"
-- The plugin ID in the state
-
-Example for Telegram:
-\`\`\`json-render
-{"version":1,"root":"root","elements":{"root":{"type":"Card","props":{"children":["title","sep","token_field","actions"],"className":"p-4 space-y-3"}},"title":{"type":"Heading","props":{"level":3,"text":"Configure Telegram"}},"sep":{"type":"Separator","props":{}},"token_field":{"type":"Input","props":{"label":"TELEGRAM_BOT_TOKEN","placeholder":"Paste your bot token from @BotFather","statePath":"config.TELEGRAM_BOT_TOKEN","type":"password"}},"actions":{"type":"Stack","props":{"direction":"row","gap":"2","children":["saveBtn"]}},"saveBtn":{"type":"Button","props":{"text":"Save & Enable","variant":"default","on":{"press":{"action":"plugin:save","params":{"pluginId":"telegram"}}}}}},"state":{"pluginId":"telegram"}}
-\`\`\`
-
-Common plugins and their required parameters:
-- telegram: TELEGRAM_BOT_TOKEN
-- discord: DISCORD_APPLICATION_ID, DISCORD_API_TOKEN
-- twitter: TWITTER_USERNAME, TWITTER_PASSWORD, TWITTER_EMAIL
-
-Always offer to show the interactive form when users ask about plugin setup. The form lets them enter credentials and save directly from chat.`;
-
-  if (character.system) {
-    character.system += pluginUiInstructions;
-  }
-
   return character;
 }
 
