@@ -791,6 +791,46 @@ function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
 
   const handleAction = useCallback(
     (action: string, params?: Record<string, unknown>) => {
+      // Plugin actions are handled directly via the API instead of
+      // being sent back as chat messages.
+      if (action === "plugin:save" && params?.pluginId) {
+        const pluginId = String(params.pluginId);
+        const config: Record<string, string> = {};
+        // Collect all config.* state values
+        if (params) {
+          for (const [key, value] of Object.entries(params)) {
+            if (key.startsWith("config.") && typeof value === "string" && value.trim()) {
+              config[key.slice(7)] = value.trim();
+            }
+          }
+        }
+        void client
+          .updatePlugin(pluginId, { config })
+          .then(() => sendActionMessage(`[Plugin ${pluginId} configuration saved successfully]`))
+          .catch((err: unknown) =>
+            sendActionMessage(
+              `[Failed to save plugin config: ${err instanceof Error ? err.message : "unknown error"}]`,
+            ),
+          );
+        return;
+      }
+      if (action === "plugin:enable" && params?.pluginId) {
+        void client
+          .updatePlugin(String(params.pluginId), { enabled: true })
+          .then(() => sendActionMessage(`[Plugin ${params.pluginId} enabled. Restart required.]`))
+          .catch(() => sendActionMessage(`[Failed to enable plugin]`));
+        return;
+      }
+      if (action === "plugin:test" && params?.pluginId) {
+        void sendActionMessage(`[Testing ${params.pluginId} connection...]`);
+        return;
+      }
+      if (action === "plugin:configure" && params?.pluginId) {
+        void sendActionMessage(
+          `Please show me the configuration form for the ${params.pluginId} plugin`,
+        );
+        return;
+      }
       const paramsStr = params ? ` ${JSON.stringify(params)}` : "";
       void sendActionMessage(`[action:${action}]${paramsStr}`);
     },

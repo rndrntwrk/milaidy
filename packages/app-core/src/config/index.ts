@@ -11,3 +11,7 @@ export {
   type UiRendererProps,
 } from "./ui-renderer";
 export * from "./ui-spec";
+export {
+  buildPluginConfigUiSpec,
+  buildPluginListUiSpec,
+} from "./plugin-ui-spec";

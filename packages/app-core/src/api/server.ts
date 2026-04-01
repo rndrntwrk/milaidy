@@ -863,6 +863,35 @@ async function handleMiladyCompatRoute(
 
   if (await handleOnboardingCompatRoute(req, res, state)) return true;
 
+  // GET /api/plugins/:id/ui-spec — generate a UiSpec for plugin configuration.
+  // Used by the agent to spawn interactive config forms in chat.
+  const uiSpecMatch =
+    method === "GET" &&
+    url.pathname.match(/^\/api\/plugins\/([^/]+)\/ui-spec$/);
+  if (uiSpecMatch) {
+    if (!ensureCompatApiAuthorized(req, res)) return true;
+    const pluginId = decodeURIComponent(uiSpecMatch[1]);
+    const { buildPluginConfigUiSpec } = await import(
+      "../config/plugin-ui-spec"
+    );
+    const { buildPluginListResponse } = await import(
+      "./plugins-compat-routes"
+    );
+    const pluginList = buildPluginListResponse(state.current);
+    const plugin = (
+      pluginList.plugins as Array<Record<string, unknown>>
+    ).find((p) => p.id === pluginId);
+    if (!plugin) {
+      sendJsonResponse(res, 404, { error: `Plugin "${pluginId}" not found` });
+      return true;
+    }
+    const spec = buildPluginConfigUiSpec(
+      plugin as unknown as Parameters<typeof buildPluginConfigUiSpec>[0],
+    );
+    sendJsonResponse(res, 200, { spec });
+    return true;
+  }
+
   // GET /api/agents — return the running agent's info.
   // Milady runs a single agent; this returns it as a one-element array
   // for compatibility with the upstream elizaOS health probe convention.
