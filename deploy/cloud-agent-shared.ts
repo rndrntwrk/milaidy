@@ -54,6 +54,58 @@ interface AgentRuntime {
   getConfig: () => Record<string, unknown>;
 }
 
+type OptionalPluginLoader = (
+  specifier: string,
+) => Promise<Record<string, unknown>>;
+
+async function loadOptionalPlugin(
+  specifier: string,
+  namedExport: string,
+  loadPlugin: OptionalPluginLoader,
+): Promise<unknown | null> {
+  return loadPlugin(specifier)
+    .then((module) => module.default ?? module[namedExport] ?? null)
+    .catch(() => null);
+}
+
+export function shouldEnableStream555Plugin(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return Boolean(env.STREAM555_BASE_URL?.trim());
+}
+
+export async function loadCloudAgentPlugins(
+  env: NodeJS.ProcessEnv = process.env,
+  loadPlugin: OptionalPluginLoader = async (specifier) => import(specifier),
+): Promise<unknown[]> {
+  const plugins: unknown[] = [];
+
+  const cloudPlugin = await loadOptionalPlugin(
+    "@elizaos/plugin-elizacloud",
+    "elizaOSCloudPlugin",
+    loadPlugin,
+  );
+  if (cloudPlugin) plugins.push(cloudPlugin);
+
+  const sqlPlugin = await loadOptionalPlugin(
+    "@elizaos/plugin-sql",
+    "sqlPlugin",
+    loadPlugin,
+  );
+  if (sqlPlugin) plugins.push(sqlPlugin);
+
+  if (shouldEnableStream555Plugin(env)) {
+    const stream555Plugin = await loadOptionalPlugin(
+      "@rndrntwrk/plugin-555stream",
+      "stream555Plugin",
+      loadPlugin,
+    );
+    if (stream555Plugin) plugins.push(stream555Plugin);
+  }
+
+  return plugins;
+}
+
 // ─── Main entry ─────────────────────────────────────────────────────────
 
 export function startCloudAgent(userConfig: CloudAgentConfig = {}): void {
@@ -151,17 +203,7 @@ export function startCloudAgent(userConfig: CloudAgentConfig = {}): void {
         },
       });
 
-      const plugins = [];
-
-      const cloudPlugin = await import("@elizaos/plugin-elizacloud")
-        .then((m) => m.default ?? m.elizaOSCloudPlugin)
-        .catch(() => null);
-      if (cloudPlugin) plugins.push(cloudPlugin);
-
-      const sqlPlugin = await import("@elizaos/plugin-sql")
-        .then((m) => m.default ?? m.sqlPlugin)
-        .catch(() => null);
-      if (sqlPlugin) plugins.push(sqlPlugin);
+      const plugins = await loadCloudAgentPlugins();
 
       const runtime = new AgentRuntimeCtor({ character, plugins });
       await runtime.initialize();
