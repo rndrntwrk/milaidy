@@ -12,12 +12,12 @@ const { invokeDesktopBridgeRequestMock, isElectrobunRuntimeMock } = vi.hoisted(
   }),
 );
 
-vi.mock("../bridge", () => ({
+vi.mock("../../bridge", () => ({
   invokeDesktopBridgeRequest: invokeDesktopBridgeRequestMock,
   isElectrobunRuntime: isElectrobunRuntimeMock,
 }));
 
-vi.mock("../state", () => ({
+vi.mock("../../state", () => ({
   useApp: () => ({
     t: (key: string, vars?: Record<string, unknown>) => testT(key, vars),
   }),
@@ -57,7 +57,7 @@ vi.mock("@miladyai/ui", () => {
 });
 
 import { findButtonByText } from "../../../../test/helpers/react-test";
-import { DesktopMediaControlPanel } from "./MediaSettingsSection";
+import { DesktopMediaControlPanel } from "./settings/MediaSettingsSection";
 
 describe("DesktopMediaControlPanel", () => {
   beforeEach(() => {

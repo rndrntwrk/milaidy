@@ -8,12 +8,12 @@ const { invokeDesktopBridgeRequestMock } = vi.hoisted(() => ({
   invokeDesktopBridgeRequestMock: vi.fn(),
 }));
 
-vi.mock("../bridge", () => ({
+vi.mock("../../bridge", () => ({
   invokeDesktopBridgeRequest: invokeDesktopBridgeRequestMock,
   isElectrobunRuntime: vi.fn(() => true),
 }));
 
-vi.mock("../state", () => ({
+vi.mock("../../state", () => ({
   useApp: () => ({
     t: (key: string, opts?: Record<string, unknown>) =>
       opts?.defaultValue && typeof opts.defaultValue === "string"
@@ -31,7 +31,7 @@ vi.mock("@miladyai/ui", () => ({
 }));
 
 import { findButtonByText } from "../../../../test/helpers/react-test";
-import { DesktopGameWindowControls } from "./GameView";
+import { DesktopGameWindowControls } from "./apps/GameView";
 
 describe("DesktopGameWindowControls", () => {
   beforeEach(() => {

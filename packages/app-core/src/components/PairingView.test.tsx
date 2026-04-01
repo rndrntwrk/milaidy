@@ -8,16 +8,16 @@ const { mockUseApp, mockUseBranding } = vi.hoisted(() => ({
   mockUseBranding: vi.fn(),
 }));
 
-vi.mock("../state", () => ({
+vi.mock("../../state", () => ({
   useApp: () => mockUseApp(),
 }));
 
-vi.mock("../config/branding", () => ({
+vi.mock("../../config/branding", () => ({
   useBranding: () => mockUseBranding(),
   appNameInterpolationVars: () => ({ appName: "Milady" }),
 }));
 
-import { PairingView } from "./PairingView";
+import { PairingView } from "./shell/PairingView";
 
 function createAppState(overrides: Record<string, unknown> = {}) {
   return {

@@ -18,8 +18,8 @@ import {
   CharacterRoster,
   type CharacterRosterEntry,
   resolveRosterEntries,
-} from "../CharacterRoster";
-import { resolveCharacterGreetingAnimation } from "../character-greeting";
+} from "../character/CharacterRoster";
+import { resolveCharacterGreetingAnimation } from "../character/character-greeting";
 import { buildPreviewTtsRequestPlans } from "./identity-preview-tts";
 
 import {

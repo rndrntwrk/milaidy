@@ -7,11 +7,11 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../state", () => ({
+vi.mock("../../state", () => ({
   useApp: () => mockUseApp(),
 }));
 
-import { HeartbeatsView } from "./HeartbeatsView";
+import { HeartbeatsView } from "./pages/HeartbeatsView";
 
 function t(key: string): string {
   const translations: Record<string, string> = {

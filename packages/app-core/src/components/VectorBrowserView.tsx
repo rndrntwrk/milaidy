@@ -30,8 +30,8 @@ import { useApp } from "../state";
 import {
   SETTINGS_COMPACT_INPUT_CLASSNAME,
   SETTINGS_COMPACT_SELECT_TRIGGER_CLASSNAME,
-} from "./settings-control-primitives";
-import { createVectorBrowserRenderer, THREE } from "./vector-browser-three";
+} from "./settings/settings-control-primitives";
+import { createVectorBrowserRenderer, THREE } from "./avatar/vector-browser-three";
 
 const PAGE_SIZE = 25;
 const MAX_THREE_PIXEL_RATIO = 2;

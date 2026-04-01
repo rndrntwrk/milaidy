@@ -15,7 +15,7 @@ const {
   optionalBugReportMock: vi.fn(),
 }));
 
-vi.mock("../api", () => ({
+vi.mock("../../api", () => ({
   client: {
     checkBugReportInfo: vi.fn().mockResolvedValue({
       nodeVersion: "v22.0.0",
@@ -25,19 +25,19 @@ vi.mock("../api", () => ({
   },
 }));
 
-vi.mock("../state", () => ({
+vi.mock("../../state", () => ({
   useApp: () => mockUseApp(),
 }));
 
-vi.mock("../config/branding", () => ({
+vi.mock("../../config/branding", () => ({
   useBranding: () => mockUseBranding(),
 }));
 
-vi.mock("../hooks", () => ({
+vi.mock("../../hooks", () => ({
   useOptionalBugReport: () => optionalBugReportMock(),
 }));
 
-import { StartupFailureView } from "./StartupFailureView";
+import { StartupFailureView } from "./shell/StartupFailureView";
 
 describe("StartupFailureView", () => {
   beforeEach(() => {

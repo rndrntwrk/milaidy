@@ -22,7 +22,7 @@ import {
   type RuntimeServiceOrderItem,
 } from "../api";
 import { useApp } from "../state";
-import { formatDateTime } from "./format";
+import { formatDateTime } from "../utils/format";
 
 type RuntimeSectionKey =
   | "summary"

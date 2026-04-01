@@ -17,17 +17,17 @@ const {
   useAppMock: vi.fn(),
 }));
 
-vi.mock("../bridge", () => ({
+vi.mock("../../bridge", () => ({
   invokeDesktopBridgeRequest: invokeDesktopBridgeRequestMock,
   isElectrobunRuntime: isElectrobunRuntimeMock,
   subscribeDesktopBridgeEvent: subscribeDesktopBridgeEventMock,
 }));
 
-vi.mock("../state", () => ({
+vi.mock("../../state", () => ({
   useApp: useAppMock,
 }));
 
-vi.mock("../utils/desktop-workspace", () => ({
+vi.mock("../../utils/desktop-workspace", () => ({
   openDesktopSurfaceWindow: vi.fn(),
 }));
 

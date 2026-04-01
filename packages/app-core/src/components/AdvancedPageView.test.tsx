@@ -9,7 +9,7 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../state", () => ({
+vi.mock("../../state", () => ({
   useApp: () => mockUseApp(),
 }));
 
@@ -18,12 +18,12 @@ vi.mock("./DatabasePageView", () => ({
     React.createElement("div", null, contentHeader, "database-view"),
 }));
 
-vi.mock("./LogsPageView", () => ({
+vi.mock("./pages/LogsPageView", () => ({
   LogsPageView: ({ contentHeader }: { contentHeader?: React.ReactNode }) =>
     React.createElement("div", null, contentHeader, "logs-view"),
 }));
 
-vi.mock("./PluginsPageView", () => ({
+vi.mock("./pages/PluginsPageView", () => ({
   PluginsPageView: ({ contentHeader }: { contentHeader?: React.ReactNode }) =>
     React.createElement("div", null, contentHeader, "plugins-view"),
 }));
@@ -82,7 +82,7 @@ vi.mock("@miladyai/ui", () => ({
     ),
 }));
 
-vi.mock("./DesktopWorkspaceSection", () => ({
+vi.mock("./settings/DesktopWorkspaceSection", () => ({
   DesktopWorkspaceSection: ({
     contentHeader,
   }: {
@@ -90,21 +90,21 @@ vi.mock("./DesktopWorkspaceSection", () => ({
   }) => React.createElement("div", null, contentHeader, "desktop"),
 }));
 
-vi.mock("./FineTuningView", () => ({
+vi.mock("./settings/FineTuningView", () => ({
   FineTuningView: ({ contentHeader }: { contentHeader?: React.ReactNode }) =>
     React.createElement("div", null, contentHeader, "fine-tuning"),
 }));
 
-vi.mock("./TrajectoriesView", () => ({
+vi.mock("./pages/TrajectoriesView", () => ({
   TrajectoriesView: ({ contentHeader }: { contentHeader?: React.ReactNode }) =>
     React.createElement("div", null, contentHeader, "trajectories"),
 }));
 
-vi.mock("./TrajectoryDetailView", () => ({
+vi.mock("./pages/TrajectoryDetailView", () => ({
   TrajectoryDetailView: () => React.createElement("div", null, "trajectory"),
 }));
 
-import { AdvancedPageView } from "./AdvancedPageView";
+import { AdvancedPageView } from "./pages/AdvancedPageView";
 
 describe("AdvancedPageView", () => {
   it("injects the shared advanced sub-nav into the standard content pane", async () => {

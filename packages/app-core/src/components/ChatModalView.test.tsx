@@ -4,7 +4,7 @@ import React from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
-import { ChatModalView } from "./ChatModalView";
+import { ChatModalView } from "./pages/ChatModalView";
 
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: vi.fn(),

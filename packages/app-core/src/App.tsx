@@ -49,8 +49,8 @@ import {
   SystemWarningBanner,
 } from "./app-shell-components";
 import { CompanionHeader } from "./components/companion/CompanionHeader";
-import { DeferredSetupChecklist } from "./components/FlaminaGuide";
-import { TasksEventsPanel } from "./components/TasksEventsPanel";
+import { DeferredSetupChecklist } from "./components/cloud/FlaminaGuide";
+import { TasksEventsPanel } from "./components/chat/TasksEventsPanel";
 import {
   BugReportProvider,
   useBugReportState,

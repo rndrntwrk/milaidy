@@ -4,7 +4,7 @@ import * as AppContext from "@miladyai/app-core/state";
 import React from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
-import { Header } from "./Header";
+import { Header } from "./shell/Header";
 
 // Mock the AppContext
 vi.mock("@miladyai/app-core/state", () => ({

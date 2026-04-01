@@ -1,7 +1,7 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
-import { ShellOverlays } from "./ShellOverlays";
+import { ShellOverlays } from "./shell/ShellOverlays";
 
 vi.mock("@miladyai/ui", async (importOriginal) => {
   const actual = await importOriginal();

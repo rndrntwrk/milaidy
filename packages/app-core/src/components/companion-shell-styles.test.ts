@@ -11,7 +11,7 @@ import {
   TOP_BAR_COLORS,
   tabFlags,
   viewWrapperStyle,
-} from "./companion-shell-styles";
+} from "./shell/companion-shell-styles";
 
 describe("COMPANION_OVERLAY_TABS", () => {
   it("contains only companion — settings/character/skills etc. require native mode", () => {

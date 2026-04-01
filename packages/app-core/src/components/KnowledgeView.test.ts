@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getKnowledgeUploadFilename,
   shouldReadKnowledgeFileAsText,
-} from "./KnowledgeView";
+} from "./pages/KnowledgeView";
 
 // SUPPORTED_UPLOAD_EXTENSIONS and isSupportedKnowledgeFile are not exported
 // directly. We test them indirectly via shouldReadKnowledgeFileAsText and by

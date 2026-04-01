@@ -11,7 +11,7 @@ import { useCallback, useState } from "react";
 import { prepareDraftForSave } from "../actions/character";
 import { type CharacterData, client } from "../api";
 import type { AgentStatus } from "../api";
-import { replaceNameTokens } from "../components/character-editor-helpers";
+import { replaceNameTokens } from "../components/character/character-editor-helpers";
 import { loadAvatarIndex, saveAvatarIndex } from "./persistence";
 import { normalizeAvatarIndex } from "./vrm";
 

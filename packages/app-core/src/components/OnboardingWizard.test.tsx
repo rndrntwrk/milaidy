@@ -4,8 +4,8 @@ import React from "react";
 import type { ReactTestRenderer } from "react-test-renderer";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { LanguageDropdownProps } from "./LanguageDropdown";
-import { LANGUAGE_DROPDOWN_TRIGGER_CLASSNAME } from "./LanguageDropdown";
+import type { LanguageDropdownProps } from "./shared/LanguageDropdown";
+import { LANGUAGE_DROPDOWN_TRIGGER_CLASSNAME } from "./shared/LanguageDropdown";
 
 const { mockUseApp, mockVrmStage, mockLanguageDropdown } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
@@ -43,7 +43,7 @@ vi.mock("@miladyai/app-core/utils", () => ({
   resolveAppAssetUrl: (path: string) => path,
 }));
 
-vi.mock("../config/branding", () => ({
+vi.mock("../../config/branding", () => ({
   useBranding: () => ({
     appName: "Milady",
     orgName: "milady-ai",
@@ -87,7 +87,7 @@ vi.mock("./onboarding/WelcomeStep", () => ({
   WelcomeStep: () => React.createElement("div", null, "WelcomeStep"),
 }));
 
-import { OnboardingWizard } from "./OnboardingWizard";
+import { OnboardingWizard } from "./onboarding/OnboardingWizard";
 
 describe("OnboardingWizard", () => {
   beforeEach(() => {

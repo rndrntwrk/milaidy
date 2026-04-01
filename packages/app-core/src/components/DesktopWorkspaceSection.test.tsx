@@ -21,21 +21,21 @@ const {
   isElectrobunRuntimeMock: vi.fn(),
 }));
 
-vi.mock("../bridge", () => ({
+vi.mock("../../bridge", () => ({
   invokeDesktopBridgeRequest: invokeDesktopBridgeRequestMock,
   isElectrobunRuntime: isElectrobunRuntimeMock,
 }));
 
-vi.mock("../state", () => ({
+vi.mock("../../state", () => ({
   useApp: useAppMock,
 }));
 
-vi.mock("../utils/clipboard", () => ({
+vi.mock("../../utils/clipboard", () => ({
   copyTextToClipboard: vi.fn(),
 }));
 
-vi.mock("../utils/desktop-workspace", async () => {
-  const actual = await vi.importActual("../utils/desktop-workspace");
+vi.mock("../../utils/desktop-workspace", async () => {
+  const actual = await vi.importActual("../../utils/desktop-workspace");
   return {
     ...actual,
     loadDesktopWorkspaceSnapshot: loadDesktopWorkspaceSnapshotMock,
@@ -72,7 +72,7 @@ vi.mock("lucide-react", () => ({
   RefreshCw: () => React.createElement("span", null, "refresh"),
 }));
 
-import { DesktopWorkspaceSection } from "./DesktopWorkspaceSection";
+import { DesktopWorkspaceSection } from "./settings/DesktopWorkspaceSection";
 
 function findButtonByText(
   root: TestRenderer.ReactTestInstance,

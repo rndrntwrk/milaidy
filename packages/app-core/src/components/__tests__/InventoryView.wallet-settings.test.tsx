@@ -212,7 +212,7 @@ vi.mock("@miladyai/ui", () => ({
     React.createElement("div", props, props.children as React.ReactNode),
 }));
 
-vi.mock("../BscTradePanel", () => ({
+vi.mock("../inventory/BscTradePanel", () => ({
   TradePanel: () =>
     React.createElement("div", { "data-testid": "trade-panel" }),
 }));

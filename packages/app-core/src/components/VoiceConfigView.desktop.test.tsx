@@ -11,7 +11,7 @@ const { invokeDesktopBridgeRequestMock, isElectrobunRuntimeMock } = vi.hoisted(
   }),
 );
 
-vi.mock("../bridge", () => ({
+vi.mock("../../bridge", () => ({
   invokeDesktopBridgeRequest: invokeDesktopBridgeRequestMock,
   isElectrobunRuntime: isElectrobunRuntimeMock,
 }));
@@ -45,7 +45,7 @@ vi.mock("@miladyai/ui", () => {
 });
 
 import { findButtonByText } from "../../../../test/helpers/react-test";
-import { DesktopTalkModePanel } from "./VoiceConfigView";
+import { DesktopTalkModePanel } from "./settings/VoiceConfigView";
 
 describe("DesktopTalkModePanel", () => {
   beforeEach(() => {

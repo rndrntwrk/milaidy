@@ -3,13 +3,13 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { textOf } from "../../../../test/helpers/react-test";
-import { FlaminaGuideCard } from "./FlaminaGuide";
+import { FlaminaGuideCard } from "./cloud/FlaminaGuide";
 
 const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../state", () => ({
+vi.mock("../../state", () => ({
   useApp: () => mockUseApp(),
 }));
 

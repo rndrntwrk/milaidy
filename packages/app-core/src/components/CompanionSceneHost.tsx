@@ -22,9 +22,9 @@ import {
   useState,
 } from "react";
 import type { VrmEngine } from "./avatar/VrmEngine";
-import { resolveCharacterGreetingAnimation } from "./character-greeting";
-import { CompanionSceneStatusContext } from "./companion-scene-status-context";
-import { SharedCompanionSceneContext } from "./shared-companion-scene-context";
+import { resolveCharacterGreetingAnimation } from "./character/character-greeting";
+import { CompanionSceneStatusContext } from "./companion/companion-scene-status-context";
+import { SharedCompanionSceneContext } from "./companion/shared-companion-scene-context";
 import { VrmStage } from "./VrmStage";
 
 const COMPANION_ZOOM_WHEEL_SENSITIVITY = 1 / 720;
