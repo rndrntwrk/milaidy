@@ -3,7 +3,7 @@
  * a focused summary/detail pane.
  */
 
-import { Button, Input, PageLayoutHeader } from "@miladyai/ui";
+import { Button, ContentLayout, Input } from "@miladyai/ui";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   client,
@@ -25,7 +25,6 @@ import {
   DESKTOP_SECTION_SHELL_CLASSNAME,
   DESKTOP_SURFACE_PANEL_CLASSNAME,
   DesktopEmptyStatePanel,
-  DesktopPageFrame,
   DesktopRailSummaryCard,
 } from "./desktop-surface-primitives";
 import { formatDateTime } from "./format";
@@ -490,7 +489,7 @@ export function RuntimeView({
   };
 
   return (
-    <DesktopPageFrame>
+    <ContentLayout contentHeader={contentHeader} className="p-0 lg:p-1">
       <div data-testid="runtime-view" className={RUNTIME_SHELL_CLASSNAME}>
         <aside className={APP_DESKTOP_SIDEBAR_RAIL_STANDARD_CLASSNAME}>
           <div className={APP_SIDEBAR_INNER_CLASSNAME}>
@@ -643,9 +642,6 @@ export function RuntimeView({
 
         <div className={RUNTIME_PANE_CLASSNAME}>
           <div className="flex min-h-0 flex-1 flex-col gap-4 p-3 lg:p-4">
-            {contentHeader ? (
-              <PageLayoutHeader>{contentHeader}</PageLayoutHeader>
-            ) : null}
             {error ? (
               <div className="rounded-[18px] border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
                 {error}
@@ -805,6 +801,6 @@ export function RuntimeView({
           </div>
         </div>
       </div>
-    </DesktopPageFrame>
+    </ContentLayout>
   );
 }

@@ -2,25 +2,25 @@
  * Databases page — wrapper with Tables / Media / Vectors sub-tabs.
  */
 
-import { Button, PageLayoutHeader } from "@miladyai/ui";
+import { Button, ContentLayout } from "@miladyai/ui";
 import type { ReactNode } from "react";
 import { useApp } from "../state";
 import { DatabaseView } from "./DatabaseView";
 import {
-  DESKTOP_PAGE_CONTENT_CLASSNAME,
   DESKTOP_SEGMENTED_GROUP_CLASSNAME,
   DESKTOP_SEGMENTED_ITEM_ACTIVE_CLASSNAME,
   DESKTOP_SEGMENTED_ITEM_BASE_CLASSNAME,
   DESKTOP_SEGMENTED_ITEM_INACTIVE_CLASSNAME,
-  DesktopPageFrame,
 } from "./desktop-surface-primitives";
 import { MediaGalleryView } from "./MediaGalleryView";
 import { VectorBrowserView } from "./VectorBrowserView";
 
 export function DatabasePageView({
   contentHeader,
+  inModal,
 }: {
   contentHeader?: ReactNode;
+  inModal?: boolean;
 } = {}) {
   const { t, databaseSubTab, setState } = useApp();
   const dbTabs = [
@@ -70,21 +70,12 @@ export function DatabasePageView({
   );
 
   return (
-    <DesktopPageFrame>
-      <div
-        className={`${DESKTOP_PAGE_CONTENT_CLASSNAME} flex h-full w-full min-h-0 flex-col`}
-      >
-        {contentHeader ? (
-          <PageLayoutHeader className="px-4 pt-4 sm:px-6 sm:pt-5 lg:px-8 lg:pt-6">
-            {contentHeader}
-          </PageLayoutHeader>
-        ) : null}
-        {databaseSubTab === "tables" && <DatabaseView leftNav={leftNav} />}
-        {databaseSubTab === "media" && <MediaGalleryView leftNav={leftNav} />}
-        {databaseSubTab === "vectors" && (
-          <VectorBrowserView leftNav={leftNav} />
-        )}
-      </div>
-    </DesktopPageFrame>
+    <ContentLayout contentHeader={contentHeader} inModal={inModal}>
+      {databaseSubTab === "tables" && <DatabaseView leftNav={leftNav} />}
+      {databaseSubTab === "media" && <MediaGalleryView leftNav={leftNav} />}
+      {databaseSubTab === "vectors" && (
+        <VectorBrowserView leftNav={leftNav} />
+      )}
+    </ContentLayout>
   );
 }
