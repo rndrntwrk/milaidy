@@ -58,7 +58,7 @@ curl http://localhost:2138/api/character \
 curl -X POST http://localhost:2138/api/chat \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Hello, what can you do?"}'
+  -d '{"text": "Hello, what can you do?"}'
 ```
 
 ### Stream a chat response
@@ -67,7 +67,7 @@ curl -X POST http://localhost:2138/api/chat \
 curl -N -X POST http://localhost:2138/api/chat/stream \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Tell me about yourself"}'
+  -d '{"text": "Tell me about yourself"}'
 ```
 
 The response is a Server-Sent Events stream. Each event contains a `data` field with a JSON payload.

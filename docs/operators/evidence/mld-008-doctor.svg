@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1178" height="678" viewBox="0 0 1178 678">
+<rect width="100%" height="100%" fill="#0b1020" rx="18"/>
+<text x="28" y="32" fill="#7dd3fc" font-family="Menlo, Monaco, monospace" font-size="20" font-weight="600">MLD-008 Proof: doctor</text>
+<text x="28" y="86" fill="#9fb0c3" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve"> </text>
+<text x="28" y="114" fill="#e5edf5" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve">Milady Health Check</text>
+<text x="28" y="142" fill="#9fb0c3" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve"> </text>
+<text x="28" y="170" fill="#e5edf5" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve">  System</text>
+<text x="28" y="198" fill="#e5edf5" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve">  ✓ Runtime              Bun 1.3.1</text>
+<text x="28" y="226" fill="#e5edf5" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve">  ✓ node_modules         /Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy-mld008-proof/node_modules</text>
+<text x="28" y="254" fill="#e5edf5" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve">  ✓ Build artifacts      /Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy-mld008-proof/dist</text>
+<text x="28" y="282" fill="#9fb0c3" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve"> </text>
+<text x="28" y="310" fill="#e5edf5" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve">  Configuration</text>
+<text x="28" y="338" fill="#e5edf5" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve">  ✓ Config file          /tmp/mld008-state-proof/milady.json</text>
+<text x="28" y="366" fill="#e5edf5" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve">  ✓ Model API key        OLLAMA_BASE_URL set (Ollama (local))</text>
+<text x="28" y="394" fill="#e5edf5" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve">  ✓ Host binding         Loopback only (default)</text>
+<text x="28" y="422" fill="#9fb0c3" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve"> </text>
+<text x="28" y="450" fill="#e5edf5" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve">  Storage</text>
+<text x="28" y="478" fill="#e5edf5" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve">  ✓ State directory      /tmp/mld008-state-proof</text>
+<text x="28" y="506" fill="#e5edf5" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve">  ✓ Database             /tmp/mld008-state-proof/workspace/.eliza/.elizadb</text>
+<text x="28" y="534" fill="#e5edf5" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve">  ✓ Disk space           15.5 GB free</text>
+<text x="28" y="562" fill="#9fb0c3" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve"> </text>
+<text x="28" y="590" fill="#e5edf5" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve">  Everything looks good. Ready to run milady start.</text>
+<text x="28" y="618" fill="#9fb0c3" font-family="Menlo, Monaco, monospace" font-size="18" xml:space="preserve"> </text>
+</svg>

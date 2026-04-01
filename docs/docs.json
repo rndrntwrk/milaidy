@@ -156,6 +156,7 @@
             "group": "Operators",
             "pages": [
               "operators/alice-operator-bootstrap",
+              "operators/alice-operator-proof-2026-04-01",
               "operators/alice-system-boundary",
               "operators/stack-lifecycle-glossary",
               "agents/runtime-and-lifecycle",
