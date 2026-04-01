@@ -619,7 +619,7 @@ export function DatabaseView({
     const dbSidebar = (
       <Sidebar testId="database-sidebar">
         <SidebarPanel>
-            <div className="space-y-3 pt-4">
+            <div className="space-y-3 pt-1">
               {leftNav}
               {viewToggle}
               {sidebarSummary}
@@ -737,7 +737,7 @@ export function DatabaseView({
 
     return (
       <PageLayout sidebar={dbSidebar} contentHeader={contentHeader}>
-        <div className="flex flex-1 flex-col min-h-0">
+        <div className="flex flex-1 flex-col min-h-0 w-full">
           {errorMessage ? (
             <div className="m-5 rounded-xl border border-danger/35 bg-danger/10 px-4 py-3 text-sm text-danger">
               {errorMessage}
