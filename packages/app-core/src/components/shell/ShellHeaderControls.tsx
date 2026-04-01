@@ -28,7 +28,7 @@ import {
   SHELL_SEGMENT_ACTIVE_CLASSNAME,
   SHELL_SEGMENT_INACTIVE_CLASSNAME,
   SHELL_SEGMENTED_CONTROL_CLASSNAME,
-} from "./shell-control-styles";
+} from "../companion/shell-control-styles";
 
 export {
   HEADER_BUTTON_STYLE,

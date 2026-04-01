@@ -3,6 +3,9 @@
  * for testability and reuse.
  */
 
+import type { StylePreset } from "@miladyai/shared/contracts/onboarding";
+import type { CharacterRosterEntry } from "./CharacterRoster";
+
 /**
  * Replace un-substituted `{{name}}` / `{{agentName}}` tokens with the
  * actual character name. Handles legacy persisted templates from onboarding.
@@ -11,6 +14,55 @@ export function replaceNameTokens(text: string, name: string): string {
   return text
     .replace(/\{\{name\}\}/g, name)
     .replace(/\{\{agentName\}\}/g, name);
+}
+
+/* ── Roster / preset helpers ─────────────────────────────────────── */
+
+export type OnboardingPreset = StylePreset;
+
+export function getOnboardingPresetStyles(
+  options: unknown,
+): readonly OnboardingPreset[] {
+  if (!options || typeof options !== "object") return [];
+  const styles = (options as { styles?: unknown }).styles;
+  return Array.isArray(styles) ? (styles as OnboardingPreset[]) : [];
+}
+
+export function replaceCharacterToken(value: string, name: string) {
+  return value.replaceAll("{{name}}", name).replaceAll("{{agentName}}", name);
+}
+
+export function buildCharacterDraftFromPreset(entry: CharacterRosterEntry) {
+  const p: OnboardingPreset = entry.preset;
+  const name = entry.name;
+  return {
+    name,
+    username: name,
+    bio: p.bio.map((l: string) => replaceCharacterToken(l, name)).join("\n"),
+    system: replaceCharacterToken(p.system, name),
+    adjectives: [...p.adjectives],
+    style: {
+      all: [...p.style.all],
+      chat: [...p.style.chat],
+      post: [...p.style.post],
+    },
+    messageExamples: p.messageExamples.map(
+      (convo: Array<{ user: string; content: { text: string } }>) => ({
+        examples: convo.map(
+          (msg: { user: string; content: { text: string } }) => ({
+            name:
+              msg.user === "{{agentName}}"
+                ? name
+                : replaceCharacterToken(msg.user, name),
+            content: { text: replaceCharacterToken(msg.content.text, name) },
+          }),
+        ),
+      }),
+    ),
+    postExamples: p.postExamples.map((ex: string) =>
+      replaceCharacterToken(ex, name),
+    ),
+  };
 }
 
 /**
