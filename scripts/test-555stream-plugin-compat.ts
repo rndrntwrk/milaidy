@@ -9,11 +9,16 @@
  * plugin plus its StreamControlService lifecycle.
  */
 
+import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const repoRoot = path.resolve(import.meta.dir, "..");
+const scriptPath = fileURLToPath(import.meta.url);
+const scriptDir = path.dirname(scriptPath);
+const repoRoot = path.resolve(scriptDir, "..");
+const execFileAsync = promisify(execFile);
 const pluginRoot = path.resolve(repoRoot, "../555stream/packages/plugin-555stream");
 const pluginEntry = path.join(pluginRoot, "src/index.ts");
 const tempOutDir = path.join("/tmp", "plugin-555stream-compat-dist");
@@ -48,17 +53,28 @@ type CompatPlugin = {
 
 export async function buildTemporaryBundle(): Promise<string> {
   await mkdir(tempOutDir, { recursive: true });
-  const result = await Bun.build({
-    entrypoints: [pluginEntry],
-    outdir: tempOutDir,
-    target: "bun",
-    format: "esm",
-    sourcemap: "external",
-  });
-
-  if (!result.success) {
-    const messages = result.logs.map((log) => log.message).join("\n");
-    throw new Error(`bun build failed:\n${messages}`);
+  try {
+    await execFileAsync(
+      "bun",
+      [
+        "build",
+        pluginEntry,
+        "--outdir",
+        tempOutDir,
+        "--target",
+        "bun",
+        "--format",
+        "esm",
+        "--sourcemap=external",
+      ],
+      { cwd: repoRoot }
+    );
+  } catch (error) {
+    const details =
+      error && typeof error === "object" && "stderr" in error
+        ? String((error as { stderr?: string }).stderr)
+        : "";
+    throw new Error(`bun build failed:\n${details}`.trim());
   }
 
   return tempOutFile;
@@ -151,7 +167,9 @@ export async function main() {
   console.log("  No compat shim is required before CLOUD-03.");
 }
 
-main().catch((error) => {
-  console.error("\nFAIL:", error instanceof Error ? error.message : error);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath) {
+  main().catch((error) => {
+    console.error("\nFAIL:", error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
+}
