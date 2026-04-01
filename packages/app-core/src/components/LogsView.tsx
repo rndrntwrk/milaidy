@@ -5,6 +5,7 @@
 import {
   Button,
   Input,
+  PagePanel,
   Select,
   SelectContent,
   SelectItem,
@@ -14,12 +15,6 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import type { LogEntry } from "../api";
 import { useApp } from "../state";
-import {
-  DESKTOP_CONTROL_SURFACE_CLASSNAME,
-  DESKTOP_INSET_PANEL_CLASSNAME,
-  DESKTOP_SURFACE_PANEL_CLASSNAME,
-  DesktopEmptyStatePanel,
-} from "./desktop-surface-primitives";
 import { formatTime } from "./format";
 import { SETTINGS_FILTER_CONTROL_CLASSNAME } from "./settings-control-primitives";
 
@@ -33,7 +28,9 @@ const TAG_TONE_CLASSNAMES: Record<string, string> = {
   websocket: "border-ok/20 bg-ok/8 text-ok",
 };
 
-const LOGS_PANEL_CLASSNAME = DESKTOP_SURFACE_PANEL_CLASSNAME;
+const GLASS_BUTTON_CLASSNAME =
+  "border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 disabled:hover:border-border/32 disabled:hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] disabled:hover:text-muted-strong dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_24px_-20px_rgba(0,0,0,0.24)]";
+
 const LOGS_LEVEL_CLASSNAMES: Record<string, string> = {
   error: "text-danger",
   warn: "text-warning",
@@ -101,7 +98,7 @@ export function LogsView() {
   return (
     <div className="flex h-full flex-col gap-3" data-testid="logs-view">
       {/* Filters row — filters left, refresh right */}
-      <section className={`${LOGS_PANEL_CLASSNAME} space-y-3 p-3 sm:p-4`}>
+      <PagePanel variant="surface" className="space-y-3 p-3 sm:p-4">
         <div className="space-y-1">
           <div className="text-sm font-semibold text-txt">
             {t("logsview.FilterLogs")}
@@ -191,7 +188,7 @@ export function LogsView() {
             <Button
               variant="outline"
               size="sm"
-              className={`min-h-10 rounded-[18px] px-3 text-xs font-medium ${DESKTOP_CONTROL_SURFACE_CLASSNAME}`}
+              className={`min-h-10 rounded-[18px] px-3 text-xs font-medium ${GLASS_BUTTON_CLASSNAME}`}
               onClick={handleClearFilters}
             >
               {t("logsview.ClearFilters")}
@@ -201,7 +198,7 @@ export function LogsView() {
           <Button
             variant="outline"
             size="sm"
-            className={`ml-auto min-h-10 rounded-[18px] px-3 text-xs font-medium ${DESKTOP_CONTROL_SURFACE_CLASSNAME}`}
+            className={`ml-auto min-h-10 rounded-[18px] px-3 text-xs font-medium ${GLASS_BUTTON_CLASSNAME}`}
             onClick={() => void loadLogs()}
           >
             {t("common.refresh")}
@@ -225,14 +222,13 @@ export function LogsView() {
             )}
           </div>
         </div>
-      </section>
+      </PagePanel>
 
       {/* Log entries — full remaining height */}
-      <div
-        className={`${LOGS_PANEL_CLASSNAME} flex-1 min-h-0 overflow-y-auto p-2 font-mono text-sm`}
-      >
+      <PagePanel variant="surface" className="flex-1 min-h-0 overflow-y-auto p-2 font-mono text-sm">
         {filteredLogs.length === 0 ? (
-          <DesktopEmptyStatePanel
+          <PagePanel.Empty
+            variant="panel"
             role="status"
             className="m-1 min-h-[16rem] rounded-xl border-border/35 bg-bg-hover/60 px-6 py-10"
             description={
@@ -247,9 +243,7 @@ export function LogsView() {
             )}
           />
         ) : (
-          <div
-            className={`${DESKTOP_INSET_PANEL_CLASSNAME} overflow-hidden rounded-[18px]`}
-          >
+          <PagePanel variant="inset" className="overflow-hidden rounded-[18px]">
             <div className="hidden grid-cols-[5.75rem_3.5rem_5rem_14rem_minmax(0,1fr)] gap-3 border-b border-border/40 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted md:grid">
               <span>{t("logsview.Time")}</span>
               <span>{t("logsview.Level")}</span>
@@ -305,9 +299,9 @@ export function LogsView() {
                 </span>
               </div>
             ))}
-          </div>
+          </PagePanel>
         )}
-      </div>
+      </PagePanel>
     </div>
   );
 }

@@ -6,8 +6,11 @@
 import {
   Button,
   Input,
+  MetaPill,
   PageLayout,
+  PagePanel,
   Sidebar,
+  SidebarContent,
   SidebarPanel,
   SidebarScrollRegion,
 } from "@miladyai/ui";
@@ -19,35 +22,7 @@ import {
   type RuntimeServiceOrderItem,
 } from "../api";
 import { useApp } from "../state";
-import {
-  DESKTOP_CONTROL_SURFACE_ACCENT_CLASSNAME,
-  DESKTOP_CONTROL_SURFACE_CLASSNAME,
-  DESKTOP_CONTROL_SURFACE_COMPACT_CLASSNAME,
-  DESKTOP_INPUT_SHELL_CLASSNAME,
-  DESKTOP_INSET_EMPTY_PANEL_CLASSNAME,
-  DESKTOP_INSET_PANEL_CLASSNAME,
-  DESKTOP_PADDED_SURFACE_PANEL_CLASSNAME,
-  DESKTOP_PAGE_CONTENT_CLASSNAME,
-  DESKTOP_RAIL_SUMMARY_CARD_COMPACT_CLASSNAME,
-  DESKTOP_SECTION_SHELL_CLASSNAME,
-  DESKTOP_SURFACE_PANEL_CLASSNAME,
-  DesktopEmptyStatePanel,
-  DesktopRailSummaryCard,
-} from "./desktop-surface-primitives";
 import { formatDateTime } from "./format";
-import {
-  APP_SIDEBAR_CARD_ACTIVE_CLASSNAME,
-  APP_SIDEBAR_CARD_INACTIVE_CLASSNAME,
-  APP_SIDEBAR_COMPACT_CARD_CLASSNAME,
-  APP_SIDEBAR_COMPACT_ICON_ACTIVE_CLASSNAME,
-  APP_SIDEBAR_COMPACT_ICON_INACTIVE_CLASSNAME,
-  APP_SIDEBAR_COMPACT_META_CLASSNAME,
-  APP_SIDEBAR_COMPACT_PILL_CLASSNAME,
-  APP_SIDEBAR_COMPACT_TITLE_CLASSNAME,
-  APP_SIDEBAR_PILL_CLASSNAME,
-  APP_SIDEBAR_SCROLL_REGION_CLASSNAME,
-  APP_SIDEBAR_SECTION_HEADING_CLASSNAME,
-} from "./sidebar-shell-styles";
 
 type RuntimeSectionKey =
   | "summary"
@@ -60,10 +35,15 @@ type RuntimeSectionKey =
 
 type RuntimeTreeSectionKey = Exclude<RuntimeSectionKey, "summary">;
 
-const RUNTIME_TOOLBAR_BUTTON_CLASSNAME = `${DESKTOP_CONTROL_SURFACE_COMPACT_CLASSNAME} ${DESKTOP_CONTROL_SURFACE_CLASSNAME}`;
-const RUNTIME_TOOLBAR_BUTTON_ACCENT_CLASSNAME = `${DESKTOP_CONTROL_SURFACE_COMPACT_CLASSNAME} ${DESKTOP_CONTROL_SURFACE_ACCENT_CLASSNAME}`;
-const RUNTIME_INPUT_CLASSNAME = `${DESKTOP_INPUT_SHELL_CLASSNAME} h-9 rounded-[16px] px-3 text-sm text-txt`;
-const RUNTIME_SECTION_BUTTON_CLASSNAME = APP_SIDEBAR_COMPACT_CARD_CLASSNAME;
+/** Inline class strings for toolbar buttons (previously composed from desktop-surface-primitives tokens). */
+const TOOLBAR_BUTTON_BASE =
+  "h-8 rounded-full px-3.5 text-[10px] font-semibold tracking-[0.12em] border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 disabled:hover:border-border/32 disabled:hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] disabled:hover:text-muted-strong dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_24px_-20px_rgba(0,0,0,0.24)]";
+
+const TOOLBAR_BUTTON_ACCENT =
+  "h-8 rounded-full px-3.5 text-[10px] font-semibold tracking-[0.12em] border border-accent/26 bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.16),rgba(var(--accent-rgb),0.07))] text-txt-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_14px_22px_-18px_rgba(var(--accent-rgb),0.24)] ring-1 ring-inset ring-accent/10 hover:border-accent/42 hover:bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.2),rgba(var(--accent-rgb),0.1))] hover:text-txt-strong";
+
+const INPUT_CLASSNAME =
+  "relative overflow-hidden border border-border/28 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_86%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_18px_28px_-24px_rgba(15,23,42,0.12)] backdrop-blur-md transition-[border-color,background-color,box-shadow] duration-200 before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.24),transparent)] hover:border-border/40 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_96%,transparent))] focus-within:border-accent/24 focus-within:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_92%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_20px_30px_-24px_rgba(15,23,42,0.14)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_20px_30px_-26px_rgba(0,0,0,0.24)] h-9 rounded-[16px] px-3 text-sm text-txt";
 
 const SECTION_TAB_KEYS: Array<{
   key: RuntimeSectionKey;
@@ -248,13 +228,14 @@ function OrderCard(props: { title: string; entries: RuntimeOrderItem[] }) {
   const { title, entries } = props;
 
   return (
-    <section className={`${DESKTOP_SECTION_SHELL_CLASSNAME} p-5`}>
+    <PagePanel variant="section" className="p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="text-sm font-semibold text-txt">{title}</div>
-        <div className={APP_SIDEBAR_PILL_CLASSNAME}>{entries.length}</div>
+        <MetaPill>{entries.length}</MetaPill>
       </div>
-      <div
-        className={`${DESKTOP_INSET_PANEL_CLASSNAME} max-h-[18rem] overflow-auto px-4 py-3 text-[12px] font-mono leading-6 tabular-nums`}
+      <PagePanel
+        variant="inset"
+        className="max-h-[18rem] overflow-auto px-4 py-3 text-[12px] font-mono leading-6 tabular-nums"
       >
         {entries.length === 0 ? (
           <div className="text-muted">{t("runtimeview.none")}</div>
@@ -268,8 +249,8 @@ function OrderCard(props: { title: string; entries: RuntimeOrderItem[] }) {
             </div>
           ))
         )}
-      </div>
-    </section>
+      </PagePanel>
+    </PagePanel>
   );
 }
 
@@ -278,33 +259,33 @@ function ServicesOrderCard(props: { entries: RuntimeServiceOrderItem[] }) {
   const { entries } = props;
 
   return (
-    <section className={`${DESKTOP_SECTION_SHELL_CLASSNAME} p-5`}>
+    <PagePanel variant="section" className="p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="text-sm font-semibold text-txt">
           {t("runtimeview.Services")}
         </div>
-        <div className={APP_SIDEBAR_PILL_CLASSNAME}>
+        <MetaPill>
           {entries.length} {t("runtimeview.types")}
-        </div>
+        </MetaPill>
       </div>
-      <div
-        className={`${DESKTOP_INSET_PANEL_CLASSNAME} max-h-[18rem] space-y-3 overflow-auto px-4 py-3 text-[12px] font-mono leading-6 tabular-nums`}
+      <PagePanel
+        variant="inset"
+        className="max-h-[18rem] space-y-3 overflow-auto px-4 py-3 text-[12px] font-mono leading-6 tabular-nums"
       >
         {entries.length === 0 ? (
           <div className="text-muted">{t("runtimeview.none")}</div>
         ) : (
           entries.map((serviceGroup) => (
-            <div
+            <PagePanel
               key={`${serviceGroup.serviceType}-${serviceGroup.index}`}
-              className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-3 py-3`}
+              variant="inset"
+              className="px-3 py-3"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0 break-words text-txt">
                   [{serviceGroup.index}] {serviceGroup.serviceType}
                 </div>
-                <div className={APP_SIDEBAR_PILL_CLASSNAME}>
-                  {serviceGroup.count}
-                </div>
+                <MetaPill>{serviceGroup.count}</MetaPill>
               </div>
               <div className="mt-2 space-y-1 pl-3 text-muted">
                 {serviceGroup.instances.map((instance) => (
@@ -316,11 +297,11 @@ function ServicesOrderCard(props: { entries: RuntimeServiceOrderItem[] }) {
                   </div>
                 ))}
               </div>
-            </div>
+            </PagePanel>
           ))
         )}
-      </div>
-    </section>
+      </PagePanel>
+    </PagePanel>
   );
 }
 
@@ -363,7 +344,7 @@ function RuntimeSummaryCard(props: {
   ];
 
   return (
-    <section className={`${DESKTOP_SECTION_SHELL_CLASSNAME} p-5`}>
+    <PagePanel variant="section" className="p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="text-sm font-semibold text-txt">
           {t("runtimeview.Summary")}
@@ -382,18 +363,19 @@ function RuntimeSummaryCard(props: {
       </div>
       <div className="grid gap-2 text-xs tabular-nums">
         {summaryRows.map((row) => (
-          <div
+          <PagePanel
             key={row.label}
-            className={`${DESKTOP_INSET_PANEL_CLASSNAME} flex items-start justify-between gap-3 px-3 py-2`}
+            variant="inset"
+            className="flex items-start justify-between gap-3 px-3 py-2"
           >
             <span className="text-muted">{row.label}</span>
             <span className="min-w-0 break-all text-right font-semibold text-txt">
               {row.value}
             </span>
-          </div>
+          </PagePanel>
         ))}
       </div>
-    </section>
+    </PagePanel>
   );
 }
 
@@ -493,9 +475,7 @@ export function RuntimeView({
   const runtimeSidebar = (
     <Sidebar testId="runtime-sidebar">
       <SidebarPanel>
-            <DesktopRailSummaryCard
-              className={`mt-2 space-y-2 ${DESKTOP_RAIL_SUMMARY_CARD_COMPACT_CLASSNAME}`}
-            >
+            <PagePanel.SummaryCard compact className="mt-2 space-y-2">
               {/* biome-ignore lint/a11y/noLabelWithoutControl: programmatic control association is preserved */}
               <label className="flex flex-col gap-1 text-[11px] text-muted">
                 <span>{t("runtimeview.depth")}</span>
@@ -512,7 +492,7 @@ export function RuntimeView({
                       ),
                     )
                   }
-                  className={RUNTIME_INPUT_CLASSNAME}
+                  className={INPUT_CLASSNAME}
                 />
               </label>
 
@@ -532,7 +512,7 @@ export function RuntimeView({
                       ),
                     )
                   }
-                  className={RUNTIME_INPUT_CLASSNAME}
+                  className={INPUT_CLASSNAME}
                 />
               </label>
 
@@ -552,7 +532,7 @@ export function RuntimeView({
                       ),
                     )
                   }
-                  className={RUNTIME_INPUT_CLASSNAME}
+                  className={INPUT_CLASSNAME}
                 />
               </label>
 
@@ -565,8 +545,8 @@ export function RuntimeView({
                   disabled={loading}
                   className={
                     loading
-                      ? RUNTIME_TOOLBAR_BUTTON_ACCENT_CLASSNAME
-                      : RUNTIME_TOOLBAR_BUTTON_CLASSNAME
+                      ? TOOLBAR_BUTTON_ACCENT
+                      : TOOLBAR_BUTTON_BASE
                   }
                 >
                   {loading ? t("runtimeview.Refreshing") : t("common.refresh")}
@@ -580,63 +560,51 @@ export function RuntimeView({
                       buildInitialExpanded(rootPath, sectionData),
                     )
                   }
-                  className={RUNTIME_TOOLBAR_BUTTON_CLASSNAME}
+                  className={TOOLBAR_BUTTON_BASE}
                   disabled={activeSection === "summary"}
                 >
                   {t("runtimeview.ExpandTop")}
                 </Button>
               </div>
-            </DesktopRailSummaryCard>
+            </PagePanel.SummaryCard>
 
-            <div className={`mt-3 ${APP_SIDEBAR_SECTION_HEADING_CLASSNAME}`}>
+            <SidebarContent.SectionLabel className="mt-3">
               {t("runtimeview.sections")}
-            </div>
-            <div className={`mt-2 ${APP_SIDEBAR_SCROLL_REGION_CLASSNAME}`}>
+            </SidebarContent.SectionLabel>
+            <SidebarScrollRegion className="mt-2">
               <div className="space-y-1.5">
                 {SECTION_TAB_KEYS.map((section) => {
                   const active = section.key === activeSection;
                   return (
-                    <Button
+                    <SidebarContent.Item
                       key={section.key}
-                      variant="ghost"
-                      type="button"
+                      active={active}
                       onClick={() => setActiveSection(section.key)}
-                      className={`${RUNTIME_SECTION_BUTTON_CLASSNAME} ${
-                        active
-                          ? APP_SIDEBAR_CARD_ACTIVE_CLASSNAME
-                          : APP_SIDEBAR_CARD_INACTIVE_CLASSNAME
-                      }`}
                       aria-current={active ? "page" : undefined}
                     >
-                      <span
-                        className={
-                          active
-                            ? APP_SIDEBAR_COMPACT_ICON_ACTIVE_CLASSNAME
-                            : APP_SIDEBAR_COMPACT_ICON_INACTIVE_CLASSNAME
-                        }
-                      >
+                      <SidebarContent.ItemIcon active={active}>
                         {section.key === "summary"
                           ? "Σ"
                           : t(section.i18nKey).charAt(0).toUpperCase()}
-                      </span>
+                      </SidebarContent.ItemIcon>
                       <span className="min-w-0 flex-1 text-left">
-                        <span className={APP_SIDEBAR_COMPACT_TITLE_CLASSNAME}>
+                        <SidebarContent.ItemTitle>
                           {t(section.i18nKey)}
-                        </span>
-                        <span className={APP_SIDEBAR_COMPACT_META_CLASSNAME}>
+                        </SidebarContent.ItemTitle>
+                        <SidebarContent.ItemDescription>
                           {sectionMeta[section.key]}
-                        </span>
+                        </SidebarContent.ItemDescription>
                       </span>
                       {getSectionCount(section.key) ? (
-                        <span className={APP_SIDEBAR_COMPACT_PILL_CLASSNAME}>
+                        <MetaPill compact>
                           {getSectionCount(section.key)}
-                        </span>
+                        </MetaPill>
                       ) : null}
-                    </Button>
+                    </SidebarContent.Item>
                   );
                 })}
               </div>
-            </div>
+            </SidebarScrollRegion>
       </SidebarPanel>
     </Sidebar>
   );
@@ -655,7 +623,8 @@ export function RuntimeView({
             ) : null}
 
             {!snapshot ? (
-              <DesktopEmptyStatePanel
+              <PagePanel.Empty
+                variant="panel"
                 className="min-h-[24rem]"
                 description={t("runtimeview.loadingDescription")}
                 title={
@@ -665,7 +634,8 @@ export function RuntimeView({
                 }
               />
             ) : !snapshot.runtimeAvailable ? (
-              <DesktopEmptyStatePanel
+              <PagePanel.Empty
+                variant="panel"
                 className="min-h-[24rem] border-warning/25 bg-warning/10 text-warning"
                 description={t("runtimeview.runtimePendingDescription")}
                 title={t("runtimeview.AgentRuntimeIsNot")}
@@ -693,7 +663,7 @@ export function RuntimeView({
               </div>
             ) : (
               <>
-                <section className={DESKTOP_PADDED_SURFACE_PANEL_CLASSNAME}>
+                <PagePanel variant="padded">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
@@ -716,7 +686,7 @@ export function RuntimeView({
                         size="sm"
                         type="button"
                         onClick={() => setExpandedPaths(new Set([rootPath]))}
-                        className={RUNTIME_TOOLBAR_BUTTON_CLASSNAME}
+                        className={TOOLBAR_BUTTON_BASE}
                       >
                         {t("runtimeview.Collapse")}
                       </Button>
@@ -729,7 +699,7 @@ export function RuntimeView({
                             buildInitialExpanded(rootPath, sectionData),
                           )
                         }
-                        className={RUNTIME_TOOLBAR_BUTTON_CLASSNAME}
+                        className={TOOLBAR_BUTTON_BASE}
                       >
                         {t("runtimeview.ExpandTop")}
                       </Button>
@@ -737,19 +707,15 @@ export function RuntimeView({
                   </div>
 
                   <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div
-                      className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-4`}
-                    >
+                    <PagePanel variant="inset" className="px-4 py-4">
                       <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
                         {t("runtimeview.path")}
                       </div>
                       <div className="mt-2 font-mono text-sm text-txt">
                         {rootPath}
                       </div>
-                    </div>
-                    <div
-                      className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-4`}
-                    >
+                    </PagePanel>
+                    <PagePanel variant="inset" className="px-4 py-4">
                       <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
                         {t("runtimeview.lastUpdated")}
                       </div>
@@ -758,36 +724,33 @@ export function RuntimeView({
                           fallback: "n/a",
                         })}
                       </div>
-                    </div>
-                    <div
-                      className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-4`}
-                    >
+                    </PagePanel>
+                    <PagePanel variant="inset" className="px-4 py-4">
                       <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
                         {t("runtimeview.depth")}
                       </div>
                       <div className="mt-2 text-sm font-semibold text-txt">
                         {depth}
                       </div>
-                    </div>
-                    <div
-                      className={`${DESKTOP_INSET_PANEL_CLASSNAME} px-4 py-4`}
-                    >
+                    </PagePanel>
+                    <PagePanel variant="inset" className="px-4 py-4">
                       <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
                         {t("runtimeview.objectCap")}
                       </div>
                       <div className="mt-2 text-sm font-semibold text-txt">
                         {maxObjectEntries}
                       </div>
-                    </div>
+                    </PagePanel>
                   </div>
-                </section>
+                </PagePanel>
 
-                <section
-                  className={`${DESKTOP_SURFACE_PANEL_CLASSNAME} min-h-[24rem] flex-1 overflow-auto p-4`}
+                <PagePanel
+                  variant="surface"
+                  className="min-h-[24rem] flex-1 overflow-auto p-4"
                 >
                   {sectionData == null ? (
-                    <DesktopEmptyStatePanel
-                      className={`min-h-[18rem] ${DESKTOP_INSET_EMPTY_PANEL_CLASSNAME}`}
+                    <PagePanel.Empty
+                      variant="inset"
                       description={t("runtimeview.noSectionData")}
                       title={t("runtimeview.sectionUnavailable")}
                     />
@@ -801,7 +764,7 @@ export function RuntimeView({
                       onToggle={handleTogglePath}
                     />
                   )}
-                </section>
+                </PagePanel>
               </>
             )}
       </div>

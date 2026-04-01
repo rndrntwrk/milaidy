@@ -10,35 +10,27 @@
 import {
   Button,
   Input,
+  MetaPill,
+  PageLayout,
+  PagePanel,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Sidebar,
+  SidebarContent,
+  SidebarPanel,
+  SidebarScrollRegion,
 } from "@miladyai/ui";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client, type QueryResult, type TableInfo } from "../api";
 import { useApp } from "../state";
 import {
-  DESKTOP_INSET_PANEL_CLASSNAME,
-  DesktopRailSummaryCard,
-} from "./desktop-surface-primitives";
-import {
   SETTINGS_COMPACT_INPUT_CLASSNAME,
   SETTINGS_COMPACT_SELECT_TRIGGER_CLASSNAME,
 } from "./settings-control-primitives";
-import {
-  APP_DESKTOP_SIDEBAR_RAIL_STANDARD_CLASSNAME,
-  APP_DESKTOP_SPLIT_SHELL_CLASSNAME,
-  APP_SIDEBAR_CARD_ACTIVE_CLASSNAME,
-  APP_SIDEBAR_CARD_BASE_CLASSNAME,
-  APP_SIDEBAR_CARD_INACTIVE_CLASSNAME,
-  APP_SIDEBAR_INNER_CLASSNAME,
-  APP_SIDEBAR_PILL_CLASSNAME,
-  APP_SIDEBAR_SCROLL_REGION_CLASSNAME,
-  APP_SIDEBAR_SEARCH_INPUT_CLASSNAME,
-} from "./sidebar-shell-styles";
 import { createVectorBrowserRenderer, THREE } from "./vector-browser-three";
 
 const PAGE_SIZE = 25;
@@ -1152,14 +1144,14 @@ function MemoryDetailPanel({ memory }: { memory: MemoryRecord | null }) {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto p-6">
-        <section className={`${DESKTOP_INSET_PANEL_CLASSNAME} p-5`}>
+        <PagePanel variant="inset" className="p-5">
           <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted/60">
             {t("vectorbrowserview.Content")}
           </div>
           <div className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-txt">
             {memory.content || "(empty)"}
           </div>
-        </section>
+        </PagePanel>
 
         <section className="rounded-2xl border border-border/40 bg-card/45 p-5">
           <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted/60">
@@ -1227,7 +1219,10 @@ function MemoryDetailPanel({ memory }: { memory: MemoryRecord | null }) {
 
 // ── Main component ─────────────────────────────────────────────────────
 
-export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
+export function VectorBrowserView({
+  leftNav,
+  contentHeader,
+}: { leftNav?: ReactNode; contentHeader?: ReactNode }) {
   const { t } = useApp();
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [selectedTable, setSelectedTable] = useState("");
@@ -1505,324 +1500,311 @@ export function VectorBrowserView({ leftNav }: { leftNav?: ReactNode }) {
   // Show connection error state prominently
   const isConnectionError = error?.includes("agent is running");
 
-  return (
-    <div className={APP_DESKTOP_SPLIT_SHELL_CLASSNAME}>
-      <aside className={APP_DESKTOP_SIDEBAR_RAIL_STANDARD_CLASSNAME}>
-        <div className={APP_SIDEBAR_INNER_CLASSNAME}>
-          <div className="space-y-3 pt-4">
-            {leftNav}
-            <DesktopRailSummaryCard>
-              <div className="text-sm font-semibold text-txt">
-                {selectedTable ||
-                  t("vectorbrowserview.Vectors", {
-                    defaultValue: "Vectors",
-                  })}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/75">
-                <span className={APP_SIDEBAR_PILL_CLASSNAME}>
-                  {viewMode === "list"
-                    ? t("vectorbrowserview.ListView", {
-                        defaultValue: "List view",
+  const vectorSidebar = (
+    <Sidebar testId="vector-sidebar">
+      <SidebarPanel>
+        <div className="space-y-3 pt-4">
+          {leftNav}
+          <PagePanel.SummaryCard>
+            <div className="text-sm font-semibold text-txt">
+              {selectedTable ||
+                t("vectorbrowserview.Vectors", {
+                  defaultValue: "Vectors",
+                })}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/75">
+              <MetaPill>
+                {viewMode === "list"
+                  ? t("vectorbrowserview.ListView", {
+                      defaultValue: "List view",
+                    })
+                  : viewMode === "graph"
+                    ? t("vectorbrowserview.Graph2D", {
+                        defaultValue: "2D graph",
                       })
-                    : viewMode === "graph"
-                      ? t("vectorbrowserview.Graph2D", {
-                          defaultValue: "2D graph",
-                        })
-                      : t("vectorbrowserview.Graph3D", {
-                          defaultValue: "3D graph",
-                        })}
-                </span>
-                {stats ? (
-                  <span className={APP_SIDEBAR_PILL_CLASSNAME}>
-                    {t("vectorbrowserview.MemoryCount", {
-                      count: Number(stats.total).toLocaleString(),
-                      defaultValue: "{{count}} memories",
-                    })}
-                  </span>
+                    : t("vectorbrowserview.Graph3D", {
+                        defaultValue: "3D graph",
+                      })}
+              </MetaPill>
+              {stats ? (
+                <MetaPill>
+                  {t("vectorbrowserview.MemoryCount", {
+                    count: Number(stats.total).toLocaleString(),
+                    defaultValue: "{{count}} memories",
+                  })}
+                </MetaPill>
+              ) : null}
+            </div>
+          </PagePanel.SummaryCard>
+        </div>
+
+        {!isConnectionError ? (
+          <div className="space-y-3 pt-4">
+            {tables.length > 1 && (
+              <Select
+                value={selectedTable}
+                onValueChange={(value) => {
+                  setSelectedTable(value);
+                  setPage(0);
+                  setSearch("");
+                  setSearchInput("");
+                  setSelectedMemory(null);
+                }}
+              >
+                <SelectTrigger
+                  className={`w-full ${SETTINGS_COMPACT_SELECT_TRIGGER_CLASSNAME}`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {tables.map((table) => (
+                    <SelectItem key={table.name} value={table.name}>
+                      {table.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
+            <div className="grid grid-cols-3 gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`${VECTOR_VIEW_TOGGLE_BASE_CLASSNAME} ${
+                  viewMode === "list"
+                    ? VECTOR_VIEW_TOGGLE_ACTIVE_CLASSNAME
+                    : VECTOR_VIEW_TOGGLE_INACTIVE_CLASSNAME
+                }`}
+                onClick={() => setViewMode("list")}
+              >
+                {t("vectorbrowserview.List")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`${VECTOR_VIEW_TOGGLE_BASE_CLASSNAME} ${
+                  viewMode === "graph"
+                    ? VECTOR_VIEW_TOGGLE_ACTIVE_CLASSNAME
+                    : VECTOR_VIEW_TOGGLE_INACTIVE_CLASSNAME
+                }`}
+                onClick={() => setViewMode("graph")}
+              >
+                {t("vectorbrowserview.2D", { defaultValue: "2D" })}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`${VECTOR_VIEW_TOGGLE_BASE_CLASSNAME} ${
+                  viewMode === "3d"
+                    ? VECTOR_VIEW_TOGGLE_ACTIVE_CLASSNAME
+                    : VECTOR_VIEW_TOGGLE_INACTIVE_CLASSNAME
+                }`}
+                onClick={() => setViewMode("3d")}
+              >
+                {t("vectorbrowserview.3D", { defaultValue: "3D" })}
+              </Button>
+            </div>
+
+            {viewMode === "list" ? (
+              <div className="flex gap-1.5">
+                <Input
+                  type="search"
+                  placeholder={t("vectorbrowserview.SearchContent")}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  className={`flex-1 h-10 rounded-[16px] border-border/40 bg-card/50 text-sm placeholder:text-muted/65 focus-visible:ring-accent/30 ${SETTINGS_COMPACT_INPUT_CLASSNAME}`}
+                />
+                <Button variant="default" size="sm" onClick={handleSearch}>
+                  {t("vectorbrowserview.Search")}
+                </Button>
+              </div>
+            ) : null}
+
+            {stats ? (
+              <div className="rounded-2xl border border-border/35 bg-bg/35 px-3 py-3 text-[11px] text-muted">
+                <div className="font-semibold text-txt">
+                  {Number(stats.total).toLocaleString()}{" "}
+                  {t("vectorbrowserview.memories")}
+                </div>
+                <div className="mt-1">
+                  {Number(stats.dimensions) > 0
+                    ? t("vectorbrowserview.DimensionsEmbeddings", {
+                        defaultValue: "{dimensions}D embeddings",
+                      }).replace("{dimensions}", String(stats.dimensions))
+                    : t("vectorbrowserview.Loading", {
+                        defaultValue: "loading...",
+                      })}
+                </div>
+                {Number(stats.uniqueCount) > 0 ? (
+                  <div className="mt-1">
+                    {Number(stats.uniqueCount).toLocaleString()}{" "}
+                    {t("vectorbrowserview.unique")}
+                  </div>
                 ) : null}
               </div>
-            </DesktopRailSummaryCard>
-          </div>
-
-          {!isConnectionError ? (
-            <div className="space-y-3 pt-4">
-              {tables.length > 1 && (
-                <Select
-                  value={selectedTable}
-                  onValueChange={(value) => {
-                    setSelectedTable(value);
-                    setPage(0);
-                    setSearch("");
-                    setSearchInput("");
-                    setSelectedMemory(null);
-                  }}
-                >
-                  <SelectTrigger
-                    className={`w-full ${SETTINGS_COMPACT_SELECT_TRIGGER_CLASSNAME}`}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tables.map((table) => (
-                      <SelectItem key={table.name} value={table.name}>
-                        {table.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-
-              <div className="grid grid-cols-3 gap-1.5">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={`${VECTOR_VIEW_TOGGLE_BASE_CLASSNAME} ${
-                    viewMode === "list"
-                      ? VECTOR_VIEW_TOGGLE_ACTIVE_CLASSNAME
-                      : VECTOR_VIEW_TOGGLE_INACTIVE_CLASSNAME
-                  }`}
-                  onClick={() => setViewMode("list")}
-                >
-                  {t("vectorbrowserview.List")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={`${VECTOR_VIEW_TOGGLE_BASE_CLASSNAME} ${
-                    viewMode === "graph"
-                      ? VECTOR_VIEW_TOGGLE_ACTIVE_CLASSNAME
-                      : VECTOR_VIEW_TOGGLE_INACTIVE_CLASSNAME
-                  }`}
-                  onClick={() => setViewMode("graph")}
-                >
-                  {t("vectorbrowserview.2D", { defaultValue: "2D" })}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={`${VECTOR_VIEW_TOGGLE_BASE_CLASSNAME} ${
-                    viewMode === "3d"
-                      ? VECTOR_VIEW_TOGGLE_ACTIVE_CLASSNAME
-                      : VECTOR_VIEW_TOGGLE_INACTIVE_CLASSNAME
-                  }`}
-                  onClick={() => setViewMode("3d")}
-                >
-                  {t("vectorbrowserview.3D", { defaultValue: "3D" })}
-                </Button>
-              </div>
-
-              {viewMode === "list" ? (
-                <div className="flex gap-1.5">
-                  <Input
-                    type="search"
-                    placeholder={t("vectorbrowserview.SearchContent")}
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                    className={`flex-1 ${APP_SIDEBAR_SEARCH_INPUT_CLASSNAME} ${SETTINGS_COMPACT_INPUT_CLASSNAME}`}
-                  />
-                  <Button variant="default" size="sm" onClick={handleSearch}>
-                    {t("vectorbrowserview.Search")}
-                  </Button>
-                </div>
-              ) : null}
-
-              {stats ? (
-                <div className="rounded-2xl border border-border/35 bg-bg/35 px-3 py-3 text-[11px] text-muted">
-                  <div className="font-semibold text-txt">
-                    {Number(stats.total).toLocaleString()}{" "}
-                    {t("vectorbrowserview.memories")}
-                  </div>
-                  <div className="mt-1">
-                    {Number(stats.dimensions) > 0
-                      ? t("vectorbrowserview.DimensionsEmbeddings", {
-                          defaultValue: "{dimensions}D embeddings",
-                        }).replace("{dimensions}", String(stats.dimensions))
-                      : t("vectorbrowserview.Loading", {
-                          defaultValue: "loading...",
-                        })}
-                  </div>
-                  {Number(stats.uniqueCount) > 0 ? (
-                    <div className="mt-1">
-                      {Number(stats.uniqueCount).toLocaleString()}{" "}
-                      {t("vectorbrowserview.unique")}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div
-            className={`mt-3 space-y-1.5 ${APP_SIDEBAR_SCROLL_REGION_CLASSNAME}`}
-          >
-            {isConnectionError ? (
-              <div className="rounded-xl border border-border/35 bg-bg/35 px-3 py-4 text-center text-xs text-muted">
-                {t("vectorbrowserview.StartTheAgentToB")}
-              </div>
-            ) : viewMode !== "list" ? (
-              <div className="rounded-xl border border-border/35 bg-bg/35 px-3 py-4 text-xs text-muted">
-                {t("vectorbrowserview.SelectPointHint", {
-                  defaultValue:
-                    "Select a point from the viewer to inspect its full record on the right.",
-                })}
-              </div>
-            ) : loading ? (
-              <div className="rounded-xl border border-border/35 bg-bg/35 px-3 py-4 text-center text-xs text-muted">
-                {t("vectorbrowserview.LoadingMemories")}
-              </div>
-            ) : memories.length === 0 ? (
-              <div className="rounded-xl border border-border/35 bg-bg/35 px-3 py-4 text-center text-xs text-muted">
-                {search
-                  ? t("vectorbrowserview.NoRecordsMatchSearchQuery", {
-                      defaultValue: "No records match your search query.",
-                    })
-                  : t("vectorbrowserview.NoMemoryRecordsDetected", {
-                      defaultValue:
-                        "No memory records detected in the database.",
-                    })}
-              </div>
-            ) : (
-              memories.map((mem) => {
-                const isActive = selectedMemory?.id === mem.id;
-                return (
-                  <Button
-                    key={
-                      mem.id || `${mem.content.slice(0, 30)}-${mem.createdAt}`
-                    }
-                    variant="ghost"
-                    className={`${APP_SIDEBAR_CARD_BASE_CLASSNAME} ${
-                      isActive
-                        ? APP_SIDEBAR_CARD_ACTIVE_CLASSNAME
-                        : APP_SIDEBAR_CARD_INACTIVE_CLASSNAME
-                    }`}
-                    onClick={() => setSelectedMemory(mem)}
-                  >
-                    <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-[11px] font-bold uppercase ${
-                        isActive
-                          ? "border-accent/30 bg-accent/18 text-txt-strong"
-                          : "border-border/50 bg-bg-accent/80 text-muted"
-                      }`}
-                    >
-                      {mem.type && mem.type !== "undefined"
-                        ? mem.type.slice(0, 1)
-                        : "M"}
-                    </div>
-                    <div className="min-w-0 flex-1 text-left">
-                      <div className="line-clamp-2 text-sm leading-snug text-inherit">
-                        {mem.content || "(empty)"}
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted/85">
-                        {mem.embedding ? (
-                          <span>{mem.embedding.length}D</span>
-                        ) : null}
-                        {mem.createdAt ? (
-                          <span className="truncate">{mem.createdAt}</span>
-                        ) : null}
-                      </div>
-                    </div>
-                  </Button>
-                );
-              })
-            )}
-          </div>
-
-          {viewMode === "list" && totalPages > 1 ? (
-            <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/30 pt-3">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page === 0}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                {t("vectorbrowserview.Prev")}
-              </Button>
-              <span className="text-[11px] text-muted">
-                {t("vectorbrowserview.Page")} {page + 1} / {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages - 1}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                {t("vectorbrowserview.Next")}
-              </Button>
-            </div>
-          ) : null}
-        </div>
-      </aside>
-
-      <div className="flex min-h-0 flex-1 flex-col bg-bg/20">
-        {error && !isConnectionError ? (
-          <div className="m-5 rounded-xl border border-danger/35 bg-danger/10 px-4 py-3 text-sm text-danger">
-            {error}
+            ) : null}
           </div>
         ) : null}
 
-        {isConnectionError ? (
-          <div className="flex flex-1 items-center justify-center p-6">
-            <div className="rounded-3xl border border-border/35 bg-bg/35 px-8 py-10 text-center shadow-inner">
-              <div className="text-base font-semibold text-txt">
-                {t("databaseview.DatabaseNotAvailab")}
+        <SidebarScrollRegion className="mt-3 space-y-1.5">
+          {isConnectionError ? (
+            <SidebarContent.EmptyState>
+              {t("vectorbrowserview.StartTheAgentToB")}
+            </SidebarContent.EmptyState>
+          ) : viewMode !== "list" ? (
+            <SidebarContent.EmptyState>
+              {t("vectorbrowserview.SelectPointHint", {
+                defaultValue:
+                  "Select a point from the viewer to inspect its full record on the right.",
+              })}
+            </SidebarContent.EmptyState>
+          ) : loading ? (
+            <SidebarContent.EmptyState>
+              {t("vectorbrowserview.LoadingMemories")}
+            </SidebarContent.EmptyState>
+          ) : memories.length === 0 ? (
+            <SidebarContent.EmptyState>
+              {search
+                ? t("vectorbrowserview.NoRecordsMatchSearchQuery", {
+                    defaultValue: "No records match your search query.",
+                  })
+                : t("vectorbrowserview.NoMemoryRecordsDetected", {
+                    defaultValue:
+                      "No memory records detected in the database.",
+                  })}
+            </SidebarContent.EmptyState>
+          ) : (
+            memories.map((mem) => {
+              const isActive = selectedMemory?.id === mem.id;
+              return (
+                <SidebarContent.Item
+                  key={
+                    mem.id || `${mem.content.slice(0, 30)}-${mem.createdAt}`
+                  }
+                  active={isActive}
+                  onClick={() => setSelectedMemory(mem)}
+                >
+                  <SidebarContent.ItemIcon active={isActive}>
+                    {mem.type && mem.type !== "undefined"
+                      ? mem.type.slice(0, 1)
+                      : "M"}
+                  </SidebarContent.ItemIcon>
+                  <SidebarContent.ItemBody>
+                    <SidebarContent.ItemTitle className="line-clamp-2">
+                      {mem.content || "(empty)"}
+                    </SidebarContent.ItemTitle>
+                    <SidebarContent.ItemDescription>
+                      {mem.embedding ? (
+                        <span>{mem.embedding.length}D</span>
+                      ) : null}
+                      {mem.createdAt ? (
+                        <span className="truncate">{mem.createdAt}</span>
+                      ) : null}
+                    </SidebarContent.ItemDescription>
+                  </SidebarContent.ItemBody>
+                </SidebarContent.Item>
+              );
+            })
+          )}
+        </SidebarScrollRegion>
+
+        {viewMode === "list" && totalPages > 1 ? (
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/30 pt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 0}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              {t("vectorbrowserview.Prev")}
+            </Button>
+            <span className="text-[11px] text-muted">
+              {t("vectorbrowserview.Page")} {page + 1} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              {t("vectorbrowserview.Next")}
+            </Button>
+          </div>
+        ) : null}
+      </SidebarPanel>
+    </Sidebar>
+  );
+
+  return (
+    <PageLayout sidebar={vectorSidebar} contentHeader={contentHeader}>
+      {error && !isConnectionError ? (
+        <div className="m-5 rounded-xl border border-danger/35 bg-danger/10 px-4 py-3 text-sm text-danger">
+          {error}
+        </div>
+      ) : null}
+
+      {isConnectionError ? (
+        <div className="flex flex-1 items-center justify-center p-6">
+          <div className="rounded-3xl border border-border/35 bg-bg/35 px-8 py-10 text-center shadow-inner">
+            <div className="text-base font-semibold text-txt">
+              {t("databaseview.DatabaseNotAvailab")}
+            </div>
+            <div className="mt-2 max-w-sm text-sm text-muted">
+              {t("vectorbrowserview.StartTheAgentToB")}
+            </div>
+            <Button
+              variant="default"
+              size="sm"
+              className="mt-5"
+              onClick={() => {
+                setError("");
+                loadTables();
+              }}
+            >
+              {t("vectorbrowserview.RetryConnection")}
+            </Button>
+          </div>
+        </div>
+      ) : viewMode === "graph" ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto p-6">
+          <PagePanel variant="inset" className="p-5">
+            {graphLoading ? (
+              <div className="py-16 text-center text-sm italic text-muted">
+                {t("vectorbrowserview.LoadingEmbeddings")}
               </div>
-              <div className="mt-2 max-w-sm text-sm text-muted">
-                {t("vectorbrowserview.StartTheAgentToB")}
+            ) : (
+              <VectorGraph
+                memories={graphMemories}
+                onSelect={setSelectedMemory}
+              />
+            )}
+          </PagePanel>
+          <div className="mt-5 min-h-[18rem] rounded-2xl border border-border/40 bg-card/45">
+            <MemoryDetailPanel memory={selectedMemory} />
+          </div>
+        </div>
+      ) : viewMode === "3d" ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto p-6">
+          <PagePanel variant="inset" className="p-5">
+            {graphLoading ? (
+              <div className="py-16 text-center text-sm italic text-muted">
+                {t("vectorbrowserview.LoadingEmbeddings")}
               </div>
-              <Button
-                variant="default"
-                size="sm"
-                className="mt-5"
-                onClick={() => {
-                  setError("");
-                  loadTables();
-                }}
-              >
-                {t("vectorbrowserview.RetryConnection")}
-              </Button>
-            </div>
+            ) : (
+              <VectorGraph3D
+                memories={graphMemories}
+                onSelect={setSelectedMemory}
+              />
+            )}
+          </PagePanel>
+          <div className="mt-5 min-h-[18rem] rounded-2xl border border-border/40 bg-card/45">
+            <MemoryDetailPanel memory={selectedMemory} />
           </div>
-        ) : viewMode === "graph" ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-auto p-6">
-            <div className={`${DESKTOP_INSET_PANEL_CLASSNAME} p-5`}>
-              {graphLoading ? (
-                <div className="py-16 text-center text-sm italic text-muted">
-                  {t("vectorbrowserview.LoadingEmbeddings")}
-                </div>
-              ) : (
-                <VectorGraph
-                  memories={graphMemories}
-                  onSelect={setSelectedMemory}
-                />
-              )}
-            </div>
-            <div className="mt-5 min-h-[18rem] rounded-2xl border border-border/40 bg-card/45">
-              <MemoryDetailPanel memory={selectedMemory} />
-            </div>
-          </div>
-        ) : viewMode === "3d" ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-auto p-6">
-            <div className={`${DESKTOP_INSET_PANEL_CLASSNAME} p-5`}>
-              {graphLoading ? (
-                <div className="py-16 text-center text-sm italic text-muted">
-                  {t("vectorbrowserview.LoadingEmbeddings")}
-                </div>
-              ) : (
-                <VectorGraph3D
-                  memories={graphMemories}
-                  onSelect={setSelectedMemory}
-                />
-              )}
-            </div>
-            <div className="mt-5 min-h-[18rem] rounded-2xl border border-border/40 bg-card/45">
-              <MemoryDetailPanel memory={selectedMemory} />
-            </div>
-          </div>
-        ) : (
-          <MemoryDetailPanel memory={selectedMemory} />
-        )}
-      </div>
-    </div>
+        </div>
+      ) : (
+        <MemoryDetailPanel memory={selectedMemory} />
+      )}
+    </PageLayout>
   );
 }

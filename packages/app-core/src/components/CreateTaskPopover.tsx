@@ -12,10 +12,12 @@ import {
 } from "@miladyai/ui";
 import { Code2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  DESKTOP_CONTROL_SURFACE_ACCENT_CLASSNAME,
-  DESKTOP_CONTROL_SURFACE_CLASSNAME,
-} from "./desktop-surface-primitives";
+/** Glass-style button surface (inlined from deleted desktop-surface-primitives). */
+const GLASS_BUTTON =
+  "border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_24px_-20px_rgba(0,0,0,0.24)]";
+
+const GLASS_BUTTON_ACCENT =
+  "border border-accent/26 bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.16),rgba(var(--accent-rgb),0.07))] text-txt-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_14px_22px_-18px_rgba(var(--accent-rgb),0.24)] ring-1 ring-inset ring-accent/10 hover:border-accent/42 hover:bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.2),rgba(var(--accent-rgb),0.1))] hover:text-txt-strong";
 
 const DEFAULT_AGENT_TYPES = ["claude", "gemini", "codex", "aider"] as const;
 type AgentType = (typeof DEFAULT_AGENT_TYPES)[number];
@@ -65,7 +67,7 @@ export function CreateTaskPopover({
         <Button
           variant="ghost"
           size="icon"
-          className={`h-[46px] w-[46px] shrink-0 ${DESKTOP_CONTROL_SURFACE_CLASSNAME}`}
+          className={`h-[46px] w-[46px] shrink-0 ${GLASS_BUTTON}`}
           disabled={disabled}
           aria-label={t("chat.createTask") || "Create coding task"}
           title={t("chat.createTask") || "Create coding task"}
@@ -136,7 +138,7 @@ export function CreateTaskPopover({
           </div>
 
           <Button
-            className={`w-full ${DESKTOP_CONTROL_SURFACE_ACCENT_CLASSNAME}`}
+            className={`w-full ${GLASS_BUTTON_ACCENT}`}
             onClick={handleCreate}
             disabled={!description.trim()}
           >

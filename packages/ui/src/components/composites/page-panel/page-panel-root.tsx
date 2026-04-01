@@ -3,10 +3,8 @@ import * as React from "react";
 import { cn } from "../../../lib/utils";
 import type { PagePanelProps } from "./page-panel-types";
 
-export const PagePanelRoot = React.forwardRef<
-  HTMLDivElement | HTMLElement,
-  PagePanelProps
->(function PagePanelRoot(
+export const PagePanelRoot = React.forwardRef<HTMLDivElement, PagePanelProps>(
+  function PagePanelRoot(
   { as, className, variant = "surface", ...props },
   ref,
 ) {

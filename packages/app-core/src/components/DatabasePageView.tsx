@@ -1,26 +1,22 @@
 /**
  * Databases page — wrapper with Tables / Media / Vectors sub-tabs.
+ *
+ * Each sub-view owns its own PageLayout + Sidebar from @miladyai/ui.
+ * DatabasePageView only decides which sub-view to render and passes
+ * through the leftNav toggle and contentHeader.
  */
 
-import { Button, ContentLayout } from "@miladyai/ui";
+import { SegmentedControl } from "@miladyai/ui";
 import type { ReactNode } from "react";
 import { useApp } from "../state";
 import { DatabaseView } from "./DatabaseView";
-import {
-  DESKTOP_SEGMENTED_GROUP_CLASSNAME,
-  DESKTOP_SEGMENTED_ITEM_ACTIVE_CLASSNAME,
-  DESKTOP_SEGMENTED_ITEM_BASE_CLASSNAME,
-  DESKTOP_SEGMENTED_ITEM_INACTIVE_CLASSNAME,
-} from "./desktop-surface-primitives";
 import { MediaGalleryView } from "./MediaGalleryView";
 import { VectorBrowserView } from "./VectorBrowserView";
 
 export function DatabasePageView({
   contentHeader,
-  inModal,
 }: {
   contentHeader?: ReactNode;
-  inModal?: boolean;
 } = {}) {
   const { t, databaseSubTab, setState } = useApp();
   const dbTabs = [
@@ -39,54 +35,34 @@ export function DatabasePageView({
   ];
 
   const leftNav = (
-    <div
-      className={DESKTOP_SEGMENTED_GROUP_CLASSNAME}
+    <SegmentedControl
+      value={databaseSubTab}
+      onValueChange={(v) => setState("databaseSubTab", v)}
+      items={dbTabs.map((tab) => ({ value: tab.id, label: tab.label }))}
       role="tablist"
       aria-label={t("aria.databaseViews")}
-    >
-      {dbTabs.map((tab) => {
-        const isActive = databaseSubTab === tab.id;
-        return (
-          <Button
-            variant="ghost"
-            size="sm"
-            type="button"
-            key={tab.id}
-            role="tab"
-            aria-selected={isActive}
-            aria-current={isActive ? "page" : undefined}
-            className={`${DESKTOP_SEGMENTED_ITEM_BASE_CLASSNAME} h-10 flex-1 ${
-              isActive
-                ? DESKTOP_SEGMENTED_ITEM_ACTIVE_CLASSNAME
-                : DESKTOP_SEGMENTED_ITEM_INACTIVE_CLASSNAME
-            }`}
-            onClick={() => setState("databaseSubTab", tab.id)}
-          >
-            {tab.label}
-          </Button>
-        );
-      })}
-    </div>
+    />
   );
 
-  // Tables sub-tab uses PageLayout internally (with its own sidebar),
-  // so it receives contentHeader directly. Media/Vectors are single-pane
-  // and need ContentLayout wrapping.
-  if (databaseSubTab === "tables") {
+  // Each sub-view owns its own PageLayout + Sidebar.
+  // contentHeader and leftNav are passed through so the layout is uniform.
+  if (databaseSubTab === "media") {
     return (
-      <DatabaseView
+      <MediaGalleryView
         leftNav={leftNav}
         contentHeader={contentHeader}
       />
     );
   }
-
+  if (databaseSubTab === "vectors") {
+    return (
+      <VectorBrowserView
+        leftNav={leftNav}
+        contentHeader={contentHeader}
+      />
+    );
+  }
   return (
-    <ContentLayout contentHeader={contentHeader} inModal={inModal}>
-      {databaseSubTab === "media" && <MediaGalleryView leftNav={leftNav} />}
-      {databaseSubTab === "vectors" && (
-        <VectorBrowserView leftNav={leftNav} />
-      )}
-    </ContentLayout>
+    <DatabaseView leftNav={leftNav} contentHeader={contentHeader} />
   );
 }

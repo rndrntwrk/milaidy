@@ -6,27 +6,22 @@
  * APIs (getDatabaseTables, executeDatabaseQuery).
  */
 
-import { Button, Input } from "@miladyai/ui";
+import {
+  Button,
+  Input,
+  MetaPill,
+  PageLayout,
+  PagePanel,
+  Sidebar,
+  SidebarContent,
+  SidebarPanel,
+  SidebarScrollRegion,
+} from "@miladyai/ui";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { client, type QueryResult } from "../api";
 import { useApp } from "../state";
 import { resolveAppAssetUrl } from "../utils";
-import {
-  DESKTOP_INSET_PANEL_CLASSNAME,
-  DesktopRailSummaryCard,
-} from "./desktop-surface-primitives";
-import {
-  APP_DESKTOP_SIDEBAR_RAIL_STANDARD_CLASSNAME,
-  APP_DESKTOP_SPLIT_SHELL_CLASSNAME,
-  APP_SIDEBAR_CARD_ACTIVE_CLASSNAME,
-  APP_SIDEBAR_CARD_BASE_CLASSNAME,
-  APP_SIDEBAR_CARD_INACTIVE_CLASSNAME,
-  APP_SIDEBAR_INNER_CLASSNAME,
-  APP_SIDEBAR_PILL_CLASSNAME,
-  APP_SIDEBAR_SCROLL_REGION_CLASSNAME,
-  APP_SIDEBAR_SEARCH_INPUT_CLASSNAME,
-} from "./sidebar-shell-styles";
 
 type MediaType = "all" | "image" | "video" | "audio";
 
@@ -185,7 +180,10 @@ function collectStrings(obj: unknown, out: Set<string>) {
   }
 }
 
-export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
+export function MediaGalleryView({
+  leftNav,
+  contentHeader,
+}: { leftNav?: ReactNode; contentHeader?: ReactNode }) {
   const { t } = useApp();
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -294,260 +292,247 @@ export function MediaGalleryView({ leftNav }: { leftNav?: ReactNode }) {
     filtered[0] ??
     null;
 
-  return (
-    <div className={APP_DESKTOP_SPLIT_SHELL_CLASSNAME}>
-      <aside className={APP_DESKTOP_SIDEBAR_RAIL_STANDARD_CLASSNAME}>
-        <div className={APP_SIDEBAR_INNER_CLASSNAME}>
-          <div className="space-y-3 pt-4">
-            {leftNav}
-            <DesktopRailSummaryCard>
-              <div className="text-sm font-semibold text-txt">
-                {filtered.length === 1
-                  ? t("mediagalleryview.ItemCountOne", {
-                      count: filtered.length,
-                      defaultValue: "{{count}} item",
-                    })
-                  : t("mediagalleryview.ItemCountMany", {
-                      count: filtered.length,
-                      defaultValue: "{{count}} items",
-                    })}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/75">
-                <span className={APP_SIDEBAR_PILL_CLASSNAME}>
-                  {filter === "all"
-                    ? t("mediagalleryview.AllMedia", {
-                        defaultValue: "All media",
-                      })
-                    : mediaTypeLabel(t, filter)}
-                </span>
-                {search ? (
-                  <span className="rounded-full border border-accent/25 bg-accent/8 px-2.5 py-1 text-accent">
-                    {t("mediagalleryview.SearchActive", {
-                      defaultValue: "Search active",
-                    })}
-                  </span>
-                ) : null}
-              </div>
-            </DesktopRailSummaryCard>
-          </div>
-
-          <div className="space-y-3 pt-4">
-            <Input
-              type="search"
-              placeholder={t("mediagalleryview.SearchMedia")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className={APP_SIDEBAR_SEARCH_INPUT_CLASSNAME}
-            />
-
-            <div className="grid grid-cols-2 gap-1.5">
-              {FILTER_CHIPS.map((chip) => {
-                const isActive = filter === chip;
-                return (
-                  <Button
-                    key={chip}
-                    variant="ghost"
-                    size="sm"
-                    className={`h-auto min-h-[2.25rem] rounded-xl border px-3 py-2 text-left text-[11px] font-semibold transition-colors ${
-                      isActive
-                        ? "border-accent/35 bg-accent/14 text-txt-strong"
-                        : "border-border/45 bg-bg/35 text-muted hover:border-border/60 hover:bg-bg-hover hover:text-txt"
-                    }`}
-                    onClick={() => setFilter(chip)}
-                  >
-                    {mediaTypeLabel(t, chip)}
-                  </Button>
-                );
-              })}
+  const mediaSidebar = (
+    <Sidebar testId="media-sidebar">
+      <SidebarPanel>
+        <div className="space-y-3 pt-4">
+          {leftNav}
+          <PagePanel.SummaryCard>
+            <div className="text-sm font-semibold text-txt">
+              {filtered.length === 1
+                ? t("mediagalleryview.ItemCountOne", {
+                    count: filtered.length,
+                    defaultValue: "{{count}} item",
+                  })
+                : t("mediagalleryview.ItemCountMany", {
+                    count: filtered.length,
+                    defaultValue: "{{count}} items",
+                  })}
             </div>
-          </div>
+            <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/75">
+              <MetaPill>
+                {filter === "all"
+                  ? t("mediagalleryview.AllMedia", {
+                      defaultValue: "All media",
+                    })
+                  : mediaTypeLabel(t, filter)}
+              </MetaPill>
+              {search ? (
+                <span className="rounded-full border border-accent/25 bg-accent/8 px-2.5 py-1 text-accent">
+                  {t("mediagalleryview.SearchActive", {
+                    defaultValue: "Search active",
+                  })}
+                </span>
+              ) : null}
+            </div>
+          </PagePanel.SummaryCard>
+        </div>
 
-          <div
-            className={`mt-3 space-y-1.5 ${APP_SIDEBAR_SCROLL_REGION_CLASSNAME}`}
-          >
-            {loading ? (
-              <div className="rounded-xl border border-border/35 bg-bg/35 px-3 py-4 text-center text-xs text-muted">
-                {t("mediagalleryview.ScanningForMedia")}
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="rounded-xl border border-border/35 bg-bg/35 px-3 py-4 text-center text-xs text-muted">
-                {t("mediagalleryview.NoMediaFound")}
-              </div>
-            ) : (
-              filtered.map((item, index) => {
-                const isActive = selectedItem?.url === item.url;
-                return (
-                  <Button
-                    variant="ghost"
-                    type="button"
-                    // biome-ignore lint/suspicious/noArrayIndexKey: stable url plus index tiebreaker
-                    key={`${item.url}-${index}`}
-                    className={`${APP_SIDEBAR_CARD_BASE_CLASSNAME} ${
-                      isActive
-                        ? APP_SIDEBAR_CARD_ACTIVE_CLASSNAME
-                        : APP_SIDEBAR_CARD_INACTIVE_CLASSNAME
-                    }`}
-                    onClick={() => setSelectedMediaUrl(item.url)}
-                  >
-                    <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-[11px] font-bold uppercase ${
-                        isActive
-                          ? "border-accent/30 bg-accent/18 text-txt-strong"
-                          : "border-border/50 bg-bg-accent/80 text-muted"
-                      }`}
-                    >
-                      {item.type.slice(0, 1)}
-                    </div>
-                    <div className="min-w-0 flex-1 text-left">
-                      <div className="truncate text-sm font-semibold leading-snug text-inherit">
-                        {item.filename ||
-                          t("mediagalleryview.MediaItem", {
-                            defaultValue: "Media item",
-                          })}
-                      </div>
-                      <div className="mt-1 flex items-center gap-2 text-[11px] text-muted/85">
-                        <span className="truncate">{item.source}</span>
-                        <span className="rounded-full border border-border/45 px-2 py-0.5 uppercase tracking-[0.16em]">
-                          {mediaTypeLabel(t, item.type)}
-                        </span>
-                      </div>
-                    </div>
-                  </Button>
-                );
-              })
-            )}
+        <div className="space-y-3 pt-4">
+          <Input
+            type="search"
+            placeholder={t("mediagalleryview.SearchMedia")}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-10 rounded-[16px] border-border/40 bg-card/50 text-sm placeholder:text-muted/65 focus-visible:ring-accent/30"
+          />
+
+          <div className="grid grid-cols-2 gap-1.5">
+            {FILTER_CHIPS.map((chip) => {
+              const isActive = filter === chip;
+              return (
+                <Button
+                  key={chip}
+                  variant="ghost"
+                  size="sm"
+                  className={`h-auto min-h-[2.25rem] rounded-xl border px-3 py-2 text-left text-[11px] font-semibold transition-colors ${
+                    isActive
+                      ? "border-accent/35 bg-accent/14 text-txt-strong"
+                      : "border-border/45 bg-bg/35 text-muted hover:border-border/60 hover:bg-bg-hover hover:text-txt"
+                  }`}
+                  onClick={() => setFilter(chip)}
+                >
+                  {mediaTypeLabel(t, chip)}
+                </Button>
+              );
+            })}
           </div>
         </div>
-      </aside>
 
-      <div className="flex min-h-0 flex-1 flex-col bg-bg/20">
-        {error ? (
-          <div className="m-5 rounded-2xl border border-danger/35 bg-danger/10 px-4 py-3 text-sm text-danger">
-            {error}
-          </div>
-        ) : loading ? (
-          <div className="flex flex-1 items-center justify-center px-6 py-12 text-sm italic text-muted">
-            {t("mediagalleryview.ScanningForMedia")}
-          </div>
-        ) : !selectedItem ? (
-          <div className="flex flex-1 items-center justify-center p-6">
-            <div className="rounded-3xl border border-border/35 bg-bg/35 px-8 py-10 text-center shadow-inner">
-              <div className="text-base font-semibold text-txt">
-                {t("mediagalleryview.NoMediaFound")}
-              </div>
-              <div className="mt-2 max-w-sm text-sm text-muted">
-                {media.length === 0
-                  ? t("mediagalleryview.NoMediaDetectedDescription", {
-                      defaultValue:
-                        "No images, videos, or audio files were detected in the database.",
-                    })
-                  : t("mediagalleryview.NoFilterMatchesDescription", {
-                      defaultValue: "No items match the current filter.",
-                    })}
-              </div>
+        <SidebarScrollRegion className="mt-3 space-y-1.5">
+          {loading ? (
+            <SidebarContent.EmptyState>
+              {t("mediagalleryview.ScanningForMedia")}
+            </SidebarContent.EmptyState>
+          ) : filtered.length === 0 ? (
+            <SidebarContent.EmptyState>
+              {t("mediagalleryview.NoMediaFound")}
+            </SidebarContent.EmptyState>
+          ) : (
+            filtered.map((item, index) => {
+              const isActive = selectedItem?.url === item.url;
+              return (
+                <SidebarContent.Item
+                  active={isActive}
+                  // biome-ignore lint/suspicious/noArrayIndexKey: stable url plus index tiebreaker
+                  key={`${item.url}-${index}`}
+                  onClick={() => setSelectedMediaUrl(item.url)}
+                >
+                  <SidebarContent.ItemIcon active={isActive}>
+                    {item.type.slice(0, 1).toUpperCase()}
+                  </SidebarContent.ItemIcon>
+                  <SidebarContent.ItemBody>
+                    <SidebarContent.ItemTitle className="truncate">
+                      {item.filename ||
+                        t("mediagalleryview.MediaItem", {
+                          defaultValue: "Media item",
+                        })}
+                    </SidebarContent.ItemTitle>
+                    <SidebarContent.ItemDescription>
+                      <span className="truncate">{item.source}</span>
+                      <span className="rounded-full border border-border/45 px-2 py-0.5 uppercase tracking-[0.16em]">
+                        {mediaTypeLabel(t, item.type)}
+                      </span>
+                    </SidebarContent.ItemDescription>
+                  </SidebarContent.ItemBody>
+                </SidebarContent.Item>
+              );
+            })
+          )}
+        </SidebarScrollRegion>
+      </SidebarPanel>
+    </Sidebar>
+  );
+
+  return (
+    <PageLayout sidebar={mediaSidebar} contentHeader={contentHeader}>
+      {error ? (
+        <div className="m-5 rounded-2xl border border-danger/35 bg-danger/10 px-4 py-3 text-sm text-danger">
+          {error}
+        </div>
+      ) : loading ? (
+        <div className="flex flex-1 items-center justify-center px-6 py-12 text-sm italic text-muted">
+          {t("mediagalleryview.ScanningForMedia")}
+        </div>
+      ) : !selectedItem ? (
+        <div className="flex flex-1 items-center justify-center p-6">
+          <div className="rounded-3xl border border-border/35 bg-bg/35 px-8 py-10 text-center shadow-inner">
+            <div className="text-base font-semibold text-txt">
+              {t("mediagalleryview.NoMediaFound")}
+            </div>
+            <div className="mt-2 max-w-sm text-sm text-muted">
+              {media.length === 0
+                ? t("mediagalleryview.NoMediaDetectedDescription", {
+                    defaultValue:
+                      "No images, videos, or audio files were detected in the database.",
+                  })
+                : t("mediagalleryview.NoFilterMatchesDescription", {
+                    defaultValue: "No items match the current filter.",
+                  })}
             </div>
           </div>
-        ) : (
-          <>
-            <div className="border-b border-border/40 px-6 py-5">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/60">
-                {t("mediagalleryview.Media", { defaultValue: "Media" })}
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-3">
-                <h2 className="text-2xl font-semibold text-txt">
-                  {selectedItem.filename ||
-                    t("mediagalleryview.MediaItem", {
-                      defaultValue: "Media item",
-                    })}
-                </h2>
-                <span className="rounded-full border border-accent/30 bg-accent/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-fg">
-                  {mediaTypeLabel(t, selectedItem.type)}
-                </span>
-              </div>
-              <div className="mt-2 text-sm text-muted">
-                {t("mediagalleryview.SourceLabel", {
-                  defaultValue: "Source:",
-                })}{" "}
-                {selectedItem.source}
-                {selectedItem.createdAt ? ` · ${selectedItem.createdAt}` : ""}
-              </div>
+        </div>
+      ) : (
+        <>
+          <div className="border-b border-border/40 px-6 py-5">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/60">
+              {t("mediagalleryview.Media", { defaultValue: "Media" })}
             </div>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <h2 className="text-2xl font-semibold text-txt">
+                {selectedItem.filename ||
+                  t("mediagalleryview.MediaItem", {
+                    defaultValue: "Media item",
+                  })}
+              </h2>
+              <span className="rounded-full border border-accent/30 bg-accent/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-fg">
+                {mediaTypeLabel(t, selectedItem.type)}
+              </span>
+            </div>
+            <div className="mt-2 text-sm text-muted">
+              {t("mediagalleryview.SourceLabel", {
+                defaultValue: "Source:",
+              })}{" "}
+              {selectedItem.source}
+              {selectedItem.createdAt ? ` · ${selectedItem.createdAt}` : ""}
+            </div>
+          </div>
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-auto p-6">
-              <div
-                className={`flex min-h-[22rem] flex-1 items-center justify-center p-6 ${DESKTOP_INSET_PANEL_CLASSNAME}`}
-              >
-                {selectedItem.type === "image" ? (
-                  <img
-                    src={normalizeMediaUrl(selectedItem.url)}
-                    alt={selectedItem.filename}
-                    className="max-h-[32rem] max-w-full rounded-2xl object-contain"
-                  />
-                ) : selectedItem.type === "video" ? (
-                  <video
+          <div className="flex min-h-0 flex-1 flex-col overflow-auto p-6">
+            <PagePanel
+              variant="inset"
+              className="flex min-h-[22rem] flex-1 items-center justify-center p-6"
+            >
+              {selectedItem.type === "image" ? (
+                <img
+                  src={normalizeMediaUrl(selectedItem.url)}
+                  alt={selectedItem.filename}
+                  className="max-h-[32rem] max-w-full rounded-2xl object-contain"
+                />
+              ) : selectedItem.type === "video" ? (
+                <video
+                  src={normalizeMediaUrl(selectedItem.url)}
+                  controls
+                  className="max-h-[32rem] max-w-full rounded-2xl"
+                >
+                  <track kind="captions" />
+                </video>
+              ) : (
+                <div className="flex w-full max-w-xl flex-col items-center gap-5 rounded-3xl border border-border/35 bg-bg/35 px-8 py-10 text-center">
+                  <div className="text-lg font-semibold text-txt">
+                    {t("mediagalleryview.AudioPreview", {
+                      defaultValue: "Audio Preview",
+                    })}
+                  </div>
+                  <audio
                     src={normalizeMediaUrl(selectedItem.url)}
                     controls
-                    className="max-h-[32rem] max-w-full rounded-2xl"
+                    className="w-full"
                   >
                     <track kind="captions" />
-                  </video>
-                ) : (
-                  <div className="flex w-full max-w-xl flex-col items-center gap-5 rounded-3xl border border-border/35 bg-bg/35 px-8 py-10 text-center">
-                    <div className="text-lg font-semibold text-txt">
-                      {t("mediagalleryview.AudioPreview", {
-                        defaultValue: "Audio Preview",
-                      })}
-                    </div>
-                    <audio
-                      src={normalizeMediaUrl(selectedItem.url)}
-                      controls
-                      className="w-full"
-                    >
-                      <track kind="captions" />
-                    </audio>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-5 rounded-2xl border border-border/40 bg-card/45 px-5 py-4 text-sm text-muted">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/60">
-                  {t("mediagalleryview.MediaDetails", {
-                    defaultValue: "Media Details",
-                  })}
+                  </audio>
                 </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <div className="text-[11px] uppercase tracking-[0.16em] text-muted/60">
-                      {t("mediagalleryview.Type", { defaultValue: "Type" })}
-                    </div>
-                    <div className="mt-1 text-sm text-txt">
-                      {mediaTypeLabel(t, selectedItem.type)}
-                    </div>
+              )}
+            </PagePanel>
+
+            <div className="mt-5 rounded-2xl border border-border/40 bg-card/45 px-5 py-4 text-sm text-muted">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/60">
+                {t("mediagalleryview.MediaDetails", {
+                  defaultValue: "Media Details",
+                })}
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.16em] text-muted/60">
+                    {t("mediagalleryview.Type", { defaultValue: "Type" })}
                   </div>
-                  <div>
-                    <div className="text-[11px] uppercase tracking-[0.16em] text-muted/60">
-                      {t("mediagalleryview.Source", {
-                        defaultValue: "Source",
-                      })}
-                    </div>
-                    <div className="mt-1 text-sm text-txt">
-                      {selectedItem.source}
-                    </div>
+                  <div className="mt-1 text-sm text-txt">
+                    {mediaTypeLabel(t, selectedItem.type)}
                   </div>
-                  <div className="sm:col-span-2">
-                    <div className="text-[11px] uppercase tracking-[0.16em] text-muted/60">
-                      URL
-                    </div>
-                    <div className="mt-1 break-all text-sm text-txt">
-                      {selectedItem.url}
-                    </div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.16em] text-muted/60">
+                    {t("mediagalleryview.Source", {
+                      defaultValue: "Source",
+                    })}
+                  </div>
+                  <div className="mt-1 text-sm text-txt">
+                    {selectedItem.source}
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <div className="text-[11px] uppercase tracking-[0.16em] text-muted/60">
+                    URL
+                  </div>
+                  <div className="mt-1 break-all text-sm text-txt">
+                    {selectedItem.url}
                   </div>
                 </div>
               </div>
             </div>
-          </>
-        )}
-      </div>
-    </div>
+          </div>
+        </>
+      )}
+    </PageLayout>
   );
 }

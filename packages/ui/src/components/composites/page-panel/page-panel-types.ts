@@ -4,14 +4,6 @@ import type { EmptyStateProps } from "../../ui/empty-state";
 
 export type PanelElement = "div" | "section";
 
-export type PolymorphicProps<
-  T extends PanelElement,
-  P extends object = Record<never, never>,
-> = P & {
-  as?: T;
-  className?: string;
-} & Omit<React.ComponentPropsWithoutRef<T>, keyof P | "as" | "className">;
-
 export type PagePanelVariant =
   | "surface"
   | "section"
@@ -20,10 +12,11 @@ export type PagePanelVariant =
   | "shell"
   | "workspace";
 
-export type PagePanelProps<T extends PanelElement = "div"> = PolymorphicProps<
-  T,
-  { variant?: PagePanelVariant }
->;
+export type PagePanelProps = {
+  as?: PanelElement;
+  variant?: PagePanelVariant;
+  className?: string;
+} & Omit<React.ComponentPropsWithoutRef<"div">, "as" | "className">;
 
 export interface MetaPillProps extends React.HTMLAttributes<HTMLSpanElement> {
   compact?: boolean;

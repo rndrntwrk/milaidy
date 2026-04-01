@@ -10,9 +10,7 @@ import {
   Button,
   ConfirmDelete,
   Dialog,
-  DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
   Input,
   PageLayout,
@@ -25,7 +23,6 @@ import {
   SkillSidebarItem,
   StatusBadge,
   Switch,
-  Textarea,
 } from "@miladyai/ui";
 import { RefreshCw } from "lucide-react";
 import {
@@ -49,16 +46,13 @@ import type { SkillInfo, SkillMarketplaceResult } from "../api";
 import { client } from "../api";
 import { useApp } from "../state";
 import {
-  ADMIN_DIALOG_CODE_EDITOR_CLASSNAME,
-  ADMIN_DIALOG_CONTENT_CLASSNAME,
-  ADMIN_DIALOG_HEADER_CLASSNAME,
-  ADMIN_DIALOG_INPUT_CLASSNAME,
-  ADMIN_DIALOG_MONO_META_CLASSNAME,
-  ADMIN_SEGMENTED_TAB_ACTIVE_CLASSNAME,
-  ADMIN_SEGMENTED_TAB_CLASSNAME,
-  ADMIN_SEGMENTED_TAB_INACTIVE_CLASSNAME,
-  ADMIN_SEGMENTED_TABLIST_CLASSNAME,
-} from "./admin-surface-primitives";
+  AdminCodeEditor,
+  AdminDialog,
+  AdminDialogContent,
+  AdminDialogHeader,
+  AdminInput,
+  AdminMonoMeta,
+} from "@miladyai/ui";
 
 /* ── Marketplace Result Card ────────────────────────────────────────── */
 
@@ -81,23 +75,23 @@ function MarketplaceCard({
   const sourceLabel = item.repository || item.slug || item.id;
 
   return (
-    <div className="flex items-start gap-4 p-4 border border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]/50 transition-colors">
+    <div className="flex items-start gap-4 p-4 border border-border bg-card hover:border-accent/50 transition-colors">
       {/* Icon placeholder */}
-      <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-[var(--accent)]/10 text-[var(--accent)] text-sm font-bold rounded">
+      <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-accent/10 text-accent text-sm font-bold rounded">
         {item.name.charAt(0).toUpperCase()}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="font-semibold text-sm text-[var(--txt)]">
+        <div className="font-semibold text-sm text-txt">
           {item.name}
         </div>
-        <div className="text-[11px] text-[var(--muted)] mt-0.5 line-clamp-2">
+        <div className="text-[11px] text-muted mt-0.5 line-clamp-2">
           {item.description || t("skillsview.noDescription")}
         </div>
-        <div className="flex items-center gap-2 mt-1.5 text-[10px] text-[var(--muted)]">
+        <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted">
           <span className="font-mono">{sourceLabel}</span>
           {item.score != null && (
             <>
-              <span className="text-[var(--border)]">/</span>
+              <span className="text-border">/</span>
               <span>
                 {t("skillsview.score")} {item.score.toFixed(2)}
               </span>
@@ -105,11 +99,11 @@ function MarketplaceCard({
           )}
           {item.tags && item.tags.length > 0 && (
             <>
-              <span className="text-[var(--border)]">/</span>
+              <span className="text-border">/</span>
               {item.tags.slice(0, 3).map((tag) => (
                 <span
                   key={tag}
-                  className="px-1.5 py-px bg-[var(--accent)]/10 text-[var(--accent)]"
+                  className="px-1.5 py-px bg-accent/10 text-accent"
                 >
                   {tag}
                 </span>
@@ -204,11 +198,11 @@ function InstallModal({
         if (!open) onClose();
       }}
     >
-      <DialogContent
+      <AdminDialogContent
         container={typeof document !== "undefined" ? document.body : undefined}
-        className={`${ADMIN_DIALOG_CONTENT_CLASSNAME} max-h-[80vh] max-w-2xl`}
+        className="max-h-[80vh] max-w-2xl"
       >
-        <DialogHeader className={ADMIN_DIALOG_HEADER_CLASSNAME}>
+        <AdminDialogHeader>
           <DialogTitle className="text-[13px] font-extrabold uppercase tracking-[0.14em]">
             {t("skillsview.installSkillTitle", {
               defaultValue: "Install Skill",
@@ -220,35 +214,27 @@ function InstallModal({
                 "Add skills from the marketplace or a GitHub repository.",
             })}
           </DialogDescription>
-        </DialogHeader>
-        <div
-          className={ADMIN_SEGMENTED_TABLIST_CLASSNAME}
+        </AdminDialogHeader>
+        <AdminDialog.SegmentedTabList
           role="tablist"
           aria-label={t("skillsview.installSkillSource", {
             defaultValue: "Install skill source",
           })}
         >
           {installTabs.map((t) => (
-            <Button
-              variant="ghost"
-              size="sm"
-              type="button"
+            <AdminDialog.SegmentedTab
               key={t.id}
+              active={tab === t.id}
               role="tab"
               id={`skills-install-tab-${t.id}`}
               aria-selected={tab === t.id}
               aria-controls={`skills-install-panel-${t.id}`}
-              className={`${ADMIN_SEGMENTED_TAB_CLASSNAME} ${
-                tab === t.id
-                  ? ADMIN_SEGMENTED_TAB_ACTIVE_CLASSNAME
-                  : ADMIN_SEGMENTED_TAB_INACTIVE_CLASSNAME
-              }`}
               onClick={() => setTab(t.id)}
             >
               {t.label}
-            </Button>
+            </AdminDialog.SegmentedTab>
           ))}
-        </div>
+        </AdminDialog.SegmentedTabList>
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {tab === "search" && (
             <div
@@ -257,9 +243,8 @@ function InstallModal({
               aria-labelledby="skills-install-tab-search"
             >
               <div className="flex gap-2 items-center mb-4">
-                <Input
+                <AdminInput
                   type="text"
-                  className={ADMIN_DIALOG_INPUT_CLASSNAME}
                   style={{ flex: 1, minWidth: 200 }}
                   placeholder={t("skillsview.searchByKeyword")}
                   aria-label={t("skillsview.searchByKeyword", {
@@ -309,7 +294,7 @@ function InstallModal({
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  <div className="text-[11px] text-[var(--muted)] mb-1">
+                  <div className="text-[11px] text-muted mb-1">
                     {skillsMarketplaceResults.length} {t("skillsview.result")}
                     {skillsMarketplaceResults.length !== 1 ? "s" : ""}
                   </div>
@@ -346,9 +331,8 @@ function InstallModal({
                 })}
               </div>
               <div className="flex gap-2 items-center">
-                <Input
+                <AdminInput
                   type="text"
-                  className={ADMIN_DIALOG_INPUT_CLASSNAME}
                   style={{ flex: 1 }}
                   placeholder="https://github.com/org/repo"
                   aria-label={t("skillsview.githubRepositoryUrl", {
@@ -393,7 +377,7 @@ function InstallModal({
             </div>
           )}
         </div>
-      </DialogContent>
+      </AdminDialogContent>
     </Dialog>
   );
 }
@@ -480,22 +464,22 @@ function EditSkillModal({
         if (!open) onClose();
       }}
     >
-      <DialogContent
+      <AdminDialogContent
         container={typeof document !== "undefined" ? document.body : undefined}
-        className={`${ADMIN_DIALOG_CONTENT_CLASSNAME} h-[85vh] max-w-4xl`}
+        className="h-[85vh] max-w-4xl"
       >
-        <DialogHeader
-          className={`${ADMIN_DIALOG_HEADER_CLASSNAME} flex-row items-center justify-between py-3 space-y-0`}
+        <AdminDialogHeader
+          className="flex-row items-center justify-between py-3 space-y-0"
         >
           <div className="flex items-center gap-3 min-w-0">
             <DialogTitle className="font-semibold text-sm truncate">
               {skillName}
             </DialogTitle>
-            <span
-              className={`rounded-md border border-border bg-bg-hover px-1.5 py-0.5 ${ADMIN_DIALOG_MONO_META_CLASSNAME}`}
+            <AdminMonoMeta
+              className="rounded-md border border-border bg-bg-hover px-1.5 py-0.5"
             >
               {t("skillsview.SKILLMd")}
-            </span>
+            </AdminMonoMeta>
             <DialogDescription className="sr-only">
               {t("skillsview.editSkillSourceDescription", {
                 defaultValue:
@@ -514,7 +498,7 @@ function EditSkillModal({
               {t("skillsview.toSave")}
             </span>
           </div>
-        </DialogHeader>
+        </AdminDialogHeader>
         <div className="flex-1 overflow-hidden">
           {loading ? (
             <div className="flex h-full items-center justify-center text-sm text-muted">
@@ -533,8 +517,7 @@ function EditSkillModal({
               </Button>
             </div>
           ) : (
-            <Textarea
-              className={ADMIN_DIALOG_CODE_EDITOR_CLASSNAME}
+            <AdminCodeEditor
               value={content}
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -581,7 +564,7 @@ function EditSkillModal({
             </Button>
           </div>
         </div>
-      </DialogContent>
+      </AdminDialogContent>
     </Dialog>
   );
 }
@@ -1208,7 +1191,7 @@ function SkillsFullView({ contentHeader }: { contentHeader?: ReactNode } = {}) {
                   <div className="bg-bg/18 px-4 py-4 sm:px-5">
                     <div className="flex flex-col gap-3">
                       <div>
-                        <span className="mb-1 block text-[11px] font-medium text-[var(--muted)]">
+                        <span className="mb-1 block text-[11px] font-medium text-muted">
                           {t("skillsview.SkillName")}{" "}
                           <span className="text-danger">*</span>
                         </span>
@@ -1231,7 +1214,7 @@ function SkillsFullView({ contentHeader }: { contentHeader?: ReactNode } = {}) {
                         />
                       </div>
                       <div>
-                        <span className="mb-1 block text-[11px] font-medium text-[var(--muted)]">
+                        <span className="mb-1 block text-[11px] font-medium text-muted">
                           {t("skillsview.Description")}
                         </span>
                         <Input
