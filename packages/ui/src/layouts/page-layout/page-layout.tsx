@@ -73,38 +73,42 @@ export function PageLayout({
   return (
     <div
       className={cn(
-        "flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden md:flex-row",
+        "flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden",
         className,
       )}
       {...props}
     >
-      <div className="hidden min-h-0 w-full shrink-0 items-stretch px-0 pb-0 pt-2 sm:pt-3 md:flex md:w-auto lg:pt-4">
-        {desktopSidebarElement}
-      </div>
-      <main
-        ref={contentRef}
-        className={cn(
-          "chat-native-scrollbar relative flex flex-1 min-w-0 flex-col overflow-x-hidden overflow-y-auto bg-transparent px-4 pb-4 pt-2 sm:px-6 sm:pb-6 sm:pt-3 lg:px-7 lg:pb-7 lg:pt-4",
-          contentClassName,
-        )}
-      >
-        <PageLayoutMobileDrawer
-          isDesktop={isDesktop}
-          mobileSidebarLabel={mobileSidebarLabel}
-          mobileSidebarOpen={mobileSidebarOpen}
-          mobileSidebarTriggerClassName={mobileSidebarTriggerClassName}
-          onMobileSidebarOpenChange={setMobileSidebarOpen}
-          sidebar={sidebar}
-        />
-        {contentHeader ? (
+      {contentHeader ? (
+        <div className="shrink-0 px-4 pt-2 sm:px-6 sm:pt-3 lg:px-7 lg:pt-4">
           <PageLayoutHeader className={contentHeaderClassName}>
             {contentHeader}
           </PageLayoutHeader>
-        ) : null}
+        </div>
+      ) : null}
+      <div className="flex flex-1 min-h-0 min-w-0 flex-col md:flex-row">
+        <div className="hidden min-h-0 w-full shrink-0 items-stretch px-0 pb-0 pt-2 sm:pt-3 md:flex md:w-auto lg:pt-4">
+          {desktopSidebarElement}
+        </div>
+        <main
+          ref={contentRef}
+          className={cn(
+            "chat-native-scrollbar relative flex flex-1 min-w-0 flex-col overflow-x-hidden overflow-y-auto bg-transparent px-4 pb-4 pt-2 sm:px-6 sm:pb-6 sm:pt-3 lg:px-7 lg:pb-7 lg:pt-4",
+            contentClassName,
+          )}
+        >
+          <PageLayoutMobileDrawer
+            isDesktop={isDesktop}
+            mobileSidebarLabel={mobileSidebarLabel}
+            mobileSidebarOpen={mobileSidebarOpen}
+            mobileSidebarTriggerClassName={mobileSidebarTriggerClassName}
+            onMobileSidebarOpenChange={setMobileSidebarOpen}
+            sidebar={sidebar}
+          />
         <div className={cn("w-full min-h-0", contentInnerClassName)}>
           {children}
         </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
