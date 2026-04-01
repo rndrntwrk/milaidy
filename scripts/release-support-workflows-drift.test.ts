@@ -94,8 +94,11 @@ describe("release support workflow drift", () => {
   it("keeps the subordinate cloud agent runtime on the dedicated child-image Dockerfile", () => {
     const dockerfile = fs.readFileSync(CLOUD_AGENT_DOCKERFILE, "utf8");
 
+    expect(dockerfile).toContain("deploy/cloud-agent-template/package.json");
     expect(dockerfile).toContain("deploy/cloud-agent-entrypoint.ts");
-    expect(dockerfile).toContain('CMD ["tsx", "entrypoint.ts"]');
+    expect(dockerfile).toContain(
+      'CMD ["./node_modules/.bin/tsx", "cloud-agent-entrypoint.ts"]',
+    );
   });
 
   it("uses the canonical image runtime selector for both agent and cloud launches", () => {

@@ -114,13 +114,20 @@ describe("release-check package guards", () => {
             "@elizaos/core": "alpha",
             "@elizaos/plugin-elizacloud": "2.0.0-alpha.7",
             "@elizaos/plugin-sql": "^2.0.0-alpha.17",
+            "@rndrntwrk/plugin-555stream": "^0.1.1",
           },
         },
-        ["@elizaos/core", "@elizaos/plugin-elizacloud", "@elizaos/plugin-sql"],
+        [
+          "@elizaos/core",
+          "@elizaos/plugin-elizacloud",
+          "@elizaos/plugin-sql",
+          "@rndrntwrk/plugin-555stream",
+        ],
       ),
     ).toEqual([
       { name: "@elizaos/core", specifier: "alpha" },
       { name: "@elizaos/plugin-sql", specifier: "^2.0.0-alpha.17" },
+      { name: "@rndrntwrk/plugin-555stream", specifier: "^0.1.1" },
     ]);
   });
 

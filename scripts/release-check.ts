@@ -230,6 +230,7 @@ const cloudAgentTemplateReleaseDependencies = [
   "@elizaos/core",
   "@elizaos/plugin-elizacloud",
   "@elizaos/plugin-sql",
+  "@rndrntwrk/plugin-555stream",
 ] as const;
 
 /**

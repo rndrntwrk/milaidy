@@ -30,11 +30,15 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Copy the entrypoint (standalone Node.js script, no build step needed)
-COPY deploy/cloud-agent-entrypoint.ts ./entrypoint.ts
+# Install the child-agent runtime dependencies from the template contract.
+COPY deploy/cloud-agent-template/package.json ./package.json
+# CLOUD-01 verified that plugin-555stream runs against elizaOS v2 even though
+# the published package still advertises a ^1.7.0 peer range.
+RUN npm install --omit=dev --no-package-lock --legacy-peer-deps
 
-# Install tsx for running TypeScript directly
-RUN npm install -g tsx@4
+# Copy the cloud-agent entrypoint pair.
+COPY deploy/cloud-agent-entrypoint.ts ./cloud-agent-entrypoint.ts
+COPY deploy/cloud-agent-shared.ts ./cloud-agent-shared.ts
 
 ENV NODE_ENV=production
 # PORT is used by cloud platforms (Railway, Fly.io); maps to MILADY_PORT locally
@@ -52,4 +56,4 @@ EXPOSE ${BRIDGE_PORT}
 RUN useradd -m agent
 USER agent
 
-CMD ["tsx", "entrypoint.ts"]
+CMD ["./node_modules/.bin/tsx", "cloud-agent-entrypoint.ts"]

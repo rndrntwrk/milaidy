@@ -9,6 +9,7 @@
     "@elizaos/core": "2.0.0-alpha.98",
     "@elizaos/plugin-sql": "2.0.0-alpha.17",
     "@elizaos/plugin-elizacloud": "2.0.0-alpha.7",
+    "@rndrntwrk/plugin-555stream": "0.1.1",
     "tsx": "4.21.0"
   }
 }
