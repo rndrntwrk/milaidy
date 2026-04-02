@@ -25,6 +25,18 @@ export function WelcomeStep() {
   } = useApp();
 
   const handleGetStarted = () => {
+    // Unlock browser autoplay by playing a silent WAV during this user gesture.
+    // Without this, audio.play() in IdentityStep's mount effect is blocked
+    // because the gesture is stale by the time the useEffect fires.
+    try {
+      const silence = new Audio(
+        "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=",
+      );
+      silence.volume = 0;
+      silence.play().catch(() => {});
+    } catch {
+      // Audio not available
+    }
     // Default to Chen (blue-haired anime character) — user picks their
     // character in the identity step (now the very next screen).
     setState("onboardingStyle", "chen");
@@ -36,6 +48,15 @@ export function WelcomeStep() {
   };
 
   const handleUseExistingSetup = () => {
+    try {
+      const silence = new Audio(
+        "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=",
+      );
+      silence.volume = 0;
+      silence.play().catch(() => {});
+    } catch {
+      // Audio not available
+    }
     setState("onboardingStep", "identity");
   };
 
