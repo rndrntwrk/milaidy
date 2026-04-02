@@ -33,14 +33,6 @@ import {
   Wallet,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { TradePanel } from "../inventory/BscTradePanel";
-import {
-  CHAIN_CONFIGS,
-  type ChainKey,
-  chainKeyToWalletRpcChain,
-  PRIMARY_CHAIN_KEYS,
-  resolveChainKey,
-} from "../inventory/chainConfig";
 import {
   BSC_GAS_READY_THRESHOLD,
   loadTrackedBscTokens,
@@ -49,7 +41,15 @@ import {
   saveTrackedTokens,
   type TrackedToken,
 } from "../inventory";
+import { TradePanel } from "../inventory/BscTradePanel";
 import { ChainIcon } from "../inventory/ChainIcon";
+import {
+  CHAIN_CONFIGS,
+  type ChainKey,
+  chainKeyToWalletRpcChain,
+  PRIMARY_CHAIN_KEYS,
+  resolveChainKey,
+} from "../inventory/chainConfig";
 import {
   type PrimaryInventoryChainKey,
   toggleInventoryChainFilter,
@@ -57,11 +57,10 @@ import {
 import { NftGrid } from "../inventory/NftGrid";
 import { TokensTable } from "../inventory/TokensTable";
 import { useInventoryData } from "../inventory/useInventoryData";
-import { ConfigPageView } from "./ConfigPageView";
 import { PolicyControlsView } from "../settings/PolicyControlsView";
 import { ApprovalQueue } from "../steward/ApprovalQueue";
-import { StewardLogo } from "../steward/StewardLogo";
 import { TransactionHistory } from "../steward/TransactionHistory";
+import { ConfigPageView } from "./ConfigPageView";
 
 /* ── Component ─────────────────────────────────────────────────────── */
 
@@ -645,15 +644,6 @@ export function InventoryView() {
       }
       footer={
         <div className="flex w-full flex-col gap-2">
-          {stewardStatus?.connected && (
-            <div
-              data-testid="steward-status-badge"
-              className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold bg-accent/10 text-accent-fg"
-            >
-              <Shield className="h-3.5 w-3.5 shrink-0" />
-              {t("settings.stewardManaged", { defaultValue: "Managed Wallet" })}
-            </div>
-          )}
           {addresses.map((item) => (
             <Button
               key={`${item.label}-${item.address}`}

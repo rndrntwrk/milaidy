@@ -435,7 +435,7 @@ export function DatabaseView({
           ) : view === "tables" ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-auto p-6">
               {!selectedTable ? (
-                <div className="flex flex-1 flex-col">
+                <>
                   <PagePanel variant="surface" as="section"
                     className="px-5 py-5 sm:px-6"
                   >
@@ -448,15 +448,15 @@ export function DatabaseView({
                   </PagePanel>
 
                   <PagePanel variant="surface"
-                    className="mt-4 flex min-h-[18rem] flex-1 items-center justify-center p-6"
+                    className="mt-4 flex flex-1 min-h-0 flex-col overflow-hidden p-3"
                   >
                     <PagePanel.Empty
-                      className="w-full flex-1 min-h-[14rem]"
+                      className="flex-1 min-h-[14rem]"
                       title={t("databaseview.SelectATable")}
                       description={t("databaseview.ChooseATableFrom")}
                     />
                   </PagePanel>
-                </div>
+                </>
               ) : loading && !tableData ? (
                 <PagePanel variant="surface"
                   className="flex flex-1 items-center justify-center px-6 py-10 text-sm font-medium italic text-muted"
@@ -723,11 +723,28 @@ export function DatabaseView({
           {/* Main grid area */}
           <div className="flex-1 min-w-0 flex flex-col bg-bg/10">
             {!selectedTable ? (
-              <PagePanel.Empty
-                className="flex-1 min-h-[18rem]"
-                title={t("databaseview.SelectATable")}
-                description={t("databaseview.ChooseATableFrom")}
-              />
+              <>
+                <PagePanel variant="surface" as="section"
+                  className="px-5 py-5 sm:px-6"
+                >
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                    {t("databaseview.Database")}
+                  </div>
+                  <div className="mt-1 text-2xl font-semibold text-txt-strong">
+                    {t("databaseview.TableBrowser")}
+                  </div>
+                </PagePanel>
+
+                <PagePanel variant="surface"
+                  className="mt-4 flex flex-1 min-h-0 flex-col overflow-hidden p-3"
+                >
+                  <PagePanel.Empty
+                    className="flex-1 min-h-[14rem]"
+                    title={t("databaseview.SelectATable")}
+                    description={t("databaseview.ChooseATableFrom")}
+                  />
+                </PagePanel>
+              </>
             ) : loading && !tableData ? (
               <PagePanel variant="surface"
                 className="flex flex-1 items-center justify-center px-6 py-10 text-sm font-medium italic text-muted"
