@@ -200,7 +200,10 @@ async function isRefAccessible(repository, ref) {
   }
 }
 
-export function resolveCurrentGitSha({ cwd = repoRoot, env = process.env } = {}) {
+export function resolveCurrentGitSha({
+  cwd = repoRoot,
+  env = process.env,
+} = {}) {
   const explicit = env.GITHUB_SHA?.trim();
   if (explicit) {
     return explicit;
