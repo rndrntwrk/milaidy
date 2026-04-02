@@ -104,7 +104,7 @@ export function PageLayout({
             onMobileSidebarOpenChange={setMobileSidebarOpen}
             sidebar={sidebar}
           />
-        <div className={cn("w-full min-h-0", contentInnerClassName)}>
+        <div className={cn("flex flex-1 flex-col w-full min-h-0", contentInnerClassName)}>
           {children}
         </div>
         </main>
