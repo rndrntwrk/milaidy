@@ -47,13 +47,15 @@ import {
   stripAssistantStageDirections,
 } from "./chat-text-helpers.js";
 import {
+  maybeAugmentChatMessageWithAgentAwareness,
+  maybeAugmentChatMessageWithKnowledge,
+  maybeAugmentChatMessageWithLanguage,
+} from "./chat-augmentation.js";
+import {
   resolveAppUserName,
   type ConversationMeta,
   // Deep dependencies of generateChatResponse that stay in server.ts
   maybeHandleDirectBinanceSkillRequest,
-  maybeAugmentChatMessageWithWalletContext,
-  maybeAugmentChatMessageWithKnowledge,
-  maybeAugmentChatMessageWithLanguage,
   executeFallbackParsedActions,
   parseFallbackActionBlocks,
   shouldForceCheckBalanceFallback,
@@ -670,13 +672,14 @@ export async function generateChatResponse(
         message,
         opts?.preferredLanguage,
       );
-      const walletAugmentedMessage = maybeAugmentChatMessageWithWalletContext(
-        runtime,
-        languageAugmentedMessage,
-      );
+      const awarenessAugmentedMessage =
+        await maybeAugmentChatMessageWithAgentAwareness(
+          runtime,
+          languageAugmentedMessage,
+        );
       const generationMessage = await maybeAugmentChatMessageWithKnowledge(
         runtime,
-        walletAugmentedMessage,
+        awarenessAugmentedMessage,
       );
       result = await runtime.messageService?.handleMessage(
         runtime,
