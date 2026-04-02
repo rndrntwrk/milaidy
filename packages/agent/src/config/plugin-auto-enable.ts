@@ -123,6 +123,27 @@ const FEATURE_PLUGINS: Record<string, string> = {
   claudeCodeWorkbench: "@elizaos/plugin-claude-code-workbench",
 };
 
+const EVM_PLUGIN_PACKAGE = "@elizaos/plugin-evm";
+const EVM_PLUGIN_SHORT_ID = "evm";
+
+function resolveEvmAutoEnableReason(
+  env: NodeJS.ProcessEnv,
+): string | null {
+  if (env.EVM_PRIVATE_KEY?.trim()) {
+    return "env: EVM_PRIVATE_KEY";
+  }
+
+  const cloudProvisioned =
+    env.MILADY_CLOUD_PROVISIONED === "1" ||
+    env.ELIZA_CLOUD_PROVISIONED === "1";
+
+  if (cloudProvisioned && env.STEWARD_AGENT_TOKEN?.trim()) {
+    return "cloud-provisioned Steward wallet";
+  }
+
+  return null;
+}
+
 export function isConnectorConfigured(
   connectorName: string,
   connectorConfig: unknown,
@@ -378,6 +399,20 @@ export function applyPluginAutoEnable(
       pluginId,
       changes,
       `env: ${envKey}`,
+    );
+  }
+
+  const evmAutoEnableReason = resolveEvmAutoEnableReason(env);
+  if (
+    evmAutoEnableReason &&
+    pluginsConfig.entries[EVM_PLUGIN_SHORT_ID]?.enabled !== false
+  ) {
+    addToAllowlist(
+      pluginsConfig.allow,
+      EVM_PLUGIN_PACKAGE,
+      EVM_PLUGIN_SHORT_ID,
+      changes,
+      evmAutoEnableReason,
     );
   }
 

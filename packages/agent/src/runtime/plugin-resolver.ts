@@ -258,10 +258,11 @@ export async function resolvePlugins(
   // It mutates config.plugins.allow based on env vars and connector config
   // so that collectPluginNames() includes auto-enabled plugins. Dependency
   // validation happens later during plugin init when the runtime is available.
-  applyPluginAutoEnable({
+  const { config: autoEnabledConfig } = applyPluginAutoEnable({
     config,
     env: process.env,
   } satisfies ApplyPluginAutoEnableParams);
+  Object.assign(config, autoEnabledConfig);
 
   const pluginsToLoad = collectPluginNames(config);
   const corePluginSet = new Set<string>(CORE_PLUGINS);

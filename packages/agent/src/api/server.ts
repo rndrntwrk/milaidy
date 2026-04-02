@@ -294,6 +294,7 @@ import {
   generateWalletKeys,
   getWalletAddresses,
   importWallet,
+  initStewardWalletCache,
   validatePrivateKey,
 } from "./wallet.js";
 import { handleWalletBscRoutes } from "./wallet-bsc-routes.js";
@@ -6093,6 +6094,10 @@ export async function startApiServer(opts?: {
       );
     }
   }
+
+  // Pre-load steward wallet addresses so getWalletAddresses() has them
+  // available synchronously from the start (cloud-provisioned containers).
+  await initStewardWalletCache();
 
   // Warn when wallet private keys live in plaintext config and the OS secure
   // store is not enabled.  This nudges operators toward MILADY_WALLET_OS_STORE=1.
