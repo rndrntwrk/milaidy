@@ -51,6 +51,14 @@ export async function stewardEvmPreBoot(runtime: IAgentRuntime): Promise<void> {
         runtime.setSetting("EVM_PRIVATE_KEY", DUMMY_PRIVATE_KEY);
         console.log("[StewardEvmBridge] Set dummy EVM_PRIVATE_KEY placeholder");
       }
+      // Expose the steward-managed address so getWalletAddresses() and
+      // resolveWalletCapabilityStatus() can discover it synchronously,
+      // even before initStewardWalletCache() runs.
+      const addr = _stewardAccount.address;
+      if (addr && addr !== "0x0000000000000000000000000000000000000000") {
+        process.env.ELIZA_MANAGED_EVM_ADDRESS = addr;
+        console.log(`[StewardEvmBridge] Set ELIZA_MANAGED_EVM_ADDRESS=${addr}`);
+      }
       _initialized = true;
     }
   } catch (err) {
