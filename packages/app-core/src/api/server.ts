@@ -124,6 +124,7 @@ import {
 } from "../utils/sql-compat";
 import { handleCloudRoute } from "./cloud-routes";
 import { handleCloudStatusRoutes } from "./cloud-status-routes";
+import { handleVincentRoute } from "./vincent-routes";
 import {
   isAllowedDevConsoleLogPath,
   readDevConsoleLogTail,
@@ -806,6 +807,20 @@ async function handleMiladyCompatRoute(
     }
 
     return handled;
+  }
+
+  // ── Vincent OAuth routes ────────────────────────────────────────
+  if (url.pathname.startsWith("/api/vincent/")) {
+    if (!ensureCompatApiAuthorized(req, res)) return true;
+    const vincentConfig = loadElizaConfig();
+    const handled = await handleVincentRoute(
+      req,
+      res,
+      url.pathname,
+      method,
+      { config: vincentConfig },
+    );
+    if (handled) return true;
   }
 
   if (method === "POST" && url.pathname === "/api/agent/reset") {

@@ -28,8 +28,11 @@ import {
   AlertTriangle,
   ChevronDown,
   Copy,
+  Link,
+  RefreshCw,
   Settings,
   Shield,
+  Unlink,
   Wallet,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -284,6 +287,11 @@ export function InventoryView() {
     approveStewardTx,
     rejectStewardTx,
     copyToClipboard,
+    vincentConnected,
+    vincentLoginBusy,
+    vincentLoginError,
+    handleVincentLogin,
+    handleVincentDisconnect,
     t,
   } = useApp();
 
@@ -689,6 +697,51 @@ export function InventoryView() {
               defaultValue: "Wallet Policies",
             })}
           </Button>
+
+          {/* Vincent OAuth connect / disconnect */}
+          <div className="mt-1 border-t border-border/30 pt-2">
+            {vincentConnected ? (
+              <div className="flex items-center justify-between rounded-xl border border-accent/25 bg-accent/8 px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-green-500" />
+                  <span className="text-xs font-semibold text-txt">
+                    {t("vincent.connected", { defaultValue: "Vincent Connected" })}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-[10px] text-muted hover:text-danger"
+                  onClick={() => void handleVincentDisconnect()}
+                  data-testid="vincent-disconnect"
+                >
+                  <Unlink className="mr-1 h-3 w-3" />
+                  {t("vincent.disconnect", { defaultValue: "Disconnect" })}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                data-testid="vincent-connect"
+                className="h-11 w-full justify-start rounded-xl px-4 text-xs font-semibold shadow-sm"
+                onClick={() => void handleVincentLogin()}
+                disabled={vincentLoginBusy}
+              >
+                {vincentLoginBusy ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Link className="h-4 w-4" />
+                )}
+                {vincentLoginBusy
+                  ? t("vincent.connecting", { defaultValue: "Connecting..." })
+                  : t("vincent.connect", { defaultValue: "Connect Vincent" })}
+              </Button>
+            )}
+            {vincentLoginError ? (
+              <p className="mt-1 px-1 text-[10px] text-danger">{vincentLoginError}</p>
+            ) : null}
+          </div>
         </div>
       }
     >
