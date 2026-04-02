@@ -1076,6 +1076,13 @@ describe("PluginsView game modal", () => {
     expect(sidebarText).toContain("AI Providers");
     expect(sidebarText).toContain("Connectors");
     expect(sidebarText).toContain("Streaming Destinations");
+
+    const addButtons = tree?.root.findAll(
+      (node) =>
+        node.type === "button" &&
+        node.children.some((child) => child === "pluginsview.AddPlugin"),
+    );
+    expect(addButtons.length).toBe(0);
   });
 
   it("renders setup links on cards and opens detail links via desktop IPC with browser fallback", async () => {

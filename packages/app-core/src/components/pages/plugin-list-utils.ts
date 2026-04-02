@@ -79,11 +79,11 @@ import {
   Zap,
 } from "lucide-react";
 import type { PluginInfo, PluginParamDef } from "../../api";
-import type { ConfigUiHint } from "../../types";
 import type { JsonSchemaObject } from "../../config";
-import { autoLabel } from "../../utils/labels";
+import type { useApp } from "../../state";
+import type { ConfigUiHint } from "../../types";
 import { resolveAppAssetUrl } from "../../utils";
-import { useApp } from "../../state";
+import { autoLabel } from "../../utils/labels";
 import { SHOWCASE_PLUGIN } from "../plugins/showcase-data";
 
 /* ── Always-on plugins (hidden from all views) ────────────────────────── */
@@ -856,8 +856,6 @@ export function buildPluginListState(options: {
   showSubgroupFilters: boolean;
   subgroupFilter: string;
 }): {
-  categoryPlugins: PluginInfo[];
-  enabledCount: number;
   nonDbPlugins: PluginInfo[];
   sorted: PluginInfo[];
   subgroupTags: SubgroupTag[];
@@ -890,10 +888,6 @@ export function buildPluginListState(options: {
     pluginOrder,
     allowCustomOrder,
   );
-  const enabledCount = categoryPlugins.filter(
-    (plugin) => plugin.enabled,
-  ).length;
-
   const subgroupCounts: Record<string, number> = {};
   const visiblePlugins: PluginInfo[] = [];
   for (const plugin of sorted) {
@@ -920,8 +914,6 @@ export function buildPluginListState(options: {
   ];
 
   return {
-    categoryPlugins,
-    enabledCount,
     nonDbPlugins,
     sorted,
     subgroupTags,

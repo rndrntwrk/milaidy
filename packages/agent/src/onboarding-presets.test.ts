@@ -20,6 +20,30 @@ describe("getStylePresets", () => {
       expect(preset).toHaveProperty("system");
     }
   });
+
+  it("keeps the richer English examples in the canonical roster", () => {
+    const chen = STYLE_PRESETS.find((preset) => preset.id === "chen");
+    const jin = STYLE_PRESETS.find((preset) => preset.id === "jin");
+
+    expect(chen?.postExamples).toContain("goodnight, everyone");
+    expect(chen?.messageExamples).toEqual(
+      expect.arrayContaining([
+        [
+          {
+            user: "{{user1}}",
+            content: { text: "thanks for listening" },
+          },
+          {
+            user: "{{agentName}}",
+            content: { text: "always here for you" },
+          },
+        ],
+      ]),
+    );
+    expect(jin?.postExamples).toContain(
+      "most meetings should be pull requests",
+    );
+  });
 });
 
 describe("getPresetNameMap", () => {

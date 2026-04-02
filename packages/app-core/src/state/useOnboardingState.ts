@@ -164,6 +164,7 @@ type OnboardingAction =
   | { type: "SET_MODE"; mode: AppState["onboardingMode"] }
   | { type: "SET_ACTIVE_GUIDE"; guide: string | null }
   | { type: "ADD_DEFERRED_TASK"; task: string }
+  | { type: "SET_DEFERRED_TASKS"; tasks: string[] }
   | { type: "SET_POST_CHECKLIST_DISMISSED"; value: boolean }
   | { type: "SET_OPTIONS"; options: OnboardingOptions | null }
   | { type: "SET_FIELD"; field: string; value: unknown }
@@ -198,6 +199,11 @@ function onboardingReducer(
         ...state,
         deferredTasks: [...state.deferredTasks, action.task],
         postChecklistDismissed: false,
+      };
+    case "SET_DEFERRED_TASKS":
+      return {
+        ...state,
+        deferredTasks: [...new Set(action.tasks)],
       };
     case "SET_POST_CHECKLIST_DISMISSED":
       return { ...state, postChecklistDismissed: action.value };
@@ -241,6 +247,7 @@ export interface OnboardingStateHook {
   setMode: (mode: AppState["onboardingMode"]) => void;
   setActiveGuide: (guide: string | null) => void;
   addDeferredTask: (task: string) => void;
+  setDeferredTasks: (tasks: string[]) => void;
   setOptions: (options: OnboardingOptions | null) => void;
   setField: (field: string, value: unknown) => void;
   setConnectorToken: (key: ConnectorTokenKey, value: string) => void;
@@ -290,6 +297,10 @@ export function useOnboardingState(cloudOnly?: boolean): OnboardingStateHook {
     dispatch({ type: "ADD_DEFERRED_TASK", task });
   }, []);
 
+  const setDeferredTasks = useCallback((tasks: string[]) => {
+    dispatch({ type: "SET_DEFERRED_TASKS", tasks });
+  }, []);
+
   const setOptions = useCallback((options: OnboardingOptions | null) => {
     dispatch({ type: "SET_OPTIONS", options });
   }, []);
@@ -326,6 +337,7 @@ export function useOnboardingState(cloudOnly?: boolean): OnboardingStateHook {
     setMode,
     setActiveGuide,
     addDeferredTask,
+    setDeferredTasks,
     setOptions,
     setField,
     setConnectorToken,

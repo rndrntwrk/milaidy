@@ -66,7 +66,10 @@ import type { ElizaConfig } from "../../config/config";
 import { buildCharacterFromConfig } from "../../runtime/eliza";
 
 describe("Onboarding → Character round-trip", () => {
-  const chenPreset = STYLE_PRESETS.find((p) => p.name === "Chen")!;
+  const chenPreset = STYLE_PRESETS.find((p) => p.name === "Chen");
+  if (!chenPreset) {
+    throw new Error("Chen preset is missing");
+  }
   const originalElevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
 
   beforeEach(() => {

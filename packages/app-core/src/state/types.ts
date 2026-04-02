@@ -417,11 +417,6 @@ export interface AppState {
   whitelistStatus: WhitelistStatus | null;
   whitelistLoading: boolean;
 
-  // Twitter verification
-  twitterVerifyMessage: string | null;
-  twitterVerifyUrl: string;
-  twitterVerifying: boolean;
-
   // Character
   characterData: CharacterData | null;
   characterLoading: boolean;

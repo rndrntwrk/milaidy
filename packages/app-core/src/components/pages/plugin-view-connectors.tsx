@@ -1,0 +1,457 @@
+import { Button, PagePanel, StatusBadge } from "@miladyai/ui";
+import { ChevronRight } from "lucide-react";
+import type { ReactNode, RefCallback } from "react";
+import type { PluginInfo } from "../../api";
+import { WhatsAppQrOverlay } from "../connectors/WhatsAppQrOverlay";
+import { PluginConfigForm, TelegramPluginConfig } from "./PluginConfigForm";
+import {
+  getPluginResourceLinks,
+  pluginResourceLinkLabel,
+  SUBGROUP_LABELS,
+  subgroupForPlugin,
+  type TranslateFn,
+} from "./plugin-list-utils";
+
+export interface PluginConnectionTestResult {
+  durationMs: number;
+  error?: string;
+  loading: boolean;
+  message?: string;
+  success: boolean;
+}
+
+interface ConnectorPluginGroupsProps {
+  collapseLabel: string;
+  connectorExpandedIds: Set<string>;
+  connectorInstallPrompt: string;
+  connectorSelectedId: string | null;
+  expandLabel: string;
+  formatSaveSettingsLabel: (isSaving: boolean, didSave: boolean) => string;
+  formatTestConnectionLabel: (result?: PluginConnectionTestResult) => string;
+  handleConfigReset: (pluginId: string) => void;
+  handleConfigSave: (pluginId: string) => Promise<void>;
+  handleConnectorExpandedChange: (
+    pluginId: string,
+    nextExpanded: boolean,
+  ) => void;
+  handleConnectorSectionToggle: (pluginId: string) => void;
+  handleInstallPlugin: (pluginId: string, npmName: string) => Promise<void>;
+  handleOpenPluginExternalUrl: (url: string) => Promise<void>;
+  handleParamChange: (
+    pluginId: string,
+    paramKey: string,
+    value: string,
+  ) => void;
+  handleTestConnection: (pluginId: string) => Promise<void>;
+  handleTogglePlugin: (pluginId: string, enabled: boolean) => Promise<void>;
+  hasPluginToggleInFlight: boolean;
+  installPluginLabel: string;
+  installProgress: Map<string, { message: string; phase: string }>;
+  installingPlugins: Set<string>;
+  installProgressLabel: (message?: string) => string;
+  loadFailedLabel: string;
+  needsSetupLabel: string;
+  noConfigurationNeededLabel: string;
+  notInstalledLabel: string;
+  pluginConfigs: Record<string, Record<string, string>>;
+  pluginDescriptionFallback: string;
+  pluginSaveSuccess: Set<string>;
+  pluginSaving: Set<string>;
+  readyLabel: string;
+  registerConnectorContentItem: (pluginId: string) => RefCallback<HTMLElement>;
+  renderResolvedIcon: (
+    plugin: PluginInfo,
+    options?: {
+      className?: string;
+      emojiClassName?: string;
+    },
+  ) => ReactNode;
+  t: TranslateFn;
+  testResults: Map<string, PluginConnectionTestResult>;
+  togglingPlugins: Set<string>;
+  visiblePlugins: PluginInfo[];
+}
+
+interface ConnectorPluginCardProps
+  extends Omit<ConnectorPluginGroupsProps, "visiblePlugins"> {
+  plugin: PluginInfo;
+}
+
+function groupVisiblePlugins(visiblePlugins: PluginInfo[]) {
+  const groupMap = new Map<string, PluginInfo[]>();
+  const groupOrder: string[] = [];
+
+  for (const plugin of visiblePlugins) {
+    const subgroupId = subgroupForPlugin(plugin);
+    if (!groupMap.has(subgroupId)) {
+      groupMap.set(subgroupId, []);
+      groupOrder.push(subgroupId);
+    }
+    groupMap.get(subgroupId)?.push(plugin);
+  }
+
+  return groupOrder.flatMap((subgroupId) => {
+    const plugins = groupMap.get(subgroupId);
+    if (!plugins) return [];
+    return [
+      {
+        id: subgroupId,
+        label: SUBGROUP_LABELS[subgroupId] ?? subgroupId,
+        plugins,
+      },
+    ];
+  });
+}
+
+function ConnectorPluginCard({
+  collapseLabel,
+  connectorExpandedIds,
+  connectorInstallPrompt,
+  connectorSelectedId,
+  expandLabel,
+  formatSaveSettingsLabel,
+  formatTestConnectionLabel,
+  handleConfigReset,
+  handleConfigSave,
+  handleConnectorExpandedChange,
+  handleConnectorSectionToggle,
+  handleInstallPlugin,
+  handleOpenPluginExternalUrl,
+  handleParamChange,
+  handleTestConnection,
+  handleTogglePlugin,
+  hasPluginToggleInFlight,
+  installPluginLabel,
+  installProgress,
+  installingPlugins,
+  installProgressLabel,
+  loadFailedLabel,
+  needsSetupLabel,
+  noConfigurationNeededLabel,
+  notInstalledLabel,
+  plugin,
+  pluginConfigs,
+  pluginDescriptionFallback,
+  pluginSaveSuccess,
+  pluginSaving,
+  readyLabel,
+  registerConnectorContentItem,
+  renderResolvedIcon,
+  t,
+  testResults,
+  togglingPlugins,
+}: ConnectorPluginCardProps) {
+  const hasParams =
+    (plugin.parameters?.length ?? 0) > 0 && plugin.id !== "__ui-showcase__";
+  const isExpanded = connectorExpandedIds.has(plugin.id);
+  const isSelected = connectorSelectedId === plugin.id;
+  const requiredParams = hasParams
+    ? plugin.parameters.filter((param) => param.required)
+    : [];
+  const requiredSetCount = requiredParams.filter((param) => param.isSet).length;
+  const setCount = hasParams
+    ? plugin.parameters.filter((param) => param.isSet).length
+    : 0;
+  const totalCount = hasParams ? plugin.parameters.length : 0;
+  const allParamsSet =
+    !hasParams ||
+    (requiredParams.length > 0
+      ? requiredSetCount === requiredParams.length
+      : setCount === totalCount);
+  const isToggleBusy = togglingPlugins.has(plugin.id);
+  const toggleDisabled =
+    isToggleBusy || (hasPluginToggleInFlight && !isToggleBusy);
+  const isSaving = pluginSaving.has(plugin.id);
+  const saveSuccess = pluginSaveSuccess.has(plugin.id);
+  const testResult = testResults.get(plugin.id);
+  const pluginLinks = getPluginResourceLinks(plugin);
+
+  const connectorHeaderMedia = (
+    <span
+      className={`mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border p-2.5 ${
+        isSelected
+          ? "border-accent/30 bg-accent/18 text-txt-strong"
+          : "border-border/50 bg-bg-accent/80 text-muted"
+      }`}
+    >
+      {renderResolvedIcon(plugin, {
+        className: "h-4 w-4 shrink-0 rounded-sm object-contain",
+        emojiClassName: "text-base",
+      })}
+    </span>
+  );
+  const connectorHeaderHeading = (
+    <span
+      data-testid={`connector-header-${plugin.id}`}
+      className="flex min-w-0 flex-wrap items-center gap-2"
+    >
+      <StatusBadge
+        label={allParamsSet ? readyLabel : needsSetupLabel}
+        tone={allParamsSet ? "success" : "warning"}
+      />
+      <span className="whitespace-normal break-words [overflow-wrap:anywhere] text-sm font-semibold leading-snug text-txt">
+        {plugin.name}
+      </span>
+      {plugin.version ? (
+        <PagePanel.Meta compact tone="strong" className="font-mono">
+          v{plugin.version}
+        </PagePanel.Meta>
+      ) : null}
+      {hasParams ? (
+        <span className="text-[11px] font-medium text-muted">
+          {setCount}/{totalCount} {t("pluginsview.configured")}
+        </span>
+      ) : (
+        <span className="text-[11px] font-medium text-muted">
+          {noConfigurationNeededLabel}
+        </span>
+      )}
+    </span>
+  );
+  const connectorHeaderDescription = (
+    <>
+      <p className="text-sm text-muted">
+        {plugin.description || pluginDescriptionFallback}
+      </p>
+      {plugin.enabled && !plugin.isActive && (
+        <span className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-muted">
+          <StatusBadge
+            label={plugin.loadError ? loadFailedLabel : notInstalledLabel}
+            tone={plugin.loadError ? "danger" : "warning"}
+          />
+        </span>
+      )}
+    </>
+  );
+  const connectorHeaderActions = (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        className={`flex h-auto min-w-[6.5rem] items-center justify-center gap-1 rounded-full border px-3.5 py-1.5 text-[11px] font-semibold transition-colors ${
+          isExpanded
+            ? "border-border/50 bg-bg/25 text-txt"
+            : "border-border/50 text-muted hover:border-accent/40 hover:text-txt"
+        }`}
+        onClick={() => handleConnectorSectionToggle(plugin.id)}
+        aria-expanded={isExpanded}
+        aria-label={`${isExpanded ? collapseLabel : expandLabel} ${plugin.name}`}
+      >
+        <span>{isExpanded ? collapseLabel : expandLabel}</span>
+        <ChevronRight
+          className={`h-4 w-4 transition-transform ${
+            isExpanded ? "rotate-90" : ""
+          }`}
+        />
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className={`h-auto min-w-[3.75rem] rounded-full border px-3 py-1.5 text-[10px] font-bold tracking-[0.16em] transition-colors ${
+          plugin.enabled
+            ? "border-accent bg-accent text-accent-fg"
+            : "border-border bg-transparent text-muted hover:border-accent/40 hover:text-txt"
+        } ${toggleDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+        onClick={() => void handleTogglePlugin(plugin.id, !plugin.enabled)}
+        disabled={toggleDisabled}
+      >
+        {isToggleBusy
+          ? "..."
+          : plugin.enabled
+            ? t("common.on")
+            : t("common.off")}
+      </Button>
+    </>
+  );
+
+  return (
+    <div key={plugin.id} data-testid={`connector-section-${plugin.id}`}>
+      <PagePanel.CollapsibleSection
+        ref={registerConnectorContentItem(plugin.id)}
+        variant="section"
+        data-testid={`connector-card-${plugin.id}`}
+        expanded={isExpanded}
+        expandOnCollapsedSurfaceClick
+        className={`transition-all ${
+          isSelected
+            ? "border-border/45 shadow-[0_18px_40px_rgba(3,5,10,0.16)]"
+            : "border-border/50"
+        }`}
+        onExpandedChange={(nextExpanded) =>
+          handleConnectorExpandedChange(plugin.id, nextExpanded)
+        }
+        media={connectorHeaderMedia}
+        heading={connectorHeaderHeading}
+        headingClassName="text-inherit"
+        description={connectorHeaderDescription}
+        descriptionClassName="space-y-0 text-sm leading-relaxed text-muted"
+        actions={connectorHeaderActions}
+      >
+        {pluginLinks.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            {pluginLinks.map((link) => (
+              <Button
+                key={`${plugin.id}:${link.key}`}
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-xl border-border/40 bg-card/40 px-3 text-[11px] font-semibold text-muted transition-all hover:border-accent hover:bg-accent/5 hover:text-txt"
+                onClick={() => {
+                  void handleOpenPluginExternalUrl(link.url);
+                }}
+                title={`${pluginResourceLinkLabel(t, link.key)}: ${link.url}`}
+              >
+                {pluginResourceLinkLabel(t, link.key)}
+              </Button>
+            ))}
+          </div>
+        )}
+
+        {plugin.enabled &&
+          !plugin.isActive &&
+          plugin.npmName &&
+          !plugin.loadError && (
+            <PagePanel.Notice
+              tone="warning"
+              className="mb-4"
+              actions={
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="h-8 rounded-xl px-4 text-[11px] font-bold"
+                  disabled={installingPlugins.has(plugin.id)}
+                  onClick={() =>
+                    void handleInstallPlugin(plugin.id, plugin.npmName ?? "")
+                  }
+                >
+                  {installingPlugins.has(plugin.id)
+                    ? installProgressLabel(
+                        installProgress.get(plugin.npmName ?? "")?.message,
+                      )
+                    : installPluginLabel}
+                </Button>
+              }
+            >
+              {connectorInstallPrompt}
+            </PagePanel.Notice>
+          )}
+
+        {hasParams ? (
+          <div className="space-y-4">
+            {plugin.id === "telegram" ? (
+              <TelegramPluginConfig
+                plugin={plugin}
+                pluginConfigs={pluginConfigs}
+                onParamChange={handleParamChange}
+              />
+            ) : (
+              <PluginConfigForm
+                plugin={plugin}
+                pluginConfigs={pluginConfigs}
+                onParamChange={handleParamChange}
+              />
+            )}
+            {plugin.id === "whatsapp" && (
+              <WhatsAppQrOverlay accountId="default" />
+            )}
+          </div>
+        ) : (
+          <div className="text-sm text-muted">{noConfigurationNeededLabel}</div>
+        )}
+
+        {plugin.validationErrors && plugin.validationErrors.length > 0 && (
+          <PagePanel.Notice tone="danger" className="mt-3 text-xs">
+            {plugin.validationErrors.map((error) => (
+              <div key={`${plugin.id}:${error.field}:${error.message}`}>
+                <span className="font-medium text-warn">{error.field}</span>:{" "}
+                {error.message}
+              </div>
+            ))}
+          </PagePanel.Notice>
+        )}
+
+        {plugin.validationWarnings && plugin.validationWarnings.length > 0 && (
+          <PagePanel.Notice tone="default" className="mt-3 text-xs">
+            {plugin.validationWarnings.map((warning) => (
+              <div key={`${plugin.id}:${warning.field}:${warning.message}`}>
+                {warning.message}
+              </div>
+            ))}
+          </PagePanel.Notice>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {plugin.isActive && (
+            <Button
+              variant={
+                testResult?.success
+                  ? "default"
+                  : testResult?.error
+                    ? "destructive"
+                    : "outline"
+              }
+              size="sm"
+              className={`h-8 rounded-xl px-4 text-[11px] font-bold transition-all ${
+                testResult?.loading
+                  ? "cursor-wait opacity-70"
+                  : testResult?.success
+                    ? "border-ok bg-ok text-ok-fg hover:bg-ok/90"
+                    : testResult?.error
+                      ? "border-danger bg-danger text-danger-fg hover:bg-danger/90"
+                      : "border-border/40 bg-card/40 hover:border-accent/40"
+              }`}
+              disabled={testResult?.loading}
+              onClick={() => void handleTestConnection(plugin.id)}
+            >
+              {formatTestConnectionLabel(testResult)}
+            </Button>
+          )}
+          {hasParams && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 rounded-xl px-4 text-[11px] font-semibold text-muted hover:text-txt"
+                onClick={() => handleConfigReset(plugin.id)}
+              >
+                {t("pluginsview.Reset")}
+              </Button>
+              <Button
+                variant={saveSuccess ? "default" : "secondary"}
+                size="sm"
+                className={`h-8 rounded-xl px-4 text-[11px] font-bold transition-all ${
+                  saveSuccess
+                    ? "bg-ok text-ok-fg hover:bg-ok/90"
+                    : "bg-accent text-accent-fg hover:bg-accent/90"
+                }`}
+                onClick={() => void handleConfigSave(plugin.id)}
+                disabled={isSaving}
+              >
+                {formatSaveSettingsLabel(isSaving, saveSuccess)}
+              </Button>
+            </>
+          )}
+        </div>
+      </PagePanel.CollapsibleSection>
+    </div>
+  );
+}
+
+export function ConnectorPluginGroups(props: ConnectorPluginGroupsProps) {
+  const groups = groupVisiblePlugins(props.visiblePlugins);
+
+  return groups.map((group) => (
+    <div
+      key={group.id}
+      className="relative rounded-xl border border-border/30 px-2 pb-2 pt-5"
+    >
+      <span className="absolute -top-2.5 left-3 bg-bg px-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
+        {group.label}
+      </span>
+      <div className="space-y-4">
+        {group.plugins.map((plugin) => (
+          <ConnectorPluginCard key={plugin.id} {...props} plugin={plugin} />
+        ))}
+      </div>
+    </div>
+  ));
+}

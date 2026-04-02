@@ -147,6 +147,7 @@ import { useLogsState } from "./useLogsState";
 import { useMiscUiState } from "./useMiscUiState";
 import { useDisplayPreferences } from "./useDisplayPreferences";
 import { useOnboardingState } from "./useOnboardingState";
+import { useOnboardingCompat } from "./useOnboardingCompat";
 import { useCharacterState } from "./useCharacterState";
 import { useWalletState } from "./useWalletState";
 import { usePluginsSkillsState } from "./usePluginsSkillsState";
@@ -668,11 +669,6 @@ function AppProviderInner({
     loadLogs,
   } = logsHook;
 
-  // Dead state — setters were never destructured. These never change.
-  const twitterVerifyMessage: string | null = null;
-  const twitterVerifyUrl = "";
-  const twitterVerifying = false;
-
   // --- Character (extracted to useCharacterState) ---
   const characterHook = useCharacterState({ agentStatus, setAgentStatus });
   const {
@@ -764,8 +760,6 @@ function AppProviderInner({
       primaryModel: onboardingPrimaryModel,
       existingInstallDetected: onboardingExistingInstallDetected,
       detectedProviders: onboardingDetectedProviders,
-      connectorTokens,
-      remote: onboardingRemote,
       remoteApiBase: onboardingRemoteApiBase,
       remoteToken: onboardingRemoteToken,
       subscriptionTab: onboardingSubscriptionTab,
@@ -779,181 +773,62 @@ function AppProviderInner({
     setActiveGuide: setOnboardingActiveGuide,
     addDeferredTask: addDeferredOnboardingTask,
     setOptions: setOnboardingOptions,
-    setField: setOnboardingField,
-    setConnectorToken,
-    setRemoteStatus: setOnboardingRemoteStatus,
     setDetectedProviders: setOnboardingDetectedProviders,
     resumeConnectionRef: onboardingResumeConnectionRefFromHook,
     completionCommittedRef: onboardingCompletionCommittedRefFromHook,
     forceLocalBootstrapRef: forceLocalBootstrapRefFromHook,
   } = onboarding;
 
-  // Compat aliases for old onboarding variable names
-  const onboardingRemoteConnecting = onboardingRemote.status === "connecting";
-  const onboardingRemoteError = onboardingRemote.error;
-  const onboardingRemoteConnected = onboardingRemote.status === "connected";
-
-  // Map connector tokens to old individual variable names
-  const onboardingTelegramToken = connectorTokens.telegramToken;
-  const onboardingDiscordToken = connectorTokens.discordToken;
-  const onboardingWhatsAppSessionPath = connectorTokens.whatsAppSessionPath;
-  const onboardingTwilioAccountSid = connectorTokens.twilioAccountSid;
-  const onboardingTwilioAuthToken = connectorTokens.twilioAuthToken;
-  const onboardingTwilioPhoneNumber = connectorTokens.twilioPhoneNumber;
-  const onboardingBlooioApiKey = connectorTokens.blooioApiKey;
-  const onboardingBlooioPhoneNumber = connectorTokens.blooioPhoneNumber;
-  const onboardingGithubToken = connectorTokens.githubToken;
-
-  // Compat setters for old setState map entries
-  const setOnboardingName = useCallback(
-    (v: string) => setOnboardingField("name", v),
-    [setOnboardingField],
-  );
-  const setOnboardingOwnerName = useCallback(
-    (v: string) => setOnboardingField("ownerName", v),
-    [setOnboardingField],
-  );
-  const setOnboardingStyle = useCallback(
-    (v: string) => setOnboardingField("style", v),
-    [setOnboardingField],
-  );
-  const setOnboardingRunMode = useCallback(
-    (v: "local" | "cloud" | "") => setOnboardingField("runMode", v),
-    [setOnboardingField],
-  );
-  const setOnboardingCloudProvider = useCallback(
-    (v: string) => setOnboardingField("cloudProvider", v),
-    [setOnboardingField],
-  );
-  const setOnboardingSmallModel = useCallback(
-    (v: string) => setOnboardingField("smallModel", v),
-    [setOnboardingField],
-  );
-  const setOnboardingLargeModel = useCallback(
-    (v: string) => setOnboardingField("largeModel", v),
-    [setOnboardingField],
-  );
-  const setOnboardingProvider = useCallback(
-    (v: string) => setOnboardingField("provider", v),
-    [setOnboardingField],
-  );
-  const setOnboardingApiKey = useCallback(
-    (v: string) => setOnboardingField("apiKey", v),
-    [setOnboardingField],
-  );
-  const setOnboardingVoiceProvider = useCallback(
-    (v: string) => setOnboardingField("voiceProvider", v),
-    [setOnboardingField],
-  );
-  const setOnboardingVoiceApiKey = useCallback(
-    (v: string) => setOnboardingField("voiceApiKey", v),
-    [setOnboardingField],
-  );
-  const setOnboardingExistingInstallDetected = useCallback(
-    (v: boolean) => setOnboardingField("existingInstallDetected", v),
-    [setOnboardingField],
-  );
-  const setOnboardingRemoteApiBase = useCallback(
-    (v: string) =>
-      onboarding.dispatch({ type: "SET_REMOTE_API_BASE", value: v }),
-    [onboarding.dispatch],
-  );
-  const setOnboardingRemoteToken = useCallback(
-    (v: string) => onboarding.dispatch({ type: "SET_REMOTE_TOKEN", value: v }),
-    [onboarding.dispatch],
-  );
-  const setOnboardingRemoteConnecting = useCallback(
-    (v: boolean) => setOnboardingRemoteStatus(v ? "connecting" : "idle"),
-    [setOnboardingRemoteStatus],
-  );
-  const setOnboardingRemoteError = useCallback(
-    (v: string | null) => setOnboardingRemoteStatus(v ? "error" : "idle", v),
-    [setOnboardingRemoteStatus],
-  );
-  const setOnboardingRemoteConnected = useCallback(
-    (v: boolean) => setOnboardingRemoteStatus(v ? "connected" : "idle"),
-    [setOnboardingRemoteStatus],
-  );
-  const setOnboardingOpenRouterModel = useCallback(
-    (v: string) => setOnboardingField("openRouterModel", v),
-    [setOnboardingField],
-  );
-  const setOnboardingPrimaryModel = useCallback(
-    (v: string) => setOnboardingField("primaryModel", v),
-    [setOnboardingField],
-  );
-  const setOnboardingTelegramToken = useCallback(
-    (v: string) => setConnectorToken("telegramToken", v),
-    [setConnectorToken],
-  );
-  const setOnboardingDiscordToken = useCallback(
-    (v: string) => setConnectorToken("discordToken", v),
-    [setConnectorToken],
-  );
-  const setOnboardingWhatsAppSessionPath = useCallback(
-    (v: string) => setConnectorToken("whatsAppSessionPath", v),
-    [setConnectorToken],
-  );
-  const setOnboardingTwilioAccountSid = useCallback(
-    (v: string) => setConnectorToken("twilioAccountSid", v),
-    [setConnectorToken],
-  );
-  const setOnboardingTwilioAuthToken = useCallback(
-    (v: string) => setConnectorToken("twilioAuthToken", v),
-    [setConnectorToken],
-  );
-  const setOnboardingTwilioPhoneNumber = useCallback(
-    (v: string) => setConnectorToken("twilioPhoneNumber", v),
-    [setConnectorToken],
-  );
-  const setOnboardingBlooioApiKey = useCallback(
-    (v: string) => setConnectorToken("blooioApiKey", v),
-    [setConnectorToken],
-  );
-  const setOnboardingBlooioPhoneNumber = useCallback(
-    (v: string) => setConnectorToken("blooioPhoneNumber", v),
-    [setConnectorToken],
-  );
-  const setOnboardingGithubToken = useCallback(
-    (v: string) => setConnectorToken("githubToken", v),
-    [setConnectorToken],
-  );
-  const setOnboardingSubscriptionTab = useCallback(
-    (v: "token" | "oauth") => setOnboardingField("subscriptionTab", v),
-    [setOnboardingField],
-  );
-  const setOnboardingElizaCloudTab = useCallback(
-    (v: "login" | "apikey") => setOnboardingField("elizaCloudTab", v),
-    [setOnboardingField],
-  );
-  const setOnboardingSelectedChains = useCallback(
-    (v: Set<string>) => setOnboardingField("selectedChains", v),
-    [setOnboardingField],
-  );
-  const setOnboardingRpcSelections = useCallback(
-    (v: Record<string, string>) => setOnboardingField("rpcSelections", v),
-    [setOnboardingField],
-  );
-  const setOnboardingRpcKeys = useCallback(
-    (v: Record<string, string>) => setOnboardingField("rpcKeys", v),
-    [setOnboardingField],
-  );
-  const setOnboardingAvatar = useCallback(
-    (v: number) => setOnboardingField("avatar", v),
-    [setOnboardingField],
-  );
-  const setPostOnboardingChecklistDismissed = useCallback(
-    (v: boolean) =>
-      onboarding.dispatch({ type: "SET_POST_CHECKLIST_DISMISSED", value: v }),
-    [onboarding.dispatch],
-  );
-  const setOnboardingDeferredTasks = useCallback(
-    (v: string[]) => {
-      // Direct set — used only by reset paths
-      for (const task of v) addDeferredOnboardingTask(task);
-    },
-    [addDeferredOnboardingTask],
-  );
+  const {
+    onboardingRemoteConnecting,
+    onboardingRemoteError,
+    onboardingRemoteConnected,
+    onboardingTelegramToken,
+    onboardingDiscordToken,
+    onboardingWhatsAppSessionPath,
+    onboardingTwilioAccountSid,
+    onboardingTwilioAuthToken,
+    onboardingTwilioPhoneNumber,
+    onboardingBlooioApiKey,
+    onboardingBlooioPhoneNumber,
+    onboardingGithubToken,
+    setOnboardingName,
+    setOnboardingOwnerName,
+    setOnboardingStyle,
+    setOnboardingRunMode,
+    setOnboardingCloudProvider,
+    setOnboardingSmallModel,
+    setOnboardingLargeModel,
+    setOnboardingProvider,
+    setOnboardingApiKey,
+    setOnboardingVoiceProvider,
+    setOnboardingVoiceApiKey,
+    setOnboardingExistingInstallDetected,
+    setOnboardingRemoteApiBase,
+    setOnboardingRemoteToken,
+    setOnboardingRemoteConnecting,
+    setOnboardingRemoteError,
+    setOnboardingRemoteConnected,
+    setOnboardingOpenRouterModel,
+    setOnboardingPrimaryModel,
+    setOnboardingTelegramToken,
+    setOnboardingDiscordToken,
+    setOnboardingWhatsAppSessionPath,
+    setOnboardingTwilioAccountSid,
+    setOnboardingTwilioAuthToken,
+    setOnboardingTwilioPhoneNumber,
+    setOnboardingBlooioApiKey,
+    setOnboardingBlooioPhoneNumber,
+    setOnboardingGithubToken,
+    setOnboardingSubscriptionTab,
+    setOnboardingElizaCloudTab,
+    setOnboardingSelectedChains,
+    setOnboardingRpcSelections,
+    setOnboardingRpcKeys,
+    setOnboardingAvatar,
+    setPostOnboardingChecklistDismissed,
+    setOnboardingDeferredTasks,
+  } = useOnboardingCompat(onboarding);
 
   // startupStatus is now derived in useLifecycleState
 
@@ -1732,11 +1607,6 @@ function AppProviderInner({
   coordinatorOnboardingCompleteRef.current =
     startupCoordinator.onboardingComplete;
 
-  const requestGreetingWhenRunningRef2 = useRef(requestGreetingWhenRunning);
-  useEffect(() => {
-    requestGreetingWhenRunningRef2.current = requestGreetingWhenRunning;
-  }, [requestGreetingWhenRunning]);
-
   // When agent transitions to "running", send a greeting if conversation is empty
   useEffect(() => {
     const current = agentStatus?.state ?? null;
@@ -1948,9 +1818,6 @@ function AppProviderInner({
     mintShiny,
     whitelistStatus,
     whitelistLoading,
-    twitterVerifyMessage,
-    twitterVerifyUrl,
-    twitterVerifying,
     characterData,
     characterLoading,
     characterSaving,

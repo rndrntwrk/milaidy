@@ -10,19 +10,10 @@ import {
   type TrainingTrajectoryDetail,
   type TrainingTrajectoryList,
 } from "@miladyai/app-core/api";
-import { formatTime } from "@miladyai/app-core/components";
 import { useIntervalWhenDocumentVisible } from "@miladyai/app-core/hooks";
 import { useApp } from "@miladyai/app-core/state";
 import { confirmDesktopAction } from "@miladyai/app-core/utils";
-import {
-  Button,
-  ContentLayout,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectValue,
-  SettingsControls,
-} from "@miladyai/ui";
+import { Button, ContentLayout } from "@miladyai/ui";
 import {
   type ReactNode,
   useCallback,
@@ -34,87 +25,19 @@ import {
   parsePositiveFloat,
   parsePositiveInteger,
 } from "../../utils/number-parsing";
-
-const TRAINING_EVENT_KINDS = new Set<TrainingStreamEvent["kind"]>([
-  "job_started",
-  "job_progress",
-  "job_log",
-  "job_completed",
-  "job_failed",
-  "job_cancelled",
-  "dataset_built",
-  "model_activated",
-  "model_imported",
-]);
-
-function formatDate(value: string | null): string {
-  if (!value) return "—";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString();
-}
-
-function formatProgress(value: number): string {
-  const bounded = Math.max(0, Math.min(1, value));
-  return `${Math.round(bounded * 100)}%`;
-}
-
-function asTrainingEvent(
-  envelope: Partial<StreamEventEnvelope>,
-): TrainingStreamEvent | null {
-  if (envelope.type !== "training_event") return null;
-  const payloadValue = envelope.payload;
-  if (!payloadValue || typeof payloadValue !== "object") return null;
-  const payload = payloadValue as Partial<TrainingStreamEvent>;
-  if (typeof payload.kind !== "string") return null;
-  if (!TRAINING_EVENT_KINDS.has(payload.kind as TrainingStreamEvent["kind"])) {
-    return null;
-  }
-  if (typeof payload.ts !== "number") return null;
-  if (typeof payload.message !== "string") return null;
-  return {
-    kind: payload.kind as TrainingStreamEvent["kind"],
-    ts: payload.ts,
-    message: payload.message,
-    jobId: typeof payload.jobId === "string" ? payload.jobId : undefined,
-    modelId: typeof payload.modelId === "string" ? payload.modelId : undefined,
-    datasetId:
-      typeof payload.datasetId === "string" ? payload.datasetId : undefined,
-    progress:
-      typeof payload.progress === "number" ? payload.progress : undefined,
-    phase: typeof payload.phase === "string" ? payload.phase : undefined,
-  };
-}
-
-function summarizeAvailability(
-  reason: string | undefined,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
-  if (!reason) return t("finetuningview.Unavailable");
-  if (reason === "runtime_not_started") {
-    return t("finetuningview.RuntimeNotStarted");
-  }
-  if (reason === "trajectories_table_missing") {
-    return t("finetuningview.NoTrajectoriesTableFound");
-  }
-  return reason;
-}
-
-const FINE_TUNING_PAGE_CLASS = "space-y-6 pb-8";
-const FINE_TUNING_SECTION_CLASS =
-  "rounded-2xl border border-border/60 bg-card/70 p-5 shadow-sm ring-1 ring-border/15";
-const FINE_TUNING_SECTION_HEADER_CLASS =
-  "mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between";
-const FINE_TUNING_SECTION_KICKER_CLASS =
-  "text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70";
-const FINE_TUNING_PANEL_CLASS =
-  "rounded-2xl border border-border/45 bg-bg/20 shadow-sm";
-const FINE_TUNING_PANEL_HEADER_CLASS =
-  "border-b border-border/35 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70";
-const FINE_TUNING_ACTION_CLASS =
-  "h-10 rounded-xl px-3 text-xs shadow-sm hover:border-accent disabled:opacity-50";
-const FINE_TUNING_STATUS_CARD_CLASS =
-  "rounded-xl border border-border/35 bg-bg/30 px-3 py-3 shadow-sm";
+import {
+  asTrainingEvent,
+  DatasetSection,
+  FINE_TUNING_ACTION_CLASS,
+  FINE_TUNING_SECTION_CLASS,
+  FINE_TUNING_SECTION_HEADER_CLASS,
+  FINE_TUNING_SECTION_KICKER_CLASS,
+  FINE_TUNING_STATUS_CARD_CLASS,
+  LiveEventsPanel,
+  TrainedModelsSection,
+  TrainingJobsSection,
+  TrajectoriesSection,
+} from "./fine-tuning-panels";
 
 export function FineTuningView({
   contentHeader,
@@ -568,7 +491,10 @@ export function FineTuningView({
   }
 
   return (
-    <ContentLayout contentHeader={contentHeader} contentClassName="space-y-6 pb-8">
+    <ContentLayout
+      contentHeader={contentHeader}
+      contentClassName="space-y-6 pb-8"
+    >
       <section className={FINE_TUNING_SECTION_CLASS}>
         <div className={FINE_TUNING_SECTION_HEADER_CLASS}>
           <div className="space-y-2">
@@ -665,601 +591,102 @@ export function FineTuningView({
         </div>
       </section>
 
-      <section className={FINE_TUNING_SECTION_CLASS}>
-        <div className={FINE_TUNING_SECTION_HEADER_CLASS}>
-          <div className="space-y-1">
-            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>
-              {t("finetuningview.DataReview")}
-            </div>
-            <div className="text-lg font-semibold text-txt">
-              {t("finetuningview.Trajectories")}
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className={FINE_TUNING_ACTION_CLASS}
-            onClick={() => {
-              void loadTrajectories();
-            }}
-          >
-            {t("common.refresh")}
-          </Button>
-        </div>
-        {!trajectoryList.available ? (
-          <div
-            className={`${FINE_TUNING_PANEL_CLASS} px-4 py-4 text-sm text-muted`}
-          >
-            {summarizeAvailability(trajectoryList.reason, t)}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="text-xs text-muted">
-              {trajectoryList.total} {t("finetuningview.trajectoryRowsAvai")}
-            </div>
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <div className={FINE_TUNING_PANEL_CLASS}>
-                <div className={FINE_TUNING_PANEL_HEADER_CLASS}>
-                  {t("finetuningview.LatestTrajectories")}
-                </div>
-                <div className="max-h-72 overflow-auto">
-                  {trajectoryList.trajectories.length === 0 ? (
-                    <div className="p-3 text-xs text-muted">
-                      {t("finetuningview.NoTrajectoriesFoun")}
-                    </div>
-                  ) : (
-                    trajectoryList.trajectories.map((trajectory) => (
-                      <Button
-                        variant="ghost"
-                        key={trajectory.trajectoryId}
-                        className="w-full justify-start rounded-none border-b border-border/35 px-3 py-3 text-left text-xs hover:bg-bg-hover"
-                        onClick={() => {
-                          void loadTrajectoryDetail(trajectory.trajectoryId);
-                        }}
-                      >
-                        <div className="font-mono">
-                          {trajectory.trajectoryId}
-                        </div>
-                        <div className="text-muted mt-1">
-                          {t("finetuningview.Calls")} {trajectory.llmCallCount}{" "}
-                          {t("finetuningview.Reward")}{" "}
-                          {trajectory.totalReward ?? "n/a"} ·{" "}
-                          {formatDate(trajectory.createdAt)}
-                        </div>
-                      </Button>
-                    ))
-                  )}
-                </div>
-              </div>
-              <div className={`${FINE_TUNING_PANEL_CLASS} p-3`}>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
-                  {t("finetuningview.SelectedTrajectory")}
-                </div>
-                {trajectoryLoading ? (
-                  <div className="text-xs text-muted">
-                    {t("finetuningview.LoadingTrajectoryD")}
-                  </div>
-                ) : !selectedTrajectory ? (
-                  <div className="text-xs text-muted">
-                    {t("finetuningview.ChooseATrajectory")}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="text-xs">
-                      <span className="font-semibold">
-                        {t("finetuningview.Trajectory")}
-                      </span>{" "}
-                      <span className="font-mono">
-                        {selectedTrajectory.trajectoryId}
-                      </span>
-                    </div>
-                    <div className="text-xs">
-                      <span className="font-semibold">
-                        {t("finetuningview.Agent")}
-                      </span>{" "}
-                      <span className="font-mono">
-                        {selectedTrajectory.agentId}
-                      </span>
-                    </div>
-                    <div className="text-xs">
-                      <span className="font-semibold">
-                        {t("finetuningview.Reward1")}
-                      </span>{" "}
-                      {selectedTrajectory.totalReward ?? "n/a"}
-                    </div>
-                    <SettingsControls.Textarea
-                      readOnly
-                      value={selectedTrajectory.stepsJson}
-                      className="min-h-56"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </section>
+      <TrajectoriesSection
+        trajectoryList={trajectoryList}
+        selectedTrajectory={selectedTrajectory}
+        trajectoryLoading={trajectoryLoading}
+        onRefresh={() => {
+          void loadTrajectories();
+        }}
+        onSelectTrajectory={(trajectoryId) => {
+          void loadTrajectoryDetail(trajectoryId);
+        }}
+        t={t}
+      />
 
-      <section className={FINE_TUNING_SECTION_CLASS}>
-        <div className={FINE_TUNING_SECTION_HEADER_CLASS}>
-          <div className="space-y-1">
-            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>
-              {t("finetuningview.DatasetBuild")}
-            </div>
-            <div className="text-lg font-semibold text-txt">
-              {t("finetuningview.Datasets1")}
-            </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-4 mb-3">
-          <SettingsControls.Input
-            variant="filter"
-            value={buildLimit}
-            onChange={(event) => setBuildLimit(event.target.value)}
-            placeholder={t("finetuningview.LimitTrajectories")}
-          />
-          <SettingsControls.Input
-            variant="filter"
-            value={buildMinCalls}
-            onChange={(event) => setBuildMinCalls(event.target.value)}
-            placeholder={t("finetuningview.MinLLMCallsPerTr")}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            className={FINE_TUNING_ACTION_CLASS}
-            disabled={datasetBuilding}
-            onClick={() => {
-              void handleBuildDataset();
-            }}
-          >
-            {datasetBuilding
-              ? t("finetuningview.Building")
-              : t("finetuningview.BuildDataset")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className={FINE_TUNING_ACTION_CLASS}
-            onClick={() => {
-              void loadDatasets();
-            }}
-          >
-            {t("finetuningview.RefreshDatasets")}
-          </Button>
-        </div>
-        <div
-          className={`${FINE_TUNING_PANEL_CLASS} max-h-60 overflow-auto p-3`}
-        >
-          {datasets.length === 0 ? (
-            <div className="text-sm text-muted">
-              {t("finetuningview.NoDatasetsYet")}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {datasets.map((dataset) => (
-                <label
-                  key={dataset.id}
-                  className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-xl border border-border/35 bg-bg/20 px-3 py-3 text-sm transition-colors hover:border-border/55 hover:bg-bg/35"
-                >
-                  <input
-                    type="radio"
-                    name="dataset-select"
-                    checked={selectedDatasetId === dataset.id}
-                    onChange={() => setSelectedDatasetId(dataset.id)}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-mono text-sm text-txt">
-                      {dataset.id}
-                    </div>
-                    <div className="mt-1 text-xs text-muted">
-                      {dataset.sampleCount} {t("finetuningview.samples")}{" "}
-                      {dataset.trajectoryCount}{" "}
-                      {t("finetuningview.trajectories")}
-                    </div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
+      <DatasetSection
+        buildLimit={buildLimit}
+        setBuildLimit={setBuildLimit}
+        buildMinCalls={buildMinCalls}
+        setBuildMinCalls={setBuildMinCalls}
+        datasetBuilding={datasetBuilding}
+        onBuildDataset={() => {
+          void handleBuildDataset();
+        }}
+        onRefreshDatasets={() => {
+          void loadDatasets();
+        }}
+        datasets={datasets}
+        selectedDatasetId={selectedDatasetId}
+        setSelectedDatasetId={setSelectedDatasetId}
+        t={t}
+      />
 
-      <section className={FINE_TUNING_SECTION_CLASS}>
-        <div className={FINE_TUNING_SECTION_HEADER_CLASS}>
-          <div className="space-y-1">
-            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>
-              {t("finetuningview.Training")}
-            </div>
-            <div className="text-lg font-semibold text-txt">
-              {t("finetuningview.TrainingJobs")}
-            </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-2 mb-3 md:grid-cols-3">
-          <Select
-            value={selectedDatasetId}
-            onValueChange={(value) => setSelectedDatasetId(value)}
-          >
-            <SettingsControls.SelectTrigger variant="toolbar">
-              <SelectValue
-                placeholder={t("finetuningview.AutoBuildDatasetF")}
-              />
-            </SettingsControls.SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__auto__">
-                {t("finetuningview.AutoBuildDatasetF")}
-              </SelectItem>
-              {datasets
-                .filter((dataset) => dataset.id)
-                .map((dataset) => (
-                  <SelectItem key={dataset.id} value={dataset.id}>
-                    {dataset.id}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={startBackend}
-            onValueChange={(value) =>
-              setStartBackend(value as "mlx" | "cuda" | "cpu")
-            }
-          >
-            <SettingsControls.SelectTrigger variant="toolbar">
-              <SelectValue />
-            </SettingsControls.SelectTrigger>
-            <SelectContent>
-              <SelectItem value="cpu">{t("finetuningview.cpu")}</SelectItem>
-              <SelectItem value="mlx">{t("finetuningview.mlx")}</SelectItem>
-              <SelectItem value="cuda">{t("finetuningview.cuda")}</SelectItem>
-            </SelectContent>
-          </Select>
-          <SettingsControls.Input
-            variant="filter"
-            value={startModel}
-            onChange={(event) => setStartModel(event.target.value)}
-            placeholder={t("finetuningview.BaseModelOptional")}
-          />
-          <SettingsControls.Input
-            variant="filter"
-            value={startIterations}
-            onChange={(event) => setStartIterations(event.target.value)}
-            placeholder={t("finetuningview.IterationsOptional")}
-          />
-          <SettingsControls.Input
-            variant="filter"
-            value={startBatchSize}
-            onChange={(event) => setStartBatchSize(event.target.value)}
-            placeholder={t("finetuningview.BatchSizeOptional")}
-          />
-          <SettingsControls.Input
-            variant="filter"
-            value={startLearningRate}
-            onChange={(event) => setStartLearningRate(event.target.value)}
-            placeholder={t("finetuningview.LearningRateOptio")}
-          />
-        </div>
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className={FINE_TUNING_ACTION_CLASS}
-            disabled={startingJob || Boolean(activeRunningJob)}
-            onClick={() => {
-              void handleStartJob();
-            }}
-          >
-            {startingJob
-              ? t("finetuningview.Starting")
-              : t("finetuningview.StartTrainingJob")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className={FINE_TUNING_ACTION_CLASS}
-            onClick={() => {
-              void loadJobs();
-              void loadStatus();
-            }}
-          >
-            {t("finetuningview.RefreshJobs")}
-          </Button>
-          {activeRunningJob && (
-            <div className="rounded-full border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-warn">
-              {t("finetuningview.ActiveJob")}{" "}
-              <span className="ml-1 font-mono">{activeRunningJob.id}</span>
-            </div>
-          )}
-        </div>
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <div className={`${FINE_TUNING_PANEL_CLASS} max-h-72 overflow-auto`}>
-            {jobs.length === 0 ? (
-              <div className="p-4 text-sm text-muted">
-                {t("finetuningview.NoJobsYet")}
-              </div>
-            ) : (
-              jobs.map((job) => (
-                <div
-                  key={job.id}
-                  className={`border-b border-border/35 px-3 py-3 text-sm ${
-                    selectedJobId === job.id ? "bg-bg-hover" : ""
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <Button
-                      variant="link"
-                      className="h-auto w-auto justify-start p-0 text-left font-mono text-sm"
-                      onClick={() => setSelectedJobId(job.id)}
-                    >
-                      {job.id}
-                    </Button>
-                    {(job.status === "running" || job.status === "queued") && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 rounded-xl border-danger/35 px-3 text-[11px] text-danger shadow-sm hover:border-danger hover:bg-danger/10 disabled:opacity-50"
-                        disabled={cancellingJobId === job.id}
-                        onClick={() => {
-                          void handleCancelJob(job.id);
-                        }}
-                      >
-                        {cancellingJobId === job.id
-                          ? t("finetuningview.Cancelling")
-                          : t("finetuningview.Cancel")}
-                      </Button>
-                    )}
-                  </div>
-                  <div className="mt-1 text-xs text-muted">
-                    {job.status} · {formatProgress(job.progress)} · {job.phase}
-                  </div>
-                  <div className="text-xs text-muted">
-                    {formatDate(job.createdAt)}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-          <div className={`${FINE_TUNING_PANEL_CLASS} p-3`}>
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
-              {t("finetuningview.SelectedJobLogs")}
-            </div>
-            {!selectedJob ? (
-              <div className="text-sm text-muted">
-                {t("finetuningview.SelectAJobToInsp")}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="text-sm">
-                  <span className="font-semibold">
-                    {t("finetuningview.Status1")}
-                  </span>{" "}
-                  {selectedJob.status} · {formatProgress(selectedJob.progress)}{" "}
-                  · {selectedJob.phase}
-                </div>
-                <div className="text-sm">
-                  <span className="font-semibold">
-                    {t("finetuningview.Dataset")}
-                  </span>{" "}
-                  <span className="font-mono">{selectedJob.datasetId}</span>
-                </div>
-                <SettingsControls.Textarea
-                  readOnly
-                  value={selectedJob.logs.join("\n")}
-                  className="min-h-56"
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
+      <TrainingJobsSection
+        selectedDatasetId={selectedDatasetId}
+        setSelectedDatasetId={setSelectedDatasetId}
+        datasets={datasets}
+        startBackend={startBackend}
+        setStartBackend={setStartBackend}
+        startModel={startModel}
+        setStartModel={setStartModel}
+        startIterations={startIterations}
+        setStartIterations={setStartIterations}
+        startBatchSize={startBatchSize}
+        setStartBatchSize={setStartBatchSize}
+        startLearningRate={startLearningRate}
+        setStartLearningRate={setStartLearningRate}
+        startingJob={startingJob}
+        activeRunningJob={activeRunningJob}
+        onStartJob={() => {
+          void handleStartJob();
+        }}
+        onRefreshJobs={() => {
+          void loadJobs();
+          void loadStatus();
+        }}
+        jobs={jobs}
+        selectedJobId={selectedJobId}
+        setSelectedJobId={setSelectedJobId}
+        cancellingJobId={cancellingJobId}
+        onCancelJob={(jobId) => {
+          void handleCancelJob(jobId);
+        }}
+        selectedJob={selectedJob}
+        t={t}
+      />
 
-      <section className={FINE_TUNING_SECTION_CLASS}>
-        <div className={FINE_TUNING_SECTION_HEADER_CLASS}>
-          <div className="space-y-1">
-            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>
-              {t("finetuningview.ModelOps")}
-            </div>
-            <div className="text-lg font-semibold text-txt">
-              {t("finetuningview.TrainedModels")}
-            </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <div className={`${FINE_TUNING_PANEL_CLASS} max-h-72 overflow-auto`}>
-            {models.length === 0 ? (
-              <div className="p-4 text-sm text-muted">
-                {t("finetuningview.NoTrainedModelsYe")}
-              </div>
-            ) : (
-              models.map((model) => (
-                <Button
-                  variant="ghost"
-                  key={model.id}
-                  className={`w-full justify-start rounded-none border-b border-border/35 px-3 py-3 text-left text-sm ${
-                    selectedModelId === model.id
-                      ? "bg-bg-hover"
-                      : "hover:bg-bg-hover"
-                  }`}
-                  onClick={() => setSelectedModelId(model.id)}
-                >
-                  <div className="font-mono">
-                    {model.id}{" "}
-                    {model.active ? t("finetuningview.ActiveIndicator") : ""}
-                  </div>
-                  <div className="mt-1 text-xs text-muted">
-                    {t("finetuningview.backend")} {model.backend}
-                    {model.ollamaModel ? ` · ollama: ${model.ollamaModel}` : ""}
-                  </div>
-                  <div className="text-xs text-muted">
-                    {t("finetuningview.benchmark")} {model.benchmark.status}
-                    {model.benchmark.lastRunAt
-                      ? ` · ${formatDate(model.benchmark.lastRunAt)}`
-                      : ""}
-                  </div>
-                </Button>
-              ))
-            )}
-          </div>
-          <div className={`${FINE_TUNING_PANEL_CLASS} p-3`}>
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
-              {t("finetuningview.ModelActions")}
-            </div>
-            {!selectedModel ? (
-              <div className="text-sm text-muted">
-                {t("finetuningview.SelectAModelToIm")}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="text-sm">
-                  <span className="font-semibold">
-                    {t("finetuningview.Model")}
-                  </span>{" "}
-                  <span className="font-mono">{selectedModel.id}</span>
-                </div>
-                <div className="text-sm">
-                  <span className="font-semibold">
-                    {t("finetuningview.AdapterPath")}
-                  </span>{" "}
-                  <span className="font-mono">
-                    {selectedModel.adapterPath ?? "n/a"}
-                  </span>
-                </div>
+      <TrainedModelsSection
+        models={models}
+        selectedModelId={selectedModelId}
+        setSelectedModelId={setSelectedModelId}
+        selectedModel={selectedModel}
+        importModelName={importModelName}
+        setImportModelName={setImportModelName}
+        importBaseModel={importBaseModel}
+        setImportBaseModel={setImportBaseModel}
+        importOllamaUrl={importOllamaUrl}
+        setImportOllamaUrl={setImportOllamaUrl}
+        activateProviderModel={activateProviderModel}
+        setActivateProviderModel={setActivateProviderModel}
+        modelAction={modelAction}
+        smokeResult={smokeResult}
+        onImport={() => {
+          void handleImportSelectedModel();
+        }}
+        onActivate={() => {
+          void handleActivateSelectedModel();
+        }}
+        onBenchmark={() => {
+          void handleBenchmarkSelectedModel();
+        }}
+        onSmokeTest={() => {
+          void handleSmokeTestSelectedModel();
+        }}
+        t={t}
+      />
 
-                <SettingsControls.Input
-                  variant="filter"
-                  value={importModelName}
-                  onChange={(event) => setImportModelName(event.target.value)}
-                  placeholder={t("finetuningview.OllamaModelNameO")}
-                />
-                <SettingsControls.Input
-                  variant="filter"
-                  value={importBaseModel}
-                  onChange={(event) => setImportBaseModel(event.target.value)}
-                  placeholder={t("finetuningview.BaseModelForOllam")}
-                />
-                <SettingsControls.Input
-                  variant="filter"
-                  value={importOllamaUrl}
-                  onChange={(event) => setImportOllamaUrl(event.target.value)}
-                  placeholder={t("finetuningview.OllamaURL")}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={FINE_TUNING_ACTION_CLASS}
-                  disabled={modelAction === `import:${selectedModel.id}`}
-                  onClick={() => {
-                    void handleImportSelectedModel();
-                  }}
-                >
-                  {modelAction === `import:${selectedModel.id}`
-                    ? t("finetuningview.Importing")
-                    : t("finetuningview.ImportToOllama")}
-                </Button>
-
-                <SettingsControls.Input
-                  variant="filter"
-                  value={activateProviderModel}
-                  onChange={(event) =>
-                    setActivateProviderModel(event.target.value)
-                  }
-                  placeholder={t("finetuningview.ProviderModelEG")}
-                />
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={FINE_TUNING_ACTION_CLASS}
-                    disabled={modelAction === `activate:${selectedModel.id}`}
-                    onClick={() => {
-                      void handleActivateSelectedModel();
-                    }}
-                  >
-                    {modelAction === `activate:${selectedModel.id}`
-                      ? t("finetuningview.Activating")
-                      : t("finetuningview.ActivateModel")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={FINE_TUNING_ACTION_CLASS}
-                    disabled={modelAction === `benchmark:${selectedModel.id}`}
-                    onClick={() => {
-                      void handleBenchmarkSelectedModel();
-                    }}
-                  >
-                    {modelAction === `benchmark:${selectedModel.id}`
-                      ? t("finetuningview.Benchmarking")
-                      : t("finetuningview.BenchmarkAction")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={FINE_TUNING_ACTION_CLASS}
-                    disabled={modelAction === `smoke:${selectedModel.id}`}
-                    onClick={() => {
-                      void handleSmokeTestSelectedModel();
-                    }}
-                  >
-                    {modelAction === `smoke:${selectedModel.id}`
-                      ? t("finetuningview.Testing")
-                      : t("finetuningview.RunSmokePrompt")}
-                  </Button>
-                </div>
-                {smokeResult && (
-                  <SettingsControls.Textarea
-                    readOnly
-                    value={smokeResult}
-                    className="min-h-24"
-                  />
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className={FINE_TUNING_SECTION_CLASS}>
-        <div className={FINE_TUNING_SECTION_HEADER_CLASS}>
-          <div className="space-y-1">
-            <div className={FINE_TUNING_SECTION_KICKER_CLASS}>
-              {t("finetuningview.Streaming")}
-            </div>
-            <div className="text-lg font-semibold text-txt">
-              {t("finetuningview.LiveTrainingEvents")}
-            </div>
-          </div>
-        </div>
-        <div className={`${FINE_TUNING_PANEL_CLASS} max-h-56 overflow-auto`}>
-          {trainingEvents.length === 0 ? (
-            <div className="p-4 text-sm text-muted">
-              {t("finetuningview.NoLiveEventsYet")}
-            </div>
-          ) : (
-            trainingEvents.map((event) => (
-              <div
-                key={`${event.ts}-${event.kind}-${String(event.message ?? "")}`}
-                className="border-b border-border/35 px-3 py-2 text-sm"
-              >
-                <span className="mr-2 font-mono text-xs text-muted">
-                  {formatTime(event.ts, { fallback: "—" })}
-                </span>
-                <span className="font-semibold">{event.kind}</span>
-                {typeof event.progress === "number" && (
-                  <span className="text-muted">
-                    {" "}
-                    · {formatProgress(event.progress)}
-                  </span>
-                )}
-                {event.phase && (
-                  <span className="text-muted"> · {event.phase}</span>
-                )}
-                <div className="mt-0.5 text-xs text-muted">{event.message}</div>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+      <LiveEventsPanel events={trainingEvents} t={t} />
     </ContentLayout>
   );
 }

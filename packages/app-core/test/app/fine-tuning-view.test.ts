@@ -9,8 +9,8 @@ import type {
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { text, findButtonByText, flush } from "../../../../test/helpers/react-test";
 import { testT } from "../../../../test/helpers/i18n";
+import { findButtonByText, flush } from "../../../../test/helpers/react-test";
 
 interface FineTuningContextStub {
   t: (key: string, vars?: Record<string, unknown>) => string;
@@ -87,6 +87,7 @@ vi.mock("@miladyai/ui", () => {
       ...props
     }: React.ButtonHTMLAttributes<HTMLButtonElement>) =>
       React.createElement("button", { type: "button", ...props }, children),
+    ContentLayout: passthrough,
     Input: (props: React.InputHTMLAttributes<HTMLInputElement>) =>
       React.createElement("input", props),
     Textarea: (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) =>
@@ -106,7 +107,9 @@ vi.mock("@miladyai/ui", () => {
       children,
       open,
     }: React.PropsWithChildren<{ open?: boolean }>) =>
-      open !== false ? React.createElement(React.Fragment, null, children) : null,
+      open !== false
+        ? React.createElement(React.Fragment, null, children)
+        : null,
     DialogContent: passthrough,
     DialogHeader: passthrough,
     DialogTitle: passthrough,
