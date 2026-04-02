@@ -46,6 +46,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: milady-ai/agent
   SOURCE_REF: ${{ github.event_name == 'push' && github.ref_name || (github.ref_name == 'cloud/staging' && 'cloud/staging' || 'cloud/main') }}
+  CLOUD_DEPLOY_WEBHOOK_URL: http://89.167.63.246:9876/deploy
 
 permissions:
   contents: read
@@ -178,7 +179,34 @@ jobs:
             VERSION_CLEAN=${{ steps.version.outputs.version_clean }}
           provenance: false
 
-      # ── 13. Build summary ──────────────────────────────────────────────────
+      # ── 13. Trigger production deploy webhook ──────────────────────────────
+      - name: Trigger cloud fleet deploy webhook
+        if: success() && steps.version.outputs.build_environment == 'production' && (github.event_name == 'push' || inputs.push_image != false) && (github.event_name == 'push' || inputs.skip_rollout != true)
+        env:
+          WEBHOOK_SECRET: ${{ secrets.CLOUD_DEPLOY_WEBHOOK_SECRET }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          IMAGE_TAG: ${{ steps.version.outputs.version }}
+          GIT_SHA: ${{ github.sha }}
+          GIT_REF: ${{ github.ref_name }}
+          DELIVERY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          if [ -z "$WEBHOOK_SECRET" ]; then
+            echo "CLOUD_DEPLOY_WEBHOOK_SECRET is required" >&2
+            exit 1
+          fi
+
+          PAYLOAD=$(python3 -c 'import json, os; print(json.dumps({"image": os.environ["IMAGE"], "tag": os.environ["IMAGE_TAG"], "sha": os.environ["GIT_SHA"], "ref": os.environ["GIT_REF"], "run_id": os.environ["DELIVERY_ID"], "skip_rollout": False}, separators=(",", ":")))')
+          SIGNATURE="sha256=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | awk '{print $2}')"
+
+          curl --fail --show-error --silent \
+            -X POST "${{ env.CLOUD_DEPLOY_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: cloud_deploy" \
+            -H "X-GitHub-Delivery: ${DELIVERY_ID}" \
+            -H "X-Hub-Signature-256: ${SIGNATURE}" \
+            --data "$PAYLOAD"
+
+      # ── 14. Build summary ──────────────────────────────────────────────────
       - name: Build summary
         if: always()
         run: |
@@ -186,6 +214,16 @@ jobs:
             BUILD_LABEL="Staging"
           else
             BUILD_LABEL="Production"
+          fi
+
+          if [ "${SOURCE_REF}" = "cloud/main" ]; then
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.skip_rollout }}" = "true" ]; then
+              ROLLOUT_STATUS="skipped (workflow_dispatch skip_rollout=true)"
+            else
+              ROLLOUT_STATUS="enabled via webhook"
+            fi
+          else
+            ROLLOUT_STATUS="not applicable (staging)"
           fi
 
           echo "## ☁️ Cloud Agent Image (${BUILD_LABEL})" >> $GITHUB_STEP_SUMMARY
@@ -199,6 +237,7 @@ jobs:
           echo "| Version | \`${{ steps.version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Branch | \`${SOURCE_REF}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | \`$(git rev-parse --short HEAD)\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Auto-deploy | ${ROLLOUT_STATUS} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
