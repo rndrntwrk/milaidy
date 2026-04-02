@@ -563,6 +563,17 @@ describe("Electrobun release workflow drift", () => {
     expect(stageScript).not.toContain("--wait \\");
   });
 
+  it("treats staged app Gatekeeper checks as advisory and keeps the notarized DMG as the hard release gate", () => {
+    const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
+
+    expect(workflow).toContain('if ! spctl -a -vv --type exec "$app"; then');
+    expect(workflow).toContain(
+      "Gatekeeper rejected staged app bundle $app; continuing because the notarized DMG is the release artifact.",
+    );
+    expect(workflow).toContain('retry_stapler_validate "$dmg"');
+    expect(workflow).toContain("Smoke test packaged macOS app");
+  });
+
   it("rebuilds the staged macOS direct launcher with the packaged launcher architecture", () => {
     const stageScript = fs.readFileSync(MACOS_STAGE_SCRIPT_PATH, "utf8");
 
