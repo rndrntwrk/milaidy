@@ -1299,6 +1299,21 @@ export async function writeCompressedJsonlRows(
   await once(outStream, "finish");
 }
 
-export function shouldEnableTrajectoryLoggingByDefault(): boolean {
-  return process.env.NODE_ENV !== "production";
+function isCloudProvisionedContainer(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return (
+    env.MILADY_CLOUD_PROVISIONED === "1" ||
+    env.ELIZA_CLOUD_PROVISIONED === "1"
+  );
+}
+
+export function shouldEnableTrajectoryLoggingByDefault(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (isCloudProvisionedContainer(env)) {
+    return true;
+  }
+
+  return env.NODE_ENV !== "production";
 }
