@@ -705,6 +705,30 @@ export async function handleKnowledgeRoutes(
   }
   const agentId = runtime.agentId as UUID;
 
+  // ── GET /api/knowledge ──────────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/knowledge") {
+    const documentCount = await knowledgeService.countMemories({
+      tableName: "documents",
+      roomId: agentId,
+      unique: false,
+    });
+
+    const fragmentCount = await knowledgeService.countMemories({
+      tableName: "knowledge",
+      roomId: agentId,
+      unique: false,
+    });
+
+    json(res, {
+      ok: true,
+      available: true,
+      agentId,
+      documentCount,
+      fragmentCount,
+    });
+    return true;
+  }
+
   // ── GET /api/knowledge/stats ────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/knowledge/stats") {
     const documentCount = await knowledgeService.countMemories({

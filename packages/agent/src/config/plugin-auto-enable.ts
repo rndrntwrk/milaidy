@@ -102,7 +102,7 @@ const FEATURE_PLUGINS: Record<string, string> = {
   cron: "@elizaos/plugin-cron",
   shell: "@elizaos/plugin-shell",
   imageGen: "@elizaos/plugin-image-generation",
-  tts: "@elizaos/plugin-tts",
+  tts: "@elizaos/plugin-edge-tts",
   stt: "@elizaos/plugin-stt",
   agentSkills: "@elizaos/plugin-agent-skills",
   // directives: "@elizaos/plugin-directives", // not yet ready — package doesn't exist
@@ -413,6 +413,19 @@ export function applyPluginAutoEnable(
       EVM_PLUGIN_SHORT_ID,
       changes,
       evmAutoEnableReason,
+    );
+  }
+
+  const cloudProvisioned =
+    env.MILADY_CLOUD_PROVISIONED === "1" ||
+    env.ELIZA_CLOUD_PROVISIONED === "1";
+  if (cloudProvisioned && pluginsConfig.entries["edge-tts"]?.enabled !== false) {
+    addToAllowlist(
+      pluginsConfig.allow,
+      "@elizaos/plugin-edge-tts",
+      "edge-tts",
+      changes,
+      "cloud-provisioned voice output",
     );
   }
 

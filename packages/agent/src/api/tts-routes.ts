@@ -50,6 +50,95 @@ export async function handleTtsRoutes(
 ): Promise<boolean> {
   const { req, res, method, pathname, state, json, error, readJsonBody } = ctx;
 
+  // ── GET /api/tts/config ───────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/tts/config") {
+    const messages =
+      state.config && typeof state.config === "object"
+        ? ((state.config as Record<string, unknown>).messages as
+            | Record<string, unknown>
+            | undefined)
+        : undefined;
+    const tts =
+      messages && typeof messages === "object"
+        ? ((messages.tts as Record<string, unknown>) ?? undefined)
+        : undefined;
+
+    const elevenlabs =
+      tts && typeof tts === "object"
+        ? ((tts.elevenlabs as Record<string, unknown>) ?? undefined)
+        : undefined;
+    const edge =
+      tts && typeof tts === "object"
+        ? ((tts.edge as Record<string, unknown>) ?? undefined)
+        : undefined;
+    const openai =
+      tts && typeof tts === "object"
+        ? ((tts.openai as Record<string, unknown>) ?? undefined)
+        : undefined;
+
+    json(res, {
+      provider: typeof tts?.provider === "string" ? tts.provider : undefined,
+      mode: typeof tts?.mode === "string" ? tts.mode : undefined,
+      auto: typeof tts?.auto === "string" ? tts.auto : undefined,
+      enabled: tts?.enabled === true,
+      elevenlabs: elevenlabs
+        ? {
+            apiKey:
+              typeof elevenlabs.apiKey === "string" &&
+              elevenlabs.apiKey.trim() &&
+              !ctx.isRedactedSecretValue(elevenlabs.apiKey)
+                ? "[REDACTED]"
+                : undefined,
+            voiceId:
+              typeof elevenlabs.voiceId === "string"
+                ? elevenlabs.voiceId
+                : undefined,
+            modelId:
+              typeof elevenlabs.modelId === "string"
+                ? elevenlabs.modelId
+                : undefined,
+            stability:
+              typeof (elevenlabs.voiceSettings as Record<string, unknown> | undefined)
+                ?.stability === "number"
+                ? ((elevenlabs.voiceSettings as Record<string, unknown>).stability as number)
+                : undefined,
+            similarityBoost:
+              typeof (elevenlabs.voiceSettings as Record<string, unknown> | undefined)
+                ?.similarityBoost === "number"
+                ? ((elevenlabs.voiceSettings as Record<string, unknown>).similarityBoost as number)
+                : undefined,
+            speed:
+              typeof (elevenlabs.voiceSettings as Record<string, unknown> | undefined)
+                ?.speed === "number"
+                ? ((elevenlabs.voiceSettings as Record<string, unknown>).speed as number)
+                : undefined,
+          }
+        : undefined,
+      edge: edge
+        ? {
+            voice: typeof edge.voice === "string" ? edge.voice : undefined,
+            lang: typeof edge.lang === "string" ? edge.lang : undefined,
+            rate: typeof edge.rate === "string" ? edge.rate : undefined,
+            pitch: typeof edge.pitch === "string" ? edge.pitch : undefined,
+            volume: typeof edge.volume === "string" ? edge.volume : undefined,
+          }
+        : undefined,
+      openai: openai
+        ? {
+            apiKey:
+              typeof openai.apiKey === "string" &&
+              openai.apiKey.trim() &&
+              !ctx.isRedactedSecretValue(openai.apiKey)
+                ? "[REDACTED]"
+                : undefined,
+            model: typeof openai.model === "string" ? openai.model : undefined,
+            voice: typeof openai.voice === "string" ? openai.voice : undefined,
+          }
+        : undefined,
+    });
+    return true;
+  }
+
   // ── POST /api/tts/elevenlabs ─────────────────────────────────────────
   if (method === "POST" && pathname === "/api/tts/elevenlabs") {
     const body = await readJsonBody<{

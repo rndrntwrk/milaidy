@@ -82,6 +82,28 @@ function trim(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
+function normalizeTriggerPath(pathname: string): {
+  normalizedPathname: string;
+  usingHeartbeatsAlias: boolean;
+} {
+  if (pathname === "/api/heartbeats") {
+    return {
+      normalizedPathname: "/api/triggers",
+      usingHeartbeatsAlias: true,
+    };
+  }
+  if (pathname.startsWith("/api/heartbeats/")) {
+    return {
+      normalizedPathname: pathname.replace("/api/heartbeats", "/api/triggers"),
+      usingHeartbeatsAlias: true,
+    };
+  }
+  return {
+    normalizedPathname: pathname,
+    usingHeartbeatsAlias: false,
+  };
+}
+
 async function findTask(
   runtime: AgentRuntime,
   id: string,
@@ -125,22 +147,48 @@ export async function handleTriggerRoutes(
     TRIGGER_TASK_TAGS,
   } = ctx;
 
-  if (!pathname.startsWith("/api/triggers")) return false;
+  const { normalizedPathname, usingHeartbeatsAlias } =
+    normalizeTriggerPath(pathname);
+  const listResponse = (triggers: TriggerSummaryLike[], status = 200): void => {
+    json(
+      res,
+      usingHeartbeatsAlias ? { triggers, heartbeats: triggers } : { triggers },
+      status,
+    );
+  };
+  const itemResponse = (summary: TriggerSummaryLike, status = 200): void => {
+    json(
+      res,
+      usingHeartbeatsAlias
+        ? { trigger: summary, heartbeat: summary }
+        : { trigger: summary },
+      status,
+    );
+  };
+
+  if (
+    !normalizedPathname.startsWith("/api/triggers") &&
+    !pathname.startsWith("/api/heartbeats")
+  )
+    return false;
   if (!runtime) {
     error(res, "Agent is not running", 503);
     return true;
   }
-  if (!triggersFeatureEnabled(runtime) && pathname !== "/api/triggers/health") {
+  if (
+    !triggersFeatureEnabled(runtime) &&
+    normalizedPathname !== "/api/triggers/health"
+  ) {
     error(res, "Triggers are disabled by configuration", 503);
     return true;
   }
 
-  if (method === "GET" && pathname === "/api/triggers/health") {
+  if (method === "GET" && normalizedPathname === "/api/triggers/health") {
     json(res, await getTriggerHealthSnapshot(runtime));
     return true;
   }
 
-  if (method === "GET" && pathname === "/api/triggers") {
+  if (method === "GET" && normalizedPathname === "/api/triggers") {
     const tasks = await listTriggerTasks(runtime);
     const triggers = tasks
       .map(taskToTriggerSummary)
@@ -148,11 +196,11 @@ export async function handleTriggerRoutes(
       .sort((a, b) =>
         String(a.displayName ?? "").localeCompare(String(b.displayName ?? "")),
       );
-    json(res, { triggers });
+    listResponse(triggers);
     return true;
   }
 
-  if (method === "POST" && pathname === "/api/triggers") {
+  if (method === "POST" && normalizedPathname === "/api/triggers") {
     const body = await readJsonBody<Record<string, unknown>>(req, res);
     if (!body) return true;
 
@@ -252,11 +300,11 @@ export async function handleTriggerRoutes(
       error(res, "Trigger created but summary could not be generated", 500);
       return true;
     }
-    json(res, { trigger: summary }, 201);
+    itemResponse(summary, 201);
     return true;
   }
 
-  const runsMatch = /^\/api\/triggers\/([^/]+)\/runs$/.exec(pathname);
+  const runsMatch = /^\/api\/triggers\/([^/]+)\/runs$/.exec(normalizedPathname);
   if (method === "GET" && runsMatch) {
     const task = await findTask(
       runtime,
@@ -272,7 +320,7 @@ export async function handleTriggerRoutes(
     return true;
   }
 
-  const execMatch = /^\/api\/triggers\/([^/]+)\/execute$/.exec(pathname);
+  const execMatch = /^\/api\/triggers\/([^/]+)\/execute$/.exec(normalizedPathname);
   if (method === "POST" && execMatch) {
     const task = await findTask(
       runtime,
@@ -289,15 +337,19 @@ export async function handleTriggerRoutes(
       force: true,
     });
     const refreshed = task.id ? await runtime.getTask(task.id) : null;
-    json(res, {
-      ok: true,
-      result,
-      trigger: refreshed ? taskToTriggerSummary(refreshed) : result.trigger ?? null,
-    });
+    const summary = refreshed
+      ? taskToTriggerSummary(refreshed)
+      : result.trigger ?? null;
+    json(
+      res,
+      usingHeartbeatsAlias
+        ? { ok: true, result, trigger: summary, heartbeat: summary }
+        : { ok: true, result, trigger: summary },
+    );
     return true;
   }
 
-  const itemMatch = /^\/api\/triggers\/([^/]+)$/.exec(pathname);
+  const itemMatch = /^\/api\/triggers\/([^/]+)$/.exec(normalizedPathname);
   if (!itemMatch) return false;
   const triggerId = decodeURIComponent(itemMatch[1]);
 
@@ -317,7 +369,7 @@ export async function handleTriggerRoutes(
       error(res, "Trigger metadata is invalid", 500);
       return true;
     }
-    json(res, { trigger: summary });
+    itemResponse(summary);
     return true;
   }
 
@@ -443,7 +495,7 @@ export async function handleTriggerRoutes(
       error(res, "Trigger metadata is invalid", 500);
       return true;
     }
-    json(res, { trigger: summary });
+    itemResponse(summary);
     return true;
   }
 

@@ -84,4 +84,21 @@ describe("handleTriggerRoutes", () => {
     expect(getStatus()).toBe(200);
     expect(getJson()).toEqual(snapshot);
   });
+
+  test("GET /api/heartbeats aliases to /api/triggers", async () => {
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const ctx = buildCtx({
+      method: "GET",
+      pathname: "/api/heartbeats",
+      res,
+      runtime: {} as TriggerRouteContext["runtime"],
+      listTriggerTasks: vi.fn(async () => []),
+    });
+
+    const handled = await handleTriggerRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual({ triggers: [], heartbeats: [] });
+  });
 });
