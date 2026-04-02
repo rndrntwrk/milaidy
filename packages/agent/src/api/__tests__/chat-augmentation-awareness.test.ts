@@ -130,7 +130,7 @@ describe("agent awareness chat augmentation", () => {
     expect(augmented.content.text).toContain("- model: anthropic/claude-sonnet-4.6");
   });
 
-  it("does not augment unrelated prompts", async () => {
+  it("does not augment unrelated prompts for non-cloud sessions", async () => {
     const message = createMessageMemory({
       id: "00000000-0000-0000-0000-000000000011",
       entityId: "00000000-0000-0000-0000-000000000012",
@@ -149,5 +149,30 @@ describe("agent awareness chat augmentation", () => {
     );
 
     expect(augmented).toBe(message);
+  });
+
+  it("augments all prompts in cloud-provisioned containers", async () => {
+    process.env.MILADY_CLOUD_PROVISIONED = "1";
+    process.env.ELIZA_API_TOKEN = "cloud-token";
+
+    const message = createMessageMemory({
+      id: "00000000-0000-0000-0000-000000000021",
+      entityId: "00000000-0000-0000-0000-000000000022",
+      agentId: "00000000-0000-0000-0000-000000000023",
+      roomId: "00000000-0000-0000-0000-000000000024",
+      content: {
+        text: "write me a haiku about snow",
+        source: "client_chat",
+        channelType: ChannelType.DIRECT,
+      },
+    });
+
+    const augmented = await maybeAugmentChatMessageWithAgentAwareness(
+      makeRuntime() as never,
+      message,
+    );
+
+    expect(augmented.content.text).toContain("Server-verified agent self-awareness:");
+    expect(augmented.content.text).toContain("Original self-status request");
   });
 });

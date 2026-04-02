@@ -314,7 +314,12 @@ export async function maybeAugmentChatMessageWithAgentAwareness(
 ): Promise<ReturnType<typeof createMessageMemory>> {
   const userPrompt = extractCompatTextContent(message.content)?.trim();
   if (!userPrompt) return message;
-  if (!AGENT_AWARENESS_INTENT_RE.test(userPrompt)) return message;
+
+  const shouldInject =
+    AGENT_AWARENESS_INTENT_RE.test(userPrompt) ||
+    isCloudProvisionedContainer();
+  if (!shouldInject) return message;
+
   return {
     ...message,
     content: {

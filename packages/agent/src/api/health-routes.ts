@@ -2,6 +2,7 @@ import type http from "node:http";
 import type { AgentRuntime } from "@elizaos/core";
 import type { ElizaConfig } from "../config/config.js";
 import type { ConnectorHealthMonitor } from "./connector-health.js";
+import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -377,9 +378,14 @@ export async function handleHealthRoutes(
   // ── GET /api/status ─────────────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/status") {
     const uptime = state.startedAt ? Date.now() - state.startedAt : undefined;
+    const cloudProvisioned = isCloudProvisionedContainer();
+    const hasCloudApiKey = Boolean(state.config.cloud?.apiKey?.trim());
     const cloudStatus = {
-      connectionStatus: "disconnected",
-      activeAgentId: null,
+      connectionStatus:
+        cloudProvisioned || hasCloudApiKey ? "connected" : "disconnected",
+      activeAgentId: cloudProvisioned ? state.agentName : null,
+      cloudProvisioned,
+      hasApiKey: hasCloudApiKey,
     };
 
     json(res, {
