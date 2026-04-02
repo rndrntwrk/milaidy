@@ -486,8 +486,12 @@ export function RuntimeView({
         search={{
           value: sidebarSearch,
           onChange: (e) => setSidebarSearch(e.target.value),
-          placeholder: t("runtimeview.filterSections", { defaultValue: "Filter sections" }),
-          "aria-label": t("runtimeview.filterSections", { defaultValue: "Filter sections" }),
+          placeholder: t("runtimeview.filterSections", {
+            defaultValue: "Filter sections",
+          }),
+          "aria-label": t("runtimeview.filterSections", {
+            defaultValue: "Filter sections",
+          }),
           onClear: () => setSidebarSearch(""),
         }}
       />

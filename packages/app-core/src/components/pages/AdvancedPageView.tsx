@@ -219,7 +219,9 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
   return (
     <div
       className={
-        inModal ? "settings-modal-layout" : "flex w-full flex-col h-full min-h-0"
+        inModal
+          ? "settings-modal-layout"
+          : "flex w-full flex-col h-full min-h-0"
       }
     >
       {inModal ? (
@@ -230,7 +232,9 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
 
       <div
         className={
-          inModal ? "settings-content-area" : "flex w-full min-h-0 flex-1 flex-col"
+          inModal
+            ? "settings-content-area"
+            : "flex w-full min-h-0 flex-1 flex-col"
         }
         style={
           inModal

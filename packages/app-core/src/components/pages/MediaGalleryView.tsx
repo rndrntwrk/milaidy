@@ -408,7 +408,11 @@ export function MediaGalleryView({
   );
 
   return (
-    <PageLayout sidebar={mediaSidebar} contentHeader={contentHeader} contentInnerClassName="w-full min-h-0">
+    <PageLayout
+      sidebar={mediaSidebar}
+      contentHeader={contentHeader}
+      contentInnerClassName="w-full min-h-0"
+    >
       <div className="flex min-h-0 flex-1 flex-col w-full">
         {error ? (
           <div className="mb-4 rounded-2xl border border-danger/35 bg-danger/10 px-4 py-3 text-sm text-danger">

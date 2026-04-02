@@ -415,7 +415,11 @@ export function DatabaseView({
     );
 
     return (
-      <PageLayout sidebar={dbSidebar} contentHeader={contentHeader} contentInnerClassName="w-full min-h-0">
+      <PageLayout
+        sidebar={dbSidebar}
+        contentHeader={contentHeader}
+        contentInnerClassName="w-full min-h-0"
+      >
         <div className="flex min-h-0 flex-1 flex-col w-full">
           {errorMessage ? (
             <div className="mb-4 rounded-xl border border-danger/35 bg-danger/10 px-4 py-3 text-sm text-danger">
@@ -425,7 +429,9 @@ export function DatabaseView({
 
           {dbStatus && !dbStatus.connected ? (
             <div className="w-full">
-              <PagePanel variant="surface" as="section"
+              <PagePanel
+                variant="surface"
+                as="section"
                 className="px-5 py-5 sm:px-6"
               >
                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
@@ -447,7 +453,9 @@ export function DatabaseView({
             <div className="w-full">
               {!selectedTable ? (
                 <>
-                  <PagePanel variant="surface" as="section"
+                  <PagePanel
+                    variant="surface"
+                    as="section"
                     className="px-5 py-5 sm:px-6"
                   >
                     <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
