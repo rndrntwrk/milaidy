@@ -299,6 +299,12 @@ import {
 } from "./wallet.js";
 import { handleWalletBscRoutes } from "./wallet-bsc-routes.js";
 import { handleWalletRoutes } from "./wallet-routes.js";
+import {
+  EVM_PLUGIN_PACKAGE,
+  resolvePluginEvmLoaded,
+  resolveWalletAutomationMode as resolveAgentAutomationModeFromConfig,
+  resolveWalletCapabilityStatus,
+} from "./wallet-capability.js";
 import { resolveWalletRpcReadiness } from "./wallet-rpc.js";
 import { discoverSkills } from "./skill-discovery-helpers.js";
 import { handleWalletTradeExecuteRoute } from "./wallet-trade-routes.js";
@@ -1192,7 +1198,7 @@ function buildWalletContextPrompt(
       ? "testnet"
       : "mainnet";
   const localSignerAvailable = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
-  const pluginEvmLoaded = isPluginLoadedByName(runtime, EVM_PLUGIN_PACKAGE);
+  const pluginEvmLoaded = resolvePluginEvmLoaded(runtime);
   const rpcReady = Boolean(
     process.env.BSC_RPC_URL?.trim() ||
       process.env.BSC_TESTNET_RPC_URL?.trim() ||
@@ -2300,8 +2306,6 @@ const AGENT_AUTOMATION_MODES = new Set<AgentAutomationMode>([
   "connectors-only",
   "full",
 ]);
-const EVM_PLUGIN_PACKAGE = "@elizaos/plugin-evm";
-
 function parseAgentAutomationMode(value: unknown): AgentAutomationMode | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
@@ -2309,22 +2313,6 @@ function parseAgentAutomationMode(value: unknown): AgentAutomationMode | null {
     return null;
   }
   return normalized as AgentAutomationMode;
-}
-
-function resolveAgentAutomationModeFromConfig(
-  config: ElizaConfig,
-): AgentAutomationMode {
-  const features =
-    config.features && typeof config.features === "object"
-      ? (config.features as Record<string, unknown>)
-      : null;
-  const agentAutomation =
-    features?.agentAutomation &&
-    typeof features.agentAutomation === "object" &&
-    !Array.isArray(features.agentAutomation)
-      ? (features.agentAutomation as Record<string, unknown>)
-      : null;
-  return parseAgentAutomationMode(agentAutomation?.mode) ?? "full";
 }
 
 function isAgentAutomationRequest(req: http.IncomingMessage): boolean {
@@ -2356,77 +2344,6 @@ function persistAgentAutomationMode(
     ...currentObject,
     enabled: true,
     mode,
-  };
-}
-
-function isPluginLoadedByName(
-  runtime: AgentRuntime | null,
-  pluginName: string,
-): boolean {
-  if (!runtime || !Array.isArray(runtime.plugins)) return false;
-  const shortId = pluginName.replace("@elizaos/plugin-", "");
-  const packageSuffix = `plugin-${shortId}`;
-  return runtime.plugins.some((plugin) => {
-    const name = typeof plugin?.name === "string" ? plugin.name : "";
-    return (
-      name === pluginName ||
-      name === shortId ||
-      name === packageSuffix ||
-      name.endsWith(`/${packageSuffix}`) ||
-      name.includes(shortId)
-    );
-  });
-}
-
-function resolveWalletCapabilityStatus(
-  state: Pick<ServerState, "config" | "runtime">,
-) {
-  const addrs = getWalletAddresses();
-  const rpcReadiness = resolveWalletRpcReadiness(state.config);
-  const automationMode = resolveAgentAutomationModeFromConfig(state.config);
-  const localSignerAvailable = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
-  const hasWallet = Boolean(addrs.evmAddress || addrs.solanaAddress);
-  const hasEvm = Boolean(addrs.evmAddress);
-  const pluginEvmLoaded = isPluginLoadedByName(
-    state.runtime,
-    EVM_PLUGIN_PACKAGE,
-  );
-  const pluginEvmRequired = hasEvm || localSignerAvailable;
-  const rpcReady = Boolean(rpcReadiness.managedBscRpcReady);
-  const walletSource = localSignerAvailable
-    ? "local"
-    : hasWallet
-      ? "managed"
-      : "none";
-
-  let executionBlockedReason: string | null = null;
-  if (!hasEvm) {
-    executionBlockedReason = "No EVM wallet is active yet.";
-  } else if (!rpcReady) {
-    executionBlockedReason = "BSC RPC is not configured.";
-  } else if (!pluginEvmLoaded) {
-    executionBlockedReason =
-      "plugin-evm is not loaded, so EVM wallet execution is unavailable.";
-  } else if (automationMode !== "full") {
-    executionBlockedReason =
-      "Agent automation is in connectors-only mode, so wallet execution is blocked in chat.";
-  }
-
-  return {
-    walletSource,
-    walletNetwork: rpcReadiness.walletNetwork,
-    evmAddress: addrs.evmAddress ?? null,
-    solanaAddress: addrs.solanaAddress ?? null,
-    hasWallet,
-    hasEvm,
-    localSignerAvailable,
-    rpcReady,
-    automationMode,
-    pluginEvmLoaded,
-    pluginEvmRequired,
-    executionReady:
-      hasEvm && rpcReady && pluginEvmLoaded && automationMode === "full",
-    executionBlockedReason,
   };
 }
 
@@ -2705,7 +2622,7 @@ export function buildWalletActionNotExecutedReply(
     process.env.MILADY_WALLET_NETWORK?.trim().toLowerCase() === "testnet"
       ? "testnet"
       : "mainnet";
-  const pluginEvmLoaded = isPluginLoadedByName(runtime, EVM_PLUGIN_PACKAGE);
+  const pluginEvmLoaded = resolvePluginEvmLoaded(runtime);
   const rpcReady = Boolean(
     process.env.BSC_RPC_URL?.trim() ||
       process.env.BSC_TESTNET_RPC_URL?.trim() ||
@@ -5197,6 +5114,7 @@ async function handleRequest(
       method,
       pathname,
       config: state.config,
+      runtime: state.runtime,
       saveConfig: saveElizaConfig,
       ensureWalletKeysInEnvAndConfig,
       resolveWalletExportRejection,

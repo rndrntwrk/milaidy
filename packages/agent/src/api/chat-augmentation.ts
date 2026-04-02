@@ -20,6 +20,7 @@ import { detectRuntimeModel, resolveProviderFromModel } from "./agent-model.js";
 import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
 import { extractCompatTextContent } from "./compat-utils.js";
 import { getKnowledgeService } from "./knowledge-service-loader.js";
+import { resolvePluginEvmLoaded } from "./wallet-capability.js";
 import { getWalletAddresses } from "./wallet.js";
 import {
   normalizeCharacterLanguage,
@@ -161,27 +162,6 @@ export function buildChatKnowledgePrompt(
 const AGENT_AWARENESS_INTENT_RE =
   /\b(model|provider|wallet|address|balance|swap|trade|transfer|send|token|bnb|eth|sol|onchain|on-chain|plugin|plugins|capabilit(?:y|ies)|cloud|credits|hosted|hosting|runtime|what are you running)\b/i;
 
-/** Needed by awareness prompt builders — checks if a plugin is loaded by name. */
-function isPluginLoadedByName(
-  runtime: AgentRuntime | null,
-  pluginName: string,
-): boolean {
-  if (!runtime || !Array.isArray(runtime.plugins)) return false;
-  const shortId = pluginName.replace("@elizaos/plugin-", "");
-  const packageSuffix = `plugin-${shortId}`;
-  return runtime.plugins.some((plugin) => {
-    const name = typeof plugin?.name === "string" ? plugin.name : "";
-    return (
-      name === pluginName ||
-      name === shortId ||
-      name === packageSuffix ||
-      name.endsWith(`/${packageSuffix}`) ||
-      name.includes(shortId)
-    );
-  });
-}
-
-const EVM_PLUGIN_PACKAGE = "@elizaos/plugin-evm";
 const AGENT_AWARENESS_CLOUD_CREDITS_TIMEOUT_MS = 1_500;
 const MAX_EXPOSED_PLUGIN_NAMES = 12;
 
@@ -212,9 +192,9 @@ function formatActivePluginList(runtime: AgentRuntime): string {
 async function resolveCloudCreditsBalance(
   runtime: AgentRuntime,
 ): Promise<string> {
-  const cloudAuth = runtime.getService?.<CloudAuthAwarenessService>(
-    "CLOUD_AUTH",
-  );
+  const cloudAuth = runtime.getService?.("CLOUD_AUTH") as
+    | CloudAuthAwarenessService
+    | undefined;
   if (!cloudAuth?.isAuthenticated?.() || !cloudAuth.getClient) {
     return "unavailable";
   }
@@ -256,7 +236,7 @@ export async function buildAgentAwarenessContextPrompt(
       ? "testnet"
       : "mainnet";
   const localSignerAvailable = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
-  const pluginEvmLoaded = isPluginLoadedByName(runtime, EVM_PLUGIN_PACKAGE);
+  const pluginEvmLoaded = resolvePluginEvmLoaded(runtime);
   const rpcReady = Boolean(
     process.env.BSC_RPC_URL?.trim() ||
       process.env.BSC_TESTNET_RPC_URL?.trim() ||
@@ -275,9 +255,9 @@ export async function buildAgentAwarenessContextPrompt(
   const model = detectRuntimeModel(runtime) ?? "unknown";
   const provider = resolveProviderFromModel(model) ?? "unknown";
   const cloudHosted = isCloudProvisionedContainer();
-  const cloudAuth = runtime.getService?.<CloudAuthAwarenessService>(
-    "CLOUD_AUTH",
-  );
+  const cloudAuth = runtime.getService?.("CLOUD_AUTH") as
+    | CloudAuthAwarenessService
+    | undefined;
   const cloudConnected =
     cloudHosted || Boolean(cloudAuth?.isAuthenticated?.());
   const cloudCredits = cloudConnected
