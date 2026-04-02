@@ -15,6 +15,7 @@ import {
   SegmentedControl,
   Sidebar,
   SidebarContent,
+  SidebarHeader,
   SidebarPanel,
   SidebarScrollRegion,
 } from "@miladyai/ui";
@@ -312,6 +313,15 @@ export function DatabaseView({
   if (showExternalSidebar) {
     const dbSidebar = (
       <Sidebar testId="database-sidebar">
+        <SidebarHeader
+          search={{
+            value: sidebarSearch,
+            onChange: (e) => setSidebarSearch(e.target.value),
+            placeholder: t("databaseview.FilterTables"),
+            "aria-label": t("databaseview.FilterTables"),
+            onClear: () => setSidebarSearch(""),
+          }}
+        />
         <SidebarPanel>
           <div className="space-y-3 pt-1">
             {leftNav}
@@ -325,13 +335,6 @@ export function DatabaseView({
           {view === "tables" ? (
             <>
               <div className="space-y-3 pt-4">
-                <Input
-                  type="text"
-                  placeholder={t("databaseview.FilterTables")}
-                  value={sidebarSearch}
-                  onChange={(e) => setSidebarSearch(e.target.value)}
-                  className="h-10 rounded-[16px] border-border/34 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_14px_20px_-20px_rgba(15,23,42,0.12)] focus-visible:border-accent/28 focus-visible:ring-1 focus-visible:ring-accent/24 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_22px_-20px_rgba(0,0,0,0.22)]"
-                />
                 <div className="text-[10px] text-muted uppercase font-bold tracking-widest px-2 bg-bg/50 py-1.5 rounded-lg border border-border/30 inline-flex items-center shadow-inner">
                   {t("databaseview.Tables")} ({filteredTables.length})
                 </div>

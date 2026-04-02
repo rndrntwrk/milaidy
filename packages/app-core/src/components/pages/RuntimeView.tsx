@@ -11,6 +11,7 @@ import {
   PagePanel,
   Sidebar,
   SidebarContent,
+  SidebarHeader,
   SidebarPanel,
   SidebarScrollRegion,
 } from "@miladyai/ui";
@@ -390,6 +391,7 @@ export function RuntimeView({
   const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] =
     useState<RuntimeSectionKey>("summary");
+  const [sidebarSearch, setSidebarSearch] = useState("");
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [depth, setDepth] = useState(10);
   const [maxArrayLength, setMaxArrayLength] = useState(1000);
@@ -472,8 +474,23 @@ export function RuntimeView({
     }
   };
 
+  const filteredSections = sidebarSearch
+    ? SECTION_TAB_KEYS.filter((s) =>
+        t(s.i18nKey).toLowerCase().includes(sidebarSearch.toLowerCase()),
+      )
+    : SECTION_TAB_KEYS;
+
   const runtimeSidebar = (
     <Sidebar testId="runtime-sidebar">
+      <SidebarHeader
+        search={{
+          value: sidebarSearch,
+          onChange: (e) => setSidebarSearch(e.target.value),
+          placeholder: t("runtimeview.filterSections", { defaultValue: "Filter sections" }),
+          "aria-label": t("runtimeview.filterSections", { defaultValue: "Filter sections" }),
+          onClear: () => setSidebarSearch(""),
+        }}
+      />
       <SidebarPanel>
         <PagePanel.SummaryCard compact className="mt-2 space-y-2">
           {/* biome-ignore lint/a11y/noLabelWithoutControl: programmatic control association is preserved */}
@@ -558,7 +575,7 @@ export function RuntimeView({
         </SidebarContent.SectionLabel>
         <SidebarScrollRegion className="mt-2">
           <div className="space-y-1.5">
-            {SECTION_TAB_KEYS.map((section) => {
+            {filteredSections.map((section) => {
               const active = section.key === activeSection;
               return (
                 <SidebarContent.Item
