@@ -1,6 +1,7 @@
 import type { AgentRuntime, Service } from "@elizaos/core";
 import { resolveCloudApiBaseUrl as resolveCanonicalCloudApiBaseUrl } from "../cloud/base-url";
 import { validateCloudBaseUrl } from "../cloud/validate-url";
+import { resolveCloudApiKey } from "./wallet-rpc.js";
 import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
 
 const DEFAULT_CLOUD_API_BASE_URL = "https://www.elizacloud.ai/api/v1";
@@ -89,7 +90,8 @@ export async function handleCloudStatusRoutes(
   if (method === "GET" && pathname === "/api/cloud/status") {
     const cloudMode = config.cloud?.enabled;
     const cloudEnabled = cloudMode === true;
-    const hasApiKey = Boolean(config.cloud?.apiKey?.trim());
+    const configApiKey = resolveCloudApiKey(config);
+    const hasApiKey = Boolean(configApiKey);
     const effectivelyEnabled = cloudEnabled;
     const cloudAuth = runtime
       ? runtime.getService<Service & CloudAuthIdentityService>("CLOUD_AUTH")
@@ -138,7 +140,7 @@ export async function handleCloudStatusRoutes(
     const cloudAuth = runtime
       ? runtime.getService<Service & CloudAuthCreditsService>("CLOUD_AUTH")
       : null;
-    const configApiKey = config.cloud?.apiKey?.trim();
+    const configApiKey = resolveCloudApiKey(config);
 
     if (!cloudAuth || !cloudAuth.isAuthenticated()) {
       if (!configApiKey) {

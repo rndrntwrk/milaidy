@@ -10,6 +10,8 @@ describe("isCloudProvisionedContainer", () => {
     delete process.env.MILADY_API_TOKEN;
     delete process.env.ELIZA_API_TOKEN;
     delete process.env.STEWARD_AGENT_TOKEN;
+    delete process.env.ELIZAOS_CLOUD_ENABLED;
+    delete process.env.ELIZAOS_CLOUD_API_KEY;
   });
 
   afterEach(() => {
@@ -48,6 +50,13 @@ describe("isCloudProvisionedContainer", () => {
   it("accepts mixed Milady/Eliza flag+token combinations", () => {
     process.env.MILADY_CLOUD_PROVISIONED = "1";
     process.env.ELIZA_API_TOKEN = "api-token";
+    expect(isCloudProvisionedContainer()).toBe(true);
+  });
+
+  it("returns true for cloud-provisioned containers with cloud API key provisioning", () => {
+    process.env.MILADY_CLOUD_PROVISIONED = "1";
+    process.env.ELIZAOS_CLOUD_ENABLED = "true";
+    process.env.ELIZAOS_CLOUD_API_KEY = "eliza_test_key";
     expect(isCloudProvisionedContainer()).toBe(true);
   });
 });

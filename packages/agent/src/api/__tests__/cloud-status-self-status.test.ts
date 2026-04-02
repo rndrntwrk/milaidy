@@ -21,6 +21,8 @@ describe("cloud status + self-status routes", () => {
     delete process.env.MILADY_API_TOKEN;
     delete process.env.ELIZA_API_TOKEN;
     delete process.env.STEWARD_AGENT_TOKEN;
+    delete process.env.ELIZAOS_CLOUD_ENABLED;
+    delete process.env.ELIZAOS_CLOUD_API_KEY;
   });
 
   afterEach(() => {
@@ -63,6 +65,47 @@ describe("cloud status + self-status routes", () => {
         activeAgentId: "mlady",
         cloudProvisioned: true,
         hasApiKey: false,
+      },
+    });
+  });
+
+  it("GET /api/status treats env-backed cloud API keys as connected", async () => {
+    process.env.MILADY_CLOUD_PROVISIONED = "1";
+    process.env.ELIZAOS_CLOUD_ENABLED = "true";
+    process.env.ELIZAOS_CLOUD_API_KEY = "eliza_test_key";
+
+    const { json, calls } = makeJsonCollector();
+
+    const handled = await handleHealthRoutes({
+      req: {} as never,
+      res: {} as never,
+      method: "GET",
+      pathname: "/api/status",
+      url: new URL("http://localhost/api/status"),
+      state: {
+        runtime: null,
+        config: {},
+        agentState: "running",
+        agentName: "mlady",
+        model: "anthropic/claude-sonnet-4.6",
+        startedAt: 1,
+        startup: { phase: "ready", attempt: 1 },
+        plugins: [],
+        pendingRestartReasons: [],
+        connectorHealthMonitor: null,
+      },
+      json,
+      error: vi.fn(),
+    });
+
+    expect(handled).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.data).toMatchObject({
+      cloud: {
+        connectionStatus: "connected",
+        activeAgentId: "mlady",
+        cloudProvisioned: true,
+        hasApiKey: true,
       },
     });
   });
