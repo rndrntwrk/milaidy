@@ -18,15 +18,15 @@ describe("buildOnboardingConnectionConfig", () => {
         onboardingRemoteConnected: false,
         onboardingRemoteApiBase: "",
         onboardingRemoteToken: "",
-        onboardingSmallModel: "openai/gpt-5-mini",
-        onboardingLargeModel: "anthropic/claude-sonnet-4.5",
+        onboardingSmallModel: "minimax/minimax-m2.7",
+        onboardingLargeModel: "anthropic/claude-sonnet-4.6",
       }),
     ).toEqual({
       kind: "cloud-managed",
       cloudProvider: "elizacloud",
       apiKey: "ck-test",
-      smallModel: "openai/gpt-5-mini",
-      largeModel: "anthropic/claude-sonnet-4.5",
+      smallModel: "minimax/minimax-m2.7",
+      largeModel: "anthropic/claude-sonnet-4.6",
     });
   });
 

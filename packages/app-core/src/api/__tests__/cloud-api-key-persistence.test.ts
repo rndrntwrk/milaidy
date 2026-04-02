@@ -105,8 +105,8 @@ describe("cloud API key persistence through onboarding", () => {
         connection: {
           kind: "cloud-managed",
           apiKey: "cloud-key-abc",
-          smallModel: "openai/gpt-5-mini",
-          largeModel: "moonshotai/kimi-k2-0905",
+          smallModel: "minimax/minimax-m2.7",
+          largeModel: "anthropic/claude-sonnet-4.6",
         },
       });
 
@@ -115,8 +115,8 @@ describe("cloud API key persistence through onboarding", () => {
       const saved = saveElizaConfigMock.mock.calls[0][0];
       expect(saved.cloud.apiKey).toBe("cloud-key-abc");
       expect(saved.cloud.enabled).toBe(true);
-      expect(saved.models.small).toBe("openai/gpt-5-mini");
-      expect(saved.models.large).toBe("moonshotai/kimi-k2-0905");
+      expect(saved.models.small).toBe("minimax/minimax-m2.7");
+      expect(saved.models.large).toBe("anthropic/claude-sonnet-4.6");
     });
   });
 
@@ -161,8 +161,8 @@ describe("cloud API key persistence through onboarding", () => {
         connection: {
           kind: "cloud-managed",
           apiKey: "cloud-key-persisted",
-          smallModel: "openai/gpt-5-mini",
-          largeModel: "moonshotai/kimi-k2-0905",
+          smallModel: "minimax/minimax-m2.7",
+          largeModel: "anthropic/claude-sonnet-4.6",
         },
       });
       expect(result).toBeNull();

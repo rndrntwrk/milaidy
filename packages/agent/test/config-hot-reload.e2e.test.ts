@@ -134,8 +134,8 @@ describe("config updates", () => {
         inferenceMode: "cloud",
       },
       models: {
-        small: "openai/gpt-5-mini",
-        large: "anthropic/claude-sonnet-4.5",
+        small: "minimax/minimax-m2.7",
+        large: "anthropic/claude-sonnet-4.6",
       },
     });
     expect(status).toBe(200);
@@ -144,8 +144,8 @@ describe("config updates", () => {
     expect(data.connection).toEqual({
       kind: "cloud-managed",
       cloudProvider: "elizacloud",
-      smallModel: "openai/gpt-5-mini",
-      largeModel: "anthropic/claude-sonnet-4.5",
+      smallModel: "minimax/minimax-m2.7",
+      largeModel: "anthropic/claude-sonnet-4.6",
     });
   });
 

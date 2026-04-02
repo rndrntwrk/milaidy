@@ -22,8 +22,8 @@ describe("cloud-preference-patch", () => {
         services: { inference: true },
       },
       models: {
-        small: "openai/gpt-5-mini",
-        large: "anthropic/claude-sonnet-4.5",
+        small: "minimax/minimax-m2.7",
+        large: "anthropic/claude-sonnet-4.6",
       },
     };
 
@@ -94,7 +94,7 @@ describe("cloud-preference-patch", () => {
         services: { inference: true },
       },
       models: {
-        small: "openai/gpt-5-mini",
+        small: "minimax/minimax-m2.7",
       },
     };
     const rawStatus = {

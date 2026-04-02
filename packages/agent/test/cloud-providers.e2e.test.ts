@@ -233,8 +233,8 @@ describe("Cloud config → env var propagation", () => {
       cloud: { enabled: true, apiKey: "ck-x" },
     } as ElizaConfig;
     applyCloudConfigToEnv(config);
-    expect(process.env.SMALL_MODEL).toBe("openai/gpt-5-mini");
-    expect(process.env.LARGE_MODEL).toBe("anthropic/claude-sonnet-4.5");
+    expect(process.env.SMALL_MODEL).toBe("minimax/minimax-m2.7");
+    expect(process.env.LARGE_MODEL).toBe("anthropic/claude-sonnet-4.6");
   });
 
   it("uses explicit model names from config", () => {

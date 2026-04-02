@@ -1477,8 +1477,8 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
     | { small?: string; large?: string }
     | undefined;
   if (effectivelyEnabled && cloudDoesInference) {
-    const small = models?.small || "openai/gpt-5-mini";
-    const large = models?.large || "anthropic/claude-sonnet-4.5";
+    const small = models?.small || "minimax/minimax-m2.7";
+    const large = models?.large || "anthropic/claude-sonnet-4.6";
     process.env.SMALL_MODEL = small;
     process.env.LARGE_MODEL = large;
     process.env.ELIZAOS_CLOUD_SMALL_MODEL = small;

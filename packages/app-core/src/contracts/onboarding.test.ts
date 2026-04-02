@@ -192,8 +192,8 @@ describe("onboarding provider catalog", () => {
       isOnboardingConnectionComplete({
         kind: "cloud-managed",
         cloudProvider: "elizacloud",
-        smallModel: "openai/gpt-5-mini",
-        largeModel: "anthropic/claude-sonnet-4.5",
+        smallModel: "minimax/minimax-m2.7",
+        largeModel: "anthropic/claude-sonnet-4.6",
       }),
     ).toBe(true);
 
@@ -202,8 +202,8 @@ describe("onboarding provider catalog", () => {
         kind: "cloud-managed",
         cloudProvider: "elizacloud",
         apiKey: "ck-ready",
-        smallModel: "openai/gpt-5-mini",
-        largeModel: "anthropic/claude-sonnet-4.5",
+        smallModel: "minimax/minimax-m2.7",
+        largeModel: "anthropic/claude-sonnet-4.6",
       }),
     ).toBe(true);
 

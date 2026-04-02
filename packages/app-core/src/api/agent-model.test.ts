@@ -114,11 +114,11 @@ describe("detectRuntimeModel", () => {
         connection: {
           kind: "cloud-managed",
           cloudProvider: "elizacloud",
-          smallModel: "openai/gpt-5-mini",
-          largeModel: "anthropic/claude-sonnet-4.5",
+          smallModel: "minimax/minimax-m2.7",
+          largeModel: "anthropic/claude-sonnet-4.6",
         },
       }),
-    ).toBe("anthropic/claude-sonnet-4.5");
+    ).toBe("anthropic/claude-sonnet-4.6");
   });
 
   it("falls back to config model.primary when no explicit connection exists", () => {

@@ -91,8 +91,8 @@ describe("POST /api/onboarding compat replay", () => {
           runtime: "cloud",
         },
         models: {
-          small: "openai/gpt-5-mini",
-          large: "moonshotai/kimi-k2-0905",
+          small: "minimax/minimax-m2.7",
+          large: "anthropic/claude-sonnet-4.6",
         },
       }),
     );

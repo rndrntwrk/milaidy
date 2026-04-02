@@ -327,8 +327,8 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
           presetId: style?.id ?? "chen",
           runMode: "cloud",
           cloudProvider: "elizacloud",
-          smallModel: "moonshotai/kimi-k2-turbo",
-          largeModel: "moonshotai/kimi-k2-0905",
+          smallModel: "minimax/minimax-m2.7",
+          largeModel: "anthropic/claude-sonnet-4.6",
         } as unknown as Parameters<typeof client.submitOnboarding>[0]);
         try {
           await persistOnboardingStyleVoice(style, client);

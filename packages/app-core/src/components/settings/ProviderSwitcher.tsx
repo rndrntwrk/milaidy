@@ -233,8 +233,8 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
           cfg as Record<string, unknown>,
         );
         const elizaCloudEnabledCfg = connection?.kind === "cloud-managed";
-        const defaultSmall = "moonshotai/kimi-k2-turbo";
-        const defaultLarge = "moonshotai/kimi-k2-0905";
+        const defaultSmall = "minimax/minimax-m2.7";
+        const defaultLarge = "anthropic/claude-sonnet-4.6";
 
         // Environment variables — needed both for model fallback and pi-ai
         const env = cfg.env as Record<string, unknown> | undefined;

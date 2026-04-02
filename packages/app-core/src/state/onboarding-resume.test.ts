@@ -102,16 +102,16 @@ describe("deriveOnboardingResumeConnection", () => {
       deriveOnboardingResumeConnection({
         cloud: { enabled: true, apiKey: "[REDACTED]" },
         models: {
-          small: "openai/gpt-5-mini",
-          large: "anthropic/claude-sonnet-4.5",
+          small: "minimax/minimax-m2.7",
+          large: "anthropic/claude-sonnet-4.6",
         },
       }),
     ).toEqual({
       kind: "cloud-managed",
       cloudProvider: "elizacloud",
       apiKey: undefined,
-      smallModel: "openai/gpt-5-mini",
-      largeModel: "anthropic/claude-sonnet-4.5",
+      smallModel: "minimax/minimax-m2.7",
+      largeModel: "anthropic/claude-sonnet-4.6",
     });
   });
 

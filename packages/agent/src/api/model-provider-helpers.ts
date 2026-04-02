@@ -43,10 +43,10 @@ export function getModelOptions(): {
       },
       // Anthropic
       {
-        id: "anthropic/claude-sonnet-4",
-        name: "Claude Sonnet 4",
+        id: "anthropic/claude-haiku-4.5",
+        name: "Claude Haiku 4.5",
         provider: "Anthropic",
-        description: "Balanced speed and capability.",
+        description: "Fast Claude for lightweight tasks.",
       },
       // Google
       {
@@ -61,52 +61,40 @@ export function getModelOptions(): {
         provider: "Google",
         description: "Fast and smart.",
       },
-      {
-        id: "google/gemini-2.0-flash",
-        name: "Gemini 2.0 Flash",
-        provider: "Google",
-        description: "Multimodal flash model.",
-      },
-      // Moonshot AI
-      {
-        id: "moonshotai/kimi-k2-turbo",
-        name: "Kimi K2 Turbo",
-        provider: "Moonshot AI",
-        description: "Extra speed.",
-      },
       // DeepSeek
       {
-        id: "deepseek/deepseek-v3.2-exp",
+        id: "deepseek/deepseek-v3.2",
         name: "DeepSeek V3.2",
         provider: "DeepSeek",
         description: "Open and powerful.",
+      },
+      // MiniMax
+      {
+        id: "minimax/minimax-m2.7",
+        name: "MiniMax M2.7",
+        provider: "MiniMax",
+        description: "Fast reasoning with strong value.",
+      },
+      {
+        id: "minimax/minimax-m2.1-lightning",
+        name: "MiniMax M2.1 Lightning",
+        provider: "MiniMax",
+        description: "Lowest-latency MiniMax option.",
       },
     ],
     large: [
       // Anthropic
       {
-        id: "anthropic/claude-sonnet-4.5",
-        name: "Claude Sonnet 4.5",
+        id: "anthropic/claude-sonnet-4.6",
+        name: "Claude Sonnet 4.6",
         provider: "Anthropic",
         description: "Newest Claude. Excellent reasoning.",
       },
       {
-        id: "anthropic/claude-opus-4.5",
-        name: "Claude Opus 4.5",
+        id: "anthropic/claude-opus-4.6",
+        name: "Claude Opus 4.6",
         provider: "Anthropic",
         description: "Most capable Claude model.",
-      },
-      {
-        id: "anthropic/claude-opus-4.1",
-        name: "Claude Opus 4.1",
-        provider: "Anthropic",
-        description: "Deep reasoning powerhouse.",
-      },
-      {
-        id: "anthropic/claude-sonnet-4",
-        name: "Claude Sonnet 4",
-        provider: "Anthropic",
-        description: "Balanced performance.",
       },
       // OpenAI
       {
@@ -114,12 +102,6 @@ export function getModelOptions(): {
         name: "GPT-5",
         provider: "OpenAI",
         description: "Most capable OpenAI model.",
-      },
-      {
-        id: "openai/gpt-4o",
-        name: "GPT-4o",
-        provider: "OpenAI",
-        description: "Flagship multimodal model.",
       },
       // Google
       {
@@ -134,19 +116,19 @@ export function getModelOptions(): {
         provider: "Google",
         description: "Strong multimodal reasoning.",
       },
-      // Moonshot AI
-      {
-        id: "moonshotai/kimi-k2-0905",
-        name: "Kimi K2",
-        provider: "Moonshot AI",
-        description: "Fast and capable.",
-      },
       // DeepSeek
       {
         id: "deepseek/deepseek-r1",
         name: "DeepSeek R1",
         provider: "DeepSeek",
         description: "Reasoning model.",
+      },
+      // MiniMax
+      {
+        id: "minimax/minimax-m2.7",
+        name: "MiniMax M2.7",
+        provider: "MiniMax",
+        description: "Strong value for advanced reasoning.",
       },
     ],
   };

@@ -366,11 +366,11 @@ export async function handleOnboardingRoutes(
         config.models.small =
           (body.smallModel as string) ||
           config.models.small ||
-          "openai/gpt-5-mini";
+          "minimax/minimax-m2.7";
         config.models.large =
           (body.largeModel as string) ||
           config.models.large ||
-          "anthropic/claude-sonnet-4.5";
+          "anthropic/claude-sonnet-4.6";
       }
 
       // ── Local LLM provider ──────────────────────────────────────────────

@@ -198,8 +198,8 @@ describe("applyOnboardingConnectionConfig", () => {
         runtime: "cloud",
       },
       models: {
-        small: "openai/gpt-5-mini",
-        large: "anthropic/claude-sonnet-4.5",
+        small: "minimax/minimax-m2.7",
+        large: "anthropic/claude-sonnet-4.6",
       },
     } as Partial<ElizaConfig>;
 
@@ -236,15 +236,15 @@ describe("applyOnboardingConnectionConfig", () => {
       kind: "cloud-managed",
       cloudProvider: "elizacloud",
       apiKey: "ck-cloud-key",
-      smallModel: "openai/gpt-5-mini",
-      largeModel: "moonshotai/kimi-k2-0905",
+      smallModel: "minimax/minimax-m2.7",
+      largeModel: "anthropic/claude-sonnet-4.6",
     });
 
     expect(config.connection).toEqual({
       kind: "cloud-managed",
       cloudProvider: "elizacloud",
-      smallModel: "openai/gpt-5-mini",
-      largeModel: "moonshotai/kimi-k2-0905",
+      smallModel: "minimax/minimax-m2.7",
+      largeModel: "anthropic/claude-sonnet-4.6",
     });
     expect(config.cloud).toMatchObject({
       enabled: true,
@@ -254,8 +254,8 @@ describe("applyOnboardingConnectionConfig", () => {
       runtime: "cloud",
     });
     expect(config.models).toEqual({
-      small: "openai/gpt-5-mini",
-      large: "moonshotai/kimi-k2-0905",
+      small: "minimax/minimax-m2.7",
+      large: "anthropic/claude-sonnet-4.6",
     });
   });
 });
@@ -361,16 +361,16 @@ describe("mergeOnboardingConnectionWithExisting", () => {
           kind: "cloud-managed",
           cloudProvider: "elizacloud",
           apiKey: "sk-cloud-saved",
-          smallModel: "openai/gpt-5-mini",
-          largeModel: "anthropic/claude-sonnet-4.5",
+          smallModel: "minimax/minimax-m2.7",
+          largeModel: "anthropic/claude-sonnet-4.6",
         },
       ),
     ).toEqual({
       kind: "cloud-managed",
       cloudProvider: "elizacloud",
       apiKey: "sk-cloud-saved",
-      smallModel: "openai/gpt-5-mini",
-      largeModel: "anthropic/claude-sonnet-4.5",
+      smallModel: "minimax/minimax-m2.7",
+      largeModel: "anthropic/claude-sonnet-4.6",
     });
   });
 });
@@ -395,8 +395,8 @@ describe("clearPersistedOnboardingConfig", () => {
         apiKey: "ck-cloud",
       },
       models: {
-        small: "openai/gpt-5-mini",
-        large: "anthropic/claude-sonnet-4.5",
+        small: "minimax/minimax-m2.7",
+        large: "anthropic/claude-sonnet-4.6",
       },
       agents: {
         defaults: {
