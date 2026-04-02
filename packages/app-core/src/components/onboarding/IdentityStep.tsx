@@ -13,20 +13,20 @@ import {
   resolveCompatApiToken,
 } from "../../utils/api-request";
 import { resolveApiUrl } from "../../utils/asset-url";
-import { PREMADE_VOICES } from "../../voice/types";
 import {
   CharacterRoster,
   type CharacterRosterEntry,
   resolveRosterEntries,
 } from "../character/CharacterRoster";
 import { resolveCharacterGreetingAnimation } from "../character/character-greeting";
-import { buildPreviewTtsRequestPlans } from "./identity-preview-tts";
+import {
+  getOnboardingVoicePreviewBlob,
+  preloadOnboardingCharacterAssets,
+} from "./onboarding-asset-preload";
 
 import {
   OnboardingStepHeader,
-  onboardingBodyTextShadowStyle,
   onboardingFooterClass,
-  onboardingLinkActionClass,
   onboardingPrimaryActionClass,
   onboardingPrimaryActionTextShadowStyle,
   onboardingSecondaryActionClass,
@@ -35,7 +35,6 @@ import {
 } from "./onboarding-step-chrome";
 
 const IMPORT_AGENT_FETCH_TIMEOUT_MS = 60_000;
-const PREVIEW_TTS_FETCH_TIMEOUT_MS = 15_000;
 
 export interface IdentityStepProps {
   /**
@@ -58,22 +57,21 @@ export function IdentityStep({
   );
   const firstEntry = entries[0];
   const selectedId = onboardingStyle || entries[0]?.id || "";
+  const selectedEntry =
+    entries.find((entry) => entry.id === selectedId) ?? firstEntry ?? null;
   const [showImport, setShowImport] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importPassword, setImportPassword] = useState("");
   const [importBusy, setImportBusy] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const [_importError, setImportError] = useState<string | null>(null);
+  const [_importSuccess, setImportSuccess] = useState<string | null>(null);
   const importBusyRef = useRef(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const previewObjectUrlRef = useRef<string | null>(null);
-  const previewAbortControllerRef = useRef<AbortController | null>(null);
   const previewRequestIdRef = useRef(0);
   const pendingPreviewEntryRef = useRef<CharacterRosterEntry | null>(null);
 
   const stopPreviewAudio = useCallback(() => {
-    previewAbortControllerRef.current?.abort();
-    previewAbortControllerRef.current = null;
     if (previewAudioRef.current) {
       previewAudioRef.current.pause();
       previewAudioRef.current = null;
@@ -106,63 +104,23 @@ export function IdentityStep({
       const catchphrase = entry.catchphrase?.trim();
       if (!catchphrase || typeof window === "undefined") return;
 
-      const selectedPreset = entry.voicePresetId
-        ? PREMADE_VOICES.find((voice) => voice.id === entry.voicePresetId)
-        : undefined;
-      const apiToken = resolveCompatApiToken();
-      const controller = new AbortController();
-      previewAbortControllerRef.current = controller;
-      const requestPlans = buildPreviewTtsRequestPlans({
-        text: catchphrase,
-        voiceId: selectedPreset?.voiceId,
-        // Prefer the cloud proxy first during onboarding so Eliza Cloud logins
-        // can synthesize the selected preset voice without requiring a browser key.
-        preferCloudProxy: true,
-      });
-
-      for (const plan of requestPlans) {
-        if (!isCurrentRequest()) return;
-        try {
-          const response = await fetchWithTimeout(
-            resolveApiUrl(plan.endpoint),
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Accept: "audio/mpeg",
-                ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
-              },
-              body: JSON.stringify(plan.body),
-              signal: controller.signal,
-            },
-            PREVIEW_TTS_FETCH_TIMEOUT_MS,
-          );
-          if (!response.ok) {
-            continue;
-          }
-          const audioBlob = await response.blob();
-          if (!audioBlob.size || !isCurrentRequest()) {
-            return;
-          }
-          stopPreviewAudio();
-          const objectUrl = URL.createObjectURL(audioBlob);
-          const audio = new Audio(objectUrl);
-          previewAudioRef.current = audio;
-          previewObjectUrlRef.current = objectUrl;
-          try {
-            await audio.play();
-            if (isCurrentRequest()) return;
-          } catch {
-            previewAudioRef.current = null;
-            URL.revokeObjectURL(objectUrl);
-            if (previewObjectUrlRef.current === objectUrl) {
-              previewObjectUrlRef.current = null;
-            }
-          }
-        } catch (error) {
-          if (error instanceof Error && error.message === "Request aborted") {
-            return;
-          }
+      const audioBlob = await getOnboardingVoicePreviewBlob(entry);
+      if (!audioBlob || !isCurrentRequest()) {
+        return;
+      }
+      stopPreviewAudio();
+      const objectUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(objectUrl);
+      previewAudioRef.current = audio;
+      previewObjectUrlRef.current = objectUrl;
+      try {
+        await audio.play();
+        if (isCurrentRequest()) return;
+      } catch {
+        previewAudioRef.current = null;
+        URL.revokeObjectURL(objectUrl);
+        if (previewObjectUrlRef.current === objectUrl) {
+          previewObjectUrlRef.current = null;
         }
       }
 
@@ -206,6 +164,12 @@ export function IdentityStep({
       stopPreviewAudio,
     ],
   );
+  useEffect(() => {
+    preloadOnboardingCharacterAssets(entries, {
+      voiceEntry: selectedEntry,
+    });
+  }, [entries, selectedEntry]);
+
   useEffect(() => {
     if (!onboardingStyle && firstEntry) {
       handleSelect(firstEntry, true);
@@ -389,7 +353,6 @@ export function IdentityStep({
       </div>
     );
   }
-  const selected = entries.find((e) => e.id === selectedId);
 
   return (
     <div

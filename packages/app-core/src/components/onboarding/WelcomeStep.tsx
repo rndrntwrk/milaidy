@@ -3,7 +3,11 @@ import {
   useBranding,
 } from "@miladyai/app-core/config";
 import { useApp } from "@miladyai/app-core/state";
+import { getStylePresets } from "@miladyai/shared/onboarding-presets";
 import { Button } from "@miladyai/ui";
+import { useEffect, useMemo } from "react";
+import { resolveRosterEntries } from "../character/CharacterRoster";
+import { preloadOnboardingCharacterAssets } from "./onboarding-asset-preload";
 import {
   OnboardingSecondaryActionButton,
   OnboardingStepHeader,
@@ -22,7 +26,19 @@ export function WelcomeStep() {
     setState,
     goToOnboardingStep,
     t,
+    uiLanguage,
   } = useApp();
+
+  const rosterEntries = useMemo(
+    () => resolveRosterEntries(getStylePresets(uiLanguage)),
+    [uiLanguage],
+  );
+
+  useEffect(() => {
+    preloadOnboardingCharacterAssets(rosterEntries, {
+      voiceEntry: rosterEntries[0] ?? null,
+    });
+  }, [rosterEntries]);
 
   const handleGetStarted = () => {
     // Default to Chen (blue-haired anime character) — user picks their

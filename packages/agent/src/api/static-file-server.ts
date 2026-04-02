@@ -6,13 +6,13 @@
  */
 
 import fs from "node:fs";
-import http from "node:http";
+import type http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { logger } from "@elizaos/core";
+import { sendJsonError } from "./http-helpers.js";
 import { getOrReadCachedFile } from "./memory-bounds.js";
 import { findOwnPackageRoot } from "./server-helpers.js";
-import { sendJsonError } from "./http-helpers.js";
 
 // ---------------------------------------------------------------------------
 // MIME types
@@ -193,9 +193,31 @@ export function serveStaticUi(
     if (stat.isFile()) {
       const ext = path.extname(candidatePath).toLowerCase();
       const body = getCachedFile(candidatePath, stat.mtimeMs);
+      const isPreviewOrBinaryAsset =
+        relativePath.startsWith("vrms/previews/") ||
+        relativePath.startsWith("vrms/backgrounds/") ||
+        [
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".gif",
+          ".webp",
+          ".avif",
+          ".svg",
+          ".mp3",
+          ".wav",
+          ".ogg",
+          ".m4a",
+          ".aac",
+          ".flac",
+          ".glb",
+          ".spz",
+        ].includes(ext);
       const cacheControl = relativePath.startsWith("assets/")
         ? "public, max-age=31536000, immutable"
-        : ext === ".vrm" || relativePath.endsWith(".vrm.gz")
+        : ext === ".vrm" ||
+            relativePath.endsWith(".vrm.gz") ||
+            isPreviewOrBinaryAsset
           ? "public, max-age=86400"
           : "public, max-age=0, must-revalidate";
       sendStaticResponse(
