@@ -57,7 +57,9 @@ export async function handleVincentRoute(
       const data = await upstream.json();
       sendJson(res, 200, data);
     } catch (err) {
-      logger.error(`[vincent/register] ${err instanceof Error ? err.message : String(err)}`);
+      logger.error(
+        `[vincent/register] ${err instanceof Error ? err.message : String(err)}`,
+      );
       sendJsonError(res, 500, "Vincent registration failed");
     }
     return true;
@@ -116,7 +118,9 @@ export async function handleVincentRoute(
       logger.info("[vincent/token] Vincent connected successfully");
       sendJson(res, 200, { ok: true, connected: true });
     } catch (err) {
-      logger.error(`[vincent/token] ${err instanceof Error ? err.message : String(err)}`);
+      logger.error(
+        `[vincent/token] ${err instanceof Error ? err.message : String(err)}`,
+      );
       sendJsonError(res, 500, "Vincent token exchange failed");
     }
     return true;
@@ -142,7 +146,9 @@ export async function handleVincentRoute(
       logger.info("[vincent/disconnect] Vincent disconnected");
       sendJson(res, 200, { ok: true });
     } catch (err) {
-      logger.error(`[vincent/disconnect] ${err instanceof Error ? err.message : String(err)}`);
+      logger.error(
+        `[vincent/disconnect] ${err instanceof Error ? err.message : String(err)}`,
+      );
       sendJsonError(res, 500, "Vincent disconnect failed");
     }
     return true;

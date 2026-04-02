@@ -705,7 +705,9 @@ export function InventoryView() {
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-green-500" />
                   <span className="text-xs font-semibold text-txt">
-                    {t("vincent.connected", { defaultValue: "Vincent Connected" })}
+                    {t("vincent.connected", {
+                      defaultValue: "Vincent Connected",
+                    })}
                   </span>
                 </div>
                 <Button
@@ -739,7 +741,9 @@ export function InventoryView() {
               </Button>
             )}
             {vincentLoginError ? (
-              <p className="mt-1 px-1 text-[10px] text-danger">{vincentLoginError}</p>
+              <p className="mt-1 px-1 text-[10px] text-danger">
+                {vincentLoginError}
+              </p>
             ) : null}
           </div>
         </div>

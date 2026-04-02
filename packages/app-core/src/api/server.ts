@@ -813,13 +813,9 @@ async function handleMiladyCompatRoute(
   if (url.pathname.startsWith("/api/vincent/")) {
     if (!ensureCompatApiAuthorized(req, res)) return true;
     const vincentConfig = loadElizaConfig();
-    const handled = await handleVincentRoute(
-      req,
-      res,
-      url.pathname,
-      method,
-      { config: vincentConfig },
-    );
+    const handled = await handleVincentRoute(req, res, url.pathname, method, {
+      config: vincentConfig,
+    });
     if (handled) return true;
   }
 

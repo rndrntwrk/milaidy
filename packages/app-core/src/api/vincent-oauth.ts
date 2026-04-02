@@ -29,7 +29,10 @@ function base64UrlEncode(buffer: ArrayBuffer): string {
   for (const byte of bytes) {
     binary += String.fromCharCode(byte);
   }
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 }
 
 async function generateCodeChallenge(verifier: string): Promise<string> {
@@ -137,7 +140,9 @@ export async function exchangeVincentCode(
     }),
   });
   if (!res.ok) {
-    throw new Error(`Vincent token exchange failed: ${res.status} ${res.statusText}`);
+    throw new Error(
+      `Vincent token exchange failed: ${res.status} ${res.statusText}`,
+    );
   }
   return res.json();
 }
@@ -146,7 +151,8 @@ export async function exchangeVincentCode(
  * Get the redirect URI for the current environment.
  */
 export function getVincentRedirectUri(): string {
-  if (typeof window === "undefined") return "https://milady.ai/callback/vincent";
+  if (typeof window === "undefined")
+    return "https://milady.ai/callback/vincent";
   const { protocol, hostname, port } = window.location;
   if (hostname === "localhost" || hostname === "127.0.0.1") {
     return `${protocol}//${hostname}${port ? `:${port}` : ""}/callback/vincent`;

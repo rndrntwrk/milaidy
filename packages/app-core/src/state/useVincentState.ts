@@ -126,8 +126,7 @@ export function useVincentState({ setActionNotice, t }: VincentStateParams) {
       // The useEffect above will handle the token exchange.
       // Keep busy state — it'll be cleared when the callback fires.
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Vincent login failed";
+      const msg = err instanceof Error ? err.message : "Vincent login failed";
       setVincentLoginError(msg);
       setVincentLoginBusy(false);
       busyRef.current = false;
