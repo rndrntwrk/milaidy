@@ -23,6 +23,8 @@ import {
   getFlaminaTopicForOnboardingStep,
   resolveOnboardingNextStep,
   resolveOnboardingPreviousStep,
+  shouldSkipConnectionStepsForCloudProvisionedContainer,
+  shouldUseCloudOnboardingFastTrack,
 } from "../onboarding/flow";
 import { buildOnboardingConnectionConfig } from "../onboarding-config";
 import {
@@ -240,6 +242,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       remote: onboardingRemote,
       rpcSelections: onboardingRpcSelections,
       rpcKeys: onboardingRpcKeys,
+      cloudProvisionedContainer,
     },
     resumeConnectionRef: onboardingResumeConnectionRef,
     completionCommittedRef: onboardingCompletionCommittedRef,
@@ -289,14 +292,13 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     if (!onboardingOptions) return;
 
     try {
-      // Cloud fast-track: submit minimal config for elizacloud-hosted agent.
-      const useCloudFastTrack =
-        elizaCloudConnected &&
-        !(
-          onboardingRunMode === "local" &&
-          onboardingProvider &&
-          onboardingProvider !== "elizacloud"
-        );
+      // Cloud fast-track: submit minimal config for cloud-managed agents.
+      const useCloudFastTrack = shouldUseCloudOnboardingFastTrack({
+        cloudProvisionedContainer,
+        elizaCloudConnected,
+        onboardingRunMode,
+        onboardingProvider,
+      });
 
       if (useCloudFastTrack) {
         const style = resolveSelectedOnboardingStyle({
@@ -529,6 +531,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     walletConfig,
     onboardingResumeConnectionRef,
     elizaCloudConnected,
+    cloudProvisionedContainer,
     completeOnboarding,
     client,
   ]);
@@ -626,6 +629,16 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
         return;
       }
 
+      if (
+        shouldSkipConnectionStepsForCloudProvisionedContainer({
+          currentStep: onboardingStep,
+          cloudProvisionedContainer,
+        })
+      ) {
+        await handleOnboardingFinish();
+        return;
+      }
+
       if (onboardingStep === "permissions") {
         if (options?.allowPermissionBypass) {
           if (options.skipTask) addDeferredOnboardingTask(options.skipTask);
@@ -671,6 +684,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       setOnboardingApiKey,
       setOnboardingProvider,
       onboardingCloudProvider,
+      cloudProvisionedContainer,
     ],
   );
 

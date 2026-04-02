@@ -98,6 +98,7 @@ export interface StartupCoordinatorDeps {
   setOnboardingRemoteToken: (v: string) => void;
   setOnboardingSmallModel: (v: string) => void;
   setOnboardingLargeModel: (v: string) => void;
+  setOnboardingCloudProvisionedContainer: (v: boolean) => void;
   applyDetectedProviders: (
     detected: Awaited<ReturnType<typeof scanProviderCredentials>>,
   ) => void;

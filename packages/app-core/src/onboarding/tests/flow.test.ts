@@ -7,6 +7,8 @@ import {
   getStepOrder,
   resolveOnboardingNextStep,
   resolveOnboardingPreviousStep,
+  shouldSkipConnectionStepsForCloudProvisionedContainer,
+  shouldUseCloudOnboardingFastTrack,
 } from "../flow";
 
 describe("onboarding flow", () => {
@@ -88,6 +90,64 @@ describe("onboarding flow", () => {
         "permissions",
         "launch",
       ]);
+    });
+  });
+
+  describe("shouldSkipConnectionStepsForCloudProvisionedContainer", () => {
+    it("finishes immediately after identity for cloud-provisioned containers", () => {
+      expect(
+        shouldSkipConnectionStepsForCloudProvisionedContainer({
+          currentStep: "identity",
+          cloudProvisionedContainer: true,
+        }),
+      ).toBe(true);
+    });
+
+    it("keeps the normal wizard flow for non-cloud or later steps", () => {
+      expect(
+        shouldSkipConnectionStepsForCloudProvisionedContainer({
+          currentStep: "identity",
+          cloudProvisionedContainer: false,
+        }),
+      ).toBe(false);
+      expect(
+        shouldSkipConnectionStepsForCloudProvisionedContainer({
+          currentStep: "hosting",
+          cloudProvisionedContainer: true,
+        }),
+      ).toBe(false);
+    });
+  });
+
+  describe("shouldUseCloudOnboardingFastTrack", () => {
+    it("always fast-tracks cloud-provisioned containers", () => {
+      expect(
+        shouldUseCloudOnboardingFastTrack({
+          cloudProvisionedContainer: true,
+          elizaCloudConnected: false,
+          onboardingRunMode: "",
+          onboardingProvider: "",
+        }),
+      ).toBe(true);
+    });
+
+    it("preserves the existing Eliza Cloud fast-track for connected cloud setups", () => {
+      expect(
+        shouldUseCloudOnboardingFastTrack({
+          cloudProvisionedContainer: false,
+          elizaCloudConnected: true,
+          onboardingRunMode: "cloud",
+          onboardingProvider: "elizacloud",
+        }),
+      ).toBe(true);
+      expect(
+        shouldUseCloudOnboardingFastTrack({
+          cloudProvisionedContainer: false,
+          elizaCloudConnected: true,
+          onboardingRunMode: "local",
+          onboardingProvider: "anthropic",
+        }),
+      ).toBe(false);
     });
   });
 

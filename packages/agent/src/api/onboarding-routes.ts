@@ -96,7 +96,7 @@ export async function handleOnboardingRoutes(
   // ── GET /api/onboarding/status ──────────────────────────────────────
   if (method === "GET" && pathname === "/api/onboarding/status") {
     if (ctx.isCloudProvisionedContainer()) {
-      json(res, { complete: true });
+      json(res, { complete: true, cloudProvisioned: true });
       return true;
     }
 

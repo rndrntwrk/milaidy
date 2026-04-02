@@ -116,6 +116,7 @@ export async function runPollingBackend(
       }
       const { complete, cloudProvisioned } = await client.getOnboardingStatus();
       if (cancelled.current) return;
+      deps.setOnboardingCloudProvisionedContainer(Boolean(cloudProvisioned));
       let sessionComplete =
         complete ||
         deps.onboardingCompletionCommittedRef.current ||

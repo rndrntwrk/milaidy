@@ -82,6 +82,7 @@ export interface OnboardingState {
 
   // Misc
   restarting: boolean;
+  cloudProvisionedContainer: boolean;
 }
 
 function loadSessionApiBase(): string {
@@ -154,6 +155,7 @@ function createInitialState(cloudOnly?: boolean): OnboardingState {
     rpcSelections: {},
     rpcKeys: {},
     restarting: false,
+    cloudProvisionedContainer: false,
   };
 }
 

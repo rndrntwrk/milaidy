@@ -827,6 +827,7 @@ function AppProviderInner({
     setOnboardingRpcSelections,
     setOnboardingRpcKeys,
     setOnboardingAvatar,
+    setOnboardingCloudProvisionedContainer,
     setPostOnboardingChecklistDismissed,
     setOnboardingDeferredTasks,
   } = useOnboardingCompat(onboarding);
@@ -1570,6 +1571,7 @@ function AppProviderInner({
     setOnboardingRemoteToken,
     setOnboardingSmallModel,
     setOnboardingLargeModel,
+    setOnboardingCloudProvisionedContainer,
     applyDetectedProviders,
     hydrateInitialConversationState,
     loadWorkbench,
