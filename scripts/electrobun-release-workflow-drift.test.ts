@@ -760,16 +760,40 @@ describe("Electrobun release workflow drift", () => {
 
     expect(workflow).toContain("name: Collect Windows smoke diagnostics");
     expect(workflow).toContain("name: Upload Windows smoke diagnostics");
+    expect(workflow).toContain("$env:MILADY_TEST_WINDOWS_APPDATA_PATH");
+    expect(workflow).toContain("$env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH");
     expect(workflow).toContain(
-      'Join-Path $env:APPDATA "Milady\\\\milady-startup.log"',
+      'Join-Path $appDataRoot "Milady\\\\milady-startup.log"',
     );
     expect(workflow).toContain(
-      'Join-Path $env:LOCALAPPDATA "com.miladyai.milady"',
+      'Join-Path $localAppDataRoot "com.miladyai.milady"',
     );
     expect(workflow).toContain(
       "path: apps/app/electrobun/artifacts/windows-smoke-diagnostics/**",
     );
     expect(workflow).not.toContain("env.USERPROFILE }}\\.config\\Milady");
+  });
+
+  it("isolates Windows smoke runs from the runner's stable profile and exports the chosen backend port", () => {
+    const smokeScript = fs.readFileSync(WINDOWS_SMOKE_PATH, "utf8");
+
+    expect(smokeScript).toContain("MILADY_TEST_WINDOWS_APPDATA_PATH");
+    expect(smokeScript).toContain("MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH");
+    expect(smokeScript).toContain("$env:APPDATA = $testAppDataRoot");
+    expect(smokeScript).toContain("$env:LOCALAPPDATA = $testLocalAppDataRoot");
+    expect(smokeScript).toContain(
+      'Add-Content -Path $env:GITHUB_ENV -Value "MILADY_TEST_WINDOWS_APPDATA_PATH=$($env:APPDATA)"',
+    );
+    expect(smokeScript).toContain(
+      'Add-Content -Path $env:GITHUB_ENV -Value "MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH=$($env:LOCALAPPDATA)"',
+    );
+    expect(smokeScript).toContain(
+      '$selfExtractionRoot = Join-Path $env:LOCALAPPDATA "com.miladyai.milady"',
+    );
+    expect(smokeScript).toContain("function Resolve-BackendPort");
+    expect(smokeScript).toContain('$env:MILADY_API_PORT = "$BackendPort"');
+    expect(smokeScript).toContain('$env:ELIZA_API_PORT = "$BackendPort"');
+    expect(smokeScript).toContain('$env:ELIZA_PORT = "$BackendPort"');
   });
 
   it("runs and uploads a clean Windows installer proof artifact on every release build", () => {

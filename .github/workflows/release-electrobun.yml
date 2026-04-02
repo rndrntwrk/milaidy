@@ -947,8 +947,18 @@ jobs:
         shell: pwsh
         run: |
           $diagnosticsDir = Join-Path $PWD "apps/app/electrobun/artifacts/windows-smoke-diagnostics"
-          $startupLog = Join-Path $env:APPDATA "Milady\\milady-startup.log"
-          $wrapperRoot = Join-Path $env:LOCALAPPDATA "com.miladyai.milady"
+          $appDataRoot = if ($env:MILADY_TEST_WINDOWS_APPDATA_PATH) {
+            $env:MILADY_TEST_WINDOWS_APPDATA_PATH
+          } else {
+            $env:APPDATA
+          }
+          $localAppDataRoot = if ($env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH) {
+            $env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH
+          } else {
+            $env:LOCALAPPDATA
+          }
+          $startupLog = Join-Path $appDataRoot "Milady\\milady-startup.log"
+          $wrapperRoot = Join-Path $localAppDataRoot "com.miladyai.milady"
 
           Remove-Item $diagnosticsDir -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $diagnosticsDir | Out-Null
