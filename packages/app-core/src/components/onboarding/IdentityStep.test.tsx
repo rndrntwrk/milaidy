@@ -187,4 +187,40 @@ describe("IdentityStep", () => {
     // The effect should NOT re-fire a second playSelectionPreview
     expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1);
   });
+
+  it("replays voiceline in new language when uiLanguage changes", async () => {
+    const appState = makeAppState({ onboardingStyle: "chen", uiLanguage: "en" });
+    useAppMock.mockReturnValue(appState);
+
+    let renderer: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        React.createElement(IdentityStep, {
+          gateVoicePreviewOnTeleport: false,
+        }),
+      );
+    });
+
+    // Trigger initial teleport-complete to play the en voiceline
+    await act(async () => {
+      window.dispatchEvent(new Event("eliza:vrm-teleport-complete"));
+    });
+
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1);
+    expect(fetchWithTimeoutMock.mock.calls[0][0]).toBe("/audio/onboarding/chen-en.mp3");
+
+    // Switch language to Spanish
+    fetchWithTimeoutMock.mockClear();
+    useAppMock.mockReturnValue({ ...appState, uiLanguage: "es" });
+    await act(async () => {
+      renderer!.update(
+        React.createElement(IdentityStep, {
+          gateVoicePreviewOnTeleport: false,
+        }),
+      );
+    });
+
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1);
+    expect(fetchWithTimeoutMock.mock.calls[0][0]).toBe("/audio/onboarding/chen-es.mp3");
+  });
 });
