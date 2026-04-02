@@ -5,9 +5,14 @@ import {
 import { useApp } from "@miladyai/app-core/state";
 import { getStylePresets } from "@miladyai/shared/onboarding-presets";
 import { Button } from "@miladyai/ui";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { resolveRosterEntries } from "../character/CharacterRoster";
-import { preloadOnboardingCharacterAssets } from "./onboarding-asset-preload";
+import {
+  getOnboardingAssetPreloadSnapshot,
+  type OnboardingAssetPreloadSnapshot,
+  primeOnboardingCharacterAssets,
+  subscribeOnboardingAssetPreload,
+} from "./onboarding-asset-preload";
 import {
   OnboardingSecondaryActionButton,
   OnboardingStepHeader,
@@ -33,11 +38,13 @@ export function WelcomeStep() {
     () => resolveRosterEntries(getStylePresets(uiLanguage)),
     [uiLanguage],
   );
+  const [preload, setPreload] = useState<OnboardingAssetPreloadSnapshot>(() =>
+    getOnboardingAssetPreloadSnapshot(),
+  );
 
   useEffect(() => {
-    preloadOnboardingCharacterAssets(rosterEntries, {
-      voiceEntry: rosterEntries[0] ?? null,
-    });
+    void primeOnboardingCharacterAssets(rosterEntries);
+    return subscribeOnboardingAssetPreload(setPreload);
   }, [rosterEntries]);
 
   const handleGetStarted = () => {
@@ -54,6 +61,29 @@ export function WelcomeStep() {
   const handleUseExistingSetup = () => {
     setState("onboardingStep", "identity");
   };
+
+  const startDisabled = !preload.ready;
+  const startLabel = preload.ready
+    ? onboardingExistingInstallDetected
+      ? t("onboarding.useExistingSetup")
+      : t("onboarding.getStarted")
+    : t("common.loading", {
+        defaultValue: "Loading…",
+      });
+  const progressLabel = preload.ready
+    ? preload.timedOut
+      ? t("onboarding.assetsLoadingInBackground", {
+          defaultValue: "Assets are still finishing in the background.",
+        })
+      : t("onboarding.assetsReady", {
+          defaultValue:
+            "Assets ready — character selection should open instantly.",
+        })
+    : t("onboarding.assetsLoadingProgress", {
+        defaultValue: "Loading assets… {{loaded}} (critical {{critical}})",
+        loaded: preload.loadedLabel,
+        critical: preload.criticalLabel,
+      });
 
   return (
     <>
@@ -73,6 +103,7 @@ export function WelcomeStep() {
         {onboardingExistingInstallDetected ? (
           <OnboardingSecondaryActionButton
             onClick={handleGetStarted}
+            disabled={startDisabled}
             type="button"
           >
             {t("onboarding.customSetup")}
@@ -85,27 +116,35 @@ export function WelcomeStep() {
             {t("onboarding.checkExistingSetup")}
           </OnboardingSecondaryActionButton>
         )}
-        <Button
-          className={onboardingPrimaryActionClass}
-          style={onboardingPrimaryActionTextShadowStyle}
-          onClick={(e) => {
-            spawnOnboardingRipple(e.currentTarget, {
-              x: e.clientX,
-              y: e.clientY,
-            });
+        <div className="flex w-full flex-col items-center gap-2">
+          <Button
+            className={onboardingPrimaryActionClass}
+            style={onboardingPrimaryActionTextShadowStyle}
+            disabled={startDisabled}
+            onClick={(e) => {
+              if (startDisabled) {
+                return;
+              }
+              spawnOnboardingRipple(e.currentTarget, {
+                x: e.clientX,
+                y: e.clientY,
+              });
 
-            if (onboardingExistingInstallDetected) {
-              handleUseExistingSetup();
-            } else {
-              handleGetStarted();
-            }
-          }}
-          type="button"
-        >
-          {onboardingExistingInstallDetected
-            ? t("onboarding.useExistingSetup")
-            : t("onboarding.getStarted")}
-        </Button>
+              if (onboardingExistingInstallDetected) {
+                handleUseExistingSetup();
+              } else {
+                handleGetStarted();
+              }
+            }}
+            type="button"
+          >
+            {startLabel}
+          </Button>
+          <div className="text-center text-[11px] tracking-[0.04em] text-[var(--onboarding-text-faint)]">
+            {progressLabel}
+            {preload.connectionLabel ? ` · ${preload.connectionLabel}` : ""}
+          </div>
+        </div>
       </div>
     </>
   );

@@ -525,7 +525,7 @@ function touchVrmCacheEntry(url: string, buffer: ArrayBuffer): void {
 export async function prefetchVrmToCache(url: string): Promise<void> {
   if (vrmBufferCache.has(url)) return; // already warm
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { cache: "force-cache" });
     if (!response.ok) return;
     let buffer = await response.arrayBuffer();
     if (isGzipBuffer(buffer)) buffer = await decompressGzipBuffer(buffer);
@@ -550,8 +550,8 @@ async function loadGltfAsset(
     touchVrmCacheEntry(url, cached.buffer);
     onProgress?.(1);
   } else {
-    // Cache miss — fetch from network.
-    const response = await fetch(url);
+    // Cache miss — fetch from network/browser cache.
+    const response = await fetch(url, { cache: "force-cache" });
     if (!response.ok) {
       throw new Error(`Failed to fetch VRM asset: ${response.status}`);
     }
