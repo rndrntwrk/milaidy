@@ -28,6 +28,9 @@ const autonomousElizaPathCandidates = [
   "node_modules/@miladyai/agent/packages/agent/src/runtime/eliza.js",
   "packages/agent/src/runtime/eliza.ts",
 ] as const;
+const homepageReleaseDataPathCandidates = [
+  "apps/web/src/generated/release-data.ts",
+] as const;
 const requiredWorkflowSnippets = [
   'BUN_VERSION: "1.3.9"',
   "workflow_call:",
@@ -1030,6 +1033,34 @@ function assertStaticAssetManifestIsCurrent() {
   process.exit(1);
 }
 
+function assertHomepageReleaseDataUsesCurrentAssetRoot() {
+  const releaseDataSource = readExistingReleaseCheckFile(
+    "generated homepage release data",
+    homepageReleaseDataPathCandidates,
+  );
+
+  if (!releaseDataSource.includes("homepageAssetBaseUrl:")) {
+    console.error(
+      "release-check: generated homepage release data is missing homepageAssetBaseUrl.",
+    );
+    process.exit(1);
+  }
+
+  if (!releaseDataSource.includes("/apps/web/public/")) {
+    console.error(
+      "release-check: generated homepage release data must point homepageAssetBaseUrl at /apps/web/public/.",
+    );
+    process.exit(1);
+  }
+
+  if (releaseDataSource.includes("/apps/homepage/public/")) {
+    console.error(
+      "release-check: generated homepage release data still points at legacy /apps/homepage/public/. Regenerate it with node scripts/write-homepage-release-data.mjs.",
+    );
+    process.exit(1);
+  }
+}
+
 function main() {
   assertReleaseWorkflowHasNotaryWrapper();
   assertElectrobunPrWorkflowExists();
@@ -1043,6 +1074,7 @@ function main() {
   assertServerDynamicHyperscapeImport();
   assertStartApiServerCatchBlockSafety();
   assertStaticAssetManifestIsCurrent();
+  assertHomepageReleaseDataUsesCurrentAssetRoot();
   maybeValidateCdnAssets();
   assertBundledAgentOrchestratorInstallFix();
   assertOrchestratorVersionPinned();
