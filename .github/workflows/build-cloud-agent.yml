@@ -3,12 +3,12 @@
 # =============================================================================
 #
 # Triggers:
-#   - Push to cloud/main branch
+#   - Push to cloud/main or cloud/staging branch
 #   - Manual dispatch with version override
 #
 # Published to: ghcr.io/milady-ai/agent
-#   Tags: :cloud-v{version}  (e.g. :cloud-v2.0.3)
-#         :cloud-latest      (always updated)
+#   Tags (production): :cloud-v{version}         and :cloud-latest
+#   Tags (staging):    :cloud-staging-v{version} and :cloud-staging-latest
 #
 # Uses Blacksmith's persistent Docker layer cache for fast rebuilds.
 # Typical warm build: ~2-4 min vs ~8-10 min without cache.
@@ -20,6 +20,7 @@ on:
   push:
     branches:
       - cloud/main
+      - cloud/staging
   workflow_dispatch:
     inputs:
       version:
@@ -38,12 +39,13 @@ on:
         default: false
 
 concurrency:
-  group: build-cloud-agent
+  group: build-cloud-agent-${{ github.event_name == 'push' && github.ref_name || (github.ref_name == 'cloud/staging' && 'cloud/staging' || 'cloud/main') }}
   cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: milady-ai/agent
+  SOURCE_REF: ${{ github.event_name == 'push' && github.ref_name || (github.ref_name == 'cloud/staging' && 'cloud/staging' || 'cloud/main') }}
 
 permissions:
   contents: read
@@ -60,7 +62,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: cloud/main
+          ref: ${{ env.SOURCE_REF }}
           fetch-depth: 0
 
       # ── 2. Set up Node + Bun ────────────────────────────────────────────────
@@ -104,17 +106,36 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="cloud-v${{ inputs.version }}"
+          if [ "${SOURCE_REF}" = "cloud/staging" ]; then
+            VERSION_PREFIX="cloud-staging-v"
+            LATEST_TAG="cloud-staging-latest"
+            BUILD_ENVIRONMENT="staging"
           else
-            # Auto-generate: cloud-v{base}.{run_number}
-            BASE_VERSION=$(node -p "require('./package.json').version")
-            VERSION="cloud-v${BASE_VERSION}-build.${{ github.run_number }}"
+            VERSION_PREFIX="cloud-v"
+            LATEST_TAG="cloud-latest"
+            BUILD_ENVIRONMENT="production"
           fi
-          VERSION_CLEAN="${VERSION#cloud-v}"
+
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${VERSION_PREFIX}${{ inputs.version }}"
+          else
+            BASE_VERSION=$(node -p "require('./package.json').version")
+            VERSION="${VERSION_PREFIX}${BASE_VERSION}-build.${{ github.run_number }}"
+          fi
+
+          if [ "${BUILD_ENVIRONMENT}" = "staging" ]; then
+            VERSION_CLEAN="${VERSION#cloud-staging-v}"
+          else
+            VERSION_CLEAN="${VERSION#cloud-v}"
+          fi
+
           echo "version=${VERSION}"             >> $GITHUB_OUTPUT
           echo "version_clean=${VERSION_CLEAN}" >> $GITHUB_OUTPUT
+          echo "latest_tag=${LATEST_TAG}"       >> $GITHUB_OUTPUT
+          echo "build_environment=${BUILD_ENVIRONMENT}" >> $GITHUB_OUTPUT
           echo "Cloud version: ${VERSION}"
+          echo "Build environment: ${BUILD_ENVIRONMENT}"
+          echo "Source branch: ${SOURCE_REF}"
           echo "Source SHA: $(git rev-parse --short HEAD)"
 
       # ── 8. Build UI (vite) ──────────────────────────────────────────────────
@@ -151,7 +172,7 @@ jobs:
           push: ${{ inputs.push_image != false }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cloud-latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.latest_tag }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             VERSION_CLEAN=${{ steps.version.outputs.version_clean }}
@@ -161,16 +182,25 @@ jobs:
       - name: Build summary
         if: always()
         run: |
-          echo "## ☁️ Cloud Agent Image" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.version.outputs.build_environment }}" = "staging" ]; then
+            BUILD_LABEL="Staging"
+          else
+            BUILD_LABEL="Production"
+          fi
+
+          echo "## ☁️ Cloud Agent Image (${BUILD_LABEL})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> ${BUILD_LABEL} build for branch \`${SOURCE_REF}\`." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | \`${{ steps.version.outputs.build_environment }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Image | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Version | \`${{ steps.version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Branch | \`cloud/main\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${SOURCE_REF}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | \`$(git rev-parse --short HEAD)\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cloud-latest" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.latest_tag }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
