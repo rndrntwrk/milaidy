@@ -97,6 +97,10 @@ export const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   "custom-rtmp": "@elizaos/plugin-custom-rtmp",
   "pumpfun-streaming": "@elizaos/plugin-pumpfun-streaming",
   "x-streaming": "@elizaos/plugin-x-streaming",
+  // EVM wallet plugin — short ID used by auto-enable and user configs
+  evm: "@elizaos/plugin-evm",
+  // Steward wallet plugin — short ID used by auto-enable
+  "stwd-eliza-plugin": "@stwd/eliza-plugin",
 };
 
 // ---------------------------------------------------------------------------

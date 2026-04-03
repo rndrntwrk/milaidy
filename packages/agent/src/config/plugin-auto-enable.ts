@@ -126,6 +126,9 @@ const FEATURE_PLUGINS: Record<string, string> = {
 const EVM_PLUGIN_PACKAGE = "@elizaos/plugin-evm";
 const EVM_PLUGIN_SHORT_ID = "evm";
 
+const STEWARD_ELIZA_PLUGIN_PACKAGE = "@stwd/eliza-plugin";
+const STEWARD_ELIZA_PLUGIN_SHORT_ID = "stwd-eliza-plugin";
+
 function resolveEvmAutoEnableReason(
   env: NodeJS.ProcessEnv,
 ): string | null {
@@ -413,6 +416,22 @@ export function applyPluginAutoEnable(
       EVM_PLUGIN_SHORT_ID,
       changes,
       evmAutoEnableReason,
+    );
+  }
+
+  // Auto-enable @stwd/eliza-plugin when Steward API is configured.
+  // This mirrors the desktop (app-core) path and ensures cloud containers get
+  // StewardService + STEWARD_TRANSFER action registered with the runtime.
+  if (
+    env.STEWARD_API_URL?.trim() &&
+    pluginsConfig.entries[STEWARD_ELIZA_PLUGIN_SHORT_ID]?.enabled !== false
+  ) {
+    addToAllowlist(
+      pluginsConfig.allow,
+      STEWARD_ELIZA_PLUGIN_PACKAGE,
+      STEWARD_ELIZA_PLUGIN_SHORT_ID,
+      changes,
+      "env: STEWARD_API_URL",
     );
   }
 
