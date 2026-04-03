@@ -156,6 +156,7 @@
             "group": "Operators",
             "pages": [
               "operators/alice-operator-bootstrap",
+              "operators/alice-config-and-env-matrix",
               "operators/alice-high-risk-action-register",
               "operators/alice-operator-proof-2026-04-01",
               "operators/alice-system-boundary",

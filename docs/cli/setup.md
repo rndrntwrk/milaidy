@@ -6,6 +6,12 @@ description: "Initialize the Milady config file and agent workspace."
 
 Initialize the Milady configuration file (`~/.milady/milady.json`) and bootstrap the agent workspace directory with required scaffold files. Run this command once before starting the agent for the first time, or to repair a missing or incomplete workspace.
 
+Before you run setup, decide which values belong in config, local `.env`,
+deploy secrets, or founder-only controls by using the
+[Alice Config and Env Matrix](/operators/alice-config-and-env-matrix). `setup`
+creates repeatable structure; it does not replace deploy-only secret
+provisioning.
+
 ## Usage
 
 ```bash
@@ -141,6 +147,7 @@ In a fresh workspace, Milady bootstraps these operator-facing files:
 
 - `milady setup` prepares config and workspace state, but it does **not** set the agent name by itself. If `agents.list[].name` is missing, the first `milady start` still opens onboarding.
 - `MILADY_STATE_DIR` changes where `milady.json` lives, but the workspace path still follows the normal resolution order. In isolated environments, pass `--workspace` explicitly or set `agents.defaults.workspace` in config so setup, start, and doctor all point at the same directory.
+- Provider keys for local runtime can live in `~/.milady/.env`, but exposed-backend tokens such as `MILADY_API_TOKEN` should stay in process env or your deploy secret store. The matrix page above is the authoritative split.
 - For source-checkout verification before the CLI is installed globally, use the repo runner:
 
 ```bash
