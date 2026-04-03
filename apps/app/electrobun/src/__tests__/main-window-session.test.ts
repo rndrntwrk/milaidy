@@ -25,10 +25,24 @@ describe("resolveMainWindowPartition", () => {
 
   it("falls back to the packaged bootstrap partition when the external test API is enabled", () => {
     expect(
-      resolveMainWindowPartition({
-        MILADY_DESKTOP_TEST_API_BASE: "http://127.0.0.1:43123",
-      }),
+      resolveMainWindowPartition(
+        {
+          MILADY_DESKTOP_TEST_API_BASE: "http://127.0.0.1:43123",
+        },
+        "darwin",
+      ),
     ).toBe("persist:bootstrap-isolated");
+  });
+
+  it("keeps the default session for the packaged Windows bootstrap harness", () => {
+    expect(
+      resolveMainWindowPartition(
+        {
+          MILADY_DESKTOP_TEST_API_BASE: "http://127.0.0.1:43123",
+        },
+        "win32",
+      ),
+    ).toBeNull();
   });
 
   it("ignores blank partition overrides", () => {
