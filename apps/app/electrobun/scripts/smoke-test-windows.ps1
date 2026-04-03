@@ -14,16 +14,40 @@ try {
 } catch {
   $resolvedBuildDir = $null
 }
+$tempRoot = if ($env:RUNNER_TEMP) {
+  $env:RUNNER_TEMP
+} else {
+  [System.IO.Path]::GetTempPath()
+}
+$testAppDataRoot = if ($env:MILADY_TEST_WINDOWS_APPDATA_PATH) {
+  $env:MILADY_TEST_WINDOWS_APPDATA_PATH
+} else {
+  Join-Path $tempRoot ("milady-windows-appdata-" + [Guid]::NewGuid().ToString("N"))
+}
+$testLocalAppDataRoot = if ($env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH) {
+  $env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH
+} else {
+  Join-Path $tempRoot ("milady-windows-localappdata-" + [Guid]::NewGuid().ToString("N"))
+}
+$env:APPDATA = $testAppDataRoot
+$env:LOCALAPPDATA = $testLocalAppDataRoot
+$env:MILADY_DESKTOP_TEST_PARTITION = "persist:bootstrap-isolated"
+New-Item -ItemType Directory -Force -Path $env:APPDATA | Out-Null
+New-Item -ItemType Directory -Force -Path $env:LOCALAPPDATA | Out-Null
+if ($env:GITHUB_ENV) {
+  Add-Content -Path $env:GITHUB_ENV -Value "MILADY_TEST_WINDOWS_APPDATA_PATH=$($env:APPDATA)"
+  Add-Content -Path $env:GITHUB_ENV -Value "MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH=$($env:LOCALAPPDATA)"
+}
 # Milady writes its startup log to AppData\Roaming\Milady on Windows, not the
 # Unix-style ~/.config/Milady path used on macOS/Linux.
 $startupLog = Join-Path $env:APPDATA "Milady\\milady-startup.log"
-$selfExtractionRoot = Join-Path $env:LOCALAPPDATA "com.miladyai.milady\\canary\\self-extraction"
-$tempExtractDir = Join-Path $env:RUNNER_TEMP ("milady-windows-smoke-" + [Guid]::NewGuid().ToString("N"))
+$selfExtractionRoot = Join-Path $env:LOCALAPPDATA "com.miladyai.milady"
+$tempExtractDir = Join-Path $tempRoot ("milady-windows-smoke-" + [Guid]::NewGuid().ToString("N"))
 $persistLauncherDir = $env:MILADY_TEST_WINDOWS_LAUNCHER_DIR
 $persistLauncherPathFile = $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE
 $startupSessionId = "milady-windows-smoke-" + [Guid]::NewGuid().ToString("N")
-$startupStateFile = Join-Path $env:RUNNER_TEMP ($startupSessionId + ".state.json")
-$startupEventsFile = Join-Path $env:RUNNER_TEMP ($startupSessionId + ".events.jsonl")
+$startupStateFile = Join-Path $tempRoot ($startupSessionId + ".state.json")
+$startupEventsFile = Join-Path $tempRoot ($startupSessionId + ".events.jsonl")
 $startupBootstrapFile = $null
 $stopProtectedProcessIds = [System.Collections.Generic.HashSet[int]]::new()
 [void]$stopProtectedProcessIds.Add([int]$PID)
@@ -69,7 +93,7 @@ function Write-ReusableLauncherPath([System.IO.FileInfo]$Launcher, [string]$Temp
     $launcherPath.StartsWith($TemporaryRoot, [System.StringComparison]::OrdinalIgnoreCase)
   ) {
     $stageDir = if ([string]::IsNullOrWhiteSpace($persistLauncherDir)) {
-      Join-Path $env:RUNNER_TEMP "milady-windows-ui-launcher"
+      Join-Path $tempRoot "milady-windows-ui-launcher"
     } else {
       $persistLauncherDir
     }
@@ -109,6 +133,38 @@ function Get-TarCommand() {
   return "tar"
 }
 
+function Test-LoopbackPortAvailable([int]$Port) {
+  $listener = $null
+  try {
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
+    $listener.Start()
+    return $true
+  } catch {
+    return $false
+  } finally {
+    if ($listener) {
+      try {
+        $listener.Stop()
+      } catch {}
+    }
+  }
+}
+
+function Resolve-BackendPort([int]$PreferredPort) {
+  if (Test-LoopbackPortAvailable $PreferredPort) {
+    return $PreferredPort
+  }
+
+  Write-Warning "Preferred backend port $PreferredPort is unavailable. Falling back to an ephemeral loopback port."
+  $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+  try {
+    $listener.Start()
+    return ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+  } finally {
+    $listener.Stop()
+  }
+}
+
 function Assert-PackagedAssetVariants(
   [string]$Description,
   [int]$MinSizeBytes,
@@ -146,7 +202,7 @@ function Assert-PackagedArchiveAssetVariants(
       continue
     }
 
-    $extractDir = Join-Path $env:RUNNER_TEMP ("milady-archive-asset-check-" + [Guid]::NewGuid().ToString("N"))
+    $extractDir = Join-Path $tempRoot ("milady-archive-asset-check-" + [Guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
     try {
       & $tarCommand -xf $ArchivePath -C $extractDir $member 2>$null | Out-Null
@@ -282,6 +338,8 @@ Write-Host "Artifacts dir: $resolvedArtifactsDir"
 if ($resolvedBuildDir) {
   Write-Host "Build dir: $resolvedBuildDir"
 }
+Write-Host "Smoke APPDATA: $($env:APPDATA)"
+Write-Host "Smoke LOCALAPPDATA: $($env:LOCALAPPDATA)"
 
 Stop-MiladyProcesses
 $env:ELECTROBUN_CONSOLE = "1"
@@ -289,6 +347,14 @@ $env:MILADY_FORCE_AUTOSTART_AGENT = "1"
 $env:MILADY_STARTUP_SESSION_ID = $startupSessionId
 $env:MILADY_STARTUP_STATE_FILE = $startupStateFile
 $env:MILADY_STARTUP_EVENTS_FILE = $startupEventsFile
+$BackendPort = Resolve-BackendPort $BackendPort
+$env:MILADY_API_PORT = "$BackendPort"
+$env:ELIZA_API_PORT = "$BackendPort"
+$env:ELIZA_PORT = "$BackendPort"
+Write-Host "Smoke backend port: $BackendPort"
+if ($env:GITHUB_ENV) {
+  Add-Content -Path $env:GITHUB_ENV -Value "MILADY_TEST_WINDOWS_BACKEND_PORT=$BackendPort"
+}
 
 # Reset stale startup logs before launch so fatal classification only applies
 # to this run.
@@ -312,7 +378,7 @@ $requireInstaller = $env:MILADY_WINDOWS_SMOKE_REQUIRE_INSTALLER -eq "1"
 $installerRoot = if ($env:MILADY_TEST_WINDOWS_INSTALL_DIR) {
   $env:MILADY_TEST_WINDOWS_INSTALL_DIR
 } else {
-  Join-Path $env:RUNNER_TEMP ("milady-windows-installed-" + [Guid]::NewGuid().ToString("N"))
+  Join-Path $tempRoot ("milady-windows-installed-" + [Guid]::NewGuid().ToString("N"))
 }
 if ($requireInstaller) {
   $launcher = $null
@@ -530,18 +596,33 @@ function Dump-FailureDiagnostics([int]$Port) {
 
   # 6. Relevant environment variables
   Write-Host ""
-  Write-Host "[6/6] Relevant environment variables:"
+  Write-Host "[6/7] Relevant environment variables:"
   foreach ($varName in @(
     "MILADY_PORT", "MILADY_API_BIND", "MILADY_API_PORT",
     "MILADY_DISABLE_LOCAL_EMBEDDINGS", "ANTHROPIC_API_KEY",
     "NO_PROXY", "HTTP_PROXY", "HTTPS_PROXY",
-    "ELECTROBUN_CONSOLE", "APPDATA", "LOCALAPPDATA"
+    "ELECTROBUN_CONSOLE", "APPDATA", "LOCALAPPDATA",
+    "MILADY_TEST_WINDOWS_APPDATA_PATH", "MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH",
+    "MILADY_DESKTOP_TEST_PARTITION", "ELIZA_API_PORT", "ELIZA_PORT"
   )) {
     $val = [System.Environment]::GetEnvironmentVariable($varName)
     if ($varName -eq "ANTHROPIC_API_KEY" -and $val) {
       $val = "$($val.Substring(0, [Math]::Min(8, $val.Length)))..."
     }
     Write-Host "  ${varName}=$($val ?? '<unset>')"
+  }
+
+  Write-Host ""
+  Write-Host "[7/7] Windows CEF profile state:"
+  $cefRoot = Join-Path $env:APPDATA "Milady\\CEF"
+  $cefMarker = Join-Path $cefRoot ".milady-version"
+  Write-Host "  CEF root: $cefRoot"
+  Write-Host "  Marker: $cefMarker"
+  Write-Host "  Root exists: $(Test-Path $cefRoot)"
+  if (Test-Path $cefMarker) {
+    Write-Host "  Marker contents: $(Get-Content $cefMarker -Raw -ErrorAction SilentlyContinue)"
+  } else {
+    Write-Host "  Marker contents: <missing>"
   }
 
   Write-Host "========== END DIAGNOSTICS =========="

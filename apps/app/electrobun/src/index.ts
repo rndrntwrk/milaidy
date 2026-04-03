@@ -8,7 +8,9 @@ import {
 } from "@miladyai/shared/runtime-env";
 import Electrobun, {
   ApplicationMenu,
+  BrowserView,
   BrowserWindow,
+  BuildConfig,
   Updater,
   Utils,
   WGPU,
@@ -28,7 +30,11 @@ import {
 } from "./application-menu";
 import { showBackgroundNoticeOnce } from "./background-notice";
 import { readNavigationEventUrl } from "./cloud-auth-window";
-import { resolveMainWindowPartition } from "./main-window-session";
+import {
+  resolveBootstrapShellRenderer,
+  resolveBootstrapViewRenderer,
+  resolveMainWindowPartition,
+} from "./main-window-session";
 import {
   buildMainMenuResetApiCandidates,
   pickReachableMenuResetApiBase,
@@ -69,6 +75,7 @@ import type { SendToWebview } from "./types.js";
 import {
   resolveDesktopBundleVersion,
   shouldResetWindowsCefProfile,
+  shouldWriteWindowsCefProfileMarker,
 } from "./windows-cef-profile";
 
 type HeartbeatMenuTriggerSummary = {
@@ -725,13 +732,9 @@ async function createMainWindow(): Promise<BrowserWindow> {
     );
   }
 
-  // Load persisted window state
   const statePath = path.join(Utils.paths.userData, "window-state.json");
   const state = loadWindowState(statePath);
 
-  // Read the pre-built webview bridge preload (built by `bun run build:preload`).
-  // The preload runs in the webview context after Electrobun's built-in preload,
-  // setting up Milady's direct Electrobun RPC bridge on the window.
   let preload: string;
   try {
     preload = readResolvedPreloadScript(import.meta.dir);
@@ -746,34 +749,54 @@ async function createMainWindow(): Promise<BrowserWindow> {
     x: state.x,
     y: state.y,
   };
-  const browserWindowOptions = {
-    title: "Milady",
-    // @ts-expect-error: Electrobun doesn't expose icon in JS typings yet
-    icon: resolveDesktopAppIconPath(),
-    url: rendererUrl,
-    preload,
-    frame: windowFrame,
-    // hiddenInset hides the title bar and insets traffic lights — macOS only.
-    // On Windows/Linux use the default title bar so the window remains draggable.
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    // Transparent background for vibrancy — macOS only.
-    // On Windows/Linux a solid background prevents rendering artifacts.
-    transparent: process.platform === "darwin",
-  };
-  if (mainWindowPartition) {
-    // The packaged Windows bootstrap probe only needs to validate renderer
-    // startup against an external API override. An in-memory partition avoids
-    // depending on CEF persistent profile creation in that harness.
-    // @ts-expect-error — partition is a valid Electrobun option not yet typed
-    browserWindowOptions.partition = mainWindowPartition;
+  const titleBarStyle =
+    process.platform === "darwin" ? "hiddenInset" : "default";
+  const transparent = process.platform === "darwin";
+
+  let win: BrowserWindow;
+  if (process.platform === "win32" && mainWindowPartition) {
+    const buildInfo = await BuildConfig.get();
+    win = new BrowserWindow({
+      title: "Milady",
+      // @ts-expect-error: Electrobun doesn't expose icon in JS typings yet
+      icon: resolveDesktopAppIconPath(),
+      url: null,
+      preload: null,
+      frame: windowFrame,
+      renderer: resolveBootstrapShellRenderer(buildInfo),
+      titleBarStyle,
+      transparent,
+    });
+    win.webview.remove();
+    const mainView = new BrowserView({
+      url: rendererUrl,
+      // @ts-expect-error: BrowserView preload exists at runtime but is not typed yet.
+      preload,
+      renderer: resolveBootstrapViewRenderer(buildInfo),
+      partition: mainWindowPartition,
+      frame: {
+        x: 0,
+        y: 0,
+        width: state.width,
+        height: state.height,
+      },
+      windowId: win.id,
+    });
+    win.webviewId = mainView.id;
+  } else {
+    win = new BrowserWindow({
+      title: "Milady",
+      // @ts-expect-error: Electrobun doesn't expose icon in JS typings yet
+      icon: resolveDesktopAppIconPath(),
+      url: rendererUrl,
+      preload,
+      frame: windowFrame,
+      titleBarStyle,
+      transparent,
+    });
   }
 
-  const win = new BrowserWindow(browserWindowOptions);
-
-  // Apply native macOS vibrancy, shadow, and traffic light positioning
   applyMacOSWindowEffects(win);
-
-  // Persist window state on resize and move
   win.on("resize", () => scheduleStateSave(statePath, win));
   win.on("move", () => scheduleStateSave(statePath, win));
 
@@ -1558,8 +1581,11 @@ async function main(): Promise<void> {
         // No marker — first run or pre-fix install.
       }
       if (
-        shouldResetWindowsCefProfile(previousVersion, currentVersion) &&
-        fs.existsSync(cefDir)
+        shouldResetWindowsCefProfile({
+          currentVersion,
+          previousVersion,
+          cefDirExists: fs.existsSync(cefDir),
+        })
       ) {
         console.log(
           `[Main] CEF version mismatch (${previousVersion ?? "none"} → ${currentVersion}), clearing stale CEF profile`,
@@ -1576,7 +1602,7 @@ async function main(): Promise<void> {
         }
       }
       // Write/update version marker so we don't clear again on next launch.
-      if (currentVersion !== "unknown") {
+      if (shouldWriteWindowsCefProfileMarker(currentVersion)) {
         fs.mkdirSync(cefDir, { recursive: true });
         fs.writeFileSync(cefVersionMarker, currentVersion);
       }
