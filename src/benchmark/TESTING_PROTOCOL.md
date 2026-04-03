@@ -10,6 +10,7 @@ Covers:
 - benchmark provider context shaping (`MILADY_BENCHMARK`)
 - deterministic mock benchmark model behavior
 - compatibility checks against `cua-bench` benchmark primitives
+- Alice quality eval coverage, scored baseline integrity, and regression comparison
 
 ## Required checks before merge
 
@@ -17,6 +18,7 @@ From the repository root:
 
 ```bash
 bunx vitest run src/benchmark/*.test.ts
+bun run evals:alice:validate
 ```
 
 This runs all benchmark unit tests in `src/benchmark/*.test.ts`.
@@ -74,3 +76,16 @@ Then probe:
 - `POST /api/benchmark/message`
 
 and confirm response includes actionable `actions` + `params`.
+
+## Alice eval pack
+
+The Alice eval pack lives in `src/benchmark/evals.ts`.
+
+- `bun run evals:alice:baseline` emits the canonical baseline bundle and summary
+- `bun run evals:alice:compare -- --candidate <path>` compares a scored candidate
+  bundle to the baseline and exits non-zero on regression
+- `.github/workflows/alice-eval-regression.yml` defines the weekly/manual cadence
+
+The current baseline is a manual expert-scored reference pack. Promote it to a
+runtime-scored pack when benchmark credentials and a repeatable capture path are
+available in CI.
