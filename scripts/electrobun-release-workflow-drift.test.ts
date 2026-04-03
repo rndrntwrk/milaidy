@@ -897,6 +897,9 @@ describe("Electrobun release workflow drift", () => {
     );
     expect(workflow).toContain("bun run test:desktop:playwright");
     expect(workflow).toContain('MILADY_DISABLE_LOCAL_EMBEDDINGS: "1"');
+    expect(workflow).toContain(
+      "ANTHROPIC_API_KEY: $" + "{{ secrets.ANTHROPIC_API_KEY }}",
+    );
     expect(workflow).not.toContain(
       "name: Install Playwright Chromium (Windows)",
     );
@@ -931,6 +934,11 @@ describe("Electrobun release workflow drift", () => {
     expect(windowsEnvHelper).toContain(
       "MILADY_DESKTOP_TEST_API_BASE: args.apiBase",
     );
+    expect(windowsEnvHelper).toContain('MILADY_DISABLE_LOCAL_EMBEDDINGS: "1"');
+    expect(windowsEnvHelper).toContain('ELECTROBUN_CONSOLE: "1"');
+    expect(windowsEnvHelper).toContain('"MILADY_RENDERER_URL"');
+    expect(windowsEnvHelper).toContain('"VITE_DEV_SERVER_URL"');
+    expect(windowsEnvHelper).toContain("for (const key of STRIPPED_ENV_KEYS)");
     expect(windowsEnvHelper).toContain("APPDATA: args.appData");
     expect(windowsEnvHelper).toContain("LOCALAPPDATA: args.localAppData");
     expect(windowsBootstrapHelper).toContain('"/api/status"');
