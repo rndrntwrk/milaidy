@@ -114,7 +114,9 @@ export async function runPollingBackend(
         dispatch({ type: "BACKEND_AUTH_REQUIRED" });
         return;
       }
-      const { complete, cloudProvisioned } = await client.getOnboardingStatus();
+      const onboardingStatusRes = await client.getOnboardingStatus();
+      const { complete, cloudProvisioned } = onboardingStatusRes;
+      console.log("[milady][startup] onboarding status response:", JSON.stringify(onboardingStatusRes));
       if (cancelled.current) return;
       deps.setOnboardingCloudProvisionedContainer(Boolean(cloudProvisioned));
       let sessionComplete =
@@ -149,6 +151,7 @@ export async function runPollingBackend(
         console.warn(
           "[milady][startup:init] Preserving completed onboarding despite incomplete backend onboarding status.",
         );
+      console.log("[milady][startup] sessionComplete:", sessionComplete, "complete:", complete, "cloudProvisioned:", cloudProvisioned, "persistedConnection:", !!ctx?.persistedConnection, "hadPrior:", !!ctx?.hadPriorOnboarding);
       deps.setOnboardingComplete(sessionComplete);
 
       if (!sessionComplete) {
@@ -254,6 +257,7 @@ export async function runPollingBackend(
         }
         return;
       }
+      console.log("[milady][startup] dispatching BACKEND_REACHED onboardingComplete=true");
       dispatch({ type: "BACKEND_REACHED", onboardingComplete: true });
       return;
     } catch (err) {

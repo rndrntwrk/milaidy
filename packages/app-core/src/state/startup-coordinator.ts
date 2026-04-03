@@ -161,9 +161,12 @@ export function startupReducer(
     case "polling-backend":
       switch (event.type) {
         case "BACKEND_REACHED":
+          console.log("[milady][coordinator] BACKEND_REACHED onboardingComplete:", event.onboardingComplete);
           if (event.onboardingComplete) {
+            console.log("[milady][coordinator] → starting-runtime (skip onboarding)");
             return { phase: "starting-runtime", attempts: 0 };
           }
+          console.log("[milady][coordinator] → onboarding-required");
           return { phase: "onboarding-required", serverReachable: true };
         case "BACKEND_AUTH_REQUIRED":
           return { phase: "pairing-required" };
