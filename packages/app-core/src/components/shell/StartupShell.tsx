@@ -18,7 +18,7 @@ import {
 } from "../../bridge/gateway-discovery";
 import {
   clearPersistedConnectionMode,
-  savePersistedConnectionMode,
+  savePersistedActiveServer,
   useApp,
 } from "../../state";
 import type { StartupErrorState } from "../../state/types";
@@ -176,15 +176,16 @@ export function StartupShell() {
   const handleConnectGateway = useCallback(
     (gateway: GatewayDiscoveryEndpoint) => {
       const remoteApiBase = gatewayEndpointToApiBase(gateway);
-      client.setToken(null);
-      client.setBaseUrl(remoteApiBase);
-      savePersistedConnectionMode({
-        runMode: "remote",
-        remoteApiBase,
+      clearClientConnectionIntent();
+      savePersistedActiveServer({
+        id: `remote:${gateway.stableId}`,
+        kind: "remote",
+        label: gateway.name.trim() || remoteApiBase,
+        apiBase: remoteApiBase,
       });
       continueToOnboarding();
     },
-    [continueToOnboarding],
+    [clearClientConnectionIntent, continueToOnboarding],
   );
 
   // Error — delegate

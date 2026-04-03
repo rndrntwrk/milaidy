@@ -9,14 +9,14 @@ const {
   clearPersistedConnectionModeMock,
   discoverGatewayEndpointsMock,
   mockUseApp,
-  savePersistedConnectionModeMock,
+  savePersistedActiveServerMock,
 } = vi.hoisted(() => ({
   clientSetBaseUrlMock: vi.fn(),
   clientSetTokenMock: vi.fn(),
   clearPersistedConnectionModeMock: vi.fn(),
   discoverGatewayEndpointsMock: vi.fn(),
   mockUseApp: vi.fn(),
-  savePersistedConnectionModeMock: vi.fn(),
+  savePersistedActiveServerMock: vi.fn(),
 }));
 
 vi.mock("../../api", () => ({
@@ -28,7 +28,7 @@ vi.mock("../../api", () => ({
 
 vi.mock("../../state", () => ({
   clearPersistedConnectionMode: clearPersistedConnectionModeMock,
-  savePersistedConnectionMode: savePersistedConnectionModeMock,
+  savePersistedActiveServer: savePersistedActiveServerMock,
   useApp: () => mockUseApp(),
 }));
 
@@ -51,7 +51,7 @@ describe("StartupShell", () => {
     clientSetTokenMock.mockReset();
     clearPersistedConnectionModeMock.mockReset();
     discoverGatewayEndpointsMock.mockReset();
-    savePersistedConnectionModeMock.mockReset();
+    savePersistedActiveServerMock.mockReset();
     discoverGatewayEndpointsMock.mockResolvedValue([]);
   });
 
@@ -126,14 +126,15 @@ describe("StartupShell", () => {
     expect(clientSetTokenMock).toHaveBeenCalledWith(null);
     expect(clientSetBaseUrlMock).toHaveBeenCalledWith(null);
     expect(clearPersistedConnectionModeMock).toHaveBeenCalledTimes(1);
+    expect(savePersistedActiveServerMock).not.toHaveBeenCalled();
     expect(goToOnboardingStep).toHaveBeenCalledWith("identity");
     expect(setState).toHaveBeenCalledWith("onboardingRunMode", "local");
     expect(setState).toHaveBeenCalledWith("onboardingRemoteApiBase", "");
     expect(dispatch).toHaveBeenCalledWith({ type: "SPLASH_CONTINUE" });
   });
 
-  it("saves a discovered gateway as the next remote target", async () => {
-    const { dispatch } = mockSplashApp();
+  it("seeds a discovered gateway through the remote onboarding path", async () => {
+    const { dispatch, goToOnboardingStep, setState } = mockSplashApp();
     discoverGatewayEndpointsMock.mockResolvedValue([
       {
         stableId: "kei",
@@ -163,11 +164,16 @@ describe("StartupShell", () => {
     });
 
     expect(clientSetTokenMock).toHaveBeenCalledWith(null);
-    expect(clientSetBaseUrlMock).toHaveBeenCalledWith("http://kei.local:18789");
-    expect(savePersistedConnectionModeMock).toHaveBeenCalledWith({
-      runMode: "remote",
-      remoteApiBase: "http://kei.local:18789",
+    expect(clientSetBaseUrlMock).toHaveBeenCalledWith(null);
+    expect(clearPersistedConnectionModeMock).not.toHaveBeenCalled();
+    expect(savePersistedActiveServerMock).toHaveBeenCalledWith({
+      id: "remote:kei",
+      kind: "remote",
+      label: "Kei",
+      apiBase: "http://kei.local:18789",
     });
+    expect(goToOnboardingStep).not.toHaveBeenCalled();
+    expect(setState).not.toHaveBeenCalledWith("onboardingRunMode", "cloud");
     expect(dispatch).toHaveBeenCalledWith({ type: "SPLASH_CONTINUE" });
   });
 });
