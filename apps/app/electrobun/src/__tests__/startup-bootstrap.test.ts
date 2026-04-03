@@ -43,7 +43,7 @@ describe("Electrobun startup bootstrap", () => {
       "preload = readResolvedPreloadScript(import.meta.dir);",
     );
     const browserWindowIndex = source.indexOf(
-      "new BrowserWindow(",
+      "new BrowserWindow({",
       validateIndex,
     );
 
