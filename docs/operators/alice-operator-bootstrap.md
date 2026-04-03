@@ -47,6 +47,7 @@ Use this document when:
    - What is Milady responsible for?
    - What is Alice responsible for?
    - What is `555-bot` responsible for?
+   - What high-risk actions are allowed, gated, or denied in operator mode?
 7. Run the first-use validation:
    - run `milady setup` or `bun scripts/run-node.mjs setup` for a source checkout
    - run `milady doctor --no-ports` or `bun scripts/run-node.mjs doctor --no-ports`
@@ -92,5 +93,6 @@ Use this document when:
 - `deployment`
 - `agents/runtime-and-lifecycle`
 - `guides/knowledge`
+- `operators/alice-high-risk-action-register`
 - `operators/alice-operator-proof-2026-04-01`
 - `Render-Network-OS/555-bot: docs/ALICE_DEPLOYMENT_DOCS_INDEX.md`
