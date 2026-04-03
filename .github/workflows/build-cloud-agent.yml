@@ -147,15 +147,11 @@ jobs:
         env:
           NODE_ENV: production
 
-      # ── 9. Set up CI dockerignore ───────────────────────────────────────────
-      - name: Set up CI dockerignore
-        run: cp .dockerignore.ci .dockerignore
-
-      # ── 10. Set up Blacksmith Docker builder ────────────────────────────────
+      # ── 9. Set up Blacksmith Docker builder ────────────────────────────────
       - name: Set up Blacksmith Docker
         uses: useblacksmith/setup-docker-builder@v1
 
-      # ── 11. Login to GHCR ──────────────────────────────────────────────────
+      # ── 10. Login to GHCR ──────────────────────────────────────────────────
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -163,12 +159,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── 12. Build and push with Blacksmith cache ────────────────────────────
+      # ── 11. Build and push with Blacksmith cache ────────────────────────────
       - name: Build and push Docker image
         uses: useblacksmith/build-push-action@v2
         with:
           context: .
-          file: Dockerfile.ci
+          file: Dockerfile.cloud
           platforms: linux/amd64
           push: ${{ inputs.push_image != false }}
           tags: |
@@ -179,7 +175,7 @@ jobs:
             VERSION_CLEAN=${{ steps.version.outputs.version_clean }}
           provenance: false
 
-      # ── 13. Trigger production deploy webhook ──────────────────────────────
+      # ── 12. Trigger production deploy webhook ──────────────────────────────
       - name: Trigger cloud fleet deploy webhook
         if: success() && steps.version.outputs.build_environment == 'production' && (github.event_name == 'push' || inputs.push_image != false) && (github.event_name == 'push' || inputs.skip_rollout != true)
         env:
@@ -206,7 +202,7 @@ jobs:
             -H "X-Hub-Signature-256: ${SIGNATURE}" \
             --data "$PAYLOAD"
 
-      # ── 14. Build summary ──────────────────────────────────────────────────
+      # ── 13. Build summary ──────────────────────────────────────────────────
       - name: Build summary
         if: always()
         run: |
