@@ -68,7 +68,13 @@ import {
   isMiladySettingsDebugEnabled,
   settingsDebugCloudSummary,
 } from "@miladyai/shared";
-import * as pluginAgentOrchestrator from "@elizaos/plugin-agent-orchestrator";
+let pluginAgentOrchestrator: any;
+try {
+  pluginAgentOrchestrator = require("@elizaos/plugin-agent-orchestrator");
+} catch {
+  // Stripped from cloud image — gracefully degrade
+  pluginAgentOrchestrator = null;
+}
 import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
 import * as pluginAnthropic from "@elizaos/plugin-anthropic";
 import * as pluginCommands from "@elizaos/plugin-commands";
@@ -219,7 +225,7 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-knowledge": pluginKnowledge,
   "@elizaos/plugin-rolodex": pluginRolodex,
   "@elizaos/plugin-trajectory-logger": pluginTrajectoryLogger,
-  "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator,
+  ...(pluginAgentOrchestrator ? { "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator } : {}),
   "@elizaos/plugin-cron": pluginCron,
   "@elizaos/plugin-shell": pluginShell,
   "@elizaos/plugin-plugin-manager": pluginPluginManager,

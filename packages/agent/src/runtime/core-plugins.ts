@@ -5,6 +5,11 @@
  * `api/server.ts` and `runtime/eliza.ts`.
  */
 
+/** Plugins that require native PTY binaries — excluded from cloud images. */
+export const DESKTOP_ONLY_PLUGINS: readonly string[] = [
+  "@elizaos/plugin-agent-orchestrator", // PTY, SwarmCoordinator, workspace provisioning
+];
+
 /** Core plugins that should always be loaded. collectPluginNames() seeds from this list only. */
 export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-sql", // database adapter — required
@@ -12,7 +17,7 @@ export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-form", // form handling for guided user journeys
   "@elizaos/plugin-knowledge", // RAG knowledge management — required for knowledge tab
   "@elizaos/plugin-trajectory-logger", // trajectory logging for debugging and RL training
-  "@elizaos/plugin-agent-orchestrator", // multi-agent orchestration (PTY, SwarmCoordinator, workspace provisioning)
+  // plugin-agent-orchestrator moved to DESKTOP_ONLY_PLUGINS (needs pty-manager, not in cloud image)
   "@elizaos/plugin-cron", // scheduled jobs and automation
   "@elizaos/plugin-shell", // shell command execution
   "@elizaos/plugin-agent-skills", // skill execution and marketplace runtime
