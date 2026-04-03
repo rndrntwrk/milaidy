@@ -1,1 +1,7 @@
 * text=auto eol=lf
+
+# Git LFS — source VRM files (build inputs, ~14-17 MB each, ~124 MB total)
+# These are master character files in apps/app/characters/vrm/, not runtime assets.
+# New commits of *.vrm in that path will be stored in LFS.
+# To migrate existing blobs: git lfs migrate import --include="apps/app/characters/vrm/*.vrm"
+apps/app/characters/vrm/*.vrm filter=lfs diff=lfs merge=lfs -text

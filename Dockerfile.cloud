@@ -11,6 +11,10 @@ ARG OCI_LICENSES="MIT"
 ARG VERSION=""
 ARG VERSION_CLEAN=""
 ARG REVISION=""
+# CDN base URL baked into the Vite bundle at build time.
+# Format: https://cdn.jsdelivr.net/gh/{org}/{repo}@{tag}/apps/app/public/
+# Leave empty for local/dev builds (assets served from origin).
+ARG VITE_ASSET_BASE_URL=""
 
 FROM oven/bun:${BUN_VERSION}-slim AS deps
 WORKDIR /src
@@ -47,6 +51,9 @@ RUN npm install --prefix /opt/tsx --ignore-scripts --no-save tsx@4.21.0 \
 FROM node:${NODE_VERSION}-slim AS prep
 WORKDIR /src
 ARG VERSION_CLEAN
+# Re-declare so it's in scope for this build stage.
+ARG VITE_ASSET_BASE_URL=""
+ENV VITE_ASSET_BASE_URL=${VITE_ASSET_BASE_URL}
 
 COPY --from=deps /src/node_modules ./node_modules
 COPY dist ./dist
