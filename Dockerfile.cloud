@@ -92,7 +92,7 @@ RUN set -eux; \
   # Remove from .bun store (where bun keeps actual package files)
   cd /runtime/node_modules/.bun && rm -rf \
     onnxruntime-node@* onnxruntime-web@* \
-    node-llama-cpp@* @node-llama-cpp+*@* \
+    @node-llama-cpp+linux-x64-cuda*@* @node-llama-cpp+linux-arm*@* \
     koffi@* node-pty@* \
     @biomejs+*@* \
     three@* @babylonjs+*@* \
