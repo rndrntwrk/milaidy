@@ -34,7 +34,7 @@ describe("resolveMainWindowPartition", () => {
     ).toBe("persist:bootstrap-isolated");
   });
 
-  it("uses a non-persistent session for the packaged Windows bootstrap harness", () => {
+  it("keeps the default session for the packaged Windows bootstrap harness", () => {
     expect(
       resolveMainWindowPartition(
         {
@@ -42,7 +42,7 @@ describe("resolveMainWindowPartition", () => {
         },
         "win32",
       ),
-    ).toBe("bootstrap-isolated");
+    ).toBeNull();
   });
 
   it("ignores blank partition overrides", () => {
