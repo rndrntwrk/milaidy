@@ -68,7 +68,7 @@ COPY scripts/docker-entrypoint.sh ./scripts/docker-entrypoint.sh
 
 RUN set -eux; \
   mkdir -p /runtime/node_modules /runtime/apps/app /runtime/scripts; \
-  cp -aL node_modules/. /runtime/node_modules/; \
+  cp -rL node_modules/. /runtime/node_modules/; \
   rm -rf /runtime/node_modules/.bun; \
   for dir in packages/agent packages/app-core packages/shared packages/ui packages/vrm-utils; do \
     name="$(node -p "require('./${dir}/package.json').name")"; \
