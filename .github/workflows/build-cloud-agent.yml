@@ -120,8 +120,7 @@ jobs:
           if [ -n "${{ inputs.version }}" ]; then
             VERSION="${VERSION_PREFIX}${{ inputs.version }}"
           else
-            BASE_VERSION=$(node -p "require('./package.json').version")
-            VERSION="${VERSION_PREFIX}${BASE_VERSION}-build.${{ github.run_number }}"
+            VERSION="${VERSION_PREFIX}2.0.${{ github.run_number }}"
           fi
 
           if [ "${BUILD_ENVIRONMENT}" = "staging" ]; then
