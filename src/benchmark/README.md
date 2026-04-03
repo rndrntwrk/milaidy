@@ -19,6 +19,7 @@ This directory contains:
 | File | Purpose |
 |---|---|
 | `server.ts` | HTTP server for benchmark traffic. Initializes `AgentRuntime`, handles benchmark sessions, and routes each message through `runtime.messageService.handleMessage(...)`. |
+| `evals.ts` | Alice eval pack, rubric, and scored baseline used for quality regression review. |
 | `mock-plugin-base.ts` | Tracked deterministic mock plugin used by benchmark unit tests and CI smoke checks. |
 | `mock-plugin.ts` | Optional local override (gitignored) loaded first when `MILADY_BENCH_MOCK=true`. |
 | `TESTING_PROTOCOL.md` | Benchmark action/testing protocol (required checks + CUA-bench compatibility commands). |
@@ -42,6 +43,15 @@ The server prints `MILADY_BENCH_READY port=<port>` when ready.
 ```bash
 # benchmark-focused unit tests
 bunx vitest run src/benchmark/*.test.ts
+
+# validate the Alice eval pack and baseline
+bun run evals:alice:validate
+
+# write the current baseline summary to a file
+bun run evals:alice:baseline -- --output artifacts/alice-evals/baseline-summary.json
+
+# compare a freshly scored candidate bundle against the checked-in baseline
+bun run evals:alice:compare -- --candidate artifacts/alice-evals/latest.json --output artifacts/alice-evals/compare.json
 
 # watch a live benchmark smoke run end-to-end
 bun run benchmark:watch
@@ -149,3 +159,4 @@ Response:
 - `context` is attached to the prompt context for each benchmark step.
 - Session reset creates isolated room/user context so task runs do not leak history.
 - Responses include `actions` and `params` extracted from `responseContent` for runner-side evaluation.
+- The eval pack is manual-expert-scored until live benchmark credentials are supplied in a secure environment.
