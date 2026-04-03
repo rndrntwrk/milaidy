@@ -89,6 +89,7 @@ const HEARTBEAT_MENU_REFRESH_MS = 30_000;
 const CONFIG_EXPORT_FILE_NAME = "milady-config.json";
 const STARTUP_CRASH_REPORT_FILE = "startup-crash-report-latest.md";
 const STARTUP_CRASH_PROMPT_MARKER_FILE = "startup-crash-last-prompted.txt";
+const INITIAL_API_BASE_RETRY_DELAYS_MS = [0, 250, 1000, 3000, 10_000] as const;
 let heartbeatMenuSnapshot: HeartbeatMenuSnapshot =
   EMPTY_HEARTBEAT_MENU_SNAPSHOT;
 let heartbeatMenuRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -814,9 +815,10 @@ function attachMainWindow(win: BrowserWindow): BrowserWindow {
   currentWindow = win;
   currentSendToWebview = sendToWebview;
   trackFocusedWindow(win);
+  scheduleBootstrapApiBaseInjection(win);
 
   win.webview.on("dom-ready", () => {
-    injectApiBase(win);
+    scheduleBootstrapApiBaseInjection(win);
   });
 
   // Prevent the main webview from navigating to external URLs.
@@ -867,6 +869,22 @@ function attachMainWindow(win: BrowserWindow): BrowserWindow {
   });
 
   return win;
+}
+
+function scheduleBootstrapApiBaseInjection(win: BrowserWindow): void {
+  for (const delayMs of INITIAL_API_BASE_RETRY_DELAYS_MS) {
+    setTimeout(() => {
+      if (currentWindow !== win) return;
+      try {
+        injectApiBase(win);
+      } catch (err) {
+        console.warn(
+          "[Main] Failed to inject bootstrap API base:",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }, delayMs);
+  }
 }
 
 async function ensureBackgroundWindow(): Promise<void> {

@@ -14,6 +14,7 @@ import {
   initializeCapacitorBridge,
   initializeStorageBridge,
   isElectrobunRuntime,
+  subscribeDesktopBridgeEvent,
 } from "@miladyai/app-core/bridge";
 import { CharacterEditor } from "@miladyai/app-core/components";
 import type { BrandingConfig } from "@miladyai/app-core/config";
@@ -76,6 +77,7 @@ const MILADY_BRANDING: Partial<BrandingConfig> = {
   // backend should control onboarding capabilities instead.
   cloudOnly: shouldUseCloudOnlyBranding({
     isDev: import.meta.env.DEV,
+    desktopRuntime: isElectrobunRuntime(),
     injectedApiBase:
       typeof window === "undefined" ? undefined : window.__MILADY_API_BASE__,
   }),
@@ -115,6 +117,8 @@ declare global {
     __MILADY_SHARE_QUEUE__?: ShareTargetPayload[];
     __MILADY_CHARACTER_EDITOR__?: typeof CharacterEditor;
     __MILADY_API_BASE__?: string;
+    __MILADY_API_TOKEN__?: string;
+    __MILADY_API_BASE_SYNC_INSTALLED__?: boolean;
   }
 }
 
@@ -149,6 +153,18 @@ installDesktopPermissionsClientPatch(client as never);
 // Register custom character editor for app-core's ViewRouter to pick up
 window.__MILADY_CHARACTER_EDITOR__ = CharacterEditor;
 
+function readInjectedMiladyApiBase(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const injectedApiBase = window.__MILADY_API_BASE__?.trim();
+  return injectedApiBase ? injectedApiBase : undefined;
+}
+
+function readInjectedMiladyApiToken(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const injectedApiToken = window.__MILADY_API_TOKEN__?.trim();
+  return injectedApiToken ? injectedApiToken : undefined;
+}
+
 import { getStylePresets } from "@miladyai/shared/onboarding-presets";
 
 // Derive VRM roster from STYLE_PRESETS so character names stay in one place.
@@ -163,6 +179,8 @@ const miladyBootConfig: AppBootConfig = {
   assetBaseUrl:
     (import.meta.env.VITE_ASSET_BASE_URL as string | undefined)?.trim() ||
     undefined,
+  apiBase: readInjectedMiladyApiBase(),
+  apiToken: readInjectedMiladyApiToken(),
   cloudApiBase:
     (import.meta.env.VITE_CLOUD_BASE as string) ?? "https://www.elizacloud.ai",
   vrmAssets: MILADY_VRM_ASSETS,
@@ -179,6 +197,7 @@ const miladyBootConfig: AppBootConfig = {
 };
 
 setBootConfig(miladyBootConfig);
+installElectrobunApiBaseSync();
 
 function dispatchShareTarget(payload: ShareTargetPayload): void {
   if (!window.__MILADY_SHARE_QUEUE__) {
@@ -468,6 +487,52 @@ function validateAndSetApiBase(apiBase: string): void {
       console.warn("[Milady] Rejected invalid relative apiBase:", apiBase);
     }
   }
+}
+
+function syncBootConfigFromInjectedApiState(payload?: {
+  base?: string;
+  token?: string;
+}): void {
+  const injectedApiBase = payload?.base?.trim() || readInjectedMiladyApiBase();
+  const injectedApiToken =
+    payload?.token?.trim() || readInjectedMiladyApiToken();
+
+  if (!injectedApiBase && !injectedApiToken) {
+    return;
+  }
+
+  setBootConfig({
+    ...getBootConfig(),
+    ...(injectedApiBase ? { apiBase: injectedApiBase } : {}),
+    ...(injectedApiToken ? { apiToken: injectedApiToken } : {}),
+  });
+
+  if (injectedApiBase) {
+    validateAndSetApiBase(injectedApiBase);
+  }
+}
+
+function installElectrobunApiBaseSync(): void {
+  if (
+    typeof window === "undefined" ||
+    !isElectrobunRuntime() ||
+    window.__MILADY_API_BASE_SYNC_INSTALLED__
+  ) {
+    return;
+  }
+
+  window.__MILADY_API_BASE_SYNC_INSTALLED__ = true;
+  syncBootConfigFromInjectedApiState();
+
+  subscribeDesktopBridgeEvent({
+    rpcMessage: "apiBaseUpdate",
+    ipcChannel: "desktop:apiBaseUpdate",
+    listener: (payload) => {
+      if (!payload || typeof payload !== "object") return;
+      const update = payload as { base?: string; token?: string };
+      syncBootConfigFromInjectedApiState(update);
+    },
+  });
 }
 
 function injectPopoutApiBase(): void {

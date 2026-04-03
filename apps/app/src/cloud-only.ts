@@ -1,8 +1,10 @@
 export function shouldUseCloudOnlyBranding(options: {
   isDev: boolean;
+  desktopRuntime?: boolean;
   injectedApiBase?: string | null;
 }): boolean {
   if (options.isDev) return false;
+  if (options.desktopRuntime) return false;
 
   // Desktop shells inject an explicit backend before React boots. When that
   // happens, the renderer should follow the host backend's capabilities rather

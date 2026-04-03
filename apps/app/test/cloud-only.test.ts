@@ -23,6 +23,16 @@ describe("shouldUseCloudOnlyBranding", () => {
     ).toBe(false);
   });
 
+  it("keeps packaged desktop runtime off the cloud-only path", () => {
+    expect(
+      shouldUseCloudOnlyBranding({
+        isDev: false,
+        desktopRuntime: true,
+        injectedApiBase: undefined,
+      }),
+    ).toBe(false);
+  });
+
   it("ignores blank injected api base values", () => {
     expect(
       shouldUseCloudOnlyBranding({
