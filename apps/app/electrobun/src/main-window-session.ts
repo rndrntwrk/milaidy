@@ -4,6 +4,7 @@ function trimToNull(value: string | undefined): string | null {
 }
 
 const PACKAGED_BOOTSTRAP_PARTITION = "persist:bootstrap-isolated";
+const WINDOWS_BOOTSTRAP_PARTITION = "bootstrap-isolated";
 
 function normalizePartition(partition: string): string {
   return partition.includes(":") ? partition : `persist:${partition}`;
@@ -18,11 +19,15 @@ export function resolveMainWindowPartition(
     return normalizePartition(explicitPartition);
   }
 
-  // Packaged Windows bootstrap already runs with redirected APPDATA and
-  // LOCALAPPDATA roots. Reusing the default session inside that isolated
-  // profile is more reliable than forcing an extra CEF partition, which has
-  // been observed to stall renderer bootstrap on hosted runners.
-  if (platform !== "win32" && trimToNull(env.MILADY_DESKTOP_TEST_API_BASE)) {
+  if (trimToNull(env.MILADY_DESKTOP_TEST_API_BASE)) {
+    if (platform === "win32") {
+      // Hosted Windows runners fail when CEF tries to materialize either the
+      // persistent default session or a persistent test partition on disk.
+      // Force a non-persistent partition for the bootstrap harness so the
+      // renderer can start without touching the redirected profile roots.
+      return WINDOWS_BOOTSTRAP_PARTITION;
+    }
+
     return PACKAGED_BOOTSTRAP_PARTITION;
   }
 
