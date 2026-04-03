@@ -6,6 +6,11 @@ description: Deploy Milady using Docker, Docker Compose, or cloud containers. Co
 
 Milady supports multiple deployment strategies: standalone Docker containers, Docker Compose orchestration, and cloud-managed containers for Eliza Cloud (AWS ECS).
 
+Before you set deployment variables, use the
+[Alice Config and Env Matrix](/operators/alice-config-and-env-matrix). The
+matrix is the canonical boundary between local runtime secrets, deploy secrets,
+and founder-only controls.
+
 ## Quick Start with Docker Compose
 
 The fastest way to deploy Milady is using the included setup script, which builds the image, generates authentication tokens, runs interactive onboarding, and starts the gateway.
@@ -199,6 +204,12 @@ When extra mounts or a home volume are specified, the setup script generates a `
 | 18790 | Bridge (inter-service communication) | Host-mapped | `MILADY_BRIDGE_PORT` |
 
 ## Environment Variables
+
+Deployment rule of thumb:
+
+- compose wiring such as paths, ports, and image tags can live in `deploy/.env`
+- public-backend auth tokens, wallet/export controls, and database URLs belong in process env or your secret manager
+- routine local operator keys do not need to be copied into every hosted deployment unless that deployment will actually use them
 
 ### Required
 

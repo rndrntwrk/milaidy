@@ -6,6 +6,19 @@ description: "Complete reference for all Milady environment variables."
 
 Milady reads environment variables at startup to configure paths, ports, API access, feature flags, and runtime behavior. Variables take precedence over config file values for path and server settings. This page documents every recognized environment variable.
 
+If you are deciding **where** a value should live, start with the
+[Alice Config and Env Matrix](/operators/alice-config-and-env-matrix). This
+page is exhaustive by variable name; the matrix is the operational source of
+truth for separating local runtime secrets, deploy secrets, and founder-only
+controls.
+
+## Use the matrix first
+
+- `milady.json` is for structure and repeatable defaults.
+- `~/.milady/.env` is for routine local runtime secrets.
+- process env or a deploy secret store is for exposed-backend and deployment tokens.
+- founder-only controls stay outside routine operator-managed config.
+
 ## Path and State
 
 These variables control where Milady stores its state, config, and credentials.
