@@ -42,7 +42,7 @@ COPY apps/web/package.json ./apps/web/package.json
 COPY deploy/cloud-agent-template/package.json ./deploy/cloud-agent-template/package.json
 
 ENV NODE_LLAMA_CPP_SKIP_DOWNLOAD=true
-RUN bun install --production --frozen-lockfile --ignore-scripts --no-progress
+RUN bun install --frozen-lockfile --ignore-scripts --no-progress
 
 FROM node:${NODE_VERSION}-slim AS tsx
 RUN npm install --prefix /opt/tsx --ignore-scripts --no-save tsx@4.21.0 \
@@ -99,12 +99,6 @@ RUN set -eux; \
     /runtime/node_modules/playwright-core \
     /runtime/node_modules/@playwright \
     /runtime/node_modules/@biomejs \
-    /runtime/node_modules/@elizaos/plugin-agent-orchestrator \
-    /runtime/node_modules/coding-agent-adapters \
-    /runtime/node_modules/pty-console \
-    /runtime/node_modules/pty-state-capture \
-    /runtime/node_modules/pty-manager \
-    /runtime/node_modules/git-workspace-service \
     /runtime/node_modules/vite \
     /runtime/node_modules/vite-node \
     /runtime/node_modules/tsup \
