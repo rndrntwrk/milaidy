@@ -1,7 +1,9 @@
 import {
   inferOnboardingConnectionFromConfig,
+  isElizaCloudLinkedInConfig,
+  resolveDeploymentTargetInConfig,
   type OnboardingConnection,
-} from "@miladyai/shared/contracts/onboarding";
+} from "@miladyai/shared/contracts";
 import type { BuildOnboardingConnectionArgs } from "../onboarding-config";
 import { asRecord } from "./config-readers";
 import type { OnboardingStep } from "./types";
@@ -17,18 +19,20 @@ export function hasPartialOnboardingConnectionConfig(
     return true;
   }
 
-  const cloud = asRecord(config?.cloud);
-  if (!cloud) {
-    return false;
+  const root =
+    config && typeof config === "object" && !Array.isArray(config)
+      ? (config as Record<string, unknown>)
+      : null;
+  if (
+    root &&
+    (Object.hasOwn(root, "deploymentTarget") ||
+      Object.hasOwn(root, "linkedAccounts") ||
+      Object.hasOwn(root, "serviceRouting"))
+  ) {
+    return true;
   }
 
-  return [
-    cloud.enabled,
-    cloud.provider,
-    cloud.inferenceMode,
-    cloud.remoteApiBase,
-    cloud.remoteAccessToken,
-  ].some(hasConfigValue);
+  return isElizaCloudLinkedInConfig(config);
 }
 
 export function inferOnboardingResumeStep(args: {
@@ -37,6 +41,10 @@ export function inferOnboardingResumeStep(args: {
 }): OnboardingStep {
   if (args.persistedStep) {
     return args.persistedStep;
+  }
+
+  if (hasPartialOnboardingConnectionConfig(args.config)) {
+    return "hosting";
   }
 
   return "identity";
@@ -60,7 +68,7 @@ export function deriveOnboardingResumeFields(
       return {
         onboardingRunMode: "cloud",
         onboardingCloudProvider: "elizacloud",
-        onboardingApiKey: connection.apiKey ?? "",
+        onboardingCloudApiKey: connection.apiKey ?? "",
         onboardingVoiceProvider: "",
         onboardingVoiceApiKey: "",
         onboardingSmallModel: connection.smallModel ?? "",
@@ -113,4 +121,30 @@ export function deriveOnboardingResumeFields(
         onboardingRemoteToken: connection.remoteAccessToken ?? "",
       };
   }
+}
+
+export function deriveOnboardingResumeFieldsFromConfig(
+  config: Record<string, unknown> | null | undefined,
+): Partial<BuildOnboardingConnectionArgs> {
+  const connection = deriveOnboardingResumeConnection(config);
+  if (!connection) {
+    const deploymentTarget = resolveDeploymentTargetInConfig(config);
+    if (deploymentTarget.runtime === "remote") {
+      return {
+        onboardingRunMode: "cloud",
+        onboardingCloudProvider: "remote",
+        onboardingRemoteConnected: Boolean(deploymentTarget.remoteApiBase),
+        onboardingRemoteApiBase: deploymentTarget.remoteApiBase ?? "",
+        onboardingRemoteToken: deploymentTarget.remoteAccessToken ?? "",
+      };
+    }
+    if (deploymentTarget.runtime === "cloud") {
+      return {
+        onboardingRunMode: "cloud",
+        onboardingCloudProvider: "elizacloud",
+      };
+    }
+    return {};
+  }
+  return deriveOnboardingResumeFields(connection);
 }

@@ -22,7 +22,9 @@ import {
 import { detectExistingOnboardingConnection } from "./onboarding-bootstrap";
 import {
   loadPersistedConnectionMode,
+  loadPersistedActiveServer,
   loadPersistedOnboardingComplete,
+  type PersistedConnectionMode,
 } from "./persistence";
 import {
   connectionModeToTarget,
@@ -31,11 +33,79 @@ import {
 import type { StartupCoordinatorDeps } from "./useStartupCoordinator";
 
 export interface RestoringSessionCtx {
+  persistedActiveServer: ReturnType<typeof loadPersistedActiveServer>;
   persistedConnection: ReturnType<typeof loadPersistedConnectionMode>;
-  // biome-ignore lint/suspicious/noExplicitAny: mixed connection types from legacy code
-  restoredConnection: any;
+  restoredConnection: PersistedConnectionMode;
   shouldPreserveCompletedOnboarding: boolean;
   hadPriorOnboarding: boolean;
+}
+
+const SESSION_STORAGE_API_BASE_KEY = "milady_api_base";
+
+function trimSessionValue(
+  value: string | null | undefined,
+): string | undefined {
+  const trimmed = value?.trim().replace(/\/+$/, "");
+  return trimmed ? trimmed : undefined;
+}
+
+export function deriveSessionConnectionMode(args: {
+  sessionApiBase?: string | null;
+  sessionApiToken?: string | null;
+}) {
+  const sessionApiBase = trimSessionValue(args.sessionApiBase);
+  if (!sessionApiBase) {
+    return null;
+  }
+
+  const sessionApiToken = trimSessionValue(args.sessionApiToken);
+  return {
+    runMode: "remote" as const,
+    remoteApiBase: sessionApiBase,
+    ...(sessionApiToken ? { remoteAccessToken: sessionApiToken } : {}),
+  };
+}
+
+function loadSessionConnectionModeOverride() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const sessionApiToken =
+    typeof client.getRestAuthToken === "function"
+      ? client.getRestAuthToken()
+      : null;
+
+  return deriveSessionConnectionMode({
+    sessionApiBase: window.sessionStorage.getItem(SESSION_STORAGE_API_BASE_KEY),
+    sessionApiToken,
+  });
+}
+
+export async function applyRestoredConnection(args: {
+  restoredConnection: PersistedConnectionMode;
+  clientRef: Pick<typeof client, "setBaseUrl" | "setToken">;
+  startLocalRuntime?: () => Promise<void>;
+}) {
+  const { restoredConnection, clientRef, startLocalRuntime } = args;
+
+  if (restoredConnection.runMode === "local") {
+    clientRef.setToken(null);
+    clientRef.setBaseUrl(null);
+    if (startLocalRuntime) {
+      await startLocalRuntime();
+    }
+    return;
+  }
+
+  if (restoredConnection.runMode === "cloud") {
+    clientRef.setBaseUrl(restoredConnection.cloudApiBase ?? null);
+    clientRef.setToken(restoredConnection.cloudAuthToken ?? null);
+    return;
+  }
+
+  clientRef.setBaseUrl(restoredConnection.remoteApiBase ?? null);
+  clientRef.setToken(restoredConnection.remoteAccessToken ?? null);
 }
 
 /**
@@ -62,7 +132,11 @@ export async function runRestoringSession(
 
   const forceLocal = deps.forceLocalBootstrapRef.current;
   deps.forceLocalBootstrapRef.current = false;
+  const persistedActiveServer = loadPersistedActiveServer();
   const persisted = loadPersistedConnectionMode();
+  const sessionConnection = !persistedActiveServer
+    ? loadSessionConnectionModeOverride()
+    : null;
   const hadPrior = loadPersistedOnboardingComplete();
   if (cancelled.current) return;
 
@@ -87,7 +161,7 @@ export async function runRestoringSession(
       : null;
   if (cancelled.current) return;
 
-  const restored = persisted ?? probed?.connection ?? null;
+  const restored = persisted ?? sessionConnection ?? probed?.connection ?? null;
   const preserveCompleted =
     hadPrior && !deps.onboardingCompletionCommittedRef.current;
 
@@ -145,23 +219,21 @@ export async function runRestoringSession(
     return;
   }
 
-  // Configure client for restored connection
-  if (restored.runMode === "cloud" && restored.cloudApiBase) {
-    client.setBaseUrl(restored.cloudApiBase);
-    if (restored.cloudAuthToken) client.setToken(restored.cloudAuthToken);
-  } else if (restored.runMode === "remote" && restored.remoteApiBase) {
-    client.setBaseUrl(restored.remoteApiBase);
-    if (restored.remoteAccessToken) client.setToken(restored.remoteAccessToken);
-  } else if (restored.runMode === "local") {
-    try {
-      await invokeDesktopBridgeRequest({
-        rpcMethod: "agentStart",
-        ipcChannel: "agent:start",
-      });
-    } catch {}
-  }
+  await applyRestoredConnection({
+    restoredConnection: restored,
+    clientRef: client,
+    startLocalRuntime: async () => {
+      try {
+        await invokeDesktopBridgeRequest({
+          rpcMethod: "agentStart",
+          ipcChannel: "agent:start",
+        });
+      } catch {}
+    },
+  });
 
   ctxRef.current = {
+    persistedActiveServer,
     persistedConnection: persisted,
     restoredConnection: restored,
     shouldPreserveCompletedOnboarding: preserveCompleted,

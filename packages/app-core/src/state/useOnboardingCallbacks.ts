@@ -12,7 +12,7 @@
 
 import { getDefaultStylePreset } from "@miladyai/shared/onboarding-presets";
 import { type RefObject, useCallback } from "react";
-import { MiladyClient } from "../api";
+import { MiladyClient, type VoiceConfig } from "../api";
 import { invokeDesktopBridgeRequest, scanProviderCredentials } from "../bridge";
 import { getBootConfig } from "../config/boot-config";
 import type { UiLanguage } from "../i18n";
@@ -24,14 +24,12 @@ import {
   resolveOnboardingNextStep,
   resolveOnboardingPreviousStep,
 } from "../onboarding/flow";
-import { buildOnboardingConnectionConfig } from "../onboarding-config";
+import { buildOnboardingRuntimeConfig } from "../onboarding-config";
 import {
   clearPersistedOnboardingStep,
-  deriveOnboardingResumeConnection,
   type OnboardingNextOptions,
   savePersistedConnectionMode,
 } from "./internal";
-import { deriveDetectedProviderPrefill } from "./onboarding-bootstrap";
 import type { OnboardingStateHook } from "./useOnboardingState";
 import type { AppState, OnboardingStep } from "./types";
 import { buildWalletRpcUpdateRequest } from "../wallet-rpc";
@@ -103,28 +101,57 @@ function resolveSelectedOnboardingStyle(args: {
   );
 }
 
-async function persistOnboardingStyleVoice(
-  style: StylePreset | undefined,
-  clientRef: MiladyClient,
-): Promise<void> {
+export function buildOnboardingStyleVoiceConfig(args: {
+  style: StylePreset | undefined;
+  voiceProvider: string;
+  voiceApiKey: string;
+  cloudTtsSelected: boolean;
+}): VoiceConfig | null {
+  const { style, voiceProvider, voiceApiKey, cloudTtsSelected } = args;
   const voicePresetId = style?.voicePresetId?.trim();
   if (!voicePresetId) {
-    return;
+    return null;
   }
   const presetVoice = PREMADE_VOICES.find(
     (voice) => voice.id === voicePresetId,
   );
   if (!presetVoice) {
+    return null;
+  }
+
+  const trimmedVoiceApiKey = voiceApiKey.trim();
+  const mode =
+    voiceProvider === "elevenlabs" && trimmedVoiceApiKey
+      ? "own-key"
+      : cloudTtsSelected
+        ? "cloud"
+        : undefined;
+
+  return {
+    provider: "elevenlabs",
+    ...(mode ? { mode } : {}),
+    elevenlabs: {
+      voiceId: presetVoice.voiceId,
+      ...(mode === "own-key" ? { apiKey: trimmedVoiceApiKey } : {}),
+    },
+  };
+}
+
+async function persistOnboardingStyleVoice(args: {
+  style: StylePreset | undefined;
+  voiceProvider: string;
+  voiceApiKey: string;
+  cloudTtsSelected: boolean;
+  clientRef: MiladyClient;
+}): Promise<void> {
+  const voiceConfig = buildOnboardingStyleVoiceConfig(args);
+  if (!voiceConfig) {
     return;
   }
-  await clientRef.updateConfig({
+
+  await args.clientRef.updateConfig({
     messages: {
-      tts: {
-        provider: "elevenlabs",
-        elevenlabs: {
-          voiceId: presetVoice.voiceId,
-        },
-      },
+      tts: voiceConfig,
     },
   });
 }
@@ -148,6 +175,7 @@ export interface OnboardingCallbacksDeps {
   ) => void;
   setOnboardingRunMode: (v: "local" | "cloud" | "") => void;
   setOnboardingCloudProvider: (v: string) => void;
+  setOnboardingCloudApiKey: (v: string) => void;
   setOnboardingProvider: (v: string) => void;
   setOnboardingApiKey: (v: string) => void;
   setOnboardingPrimaryModel: (v: string) => void;
@@ -191,6 +219,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     setOnboardingDetectedProviders,
     setOnboardingRunMode,
     setOnboardingCloudProvider,
+    setOnboardingCloudApiKey,
     setOnboardingProvider,
     setOnboardingApiKey,
     setOnboardingPrimaryModel: _setOnboardingPrimaryModel,
@@ -209,7 +238,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     uiLanguage,
     selectedVrmIndex,
     walletConfig,
-    elizaCloudConnected,
     setActionNotice,
     retryStartup,
     forceLocalBootstrapRef,
@@ -226,6 +254,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       style: onboardingStyle,
       runMode: onboardingRunMode,
       cloudProvider: onboardingCloudProvider,
+      cloudApiKey: onboardingCloudApiKey,
       provider: onboardingProvider,
       apiKey: onboardingApiKey,
       voiceProvider: onboardingVoiceProvider,
@@ -249,39 +278,42 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
 
   // ── completeOnboarding ────────────────────────────────────────────
 
-  const completeOnboarding = useCallback(() => {
-    clearPersistedOnboardingStep();
-    onboardingResumeConnectionRef.current = null;
-    onboardingCompletionCommittedRef.current = true;
-    _setOnboardingMode("basic");
-    setOnboardingActiveGuide(null);
-    setPostOnboardingChecklistDismissed(false);
-    setOnboardingDetectedProviders(
-      onboardingDetectedProviders.map((provider) => {
-        const { apiKey: _, ...rest } = provider;
-        return rest;
-      }) as AppState["onboardingDetectedProviders"],
-    );
-    setOnboardingComplete(true);
-    coordinatorOnboardingCompleteRef.current?.();
-    initialTabSetRef.current = true;
-    setTab(defaultLandingTab);
-    void loadCharacter();
-  }, [
-    onboardingCompletionCommittedRef,
-    onboardingDetectedProviders,
-    onboardingResumeConnectionRef,
-    setOnboardingActiveGuide,
-    setOnboardingComplete,
-    setOnboardingDetectedProviders,
-    _setOnboardingMode,
-    setPostOnboardingChecklistDismissed,
-    setTab,
-    defaultLandingTab,
-    loadCharacter,
-    coordinatorOnboardingCompleteRef,
-    initialTabSetRef,
-  ]);
+  const completeOnboarding = useCallback(
+    (landingTab: Tab = defaultLandingTab) => {
+      clearPersistedOnboardingStep();
+      onboardingResumeConnectionRef.current = null;
+      onboardingCompletionCommittedRef.current = true;
+      _setOnboardingMode("basic");
+      setOnboardingActiveGuide(null);
+      setPostOnboardingChecklistDismissed(false);
+      setOnboardingDetectedProviders(
+        onboardingDetectedProviders.map((provider) => {
+          const { apiKey: _, ...rest } = provider;
+          return rest;
+        }) as AppState["onboardingDetectedProviders"],
+      );
+      setOnboardingComplete(true);
+      coordinatorOnboardingCompleteRef.current?.();
+      initialTabSetRef.current = true;
+      setTab(landingTab);
+      void loadCharacter();
+    },
+    [
+      onboardingCompletionCommittedRef,
+      onboardingDetectedProviders,
+      onboardingResumeConnectionRef,
+      setOnboardingActiveGuide,
+      setOnboardingComplete,
+      setOnboardingDetectedProviders,
+      _setOnboardingMode,
+      setPostOnboardingChecklistDismissed,
+      setTab,
+      defaultLandingTab,
+      loadCharacter,
+      coordinatorOnboardingCompleteRef,
+      initialTabSetRef,
+    ],
+  );
 
   // ── runOnboardingChatHandoff ──────────────────────────────────────
 
@@ -289,60 +321,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     if (!onboardingOptions) return;
 
     try {
-      // Cloud fast-track: submit minimal config for elizacloud-hosted agent.
-      const useCloudFastTrack =
-        elizaCloudConnected &&
-        !(
-          onboardingRunMode === "local" &&
-          onboardingProvider &&
-          onboardingProvider !== "elizacloud"
-        );
-
-      if (useCloudFastTrack) {
-        const style = resolveSelectedOnboardingStyle({
-          styles: onboardingOptions.styles,
-          onboardingStyle,
-          selectedVrmIndex,
-          uiLanguage,
-        });
-        const defaultName =
-          style.name ?? getDefaultStylePreset(uiLanguage).name;
-
-        await client.submitOnboarding({
-          name: onboardingName || defaultName,
-          bio: style?.bio ?? ["An autonomous AI agent."],
-          systemPrompt:
-            style?.system?.replace(
-              /\{\{name\}\}/g,
-              onboardingName || defaultName,
-            ) ??
-            `You are ${onboardingName || defaultName}, an autonomous AI agent powered by elizaOS.`,
-          style: style?.style,
-          adjectives: style?.adjectives,
-          postExamples: style?.postExamples,
-          messageExamples: style?.messageExamples,
-          topics: style?.topics,
-          avatarIndex: style?.avatarIndex ?? 1,
-          language: uiLanguage,
-          presetId: style?.id ?? "chen",
-          runMode: "cloud",
-          cloudProvider: "elizacloud",
-          smallModel: "moonshotai/kimi-k2-turbo",
-          largeModel: "moonshotai/kimi-k2-0905",
-        } as unknown as Parameters<typeof client.submitOnboarding>[0]);
-        try {
-          await persistOnboardingStyleVoice(style, client);
-        } catch (err) {
-          console.warn(
-            "[onboarding] Failed to persist cloud voice preset",
-            err,
-          );
-        }
-
-        completeOnboarding();
-        return;
-      }
-
       const style = resolveSelectedOnboardingStyle({
         styles: onboardingOptions.styles,
         onboardingStyle,
@@ -354,40 +332,22 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
         ? style.system.replace(/\{\{name\}\}/g, onboardingName)
         : `You are ${onboardingName}, an autonomous AI agent powered by elizaOS. ${onboardingOptions.sharedStyleRules}`;
 
-      let connection =
-        buildOnboardingConnectionConfig({
-          onboardingRunMode,
-          onboardingCloudProvider,
-          onboardingProvider,
-          onboardingApiKey,
-          onboardingVoiceProvider,
-          onboardingVoiceApiKey,
-          onboardingPrimaryModel,
-          onboardingOpenRouterModel,
-          onboardingRemoteConnected: onboardingRemote.status === "connected",
-          onboardingRemoteApiBase,
-          onboardingRemoteToken,
-          onboardingSmallModel,
-          onboardingLargeModel,
-        }) ?? onboardingResumeConnectionRef.current;
-
-      if (!connection) {
-        try {
-          const freshConfig = await client.getConfig();
-          connection = deriveOnboardingResumeConnection(freshConfig);
-          if (connection) {
-            onboardingResumeConnectionRef.current = connection;
-          }
-        } catch {
-          /* config fetch failed — fall through to the error below */
-        }
-      }
-
-      if (!connection) {
-        throw new Error(
-          "Your connection settings could not be restored after restart.",
-        );
-      }
+      const runtimeConfig = buildOnboardingRuntimeConfig({
+        onboardingRunMode,
+        onboardingCloudProvider,
+        onboardingCloudApiKey,
+        onboardingProvider,
+        onboardingApiKey,
+        onboardingVoiceProvider,
+        onboardingVoiceApiKey,
+        onboardingPrimaryModel,
+        onboardingOpenRouterModel,
+        onboardingRemoteConnected: onboardingRemote.status === "connected",
+        onboardingRemoteApiBase,
+        onboardingRemoteToken,
+        onboardingSmallModel,
+        onboardingLargeModel,
+      });
 
       const rpcSel = onboardingRpcSelections as Record<string, string>;
       const rpcK = onboardingRpcKeys as Record<string, string>;
@@ -489,16 +449,43 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
         avatarIndex: style?.avatarIndex ?? selectedVrmIndex,
         language: uiLanguage,
         presetId: (style?.id ?? onboardingStyle) || "chen",
-        connection,
+        ...(runtimeConfig.connection
+          ? { connection: runtimeConfig.connection }
+          : {}),
+        deploymentTarget: runtimeConfig.deploymentTarget,
+        ...(runtimeConfig.linkedAccounts
+          ? { linkedAccounts: runtimeConfig.linkedAccounts }
+          : {}),
+        ...(runtimeConfig.serviceRouting
+          ? { serviceRouting: runtimeConfig.serviceRouting }
+          : {}),
         walletConfig: nextWalletConfig,
       } as Parameters<typeof client.submitOnboarding>[0]);
       try {
-        await persistOnboardingStyleVoice(style, client);
+        await persistOnboardingStyleVoice({
+          style,
+          voiceProvider: onboardingVoiceProvider,
+          voiceApiKey: onboardingVoiceApiKey,
+          cloudTtsSelected:
+            runtimeConfig.serviceRouting?.tts?.transport === "cloud-proxy" &&
+            runtimeConfig.serviceRouting?.tts?.backend === "elizacloud",
+          clientRef: client,
+        });
       } catch (err) {
         console.warn(
           "[onboarding] Failed to persist selected voice preset",
           err,
         );
+      }
+
+      if (runtimeConfig.needsProviderSetup) {
+        setActionNotice(
+          "Choose a chat provider in Settings to start chatting.",
+          "info",
+          6000,
+        );
+        completeOnboarding("settings");
+        return;
       }
 
       completeOnboarding();
@@ -511,6 +498,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     onboardingName,
     onboardingRunMode,
     onboardingCloudProvider,
+    onboardingCloudApiKey,
     onboardingSmallModel,
     onboardingLargeModel,
     onboardingProvider,
@@ -527,10 +515,9 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     onboardingRpcSelections,
     onboardingRpcKeys,
     walletConfig,
-    onboardingResumeConnectionRef,
-    elizaCloudConnected,
     completeOnboarding,
     client,
+    setActionNotice,
   ]);
 
   // ── handleOnboardingFinish ────────────────────────────────────────
@@ -563,6 +550,9 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     if (patch.onboardingCloudProvider !== undefined) {
       setOnboardingCloudProvider(patch.onboardingCloudProvider);
     }
+    if (patch.onboardingCloudApiKey !== undefined) {
+      setOnboardingCloudApiKey(patch.onboardingCloudApiKey);
+    }
     if (patch.onboardingProvider !== undefined) {
       setOnboardingProvider(patch.onboardingProvider);
     }
@@ -580,6 +570,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     }
   }, [
     setOnboardingApiKey,
+    setOnboardingCloudApiKey,
     setOnboardingCloudProvider,
     _setOnboardingPrimaryModel,
     setOnboardingProvider,
@@ -592,35 +583,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
 
   const advanceOnboarding = useCallback(
     async (options?: OnboardingNextOptions) => {
-      if (
-        onboardingStep === "providers" &&
-        onboardingRunMode === "local" &&
-        !onboardingProvider
-      ) {
-        const detectedProvider = onboardingDetectedProviders[0];
-        const fallbackProvider =
-          detectedProvider?.id ??
-          onboardingOptions?.providers?.find(
-            (provider) => provider.id !== "elizacloud",
-          )?.id ??
-          "";
-        if (fallbackProvider) {
-          setOnboardingProvider(fallbackProvider);
-          // Only auto-fill API key if it's a real (unmasked) value.
-          // Keys from the credential scanner are masked ("****xxxx") for
-          // IPC security — the server re-scans natively when persisting.
-          // OAuth providers don't need the key field at all.
-          if (
-            detectedProvider?.id === fallbackProvider &&
-            detectedProvider.apiKey &&
-            !detectedProvider.apiKey.startsWith("****") &&
-            detectedProvider.authMode !== "oauth"
-          ) {
-            setOnboardingApiKey(detectedProvider.apiKey);
-          }
-        }
-      }
-
       if (onboardingStep === "launch") {
         await handleOnboardingFinish();
         return;
@@ -662,14 +624,10 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       handleOnboardingFinish,
       onboardingDetectedProviders,
       onboardingMode,
-      onboardingOptions?.providers,
-      onboardingProvider,
       onboardingRunMode,
       onboardingStep,
       setOnboardingStep,
       setOnboardingActiveGuide,
-      setOnboardingApiKey,
-      setOnboardingProvider,
       onboardingCloudProvider,
     ],
   );
@@ -845,17 +803,8 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       setOnboardingDetectedProviders(
         detected as typeof detected & AppState["onboardingDetectedProviders"],
       );
-      const prefill = deriveDetectedProviderPrefill(detected);
-      if (!prefill) {
-        return;
-      }
-
-      // Keep users on provider choice first: detection should inform and
-      // annotate options, not auto-route into a specific provider detail view.
-      // We only nudge run mode so the provider grid is available.
-      setOnboardingRunMode(prefill.runMode);
     },
-    [setOnboardingDetectedProviders, setOnboardingRunMode],
+    [setOnboardingDetectedProviders],
   );
 
   return {

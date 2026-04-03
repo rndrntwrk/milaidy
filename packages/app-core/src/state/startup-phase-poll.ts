@@ -13,15 +13,16 @@ import {
   asApiLikeError,
   clearPersistedOnboardingStep,
   deriveOnboardingResumeConnection,
-  deriveOnboardingResumeFields,
+  deriveOnboardingResumeFieldsFromConfig,
   formatStartupErrorDetail,
   inferOnboardingResumeStep,
   type StartupErrorState,
 } from "./internal";
 import {
   loadPersistedOnboardingStep,
-  savePersistedConnectionMode,
+  savePersistedActiveServer,
 } from "./persistence";
+import { connectionModeToActiveServer } from "./internal";
 import { getStylePresets } from "@miladyai/shared/onboarding-presets";
 import type { StartupEvent, PlatformPolicy } from "./startup-coordinator";
 import type { StartupCoordinatorDeps } from "./useStartupCoordinator";
@@ -135,10 +136,13 @@ export async function runPollingBackend(
       }
       if (
         sessionComplete &&
-        !ctx?.persistedConnection &&
+        !ctx?.persistedActiveServer &&
         ctx?.restoredConnection
-      )
-        savePersistedConnectionMode(ctx.restoredConnection);
+      ) {
+        savePersistedActiveServer(
+          connectionModeToActiveServer(ctx.restoredConnection),
+        );
+      }
       if (!complete && ctx?.shouldPreserveCompletedOnboarding)
         console.warn(
           "[milady][startup:init] Preserving completed onboarding despite incomplete backend onboarding status.",
@@ -168,7 +172,7 @@ export async function runPollingBackend(
               return;
             }
             const rc = deriveOnboardingResumeConnection(config);
-            const rf = deriveOnboardingResumeFields(rc);
+            const rf = deriveOnboardingResumeFieldsFromConfig(config);
             deps.onboardingResumeConnectionRef.current = rc;
             deps.setOnboardingOptions({
               ...options,
@@ -189,6 +193,8 @@ export async function runPollingBackend(
               );
             if (rf.onboardingCloudProvider !== undefined)
               deps.setOnboardingCloudProvider(rf.onboardingCloudProvider);
+            if (rf.onboardingCloudApiKey !== undefined)
+              deps.setOnboardingCloudApiKey(rf.onboardingCloudApiKey);
             if (rf.onboardingProvider !== undefined)
               deps.setOnboardingProvider(rf.onboardingProvider);
             if (rf.onboardingVoiceProvider !== undefined)

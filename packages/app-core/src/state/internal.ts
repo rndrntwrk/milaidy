@@ -10,6 +10,7 @@ export {
 export {
   deriveOnboardingResumeConnection,
   deriveOnboardingResumeFields,
+  deriveOnboardingResumeFieldsFromConfig,
   hasPartialOnboardingConnectionConfig,
   inferOnboardingResumeStep,
 } from "./onboarding-resume";
@@ -32,10 +33,13 @@ export {
   shouldApplyFinalStreamText,
 } from "./parsers";
 export {
+  activeServerToConnectionMode,
   applyUiTheme,
   clearAvatarIndex,
+  clearPersistedActiveServer,
   clearPersistedConnectionMode,
   clearPersistedOnboardingStep,
+  connectionModeToActiveServer,
   loadActiveConversationId,
   loadAvatarIndex,
   loadChatAvatarVisible,
@@ -46,6 +50,7 @@ export {
   loadCompanionMessageCutoffTs,
   loadCompanionVrmPowerMode,
   loadLastNativeTab,
+  loadPersistedActiveServer,
   loadPersistedConnectionMode,
   loadPersistedOnboardingComplete,
   loadPersistedOnboardingStep,
@@ -56,6 +61,7 @@ export {
   normalizeCompanionVrmPowerMode,
   normalizeUiShellMode,
   normalizeUiTheme,
+  type PersistedActiveServer,
   type PersistedConnectionMode,
   saveActiveConversationId,
   saveAvatarIndex,
@@ -68,6 +74,7 @@ export {
   saveCompanionVrmPowerMode,
   saveLastNativeTab,
   saveOnboardingStep,
+  savePersistedActiveServer,
   savePersistedConnectionMode,
   savePersistedOnboardingComplete,
   saveUiLanguage,
