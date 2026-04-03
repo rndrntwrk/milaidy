@@ -9,6 +9,8 @@
  * Non-loading phases (error, pairing, onboarding) delegate to their views.
  */
 
+import { useEffect, useRef } from "react";
+import { client } from "../../api";
 import { useApp } from "../../state";
 import type { StartupErrorState } from "../../state/types";
 import { OnboardingWizard } from "../onboarding/OnboardingWizard";
@@ -45,8 +47,49 @@ function phaseToStatusKey(phase: string): string {
 }
 
 export function StartupShell() {
-  const { startupCoordinator, startupError, retryStartup, t } = useApp();
+  const { startupCoordinator, startupError, retryStartup, setState, t } =
+    useApp();
   const phase = startupCoordinator.phase;
+  const cloudSkipProbeStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (phase !== "onboarding-required") {
+      cloudSkipProbeStartedRef.current = false;
+      return;
+    }
+
+    const coordState = startupCoordinator.state;
+    if (
+      coordState.phase !== "onboarding-required" ||
+      coordState.serverReachable ||
+      cloudSkipProbeStartedRef.current
+    ) {
+      return;
+    }
+
+    // Hidden startup path: a first-visit cloud container can land directly in
+    // onboarding-required before the normal backend-poll phase ever runs.
+    // Re-check the server here and fast-forward cloud-provisioned containers.
+    cloudSkipProbeStartedRef.current = true;
+    let cancelled = false;
+
+    void client
+      .getOnboardingStatus()
+      .then((status) => {
+        if (cancelled || !status.cloudProvisioned) {
+          return;
+        }
+        setState("onboardingComplete", true);
+        startupCoordinator.dispatch({ type: "ONBOARDING_COMPLETE" });
+      })
+      .catch(() => {
+        cloudSkipProbeStartedRef.current = false;
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, setState, startupCoordinator]);
 
   // Error — delegate
   if (phase === "error") {
