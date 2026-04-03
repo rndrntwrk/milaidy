@@ -32,10 +32,7 @@ import {
   type deriveOnboardingResumeConnection,
   type StartupErrorState,
 } from "./internal";
-import {
-  loadPersistedConnectionMode,
-  loadPersistedOnboardingComplete,
-} from "./persistence";
+import { loadPersistedOnboardingComplete } from "./persistence";
 import { resolveApiUrl } from "../utils";
 import { COMPANION_ENABLED, type Tab } from "../navigation";
 import {

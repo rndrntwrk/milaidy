@@ -22,7 +22,6 @@ import {
   loadPersistedOnboardingStep,
   savePersistedActiveServer,
 } from "./persistence";
-import { connectionModeToActiveServer } from "./internal";
 import { getStylePresets } from "@miladyai/shared/onboarding-presets";
 import type { StartupEvent, PlatformPolicy } from "./startup-coordinator";
 import type { StartupCoordinatorDeps } from "./useStartupCoordinator";
@@ -124,7 +123,7 @@ export async function runPollingBackend(
 
       if (
         sessionComplete &&
-        !ctx?.persistedConnection &&
+        !ctx?.persistedActiveServer &&
         !ctx?.hadPriorOnboarding
       ) {
         sessionComplete = false;
@@ -137,11 +136,9 @@ export async function runPollingBackend(
       if (
         sessionComplete &&
         !ctx?.persistedActiveServer &&
-        ctx?.restoredConnection
+        ctx?.restoredActiveServer
       ) {
-        savePersistedActiveServer(
-          connectionModeToActiveServer(ctx.restoredConnection),
-        );
+        savePersistedActiveServer(ctx.restoredActiveServer);
       }
       if (!complete && ctx?.shouldPreserveCompletedOnboarding)
         console.warn(

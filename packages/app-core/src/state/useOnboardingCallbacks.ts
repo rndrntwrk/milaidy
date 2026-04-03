@@ -25,13 +25,13 @@ import {
   resolveOnboardingPreviousStep,
 } from "../onboarding/flow";
 import { buildOnboardingRuntimeConfig } from "../onboarding-config";
+import { resolveOnboardingServerTarget } from "../onboarding/server-target";
 import {
   clearPersistedConnectionMode,
   clearPersistedOnboardingStep,
-  connectionModeToActiveServer,
+  createPersistedActiveServer,
   type OnboardingNextOptions,
   savePersistedActiveServer,
-  savePersistedConnectionMode,
 } from "./internal";
 import type { OnboardingStateHook } from "./useOnboardingState";
 import type { AppState, OnboardingStep } from "./types";
@@ -364,10 +364,13 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
         },
       });
 
-      const isSandboxMode =
-        onboardingRunMode === "cloud" &&
-        onboardingCloudProvider === "elizacloud";
-      const isLocalMode = onboardingRunMode === "local" || !onboardingRunMode;
+      const serverTarget = resolveOnboardingServerTarget({
+        runMode: onboardingRunMode,
+        cloudProvider: onboardingCloudProvider,
+      });
+      const isSandboxMode = serverTarget === "elizacloud";
+      const isLocalMode = serverTarget === "local" || !serverTarget;
+      const isRemoteMode = serverTarget === "remote";
 
       if (isSandboxMode) {
         const cloudApiBase =
@@ -393,11 +396,13 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
 
         client.setBaseUrl(cloudApiBase);
         client.setToken(authToken);
-        savePersistedConnectionMode({
-          runMode: "cloud",
-          cloudApiBase,
-          cloudAuthToken: authToken,
-        });
+        savePersistedActiveServer(
+          createPersistedActiveServer({
+            kind: "cloud",
+            apiBase: cloudApiBase,
+            accessToken: authToken,
+          }),
+        );
       } else if (isLocalMode) {
         try {
           await invokeDesktopBridgeRequest({
@@ -426,16 +431,17 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
           }
         }
 
-        savePersistedConnectionMode({ runMode: "local" });
-      } else if (
-        onboardingRunMode === "cloud" &&
-        onboardingCloudProvider === "remote"
-      ) {
-        savePersistedConnectionMode({
-          runMode: "remote",
-          remoteApiBase: onboardingRemoteApiBase,
-          remoteAccessToken: onboardingRemoteToken || undefined,
-        });
+        savePersistedActiveServer(
+          createPersistedActiveServer({ kind: "local" }),
+        );
+      } else if (isRemoteMode) {
+        savePersistedActiveServer(
+          createPersistedActiveServer({
+            kind: "remote",
+            apiBase: onboardingRemoteApiBase,
+            accessToken: onboardingRemoteToken || undefined,
+          }),
+        );
       }
 
       const sandboxMode = isSandboxMode ? "standard" : "off";
@@ -603,8 +609,10 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       // Skip voice provider selection if they set up Eliza Cloud
       if (
         nextStep === "voice" &&
-        onboardingRunMode === "cloud" &&
-        onboardingCloudProvider === "elizacloud"
+        resolveOnboardingServerTarget({
+          runMode: onboardingRunMode,
+          cloudProvider: onboardingCloudProvider,
+        }) === "elizacloud"
       ) {
         nextStep = resolveOnboardingNextStep(nextStep);
       }
@@ -648,8 +656,10 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     // Skip voice provider selection if they set up Eliza Cloud
     if (
       previousStep === "voice" &&
-      onboardingRunMode === "cloud" &&
-      onboardingCloudProvider === "elizacloud"
+      resolveOnboardingServerTarget({
+        runMode: onboardingRunMode,
+        cloudProvider: onboardingCloudProvider,
+      }) === "elizacloud"
     ) {
       previousStep = resolveOnboardingPreviousStep(previousStep);
     }
@@ -760,10 +770,10 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       }
       await probe.getOnboardingStatus();
       savePersistedActiveServer(
-        connectionModeToActiveServer({
-          runMode: "remote",
-          remoteApiBase: normalizedBase,
-          ...(accessKey ? { remoteAccessToken: accessKey } : {}),
+        createPersistedActiveServer({
+          kind: "remote",
+          apiBase: normalizedBase,
+          ...(accessKey ? { accessToken: accessKey } : {}),
         }),
       );
       setOnboardingRunMode("cloud");
@@ -798,7 +808,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     setOnboardingRemoteToken,
     setOnboardingRunMode,
     savePersistedActiveServer,
-    connectionModeToActiveServer,
   ]);
 
   // ── handleCloudOnboardingFinish ──────────────────────────────────
