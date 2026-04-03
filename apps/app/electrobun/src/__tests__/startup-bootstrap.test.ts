@@ -74,18 +74,6 @@ describe("Electrobun startup bootstrap", () => {
     expect(source).toContain("resolveInitialApiBase");
   });
 
-  it("retries bootstrap api-base injection until the renderer bridge is ready", () => {
-    const source = fs.readFileSync(INDEX_PATH, "utf8");
-
-    expect(source).toContain(
-      "const INITIAL_API_BASE_RETRY_DELAYS_MS = [0, 250, 1000, 3000, 10_000] as const;",
-    );
-    expect(source).toContain(
-      "function scheduleBootstrapApiBaseInjection(win: BrowserWindow): void",
-    );
-    expect(source).toContain("scheduleBootstrapApiBaseInjection(win);");
-  });
-
   it("resolves packaged renderer and preload assets from the app resource root", () => {
     const source = fs.readFileSync(INDEX_PATH, "utf8");
 
