@@ -13,10 +13,7 @@ describe("wallet plugin auto-enable", () => {
 
   beforeEach(async () => {
     const mod = await import("../plugin-auto-enable");
-    // The map is not exported directly — read it from the module internals.
-    // If the module structure changes, this test will break and tell us.
-    AUTH_PROVIDER_PLUGINS = (mod as Record<string, unknown>)
-      .AUTH_PROVIDER_PLUGINS as Record<string, string>;
+    AUTH_PROVIDER_PLUGINS = mod.AUTH_PROVIDER_PLUGINS;
   });
 
   it("maps EVM_PRIVATE_KEY to plugin-evm", () => {
