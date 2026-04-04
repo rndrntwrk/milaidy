@@ -2,15 +2,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 import {
+  coverageSummaryReporters,
+  coverageThresholds,
+} from "./scripts/coverage-policy.mjs";
+import {
   getAppCoreSourceRoot,
   getAutonomousSourceRoot,
   getElizaCoreEntry,
   resolveModuleEntry,
 } from "./test/eliza-package-paths";
-import {
-  coverageSummaryReporters,
-  coverageThresholds,
-} from "./scripts/coverage-policy.mjs";
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 const elizaCoreEntry = getElizaCoreEntry(repoRoot);
@@ -165,12 +165,58 @@ export default defineConfig({
           ]),
       // @miladyai/shared — always resolve subpath imports from source
       {
+        find: /^@miladyai\/plugin-selfcontrol\/(.*)/,
+        replacement: path.join(
+          repoRoot,
+          "packages",
+          "plugin-selfcontrol",
+          "src",
+          "$1",
+        ),
+      },
+      {
+        find: "@miladyai/plugin-selfcontrol",
+        replacement: path.join(
+          repoRoot,
+          "packages",
+          "plugin-selfcontrol",
+          "src",
+          "index.ts",
+        ),
+      },
+      {
+        find: /^@miladyai\/plugin-roles\/(.*)/,
+        replacement: path.join(
+          repoRoot,
+          "packages",
+          "plugin-roles",
+          "src",
+          "$1",
+        ),
+      },
+      {
+        find: "@miladyai/plugin-roles",
+        replacement: path.join(
+          repoRoot,
+          "packages",
+          "plugin-roles",
+          "src",
+          "index.ts",
+        ),
+      },
+      {
         find: /^@miladyai\/shared\/(.*)/,
         replacement: path.join(repoRoot, "packages", "shared", "src", "$1"),
       },
       {
         find: "@miladyai/shared",
-        replacement: path.join(repoRoot, "packages", "shared", "src", "index.ts"),
+        replacement: path.join(
+          repoRoot,
+          "packages",
+          "shared",
+          "src",
+          "index.ts",
+        ),
       },
     ],
   },
@@ -196,6 +242,7 @@ export default defineConfig({
       "packages/app-core/src/**/*.test.tsx",
       "packages/app-core/test/**/*.test.ts",
       "packages/app-core/test/**/*.test.tsx",
+      "packages/plugin-selfcontrol/src/**/*.test.ts",
       "packages/plugin-wechat/src/**/*.test.ts",
       "src/**/*.test.ts",
       "scripts/**/*.test.ts",

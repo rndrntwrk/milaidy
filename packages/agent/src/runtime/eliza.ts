@@ -28,12 +28,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // Extracted modules — re-exported for backward compatibility
 // ---------------------------------------------------------------------------
 import { runFirstTimeSetup } from "./first-time-setup";
-import {
-  CHANNEL_PLUGIN_MAP,
-  collectPluginNames,
-  OPTIONAL_PLUGIN_MAP,
-  PROVIDER_PLUGIN_MAP,
-} from "./plugin-collector";
 import { resolvePlugins } from "./plugin-resolver";
 
 export {
@@ -88,10 +82,12 @@ import * as pluginTodo from "@elizaos/plugin-todo";
 import * as pluginTrajectoryLogger from "@elizaos/plugin-trajectory-logger";
 import * as pluginTrust from "@elizaos/plugin-trust";
 import * as pluginRoles from "@miladyai/plugin-roles";
+import * as pluginSelfControl from "@miladyai/plugin-selfcontrol";
 import {
   isMiladySettingsDebugEnabled,
   settingsDebugCloudSummary,
 } from "@miladyai/shared";
+import { resolveElizaCloudTopology } from "@miladyai/shared/contracts";
 import {
   getOnboardingProviderOption,
   migrateLegacyRuntimeConfig,
@@ -99,7 +95,6 @@ import {
   resolveDeploymentTargetInConfig,
   resolveServiceRoutingInConfig,
 } from "@miladyai/shared/contracts/onboarding";
-import { resolveElizaCloudTopology } from "@miladyai/shared/contracts";
 import {
   debugLogResolvedContext,
   validateRuntimeContext,
@@ -108,12 +103,10 @@ import {
   configFileExists,
   type ElizaConfig,
   loadElizaConfig,
-  saveElizaConfig,
 } from "../config/config";
 import { collectConfigEnvVars } from "../config/env-vars";
 import { resolveStateDir, resolveUserPath } from "../config/paths";
 import { resolveServerOnlyPort } from "../config/runtime-env";
-import type { AgentConfig } from "../config/types.agents";
 import type { PluginInstallRecord } from "../config/types.eliza";
 import {
   createHookEvent,
@@ -238,6 +231,7 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-ollama": pluginOllama,
   "@elizaos/plugin-elizacloud": pluginElizacloud,
   "@elizaos/plugin-trust": pluginTrust,
+  "@miladyai/plugin-selfcontrol": pluginSelfControl,
   "@miladyai/plugin-roles": pluginRoles,
   "@elizaos/plugin-todo": pluginTodo,
   "@elizaos/plugin-personality": pluginPersonality,
@@ -666,7 +660,7 @@ export function normalizeOpenAiCompatibleProviderConfig(
 }
 
 /** Redact username segments from filesystem paths to avoid leaking user info in logs. */
-function redactUserSegments(filepath: string): string {
+function _redactUserSegments(filepath: string): string {
   // Replace /Users/<name>/ or /home/<name>/ with /Users/<redacted>/ etc.
   return filepath.replace(/\/(Users|home)\/[^/]+\//g, "/$1/<redacted>/");
 }
@@ -1454,7 +1448,10 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
   setCloudUsageEnv("ELIZAOS_CLOUD_USE_INFERENCE", topology.services.inference);
   setCloudUsageEnv("ELIZAOS_CLOUD_USE_TTS", topology.services.tts);
   setCloudUsageEnv("ELIZAOS_CLOUD_USE_MEDIA", topology.services.media);
-  setCloudUsageEnv("ELIZAOS_CLOUD_USE_EMBEDDINGS", topology.services.embeddings);
+  setCloudUsageEnv(
+    "ELIZAOS_CLOUD_USE_EMBEDDINGS",
+    topology.services.embeddings,
+  );
   setCloudUsageEnv("ELIZAOS_CLOUD_USE_RPC", topology.services.rpc);
 
   if (effectivelyEnabled) {
