@@ -391,15 +391,20 @@ export interface LifeOpsAuditEvent {
 }
 
 export interface LifeOpsActiveReminderView {
-  occurrenceId: string;
-  definitionId: string;
+  ownerType: "occurrence" | "calendar_event";
+  ownerId: string;
+  occurrenceId: string | null;
+  definitionId: string | null;
+  eventId: string | null;
   title: string;
   channel: LifeOpsReminderChannel;
   stepIndex: number;
   stepLabel: string;
   scheduledFor: string;
   dueAt: string | null;
-  state: LifeOpsOccurrenceState;
+  state: LifeOpsOccurrenceState | "upcoming";
+  htmlLink?: string | null;
+  eventStartAt?: string | null;
 }
 
 export interface LifeOpsOverviewSummary {

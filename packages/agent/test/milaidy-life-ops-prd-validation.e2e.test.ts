@@ -1420,6 +1420,109 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
         continue;
       }
 
+      if (scenario.id === "P1-06") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          await withGoogleOAuthApiServer(
+            {
+              MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID: "desktop-client-id",
+            },
+            async ({ port, fetchMock }) => {
+              fetchMock.mockResolvedValueOnce(
+                new Response(
+                  JSON.stringify({
+                    access_token: "calendar-reminder-token",
+                    refresh_token: "calendar-reminder-refresh",
+                    expires_in: 3600,
+                    scope: [
+                      "openid",
+                      "email",
+                      "profile",
+                      "https://www.googleapis.com/auth/calendar.readonly",
+                    ].join(" "),
+                    token_type: "Bearer",
+                    id_token: buildIdToken({
+                      sub: "google-user-5",
+                      email: "calendar-reminder@example.com",
+                      name: "Calendar Reminder Example",
+                      email_verified: true,
+                    }),
+                  }),
+                  {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                  },
+                ),
+              );
+
+              const startRes = await req(
+                port,
+                "POST",
+                "/api/lifeops/connectors/google/start",
+                { capabilities: ["google.calendar.read"] },
+              );
+              const authUrl = new URL(String(startRes.data.authUrl));
+              await req(
+                port,
+                "GET",
+                `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(authUrl.searchParams.get("state") ?? "")}&code=reminder-code`,
+              );
+
+              const now = new Date();
+              const eventStart = new Date(now.getTime() + 20 * 60_000);
+              const eventEnd = new Date(now.getTime() + 80 * 60_000);
+
+              fetchMock.mockResolvedValueOnce(
+                new Response(
+                  JSON.stringify({
+                    items: [
+                      {
+                        id: "event-reminder",
+                        status: "confirmed",
+                        summary: "Preparation sync",
+                        htmlLink:
+                          "https://calendar.google.com/event?eid=prep-sync",
+                        start: {
+                          dateTime: eventStart.toISOString(),
+                          timeZone: "UTC",
+                        },
+                        end: {
+                          dateTime: eventEnd.toISOString(),
+                          timeZone: "UTC",
+                        },
+                      },
+                    ],
+                  }),
+                  {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                  },
+                ),
+              );
+
+              const feedRes = await req(
+                port,
+                "GET",
+                "/api/lifeops/calendar/feed?timeZone=UTC",
+              );
+              expect(feedRes.status).toBe(200);
+
+              const overviewRes = await req(port, "GET", "/api/lifeops/overview");
+              expect(overviewRes.status).toBe(200);
+              expect(overviewRes.data.reminders).toEqual(
+                expect.arrayContaining([
+                  expect.objectContaining({
+                    ownerType: "calendar_event",
+                    title: "Preparation sync",
+                    dueAt: eventStart.toISOString(),
+                  }),
+                ]),
+              );
+            },
+          );
+        });
+        continue;
+      }
+
       it.todo(`[${scenario.id}] ${scenario.title}`);
     }
   });

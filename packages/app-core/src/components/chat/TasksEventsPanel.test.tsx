@@ -123,8 +123,11 @@ describe("TasksEventsPanel", () => {
         ],
         reminders: [
           {
+            ownerType: "occurrence",
+            ownerId: "occ-visible",
             occurrenceId: "occ-visible",
             definitionId: "def-1",
+            eventId: null,
             title: "Current slot check-in",
             channel: "in_app",
             stepIndex: 0,
@@ -132,6 +135,8 @@ describe("TasksEventsPanel", () => {
             scheduledFor: new Date(Date.now() - 60_000).toISOString(),
             dueAt: new Date(Date.now() + 15 * 60_000).toISOString(),
             state: "visible",
+            htmlLink: null,
+            eventStartAt: null,
           },
         ],
         summary: {

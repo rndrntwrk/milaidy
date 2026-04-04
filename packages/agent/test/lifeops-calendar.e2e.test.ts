@@ -403,6 +403,59 @@ describe("life-ops calendar sync", () => {
     );
   });
 
+  it("emits calendar reminders through the life-ops overview after sync", async () => {
+    await connectGoogleCalendar();
+
+    const now = new Date();
+    const startAt = new Date(now.getTime() + 20 * 60_000);
+    const endAt = new Date(now.getTime() + 80 * 60_000);
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "event-reminder",
+              status: "confirmed",
+              summary: "Preparation sync",
+              htmlLink: "https://calendar.google.com/event?eid=prep-sync",
+              start: {
+                dateTime: startAt.toISOString(),
+                timeZone: "UTC",
+              },
+              end: {
+                dateTime: endAt.toISOString(),
+                timeZone: "UTC",
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+
+    const feedRes = await req(port, "GET", "/api/lifeops/calendar/feed?timeZone=UTC");
+    expect(feedRes.status).toBe(200);
+
+    const overviewRes = await req(port, "GET", "/api/lifeops/overview");
+    expect(overviewRes.status).toBe(200);
+    expect(overviewRes.data.reminders).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ownerType: "calendar_event",
+          title: "Preparation sync",
+          eventStartAt: startAt.toISOString(),
+          dueAt: startAt.toISOString(),
+          htmlLink: "https://calendar.google.com/event?eid=prep-sync",
+        }),
+      ]),
+    );
+    expect(overviewRes.data.summary.activeReminderCount).toBeGreaterThanOrEqual(1);
+  });
+
   it("clears cached calendar data on disconnect", async () => {
     await connectGoogleCalendar();
 

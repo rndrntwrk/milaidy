@@ -797,7 +797,7 @@ function LifeOpsSection({
       ) : null}
       {reminders.map((reminder) => (
         <ReminderRow
-          key={`${reminder.occurrenceId}:${reminder.stepIndex}`}
+          key={`${reminder.ownerType}:${reminder.ownerId}:${reminder.stepIndex}`}
           reminder={reminder}
         />
       ))}
@@ -1090,6 +1090,8 @@ export function TasksEventsPanel({
       if (!active) return;
       await loadNextCalendarContext(connectorStatus, true);
       if (!active) return;
+      await loadLifeOps(true);
+      if (!active) return;
     })();
 
     const intervalId = window.setInterval(() => {
@@ -1101,6 +1103,8 @@ export function TasksEventsPanel({
         await loadCalendarFeed(connectorStatus, true);
         if (!active) return;
         await loadNextCalendarContext(connectorStatus, true);
+        if (!active) return;
+        await loadLifeOps(true);
       })();
     }, LIFEOPS_REFRESH_INTERVAL_MS);
 
@@ -1145,6 +1149,7 @@ export function TasksEventsPanel({
         if (status?.connected) {
           await loadCalendarFeed(status, true);
           await loadNextCalendarContext(status, true);
+          await loadLifeOps(true);
           setActionNotice(
             "Google connected for calendar access.",
             "success",
@@ -1154,7 +1159,7 @@ export function TasksEventsPanel({
         }
       }
     },
-    [loadCalendarFeed, loadGoogleConnector, setActionNotice],
+    [loadCalendarFeed, loadGoogleConnector, loadLifeOps, loadNextCalendarContext, setActionNotice],
   );
 
   const handleOpenPendingGoogle = useCallback(async () => {

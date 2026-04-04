@@ -86,6 +86,13 @@ const OVERVIEW_HORIZON_MINUTES = 18 * 60;
 const DAY_MINUTES = 24 * 60;
 const GOOGLE_CALENDAR_CACHE_TTL_MS = 5 * 60 * 1000;
 const GOOGLE_PRIMARY_CALENDAR_ID = "primary";
+const DEFAULT_CALENDAR_REMINDER_STEPS: LifeOpsReminderStep[] = [
+  {
+    channel: "in_app",
+    offsetMinutes: 30,
+    label: "30m before event",
+  },
+];
 
 type LifeOpsDefinitionRecord = {
   definition: LifeOpsTaskDefinition;
@@ -970,8 +977,11 @@ function buildActiveReminders(
         continue;
       }
       reminders.push({
+        ownerType: "occurrence",
+        ownerId: occurrence.id,
         occurrenceId: occurrence.id,
         definitionId: occurrence.definitionId,
+        eventId: null,
         title: occurrence.title,
         channel: step.channel,
         stepIndex,
@@ -979,6 +989,55 @@ function buildActiveReminders(
         scheduledFor: scheduledFor.toISOString(),
         dueAt: occurrence.dueAt,
         state: occurrence.state,
+        htmlLink: null,
+        eventStartAt: null,
+      });
+    }
+  }
+  reminders.sort(
+    (left, right) =>
+      new Date(left.scheduledFor).getTime() - new Date(right.scheduledFor).getTime(),
+  );
+  return reminders.slice(0, MAX_OVERVIEW_REMINDERS);
+}
+
+function buildActiveCalendarEventReminders(
+  events: LifeOpsCalendarEvent[],
+  plansByEventId: Map<string, LifeOpsReminderPlan>,
+  now: Date,
+): LifeOpsActiveReminderView[] {
+  const reminders: LifeOpsActiveReminderView[] = [];
+  for (const event of events) {
+    const plan = plansByEventId.get(event.id);
+    if (!plan) continue;
+    if (event.status === "cancelled") {
+      continue;
+    }
+    const startAt = new Date(event.startAt);
+    const endAt = new Date(event.endAt);
+    if (endAt.getTime() <= now.getTime()) {
+      continue;
+    }
+    for (const [stepIndex, step] of plan.steps.entries()) {
+      const scheduledFor = addMinutes(startAt, -step.offsetMinutes);
+      if (scheduledFor.getTime() > now.getTime()) {
+        continue;
+      }
+      reminders.push({
+        ownerType: "calendar_event",
+        ownerId: event.id,
+        occurrenceId: null,
+        definitionId: null,
+        eventId: event.id,
+        title: event.title,
+        channel: step.channel,
+        stepIndex,
+        stepLabel: step.label,
+        scheduledFor: scheduledFor.toISOString(),
+        dueAt: event.startAt,
+        state: "upcoming",
+        htmlLink: event.htmlLink,
+        eventStartAt: event.startAt,
       });
     }
   }
@@ -1088,6 +1147,64 @@ export class LifeOpsService {
     );
   }
 
+  private async syncCalendarReminderPlans(
+    events: LifeOpsCalendarEvent[],
+  ): Promise<void> {
+    const eventIds = events.map((event) => event.id);
+    const existingPlans = await this.repository.listReminderPlansForOwners(
+      this.agentId(),
+      "calendar_event",
+      eventIds,
+    );
+    const plansByOwnerId = new Map(
+      existingPlans.map((plan) => [plan.ownerId, plan]),
+    );
+
+    for (const event of events) {
+      const existing = plansByOwnerId.get(event.id);
+      if (existing) {
+        const sameSteps =
+          JSON.stringify(existing.steps) ===
+          JSON.stringify(DEFAULT_CALENDAR_REMINDER_STEPS);
+        if (sameSteps) {
+          continue;
+        }
+        await this.repository.updateReminderPlan({
+          ...existing,
+          steps: DEFAULT_CALENDAR_REMINDER_STEPS.map((step) => ({ ...step })),
+          updatedAt: new Date().toISOString(),
+        });
+        continue;
+      }
+      await this.repository.createReminderPlan(
+        createLifeOpsReminderPlan({
+          agentId: this.agentId(),
+          ownerType: "calendar_event",
+          ownerId: event.id,
+          steps: DEFAULT_CALENDAR_REMINDER_STEPS.map((step) => ({ ...step })),
+          mutePolicy: {},
+          quietHours: {},
+        }),
+      );
+    }
+  }
+
+  private async deleteCalendarReminderPlansForEvents(
+    eventIds: string[],
+  ): Promise<void> {
+    if (eventIds.length === 0) {
+      return;
+    }
+    const plans = await this.repository.listReminderPlansForOwners(
+      this.agentId(),
+      "calendar_event",
+      eventIds,
+    );
+    for (const plan of plans) {
+      await this.repository.deleteReminderPlan(this.agentId(), plan.id);
+    }
+  }
+
   private async syncGoogleCalendarFeed(args: {
     requestUrl: URL;
     requestedMode?: LifeOpsConnectorMode;
@@ -1105,6 +1222,12 @@ export class LifeOpsService {
     }
     const token = await ensureFreshGoogleAccessToken(grant.tokenRef);
     const syncedAt = new Date().toISOString();
+    const existingEvents = await this.repository.listCalendarEvents(
+      this.agentId(),
+      "google",
+      args.timeMin,
+      args.timeMax,
+    );
     const events = await fetchGoogleCalendarEvents({
       accessToken: token.accessToken,
       calendarId: args.calendarId,
@@ -1112,6 +1235,23 @@ export class LifeOpsService {
       timeMax: args.timeMax,
       timeZone: args.timeZone,
     });
+    const nextEvents = events.map((event) => ({
+      id: createCalendarEventId(
+        this.agentId(),
+        "google",
+        event.calendarId,
+        event.externalId,
+      ),
+      agentId: this.agentId(),
+      provider: "google" as const,
+      ...event,
+      syncedAt,
+      updatedAt: syncedAt,
+    }));
+    const nextEventIds = new Set(nextEvents.map((event) => event.id));
+    const removedEventIds = existingEvents
+      .map((event) => event.id)
+      .filter((eventId) => !nextEventIds.has(eventId));
 
     await this.repository.pruneCalendarEventsInWindow(
       this.agentId(),
@@ -1121,22 +1261,12 @@ export class LifeOpsService {
       args.timeMax,
       events.map((event) => event.externalId),
     );
+    await this.deleteCalendarReminderPlansForEvents(removedEventIds);
 
-    for (const event of events) {
-      await this.repository.upsertCalendarEvent({
-        id: createCalendarEventId(
-          this.agentId(),
-          "google",
-          event.calendarId,
-          event.externalId,
-        ),
-        agentId: this.agentId(),
-        provider: "google",
-        ...event,
-        syncedAt,
-        updatedAt: syncedAt,
-      });
+    for (const event of nextEvents) {
+      await this.repository.upsertCalendarEvent(event);
     }
+    await this.syncCalendarReminderPlans(nextEvents);
 
     await this.repository.upsertCalendarSyncState(
       createLifeOpsCalendarSyncState({
@@ -1632,10 +1762,33 @@ export class LifeOpsService {
     const plansByDefinitionId = new Map(
       reminderPlans.map((plan) => [plan.ownerId, plan]),
     );
+    const calendarEvents = await this.repository.listCalendarEvents(
+      this.agentId(),
+      "google",
+      now.toISOString(),
+      addMinutes(now, OVERVIEW_HORIZON_MINUTES).toISOString(),
+    );
+    const calendarReminderPlans = await this.repository.listReminderPlansForOwners(
+      this.agentId(),
+      "calendar_event",
+      calendarEvents.map((event) => event.id),
+    );
+    const plansByEventId = new Map(
+      calendarReminderPlans.map((plan) => [plan.ownerId, plan]),
+    );
     const goals = (await this.repository.listGoals(this.agentId())).filter(
       (goal) => goal.status === "active",
     );
-    const reminders = buildActiveReminders(overviewOccurrences, plansByDefinitionId, now);
+    const reminders = [
+      ...buildActiveReminders(overviewOccurrences, plansByDefinitionId, now),
+      ...buildActiveCalendarEventReminders(calendarEvents, plansByEventId, now),
+    ]
+      .sort(
+        (left, right) =>
+          new Date(left.scheduledFor).getTime() -
+          new Date(right.scheduledFor).getTime(),
+      )
+      .slice(0, MAX_OVERVIEW_REMINDERS);
     return {
       occurrences: selectedOccurrences,
       goals,
@@ -1763,6 +1916,7 @@ export class LifeOpsService {
       updatedAt: syncedAt,
     };
     await this.repository.upsertCalendarEvent(event);
+    await this.syncCalendarReminderPlans([event]);
     await this.recordCalendarEventAudit(
       event.id,
       "calendar event created",
@@ -2140,6 +2294,13 @@ export class LifeOpsService {
     if (grant.tokenRef) {
       deleteStoredGoogleToken(grant.tokenRef);
     }
+    const calendarEvents = await this.repository.listCalendarEvents(
+      this.agentId(),
+      "google",
+    );
+    await this.deleteCalendarReminderPlansForEvents(
+      calendarEvents.map((event) => event.id),
+    );
     await this.repository.deleteCalendarEventsForProvider(this.agentId(), "google");
     await this.repository.deleteCalendarSyncState(this.agentId(), "google");
     await this.repository.deleteConnectorGrant(
