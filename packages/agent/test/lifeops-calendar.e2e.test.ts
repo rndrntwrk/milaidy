@@ -15,6 +15,7 @@ import {
   vi,
 } from "vitest";
 import { startApiServer } from "../src/api/server";
+import { resolveOAuthDir } from "../src/config/paths";
 import { LifeOpsRepository } from "../src/lifeops/repository";
 import { req } from "../../../test/helpers/http";
 import { saveEnv } from "../../../test/helpers/test-utils";
@@ -63,8 +64,10 @@ function createRuntimeForCalendarTests(): AgentRuntime {
               ...task,
               ...update,
               metadata: {
-                ...((task.metadata as Record<string, unknown> | undefined) ?? {}),
-                ...((update.metadata as Record<string, unknown> | undefined) ?? {}),
+                ...((task.metadata as Record<string, unknown> | undefined) ??
+                  {}),
+                ...((update.metadata as Record<string, unknown> | undefined) ??
+                  {}),
               } as Task["metadata"],
             }
           : task,
@@ -166,8 +169,14 @@ describe("life-ops calendar sync", () => {
     });
     const repository = new LifeOpsRepository(runtime);
     await repository.deleteConnectorGrant("lifeops-calendar-agent", "google");
-    await repository.deleteCalendarEventsForProvider("lifeops-calendar-agent", "google");
-    await repository.deleteCalendarSyncState("lifeops-calendar-agent", "google");
+    await repository.deleteCalendarEventsForProvider(
+      "lifeops-calendar-agent",
+      "google",
+    );
+    await repository.deleteCalendarSyncState(
+      "lifeops-calendar-agent",
+      "google",
+    );
   });
 
   async function connectGoogleCalendar(
@@ -201,9 +210,14 @@ describe("life-ops calendar sync", () => {
       ),
     );
 
-    const startRes = await req(port, "POST", "/api/lifeops/connectors/google/start", {
-      capabilities,
-    });
+    const startRes = await req(
+      port,
+      "POST",
+      "/api/lifeops/connectors/google/start",
+      {
+        capabilities,
+      },
+    );
     expect(startRes.status).toBe(200);
 
     const authUrl = new URL(String(startRes.data.authUrl));
@@ -215,18 +229,44 @@ describe("life-ops calendar sync", () => {
     expect(callbackRes.status).toBe(200);
   }
 
+  async function expireStoredGoogleToken(): Promise<void> {
+    const repository = new LifeOpsRepository(runtime);
+    const grant = await repository.getConnectorGrant(
+      "lifeops-calendar-agent",
+      "google",
+      "local",
+    );
+    expect(grant?.tokenRef).toBeTruthy();
+    const tokenPath = path.join(
+      resolveOAuthDir(process.env, stateDir),
+      "lifeops",
+      "google",
+      String(grant?.tokenRef),
+    );
+    const stored = JSON.parse(await fs.readFile(tokenPath, "utf-8")) as Record<
+      string,
+      unknown
+    >;
+    stored.expiresAt = Date.now() - 60_000;
+    await fs.writeFile(tokenPath, JSON.stringify(stored, null, 2), "utf-8");
+  }
+
   it("syncs today's calendar feed, orders events, and reuses the cache until forced", async () => {
     await connectGoogleCalendar();
 
     fetchMock.mockImplementation(async (input, init) => {
       const url = typeof input === "string" ? input : input.toString();
-      expect(url).toContain("https://www.googleapis.com/calendar/v3/calendars/primary/events?");
+      expect(url).toContain(
+        "https://www.googleapis.com/calendar/v3/calendars/primary/events?",
+      );
       expect(init?.headers).toMatchObject({
         Authorization: "Bearer calendar-access-token",
       });
 
       const requestUrl = new URL(url);
-      expect(requestUrl.searchParams.get("timeZone")).toBe("America/Los_Angeles");
+      expect(requestUrl.searchParams.get("timeZone")).toBe(
+        "America/Los_Angeles",
+      );
       return new Response(
         JSON.stringify({
           items: [
@@ -286,10 +326,9 @@ describe("life-ops calendar sync", () => {
     expect(feedRes.data.source).toBe("synced");
     expect(feedRes.data.calendarId).toBe("primary");
     expect(feedRes.data.events).toHaveLength(2);
-    expect(feedRes.data.events.map((event: { title: string }) => event.title)).toEqual([
-      "Morning standup",
-      "Design review",
-    ]);
+    expect(
+      feedRes.data.events.map((event: { title: string }) => event.title),
+    ).toEqual(["Morning standup", "Design review"]);
     expect(feedRes.data.events[1].htmlLink).toBe(
       "https://calendar.google.com/event?eid=design",
     );
@@ -437,7 +476,11 @@ describe("life-ops calendar sync", () => {
       ),
     );
 
-    const feedRes = await req(port, "GET", "/api/lifeops/calendar/feed?timeZone=UTC");
+    const feedRes = await req(
+      port,
+      "GET",
+      "/api/lifeops/calendar/feed?timeZone=UTC",
+    );
     expect(feedRes.status).toBe(200);
 
     const overviewRes = await req(port, "GET", "/api/lifeops/overview");
@@ -453,7 +496,94 @@ describe("life-ops calendar sync", () => {
         }),
       ]),
     );
-    expect(overviewRes.data.summary.activeReminderCount).toBeGreaterThanOrEqual(1);
+    expect(overviewRes.data.summary.activeReminderCount).toBeGreaterThanOrEqual(
+      1,
+    );
+  });
+
+  it("marks the Google connector for reauth when refresh token exchange fails", async () => {
+    await connectGoogleCalendar();
+    await expireStoredGoogleToken();
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: "invalid_grant",
+          error_description: "Token has been expired or revoked.",
+        }),
+        {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+
+    const feedRes = await req(
+      port,
+      "GET",
+      "/api/lifeops/calendar/feed?timeZone=UTC",
+    );
+    expect(feedRes.status).toBe(401);
+    expect(String(feedRes.data.error)).toContain(
+      "Google connector needs re-authentication",
+    );
+    expect(String(feedRes.data.error)).toContain("expired or revoked");
+
+    const statusRes = await req(
+      port,
+      "GET",
+      "/api/lifeops/connectors/google/status",
+    );
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.data.connected).toBe(false);
+    expect(statusRes.data.reason).toBe("needs_reauth");
+    expect(statusRes.data.grant).toMatchObject({
+      metadata: expect.objectContaining({
+        authState: "needs_reauth",
+      }),
+    });
+    expect(String(statusRes.data.grant.metadata.lastAuthError)).toContain(
+      "expired or revoked",
+    );
+  });
+
+  it("surfaces Google Workspace admin policy blocks without downgrading the grant", async () => {
+    await connectGoogleCalendar();
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            message:
+              "Access blocked by your organization's admin policy for this calendar.",
+          },
+        }),
+        {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+
+    const feedRes = await req(
+      port,
+      "GET",
+      "/api/lifeops/calendar/feed?timeZone=UTC",
+    );
+    expect(feedRes.status).toBe(403);
+    expect(String(feedRes.data.error)).toContain(
+      "Google Workspace policy blocked the request",
+    );
+    expect(String(feedRes.data.error)).toContain("admin policy");
+
+    const statusRes = await req(
+      port,
+      "GET",
+      "/api/lifeops/connectors/google/status",
+    );
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.data.connected).toBe(true);
+    expect(statusRes.data.reason).toBe("connected");
   });
 
   it("clears cached calendar data on disconnect", async () => {
@@ -523,17 +653,12 @@ describe("life-ops calendar sync", () => {
   it("rejects event creation when the connector only has calendar read access", async () => {
     await connectGoogleCalendar();
 
-    const createRes = await req(
-      port,
-      "POST",
-      "/api/lifeops/calendar/events",
-      {
-        title: "Coffee",
-        startAt: "2026-04-05T21:00:00.000Z",
-        endAt: "2026-04-05T22:00:00.000Z",
-        timeZone: "America/Los_Angeles",
-      },
-    );
+    const createRes = await req(port, "POST", "/api/lifeops/calendar/events", {
+      title: "Coffee",
+      startAt: "2026-04-05T21:00:00.000Z",
+      endAt: "2026-04-05T22:00:00.000Z",
+      timeZone: "America/Los_Angeles",
+    });
     expect(createRes.status).toBe(403);
     expect(String(createRes.data.error)).toContain(
       "Google Calendar write access has not been granted",
@@ -553,7 +678,9 @@ describe("life-ops calendar sync", () => {
 
     fetchMock.mockImplementation(async (input, init) => {
       const url = typeof input === "string" ? input : input.toString();
-      expect(url).toBe("https://www.googleapis.com/calendar/v3/calendars/primary/events");
+      expect(url).toBe(
+        "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+      );
       expect(init?.method).toBe("POST");
       expect(init?.headers).toMatchObject({
         Authorization: "Bearer calendar-access-token",
@@ -595,19 +722,14 @@ describe("life-ops calendar sync", () => {
       );
     });
 
-    const createRes = await req(
-      port,
-      "POST",
-      "/api/lifeops/calendar/events",
-      {
-        title: "Coffee with Mira",
-        description: "Talk through next week.",
-        location: "Cafe",
-        startAt: "2026-04-05T21:00:00.000Z",
-        endAt: "2026-04-05T22:30:00.000Z",
-        timeZone: "America/Los_Angeles",
-      },
-    );
+    const createRes = await req(port, "POST", "/api/lifeops/calendar/events", {
+      title: "Coffee with Mira",
+      description: "Talk through next week.",
+      location: "Cafe",
+      startAt: "2026-04-05T21:00:00.000Z",
+      endAt: "2026-04-05T22:30:00.000Z",
+      timeZone: "America/Los_Angeles",
+    });
     expect(createRes.status).toBe(201);
     expect(createRes.data.event).toMatchObject({
       title: "Coffee with Mira",

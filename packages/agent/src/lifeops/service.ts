@@ -155,6 +155,7 @@ const GOOGLE_PRIMARY_CALENDAR_ID = "primary";
 const GOOGLE_GMAIL_MAILBOX = "me";
 const DEFAULT_GMAIL_TRIAGE_MAX_RESULTS = 12;
 const DEFAULT_REMINDER_PROCESS_LIMIT = 24;
+const reminderProcessingQueues = new Map<string, Promise<void>>();
 const DEFAULT_CALENDAR_REMINDER_STEPS: LifeOpsReminderStep[] = [
   {
     channel: "in_app",
@@ -1739,9 +1740,7 @@ function buildActiveCalendarEventReminders(
   return reminders.slice(0, MAX_OVERVIEW_REMINDERS);
 }
 
-function parseQuietHoursPolicy(
-  value: LifeOpsReminderPlan["quietHours"],
-): {
+function parseQuietHoursPolicy(value: LifeOpsReminderPlan["quietHours"]): {
   timezone: string;
   startMinute: number;
   endMinute: number;
@@ -1890,6 +1889,29 @@ export class LifeOpsService {
 
   private agentId(): string {
     return requireAgentId(this.runtime);
+  }
+
+  private async withReminderProcessingLock<T>(
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const agentId = this.agentId();
+    const queueTail =
+      reminderProcessingQueues.get(agentId) ?? Promise.resolve();
+    let releaseCurrent = () => {};
+    const currentTurn = new Promise<void>((resolve) => {
+      releaseCurrent = resolve;
+    });
+    const nextQueueTail = queueTail.then(() => currentTurn);
+    reminderProcessingQueues.set(agentId, nextQueueTail);
+    await queueTail;
+    try {
+      return await operation();
+    } finally {
+      releaseCurrent();
+      if (reminderProcessingQueues.get(agentId) === nextQueueTail) {
+        reminderProcessingQueues.delete(agentId);
+      }
+    }
   }
 
   private async recordAudit(
@@ -3426,183 +3448,185 @@ export class LifeOpsService {
   async processReminders(
     request: { now?: string; limit?: number } = {},
   ): Promise<LifeOpsReminderProcessingResult> {
-    const now =
-      request.now === undefined
-        ? new Date()
-        : new Date(normalizeIsoString(request.now, "now"));
-    const limit =
-      request.limit === undefined
-        ? DEFAULT_REMINDER_PROCESS_LIMIT
-        : normalizePositiveInteger(request.limit, "limit");
+    return this.withReminderProcessingLock(async () => {
+      const now =
+        request.now === undefined
+          ? new Date()
+          : new Date(normalizeIsoString(request.now, "now"));
+      const limit =
+        request.limit === undefined
+          ? DEFAULT_REMINDER_PROCESS_LIMIT
+          : normalizePositiveInteger(request.limit, "limit");
 
-    const definitions = await this.repository.listActiveDefinitions(
-      this.agentId(),
-    );
-    for (const definition of definitions) {
-      await this.refreshDefinitionOccurrences(definition, now);
-    }
-
-    const horizon = addMinutes(now, OVERVIEW_HORIZON_MINUTES).toISOString();
-    const occurrenceViews =
-      await this.repository.listOccurrenceViewsForOverview(
+      const definitions = await this.repository.listActiveDefinitions(
         this.agentId(),
-        horizon,
       );
-    const occurrencePlans = await this.repository.listReminderPlansForOwners(
-      this.agentId(),
-      "definition",
-      occurrenceViews.map((occurrence) => occurrence.definitionId),
-    );
-    const plansByDefinitionId = new Map(
-      occurrencePlans.map((plan) => [plan.ownerId, plan]),
-    );
-    const eventWindowEnd = addMinutes(
-      now,
-      OVERVIEW_HORIZON_MINUTES,
-    ).toISOString();
-    const calendarEvents = await this.repository.listCalendarEvents(
-      this.agentId(),
-      "google",
-      now.toISOString(),
-      eventWindowEnd,
-    );
-    const eventPlans = await this.repository.listReminderPlansForOwners(
-      this.agentId(),
-      "calendar_event",
-      calendarEvents.map((event) => event.id),
-    );
-    const plansByEventId = new Map(
-      eventPlans.map((plan) => [plan.ownerId, plan]),
-    );
-    const existingAttempts = await this.repository.listReminderAttempts(
-      this.agentId(),
-    );
-    const attemptKey = (
-      planId: string,
-      stepIndex: number,
-      scheduledFor: string,
-    ) => `${planId}:${stepIndex}:${scheduledFor}`;
-    const deliveredAttempts = new Set(
-      existingAttempts
-        .filter((attempt) => attempt.outcome === "delivered")
-        .map((attempt) =>
-          attemptKey(attempt.planId, attempt.stepIndex, attempt.scheduledFor),
-        ),
-    );
-    const blockedAckAttempts = new Set(
-      existingAttempts
-        .filter((attempt) => attempt.outcome === "blocked_acknowledged")
-        .map((attempt) =>
-          attemptKey(attempt.planId, attempt.stepIndex, attempt.scheduledFor),
-        ),
-    );
+      for (const definition of definitions) {
+        await this.refreshDefinitionOccurrences(definition, now);
+      }
 
-    const dueAttempts: LifeOpsReminderAttempt[] = [];
-    for (const reminder of buildActiveReminders(
-      occurrenceViews,
-      plansByDefinitionId,
-      now,
-    )) {
-      if (dueAttempts.length >= limit) break;
-      const plan = reminder.definitionId
-        ? plansByDefinitionId.get(reminder.definitionId)
-        : null;
-      if (!plan) continue;
-      const occurrence = occurrenceViews.find(
-        (candidate) => candidate.id === reminder.ownerId,
+      const horizon = addMinutes(now, OVERVIEW_HORIZON_MINUTES).toISOString();
+      const occurrenceViews =
+        await this.repository.listOccurrenceViewsForOverview(
+          this.agentId(),
+          horizon,
+        );
+      const occurrencePlans = await this.repository.listReminderPlansForOwners(
+        this.agentId(),
+        "definition",
+        occurrenceViews.map((occurrence) => occurrence.definitionId),
       );
-      if (!occurrence) continue;
-      const key = attemptKey(
-        plan.id,
-        reminder.stepIndex,
-        reminder.scheduledFor,
+      const plansByDefinitionId = new Map(
+        occurrencePlans.map((plan) => [plan.ownerId, plan]),
       );
-      const acknowledged = Boolean(
-        occurrence.metadata.reminderAcknowledgedAt ||
-          occurrence.state === "completed",
+      const eventWindowEnd = addMinutes(
+        now,
+        OVERVIEW_HORIZON_MINUTES,
+      ).toISOString();
+      const calendarEvents = await this.repository.listCalendarEvents(
+        this.agentId(),
+        "google",
+        now.toISOString(),
+        eventWindowEnd,
       );
-      if (
-        deliveredAttempts.has(key) ||
-        (acknowledged && blockedAckAttempts.has(key))
-      ) {
-        continue;
-      }
-      const attempt = await this.dispatchReminderAttempt({
-        plan,
-        ownerType: "occurrence",
-        ownerId: reminder.ownerId,
-        occurrenceId: reminder.occurrenceId,
-        title: reminder.title,
-        channel: reminder.channel,
-        stepIndex: reminder.stepIndex,
-        scheduledFor: reminder.scheduledFor,
-        urgency:
-          typeof occurrence.metadata.urgency === "string"
-            ? normalizeReminderUrgency(occurrence.metadata.urgency)
-            : priorityToUrgency(occurrence.priority),
-        quietHours: plan.quietHours,
-        acknowledged,
-        attemptedAt: now.toISOString(),
-      });
-      dueAttempts.push(attempt);
-      if (attempt.outcome === "delivered") {
-        deliveredAttempts.add(key);
-      }
-    }
+      const eventPlans = await this.repository.listReminderPlansForOwners(
+        this.agentId(),
+        "calendar_event",
+        calendarEvents.map((event) => event.id),
+      );
+      const plansByEventId = new Map(
+        eventPlans.map((plan) => [plan.ownerId, plan]),
+      );
+      const existingAttempts = await this.repository.listReminderAttempts(
+        this.agentId(),
+      );
+      const attemptKey = (
+        planId: string,
+        stepIndex: number,
+        scheduledFor: string,
+      ) => `${planId}:${stepIndex}:${scheduledFor}`;
+      const deliveredAttempts = new Set(
+        existingAttempts
+          .filter((attempt) => attempt.outcome === "delivered")
+          .map((attempt) =>
+            attemptKey(attempt.planId, attempt.stepIndex, attempt.scheduledFor),
+          ),
+      );
+      const blockedAckAttempts = new Set(
+        existingAttempts
+          .filter((attempt) => attempt.outcome === "blocked_acknowledged")
+          .map((attempt) =>
+            attemptKey(attempt.planId, attempt.stepIndex, attempt.scheduledFor),
+          ),
+      );
 
-    for (const reminder of buildActiveCalendarEventReminders(
-      calendarEvents,
-      plansByEventId,
-      now,
-    )) {
-      if (dueAttempts.length >= limit) break;
-      const plan = reminder.eventId
-        ? plansByEventId.get(reminder.eventId)
-        : null;
-      if (!plan) continue;
-      const event = calendarEvents.find(
-        (candidate) => candidate.id === reminder.ownerId,
-      );
-      if (!event) continue;
-      const key = attemptKey(
-        plan.id,
-        reminder.stepIndex,
-        reminder.scheduledFor,
-      );
-      const acknowledged = Boolean(event.metadata.reminderAcknowledgedAt);
-      if (
-        deliveredAttempts.has(key) ||
-        (acknowledged && blockedAckAttempts.has(key))
-      ) {
-        continue;
+      const dueAttempts: LifeOpsReminderAttempt[] = [];
+      for (const reminder of buildActiveReminders(
+        occurrenceViews,
+        plansByDefinitionId,
+        now,
+      )) {
+        if (dueAttempts.length >= limit) break;
+        const plan = reminder.definitionId
+          ? plansByDefinitionId.get(reminder.definitionId)
+          : null;
+        if (!plan) continue;
+        const occurrence = occurrenceViews.find(
+          (candidate) => candidate.id === reminder.ownerId,
+        );
+        if (!occurrence) continue;
+        const key = attemptKey(
+          plan.id,
+          reminder.stepIndex,
+          reminder.scheduledFor,
+        );
+        const acknowledged = Boolean(
+          occurrence.metadata.reminderAcknowledgedAt ||
+            occurrence.state === "completed",
+        );
+        if (
+          deliveredAttempts.has(key) ||
+          (acknowledged && blockedAckAttempts.has(key))
+        ) {
+          continue;
+        }
+        const attempt = await this.dispatchReminderAttempt({
+          plan,
+          ownerType: "occurrence",
+          ownerId: reminder.ownerId,
+          occurrenceId: reminder.occurrenceId,
+          title: reminder.title,
+          channel: reminder.channel,
+          stepIndex: reminder.stepIndex,
+          scheduledFor: reminder.scheduledFor,
+          urgency:
+            typeof occurrence.metadata.urgency === "string"
+              ? normalizeReminderUrgency(occurrence.metadata.urgency)
+              : priorityToUrgency(occurrence.priority),
+          quietHours: plan.quietHours,
+          acknowledged,
+          attemptedAt: now.toISOString(),
+        });
+        dueAttempts.push(attempt);
+        if (attempt.outcome === "delivered") {
+          deliveredAttempts.add(key);
+        }
       }
-      const attempt = await this.dispatchReminderAttempt({
-        plan,
-        ownerType: "calendar_event",
-        ownerId: reminder.ownerId,
-        occurrenceId: null,
-        title: reminder.title,
-        channel: reminder.channel,
-        stepIndex: reminder.stepIndex,
-        scheduledFor: reminder.scheduledFor,
-        urgency:
-          typeof event.metadata.urgency === "string"
-            ? normalizeReminderUrgency(event.metadata.urgency)
-            : "medium",
-        quietHours: plan.quietHours,
-        acknowledged,
-        attemptedAt: now.toISOString(),
-      });
-      dueAttempts.push(attempt);
-      if (attempt.outcome === "delivered") {
-        deliveredAttempts.add(key);
-      }
-    }
 
-    return {
-      now: now.toISOString(),
-      attempts: dueAttempts,
-    };
+      for (const reminder of buildActiveCalendarEventReminders(
+        calendarEvents,
+        plansByEventId,
+        now,
+      )) {
+        if (dueAttempts.length >= limit) break;
+        const plan = reminder.eventId
+          ? plansByEventId.get(reminder.eventId)
+          : null;
+        if (!plan) continue;
+        const event = calendarEvents.find(
+          (candidate) => candidate.id === reminder.ownerId,
+        );
+        if (!event) continue;
+        const key = attemptKey(
+          plan.id,
+          reminder.stepIndex,
+          reminder.scheduledFor,
+        );
+        const acknowledged = Boolean(event.metadata.reminderAcknowledgedAt);
+        if (
+          deliveredAttempts.has(key) ||
+          (acknowledged && blockedAckAttempts.has(key))
+        ) {
+          continue;
+        }
+        const attempt = await this.dispatchReminderAttempt({
+          plan,
+          ownerType: "calendar_event",
+          ownerId: reminder.ownerId,
+          occurrenceId: null,
+          title: reminder.title,
+          channel: reminder.channel,
+          stepIndex: reminder.stepIndex,
+          scheduledFor: reminder.scheduledFor,
+          urgency:
+            typeof event.metadata.urgency === "string"
+              ? normalizeReminderUrgency(event.metadata.urgency)
+              : "medium",
+          quietHours: plan.quietHours,
+          acknowledged,
+          attemptedAt: now.toISOString(),
+        });
+        dueAttempts.push(attempt);
+        if (attempt.outcome === "delivered") {
+          deliveredAttempts.add(key);
+        }
+      }
+
+      return {
+        now: now.toISOString(),
+        attempts: dueAttempts,
+      };
+    });
   }
 
   async inspectReminder(
