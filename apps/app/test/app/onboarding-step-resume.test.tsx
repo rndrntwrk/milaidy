@@ -128,13 +128,6 @@ type ProbeApi = {
 
 function Probe({ onReady }: { onReady: (api: ProbeApi) => void }) {
   const app = useApp();
-  console.log("PROBE RENDER:", app.onboardingLoading, app.onboardingStep);
-  console.log(
-    "APP STATE:",
-    app.startupPhase,
-    app.startupStatus,
-    app.startupError,
-  );
 
   useEffect(() => {
     onReady({

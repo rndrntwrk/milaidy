@@ -9,3 +9,4 @@ export * from "./permissions.js";
 export * from "./service-routing.js";
 export * from "./verification.js";
 export * from "./wallet.js";
+export * from "./lifeops.js";

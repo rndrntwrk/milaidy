@@ -160,11 +160,13 @@ export async function runHydrating(
   // Avatar / VRM selection
   let resolvedIdx = loadAvatarIndex();
   try {
-    const stream = await client.getStreamSettings();
-    const si = stream.settings?.avatarIndex;
-    if (typeof si === "number" && Number.isFinite(si)) {
-      resolvedIdx = normalizeAvatarIndex(si);
-      deps.setSelectedVrmIndex(resolvedIdx);
+    if (typeof client.getStreamSettings === "function") {
+      const stream = await client.getStreamSettings();
+      const si = stream.settings?.avatarIndex;
+      if (typeof si === "number" && Number.isFinite(si)) {
+        resolvedIdx = normalizeAvatarIndex(si);
+        deps.setSelectedVrmIndex(resolvedIdx);
+      }
     }
   } catch (e) {
     warn("stream settings avatar", e);
