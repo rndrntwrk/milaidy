@@ -776,11 +776,17 @@ describe("Electrobun release workflow drift", () => {
     expect(workflow).not.toContain("env.USERPROFILE }}\\.config\\Milady");
   });
 
-  it("isolates Windows smoke runs from the runner's stable profile and exports the chosen backend port", () => {
+  it("defaults Windows smoke runs to the stable runner profile unless explicit overrides are provided, while still exporting the chosen backend port", () => {
     const smokeScript = fs.readFileSync(WINDOWS_SMOKE_PATH, "utf8");
 
     expect(smokeScript).toContain("MILADY_TEST_WINDOWS_APPDATA_PATH");
     expect(smokeScript).toContain("MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH");
+    expect(smokeScript).toContain(
+      '$defaultAppDataRoot = if ([string]::IsNullOrWhiteSpace($env:APPDATA)) {',
+    );
+    expect(smokeScript).toContain(
+      '$defaultLocalAppDataRoot = if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {',
+    );
     expect(smokeScript).toContain("$env:APPDATA = $testAppDataRoot");
     expect(smokeScript).toContain("$env:LOCALAPPDATA = $testLocalAppDataRoot");
     expect(smokeScript).toContain(
