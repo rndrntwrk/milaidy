@@ -593,12 +593,17 @@ export function buildCorsAllowedPorts(): Set<string> {
   return ports;
 }
 
-/** Lazily cached port set — computed once on first request. */
+/** Lazily cached port set — computed once, invalidated on port changes. */
 let _cachedCorsAllowedPorts: Set<string> | undefined;
 function getCorsAllowedPorts(): Set<string> {
   if (!_cachedCorsAllowedPorts)
     _cachedCorsAllowedPorts = buildCorsAllowedPorts();
   return _cachedCorsAllowedPorts;
+}
+
+/** Invalidate the cached CORS port set so it is recomputed on next request. */
+export function invalidateCorsAllowedPorts(): void {
+  _cachedCorsAllowedPorts = undefined;
 }
 
 /**
