@@ -17,6 +17,7 @@ export function resolveLifeOpsBaseUrls(
   const envLists = [
     env.MILADY_LIFEOPS_BASE_URLS,
     env.ELIZA_LIFEOPS_BASE_URLS,
+    env.MILADY_DEPLOY_BASE_URLS,
     env.ELIZA_DEPLOY_BASE_URLS,
   ]
     .flatMap((value) => value?.split(",") ?? [])
@@ -25,6 +26,7 @@ export function resolveLifeOpsBaseUrls(
   const singleBase =
     env.MILADY_LIFEOPS_BASE_URL?.trim() ||
     env.ELIZA_LIFEOPS_BASE_URL?.trim() ||
+    env.MILADY_DEPLOY_BASE_URL?.trim() ||
     env.ELIZA_DEPLOY_BASE_URL?.trim();
   if (singleBase) {
     envLists.push(singleBase);
@@ -91,7 +93,8 @@ function hasGoogleStatusShape(body) {
       typeof body === "object" &&
       body.provider === "google" &&
       typeof body.connected === "boolean" &&
-      typeof body.reason === "string",
+      typeof body.reason === "string" &&
+      Array.isArray(body.grantedCapabilities),
   );
 }
 
@@ -102,6 +105,18 @@ function hasNextContextShape(body) {
       Array.isArray(body.preparationChecklist) &&
       Array.isArray(body.linkedMail) &&
       typeof body.linkedMailState === "string",
+  );
+}
+
+function hasGmailTriageShape(body) {
+  return Boolean(
+    body &&
+      typeof body === "object" &&
+      Array.isArray(body.messages) &&
+      body.summary &&
+      typeof body.summary.unreadCount === "number" &&
+      typeof body.summary.importantNewCount === "number" &&
+      typeof body.summary.likelyReplyNeededCount === "number",
   );
 }
 
@@ -127,6 +142,10 @@ export async function runSmokeLifeOps(options = {}) {
   const expectGoogleConnected = parseTruthy(
     env.MILADY_LIFEOPS_EXPECT_GOOGLE_CONNECTED ||
       env.ELIZA_LIFEOPS_EXPECT_GOOGLE_CONNECTED,
+  );
+  const expectGmailTriage = parseTruthy(
+    env.MILADY_LIFEOPS_EXPECT_GMAIL_TRIAGE ||
+      env.ELIZA_LIFEOPS_EXPECT_GMAIL_TRIAGE,
   );
 
   let hasFailure = false;
@@ -215,7 +234,21 @@ export async function runSmokeLifeOps(options = {}) {
       continue;
     }
 
-    if (googleStatus.body.connected) {
+    const grantedCapabilities = Array.isArray(
+      googleStatus.body.grantedCapabilities,
+    )
+      ? googleStatus.body.grantedCapabilities.filter(
+          (value) => typeof value === "string",
+        )
+      : [];
+    const hasCalendarCapability =
+      grantedCapabilities.includes("google.calendar.read") ||
+      grantedCapabilities.includes("google.calendar.write");
+    const hasGmailCapability =
+      grantedCapabilities.includes("google.gmail.triage") ||
+      grantedCapabilities.includes("google.gmail.send");
+
+    if (googleStatus.body.connected && hasCalendarCapability) {
       const nextContextUrl = new URL(
         "/api/lifeops/calendar/next-context?timeZone=UTC",
         base,
@@ -235,6 +268,32 @@ export async function runSmokeLifeOps(options = {}) {
       }
       log(
         `[smoke-lifeops] OK ${nextContextUrl} linkedMailState=${nextContext.body.linkedMailState}`,
+      );
+    }
+
+    if (
+      googleStatus.body.connected &&
+      (expectGmailTriage || hasGmailCapability)
+    ) {
+      const gmailTriageUrl = new URL(
+        "/api/lifeops/gmail/triage?maxResults=5",
+        base,
+      ).toString();
+      const gmailTriage = await fetchJson(
+        fetchImpl,
+        gmailTriageUrl,
+        headers,
+        timeoutMs,
+      );
+      if (!gmailTriage.res?.ok || !hasGmailTriageShape(gmailTriage.body)) {
+        hasFailure = true;
+        error(
+          `[smoke-lifeops] FAIL ${gmailTriageUrl} did not return a valid Gmail triage payload.`,
+        );
+        continue;
+      }
+      log(
+        `[smoke-lifeops] OK ${gmailTriageUrl} unread=${gmailTriage.body.summary.unreadCount} replyNeeded=${gmailTriage.body.summary.likelyReplyNeededCount}`,
       );
     }
   }

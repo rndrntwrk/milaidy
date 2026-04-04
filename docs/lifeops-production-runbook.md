@@ -35,7 +35,17 @@ The smoke check validates:
 - `GET /api/lifeops/overview`
 - `GET /api/lifeops/browser/sessions`
 - `GET /api/lifeops/connectors/google/status`
-- `GET /api/lifeops/calendar/next-context?timeZone=UTC` when Google is connected
+- `GET /api/lifeops/calendar/next-context?timeZone=UTC` when Google has Calendar capability
+- `GET /api/lifeops/gmail/triage?maxResults=5` when Google has Gmail triage capability or `MILADY_LIFEOPS_EXPECT_GMAIL_TRIAGE=true`
+
+The deploy workflow also runs this automatically on the app origin in [deploy-origin-smoke.yml](/Users/shawwalters/eliza-workspace/milady/.github/workflows/deploy-origin-smoke.yml).
+
+## Assumptions And Limits
+
+- Live connector tests remain env-gated and will stay skipped until real Google/Twilio credentials and callback marker files are provided.
+- `smoke-lifeops` only validates capabilities that are actually granted. A Gmail-only Google grant should not be forced through Calendar routes, and a Calendar-only grant should not be forced through Gmail routes.
+- For auth-protected deployments, `MILADY_SMOKE_API_TOKEN` or `ELIZA_SMOKE_API_TOKEN` must be populated in the deployment smoke environment.
+- A green life-ops smoke run does not clear the workspace dependency audit. `bun run audit:deps` is a separate release gate.
 
 ## Monitoring Signals
 
@@ -84,6 +94,8 @@ Recommended pages:
 2. Any `[integration]` event with `boundary: "lifeops"`, `outcome: "failure"`, and `operation` starting with `GET /api/lifeops/calendar` or `GET /api/lifeops/gmail` for 5 continuous minutes.
 3. Any `[lifeops] Reminder delivery failed` log for `sms` or `voice`.
 4. Google connector status flips to `reason: "needs_reauth"` on environments that require calendar or Gmail.
+
+In-repo wiring now exists for deployment smoke via [deploy-origin-smoke.yml](/Users/shawwalters/eliza-workspace/milady/.github/workflows/deploy-origin-smoke.yml), but external notification routing still depends on GitHub notification settings or the deployment platform's alerting destination.
 
 ## Rollback
 
