@@ -902,36 +902,6 @@ export function InventoryView() {
     </Sidebar>
   );
 
-  const stewardHasAddresses = Boolean(
-    stewardStatus?.connected &&
-      (stewardStatus.walletAddresses?.evm || stewardStatus.evmAddress),
-  );
-  if (!evmAddr && !solAddr && !stewardHasAddresses) {
-    return (
-      <div className="flex flex-1 min-h-0 flex-col">
-        <PagePanel.Empty
-          variant="surface"
-          title={t("wallet.noOnchainWallet")}
-          description={t("wallet.noOnchainWalletHint")}
-          action={
-            <Button
-              variant="default"
-              size="sm"
-              className="rounded-full px-5"
-              onClick={() => setTab("settings")}
-            >
-              {t("nav.settings")}
-            </Button>
-          }
-        >
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-accent/25 bg-accent/10 text-accent">
-            <Wallet className="h-6 w-6" />
-          </div>
-        </PagePanel.Empty>
-      </div>
-    );
-  }
-
   const stewardConnected = stewardStatus?.connected === true;
   const walletSubTabItems = [
     { value: "balances" as const, label: "Balances" },

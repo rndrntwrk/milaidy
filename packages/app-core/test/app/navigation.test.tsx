@@ -19,7 +19,7 @@ describe("navigation", () => {
     expect(titleForTab("database")).toBe("Databases");
   });
 
-  it("includes database and plugins in the advanced tab group", () => {
+  it("includes database, plugins, and logs in the advanced tab group", () => {
     const advancedGroup = ALL_TAB_GROUPS.find(
       (group) => group.label === "Advanced",
     );

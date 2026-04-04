@@ -278,7 +278,8 @@ function resolveCompatLoopbackApiBase(
       process.env.MILADY_API_PORT?.trim() ||
         process.env.ELIZA_PORT?.trim() ||
         "31337",
-    ) || 31337);
+    ) ||
+      31337);
   return `http://127.0.0.1:${port}`;
 }
 
