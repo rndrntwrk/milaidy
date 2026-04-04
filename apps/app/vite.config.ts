@@ -807,10 +807,12 @@ export default defineConfig({
     cssMinify: desktopFastDist ? false : undefined,
     reportCompressedSize: !desktopFastDist,
     rollupOptions: {
-      // Native-only deps and Node built-ins that must not be resolved during
-      // the browser build. The agent package barrel-exports server-only modules
-      // that import Node APIs; these are tree-shaken at runtime but Rollup
-      // still needs to resolve them.
+      // Native-only deps that must not be resolved during the browser build.
+      // Node built-ins (node:fs, fs, path, etc.) are NOT externalized here —
+      // they are intercepted by nativeModuleStubPlugin which replaces them
+      // with no-op Proxy stubs. Externalizing them causes Rollup to emit
+      // bare `import "node:fs"` in output chunks, which the browser rejects
+      // with a CSP violation.
       external: (id) => {
         if (
           [
@@ -822,48 +824,6 @@ export default defineConfig({
         )
           return true;
         if (/^@node-llama-cpp\//.test(id)) return true;
-        if (/^node:/.test(id)) return true;
-        // Bare Node built-in names and sub-paths (fs, fs/promises, path, etc.)
-        const nodeBuiltins = [
-          "fs",
-          "path",
-          "os",
-          "net",
-          "dns",
-          "util",
-          "crypto",
-          "http",
-          "https",
-          "http2",
-          "stream",
-          "zlib",
-          "child_process",
-          "events",
-          "buffer",
-          "url",
-          "module",
-          "tls",
-          "dgram",
-          "readline",
-          "tty",
-          "assert",
-          "constants",
-          "punycode",
-          "querystring",
-          "string_decoder",
-          "timers",
-          "vm",
-          "worker_threads",
-          "perf_hooks",
-          "async_hooks",
-          "inspector",
-          "cluster",
-          "v8",
-          "process",
-          "console",
-        ];
-        const base = id.split("/")[0];
-        if (nodeBuiltins.includes(base)) return true;
         return false;
       },
       input: {
