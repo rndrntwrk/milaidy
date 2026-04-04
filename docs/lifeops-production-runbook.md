@@ -45,7 +45,8 @@ The deploy workflow also runs this automatically on the app origin in [deploy-or
 - Live connector tests remain env-gated and will stay skipped until real Google/Twilio credentials and callback marker files are provided.
 - `smoke-lifeops` only validates capabilities that are actually granted. A Gmail-only Google grant should not be forced through Calendar routes, and a Calendar-only grant should not be forced through Gmail routes.
 - For auth-protected deployments, `MILADY_SMOKE_API_TOKEN` or `ELIZA_SMOKE_API_TOKEN` must be populated in the deployment smoke environment.
-- A green life-ops smoke run does not clear the workspace dependency audit. `bun run audit:deps` is a separate release gate.
+- A green life-ops smoke run does not clear the workspace dependency audit. Use `bun run audit:deps` for the full advisory inventory and `bun run audit:deps:release` for the deployment gate.
+- As of April 4, 2026, the full audit still reports `GHSA-848j-6mx2-7j84` (`elliptic`) through `@elizaos/core` in `milady-cloud-agent`. There is no newer published `elliptic` release to force, so the release gate is currently set to `moderate+` while that upstream low-severity advisory is tracked separately.
 
 ## Monitoring Signals
 

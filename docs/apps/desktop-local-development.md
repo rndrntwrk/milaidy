@@ -150,26 +150,26 @@ Prefixed **vite / api / electrobun** lines are mirrored to **`.milady/desktop-de
 
 **Why a file:** agents can `read_file` the path from `desktopDevLog.filePath` without HTTP. **Why HTTP tail:** avoids reading multi-megabyte logs into context; caps prevent OOM. **Why basename allow-list:** `MILADY_DESKTOP_DEV_LOG_PATH` could otherwise be pointed at arbitrary files.
 
-## UI E2E (TestCafe, Bun-only)
+## UI E2E (Playwright)
 
 Browser smoke tests target the **same renderer URL** Electrobun loads in watch mode (`http://localhost:<MILADY_PORT>`, default **2138**). They do **not** drive the native Electrobun webview; tray, native menus, and packaged-only behaviors stay covered by **`bun run test:desktop:packaged`** (where applicable) and the [release regression checklist](./release-regression-checklist.md).
 
-**Why TestCafe + Bun:** `bunx testcafe` runs the CLI under Bun. Postinstall patches in `scripts/patch-deps.mjs` adjust TestCafe for Bun (`module` / callsite compatibility). Use **`bun run …`** / **`bunx`** only for this suite — do not rely on `npx` for the runner.
+**Why Playwright:** the app already ships Playwright for renderer and packaged checks, so the browser smoke flows now use the same supported stack instead of a separate TestCafe toolchain. This removes the vulnerable `replicator` dependency entirely and keeps the UI E2E surface on one runner.
 
-**Dependency:** `testcafe` is a **devDependency of `@miladyai/app`** (next to `apps/app/test/testcafe/`), not the monorepo root, so UI E2E tooling stays with the Vite app. A normal root `bun install` still hoists workspace packages; the TestCafe tree is only needed for opt-in `test:ui:testcafe*` runs.
+**Dependency:** Playwright lives in **`@miladyai/app`** and the smoke specs live in `apps/app/test/ui-smoke/`. A normal root `bun install` still hoists workspace packages; these browser checks are opt-in via `test:ui:playwright*`.
 
-**Browser auto-pick:** `scripts/run-testcafe.mjs` tries **macOS `.app` paths** first; on **Linux / Windows** nothing matches and it falls back to **`bunx testcafe --list-browsers`** (preferred order: chrome, opera, edge, firefox, safari).
+**Browser runtime:** the suite uses Playwright Chromium. Install the browser once with `cd apps/app && bunx playwright install chromium` if it is not already present on the machine.
 
 | Command | Purpose |
 |---------|---------|
-| `bun run test:ui:testcafe` | Run [`apps/app/test/testcafe/smoke.testcafe.js`](../../apps/app/test/testcafe/smoke.testcafe.js); expects dev UI already on **:2138** (e.g. `ELIZA_DEV_ONCHAIN=0 bun run dev`). Auto-picks an installed browser (Chrome, Opera GX, Firefox, Edge, Safari). |
-| `bun run test:ui:testcafe:with-dev` | Same, but runs `bun run dev` first if the UI port is closed (`--spawn-dev` / `MILADY_TESTCAFE_SPAWN_DEV=1`). |
-| `bun run test:ui:testcafe:packaged` | Optional **`file://` + hash** check for packaged-style routing; needs `apps/app/dist/` from `cd apps/app && bun run build`. Skips if `dist` is missing. |
-| `bun run test:ui:testcafe -- opera` | Force a browser alias TestCafe recognizes. |
+| `bun run test:ui:playwright` | Run [`apps/app/test/ui-smoke/ui-smoke.spec.ts`](../../apps/app/test/ui-smoke/ui-smoke.spec.ts); auto-starts the Vite renderer on **:2138** when needed. |
+| `bun run test:ui:playwright:settings-chat` | Run [`apps/app/test/ui-smoke/settings-chat-companion.spec.ts`](../../apps/app/test/ui-smoke/settings-chat-companion.spec.ts) for companion media settings persistence. |
+| `bun run test:ui:playwright:packaged` | Run [`apps/app/test/ui-smoke/packaged-hash.spec.ts`](../../apps/app/test/ui-smoke/packaged-hash.spec.ts) against `apps/app/dist/index.html`; skips if `dist` is missing. |
+| `bun run test:ui:testcafe*` | Legacy aliases preserved for older local workflows; these now delegate to the Playwright commands above. |
 
-**Full test matrix:** `bun run test` does **not** run TestCafe by default. Set **`MILADY_TEST_UI_TESTCAFE=1`** to append the UI suite to `test/scripts/test-parallel.mjs` (serial, after Vitest e2e). Use only on machines or CI images with a supported browser.
+**Full test matrix:** `bun run test` does **not** run Playwright UI smoke by default. Set **`MILADY_TEST_UI_PLAYWRIGHT=1`** to append the UI suite to `test/scripts/test-parallel.mjs` (serial, after Vitest e2e). `MILADY_TEST_UI_TESTCAFE=1` is still accepted as a legacy alias.
 
-**Path A vs native webview (Phase B):** Automating the **embedded** Electrobun surface without Node on the host is unresolved; options are TestCafe remote/browser targets, or running automation **inside Docker** while the host only runs `bun` / `docker`. Legacy Playwright **web-views** config (`apps/app/playwright.web-views.config.ts`) still expects a **Node**-driven Playwright CLI for `.ts` config.
+**Path A vs native webview (Phase B):** These specs still target the renderer URL, not the embedded Electrobun webview. Packaged/native behaviors remain covered by **`bun run test:desktop:packaged`**, **`bun run test:desktop:playwright`**, and the [release regression checklist](./release-regression-checklist.md).
 
 ## Related source
 
@@ -186,8 +186,11 @@ Browser smoke tests target the **same renderer URL** Electrobun loads in watch m
 | `packages/app-core/src/api/dev-console-log.ts` | Safe tail read for `GET /api/dev/console-log` |
 | `apps/app/electrobun/src/index.ts` | `resolveRendererUrl()`; starts screenshot dev server when enabled |
 | `apps/app/electrobun/src/screenshot-dev-server.ts` | Loopback PNG server (proxied as `/api/dev/cursor-screenshot`) |
-| `scripts/run-testcafe.mjs` | TestCafe runner (browser detect, optional `--spawn-dev`, `--fixture`) |
-| `apps/app/test/testcafe/smoke.testcafe.js` | Main UI traversal + `TAB_PATHS` parity (e.g. `/apps` disabled) |
+| `apps/app/playwright.ui-smoke.config.ts` | Playwright config for renderer smoke specs |
+| `apps/app/playwright.ui-packaged.config.ts` | Playwright config for packaged `file://` smoke |
+| `apps/app/test/ui-smoke/ui-smoke.spec.ts` | Main UI traversal + `TAB_PATHS` parity (e.g. `/apps` disabled) |
+| `apps/app/test/ui-smoke/settings-chat-companion.spec.ts` | Companion media settings persistence |
+| `apps/app/test/ui-smoke/packaged-hash.spec.ts` | `file://` + hash routing parity |
 
 ## See also
 

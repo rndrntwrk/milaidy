@@ -12,8 +12,8 @@ import path from "node:path";
  * - `forceSerial: true` entries always run after parallel groups.
  * - `maxWorkers` lets a suite pin worker concurrency.
  *
- * Opt-in UI browser E2E (TestCafe): set MILADY_TEST_UI_TESTCAFE=1. Spawns dev if needed
- * and requires a supported browser on the runner (Chrome, Opera, Firefox, Edge, Safari).
+ * Opt-in UI browser E2E (Playwright): set MILADY_TEST_UI_PLAYWRIGHT=1.
+ * MILADY_TEST_UI_TESTCAFE remains as a legacy alias for the same suite.
  */
 const runs = [
   {
@@ -37,11 +37,14 @@ const runs = [
   },
 ];
 
-if (process.env.MILADY_TEST_UI_TESTCAFE === "1") {
+if (
+  process.env.MILADY_TEST_UI_PLAYWRIGHT === "1" ||
+  process.env.MILADY_TEST_UI_TESTCAFE === "1"
+) {
   runs.push({
-    name: "ui-testcafe",
+    name: "ui-playwright",
     cmd: "bun",
-    args: ["scripts/run-testcafe.mjs", "--spawn-dev"],
+    args: ["run", "test:ui:playwright"],
     forceSerial: true,
   });
 }
