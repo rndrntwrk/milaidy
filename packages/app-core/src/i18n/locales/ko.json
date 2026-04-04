@@ -1973,6 +1973,7 @@
   "subscriptionstatus.YourClaudeSubscrip": "귀하의 Claude 구독이 연결되었습니다. 계정을 전환하려면 연결을 해제하세요.",
   "taskseventspanel.Events": "이벤트",
   "taskseventspanel.Tasks": "작업",
+  "taskseventspanel.Todos": "할 일",
   "taskseventspanel.Title": "작업 및 이벤트",
   "tokenstable.nativeGas": "네이티브 가스",
   "trajectoriesview.Completed": "완료됨",

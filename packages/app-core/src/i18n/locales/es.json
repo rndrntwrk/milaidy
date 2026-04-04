@@ -1973,6 +1973,7 @@
   "subscriptionstatus.YourClaudeSubscrip": "Tu suscripción a Claude está vinculada. Desconéctese para cambiar de cuenta.",
   "taskseventspanel.Events": "Eventos",
   "taskseventspanel.Tasks": "Tareas",
+  "taskseventspanel.Todos": "Pendientes",
   "taskseventspanel.Title": "Tareas y eventos",
   "tokenstable.nativeGas": "gas nativo",
   "trajectoriesview.Completed": "Completado",

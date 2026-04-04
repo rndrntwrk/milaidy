@@ -701,7 +701,10 @@ async function maybeBackfillTrajectoryFromUseModelLogs(
       }),
     };
 
-    const nextMetadata = { ...metadata, llmCallBackfillSource: "logs" };
+    const nextMetadata: Record<string, unknown> = {
+      ...metadata,
+      llmCallBackfillSource: "logs",
+    };
     delete nextMetadata.syntheticLlmCall;
     delete nextMetadata.syntheticLlmCallSource;
 
@@ -832,7 +835,7 @@ async function maybeBackfillTrajectoryFromConversationMemory(
       ],
     };
 
-    const nextMetadata = {
+    const nextMetadata: Record<string, unknown> = {
       ...metadata,
       llmCallBackfillSource: "conversation-memory",
     };

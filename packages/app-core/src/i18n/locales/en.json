@@ -1973,6 +1973,7 @@
   "subscriptionstatus.YourClaudeSubscrip": "Your Claude subscription is linked. Disconnect to switch accounts.",
   "taskseventspanel.Events": "Events",
   "taskseventspanel.Tasks": "Tasks",
+  "taskseventspanel.Todos": "Todos",
   "taskseventspanel.Title": "Tasks & Events",
   "tokenstable.nativeGas": "native gas",
   "trajectoriesview.Completed": "Completed",

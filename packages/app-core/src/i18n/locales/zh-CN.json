@@ -1973,6 +1973,7 @@
   "subscriptionstatus.YourClaudeSubscrip": "您的 Claude 订阅已连接。断开连接可切换账户。",
   "taskseventspanel.Events": "活动",
   "taskseventspanel.Tasks": "任务",
+  "taskseventspanel.Todos": "待办",
   "taskseventspanel.Title": "任务与活动",
   "tokenstable.nativeGas": "天然气",
   "trajectoriesview.Completed": "完全的",
