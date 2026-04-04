@@ -758,16 +758,13 @@ export async function handlePluginRoutes(
       // Without this, the downloaded package in ~/.milady/plugins/installed/
       // is invisible to the runtime loader.
       if (result.installPath) {
-        if (
-          !(state.config.plugins as Record<string, unknown>).installs ||
-          typeof (state.config.plugins as Record<string, unknown>).installs !==
-            "object"
-        ) {
-          (state.config.plugins as Record<string, unknown>).installs = {};
+        const pluginsObj = state.config.plugins as {
+          installs?: Record<string, Record<string, unknown>>;
+        };
+        if (!pluginsObj.installs || typeof pluginsObj.installs !== "object") {
+          pluginsObj.installs = {};
         }
-        const installs = (state.config.plugins as Record<string, unknown>)
-          .installs as Record<string, Record<string, unknown>>;
-        installs[result.pluginName ?? pluginName] = {
+        pluginsObj.installs[result.pluginName ?? pluginName] = {
           source: "npm",
           installPath: result.installPath,
           version: result.version ?? "unknown",

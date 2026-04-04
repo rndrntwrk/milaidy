@@ -65,6 +65,9 @@ import { ApprovalQueue } from "../steward/ApprovalQueue";
 import { TransactionHistory } from "../steward/TransactionHistory";
 import { ConfigPageView } from "./ConfigPageView";
 
+/** Suppress dialog re-open for this many ms after user closes it (restart-cycle debounce). */
+const DIALOG_CLOSE_DEBOUNCE_MS = 3_000;
+
 /* ── Component ─────────────────────────────────────────────────────── */
 
 /* ── Wallet Settings Popup Components ────────────────────────────────── */
@@ -314,7 +317,7 @@ export function InventoryView() {
   // explicitly closes the dialog, ignore re-renders for 3 seconds.
   const walletRpcClosedAtRef = useRef(0);
   const setWalletRpcOpen = useCallback((open: boolean) => {
-    if (open && Date.now() - walletRpcClosedAtRef.current < 3000) return;
+    if (open && Date.now() - walletRpcClosedAtRef.current < DIALOG_CLOSE_DEBOUNCE_MS) return;
     if (!open) walletRpcClosedAtRef.current = Date.now();
     setWalletRpcOpenRaw(open);
   }, []);
