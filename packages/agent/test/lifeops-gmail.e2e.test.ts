@@ -369,6 +369,85 @@ describe("life-ops gmail triage", () => {
         }),
       ]),
     );
+    expect(contextRes.data.linkedMailState).toBe("cache");
+    expect(contextRes.data.linkedMailError).toBeNull();
+  });
+
+  it("surfaces linked-mail errors in next-event context instead of silently hiding them", async () => {
+    await connectGoogle(
+      ["google.calendar.read", "google.gmail.triage"],
+      [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/calendar.readonly",
+        "https://www.googleapis.com/auth/gmail.metadata",
+      ],
+    );
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/calendar/v3/calendars/primary/events?")) {
+        const startAt = new Date(Date.now() + 25 * 60_000).toISOString();
+        const endAt = new Date(Date.now() + 85 * 60_000).toISOString();
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: "event-err",
+                status: "confirmed",
+                summary: "Admin-blocked mail sync review",
+                start: {
+                  dateTime: startAt,
+                  timeZone: "UTC",
+                },
+                end: {
+                  dateTime: endAt,
+                  timeZone: "UTC",
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (
+        url.startsWith(
+          "https://gmail.googleapis.com/gmail/v1/users/me/messages?",
+        )
+      ) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: "Access blocked by your organization's admin policy.",
+            },
+          }),
+          {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const contextRes = await req(
+      port,
+      "GET",
+      "/api/lifeops/calendar/next-context?timeZone=UTC",
+    );
+    expect(contextRes.status).toBe(200);
+    expect(contextRes.data.event).toMatchObject({
+      title: "Admin-blocked mail sync review",
+    });
+    expect(contextRes.data.linkedMail).toEqual([]);
+    expect(contextRes.data.linkedMailState).toBe("error");
+    expect(String(contextRes.data.linkedMailError)).toContain(
+      "Google Workspace policy blocked the request",
+    );
   });
 
   it("creates reply drafts and blocks sends without explicit confirmation", async () => {

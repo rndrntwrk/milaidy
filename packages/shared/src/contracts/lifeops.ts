@@ -28,8 +28,7 @@ export const LIFEOPS_OCCURRENCE_STATES = [
   "expired",
   "muted",
 ] as const;
-export type LifeOpsOccurrenceState =
-  (typeof LIFEOPS_OCCURRENCE_STATES)[number];
+export type LifeOpsOccurrenceState = (typeof LIFEOPS_OCCURRENCE_STATES)[number];
 
 export const LIFEOPS_GOAL_STATUSES = [
   "active",
@@ -107,8 +106,7 @@ export const LIFEOPS_REMINDER_CHANNELS = [
   "whatsapp",
   "imessage",
 ] as const;
-export type LifeOpsReminderChannel =
-  (typeof LIFEOPS_REMINDER_CHANNELS)[number];
+export type LifeOpsReminderChannel = (typeof LIFEOPS_REMINDER_CHANNELS)[number];
 
 export const LIFEOPS_CHANNEL_TYPES = [
   "in_app",
@@ -174,10 +172,14 @@ export const LIFEOPS_AUDIT_EVENT_TYPES = [
   "browser_session_updated",
   "x_post_sent",
 ] as const;
-export type LifeOpsAuditEventType =
-  (typeof LIFEOPS_AUDIT_EVENT_TYPES)[number];
+export type LifeOpsAuditEventType = (typeof LIFEOPS_AUDIT_EVENT_TYPES)[number];
 
-export const LIFEOPS_ACTORS = ["agent", "user", "workflow", "connector"] as const;
+export const LIFEOPS_ACTORS = [
+  "agent",
+  "user",
+  "workflow",
+  "connector",
+] as const;
 export type LifeOpsActor = (typeof LIFEOPS_ACTORS)[number];
 
 export interface LifeOpsTimeWindowDefinition {
@@ -644,11 +646,7 @@ export interface GetLifeOpsGmailTriageRequest {
   maxResults?: number;
 }
 
-export const LIFEOPS_GMAIL_DRAFT_TONES = [
-  "brief",
-  "neutral",
-  "warm",
-] as const;
+export const LIFEOPS_GMAIL_DRAFT_TONES = ["brief", "neutral", "warm"] as const;
 export type LifeOpsGmailDraftTone = (typeof LIFEOPS_GMAIL_DRAFT_TONES)[number];
 
 export interface CreateLifeOpsGmailReplyDraftRequest {
@@ -718,10 +716,14 @@ export interface LifeOpsNextCalendarEventContext {
   location: string | null;
   conferenceLink: string | null;
   preparationChecklist: string[];
-  linkedMail: Array<Pick<
-    LifeOpsGmailMessageSummary,
-    "id" | "subject" | "from" | "receivedAt" | "snippet" | "htmlLink"
-  >>;
+  linkedMailState: "unavailable" | "cache" | "synced" | "error";
+  linkedMailError: string | null;
+  linkedMail: Array<
+    Pick<
+      LifeOpsGmailMessageSummary,
+      "id" | "subject" | "from" | "receivedAt" | "snippet" | "htmlLink"
+    >
+  >;
 }
 
 export const LIFEOPS_GOOGLE_CONNECTOR_REASONS = [

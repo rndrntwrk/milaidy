@@ -85,14 +85,16 @@ import {
   LIFEOPS_REMINDER_ATTEMPT_OUTCOMES,
   LIFEOPS_REMINDER_URGENCY_LEVELS,
   LIFEOPS_REVIEW_STATES,
+  LIFEOPS_TIME_WINDOW_NAMES,
   LIFEOPS_WORKFLOW_STATUSES,
   LIFEOPS_WORKFLOW_TRIGGER_TYPES,
   LIFEOPS_X_CAPABILITIES,
 } from "@miladyai/shared/contracts/lifeops";
 import {
   DEFAULT_REMINDER_STEPS,
-  normalizeTimeZone,
-  normalizeWindowPolicy,
+  isValidTimeZone,
+  resolveDefaultTimeZone,
+  resolveDefaultWindowPolicy,
 } from "./defaults.js";
 import { materializeDefinitionOccurrences } from "./engine.js";
 import {
@@ -138,6 +140,7 @@ import {
   getZonedDateParts,
   type ZonedDateParts,
 } from "./time.js";
+import { parseCronExpression } from "../triggers/scheduling.js";
 import { postToX, readXPosterCredentialsFromEnv } from "./x-poster.js";
 import {
   readTwilioCredentialsFromEnv,
@@ -424,7 +427,7 @@ function normalizeCalendarId(value: unknown): string {
 }
 
 function normalizeCalendarTimeZone(value: unknown): string {
-  return normalizeTimeZone(normalizeOptionalString(value) ?? "UTC");
+  return normalizeValidTimeZone(value, "timeZone", "UTC");
 }
 
 function resolveCalendarWindow(args: {
@@ -651,6 +654,8 @@ function buildNextCalendarEventContext(
   event: LifeOpsCalendarEvent | null,
   now: Date,
   linkedMail: LifeOpsGmailMessageSummary[] = [],
+  linkedMailState: "unavailable" | "cache" | "synced" | "error" = "unavailable",
+  linkedMailError: string | null = null,
 ): LifeOpsNextCalendarEventContext {
   if (!event) {
     return {
@@ -662,6 +667,8 @@ function buildNextCalendarEventContext(
       location: null,
       conferenceLink: null,
       preparationChecklist: [],
+      linkedMailState: "unavailable",
+      linkedMailError: null,
       linkedMail: [],
     };
   }
@@ -698,6 +705,8 @@ function buildNextCalendarEventContext(
     location: event.location.trim() || null,
     conferenceLink: event.conferenceLink,
     preparationChecklist: checklist,
+    linkedMailState,
+    linkedMailError,
     linkedMail: linkedMail.map((message) => ({
       id: message.id,
       subject: message.subject,
@@ -977,6 +986,153 @@ function normalizeEnumValue<T extends string>(
   return text;
 }
 
+function normalizeValidTimeZone(
+  value: unknown,
+  field: string,
+  fallback: string = resolveDefaultTimeZone(),
+): string {
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+  if (typeof value !== "string") {
+    fail(400, `${field} must be a valid IANA time zone`);
+  }
+  const candidate = value.trim();
+  if (candidate.length === 0) {
+    return fallback;
+  }
+  if (!isValidTimeZone(candidate)) {
+    fail(400, `${field} must be a valid IANA time zone`);
+  }
+  return candidate;
+}
+
+function normalizeWindowPolicyInput(
+  value: unknown,
+  field: string,
+  timeZone: string,
+): LifeOpsWindowPolicy {
+  if (value === undefined || value === null) {
+    return resolveDefaultWindowPolicy(timeZone);
+  }
+  const input = requireRecord(value, field);
+  if (!Array.isArray(input.windows) || input.windows.length === 0) {
+    fail(400, `${field}.windows must contain at least one window`);
+  }
+  const policyTimeZone = normalizeValidTimeZone(
+    input.timezone,
+    `${field}.timezone`,
+    timeZone,
+  );
+  const seenNames = new Set<string>();
+  const windows = input.windows.map((candidate, index) => {
+    const windowInput = requireRecord(candidate, `${field}.windows[${index}]`);
+    const name = normalizeEnumValue(
+      windowInput.name,
+      `${field}.windows[${index}].name`,
+      LIFEOPS_TIME_WINDOW_NAMES,
+    );
+    if (seenNames.has(name)) {
+      fail(400, `${field}.windows contains duplicate name "${name}"`);
+    }
+    seenNames.add(name);
+    const label = requireNonEmptyString(
+      windowInput.label,
+      `${field}.windows[${index}].label`,
+    );
+    const startMinute = Math.trunc(
+      normalizeFiniteNumber(
+        windowInput.startMinute,
+        `${field}.windows[${index}].startMinute`,
+      ),
+    );
+    const endMinute = Math.trunc(
+      normalizeFiniteNumber(
+        windowInput.endMinute,
+        `${field}.windows[${index}].endMinute`,
+      ),
+    );
+    if (startMinute < 0 || startMinute >= DAY_MINUTES * 2) {
+      fail(
+        400,
+        `${field}.windows[${index}].startMinute must be between 0 and 2879`,
+      );
+    }
+    if (endMinute <= startMinute || endMinute > DAY_MINUTES * 2) {
+      fail(
+        400,
+        `${field}.windows[${index}].endMinute must be greater than startMinute and at most 2880`,
+      );
+    }
+    return {
+      name,
+      label,
+      startMinute,
+      endMinute,
+    } satisfies LifeOpsTimeWindowDefinition;
+  });
+  return {
+    timezone: policyTimeZone,
+    windows,
+  };
+}
+
+function normalizeQuietHoursInput(
+  value: unknown,
+  field: string,
+): Record<string, unknown> {
+  if (value === undefined || value === null) {
+    return {};
+  }
+  const input = requireRecord(value, field);
+  if (Object.keys(input).length === 0) {
+    return {};
+  }
+  const timezone = normalizeValidTimeZone(
+    input.timezone,
+    `${field}.timezone`,
+    resolveDefaultTimeZone(),
+  );
+  const startMinute = Math.trunc(
+    normalizeFiniteNumber(input.startMinute, `${field}.startMinute`),
+  );
+  const endMinute = Math.trunc(
+    normalizeFiniteNumber(input.endMinute, `${field}.endMinute`),
+  );
+  if (startMinute < 0 || startMinute >= DAY_MINUTES) {
+    fail(400, `${field}.startMinute must be between 0 and 1439`);
+  }
+  if (endMinute < 0 || endMinute >= DAY_MINUTES) {
+    fail(400, `${field}.endMinute must be between 0 and 1439`);
+  }
+  let channels: LifeOpsReminderStep["channel"][] | undefined;
+  if (input.channels !== undefined) {
+    if (!Array.isArray(input.channels)) {
+      fail(400, `${field}.channels must be an array`);
+    }
+    const seen = new Set<LifeOpsReminderStep["channel"]>();
+    channels = [];
+    for (const [index, candidate] of input.channels.entries()) {
+      const channel = normalizeEnumValue(
+        candidate,
+        `${field}.channels[${index}]`,
+        LIFEOPS_REMINDER_CHANNELS,
+      );
+      if (seen.has(channel)) {
+        continue;
+      }
+      seen.add(channel);
+      channels.push(channel);
+    }
+  }
+  return {
+    timezone,
+    startMinute,
+    endMinute,
+    ...(channels !== undefined ? { channels } : {}),
+  };
+}
+
 function normalizeOptionalConnectorMode(
   value: unknown,
   field: string,
@@ -1046,7 +1202,7 @@ function normalizeWorkflowSchedule(
     return {
       kind,
       runAt: normalizeIsoString(schedule.runAt, "schedule.runAt"),
-      timezone: normalizeTimeZone(normalizeOptionalString(schedule.timezone)),
+      timezone: normalizeValidTimeZone(schedule.timezone, "schedule.timezone"),
     };
   }
   if (kind === "interval") {
@@ -1056,16 +1212,23 @@ function normalizeWorkflowSchedule(
         schedule.everyMinutes,
         "schedule.everyMinutes",
       ),
-      timezone: normalizeTimeZone(normalizeOptionalString(schedule.timezone)),
+      timezone: normalizeValidTimeZone(schedule.timezone, "schedule.timezone"),
     };
+  }
+  const cronExpression = requireNonEmptyString(
+    schedule.cronExpression,
+    "schedule.cronExpression",
+  );
+  if (!parseCronExpression(cronExpression)) {
+    fail(
+      400,
+      "schedule.cronExpression must be a valid 5-field cron expression",
+    );
   }
   return {
     kind,
-    cronExpression: requireNonEmptyString(
-      schedule.cronExpression,
-      "schedule.cronExpression",
-    ),
-    timezone: normalizeTimeZone(normalizeOptionalString(schedule.timezone)),
+    cronExpression,
+    timezone: normalizeValidTimeZone(schedule.timezone, "schedule.timezone"),
   };
 }
 
@@ -1498,7 +1661,10 @@ function normalizeReminderPlanDraft(
   return {
     steps: normalizeReminderSteps(reminderPlan.steps),
     mutePolicy: cloneRecord(reminderPlan.mutePolicy),
-    quietHours: cloneRecord(reminderPlan.quietHours),
+    quietHours: normalizeQuietHoursInput(
+      reminderPlan.quietHours,
+      "reminderPlan.quietHours",
+    ),
   };
 }
 
@@ -1756,6 +1922,10 @@ function parseQuietHoursPolicy(value: LifeOpsReminderPlan["quietHours"]): {
   ) {
     return null;
   }
+  const timezone = value.timezone.trim();
+  if (!isValidTimeZone(timezone)) {
+    return null;
+  }
   const channels = Array.isArray(value.channels)
     ? new Set(
         value.channels.filter(
@@ -1763,10 +1933,20 @@ function parseQuietHoursPolicy(value: LifeOpsReminderPlan["quietHours"]): {
         ),
       )
     : new Set<string>();
+  const startMinute = Math.trunc(value.startMinute);
+  const endMinute = Math.trunc(value.endMinute);
+  if (
+    startMinute < 0 ||
+    startMinute >= DAY_MINUTES ||
+    endMinute < 0 ||
+    endMinute >= DAY_MINUTES
+  ) {
+    return null;
+  }
   return {
-    timezone: normalizeTimeZone(value.timezone),
-    startMinute: Math.trunc(value.startMinute),
-    endMinute: Math.trunc(value.endMinute),
+    timezone,
+    startMinute,
+    endMinute,
     channels,
   };
 }
@@ -2919,8 +3099,12 @@ export class LifeOpsService {
     const description = normalizeOptionalString(request.description) ?? "";
     const originalIntent =
       normalizeOptionalString(request.originalIntent) ?? title;
-    const timezone = normalizeTimeZone(request.timezone);
-    const windowPolicy = normalizeWindowPolicy(request.windowPolicy, timezone);
+    const timezone = normalizeValidTimeZone(request.timezone, "timezone");
+    const windowPolicy = normalizeWindowPolicyInput(
+      request.windowPolicy,
+      "windowPolicy",
+      timezone,
+    );
     const cadence = normalizeCadence(request.cadence, windowPolicy);
     const progressionRule = normalizeProgressionRule(request.progressionRule);
     const reminderPlanDraft = normalizeReminderPlanDraft(
@@ -2984,11 +3168,14 @@ export class LifeOpsService {
     request: UpdateLifeOpsDefinitionRequest,
   ): Promise<LifeOpsDefinitionRecord> {
     const current = await this.getDefinitionRecord(definitionId);
-    const nextTimezone = normalizeTimeZone(
+    const nextTimezone = normalizeValidTimeZone(
       request.timezone ?? current.definition.timezone,
+      "timezone",
+      current.definition.timezone,
     );
-    const nextWindowPolicy = normalizeWindowPolicy(
+    const nextWindowPolicy = normalizeWindowPolicyInput(
       request.windowPolicy ?? current.definition.windowPolicy,
+      "windowPolicy",
       nextTimezone,
     );
     const nextCadence = normalizeCadence(
@@ -4463,6 +4650,9 @@ export class LifeOpsService {
     }
 
     let linkedMail: LifeOpsGmailMessageSummary[] = [];
+    let linkedMailState: "unavailable" | "cache" | "synced" | "error" =
+      "unavailable";
+    let linkedMailError: string | null = null;
     const status = await this.getGoogleConnectorStatus(requestUrl, mode);
     if (
       status.connected &&
@@ -4477,6 +4667,7 @@ export class LifeOpsService {
         },
       );
       linkedMail = findLinkedMailForCalendarEvent(nextEvent, cachedMessages);
+      linkedMailState = "cache";
       if (linkedMail.length === 0) {
         try {
           const triage = await this.getGmailTriage(
@@ -4491,15 +4682,24 @@ export class LifeOpsService {
             nextEvent,
             triage.messages,
           );
+          linkedMailState = "synced";
         } catch (error) {
           if (!(error instanceof LifeOpsServiceError)) {
             throw error;
           }
+          linkedMailState = "error";
+          linkedMailError = error.message;
         }
       }
     }
 
-    return buildNextCalendarEventContext(nextEvent, now, linkedMail);
+    return buildNextCalendarEventContext(
+      nextEvent,
+      now,
+      linkedMail,
+      linkedMailState,
+      linkedMailError,
+    );
   }
 
   async createGmailReplyDraft(

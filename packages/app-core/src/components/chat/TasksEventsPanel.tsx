@@ -30,7 +30,13 @@ import {
   SkipForward,
   Target,
 } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { client } from "../../api";
 import { TERMINAL_STATUSES } from "../../coding";
 import type { ActivityEvent } from "../../hooks/useActivityEvents";
@@ -91,6 +97,16 @@ function formatIsoTime(value: string | null | undefined): string {
   });
 }
 
+function readErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    if (message.length > 0) {
+      return message;
+    }
+  }
+  return fallback;
+}
+
 function formatCalendarEventTime(event: LifeOpsCalendarEvent): string {
   if (event.isAllDay) {
     return "All day";
@@ -120,10 +136,7 @@ function describeCalendarEventMeta(event: LifeOpsCalendarEvent): string {
 }
 
 function describeGoogleCapability(capability: string): string {
-  return capability
-    .replace("google.", "")
-    .replace(/\./g, " ")
-    .trim();
+  return capability.replace("google.", "").replace(/\./g, " ").trim();
 }
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
@@ -366,7 +379,9 @@ function ReminderRow({
   return (
     <div className="rounded-lg border border-border/50 bg-bg/70 p-3">
       <div className="flex items-start gap-2">
-        <BellRing className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${reminderToneClass(reminder.channel)}`} />
+        <BellRing
+          className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${reminderToneClass(reminder.channel)}`}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="truncate text-xs font-semibold text-txt">
@@ -377,7 +392,8 @@ function ReminderRow({
             </Badge>
           </div>
           <p className="mt-1 text-[11px] text-muted">
-            {formatIsoTime(reminder.scheduledFor)} · {relativeIsoTime(reminder.scheduledFor)}
+            {formatIsoTime(reminder.scheduledFor)} ·{" "}
+            {relativeIsoTime(reminder.scheduledFor)}
           </p>
         </div>
       </div>
@@ -418,7 +434,11 @@ function GoogleConnectorCard({
   loading: boolean;
   busy: boolean;
   pendingAuthUrl: string | null;
-  onConnect: (capabilities?: Array<"google.calendar.read" | "google.gmail.triage" | "google.gmail.send">) => Promise<void>;
+  onConnect: (
+    capabilities?: Array<
+      "google.calendar.read" | "google.gmail.triage" | "google.gmail.send"
+    >,
+  ) => Promise<void>;
   onDisconnect: () => Promise<void>;
   onOpenPending: () => Promise<void>;
 }) {
@@ -588,7 +608,9 @@ function GmailMessageRow({
   onOpen,
 }: {
   message: LifeOpsGmailTriageFeed["messages"][number];
-  onOpen: (message: LifeOpsGmailTriageFeed["messages"][number]) => Promise<void>;
+  onOpen: (
+    message: LifeOpsGmailTriageFeed["messages"][number],
+  ) => Promise<void>;
 }) {
   return (
     <div className="rounded-lg border border-border/50 bg-bg/70 p-3">
@@ -693,6 +715,11 @@ function NextCalendarContextCard({
               ))}
             </div>
           ) : null}
+          {context.linkedMailState === "error" && context.linkedMailError ? (
+            <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-warn">
+              Mail linking unavailable: {context.linkedMailError}
+            </p>
+          ) : null}
         </div>
       </div>
     </div>
@@ -718,7 +745,9 @@ function LifeOpsOccurrenceRow({
   return (
     <div className="rounded-lg border border-border/50 bg-bg/70 p-3">
       <div className="flex items-start gap-2">
-        <Target className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${occurrenceToneClass(occurrence.state)}`} />
+        <Target
+          className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${occurrenceToneClass(occurrence.state)}`}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="truncate text-xs font-semibold text-txt">
@@ -739,8 +768,13 @@ function LifeOpsOccurrenceRow({
             </p>
           ) : null}
           <p className="mt-1 text-[11px] text-muted">
-            {formatIsoTime(occurrence.scheduledAt ?? occurrence.relevanceStartAt)} ·{" "}
-            {relativeIsoTime(occurrence.scheduledAt ?? occurrence.relevanceStartAt)}
+            {formatIsoTime(
+              occurrence.scheduledAt ?? occurrence.relevanceStartAt,
+            )}{" "}
+            ·{" "}
+            {relativeIsoTime(
+              occurrence.scheduledAt ?? occurrence.relevanceStartAt,
+            )}
           </p>
           {actionable ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -815,7 +849,9 @@ function LifeOpsSection({
   googleConnectorBusy: boolean;
   pendingGoogleAuthUrl: string | null;
   onConnectGoogle: (
-    capabilities?: Array<"google.calendar.read" | "google.gmail.triage" | "google.gmail.send">,
+    capabilities?: Array<
+      "google.calendar.read" | "google.gmail.triage" | "google.gmail.send"
+    >,
   ) => Promise<void>;
   onDisconnectGoogle: () => Promise<void>;
   onOpenPendingGoogle: () => Promise<void>;
@@ -891,7 +927,8 @@ function LifeOpsSection({
           <>
             <p className="px-1 text-[11px] text-muted">
               {gmailTriage?.summary.importantNewCount ?? 0} important new mail ·{" "}
-              {gmailTriage?.summary.likelyReplyNeededCount ?? 0} likely reply-needed
+              {gmailTriage?.summary.likelyReplyNeededCount ?? 0} likely
+              reply-needed
               {gmailTriage?.syncedAt
                 ? ` · synced ${relativeIsoTime(gmailTriage.syncedAt)}`
                 : ""}
@@ -1033,7 +1070,9 @@ export function TasksEventsPanel({
     workbench?.lifeops ?? null,
   );
   const [lifeopsLoading, setLifeopsLoading] = useState(false);
-  const [calendarFeed, setCalendarFeed] = useState<LifeOpsCalendarFeed | null>(null);
+  const [calendarFeed, setCalendarFeed] = useState<LifeOpsCalendarFeed | null>(
+    null,
+  );
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [gmailTriage, setGmailTriage] = useState<LifeOpsGmailTriageFeed | null>(
     null,
@@ -1045,9 +1084,9 @@ export function TasksEventsPanel({
     useState<LifeOpsGoogleConnectorStatus | null>(null);
   const [googleConnectorLoading, setGoogleConnectorLoading] = useState(false);
   const [googleConnectorBusy, setGoogleConnectorBusy] = useState(false);
-  const [pendingGoogleAuthUrl, setPendingGoogleAuthUrl] = useState<string | null>(
-    null,
-  );
+  const [pendingGoogleAuthUrl, setPendingGoogleAuthUrl] = useState<
+    string | null
+  >(null);
   const [actingOccurrenceId, setActingOccurrenceId] = useState<string | null>(
     null,
   );
@@ -1109,15 +1148,22 @@ export function TasksEventsPanel({
       try {
         const result = await client.getLifeOpsOverview();
         setLifeops(result);
-      } catch {
+      } catch (error) {
         if (workbench?.lifeops) {
           setLifeops(workbench.lifeops);
+        }
+        if (!silent) {
+          setActionNotice(
+            readErrorMessage(error, "Life Ops refresh failed."),
+            "error",
+            4800,
+          );
         }
       } finally {
         setLifeopsLoading(false);
       }
     },
-    [workbench?.lifeops],
+    [setActionNotice, workbench?.lifeops],
   );
 
   const loadGoogleConnector = useCallback(
@@ -1133,13 +1179,20 @@ export function TasksEventsPanel({
           setPendingGoogleAuthUrl(null);
         }
         return result;
-      } catch {
+      } catch (error) {
+        if (!silent) {
+          setActionNotice(
+            readErrorMessage(error, "Google connector status failed to load."),
+            "error",
+            4800,
+          );
+        }
         return null;
       } finally {
         setGoogleConnectorLoading(false);
       }
     },
-    [],
+    [setActionNotice],
   );
 
   const loadCalendarFeed = useCallback(
@@ -1157,17 +1210,26 @@ export function TasksEventsPanel({
       }
 
       try {
-        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+        const timeZone =
+          Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
         const result = await client.getLifeOpsCalendarFeed({ timeZone });
         setCalendarFeed(result);
         return result;
-      } catch {
+      } catch (error) {
+        if (!silent) {
+          setCalendarFeed(null);
+          setActionNotice(
+            readErrorMessage(error, "Calendar events failed to load."),
+            "error",
+            4800,
+          );
+        }
         return null;
       } finally {
         setCalendarLoading(false);
       }
     },
-    [],
+    [setActionNotice],
   );
 
   const loadNextCalendarContext = useCallback(
@@ -1180,18 +1242,26 @@ export function TasksEventsPanel({
         return null;
       }
       try {
-        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-        const result = await client.getLifeOpsNextCalendarEventContext({ timeZone });
+        const timeZone =
+          Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+        const result = await client.getLifeOpsNextCalendarEventContext({
+          timeZone,
+        });
         setNextCalendarContext(result);
         return result;
-      } catch {
+      } catch (error) {
         if (!silent) {
           setNextCalendarContext(null);
+          setActionNotice(
+            readErrorMessage(error, "Next event context failed to load."),
+            "error",
+            4800,
+          );
         }
         return null;
       }
     },
-    [],
+    [setActionNotice],
   );
 
   const loadGmailTriage = useCallback(
@@ -1204,7 +1274,9 @@ export function TasksEventsPanel({
         setGmailTriageLoading(false);
         return null;
       }
-      if (!connectorStatus.grantedCapabilities.includes("google.gmail.triage")) {
+      if (
+        !connectorStatus.grantedCapabilities.includes("google.gmail.triage")
+      ) {
         setGmailTriage(null);
         setGmailTriageLoading(false);
         return null;
@@ -1218,16 +1290,21 @@ export function TasksEventsPanel({
         });
         setGmailTriage(result);
         return result;
-      } catch {
+      } catch (error) {
         if (!silent) {
           setGmailTriage(null);
+          setActionNotice(
+            readErrorMessage(error, "Gmail triage failed to load."),
+            "error",
+            4800,
+          );
         }
         return null;
       } finally {
         setGmailTriageLoading(false);
       }
     },
-    [],
+    [setActionNotice],
   );
 
   useEffect(() => {
@@ -1265,7 +1342,9 @@ export function TasksEventsPanel({
     })();
 
     void (async () => {
-      const connectorStatus = await loadGoogleConnector(googleConnector !== null);
+      const connectorStatus = await loadGoogleConnector(
+        googleConnector !== null,
+      );
       if (!active) return;
       await loadCalendarFeed(connectorStatus, calendarFeed !== null);
       if (!active) return;
@@ -1310,10 +1389,7 @@ export function TasksEventsPanel({
   ]);
 
   const runOccurrenceAction = useCallback(
-    async (
-      occurrenceId: string,
-      action: () => Promise<void>,
-    ) => {
+    async (occurrenceId: string, action: () => Promise<void>) => {
       setActingOccurrenceId(occurrenceId);
       try {
         await action();
@@ -1325,29 +1401,33 @@ export function TasksEventsPanel({
     [loadLifeOps],
   );
 
-  const pollForGoogleConnection = useCallback(
-    async () => {
-      for (let attempt = 0; attempt < GOOGLE_CONNECTOR_POLL_ATTEMPTS; attempt += 1) {
-        await new Promise<void>((resolve) => {
-          window.setTimeout(resolve, GOOGLE_CONNECTOR_POLL_MS);
-        });
-        const status = await loadGoogleConnector(true);
-        if (status?.connected) {
-          await loadCalendarFeed(status, true);
-          await loadGmailTriage(status, true);
-          await loadNextCalendarContext(status, true);
-          await loadLifeOps(true);
-          setActionNotice(
-            "Google permissions updated.",
-            "success",
-            3600,
-          );
-          return;
-        }
+  const pollForGoogleConnection = useCallback(async () => {
+    for (
+      let attempt = 0;
+      attempt < GOOGLE_CONNECTOR_POLL_ATTEMPTS;
+      attempt += 1
+    ) {
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, GOOGLE_CONNECTOR_POLL_MS);
+      });
+      const status = await loadGoogleConnector(true);
+      if (status?.connected) {
+        await loadCalendarFeed(status, true);
+        await loadGmailTriage(status, true);
+        await loadNextCalendarContext(status, true);
+        await loadLifeOps(true);
+        setActionNotice("Google permissions updated.", "success", 3600);
+        return;
       }
-    },
-    [loadCalendarFeed, loadGmailTriage, loadGoogleConnector, loadLifeOps, loadNextCalendarContext, setActionNotice],
-  );
+    }
+  }, [
+    loadCalendarFeed,
+    loadGmailTriage,
+    loadGoogleConnector,
+    loadLifeOps,
+    loadNextCalendarContext,
+    setActionNotice,
+  ]);
 
   const handleOpenPendingGoogle = useCallback(async () => {
     if (!pendingGoogleAuthUrl) {
@@ -1356,32 +1436,37 @@ export function TasksEventsPanel({
     await openExternalUrl(pendingGoogleAuthUrl);
   }, [pendingGoogleAuthUrl]);
 
-  const handleConnectGoogle = useCallback(async (
-    capabilities?: Array<"google.calendar.read" | "google.gmail.triage" | "google.gmail.send">,
-  ) => {
-    setGoogleConnectorBusy(true);
-    try {
-      const result = await client.startGoogleLifeOpsConnector(
-        capabilities ? { capabilities } : {},
-      );
-      setPendingGoogleAuthUrl(result.authUrl);
-      await openExternalUrl(result.authUrl);
-      setActionNotice(
-        "Continue Google consent in your browser.",
-        "info",
-        3600,
-      );
-      await pollForGoogleConnection();
-    } catch (error) {
-      setActionNotice(
-        error instanceof Error ? error.message : "Google connection failed.",
-        "error",
-        4800,
-      );
-    } finally {
-      setGoogleConnectorBusy(false);
-    }
-  }, [pollForGoogleConnection, setActionNotice]);
+  const handleConnectGoogle = useCallback(
+    async (
+      capabilities?: Array<
+        "google.calendar.read" | "google.gmail.triage" | "google.gmail.send"
+      >,
+    ) => {
+      setGoogleConnectorBusy(true);
+      try {
+        const result = await client.startGoogleLifeOpsConnector(
+          capabilities ? { capabilities } : {},
+        );
+        setPendingGoogleAuthUrl(result.authUrl);
+        await openExternalUrl(result.authUrl);
+        setActionNotice(
+          "Continue Google consent in your browser.",
+          "info",
+          3600,
+        );
+        await pollForGoogleConnection();
+      } catch (error) {
+        setActionNotice(
+          error instanceof Error ? error.message : "Google connection failed.",
+          "error",
+          4800,
+        );
+      } finally {
+        setGoogleConnectorBusy(false);
+      }
+    },
+    [pollForGoogleConnection, setActionNotice],
+  );
 
   const handleDisconnectGoogle = useCallback(async () => {
     setGoogleConnectorBusy(true);

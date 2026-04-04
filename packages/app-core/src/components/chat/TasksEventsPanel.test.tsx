@@ -4,7 +4,7 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockUseApp, mockClient } = vi.hoisted(() => ({
+const { mockUseApp, mockClient, mockSetActionNotice } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
   mockClient: {
     completeLifeOpsOccurrence: vi.fn(),
@@ -21,6 +21,7 @@ const { mockUseApp, mockClient } = vi.hoisted(() => ({
     snoozeLifeOpsOccurrence: vi.fn(),
     startGoogleLifeOpsConnector: vi.fn(),
   },
+  mockSetActionNotice: vi.fn(),
 }));
 
 vi.mock("@miladyai/ui", () => ({
@@ -79,6 +80,7 @@ describe("TasksEventsPanel", () => {
     mockClient.skipLifeOpsOccurrence.mockReset();
     mockClient.snoozeLifeOpsOccurrence.mockReset();
     mockClient.startGoogleLifeOpsConnector.mockReset();
+    mockSetActionNotice.mockReset();
     mockOpenExternalUrl.mockReset();
     const workbench = {
       todos: [],
@@ -179,7 +181,7 @@ describe("TasksEventsPanel", () => {
           autoResolvedCount: 0,
         },
       ],
-      setActionNotice: vi.fn(),
+      setActionNotice: mockSetActionNotice,
       t: (key: string, options?: { defaultValue?: string }) =>
         options?.defaultValue ?? key,
       workbench,
@@ -341,6 +343,8 @@ describe("TasksEventsPanel", () => {
         "Confirm route or access for Studio",
         "Read the event description and agenda notes",
       ],
+      linkedMailState: "cache",
+      linkedMailError: null,
       linkedMail: [
         {
           id: "mail-1",
@@ -410,7 +414,8 @@ describe("TasksEventsPanel", () => {
       provider: "google",
       mode: "local",
       requestedCapabilities: ["google.basic_identity", "google.calendar.read"],
-      redirectUri: "http://127.0.0.1:2138/api/lifeops/connectors/google/callback",
+      redirectUri:
+        "http://127.0.0.1:2138/api/lifeops/connectors/google/callback",
       authUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=test",
     });
     mockClient.disconnectGoogleLifeOpsConnector.mockResolvedValue({
@@ -458,11 +463,19 @@ describe("TasksEventsPanel", () => {
     const text = flattenText(tree.root).toLowerCase();
     const normalizedText = text.replace(/\s+/g, " ").trim();
     expect(mockClient.listWorkbenchTodos.mock.calls.length).toBeGreaterThan(0);
-    expect(mockClient.getLifeOpsCalendarFeed.mock.calls.length).toBeGreaterThan(0);
-    expect(mockClient.getLifeOpsGmailTriage.mock.calls.length).toBeGreaterThan(0);
+    expect(mockClient.getLifeOpsCalendarFeed.mock.calls.length).toBeGreaterThan(
+      0,
+    );
+    expect(mockClient.getLifeOpsGmailTriage.mock.calls.length).toBeGreaterThan(
+      0,
+    );
     expect(mockClient.getLifeOpsOverview.mock.calls.length).toBeGreaterThan(0);
-    expect(mockClient.getLifeOpsNextCalendarEventContext.mock.calls.length).toBeGreaterThan(0);
-    expect(mockClient.getGoogleLifeOpsConnectorStatus.mock.calls.length).toBeGreaterThan(0);
+    expect(
+      mockClient.getLifeOpsNextCalendarEventContext.mock.calls.length,
+    ).toBeGreaterThan(0);
+    expect(
+      mockClient.getGoogleLifeOpsConnectorStatus.mock.calls.length,
+    ).toBeGreaterThan(0);
     expect(normalizedText).toContain("google");
     expect(normalizedText).toContain("connected as agent@example.com");
     expect(normalizedText).toContain("next up: design review");
@@ -476,6 +489,119 @@ describe("TasksEventsPanel", () => {
     expect(normalizedText).toContain("worker 1");
     expect(normalizedText).not.toContain("finished worker");
     expect(normalizedText).toContain("task started: worker 1");
+  });
+
+  it("shows next-event mail linking errors when Gmail context sync fails", async () => {
+    mockClient.getLifeOpsNextCalendarEventContext.mockResolvedValue({
+      event: {
+        id: "event-error",
+        externalId: "google-event-error",
+        agentId: "agent-1",
+        provider: "google",
+        calendarId: "primary",
+        title: "Inbox zero sync",
+        description: "",
+        location: "",
+        status: "confirmed",
+        startAt: new Date(Date.now() + 45 * 60_000).toISOString(),
+        endAt: new Date(Date.now() + 75 * 60_000).toISOString(),
+        isAllDay: false,
+        timezone: "UTC",
+        htmlLink: null,
+        conferenceLink: null,
+        organizer: null,
+        attendees: [],
+        metadata: {},
+        syncedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      startsAt: new Date(Date.now() + 45 * 60_000).toISOString(),
+      startsInMinutes: 45,
+      attendeeCount: 0,
+      attendeeNames: [],
+      location: null,
+      conferenceLink: null,
+      preparationChecklist: [],
+      linkedMailState: "error",
+      linkedMailError:
+        "Google Workspace policy blocked the request: Access blocked by admin policy.",
+      linkedMail: [],
+    });
+
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(TasksEventsPanel, {
+          open: true,
+          clearEvents: vi.fn(),
+          events: [],
+        }),
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const text = flattenText(tree.root)
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    expect(text).toContain("next up: inbox zero sync");
+    expect(text).toContain("mail linking unavailable:");
+    expect(text).toContain("admin policy");
+  });
+
+  it("surfaces Google connector load failures instead of hiding them", async () => {
+    mockClient.getGoogleLifeOpsConnectorStatus.mockRejectedValueOnce(
+      new Error("Connector status unavailable"),
+    );
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(TasksEventsPanel, {
+          open: true,
+          clearEvents: vi.fn(),
+          events: [],
+        }),
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockSetActionNotice).toHaveBeenCalledWith(
+      "Connector status unavailable",
+      "error",
+      4800,
+    );
+  });
+
+  it("surfaces calendar load failures instead of quietly clearing the feed", async () => {
+    mockClient.getLifeOpsCalendarFeed.mockRejectedValueOnce(
+      new Error("Calendar sync failed"),
+    );
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(TasksEventsPanel, {
+          open: true,
+          clearEvents: vi.fn(),
+          events: [],
+        }),
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockSetActionNotice).toHaveBeenCalledWith(
+      "Calendar sync failed",
+      "error",
+      4800,
+    );
   });
 
   it("runs life-ops occurrence actions from the panel", async () => {

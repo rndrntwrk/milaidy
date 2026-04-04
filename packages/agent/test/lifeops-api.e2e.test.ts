@@ -329,6 +329,161 @@ describe("Life-ops API E2E", () => {
       expect(String(malformedDefinitionId.data.error)).toContain(
         "Invalid definition id: malformed URL encoding",
       );
+
+      const invalidDefinitionTimezone = await req(
+        port,
+        "POST",
+        "/api/lifeops/definitions",
+        {
+          kind: "task",
+          title: "Broken timezone task",
+          timezone: "Mars/Olympus",
+          cadence: {
+            kind: "once",
+            dueAt: "2026-04-05T10:00:00.000Z",
+          },
+        },
+      );
+      expect(invalidDefinitionTimezone.status).toBe(400);
+      expect(String(invalidDefinitionTimezone.data.error)).toContain(
+        "timezone must be a valid IANA time zone",
+      );
+
+      const invalidWindowPolicy = await req(
+        port,
+        "POST",
+        "/api/lifeops/definitions",
+        {
+          kind: "task",
+          title: "Broken windows task",
+          timezone: "UTC",
+          cadence: {
+            kind: "daily",
+            windows: ["custom"],
+          },
+          windowPolicy: {
+            timezone: "UTC",
+            windows: [
+              {
+                name: "custom",
+                label: "Broken",
+                startMinute: 600,
+                endMinute: 500,
+              },
+            ],
+          },
+        },
+      );
+      expect(invalidWindowPolicy.status).toBe(400);
+      expect(String(invalidWindowPolicy.data.error)).toContain(
+        "windowPolicy.windows[0].endMinute must be greater than startMinute",
+      );
+
+      const invalidQuietHours = await req(
+        port,
+        "POST",
+        "/api/lifeops/definitions",
+        {
+          kind: "task",
+          title: "Broken quiet hours task",
+          timezone: "UTC",
+          cadence: {
+            kind: "once",
+            dueAt: "2026-04-05T10:00:00.000Z",
+          },
+          reminderPlan: {
+            steps: [
+              {
+                channel: "sms",
+                offsetMinutes: 0,
+                label: "SMS",
+              },
+            ],
+            quietHours: {
+              timezone: "UTC",
+              startMinute: 0,
+              endMinute: 60,
+              channels: ["pager"],
+            },
+          },
+        },
+      );
+      expect(invalidQuietHours.status).toBe(400);
+      expect(String(invalidQuietHours.data.error)).toContain(
+        "reminderPlan.quietHours.channels[0] must be one of",
+      );
+
+      const invalidCalendarEventTimezone = await req(
+        port,
+        "POST",
+        "/api/lifeops/calendar/events",
+        {
+          title: "Bad calendar event",
+          startAt: "2026-04-05T10:00:00.000Z",
+          endAt: "2026-04-05T11:00:00.000Z",
+          timeZone: "Moon/Base",
+        },
+      );
+      expect(invalidCalendarEventTimezone.status).toBe(400);
+      expect(String(invalidCalendarEventTimezone.data.error)).toContain(
+        "timeZone must be a valid IANA time zone",
+      );
+
+      const invalidWorkflowTimezone = await req(
+        port,
+        "POST",
+        "/api/lifeops/workflows",
+        {
+          title: "Broken schedule workflow",
+          triggerType: "schedule",
+          schedule: {
+            kind: "cron",
+            cronExpression: "not-a-cron",
+            timezone: "UTC",
+          },
+          actionPlan: {
+            steps: [
+              {
+                kind: "summarize",
+                id: "summary-step",
+                prompt: "Summarize today",
+              },
+            ],
+          },
+        },
+      );
+      expect(invalidWorkflowTimezone.status).toBe(400);
+      expect(String(invalidWorkflowTimezone.data.error)).toContain(
+        "schedule.cronExpression must be a valid 5-field cron expression",
+      );
+
+      const invalidWorkflowScheduleTimezone = await req(
+        port,
+        "POST",
+        "/api/lifeops/workflows",
+        {
+          title: "Broken timezone workflow",
+          triggerType: "schedule",
+          schedule: {
+            kind: "interval",
+            everyMinutes: 30,
+            timezone: "Invalid/Timezone",
+          },
+          actionPlan: {
+            steps: [
+              {
+                kind: "summarize",
+                id: "summary-step",
+                prompt: "Summarize today",
+              },
+            ],
+          },
+        },
+      );
+      expect(invalidWorkflowScheduleTimezone.status).toBe(400);
+      expect(String(invalidWorkflowScheduleTimezone.data.error)).toContain(
+        "schedule.timezone must be a valid IANA time zone",
+      );
     });
   });
 });
