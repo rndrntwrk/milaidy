@@ -1,9 +1,9 @@
 /**
  * PRD validation inventory for Milaidy life-ops.
  *
- * Replace each `it.todo()` with executable assertions as the corresponding
- * implementation lands. This file keeps the PRD's milestone and acceptance
- * surface inside the repo so the delivery scope does not drift.
+ * Contract scenarios are executable by default.
+ * Live connector scenarios are executable but env-gated, so the PRD scope
+ * stays in-repo without forcing external credentials in normal CI.
  */
 
 import fs from "node:fs/promises";
@@ -335,7 +335,9 @@ function extractSqlText(query: SqlQuery): string {
     .join("");
 }
 
-function createSqliteRuntime(agentId = "milaidy-lifeops-prd-agent"): AgentRuntime {
+function createSqliteRuntime(
+  agentId = "milaidy-lifeops-prd-agent",
+): AgentRuntime {
   const sqlite = new DatabaseSync(":memory:");
   const runtimeSubset = {
     agentId,
@@ -357,12 +359,16 @@ function createSqliteRuntime(agentId = "milaidy-lifeops-prd-agent"): AgentRuntim
   return runtimeSubset as unknown as AgentRuntime;
 }
 
-function createApiRuntime(agentId = "milaidy-lifeops-prd-api-agent"): AgentRuntime {
+function createApiRuntime(
+  agentId = "milaidy-lifeops-prd-api-agent",
+): AgentRuntime {
   const sqlite = new DatabaseSync(":memory:");
   let tasks: Task[] = [];
   const runtimeSubset = {
     agentId,
-    character: { name: "MilaidyLifeOpsValidation" } as AgentRuntime["character"],
+    character: {
+      name: "MilaidyLifeOpsValidation",
+    } as AgentRuntime["character"],
     getSetting: () => undefined,
     getService: () => null,
     getRoomsByWorld: async () => [],
@@ -386,8 +392,10 @@ function createApiRuntime(agentId = "milaidy-lifeops-prd-api-agent"): AgentRunti
               ...task,
               ...update,
               metadata: {
-                ...((task.metadata as Record<string, unknown> | undefined) ?? {}),
-                ...((update.metadata as Record<string, unknown> | undefined) ?? {}),
+                ...((task.metadata as Record<string, unknown> | undefined) ??
+                  {}),
+                ...((update.metadata as Record<string, unknown> | undefined) ??
+                  {}),
               } as Task["metadata"],
             }
           : task,
@@ -487,22 +495,44 @@ function readOptionalEnv(key: string): string | null {
   return value && value.length > 0 ? value : null;
 }
 
+function readOptionalEnvAny(...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = readOptionalEnv(key);
+    if (value) {
+      return value;
+    }
+  }
+  return null;
+}
+
 function hasLiveGoogleLocalConfig(): boolean {
   return Boolean(
-    readOptionalEnv("MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID") ??
-      readOptionalEnv("ELIZA_GOOGLE_OAUTH_DESKTOP_CLIENT_ID"),
+    readOptionalEnvAny(
+      "MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID",
+      "ELIZA_GOOGLE_OAUTH_DESKTOP_CLIENT_ID",
+    ),
   );
 }
 
 function hasLiveGoogleRemoteConfig(): boolean {
   return Boolean(
-    (readOptionalEnv("MILADY_GOOGLE_OAUTH_WEB_CLIENT_ID") ??
-      readOptionalEnv("ELIZA_GOOGLE_OAUTH_WEB_CLIENT_ID")) &&
-      (readOptionalEnv("MILADY_GOOGLE_OAUTH_WEB_CLIENT_SECRET") ??
-        readOptionalEnv("ELIZA_GOOGLE_OAUTH_WEB_CLIENT_SECRET")) &&
-      (readOptionalEnv("MILADY_GOOGLE_OAUTH_PUBLIC_BASE_URL") ??
-        readOptionalEnv("ELIZA_GOOGLE_OAUTH_PUBLIC_BASE_URL")),
+    readOptionalEnvAny(
+      "MILADY_GOOGLE_OAUTH_WEB_CLIENT_ID",
+      "ELIZA_GOOGLE_OAUTH_WEB_CLIENT_ID",
+    ) &&
+      readOptionalEnvAny(
+        "MILADY_GOOGLE_OAUTH_WEB_CLIENT_SECRET",
+        "ELIZA_GOOGLE_OAUTH_WEB_CLIENT_SECRET",
+      ) &&
+      readOptionalEnvAny(
+        "MILADY_GOOGLE_OAUTH_PUBLIC_BASE_URL",
+        "ELIZA_GOOGLE_OAUTH_PUBLIC_BASE_URL",
+      ),
   );
+}
+
+async function readJsonFile<T>(filePath: string): Promise<T> {
+  return JSON.parse(await fs.readFile(filePath, "utf-8")) as T;
 }
 
 async function withLiveLifeOpsApiServer<T>(
@@ -622,13 +652,17 @@ async function connectLiveGoogle(args: {
   expectedEmail?: string | null;
 }): Promise<{
   status: Record<string, unknown>;
-  grant: Record<string, unknown>;
   tokenPath: string;
 }> {
-  const startRes = await req(port, "POST", "/api/lifeops/connectors/google/start", {
-    mode: args.mode,
-    capabilities: args.capabilities,
-  });
+  const startRes = await req(
+    port,
+    "POST",
+    "/api/lifeops/connectors/google/start",
+    {
+      mode: args.mode,
+      capabilities: args.capabilities,
+    },
+  );
   expect(startRes.status).toBe(200);
 
   const callbackUrl = await waitForCallbackUrl({
@@ -655,8 +689,10 @@ async function connectLiveGoogle(args: {
 
   if (args.expectedEmail) {
     expect(
-      String((statusRes.data.identity as Record<string, unknown> | null)?.email ?? "")
-        .toLowerCase(),
+      String(
+        (statusRes.data.identity as Record<string, unknown> | null)?.email ??
+          "",
+      ).toLowerCase(),
     ).toBe(args.expectedEmail.toLowerCase());
   }
 
@@ -672,21 +708,31 @@ async function connectLiveGoogle(args: {
 
   return {
     status: statusRes.data as Record<string, unknown>,
-    grant,
     tokenPath,
   };
 }
 
 async function expireStoredGoogleAccessToken(tokenPath: string): Promise<void> {
-  const raw = JSON.parse(await fs.readFile(tokenPath, "utf-8")) as Record<
-    string,
-    unknown
-  >;
+  const raw = await readJsonFile<Record<string, unknown>>(tokenPath);
   raw.expiresAt = Date.now() - 60_000;
   await fs.writeFile(tokenPath, JSON.stringify(raw, null, 2), {
     encoding: "utf-8",
     mode: 0o600,
   });
+}
+
+async function assertBrowserSessionListed(
+  port: number,
+  sessionId: string,
+  status: string,
+): Promise<void> {
+  const listed = await req(port, "GET", "/api/lifeops/browser/sessions");
+  expect(listed.status).toBe(200);
+  expect(
+    (listed.data.sessions as Array<Record<string, unknown>>).some(
+      (session) => session.id === sessionId && session.status === status,
+    ),
+  ).toBe(true);
 }
 
 async function createMorningNightHabit(runtime: AgentRuntime) {
@@ -730,12 +776,16 @@ function buildDenseSlots() {
 
 describe("Milaidy PRD validation inventory", () => {
   it("covers every milestone phase", () => {
-    const phases = [...new Set(contractScenarios.map((scenario) => scenario.phase))].sort();
+    const phases = [
+      ...new Set(contractScenarios.map((scenario) => scenario.phase)),
+    ].sort();
     expect(phases).toEqual(["P0", "P1", "P2", "P3"]);
   });
 
   it("covers every required product domain", () => {
-    const domains = new Set(contractScenarios.map((scenario) => scenario.domain));
+    const domains = new Set(
+      contractScenarios.map((scenario) => scenario.domain),
+    );
     for (const domain of requiredDomains) {
       expect(domains.has(domain)).toBe(true);
     }
@@ -759,21 +809,32 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
         it(`[${scenario.id}] ${scenario.title}`, async () => {
           const server = await startApiServer({ port: 0 });
           try {
-            const missingName = await req(server.port, "POST", "/api/onboarding", {
-              deploymentTarget: "local",
-              linkedAccounts: [],
-              serviceRouting: {},
-              credentialInputs: {},
-            });
+            const missingName = await req(
+              server.port,
+              "POST",
+              "/api/onboarding",
+              {
+                deploymentTarget: "local",
+                linkedAccounts: [],
+                serviceRouting: {},
+                credentialInputs: {},
+              },
+            );
             expect(missingName.status).toBe(400);
             expect(String(missingName.data.error)).toContain("agent name");
 
-            const options = await req(server.port, "GET", "/api/onboarding/options");
+            const options = await req(
+              server.port,
+              "GET",
+              "/api/onboarding/options",
+            );
             expect(options.status).toBe(200);
             expect(Array.isArray(options.data.names)).toBe(true);
             expect((options.data.names as string[]).length).toBeGreaterThan(0);
             expect(Array.isArray(options.data.providers)).toBe(true);
-            expect((options.data.providers as Array<Record<string, unknown>>).length).toBeGreaterThan(0);
+            expect(
+              (options.data.providers as Array<Record<string, unknown>>).length,
+            ).toBeGreaterThan(0);
 
             const runtime = createApiRuntime("p0-01-lifeops-agent");
             const lifeopsServer = await startApiServer({
@@ -844,12 +905,12 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
           const morningOverview = await service.getOverview(
             new Date("2026-04-04T16:00:00.000Z"),
           );
-          expect(requireOccurrenceByWindow(morningOverview, "morning").state).toBe(
-            "visible",
-          );
-          expect(requireOccurrenceByWindow(morningOverview, "night").state).toBe(
-            "pending",
-          );
+          expect(
+            requireOccurrenceByWindow(morningOverview, "morning").state,
+          ).toBe("visible");
+          expect(
+            requireOccurrenceByWindow(morningOverview, "night").state,
+          ).toBe("pending");
 
           const afternoonOverview = await service.getOverview(
             new Date("2026-04-04T20:30:00.000Z"),
@@ -873,14 +934,16 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
           const runtime = createSqliteRuntime("p0-04-agent");
           const { service } = await createMorningNightHabit(runtime);
           const morningTime = new Date("2026-04-04T16:00:00.000Z");
-          const morningOverview = await service.getOverview(
-            morningTime,
-          );
+          const morningOverview = await service.getOverview(morningTime);
           const morning = requireOccurrenceByWindow(morningOverview, "morning");
 
-          const snoozed = await service.snoozeOccurrence(morning.id, {
-            minutes: 30,
-          }, morningTime);
+          const snoozed = await service.snoozeOccurrence(
+            morning.id,
+            {
+              minutes: 30,
+            },
+            morningTime,
+          );
           expect(snoozed.state).toBe("snoozed");
 
           const restartedService = new LifeOpsService(runtime);
@@ -911,17 +974,21 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
           const { service, created } = await createMorningNightHabit(runtime);
           const repository = new LifeOpsRepository(runtime);
           const morningTime = new Date("2026-04-04T16:00:00.000Z");
-          const morningOverview = await service.getOverview(
-            morningTime,
-          );
+          const morningOverview = await service.getOverview(morningTime);
           const morning = requireOccurrenceByWindow(morningOverview, "morning");
 
-          const completed = await service.completeOccurrence(morning.id, {
-            note: "done",
-          }, morningTime);
+          const completed = await service.completeOccurrence(
+            morning.id,
+            {
+              note: "done",
+            },
+            morningTime,
+          );
           expect(completed.state).toBe("completed");
 
-          const definitionRecord = await service.getDefinition(created.definition.id);
+          const definitionRecord = await service.getDefinition(
+            created.definition.id,
+          );
           expect(definitionRecord.definition.status).toBe("active");
 
           const occurrences = await repository.listOccurrencesForDefinition(
@@ -929,12 +996,14 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
             created.definition.id,
           );
           expect(
-            occurrences.find((occurrence) => occurrence.id === morning.id)?.state,
+            occurrences.find((occurrence) => occurrence.id === morning.id)
+              ?.state,
           ).toBe("completed");
           expect(
             occurrences.some(
               (occurrence) =>
-                occurrence.windowName === "night" && occurrence.state === "pending",
+                occurrence.windowName === "night" &&
+                occurrence.state === "pending",
             ),
           ).toBe(true);
         });
@@ -973,7 +1042,9 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
             new Date("2026-04-04T16:00:00.000Z"),
           );
 
-          const definitionRecord = await service.getDefinition(created.definition.id);
+          const definitionRecord = await service.getDefinition(
+            created.definition.id,
+          );
           expect(definitionRecord.definition.progressionRule).toEqual({
             kind: "linear_increment",
             metric: "reps",
@@ -988,7 +1059,8 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
           );
           const night = occurrences.find(
             (occurrence) =>
-              occurrence.windowName === "night" && occurrence.state === "pending",
+              occurrence.windowName === "night" &&
+              occurrence.state === "pending",
           );
           expect(night?.derivedTarget).toMatchObject({
             kind: "linear_increment",
@@ -1033,7 +1105,9 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
           const overview = await service.getOverview(
             new Date("2026-04-05T05:30:00.000Z"),
           );
-          expect(overview.goals.map((goal) => goal.id)).toContain(goalRecord.goal.id);
+          expect(overview.goals.map((goal) => goal.id)).toContain(
+            goalRecord.goal.id,
+          );
         });
         continue;
       }
@@ -1056,10 +1130,14 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
             new Date("2026-04-04T00:30:00.000Z"),
           );
           expect(overview.occurrences.length).toBe(8);
-          expect(overview.summary.activeOccurrenceCount).toBeGreaterThanOrEqual(1);
+          expect(overview.summary.activeOccurrenceCount).toBeGreaterThanOrEqual(
+            1,
+          );
           expect(overview.reminders.length).toBeGreaterThanOrEqual(1);
           expect(
-            overview.reminders.every((reminder) => reminder.channel === "in_app"),
+            overview.reminders.every(
+              (reminder) => reminder.channel === "in_app",
+            ),
           ).toBe(true);
         });
         continue;
@@ -1166,7 +1244,9 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                 `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(authUrl.searchParams.get("state") ?? "")}&code=desktop-code`,
               );
               expect(callbackRes.status).toBe(200);
-              expect(String(callbackRes.data._raw)).toContain("Google Connected");
+              expect(String(callbackRes.data._raw)).toContain(
+                "Google Connected",
+              );
 
               const statusRes = await req(
                 port,
@@ -1285,9 +1365,9 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                 "google.calendar.read",
                 "google.calendar.write",
               ]);
-              expect((statusRes.data.identity as Record<string, unknown>).email).toBe(
-                "remote@example.com",
-              );
+              expect(
+                (statusRes.data.identity as Record<string, unknown>).email,
+              ).toBe("remote@example.com");
             },
           );
         });
@@ -1352,7 +1432,8 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                         status: "confirmed",
                         summary: "Design review",
                         location: "Studio",
-                        htmlLink: "https://calendar.google.com/event?eid=design",
+                        htmlLink:
+                          "https://calendar.google.com/event?eid=design",
                         start: {
                           dateTime: "2026-04-04T15:00:00-07:00",
                           timeZone: "America/Los_Angeles",
@@ -1373,7 +1454,8 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                         id: "event-earlier",
                         status: "confirmed",
                         summary: "Morning standup",
-                        htmlLink: "https://calendar.google.com/event?eid=standup",
+                        htmlLink:
+                          "https://calendar.google.com/event?eid=standup",
                         start: {
                           dateTime: "2026-04-04T09:00:00-07:00",
                           timeZone: "America/Los_Angeles",
@@ -1399,10 +1481,11 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
               );
               expect(feedRes.status).toBe(200);
               expect(feedRes.data.source).toBe("synced");
-              expect(feedRes.data.events.map((event: { title: string }) => event.title)).toEqual([
-                "Morning standup",
-                "Design review",
-              ]);
+              expect(
+                feedRes.data.events.map(
+                  (event: { title: string }) => event.title,
+                ),
+              ).toEqual(["Morning standup", "Design review"]);
               expect(feedRes.data.events[1]).toMatchObject({
                 title: "Design review",
                 htmlLink: "https://calendar.google.com/event?eid=design",
@@ -1655,7 +1738,8 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                 );
 
                 fetchMock.mockImplementationOnce(async (input, init) => {
-                  const url = typeof input === "string" ? input : input.toString();
+                  const url =
+                    typeof input === "string" ? input : input.toString();
                   expect(url).toBe(
                     "https://www.googleapis.com/calendar/v3/calendars/primary/events",
                   );
@@ -1809,7 +1893,11 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
               );
               expect(feedRes.status).toBe(200);
 
-              const overviewRes = await req(port, "GET", "/api/lifeops/overview");
+              const overviewRes = await req(
+                port,
+                "GET",
+                "/api/lifeops/overview",
+              );
               expect(overviewRes.status).toBe(200);
               expect(overviewRes.data.reminders).toEqual(
                 expect.arrayContaining([
@@ -1874,8 +1962,13 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
               );
 
               fetchMock.mockImplementation(async (input) => {
-                const url = typeof input === "string" ? input : input.toString();
-                if (url.startsWith("https://gmail.googleapis.com/gmail/v1/users/me/messages?")) {
+                const url =
+                  typeof input === "string" ? input : input.toString();
+                if (
+                  url.startsWith(
+                    "https://gmail.googleapis.com/gmail/v1/users/me/messages?",
+                  )
+                ) {
                   return new Response(
                     JSON.stringify({
                       messages: [{ id: "msg-prd-1", threadId: "thread-prd-1" }],
@@ -1897,9 +1990,15 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                       payload: {
                         headers: [
                           { name: "Subject", value: "Design review agenda" },
-                          { name: "From", value: "Friend <friend@example.com>" },
+                          {
+                            name: "From",
+                            value: "Friend <friend@example.com>",
+                          },
                           { name: "To", value: "gmail-triage@example.com" },
-                          { name: "Message-Id", value: "<message-prd-1@example.com>" },
+                          {
+                            name: "Message-Id",
+                            value: "<message-prd-1@example.com>",
+                          },
                         ],
                       },
                     }),
@@ -1999,8 +2098,13 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
               );
 
               fetchMock.mockImplementation(async (input) => {
-                const url = typeof input === "string" ? input : input.toString();
-                if (url.startsWith("https://gmail.googleapis.com/gmail/v1/users/me/messages?")) {
+                const url =
+                  typeof input === "string" ? input : input.toString();
+                if (
+                  url.startsWith(
+                    "https://gmail.googleapis.com/gmail/v1/users/me/messages?",
+                  )
+                ) {
                   return new Response(
                     JSON.stringify({
                       messages: [{ id: "msg-prd-2", threadId: "thread-prd-2" }],
@@ -2024,7 +2128,10 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                           { name: "Subject", value: "Revised plan" },
                           { name: "From", value: "Mira <mira@example.com>" },
                           { name: "To", value: "gmail-draft@example.com" },
-                          { name: "Message-Id", value: "<message-prd-2@example.com>" },
+                          {
+                            name: "Message-Id",
+                            value: "<message-prd-2@example.com>",
+                          },
                         ],
                       },
                     }),
@@ -2037,7 +2144,11 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                 throw new Error(`Unexpected fetch: ${url}`);
               });
 
-              const triageRes = await req(port, "GET", "/api/lifeops/gmail/triage");
+              const triageRes = await req(
+                port,
+                "GET",
+                "/api/lifeops/gmail/triage",
+              );
               expect(triageRes.status).toBe(200);
               const messageId = String(triageRes.data.messages[0].id);
 
@@ -2117,7 +2228,9 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                 "/api/lifeops/connectors/google/start",
                 { capabilities: ["google.calendar.read"] },
               );
-              const calendarAuthUrl = new URL(String(calendarStartRes.data.authUrl));
+              const calendarAuthUrl = new URL(
+                String(calendarStartRes.data.authUrl),
+              );
               await req(
                 port,
                 "GET",
@@ -2455,7 +2568,8 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
               new Date("2026-04-04T15:45:00.000Z"),
             );
             const secondOccurrence = dayOverview.occurrences.find(
-              (candidate) => candidate.definitionId === secondDefinition.definition.id,
+              (candidate) =>
+                candidate.definitionId === secondDefinition.definition.id,
             );
             expect(secondOccurrence).toBeDefined();
 
@@ -2470,7 +2584,9 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
             );
             expect(policyBlocked.status).toBe(200);
             expect(
-              (policyBlocked.data.attempts as Array<Record<string, unknown>>).some(
+              (
+                policyBlocked.data.attempts as Array<Record<string, unknown>>
+              ).some(
                 (attempt) =>
                   attempt.ownerId === secondOccurrence?.id &&
                   attempt.channel === "sms" &&
@@ -2531,7 +2647,11 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
             });
             const workflowId = String(created.data.definition.id);
 
-            const listed = await req(server.port, "GET", "/api/lifeops/workflows");
+            const listed = await req(
+              server.port,
+              "GET",
+              "/api/lifeops/workflows",
+            );
             expect(listed.status).toBe(200);
             expect(listed.data.workflows).toEqual(
               expect.arrayContaining([
@@ -2658,9 +2778,14 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                           id: "workflow-event",
                           status: "confirmed",
                           summary: "Workflow planning",
-                          start: { dateTime: now.toISOString(), timeZone: "UTC" },
+                          start: {
+                            dateTime: now.toISOString(),
+                            timeZone: "UTC",
+                          },
                           end: {
-                            dateTime: new Date(now.getTime() + 60 * 60_000).toISOString(),
+                            dateTime: new Date(
+                              now.getTime() + 60 * 60_000,
+                            ).toISOString(),
                             timeZone: "UTC",
                           },
                         },
@@ -2672,7 +2797,10 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                     },
                   );
                 }
-                if (target === "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=3&includeSpamTrash=false&labelIds=INBOX") {
+                if (
+                  target ===
+                  "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=3&includeSpamTrash=false&labelIds=INBOX"
+                ) {
                   return new Response(
                     JSON.stringify({
                       messages: [{ id: "mail-1", threadId: "thread-1" }],
@@ -2683,7 +2811,11 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                     },
                   );
                 }
-                if (target.startsWith("https://gmail.googleapis.com/gmail/v1/users/me/messages/mail-1?")) {
+                if (
+                  target.startsWith(
+                    "https://gmail.googleapis.com/gmail/v1/users/me/messages/mail-1?",
+                  )
+                ) {
                   return new Response(
                     JSON.stringify({
                       id: "mail-1",
@@ -2696,7 +2828,10 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                           { name: "Subject", value: "Next draft" },
                           { name: "From", value: "Mira <mira@example.com>" },
                           { name: "To", value: "workflow@example.com" },
-                          { name: "Message-Id", value: "<workflow@example.com>" },
+                          {
+                            name: "Message-Id",
+                            value: "<workflow@example.com>",
+                          },
                         ],
                       },
                     }),
@@ -2832,14 +2967,12 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
           process.env.TWILIO_ACCOUNT_SID = "AC123";
           process.env.TWILIO_AUTH_TOKEN = "secret";
           process.env.TWILIO_PHONE_NUMBER = "+14155550999";
-          const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
-            new Response(
-              JSON.stringify({ sid: "SM123" }),
-              {
+          const fetchMock = vi.fn<typeof fetch>().mockImplementation(
+            async () =>
+              new Response(JSON.stringify({ sid: "SM123" }), {
                 status: 201,
                 headers: { "content-type": "application/json" },
-              },
-            ),
+              }),
           );
           vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
@@ -3020,14 +3153,12 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
           process.env.TWITTER_API_SECRET_KEY = "secret";
           process.env.TWITTER_ACCESS_TOKEN = "token";
           process.env.TWITTER_ACCESS_TOKEN_SECRET = "token-secret";
-          const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
-            new Response(
-              JSON.stringify({ data: { id: "tweet-123" } }),
-              {
+          const fetchMock = vi.fn<typeof fetch>().mockImplementation(
+            async () =>
+              new Response(JSON.stringify({ data: { id: "tweet-123" } }), {
                 status: 201,
                 headers: { "content-type": "application/json" },
-              },
-            ),
+              }),
           );
           vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
@@ -3049,16 +3180,26 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
             );
             expect(connector.status).toBe(201);
 
-            const blocked = await req(server.port, "POST", "/api/lifeops/x/posts", {
-              text: "No confirmation yet",
-            });
+            const blocked = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/x/posts",
+              {
+                text: "No confirmation yet",
+              },
+            );
             expect(blocked.status).toBe(409);
             expect(fetchMock.mock.calls.length).toBe(startupFetchCount);
 
-            const confirmed = await req(server.port, "POST", "/api/lifeops/x/posts", {
-              text: "Confirmed post",
-              confirmPost: true,
-            });
+            const confirmed = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/x/posts",
+              {
+                text: "Confirmed post",
+                confirmPost: true,
+              },
+            );
             expect(confirmed.status).toBe(201);
             expect(confirmed.data).toMatchObject({
               ok: true,
@@ -3204,7 +3345,9 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
             );
             expect(created.status).toBe(201);
             const sessionId = String(created.data.session.id);
-            expect(created.data.session.awaitingConfirmationForActionId).toBeTruthy();
+            expect(
+              created.data.session.awaitingConfirmationForActionId,
+            ).toBeTruthy();
 
             const blocked = await req(
               server.port,
@@ -3217,7 +3360,9 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
               },
             );
             expect(blocked.status).toBe(409);
-            expect(String(blocked.data.error)).toContain("explicit confirmation");
+            expect(String(blocked.data.error)).toContain(
+              "explicit confirmation",
+            );
 
             const cancelled = await req(
               server.port,
@@ -3250,8 +3395,9 @@ function liveScenarioTitle(id: string): string {
   return liveScenarios.find((scenario) => scenario.id === id)?.title ?? id;
 }
 
-const liveGoogleExpectedEmail =
-  readOptionalEnv("MILADY_LIFEOPS_LIVE_GOOGLE_EXPECTED_EMAIL");
+const liveGoogleExpectedEmail = readOptionalEnv(
+  "MILADY_LIFEOPS_LIVE_GOOGLE_EXPECTED_EMAIL",
+);
 const liveGoogleLocalCallbackFile = readOptionalEnv(
   "MILADY_LIFEOPS_LIVE_GOOGLE_LOCAL_CALLBACK_FILE",
 );
@@ -3277,7 +3423,9 @@ const liveGoogleAdminBlockMode =
   readOptionalEnv("MILADY_LIFEOPS_LIVE_GOOGLE_ADMIN_BLOCK_MODE") === "remote"
     ? "remote"
     : "local";
-const liveTwilioToPhone = readOptionalEnv("MILADY_LIFEOPS_LIVE_TWILIO_TO_PHONE");
+const liveTwilioToPhone = readOptionalEnv(
+  "MILADY_LIFEOPS_LIVE_TWILIO_TO_PHONE",
+);
 const liveTwilioPrimaryChannel =
   readOptionalEnv("MILADY_LIFEOPS_LIVE_TWILIO_PRIMARY_CHANNEL") === "voice"
     ? "voice"
@@ -3300,9 +3448,9 @@ describeLive("Milaidy PRD live connector coverage", () => {
           callbackFile: liveGoogleLocalCallbackFile!,
           expectedEmail: liveGoogleExpectedEmail,
         });
-        const raw = JSON.parse(await fs.readFile(tokenPath, "utf-8")) as {
+        const raw = await readJsonFile<{
           refreshToken?: string | null;
-        };
+        }>(tokenPath);
         expect(raw.refreshToken?.trim()).toBeTruthy();
         expect(status.mode).toBe("local");
         expect(status.reason).toBe("connected");
@@ -3329,9 +3477,9 @@ describeLive("Milaidy PRD live connector coverage", () => {
           callbackFile: liveGoogleRemoteCallbackFile!,
           expectedEmail: liveGoogleExpectedEmail,
         });
-        const raw = JSON.parse(await fs.readFile(tokenPath, "utf-8")) as {
+        const raw = await readJsonFile<{
           refreshToken?: string | null;
-        };
+        }>(tokenPath);
         expect(raw.refreshToken?.trim()).toBeTruthy();
         expect(status.mode).toBe("remote");
         expect(status.connected).toBe(true);
@@ -3371,10 +3519,10 @@ describeLive("Milaidy PRD live connector coverage", () => {
         expect(secondFeed.status).toBe(200);
         expect(Array.isArray(secondFeed.data.events)).toBe(true);
 
-        const refreshed = JSON.parse(await fs.readFile(tokenPath, "utf-8")) as {
+        const refreshed = await readJsonFile<{
           expiresAt?: number;
           refreshToken?: string | null;
-        };
+        }>(tokenPath);
         expect(refreshed.refreshToken?.trim()).toBeTruthy();
         expect(Number(refreshed.expiresAt)).toBeGreaterThan(Date.now());
 
@@ -3542,9 +3690,9 @@ describeLive("Milaidy PRD live connector coverage", () => {
         );
         expect(processed.status).toBe(200);
 
-        const attempts = (processed.data.attempts as Array<Record<string, unknown>>).filter(
-          (attempt) => attempt.ownerId === occurrence?.id,
-        );
+        const attempts = (
+          processed.data.attempts as Array<Record<string, unknown>>
+        ).filter((attempt) => attempt.ownerId === occurrence?.id);
         expect(attempts).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
@@ -3662,15 +3810,11 @@ describeLive("Milaidy PRD live connector coverage", () => {
       expect(pending.data.session.status).toBe("awaiting_confirmation");
       expect(pending.data.session.awaitingConfirmationForActionId).toBeTruthy();
 
-      const listedPending = await req(port, "GET", "/api/lifeops/browser/sessions");
-      expect(listedPending.status).toBe(200);
-      expect(
-        (listedPending.data.sessions as Array<Record<string, unknown>>).some(
-          (session) =>
-            session.id === sessionId &&
-            session.status === "awaiting_confirmation",
-        ),
-      ).toBe(true);
+      await assertBrowserSessionListed(
+        port,
+        sessionId,
+        "awaiting_confirmation",
+      );
 
       const confirmed = await req(
         port,
@@ -3683,14 +3827,7 @@ describeLive("Milaidy PRD live connector coverage", () => {
       expect(confirmed.status).toBe(200);
       expect(confirmed.data.session.status).toBe("navigating");
 
-      const listedNavigating = await req(port, "GET", "/api/lifeops/browser/sessions");
-      expect(listedNavigating.status).toBe(200);
-      expect(
-        (listedNavigating.data.sessions as Array<Record<string, unknown>>).some(
-          (session) =>
-            session.id === sessionId && session.status === "navigating",
-        ),
-      ).toBe(true);
+      await assertBrowserSessionListed(port, sessionId, "navigating");
 
       const completed = await req(
         port,
@@ -3705,13 +3842,7 @@ describeLive("Milaidy PRD live connector coverage", () => {
       expect(completed.status).toBe(200);
       expect(completed.data.session.status).toBe("done");
 
-      const listedDone = await req(port, "GET", "/api/lifeops/browser/sessions");
-      expect(listedDone.status).toBe(200);
-      expect(
-        (listedDone.data.sessions as Array<Record<string, unknown>>).some(
-          (session) => session.id === sessionId && session.status === "done",
-        ),
-      ).toBe(true);
+      await assertBrowserSessionListed(port, sessionId, "done");
     });
   });
 });

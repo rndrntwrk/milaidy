@@ -115,9 +115,7 @@ import {
   fetchGoogleGmailTriageMessages,
   sendGoogleGmailReply,
 } from "./google-gmail.js";
-import {
-  normalizeGoogleCapabilities,
-} from "./google-scopes.js";
+import { normalizeGoogleCapabilities } from "./google-scopes.js";
 import {
   createLifeOpsAuditEvent,
   createLifeOpsBrowserSession,
@@ -140,10 +138,7 @@ import {
   getZonedDateParts,
   type ZonedDateParts,
 } from "./time.js";
-import {
-  postToX,
-  readXPosterCredentialsFromEnv,
-} from "./x-poster.js";
+import { postToX, readXPosterCredentialsFromEnv } from "./x-poster.js";
 import {
   readTwilioCredentialsFromEnv,
   sendTwilioSms,
@@ -210,6 +205,16 @@ function clearGoogleGrantAuthFailureMetadata(
   return next;
 }
 
+function googleGrantHasAuthFailureMetadata(
+  metadata: Record<string, unknown>,
+): boolean {
+  return (
+    metadata.authState !== undefined ||
+    metadata.lastAuthError !== undefined ||
+    metadata.lastAuthErrorAt !== undefined
+  );
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -251,7 +256,10 @@ function mergeMetadata(
     ...current,
     ...cloneRecord(updates),
   };
-  if (typeof merged.privacyClass !== "string" || merged.privacyClass.trim().length === 0) {
+  if (
+    typeof merged.privacyClass !== "string" ||
+    merged.privacyClass.trim().length === 0
+  ) {
     merged.privacyClass = "private";
   }
   if (merged.privacyClass === "private") {
@@ -285,7 +293,10 @@ function normalizeOptionalString(value: unknown): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
-function normalizeOptionalBoolean(value: unknown, field: string): boolean | undefined {
+function normalizeOptionalBoolean(
+  value: unknown,
+  field: string,
+): boolean | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -336,7 +347,10 @@ function normalizeFiniteNumber(value: unknown, field: string): number {
   fail(400, `${field} must be a finite number`);
 }
 
-function normalizeOptionalMinutes(value: unknown, field: string): number | undefined {
+function normalizeOptionalMinutes(
+  value: unknown,
+  field: string,
+): number | undefined {
   if (value === null || value === undefined || value === "") return undefined;
   const minutes = Math.trunc(normalizeFiniteNumber(value, field));
   if (minutes < 0) {
@@ -388,14 +402,12 @@ function normalizeReminderUrgency(value: unknown): LifeOpsReminderUrgency {
   if (typeof value !== "string" || value.trim().length === 0) {
     return "medium";
   }
-  return normalizeEnumValue(
-    value,
-    "urgency",
-    LIFEOPS_REMINDER_URGENCY_LEVELS,
-  );
+  return normalizeEnumValue(value, "urgency", LIFEOPS_REMINDER_URGENCY_LEVELS);
 }
 
-function normalizeXCapabilityRequest(value: unknown): Array<"x.read" | "x.write"> {
+function normalizeXCapabilityRequest(
+  value: unknown,
+): Array<"x.read" | "x.write"> {
   const entries = Array.isArray(value) ? value : [];
   if (entries.length === 0) {
     fail(400, "capabilities must include at least one X capability");
@@ -492,16 +504,12 @@ function hasGoogleCalendarWriteCapability(
   return capabilities.has("google.calendar.write");
 }
 
-function hasGoogleGmailTriageCapability(
-  grant: LifeOpsConnectorGrant,
-): boolean {
+function hasGoogleGmailTriageCapability(grant: LifeOpsConnectorGrant): boolean {
   const capabilities = new Set(normalizeGrantCapabilities(grant.capabilities));
   return capabilities.has("google.gmail.triage");
 }
 
-function hasGoogleGmailSendCapability(
-  grant: LifeOpsConnectorGrant,
-): boolean {
+function hasGoogleGmailSendCapability(grant: LifeOpsConnectorGrant): boolean {
   const capabilities = new Set(normalizeGrantCapabilities(grant.capabilities));
   return capabilities.has("google.gmail.send");
 }
@@ -516,13 +524,20 @@ function normalizeCalendarAttendees(
     fail(400, "attendees must be an array");
   }
   const seen = new Set<string>();
-  const attendees: Array<{ email: string; displayName?: string; optional?: boolean }> = [];
+  const attendees: Array<{
+    email: string;
+    displayName?: string;
+    optional?: boolean;
+  }> = [];
   for (const [index, candidate] of value.entries()) {
     if (!candidate || typeof candidate !== "object") {
       fail(400, `attendees[${index}] must be an object`);
     }
     const attendee = candidate as Record<string, unknown>;
-    const email = requireNonEmptyString(attendee.email, `attendees[${index}].email`).toLowerCase();
+    const email = requireNonEmptyString(
+      attendee.email,
+      `attendees[${index}].email`,
+    ).toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       fail(400, `attendees[${index}].email must be a valid email address`);
     }
@@ -530,7 +545,11 @@ function normalizeCalendarAttendees(
       continue;
     }
     seen.add(email);
-    const normalized: { email: string; displayName?: string; optional?: boolean } = {
+    const normalized: {
+      email: string;
+      displayName?: string;
+      optional?: boolean;
+    } = {
       email,
     };
     const displayName = normalizeOptionalString(attendee.displayName);
@@ -584,10 +603,8 @@ function resolveCalendarEventRange(
   now: Date,
 ): { startAt: string; endAt: string; timeZone: string } {
   const timeZone = normalizeCalendarTimeZone(request.timeZone);
-  const durationMinutes = normalizeOptionalMinutes(
-    request.durationMinutes,
-    "durationMinutes",
-  ) ?? 60;
+  const durationMinutes =
+    normalizeOptionalMinutes(request.durationMinutes, "durationMinutes") ?? 60;
   if (durationMinutes <= 0) {
     fail(400, "durationMinutes must be greater than 0");
   }
@@ -657,12 +674,18 @@ function buildNextCalendarEventContext(
     ? Math.max(0, Math.round((startsAtMs - now.getTime()) / 60_000))
     : null;
   const checklist = [
-    event.location.trim().length > 0 ? `Confirm route or access for ${event.location.trim()}` : "",
-    event.conferenceLink ? "Open and test the call link before the meeting starts" : "",
+    event.location.trim().length > 0
+      ? `Confirm route or access for ${event.location.trim()}`
+      : "",
+    event.conferenceLink
+      ? "Open and test the call link before the meeting starts"
+      : "",
     attendeeNames.length > 0
       ? `Review attendee context for ${attendeeNames.slice(0, 3).join(", ")}`
       : "",
-    event.description.trim().length > 0 ? "Read the event description and agenda notes" : "",
+    event.description.trim().length > 0
+      ? "Read the event description and agenda notes"
+      : "",
   ].filter((value) => value.length > 0);
 
   return {
@@ -696,10 +719,12 @@ function normalizeGmailTriageMaxResults(value: unknown): number {
   return maxResults;
 }
 
-function normalizeGmailDraftTone(
-  value: unknown,
-): "brief" | "neutral" | "warm" {
-  return normalizeEnumValue(value ?? "neutral", "tone", LIFEOPS_GMAIL_DRAFT_TONES);
+function normalizeGmailDraftTone(value: unknown): "brief" | "neutral" | "warm" {
+  return normalizeEnumValue(
+    value ?? "neutral",
+    "tone",
+    LIFEOPS_GMAIL_DRAFT_TONES,
+  );
 }
 
 function normalizeOptionalStringArray(
@@ -715,7 +740,10 @@ function normalizeOptionalStringArray(
   const items: string[] = [];
   const seen = new Set<string>();
   for (const [index, candidate] of value.entries()) {
-    const item = requireNonEmptyString(candidate, `${field}[${index}]`).toLowerCase();
+    const item = requireNonEmptyString(
+      candidate,
+      `${field}[${index}]`,
+    ).toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(item)) {
       fail(400, `${field}[${index}] must be a valid email address`);
     }
@@ -736,10 +764,14 @@ function normalizeGmailReplyBody(value: unknown): string {
   return body;
 }
 
-function collectCalendarEventContactEmails(event: LifeOpsCalendarEvent): Set<string> {
+function collectCalendarEventContactEmails(
+  event: LifeOpsCalendarEvent,
+): Set<string> {
   const emails = new Set<string>();
   const organizerEmail =
-    typeof event.organizer?.email === "string" ? event.organizer.email.trim().toLowerCase() : "";
+    typeof event.organizer?.email === "string"
+      ? event.organizer.email.trim().toLowerCase()
+      : "";
   if (organizerEmail) {
     emails.add(organizerEmail);
   }
@@ -768,12 +800,19 @@ function findLinkedMailForCalendarEvent(
 
   return messages
     .filter((message) => {
-      if (message.fromEmail && relatedEmails.has(message.fromEmail.toLowerCase())) {
+      if (
+        message.fromEmail &&
+        relatedEmails.has(message.fromEmail.toLowerCase())
+      ) {
         return true;
       }
       if (
-        message.to.some((entry) => relatedEmails.has(entry.trim().toLowerCase())) ||
-        message.cc.some((entry) => relatedEmails.has(entry.trim().toLowerCase()))
+        message.to.some((entry) =>
+          relatedEmails.has(entry.trim().toLowerCase()),
+        ) ||
+        message.cc.some((entry) =>
+          relatedEmails.has(entry.trim().toLowerCase()),
+        )
       ) {
         return true;
       }
@@ -847,20 +886,9 @@ function buildGmailReplyDraft(args: {
       : args.tone === "warm"
         ? `Thanks for reaching out about ${subject}. I reviewed your note and wanted to follow up.`
         : `Thanks for the note about ${subject}. I reviewed your message and wanted to follow up.`;
-  const bodyLines = [
-    greeting,
-    "",
-    bodyCore,
-    "",
-    "Best,",
-    args.senderName,
-  ];
+  const bodyLines = [greeting, "", bodyCore, "", "Best,", args.senderName];
   if (args.includeQuotedOriginal && args.message.snippet.trim().length > 0) {
-    bodyLines.push(
-      "",
-      "Quoted context:",
-      args.message.snippet.trim(),
-    );
+    bodyLines.push("", "Quoted context:", args.message.snippet.trim());
   }
 
   const recipient = args.message.replyTo ?? args.message.fromEmail ?? null;
@@ -990,8 +1018,14 @@ function normalizeGrantCapabilities(
   return normalizeGoogleCapabilities(capabilities);
 }
 
-function normalizeWorkflowTriggerType(value: unknown): LifeOpsWorkflowTriggerType {
-  return normalizeEnumValue(value, "triggerType", LIFEOPS_WORKFLOW_TRIGGER_TYPES);
+function normalizeWorkflowTriggerType(
+  value: unknown,
+): LifeOpsWorkflowTriggerType {
+  return normalizeEnumValue(
+    value,
+    "triggerType",
+    LIFEOPS_WORKFLOW_TRIGGER_TYPES,
+  );
 }
 
 function normalizeWorkflowSchedule(
@@ -1002,11 +1036,11 @@ function normalizeWorkflowSchedule(
     return { kind: "manual" };
   }
   const schedule = requireRecord(value, "schedule");
-  const kind = normalizeEnumValue(
-    schedule.kind,
-    "schedule.kind",
-    ["once", "interval", "cron"] as const,
-  );
+  const kind = normalizeEnumValue(schedule.kind, "schedule.kind", [
+    "once",
+    "interval",
+    "cron",
+  ] as const);
   if (kind === "once") {
     return {
       kind,
@@ -1115,11 +1149,14 @@ function normalizeBrowserActionInput(
         input.requiresConfirmation,
         `${field}.requiresConfirmation`,
       ) ?? false,
-    metadata: normalizeOptionalRecord(input.metadata, `${field}.metadata`) ?? {},
+    metadata:
+      normalizeOptionalRecord(input.metadata, `${field}.metadata`) ?? {},
   };
 }
 
-function normalizeWorkflowActionPlan(value: unknown): LifeOpsWorkflowActionPlan {
+function normalizeWorkflowActionPlan(
+  value: unknown,
+): LifeOpsWorkflowActionPlan {
   const input = requireRecord(value, "actionPlan");
   if (!Array.isArray(input.steps) || input.steps.length === 0) {
     fail(400, "actionPlan.steps must contain at least one step");
@@ -1129,7 +1166,13 @@ function normalizeWorkflowActionPlan(value: unknown): LifeOpsWorkflowActionPlan 
     const kind = normalizeEnumValue(
       step.kind,
       `actionPlan.steps[${index}].kind`,
-      ["create_task", "get_calendar_feed", "get_gmail_triage", "summarize", "browser"] as const,
+      [
+        "create_task",
+        "get_calendar_feed",
+        "get_gmail_triage",
+        "summarize",
+        "browser",
+      ] as const,
     );
     const id = normalizeOptionalString(step.id);
     const resultKey = normalizeOptionalString(step.resultKey);
@@ -1176,7 +1219,10 @@ function normalizeWorkflowActionPlan(value: unknown): LifeOpsWorkflowActionPlan 
       };
     }
     if (!Array.isArray(step.actions) || step.actions.length === 0) {
-      fail(400, `actionPlan.steps[${index}].actions must contain at least one action`);
+      fail(
+        400,
+        `actionPlan.steps[${index}].actions must contain at least one action`,
+      );
     }
     return {
       kind,
@@ -1205,11 +1251,16 @@ function normalizeWindowNames(
   if (!Array.isArray(value) || value.length === 0) {
     fail(400, `${field} must contain at least one time window`);
   }
-  const allowedNames = new Set(windowPolicy.windows.map((window) => window.name));
+  const allowedNames = new Set(
+    windowPolicy.windows.map((window) => window.name),
+  );
   const seen = new Set<string>();
   const windows: Array<LifeOpsTimeWindowDefinition["name"]> = [];
   for (const candidate of value) {
-    const name = requireNonEmptyString(candidate, field) as LifeOpsTimeWindowDefinition["name"];
+    const name = requireNonEmptyString(
+      candidate,
+      field,
+    ) as LifeOpsTimeWindowDefinition["name"];
     if (!allowedNames.has(name)) {
       fail(400, `${field} contains unknown window \"${name}\"`);
     }
@@ -1262,22 +1313,34 @@ function normalizeCadence(
     case "daily":
       return withVisibility({
         kind: "daily",
-        windows: normalizeWindowNames(cadence.windows, "cadence.windows", windowPolicy),
+        windows: normalizeWindowNames(
+          cadence.windows,
+          "cadence.windows",
+          windowPolicy,
+        ),
       }) as LifeOpsCadence;
     case "weekly": {
       if (!Array.isArray(cadence.weekdays) || cadence.weekdays.length === 0) {
         fail(400, "cadence.weekdays must contain at least one weekday");
       }
-      const weekdays = [...new Set(cadence.weekdays.map((weekday) => Math.trunc(normalizeFiniteNumber(weekday, "cadence.weekdays"))))].sort(
-        (left, right) => left - right,
-      );
+      const weekdays = [
+        ...new Set(
+          cadence.weekdays.map((weekday) =>
+            Math.trunc(normalizeFiniteNumber(weekday, "cadence.weekdays")),
+          ),
+        ),
+      ].sort((left, right) => left - right);
       if (weekdays.some((weekday) => weekday < 0 || weekday > 6)) {
         fail(400, "cadence.weekdays must use Sunday=0 through Saturday=6");
       }
       return withVisibility({
         kind: "weekly",
         weekdays,
-        windows: normalizeWindowNames(cadence.windows, "cadence.windows", windowPolicy),
+        windows: normalizeWindowNames(
+          cadence.windows,
+          "cadence.windows",
+          windowPolicy,
+        ),
       }) as LifeOpsCadence;
     }
     case "times_per_day": {
@@ -1286,14 +1349,23 @@ function normalizeCadence(
       }
       const seen = new Set<string>();
       const slots = cadence.slots.map((slot, index) => {
-        const key = requireNonEmptyString(slot.key, `cadence.slots[${index}].key`);
+        const key = requireNonEmptyString(
+          slot.key,
+          `cadence.slots[${index}].key`,
+        );
         if (seen.has(key)) {
           fail(400, `cadence.slots contains duplicate key \"${key}\"`);
         }
         seen.add(key);
-        const label = requireNonEmptyString(slot.label, `cadence.slots[${index}].label`);
+        const label = requireNonEmptyString(
+          slot.label,
+          `cadence.slots[${index}].label`,
+        );
         const minuteOfDay = Math.trunc(
-          normalizeFiniteNumber(slot.minuteOfDay, `cadence.slots[${index}].minuteOfDay`),
+          normalizeFiniteNumber(
+            slot.minuteOfDay,
+            `cadence.slots[${index}].minuteOfDay`,
+          ),
         );
         const durationMinutes = Math.trunc(
           normalizeFiniteNumber(
@@ -1302,10 +1374,16 @@ function normalizeCadence(
           ),
         );
         if (minuteOfDay < 0 || minuteOfDay >= DAY_MINUTES) {
-          fail(400, `cadence.slots[${index}].minuteOfDay must be between 0 and 1439`);
+          fail(
+            400,
+            `cadence.slots[${index}].minuteOfDay must be between 0 and 1439`,
+          );
         }
         if (durationMinutes <= 0 || durationMinutes > DAY_MINUTES) {
-          fail(400, `cadence.slots[${index}].durationMinutes must be between 1 and 1440`);
+          fail(
+            400,
+            `cadence.slots[${index}].durationMinutes must be between 1 and 1440`,
+          );
         }
         return {
           key,
@@ -1373,9 +1451,15 @@ function normalizeReminderSteps(value: unknown): LifeOpsReminderStep[] {
       ),
     );
     if (offsetMinutes < 0) {
-      fail(400, `reminderPlan.steps[${index}].offsetMinutes must be zero or greater`);
+      fail(
+        400,
+        `reminderPlan.steps[${index}].offsetMinutes must be zero or greater`,
+      );
     }
-    const label = requireNonEmptyString(stepRecord.label, `reminderPlan.steps[${index}].label`);
+    const label = requireNonEmptyString(
+      stepRecord.label,
+      `reminderPlan.steps[${index}].label`,
+    );
     return {
       channel,
       offsetMinutes,
@@ -1387,9 +1471,19 @@ function normalizeReminderSteps(value: unknown): LifeOpsReminderStep[] {
 }
 
 function normalizeReminderPlanDraft(
-  reminderPlan: CreateLifeOpsDefinitionRequest["reminderPlan"] | UpdateLifeOpsDefinitionRequest["reminderPlan"] | undefined,
+  reminderPlan:
+    | CreateLifeOpsDefinitionRequest["reminderPlan"]
+    | UpdateLifeOpsDefinitionRequest["reminderPlan"]
+    | undefined,
   mode: "create" | "update",
-): { steps: LifeOpsReminderStep[]; mutePolicy: Record<string, unknown>; quietHours: Record<string, unknown> } | null | undefined {
+):
+  | {
+      steps: LifeOpsReminderStep[];
+      mutePolicy: Record<string, unknown>;
+      quietHours: Record<string, unknown>;
+    }
+  | null
+  | undefined {
   if (reminderPlan === undefined) {
     return mode === "create"
       ? {
@@ -1498,7 +1592,9 @@ function computeSnoozedUntil(
     }
   }
   const minutes = request.minutes ?? 30;
-  const normalizedMinutes = Math.trunc(normalizeFiniteNumber(minutes, "minutes"));
+  const normalizedMinutes = Math.trunc(
+    normalizeFiniteNumber(minutes, "minutes"),
+  );
   if (normalizedMinutes <= 0) {
     fail(400, "minutes must be greater than 0");
   }
@@ -1589,7 +1685,8 @@ function buildActiveReminders(
   }
   reminders.sort(
     (left, right) =>
-      new Date(left.scheduledFor).getTime() - new Date(right.scheduledFor).getTime(),
+      new Date(left.scheduledFor).getTime() -
+      new Date(right.scheduledFor).getTime(),
   );
   return reminders.slice(0, MAX_OVERVIEW_REMINDERS);
 }
@@ -1636,14 +1733,20 @@ function buildActiveCalendarEventReminders(
   }
   reminders.sort(
     (left, right) =>
-      new Date(left.scheduledFor).getTime() - new Date(right.scheduledFor).getTime(),
+      new Date(left.scheduledFor).getTime() -
+      new Date(right.scheduledFor).getTime(),
   );
   return reminders.slice(0, MAX_OVERVIEW_REMINDERS);
 }
 
 function parseQuietHoursPolicy(
   value: LifeOpsReminderPlan["quietHours"],
-): { timezone: string; startMinute: number; endMinute: number; channels: Set<string> } | null {
+): {
+  timezone: string;
+  startMinute: number;
+  endMinute: number;
+  channels: Set<string>;
+} | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -1655,7 +1758,11 @@ function parseQuietHoursPolicy(
     return null;
   }
   const channels = Array.isArray(value.channels)
-    ? new Set(value.channels.filter((entry): entry is string => typeof entry === "string"))
+    ? new Set(
+        value.channels.filter(
+          (entry): entry is string => typeof entry === "string",
+        ),
+      )
     : new Set<string>();
   return {
     timezone: normalizeTimeZone(value.timezone),
@@ -1683,9 +1790,14 @@ function isWithinQuietHours(args: {
     return false;
   }
   if (quietHours.startMinute < quietHours.endMinute) {
-    return minuteOfDay >= quietHours.startMinute && minuteOfDay < quietHours.endMinute;
+    return (
+      minuteOfDay >= quietHours.startMinute &&
+      minuteOfDay < quietHours.endMinute
+    );
   }
-  return minuteOfDay >= quietHours.startMinute || minuteOfDay < quietHours.endMinute;
+  return (
+    minuteOfDay >= quietHours.startMinute || minuteOfDay < quietHours.endMinute
+  );
 }
 
 function isReminderChannelAllowedForUrgency(
@@ -1755,7 +1867,9 @@ function summarizeWorkflowValue(value: unknown, prompt?: string): string {
   if (isRecord(value) && Array.isArray(value.messages)) {
     const subjects = value.messages
       .map((message) =>
-        isRecord(message) && typeof message.subject === "string" ? message.subject : "",
+        isRecord(message) && typeof message.subject === "string"
+          ? message.subject
+          : "",
       )
       .filter((subject) => subject.length > 0)
       .slice(0, 3);
@@ -1928,18 +2042,14 @@ export class LifeOpsService {
   private async clearGoogleGrantAuthFailure(
     grant: LifeOpsConnectorGrant,
   ): Promise<LifeOpsConnectorGrant> {
-    const clearedMetadata = clearGoogleGrantAuthFailureMetadata(grant.metadata);
-    if (
-      JSON.stringify(clearedMetadata) === JSON.stringify(grant.metadata) &&
-      grant.lastRefreshAt !== null
-    ) {
+    if (!googleGrantHasAuthFailureMetadata(grant.metadata)) {
       return grant;
     }
 
     const nowIso = new Date().toISOString();
     const nextGrant: LifeOpsConnectorGrant = {
       ...grant,
-      metadata: clearedMetadata,
+      metadata: clearGoogleGrantAuthFailureMetadata(grant.metadata),
       lastRefreshAt: nowIso,
       updatedAt: nowIso,
     };
@@ -1966,12 +2076,28 @@ export class LifeOpsService {
     return nextGrant;
   }
 
+  private async withGoogleGrantOperation<T>(
+    grant: LifeOpsConnectorGrant,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    try {
+      const result = await operation();
+      await this.clearGoogleGrantAuthFailure(grant);
+      return result;
+    } catch (error) {
+      return this.rethrowGoogleServiceError(grant, error);
+    }
+  }
+
   private async rethrowGoogleServiceError(
     grant: LifeOpsConnectorGrant,
     error: unknown,
   ): Promise<never> {
     if (error instanceof GoogleOAuthError) {
-      const needsReauth = googleErrorRequiresReauth(error.status, error.message);
+      const needsReauth = googleErrorRequiresReauth(
+        error.status,
+        error.message,
+      );
       if (needsReauth) {
         await this.markGoogleGrantNeedsReauth(grant, error.message);
         fail(401, `Google connector needs re-authentication: ${error.message}`);
@@ -1980,7 +2106,10 @@ export class LifeOpsService {
     }
 
     if (error instanceof GoogleApiError) {
-      const needsReauth = googleErrorRequiresReauth(error.status, error.message);
+      const needsReauth = googleErrorRequiresReauth(
+        error.status,
+        error.message,
+      );
       if (needsReauth) {
         await this.markGoogleGrantNeedsReauth(grant, error.message);
         fail(401, `Google connector needs re-authentication: ${error.message}`);
@@ -1989,7 +2118,10 @@ export class LifeOpsService {
         error.status === 403 &&
         googleErrorLooksLikeAdminPolicyBlock(error.message)
       ) {
-        fail(403, `Google Workspace policy blocked the request: ${error.message}`);
+        fail(
+          403,
+          `Google Workspace policy blocked the request: ${error.message}`,
+        );
       }
       fail(error.status, error.message);
     }
@@ -2001,7 +2133,10 @@ export class LifeOpsService {
     requestUrl: URL,
     requestedMode?: LifeOpsConnectorMode,
   ): Promise<LifeOpsConnectorGrant> {
-    const status = await this.getGoogleConnectorStatus(requestUrl, requestedMode);
+    const status = await this.getGoogleConnectorStatus(
+      requestUrl,
+      requestedMode,
+    );
     const grant = status.grant;
     if (!status.connected || !grant || !grant.tokenRef) {
       fail(409, "Google Calendar is not connected.");
@@ -2016,7 +2151,10 @@ export class LifeOpsService {
     requestUrl: URL,
     requestedMode?: LifeOpsConnectorMode,
   ): Promise<LifeOpsConnectorGrant> {
-    const grant = await this.requireGoogleCalendarGrant(requestUrl, requestedMode);
+    const grant = await this.requireGoogleCalendarGrant(
+      requestUrl,
+      requestedMode,
+    );
     if (!hasGoogleCalendarWriteCapability(grant)) {
       fail(403, "Google Calendar write access has not been granted.");
     }
@@ -2027,7 +2165,10 @@ export class LifeOpsService {
     requestUrl: URL,
     requestedMode?: LifeOpsConnectorMode,
   ): Promise<LifeOpsConnectorGrant> {
-    const status = await this.getGoogleConnectorStatus(requestUrl, requestedMode);
+    const status = await this.getGoogleConnectorStatus(
+      requestUrl,
+      requestedMode,
+    );
     const grant = status.grant;
     if (!status.connected || !grant || !grant.tokenRef) {
       fail(409, "Google Gmail is not connected.");
@@ -2052,7 +2193,8 @@ export class LifeOpsService {
   private async requireXGrant(
     requestedMode?: LifeOpsConnectorMode,
   ): Promise<LifeOpsConnectorGrant> {
-    const mode = normalizeOptionalConnectorMode(requestedMode, "mode") ?? "local";
+    const mode =
+      normalizeOptionalConnectorMode(requestedMode, "mode") ?? "local";
     const grant = await this.repository.getConnectorGrant(
       this.agentId(),
       "x",
@@ -2067,7 +2209,10 @@ export class LifeOpsService {
   private async getWorkflowDefinition(
     workflowId: string,
   ): Promise<LifeOpsWorkflowDefinition> {
-    const workflow = await this.repository.getWorkflow(this.agentId(), workflowId);
+    const workflow = await this.repository.getWorkflow(
+      this.agentId(),
+      workflowId,
+    );
     if (!workflow) {
       fail(404, "life-ops workflow not found");
     }
@@ -2075,7 +2220,10 @@ export class LifeOpsService {
   }
 
   private async recordGmailAudit(
-    eventType: "gmail_triage_synced" | "gmail_reply_drafted" | "gmail_reply_sent",
+    eventType:
+      | "gmail_triage_synced"
+      | "gmail_reply_drafted"
+      | "gmail_reply_sent",
     ownerId: string,
     reason: string,
     inputs: Record<string, unknown>,
@@ -2085,7 +2233,8 @@ export class LifeOpsService {
       createLifeOpsAuditEvent({
         agentId: this.agentId(),
         eventType,
-        ownerType: eventType === "gmail_triage_synced" ? "connector" : "gmail_message",
+        ownerType:
+          eventType === "gmail_triage_synced" ? "connector" : "gmail_message",
         ownerId,
         reason,
         inputs,
@@ -2107,7 +2256,7 @@ export class LifeOpsService {
     if (!grant.tokenRef) {
       fail(409, "Google Gmail token reference is missing.");
     }
-    try {
+    return this.withGoogleGrantOperation(grant, async () => {
       const token = await ensureFreshGoogleAccessToken(grant.tokenRef);
       const selfEmail =
         typeof grant.identity.email === "string"
@@ -2164,9 +2313,7 @@ export class LifeOpsService {
         syncedAt,
         summary: summarizeGmailTriage(persistedMessages),
       };
-    } catch (error) {
-      return this.rethrowGoogleServiceError(grant, error);
-    }
+    });
   }
 
   private async recordCalendarEventAudit(
@@ -2262,7 +2409,7 @@ export class LifeOpsService {
     if (!grant.tokenRef) {
       fail(409, "Google Calendar token reference is missing.");
     }
-    try {
+    return this.withGoogleGrantOperation(grant, async () => {
       const token = await ensureFreshGoogleAccessToken(grant.tokenRef);
       const syncedAt = new Date().toISOString();
       const existingEvents = await this.repository.listCalendarEvents(
@@ -2336,20 +2483,24 @@ export class LifeOpsService {
         timeMax: args.timeMax,
         syncedAt,
       };
-    } catch (error) {
-      return this.rethrowGoogleServiceError(grant, error);
-    }
+    });
   }
 
   private async getDefinitionRecord(
     definitionId: string,
   ): Promise<LifeOpsDefinitionRecord> {
-    const definition = await this.repository.getDefinition(this.agentId(), definitionId);
+    const definition = await this.repository.getDefinition(
+      this.agentId(),
+      definitionId,
+    );
     if (!definition) {
       fail(404, "life-ops definition not found");
     }
     const reminderPlan = definition.reminderPlanId
-      ? await this.repository.getReminderPlan(this.agentId(), definition.reminderPlanId)
+      ? await this.repository.getReminderPlan(
+          this.agentId(),
+          definition.reminderPlanId,
+        )
       : null;
     return { definition, reminderPlan };
   }
@@ -2359,11 +2510,16 @@ export class LifeOpsService {
     if (!goal) {
       fail(404, "life-ops goal not found");
     }
-    const links = await this.repository.listGoalLinksForGoal(this.agentId(), goalId);
+    const links = await this.repository.listGoalLinksForGoal(
+      this.agentId(),
+      goalId,
+    );
     return { goal, links };
   }
 
-  private async ensureGoalExists(goalId: string | null): Promise<string | null> {
+  private async ensureGoalExists(
+    goalId: string | null,
+  ): Promise<string | null> {
     if (!goalId) return null;
     const goal = await this.repository.getGoal(this.agentId(), goalId);
     if (!goal) {
@@ -2402,18 +2558,27 @@ export class LifeOpsService {
   ): Promise<LifeOpsReminderPlan | null> {
     if (draft === undefined) {
       return definition.reminderPlanId
-        ? await this.repository.getReminderPlan(definition.agentId, definition.reminderPlanId)
+        ? await this.repository.getReminderPlan(
+            definition.agentId,
+            definition.reminderPlanId,
+          )
         : null;
     }
     if (draft === null) {
       if (definition.reminderPlanId) {
-        await this.repository.deleteReminderPlan(definition.agentId, definition.reminderPlanId);
+        await this.repository.deleteReminderPlan(
+          definition.agentId,
+          definition.reminderPlanId,
+        );
       }
       definition.reminderPlanId = null;
       return null;
     }
     const existingPlan = definition.reminderPlanId
-      ? await this.repository.getReminderPlan(definition.agentId, definition.reminderPlanId)
+      ? await this.repository.getReminderPlan(
+          definition.agentId,
+          definition.reminderPlanId,
+        )
       : null;
     if (existingPlan) {
       const nextPlan: LifeOpsReminderPlan = {
@@ -2444,10 +2609,11 @@ export class LifeOpsService {
     definition: LifeOpsTaskDefinition,
     now = new Date(),
   ): Promise<LifeOpsOccurrence[]> {
-    const existingOccurrences = await this.repository.listOccurrencesForDefinition(
-      definition.agentId,
-      definition.id,
-    );
+    const existingOccurrences =
+      await this.repository.listOccurrencesForDefinition(
+        definition.agentId,
+        definition.id,
+      );
     const materialized = materializeDefinitionOccurrences(
       definition,
       existingOccurrences,
@@ -2467,8 +2633,14 @@ export class LifeOpsService {
   private async getFreshOccurrence(
     occurrenceId: string,
     now = new Date(),
-  ): Promise<{ definition: LifeOpsTaskDefinition; occurrence: LifeOpsOccurrence }> {
-    const occurrence = await this.repository.getOccurrence(this.agentId(), occurrenceId);
+  ): Promise<{
+    definition: LifeOpsTaskDefinition;
+    occurrence: LifeOpsOccurrence;
+  }> {
+    const occurrence = await this.repository.getOccurrence(
+      this.agentId(),
+      occurrenceId,
+    );
     if (!occurrence) {
       fail(404, "life-ops occurrence not found");
     }
@@ -2482,7 +2654,10 @@ export class LifeOpsService {
     if (definition.status === "active") {
       await this.refreshDefinitionOccurrences(definition, now);
     }
-    const freshOccurrence = await this.repository.getOccurrence(this.agentId(), occurrenceId);
+    const freshOccurrence = await this.repository.getOccurrence(
+      this.agentId(),
+      occurrenceId,
+    );
     if (!freshOccurrence) {
       fail(404, "life-ops occurrence not found after refresh");
     }
@@ -2495,15 +2670,14 @@ export class LifeOpsService {
   private async resolvePrimaryChannelPolicy(
     channelType: LifeOpsChannelPolicy["channelType"],
   ): Promise<LifeOpsChannelPolicy | null> {
-    const policies = (await this.repository.listChannelPolicies(this.agentId())).filter(
-      (policy) => policy.channelType === channelType,
+    const policies = (
+      await this.repository.listChannelPolicies(this.agentId())
+    ).filter((policy) => policy.channelType === channelType);
+    return (
+      policies.find((policy) => policy.metadata.isPrimary === true) ??
+      policies[0] ??
+      null
     );
-    if (policies.length === 0) {
-      return null;
-    }
-    const primary =
-      policies.find((policy) => policy.metadata.isPrimary === true) ?? policies[0];
-    return primary;
   }
 
   private async dispatchReminderAttempt(args: {
@@ -2521,6 +2695,12 @@ export class LifeOpsService {
     attemptedAt: string;
   }): Promise<LifeOpsReminderAttempt> {
     const attemptedAt = args.attemptedAt;
+    const attemptedAtDate = new Date(attemptedAt);
+    const reminderBody = buildReminderBody({
+      title: args.title,
+      scheduledFor: args.scheduledFor,
+      channel: args.channel,
+    });
     let outcome: LifeOpsReminderAttemptOutcome = "delivered";
     let connectorRef: string | null = null;
     const deliveryMetadata: Record<string, unknown> = {
@@ -2547,23 +2727,24 @@ export class LifeOpsService {
     if (args.acknowledged) {
       outcome = "blocked_acknowledged";
       deliveryMetadata.reason = "owner_acknowledged";
-    } else if (!isReminderChannelAllowedForUrgency(args.channel, args.urgency)) {
+    } else if (
+      !isReminderChannelAllowedForUrgency(args.channel, args.urgency)
+    ) {
       outcome = "blocked_urgency";
       deliveryMetadata.reason = "urgency_gate";
-    } else if (args.channel !== "in_app" && isWithinQuietHours({
-      now: new Date(args.attemptedAt),
-      quietHours: args.quietHours,
-      channel: args.channel,
-    })) {
+    } else if (
+      args.channel !== "in_app" &&
+      isWithinQuietHours({
+        now: attemptedAtDate,
+        quietHours: args.quietHours,
+        channel: args.channel,
+      })
+    ) {
       outcome = "blocked_quiet_hours";
       deliveryMetadata.reason = "quiet_hours";
     } else if (args.channel === "in_app") {
       connectorRef = "system:in_app";
-      deliveryMetadata.message = buildReminderBody({
-        title: args.title,
-        scheduledFor: args.scheduledFor,
-        channel: args.channel,
-      });
+      deliveryMetadata.message = reminderBody;
     } else {
       const policy = await this.resolvePrimaryChannelPolicy(args.channel);
       if (!policy || !policy.allowReminders || !policy.allowEscalation) {
@@ -2580,11 +2761,7 @@ export class LifeOpsService {
             const result = await sendTwilioSms({
               credentials,
               to: policy.channelRef,
-              body: buildReminderBody({
-                title: args.title,
-                scheduledFor: args.scheduledFor,
-                channel: args.channel,
-              }),
+              body: reminderBody,
             });
             if (!result.ok) {
               outcome = "blocked_connector";
@@ -2598,11 +2775,7 @@ export class LifeOpsService {
             const result = await sendTwilioVoiceCall({
               credentials,
               to: policy.channelRef,
-              message: buildReminderBody({
-                title: args.title,
-                scheduledFor: args.scheduledFor,
-                channel: args.channel,
-              }),
+              message: reminderBody,
             });
             if (!result.ok) {
               outcome = "blocked_connector";
@@ -2674,7 +2847,7 @@ export class LifeOpsService {
       awaitingConfirmationForActionId: awaitingActionId,
       result: {},
       metadata: {},
-      finishedAt: awaitingActionId ? null : null,
+      finishedAt: null,
     });
     await this.repository.createBrowserSession(session);
     await this.recordBrowserAudit(
@@ -2715,7 +2888,11 @@ export class LifeOpsService {
     request: CreateLifeOpsDefinitionRequest,
   ): Promise<LifeOpsDefinitionRecord> {
     const agentId = this.agentId();
-    const kind = normalizeEnumValue(request.kind, "kind", LIFEOPS_DEFINITION_KINDS);
+    const kind = normalizeEnumValue(
+      request.kind,
+      "kind",
+      LIFEOPS_DEFINITION_KINDS,
+    );
     const title = requireNonEmptyString(request.title, "title");
     const description = normalizeOptionalString(request.description) ?? "";
     const originalIntent =
@@ -2724,7 +2901,10 @@ export class LifeOpsService {
     const windowPolicy = normalizeWindowPolicy(request.windowPolicy, timezone);
     const cadence = normalizeCadence(request.cadence, windowPolicy);
     const progressionRule = normalizeProgressionRule(request.progressionRule);
-    const reminderPlanDraft = normalizeReminderPlanDraft(request.reminderPlan, "create");
+    const reminderPlanDraft = normalizeReminderPlanDraft(
+      request.reminderPlan,
+      "create",
+    );
     const goalId = await this.ensureGoalExists(request.goalId ?? null);
     const definition = createLifeOpsTaskDefinition({
       agentId,
@@ -2747,7 +2927,10 @@ export class LifeOpsService {
       ),
     });
     await this.repository.createDefinition(definition);
-    const reminderPlan = await this.syncReminderPlan(definition, reminderPlanDraft);
+    const reminderPlan = await this.syncReminderPlan(
+      definition,
+      reminderPlanDraft,
+    );
     if (definition.reminderPlanId !== null) {
       await this.repository.updateDefinition(definition);
     }
@@ -2779,7 +2962,9 @@ export class LifeOpsService {
     request: UpdateLifeOpsDefinitionRequest,
   ): Promise<LifeOpsDefinitionRecord> {
     const current = await this.getDefinitionRecord(definitionId);
-    const nextTimezone = normalizeTimeZone(request.timezone ?? current.definition.timezone);
+    const nextTimezone = normalizeTimeZone(
+      request.timezone ?? current.definition.timezone,
+    );
     const nextWindowPolicy = normalizeWindowPolicy(
       request.windowPolicy ?? current.definition.windowPolicy,
       nextTimezone,
@@ -2804,15 +2989,19 @@ export class LifeOpsService {
           : current.definition.title,
       description:
         request.description !== undefined
-          ? normalizeOptionalString(request.description) ?? ""
+          ? (normalizeOptionalString(request.description) ?? "")
           : current.definition.description,
       originalIntent:
         request.originalIntent !== undefined
-          ? normalizeOptionalString(request.originalIntent) ?? current.definition.title
+          ? (normalizeOptionalString(request.originalIntent) ??
+            current.definition.title)
           : current.definition.originalIntent,
       timezone: nextTimezone,
       status: nextStatus,
-      priority: normalizePriority(request.priority, current.definition.priority),
+      priority: normalizePriority(
+        request.priority,
+        current.definition.priority,
+      ),
       cadence: nextCadence,
       windowPolicy: nextWindowPolicy,
       progressionRule:
@@ -2832,9 +3021,15 @@ export class LifeOpsService {
           : current.definition.metadata,
       updatedAt: new Date().toISOString(),
     };
-    const reminderPlanDraft = normalizeReminderPlanDraft(request.reminderPlan, "update");
+    const reminderPlanDraft = normalizeReminderPlanDraft(
+      request.reminderPlan,
+      "update",
+    );
     await this.repository.updateDefinition(nextDefinition);
-    const reminderPlan = await this.syncReminderPlan(nextDefinition, reminderPlanDraft);
+    const reminderPlan = await this.syncReminderPlan(
+      nextDefinition,
+      reminderPlanDraft,
+    );
     await this.repository.updateDefinition(nextDefinition);
     await this.syncGoalLink(nextDefinition);
     if (nextDefinition.status === "active") {
@@ -2865,7 +3060,10 @@ export class LifeOpsService {
     const goals = await this.repository.listGoals(this.agentId());
     const records: LifeOpsGoalRecord[] = [];
     for (const goal of goals) {
-      const links = await this.repository.listGoalLinksForGoal(this.agentId(), goal.id);
+      const links = await this.repository.listGoalLinksForGoal(
+        this.agentId(),
+        goal.id,
+      );
       records.push({ goal, links });
     }
     return records;
@@ -2875,17 +3073,20 @@ export class LifeOpsService {
     return this.getGoalRecord(goalId);
   }
 
-  async createGoal(request: CreateLifeOpsGoalRequest): Promise<LifeOpsGoalRecord> {
+  async createGoal(
+    request: CreateLifeOpsGoalRequest,
+  ): Promise<LifeOpsGoalRecord> {
     const goal = createLifeOpsGoalDefinition({
       agentId: this.agentId(),
       title: requireNonEmptyString(request.title, "title"),
       description: normalizeOptionalString(request.description) ?? "",
-      cadence:
-        normalizeNullableRecord(request.cadence, "cadence") ?? null,
+      cadence: normalizeNullableRecord(request.cadence, "cadence") ?? null,
       supportStrategy:
-        normalizeOptionalRecord(request.supportStrategy, "supportStrategy") ?? {},
+        normalizeOptionalRecord(request.supportStrategy, "supportStrategy") ??
+        {},
       successCriteria:
-        normalizeOptionalRecord(request.successCriteria, "successCriteria") ?? {},
+        normalizeOptionalRecord(request.successCriteria, "successCriteria") ??
+        {},
       status:
         request.status === undefined
           ? "active"
@@ -2936,11 +3137,11 @@ export class LifeOpsService {
           : current.goal.title,
       description:
         request.description !== undefined
-          ? normalizeOptionalString(request.description) ?? ""
+          ? (normalizeOptionalString(request.description) ?? "")
           : current.goal.description,
       cadence:
         request.cadence !== undefined
-          ? normalizeNullableRecord(request.cadence, "cadence") ?? null
+          ? (normalizeNullableRecord(request.cadence, "cadence") ?? null)
           : current.goal.cadence,
       supportStrategy:
         request.supportStrategy !== undefined
@@ -2992,15 +3193,18 @@ export class LifeOpsService {
   }
 
   async getOverview(now = new Date()): Promise<LifeOpsOverview> {
-    const definitions = await this.repository.listActiveDefinitions(this.agentId());
+    const definitions = await this.repository.listActiveDefinitions(
+      this.agentId(),
+    );
     for (const definition of definitions) {
       await this.refreshDefinitionOccurrences(definition, now);
     }
     const horizon = addMinutes(now, OVERVIEW_HORIZON_MINUTES).toISOString();
-    const overviewOccurrences = await this.repository.listOccurrenceViewsForOverview(
-      this.agentId(),
-      horizon,
-    );
+    const overviewOccurrences =
+      await this.repository.listOccurrenceViewsForOverview(
+        this.agentId(),
+        horizon,
+      );
     const selectedOccurrences = selectOverviewOccurrences(overviewOccurrences);
     const reminderPlans = await this.repository.listReminderPlansForOwners(
       this.agentId(),
@@ -3016,11 +3220,12 @@ export class LifeOpsService {
       now.toISOString(),
       addMinutes(now, OVERVIEW_HORIZON_MINUTES).toISOString(),
     );
-    const calendarReminderPlans = await this.repository.listReminderPlansForOwners(
-      this.agentId(),
-      "calendar_event",
-      calendarEvents.map((event) => event.id),
-    );
+    const calendarReminderPlans =
+      await this.repository.listReminderPlansForOwners(
+        this.agentId(),
+        "calendar_event",
+        calendarEvents.map((event) => event.id),
+      );
     const plansByEventId = new Map(
       calendarReminderPlans.map((plan) => [plan.ownerId, plan]),
     );
@@ -3159,9 +3364,15 @@ export class LifeOpsService {
     if (
       normalizeOptionalBoolean(request.consentGiven, "consentGiven") !== true
     ) {
-      fail(400, "Explicit consent is required before capturing a phone number.");
+      fail(
+        400,
+        "Explicit consent is required before capturing a phone number.",
+      );
     }
-    const phoneNumber = normalizePhoneNumber(request.phoneNumber, "phoneNumber");
+    const phoneNumber = normalizePhoneNumber(
+      request.phoneNumber,
+      "phoneNumber",
+    );
     const privacyClass = normalizePrivacyClass(request.privacyClass);
     const baseMetadata = {
       ...(normalizeOptionalRecord(request.metadata, "metadata") ?? {}),
@@ -3216,22 +3427,27 @@ export class LifeOpsService {
     request: { now?: string; limit?: number } = {},
   ): Promise<LifeOpsReminderProcessingResult> {
     const now =
-      request.now === undefined ? new Date() : new Date(normalizeIsoString(request.now, "now"));
+      request.now === undefined
+        ? new Date()
+        : new Date(normalizeIsoString(request.now, "now"));
     const limit =
       request.limit === undefined
         ? DEFAULT_REMINDER_PROCESS_LIMIT
         : normalizePositiveInteger(request.limit, "limit");
 
-    const definitions = await this.repository.listActiveDefinitions(this.agentId());
+    const definitions = await this.repository.listActiveDefinitions(
+      this.agentId(),
+    );
     for (const definition of definitions) {
       await this.refreshDefinitionOccurrences(definition, now);
     }
 
     const horizon = addMinutes(now, OVERVIEW_HORIZON_MINUTES).toISOString();
-    const occurrenceViews = await this.repository.listOccurrenceViewsForOverview(
-      this.agentId(),
-      horizon,
-    );
+    const occurrenceViews =
+      await this.repository.listOccurrenceViewsForOverview(
+        this.agentId(),
+        horizon,
+      );
     const occurrencePlans = await this.repository.listReminderPlansForOwners(
       this.agentId(),
       "definition",
@@ -3240,7 +3456,10 @@ export class LifeOpsService {
     const plansByDefinitionId = new Map(
       occurrencePlans.map((plan) => [plan.ownerId, plan]),
     );
-    const eventWindowEnd = addMinutes(now, OVERVIEW_HORIZON_MINUTES).toISOString();
+    const eventWindowEnd = addMinutes(
+      now,
+      OVERVIEW_HORIZON_MINUTES,
+    ).toISOString();
     const calendarEvents = await this.repository.listCalendarEvents(
       this.agentId(),
       "google",
@@ -3252,10 +3471,17 @@ export class LifeOpsService {
       "calendar_event",
       calendarEvents.map((event) => event.id),
     );
-    const plansByEventId = new Map(eventPlans.map((plan) => [plan.ownerId, plan]));
-    const existingAttempts = await this.repository.listReminderAttempts(this.agentId());
-    const attemptKey = (planId: string, stepIndex: number, scheduledFor: string) =>
-      `${planId}:${stepIndex}:${scheduledFor}`;
+    const plansByEventId = new Map(
+      eventPlans.map((plan) => [plan.ownerId, plan]),
+    );
+    const existingAttempts = await this.repository.listReminderAttempts(
+      this.agentId(),
+    );
+    const attemptKey = (
+      planId: string,
+      stepIndex: number,
+      scheduledFor: string,
+    ) => `${planId}:${stepIndex}:${scheduledFor}`;
     const deliveredAttempts = new Set(
       existingAttempts
         .filter((attempt) => attempt.outcome === "delivered")
@@ -3282,11 +3508,18 @@ export class LifeOpsService {
         ? plansByDefinitionId.get(reminder.definitionId)
         : null;
       if (!plan) continue;
-      const occurrence = occurrenceViews.find((candidate) => candidate.id === reminder.ownerId);
+      const occurrence = occurrenceViews.find(
+        (candidate) => candidate.id === reminder.ownerId,
+      );
       if (!occurrence) continue;
-      const key = attemptKey(plan.id, reminder.stepIndex, reminder.scheduledFor);
+      const key = attemptKey(
+        plan.id,
+        reminder.stepIndex,
+        reminder.scheduledFor,
+      );
       const acknowledged = Boolean(
-        occurrence.metadata.reminderAcknowledgedAt || occurrence.state === "completed",
+        occurrence.metadata.reminderAcknowledgedAt ||
+          occurrence.state === "completed",
       );
       if (
         deliveredAttempts.has(key) ||
@@ -3323,11 +3556,19 @@ export class LifeOpsService {
       now,
     )) {
       if (dueAttempts.length >= limit) break;
-      const plan = reminder.eventId ? plansByEventId.get(reminder.eventId) : null;
+      const plan = reminder.eventId
+        ? plansByEventId.get(reminder.eventId)
+        : null;
       if (!plan) continue;
-      const event = calendarEvents.find((candidate) => candidate.id === reminder.ownerId);
+      const event = calendarEvents.find(
+        (candidate) => candidate.id === reminder.ownerId,
+      );
       if (!event) continue;
-      const key = attemptKey(plan.id, reminder.stepIndex, reminder.scheduledFor);
+      const key = attemptKey(
+        plan.id,
+        reminder.stepIndex,
+        reminder.scheduledFor,
+      );
       const acknowledged = Boolean(event.metadata.reminderAcknowledgedAt);
       if (
         deliveredAttempts.has(key) ||
@@ -3368,13 +3609,13 @@ export class LifeOpsService {
     ownerType: "occurrence" | "calendar_event",
     ownerId: string,
   ): Promise<LifeOpsReminderInspection> {
-    const reminderPlan =
-      ownerType === "occurrence"
-        ? (() => null)()
-        : null;
+    const reminderPlan = ownerType === "occurrence" ? (() => null)() : null;
     let plan: LifeOpsReminderPlan | null = reminderPlan;
     if (ownerType === "occurrence") {
-      const occurrence = await this.repository.getOccurrence(this.agentId(), ownerId);
+      const occurrence = await this.repository.getOccurrence(
+        this.agentId(),
+        ownerId,
+      );
       if (!occurrence) {
         fail(404, "life-ops occurrence not found");
       }
@@ -3404,18 +3645,21 @@ export class LifeOpsService {
         ownerType,
         ownerId,
       }),
-      audits: await this.repository.listAuditEvents(this.agentId(), ownerType, ownerId),
+      audits: await this.repository.listAuditEvents(
+        this.agentId(),
+        ownerType,
+        ownerId,
+      ),
     };
   }
 
   async acknowledgeReminder(
     request: AcknowledgeLifeOpsReminderRequest,
   ): Promise<{ ok: true }> {
-    const ownerType = normalizeEnumValue(
-      request.ownerType,
-      "ownerType",
-      ["occurrence", "calendar_event"] as const,
-    );
+    const ownerType = normalizeEnumValue(request.ownerType, "ownerType", [
+      "occurrence",
+      "calendar_event",
+    ] as const);
     const ownerId = requireNonEmptyString(request.ownerId, "ownerId");
     const acknowledgedAt =
       request.acknowledgedAt === undefined
@@ -3423,7 +3667,10 @@ export class LifeOpsService {
         : normalizeIsoString(request.acknowledgedAt, "acknowledgedAt");
     const note = normalizeOptionalString(request.note) ?? null;
     if (ownerType === "occurrence") {
-      const occurrence = await this.repository.getOccurrence(this.agentId(), ownerId);
+      const occurrence = await this.repository.getOccurrence(
+        this.agentId(),
+        ownerId,
+      );
       if (!occurrence) {
         fail(404, "life-ops occurrence not found");
       }
@@ -3437,9 +3684,9 @@ export class LifeOpsService {
         updatedAt: new Date().toISOString(),
       });
     } else {
-      const event = (await this.repository.listCalendarEvents(this.agentId(), "google")).find(
-        (candidate) => candidate.id === ownerId,
-      );
+      const event = (
+        await this.repository.listCalendarEvents(this.agentId(), "google")
+      ).find((candidate) => candidate.id === ownerId);
       if (!event) {
         fail(404, "life-ops calendar event not found");
       }
@@ -3462,7 +3709,10 @@ export class LifeOpsService {
     for (const definition of workflows) {
       records.push({
         definition,
-        runs: await this.repository.listWorkflowRuns(this.agentId(), definition.id),
+        runs: await this.repository.listWorkflowRuns(
+          this.agentId(),
+          definition.id,
+        ),
       });
     }
     return records;
@@ -3486,7 +3736,9 @@ export class LifeOpsService {
       triggerType,
       schedule: normalizeWorkflowSchedule(request.schedule, triggerType),
       actionPlan: normalizeWorkflowActionPlan(request.actionPlan),
-      permissionPolicy: normalizeWorkflowPermissionPolicy(request.permissionPolicy),
+      permissionPolicy: normalizeWorkflowPermissionPolicy(
+        request.permissionPolicy,
+      ),
       status:
         request.status === undefined
           ? "active"
@@ -3498,11 +3750,12 @@ export class LifeOpsService {
       createdBy:
         request.createdBy === undefined
           ? "user"
-          : normalizeEnumValue(
-              request.createdBy,
-              "createdBy",
-              ["agent", "user", "workflow", "connector"] as const,
-            ),
+          : normalizeEnumValue(request.createdBy, "createdBy", [
+              "agent",
+              "user",
+              "workflow",
+              "connector",
+            ] as const),
       metadata: normalizeOptionalRecord(request.metadata, "metadata") ?? {},
     });
     await this.repository.createWorkflow(definition);
@@ -3629,7 +3882,8 @@ export class LifeOpsService {
           );
         } else if (step.kind === "summarize") {
           const sourceValue =
-            (step.sourceKey ? outputs[step.sourceKey] : steps.at(-1)?.value) ?? null;
+            (step.sourceKey ? outputs[step.sourceKey] : steps.at(-1)?.value) ??
+            null;
           value = {
             text: summarizeWorkflowValue(sourceValue, step.prompt),
           };
@@ -3758,7 +4012,10 @@ export class LifeOpsService {
   }
 
   async getBrowserSession(sessionId: string): Promise<LifeOpsBrowserSession> {
-    const session = await this.repository.getBrowserSession(this.agentId(), sessionId);
+    const session = await this.repository.getBrowserSession(
+      this.agentId(),
+      sessionId,
+    );
     if (!session) {
       fail(404, "browser session not found");
     }
@@ -3816,7 +4073,10 @@ export class LifeOpsService {
       session.status === "awaiting_confirmation" &&
       session.awaitingConfirmationForActionId
     ) {
-      fail(409, "Browser session requires explicit confirmation before execution.");
+      fail(
+        409,
+        "Browser session requires explicit confirmation before execution.",
+      );
     }
     const nextSession: LifeOpsBrowserSession = {
       ...session,
@@ -3850,10 +4110,16 @@ export class LifeOpsService {
   async getXConnectorStatus(
     requestedMode?: LifeOpsConnectorMode,
   ): Promise<LifeOpsXConnectorStatus> {
-    const mode = normalizeOptionalConnectorMode(requestedMode, "mode") ?? "local";
-    const grant = await this.repository.getConnectorGrant(this.agentId(), "x", mode);
-    const capabilities = (grant?.capabilities ?? []).filter((candidate): candidate is "x.read" | "x.write" =>
-      candidate === "x.read" || candidate === "x.write",
+    const mode =
+      normalizeOptionalConnectorMode(requestedMode, "mode") ?? "local";
+    const grant = await this.repository.getConnectorGrant(
+      this.agentId(),
+      "x",
+      mode,
+    );
+    const capabilities = (grant?.capabilities ?? []).filter(
+      (candidate): candidate is "x.read" | "x.write" =>
+        candidate === "x.read" || candidate === "x.write",
     );
     return {
       provider: "x",
@@ -3871,16 +4137,23 @@ export class LifeOpsService {
   async upsertXConnector(
     request: UpsertLifeOpsXConnectorRequest,
   ): Promise<LifeOpsXConnectorStatus> {
-    const mode = normalizeOptionalConnectorMode(request.mode, "mode") ?? "local";
-    const existing = await this.repository.getConnectorGrant(this.agentId(), "x", mode);
+    const mode =
+      normalizeOptionalConnectorMode(request.mode, "mode") ?? "local";
+    const existing = await this.repository.getConnectorGrant(
+      this.agentId(),
+      "x",
+      mode,
+    );
     const capabilities = normalizeXCapabilityRequest(request.capabilities);
     const scopes = Array.isArray(request.grantedScopes)
       ? request.grantedScopes.map((scope, index) =>
           requireNonEmptyString(scope, `grantedScopes[${index}]`),
         )
       : [];
-    const identity = normalizeOptionalRecord(request.identity, "identity") ?? {};
-    const metadata = normalizeOptionalRecord(request.metadata, "metadata") ?? {};
+    const identity =
+      normalizeOptionalRecord(request.identity, "identity") ?? {};
+    const metadata =
+      normalizeOptionalRecord(request.metadata, "metadata") ?? {};
     const grant = existing
       ? {
           ...existing,
@@ -3916,12 +4189,16 @@ export class LifeOpsService {
     return this.getXConnectorStatus(mode);
   }
 
-  async createXPost(request: CreateLifeOpsXPostRequest): Promise<LifeOpsXPostResponse> {
+  async createXPost(
+    request: CreateLifeOpsXPostRequest,
+  ): Promise<LifeOpsXPostResponse> {
     const mode = normalizeOptionalConnectorMode(request.mode, "mode");
     const grant = await this.requireXGrant(mode);
-    const capabilities = new Set((grant.capabilities ?? []).filter((candidate) =>
-      candidate === "x.read" || candidate === "x.write",
-    ));
+    const capabilities = new Set(
+      (grant.capabilities ?? []).filter(
+        (candidate) => candidate === "x.read" || candidate === "x.write",
+      ),
+    );
     if (!capabilities.has("x.write")) {
       fail(403, "X write access has not been granted.");
     }
@@ -3933,7 +4210,10 @@ export class LifeOpsService {
     const confirmPost =
       normalizeOptionalBoolean(request.confirmPost, "confirmPost") ?? false;
     if (!confirmPost && !trustedPosting) {
-      fail(409, "X posting requires explicit confirmation or a trusted posting policy.");
+      fail(
+        409,
+        "X posting requires explicit confirmation or a trusted posting policy.",
+      );
     }
     const credentials = readXPosterCredentialsFromEnv();
     if (!credentials) {
@@ -3981,7 +4261,8 @@ export class LifeOpsService {
       requestedTimeMin: request.timeMin,
       requestedTimeMax: request.timeMax,
     });
-    const forceSync = normalizeOptionalBoolean(request.forceSync, "forceSync") ?? false;
+    const forceSync =
+      normalizeOptionalBoolean(request.forceSync, "forceSync") ?? false;
     await this.requireGoogleCalendarGrant(requestUrl, mode);
 
     const syncState = await this.repository.getCalendarSyncState(
@@ -4012,7 +4293,7 @@ export class LifeOpsService {
         source: "cache",
         timeMin,
         timeMax,
-      syncedAt: syncState.syncedAt,
+        syncedAt: syncState.syncedAt,
       };
     }
 
@@ -4033,7 +4314,8 @@ export class LifeOpsService {
   ): Promise<LifeOpsGmailTriageFeed> {
     const mode = normalizeOptionalConnectorMode(request.mode, "mode");
     const maxResults = normalizeGmailTriageMaxResults(request.maxResults);
-    const forceSync = normalizeOptionalBoolean(request.forceSync, "forceSync") ?? false;
+    const forceSync =
+      normalizeOptionalBoolean(request.forceSync, "forceSync") ?? false;
     await this.requireGoogleGmailGrant(requestUrl, mode);
 
     const syncState = await this.repository.getGmailSyncState(
@@ -4084,13 +4366,16 @@ export class LifeOpsService {
     const description = normalizeOptionalString(request.description) ?? "";
     const location = normalizeOptionalString(request.location) ?? "";
     const attendees = normalizeCalendarAttendees(request.attendees);
-    const { startAt, endAt, timeZone } = resolveCalendarEventRange(request, now);
+    const { startAt, endAt, timeZone } = resolveCalendarEventRange(
+      request,
+      now,
+    );
 
     const grant = await this.requireGoogleCalendarWriteGrant(requestUrl, mode);
     if (!grant.tokenRef) {
       fail(409, "Google Calendar token reference is missing.");
     }
-    try {
+    return this.withGoogleGrantOperation(grant, async () => {
       const token = await ensureFreshGoogleAccessToken(grant.tokenRef);
       const created = await createGoogleCalendarEvent({
         accessToken: token.accessToken,
@@ -4136,9 +4421,7 @@ export class LifeOpsService {
         },
       );
       return event;
-    } catch (error) {
-      return this.rethrowGoogleServiceError(grant, error);
-    }
+    });
   }
 
   async getNextCalendarEventContext(
@@ -4149,14 +4432,19 @@ export class LifeOpsService {
     const mode = normalizeOptionalConnectorMode(request.mode, "mode");
     const feed = await this.getCalendarFeed(requestUrl, request, now);
     const nextEvent =
-      feed.events.find((event) => Date.parse(event.endAt) > now.getTime()) ?? null;
+      feed.events.find((event) => Date.parse(event.endAt) > now.getTime()) ??
+      null;
     if (!nextEvent) {
       return buildNextCalendarEventContext(null, now);
     }
 
     let linkedMail: LifeOpsGmailMessageSummary[] = [];
     const status = await this.getGoogleConnectorStatus(requestUrl, mode);
-    if (status.connected && status.grant && hasGoogleGmailTriageCapability(status.grant)) {
+    if (
+      status.connected &&
+      status.grant &&
+      hasGoogleGmailTriageCapability(status.grant)
+    ) {
       const cachedMessages = await this.repository.listGmailMessages(
         this.agentId(),
         "google",
@@ -4175,7 +4463,10 @@ export class LifeOpsService {
             },
             now,
           );
-          linkedMail = findLinkedMailForCalendarEvent(nextEvent, triage.messages);
+          linkedMail = findLinkedMailForCalendarEvent(
+            nextEvent,
+            triage.messages,
+          );
         } catch (error) {
           if (!(error instanceof LifeOpsServiceError)) {
             throw error;
@@ -4196,8 +4487,10 @@ export class LifeOpsService {
     const tone = normalizeGmailDraftTone(request.tone);
     const intent = normalizeOptionalString(request.intent);
     const includeQuotedOriginal =
-      normalizeOptionalBoolean(request.includeQuotedOriginal, "includeQuotedOriginal") ??
-      false;
+      normalizeOptionalBoolean(
+        request.includeQuotedOriginal,
+        "includeQuotedOriginal",
+      ) ?? false;
     const grant = await this.requireGoogleGmailGrant(requestUrl, mode);
 
     let message = await this.repository.getGmailMessage(
@@ -4207,7 +4500,11 @@ export class LifeOpsService {
     );
     if (!message) {
       await this.getGmailTriage(requestUrl, { mode }, new Date());
-      message = await this.repository.getGmailMessage(this.agentId(), "google", messageId);
+      message = await this.repository.getGmailMessage(
+        this.agentId(),
+        "google",
+        messageId,
+      );
     }
     if (!message) {
       fail(404, "life-ops Gmail message not found");
@@ -4261,7 +4558,11 @@ export class LifeOpsService {
     );
     if (!message) {
       await this.getGmailTriage(requestUrl, { mode }, new Date());
-      message = await this.repository.getGmailMessage(this.agentId(), "google", messageId);
+      message = await this.repository.getGmailMessage(
+        this.agentId(),
+        "google",
+        messageId,
+      );
     }
     if (!message) {
       fail(404, "life-ops Gmail message not found");
@@ -4272,13 +4573,14 @@ export class LifeOpsService {
 
     const to =
       normalizeOptionalStringArray(request.to, "to") ??
-      [message.replyTo ?? message.fromEmail ?? ""].filter((value) => value.length > 0);
+      [message.replyTo ?? message.fromEmail ?? ""].filter(
+        (value) => value.length > 0,
+      );
     if (to.length === 0) {
       fail(409, "The selected Gmail message has no replyable recipient.");
     }
     const cc = normalizeOptionalStringArray(request.cc, "cc") ?? [];
-    const subject =
-      normalizeOptionalString(request.subject) ?? message.subject;
+    const subject = normalizeOptionalString(request.subject) ?? message.subject;
     const bodyText = normalizeGmailReplyBody(request.bodyText);
     const messageIdHeader =
       typeof message.metadata.messageIdHeader === "string"
@@ -4293,7 +4595,7 @@ export class LifeOpsService {
       .join(" ")
       .trim();
 
-    try {
+    await this.withGoogleGrantOperation(grant, async () => {
       const token = await ensureFreshGoogleAccessToken(grant.tokenRef);
       await sendGoogleGmailReply({
         accessToken: token.accessToken,
@@ -4304,10 +4606,7 @@ export class LifeOpsService {
         inReplyTo: messageIdHeader,
         references: references.length > 0 ? references : null,
       });
-      await this.clearGoogleGrantAuthFailure(grant);
-    } catch (error) {
-      return this.rethrowGoogleServiceError(grant, error);
-    }
+    });
     await this.recordGmailAudit(
       "gmail_reply_sent",
       message.id,
@@ -4331,16 +4630,25 @@ export class LifeOpsService {
     request: CompleteLifeOpsOccurrenceRequest,
     now = new Date(),
   ): Promise<LifeOpsOccurrenceView> {
-    const { definition, occurrence } = await this.getFreshOccurrence(occurrenceId, now);
+    const { definition, occurrence } = await this.getFreshOccurrence(
+      occurrenceId,
+      now,
+    );
     if (occurrence.state === "completed") {
-      const current = await this.repository.getOccurrenceView(this.agentId(), occurrence.id);
+      const current = await this.repository.getOccurrenceView(
+        this.agentId(),
+        occurrence.id,
+      );
       if (!current) {
         fail(404, "life-ops occurrence not found");
       }
       return current;
     }
     if (["skipped", "expired", "muted"].includes(occurrence.state)) {
-      fail(409, `occurrence cannot be completed from state ${occurrence.state}`);
+      fail(
+        409,
+        `occurrence cannot be completed from state ${occurrence.state}`,
+      );
     }
     const updatedOccurrence: LifeOpsOccurrence = {
       ...occurrence,
@@ -4369,7 +4677,10 @@ export class LifeOpsService {
       },
     );
     await this.refreshDefinitionOccurrences(definition, now);
-    const view = await this.repository.getOccurrenceView(this.agentId(), updatedOccurrence.id);
+    const view = await this.repository.getOccurrenceView(
+      this.agentId(),
+      updatedOccurrence.id,
+    );
     if (!view) {
       fail(404, "life-ops occurrence not found after completion");
     }
@@ -4380,9 +4691,15 @@ export class LifeOpsService {
     occurrenceId: string,
     now = new Date(),
   ): Promise<LifeOpsOccurrenceView> {
-    const { definition, occurrence } = await this.getFreshOccurrence(occurrenceId, now);
+    const { definition, occurrence } = await this.getFreshOccurrence(
+      occurrenceId,
+      now,
+    );
     if (occurrence.state === "skipped") {
-      const current = await this.repository.getOccurrenceView(this.agentId(), occurrence.id);
+      const current = await this.repository.getOccurrenceView(
+        this.agentId(),
+        occurrence.id,
+      );
       if (!current) {
         fail(404, "life-ops occurrence not found");
       }
@@ -4414,7 +4731,10 @@ export class LifeOpsService {
       },
     );
     await this.refreshDefinitionOccurrences(definition, now);
-    const view = await this.repository.getOccurrenceView(this.agentId(), updatedOccurrence.id);
+    const view = await this.repository.getOccurrenceView(
+      this.agentId(),
+      updatedOccurrence.id,
+    );
     if (!view) {
       fail(404, "life-ops occurrence not found after skip");
     }
@@ -4426,8 +4746,13 @@ export class LifeOpsService {
     request: SnoozeLifeOpsOccurrenceRequest,
     now = new Date(),
   ): Promise<LifeOpsOccurrenceView> {
-    const { occurrence, definition } = await this.getFreshOccurrence(occurrenceId, now);
-    if (["completed", "skipped", "expired", "muted"].includes(occurrence.state)) {
+    const { occurrence, definition } = await this.getFreshOccurrence(
+      occurrenceId,
+      now,
+    );
+    if (
+      ["completed", "skipped", "expired", "muted"].includes(occurrence.state)
+    ) {
       fail(409, `occurrence cannot be snoozed from state ${occurrence.state}`);
     }
     const snoozedUntil = computeSnoozedUntil(definition, request, now);
@@ -4458,7 +4783,10 @@ export class LifeOpsService {
         snoozedUntil: updatedOccurrence.snoozedUntil,
       },
     );
-    const view = await this.repository.getOccurrenceView(this.agentId(), updatedOccurrence.id);
+    const view = await this.repository.getOccurrenceView(
+      this.agentId(),
+      updatedOccurrence.id,
+    );
     if (!view) {
       fail(404, "life-ops occurrence not found after snooze");
     }
@@ -4479,7 +4807,9 @@ export class LifeOpsService {
 
     if (!explicitMode && !grant) {
       const grants = await this.repository.listConnectorGrants(this.agentId());
-      const googleGrant = grants.find((candidate) => candidate.provider === "google");
+      const googleGrant = grants.find(
+        (candidate) => candidate.provider === "google",
+      );
       if (googleGrant) {
         config = resolveGoogleOAuthConfig(requestUrl, googleGrant.mode);
         grant = googleGrant;
@@ -4686,9 +5016,15 @@ export class LifeOpsService {
     await this.deleteCalendarReminderPlansForEvents(
       calendarEvents.map((event) => event.id),
     );
-    await this.repository.deleteCalendarEventsForProvider(this.agentId(), "google");
+    await this.repository.deleteCalendarEventsForProvider(
+      this.agentId(),
+      "google",
+    );
     await this.repository.deleteCalendarSyncState(this.agentId(), "google");
-    await this.repository.deleteGmailMessagesForProvider(this.agentId(), "google");
+    await this.repository.deleteGmailMessagesForProvider(
+      this.agentId(),
+      "google",
+    );
     await this.repository.deleteGmailSyncState(this.agentId(), "google");
     await this.repository.deleteConnectorGrant(
       this.agentId(),
