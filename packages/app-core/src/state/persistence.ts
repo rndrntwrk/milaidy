@@ -331,6 +331,45 @@ export function savePersistedOnboardingComplete(complete: boolean): void {
   }
 }
 
+/* ── Content pack persistence ───────────────────────────────────────── */
+
+const ACTIVE_PACK_STORAGE_KEY = "milady:active-pack-id";
+const ACTIVE_PACK_URL_STORAGE_KEY = "milady:active-pack-url";
+
+export function loadPersistedActivePackId(): string | null {
+  return tryLocalStorage(
+    () => localStorage.getItem(ACTIVE_PACK_STORAGE_KEY),
+    null,
+  );
+}
+
+export function savePersistedActivePackId(packId: string | null): void {
+  tryLocalStorage(() => {
+    if (packId) {
+      localStorage.setItem(ACTIVE_PACK_STORAGE_KEY, packId);
+    } else {
+      localStorage.removeItem(ACTIVE_PACK_STORAGE_KEY);
+    }
+  }, undefined);
+}
+
+export function loadPersistedActivePackUrl(): string | null {
+  return tryLocalStorage(
+    () => localStorage.getItem(ACTIVE_PACK_URL_STORAGE_KEY),
+    null,
+  );
+}
+
+export function savePersistedActivePackUrl(packUrl: string | null): void {
+  tryLocalStorage(() => {
+    if (packUrl) {
+      localStorage.setItem(ACTIVE_PACK_URL_STORAGE_KEY, packUrl);
+    } else {
+      localStorage.removeItem(ACTIVE_PACK_URL_STORAGE_KEY);
+    }
+  }, undefined);
+}
+
 export function loadUiLanguage(): UiLanguage {
   return tryLocalStorage(() => {
     const stored = localStorage.getItem(UI_LANGUAGE_STORAGE_KEY);

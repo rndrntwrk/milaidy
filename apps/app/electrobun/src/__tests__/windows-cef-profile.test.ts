@@ -1,13 +1,15 @@
 import type fs from "node:fs";
 import { describe, expect, it } from "vitest";
+
 import {
   resolveDesktopBundleVersion,
   shouldResetWindowsCefProfile,
+  shouldWriteWindowsCefProfileMarker,
 } from "../windows-cef-profile";
 
 type ExistsSyncLike = Pick<typeof fs, "existsSync" | "readFileSync">;
 
-describe("resolveDesktopBundleVersion", () => {
+describe("windows-cef-profile", () => {
   it("prefers packaged Windows Resources/version.json", () => {
     const version = resolveDesktopBundleVersion(
       "C:\\mi\\Resources\\app\\bun",
@@ -47,19 +49,45 @@ describe("resolveDesktopBundleVersion", () => {
 
     expect(version).toBe("2.0.0-dev");
   });
-});
 
-describe("shouldResetWindowsCefProfile", () => {
-  it("does not reset on first run without a prior marker", () => {
-    expect(shouldResetWindowsCefProfile(null, "2.0.0")).toBe(false);
+  it("resets stale CEF data when the previous version marker is missing", () => {
+    expect(
+      shouldResetWindowsCefProfile({
+        currentVersion: "2.0.0-alpha.116",
+        previousVersion: null,
+        cefDirExists: true,
+      }),
+    ).toBe(true);
   });
 
-  it("does not reset when the current version is unknown", () => {
-    expect(shouldResetWindowsCefProfile("1.9.0", "unknown")).toBe(false);
+  it("does not reset when the CEF directory does not exist", () => {
+    expect(
+      shouldResetWindowsCefProfile({
+        currentVersion: "2.0.0-alpha.116",
+        previousVersion: null,
+        cefDirExists: false,
+      }),
+    ).toBe(false);
   });
 
-  it("resets only on a real version change", () => {
-    expect(shouldResetWindowsCefProfile("1.9.0", "2.0.0")).toBe(true);
-    expect(shouldResetWindowsCefProfile("2.0.0", "2.0.0")).toBe(false);
+  it("does not reset when the version has not changed", () => {
+    expect(
+      shouldResetWindowsCefProfile({
+        currentVersion: "2.0.0-alpha.116",
+        previousVersion: "2.0.0-alpha.116",
+        cefDirExists: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not reset or persist a marker when the current version is unknown", () => {
+    expect(
+      shouldResetWindowsCefProfile({
+        currentVersion: "unknown",
+        previousVersion: null,
+        cefDirExists: true,
+      }),
+    ).toBe(false);
+    expect(shouldWriteWindowsCefProfileMarker("unknown")).toBe(false);
   });
 });

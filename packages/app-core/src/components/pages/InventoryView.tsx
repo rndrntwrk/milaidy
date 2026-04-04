@@ -35,7 +35,7 @@ import {
   Unlink,
   Wallet,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BSC_GAS_READY_THRESHOLD,
   loadTrackedBscTokens,
@@ -310,6 +310,7 @@ export function InventoryView() {
   // ── Wallet settings popup state ──────────────────────────────────
   const [walletRpcOpen, setWalletRpcOpen] = useState(false);
   const [walletPoliciesOpen, setWalletPoliciesOpen] = useState(false);
+  const autoLoadedInventoryViewRef = useRef<"tokens" | "nfts" | null>(null);
 
   const handlePendingCountChange = useCallback((count: number) => {
     setPendingApprovalCount(count);
@@ -336,6 +337,32 @@ export function InventoryView() {
       cancelled = true;
     };
   }, [getStewardStatus]);
+
+  useEffect(() => {
+    if (autoLoadedInventoryViewRef.current === inventoryView) {
+      return;
+    }
+    autoLoadedInventoryViewRef.current = inventoryView;
+
+    if (inventoryView === "tokens") {
+      if (!walletBalances && !walletLoading) {
+        void loadBalances();
+      }
+      return;
+    }
+
+    if (!walletNfts && !walletNftsLoading) {
+      void loadNfts();
+    }
+  }, [
+    inventoryView,
+    loadBalances,
+    loadNfts,
+    walletBalances,
+    walletLoading,
+    walletNfts,
+    walletNftsLoading,
+  ]);
 
   // ── RPC + wallet readiness ───────────────────────────────────────
   const cfg = walletConfig;

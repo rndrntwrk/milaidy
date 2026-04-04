@@ -106,12 +106,49 @@ export function IdentityStep({
       const catchphrase = entry.catchphrase?.trim();
       if (!catchphrase || typeof window === "undefined") return;
 
+      const controller = new AbortController();
+      previewAbortControllerRef.current = controller;
+
+      // Try pre-generated static voiceline first (instant, no API call).
+      // Use a relative URL — static assets are served by Vite, not the API server.
+      const lang = uiLanguage || "en";
+      const staticUrl = `/audio/onboarding/${entry.id}-${lang}.mp3`;
+      try {
+        const staticRes = await fetchWithTimeout(
+          staticUrl,
+          { signal: controller.signal },
+          5_000,
+        );
+        if (staticRes.ok && isCurrentRequest()) {
+          const audioBlob = await staticRes.blob();
+          if (audioBlob.size && isCurrentRequest()) {
+            stopPreviewAudio();
+            const objectUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(objectUrl);
+            previewAudioRef.current = audio;
+            previewObjectUrlRef.current = objectUrl;
+            try {
+              await audio.play();
+            } catch {
+              previewAudioRef.current = null;
+              URL.revokeObjectURL(objectUrl);
+              if (previewObjectUrlRef.current === objectUrl) {
+                previewObjectUrlRef.current = null;
+              }
+            }
+            return;
+          }
+        }
+      } catch {
+        // Static file not available — fall through to TTS API chain
+      }
+
+      if (!isCurrentRequest()) return;
+
       const selectedPreset = entry.voicePresetId
         ? PREMADE_VOICES.find((voice) => voice.id === entry.voicePresetId)
         : undefined;
       const apiToken = resolveCompatApiToken();
-      const controller = new AbortController();
-      previewAbortControllerRef.current = controller;
       const requestPlans = buildPreviewTtsRequestPlans({
         text: catchphrase,
         voiceId: selectedPreset?.voiceId,
@@ -170,7 +207,7 @@ export function IdentityStep({
       // system voices here. If the selected preset catchphrase cannot be
       // synthesized, stay silent instead of playing the wrong line.
     },
-    [stopPreviewAudio],
+    [stopPreviewAudio, uiLanguage],
   );
 
   const handleSelect = useCallback(
@@ -206,11 +243,50 @@ export function IdentityStep({
       stopPreviewAudio,
     ],
   );
+  // Fresh onboarding (no pre-existing selection): auto-select first character.
   useEffect(() => {
     if (!onboardingStyle && firstEntry) {
       handleSelect(firstEntry, true);
     }
   }, [onboardingStyle, handleSelect, firstEntry]);
+
+  // Pre-existing selection: queue the preview for the teleport-complete event
+  // so the voiceline plays when the avatar is visually ready, not before.
+  // Uses a ref to capture the initial value — doesn't re-fire on user clicks.
+  const initialOnboardingStyleRef = useRef(onboardingStyle);
+  useEffect(() => {
+    const style = initialOnboardingStyleRef.current;
+    if (!style) return;
+    const entry = entries.find((e) => e.id === style);
+    if (!entry) return;
+    pendingPreviewEntryRef.current = entry;
+    // Defer dispatch so parent effects (OnboardingWizard's no-VRM bridge) mount first.
+    // Desktop: VrmStage fires TELEPORT_COMPLETE when the avatar is visible.
+    // Browser (no VRM): the bridge converts AWAIT_TELEPORT → TELEPORT_COMPLETE.
+    const rafId = requestAnimationFrame(() => {
+      if (pendingPreviewEntryRef.current === entry) {
+        dispatchWindowEvent(ONBOARDING_VOICE_PREVIEW_AWAIT_TELEPORT_EVENT);
+      }
+    });
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (pendingPreviewEntryRef.current === entry) {
+        pendingPreviewEntryRef.current = null;
+      }
+    };
+  }, [entries]);
+
+  // Replay voiceline when UI language changes (entries update with new catchphrases).
+  const prevLanguageRef = useRef(uiLanguage);
+  useEffect(() => {
+    if (prevLanguageRef.current === uiLanguage) return;
+    prevLanguageRef.current = uiLanguage;
+    if (!onboardingStyle) return;
+    const entry = entries.find((e) => e.id === onboardingStyle);
+    if (entry) {
+      void playSelectionPreview(entry);
+    }
+  }, [uiLanguage, onboardingStyle, entries, playSelectionPreview]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
