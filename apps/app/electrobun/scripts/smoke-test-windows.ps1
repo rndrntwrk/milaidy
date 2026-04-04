@@ -19,15 +19,25 @@ $tempRoot = if ($env:RUNNER_TEMP) {
 } else {
   [System.IO.Path]::GetTempPath()
 }
+$defaultAppDataRoot = if ([string]::IsNullOrWhiteSpace($env:APPDATA)) {
+  Join-Path $tempRoot ("milady-windows-appdata-" + [Guid]::NewGuid().ToString("N"))
+} else {
+  $env:APPDATA
+}
+$defaultLocalAppDataRoot = if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+  Join-Path $tempRoot ("milady-windows-localappdata-" + [Guid]::NewGuid().ToString("N"))
+} else {
+  $env:LOCALAPPDATA
+}
 $testAppDataRoot = if ($env:MILADY_TEST_WINDOWS_APPDATA_PATH) {
   $env:MILADY_TEST_WINDOWS_APPDATA_PATH
 } else {
-  Join-Path $tempRoot ("milady-windows-appdata-" + [Guid]::NewGuid().ToString("N"))
+  $defaultAppDataRoot
 }
 $testLocalAppDataRoot = if ($env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH) {
   $env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH
 } else {
-  Join-Path $tempRoot ("milady-windows-localappdata-" + [Guid]::NewGuid().ToString("N"))
+  $defaultLocalAppDataRoot
 }
 $env:APPDATA = $testAppDataRoot
 $env:LOCALAPPDATA = $testLocalAppDataRoot
