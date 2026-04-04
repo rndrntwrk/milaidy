@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { IAgentRuntime } from "@elizaos/core";
 import type {
   CompleteLifeOpsOccurrenceRequest,
+  CreateLifeOpsCalendarEventRequest,
   DisconnectLifeOpsGoogleConnectorRequest,
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,
@@ -36,6 +37,7 @@ import {
   LIFEOPS_DEFINITION_KINDS,
   LIFEOPS_DEFINITION_STATUSES,
   LIFEOPS_GOAL_STATUSES,
+  LIFEOPS_CALENDAR_WINDOW_PRESETS,
   LIFEOPS_GOOGLE_CAPABILITIES,
   LIFEOPS_REMINDER_CHANNELS,
   LIFEOPS_REVIEW_STATES,
@@ -56,6 +58,7 @@ import {
   startGoogleConnectorOAuth,
 } from "./google-oauth.js";
 import { fetchGoogleCalendarEvents } from "./google-calendar.js";
+import { createGoogleCalendarEvent } from "./google-calendar.js";
 import {
   normalizeGoogleCapabilities,
 } from "./google-scopes.js";
@@ -316,6 +319,136 @@ function hasGoogleCalendarReadCapability(
     capabilities.has("google.calendar.read") ||
     capabilities.has("google.calendar.write")
   );
+}
+
+function hasGoogleCalendarWriteCapability(
+  grant: LifeOpsConnectorGrant,
+): boolean {
+  const capabilities = new Set(normalizeGrantCapabilities(grant.capabilities));
+  return capabilities.has("google.calendar.write");
+}
+
+function normalizeCalendarAttendees(
+  value: unknown,
+): Array<{ email: string; displayName?: string; optional?: boolean }> {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    fail(400, "attendees must be an array");
+  }
+  const seen = new Set<string>();
+  const attendees: Array<{ email: string; displayName?: string; optional?: boolean }> = [];
+  for (const [index, candidate] of value.entries()) {
+    if (!candidate || typeof candidate !== "object") {
+      fail(400, `attendees[${index}] must be an object`);
+    }
+    const attendee = candidate as Record<string, unknown>;
+    const email = requireNonEmptyString(attendee.email, `attendees[${index}].email`).toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      fail(400, `attendees[${index}].email must be a valid email address`);
+    }
+    if (seen.has(email)) {
+      continue;
+    }
+    seen.add(email);
+    const normalized: { email: string; displayName?: string; optional?: boolean } = {
+      email,
+    };
+    const displayName = normalizeOptionalString(attendee.displayName);
+    if (displayName) {
+      normalized.displayName = displayName;
+    }
+    const optional = normalizeOptionalBoolean(
+      attendee.optional,
+      `attendees[${index}].optional`,
+    );
+    if (optional) {
+      normalized.optional = true;
+    }
+    attendees.push(normalized);
+  }
+  return attendees;
+}
+
+function resolveCalendarPresetStart(
+  timeZone: string,
+  preset: "tomorrow_morning" | "tomorrow_afternoon" | "tomorrow_evening",
+  now: Date,
+): Date {
+  const localNow = getZonedDateParts(now, timeZone);
+  const tomorrow = addDaysToLocalDate(
+    {
+      year: localNow.year,
+      month: localNow.month,
+      day: localNow.day,
+    },
+    1,
+  );
+  const [hour, minute] =
+    preset === "tomorrow_morning"
+      ? [9, 0]
+      : preset === "tomorrow_afternoon"
+        ? [14, 0]
+        : [19, 0];
+  return buildUtcDateFromLocalParts(timeZone, {
+    year: tomorrow.year,
+    month: tomorrow.month,
+    day: tomorrow.day,
+    hour,
+    minute,
+    second: 0,
+  });
+}
+
+function resolveCalendarEventRange(
+  request: CreateLifeOpsCalendarEventRequest,
+  now: Date,
+): { startAt: string; endAt: string; timeZone: string } {
+  const timeZone = normalizeCalendarTimeZone(request.timeZone);
+  const durationMinutes = normalizeOptionalMinutes(
+    request.durationMinutes,
+    "durationMinutes",
+  ) ?? 60;
+  if (durationMinutes <= 0) {
+    fail(400, "durationMinutes must be greater than 0");
+  }
+
+  const preset = normalizeOptionalString(request.windowPreset);
+  if (preset) {
+    if (!LIFEOPS_CALENDAR_WINDOW_PRESETS.includes(preset as never)) {
+      fail(
+        400,
+        `windowPreset must be one of: ${LIFEOPS_CALENDAR_WINDOW_PRESETS.join(", ")}`,
+      );
+    }
+    const start = resolveCalendarPresetStart(
+      timeZone,
+      preset as "tomorrow_morning" | "tomorrow_afternoon" | "tomorrow_evening",
+      now,
+    );
+    return {
+      startAt: start.toISOString(),
+      endAt: addMinutes(start, durationMinutes).toISOString(),
+      timeZone,
+    };
+  }
+
+  const startAt = normalizeOptionalIsoString(request.startAt, "startAt");
+  if (!startAt) {
+    fail(400, "startAt is required when windowPreset is not provided");
+  }
+  const endAt =
+    normalizeOptionalIsoString(request.endAt, "endAt") ??
+    addMinutes(new Date(startAt), durationMinutes).toISOString();
+  if (Date.parse(endAt) <= Date.parse(startAt)) {
+    fail(400, "endAt must be later than startAt");
+  }
+  return {
+    startAt,
+    endAt,
+    timeZone,
+  };
 }
 
 function createCalendarEventId(
@@ -873,6 +1006,37 @@ export class LifeOpsService {
       fail(403, "Google Calendar read access has not been granted.");
     }
     return grant;
+  }
+
+  private async requireGoogleCalendarWriteGrant(
+    requestUrl: URL,
+    requestedMode?: LifeOpsConnectorMode,
+  ): Promise<LifeOpsConnectorGrant> {
+    const grant = await this.requireGoogleCalendarGrant(requestUrl, requestedMode);
+    if (!hasGoogleCalendarWriteCapability(grant)) {
+      fail(403, "Google Calendar write access has not been granted.");
+    }
+    return grant;
+  }
+
+  private async recordCalendarEventAudit(
+    ownerId: string,
+    reason: string,
+    inputs: Record<string, unknown>,
+    decision: Record<string, unknown>,
+  ): Promise<void> {
+    await this.repository.createAuditEvent(
+      createLifeOpsAuditEvent({
+        agentId: this.agentId(),
+        eventType: "calendar_event_created",
+        ownerType: "calendar_event",
+        ownerId,
+        reason,
+        inputs,
+        decision,
+        actor: "user",
+      }),
+    );
   }
 
   private async syncGoogleCalendarFeed(args: {
@@ -1503,6 +1667,69 @@ export class LifeOpsService {
       timeMax,
       timeZone,
     });
+  }
+
+  async createCalendarEvent(
+    requestUrl: URL,
+    request: CreateLifeOpsCalendarEventRequest,
+    now = new Date(),
+  ): Promise<LifeOpsCalendarEvent> {
+    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const calendarId = normalizeCalendarId(request.calendarId);
+    const title = requireNonEmptyString(request.title, "title");
+    const description = normalizeOptionalString(request.description) ?? "";
+    const location = normalizeOptionalString(request.location) ?? "";
+    const attendees = normalizeCalendarAttendees(request.attendees);
+    const { startAt, endAt, timeZone } = resolveCalendarEventRange(request, now);
+
+    const grant = await this.requireGoogleCalendarWriteGrant(requestUrl, mode);
+    if (!grant.tokenRef) {
+      fail(409, "Google Calendar token reference is missing.");
+    }
+
+    const token = await ensureFreshGoogleAccessToken(grant.tokenRef);
+    const created = await createGoogleCalendarEvent({
+      accessToken: token.accessToken,
+      calendarId,
+      title,
+      description,
+      location,
+      startAt,
+      endAt,
+      timeZone,
+      attendees,
+    });
+    const syncedAt = new Date().toISOString();
+    const event: LifeOpsCalendarEvent = {
+      id: createCalendarEventId(
+        this.agentId(),
+        "google",
+        created.calendarId,
+        created.externalId,
+      ),
+      agentId: this.agentId(),
+      provider: "google",
+      ...created,
+      syncedAt,
+      updatedAt: syncedAt,
+    };
+    await this.repository.upsertCalendarEvent(event);
+    await this.recordCalendarEventAudit(
+      event.id,
+      "calendar event created",
+      {
+        calendarId,
+        mode: grant.mode,
+        title,
+        requestedStartAt: startAt,
+        requestedEndAt: endAt,
+      },
+      {
+        externalId: event.externalId,
+        htmlLink: event.htmlLink,
+      },
+    );
+    return event;
   }
 
   async completeOccurrence(

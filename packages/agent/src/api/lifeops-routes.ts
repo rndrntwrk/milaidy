@@ -3,6 +3,7 @@ import type { AgentRuntime, UUID } from "@elizaos/core";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
 import type {
   CompleteLifeOpsOccurrenceRequest,
+  CreateLifeOpsCalendarEventRequest,
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,
   DisconnectLifeOpsGoogleConnectorRequest,
@@ -181,6 +182,14 @@ export async function handleLifeOpsRoutes(
             : rawForceSync === "true" || rawForceSync === "1",
       };
       json(res, await service.getCalendarFeed(url, request));
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/calendar/events") {
+    const body = await readJsonBody<CreateLifeOpsCalendarEventRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, { event: await service.createCalendarEvent(url, body) }, 201);
     });
   }
 

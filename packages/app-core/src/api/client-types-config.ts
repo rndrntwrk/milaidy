@@ -11,6 +11,7 @@ import type {
 import type { ReleaseChannel } from "@miladyai/agent/contracts/config";
 import type {
   CompleteLifeOpsOccurrenceRequest,
+  CreateLifeOpsCalendarEventRequest,
   DisconnectLifeOpsGoogleConnectorRequest,
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,
@@ -35,6 +36,7 @@ import type { MessageExampleContent } from "@miladyai/shared/contracts/onboardin
 
 export type {
   CompleteLifeOpsOccurrenceRequest,
+  CreateLifeOpsCalendarEventRequest,
   DisconnectLifeOpsGoogleConnectorRequest,
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,

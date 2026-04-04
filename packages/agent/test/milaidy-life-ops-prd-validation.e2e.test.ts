@@ -1110,6 +1110,178 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
         continue;
       }
 
+      if (scenario.id === "P1-05") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          await withGoogleOAuthApiServer(
+            {
+              MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID: "desktop-client-id",
+            },
+            async ({ port, fetchMock }) => {
+              vi.useFakeTimers();
+              vi.setSystemTime(new Date("2026-04-04T19:00:00.000Z"));
+              try {
+                fetchMock.mockResolvedValueOnce(
+                  new Response(
+                    JSON.stringify({
+                      access_token: "calendar-read-token",
+                      refresh_token: "calendar-read-refresh",
+                      expires_in: 3600,
+                      scope: [
+                        "openid",
+                        "email",
+                        "profile",
+                        "https://www.googleapis.com/auth/calendar.readonly",
+                      ].join(" "),
+                      token_type: "Bearer",
+                      id_token: buildIdToken({
+                        sub: "google-user-4",
+                        email: "calendar-write@example.com",
+                        name: "Calendar Write Example",
+                        email_verified: true,
+                      }),
+                    }),
+                    {
+                      status: 200,
+                      headers: { "content-type": "application/json" },
+                    },
+                  ),
+                );
+
+                const readStart = await req(
+                  port,
+                  "POST",
+                  "/api/lifeops/connectors/google/start",
+                  { capabilities: ["google.calendar.read"] },
+                );
+                const readAuthUrl = new URL(String(readStart.data.authUrl));
+                await req(
+                  port,
+                  "GET",
+                  `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(readAuthUrl.searchParams.get("state") ?? "")}&code=read-code`,
+                );
+
+                const rejected = await req(
+                  port,
+                  "POST",
+                  "/api/lifeops/calendar/events",
+                  {
+                    title: "Coffee with Mira",
+                    windowPreset: "tomorrow_afternoon",
+                    durationMinutes: 90,
+                    timeZone: "America/Los_Angeles",
+                  },
+                );
+                expect(rejected.status).toBe(403);
+
+                fetchMock.mockResolvedValueOnce(
+                  new Response(
+                    JSON.stringify({
+                      access_token: "calendar-write-token",
+                      refresh_token: "calendar-write-refresh",
+                      expires_in: 3600,
+                      scope: [
+                        "openid",
+                        "email",
+                        "profile",
+                        "https://www.googleapis.com/auth/calendar.events",
+                      ].join(" "),
+                      token_type: "Bearer",
+                      id_token: buildIdToken({
+                        sub: "google-user-4",
+                        email: "calendar-write@example.com",
+                        name: "Calendar Write Example",
+                        email_verified: true,
+                      }),
+                    }),
+                    {
+                      status: 200,
+                      headers: { "content-type": "application/json" },
+                    },
+                  ),
+                );
+
+                const writeStart = await req(
+                  port,
+                  "POST",
+                  "/api/lifeops/connectors/google/start",
+                  { capabilities: ["google.calendar.write"] },
+                );
+                const writeAuthUrl = new URL(String(writeStart.data.authUrl));
+                await req(
+                  port,
+                  "GET",
+                  `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(writeAuthUrl.searchParams.get("state") ?? "")}&code=write-code`,
+                );
+
+                fetchMock.mockImplementationOnce(async (input, init) => {
+                  const url = typeof input === "string" ? input : input.toString();
+                  expect(url).toBe(
+                    "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+                  );
+                  expect(init?.method).toBe("POST");
+                  expect(init?.headers).toMatchObject({
+                    Authorization: "Bearer calendar-write-token",
+                  });
+                  expect(JSON.parse(String(init?.body ?? "{}"))).toMatchObject({
+                    summary: "Coffee with Mira",
+                    start: {
+                      dateTime: "2026-04-05T21:00:00.000Z",
+                      timeZone: "America/Los_Angeles",
+                    },
+                    end: {
+                      dateTime: "2026-04-05T22:30:00.000Z",
+                      timeZone: "America/Los_Angeles",
+                    },
+                  });
+                  return new Response(
+                    JSON.stringify({
+                      id: "created-event-prd",
+                      status: "confirmed",
+                      summary: "Coffee with Mira",
+                      htmlLink:
+                        "https://calendar.google.com/event?eid=created-prd",
+                      start: {
+                        dateTime: "2026-04-05T14:00:00-07:00",
+                        timeZone: "America/Los_Angeles",
+                      },
+                      end: {
+                        dateTime: "2026-04-05T15:30:00-07:00",
+                        timeZone: "America/Los_Angeles",
+                      },
+                    }),
+                    {
+                      status: 200,
+                      headers: { "content-type": "application/json" },
+                    },
+                  );
+                });
+
+                const createRes = await req(
+                  port,
+                  "POST",
+                  "/api/lifeops/calendar/events",
+                  {
+                    title: "Coffee with Mira",
+                    windowPreset: "tomorrow_afternoon",
+                    durationMinutes: 90,
+                    timeZone: "America/Los_Angeles",
+                  },
+                );
+                expect(createRes.status).toBe(201);
+                expect(createRes.data.event).toMatchObject({
+                  title: "Coffee with Mira",
+                  startAt: "2026-04-05T21:00:00.000Z",
+                  endAt: "2026-04-05T22:30:00.000Z",
+                });
+              } finally {
+                vi.useRealTimers();
+              }
+            },
+          );
+        });
+        continue;
+      }
+
       it.todo(`[${scenario.id}] ${scenario.title}`);
     }
   });

@@ -8,6 +8,7 @@ import type {
   ChatTokenUsage,
   ConnectionTestResult,
   ContentBlock,
+  CreateLifeOpsCalendarEventRequest,
   GetLifeOpsCalendarFeedRequest,
   DisconnectLifeOpsGoogleConnectorRequest,
   Conversation,
@@ -217,6 +218,9 @@ declare module "./client-base" {
     getLifeOpsCalendarFeed(
       options?: GetLifeOpsCalendarFeedRequest,
     ): Promise<LifeOpsCalendarFeed>;
+    createLifeOpsCalendarEvent(
+      data: CreateLifeOpsCalendarEventRequest,
+    ): Promise<{ event: LifeOpsCalendarFeed["events"][number] }>;
     listLifeOpsDefinitions(): Promise<{ definitions: LifeOpsDefinitionRecord[] }>;
     getLifeOpsDefinition(definitionId: string): Promise<LifeOpsDefinitionRecord>;
     createLifeOpsDefinition(
@@ -786,6 +790,16 @@ MiladyClient.prototype.getLifeOpsCalendarFeed = async function (
   }
   const query = params.toString();
   return this.fetch(`/api/lifeops/calendar/feed${query ? `?${query}` : ""}`);
+};
+
+MiladyClient.prototype.createLifeOpsCalendarEvent = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/calendar/events", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 };
 
 MiladyClient.prototype.listLifeOpsDefinitions = async function (

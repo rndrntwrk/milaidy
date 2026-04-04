@@ -140,6 +140,7 @@ export const LIFEOPS_AUDIT_EVENT_TYPES = [
   "occurrence_snoozed",
   "goal_created",
   "goal_updated",
+  "calendar_event_created",
   "reminder_due",
   "reminder_delivered",
   "workflow_created",
@@ -464,6 +465,34 @@ export interface GetLifeOpsCalendarFeedRequest {
   timeMax?: string;
   timeZone?: string;
   forceSync?: boolean;
+}
+
+export const LIFEOPS_CALENDAR_WINDOW_PRESETS = [
+  "tomorrow_morning",
+  "tomorrow_afternoon",
+  "tomorrow_evening",
+] as const;
+export type LifeOpsCalendarWindowPreset =
+  (typeof LIFEOPS_CALENDAR_WINDOW_PRESETS)[number];
+
+export interface CreateLifeOpsCalendarEventAttendee {
+  email: string;
+  displayName?: string;
+  optional?: boolean;
+}
+
+export interface CreateLifeOpsCalendarEventRequest {
+  mode?: LifeOpsConnectorMode;
+  calendarId?: string;
+  title: string;
+  description?: string;
+  location?: string;
+  startAt?: string;
+  endAt?: string;
+  timeZone?: string;
+  durationMinutes?: number;
+  windowPreset?: LifeOpsCalendarWindowPreset;
+  attendees?: CreateLifeOpsCalendarEventAttendee[];
 }
 
 export const LIFEOPS_GOOGLE_CONNECTOR_REASONS = [

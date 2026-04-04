@@ -45,6 +45,25 @@ interface GoogleCalendarApiEvent {
   };
 }
 
+interface GoogleCalendarCreateRequestBody {
+  summary: string;
+  description?: string;
+  location?: string;
+  start: {
+    dateTime: string;
+    timeZone: string;
+  };
+  end: {
+    dateTime: string;
+    timeZone: string;
+  };
+  attendees?: Array<{
+    email: string;
+    displayName?: string;
+    optional?: boolean;
+  }>;
+}
+
 export interface SyncedGoogleCalendarEvent
   extends Omit<
     LifeOpsCalendarEvent,
@@ -190,4 +209,71 @@ export async function fetchGoogleCalendarEvents(args: {
     }
   }
   return events;
+}
+
+export async function createGoogleCalendarEvent(args: {
+  accessToken: string;
+  calendarId?: string;
+  title: string;
+  description?: string;
+  location?: string;
+  startAt: string;
+  endAt: string;
+  timeZone: string;
+  attendees?: Array<{
+    email: string;
+    displayName?: string;
+    optional?: boolean;
+  }>;
+}): Promise<SyncedGoogleCalendarEvent> {
+  const calendarId = args.calendarId ?? "primary";
+  const body: GoogleCalendarCreateRequestBody = {
+    summary: args.title,
+    start: {
+      dateTime: args.startAt,
+      timeZone: args.timeZone,
+    },
+    end: {
+      dateTime: args.endAt,
+      timeZone: args.timeZone,
+    },
+  };
+  if (args.description?.trim()) {
+    body.description = args.description.trim();
+  }
+  if (args.location?.trim()) {
+    body.location = args.location.trim();
+  }
+  if (args.attendees && args.attendees.length > 0) {
+    body.attendees = args.attendees.map((attendee) => ({
+      email: attendee.email,
+      ...(attendee.displayName?.trim()
+        ? { displayName: attendee.displayName.trim() }
+        : {}),
+      ...(attendee.optional ? { optional: true } : {}),
+    }));
+  }
+
+  const response = await fetch(
+    `${GOOGLE_CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${args.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readGoogleCalendarError(response));
+  }
+
+  const parsed = (await response.json()) as GoogleCalendarApiEvent;
+  const normalized = normalizeGoogleCalendarEvent(calendarId, parsed);
+  if (!normalized) {
+    throw new Error("Google Calendar create event returned an invalid payload.");
+  }
+  return normalized;
 }

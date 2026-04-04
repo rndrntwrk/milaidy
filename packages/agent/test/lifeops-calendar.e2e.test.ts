@@ -170,19 +170,22 @@ describe("life-ops calendar sync", () => {
     await repository.deleteCalendarSyncState("lifeops-calendar-agent", "google");
   });
 
-  async function connectGoogleCalendar(): Promise<void> {
+  async function connectGoogleCalendar(
+    capabilities: string[] = ["google.calendar.read"],
+    scopes: string[] = [
+      "openid",
+      "email",
+      "profile",
+      "https://www.googleapis.com/auth/calendar.readonly",
+    ],
+  ): Promise<void> {
     fetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
           access_token: "calendar-access-token",
           refresh_token: "calendar-refresh-token",
           expires_in: 3600,
-          scope: [
-            "openid",
-            "email",
-            "profile",
-            "https://www.googleapis.com/auth/calendar.readonly",
-          ].join(" "),
+          scope: scopes.join(" "),
           token_type: "Bearer",
           id_token: buildIdToken({
             sub: "google-user-calendar",
@@ -199,7 +202,7 @@ describe("life-ops calendar sync", () => {
     );
 
     const startRes = await req(port, "POST", "/api/lifeops/connectors/google/start", {
-      capabilities: ["google.calendar.read"],
+      capabilities,
     });
     expect(startRes.status).toBe(200);
 
@@ -372,5 +375,115 @@ describe("life-ops calendar sync", () => {
     expect(String(afterDisconnect.data.error)).toContain(
       "Google Calendar is not connected",
     );
+  });
+
+  it("rejects event creation when the connector only has calendar read access", async () => {
+    await connectGoogleCalendar();
+
+    const createRes = await req(
+      port,
+      "POST",
+      "/api/lifeops/calendar/events",
+      {
+        title: "Coffee",
+        startAt: "2026-04-05T21:00:00.000Z",
+        endAt: "2026-04-05T22:00:00.000Z",
+        timeZone: "America/Los_Angeles",
+      },
+    );
+    expect(createRes.status).toBe(403);
+    expect(String(createRes.data.error)).toContain(
+      "Google Calendar write access has not been granted",
+    );
+  });
+
+  it("creates calendar events with write access and persists the created window", async () => {
+    await connectGoogleCalendar(
+      ["google.calendar.write"],
+      [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/calendar.events",
+      ],
+    );
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input.toString();
+      expect(url).toBe("https://www.googleapis.com/calendar/v3/calendars/primary/events");
+      expect(init?.method).toBe("POST");
+      expect(init?.headers).toMatchObject({
+        Authorization: "Bearer calendar-access-token",
+        "Content-Type": "application/json",
+      });
+      expect(JSON.parse(String(init?.body ?? "{}"))).toMatchObject({
+        summary: "Coffee with Mira",
+        start: {
+          dateTime: "2026-04-05T21:00:00.000Z",
+          timeZone: "America/Los_Angeles",
+        },
+        end: {
+          dateTime: "2026-04-05T22:30:00.000Z",
+          timeZone: "America/Los_Angeles",
+        },
+      });
+
+      return new Response(
+        JSON.stringify({
+          id: "created-event-1",
+          status: "confirmed",
+          summary: "Coffee with Mira",
+          description: "Talk through next week.",
+          location: "Cafe",
+          htmlLink: "https://calendar.google.com/event?eid=created",
+          start: {
+            dateTime: "2026-04-05T14:00:00-07:00",
+            timeZone: "America/Los_Angeles",
+          },
+          end: {
+            dateTime: "2026-04-05T15:30:00-07:00",
+            timeZone: "America/Los_Angeles",
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    });
+
+    const createRes = await req(
+      port,
+      "POST",
+      "/api/lifeops/calendar/events",
+      {
+        title: "Coffee with Mira",
+        description: "Talk through next week.",
+        location: "Cafe",
+        startAt: "2026-04-05T21:00:00.000Z",
+        endAt: "2026-04-05T22:30:00.000Z",
+        timeZone: "America/Los_Angeles",
+      },
+    );
+    expect(createRes.status).toBe(201);
+    expect(createRes.data.event).toMatchObject({
+      title: "Coffee with Mira",
+      location: "Cafe",
+      htmlLink: "https://calendar.google.com/event?eid=created",
+    });
+
+    const repository = new LifeOpsRepository(runtime);
+    const persisted = await repository.listCalendarEvents(
+      "lifeops-calendar-agent",
+      "google",
+      "2026-04-05T00:00:00.000Z",
+      "2026-04-06T00:00:00.000Z",
+    );
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0]).toMatchObject({
+      title: "Coffee with Mira",
+      startAt: "2026-04-05T21:00:00.000Z",
+      endAt: "2026-04-05T22:30:00.000Z",
+    });
   });
 });
