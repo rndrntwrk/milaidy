@@ -12,6 +12,7 @@ const { mockUseApp, mockClient } = vi.hoisted(() => ({
     getLifeOpsCalendarFeed: vi.fn(),
     getGoogleLifeOpsConnectorStatus: vi.fn(),
     getLifeOpsOverview: vi.fn(),
+    getLifeOpsNextCalendarEventContext: vi.fn(),
     listWorkbenchTodos: vi.fn(),
     skipLifeOpsOccurrence: vi.fn(),
     snoozeLifeOpsOccurrence: vi.fn(),
@@ -67,6 +68,7 @@ describe("TasksEventsPanel", () => {
     mockClient.getLifeOpsCalendarFeed.mockReset();
     mockClient.getGoogleLifeOpsConnectorStatus.mockReset();
     mockClient.getLifeOpsOverview.mockReset();
+    mockClient.getLifeOpsNextCalendarEventContext.mockReset();
     mockClient.listWorkbenchTodos.mockReset();
     mockClient.skipLifeOpsOccurrence.mockReset();
     mockClient.snoozeLifeOpsOccurrence.mockReset();
@@ -276,6 +278,50 @@ describe("TasksEventsPanel", () => {
         updatedAt: new Date().toISOString(),
       },
     });
+    mockClient.getLifeOpsNextCalendarEventContext.mockResolvedValue({
+      event: {
+        id: "event-1",
+        externalId: "google-event-1",
+        agentId: "agent-1",
+        provider: "google",
+        calendarId: "primary",
+        title: "Design review",
+        description: "Discuss the next milestone.",
+        location: "Studio",
+        status: "confirmed",
+        startAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+        endAt: new Date(Date.now() + 90 * 60_000).toISOString(),
+        isAllDay: false,
+        timezone: "UTC",
+        htmlLink: "https://calendar.google.com/event?eid=1",
+        conferenceLink: "https://meet.google.com/example",
+        organizer: { email: "agent@example.com" },
+        attendees: [
+          {
+            email: "friend@example.com",
+            displayName: "Friend",
+            responseStatus: "accepted",
+            self: false,
+            organizer: false,
+            optional: false,
+          },
+        ],
+        metadata: {},
+        syncedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      startsAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      startsInMinutes: 30,
+      attendeeCount: 1,
+      attendeeNames: ["Friend"],
+      location: "Studio",
+      conferenceLink: "https://meet.google.com/example",
+      preparationChecklist: [
+        "Confirm route or access for Studio",
+        "Read the event description and agenda notes",
+      ],
+      linkedMail: [],
+    });
     mockClient.completeLifeOpsOccurrence.mockResolvedValue({
       occurrence: {
         id: "occ-visible",
@@ -344,20 +390,23 @@ describe("TasksEventsPanel", () => {
     });
 
     const text = flattenText(tree.root).toLowerCase();
+    const normalizedText = text.replace(/\s+/g, " ").trim();
     expect(mockClient.listWorkbenchTodos.mock.calls.length).toBeGreaterThan(0);
     expect(mockClient.getLifeOpsCalendarFeed.mock.calls.length).toBeGreaterThan(0);
     expect(mockClient.getLifeOpsOverview.mock.calls.length).toBeGreaterThan(0);
+    expect(mockClient.getLifeOpsNextCalendarEventContext.mock.calls.length).toBeGreaterThan(0);
     expect(mockClient.getGoogleLifeOpsConnectorStatus.mock.calls.length).toBeGreaterThan(0);
-    expect(text).toContain("google calendar");
-    expect(text).toContain("connected as agent@example.com");
-    expect(text).toContain("design review");
-    expect(text).toContain("current slot check-in");
-    expect(text).toContain("in-app reminder");
-    expect(text).toContain("write release notes");
-    expect(text).not.toContain("ship patch");
-    expect(text).toContain("worker 1");
-    expect(text).not.toContain("finished worker");
-    expect(text).toContain("task started: worker 1");
+    expect(normalizedText).toContain("google calendar");
+    expect(normalizedText).toContain("connected as agent@example.com");
+    expect(normalizedText).toContain("next up: design review");
+    expect(normalizedText).toContain("design review");
+    expect(normalizedText).toContain("current slot check-in");
+    expect(normalizedText).toContain("in-app reminder");
+    expect(normalizedText).toContain("write release notes");
+    expect(normalizedText).not.toContain("ship patch");
+    expect(normalizedText).toContain("worker 1");
+    expect(normalizedText).not.toContain("finished worker");
+    expect(normalizedText).toContain("task started: worker 1");
   });
 
   it("runs life-ops occurrence actions from the panel", async () => {

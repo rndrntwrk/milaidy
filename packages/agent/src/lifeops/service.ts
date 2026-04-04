@@ -16,6 +16,7 @@ import type {
   LifeOpsGoogleCapability,
   LifeOpsGoogleConnectorStatus,
   LifeOpsGoalLink,
+  LifeOpsNextCalendarEventContext,
   LifeOpsOccurrence,
   LifeOpsOverview,
   LifeOpsOccurrenceView,
@@ -448,6 +449,54 @@ function resolveCalendarEventRange(
     startAt,
     endAt,
     timeZone,
+  };
+}
+
+function buildNextCalendarEventContext(
+  event: LifeOpsCalendarEvent | null,
+  now: Date,
+): LifeOpsNextCalendarEventContext {
+  if (!event) {
+    return {
+      event: null,
+      startsAt: null,
+      startsInMinutes: null,
+      attendeeCount: 0,
+      attendeeNames: [],
+      location: null,
+      conferenceLink: null,
+      preparationChecklist: [],
+      linkedMail: [],
+    };
+  }
+
+  const attendeeNames = event.attendees
+    .filter((attendee) => !attendee.self)
+    .map((attendee) => attendee.displayName || attendee.email || "")
+    .filter((value) => value.length > 0);
+  const startsAtMs = Date.parse(event.startAt);
+  const startsInMinutes = Number.isFinite(startsAtMs)
+    ? Math.max(0, Math.round((startsAtMs - now.getTime()) / 60_000))
+    : null;
+  const checklist = [
+    event.location.trim().length > 0 ? `Confirm route or access for ${event.location.trim()}` : "",
+    event.conferenceLink ? "Open and test the call link before the meeting starts" : "",
+    attendeeNames.length > 0
+      ? `Review attendee context for ${attendeeNames.slice(0, 3).join(", ")}`
+      : "",
+    event.description.trim().length > 0 ? "Read the event description and agenda notes" : "",
+  ].filter((value) => value.length > 0);
+
+  return {
+    event,
+    startsAt: event.startAt,
+    startsInMinutes,
+    attendeeCount: event.attendees.filter((attendee) => !attendee.self).length,
+    attendeeNames,
+    location: event.location.trim() || null,
+    conferenceLink: event.conferenceLink,
+    preparationChecklist: checklist,
+    linkedMail: [],
   };
 }
 
@@ -1730,6 +1779,17 @@ export class LifeOpsService {
       },
     );
     return event;
+  }
+
+  async getNextCalendarEventContext(
+    requestUrl: URL,
+    request: GetLifeOpsCalendarFeedRequest = {},
+    now = new Date(),
+  ): Promise<LifeOpsNextCalendarEventContext> {
+    const feed = await this.getCalendarFeed(requestUrl, request, now);
+    const nextEvent =
+      feed.events.find((event) => Date.parse(event.endAt) > now.getTime()) ?? null;
+    return buildNextCalendarEventContext(nextEvent, now);
   }
 
   async completeOccurrence(

@@ -12,6 +12,7 @@ import type {
   LifeOpsCalendarFeed,
   LifeOpsCalendarEvent,
   LifeOpsGoogleConnectorStatus,
+  LifeOpsNextCalendarEventContext,
   LifeOpsOccurrenceView,
   LifeOpsOverview,
   WorkbenchTodo,
@@ -549,6 +550,56 @@ function CalendarEventRow({
   );
 }
 
+function NextCalendarContextCard({
+  context,
+}: {
+  context: LifeOpsNextCalendarEventContext | null;
+}) {
+  if (!context?.event) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-lg border border-border/50 bg-bg/70 p-3">
+      <div className="flex items-start gap-2">
+        <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="truncate text-xs font-semibold text-txt">
+              Next up: {context.event.title}
+            </span>
+            {context.startsInMinutes !== null ? (
+              <Badge variant="secondary" className="text-[9px]">
+                {context.startsInMinutes === 0
+                  ? "now"
+                  : `${context.startsInMinutes}m`}
+              </Badge>
+            ) : null}
+          </div>
+          <p className="mt-1 text-[11px] text-muted">
+            {formatCalendarEventTime(context.event)}
+            {context.location ? ` · ${context.location}` : ""}
+          </p>
+          {context.attendeeNames.length > 0 ? (
+            <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-muted">
+              {context.attendeeNames.join(", ")}
+            </p>
+          ) : null}
+          {context.preparationChecklist.length > 0 ? (
+            <div className="mt-2 flex flex-col gap-1">
+              {context.preparationChecklist.slice(0, 2).map((item) => (
+                <p key={item} className="text-[11px] leading-5 text-muted">
+                  {item}
+                </p>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LifeOpsOccurrenceRow({
   occurrence,
   acting,
@@ -636,6 +687,7 @@ function LifeOpsSection({
   loading,
   calendarFeed,
   calendarLoading,
+  nextCalendarContext,
   googleConnector,
   googleConnectorLoading,
   googleConnectorBusy,
@@ -653,6 +705,7 @@ function LifeOpsSection({
   loading: boolean;
   calendarFeed: LifeOpsCalendarFeed | null;
   calendarLoading: boolean;
+  nextCalendarContext: LifeOpsNextCalendarEventContext | null;
   googleConnector: LifeOpsGoogleConnectorStatus | null;
   googleConnectorLoading: boolean;
   googleConnectorBusy: boolean;
@@ -698,6 +751,7 @@ function LifeOpsSection({
       {googleConnector?.connected ? (
         calendarEvents.length > 0 ? (
           <>
+            <NextCalendarContextCard context={nextCalendarContext} />
             <p className="px-1 text-[11px] text-muted">
               {calendarEvents.length} upcoming calendar event
               {calendarEvents.length === 1 ? "" : "s"}
@@ -840,6 +894,8 @@ export function TasksEventsPanel({
   const [lifeopsLoading, setLifeopsLoading] = useState(false);
   const [calendarFeed, setCalendarFeed] = useState<LifeOpsCalendarFeed | null>(null);
   const [calendarLoading, setCalendarLoading] = useState(false);
+  const [nextCalendarContext, setNextCalendarContext] =
+    useState<LifeOpsNextCalendarEventContext | null>(null);
   const [googleConnector, setGoogleConnector] =
     useState<LifeOpsGoogleConnectorStatus | null>(null);
   const [googleConnectorLoading, setGoogleConnectorLoading] = useState(false);
@@ -969,6 +1025,30 @@ export function TasksEventsPanel({
     [],
   );
 
+  const loadNextCalendarContext = useCallback(
+    async (
+      connectorStatus: LifeOpsGoogleConnectorStatus | null,
+      silent = false,
+    ) => {
+      if (!connectorStatus?.connected) {
+        setNextCalendarContext(null);
+        return null;
+      }
+      try {
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+        const result = await client.getLifeOpsNextCalendarEventContext({ timeZone });
+        setNextCalendarContext(result);
+        return result;
+      } catch {
+        if (!silent) {
+          setNextCalendarContext(null);
+        }
+        return null;
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!open) {
       return;
@@ -1008,6 +1088,8 @@ export function TasksEventsPanel({
       if (!active) return;
       await loadCalendarFeed(connectorStatus, calendarFeed !== null);
       if (!active) return;
+      await loadNextCalendarContext(connectorStatus, true);
+      if (!active) return;
     })();
 
     const intervalId = window.setInterval(() => {
@@ -1017,6 +1099,8 @@ export function TasksEventsPanel({
         const connectorStatus = await loadGoogleConnector(true);
         if (!active) return;
         await loadCalendarFeed(connectorStatus, true);
+        if (!active) return;
+        await loadNextCalendarContext(connectorStatus, true);
       })();
     }, LIFEOPS_REFRESH_INTERVAL_MS);
 
@@ -1031,6 +1115,7 @@ export function TasksEventsPanel({
     loadCalendarFeed,
     loadGoogleConnector,
     loadLifeOps,
+    loadNextCalendarContext,
     open,
   ]);
 
@@ -1059,6 +1144,7 @@ export function TasksEventsPanel({
         const status = await loadGoogleConnector(true);
         if (status?.connected) {
           await loadCalendarFeed(status, true);
+          await loadNextCalendarContext(status, true);
           setActionNotice(
             "Google connected for calendar access.",
             "success",
@@ -1108,6 +1194,7 @@ export function TasksEventsPanel({
       setGoogleConnector(result);
       setPendingGoogleAuthUrl(null);
       setCalendarFeed(null);
+      setNextCalendarContext(null);
       setActionNotice("Google disconnected.", "info", 3200);
     } catch (error) {
       setActionNotice(
@@ -1151,6 +1238,7 @@ export function TasksEventsPanel({
             loading={lifeopsLoading}
             calendarFeed={calendarFeed}
             calendarLoading={calendarLoading}
+            nextCalendarContext={nextCalendarContext}
             googleConnector={googleConnector}
             googleConnectorLoading={googleConnectorLoading}
             googleConnectorBusy={googleConnectorBusy}

@@ -313,6 +313,96 @@ describe("life-ops calendar sync", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it("builds next-event context from the earliest upcoming calendar event", async () => {
+    await connectGoogleCalendar();
+
+    const now = new Date();
+    const nextStart = new Date(now.getTime() + 20 * 60_000);
+    const nextEnd = new Date(now.getTime() + 80 * 60_000);
+    const laterStart = new Date(now.getTime() + 4 * 60 * 60_000);
+    const laterEnd = new Date(now.getTime() + 5 * 60 * 60_000);
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "event-later",
+              status: "confirmed",
+              summary: "Later review",
+              start: {
+                dateTime: laterStart.toISOString(),
+                timeZone: "UTC",
+              },
+              end: {
+                dateTime: laterEnd.toISOString(),
+                timeZone: "UTC",
+              },
+            },
+            {
+              id: "event-next",
+              status: "confirmed",
+              summary: "Design review",
+              description: "Read the draft and final comments.",
+              location: "Studio",
+              conferenceData: {
+                entryPoints: [
+                  {
+                    uri: "https://meet.google.com/next-event",
+                  },
+                ],
+              },
+              start: {
+                dateTime: nextStart.toISOString(),
+                timeZone: "UTC",
+              },
+              end: {
+                dateTime: nextEnd.toISOString(),
+                timeZone: "UTC",
+              },
+              attendees: [
+                {
+                  email: "friend@example.com",
+                  displayName: "Friend",
+                  responseStatus: "accepted",
+                },
+              ],
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+
+    const contextRes = await req(
+      port,
+      "GET",
+      "/api/lifeops/calendar/next-context?timeZone=UTC",
+    );
+    expect(contextRes.status).toBe(200);
+    expect(contextRes.data).toMatchObject({
+      attendeeCount: 1,
+      attendeeNames: ["Friend"],
+      location: "Studio",
+      conferenceLink: "https://meet.google.com/next-event",
+      linkedMail: [],
+    });
+    expect(contextRes.data.event).toMatchObject({
+      title: "Design review",
+    });
+    expect(contextRes.data.preparationChecklist).toEqual(
+      expect.arrayContaining([
+        "Confirm route or access for Studio",
+        "Open and test the call link before the meeting starts",
+        "Review attendee context for Friend",
+        "Read the event description and agenda notes",
+      ]),
+    );
+  });
+
   it("clears cached calendar data on disconnect", async () => {
     await connectGoogleCalendar();
 

@@ -1110,6 +1110,144 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
         continue;
       }
 
+      if (scenario.id === "P1-04") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          await withGoogleOAuthApiServer(
+            {
+              MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID: "desktop-client-id",
+            },
+            async ({ port, fetchMock }) => {
+              vi.useFakeTimers();
+              vi.setSystemTime(new Date("2026-04-04T16:00:00.000Z"));
+              try {
+                fetchMock.mockResolvedValueOnce(
+                  new Response(
+                    JSON.stringify({
+                      access_token: "calendar-context-token",
+                      refresh_token: "calendar-context-refresh",
+                      expires_in: 3600,
+                      scope: [
+                        "openid",
+                        "email",
+                        "profile",
+                        "https://www.googleapis.com/auth/calendar.readonly",
+                      ].join(" "),
+                      token_type: "Bearer",
+                      id_token: buildIdToken({
+                        sub: "google-user-4",
+                        email: "calendar-context@example.com",
+                        name: "Calendar Context Example",
+                        email_verified: true,
+                      }),
+                    }),
+                    {
+                      status: 200,
+                      headers: { "content-type": "application/json" },
+                    },
+                  ),
+                );
+
+                const startRes = await req(
+                  port,
+                  "POST",
+                  "/api/lifeops/connectors/google/start",
+                  { capabilities: ["google.calendar.read"] },
+                );
+                const authUrl = new URL(String(startRes.data.authUrl));
+                await req(
+                  port,
+                  "GET",
+                  `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(authUrl.searchParams.get("state") ?? "")}&code=context-code`,
+                );
+
+                fetchMock.mockResolvedValueOnce(
+                  new Response(
+                    JSON.stringify({
+                      items: [
+                        {
+                          id: "event-next",
+                          status: "confirmed",
+                          summary: "Design review",
+                          description: "Read the spec and final comments.",
+                          location: "Studio",
+                          conferenceData: {
+                            entryPoints: [
+                              {
+                                uri: "https://meet.google.com/design-review",
+                              },
+                            ],
+                          },
+                          start: {
+                            dateTime: "2026-04-04T10:30:00-07:00",
+                            timeZone: "America/Los_Angeles",
+                          },
+                          end: {
+                            dateTime: "2026-04-04T11:30:00-07:00",
+                            timeZone: "America/Los_Angeles",
+                          },
+                          attendees: [
+                            {
+                              email: "friend@example.com",
+                              displayName: "Friend",
+                              responseStatus: "accepted",
+                            },
+                          ],
+                        },
+                        {
+                          id: "event-later",
+                          status: "confirmed",
+                          summary: "Later planning",
+                          start: {
+                            dateTime: "2026-04-04T14:00:00-07:00",
+                            timeZone: "America/Los_Angeles",
+                          },
+                          end: {
+                            dateTime: "2026-04-04T15:00:00-07:00",
+                            timeZone: "America/Los_Angeles",
+                          },
+                        },
+                      ],
+                    }),
+                    {
+                      status: 200,
+                      headers: { "content-type": "application/json" },
+                    },
+                  ),
+                );
+
+                const contextRes = await req(
+                  port,
+                  "GET",
+                  "/api/lifeops/calendar/next-context?timeZone=America%2FLos_Angeles",
+                );
+                expect(contextRes.status).toBe(200);
+                expect(contextRes.data).toMatchObject({
+                  attendeeCount: 1,
+                  attendeeNames: ["Friend"],
+                  location: "Studio",
+                  conferenceLink: "https://meet.google.com/design-review",
+                  linkedMail: [],
+                });
+                expect(contextRes.data.event).toMatchObject({
+                  title: "Design review",
+                });
+                expect(contextRes.data.preparationChecklist).toEqual(
+                  expect.arrayContaining([
+                    "Confirm route or access for Studio",
+                    "Open and test the call link before the meeting starts",
+                    "Review attendee context for Friend",
+                    "Read the event description and agenda notes",
+                  ]),
+                );
+              } finally {
+                vi.useRealTimers();
+              }
+            },
+          );
+        });
+        continue;
+      }
+
       if (scenario.id === "P1-05") {
         it(`[${scenario.id}] ${scenario.title}`, async () => {
           await withGoogleOAuthApiServer(

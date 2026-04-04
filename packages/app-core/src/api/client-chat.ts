@@ -30,6 +30,7 @@ import type {
   KnowledgeUploadResult,
   LifeOpsDefinitionRecord,
   LifeOpsCalendarFeed,
+  LifeOpsNextCalendarEventContext,
   LifeOpsGoalRecord,
   LifeOpsOccurrenceActionResult,
   LifeOpsOverview,
@@ -218,6 +219,9 @@ declare module "./client-base" {
     getLifeOpsCalendarFeed(
       options?: GetLifeOpsCalendarFeedRequest,
     ): Promise<LifeOpsCalendarFeed>;
+    getLifeOpsNextCalendarEventContext(
+      options?: GetLifeOpsCalendarFeedRequest,
+    ): Promise<LifeOpsNextCalendarEventContext>;
     createLifeOpsCalendarEvent(
       data: CreateLifeOpsCalendarEventRequest,
     ): Promise<{ event: LifeOpsCalendarFeed["events"][number] }>;
@@ -790,6 +794,32 @@ MiladyClient.prototype.getLifeOpsCalendarFeed = async function (
   }
   const query = params.toString();
   return this.fetch(`/api/lifeops/calendar/feed${query ? `?${query}` : ""}`);
+};
+
+MiladyClient.prototype.getLifeOpsNextCalendarEventContext = async function (
+  this: MiladyClient,
+  options = {},
+) {
+  const params = new URLSearchParams();
+  if (options.mode) {
+    params.set("mode", options.mode);
+  }
+  if (options.calendarId) {
+    params.set("calendarId", options.calendarId);
+  }
+  if (options.timeMin) {
+    params.set("timeMin", options.timeMin);
+  }
+  if (options.timeMax) {
+    params.set("timeMax", options.timeMax);
+  }
+  if (options.timeZone) {
+    params.set("timeZone", options.timeZone);
+  }
+  const query = params.toString();
+  return this.fetch(
+    `/api/lifeops/calendar/next-context${query ? `?${query}` : ""}`,
+  );
 };
 
 MiladyClient.prototype.createLifeOpsCalendarEvent = async function (

@@ -185,6 +185,23 @@ export async function handleLifeOpsRoutes(
     });
   }
 
+  if (method === "GET" && pathname === "/api/lifeops/calendar/next-context") {
+    return runRoute(ctx, async (service) => {
+      const rawMode = url.searchParams.get("mode");
+      if (rawMode !== null && rawMode !== "local" && rawMode !== "remote") {
+        throw new LifeOpsServiceError(400, "mode must be one of: local, remote");
+      }
+      const request: GetLifeOpsCalendarFeedRequest = {
+        mode: (rawMode ?? undefined) as "local" | "remote" | undefined,
+        calendarId: url.searchParams.get("calendarId") ?? undefined,
+        timeMin: url.searchParams.get("timeMin") ?? undefined,
+        timeMax: url.searchParams.get("timeMax") ?? undefined,
+        timeZone: url.searchParams.get("timeZone") ?? undefined,
+      };
+      json(res, await service.getNextCalendarEventContext(url, request));
+    });
+  }
+
   if (method === "POST" && pathname === "/api/lifeops/calendar/events") {
     const body = await readJsonBody<CreateLifeOpsCalendarEventRequest>(req, res);
     if (!body) return true;

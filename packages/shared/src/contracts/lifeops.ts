@@ -495,6 +495,24 @@ export interface CreateLifeOpsCalendarEventRequest {
   attendees?: CreateLifeOpsCalendarEventAttendee[];
 }
 
+export interface LifeOpsNextCalendarEventContext {
+  event: LifeOpsCalendarEvent | null;
+  startsAt: string | null;
+  startsInMinutes: number | null;
+  attendeeCount: number;
+  attendeeNames: string[];
+  location: string | null;
+  conferenceLink: string | null;
+  preparationChecklist: string[];
+  linkedMail: Array<{
+    id: string;
+    subject: string;
+    from: string;
+    receivedAt: string;
+    snippet: string;
+  }>;
+}
+
 export const LIFEOPS_GOOGLE_CONNECTOR_REASONS = [
   "connected",
   "disconnected",
