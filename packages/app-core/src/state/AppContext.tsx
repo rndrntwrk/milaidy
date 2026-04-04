@@ -127,10 +127,7 @@ import {
   type UiShellMode,
   type UiTheme,
 } from "./internal";
-import {
-  detectExistingOnboardingConnection,
-  resolveStartupWithoutRestoredConnection,
-} from "./onboarding-bootstrap";
+import { detectExistingOnboardingConnection } from "./onboarding-bootstrap";
 import { deriveUiShellModeForTab } from "./shell-routing";
 import { TranslationProvider, useTranslation } from "./TranslationContext";
 import type { InventoryChainFilters } from "./types";
@@ -418,10 +415,15 @@ function AppProviderInner({
   // The coordinator's phase effects will re-run from restoring-session.
   // We store a ref to the coordinator's retry since it's created after this line.
   const coordinatorRetryRef = useRef<(() => void) | null>(null);
+  const coordinatorResetRef = useRef<(() => void) | null>(null);
   const coordinatorOnboardingCompleteRef = useRef<(() => void) | null>(null);
   const retryStartup = useCallback(() => {
     lifecycle.retryStartup();
     coordinatorRetryRef.current?.();
+  }, [lifecycle.retryStartup]);
+  const resetToSplash = useCallback(() => {
+    lifecycle.retryStartup();
+    coordinatorResetRef.current?.();
   }, [lifecycle.retryStartup]);
 
   const uiShellMode = deriveUiShellModeForTab(tab);
@@ -1224,6 +1226,7 @@ function AppProviderInner({
     setPlugins: setPlugins as (v: never[]) => void,
     setSkills: setSkills as (v: never[]) => void,
     setLogs: setLogs as (v: never[]) => void,
+    coordinatorResetRef,
   });
   const {
     fetchGreeting,
@@ -1603,6 +1606,7 @@ function AppProviderInner({
 
   // Wire coordinator refs so callbacks defined before the coordinator can reach it
   coordinatorRetryRef.current = startupCoordinator.retry;
+  coordinatorResetRef.current = startupCoordinator.reset;
   coordinatorOnboardingCompleteRef.current =
     startupCoordinator.onboardingComplete;
 

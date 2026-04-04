@@ -56,10 +56,7 @@ function withLocalStorageStub(fn: () => void) {
 describe("normalizeOnboardingStep (via load/save helpers)", () => {
   it.each([
     "identity",
-    "hosting",
     "providers",
-    "permissions",
-    "launch",
   ] as const)("accepts valid step %s", (step) => {
     withLocalStorageStub(() => {
       saveOnboardingStep(step);
@@ -68,11 +65,15 @@ describe("normalizeOnboardingStep (via load/save helpers)", () => {
   });
 
   it.each([
-    ["connection", "hosting"],
+    ["hosting", "providers"],
+    ["connection", "providers"],
     ["cloudLogin", "providers"],
     ["rpc", "providers"],
-    ["senses", "permissions"],
-    ["activate", "launch"],
+    ["voice", "providers"],
+    ["senses", "providers"],
+    ["permissions", "providers"],
+    ["launch", "providers"],
+    ["activate", "providers"],
   ] as const)("migrates legacy step %s to %s", (legacy, expected) => {
     withLocalStorageStub(() => {
       localStorage.setItem("eliza:onboarding:step", legacy);
@@ -118,7 +119,7 @@ describe("normalizeOnboardingStep (via load/save helpers)", () => {
 
   it("returns null after clearPersistedOnboardingStep is called", () => {
     withLocalStorageStub(() => {
-      saveOnboardingStep("hosting");
+      saveOnboardingStep("providers");
       clearPersistedOnboardingStep();
       expect(loadPersistedOnboardingStep()).toBeNull();
     });
