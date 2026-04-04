@@ -35,7 +35,7 @@ import {
   Unlink,
   Wallet,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BSC_GAS_READY_THRESHOLD,
   loadTrackedBscTokens,
@@ -308,8 +308,16 @@ export function InventoryView() {
   const [walletSearch, setWalletSearch] = useState("");
 
   // ── Wallet settings popup state ──────────────────────────────────
-  const [walletRpcOpen, setWalletRpcOpen] = useState(false);
+  const [walletRpcOpen, setWalletRpcOpenRaw] = useState(false);
   const [walletPoliciesOpen, setWalletPoliciesOpen] = useState(false);
+  // Prevent dialog flash-reopen during restart cycle: once the user
+  // explicitly closes the dialog, ignore re-renders for 3 seconds.
+  const walletRpcClosedAtRef = useRef(0);
+  const setWalletRpcOpen = useCallback((open: boolean) => {
+    if (open && Date.now() - walletRpcClosedAtRef.current < 3000) return;
+    if (!open) walletRpcClosedAtRef.current = Date.now();
+    setWalletRpcOpenRaw(open);
+  }, []);
 
   const handlePendingCountChange = useCallback((count: number) => {
     setPendingApprovalCount(count);

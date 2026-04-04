@@ -609,6 +609,15 @@ export async function handleWalletRoutes(
 
     applyWalletRpcConfigUpdate(config, updateRequest);
 
+    // Ensure wallet keys exist so plugin-evm/solana load on restart.
+    // Same call that onboarding-routes makes on completion.
+    const keysGenerated = ensureWalletKeysInEnvAndConfig(config);
+    if (keysGenerated) {
+      logger.info(
+        "[api] Generated wallet keys during wallet config save",
+      );
+    }
+
     let configSaveWarning: string | undefined;
     try {
       saveConfig(config);
@@ -620,6 +629,7 @@ export async function handleWalletRoutes(
 
     json(res, {
       ok: true,
+      keysGenerated,
       ...(configSaveWarning ? { warnings: [configSaveWarning] } : {}),
     });
     ctx.scheduleRuntimeRestart?.("Wallet configuration updated");
