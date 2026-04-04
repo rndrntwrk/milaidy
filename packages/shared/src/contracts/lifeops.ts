@@ -64,6 +64,10 @@ export const LIFEOPS_WORKFLOW_RUN_STATUSES = [
 export type LifeOpsWorkflowRunStatus =
   (typeof LIFEOPS_WORKFLOW_RUN_STATUSES)[number];
 
+export const LIFEOPS_WORKFLOW_TRIGGER_TYPES = ["manual", "schedule"] as const;
+export type LifeOpsWorkflowTriggerType =
+  (typeof LIFEOPS_WORKFLOW_TRIGGER_TYPES)[number];
+
 export const LIFEOPS_CONNECTOR_PROVIDERS = [
   "google",
   "x",
@@ -89,6 +93,9 @@ export const LIFEOPS_GOOGLE_CAPABILITIES = [
 ] as const;
 export type LifeOpsGoogleCapability =
   (typeof LIFEOPS_GOOGLE_CAPABILITIES)[number];
+
+export const LIFEOPS_X_CAPABILITIES = ["x.read", "x.write"] as const;
+export type LifeOpsXCapability = (typeof LIFEOPS_X_CAPABILITIES)[number];
 
 export const LIFEOPS_REMINDER_CHANNELS = [
   "in_app",
@@ -120,6 +127,15 @@ export type LifeOpsChannelType = (typeof LIFEOPS_CHANNEL_TYPES)[number];
 export const LIFEOPS_PRIVACY_CLASSES = ["private", "shared", "public"] as const;
 export type LifeOpsPrivacyClass = (typeof LIFEOPS_PRIVACY_CLASSES)[number];
 
+export const LIFEOPS_REMINDER_URGENCY_LEVELS = [
+  "low",
+  "medium",
+  "high",
+  "critical",
+] as const;
+export type LifeOpsReminderUrgency =
+  (typeof LIFEOPS_REMINDER_URGENCY_LEVELS)[number];
+
 export const LIFEOPS_OWNER_TYPES = [
   "definition",
   "occurrence",
@@ -129,6 +145,7 @@ export const LIFEOPS_OWNER_TYPES = [
   "gmail_message",
   "connector",
   "channel_policy",
+  "browser_session",
 ] as const;
 export type LifeOpsOwnerType = (typeof LIFEOPS_OWNER_TYPES)[number];
 
@@ -147,10 +164,15 @@ export const LIFEOPS_AUDIT_EVENT_TYPES = [
   "gmail_reply_sent",
   "reminder_due",
   "reminder_delivered",
+  "reminder_blocked",
   "workflow_created",
+  "workflow_updated",
   "workflow_run",
   "connector_grant_updated",
   "channel_policy_updated",
+  "browser_session_created",
+  "browser_session_updated",
+  "x_post_sent",
 ] as const;
 export type LifeOpsAuditEventType =
   (typeof LIFEOPS_AUDIT_EVENT_TYPES)[number];
@@ -222,6 +244,13 @@ export interface LifeOpsReminderStep {
   label: string;
 }
 
+export interface LifeOpsQuietHoursPolicy {
+  timezone: string;
+  startMinute: number;
+  endMinute: number;
+  channels?: LifeOpsReminderChannel[];
+}
+
 export interface LifeOpsReminderPlan {
   id: string;
   agentId: string;
@@ -229,7 +258,7 @@ export interface LifeOpsReminderPlan {
   ownerId: string;
   steps: LifeOpsReminderStep[];
   mutePolicy: Record<string, unknown>;
-  quietHours: Record<string, unknown>;
+  quietHours: LifeOpsQuietHoursPolicy | Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
@@ -313,10 +342,10 @@ export interface LifeOpsWorkflowDefinition {
   id: string;
   agentId: string;
   title: string;
-  triggerType: string;
-  schedule: Record<string, unknown>;
-  actionPlan: Record<string, unknown>;
-  permissionPolicy: Record<string, unknown>;
+  triggerType: LifeOpsWorkflowTriggerType;
+  schedule: LifeOpsWorkflowSchedule;
+  actionPlan: LifeOpsWorkflowActionPlan;
+  permissionPolicy: LifeOpsWorkflowPermissionPolicy;
   status: LifeOpsWorkflowStatus;
   createdBy: LifeOpsActor;
   metadata: Record<string, unknown>;
@@ -335,6 +364,100 @@ export interface LifeOpsWorkflowRun {
   auditRef: string | null;
 }
 
+export type LifeOpsWorkflowSchedule =
+  | {
+      kind: "manual";
+    }
+  | {
+      kind: "once";
+      runAt: string;
+      timezone: string;
+    }
+  | {
+      kind: "interval";
+      everyMinutes: number;
+      timezone: string;
+    }
+  | {
+      kind: "cron";
+      cronExpression: string;
+      timezone: string;
+    };
+
+export interface LifeOpsWorkflowPermissionPolicy {
+  allowBrowserActions: boolean;
+  trustedBrowserActions: boolean;
+  allowXPosts: boolean;
+  trustedXPosting: boolean;
+  requireConfirmationForBrowserActions: boolean;
+  requireConfirmationForXPosts: boolean;
+}
+
+export const LIFEOPS_BROWSER_ACTION_KINDS = [
+  "navigate",
+  "click",
+  "type",
+] as const;
+export type LifeOpsBrowserActionKind =
+  (typeof LIFEOPS_BROWSER_ACTION_KINDS)[number];
+
+export interface LifeOpsBrowserAction {
+  id: string;
+  kind: LifeOpsBrowserActionKind;
+  label: string;
+  url: string | null;
+  selector: string | null;
+  text: string | null;
+  accountAffecting: boolean;
+  requiresConfirmation: boolean;
+  metadata: Record<string, unknown>;
+}
+
+export interface LifeOpsWorkflowActionBase {
+  id?: string;
+  resultKey?: string;
+}
+
+export type LifeOpsWorkflowAction =
+  | (LifeOpsWorkflowActionBase & {
+      kind: "create_task";
+      request: CreateLifeOpsDefinitionRequest;
+    })
+  | (LifeOpsWorkflowActionBase & {
+      kind: "get_calendar_feed";
+      request?: GetLifeOpsCalendarFeedRequest;
+    })
+  | (LifeOpsWorkflowActionBase & {
+      kind: "get_gmail_triage";
+      request?: GetLifeOpsGmailTriageRequest;
+    })
+  | (LifeOpsWorkflowActionBase & {
+      kind: "summarize";
+      sourceKey?: string;
+      prompt?: string;
+    })
+  | (LifeOpsWorkflowActionBase & {
+      kind: "browser";
+      sessionTitle: string;
+      actions: Array<Omit<LifeOpsBrowserAction, "id">>;
+    });
+
+export interface LifeOpsWorkflowActionPlan {
+  steps: LifeOpsWorkflowAction[];
+}
+
+export const LIFEOPS_REMINDER_ATTEMPT_OUTCOMES = [
+  "delivered",
+  "blocked_policy",
+  "blocked_quiet_hours",
+  "blocked_urgency",
+  "blocked_acknowledged",
+  "blocked_connector",
+  "skipped_duplicate",
+] as const;
+export type LifeOpsReminderAttemptOutcome =
+  (typeof LIFEOPS_REMINDER_ATTEMPT_OUTCOMES)[number];
+
 export interface LifeOpsReminderAttempt {
   id: string;
   agentId: string;
@@ -346,7 +469,7 @@ export interface LifeOpsReminderAttempt {
   stepIndex: number;
   scheduledFor: string;
   attemptedAt: string | null;
-  outcome: string;
+  outcome: LifeOpsReminderAttemptOutcome;
   connectorRef: string | null;
   deliveryMetadata: Record<string, unknown>;
 }
@@ -627,6 +750,17 @@ export interface LifeOpsGoogleConnectorStatus {
   grant: LifeOpsConnectorGrant | null;
 }
 
+export interface LifeOpsXConnectorStatus {
+  provider: "x";
+  mode: LifeOpsConnectorMode;
+  connected: boolean;
+  grantedCapabilities: LifeOpsXCapability[];
+  grantedScopes: string[];
+  identity: Record<string, unknown> | null;
+  hasCredentials: boolean;
+  grant: LifeOpsConnectorGrant | null;
+}
+
 export interface StartLifeOpsGoogleConnectorRequest {
   mode?: LifeOpsConnectorMode;
   capabilities?: LifeOpsGoogleCapability[];
@@ -642,6 +776,28 @@ export interface StartLifeOpsGoogleConnectorResponse {
 
 export interface DisconnectLifeOpsGoogleConnectorRequest {
   mode?: LifeOpsConnectorMode;
+}
+
+export interface UpsertLifeOpsXConnectorRequest {
+  mode?: LifeOpsConnectorMode;
+  capabilities: LifeOpsXCapability[];
+  grantedScopes?: string[];
+  identity?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CreateLifeOpsXPostRequest {
+  mode?: LifeOpsConnectorMode;
+  text: string;
+  confirmPost?: boolean;
+}
+
+export interface LifeOpsXPostResponse {
+  ok: boolean;
+  status: number | null;
+  postId?: string;
+  error?: string;
+  category: "success" | "auth" | "rate_limit" | "network" | "unknown";
 }
 
 export interface CreateLifeOpsDefinitionRequest {
@@ -713,4 +869,119 @@ export interface SnoozeLifeOpsOccurrenceRequest {
 export interface CompleteLifeOpsOccurrenceRequest {
   note?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface UpsertLifeOpsChannelPolicyRequest {
+  channelType: LifeOpsChannelType;
+  channelRef: string;
+  privacyClass?: LifeOpsPrivacyClass;
+  allowReminders?: boolean;
+  allowEscalation?: boolean;
+  allowPosts?: boolean;
+  requireConfirmationForActions?: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CaptureLifeOpsPhoneConsentRequest {
+  phoneNumber: string;
+  consentGiven: boolean;
+  allowSms: boolean;
+  allowVoice: boolean;
+  privacyClass?: LifeOpsPrivacyClass;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ProcessLifeOpsRemindersRequest {
+  now?: string;
+  limit?: number;
+}
+
+export interface LifeOpsReminderProcessingResult {
+  now: string;
+  attempts: LifeOpsReminderAttempt[];
+}
+
+export interface LifeOpsReminderInspection {
+  ownerType: "occurrence" | "calendar_event";
+  ownerId: string;
+  reminderPlan: LifeOpsReminderPlan | null;
+  attempts: LifeOpsReminderAttempt[];
+  audits: LifeOpsAuditEvent[];
+}
+
+export interface AcknowledgeLifeOpsReminderRequest {
+  ownerType: "occurrence" | "calendar_event";
+  ownerId: string;
+  acknowledgedAt?: string;
+  note?: string;
+}
+
+export interface CreateLifeOpsWorkflowRequest {
+  title: string;
+  triggerType: LifeOpsWorkflowTriggerType;
+  schedule?: LifeOpsWorkflowSchedule;
+  actionPlan: LifeOpsWorkflowActionPlan;
+  permissionPolicy?: Partial<LifeOpsWorkflowPermissionPolicy>;
+  status?: LifeOpsWorkflowStatus;
+  createdBy?: LifeOpsActor;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateLifeOpsWorkflowRequest {
+  title?: string;
+  triggerType?: LifeOpsWorkflowTriggerType;
+  schedule?: LifeOpsWorkflowSchedule;
+  actionPlan?: LifeOpsWorkflowActionPlan;
+  permissionPolicy?: Partial<LifeOpsWorkflowPermissionPolicy>;
+  status?: LifeOpsWorkflowStatus;
+  metadata?: Record<string, unknown>;
+}
+
+export interface RunLifeOpsWorkflowRequest {
+  now?: string;
+  confirmBrowserActions?: boolean;
+}
+
+export interface LifeOpsWorkflowRecord {
+  definition: LifeOpsWorkflowDefinition;
+  runs: LifeOpsWorkflowRun[];
+}
+
+export const LIFEOPS_BROWSER_SESSION_STATUSES = [
+  "awaiting_confirmation",
+  "navigating",
+  "done",
+  "cancelled",
+] as const;
+export type LifeOpsBrowserSessionStatus =
+  (typeof LIFEOPS_BROWSER_SESSION_STATUSES)[number];
+
+export interface LifeOpsBrowserSession {
+  id: string;
+  agentId: string;
+  workflowId: string | null;
+  title: string;
+  status: LifeOpsBrowserSessionStatus;
+  actions: LifeOpsBrowserAction[];
+  currentActionIndex: number;
+  awaitingConfirmationForActionId: string | null;
+  result: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+}
+
+export interface CreateLifeOpsBrowserSessionRequest {
+  workflowId?: string | null;
+  title: string;
+  actions: Array<Omit<LifeOpsBrowserAction, "id">>;
+}
+
+export interface ConfirmLifeOpsBrowserSessionRequest {
+  confirmed: boolean;
+}
+
+export interface CompleteLifeOpsBrowserSessionRequest {
+  result?: Record<string, unknown>;
 }

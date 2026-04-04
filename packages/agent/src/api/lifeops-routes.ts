@@ -2,19 +2,31 @@ import type http from "node:http";
 import type { AgentRuntime, UUID } from "@elizaos/core";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
 import type {
+  AcknowledgeLifeOpsReminderRequest,
+  CaptureLifeOpsPhoneConsentRequest,
   CompleteLifeOpsOccurrenceRequest,
+  CompleteLifeOpsBrowserSessionRequest,
+  ConfirmLifeOpsBrowserSessionRequest,
+  CreateLifeOpsBrowserSessionRequest,
   CreateLifeOpsCalendarEventRequest,
   CreateLifeOpsGmailReplyDraftRequest,
+  CreateLifeOpsWorkflowRequest,
+  CreateLifeOpsXPostRequest,
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,
   DisconnectLifeOpsGoogleConnectorRequest,
   GetLifeOpsCalendarFeedRequest,
   GetLifeOpsGmailTriageRequest,
+  ProcessLifeOpsRemindersRequest,
+  RunLifeOpsWorkflowRequest,
   SendLifeOpsGmailReplyRequest,
   SnoozeLifeOpsOccurrenceRequest,
   StartLifeOpsGoogleConnectorRequest,
+  UpsertLifeOpsChannelPolicyRequest,
+  UpsertLifeOpsXConnectorRequest,
   UpdateLifeOpsDefinitionRequest,
   UpdateLifeOpsGoalRequest,
+  UpdateLifeOpsWorkflowRequest,
 } from "../contracts/lifeops.js";
 import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 
@@ -297,6 +309,120 @@ export async function handleLifeOpsRoutes(
     });
   }
 
+  if (method === "GET" && pathname === "/api/lifeops/connectors/x/status") {
+    return runRoute(ctx, async (service) => {
+      const rawMode = url.searchParams.get("mode");
+      if (rawMode !== null && rawMode !== "local" && rawMode !== "remote") {
+        throw new LifeOpsServiceError(400, "mode must be one of: local, remote");
+      }
+      json(
+        res,
+        await service.getXConnectorStatus(
+          (rawMode ?? undefined) as "local" | "remote" | undefined,
+        ),
+      );
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/connectors/x") {
+    const body = await readJsonBody<UpsertLifeOpsXConnectorRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.upsertXConnector(body), 201);
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/x/posts") {
+    const body = await readJsonBody<CreateLifeOpsXPostRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.createXPost(body), 201);
+    });
+  }
+
+  if (method === "GET" && pathname === "/api/lifeops/channel-policies") {
+    return runRoute(ctx, async (service) => {
+      json(res, { policies: await service.listChannelPolicies() });
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/channel-policies") {
+    const body = await readJsonBody<UpsertLifeOpsChannelPolicyRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, { policy: await service.upsertChannelPolicy(body) }, 201);
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/channels/phone-consent") {
+    const body = await readJsonBody<CaptureLifeOpsPhoneConsentRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.capturePhoneConsent(body), 201);
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/reminders/process") {
+    const body = await readJsonBody<ProcessLifeOpsRemindersRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.processReminders(body));
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/reminders/acknowledge") {
+    const body = await readJsonBody<AcknowledgeLifeOpsReminderRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.acknowledgeReminder(body));
+    });
+  }
+
+  if (method === "GET" && pathname === "/api/lifeops/reminders/inspection") {
+    return runRoute(ctx, async (service) => {
+      const ownerType = url.searchParams.get("ownerType");
+      const ownerId = url.searchParams.get("ownerId");
+      if (ownerType !== "occurrence" && ownerType !== "calendar_event") {
+        throw new LifeOpsServiceError(
+          400,
+          "ownerType must be occurrence or calendar_event",
+        );
+      }
+      if (!ownerId) {
+        throw new LifeOpsServiceError(400, "ownerId is required");
+      }
+      json(res, await service.inspectReminder(ownerType, ownerId));
+    });
+  }
+
+  if (method === "GET" && pathname === "/api/lifeops/workflows") {
+    return runRoute(ctx, async (service) => {
+      json(res, { workflows: await service.listWorkflows() });
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/workflows") {
+    const body = await readJsonBody<CreateLifeOpsWorkflowRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.createWorkflow(body), 201);
+    });
+  }
+
+  if (method === "GET" && pathname === "/api/lifeops/browser/sessions") {
+    return runRoute(ctx, async (service) => {
+      json(res, { sessions: await service.listBrowserSessions() });
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/browser/sessions") {
+    const body = await readJsonBody<CreateLifeOpsBrowserSessionRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, { session: await service.createBrowserSession(body) }, 201);
+    });
+  }
+
   if (method === "GET" && pathname === "/api/lifeops/overview") {
     return runRoute(ctx, async (service) => {
       json(res, await service.getOverview());
@@ -365,6 +491,88 @@ export async function handleLifeOpsRoutes(
         json(res, await service.updateGoal(goalId, body));
       });
     }
+  }
+
+  const workflowMatch = pathname.match(/^\/api\/lifeops\/workflows\/([^/]+)$/);
+  if (workflowMatch) {
+    const workflowId = decodePathComponent(workflowMatch[1], res, "workflow id");
+    if (!workflowId) return true;
+    if (method === "GET") {
+      return runRoute(ctx, async (service) => {
+        json(res, await service.getWorkflow(workflowId));
+      });
+    }
+    if (method === "PUT") {
+      const body = await readJsonBody<UpdateLifeOpsWorkflowRequest>(req, res);
+      if (!body) return true;
+      return runRoute(ctx, async (service) => {
+        json(res, await service.updateWorkflow(workflowId, body));
+      });
+    }
+  }
+
+  const workflowRunMatch = pathname.match(/^\/api\/lifeops\/workflows\/([^/]+)\/run$/);
+  if (method === "POST" && workflowRunMatch) {
+    const workflowId = decodePathComponent(
+      workflowRunMatch[1],
+      res,
+      "workflow id",
+    );
+    if (!workflowId) return true;
+    const body = await readJsonBody<RunLifeOpsWorkflowRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, { run: await service.runWorkflow(workflowId, body) }, 201);
+    });
+  }
+
+  const browserSessionMatch = pathname.match(/^\/api\/lifeops\/browser\/sessions\/([^/]+)$/);
+  if (browserSessionMatch) {
+    const sessionId = decodePathComponent(
+      browserSessionMatch[1],
+      res,
+      "browser session id",
+    );
+    if (!sessionId) return true;
+    if (method === "GET") {
+      return runRoute(ctx, async (service) => {
+        json(res, { session: await service.getBrowserSession(sessionId) });
+      });
+    }
+  }
+
+  const browserConfirmMatch = pathname.match(
+    /^\/api\/lifeops\/browser\/sessions\/([^/]+)\/confirm$/,
+  );
+  if (method === "POST" && browserConfirmMatch) {
+    const sessionId = decodePathComponent(
+      browserConfirmMatch[1],
+      res,
+      "browser session id",
+    );
+    if (!sessionId) return true;
+    const body = await readJsonBody<ConfirmLifeOpsBrowserSessionRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, { session: await service.confirmBrowserSession(sessionId, body) });
+    });
+  }
+
+  const browserCompleteMatch = pathname.match(
+    /^\/api\/lifeops\/browser\/sessions\/([^/]+)\/complete$/,
+  );
+  if (method === "POST" && browserCompleteMatch) {
+    const sessionId = decodePathComponent(
+      browserCompleteMatch[1],
+      res,
+      "browser session id",
+    );
+    if (!sessionId) return true;
+    const body = await readJsonBody<CompleteLifeOpsBrowserSessionRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, { session: await service.completeBrowserSession(sessionId, body) });
+    });
   }
 
   const completeMatch = pathname.match(/^\/api\/lifeops\/occurrences\/([^/]+)\/complete$/);

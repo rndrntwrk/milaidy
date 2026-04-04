@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { IAgentRuntime } from "@elizaos/core";
 import type {
   LifeOpsAuditEvent,
+  LifeOpsBrowserSession,
   LifeOpsCalendarEvent,
   LifeOpsChannelPolicy,
   LifeOpsConnectorGrant,
@@ -258,6 +259,84 @@ function parseGmailMessageSummary(
   };
 }
 
+function parseWorkflowDefinition(
+  row: Record<string, unknown>,
+): LifeOpsWorkflowDefinition {
+  return {
+    id: toText(row.id),
+    agentId: toText(row.agent_id),
+    title: toText(row.title),
+    triggerType: toText(row.trigger_type) as LifeOpsWorkflowDefinition["triggerType"],
+    schedule: parseJsonRecord(
+      row.schedule_json,
+    ) as unknown as LifeOpsWorkflowDefinition["schedule"],
+    actionPlan: parseJsonRecord(
+      row.action_plan_json,
+    ) as unknown as LifeOpsWorkflowDefinition["actionPlan"],
+    permissionPolicy: parseJsonRecord(
+      row.permission_policy_json,
+    ) as unknown as LifeOpsWorkflowDefinition["permissionPolicy"],
+    status: toText(row.status) as LifeOpsWorkflowDefinition["status"],
+    createdBy: toText(row.created_by) as LifeOpsWorkflowDefinition["createdBy"],
+    metadata: parseJsonRecord(row.metadata_json),
+    createdAt: toText(row.created_at),
+    updatedAt: toText(row.updated_at),
+  };
+}
+
+function parseWorkflowRun(row: Record<string, unknown>): LifeOpsWorkflowRun {
+  return {
+    id: toText(row.id),
+    agentId: toText(row.agent_id),
+    workflowId: toText(row.workflow_id),
+    startedAt: toText(row.started_at),
+    finishedAt: row.finished_at ? toText(row.finished_at) : null,
+    status: toText(row.status) as LifeOpsWorkflowRun["status"],
+    result: parseJsonRecord(row.result_json),
+    auditRef: row.audit_ref ? toText(row.audit_ref) : null,
+  };
+}
+
+function parseReminderAttempt(row: Record<string, unknown>): LifeOpsReminderAttempt {
+  return {
+    id: toText(row.id),
+    agentId: toText(row.agent_id),
+    planId: toText(row.plan_id),
+    ownerType: toText(row.owner_type) as LifeOpsReminderAttempt["ownerType"],
+    ownerId: toText(row.owner_id),
+    occurrenceId: row.occurrence_id ? toText(row.occurrence_id) : null,
+    channel: toText(row.channel) as LifeOpsReminderAttempt["channel"],
+    stepIndex: toNumber(row.step_index, 0),
+    scheduledFor: toText(row.scheduled_for),
+    attemptedAt: row.attempted_at ? toText(row.attempted_at) : null,
+    outcome: toText(row.outcome) as LifeOpsReminderAttempt["outcome"],
+    connectorRef: row.connector_ref ? toText(row.connector_ref) : null,
+    deliveryMetadata: parseJsonRecord(row.delivery_metadata_json),
+  };
+}
+
+function parseBrowserSession(row: Record<string, unknown>): LifeOpsBrowserSession {
+  return {
+    id: toText(row.id),
+    agentId: toText(row.agent_id),
+    workflowId: row.workflow_id ? toText(row.workflow_id) : null,
+    title: toText(row.title),
+    status: toText(row.status) as LifeOpsBrowserSession["status"],
+    actions: parseJsonArray(
+      row.actions_json,
+    ) as unknown as LifeOpsBrowserSession["actions"],
+    currentActionIndex: toNumber(row.current_action_index, 0),
+    awaitingConfirmationForActionId: row.awaiting_confirmation_for_action_id
+      ? toText(row.awaiting_confirmation_for_action_id)
+      : null,
+    result: parseJsonRecord(row.result_json),
+    metadata: parseJsonRecord(row.metadata_json),
+    createdAt: toText(row.created_at),
+    updatedAt: toText(row.updated_at),
+    finishedAt: row.finished_at ? toText(row.finished_at) : null,
+  };
+}
+
 interface LifeOpsCalendarSyncState {
   id: string;
   agentId: string;
@@ -398,6 +477,21 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
       status TEXT NOT NULL,
       result_json TEXT NOT NULL DEFAULT '{}',
       audit_ref TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS life_browser_sessions (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      workflow_id TEXT,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL,
+      actions_json TEXT NOT NULL DEFAULT '[]',
+      current_action_index INTEGER NOT NULL DEFAULT 0,
+      awaiting_confirmation_for_action_id TEXT,
+      result_json TEXT NOT NULL DEFAULT '{}',
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      finished_at TEXT
     )`,
     `CREATE TABLE IF NOT EXISTS life_reminder_plans (
       id TEXT PRIMARY KEY,
@@ -549,6 +643,10 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
       ON life_reminder_plans(agent_id, owner_type, owner_id)`,
     `CREATE INDEX IF NOT EXISTS idx_life_audit_events_owner
       ON life_audit_events(agent_id, owner_type, owner_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_workflow_definitions_agent
+      ON life_workflow_definitions(agent_id, status, updated_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_workflow_runs_workflow
+      ON life_workflow_runs(agent_id, workflow_id, started_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_calendar_events_window
       ON life_calendar_events(agent_id, provider, start_at, end_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_calendar_sync_states_agent
@@ -557,6 +655,8 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
       ON life_gmail_messages(agent_id, provider, triage_score, received_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_gmail_sync_states_agent
       ON life_gmail_sync_states(agent_id, provider, mailbox)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_browser_sessions_agent
+      ON life_browser_sessions(agent_id, status, updated_at)`,
   ];
 
   for (const statement of statements) {
@@ -1138,6 +1238,25 @@ export class LifeOpsRepository {
     return rows.map(parseChannelPolicy);
   }
 
+  async getChannelPolicy(
+    agentId: string,
+    channelType: LifeOpsChannelPolicy["channelType"],
+    channelRef: string,
+  ): Promise<LifeOpsChannelPolicy | null> {
+    await this.ensureReady();
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_channel_policies
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND channel_type = ${sqlQuote(channelType)}
+          AND channel_ref = ${sqlQuote(channelRef)}
+        LIMIT 1`,
+    );
+    const row = rows[0];
+    return row ? parseChannelPolicy(row) : null;
+  }
+
   async upsertConnectorGrant(grant: LifeOpsConnectorGrant): Promise<void> {
     await this.ensureReady();
     await executeRawSql(
@@ -1628,6 +1747,53 @@ export class LifeOpsRepository {
     );
   }
 
+  async updateWorkflow(definition: LifeOpsWorkflowDefinition): Promise<void> {
+    await this.ensureReady();
+    await executeRawSql(
+      this.runtime,
+      `UPDATE life_workflow_definitions
+          SET title = ${sqlQuote(definition.title)},
+              trigger_type = ${sqlQuote(definition.triggerType)},
+              schedule_json = ${sqlJson(definition.schedule)},
+              action_plan_json = ${sqlJson(definition.actionPlan)},
+              permission_policy_json = ${sqlJson(definition.permissionPolicy)},
+              status = ${sqlQuote(definition.status)},
+              metadata_json = ${sqlJson(definition.metadata)},
+              updated_at = ${sqlQuote(definition.updatedAt)}
+        WHERE id = ${sqlQuote(definition.id)}
+          AND agent_id = ${sqlQuote(definition.agentId)}`,
+    );
+  }
+
+  async listWorkflows(agentId: string): Promise<LifeOpsWorkflowDefinition[]> {
+    await this.ensureReady();
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_workflow_definitions
+        WHERE agent_id = ${sqlQuote(agentId)}
+        ORDER BY updated_at DESC, created_at DESC`,
+    );
+    return rows.map(parseWorkflowDefinition);
+  }
+
+  async getWorkflow(
+    agentId: string,
+    workflowId: string,
+  ): Promise<LifeOpsWorkflowDefinition | null> {
+    await this.ensureReady();
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_workflow_definitions
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND id = ${sqlQuote(workflowId)}
+        LIMIT 1`,
+    );
+    const row = rows[0];
+    return row ? parseWorkflowDefinition(row) : null;
+  }
+
   async createWorkflowRun(run: LifeOpsWorkflowRun): Promise<void> {
     await this.ensureReady();
     await executeRawSql(
@@ -1646,6 +1812,22 @@ export class LifeOpsRepository {
         ${sqlText(run.auditRef)}
       )`,
     );
+  }
+
+  async listWorkflowRuns(
+    agentId: string,
+    workflowId: string,
+  ): Promise<LifeOpsWorkflowRun[]> {
+    await this.ensureReady();
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_workflow_runs
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND workflow_id = ${sqlQuote(workflowId)}
+        ORDER BY started_at DESC`,
+    );
+    return rows.map(parseWorkflowRun);
   }
 
   async createReminderAttempt(attempt: LifeOpsReminderAttempt): Promise<void> {
@@ -1673,6 +1855,112 @@ export class LifeOpsRepository {
       )`,
     );
   }
+
+  async listReminderAttempts(
+    agentId: string,
+    options?: {
+      ownerType?: LifeOpsReminderAttempt["ownerType"];
+      ownerId?: string;
+      planId?: string;
+    },
+  ): Promise<LifeOpsReminderAttempt[]> {
+    await this.ensureReady();
+    const ownerTypeClause = options?.ownerType
+      ? `AND owner_type = ${sqlQuote(options.ownerType)}`
+      : "";
+    const ownerIdClause = options?.ownerId
+      ? `AND owner_id = ${sqlQuote(options.ownerId)}`
+      : "";
+    const planIdClause = options?.planId
+      ? `AND plan_id = ${sqlQuote(options.planId)}`
+      : "";
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_reminder_attempts
+        WHERE agent_id = ${sqlQuote(agentId)}
+          ${ownerTypeClause}
+          ${ownerIdClause}
+          ${planIdClause}
+        ORDER BY scheduled_for ASC, step_index ASC, attempted_at ASC`,
+    );
+    return rows.map(parseReminderAttempt);
+  }
+
+  async createBrowserSession(session: LifeOpsBrowserSession): Promise<void> {
+    await this.ensureReady();
+    await executeRawSql(
+      this.runtime,
+      `INSERT INTO life_browser_sessions (
+        id, agent_id, workflow_id, title, status, actions_json,
+        current_action_index, awaiting_confirmation_for_action_id,
+        result_json, metadata_json, created_at, updated_at, finished_at
+      ) VALUES (
+        ${sqlQuote(session.id)},
+        ${sqlQuote(session.agentId)},
+        ${sqlText(session.workflowId)},
+        ${sqlQuote(session.title)},
+        ${sqlQuote(session.status)},
+        ${sqlJson(session.actions)},
+        ${sqlInteger(session.currentActionIndex)},
+        ${sqlText(session.awaitingConfirmationForActionId)},
+        ${sqlJson(session.result)},
+        ${sqlJson(session.metadata)},
+        ${sqlQuote(session.createdAt)},
+        ${sqlQuote(session.updatedAt)},
+        ${sqlText(session.finishedAt)}
+      )`,
+    );
+  }
+
+  async updateBrowserSession(session: LifeOpsBrowserSession): Promise<void> {
+    await this.ensureReady();
+    await executeRawSql(
+      this.runtime,
+      `UPDATE life_browser_sessions
+          SET workflow_id = ${sqlText(session.workflowId)},
+              title = ${sqlQuote(session.title)},
+              status = ${sqlQuote(session.status)},
+              actions_json = ${sqlJson(session.actions)},
+              current_action_index = ${sqlInteger(session.currentActionIndex)},
+              awaiting_confirmation_for_action_id = ${sqlText(session.awaitingConfirmationForActionId)},
+              result_json = ${sqlJson(session.result)},
+              metadata_json = ${sqlJson(session.metadata)},
+              updated_at = ${sqlQuote(session.updatedAt)},
+              finished_at = ${sqlText(session.finishedAt)}
+        WHERE id = ${sqlQuote(session.id)}
+          AND agent_id = ${sqlQuote(session.agentId)}`,
+    );
+  }
+
+  async getBrowserSession(
+    agentId: string,
+    sessionId: string,
+  ): Promise<LifeOpsBrowserSession | null> {
+    await this.ensureReady();
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_browser_sessions
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND id = ${sqlQuote(sessionId)}
+        LIMIT 1`,
+    );
+    const row = rows[0];
+    return row ? parseBrowserSession(row) : null;
+  }
+
+  async listBrowserSessions(agentId: string): Promise<LifeOpsBrowserSession[]> {
+    await this.ensureReady();
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_browser_sessions
+        WHERE agent_id = ${sqlQuote(agentId)}
+        ORDER BY updated_at DESC, created_at DESC`,
+    );
+    return rows.map(parseBrowserSession);
+  }
 }
 
 export function createLifeOpsTaskDefinition(params: Omit<LifeOpsTaskDefinition, "id" | "createdAt" | "updatedAt">): LifeOpsTaskDefinition {
@@ -1696,6 +1984,18 @@ export function createLifeOpsGoalDefinition(params: Omit<LifeOpsGoalDefinition, 
 }
 
 export function createLifeOpsReminderPlan(params: Omit<LifeOpsReminderPlan, "id" | "createdAt" | "updatedAt">): LifeOpsReminderPlan {
+  const timestamp = isoNow();
+  return {
+    ...params,
+    id: crypto.randomUUID(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+export function createLifeOpsChannelPolicy(
+  params: Omit<LifeOpsChannelPolicy, "id" | "createdAt" | "updatedAt">,
+): LifeOpsChannelPolicy {
   const timestamp = isoNow();
   return {
     ...params,
@@ -1742,5 +2042,47 @@ export function createLifeOpsGmailSyncState(
     ...params,
     id: crypto.randomUUID(),
     updatedAt: isoNow(),
+  };
+}
+
+export function createLifeOpsWorkflowDefinition(
+  params: Omit<LifeOpsWorkflowDefinition, "id" | "createdAt" | "updatedAt">,
+): LifeOpsWorkflowDefinition {
+  const timestamp = isoNow();
+  return {
+    ...params,
+    id: crypto.randomUUID(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+export function createLifeOpsWorkflowRun(
+  params: Omit<LifeOpsWorkflowRun, "id">,
+): LifeOpsWorkflowRun {
+  return {
+    ...params,
+    id: crypto.randomUUID(),
+  };
+}
+
+export function createLifeOpsReminderAttempt(
+  params: Omit<LifeOpsReminderAttempt, "id">,
+): LifeOpsReminderAttempt {
+  return {
+    ...params,
+    id: crypto.randomUUID(),
+  };
+}
+
+export function createLifeOpsBrowserSession(
+  params: Omit<LifeOpsBrowserSession, "id" | "createdAt" | "updatedAt">,
+): LifeOpsBrowserSession {
+  const timestamp = isoNow();
+  return {
+    ...params,
+    id: crypto.randomUUID(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
   };
 }

@@ -1,4 +1,5 @@
 import type { LifeOpsCalendarEvent } from "@miladyai/shared/contracts/lifeops";
+import { GoogleApiError } from "./google-api-error.js";
 
 const GOOGLE_CALENDAR_EVENTS_ENDPOINT =
   "https://www.googleapis.com/calendar/v3/calendars";
@@ -197,7 +198,10 @@ export async function fetchGoogleCalendarEvents(args: {
   );
 
   if (!response.ok) {
-    throw new Error(await readGoogleCalendarError(response));
+    throw new GoogleApiError(
+      response.status,
+      await readGoogleCalendarError(response),
+    );
   }
 
   const parsed = (await response.json()) as { items?: GoogleCalendarApiEvent[] };
@@ -267,7 +271,10 @@ export async function createGoogleCalendarEvent(args: {
   );
 
   if (!response.ok) {
-    throw new Error(await readGoogleCalendarError(response));
+    throw new GoogleApiError(
+      response.status,
+      await readGoogleCalendarError(response),
+    );
   }
 
   const parsed = (await response.json()) as GoogleCalendarApiEvent;

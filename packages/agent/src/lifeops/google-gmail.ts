@@ -1,4 +1,5 @@
 import type { LifeOpsGmailMessageSummary } from "@miladyai/shared/contracts/lifeops";
+import { GoogleApiError } from "./google-api-error.js";
 
 const GOOGLE_GMAIL_MESSAGES_ENDPOINT =
   "https://gmail.googleapis.com/gmail/v1/users/me/messages";
@@ -341,7 +342,10 @@ export async function fetchGoogleGmailTriageMessages(args: {
   );
 
   if (!listResponse.ok) {
-    throw new Error(await readGoogleGmailError(listResponse));
+    throw new GoogleApiError(
+      listResponse.status,
+      await readGoogleGmailError(listResponse),
+    );
   }
 
   const listed = (await listResponse.json()) as GoogleGmailListResponse;
@@ -367,7 +371,7 @@ export async function fetchGoogleGmailTriageMessages(args: {
         },
       );
       if (!response.ok) {
-        throw new Error(await readGoogleGmailError(response));
+        throw new GoogleApiError(response.status, await readGoogleGmailError(response));
       }
       const parsed = (await response.json()) as GoogleGmailMetadataResponse;
       return normalizeGoogleGmailMessage(parsed, args.selfEmail ?? null);
@@ -417,6 +421,6 @@ export async function sendGoogleGmailReply(args: {
   });
 
   if (!response.ok) {
-    throw new Error(await readGoogleGmailError(response));
+    throw new GoogleApiError(response.status, await readGoogleGmailError(response));
   }
 }
