@@ -93,10 +93,6 @@ import * as pluginTrajectoryLogger from "@elizaos/plugin-trajectory-logger";
 import * as pluginTrust from "@elizaos/plugin-trust";
 import * as pluginRoles from "@miladyai/plugin-roles";
 import * as pluginSelfControl from "@miladyai/plugin-selfcontrol";
-import {
-  isMiladySettingsDebugEnabled,
-  settingsDebugCloudSummary,
-} from "@miladyai/shared";
 import { resolveElizaCloudTopology } from "@miladyai/shared/contracts";
 import {
   getOnboardingProviderOption,

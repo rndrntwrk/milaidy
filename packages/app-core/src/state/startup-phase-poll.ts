@@ -49,6 +49,7 @@ export interface PollingBackendDeps {
   setOnboardingRemoteToken: (v: string) => void;
   setOnboardingSmallModel: (v: string) => void;
   setOnboardingLargeModel: (v: string) => void;
+  setOnboardingCloudProvisionedContainer: (v: boolean) => void;
   setPairingEnabled: (v: boolean) => void;
   setPairingExpiresAt: (v: number | null) => void;
   applyDetectedProviders: (
@@ -226,7 +227,7 @@ export async function runPollingBackend(
         console.warn(
           "[milady][startup:init] Preserving completed onboarding despite incomplete backend onboarding status.",
         );
-      console.log("[milady][startup] sessionComplete:", sessionComplete, "complete:", complete, "cloudProvisioned:", cloudProvisioned, "persistedConnection:", !!ctx?.persistedConnection, "hadPrior:", !!ctx?.hadPriorOnboarding);
+      console.log("[milady][startup] sessionComplete:", sessionComplete, "complete:", complete, "cloudProvisioned:", cloudProvisioned, "persistedConnection:", !!ctx?.persistedActiveServer, "hadPrior:", !!ctx?.hadPriorOnboarding);
       deps.setOnboardingComplete(sessionComplete);
 
       if (!sessionComplete) {

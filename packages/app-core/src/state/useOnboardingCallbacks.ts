@@ -327,7 +327,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       const useCloudFastTrack = shouldUseCloudOnboardingFastTrack({
         cloudProvisionedContainer,
         elizaCloudConnected,
-        onboardingRunMode: onboardingMode,
+        onboardingRunMode: onboardingMode === "elizacloudonly" ? "cloud" : onboardingMode === "basic" || onboardingMode === "advanced" ? "local" : "",
         onboardingProvider,
       });
 
@@ -654,7 +654,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
         return;
       }
 
-      if (onboardingStep === "permissions") {
+      if (onboardingStep === "providers") {
         if (options?.allowPermissionBypass) {
           if (options.skipTask) addDeferredOnboardingTask(options.skipTask);
           // Don't finish yet — advance to the next step
