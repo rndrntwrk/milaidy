@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import { logger } from "@elizaos/core";
+import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
 
 export interface XPosterCredentials {
   apiKey: string;
@@ -112,6 +114,11 @@ export async function postToX(args: {
   credentials: XPosterCredentials;
 }): Promise<XPostResult> {
   const { text, credentials } = args;
+  const span = createIntegrationTelemetrySpan({
+    boundary: "lifeops",
+    operation: "x_post",
+    timeoutMs: 12_000,
+  });
   const nonce = crypto.randomBytes(16).toString("hex");
   const timestamp = String(Math.floor(Date.now() / 1000));
   const authorization = buildOAuth1AuthorizationHeader({
@@ -141,19 +148,37 @@ export async function postToX(args: {
     const category = classifyStatus(response.status);
 
     if (!response.ok) {
+      const errorMessage =
+        payload.errors?.[0]?.detail ??
+        payload.errors?.[0]?.message ??
+        payload.detail ??
+        payload.title ??
+        `HTTP ${response.status}`;
+      logger.warn(
+        {
+          boundary: "lifeops",
+          integration: "x",
+          operation: "x_post",
+          statusCode: response.status,
+          category,
+        },
+        `[lifeops] X post failed: ${errorMessage}`,
+      );
+      span.failure({
+        statusCode: response.status,
+        errorKind: category,
+      });
       return {
         ok: false,
         status: response.status,
-        error:
-          payload.errors?.[0]?.detail ??
-          payload.errors?.[0]?.message ??
-          payload.detail ??
-          payload.title ??
-          `HTTP ${response.status}`,
+        error: errorMessage,
         category,
       };
     }
 
+    span.success({
+      statusCode: response.status,
+    });
     return {
       ok: true,
       status: response.status,
@@ -161,10 +186,24 @@ export async function postToX(args: {
       category,
     };
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error(
+      {
+        boundary: "lifeops",
+        integration: "x",
+        operation: "x_post",
+        err: error instanceof Error ? error : undefined,
+      },
+      `[lifeops] X post failed: ${errorMessage}`,
+    );
+    span.failure({
+      error,
+      errorKind: "network",
+    });
     return {
       ok: false,
       status: null,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage,
       category: "network",
     };
   }

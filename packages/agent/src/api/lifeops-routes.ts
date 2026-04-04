@@ -1,6 +1,7 @@
 import type http from "node:http";
-import type { AgentRuntime, UUID } from "@elizaos/core";
+import { logger, type AgentRuntime, type UUID } from "@elizaos/core";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
+import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
 import type {
   AcknowledgeLifeOpsReminderRequest,
   CaptureLifeOpsPhoneConsentRequest,
@@ -62,20 +63,74 @@ function getService(ctx: LifeOpsRouteContext): LifeOpsService | null {
   return new LifeOpsService(ctx.state.runtime);
 }
 
+function routeOperation(ctx: LifeOpsRouteContext): string {
+  return `${ctx.method.toUpperCase()} ${ctx.pathname}`;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function runRoute(
   ctx: LifeOpsRouteContext,
   fn: (service: LifeOpsService) => Promise<void>,
 ): Promise<boolean> {
+  const operation = routeOperation(ctx);
+  const span = createIntegrationTelemetrySpan({
+    boundary: "lifeops",
+    operation,
+  });
   const service = getService(ctx);
-  if (!service) return true;
+  if (!service) {
+    logger.warn(
+      {
+        boundary: "lifeops",
+        operation,
+        statusCode: 503,
+      },
+      "[lifeops] Route rejected because agent runtime is unavailable",
+    );
+    span.failure({
+      statusCode: 503,
+      errorKind: "runtime_unavailable",
+    });
+    return true;
+  }
   try {
     await fn(service);
+    span.success({
+      statusCode: ctx.res.statusCode >= 400 ? ctx.res.statusCode : 200,
+    });
     return true;
   } catch (error) {
     if (error instanceof LifeOpsServiceError) {
+      logger.warn(
+        {
+          boundary: "lifeops",
+          operation,
+          statusCode: error.status,
+        },
+        `[lifeops] Route failed: ${error.message}`,
+      );
+      span.failure({
+        statusCode: error.status,
+        error,
+        errorKind: "lifeops_service_error",
+      });
       ctx.error(ctx.res, error.message, error.status);
       return true;
     }
+    logger.error(
+      {
+        boundary: "lifeops",
+        operation,
+      },
+      `[lifeops] Route crashed: ${errorMessage(error)}`,
+    );
+    span.failure({
+      error,
+      errorKind: "unhandled_error",
+    });
     throw error;
   }
 }
@@ -151,13 +206,28 @@ function writeHtml(
 export async function handleLifeOpsRoutes(
   ctx: LifeOpsRouteContext,
 ): Promise<boolean> {
-  const { req, res, method, pathname, url, json, readJsonBody, decodePathComponent } = ctx;
+  const {
+    req,
+    res,
+    method,
+    pathname,
+    url,
+    json,
+    readJsonBody,
+    decodePathComponent,
+  } = ctx;
 
-  if (method === "GET" && pathname === "/api/lifeops/connectors/google/status") {
+  if (
+    method === "GET" &&
+    pathname === "/api/lifeops/connectors/google/status"
+  ) {
     return runRoute(ctx, async (service) => {
       const rawMode = url.searchParams.get("mode");
       if (rawMode !== null && rawMode !== "local" && rawMode !== "remote") {
-        throw new LifeOpsServiceError(400, "mode must be one of: local, remote");
+        throw new LifeOpsServiceError(
+          400,
+          "mode must be one of: local, remote",
+        );
       }
       json(
         res,
@@ -174,7 +244,10 @@ export async function handleLifeOpsRoutes(
       const rawMode = url.searchParams.get("mode");
       const rawForceSync = url.searchParams.get("forceSync");
       if (rawMode !== null && rawMode !== "local" && rawMode !== "remote") {
-        throw new LifeOpsServiceError(400, "mode must be one of: local, remote");
+        throw new LifeOpsServiceError(
+          400,
+          "mode must be one of: local, remote",
+        );
       }
       if (
         rawForceSync !== null &&
@@ -204,7 +277,10 @@ export async function handleLifeOpsRoutes(
     return runRoute(ctx, async (service) => {
       const rawMode = url.searchParams.get("mode");
       if (rawMode !== null && rawMode !== "local" && rawMode !== "remote") {
-        throw new LifeOpsServiceError(400, "mode must be one of: local, remote");
+        throw new LifeOpsServiceError(
+          400,
+          "mode must be one of: local, remote",
+        );
       }
       const request: GetLifeOpsCalendarFeedRequest = {
         mode: (rawMode ?? undefined) as "local" | "remote" | undefined,
@@ -222,7 +298,10 @@ export async function handleLifeOpsRoutes(
       const rawMode = url.searchParams.get("mode");
       const rawForceSync = url.searchParams.get("forceSync");
       if (rawMode !== null && rawMode !== "local" && rawMode !== "remote") {
-        throw new LifeOpsServiceError(400, "mode must be one of: local, remote");
+        throw new LifeOpsServiceError(
+          400,
+          "mode must be one of: local, remote",
+        );
       }
       if (
         rawForceSync !== null &&
@@ -249,7 +328,10 @@ export async function handleLifeOpsRoutes(
   }
 
   if (method === "POST" && pathname === "/api/lifeops/calendar/events") {
-    const body = await readJsonBody<CreateLifeOpsCalendarEventRequest>(req, res);
+    const body = await readJsonBody<CreateLifeOpsCalendarEventRequest>(
+      req,
+      res,
+    );
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, { event: await service.createCalendarEvent(url, body) }, 201);
@@ -257,7 +339,10 @@ export async function handleLifeOpsRoutes(
   }
 
   if (method === "POST" && pathname === "/api/lifeops/gmail/reply-drafts") {
-    const body = await readJsonBody<CreateLifeOpsGmailReplyDraftRequest>(req, res);
+    const body = await readJsonBody<CreateLifeOpsGmailReplyDraftRequest>(
+      req,
+      res,
+    );
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, { draft: await service.createGmailReplyDraft(url, body) }, 201);
@@ -272,15 +357,24 @@ export async function handleLifeOpsRoutes(
     });
   }
 
-  if (method === "POST" && pathname === "/api/lifeops/connectors/google/start") {
-    const body = await readJsonBody<StartLifeOpsGoogleConnectorRequest>(req, res);
+  if (
+    method === "POST" &&
+    pathname === "/api/lifeops/connectors/google/start"
+  ) {
+    const body = await readJsonBody<StartLifeOpsGoogleConnectorRequest>(
+      req,
+      res,
+    );
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, await service.startGoogleConnector(body, url));
     });
   }
 
-  if (method === "GET" && pathname === "/api/lifeops/connectors/google/callback") {
+  if (
+    method === "GET" &&
+    pathname === "/api/lifeops/connectors/google/callback"
+  ) {
     const service = getService(ctx);
     if (!service) return true;
     try {
@@ -301,8 +395,14 @@ export async function handleLifeOpsRoutes(
     }
   }
 
-  if (method === "POST" && pathname === "/api/lifeops/connectors/google/disconnect") {
-    const body = await readJsonBody<DisconnectLifeOpsGoogleConnectorRequest>(req, res);
+  if (
+    method === "POST" &&
+    pathname === "/api/lifeops/connectors/google/disconnect"
+  ) {
+    const body = await readJsonBody<DisconnectLifeOpsGoogleConnectorRequest>(
+      req,
+      res,
+    );
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, await service.disconnectGoogleConnector(body, url));
@@ -313,7 +413,10 @@ export async function handleLifeOpsRoutes(
     return runRoute(ctx, async (service) => {
       const rawMode = url.searchParams.get("mode");
       if (rawMode !== null && rawMode !== "local" && rawMode !== "remote") {
-        throw new LifeOpsServiceError(400, "mode must be one of: local, remote");
+        throw new LifeOpsServiceError(
+          400,
+          "mode must be one of: local, remote",
+        );
       }
       json(
         res,
@@ -347,7 +450,10 @@ export async function handleLifeOpsRoutes(
   }
 
   if (method === "POST" && pathname === "/api/lifeops/channel-policies") {
-    const body = await readJsonBody<UpsertLifeOpsChannelPolicyRequest>(req, res);
+    const body = await readJsonBody<UpsertLifeOpsChannelPolicyRequest>(
+      req,
+      res,
+    );
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, { policy: await service.upsertChannelPolicy(body) }, 201);
@@ -355,7 +461,10 @@ export async function handleLifeOpsRoutes(
   }
 
   if (method === "POST" && pathname === "/api/lifeops/channels/phone-consent") {
-    const body = await readJsonBody<CaptureLifeOpsPhoneConsentRequest>(req, res);
+    const body = await readJsonBody<CaptureLifeOpsPhoneConsentRequest>(
+      req,
+      res,
+    );
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, await service.capturePhoneConsent(body), 201);
@@ -371,7 +480,10 @@ export async function handleLifeOpsRoutes(
   }
 
   if (method === "POST" && pathname === "/api/lifeops/reminders/acknowledge") {
-    const body = await readJsonBody<AcknowledgeLifeOpsReminderRequest>(req, res);
+    const body = await readJsonBody<AcknowledgeLifeOpsReminderRequest>(
+      req,
+      res,
+    );
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, await service.acknowledgeReminder(body));
@@ -416,7 +528,10 @@ export async function handleLifeOpsRoutes(
   }
 
   if (method === "POST" && pathname === "/api/lifeops/browser/sessions") {
-    const body = await readJsonBody<CreateLifeOpsBrowserSessionRequest>(req, res);
+    const body = await readJsonBody<CreateLifeOpsBrowserSessionRequest>(
+      req,
+      res,
+    );
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, { session: await service.createBrowserSession(body) }, 201);
@@ -443,9 +558,15 @@ export async function handleLifeOpsRoutes(
     });
   }
 
-  const definitionMatch = pathname.match(/^\/api\/lifeops\/definitions\/([^/]+)$/);
+  const definitionMatch = pathname.match(
+    /^\/api\/lifeops\/definitions\/([^/]+)$/,
+  );
   if (definitionMatch) {
-    const definitionId = decodePathComponent(definitionMatch[1], res, "definition id");
+    const definitionId = decodePathComponent(
+      definitionMatch[1],
+      res,
+      "definition id",
+    );
     if (!definitionId) return true;
     if (method === "GET") {
       return runRoute(ctx, async (service) => {
@@ -495,7 +616,11 @@ export async function handleLifeOpsRoutes(
 
   const workflowMatch = pathname.match(/^\/api\/lifeops\/workflows\/([^/]+)$/);
   if (workflowMatch) {
-    const workflowId = decodePathComponent(workflowMatch[1], res, "workflow id");
+    const workflowId = decodePathComponent(
+      workflowMatch[1],
+      res,
+      "workflow id",
+    );
     if (!workflowId) return true;
     if (method === "GET") {
       return runRoute(ctx, async (service) => {
@@ -511,7 +636,9 @@ export async function handleLifeOpsRoutes(
     }
   }
 
-  const workflowRunMatch = pathname.match(/^\/api\/lifeops\/workflows\/([^/]+)\/run$/);
+  const workflowRunMatch = pathname.match(
+    /^\/api\/lifeops\/workflows\/([^/]+)\/run$/,
+  );
   if (method === "POST" && workflowRunMatch) {
     const workflowId = decodePathComponent(
       workflowRunMatch[1],
@@ -526,7 +653,9 @@ export async function handleLifeOpsRoutes(
     });
   }
 
-  const browserSessionMatch = pathname.match(/^\/api\/lifeops\/browser\/sessions\/([^/]+)$/);
+  const browserSessionMatch = pathname.match(
+    /^\/api\/lifeops\/browser\/sessions\/([^/]+)$/,
+  );
   if (browserSessionMatch) {
     const sessionId = decodePathComponent(
       browserSessionMatch[1],
@@ -551,10 +680,15 @@ export async function handleLifeOpsRoutes(
       "browser session id",
     );
     if (!sessionId) return true;
-    const body = await readJsonBody<ConfirmLifeOpsBrowserSessionRequest>(req, res);
+    const body = await readJsonBody<ConfirmLifeOpsBrowserSessionRequest>(
+      req,
+      res,
+    );
     if (!body) return true;
     return runRoute(ctx, async (service) => {
-      json(res, { session: await service.confirmBrowserSession(sessionId, body) });
+      json(res, {
+        session: await service.confirmBrowserSession(sessionId, body),
+      });
     });
   }
 
@@ -568,14 +702,21 @@ export async function handleLifeOpsRoutes(
       "browser session id",
     );
     if (!sessionId) return true;
-    const body = await readJsonBody<CompleteLifeOpsBrowserSessionRequest>(req, res);
+    const body = await readJsonBody<CompleteLifeOpsBrowserSessionRequest>(
+      req,
+      res,
+    );
     if (!body) return true;
     return runRoute(ctx, async (service) => {
-      json(res, { session: await service.completeBrowserSession(sessionId, body) });
+      json(res, {
+        session: await service.completeBrowserSession(sessionId, body),
+      });
     });
   }
 
-  const completeMatch = pathname.match(/^\/api\/lifeops\/occurrences\/([^/]+)\/complete$/);
+  const completeMatch = pathname.match(
+    /^\/api\/lifeops\/occurrences\/([^/]+)\/complete$/,
+  );
   if (method === "POST" && completeMatch) {
     const occurrenceId = decodePathComponent(
       completeMatch[1],
@@ -592,9 +733,15 @@ export async function handleLifeOpsRoutes(
     });
   }
 
-  const skipMatch = pathname.match(/^\/api\/lifeops\/occurrences\/([^/]+)\/skip$/);
+  const skipMatch = pathname.match(
+    /^\/api\/lifeops\/occurrences\/([^/]+)\/skip$/,
+  );
   if (method === "POST" && skipMatch) {
-    const occurrenceId = decodePathComponent(skipMatch[1], res, "occurrence id");
+    const occurrenceId = decodePathComponent(
+      skipMatch[1],
+      res,
+      "occurrence id",
+    );
     if (!occurrenceId) return true;
     const body = await readJsonBody<Record<string, never>>(req, res);
     if (!body) return true;
@@ -605,7 +752,9 @@ export async function handleLifeOpsRoutes(
     });
   }
 
-  const snoozeMatch = pathname.match(/^\/api\/lifeops\/occurrences\/([^/]+)\/snooze$/);
+  const snoozeMatch = pathname.match(
+    /^\/api\/lifeops\/occurrences\/([^/]+)\/snooze$/,
+  );
   if (method === "POST" && snoozeMatch) {
     const occurrenceId = decodePathComponent(
       snoozeMatch[1],

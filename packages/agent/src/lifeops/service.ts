@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { IAgentRuntime } from "@elizaos/core";
+import { logger, type IAgentRuntime } from "@elizaos/core";
 import type {
   AcknowledgeLifeOpsReminderRequest,
   CaptureLifeOpsPhoneConsentRequest,
@@ -193,6 +193,10 @@ export class LifeOpsServiceError extends Error {
     super(message);
     this.name = "LifeOpsServiceError";
   }
+}
+
+function lifeOpsErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function fail(status: number, message: string): never {
@@ -1855,7 +1859,7 @@ function buildActiveReminders(
       new Date(left.scheduledFor).getTime() -
       new Date(right.scheduledFor).getTime(),
   );
-  return reminders.slice(0, MAX_OVERVIEW_REMINDERS);
+  return reminders;
 }
 
 function buildActiveCalendarEventReminders(
@@ -1903,7 +1907,7 @@ function buildActiveCalendarEventReminders(
       new Date(left.scheduledFor).getTime() -
       new Date(right.scheduledFor).getTime(),
   );
-  return reminders.slice(0, MAX_OVERVIEW_REMINDERS);
+  return reminders;
 }
 
 function parseQuietHoursPolicy(value: LifeOpsReminderPlan["quietHours"]): {
@@ -2069,6 +2073,39 @@ export class LifeOpsService {
 
   private agentId(): string {
     return requireAgentId(this.runtime);
+  }
+
+  private logLifeOpsWarn(
+    operation: string,
+    message: string,
+    context: Record<string, unknown> = {},
+  ): void {
+    logger.warn(
+      {
+        boundary: "lifeops",
+        operation,
+        agentId: this.agentId(),
+        ...context,
+      },
+      message,
+    );
+  }
+
+  private logLifeOpsError(
+    operation: string,
+    error: unknown,
+    context: Record<string, unknown> = {},
+  ): void {
+    logger.error(
+      {
+        boundary: "lifeops",
+        operation,
+        agentId: this.agentId(),
+        err: error instanceof Error ? error : undefined,
+        ...context,
+      },
+      `[lifeops] ${operation} failed: ${lifeOpsErrorMessage(error)}`,
+    );
   }
 
   private async withReminderProcessingLock<T>(
@@ -2296,6 +2333,12 @@ export class LifeOpsService {
     error: unknown,
   ): Promise<never> {
     if (error instanceof GoogleOAuthError) {
+      this.logLifeOpsWarn("google_connector_request", error.message, {
+        provider: "google",
+        mode: grant.mode,
+        statusCode: error.status,
+        authState: grant.metadata.authState ?? null,
+      });
       const needsReauth = googleErrorRequiresReauth(
         error.status,
         error.message,
@@ -2308,6 +2351,12 @@ export class LifeOpsService {
     }
 
     if (error instanceof GoogleApiError) {
+      this.logLifeOpsWarn("google_connector_request", error.message, {
+        provider: "google",
+        mode: grant.mode,
+        statusCode: error.status,
+        authState: grant.metadata.authState ?? null,
+      });
       const needsReauth = googleErrorRequiresReauth(
         error.status,
         error.message,
@@ -2328,6 +2377,11 @@ export class LifeOpsService {
       fail(error.status, error.message);
     }
 
+    this.logLifeOpsError("google_connector_request", error, {
+      provider: "google",
+      mode: grant.mode,
+      authState: grant.metadata.authState ?? null,
+    });
     throw error;
   }
 
@@ -3027,6 +3081,33 @@ export class LifeOpsService {
         ...deliveryMetadata,
       },
     );
+    if (outcome === "blocked_connector") {
+      this.logLifeOpsWarn(
+        "reminder_dispatch",
+        `[lifeops] Reminder delivery failed for ${args.channel}`,
+        {
+          ownerType: args.ownerType,
+          ownerId: args.ownerId,
+          occurrenceId: args.occurrenceId,
+          channel: args.channel,
+          connectorRef,
+          scheduledFor: args.scheduledFor,
+          stepIndex: args.stepIndex,
+          reason:
+            typeof deliveryMetadata.reason === "string"
+              ? deliveryMetadata.reason
+              : null,
+          status:
+            typeof deliveryMetadata.status === "number"
+              ? deliveryMetadata.status
+              : null,
+          error:
+            typeof deliveryMetadata.error === "string"
+              ? deliveryMetadata.error
+              : null,
+        },
+      );
+    }
     return attempt;
   }
 
@@ -4435,6 +4516,15 @@ export class LifeOpsService {
       credentials,
     });
     if (!result.ok) {
+      this.logLifeOpsWarn(
+        "x_post",
+        result.error ?? "Failed to create X post.",
+        {
+          mode: grant.mode,
+          statusCode: result.status,
+          category: result.category,
+        },
+      );
       fail(result.status ?? 502, result.error ?? "Failed to create X post.");
     }
     await this.recordXPostAudit(
@@ -4687,6 +4777,15 @@ export class LifeOpsService {
           if (!(error instanceof LifeOpsServiceError)) {
             throw error;
           }
+          this.logLifeOpsWarn(
+            "next_calendar_context_linked_mail",
+            error.message,
+            {
+              provider: "google",
+              mode: status.mode,
+              calendarEventId: nextEvent.id,
+            },
+          );
           linkedMailState = "error";
           linkedMailError = error.message;
         }
@@ -5134,8 +5233,15 @@ export class LifeOpsService {
       });
     } catch (error) {
       if (error instanceof GoogleOAuthError) {
+        this.logLifeOpsWarn("google_connector_start", error.message, {
+          statusCode: error.status,
+          mode: resolvedConfig.mode,
+        });
         fail(error.status, error.message);
       }
+      this.logLifeOpsError("google_connector_start", error, {
+        mode: resolvedConfig.mode,
+      });
       throw error;
     }
   }
@@ -5150,8 +5256,12 @@ export class LifeOpsService {
       });
     } catch (error) {
       if (error instanceof GoogleOAuthError) {
+        this.logLifeOpsWarn("google_connector_callback", error.message, {
+          statusCode: error.status,
+        });
         fail(error.status, error.message);
       }
+      this.logLifeOpsError("google_connector_callback", error);
       throw error;
     }
 

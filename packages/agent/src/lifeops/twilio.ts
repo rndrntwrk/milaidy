@@ -1,3 +1,6 @@
+import { logger } from "@elizaos/core";
+import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
+
 export interface TwilioCredentials {
   accountSid: string;
   authToken: string;
@@ -13,6 +16,10 @@ export interface TwilioDeliveryResult {
 
 function encodeBasicAuth(accountSid: string, authToken: string): string {
   return Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+}
+
+function twilioOperation(path: string): string {
+  return path.includes("/Calls.") ? "twilio_voice" : "twilio_sms";
 }
 
 export function readTwilioCredentialsFromEnv(
@@ -38,6 +45,12 @@ async function sendTwilioRequest(args: {
 }): Promise<TwilioDeliveryResult> {
   const { credentials, path, payload } = args;
   const url = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(credentials.accountSid)}${path}`;
+  const operation = twilioOperation(path);
+  const span = createIntegrationTelemetrySpan({
+    boundary: "lifeops",
+    operation,
+    timeoutMs: 12_000,
+  });
   try {
     const response = await fetch(url, {
       method: "POST",
@@ -57,12 +70,29 @@ async function sendTwilioRequest(args: {
       code?: number;
     };
     if (!response.ok) {
+      const errorMessage = data.message ?? `HTTP ${response.status}`;
+      logger.warn(
+        {
+          boundary: "lifeops",
+          integration: "twilio",
+          operation,
+          statusCode: response.status,
+        },
+        `[lifeops] Twilio request failed: ${errorMessage}`,
+      );
+      span.failure({
+        statusCode: response.status,
+        errorKind: "http_error",
+      });
       return {
         ok: false,
         status: response.status,
-        error: data.message ?? `HTTP ${response.status}`,
+        error: errorMessage,
       };
     }
+    span.success({
+      statusCode: response.status,
+    });
     return {
       ok: true,
       status: response.status,
@@ -74,6 +104,20 @@ async function sendTwilioRequest(args: {
       status: null,
       error: error instanceof Error ? error.message : String(error),
     };
+    logger.error(
+      {
+        boundary: "lifeops",
+        integration: "twilio",
+        operation,
+        err: error instanceof Error ? error : undefined,
+      },
+      `[lifeops] Twilio request failed: ${result.error}`,
+    );
+    span.failure({
+      error,
+      errorKind: "network_error",
+    });
+    return result;
   }
 }
 

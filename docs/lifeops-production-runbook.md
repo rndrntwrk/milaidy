@@ -1,0 +1,118 @@
+# LifeOps Production Runbook
+
+This runbook covers deployment validation, monitoring, alerting inputs, and rollback for the Life Ops slice.
+
+## Preconditions
+
+- Build and tests pass for the life-ops suites.
+- API auth is configured for any non-loopback deployment via `MILADY_API_TOKEN` or `ELIZA_API_TOKEN`.
+- Connector credentials are provided only through environment variables:
+  - Google OAuth: `MILADY_GOOGLE_OAUTH_*` or `ELIZA_GOOGLE_OAUTH_*`
+  - Twilio: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`
+  - X: `TWITTER_API_KEY`, `TWITTER_API_SECRET_KEY`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET`
+
+## Deployment Smoke Check
+
+Run this against every deployed origin after rollout and on a recurring monitor:
+
+```bash
+MILADY_LIFEOPS_BASE_URLS=https://app.example.com \
+MILADY_SMOKE_API_TOKEN=$MILADY_API_TOKEN \
+node scripts/smoke-lifeops.mjs
+```
+
+If Google Calendar is expected to be connected in the target environment, require that explicitly:
+
+```bash
+MILADY_LIFEOPS_BASE_URLS=https://app.example.com \
+MILADY_SMOKE_API_TOKEN=$MILADY_API_TOKEN \
+MILADY_LIFEOPS_EXPECT_GOOGLE_CONNECTED=true \
+node scripts/smoke-lifeops.mjs
+```
+
+The smoke check validates:
+
+- `GET /api/lifeops/overview`
+- `GET /api/lifeops/browser/sessions`
+- `GET /api/lifeops/connectors/google/status`
+- `GET /api/lifeops/calendar/next-context?timeZone=UTC` when Google is connected
+
+## Monitoring Signals
+
+### Structured integration telemetry
+
+Life Ops now emits `[integration]` log lines with `boundary: "lifeops"` for route handling and connector calls.
+
+Watch these operations:
+
+- `GET /api/lifeops/connectors/google/status`
+- `GET /api/lifeops/calendar/feed`
+- `GET /api/lifeops/calendar/next-context`
+- `GET /api/lifeops/gmail/triage`
+- `POST /api/lifeops/reminders/process`
+- `twilio_sms`
+- `twilio_voice`
+- `x_post`
+
+### Runtime warnings/errors
+
+Watch these log patterns:
+
+- `[lifeops] Route failed:`
+- `[lifeops] Route crashed:`
+- `[lifeops] Reminder delivery failed`
+- `[lifeops] Twilio request failed:`
+- `[lifeops] X post failed:`
+
+### Durable audit trail
+
+For reminder and connector incidents, inspect:
+
+- `GET /api/lifeops/reminders/inspection?ownerType=...&ownerId=...`
+- `GET /api/lifeops/overview`
+- `GET /api/lifeops/connectors/google/status`
+
+Reminder inspection returns both attempts and `life_audit_events`, which is the primary forensic record for delivery failures and connector decisions.
+
+## Alert Inputs
+
+Wire alerts from the deployment platform using either recurring smoke checks or log queries.
+
+Recommended pages:
+
+1. Smoke check exits non-zero for any production origin.
+2. Any `[integration]` event with `boundary: "lifeops"`, `outcome: "failure"`, and `operation` starting with `GET /api/lifeops/calendar` or `GET /api/lifeops/gmail` for 5 continuous minutes.
+3. Any `[lifeops] Reminder delivery failed` log for `sms` or `voice`.
+4. Google connector status flips to `reason: "needs_reauth"` on environments that require calendar or Gmail.
+
+## Rollback
+
+If the rollout causes failures, revert to the previous known-good deployment artifact or commit SHA, then rerun the smoke check.
+
+Typical git rollback flow:
+
+```bash
+git checkout <previous-good-sha>
+bun install --frozen-lockfile
+bun run build
+```
+
+Typical container rollback flow:
+
+1. Redeploy the previous image tag.
+2. Re-run `node scripts/smoke-lifeops.mjs` against the restored origin.
+3. Confirm connector status and reminder inspection are healthy.
+
+If the issue is isolated to external delivery, you can also perform a connector-only mitigation while code rollback is in progress:
+
+- disconnect Google via `POST /api/lifeops/connectors/google/disconnect`
+- disable escalation channels via `POST /api/lifeops/channel-policies`
+
+## Release Gate
+
+Do not ship when any of these are true:
+
+- life-ops smoke check fails
+- life-ops tests fail
+- dependency audit returns unresolved high-severity issues in the deployed runtime graph
+- no alerting target is attached to the smoke check or life-ops failure logs

@@ -58,6 +58,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "audit:deps": "bun audit",
     "benchmark:preflight": "node scripts/benchmark-preflight.mjs",
     "benchmark:server": "node --import tsx packages/app-core/src/benchmark/server.ts",
     "benchmark:normalize-capture": "node --import tsx scripts/normalize-parallax-capture.ts",
@@ -116,6 +117,7 @@
     "desktop:stack-status": "node scripts/desktop-stack-status.mjs",
     "smoke:api-status": "node scripts/smoke-api-status.mjs",
     "smoke:api-status:prod": "node scripts/smoke-api-status.mjs https://milady.ai https://app.milady.ai",
+    "smoke:lifeops": "node scripts/smoke-lifeops.mjs",
     "ui:sync:desktop": "node scripts/sync-desktop-renderer.mjs",
     "ui:sync:desktop:watch": "node scripts/sync-desktop-renderer.mjs --watch",
     "start": "scripts/rt.sh scripts/run-node.mjs start",
