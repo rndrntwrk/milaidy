@@ -420,9 +420,67 @@ describe("wallet routes", () => {
     });
     expect(result.config.wallet?.network).toBe("testnet");
     expect(process.env.MILADY_WALLET_NETWORK).toBe("testnet");
-    expect(result.ensureWalletKeysInEnvAndConfig).not.toHaveBeenCalled();
+    expect(result.ensureWalletKeysInEnvAndConfig).toHaveBeenCalledWith(
+      result.config,
+    );
     expect(result.saveConfig).toHaveBeenCalledWith(result.config);
-    expect(result.payload).toEqual({ ok: true });
+    expect(result.payload).toMatchObject({ ok: true });
+  });
+
+  test("wallet config save calls ensureWalletKeysInEnvAndConfig", async () => {
+    const ensureFn = vi.fn(() => true);
+    let payload: unknown = null;
+    const config = { env: {} } as ElizaConfig;
+
+    await handleWalletRoutes({
+      req: {} as IncomingMessage,
+      res: {} as ServerResponse,
+      method: "PUT",
+      pathname: "/api/wallet/config",
+      config,
+      saveConfig: vi.fn(),
+      ensureWalletKeysInEnvAndConfig: ensureFn,
+      resolveWalletExportRejection: () => null,
+      deps: createDeps(),
+      readJsonBody: vi.fn(async () => ({
+        selections: { evm: "alchemy" },
+        credentials: { ALCHEMY_API_KEY: "test" },
+      })),
+      json: (_res, data) => {
+        payload = data;
+      },
+      error: vi.fn(),
+    });
+
+    expect(ensureFn).toHaveBeenCalledWith(config);
+    expect(payload).toMatchObject({ ok: true, keysGenerated: true });
+  });
+
+  test("wallet config save reports keysGenerated=false when keys exist", async () => {
+    const ensureFn = vi.fn(() => false);
+    let payload: unknown = null;
+
+    await handleWalletRoutes({
+      req: {} as IncomingMessage,
+      res: {} as ServerResponse,
+      method: "PUT",
+      pathname: "/api/wallet/config",
+      config: { env: {} } as ElizaConfig,
+      saveConfig: vi.fn(),
+      ensureWalletKeysInEnvAndConfig: ensureFn,
+      resolveWalletExportRejection: () => null,
+      deps: createDeps(),
+      readJsonBody: vi.fn(async () => ({
+        selections: { evm: "alchemy" },
+        credentials: { ALCHEMY_API_KEY: "test" },
+      })),
+      json: (_res, data) => {
+        payload = data;
+      },
+      error: vi.fn(),
+    });
+
+    expect(payload).toMatchObject({ ok: true, keysGenerated: false });
   });
 
   test("clears explicitly blank wallet RPC config keys", async () => {
