@@ -28,10 +28,13 @@ import {
   type Tab,
 } from "../navigation";
 import { shouldStartAtCharacterSelectOnLaunch } from "./shell-routing";
-import { resolveApiUrl } from "../utils";
+import { resolveApiUrl, resolveAppAssetUrl } from "../utils";
 import type { StartupEvent } from "./startup-coordinator";
 import type { AgentStatus, WalletAddresses } from "../api";
 import type { OnboardingMode } from "./types";
+import { getVrmUrl } from "./vrm";
+import { loadUiTheme } from "./persistence";
+import { prefetchVrmToCache } from "../components/avatar/VrmEngine";
 
 export interface HydratingDeps {
   setStartupError: (v: null) => void;
@@ -179,6 +182,24 @@ export async function runHydrating(
       deps.setCustomBackgroundUrl(
         resolveApiUrl(`/api/avatar/background?t=${Date.now()}`),
       );
+  }
+
+  // ── Prefetch companion assets (VRM + gaussian splat world) ─────────
+  // Fire-and-forget: warm the in-memory VRM buffer cache and the browser
+  // HTTP cache for the splat world so that when the companion scene goes
+  // active after HYDRATION_COMPLETE, assets are already downloaded. This
+  // avoids a cold ~3-10 s blank screen on first companion render,
+  // especially noticeable in cloud containers where the CDN round-trip
+  // is the bottleneck.
+  if (COMPANION_ENABLED) {
+    const vrmIdx = resolvedIdx > 0 ? resolvedIdx : 1;
+    void prefetchVrmToCache(getVrmUrl(vrmIdx));
+    const theme = loadUiTheme();
+    const worldUrl =
+      theme === "dark"
+        ? resolveAppAssetUrl("worlds/companion-night.spz")
+        : resolveAppAssetUrl("worlds/companion-day.spz");
+    void fetch(worldUrl, { cache: "force-cache" }).catch(() => {});
   }
 
   void deps.pollCloudCredits();

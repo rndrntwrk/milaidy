@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
+import { client } from "../api";
 import { loadPersistedOnboardingComplete } from "./persistence";
 import {
   INITIAL_STARTUP_STATE,
@@ -115,6 +116,7 @@ export function useStartupCoordinator(
   }, [legacyPhase, depsReady]);
 
   // ── Phase: splash — auto-skip for returning users, mark loaded for new users
+  // Cloud-provisioned containers also skip the splash/server-chooser entirely.
   useEffect(() => {
     if (state.phase !== "splash") return;
     if (!depsReady) return;
@@ -123,7 +125,37 @@ export function useStartupCoordinator(
       dispatch({ type: "SPLASH_CONTINUE" });
       return;
     }
-    dispatch({ type: "SPLASH_LOADED" });
+
+    // Probe the backend for cloud provisioning status. On cloud containers
+    // the backend is always on the same origin, so this works even before any
+    // connection is configured. If the probe succeeds and reports cloud
+    // provisioned, skip the splash screen entirely so the user never sees
+    // the "Create local agent" chooser.
+    let cancelled = false;
+    client
+      .getOnboardingStatus()
+      .then((status) => {
+        if (cancelled) return;
+        if (status.cloudProvisioned) {
+          console.log(
+            "[milady][startup] Cloud-provisioned container detected at splash — skipping server chooser",
+          );
+          dispatch({ type: "SPLASH_CONTINUE" });
+        } else {
+          dispatch({ type: "SPLASH_LOADED" });
+        }
+      })
+      .catch(() => {
+        // Backend not reachable yet (e.g. local mode, no server running) —
+        // fall through to the normal splash chooser.
+        if (!cancelled) {
+          dispatch({ type: "SPLASH_LOADED" });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [state.phase, depsReady]);
 
   // ── Phase: restoring-session ────────────────────────────────────

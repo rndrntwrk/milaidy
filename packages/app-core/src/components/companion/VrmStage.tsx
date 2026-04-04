@@ -11,7 +11,6 @@ import type {
   CompanionVrmPowerMode,
 } from "../../state/types";
 import type { TranslateFn } from "../../types";
-import { AvatarLoader } from "../character/AvatarLoader";
 import type {
   CameraProfile,
   VrmEngine,

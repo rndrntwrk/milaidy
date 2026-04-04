@@ -375,8 +375,14 @@ export function isCloudProvisioned(): boolean {
     process.env.MILADY_CLOUD_PROVISIONED === "1" ||
     process.env.ELIZA_CLOUD_PROVISIONED === "1";
 
+  const hasCloudApiKeyProvisioning =
+    process.env.ELIZAOS_CLOUD_ENABLED === "true" &&
+    Boolean(process.env.ELIZAOS_CLOUD_API_KEY?.trim());
+
   const hasPlatformToken = Boolean(
-    process.env.STEWARD_AGENT_TOKEN?.trim() || getCompatApiToken(),
+    process.env.STEWARD_AGENT_TOKEN?.trim() ||
+      getCompatApiToken() ||
+      hasCloudApiKeyProvisioning,
   );
 
   return hasCloudFlag && hasPlatformToken;
