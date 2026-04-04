@@ -9,8 +9,37 @@ import type {
   TriggerWakeMode,
 } from "./client-types-core";
 import type { ReleaseChannel } from "@miladyai/agent/contracts/config";
+import type {
+  CompleteLifeOpsOccurrenceRequest,
+  CreateLifeOpsDefinitionRequest,
+  CreateLifeOpsGoalRequest,
+  LifeOpsGoalDefinition,
+  LifeOpsGoalLink,
+  LifeOpsOccurrenceView,
+  LifeOpsOverview,
+  LifeOpsReminderPlan,
+  LifeOpsTaskDefinition,
+  SnoozeLifeOpsOccurrenceRequest,
+  UpdateLifeOpsDefinitionRequest,
+  UpdateLifeOpsGoalRequest,
+} from "@miladyai/shared/contracts/lifeops";
 import type { ConfigUiHint } from "../types";
 import type { MessageExampleContent } from "@miladyai/shared/contracts/onboarding";
+
+export type {
+  CompleteLifeOpsOccurrenceRequest,
+  CreateLifeOpsDefinitionRequest,
+  CreateLifeOpsGoalRequest,
+  LifeOpsGoalDefinition,
+  LifeOpsGoalLink,
+  LifeOpsOccurrenceView,
+  LifeOpsOverview,
+  LifeOpsReminderPlan,
+  LifeOpsTaskDefinition,
+  SnoozeLifeOpsOccurrenceRequest,
+  UpdateLifeOpsDefinitionRequest,
+  UpdateLifeOpsGoalRequest,
+} from "@miladyai/shared/contracts/lifeops";
 
 export interface SecretInfo {
   key: string;
@@ -406,11 +435,26 @@ export interface WorkbenchOverview {
   tasks: WorkbenchTask[];
   triggers: TriggerSummary[];
   todos: WorkbenchTodo[];
+  lifeops?: LifeOpsOverview;
   autonomy?: {
     enabled: boolean;
     thinking: boolean;
     lastEventAt?: number | null;
   };
+}
+
+export interface LifeOpsDefinitionRecord {
+  definition: LifeOpsTaskDefinition;
+  reminderPlan: LifeOpsReminderPlan | null;
+}
+
+export interface LifeOpsGoalRecord {
+  goal: LifeOpsGoalDefinition;
+  links: LifeOpsGoalLink[];
+}
+
+export interface LifeOpsOccurrenceActionResult {
+  occurrence: LifeOpsOccurrenceView;
 }
 
 // Voice / TTS config

@@ -6,7 +6,11 @@
  * surface inside the repo so the delivery scope does not drift.
  */
 
+import { DatabaseSync } from "node:sqlite";
+import type { AgentRuntime } from "@elizaos/core";
 import { describe, expect, it } from "vitest";
+import { LifeOpsRepository } from "../src/lifeops/repository";
+import { LifeOpsService } from "../src/lifeops/service";
 
 type Phase = "P0" | "P1" | "P2" | "P3";
 type Domain =
@@ -301,6 +305,82 @@ function assertUniqueScenarioIds(scenarios: Scenario[]): void {
   expect(new Set(ids).size).toBe(ids.length);
 }
 
+type SqlQuery = {
+  queryChunks?: Array<{ value?: unknown }>;
+};
+
+function extractSqlText(query: SqlQuery): string {
+  if (!Array.isArray(query.queryChunks)) return "";
+  return query.queryChunks
+    .map((chunk) => {
+      const value = chunk?.value;
+      if (Array.isArray(value)) return value.join("");
+      return String(value ?? "");
+    })
+    .join("");
+}
+
+function createSqliteRuntime(agentId = "milaidy-lifeops-prd-agent"): AgentRuntime {
+  const sqlite = new DatabaseSync(":memory:");
+  const runtimeSubset = {
+    agentId,
+    character: { name: "MilaidyLifeOpsValidation" },
+    adapter: {
+      db: {
+        execute: async (query: SqlQuery) => {
+          const sql = extractSqlText(query).trim();
+          if (sql.length === 0) return [];
+          if (/^(select|pragma)\b/i.test(sql)) {
+            return sqlite.prepare(sql).all() as Array<Record<string, unknown>>;
+          }
+          sqlite.exec(sql);
+          return [];
+        },
+      },
+    },
+  };
+  return runtimeSubset as unknown as AgentRuntime;
+}
+
+async function createMorningNightHabit(runtime: AgentRuntime) {
+  const service = new LifeOpsService(runtime);
+  const created = await service.createDefinition({
+    kind: "habit",
+    title: "Brush teeth",
+    description: "Brush every morning and night",
+    originalIntent: "Remind me to brush my teeth every morning and every night",
+    timezone: "America/Los_Angeles",
+    cadence: {
+      kind: "daily",
+      windows: ["morning", "night"],
+    },
+  });
+  return {
+    service,
+    created,
+  };
+}
+
+function requireOccurrenceByWindow(
+  overview: Awaited<ReturnType<LifeOpsService["getOverview"]>>,
+  windowName: string,
+) {
+  const occurrence = overview.occurrences.find(
+    (candidate) => candidate.windowName === windowName,
+  );
+  expect(occurrence).toBeDefined();
+  return occurrence!;
+}
+
+function buildDenseSlots() {
+  return Array.from({ length: 12 }, (_, index) => ({
+    key: `slot-${index + 1}`,
+    label: `Slot ${index + 1}`,
+    minuteOfDay: index * 90,
+    durationMinutes: 20,
+  }));
+}
+
 describe("Milaidy PRD validation inventory", () => {
   it("covers every milestone phase", () => {
     const phases = [...new Set(contractScenarios.map((scenario) => scenario.phase))].sort();
@@ -328,6 +408,269 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
     for (const scenario of contractScenarios.filter(
       (candidate) => candidate.phase === phase,
     )) {
+      if (scenario.id === "P0-02") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const runtime = createSqliteRuntime("p0-02-agent");
+          const { service, created } = await createMorningNightHabit(runtime);
+          const repository = new LifeOpsRepository(runtime);
+
+          expect(created.definition.status).toBe("active");
+          expect(created.reminderPlan?.steps).toHaveLength(1);
+
+          const overview = await service.getOverview(
+            new Date("2026-04-04T16:00:00.000Z"),
+          );
+          const morning = requireOccurrenceByWindow(overview, "morning");
+          const night = requireOccurrenceByWindow(overview, "night");
+          expect(morning.state).toBe("visible");
+          expect(night.state).toBe("pending");
+          expect(morning.definitionId).toBe(created.definition.id);
+          expect(night.definitionId).toBe(created.definition.id);
+          expect(morning.id).not.toBe(night.id);
+          expect(new Date(morning.scheduledAt ?? 0).getTime()).toBeLessThan(
+            new Date(night.scheduledAt ?? 0).getTime(),
+          );
+
+          const persisted = await repository.listOccurrencesForDefinition(
+            created.definition.agentId,
+            created.definition.id,
+          );
+          expect(persisted.map((occurrence) => occurrence.windowName)).toEqual(
+            expect.arrayContaining(["morning", "night"]),
+          );
+        });
+        continue;
+      }
+
+      if (scenario.id === "P0-03") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const runtime = createSqliteRuntime("p0-03-agent");
+          const { service } = await createMorningNightHabit(runtime);
+
+          const morningOverview = await service.getOverview(
+            new Date("2026-04-04T16:00:00.000Z"),
+          );
+          expect(requireOccurrenceByWindow(morningOverview, "morning").state).toBe(
+            "visible",
+          );
+          expect(requireOccurrenceByWindow(morningOverview, "night").state).toBe(
+            "pending",
+          );
+
+          const afternoonOverview = await service.getOverview(
+            new Date("2026-04-04T20:30:00.000Z"),
+          );
+          expect(
+            afternoonOverview.occurrences.some(
+              (occurrence) =>
+                occurrence.windowName === "morning" &&
+                occurrence.state === "visible",
+            ),
+          ).toBe(false);
+          expect(
+            requireOccurrenceByWindow(afternoonOverview, "night").state,
+          ).toBe("pending");
+        });
+        continue;
+      }
+
+      if (scenario.id === "P0-04") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const runtime = createSqliteRuntime("p0-04-agent");
+          const { service } = await createMorningNightHabit(runtime);
+          const morningTime = new Date("2026-04-04T16:00:00.000Z");
+          const morningOverview = await service.getOverview(
+            morningTime,
+          );
+          const morning = requireOccurrenceByWindow(morningOverview, "morning");
+
+          const snoozed = await service.snoozeOccurrence(morning.id, {
+            minutes: 30,
+          }, morningTime);
+          expect(snoozed.state).toBe("snoozed");
+
+          const restartedService = new LifeOpsService(runtime);
+          const beforeResurface = await restartedService.getOverview(
+            new Date("2026-04-04T16:20:00.000Z"),
+          );
+          expect(
+            beforeResurface.occurrences.find(
+              (occurrence) => occurrence.id === morning.id,
+            )?.state,
+          ).toBe("snoozed");
+
+          const afterResurface = await restartedService.getOverview(
+            new Date("2026-04-04T16:31:00.000Z"),
+          );
+          expect(
+            afterResurface.occurrences.find(
+              (occurrence) => occurrence.id === morning.id,
+            )?.state,
+          ).toBe("visible");
+        });
+        continue;
+      }
+
+      if (scenario.id === "P0-05") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const runtime = createSqliteRuntime("p0-05-agent");
+          const { service, created } = await createMorningNightHabit(runtime);
+          const repository = new LifeOpsRepository(runtime);
+          const morningTime = new Date("2026-04-04T16:00:00.000Z");
+          const morningOverview = await service.getOverview(
+            morningTime,
+          );
+          const morning = requireOccurrenceByWindow(morningOverview, "morning");
+
+          const completed = await service.completeOccurrence(morning.id, {
+            note: "done",
+          }, morningTime);
+          expect(completed.state).toBe("completed");
+
+          const definitionRecord = await service.getDefinition(created.definition.id);
+          expect(definitionRecord.definition.status).toBe("active");
+
+          const occurrences = await repository.listOccurrencesForDefinition(
+            created.definition.agentId,
+            created.definition.id,
+          );
+          expect(
+            occurrences.find((occurrence) => occurrence.id === morning.id)?.state,
+          ).toBe("completed");
+          expect(
+            occurrences.some(
+              (occurrence) =>
+                occurrence.windowName === "night" && occurrence.state === "pending",
+            ),
+          ).toBe(true);
+        });
+        continue;
+      }
+
+      if (scenario.id === "P0-06") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const runtime = createSqliteRuntime("p0-06-agent");
+          const service = new LifeOpsService(runtime);
+          const repository = new LifeOpsRepository(runtime);
+          const created = await service.createDefinition({
+            kind: "routine",
+            title: "Push-ups",
+            timezone: "America/Los_Angeles",
+            cadence: {
+              kind: "daily",
+              windows: ["morning", "night"],
+            },
+            progressionRule: {
+              kind: "linear_increment",
+              metric: "reps",
+              start: 20,
+              step: 5,
+              unit: "reps",
+            },
+          });
+
+          const overview = await service.getOverview(
+            new Date("2026-04-04T16:00:00.000Z"),
+          );
+          const morning = requireOccurrenceByWindow(overview, "morning");
+          await service.completeOccurrence(
+            morning.id,
+            {},
+            new Date("2026-04-04T16:00:00.000Z"),
+          );
+
+          const definitionRecord = await service.getDefinition(created.definition.id);
+          expect(definitionRecord.definition.progressionRule).toEqual({
+            kind: "linear_increment",
+            metric: "reps",
+            start: 20,
+            step: 5,
+            unit: "reps",
+          });
+
+          const occurrences = await repository.listOccurrencesForDefinition(
+            created.definition.agentId,
+            created.definition.id,
+          );
+          const night = occurrences.find(
+            (occurrence) =>
+              occurrence.windowName === "night" && occurrence.state === "pending",
+          );
+          expect(night?.derivedTarget).toMatchObject({
+            kind: "linear_increment",
+            metric: "reps",
+            start: 20,
+            step: 5,
+            target: 25,
+            unit: "reps",
+          });
+        });
+        continue;
+      }
+
+      if (scenario.id === "P0-07") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const runtime = createSqliteRuntime("p0-07-agent");
+          const service = new LifeOpsService(runtime);
+          const goalRecord = await service.createGoal({
+            title: "Stabilize sleep schedule",
+            description: "Wake up consistently and protect bedtime.",
+          });
+          const definitionRecord = await service.createDefinition({
+            kind: "habit",
+            title: "Lights out routine",
+            timezone: "America/Los_Angeles",
+            goalId: goalRecord.goal.id,
+            cadence: {
+              kind: "daily",
+              windows: ["night"],
+            },
+          });
+
+          const fetchedGoal = await service.getGoal(goalRecord.goal.id);
+          expect(fetchedGoal.goal.id).toBe(goalRecord.goal.id);
+          expect(fetchedGoal.links).toHaveLength(1);
+          expect(fetchedGoal.links[0]).toMatchObject({
+            goalId: goalRecord.goal.id,
+            linkedType: "definition",
+            linkedId: definitionRecord.definition.id,
+          });
+
+          const overview = await service.getOverview(
+            new Date("2026-04-05T05:30:00.000Z"),
+          );
+          expect(overview.goals.map((goal) => goal.id)).toContain(goalRecord.goal.id);
+        });
+        continue;
+      }
+
+      if (scenario.id === "P0-08") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const runtime = createSqliteRuntime("p0-08-agent");
+          const service = new LifeOpsService(runtime);
+          await service.createDefinition({
+            kind: "routine",
+            title: "Deep work pulse",
+            timezone: "UTC",
+            cadence: {
+              kind: "times_per_day",
+              slots: buildDenseSlots(),
+            },
+          });
+
+          const overview = await service.getOverview(
+            new Date("2026-04-04T00:30:00.000Z"),
+          );
+          expect(overview.occurrences.length).toBe(8);
+          expect(overview.summary.activeOccurrenceCount).toBeGreaterThanOrEqual(1);
+          expect(overview.reminders.length).toBeGreaterThanOrEqual(1);
+          expect(
+            overview.reminders.every((reminder) => reminder.channel === "in_app"),
+          ).toBe(true);
+        });
+        continue;
+      }
+
       it.todo(`[${scenario.id}] ${scenario.title}`);
     }
   });

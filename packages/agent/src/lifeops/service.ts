@@ -1126,8 +1126,8 @@ export class LifeOpsService {
   async completeOccurrence(
     occurrenceId: string,
     request: CompleteLifeOpsOccurrenceRequest,
+    now = new Date(),
   ): Promise<LifeOpsOccurrenceView> {
-    const now = new Date();
     const { definition, occurrence } = await this.getFreshOccurrence(occurrenceId, now);
     if (occurrence.state === "completed") {
       const current = await this.repository.getOccurrenceView(this.agentId(), occurrence.id);
@@ -1173,8 +1173,10 @@ export class LifeOpsService {
     return view;
   }
 
-  async skipOccurrence(occurrenceId: string): Promise<LifeOpsOccurrenceView> {
-    const now = new Date();
+  async skipOccurrence(
+    occurrenceId: string,
+    now = new Date(),
+  ): Promise<LifeOpsOccurrenceView> {
     const { definition, occurrence } = await this.getFreshOccurrence(occurrenceId, now);
     if (occurrence.state === "skipped") {
       const current = await this.repository.getOccurrenceView(this.agentId(), occurrence.id);
@@ -1219,8 +1221,8 @@ export class LifeOpsService {
   async snoozeOccurrence(
     occurrenceId: string,
     request: SnoozeLifeOpsOccurrenceRequest,
+    now = new Date(),
   ): Promise<LifeOpsOccurrenceView> {
-    const now = new Date();
     const { occurrence, definition } = await this.getFreshOccurrence(occurrenceId, now);
     if (["completed", "skipped", "expired", "muted"].includes(occurrence.state)) {
       fail(409, `occurrence cannot be snoozed from state ${occurrence.state}`);

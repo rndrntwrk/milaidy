@@ -7,10 +7,15 @@
  * Shows open todos, ongoing orchestrator sessions, and recent activity.
  */
 
-import type { CodingAgentSession, WorkbenchTodo } from "@miladyai/app-core/api";
+import type {
+  CodingAgentSession,
+  LifeOpsOccurrenceView,
+  LifeOpsOverview,
+  WorkbenchTodo,
+} from "@miladyai/app-core/api";
 import { Badge, Button } from "@miladyai/ui";
-import { Activity, ListTodo } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { Activity, BellRing, Check, ListTodo, SkipForward, Target } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { client } from "../../api";
 import { TERMINAL_STATUSES } from "../../coding";
 import type { ActivityEvent } from "../../hooks/useActivityEvents";
@@ -27,6 +32,7 @@ interface TasksEventsPanelProps {
 }
 
 const TODO_REFRESH_INTERVAL_MS = 15_000;
+const LIFEOPS_REFRESH_INTERVAL_MS = 15_000;
 const MAX_VISIBLE_TODOS = 8;
 
 /** Derive activity text for a coding agent session. */
@@ -48,6 +54,23 @@ function relativeTime(ts: number): string {
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   return `${hrs}h ago`;
+}
+
+function relativeIsoTime(value: string | null | undefined): string {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return "—";
+  return relativeTime(parsed.getTime());
+}
+
+function formatIsoTime(value: string | null | undefined): string {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return "—";
+  return parsed.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
@@ -270,6 +293,191 @@ function TodosSection({
   );
 }
 
+function reminderToneClass(channel: string): string {
+  if (channel === "in_app") return "text-accent";
+  if (channel === "sms" || channel === "voice") return "text-warn";
+  return "text-muted";
+}
+
+function occurrenceToneClass(state: LifeOpsOccurrenceView["state"]): string {
+  if (state === "visible") return "text-accent";
+  if (state === "snoozed") return "text-warn";
+  return "text-muted";
+}
+
+function ReminderRow({
+  reminder,
+}: {
+  reminder: LifeOpsOverview["reminders"][number];
+}) {
+  return (
+    <div className="rounded-lg border border-border/50 bg-bg/70 p-3">
+      <div className="flex items-start gap-2">
+        <BellRing className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${reminderToneClass(reminder.channel)}`} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="truncate text-xs font-semibold text-txt">
+              {reminder.title}
+            </span>
+            <Badge variant="secondary" className="text-[9px]">
+              {reminder.stepLabel}
+            </Badge>
+          </div>
+          <p className="mt-1 text-[11px] text-muted">
+            {formatIsoTime(reminder.scheduledFor)} · {relativeIsoTime(reminder.scheduledFor)}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LifeOpsOccurrenceRow({
+  occurrence,
+  acting,
+  onComplete,
+  onSnooze,
+  onSkip,
+}: {
+  occurrence: LifeOpsOccurrenceView;
+  acting: boolean;
+  onComplete: (occurrenceId: string) => Promise<void>;
+  onSnooze: (occurrenceId: string) => Promise<void>;
+  onSkip: (occurrenceId: string) => Promise<void>;
+}) {
+  const actionable =
+    occurrence.state === "visible" || occurrence.state === "snoozed";
+
+  return (
+    <div className="rounded-lg border border-border/50 bg-bg/70 p-3">
+      <div className="flex items-start gap-2">
+        <Target className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${occurrenceToneClass(occurrence.state)}`} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="truncate text-xs font-semibold text-txt">
+              {occurrence.title}
+            </span>
+            <Badge variant="secondary" className="text-[9px]">
+              {occurrence.state}
+            </Badge>
+            {occurrence.windowName ? (
+              <Badge variant="secondary" className="text-[9px]">
+                {occurrence.windowName}
+              </Badge>
+            ) : null}
+          </div>
+          {occurrence.description.trim().length > 0 ? (
+            <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-muted">
+              {occurrence.description}
+            </p>
+          ) : null}
+          <p className="mt-1 text-[11px] text-muted">
+            {formatIsoTime(occurrence.scheduledAt ?? occurrence.relevanceStartAt)} ·{" "}
+            {relativeIsoTime(occurrence.scheduledAt ?? occurrence.relevanceStartAt)}
+          </p>
+          {actionable ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={acting}
+                onClick={() => void onComplete(occurrence.id)}
+                className="h-6 px-2 text-[10px]"
+              >
+                <Check className="mr-1 h-3 w-3" />
+                Done
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={acting}
+                onClick={() => void onSnooze(occurrence.id)}
+                className="h-6 px-2 text-[10px]"
+              >
+                30m
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={acting}
+                onClick={() => void onSkip(occurrence.id)}
+                className="h-6 px-2 text-[10px]"
+              >
+                <SkipForward className="mr-1 h-3 w-3" />
+                Skip
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LifeOpsSection({
+  lifeops,
+  loading,
+  actingOccurrenceId,
+  onComplete,
+  onSnooze,
+  onSkip,
+}: {
+  lifeops: LifeOpsOverview | null;
+  loading: boolean;
+  actingOccurrenceId: string | null;
+  onComplete: (occurrenceId: string) => Promise<void>;
+  onSnooze: (occurrenceId: string) => Promise<void>;
+  onSkip: (occurrenceId: string) => Promise<void>;
+}) {
+  const occurrences = lifeops?.occurrences ?? [];
+  const reminders = lifeops?.reminders ?? [];
+
+  if (loading && occurrences.length === 0 && reminders.length === 0) {
+    return <div className="py-3 text-xs text-muted">Refreshing life ops…</div>;
+  }
+
+  if (occurrences.length === 0 && reminders.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+        <Target className="h-8 w-8 text-muted/50" />
+        <p className="text-sm text-muted">No active life ops</p>
+        <p className="text-xs text-muted/70">
+          Recurring routines and reminders will surface here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {lifeops ? (
+        <p className="px-1 text-[11px] text-muted">
+          {lifeops.summary.activeGoalCount} goal
+          {lifeops.summary.activeGoalCount === 1 ? "" : "s"} active ·{" "}
+          {lifeops.summary.activeReminderCount} reminder
+          {lifeops.summary.activeReminderCount === 1 ? "" : "s"} firing
+        </p>
+      ) : null}
+      {reminders.map((reminder) => (
+        <ReminderRow
+          key={`${reminder.occurrenceId}:${reminder.stepIndex}`}
+          reminder={reminder}
+        />
+      ))}
+      {occurrences.map((occurrence) => (
+        <LifeOpsOccurrenceRow
+          key={occurrence.id}
+          occurrence={occurrence}
+          acting={actingOccurrenceId === occurrence.id}
+          onComplete={onComplete}
+          onSnooze={onSnooze}
+          onSkip={onSkip}
+        />
+      ))}
+    </div>
+  );
+}
+
 function TasksSection({ sessions }: { sessions: CodingAgentSession[] }) {
   if (sessions.length === 0) {
     return (
@@ -343,6 +551,13 @@ export function TasksEventsPanel({
     dedupeTodos(workbench?.todos ?? []),
   );
   const [todosLoading, setTodosLoading] = useState(false);
+  const [lifeops, setLifeops] = useState<LifeOpsOverview | null>(
+    workbench?.lifeops ?? null,
+  );
+  const [lifeopsLoading, setLifeopsLoading] = useState(false);
+  const [actingOccurrenceId, setActingOccurrenceId] = useState<string | null>(
+    null,
+  );
 
   const activeSessions = useMemo(
     () =>
@@ -355,10 +570,62 @@ export function TasksEventsPanel({
     () => todos.filter((todo) => !todo.isCompleted).length,
     [todos],
   );
+  const activeLifeOpsCount = useMemo(
+    () =>
+      (lifeops?.occurrences ?? []).filter(
+        (occurrence) =>
+          occurrence.state === "visible" || occurrence.state === "snoozed",
+      ).length,
+    [lifeops],
+  );
 
   useEffect(() => {
     setTodos(dedupeTodos(workbench?.todos ?? []));
   }, [workbench?.todos]);
+
+  useEffect(() => {
+    setLifeops(workbench?.lifeops ?? null);
+  }, [workbench?.lifeops]);
+
+  const loadTodos = useCallback(
+    async (silent = false) => {
+      if (!silent) {
+        setTodosLoading(true);
+      }
+
+      try {
+        const result = await client.listWorkbenchTodos();
+        setTodos(dedupeTodos(result.todos));
+      } catch {
+        if ((workbench?.todos?.length ?? 0) > 0) {
+          setTodos(dedupeTodos(workbench?.todos ?? []));
+        }
+      } finally {
+        setTodosLoading(false);
+      }
+    },
+    [workbench?.todos],
+  );
+
+  const loadLifeOps = useCallback(
+    async (silent = false) => {
+      if (!silent) {
+        setLifeopsLoading(true);
+      }
+
+      try {
+        const result = await client.getLifeOpsOverview();
+        setLifeops(result);
+      } catch {
+        if (workbench?.lifeops) {
+          setLifeops(workbench.lifeops);
+        }
+      } finally {
+        setLifeopsLoading(false);
+      }
+    },
+    [workbench?.lifeops],
+  );
 
   useEffect(() => {
     if (!open) {
@@ -367,33 +634,12 @@ export function TasksEventsPanel({
 
     let active = true;
 
-    const loadTodos = async (silent = false) => {
-      if (!silent) {
-        setTodosLoading(true);
-      }
-
-      try {
-        const result = await client.listWorkbenchTodos();
-        if (!active) {
-          return;
-        }
-        setTodos(dedupeTodos(result.todos));
-      } catch {
-        if (!active) {
-          return;
-        }
-        if ((workbench?.todos?.length ?? 0) > 0) {
-          setTodos(dedupeTodos(workbench?.todos ?? []));
-        }
-      } finally {
-        if (active) {
-          setTodosLoading(false);
-        }
-      }
-    };
-
-    void loadTodos(todos.length > 0);
+    void (async () => {
+      await loadTodos(todos.length > 0);
+      if (!active) return;
+    })();
     const intervalId = window.setInterval(() => {
+      if (!active) return;
       void loadTodos(true);
     }, TODO_REFRESH_INTERVAL_MS);
 
@@ -401,7 +647,46 @@ export function TasksEventsPanel({
       active = false;
       window.clearInterval(intervalId);
     };
-  }, [open, todos.length, workbench?.todos]);
+  }, [loadTodos, open, todos.length]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let active = true;
+
+    void (async () => {
+      await loadLifeOps((lifeops?.occurrences.length ?? 0) > 0);
+      if (!active) return;
+    })();
+
+    const intervalId = window.setInterval(() => {
+      if (!active) return;
+      void loadLifeOps(true);
+    }, LIFEOPS_REFRESH_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [lifeops?.occurrences.length, loadLifeOps, open]);
+
+  const runOccurrenceAction = useCallback(
+    async (
+      occurrenceId: string,
+      action: () => Promise<void>,
+    ) => {
+      setActingOccurrenceId(occurrenceId);
+      try {
+        await action();
+        await loadLifeOps(true);
+      } finally {
+        setActingOccurrenceId(null);
+      }
+    },
+    [loadLifeOps],
+  );
 
   if (!open) return null;
 
@@ -412,6 +697,36 @@ export function TasksEventsPanel({
   return (
     <aside className={rootClassName} data-testid="chat-widgets-bar">
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-3 py-3">
+        <WidgetSection
+          title={t("taskseventspanel.LifeOps", { defaultValue: "Life Ops" })}
+          icon={<Target className="h-4 w-4" />}
+          count={activeLifeOpsCount}
+          testId="chat-widget-lifeops"
+        >
+          <LifeOpsSection
+            lifeops={lifeops}
+            loading={lifeopsLoading}
+            actingOccurrenceId={actingOccurrenceId}
+            onComplete={(occurrenceId) =>
+              runOccurrenceAction(occurrenceId, async () => {
+                await client.completeLifeOpsOccurrence(occurrenceId, {});
+              })
+            }
+            onSnooze={(occurrenceId) =>
+              runOccurrenceAction(occurrenceId, async () => {
+                await client.snoozeLifeOpsOccurrence(occurrenceId, {
+                  minutes: 30,
+                });
+              })
+            }
+            onSkip={(occurrenceId) =>
+              runOccurrenceAction(occurrenceId, async () => {
+                await client.skipLifeOpsOccurrence(occurrenceId);
+              })
+            }
+          />
+        </WidgetSection>
+
         <WidgetSection
           title={t("taskseventspanel.Todos", { defaultValue: "Todos" })}
           icon={<ListTodo className="h-4 w-4" />}

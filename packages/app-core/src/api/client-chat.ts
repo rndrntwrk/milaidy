@@ -24,6 +24,10 @@ import type {
   KnowledgeSearchResponse,
   KnowledgeStats,
   KnowledgeUploadResult,
+  LifeOpsDefinitionRecord,
+  LifeOpsGoalRecord,
+  LifeOpsOccurrenceActionResult,
+  LifeOpsOverview,
   McpMarketplaceResult,
   McpRegistryServerDetail,
   McpServerConfig,
@@ -45,6 +49,12 @@ import type {
   WorkbenchOverview,
   WorkbenchTask,
   WorkbenchTodo,
+  CompleteLifeOpsOccurrenceRequest,
+  CreateLifeOpsDefinitionRequest,
+  CreateLifeOpsGoalRequest,
+  SnoozeLifeOpsOccurrenceRequest,
+  UpdateLifeOpsDefinitionRequest,
+  UpdateLifeOpsGoalRequest,
 } from "./client-types";
 import { MiladyClient } from "./client-base";
 
@@ -194,8 +204,37 @@ declare module "./client-base" {
         tasksAvailable?: boolean;
         triggersAvailable?: boolean;
         todosAvailable?: boolean;
+        lifeopsAvailable?: boolean;
       }
     >;
+    getLifeOpsOverview(): Promise<LifeOpsOverview>;
+    listLifeOpsDefinitions(): Promise<{ definitions: LifeOpsDefinitionRecord[] }>;
+    getLifeOpsDefinition(definitionId: string): Promise<LifeOpsDefinitionRecord>;
+    createLifeOpsDefinition(
+      data: CreateLifeOpsDefinitionRequest,
+    ): Promise<LifeOpsDefinitionRecord>;
+    updateLifeOpsDefinition(
+      definitionId: string,
+      data: UpdateLifeOpsDefinitionRequest,
+    ): Promise<LifeOpsDefinitionRecord>;
+    listLifeOpsGoals(): Promise<{ goals: LifeOpsGoalRecord[] }>;
+    getLifeOpsGoal(goalId: string): Promise<LifeOpsGoalRecord>;
+    createLifeOpsGoal(data: CreateLifeOpsGoalRequest): Promise<LifeOpsGoalRecord>;
+    updateLifeOpsGoal(
+      goalId: string,
+      data: UpdateLifeOpsGoalRequest,
+    ): Promise<LifeOpsGoalRecord>;
+    completeLifeOpsOccurrence(
+      occurrenceId: string,
+      data?: CompleteLifeOpsOccurrenceRequest,
+    ): Promise<LifeOpsOccurrenceActionResult>;
+    skipLifeOpsOccurrence(
+      occurrenceId: string,
+    ): Promise<LifeOpsOccurrenceActionResult>;
+    snoozeLifeOpsOccurrence(
+      occurrenceId: string,
+      data: SnoozeLifeOpsOccurrenceRequest,
+    ): Promise<LifeOpsOccurrenceActionResult>;
     listWorkbenchTasks(): Promise<{ tasks: WorkbenchTask[] }>;
     getWorkbenchTask(taskId: string): Promise<{ task: WorkbenchTask }>;
     createWorkbenchTask(data: {
@@ -698,6 +737,112 @@ MiladyClient.prototype.getWorkbenchOverview = async function (
   this: MiladyClient,
 ) {
   return this.fetch("/api/workbench/overview");
+};
+
+MiladyClient.prototype.getLifeOpsOverview = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/lifeops/overview");
+};
+
+MiladyClient.prototype.listLifeOpsDefinitions = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/lifeops/definitions");
+};
+
+MiladyClient.prototype.getLifeOpsDefinition = async function (
+  this: MiladyClient,
+  definitionId,
+) {
+  return this.fetch(`/api/lifeops/definitions/${encodeURIComponent(definitionId)}`);
+};
+
+MiladyClient.prototype.createLifeOpsDefinition = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/definitions", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.updateLifeOpsDefinition = async function (
+  this: MiladyClient,
+  definitionId,
+  data,
+) {
+  return this.fetch(`/api/lifeops/definitions/${encodeURIComponent(definitionId)}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.listLifeOpsGoals = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/lifeops/goals");
+};
+
+MiladyClient.prototype.getLifeOpsGoal = async function (
+  this: MiladyClient,
+  goalId,
+) {
+  return this.fetch(`/api/lifeops/goals/${encodeURIComponent(goalId)}`);
+};
+
+MiladyClient.prototype.createLifeOpsGoal = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/goals", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.updateLifeOpsGoal = async function (
+  this: MiladyClient,
+  goalId,
+  data,
+) {
+  return this.fetch(`/api/lifeops/goals/${encodeURIComponent(goalId)}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.completeLifeOpsOccurrence = async function (
+  this: MiladyClient,
+  occurrenceId,
+  data = {},
+) {
+  return this.fetch(`/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/complete`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.skipLifeOpsOccurrence = async function (
+  this: MiladyClient,
+  occurrenceId,
+) {
+  return this.fetch(`/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/skip`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+};
+
+MiladyClient.prototype.snoozeLifeOpsOccurrence = async function (
+  this: MiladyClient,
+  occurrenceId,
+  data,
+) {
+  return this.fetch(`/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/snooze`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 };
 
 MiladyClient.prototype.listWorkbenchTasks = async function (
