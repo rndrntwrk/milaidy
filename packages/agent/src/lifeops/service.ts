@@ -3,6 +3,7 @@ import type { IAgentRuntime } from "@elizaos/core";
 import type {
   CompleteLifeOpsOccurrenceRequest,
   CreateLifeOpsCalendarEventRequest,
+  CreateLifeOpsGmailReplyDraftRequest,
   DisconnectLifeOpsGoogleConnectorRequest,
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,
@@ -12,6 +13,10 @@ import type {
   LifeOpsCadence,
   LifeOpsConnectorGrant,
   LifeOpsConnectorMode,
+  GetLifeOpsGmailTriageRequest,
+  LifeOpsGmailMessageSummary,
+  LifeOpsGmailReplyDraft,
+  LifeOpsGmailTriageFeed,
   LifeOpsGoalDefinition,
   LifeOpsGoogleCapability,
   LifeOpsGoogleConnectorStatus,
@@ -27,6 +32,7 @@ import type {
   LifeOpsTimeWindowDefinition,
   GetLifeOpsCalendarFeedRequest,
   LifeOpsWindowPolicy,
+  SendLifeOpsGmailReplyRequest,
   SnoozeLifeOpsOccurrenceRequest,
   StartLifeOpsGoogleConnectorRequest,
   StartLifeOpsGoogleConnectorResponse,
@@ -39,6 +45,7 @@ import {
   LIFEOPS_DEFINITION_STATUSES,
   LIFEOPS_GOAL_STATUSES,
   LIFEOPS_CALENDAR_WINDOW_PRESETS,
+  LIFEOPS_GMAIL_DRAFT_TONES,
   LIFEOPS_GOOGLE_CAPABILITIES,
   LIFEOPS_REMINDER_CHANNELS,
   LIFEOPS_REVIEW_STATES,
@@ -61,12 +68,17 @@ import {
 import { fetchGoogleCalendarEvents } from "./google-calendar.js";
 import { createGoogleCalendarEvent } from "./google-calendar.js";
 import {
+  fetchGoogleGmailTriageMessages,
+  sendGoogleGmailReply,
+} from "./google-gmail.js";
+import {
   normalizeGoogleCapabilities,
 } from "./google-scopes.js";
 import {
   createLifeOpsAuditEvent,
   createLifeOpsCalendarSyncState,
   createLifeOpsConnectorGrant,
+  createLifeOpsGmailSyncState,
   createLifeOpsGoalDefinition,
   createLifeOpsReminderPlan,
   createLifeOpsTaskDefinition,
@@ -85,7 +97,10 @@ const MAX_OVERVIEW_REMINDERS = 6;
 const OVERVIEW_HORIZON_MINUTES = 18 * 60;
 const DAY_MINUTES = 24 * 60;
 const GOOGLE_CALENDAR_CACHE_TTL_MS = 5 * 60 * 1000;
+const GOOGLE_GMAIL_CACHE_TTL_MS = 5 * 60 * 1000;
 const GOOGLE_PRIMARY_CALENDAR_ID = "primary";
+const GOOGLE_GMAIL_MAILBOX = "me";
+const DEFAULT_GMAIL_TRIAGE_MAX_RESULTS = 12;
 const DEFAULT_CALENDAR_REMINDER_STEPS: LifeOpsReminderStep[] = [
   {
     channel: "in_app",
@@ -336,6 +351,20 @@ function hasGoogleCalendarWriteCapability(
   return capabilities.has("google.calendar.write");
 }
 
+function hasGoogleGmailTriageCapability(
+  grant: LifeOpsConnectorGrant,
+): boolean {
+  const capabilities = new Set(normalizeGrantCapabilities(grant.capabilities));
+  return capabilities.has("google.gmail.triage");
+}
+
+function hasGoogleGmailSendCapability(
+  grant: LifeOpsConnectorGrant,
+): boolean {
+  const capabilities = new Set(normalizeGrantCapabilities(grant.capabilities));
+  return capabilities.has("google.gmail.send");
+}
+
 function normalizeCalendarAttendees(
   value: unknown,
 ): Array<{ email: string; displayName?: string; optional?: boolean }> {
@@ -462,6 +491,7 @@ function resolveCalendarEventRange(
 function buildNextCalendarEventContext(
   event: LifeOpsCalendarEvent | null,
   now: Date,
+  linkedMail: LifeOpsGmailMessageSummary[] = [],
 ): LifeOpsNextCalendarEventContext {
   if (!event) {
     return {
@@ -503,7 +533,210 @@ function buildNextCalendarEventContext(
     location: event.location.trim() || null,
     conferenceLink: event.conferenceLink,
     preparationChecklist: checklist,
-    linkedMail: [],
+    linkedMail: linkedMail.map((message) => ({
+      id: message.id,
+      subject: message.subject,
+      from: message.from,
+      receivedAt: message.receivedAt,
+      snippet: message.snippet,
+      htmlLink: message.htmlLink,
+    })),
+  };
+}
+
+function normalizeGmailTriageMaxResults(value: unknown): number {
+  if (value === undefined || value === null || value === "") {
+    return DEFAULT_GMAIL_TRIAGE_MAX_RESULTS;
+  }
+  const maxResults = Math.trunc(normalizeFiniteNumber(value, "maxResults"));
+  if (maxResults < 1 || maxResults > 50) {
+    fail(400, "maxResults must be between 1 and 50");
+  }
+  return maxResults;
+}
+
+function normalizeGmailDraftTone(
+  value: unknown,
+): "brief" | "neutral" | "warm" {
+  return normalizeEnumValue(value ?? "neutral", "tone", LIFEOPS_GMAIL_DRAFT_TONES);
+}
+
+function normalizeOptionalStringArray(
+  value: unknown,
+  field: string,
+): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    fail(400, `${field} must be an array`);
+  }
+  const items: string[] = [];
+  const seen = new Set<string>();
+  for (const [index, candidate] of value.entries()) {
+    const item = requireNonEmptyString(candidate, `${field}[${index}]`).toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(item)) {
+      fail(400, `${field}[${index}] must be a valid email address`);
+    }
+    if (seen.has(item)) {
+      continue;
+    }
+    seen.add(item);
+    items.push(item);
+  }
+  return items;
+}
+
+function normalizeGmailReplyBody(value: unknown): string {
+  const body = requireNonEmptyString(value, "bodyText");
+  if (body.length > 8000) {
+    fail(400, "bodyText must be 8000 characters or fewer");
+  }
+  return body;
+}
+
+function collectCalendarEventContactEmails(event: LifeOpsCalendarEvent): Set<string> {
+  const emails = new Set<string>();
+  const organizerEmail =
+    typeof event.organizer?.email === "string" ? event.organizer.email.trim().toLowerCase() : "";
+  if (organizerEmail) {
+    emails.add(organizerEmail);
+  }
+  for (const attendee of event.attendees) {
+    const email = attendee.email?.trim().toLowerCase() || "";
+    if (email) {
+      emails.add(email);
+    }
+  }
+  return emails;
+}
+
+function extractSubjectTokens(subject: string): string[] {
+  return subject
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 4);
+}
+
+function findLinkedMailForCalendarEvent(
+  event: LifeOpsCalendarEvent,
+  messages: LifeOpsGmailMessageSummary[],
+): LifeOpsGmailMessageSummary[] {
+  const relatedEmails = collectCalendarEventContactEmails(event);
+  const subjectTokens = new Set(extractSubjectTokens(event.title));
+
+  return messages
+    .filter((message) => {
+      if (message.fromEmail && relatedEmails.has(message.fromEmail.toLowerCase())) {
+        return true;
+      }
+      if (
+        message.to.some((entry) => relatedEmails.has(entry.trim().toLowerCase())) ||
+        message.cc.some((entry) => relatedEmails.has(entry.trim().toLowerCase()))
+      ) {
+        return true;
+      }
+      const messageTokens = extractSubjectTokens(message.subject);
+      return messageTokens.some((token) => subjectTokens.has(token));
+    })
+    .sort((left, right) => {
+      const receivedDelta =
+        Date.parse(right.receivedAt) - Date.parse(left.receivedAt);
+      if (receivedDelta !== 0) {
+        return receivedDelta;
+      }
+      return right.triageScore - left.triageScore;
+    })
+    .slice(0, 3);
+}
+
+function isGmailSyncStateFresh(args: {
+  syncedAt: string;
+  maxResults: number;
+  requestedMaxResults: number;
+  now: Date;
+}): boolean {
+  const syncedAtMs = Date.parse(args.syncedAt);
+  if (!Number.isFinite(syncedAtMs)) {
+    return false;
+  }
+  if (args.now.getTime() - syncedAtMs > GOOGLE_GMAIL_CACHE_TTL_MS) {
+    return false;
+  }
+  return args.maxResults >= args.requestedMaxResults;
+}
+
+function summarizeGmailTriage(
+  messages: LifeOpsGmailMessageSummary[],
+): LifeOpsGmailTriageFeed["summary"] {
+  return {
+    unreadCount: messages.filter((message) => message.isUnread).length,
+    importantNewCount: messages.filter(
+      (message) => message.isUnread && message.isImportant,
+    ).length,
+    likelyReplyNeededCount: messages.filter(
+      (message) => message.likelyReplyNeeded,
+    ).length,
+  };
+}
+
+function buildGmailReplyDraft(args: {
+  message: LifeOpsGmailMessageSummary;
+  tone: "brief" | "neutral" | "warm";
+  intent?: string;
+  includeQuotedOriginal: boolean;
+  senderName: string;
+  sendAllowed: boolean;
+}): LifeOpsGmailReplyDraft {
+  const recipientLabel =
+    args.message.from.split("<")[0]?.trim() ||
+    args.message.fromEmail ||
+    "there";
+  const greeting =
+    args.tone === "brief"
+      ? `Hi ${recipientLabel},`
+      : args.tone === "warm"
+        ? `Hi ${recipientLabel},`
+        : `Hello ${recipientLabel},`;
+  const subject = args.message.subject.trim() || "your message";
+  const bodyCore = args.intent?.trim()
+    ? args.intent.trim()
+    : args.tone === "brief"
+      ? `Thanks for the note about ${subject}. I saw it and will follow up shortly.`
+      : args.tone === "warm"
+        ? `Thanks for reaching out about ${subject}. I reviewed your note and wanted to follow up.`
+        : `Thanks for the note about ${subject}. I reviewed your message and wanted to follow up.`;
+  const bodyLines = [
+    greeting,
+    "",
+    bodyCore,
+    "",
+    "Best,",
+    args.senderName,
+  ];
+  if (args.includeQuotedOriginal && args.message.snippet.trim().length > 0) {
+    bodyLines.push(
+      "",
+      "Quoted context:",
+      args.message.snippet.trim(),
+    );
+  }
+
+  const recipient = args.message.replyTo ?? args.message.fromEmail ?? null;
+  if (!recipient) {
+    fail(409, "The selected Gmail message has no replyable sender.");
+  }
+
+  return {
+    messageId: args.message.id,
+    threadId: args.message.threadId,
+    subject: args.message.subject,
+    to: [recipient.toLowerCase()],
+    cc: [],
+    bodyText: bodyLines.join("\n"),
+    previewLines: bodyLines.slice(0, 3),
+    sendAllowed: args.sendAllowed,
+    requiresConfirmation: true,
   };
 }
 
@@ -518,6 +751,18 @@ function createCalendarEventId(
     .update(`${agentId}:${provider}:${calendarId}:${externalId}`)
     .digest("hex");
   return `life-calendar-${digest.slice(0, 32)}`;
+}
+
+function createGmailMessageId(
+  agentId: string,
+  provider: LifeOpsConnectorGrant["provider"],
+  externalMessageId: string,
+): string {
+  const digest = crypto
+    .createHash("sha256")
+    .update(`${agentId}:${provider}:gmail:${externalMessageId}`)
+    .digest("hex");
+  return `life-gmail-${digest.slice(0, 32)}`;
 }
 
 function isCalendarSyncStateFresh(args: {
@@ -1125,6 +1370,131 @@ export class LifeOpsService {
       fail(403, "Google Calendar write access has not been granted.");
     }
     return grant;
+  }
+
+  private async requireGoogleGmailGrant(
+    requestUrl: URL,
+    requestedMode?: LifeOpsConnectorMode,
+  ): Promise<LifeOpsConnectorGrant> {
+    const status = await this.getGoogleConnectorStatus(requestUrl, requestedMode);
+    const grant = status.grant;
+    if (!status.connected || !grant || !grant.tokenRef) {
+      fail(409, "Google Gmail is not connected.");
+    }
+    if (!hasGoogleGmailTriageCapability(grant)) {
+      fail(403, "Google Gmail triage access has not been granted.");
+    }
+    return grant;
+  }
+
+  private async requireGoogleGmailSendGrant(
+    requestUrl: URL,
+    requestedMode?: LifeOpsConnectorMode,
+  ): Promise<LifeOpsConnectorGrant> {
+    const grant = await this.requireGoogleGmailGrant(requestUrl, requestedMode);
+    if (!hasGoogleGmailSendCapability(grant)) {
+      fail(403, "Google Gmail send access has not been granted.");
+    }
+    return grant;
+  }
+
+  private async recordGmailAudit(
+    eventType: "gmail_triage_synced" | "gmail_reply_drafted" | "gmail_reply_sent",
+    ownerId: string,
+    reason: string,
+    inputs: Record<string, unknown>,
+    decision: Record<string, unknown>,
+  ): Promise<void> {
+    await this.repository.createAuditEvent(
+      createLifeOpsAuditEvent({
+        agentId: this.agentId(),
+        eventType,
+        ownerType: eventType === "gmail_triage_synced" ? "connector" : "gmail_message",
+        ownerId,
+        reason,
+        inputs,
+        decision,
+        actor: "user",
+      }),
+    );
+  }
+
+  private async syncGoogleGmailTriage(args: {
+    requestUrl: URL;
+    requestedMode?: LifeOpsConnectorMode;
+    maxResults: number;
+  }): Promise<LifeOpsGmailTriageFeed> {
+    const grant = await this.requireGoogleGmailGrant(
+      args.requestUrl,
+      args.requestedMode,
+    );
+    if (!grant.tokenRef) {
+      fail(409, "Google Gmail token reference is missing.");
+    }
+    let token;
+    try {
+      token = await ensureFreshGoogleAccessToken(grant.tokenRef);
+    } catch (error) {
+      if (error instanceof GoogleOAuthError) {
+        fail(error.status, error.message);
+      }
+      throw error;
+    }
+
+    const selfEmail =
+      typeof grant.identity.email === "string"
+        ? grant.identity.email.trim().toLowerCase()
+        : null;
+    const syncedAt = new Date().toISOString();
+    const messages = await fetchGoogleGmailTriageMessages({
+      accessToken: token.accessToken,
+      selfEmail,
+      maxResults: args.maxResults,
+    });
+    const persistedMessages = messages.map((message) => ({
+      id: createGmailMessageId(this.agentId(), "google", message.externalId),
+      agentId: this.agentId(),
+      provider: "google" as const,
+      ...message,
+      syncedAt,
+      updatedAt: syncedAt,
+    }));
+
+    await this.repository.pruneGmailMessages(
+      this.agentId(),
+      "google",
+      messages.map((message) => message.externalId),
+    );
+    for (const message of persistedMessages) {
+      await this.repository.upsertGmailMessage(message);
+    }
+    await this.repository.upsertGmailSyncState(
+      createLifeOpsGmailSyncState({
+        agentId: this.agentId(),
+        provider: "google",
+        mailbox: GOOGLE_GMAIL_MAILBOX,
+        maxResults: args.maxResults,
+        syncedAt,
+      }),
+    );
+    await this.recordGmailAudit(
+      "gmail_triage_synced",
+      `google:${grant.mode}:gmail`,
+      "gmail triage synced",
+      {
+        mode: grant.mode,
+        maxResults: args.maxResults,
+      },
+      {
+        messageCount: persistedMessages.length,
+      },
+    );
+    return {
+      messages: persistedMessages,
+      source: "synced",
+      syncedAt,
+      summary: summarizeGmailTriage(persistedMessages),
+    };
   }
 
   private async recordCalendarEventAudit(
@@ -1857,7 +2227,7 @@ export class LifeOpsService {
         source: "cache",
         timeMin,
         timeMax,
-        syncedAt: syncState.syncedAt,
+      syncedAt: syncState.syncedAt,
       };
     }
 
@@ -1868,6 +2238,53 @@ export class LifeOpsService {
       timeMin,
       timeMax,
       timeZone,
+    });
+  }
+
+  async getGmailTriage(
+    requestUrl: URL,
+    request: GetLifeOpsGmailTriageRequest = {},
+    now = new Date(),
+  ): Promise<LifeOpsGmailTriageFeed> {
+    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const maxResults = normalizeGmailTriageMaxResults(request.maxResults);
+    const forceSync = normalizeOptionalBoolean(request.forceSync, "forceSync") ?? false;
+    await this.requireGoogleGmailGrant(requestUrl, mode);
+
+    const syncState = await this.repository.getGmailSyncState(
+      this.agentId(),
+      "google",
+      GOOGLE_GMAIL_MAILBOX,
+    );
+    if (
+      !forceSync &&
+      syncState &&
+      isGmailSyncStateFresh({
+        syncedAt: syncState.syncedAt,
+        maxResults: syncState.maxResults,
+        requestedMaxResults: maxResults,
+        now,
+      })
+    ) {
+      const messages = await this.repository.listGmailMessages(
+        this.agentId(),
+        "google",
+        {
+          maxResults,
+        },
+      );
+      return {
+        messages,
+        source: "cache",
+        syncedAt: syncState.syncedAt,
+        summary: summarizeGmailTriage(messages),
+      };
+    }
+
+    return this.syncGoogleGmailTriage({
+      requestUrl,
+      requestedMode: mode,
+      maxResults,
     });
   }
 
@@ -1940,10 +2357,188 @@ export class LifeOpsService {
     request: GetLifeOpsCalendarFeedRequest = {},
     now = new Date(),
   ): Promise<LifeOpsNextCalendarEventContext> {
+    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
     const feed = await this.getCalendarFeed(requestUrl, request, now);
     const nextEvent =
       feed.events.find((event) => Date.parse(event.endAt) > now.getTime()) ?? null;
-    return buildNextCalendarEventContext(nextEvent, now);
+    if (!nextEvent) {
+      return buildNextCalendarEventContext(null, now);
+    }
+
+    let linkedMail: LifeOpsGmailMessageSummary[] = [];
+    const status = await this.getGoogleConnectorStatus(requestUrl, mode);
+    if (status.connected && status.grant && hasGoogleGmailTriageCapability(status.grant)) {
+      const cachedMessages = await this.repository.listGmailMessages(
+        this.agentId(),
+        "google",
+        {
+          maxResults: DEFAULT_GMAIL_TRIAGE_MAX_RESULTS,
+        },
+      );
+      linkedMail = findLinkedMailForCalendarEvent(nextEvent, cachedMessages);
+      if (linkedMail.length === 0) {
+        try {
+          const triage = await this.getGmailTriage(
+            requestUrl,
+            {
+              mode,
+              maxResults: DEFAULT_GMAIL_TRIAGE_MAX_RESULTS,
+            },
+            now,
+          );
+          linkedMail = findLinkedMailForCalendarEvent(nextEvent, triage.messages);
+        } catch (error) {
+          if (!(error instanceof LifeOpsServiceError)) {
+            throw error;
+          }
+        }
+      }
+    }
+
+    return buildNextCalendarEventContext(nextEvent, now, linkedMail);
+  }
+
+  async createGmailReplyDraft(
+    requestUrl: URL,
+    request: CreateLifeOpsGmailReplyDraftRequest,
+  ): Promise<LifeOpsGmailReplyDraft> {
+    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const messageId = requireNonEmptyString(request.messageId, "messageId");
+    const tone = normalizeGmailDraftTone(request.tone);
+    const intent = normalizeOptionalString(request.intent);
+    const includeQuotedOriginal =
+      normalizeOptionalBoolean(request.includeQuotedOriginal, "includeQuotedOriginal") ??
+      false;
+    const grant = await this.requireGoogleGmailGrant(requestUrl, mode);
+
+    let message = await this.repository.getGmailMessage(
+      this.agentId(),
+      "google",
+      messageId,
+    );
+    if (!message) {
+      await this.getGmailTriage(requestUrl, { mode }, new Date());
+      message = await this.repository.getGmailMessage(this.agentId(), "google", messageId);
+    }
+    if (!message) {
+      fail(404, "life-ops Gmail message not found");
+    }
+
+    const senderName =
+      normalizeOptionalString(grant.identity.name) ??
+      normalizeOptionalString(grant.identity.email)?.split("@")[0] ??
+      "Milady";
+    const draft = buildGmailReplyDraft({
+      message,
+      tone,
+      intent,
+      includeQuotedOriginal,
+      senderName,
+      sendAllowed: hasGoogleGmailSendCapability(grant),
+    });
+    await this.recordGmailAudit(
+      "gmail_reply_drafted",
+      message.id,
+      "gmail reply drafted",
+      {
+        messageId: message.id,
+        tone,
+        includeQuotedOriginal,
+      },
+      {
+        sendAllowed: draft.sendAllowed,
+      },
+    );
+    return draft;
+  }
+
+  async sendGmailReply(
+    requestUrl: URL,
+    request: SendLifeOpsGmailReplyRequest,
+  ): Promise<{ ok: true }> {
+    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const messageId = requireNonEmptyString(request.messageId, "messageId");
+    const confirmSend =
+      normalizeOptionalBoolean(request.confirmSend, "confirmSend") ?? false;
+    if (!confirmSend) {
+      fail(409, "Gmail send requires explicit confirmation.");
+    }
+
+    const grant = await this.requireGoogleGmailSendGrant(requestUrl, mode);
+    let message = await this.repository.getGmailMessage(
+      this.agentId(),
+      "google",
+      messageId,
+    );
+    if (!message) {
+      await this.getGmailTriage(requestUrl, { mode }, new Date());
+      message = await this.repository.getGmailMessage(this.agentId(), "google", messageId);
+    }
+    if (!message) {
+      fail(404, "life-ops Gmail message not found");
+    }
+    if (!grant.tokenRef) {
+      fail(409, "Google Gmail token reference is missing.");
+    }
+
+    const to =
+      normalizeOptionalStringArray(request.to, "to") ??
+      [message.replyTo ?? message.fromEmail ?? ""].filter((value) => value.length > 0);
+    if (to.length === 0) {
+      fail(409, "The selected Gmail message has no replyable recipient.");
+    }
+    const cc = normalizeOptionalStringArray(request.cc, "cc") ?? [];
+    const subject =
+      normalizeOptionalString(request.subject) ?? message.subject;
+    const bodyText = normalizeGmailReplyBody(request.bodyText);
+    const messageIdHeader =
+      typeof message.metadata.messageIdHeader === "string"
+        ? message.metadata.messageIdHeader.trim()
+        : null;
+    const referencesHeader =
+      typeof message.metadata.referencesHeader === "string"
+        ? message.metadata.referencesHeader.trim()
+        : null;
+    const references = [referencesHeader, messageIdHeader]
+      .filter((value): value is string => Boolean(value && value.length > 0))
+      .join(" ")
+      .trim();
+
+    let token;
+    try {
+      token = await ensureFreshGoogleAccessToken(grant.tokenRef);
+    } catch (error) {
+      if (error instanceof GoogleOAuthError) {
+        fail(error.status, error.message);
+      }
+      throw error;
+    }
+
+    await sendGoogleGmailReply({
+      accessToken: token.accessToken,
+      to,
+      cc,
+      subject,
+      bodyText,
+      inReplyTo: messageIdHeader,
+      references: references.length > 0 ? references : null,
+    });
+    await this.recordGmailAudit(
+      "gmail_reply_sent",
+      message.id,
+      "gmail reply sent",
+      {
+        messageId: message.id,
+        to,
+        cc,
+        confirmSend,
+      },
+      {
+        subject,
+        sent: true,
+      },
+    );
+    return { ok: true };
   }
 
   async completeOccurrence(
@@ -2303,6 +2898,8 @@ export class LifeOpsService {
     );
     await this.repository.deleteCalendarEventsForProvider(this.agentId(), "google");
     await this.repository.deleteCalendarSyncState(this.agentId(), "google");
+    await this.repository.deleteGmailMessagesForProvider(this.agentId(), "google");
+    await this.repository.deleteGmailSyncState(this.agentId(), "google");
     await this.repository.deleteConnectorGrant(
       this.agentId(),
       "google",

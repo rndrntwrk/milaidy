@@ -1523,6 +1523,373 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
         continue;
       }
 
+      if (scenario.id === "P1-07") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          await withGoogleOAuthApiServer(
+            {
+              MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID: "desktop-client-id",
+            },
+            async ({ port, fetchMock }) => {
+              fetchMock.mockResolvedValueOnce(
+                new Response(
+                  JSON.stringify({
+                    access_token: "gmail-triage-token",
+                    refresh_token: "gmail-triage-refresh",
+                    expires_in: 3600,
+                    scope: [
+                      "openid",
+                      "email",
+                      "profile",
+                      "https://www.googleapis.com/auth/gmail.metadata",
+                    ].join(" "),
+                    token_type: "Bearer",
+                    id_token: buildIdToken({
+                      sub: "google-user-gmail-triage",
+                      email: "gmail-triage@example.com",
+                      name: "Gmail Triage Example",
+                      email_verified: true,
+                    }),
+                  }),
+                  {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                  },
+                ),
+              );
+
+              const startRes = await req(
+                port,
+                "POST",
+                "/api/lifeops/connectors/google/start",
+                { capabilities: ["google.gmail.triage"] },
+              );
+              const authUrl = new URL(String(startRes.data.authUrl));
+              await req(
+                port,
+                "GET",
+                `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(authUrl.searchParams.get("state") ?? "")}&code=gmail-triage-code`,
+              );
+
+              fetchMock.mockImplementation(async (input) => {
+                const url = typeof input === "string" ? input : input.toString();
+                if (url.startsWith("https://gmail.googleapis.com/gmail/v1/users/me/messages?")) {
+                  return new Response(
+                    JSON.stringify({
+                      messages: [{ id: "msg-prd-1", threadId: "thread-prd-1" }],
+                    }),
+                    {
+                      status: 200,
+                      headers: { "content-type": "application/json" },
+                    },
+                  );
+                }
+                if (url.includes("/gmail/v1/users/me/messages/msg-prd-1?")) {
+                  return new Response(
+                    JSON.stringify({
+                      id: "msg-prd-1",
+                      threadId: "thread-prd-1",
+                      labelIds: ["INBOX", "UNREAD", "IMPORTANT"],
+                      snippet: "Can you confirm the agenda and timing?",
+                      internalDate: String(Date.now() - 10 * 60_000),
+                      payload: {
+                        headers: [
+                          { name: "Subject", value: "Design review agenda" },
+                          { name: "From", value: "Friend <friend@example.com>" },
+                          { name: "To", value: "gmail-triage@example.com" },
+                          { name: "Message-Id", value: "<message-prd-1@example.com>" },
+                        ],
+                      },
+                    }),
+                    {
+                      status: 200,
+                      headers: { "content-type": "application/json" },
+                    },
+                  );
+                }
+                throw new Error(`Unexpected fetch: ${url}`);
+              });
+
+              const triageRes = await req(
+                port,
+                "GET",
+                "/api/lifeops/gmail/triage?maxResults=5",
+              );
+              expect(triageRes.status).toBe(200);
+              expect(triageRes.data.summary).toMatchObject({
+                importantNewCount: 1,
+                likelyReplyNeededCount: 1,
+                unreadCount: 1,
+              });
+              expect(triageRes.data.messages).toEqual(
+                expect.arrayContaining([
+                  expect.objectContaining({
+                    subject: "Design review agenda",
+                    isImportant: true,
+                    likelyReplyNeeded: true,
+                  }),
+                ]),
+              );
+
+              const statusRes = await req(
+                port,
+                "GET",
+                "/api/lifeops/connectors/google/status",
+              );
+              expect(statusRes.status).toBe(200);
+              expect(statusRes.data.grantedCapabilities).toEqual(
+                expect.arrayContaining(["google.gmail.triage"]),
+              );
+              expect(statusRes.data.grantedCapabilities).not.toContain(
+                "google.gmail.send",
+              );
+            },
+          );
+        });
+        continue;
+      }
+
+      if (scenario.id === "P1-08") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          await withGoogleOAuthApiServer(
+            {
+              MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID: "desktop-client-id",
+            },
+            async ({ port, fetchMock }) => {
+              fetchMock.mockResolvedValueOnce(
+                new Response(
+                  JSON.stringify({
+                    access_token: "gmail-draft-token",
+                    refresh_token: "gmail-draft-refresh",
+                    expires_in: 3600,
+                    scope: [
+                      "openid",
+                      "email",
+                      "profile",
+                      "https://www.googleapis.com/auth/gmail.metadata",
+                    ].join(" "),
+                    token_type: "Bearer",
+                    id_token: buildIdToken({
+                      sub: "google-user-gmail-draft",
+                      email: "gmail-draft@example.com",
+                      name: "Gmail Draft Example",
+                      email_verified: true,
+                    }),
+                  }),
+                  {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                  },
+                ),
+              );
+
+              const startRes = await req(
+                port,
+                "POST",
+                "/api/lifeops/connectors/google/start",
+                { capabilities: ["google.gmail.triage"] },
+              );
+              const authUrl = new URL(String(startRes.data.authUrl));
+              await req(
+                port,
+                "GET",
+                `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(authUrl.searchParams.get("state") ?? "")}&code=gmail-draft-code`,
+              );
+
+              fetchMock.mockImplementation(async (input) => {
+                const url = typeof input === "string" ? input : input.toString();
+                if (url.startsWith("https://gmail.googleapis.com/gmail/v1/users/me/messages?")) {
+                  return new Response(
+                    JSON.stringify({
+                      messages: [{ id: "msg-prd-2", threadId: "thread-prd-2" }],
+                    }),
+                    {
+                      status: 200,
+                      headers: { "content-type": "application/json" },
+                    },
+                  );
+                }
+                if (url.includes("/gmail/v1/users/me/messages/msg-prd-2?")) {
+                  return new Response(
+                    JSON.stringify({
+                      id: "msg-prd-2",
+                      threadId: "thread-prd-2",
+                      labelIds: ["INBOX", "UNREAD"],
+                      snippet: "Please send the revised plan when you can.",
+                      internalDate: String(Date.now() - 5 * 60_000),
+                      payload: {
+                        headers: [
+                          { name: "Subject", value: "Revised plan" },
+                          { name: "From", value: "Mira <mira@example.com>" },
+                          { name: "To", value: "gmail-draft@example.com" },
+                          { name: "Message-Id", value: "<message-prd-2@example.com>" },
+                        ],
+                      },
+                    }),
+                    {
+                      status: 200,
+                      headers: { "content-type": "application/json" },
+                    },
+                  );
+                }
+                throw new Error(`Unexpected fetch: ${url}`);
+              });
+
+              const triageRes = await req(port, "GET", "/api/lifeops/gmail/triage");
+              expect(triageRes.status).toBe(200);
+              const messageId = String(triageRes.data.messages[0].id);
+
+              const draftRes = await req(
+                port,
+                "POST",
+                "/api/lifeops/gmail/reply-drafts",
+                {
+                  messageId,
+                  intent: "I will send the revised plan this afternoon.",
+                },
+              );
+              expect(draftRes.status).toBe(201);
+              expect(draftRes.data.draft).toMatchObject({
+                sendAllowed: false,
+                requiresConfirmation: true,
+                to: ["mira@example.com"],
+              });
+
+              const blockedSendRes = await req(
+                port,
+                "POST",
+                "/api/lifeops/gmail/reply-send",
+                {
+                  messageId,
+                  bodyText: "Sending the revised plan shortly.",
+                  confirmSend: false,
+                },
+              );
+              expect(blockedSendRes.status).toBe(409);
+              expect(String(blockedSendRes.data.error)).toContain(
+                "explicit confirmation",
+              );
+            },
+          );
+        });
+        continue;
+      }
+
+      if (scenario.id === "P1-09") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          await withGoogleOAuthApiServer(
+            {
+              MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID: "desktop-client-id",
+            },
+            async ({ port, fetchMock }) => {
+              fetchMock.mockResolvedValueOnce(
+                new Response(
+                  JSON.stringify({
+                    access_token: "calendar-only-token",
+                    refresh_token: "calendar-only-refresh",
+                    expires_in: 3600,
+                    scope: [
+                      "openid",
+                      "email",
+                      "profile",
+                      "https://www.googleapis.com/auth/calendar.readonly",
+                    ].join(" "),
+                    token_type: "Bearer",
+                    id_token: buildIdToken({
+                      sub: "google-user-calendar-only",
+                      email: "calendar-only@example.com",
+                      name: "Calendar Only Example",
+                      email_verified: true,
+                    }),
+                  }),
+                  {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                  },
+                ),
+              );
+
+              const calendarStartRes = await req(
+                port,
+                "POST",
+                "/api/lifeops/connectors/google/start",
+                { capabilities: ["google.calendar.read"] },
+              );
+              const calendarAuthUrl = new URL(String(calendarStartRes.data.authUrl));
+              await req(
+                port,
+                "GET",
+                `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(calendarAuthUrl.searchParams.get("state") ?? "")}&code=calendar-only-code`,
+              );
+
+              fetchMock.mockResolvedValueOnce(
+                new Response(
+                  JSON.stringify({
+                    access_token: "gmail-upgrade-token",
+                    refresh_token: "gmail-upgrade-refresh",
+                    expires_in: 3600,
+                    scope: [
+                      "openid",
+                      "email",
+                      "profile",
+                      "https://www.googleapis.com/auth/calendar.readonly",
+                      "https://www.googleapis.com/auth/gmail.metadata",
+                    ].join(" "),
+                    token_type: "Bearer",
+                    id_token: buildIdToken({
+                      sub: "google-user-calendar-only",
+                      email: "calendar-only@example.com",
+                      name: "Calendar Only Example",
+                      email_verified: true,
+                    }),
+                  }),
+                  {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                  },
+                ),
+              );
+
+              const gmailStartRes = await req(
+                port,
+                "POST",
+                "/api/lifeops/connectors/google/start",
+                { capabilities: ["google.gmail.triage"] },
+              );
+              expect(gmailStartRes.status).toBe(200);
+              expect(gmailStartRes.data.requestedCapabilities).toEqual(
+                expect.arrayContaining([
+                  "google.basic_identity",
+                  "google.calendar.read",
+                  "google.gmail.triage",
+                ]),
+              );
+
+              const gmailAuthUrl = new URL(String(gmailStartRes.data.authUrl));
+              const callbackRes = await req(
+                port,
+                "GET",
+                `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(gmailAuthUrl.searchParams.get("state") ?? "")}&code=gmail-upgrade-code`,
+              );
+              expect(callbackRes.status).toBe(200);
+
+              const statusRes = await req(
+                port,
+                "GET",
+                "/api/lifeops/connectors/google/status",
+              );
+              expect(statusRes.status).toBe(200);
+              expect(statusRes.data.grantedCapabilities).toEqual(
+                expect.arrayContaining([
+                  "google.calendar.read",
+                  "google.gmail.triage",
+                ]),
+              );
+            },
+          );
+        });
+        continue;
+      }
+
       it.todo(`[${scenario.id}] ${scenario.title}`);
     }
   });

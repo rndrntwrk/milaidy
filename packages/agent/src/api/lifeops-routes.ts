@@ -4,10 +4,13 @@ import type { ReadJsonBodyOptions } from "./http-helpers.js";
 import type {
   CompleteLifeOpsOccurrenceRequest,
   CreateLifeOpsCalendarEventRequest,
+  CreateLifeOpsGmailReplyDraftRequest,
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,
   DisconnectLifeOpsGoogleConnectorRequest,
   GetLifeOpsCalendarFeedRequest,
+  GetLifeOpsGmailTriageRequest,
+  SendLifeOpsGmailReplyRequest,
   SnoozeLifeOpsOccurrenceRequest,
   StartLifeOpsGoogleConnectorRequest,
   UpdateLifeOpsDefinitionRequest,
@@ -202,11 +205,58 @@ export async function handleLifeOpsRoutes(
     });
   }
 
+  if (method === "GET" && pathname === "/api/lifeops/gmail/triage") {
+    return runRoute(ctx, async (service) => {
+      const rawMode = url.searchParams.get("mode");
+      const rawForceSync = url.searchParams.get("forceSync");
+      if (rawMode !== null && rawMode !== "local" && rawMode !== "remote") {
+        throw new LifeOpsServiceError(400, "mode must be one of: local, remote");
+      }
+      if (
+        rawForceSync !== null &&
+        rawForceSync !== "true" &&
+        rawForceSync !== "false" &&
+        rawForceSync !== "1" &&
+        rawForceSync !== "0"
+      ) {
+        throw new LifeOpsServiceError(400, "forceSync must be a boolean");
+      }
+      const request: GetLifeOpsGmailTriageRequest = {
+        mode: (rawMode ?? undefined) as "local" | "remote" | undefined,
+        forceSync:
+          rawForceSync === null
+            ? undefined
+            : rawForceSync === "true" || rawForceSync === "1",
+        maxResults:
+          url.searchParams.get("maxResults") === null
+            ? undefined
+            : Number(url.searchParams.get("maxResults")),
+      };
+      json(res, await service.getGmailTriage(url, request));
+    });
+  }
+
   if (method === "POST" && pathname === "/api/lifeops/calendar/events") {
     const body = await readJsonBody<CreateLifeOpsCalendarEventRequest>(req, res);
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, { event: await service.createCalendarEvent(url, body) }, 201);
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/gmail/reply-drafts") {
+    const body = await readJsonBody<CreateLifeOpsGmailReplyDraftRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, { draft: await service.createGmailReplyDraft(url, body) }, 201);
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/gmail/reply-send") {
+    const body = await readJsonBody<SendLifeOpsGmailReplyRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.sendGmailReply(url, body));
     });
   }
 

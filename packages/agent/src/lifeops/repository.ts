@@ -5,6 +5,7 @@ import type {
   LifeOpsCalendarEvent,
   LifeOpsChannelPolicy,
   LifeOpsConnectorGrant,
+  LifeOpsGmailMessageSummary,
   LifeOpsGoalDefinition,
   LifeOpsGoalLink,
   LifeOpsOccurrence,
@@ -227,6 +228,36 @@ function parseCalendarEvent(row: Record<string, unknown>): LifeOpsCalendarEvent 
   };
 }
 
+function parseGmailMessageSummary(
+  row: Record<string, unknown>,
+): LifeOpsGmailMessageSummary {
+  return {
+    id: toText(row.id),
+    externalId: toText(row.external_message_id),
+    agentId: toText(row.agent_id),
+    provider: "google",
+    threadId: toText(row.thread_id),
+    subject: toText(row.subject),
+    from: toText(row.from_display),
+    fromEmail: row.from_email ? toText(row.from_email) : null,
+    replyTo: row.reply_to ? toText(row.reply_to) : null,
+    to: parseJsonArray(row.to_json),
+    cc: parseJsonArray(row.cc_json),
+    snippet: toText(row.snippet),
+    receivedAt: toText(row.received_at),
+    isUnread: toBoolean(row.is_unread),
+    isImportant: toBoolean(row.is_important),
+    likelyReplyNeeded: toBoolean(row.likely_reply_needed),
+    triageScore: toNumber(row.triage_score),
+    triageReason: toText(row.triage_reason),
+    labels: parseJsonArray(row.label_ids_json),
+    htmlLink: row.html_link ? toText(row.html_link) : null,
+    metadata: parseJsonRecord(row.metadata_json),
+    syncedAt: toText(row.synced_at),
+    updatedAt: toText(row.updated_at),
+  };
+}
+
 interface LifeOpsCalendarSyncState {
   id: string;
   agentId: string;
@@ -248,6 +279,30 @@ function parseCalendarSyncState(
     calendarId: toText(row.calendar_id),
     windowStartAt: toText(row.window_start_at),
     windowEndAt: toText(row.window_end_at),
+    syncedAt: toText(row.synced_at),
+    updatedAt: toText(row.updated_at),
+  };
+}
+
+interface LifeOpsGmailSyncState {
+  id: string;
+  agentId: string;
+  provider: LifeOpsConnectorGrant["provider"];
+  mailbox: string;
+  maxResults: number;
+  syncedAt: string;
+  updatedAt: string;
+}
+
+function parseGmailSyncState(
+  row: Record<string, unknown>,
+): LifeOpsGmailSyncState {
+  return {
+    id: toText(row.id),
+    agentId: toText(row.agent_id),
+    provider: toText(row.provider) as LifeOpsConnectorGrant["provider"],
+    mailbox: toText(row.mailbox),
+    maxResults: toNumber(row.max_results, 0),
     syncedAt: toText(row.synced_at),
     updatedAt: toText(row.updated_at),
   };
@@ -419,6 +474,42 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
       updated_at TEXT NOT NULL,
       UNIQUE(agent_id, provider, calendar_id)
     )`,
+    `CREATE TABLE IF NOT EXISTS life_gmail_messages (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      external_message_id TEXT NOT NULL,
+      thread_id TEXT NOT NULL,
+      subject TEXT NOT NULL DEFAULT '',
+      from_display TEXT NOT NULL DEFAULT '',
+      from_email TEXT,
+      reply_to TEXT,
+      to_json TEXT NOT NULL DEFAULT '[]',
+      cc_json TEXT NOT NULL DEFAULT '[]',
+      snippet TEXT NOT NULL DEFAULT '',
+      received_at TEXT NOT NULL,
+      is_unread BOOLEAN NOT NULL DEFAULT FALSE,
+      is_important BOOLEAN NOT NULL DEFAULT FALSE,
+      likely_reply_needed BOOLEAN NOT NULL DEFAULT FALSE,
+      triage_score INTEGER NOT NULL DEFAULT 0,
+      triage_reason TEXT NOT NULL DEFAULT '',
+      label_ids_json TEXT NOT NULL DEFAULT '[]',
+      html_link TEXT,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      synced_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(agent_id, provider, external_message_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS life_gmail_sync_states (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      mailbox TEXT NOT NULL,
+      max_results INTEGER NOT NULL DEFAULT 0,
+      synced_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(agent_id, provider, mailbox)
+    )`,
     `CREATE TABLE IF NOT EXISTS life_channel_policies (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
@@ -462,6 +553,10 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
       ON life_calendar_events(agent_id, provider, start_at, end_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_calendar_sync_states_agent
       ON life_calendar_sync_states(agent_id, provider, calendar_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_gmail_messages_priority
+      ON life_gmail_messages(agent_id, provider, triage_score, received_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_gmail_sync_states_agent
+      ON life_gmail_sync_states(agent_id, provider, mailbox)`,
   ];
 
   for (const statement of statements) {
@@ -1306,6 +1401,208 @@ export class LifeOpsRepository {
     );
   }
 
+  async upsertGmailMessage(message: LifeOpsGmailMessageSummary): Promise<void> {
+    await this.ensureReady();
+    await executeRawSql(
+      this.runtime,
+      `INSERT INTO life_gmail_messages (
+        id, agent_id, provider, external_message_id, thread_id, subject,
+        from_display, from_email, reply_to, to_json, cc_json, snippet,
+        received_at, is_unread, is_important, likely_reply_needed,
+        triage_score, triage_reason, label_ids_json, html_link, metadata_json,
+        synced_at, updated_at
+      ) VALUES (
+        ${sqlQuote(message.id)},
+        ${sqlQuote(message.agentId)},
+        ${sqlQuote(message.provider)},
+        ${sqlQuote(message.externalId)},
+        ${sqlQuote(message.threadId)},
+        ${sqlQuote(message.subject)},
+        ${sqlQuote(message.from)},
+        ${sqlText(message.fromEmail)},
+        ${sqlText(message.replyTo)},
+        ${sqlJson(message.to)},
+        ${sqlJson(message.cc)},
+        ${sqlQuote(message.snippet)},
+        ${sqlQuote(message.receivedAt)},
+        ${sqlBoolean(message.isUnread)},
+        ${sqlBoolean(message.isImportant)},
+        ${sqlBoolean(message.likelyReplyNeeded)},
+        ${sqlInteger(message.triageScore)},
+        ${sqlQuote(message.triageReason)},
+        ${sqlJson(message.labels)},
+        ${sqlText(message.htmlLink)},
+        ${sqlJson(message.metadata)},
+        ${sqlQuote(message.syncedAt)},
+        ${sqlQuote(message.updatedAt)}
+      )
+      ON CONFLICT(agent_id, provider, external_message_id) DO UPDATE SET
+        thread_id = excluded.thread_id,
+        subject = excluded.subject,
+        from_display = excluded.from_display,
+        from_email = excluded.from_email,
+        reply_to = excluded.reply_to,
+        to_json = excluded.to_json,
+        cc_json = excluded.cc_json,
+        snippet = excluded.snippet,
+        received_at = excluded.received_at,
+        is_unread = excluded.is_unread,
+        is_important = excluded.is_important,
+        likely_reply_needed = excluded.likely_reply_needed,
+        triage_score = excluded.triage_score,
+        triage_reason = excluded.triage_reason,
+        label_ids_json = excluded.label_ids_json,
+        html_link = excluded.html_link,
+        metadata_json = excluded.metadata_json,
+        synced_at = excluded.synced_at,
+        updated_at = excluded.updated_at`,
+    );
+  }
+
+  async pruneGmailMessages(
+    agentId: string,
+    provider: LifeOpsConnectorGrant["provider"],
+    keepExternalIds: readonly string[],
+  ): Promise<void> {
+    await this.ensureReady();
+    const keepClause =
+      keepExternalIds.length > 0
+        ? `AND external_message_id NOT IN (${keepExternalIds
+            .map((externalId) => sqlQuote(externalId))
+            .join(", ")})`
+        : "";
+    await executeRawSql(
+      this.runtime,
+      `DELETE FROM life_gmail_messages
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND provider = ${sqlQuote(provider)}
+          ${keepClause}`,
+    );
+  }
+
+  async listGmailMessages(
+    agentId: string,
+    provider: LifeOpsConnectorGrant["provider"],
+    options?: {
+      maxResults?: number;
+      threadId?: string;
+      since?: string;
+    },
+  ): Promise<LifeOpsGmailMessageSummary[]> {
+    await this.ensureReady();
+    const maxResultsClause =
+      options?.maxResults !== undefined && Number.isFinite(options.maxResults)
+        ? `LIMIT ${sqlInteger(options.maxResults)}`
+        : "";
+    const threadClause = options?.threadId
+      ? `AND thread_id = ${sqlQuote(options.threadId)}`
+      : "";
+    const sinceClause = options?.since
+      ? `AND received_at >= ${sqlQuote(options.since)}`
+      : "";
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_gmail_messages
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND provider = ${sqlQuote(provider)}
+          ${threadClause}
+          ${sinceClause}
+        ORDER BY triage_score DESC, received_at DESC
+        ${maxResultsClause}`,
+    );
+    return rows.map(parseGmailMessageSummary);
+  }
+
+  async getGmailMessage(
+    agentId: string,
+    provider: LifeOpsConnectorGrant["provider"],
+    messageId: string,
+  ): Promise<LifeOpsGmailMessageSummary | null> {
+    await this.ensureReady();
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_gmail_messages
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND provider = ${sqlQuote(provider)}
+          AND id = ${sqlQuote(messageId)}
+        LIMIT 1`,
+    );
+    const row = rows[0];
+    return row ? parseGmailMessageSummary(row) : null;
+  }
+
+  async deleteGmailMessagesForProvider(
+    agentId: string,
+    provider: LifeOpsConnectorGrant["provider"],
+  ): Promise<void> {
+    await this.ensureReady();
+    await executeRawSql(
+      this.runtime,
+      `DELETE FROM life_gmail_messages
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND provider = ${sqlQuote(provider)}`,
+    );
+  }
+
+  async upsertGmailSyncState(state: LifeOpsGmailSyncState): Promise<void> {
+    await this.ensureReady();
+    await executeRawSql(
+      this.runtime,
+      `INSERT INTO life_gmail_sync_states (
+        id, agent_id, provider, mailbox, max_results, synced_at, updated_at
+      ) VALUES (
+        ${sqlQuote(state.id)},
+        ${sqlQuote(state.agentId)},
+        ${sqlQuote(state.provider)},
+        ${sqlQuote(state.mailbox)},
+        ${sqlInteger(state.maxResults)},
+        ${sqlQuote(state.syncedAt)},
+        ${sqlQuote(state.updatedAt)}
+      )
+      ON CONFLICT(agent_id, provider, mailbox) DO UPDATE SET
+        max_results = excluded.max_results,
+        synced_at = excluded.synced_at,
+        updated_at = excluded.updated_at`,
+    );
+  }
+
+  async getGmailSyncState(
+    agentId: string,
+    provider: LifeOpsConnectorGrant["provider"],
+    mailbox: string,
+  ): Promise<LifeOpsGmailSyncState | null> {
+    await this.ensureReady();
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_gmail_sync_states
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND provider = ${sqlQuote(provider)}
+          AND mailbox = ${sqlQuote(mailbox)}
+        LIMIT 1`,
+    );
+    const row = rows[0];
+    return row ? parseGmailSyncState(row) : null;
+  }
+
+  async deleteGmailSyncState(
+    agentId: string,
+    provider: LifeOpsConnectorGrant["provider"],
+    mailbox?: string,
+  ): Promise<void> {
+    await this.ensureReady();
+    const mailboxClause = mailbox ? `AND mailbox = ${sqlQuote(mailbox)}` : "";
+    await executeRawSql(
+      this.runtime,
+      `DELETE FROM life_gmail_sync_states
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND provider = ${sqlQuote(provider)}
+          ${mailboxClause}`,
+    );
+  }
+
   async createWorkflow(definition: LifeOpsWorkflowDefinition): Promise<void> {
     await this.ensureReady();
     await executeRawSql(
@@ -1431,6 +1728,16 @@ export function createLifeOpsConnectorGrant(
 export function createLifeOpsCalendarSyncState(
   params: Omit<LifeOpsCalendarSyncState, "id" | "updatedAt">,
 ): LifeOpsCalendarSyncState {
+  return {
+    ...params,
+    id: crypto.randomUUID(),
+    updatedAt: isoNow(),
+  };
+}
+
+export function createLifeOpsGmailSyncState(
+  params: Omit<LifeOpsGmailSyncState, "id" | "updatedAt">,
+): LifeOpsGmailSyncState {
   return {
     ...params,
     id: crypto.randomUUID(),

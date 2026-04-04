@@ -1,0 +1,422 @@
+import type { LifeOpsGmailMessageSummary } from "@miladyai/shared/contracts/lifeops";
+
+const GOOGLE_GMAIL_MESSAGES_ENDPOINT =
+  "https://gmail.googleapis.com/gmail/v1/users/me/messages";
+
+const GMAIL_METADATA_HEADERS = [
+  "Subject",
+  "From",
+  "To",
+  "Cc",
+  "Date",
+  "Reply-To",
+  "Message-Id",
+  "References",
+  "List-Id",
+  "Precedence",
+  "Auto-Submitted",
+] as const;
+
+interface GoogleGmailListResponse {
+  messages?: Array<{
+    id?: string;
+    threadId?: string;
+  }>;
+}
+
+interface GoogleGmailMetadataHeader {
+  name?: string;
+  value?: string;
+}
+
+interface GoogleGmailMetadataResponse {
+  id?: string;
+  threadId?: string;
+  labelIds?: string[];
+  snippet?: string;
+  internalDate?: string;
+  historyId?: string;
+  sizeEstimate?: number;
+  payload?: {
+    headers?: GoogleGmailMetadataHeader[];
+  };
+}
+
+export interface SyncedGoogleGmailMessageSummary
+  extends Omit<
+    LifeOpsGmailMessageSummary,
+    "id" | "agentId" | "provider" | "syncedAt" | "updatedAt"
+  > {}
+
+function readGoogleGmailErrorPrefix(status: number): string {
+  return `Google Gmail request failed with ${status}`;
+}
+
+async function readGoogleGmailError(response: Response): Promise<string> {
+  const text = await response.text();
+  if (!text) {
+    return readGoogleGmailErrorPrefix(response.status);
+  }
+  try {
+    const parsed = JSON.parse(text) as {
+      error?: {
+        message?: string;
+      };
+    };
+    return parsed.error?.message || text;
+  } catch {
+    return text;
+  }
+}
+
+function splitMailboxHeader(value: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  let angleDepth = 0;
+
+  for (const char of value) {
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      current += char;
+      continue;
+    }
+    if (!inQuotes && char === "<") {
+      angleDepth += 1;
+      current += char;
+      continue;
+    }
+    if (!inQuotes && char === ">") {
+      angleDepth = Math.max(0, angleDepth - 1);
+      current += char;
+      continue;
+    }
+    if (!inQuotes && angleDepth === 0 && char === ",") {
+      const trimmed = current.trim();
+      if (trimmed.length > 0) {
+        parts.push(trimmed);
+      }
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+
+  const trimmed = current.trim();
+  if (trimmed.length > 0) {
+    parts.push(trimmed);
+  }
+  return parts;
+}
+
+function stripQuotedDisplayName(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function parseMailbox(value: string): { display: string; email: string | null } {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(.*?)(?:<([^>]+)>)$/);
+  if (match) {
+    const display = stripQuotedDisplayName(match[1] ?? "").trim();
+    const email = (match[2] ?? "").trim().toLowerCase();
+    return {
+      display: display || email,
+      email: email.length > 0 ? email : null,
+    };
+  }
+  const normalized = stripQuotedDisplayName(trimmed);
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalized)) {
+    return {
+      display: normalized,
+      email: normalized.toLowerCase(),
+    };
+  }
+  return {
+    display: normalized,
+    email: null,
+  };
+}
+
+function parseMailboxList(value: string | undefined): Array<{ display: string; email: string | null }> {
+  if (!value) {
+    return [];
+  }
+  return splitMailboxHeader(value)
+    .map((entry) => parseMailbox(entry))
+    .filter((entry) => entry.display.length > 0 || entry.email !== null);
+}
+
+function readHeaderValue(
+  headers: GoogleGmailMetadataHeader[] | undefined,
+  name: string,
+): string | undefined {
+  const lowerName = name.toLowerCase();
+  const header = headers?.find(
+    (candidate) => candidate.name?.trim().toLowerCase() === lowerName,
+  );
+  const value = header?.value?.trim();
+  return value && value.length > 0 ? value : undefined;
+}
+
+function normalizeReplySubject(subject: string): string {
+  const trimmed = subject.trim();
+  if (trimmed.length === 0) {
+    return "Re: your message";
+  }
+  return /^re:/i.test(trimmed) ? trimmed : `Re: ${trimmed}`;
+}
+
+function normalizeSnippet(value: string | undefined): string {
+  return value?.replace(/\s+/g, " ").trim() || "";
+}
+
+function deriveHtmlLink(threadId: string): string {
+  return `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(threadId)}`;
+}
+
+function classifyReplyNeed(args: {
+  labels: string[];
+  fromEmail: string | null;
+  to: string[];
+  cc: string[];
+  selfEmail: string | null;
+  precedence: string | undefined;
+  listId: string | undefined;
+  autoSubmitted: string | undefined;
+}): { likelyReplyNeeded: boolean; isImportant: boolean; triageScore: number; triageReason: string } {
+  const labels = new Set(args.labels.map((label) => label.trim().toUpperCase()));
+  const isUnread = labels.has("UNREAD");
+  const explicitlyImportant = labels.has("IMPORTANT");
+  const selfEmail = args.selfEmail?.trim().toLowerCase() || null;
+  const fromEmail = args.fromEmail?.trim().toLowerCase() || null;
+  const directRecipients = [...args.to, ...args.cc].map((entry) => entry.trim().toLowerCase());
+  const directlyAddressed = selfEmail ? directRecipients.includes(selfEmail) : false;
+  const fromSelf = Boolean(selfEmail && fromEmail && selfEmail === fromEmail);
+  const precedence = args.precedence?.trim().toLowerCase();
+  const autoSubmitted = args.autoSubmitted?.trim().toLowerCase();
+  const automated =
+    Boolean(fromEmail && /(?:^|\b)(?:no-?reply|donotreply|notifications?|mailer-daemon)(?:\b|@)/i.test(fromEmail)) ||
+    Boolean(args.listId) ||
+    precedence === "bulk" ||
+    precedence === "list" ||
+    precedence === "junk" ||
+    (autoSubmitted !== undefined && autoSubmitted !== "no");
+
+  let triageScore = 0;
+  const reasons: string[] = [];
+
+  if (isUnread) {
+    triageScore += 30;
+    reasons.push("unread");
+  }
+  if (explicitlyImportant) {
+    triageScore += 35;
+    reasons.push("important label");
+  }
+  if (directlyAddressed) {
+    triageScore += 15;
+    reasons.push("directly addressed");
+  }
+  if (!automated && !fromSelf && isUnread && directlyAddressed) {
+    triageScore += 30;
+    reasons.push("likely needs reply");
+  }
+  if (automated) {
+    triageScore -= 25;
+    reasons.push("automated sender");
+  }
+  if (fromSelf) {
+    triageScore -= 60;
+    reasons.push("sent by self");
+  }
+
+  const likelyReplyNeeded =
+    !automated && !fromSelf && isUnread && directlyAddressed;
+  const isImportant = explicitlyImportant || likelyReplyNeeded;
+  const triageReason = reasons.join(", ") || "recent inbox message";
+
+  return {
+    likelyReplyNeeded,
+    isImportant,
+    triageScore: Math.max(0, triageScore),
+    triageReason,
+  };
+}
+
+function normalizeGoogleGmailMessage(
+  message: GoogleGmailMetadataResponse,
+  selfEmail: string | null,
+): SyncedGoogleGmailMessageSummary | null {
+  const externalId = message.id?.trim();
+  const threadId = message.threadId?.trim();
+  if (!externalId || !threadId) {
+    return null;
+  }
+
+  const headers = message.payload?.headers ?? [];
+  const subject = readHeaderValue(headers, "Subject") || "(no subject)";
+  const fromHeader = readHeaderValue(headers, "From") || "Unknown sender";
+  const fromMailbox = parseMailbox(fromHeader);
+  const replyToHeader = readHeaderValue(headers, "Reply-To");
+  const replyToMailbox = replyToHeader ? parseMailbox(replyToHeader) : null;
+  const to = parseMailboxList(readHeaderValue(headers, "To")).map(
+    (entry) => entry.email || entry.display,
+  );
+  const cc = parseMailboxList(readHeaderValue(headers, "Cc")).map(
+    (entry) => entry.email || entry.display,
+  );
+  const labels = (message.labelIds ?? []).map((label) => label.trim()).filter(Boolean);
+  const receivedAtMs = Number(message.internalDate);
+  const receivedAt = Number.isFinite(receivedAtMs)
+    ? new Date(receivedAtMs).toISOString()
+    : new Date().toISOString();
+  const precedence = readHeaderValue(headers, "Precedence");
+  const listId = readHeaderValue(headers, "List-Id");
+  const autoSubmitted = readHeaderValue(headers, "Auto-Submitted");
+  const triage = classifyReplyNeed({
+    labels,
+    fromEmail: fromMailbox.email,
+    to,
+    cc,
+    selfEmail,
+    precedence,
+    listId,
+    autoSubmitted,
+  });
+
+  return {
+    externalId,
+    threadId,
+    subject,
+    from: fromMailbox.display,
+    fromEmail: fromMailbox.email,
+    replyTo: replyToMailbox?.email || replyToMailbox?.display || null,
+    to,
+    cc,
+    snippet: normalizeSnippet(message.snippet),
+    receivedAt,
+    isUnread: labels.includes("UNREAD"),
+    isImportant: triage.isImportant,
+    likelyReplyNeeded: triage.likelyReplyNeeded,
+    triageScore: triage.triageScore,
+    triageReason: triage.triageReason,
+    labels,
+    htmlLink: deriveHtmlLink(threadId),
+    metadata: {
+      historyId: message.historyId?.trim() || null,
+      sizeEstimate: typeof message.sizeEstimate === "number" ? message.sizeEstimate : null,
+      dateHeader: readHeaderValue(headers, "Date") || null,
+      messageIdHeader: readHeaderValue(headers, "Message-Id") || null,
+      referencesHeader: readHeaderValue(headers, "References") || null,
+      listId: listId || null,
+      precedence: precedence || null,
+      autoSubmitted: autoSubmitted || null,
+    },
+  };
+}
+
+export async function fetchGoogleGmailTriageMessages(args: {
+  accessToken: string;
+  selfEmail?: string | null;
+  maxResults?: number;
+}): Promise<SyncedGoogleGmailMessageSummary[]> {
+  const maxResults = args.maxResults && args.maxResults > 0 ? Math.min(args.maxResults, 50) : 20;
+  const listParams = new URLSearchParams({
+    maxResults: String(maxResults),
+    includeSpamTrash: "false",
+  });
+  listParams.append("labelIds", "INBOX");
+
+  const listResponse = await fetch(
+    `${GOOGLE_GMAIL_MESSAGES_ENDPOINT}?${listParams.toString()}`,
+    {
+      headers: {
+        Authorization: `Bearer ${args.accessToken}`,
+      },
+    },
+  );
+
+  if (!listResponse.ok) {
+    throw new Error(await readGoogleGmailError(listResponse));
+  }
+
+  const listed = (await listResponse.json()) as GoogleGmailListResponse;
+  const messages = await Promise.all(
+    (listed.messages ?? []).map(async (messageRef) => {
+      const messageId = messageRef.id?.trim();
+      if (!messageId) {
+        return null;
+      }
+      const params = new URLSearchParams({
+        format: "metadata",
+      });
+      for (const header of GMAIL_METADATA_HEADERS) {
+        params.append("metadataHeaders", header);
+      }
+
+      const response = await fetch(
+        `${GOOGLE_GMAIL_MESSAGES_ENDPOINT}/${encodeURIComponent(messageId)}?${params.toString()}`,
+        {
+          headers: {
+            Authorization: `Bearer ${args.accessToken}`,
+          },
+        },
+      );
+      if (!response.ok) {
+        throw new Error(await readGoogleGmailError(response));
+      }
+      const parsed = (await response.json()) as GoogleGmailMetadataResponse;
+      return normalizeGoogleGmailMessage(parsed, args.selfEmail ?? null);
+    }),
+  );
+
+  return messages
+    .filter((message): message is SyncedGoogleGmailMessageSummary => message !== null)
+    .sort((left, right) => {
+      const scoreDelta = right.triageScore - left.triageScore;
+      if (scoreDelta !== 0) {
+        return scoreDelta;
+      }
+      return Date.parse(right.receivedAt) - Date.parse(left.receivedAt);
+    });
+}
+
+export async function sendGoogleGmailReply(args: {
+  accessToken: string;
+  to: string[];
+  cc?: string[];
+  subject: string;
+  bodyText: string;
+  inReplyTo?: string | null;
+  references?: string | null;
+}): Promise<void> {
+  const lines = [
+    `To: ${args.to.join(", ")}`,
+    ...(args.cc && args.cc.length > 0 ? [`Cc: ${args.cc.join(", ")}`] : []),
+    `Subject: ${normalizeReplySubject(args.subject)}`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=UTF-8",
+    ...(args.inReplyTo ? [`In-Reply-To: ${args.inReplyTo}`] : []),
+    ...(args.references ? [`References: ${args.references}`] : []),
+    "",
+    args.bodyText.replace(/\r?\n/g, "\r\n"),
+  ];
+  const raw = Buffer.from(lines.join("\r\n"), "utf-8").toString("base64url");
+
+  const response = await fetch(`${GOOGLE_GMAIL_MESSAGES_ENDPOINT}/send`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${args.accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ raw }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readGoogleGmailError(response));
+  }
+}

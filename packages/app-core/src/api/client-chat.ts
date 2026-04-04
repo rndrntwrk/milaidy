@@ -9,7 +9,9 @@ import type {
   ConnectionTestResult,
   ContentBlock,
   CreateLifeOpsCalendarEventRequest,
+  CreateLifeOpsGmailReplyDraftRequest,
   GetLifeOpsCalendarFeedRequest,
+  GetLifeOpsGmailTriageRequest,
   DisconnectLifeOpsGoogleConnectorRequest,
   Conversation,
   ConversationChannelType,
@@ -21,6 +23,8 @@ import type {
   DatabaseStatus,
   ImageAttachment,
   LifeOpsGoogleConnectorStatus,
+  LifeOpsGmailReplyDraft,
+  LifeOpsGmailTriageFeed,
   KnowledgeBulkUploadResult,
   KnowledgeDocumentDetail,
   KnowledgeDocumentsResponse,
@@ -42,6 +46,7 @@ import type {
   MemorySearchResponse,
   QueryResult,
   QuickContextResponse,
+  SendLifeOpsGmailReplyRequest,
   ShareIngestItem,
   ShareIngestPayload,
   StartLifeOpsGoogleConnectorRequest,
@@ -219,12 +224,21 @@ declare module "./client-base" {
     getLifeOpsCalendarFeed(
       options?: GetLifeOpsCalendarFeedRequest,
     ): Promise<LifeOpsCalendarFeed>;
+    getLifeOpsGmailTriage(
+      options?: GetLifeOpsGmailTriageRequest,
+    ): Promise<LifeOpsGmailTriageFeed>;
     getLifeOpsNextCalendarEventContext(
       options?: GetLifeOpsCalendarFeedRequest,
     ): Promise<LifeOpsNextCalendarEventContext>;
     createLifeOpsCalendarEvent(
       data: CreateLifeOpsCalendarEventRequest,
     ): Promise<{ event: LifeOpsCalendarFeed["events"][number] }>;
+    createLifeOpsGmailReplyDraft(
+      data: CreateLifeOpsGmailReplyDraftRequest,
+    ): Promise<{ draft: LifeOpsGmailReplyDraft }>;
+    sendLifeOpsGmailReply(
+      data: SendLifeOpsGmailReplyRequest,
+    ): Promise<{ ok: true }>;
     listLifeOpsDefinitions(): Promise<{ definitions: LifeOpsDefinitionRecord[] }>;
     getLifeOpsDefinition(definitionId: string): Promise<LifeOpsDefinitionRecord>;
     createLifeOpsDefinition(
@@ -796,6 +810,24 @@ MiladyClient.prototype.getLifeOpsCalendarFeed = async function (
   return this.fetch(`/api/lifeops/calendar/feed${query ? `?${query}` : ""}`);
 };
 
+MiladyClient.prototype.getLifeOpsGmailTriage = async function (
+  this: MiladyClient,
+  options = {},
+) {
+  const params = new URLSearchParams();
+  if (options.mode) {
+    params.set("mode", options.mode);
+  }
+  if (options.forceSync !== undefined) {
+    params.set("forceSync", String(options.forceSync));
+  }
+  if (options.maxResults !== undefined) {
+    params.set("maxResults", String(options.maxResults));
+  }
+  const query = params.toString();
+  return this.fetch(`/api/lifeops/gmail/triage${query ? `?${query}` : ""}`);
+};
+
 MiladyClient.prototype.getLifeOpsNextCalendarEventContext = async function (
   this: MiladyClient,
   options = {},
@@ -827,6 +859,26 @@ MiladyClient.prototype.createLifeOpsCalendarEvent = async function (
   data,
 ) {
   return this.fetch("/api/lifeops/calendar/events", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.createLifeOpsGmailReplyDraft = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/gmail/reply-drafts", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.sendLifeOpsGmailReply = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/gmail/reply-send", {
     method: "POST",
     body: JSON.stringify(data),
   });

@@ -8,12 +8,15 @@ const { mockUseApp, mockClient } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
   mockClient: {
     completeLifeOpsOccurrence: vi.fn(),
+    createLifeOpsGmailReplyDraft: vi.fn(),
     disconnectGoogleLifeOpsConnector: vi.fn(),
     getLifeOpsCalendarFeed: vi.fn(),
+    getLifeOpsGmailTriage: vi.fn(),
     getGoogleLifeOpsConnectorStatus: vi.fn(),
     getLifeOpsOverview: vi.fn(),
     getLifeOpsNextCalendarEventContext: vi.fn(),
     listWorkbenchTodos: vi.fn(),
+    sendLifeOpsGmailReply: vi.fn(),
     skipLifeOpsOccurrence: vi.fn(),
     snoozeLifeOpsOccurrence: vi.fn(),
     startGoogleLifeOpsConnector: vi.fn(),
@@ -64,12 +67,15 @@ describe("TasksEventsPanel", () => {
   beforeEach(() => {
     mockUseApp.mockReset();
     mockClient.completeLifeOpsOccurrence.mockReset();
+    mockClient.createLifeOpsGmailReplyDraft.mockReset();
     mockClient.disconnectGoogleLifeOpsConnector.mockReset();
     mockClient.getLifeOpsCalendarFeed.mockReset();
+    mockClient.getLifeOpsGmailTriage.mockReset();
     mockClient.getGoogleLifeOpsConnectorStatus.mockReset();
     mockClient.getLifeOpsOverview.mockReset();
     mockClient.getLifeOpsNextCalendarEventContext.mockReset();
     mockClient.listWorkbenchTodos.mockReset();
+    mockClient.sendLifeOpsGmailReply.mockReset();
     mockClient.skipLifeOpsOccurrence.mockReset();
     mockClient.snoozeLifeOpsOccurrence.mockReset();
     mockClient.startGoogleLifeOpsConnector.mockReset();
@@ -254,12 +260,17 @@ describe("TasksEventsPanel", () => {
       identity: {
         email: "agent@example.com",
       },
-      grantedCapabilities: ["google.basic_identity", "google.calendar.read"],
+      grantedCapabilities: [
+        "google.basic_identity",
+        "google.calendar.read",
+        "google.gmail.triage",
+      ],
       grantedScopes: [
         "openid",
         "email",
         "profile",
         "https://www.googleapis.com/auth/calendar.readonly",
+        "https://www.googleapis.com/auth/gmail.metadata",
       ],
       expiresAt: new Date(Date.now() + 3600_000).toISOString(),
       hasRefreshToken: true,
@@ -273,8 +284,13 @@ describe("TasksEventsPanel", () => {
           "email",
           "profile",
           "https://www.googleapis.com/auth/calendar.readonly",
+          "https://www.googleapis.com/auth/gmail.metadata",
         ],
-        capabilities: ["google.basic_identity", "google.calendar.read"],
+        capabilities: [
+          "google.basic_identity",
+          "google.calendar.read",
+          "google.gmail.triage",
+        ],
         tokenRef: "agent-1/local.json",
         mode: "local",
         metadata: {},
@@ -325,7 +341,52 @@ describe("TasksEventsPanel", () => {
         "Confirm route or access for Studio",
         "Read the event description and agenda notes",
       ],
-      linkedMail: [],
+      linkedMail: [
+        {
+          id: "mail-1",
+          subject: "Design review agenda",
+          from: "Friend",
+          receivedAt: new Date(Date.now() - 15 * 60_000).toISOString(),
+          snippet: "Here is the latest agenda.",
+          htmlLink: "https://mail.google.com/mail/u/0/#all/thread-1",
+        },
+      ],
+    });
+    mockClient.getLifeOpsGmailTriage.mockResolvedValue({
+      messages: [
+        {
+          id: "mail-1",
+          externalId: "gmail-message-1",
+          agentId: "agent-1",
+          provider: "google",
+          threadId: "thread-1",
+          subject: "Design review agenda",
+          from: "Friend",
+          fromEmail: "friend@example.com",
+          replyTo: "friend@example.com",
+          to: ["agent@example.com"],
+          cc: [],
+          snippet: "Here is the latest agenda.",
+          receivedAt: new Date(Date.now() - 15 * 60_000).toISOString(),
+          isUnread: true,
+          isImportant: true,
+          likelyReplyNeeded: true,
+          triageScore: 90,
+          triageReason: "important label, likely needs reply",
+          labels: ["INBOX", "UNREAD", "IMPORTANT"],
+          htmlLink: "https://mail.google.com/mail/u/0/#all/thread-1",
+          metadata: {},
+          syncedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+      source: "synced",
+      syncedAt: new Date().toISOString(),
+      summary: {
+        unreadCount: 1,
+        importantNewCount: 1,
+        likelyReplyNeededCount: 1,
+      },
     });
     mockClient.completeLifeOpsOccurrence.mockResolvedValue({
       occurrence: {
@@ -398,13 +459,16 @@ describe("TasksEventsPanel", () => {
     const normalizedText = text.replace(/\s+/g, " ").trim();
     expect(mockClient.listWorkbenchTodos.mock.calls.length).toBeGreaterThan(0);
     expect(mockClient.getLifeOpsCalendarFeed.mock.calls.length).toBeGreaterThan(0);
+    expect(mockClient.getLifeOpsGmailTriage.mock.calls.length).toBeGreaterThan(0);
     expect(mockClient.getLifeOpsOverview.mock.calls.length).toBeGreaterThan(0);
     expect(mockClient.getLifeOpsNextCalendarEventContext.mock.calls.length).toBeGreaterThan(0);
     expect(mockClient.getGoogleLifeOpsConnectorStatus.mock.calls.length).toBeGreaterThan(0);
-    expect(normalizedText).toContain("google calendar");
+    expect(normalizedText).toContain("google");
     expect(normalizedText).toContain("connected as agent@example.com");
     expect(normalizedText).toContain("next up: design review");
     expect(normalizedText).toContain("design review");
+    expect(normalizedText).toContain("mail: design review agenda");
+    expect(normalizedText).toContain("important new mail");
     expect(normalizedText).toContain("current slot check-in");
     expect(normalizedText).toContain("in-app reminder");
     expect(normalizedText).toContain("write release notes");
@@ -496,7 +560,9 @@ describe("TasksEventsPanel", () => {
       await Promise.resolve();
     });
 
-    expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith();
+    expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith({
+      capabilities: ["google.calendar.read"],
+    });
     expect(mockOpenExternalUrl).toHaveBeenCalledWith(
       "https://accounts.google.com/o/oauth2/v2/auth?state=test",
     );
@@ -531,5 +597,36 @@ describe("TasksEventsPanel", () => {
     expect(mockOpenExternalUrl).toHaveBeenCalledWith(
       "https://calendar.google.com/event?eid=1",
     );
+  });
+
+  it("requests Gmail send re-consent from the Google card", async () => {
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(TasksEventsPanel, {
+          open: true,
+          clearEvents: vi.fn(),
+          events: [],
+        }),
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const enableSendButton = tree.root
+      .findAllByType("button")
+      .find((button) => flattenText(button).includes("Enable Send"));
+    expect(enableSendButton).toBeDefined();
+
+    await act(async () => {
+      enableSendButton?.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith({
+      capabilities: ["google.gmail.send"],
+    });
   });
 });

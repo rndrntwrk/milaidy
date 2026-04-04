@@ -11,6 +11,7 @@ import type {
   CodingAgentSession,
   LifeOpsCalendarFeed,
   LifeOpsCalendarEvent,
+  LifeOpsGmailTriageFeed,
   LifeOpsGoogleConnectorStatus,
   LifeOpsNextCalendarEventContext,
   LifeOpsOccurrenceView,
@@ -25,6 +26,7 @@ import {
   Check,
   ExternalLink,
   ListTodo,
+  Mail,
   SkipForward,
   Target,
 } from "lucide-react";
@@ -115,6 +117,13 @@ function describeCalendarEventMeta(event: LifeOpsCalendarEvent): string {
       : "",
   ].filter((value) => value.length > 0);
   return details.join(" · ");
+}
+
+function describeGoogleCapability(capability: string): string {
+  return capability
+    .replace("google.", "")
+    .replace(/\./g, " ")
+    .trim();
 }
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
@@ -409,12 +418,14 @@ function GoogleConnectorCard({
   loading: boolean;
   busy: boolean;
   pendingAuthUrl: string | null;
-  onConnect: () => Promise<void>;
+  onConnect: (capabilities?: Array<"google.calendar.read" | "google.gmail.triage" | "google.gmail.send">) => Promise<void>;
   onDisconnect: () => Promise<void>;
   onOpenPending: () => Promise<void>;
 }) {
   const connected = status?.connected ?? false;
   const capabilities = status?.grantedCapabilities ?? [];
+  const hasGmailTriage = capabilities.includes("google.gmail.triage");
+  const hasGmailSend = capabilities.includes("google.gmail.send");
 
   return (
     <div className="rounded-lg border border-border/50 bg-bg/70 p-3">
@@ -423,7 +434,7 @@ function GoogleConnectorCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="truncate text-xs font-semibold text-txt">
-              Google Calendar
+              Google
             </span>
             {status ? (
               <Badge variant="secondary" className="text-[9px]">
@@ -449,7 +460,7 @@ function GoogleConnectorCard({
                   variant="secondary"
                   className="text-[9px]"
                 >
-                  {capability.replace("google.", "")}
+                  {describeGoogleCapability(capability)}
                 </Badge>
               ))}
             </div>
@@ -470,12 +481,34 @@ function GoogleConnectorCard({
                 variant="ghost"
                 size="sm"
                 disabled={busy || status?.reason === "config_missing"}
-                onClick={() => void onConnect()}
+                onClick={() => void onConnect(["google.calendar.read"])}
                 className="h-6 px-2 text-[10px]"
               >
-                Connect
+                Connect Calendar
               </Button>
             )}
+            {connected && !hasGmailTriage ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => void onConnect(["google.gmail.triage"])}
+                className="h-6 px-2 text-[10px]"
+              >
+                Add Gmail
+              </Button>
+            ) : null}
+            {connected && hasGmailTriage && !hasGmailSend ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => void onConnect(["google.gmail.send"])}
+                className="h-6 px-2 text-[10px]"
+              >
+                Enable Send
+              </Button>
+            ) : null}
             {pendingAuthUrl ? (
               <Button
                 variant="ghost"
@@ -550,6 +583,60 @@ function CalendarEventRow({
   );
 }
 
+function GmailMessageRow({
+  message,
+  onOpen,
+}: {
+  message: LifeOpsGmailTriageFeed["messages"][number];
+  onOpen: (message: LifeOpsGmailTriageFeed["messages"][number]) => Promise<void>;
+}) {
+  return (
+    <div className="rounded-lg border border-border/50 bg-bg/70 p-3">
+      <div className="flex items-start gap-2">
+        <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="truncate text-xs font-semibold text-txt">
+              {message.subject}
+            </span>
+            {message.isImportant ? (
+              <Badge variant="secondary" className="text-[9px]">
+                important
+              </Badge>
+            ) : null}
+            {message.likelyReplyNeeded ? (
+              <Badge variant="secondary" className="text-[9px]">
+                reply
+              </Badge>
+            ) : null}
+          </div>
+          <p className="mt-1 text-[11px] text-muted">
+            {message.from} · {relativeIsoTime(message.receivedAt)}
+          </p>
+          {message.snippet.trim().length > 0 ? (
+            <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-muted">
+              {message.snippet}
+            </p>
+          ) : null}
+          {message.htmlLink ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void onOpen(message)}
+                className="h-6 px-2 text-[10px]"
+              >
+                <ExternalLink className="mr-1 h-3 w-3" />
+                Open
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NextCalendarContextCard({
   context,
 }: {
@@ -590,6 +677,18 @@ function NextCalendarContextCard({
               {context.preparationChecklist.slice(0, 2).map((item) => (
                 <p key={item} className="text-[11px] leading-5 text-muted">
                   {item}
+                </p>
+              ))}
+            </div>
+          ) : null}
+          {context.linkedMail.length > 0 ? (
+            <div className="mt-2 flex flex-col gap-1">
+              {context.linkedMail.slice(0, 2).map((message) => (
+                <p
+                  key={message.id}
+                  className="line-clamp-2 text-[11px] leading-5 text-muted"
+                >
+                  Mail: {message.subject} · {message.from}
                 </p>
               ))}
             </div>
@@ -687,6 +786,8 @@ function LifeOpsSection({
   loading,
   calendarFeed,
   calendarLoading,
+  gmailTriage,
+  gmailTriageLoading,
   nextCalendarContext,
   googleConnector,
   googleConnectorLoading,
@@ -696,6 +797,7 @@ function LifeOpsSection({
   onDisconnectGoogle,
   onOpenPendingGoogle,
   onOpenCalendarEvent,
+  onOpenGmailMessage,
   actingOccurrenceId,
   onComplete,
   onSnooze,
@@ -705,15 +807,22 @@ function LifeOpsSection({
   loading: boolean;
   calendarFeed: LifeOpsCalendarFeed | null;
   calendarLoading: boolean;
+  gmailTriage: LifeOpsGmailTriageFeed | null;
+  gmailTriageLoading: boolean;
   nextCalendarContext: LifeOpsNextCalendarEventContext | null;
   googleConnector: LifeOpsGoogleConnectorStatus | null;
   googleConnectorLoading: boolean;
   googleConnectorBusy: boolean;
   pendingGoogleAuthUrl: string | null;
-  onConnectGoogle: () => Promise<void>;
+  onConnectGoogle: (
+    capabilities?: Array<"google.calendar.read" | "google.gmail.triage" | "google.gmail.send">,
+  ) => Promise<void>;
   onDisconnectGoogle: () => Promise<void>;
   onOpenPendingGoogle: () => Promise<void>;
   onOpenCalendarEvent: (event: LifeOpsCalendarEvent) => Promise<void>;
+  onOpenGmailMessage: (
+    message: LifeOpsGmailTriageFeed["messages"][number],
+  ) => Promise<void>;
   actingOccurrenceId: string | null;
   onComplete: (occurrenceId: string) => Promise<void>;
   onSnooze: (occurrenceId: string) => Promise<void>;
@@ -721,6 +830,7 @@ function LifeOpsSection({
 }) {
   const occurrences = lifeops?.occurrences ?? [];
   const reminders = lifeops?.reminders ?? [];
+  const gmailMessages = gmailTriage?.messages ?? [];
   const calendarEvents = useMemo(() => {
     const now = Date.now();
     return (calendarFeed?.events ?? []).filter((event) => {
@@ -775,18 +885,49 @@ function LifeOpsSection({
           </p>
         )
       ) : null}
+      {googleConnector?.connected &&
+      googleConnector.grantedCapabilities.includes("google.gmail.triage") ? (
+        gmailMessages.length > 0 ? (
+          <>
+            <p className="px-1 text-[11px] text-muted">
+              {gmailTriage?.summary.importantNewCount ?? 0} important new mail ·{" "}
+              {gmailTriage?.summary.likelyReplyNeededCount ?? 0} likely reply-needed
+              {gmailTriage?.syncedAt
+                ? ` · synced ${relativeIsoTime(gmailTriage.syncedAt)}`
+                : ""}
+            </p>
+            {gmailMessages.slice(0, 3).map((message) => (
+              <GmailMessageRow
+                key={message.id}
+                message={message}
+                onOpen={onOpenGmailMessage}
+              />
+            ))}
+          </>
+        ) : (
+          <p className="px-1 text-[11px] text-muted">
+            {gmailTriageLoading
+              ? "Refreshing Gmail triage…"
+              : "No high-priority Gmail triage items right now."}
+          </p>
+        )
+      ) : null}
       {loading &&
       calendarLoading &&
+      gmailTriageLoading &&
       occurrences.length === 0 &&
       reminders.length === 0 &&
-      calendarEvents.length === 0 ? (
+      calendarEvents.length === 0 &&
+      gmailMessages.length === 0 ? (
         <div className="py-3 text-xs text-muted">Refreshing life ops…</div>
       ) : null}
       {!loading &&
       !calendarLoading &&
+      !gmailTriageLoading &&
       occurrences.length === 0 &&
       reminders.length === 0 &&
-      calendarEvents.length === 0 ? (
+      calendarEvents.length === 0 &&
+      gmailMessages.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
           <Target className="h-8 w-8 text-muted/50" />
           <p className="text-sm text-muted">No active life ops</p>
@@ -894,6 +1035,10 @@ export function TasksEventsPanel({
   const [lifeopsLoading, setLifeopsLoading] = useState(false);
   const [calendarFeed, setCalendarFeed] = useState<LifeOpsCalendarFeed | null>(null);
   const [calendarLoading, setCalendarLoading] = useState(false);
+  const [gmailTriage, setGmailTriage] = useState<LifeOpsGmailTriageFeed | null>(
+    null,
+  );
+  const [gmailTriageLoading, setGmailTriageLoading] = useState(false);
   const [nextCalendarContext, setNextCalendarContext] =
     useState<LifeOpsNextCalendarEventContext | null>(null);
   const [googleConnector, setGoogleConnector] =
@@ -1049,6 +1194,42 @@ export function TasksEventsPanel({
     [],
   );
 
+  const loadGmailTriage = useCallback(
+    async (
+      connectorStatus: LifeOpsGoogleConnectorStatus | null,
+      silent = false,
+    ) => {
+      if (!connectorStatus?.connected) {
+        setGmailTriage(null);
+        setGmailTriageLoading(false);
+        return null;
+      }
+      if (!connectorStatus.grantedCapabilities.includes("google.gmail.triage")) {
+        setGmailTriage(null);
+        setGmailTriageLoading(false);
+        return null;
+      }
+      if (!silent) {
+        setGmailTriageLoading(true);
+      }
+      try {
+        const result = await client.getLifeOpsGmailTriage({
+          maxResults: 12,
+        });
+        setGmailTriage(result);
+        return result;
+      } catch {
+        if (!silent) {
+          setGmailTriage(null);
+        }
+        return null;
+      } finally {
+        setGmailTriageLoading(false);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!open) {
       return;
@@ -1088,6 +1269,8 @@ export function TasksEventsPanel({
       if (!active) return;
       await loadCalendarFeed(connectorStatus, calendarFeed !== null);
       if (!active) return;
+      await loadGmailTriage(connectorStatus, true);
+      if (!active) return;
       await loadNextCalendarContext(connectorStatus, true);
       if (!active) return;
       await loadLifeOps(true);
@@ -1101,6 +1284,8 @@ export function TasksEventsPanel({
         const connectorStatus = await loadGoogleConnector(true);
         if (!active) return;
         await loadCalendarFeed(connectorStatus, true);
+        if (!active) return;
+        await loadGmailTriage(connectorStatus, true);
         if (!active) return;
         await loadNextCalendarContext(connectorStatus, true);
         if (!active) return;
@@ -1117,6 +1302,7 @@ export function TasksEventsPanel({
     googleConnector !== null,
     lifeops?.occurrences.length,
     loadCalendarFeed,
+    loadGmailTriage,
     loadGoogleConnector,
     loadLifeOps,
     loadNextCalendarContext,
@@ -1148,10 +1334,11 @@ export function TasksEventsPanel({
         const status = await loadGoogleConnector(true);
         if (status?.connected) {
           await loadCalendarFeed(status, true);
+          await loadGmailTriage(status, true);
           await loadNextCalendarContext(status, true);
           await loadLifeOps(true);
           setActionNotice(
-            "Google connected for calendar access.",
+            "Google permissions updated.",
             "success",
             3600,
           );
@@ -1159,7 +1346,7 @@ export function TasksEventsPanel({
         }
       }
     },
-    [loadCalendarFeed, loadGoogleConnector, loadLifeOps, loadNextCalendarContext, setActionNotice],
+    [loadCalendarFeed, loadGmailTriage, loadGoogleConnector, loadLifeOps, loadNextCalendarContext, setActionNotice],
   );
 
   const handleOpenPendingGoogle = useCallback(async () => {
@@ -1169,10 +1356,14 @@ export function TasksEventsPanel({
     await openExternalUrl(pendingGoogleAuthUrl);
   }, [pendingGoogleAuthUrl]);
 
-  const handleConnectGoogle = useCallback(async () => {
+  const handleConnectGoogle = useCallback(async (
+    capabilities?: Array<"google.calendar.read" | "google.gmail.triage" | "google.gmail.send">,
+  ) => {
     setGoogleConnectorBusy(true);
     try {
-      const result = await client.startGoogleLifeOpsConnector();
+      const result = await client.startGoogleLifeOpsConnector(
+        capabilities ? { capabilities } : {},
+      );
       setPendingGoogleAuthUrl(result.authUrl);
       await openExternalUrl(result.authUrl);
       setActionNotice(
@@ -1199,6 +1390,7 @@ export function TasksEventsPanel({
       setGoogleConnector(result);
       setPendingGoogleAuthUrl(null);
       setCalendarFeed(null);
+      setGmailTriage(null);
       setNextCalendarContext(null);
       setActionNotice("Google disconnected.", "info", 3200);
     } catch (error) {
@@ -1223,6 +1415,16 @@ export function TasksEventsPanel({
     [],
   );
 
+  const handleOpenGmailMessage = useCallback(
+    async (message: LifeOpsGmailTriageFeed["messages"][number]) => {
+      if (!message.htmlLink) {
+        return;
+      }
+      await openExternalUrl(message.htmlLink);
+    },
+    [],
+  );
+
   if (!open) return null;
 
   const rootClassName = mobile
@@ -1243,6 +1445,8 @@ export function TasksEventsPanel({
             loading={lifeopsLoading}
             calendarFeed={calendarFeed}
             calendarLoading={calendarLoading}
+            gmailTriage={gmailTriage}
+            gmailTriageLoading={gmailTriageLoading}
             nextCalendarContext={nextCalendarContext}
             googleConnector={googleConnector}
             googleConnectorLoading={googleConnectorLoading}
@@ -1252,6 +1456,7 @@ export function TasksEventsPanel({
             onDisconnectGoogle={handleDisconnectGoogle}
             onOpenPendingGoogle={handleOpenPendingGoogle}
             onOpenCalendarEvent={handleOpenCalendarEvent}
+            onOpenGmailMessage={handleOpenGmailMessage}
             actingOccurrenceId={actingOccurrenceId}
             onComplete={(occurrenceId) =>
               runOccurrenceAction(occurrenceId, async () => {

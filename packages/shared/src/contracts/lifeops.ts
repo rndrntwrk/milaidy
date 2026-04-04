@@ -126,6 +126,7 @@ export const LIFEOPS_OWNER_TYPES = [
   "goal",
   "workflow",
   "calendar_event",
+  "gmail_message",
   "connector",
   "channel_policy",
 ] as const;
@@ -141,6 +142,9 @@ export const LIFEOPS_AUDIT_EVENT_TYPES = [
   "goal_created",
   "goal_updated",
   "calendar_event_created",
+  "gmail_triage_synced",
+  "gmail_reply_drafted",
+  "gmail_reply_sent",
   "reminder_due",
   "reminder_delivered",
   "workflow_created",
@@ -472,6 +476,88 @@ export interface GetLifeOpsCalendarFeedRequest {
   forceSync?: boolean;
 }
 
+export interface LifeOpsGmailMessageSummary {
+  id: string;
+  externalId: string;
+  agentId: string;
+  provider: "google";
+  threadId: string;
+  subject: string;
+  from: string;
+  fromEmail: string | null;
+  replyTo: string | null;
+  to: string[];
+  cc: string[];
+  snippet: string;
+  receivedAt: string;
+  isUnread: boolean;
+  isImportant: boolean;
+  likelyReplyNeeded: boolean;
+  triageScore: number;
+  triageReason: string;
+  labels: string[];
+  htmlLink: string | null;
+  metadata: Record<string, unknown>;
+  syncedAt: string;
+  updatedAt: string;
+}
+
+export interface LifeOpsGmailTriageSummary {
+  unreadCount: number;
+  importantNewCount: number;
+  likelyReplyNeededCount: number;
+}
+
+export interface LifeOpsGmailTriageFeed {
+  messages: LifeOpsGmailMessageSummary[];
+  source: "cache" | "synced";
+  syncedAt: string | null;
+  summary: LifeOpsGmailTriageSummary;
+}
+
+export interface GetLifeOpsGmailTriageRequest {
+  mode?: LifeOpsConnectorMode;
+  forceSync?: boolean;
+  maxResults?: number;
+}
+
+export const LIFEOPS_GMAIL_DRAFT_TONES = [
+  "brief",
+  "neutral",
+  "warm",
+] as const;
+export type LifeOpsGmailDraftTone = (typeof LIFEOPS_GMAIL_DRAFT_TONES)[number];
+
+export interface CreateLifeOpsGmailReplyDraftRequest {
+  mode?: LifeOpsConnectorMode;
+  messageId: string;
+  tone?: LifeOpsGmailDraftTone;
+  intent?: string;
+  includeQuotedOriginal?: boolean;
+}
+
+export interface LifeOpsGmailReplyDraft {
+  messageId: string;
+  threadId: string;
+  subject: string;
+  to: string[];
+  cc: string[];
+  bodyText: string;
+  previewLines: string[];
+  sendAllowed: boolean;
+  requiresConfirmation: boolean;
+}
+
+export interface SendLifeOpsGmailReplyRequest {
+  mode?: LifeOpsConnectorMode;
+  messageId: string;
+  bodyText: string;
+  subject?: string;
+  to?: string[];
+  cc?: string[];
+  confirmSend?: boolean;
+}
+
 export const LIFEOPS_CALENDAR_WINDOW_PRESETS = [
   "tomorrow_morning",
   "tomorrow_afternoon",
@@ -509,13 +595,10 @@ export interface LifeOpsNextCalendarEventContext {
   location: string | null;
   conferenceLink: string | null;
   preparationChecklist: string[];
-  linkedMail: Array<{
-    id: string;
-    subject: string;
-    from: string;
-    receivedAt: string;
-    snippet: string;
-  }>;
+  linkedMail: Array<Pick<
+    LifeOpsGmailMessageSummary,
+    "id" | "subject" | "from" | "receivedAt" | "snippet" | "htmlLink"
+  >>;
 }
 
 export const LIFEOPS_GOOGLE_CONNECTOR_REASONS = [
