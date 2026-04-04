@@ -15,6 +15,7 @@ import {
   loadCompanionMessageCutoffTs,
   loadCompanionVrmPowerMode,
   loadLastNativeTab,
+  loadPersistedActivePackUrl,
   loadPersistedOnboardingStep,
   loadUiTheme,
   normalizeCompanionHalfFramerateMode,
@@ -24,6 +25,7 @@ import {
   saveCompanionVrmPowerMode,
   saveLastNativeTab,
   saveOnboardingStep,
+  savePersistedActivePackUrl,
   saveUiTheme,
 } from "./persistence";
 
@@ -202,6 +204,20 @@ describe("theme persistence", () => {
         (globalThis as Record<string, unknown>).document = previousDocument;
       }
     }
+  });
+});
+
+describe("content pack persistence", () => {
+  it("round-trips the persisted custom pack URL and clears it", () => {
+    withLocalStorageStub(() => {
+      expect(loadPersistedActivePackUrl()).toBeNull();
+      savePersistedActivePackUrl("https://example.com/packs/neo/");
+      expect(loadPersistedActivePackUrl()).toBe(
+        "https://example.com/packs/neo/",
+      );
+      savePersistedActivePackUrl(null);
+      expect(loadPersistedActivePackUrl()).toBeNull();
+    });
   });
 });
 

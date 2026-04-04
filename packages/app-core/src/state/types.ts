@@ -428,6 +428,10 @@ export interface AppState {
   selectedVrmIndex: number;
   customVrmUrl: string;
   customBackgroundUrl: string;
+  /** Active content pack ID, or null if no pack is selected. */
+  activePackId: string | null;
+  /** Custom companion world URL from content pack (overrides day/night default). */
+  customWorldUrl: string;
 
   // Eliza Cloud
   elizaCloudEnabled: boolean;

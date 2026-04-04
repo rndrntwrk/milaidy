@@ -127,10 +127,7 @@ import {
   type UiShellMode,
   type UiTheme,
 } from "./internal";
-import {
-  detectExistingOnboardingConnection,
-  resolveStartupWithoutRestoredConnection,
-} from "./onboarding-bootstrap";
+import { detectExistingOnboardingConnection } from "./onboarding-bootstrap";
 import { deriveUiShellModeForTab } from "./shell-routing";
 import { TranslationProvider, useTranslation } from "./TranslationContext";
 import type { InventoryChainFilters } from "./types";
@@ -680,6 +677,8 @@ function AppProviderInner({
       selectedVrmIndex,
       customVrmUrl,
       customBackgroundUrl,
+      activePackId,
+      customWorldUrl,
     },
     setCharacterData,
     setCharacterDraft,
@@ -688,6 +687,8 @@ function AppProviderInner({
     setSelectedVrmIndex,
     setCustomVrmUrl,
     setCustomBackgroundUrl,
+    setActivePackId,
+    setCustomWorldUrl,
     loadCharacter,
     handleSaveCharacter,
     handleCharacterFieldInput,
@@ -1398,6 +1399,8 @@ function AppProviderInner({
         selectedVrmIndex: setSelectedVrmIndex,
         customVrmUrl: setCustomVrmUrl,
         customBackgroundUrl: setCustomBackgroundUrl,
+        activePackId: setActivePackId,
+        customWorldUrl: setCustomWorldUrl,
         commandQuery: setCommandQuery,
         commandActiveIndex: setCommandActiveIndex,
         emotePickerOpen: setEmotePickerOpen,
@@ -1685,6 +1688,7 @@ function AppProviderInner({
     () => ({
       selectedVrmIndex,
       customVrmUrl,
+      customWorldUrl,
       uiTheme,
       tab,
       companionVrmPowerMode,
@@ -1694,6 +1698,7 @@ function AppProviderInner({
     [
       selectedVrmIndex,
       customVrmUrl,
+      customWorldUrl,
       uiTheme,
       tab,
       companionVrmPowerMode,
@@ -1826,6 +1831,8 @@ function AppProviderInner({
     selectedVrmIndex,
     customVrmUrl,
     customBackgroundUrl,
+    activePackId,
+    customWorldUrl,
     elizaCloudEnabled,
     elizaCloudVoiceProxyAvailable,
     elizaCloudConnected,
