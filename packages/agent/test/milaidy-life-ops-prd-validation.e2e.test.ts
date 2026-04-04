@@ -17,7 +17,15 @@ import { startApiServer } from "../src/api/server";
 import { LifeOpsRepository } from "../src/lifeops/repository";
 import { LifeOpsService } from "../src/lifeops/service";
 import { req } from "../../../test/helpers/http";
-import { saveEnv } from "../../../test/helpers/test-utils";
+import { saveEnv, sleep } from "../../../test/helpers/test-utils";
+
+const envPath = path.resolve(import.meta.dirname, "..", "..", "..", ".env");
+try {
+  const { config } = await import("dotenv");
+  config({ path: envPath });
+} catch {
+  // dotenv is optional in CI; live tests may also rely on already-exported env vars.
+}
 
 type Phase = "P0" | "P1" | "P2" | "P3";
 type Domain =
@@ -465,6 +473,222 @@ async function withGoogleOAuthApiServer<T>(
   }
 }
 
+const LIVE_TEST_TIMEOUT_MS = 180_000;
+const LIVE_SIGNAL_POLL_MS = 1_000;
+
+type LiveServerContext = {
+  port: number;
+  stateDir: string;
+  runtime: AgentRuntime;
+};
+
+function readOptionalEnv(key: string): string | null {
+  const value = process.env[key]?.trim();
+  return value && value.length > 0 ? value : null;
+}
+
+function hasLiveGoogleLocalConfig(): boolean {
+  return Boolean(
+    readOptionalEnv("MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID") ??
+      readOptionalEnv("ELIZA_GOOGLE_OAUTH_DESKTOP_CLIENT_ID"),
+  );
+}
+
+function hasLiveGoogleRemoteConfig(): boolean {
+  return Boolean(
+    (readOptionalEnv("MILADY_GOOGLE_OAUTH_WEB_CLIENT_ID") ??
+      readOptionalEnv("ELIZA_GOOGLE_OAUTH_WEB_CLIENT_ID")) &&
+      (readOptionalEnv("MILADY_GOOGLE_OAUTH_WEB_CLIENT_SECRET") ??
+        readOptionalEnv("ELIZA_GOOGLE_OAUTH_WEB_CLIENT_SECRET")) &&
+      (readOptionalEnv("MILADY_GOOGLE_OAUTH_PUBLIC_BASE_URL") ??
+        readOptionalEnv("ELIZA_GOOGLE_OAUTH_PUBLIC_BASE_URL")),
+  );
+}
+
+async function withLiveLifeOpsApiServer<T>(
+  fn: (args: LiveServerContext) => Promise<T>,
+): Promise<T> {
+  const envBackup = saveEnv("ELIZA_STATE_DIR");
+  const stateDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), "milaidy-prd-live-lifeops-"),
+  );
+  process.env.ELIZA_STATE_DIR = stateDir;
+
+  const runtime = createApiRuntime(
+    `milaidy-prd-live-${crypto.randomUUID().slice(0, 8)}`,
+  );
+  const server = await startApiServer({
+    port: 0,
+    runtime,
+  });
+
+  try {
+    return await fn({
+      port: server.port,
+      stateDir,
+      runtime,
+    });
+  } finally {
+    await server.close();
+    await fs.rm(stateDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
+    envBackup.restore();
+  }
+}
+
+async function waitForSignalFile(args: {
+  label: string;
+  filePath: string;
+  instructions: string;
+  timeoutMs?: number;
+}): Promise<string> {
+  const timeoutMs = args.timeoutMs ?? LIVE_TEST_TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
+  await fs.mkdir(path.dirname(args.filePath), { recursive: true });
+  await fs.rm(args.filePath, { force: true });
+  await fs.writeFile(
+    `${args.filePath}.instructions.txt`,
+    `${args.instructions.trim()}\n`,
+    "utf-8",
+  );
+  console.log(`[${args.label}] ${args.instructions}`);
+
+  while (Date.now() < deadline) {
+    try {
+      const raw = (await fs.readFile(args.filePath, "utf-8")).trim();
+      if (raw.length > 0) {
+        return raw;
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
+    await sleep(LIVE_SIGNAL_POLL_MS);
+  }
+
+  throw new Error(
+    `[${args.label}] timed out waiting for ${args.filePath} after ${timeoutMs}ms`,
+  );
+}
+
+async function waitForCallbackUrl(args: {
+  label: string;
+  authUrl: string;
+  callbackFile: string;
+  timeoutMs?: number;
+}): Promise<URL> {
+  const raw = await waitForSignalFile({
+    label: args.label,
+    filePath: args.callbackFile,
+    timeoutMs: args.timeoutMs,
+    instructions: [
+      `Open this Google auth URL in a browser:`,
+      args.authUrl,
+      "",
+      `After consent completes, write the full callback URL into:`,
+      args.callbackFile,
+    ].join("\n"),
+  });
+  return new URL(raw);
+}
+
+async function listAuditEventTypes(runtime: AgentRuntime): Promise<string[]> {
+  const rows = (await runtime.adapter.db.execute({
+    queryChunks: [
+      {
+        value: [
+          `SELECT event_type
+             FROM life_audit_events
+            WHERE agent_id = '${String(runtime.agentId).replace(/'/g, "''")}'
+            ORDER BY created_at ASC`,
+        ],
+      },
+    ],
+  })) as Array<{ event_type?: unknown }>;
+  return rows.map((row) => String(row.event_type ?? ""));
+}
+
+async function connectLiveGoogle(args: {
+  port: number;
+  stateDir: string;
+  mode: "local" | "remote";
+  capabilities: string[];
+  callbackFile: string;
+  expectedEmail?: string | null;
+}): Promise<{
+  status: Record<string, unknown>;
+  grant: Record<string, unknown>;
+  tokenPath: string;
+}> {
+  const startRes = await req(port, "POST", "/api/lifeops/connectors/google/start", {
+    mode: args.mode,
+    capabilities: args.capabilities,
+  });
+  expect(startRes.status).toBe(200);
+
+  const callbackUrl = await waitForCallbackUrl({
+    label: `google-${args.mode}`,
+    authUrl: String(startRes.data.authUrl),
+    callbackFile: args.callbackFile,
+  });
+
+  const callbackRes = await req(
+    args.port,
+    "GET",
+    `/api/lifeops/connectors/google/callback${callbackUrl.search}`,
+  );
+  expect(callbackRes.status).toBe(200);
+  expect(String(callbackRes.data._raw)).toContain("Google Connected");
+
+  const statusRes = await req(
+    args.port,
+    "GET",
+    `/api/lifeops/connectors/google/status?mode=${args.mode}`,
+  );
+  expect(statusRes.status).toBe(200);
+  expect(statusRes.data.connected).toBe(true);
+
+  if (args.expectedEmail) {
+    expect(
+      String((statusRes.data.identity as Record<string, unknown> | null)?.email ?? "")
+        .toLowerCase(),
+    ).toBe(args.expectedEmail.toLowerCase());
+  }
+
+  const grant = statusRes.data.grant as Record<string, unknown>;
+  const tokenPath = path.join(
+    args.stateDir,
+    "credentials",
+    "lifeops",
+    "google",
+    String(grant.tokenRef ?? ""),
+  );
+  await fs.access(tokenPath);
+
+  return {
+    status: statusRes.data as Record<string, unknown>,
+    grant,
+    tokenPath,
+  };
+}
+
+async function expireStoredGoogleAccessToken(tokenPath: string): Promise<void> {
+  const raw = JSON.parse(await fs.readFile(tokenPath, "utf-8")) as Record<
+    string,
+    unknown
+  >;
+  raw.expiresAt = Date.now() - 60_000;
+  await fs.writeFile(tokenPath, JSON.stringify(raw, null, 2), {
+    encoding: "utf-8",
+    mode: 0o600,
+  });
+}
+
 async function createMorningNightHabit(runtime: AgentRuntime) {
   const service = new LifeOpsService(runtime);
   const created = await service.createDefinition({
@@ -531,6 +755,53 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
     for (const scenario of contractScenarios.filter(
       (candidate) => candidate.phase === phase,
     )) {
+      if (scenario.id === "P0-01") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const server = await startApiServer({ port: 0 });
+          try {
+            const missingName = await req(server.port, "POST", "/api/onboarding", {
+              deploymentTarget: "local",
+              linkedAccounts: [],
+              serviceRouting: {},
+              credentialInputs: {},
+            });
+            expect(missingName.status).toBe(400);
+            expect(String(missingName.data.error)).toContain("agent name");
+
+            const options = await req(server.port, "GET", "/api/onboarding/options");
+            expect(options.status).toBe(200);
+            expect(Array.isArray(options.data.names)).toBe(true);
+            expect((options.data.names as string[]).length).toBeGreaterThan(0);
+            expect(Array.isArray(options.data.providers)).toBe(true);
+            expect((options.data.providers as Array<Record<string, unknown>>).length).toBeGreaterThan(0);
+
+            const runtime = createApiRuntime("p0-01-lifeops-agent");
+            const lifeopsServer = await startApiServer({
+              port: 0,
+              runtime,
+            });
+            try {
+              const connectorStatus = await req(
+                lifeopsServer.port,
+                "GET",
+                "/api/lifeops/connectors/google/status",
+              );
+              expect(connectorStatus.status).toBe(200);
+              expect(connectorStatus.data).toMatchObject({
+                provider: "google",
+                connected: false,
+                grantedCapabilities: [],
+              });
+            } finally {
+              await lifeopsServer.close();
+            }
+          } finally {
+            await server.close();
+          }
+        });
+        continue;
+      }
+
       if (scenario.id === "P0-02") {
         it(`[${scenario.id}] ${scenario.title}`, async () => {
           const runtime = createSqliteRuntime("p0-02-agent");
@@ -790,6 +1061,38 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
           expect(
             overview.reminders.every((reminder) => reminder.channel === "in_app"),
           ).toBe(true);
+        });
+        continue;
+      }
+
+      if (scenario.id === "P0-09") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const runtime = createSqliteRuntime("p0-09-agent");
+          const service = new LifeOpsService(runtime);
+
+          const definitionRecord = await service.createDefinition({
+            kind: "habit",
+            title: "Medication check-in",
+            description: "Take morning medication with breakfast.",
+            timezone: "America/Los_Angeles",
+            cadence: {
+              kind: "daily",
+              windows: ["morning"],
+            },
+          });
+          const goalRecord = await service.createGoal({
+            title: "Stabilize mood this month",
+            description: "Track how I feel and protect recovery time.",
+          });
+
+          expect(definitionRecord.definition.metadata).toMatchObject({
+            privacyClass: "private",
+            publicContextBlocked: true,
+          });
+          expect(goalRecord.goal.metadata).toMatchObject({
+            privacyClass: "private",
+            publicContextBlocked: true,
+          });
         });
         continue;
       }
@@ -1890,7 +2193,1052 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
         continue;
       }
 
-      it.todo(`[${scenario.id}] ${scenario.title}`);
+      if (scenario.id === "P2-01") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const runtime = createApiRuntime("p2-01-agent");
+          const server = await startApiServer({
+            port: 0,
+            runtime,
+          });
+
+          try {
+            const blocked = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/channels/phone-consent",
+              {
+                phoneNumber: "415-555-0100",
+                consentGiven: false,
+                allowSms: true,
+                allowVoice: false,
+              },
+            );
+            expect(blocked.status).toBe(400);
+            expect(String(blocked.data.error)).toContain("Explicit consent");
+
+            const captured = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/channels/phone-consent",
+              {
+                phoneNumber: "415-555-0100",
+                consentGiven: true,
+                allowSms: true,
+                allowVoice: false,
+                metadata: {
+                  source: "onboarding",
+                },
+              },
+            );
+            expect(captured.status).toBe(201);
+            expect(captured.data.phoneNumber).toBe("+14155550100");
+            expect(captured.data.policies).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({
+                  channelType: "sms",
+                  channelRef: "+14155550100",
+                  allowEscalation: true,
+                }),
+                expect.objectContaining({
+                  channelType: "voice",
+                  channelRef: "+14155550100",
+                  allowEscalation: false,
+                }),
+              ]),
+            );
+
+            const listed = await req(
+              server.port,
+              "GET",
+              "/api/lifeops/channel-policies",
+            );
+            expect(listed.status).toBe(200);
+            expect(listed.data.policies).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({
+                  channelType: "sms",
+                  channelRef: "+14155550100",
+                  metadata: expect.objectContaining({
+                    consentGiven: true,
+                    smsAllowed: true,
+                    voiceAllowed: false,
+                  }),
+                }),
+                expect.objectContaining({
+                  channelType: "voice",
+                  channelRef: "+14155550100",
+                  metadata: expect.objectContaining({
+                    consentGiven: true,
+                    smsAllowed: true,
+                    voiceAllowed: false,
+                  }),
+                }),
+              ]),
+            );
+          } finally {
+            await server.close();
+          }
+        });
+        continue;
+      }
+
+      if (scenario.id === "P2-02") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const runtime = createApiRuntime("p2-02-agent");
+          const service = new LifeOpsService(runtime);
+          const server = await startApiServer({
+            port: 0,
+            runtime,
+          });
+
+          try {
+            const consent = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/channels/phone-consent",
+              {
+                phoneNumber: "415-555-0101",
+                consentGiven: true,
+                allowSms: true,
+                allowVoice: true,
+              },
+            );
+            expect(consent.status).toBe(201);
+
+            const created = await service.createDefinition({
+              kind: "task",
+              title: "Check in on the venue",
+              timezone: "America/Los_Angeles",
+              priority: 3,
+              cadence: {
+                kind: "once",
+                dueAt: "2026-04-04T05:20:00.000Z",
+                visibilityLeadMinutes: 0,
+                visibilityLagMinutes: 900,
+              },
+              reminderPlan: {
+                steps: [
+                  {
+                    channel: "in_app",
+                    offsetMinutes: 0,
+                    label: "In-app",
+                  },
+                  {
+                    channel: "sms",
+                    offsetMinutes: 5,
+                    label: "SMS",
+                  },
+                  {
+                    channel: "voice",
+                    offsetMinutes: 10,
+                    label: "Voice",
+                  },
+                ],
+                quietHours: {
+                  timezone: "America/Los_Angeles",
+                  startMinute: 22 * 60,
+                  endMinute: 7 * 60,
+                  channels: ["sms", "voice"],
+                },
+              },
+            });
+
+            const quietOverview = await service.getOverview(
+              new Date("2026-04-04T05:35:00.000Z"),
+            );
+            const occurrence = quietOverview.occurrences.find(
+              (candidate) => candidate.definitionId === created.definition.id,
+            );
+            expect(occurrence).toBeDefined();
+
+            const firstProcess = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/reminders/process",
+              {
+                now: "2026-04-04T05:35:00.000Z",
+                limit: 10,
+              },
+            );
+            expect(firstProcess.status).toBe(200);
+            const quietAttempts = (
+              firstProcess.data.attempts as Array<Record<string, unknown>>
+            ).filter((attempt) => attempt.ownerId === occurrence?.id);
+            expect(quietAttempts).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({
+                  channel: "in_app",
+                  outcome: "delivered",
+                }),
+                expect.objectContaining({
+                  channel: "sms",
+                  outcome: "blocked_quiet_hours",
+                }),
+                expect.objectContaining({
+                  channel: "voice",
+                  outcome: "blocked_urgency",
+                }),
+              ]),
+            );
+
+            const acknowledged = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/reminders/acknowledge",
+              {
+                ownerType: "occurrence",
+                ownerId: occurrence?.id,
+                note: "Seen already",
+              },
+            );
+            expect(acknowledged.status).toBe(200);
+
+            const afterAck = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/reminders/process",
+              {
+                now: "2026-04-04T16:00:00.000Z",
+                limit: 10,
+              },
+            );
+            expect(afterAck.status).toBe(200);
+            expect(
+              (afterAck.data.attempts as Array<Record<string, unknown>>).some(
+                (attempt) =>
+                  attempt.ownerId === occurrence?.id &&
+                  attempt.outcome === "blocked_acknowledged",
+              ),
+            ).toBe(true);
+
+            const policyUpdate = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/channel-policies",
+              {
+                channelType: "sms",
+                channelRef: "+14155550101",
+                allowReminders: true,
+                allowEscalation: false,
+                requireConfirmationForActions: true,
+              },
+            );
+            expect(policyUpdate.status).toBe(201);
+
+            const secondDefinition = await service.createDefinition({
+              kind: "task",
+              title: "Confirm arrival window",
+              timezone: "America/Los_Angeles",
+              priority: 1,
+              cadence: {
+                kind: "once",
+                dueAt: "2026-04-04T15:35:00.000Z",
+                visibilityLeadMinutes: 0,
+                visibilityLagMinutes: 240,
+              },
+              reminderPlan: {
+                steps: [
+                  {
+                    channel: "in_app",
+                    offsetMinutes: 0,
+                    label: "In-app",
+                  },
+                  {
+                    channel: "sms",
+                    offsetMinutes: 5,
+                    label: "SMS",
+                  },
+                ],
+              },
+            });
+            const dayOverview = await service.getOverview(
+              new Date("2026-04-04T15:45:00.000Z"),
+            );
+            const secondOccurrence = dayOverview.occurrences.find(
+              (candidate) => candidate.definitionId === secondDefinition.definition.id,
+            );
+            expect(secondOccurrence).toBeDefined();
+
+            const policyBlocked = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/reminders/process",
+              {
+                now: "2026-04-04T15:45:00.000Z",
+                limit: 10,
+              },
+            );
+            expect(policyBlocked.status).toBe(200);
+            expect(
+              (policyBlocked.data.attempts as Array<Record<string, unknown>>).some(
+                (attempt) =>
+                  attempt.ownerId === secondOccurrence?.id &&
+                  attempt.channel === "sms" &&
+                  attempt.outcome === "blocked_policy",
+              ),
+            ).toBe(true);
+          } finally {
+            await server.close();
+          }
+        });
+        continue;
+      }
+
+      if (scenario.id === "P2-03") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const runtime = createApiRuntime("p2-03-agent");
+          const server = await startApiServer({
+            port: 0,
+            runtime,
+          });
+
+          try {
+            const created = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/workflows",
+              {
+                title: "Morning ops sweep",
+                triggerType: "schedule",
+                schedule: {
+                  kind: "interval",
+                  everyMinutes: 60,
+                  timezone: "UTC",
+                },
+                actionPlan: {
+                  steps: [
+                    {
+                      kind: "summarize",
+                      resultKey: "summary",
+                      prompt: "Daily summary",
+                    },
+                  ],
+                },
+                metadata: {
+                  origin: "milady-panel",
+                },
+              },
+            );
+            expect(created.status).toBe(201);
+            expect(created.data.definition).toMatchObject({
+              title: "Morning ops sweep",
+              triggerType: "schedule",
+              createdBy: "user",
+              status: "active",
+              metadata: {
+                origin: "milady-panel",
+              },
+            });
+            const workflowId = String(created.data.definition.id);
+
+            const listed = await req(server.port, "GET", "/api/lifeops/workflows");
+            expect(listed.status).toBe(200);
+            expect(listed.data.workflows).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({
+                  definition: expect.objectContaining({
+                    id: workflowId,
+                    createdBy: "user",
+                    metadata: expect.objectContaining({
+                      origin: "milady-panel",
+                    }),
+                  }),
+                  runs: [],
+                }),
+              ]),
+            );
+
+            const updated = await req(
+              server.port,
+              "PUT",
+              `/api/lifeops/workflows/${encodeURIComponent(workflowId)}`,
+              {
+                title: "Paused ops sweep",
+                status: "paused",
+                schedule: {
+                  kind: "cron",
+                  cronExpression: "0 14 * * *",
+                  timezone: "UTC",
+                },
+              },
+            );
+            expect(updated.status).toBe(200);
+            expect(updated.data.definition).toMatchObject({
+              id: workflowId,
+              title: "Paused ops sweep",
+              status: "paused",
+              createdBy: "user",
+              schedule: {
+                kind: "cron",
+                cronExpression: "0 14 * * *",
+              },
+            });
+
+            const fetched = await req(
+              server.port,
+              "GET",
+              `/api/lifeops/workflows/${encodeURIComponent(workflowId)}`,
+            );
+            expect(fetched.status).toBe(200);
+            expect(fetched.data.definition).toMatchObject({
+              id: workflowId,
+              title: "Paused ops sweep",
+              createdBy: "user",
+              metadata: {
+                origin: "milady-panel",
+              },
+            });
+          } finally {
+            await server.close();
+          }
+        });
+        continue;
+      }
+
+      if (scenario.id === "P2-04") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          await withGoogleOAuthApiServer(
+            {
+              MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID: "desktop-client-id",
+            },
+            async ({ port, fetchMock }) => {
+              fetchMock.mockResolvedValueOnce(
+                new Response(
+                  JSON.stringify({
+                    access_token: "workflow-access-token",
+                    refresh_token: "workflow-refresh-token",
+                    expires_in: 3600,
+                    scope: [
+                      "openid",
+                      "email",
+                      "profile",
+                      "https://www.googleapis.com/auth/calendar.readonly",
+                      "https://www.googleapis.com/auth/gmail.metadata",
+                    ].join(" "),
+                    token_type: "Bearer",
+                    id_token: buildIdToken({
+                      sub: "workflow-google-user",
+                      email: "workflow@example.com",
+                      name: "Workflow Example",
+                      email_verified: true,
+                    }),
+                  }),
+                  {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                  },
+                ),
+              );
+
+              const startRes = await req(
+                port,
+                "POST",
+                "/api/lifeops/connectors/google/start",
+                {
+                  capabilities: ["google.calendar.read", "google.gmail.triage"],
+                },
+              );
+              expect(startRes.status).toBe(200);
+              const authUrl = new URL(String(startRes.data.authUrl));
+              const callbackRes = await req(
+                port,
+                "GET",
+                `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(authUrl.searchParams.get("state") ?? "")}&code=workflow-code`,
+              );
+              expect(callbackRes.status).toBe(200);
+
+              const now = new Date("2026-04-04T16:00:00.000Z");
+              fetchMock.mockImplementation(async (input) => {
+                const target = String(input);
+                if (target.includes("/calendar/v3/calendars/primary/events")) {
+                  return new Response(
+                    JSON.stringify({
+                      items: [
+                        {
+                          id: "workflow-event",
+                          status: "confirmed",
+                          summary: "Workflow planning",
+                          start: { dateTime: now.toISOString(), timeZone: "UTC" },
+                          end: {
+                            dateTime: new Date(now.getTime() + 60 * 60_000).toISOString(),
+                            timeZone: "UTC",
+                          },
+                        },
+                      ],
+                    }),
+                    {
+                      status: 200,
+                      headers: { "content-type": "application/json" },
+                    },
+                  );
+                }
+                if (target === "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=3&includeSpamTrash=false&labelIds=INBOX") {
+                  return new Response(
+                    JSON.stringify({
+                      messages: [{ id: "mail-1", threadId: "thread-1" }],
+                    }),
+                    {
+                      status: 200,
+                      headers: { "content-type": "application/json" },
+                    },
+                  );
+                }
+                if (target.startsWith("https://gmail.googleapis.com/gmail/v1/users/me/messages/mail-1?")) {
+                  return new Response(
+                    JSON.stringify({
+                      id: "mail-1",
+                      threadId: "thread-1",
+                      labelIds: ["INBOX", "UNREAD", "IMPORTANT"],
+                      snippet: "Need your sign-off on the next draft.",
+                      internalDate: String(now.getTime()),
+                      payload: {
+                        headers: [
+                          { name: "Subject", value: "Next draft" },
+                          { name: "From", value: "Mira <mira@example.com>" },
+                          { name: "To", value: "workflow@example.com" },
+                          { name: "Message-Id", value: "<workflow@example.com>" },
+                        ],
+                      },
+                    }),
+                    {
+                      status: 200,
+                      headers: { "content-type": "application/json" },
+                    },
+                  );
+                }
+                throw new Error(`Unexpected fetch: ${target}`);
+              });
+
+              const workflowCreate = await req(
+                port,
+                "POST",
+                "/api/lifeops/workflows",
+                {
+                  title: "Triage and plan",
+                  triggerType: "schedule",
+                  schedule: {
+                    kind: "interval",
+                    everyMinutes: 120,
+                    timezone: "UTC",
+                  },
+                  actionPlan: {
+                    steps: [
+                      {
+                        kind: "get_calendar_feed",
+                        resultKey: "calendar",
+                        request: {
+                          timeZone: "UTC",
+                          forceSync: true,
+                        },
+                      },
+                      {
+                        kind: "get_gmail_triage",
+                        resultKey: "mail",
+                        request: {
+                          maxResults: 3,
+                          forceSync: true,
+                        },
+                      },
+                      {
+                        kind: "summarize",
+                        resultKey: "summary",
+                        sourceKey: "mail",
+                        prompt: "Workflow mail summary",
+                      },
+                      {
+                        kind: "create_task",
+                        resultKey: "task",
+                        request: {
+                          kind: "task",
+                          title: "Follow up with Mira",
+                          timezone: "UTC",
+                          cadence: {
+                            kind: "once",
+                            dueAt: "2026-04-04T18:00:00.000Z",
+                          },
+                        },
+                      },
+                      {
+                        kind: "browser",
+                        resultKey: "browser",
+                        sessionTitle: "Review account settings",
+                        actions: [
+                          {
+                            kind: "navigate",
+                            label: "Open settings",
+                            url: "https://example.com/settings",
+                            accountAffecting: true,
+                            requiresConfirmation: true,
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  permissionPolicy: {
+                    allowBrowserActions: true,
+                    trustedBrowserActions: false,
+                    requireConfirmationForBrowserActions: true,
+                  },
+                },
+              );
+              expect(workflowCreate.status).toBe(201);
+
+              const runRes = await req(
+                port,
+                "POST",
+                `/api/lifeops/workflows/${encodeURIComponent(String(workflowCreate.data.definition.id))}/run`,
+                {
+                  now: now.toISOString(),
+                },
+              );
+              expect(runRes.status).toBe(201);
+              expect(runRes.data.run.result.outputs.task).toMatchObject({
+                title: "Follow up with Mira",
+              });
+              expect(runRes.data.run.result.outputs.summary).toMatchObject({
+                text: expect.stringContaining("Workflow mail summary"),
+              });
+              expect(runRes.data.run.result.outputs.browser).toMatchObject({
+                requiresConfirmation: true,
+                status: "awaiting_confirmation",
+              });
+
+              const sessionId = String(
+                runRes.data.run.result.outputs.browser.sessionId,
+              );
+              const sessionRes = await req(
+                port,
+                "GET",
+                `/api/lifeops/browser/sessions/${encodeURIComponent(sessionId)}`,
+              );
+              expect(sessionRes.status).toBe(200);
+              expect(sessionRes.data.session).toMatchObject({
+                id: sessionId,
+                status: "awaiting_confirmation",
+              });
+            },
+          );
+        });
+        continue;
+      }
+
+      if (scenario.id === "P2-05") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const envBackup = saveEnv(
+            "TWILIO_ACCOUNT_SID",
+            "TWILIO_AUTH_TOKEN",
+            "TWILIO_PHONE_NUMBER",
+          );
+          process.env.TWILIO_ACCOUNT_SID = "AC123";
+          process.env.TWILIO_AUTH_TOKEN = "secret";
+          process.env.TWILIO_PHONE_NUMBER = "+14155550999";
+          const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
+            new Response(
+              JSON.stringify({ sid: "SM123" }),
+              {
+                status: 201,
+                headers: { "content-type": "application/json" },
+              },
+            ),
+          );
+          vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+          const runtime = createApiRuntime("p2-05-agent");
+          const service = new LifeOpsService(runtime);
+          const server = await startApiServer({
+            port: 0,
+            runtime,
+          });
+
+          try {
+            const consent = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/channels/phone-consent",
+              {
+                phoneNumber: "415-555-0102",
+                consentGiven: true,
+                allowSms: true,
+                allowVoice: false,
+              },
+            );
+            expect(consent.status).toBe(201);
+
+            const created = await service.createDefinition({
+              kind: "task",
+              title: "Reply to venue",
+              timezone: "UTC",
+              priority: 1,
+              cadence: {
+                kind: "once",
+                dueAt: "2026-04-04T16:00:00.000Z",
+                visibilityLeadMinutes: 0,
+                visibilityLagMinutes: 180,
+              },
+              reminderPlan: {
+                steps: [
+                  {
+                    channel: "in_app",
+                    offsetMinutes: 0,
+                    label: "In-app",
+                  },
+                  {
+                    channel: "sms",
+                    offsetMinutes: 5,
+                    label: "SMS",
+                  },
+                ],
+              },
+            });
+            const overview = await service.getOverview(
+              new Date("2026-04-04T16:10:00.000Z"),
+            );
+            const occurrence = overview.occurrences.find(
+              (candidate) => candidate.definitionId === created.definition.id,
+            );
+            expect(occurrence).toBeDefined();
+
+            const processed = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/reminders/process",
+              {
+                now: "2026-04-04T16:10:00.000Z",
+                limit: 10,
+              },
+            );
+            expect(processed.status).toBe(200);
+
+            const inspection = await req(
+              server.port,
+              "GET",
+              `/api/lifeops/reminders/inspection?ownerType=occurrence&ownerId=${encodeURIComponent(String(occurrence?.id ?? ""))}`,
+            );
+            expect(inspection.status).toBe(200);
+            expect(inspection.data.attempts).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({
+                  channel: "sms",
+                  stepIndex: 1,
+                  outcome: "delivered",
+                  connectorRef: "twilio:+14155550102",
+                  deliveryMetadata: expect.objectContaining({
+                    sid: "SM123",
+                  }),
+                }),
+              ]),
+            );
+            expect(inspection.data.audits).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({
+                  eventType: "reminder_due",
+                }),
+                expect.objectContaining({
+                  eventType: "reminder_delivered",
+                  decision: expect.objectContaining({
+                    connectorRef: "twilio:+14155550102",
+                  }),
+                }),
+              ]),
+            );
+          } finally {
+            await server.close();
+            vi.unstubAllGlobals();
+            envBackup.restore();
+          }
+        });
+        continue;
+      }
+
+      if (scenario.id === "P3-01") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const runtime = createApiRuntime("p3-01-agent");
+          const server = await startApiServer({
+            port: 0,
+            runtime,
+          });
+
+          try {
+            const readOnly = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/connectors/x",
+              {
+                capabilities: ["x.read"],
+                identity: {
+                  handle: "@milady",
+                },
+              },
+            );
+            expect(readOnly.status).toBe(201);
+            expect(readOnly.data.grantedCapabilities).toEqual(["x.read"]);
+
+            const upgraded = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/connectors/x",
+              {
+                capabilities: ["x.read", "x.write"],
+                identity: {
+                  handle: "@milady",
+                },
+              },
+            );
+            expect(upgraded.status).toBe(201);
+            expect(upgraded.data.grantedCapabilities).toEqual(
+              expect.arrayContaining(["x.read", "x.write"]),
+            );
+
+            const statusRes = await req(
+              server.port,
+              "GET",
+              "/api/lifeops/connectors/x/status",
+            );
+            expect(statusRes.status).toBe(200);
+            expect(statusRes.data.grantedCapabilities).toEqual(
+              expect.arrayContaining(["x.read", "x.write"]),
+            );
+            expect(statusRes.data.identity).toMatchObject({
+              handle: "@milady",
+            });
+          } finally {
+            await server.close();
+          }
+        });
+        continue;
+      }
+
+      if (scenario.id === "P3-02") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const envBackup = saveEnv(
+            "TWITTER_API_KEY",
+            "TWITTER_API_SECRET_KEY",
+            "TWITTER_ACCESS_TOKEN",
+            "TWITTER_ACCESS_TOKEN_SECRET",
+          );
+          process.env.TWITTER_API_KEY = "key";
+          process.env.TWITTER_API_SECRET_KEY = "secret";
+          process.env.TWITTER_ACCESS_TOKEN = "token";
+          process.env.TWITTER_ACCESS_TOKEN_SECRET = "token-secret";
+          const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
+            new Response(
+              JSON.stringify({ data: { id: "tweet-123" } }),
+              {
+                status: 201,
+                headers: { "content-type": "application/json" },
+              },
+            ),
+          );
+          vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+          const runtime = createApiRuntime("p3-02-agent");
+          const server = await startApiServer({
+            port: 0,
+            runtime,
+          });
+
+          try {
+            const startupFetchCount = fetchMock.mock.calls.length;
+            const connector = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/connectors/x",
+              {
+                capabilities: ["x.read", "x.write"],
+              },
+            );
+            expect(connector.status).toBe(201);
+
+            const blocked = await req(server.port, "POST", "/api/lifeops/x/posts", {
+              text: "No confirmation yet",
+            });
+            expect(blocked.status).toBe(409);
+            expect(fetchMock.mock.calls.length).toBe(startupFetchCount);
+
+            const confirmed = await req(server.port, "POST", "/api/lifeops/x/posts", {
+              text: "Confirmed post",
+              confirmPost: true,
+            });
+            expect(confirmed.status).toBe(201);
+            expect(confirmed.data).toMatchObject({
+              ok: true,
+              postId: "tweet-123",
+            });
+
+            const trustedPolicy = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/channel-policies",
+              {
+                channelType: "x",
+                channelRef: "default",
+                allowPosts: true,
+                requireConfirmationForActions: false,
+              },
+            );
+            expect(trustedPolicy.status).toBe(201);
+
+            const trustedPost = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/x/posts",
+              {
+                text: "Trusted policy post",
+              },
+            );
+            expect(trustedPost.status).toBe(201);
+            expect(trustedPost.data).toMatchObject({
+              ok: true,
+              postId: "tweet-123",
+            });
+            expect(fetchMock.mock.calls.length).toBe(startupFetchCount + 2);
+          } finally {
+            await server.close();
+            vi.unstubAllGlobals();
+            envBackup.restore();
+          }
+        });
+        continue;
+      }
+
+      if (scenario.id === "P3-03") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const runtime = createApiRuntime("p3-03-agent");
+          const server = await startApiServer({
+            port: 0,
+            runtime,
+          });
+
+          try {
+            const created = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/browser/sessions",
+              {
+                title: "Account review",
+                actions: [
+                  {
+                    kind: "navigate",
+                    label: "Open account",
+                    url: "https://example.com/account",
+                    accountAffecting: true,
+                    requiresConfirmation: true,
+                  },
+                ],
+              },
+            );
+            expect(created.status).toBe(201);
+            const sessionId = String(created.data.session.id);
+            expect(created.data.session.status).toBe("awaiting_confirmation");
+
+            const confirmed = await req(
+              server.port,
+              "POST",
+              `/api/lifeops/browser/sessions/${encodeURIComponent(sessionId)}/confirm`,
+              {
+                confirmed: true,
+              },
+            );
+            expect(confirmed.status).toBe(200);
+            expect(confirmed.data.session.status).toBe("navigating");
+
+            const completed = await req(
+              server.port,
+              "POST",
+              `/api/lifeops/browser/sessions/${encodeURIComponent(sessionId)}/complete`,
+              {
+                result: {
+                  finalUrl: "https://example.com/account",
+                },
+              },
+            );
+            expect(completed.status).toBe(200);
+            expect(completed.data.session.status).toBe("done");
+
+            const listed = await req(
+              server.port,
+              "GET",
+              "/api/lifeops/browser/sessions",
+            );
+            expect(listed.status).toBe(200);
+            expect(listed.data.sessions).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({
+                  id: sessionId,
+                  status: "done",
+                }),
+              ]),
+            );
+          } finally {
+            await server.close();
+          }
+        });
+        continue;
+      }
+
+      if (scenario.id === "P3-04") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          const runtime = createApiRuntime("p3-04-agent");
+          const server = await startApiServer({
+            port: 0,
+            runtime,
+          });
+
+          try {
+            const created = await req(
+              server.port,
+              "POST",
+              "/api/lifeops/browser/sessions",
+              {
+                title: "Delete draft",
+                actions: [
+                  {
+                    kind: "click",
+                    label: "Delete draft",
+                    selector: "[data-delete]",
+                    accountAffecting: true,
+                    requiresConfirmation: true,
+                  },
+                ],
+              },
+            );
+            expect(created.status).toBe(201);
+            const sessionId = String(created.data.session.id);
+            expect(created.data.session.awaitingConfirmationForActionId).toBeTruthy();
+
+            const blocked = await req(
+              server.port,
+              "POST",
+              `/api/lifeops/browser/sessions/${encodeURIComponent(sessionId)}/complete`,
+              {
+                result: {
+                  finalUrl: "https://example.com/drafts",
+                },
+              },
+            );
+            expect(blocked.status).toBe(409);
+            expect(String(blocked.data.error)).toContain("explicit confirmation");
+
+            const cancelled = await req(
+              server.port,
+              "POST",
+              `/api/lifeops/browser/sessions/${encodeURIComponent(sessionId)}/confirm`,
+              {
+                confirmed: false,
+              },
+            );
+            expect(cancelled.status).toBe(200);
+            expect(cancelled.data.session.status).toBe("cancelled");
+          } finally {
+            await server.close();
+          }
+        });
+        continue;
+      }
+
+      it(`[${scenario.id}] ${scenario.title}`, () => {
+        throw new Error(`Missing executable validation for ${scenario.id}`);
+      });
     }
   });
 }
@@ -1898,8 +3246,472 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
 const describeLive =
   process.env.MILADY_LIFEOPS_LIVE_TEST === "1" ? describe : describe.skip;
 
+function liveScenarioTitle(id: string): string {
+  return liveScenarios.find((scenario) => scenario.id === id)?.title ?? id;
+}
+
+const liveGoogleExpectedEmail =
+  readOptionalEnv("MILADY_LIFEOPS_LIVE_GOOGLE_EXPECTED_EMAIL");
+const liveGoogleLocalCallbackFile = readOptionalEnv(
+  "MILADY_LIFEOPS_LIVE_GOOGLE_LOCAL_CALLBACK_FILE",
+);
+const liveGoogleRemoteCallbackFile = readOptionalEnv(
+  "MILADY_LIFEOPS_LIVE_GOOGLE_REMOTE_CALLBACK_FILE",
+);
+const liveGoogleCalendarCallbackFile = readOptionalEnv(
+  "MILADY_LIFEOPS_LIVE_GOOGLE_CALENDAR_CALLBACK_FILE",
+);
+const liveGoogleGmailCallbackFile = readOptionalEnv(
+  "MILADY_LIFEOPS_LIVE_GOOGLE_GMAIL_CALLBACK_FILE",
+);
+const liveGoogleRevokeCallbackFile = readOptionalEnv(
+  "MILADY_LIFEOPS_LIVE_GOOGLE_REVOKE_CALLBACK_FILE",
+);
+const liveGoogleRevokeMarkerFile = readOptionalEnv(
+  "MILADY_LIFEOPS_LIVE_GOOGLE_REVOKE_MARKER_FILE",
+);
+const liveGoogleAdminBlockCallbackFile = readOptionalEnv(
+  "MILADY_LIFEOPS_LIVE_GOOGLE_ADMIN_BLOCK_CALLBACK_FILE",
+);
+const liveGoogleAdminBlockMode =
+  readOptionalEnv("MILADY_LIFEOPS_LIVE_GOOGLE_ADMIN_BLOCK_MODE") === "remote"
+    ? "remote"
+    : "local";
+const liveTwilioToPhone = readOptionalEnv("MILADY_LIFEOPS_LIVE_TWILIO_TO_PHONE");
+const liveTwilioPrimaryChannel =
+  readOptionalEnv("MILADY_LIFEOPS_LIVE_TWILIO_PRIMARY_CHANNEL") === "voice"
+    ? "voice"
+    : "sms";
+const hasTwilioConfig =
+  Boolean(readOptionalEnv("TWILIO_ACCOUNT_SID")) &&
+  Boolean(readOptionalEnv("TWILIO_AUTH_TOKEN")) &&
+  Boolean(readOptionalEnv("TWILIO_PHONE_NUMBER"));
+
 describeLive("Milaidy PRD live connector coverage", () => {
-  for (const scenario of liveScenarios) {
-    it.todo(`[${scenario.id}] ${scenario.title}`);
-  }
+  it.skipIf(!hasLiveGoogleLocalConfig() || !liveGoogleLocalCallbackFile)(
+    `[LIVE-01] ${liveScenarioTitle("LIVE-01")}`,
+    async () => {
+      await withLiveLifeOpsApiServer(async ({ port, stateDir }) => {
+        const { status, tokenPath } = await connectLiveGoogle({
+          port,
+          stateDir,
+          mode: "local",
+          capabilities: ["google.calendar.read"],
+          callbackFile: liveGoogleLocalCallbackFile!,
+          expectedEmail: liveGoogleExpectedEmail,
+        });
+        const raw = JSON.parse(await fs.readFile(tokenPath, "utf-8")) as {
+          refreshToken?: string | null;
+        };
+        expect(raw.refreshToken?.trim()).toBeTruthy();
+        expect(status.mode).toBe("local");
+        expect(status.reason).toBe("connected");
+        expect(status.grantedCapabilities).toEqual(
+          expect.arrayContaining([
+            "google.basic_identity",
+            "google.calendar.read",
+          ]),
+        );
+      });
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it.skipIf(!hasLiveGoogleRemoteConfig() || !liveGoogleRemoteCallbackFile)(
+    `[LIVE-02] ${liveScenarioTitle("LIVE-02")}`,
+    async () => {
+      await withLiveLifeOpsApiServer(async ({ port, stateDir }) => {
+        const { status, tokenPath } = await connectLiveGoogle({
+          port,
+          stateDir,
+          mode: "remote",
+          capabilities: ["google.calendar.read"],
+          callbackFile: liveGoogleRemoteCallbackFile!,
+          expectedEmail: liveGoogleExpectedEmail,
+        });
+        const raw = JSON.parse(await fs.readFile(tokenPath, "utf-8")) as {
+          refreshToken?: string | null;
+        };
+        expect(raw.refreshToken?.trim()).toBeTruthy();
+        expect(status.mode).toBe("remote");
+        expect(status.connected).toBe(true);
+      });
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it.skipIf(!hasLiveGoogleLocalConfig() || !liveGoogleCalendarCallbackFile)(
+    `[LIVE-03] ${liveScenarioTitle("LIVE-03")}`,
+    async () => {
+      await withLiveLifeOpsApiServer(async ({ port, stateDir }) => {
+        const { tokenPath } = await connectLiveGoogle({
+          port,
+          stateDir,
+          mode: "local",
+          capabilities: ["google.calendar.read"],
+          callbackFile: liveGoogleCalendarCallbackFile!,
+          expectedEmail: liveGoogleExpectedEmail,
+        });
+
+        const firstFeed = await req(
+          port,
+          "GET",
+          "/api/lifeops/calendar/feed?mode=local&forceSync=1&timeZone=UTC",
+        );
+        expect(firstFeed.status).toBe(200);
+        expect(Array.isArray(firstFeed.data.events)).toBe(true);
+
+        await expireStoredGoogleAccessToken(tokenPath);
+
+        const secondFeed = await req(
+          port,
+          "GET",
+          "/api/lifeops/calendar/feed?mode=local&forceSync=1&timeZone=UTC",
+        );
+        expect(secondFeed.status).toBe(200);
+        expect(Array.isArray(secondFeed.data.events)).toBe(true);
+
+        const refreshed = JSON.parse(await fs.readFile(tokenPath, "utf-8")) as {
+          expiresAt?: number;
+          refreshToken?: string | null;
+        };
+        expect(refreshed.refreshToken?.trim()).toBeTruthy();
+        expect(Number(refreshed.expiresAt)).toBeGreaterThan(Date.now());
+
+        const statusRes = await req(
+          port,
+          "GET",
+          "/api/lifeops/connectors/google/status?mode=local",
+        );
+        expect(statusRes.status).toBe(200);
+        expect(statusRes.data.connected).toBe(true);
+        expect(statusRes.data.reason).toBe("connected");
+      });
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it.skipIf(!hasLiveGoogleLocalConfig() || !liveGoogleGmailCallbackFile)(
+    `[LIVE-04] ${liveScenarioTitle("LIVE-04")}`,
+    async () => {
+      await withLiveLifeOpsApiServer(async ({ port, stateDir, runtime }) => {
+        const { status } = await connectLiveGoogle({
+          port,
+          stateDir,
+          mode: "local",
+          capabilities: ["google.gmail.triage"],
+          callbackFile: liveGoogleGmailCallbackFile!,
+          expectedEmail: liveGoogleExpectedEmail,
+        });
+        expect(status.grantedCapabilities).toEqual(
+          expect.arrayContaining([
+            "google.basic_identity",
+            "google.gmail.triage",
+          ]),
+        );
+        expect(status.grantedCapabilities).not.toContain("google.gmail.send");
+
+        const triageRes = await req(
+          port,
+          "GET",
+          "/api/lifeops/gmail/triage?mode=local&forceSync=1&maxResults=10",
+        );
+        expect(triageRes.status).toBe(200);
+        expect(Array.isArray(triageRes.data.messages)).toBe(true);
+
+        const auditEventTypes = await listAuditEventTypes(runtime);
+        expect(auditEventTypes).toContain("gmail_triage_synced");
+        expect(auditEventTypes).not.toContain("gmail_reply_sent");
+      });
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it.skipIf(
+    !hasLiveGoogleLocalConfig() ||
+      !liveGoogleRevokeCallbackFile ||
+      !liveGoogleRevokeMarkerFile,
+  )(
+    `[LIVE-05] ${liveScenarioTitle("LIVE-05")}`,
+    async () => {
+      await withLiveLifeOpsApiServer(async ({ port, stateDir }) => {
+        const { tokenPath } = await connectLiveGoogle({
+          port,
+          stateDir,
+          mode: "local",
+          capabilities: ["google.calendar.read"],
+          callbackFile: liveGoogleRevokeCallbackFile!,
+          expectedEmail: liveGoogleExpectedEmail,
+        });
+
+        await waitForSignalFile({
+          label: "google-revoke",
+          filePath: liveGoogleRevokeMarkerFile!,
+          instructions: [
+            "Revoke the connected Google app access for this account, then write any text into:",
+            liveGoogleRevokeMarkerFile!,
+          ].join("\n"),
+        });
+
+        await expireStoredGoogleAccessToken(tokenPath);
+
+        const feedRes = await req(
+          port,
+          "GET",
+          "/api/lifeops/calendar/feed?mode=local&forceSync=1&timeZone=UTC",
+        );
+        expect(feedRes.status).toBe(401);
+        expect(String(feedRes.data.error).toLowerCase()).toContain("re-auth");
+
+        const statusRes = await req(
+          port,
+          "GET",
+          "/api/lifeops/connectors/google/status?mode=local",
+        );
+        expect(statusRes.status).toBe(200);
+        expect(statusRes.data.connected).toBe(false);
+        expect(statusRes.data.reason).toBe("needs_reauth");
+      });
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it.skipIf(!hasTwilioConfig || !liveTwilioToPhone)(
+    `[LIVE-06] ${liveScenarioTitle("LIVE-06")}`,
+    async () => {
+      await withLiveLifeOpsApiServer(async ({ port, runtime }) => {
+        const primaryChannel = liveTwilioPrimaryChannel;
+        const blockedChannel = primaryChannel === "sms" ? "voice" : "sms";
+        const service = new LifeOpsService(runtime);
+
+        const consent = await req(
+          port,
+          "POST",
+          "/api/lifeops/channels/phone-consent",
+          {
+            phoneNumber: liveTwilioToPhone!,
+            consentGiven: true,
+            allowSms: primaryChannel === "sms",
+            allowVoice: primaryChannel === "voice",
+          },
+        );
+        expect(consent.status).toBe(201);
+
+        const created = await service.createDefinition({
+          kind: "task",
+          title: "Live Twilio escalation check",
+          timezone: "UTC",
+          priority: 1,
+          cadence: {
+            kind: "once",
+            dueAt: "2026-04-04T12:00:00.000Z",
+            visibilityLeadMinutes: 0,
+            visibilityLagMinutes: 240,
+          },
+          reminderPlan: {
+            steps: [
+              {
+                channel: primaryChannel,
+                offsetMinutes: 0,
+                label: `Primary ${primaryChannel}`,
+              },
+              {
+                channel: blockedChannel,
+                offsetMinutes: 5,
+                label: `Blocked ${blockedChannel}`,
+              },
+            ],
+          },
+        });
+        const overview = await service.getOverview(
+          new Date("2026-04-04T12:10:00.000Z"),
+        );
+        const occurrence = overview.occurrences.find(
+          (candidate) => candidate.definitionId === created.definition.id,
+        );
+        expect(occurrence).toBeDefined();
+
+        const processed = await req(
+          port,
+          "POST",
+          "/api/lifeops/reminders/process",
+          {
+            now: "2026-04-04T12:10:00.000Z",
+            limit: 10,
+          },
+        );
+        expect(processed.status).toBe(200);
+
+        const attempts = (processed.data.attempts as Array<Record<string, unknown>>).filter(
+          (attempt) => attempt.ownerId === occurrence?.id,
+        );
+        expect(attempts).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              channel: primaryChannel,
+              outcome: "delivered",
+              connectorRef: `twilio:${liveTwilioToPhone}`,
+            }),
+            expect.objectContaining({
+              channel: blockedChannel,
+              outcome: "blocked_policy",
+            }),
+          ]),
+        );
+
+        const inspection = await req(
+          port,
+          "GET",
+          `/api/lifeops/reminders/inspection?ownerType=occurrence&ownerId=${encodeURIComponent(String(occurrence?.id ?? ""))}`,
+        );
+        expect(inspection.status).toBe(200);
+        expect(Array.isArray(inspection.data.audits)).toBe(true);
+        expect(
+          (inspection.data.audits as Array<Record<string, unknown>>).some(
+            (audit) =>
+              audit.eventType === "reminder_delivered" &&
+              String(audit.decision?.connectorRef ?? "").startsWith("twilio:"),
+          ),
+        ).toBe(true);
+      });
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it.skipIf(
+    !liveGoogleAdminBlockCallbackFile ||
+      (liveGoogleAdminBlockMode === "local"
+        ? !hasLiveGoogleLocalConfig()
+        : !hasLiveGoogleRemoteConfig()),
+  )(
+    `[LIVE-07] ${liveScenarioTitle("LIVE-07")}`,
+    async () => {
+      await withLiveLifeOpsApiServer(async ({ port }) => {
+        const startRes = await req(
+          port,
+          "POST",
+          "/api/lifeops/connectors/google/start",
+          {
+            mode: liveGoogleAdminBlockMode,
+            capabilities: ["google.calendar.read"],
+          },
+        );
+        expect(startRes.status).toBe(200);
+
+        const callbackUrl = await waitForCallbackUrl({
+          label: "google-admin-block",
+          authUrl: String(startRes.data.authUrl),
+          callbackFile: liveGoogleAdminBlockCallbackFile!,
+        });
+        const callbackRes = await req(
+          port,
+          "GET",
+          `/api/lifeops/connectors/google/callback${callbackUrl.search}`,
+        );
+
+        if (callbackRes.status !== 200) {
+          expect([400, 403]).toContain(callbackRes.status);
+          expect(String(callbackRes.data._raw).toLowerCase()).toMatch(
+            /admin|policy|blocked|workspace|organization|forbidden/,
+          );
+          return;
+        }
+
+        const feedRes = await req(
+          port,
+          "GET",
+          `/api/lifeops/calendar/feed?mode=${liveGoogleAdminBlockMode}&forceSync=1&timeZone=UTC`,
+        );
+        expect(feedRes.status).toBe(403);
+        expect(String(feedRes.data.error).toLowerCase()).toMatch(
+          /admin|policy|blocked|workspace|organization|forbidden/,
+        );
+      });
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(`[LIVE-08] ${liveScenarioTitle("LIVE-08")}`, async () => {
+    await withLiveLifeOpsApiServer(async ({ port }) => {
+      const created = await req(port, "POST", "/api/lifeops/browser/sessions", {
+        title: "Live browser session",
+        actions: [
+          {
+            kind: "navigate",
+            label: "Open settings",
+            url: "https://example.com/settings",
+          },
+          {
+            kind: "click",
+            label: "Save settings",
+            selector: "[data-save]",
+            accountAffecting: true,
+            requiresConfirmation: true,
+          },
+        ],
+      });
+      expect(created.status).toBe(201);
+      const sessionId = String(created.data.session.id);
+
+      const pending = await req(
+        port,
+        "GET",
+        `/api/lifeops/browser/sessions/${encodeURIComponent(sessionId)}`,
+      );
+      expect(pending.status).toBe(200);
+      expect(pending.data.session.status).toBe("awaiting_confirmation");
+      expect(pending.data.session.awaitingConfirmationForActionId).toBeTruthy();
+
+      const listedPending = await req(port, "GET", "/api/lifeops/browser/sessions");
+      expect(listedPending.status).toBe(200);
+      expect(
+        (listedPending.data.sessions as Array<Record<string, unknown>>).some(
+          (session) =>
+            session.id === sessionId &&
+            session.status === "awaiting_confirmation",
+        ),
+      ).toBe(true);
+
+      const confirmed = await req(
+        port,
+        "POST",
+        `/api/lifeops/browser/sessions/${encodeURIComponent(sessionId)}/confirm`,
+        {
+          confirmed: true,
+        },
+      );
+      expect(confirmed.status).toBe(200);
+      expect(confirmed.data.session.status).toBe("navigating");
+
+      const listedNavigating = await req(port, "GET", "/api/lifeops/browser/sessions");
+      expect(listedNavigating.status).toBe(200);
+      expect(
+        (listedNavigating.data.sessions as Array<Record<string, unknown>>).some(
+          (session) =>
+            session.id === sessionId && session.status === "navigating",
+        ),
+      ).toBe(true);
+
+      const completed = await req(
+        port,
+        "POST",
+        `/api/lifeops/browser/sessions/${encodeURIComponent(sessionId)}/complete`,
+        {
+          result: {
+            finalUrl: "https://example.com/settings/saved",
+          },
+        },
+      );
+      expect(completed.status).toBe(200);
+      expect(completed.data.session.status).toBe("done");
+
+      const listedDone = await req(port, "GET", "/api/lifeops/browser/sessions");
+      expect(listedDone.status).toBe(200);
+      expect(
+        (listedDone.data.sessions as Array<Record<string, unknown>>).some(
+          (session) => session.id === sessionId && session.status === "done",
+        ),
+      ).toBe(true);
+    });
+  });
 });
