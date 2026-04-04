@@ -97,6 +97,45 @@ describe("life-ops integration observability", () => {
     );
   });
 
+  it("logs Twilio network failures with telemetry", async () => {
+    fetchMock.mockRejectedValue(new Error("connect ECONNRESET"));
+
+    const result = await sendTwilioSms({
+      credentials: {
+        accountSid: "AC123",
+        authToken: "secret",
+        fromPhoneNumber: "+14155550199",
+      },
+      to: "+14155550101",
+      body: "Reminder body",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      status: null,
+      error: "connect ECONNRESET",
+    });
+    expect(createSpanMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        boundary: "lifeops",
+        operation: "twilio_sms",
+      }),
+    );
+    expect(spanFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorKind: "network_error",
+      }),
+    );
+    expect(loggerErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        boundary: "lifeops",
+        integration: "twilio",
+        operation: "twilio_sms",
+      }),
+      "[lifeops] Twilio request failed: connect ECONNRESET",
+    );
+  });
+
   it("logs X network failures with telemetry", async () => {
     fetchMock.mockRejectedValue(new Error("socket hang up"));
 

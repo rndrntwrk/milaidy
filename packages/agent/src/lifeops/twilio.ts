@@ -99,11 +99,7 @@ async function sendTwilioRequest(args: {
       sid: data.sid,
     };
   } catch (error) {
-    return {
-      ok: false,
-      status: null,
-      error: error instanceof Error ? error.message : String(error),
-    };
+    const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error(
       {
         boundary: "lifeops",
@@ -111,13 +107,17 @@ async function sendTwilioRequest(args: {
         operation,
         err: error instanceof Error ? error : undefined,
       },
-      `[lifeops] Twilio request failed: ${result.error}`,
+      `[lifeops] Twilio request failed: ${errorMessage}`,
     );
     span.failure({
       error,
       errorKind: "network_error",
     });
-    return result;
+    return {
+      ok: false,
+      status: null,
+      error: errorMessage,
+    };
   }
 }
 
