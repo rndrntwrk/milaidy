@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
+  assertReadyChecks,
   openAppPath,
-  runSoftReadyChecks,
   seedAppStorage,
   installDefaultAppMocks,
 } from "./helpers";
@@ -52,7 +52,7 @@ const VIEWS: ViewSpec[] = [
     id: "wallets",
     path: "/wallets",
     label: "Wallets",
-    readyChecks: [{ selector: '[data-testid="wallet-balance-value"]' }],
+    readyChecks: [{ selector: '[data-testid="wallets-sidebar"]' }],
   },
   {
     id: "knowledge",
@@ -64,13 +64,13 @@ const VIEWS: ViewSpec[] = [
     id: "connectors",
     path: "/connectors",
     label: "Connectors",
-    readyChecks: [{ selector: '[data-testid="plugins-view-social"]' }],
+    readyChecks: [{ selector: '[data-testid="connectors-settings-sidebar"]' }],
   },
   {
     id: "settings",
     path: "/settings",
     label: "Settings",
-    readyChecks: [{ selector: '[aria-label="Close settings"]' }],
+    readyChecks: [{ selector: '[data-testid="settings-sidebar"]' }],
   },
   {
     id: "triggers",
@@ -140,7 +140,7 @@ for (const view of VIEWS) {
     }
 
     if (view.readyChecks?.length) {
-      await runSoftReadyChecks(
+      await assertReadyChecks(
         page,
         `${view.label} (${view.id})`,
         view.readyChecks,

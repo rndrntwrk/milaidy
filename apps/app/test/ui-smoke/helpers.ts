@@ -11,6 +11,11 @@ type ReadyCheck =
   | { selector: string; text?: never }
   | { selector?: never; text: string };
 
+type EvaluatedReadyCheck = {
+  check: ReadyCheck;
+  passed: boolean;
+};
+
 const DEFAULT_STORAGE: Record<string, string> = {
   "eliza:onboarding-complete": "1",
   "eliza:onboarding:step": "activate",
@@ -100,28 +105,91 @@ async function locatorVisible(locator: Locator): Promise<boolean> {
   }
 }
 
+function formatReadyCheck(check: ReadyCheck): string {
+  if ("selector" in check) {
+    return `selector=${check.selector}`;
+  }
+  return `text=${JSON.stringify(check.text)}`;
+}
+
+function readyChecksPassed(
+  results: EvaluatedReadyCheck[],
+  mode: "any" | "all",
+): boolean {
+  if (mode === "all") {
+    return results.every((result) => result.passed);
+  }
+  return results.some((result) => result.passed);
+}
+
+async function evaluateReadyChecks(
+  page: Page,
+  checks: ReadyCheck[],
+  mode: "any" | "all" = "any",
+): Promise<{
+  passed: boolean;
+  results: EvaluatedReadyCheck[];
+}> {
+  const results: EvaluatedReadyCheck[] = [];
+
+  for (const check of checks) {
+    if ("selector" in check) {
+      results.push({
+        check,
+        passed: await locatorVisible(page.locator(check.selector)),
+      });
+      continue;
+    }
+    results.push({
+      check,
+      passed: await locatorVisible(page.getByText(check.text)),
+    });
+  }
+
+  return {
+    passed: readyChecksPassed(results, mode),
+    results,
+  };
+}
+
+export async function assertReadyChecks(
+  page: Page,
+  label: string,
+  checks: ReadyCheck[],
+  mode: "any" | "all" = "any",
+): Promise<void> {
+  const evaluation = await evaluateReadyChecks(page, checks, mode);
+  const summary = evaluation.results
+    .map(
+      (result) =>
+        `${result.passed ? "pass" : "fail"}:${formatReadyCheck(result.check)}`,
+    )
+    .join(", ");
+
+  expect(
+    evaluation.passed,
+    `[playwright-ui-smoke] ${label}: ready checks failed (${summary})`,
+  ).toBe(true);
+}
+
 export async function runSoftReadyChecks(
   page: Page,
   label: string,
   checks: ReadyCheck[],
   mode: "any" | "all" = "any",
 ): Promise<void> {
-  const results: boolean[] = [];
-
-  for (const check of checks) {
-    if ("selector" in check) {
-      results.push(await locatorVisible(page.locator(check.selector)));
-      continue;
-    }
-    results.push(await locatorVisible(page.getByText(check.text)));
+  const evaluation = await evaluateReadyChecks(page, checks, mode);
+  if (evaluation.passed) {
+    return;
   }
 
-  const passed =
-    mode === "all" ? results.every((result) => result) : results.some(Boolean);
-
-  if (!passed) {
-    console.warn(
-      `[playwright-ui-smoke] ${label}: ready checks did not pass (${JSON.stringify(results)}).`,
-    );
-  }
+  const summary = evaluation.results
+    .map(
+      (result) =>
+        `${result.passed ? "pass" : "fail"}:${formatReadyCheck(result.check)}`,
+    )
+    .join(", ");
+  console.warn(
+    `[playwright-ui-smoke] ${label}: ready checks failed (${summary}).`,
+  );
 }
