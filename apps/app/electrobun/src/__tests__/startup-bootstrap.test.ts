@@ -43,7 +43,7 @@ describe("Electrobun startup bootstrap", () => {
       "preload = readResolvedPreloadScript(import.meta.dir);",
     );
     const browserWindowIndex = source.indexOf(
-      "const win = new BrowserWindow(browserWindowOptions);",
+      "new BrowserWindow({",
       validateIndex,
     );
 
@@ -110,7 +110,11 @@ describe("Electrobun startup bootstrap", () => {
     const source = fs.readFileSync(INDEX_PATH, "utf8");
 
     expect(source).toContain("resolveMainWindowPartition(process.env)");
-    expect(source).toContain("browserWindowOptions.partition");
+    expect(source).toContain("resolveBootstrapShellRenderer(buildInfo)");
+    expect(source).toContain("resolveBootstrapViewRenderer(buildInfo)");
+    expect(source).toContain("const mainView = new BrowserView({");
+    expect(source).toContain("partition: mainWindowPartition");
+    expect(source).toContain("win.webviewId = mainView.id");
   });
 
   it("guards embedded agent startup behind local runtime mode", () => {
