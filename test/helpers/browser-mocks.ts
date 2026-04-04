@@ -9,6 +9,8 @@ import { vi } from "vitest";
 
 const CANVAS_PATCH_MARK = Symbol.for("milady.test.canvasMocksInstalled");
 const CONSOLE_PATCH_MARK = Symbol.for("milady.test.consoleErrorPatched");
+const MEDIA_PATCH_MARK = Symbol.for("milady.test.mediaMocksInstalled");
+const AUDIO_PATCH_MARK = Symbol.for("milady.test.audioMocksInstalled");
 
 /**
  * Create an in-memory Storage mock backed by a Map.
@@ -120,6 +122,62 @@ export function installCanvasMocks(): void {
   });
 
   prototype[CANVAS_PATCH_MARK] = true;
+}
+
+/**
+ * Install HTMLMediaElement and Audio mocks to avoid jsdom "Not implemented"
+ * warnings when tests exercise preview/playback flows.
+ */
+export function installMediaElementMocks(): void {
+  if (typeof globalThis.HTMLMediaElement === "undefined") return;
+
+  const prototype = globalThis.HTMLMediaElement.prototype as
+    HTMLMediaElement["prototype"] & {
+      [MEDIA_PATCH_MARK]?: boolean;
+    };
+  if (!prototype[MEDIA_PATCH_MARK]) {
+    Object.defineProperty(prototype, "load", {
+      value: vi.fn(),
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(prototype, "play", {
+      value: vi.fn(() => Promise.resolve()),
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(prototype, "pause", {
+      value: vi.fn(),
+      writable: true,
+      configurable: true,
+    });
+    prototype[MEDIA_PATCH_MARK] = true;
+  }
+
+  const globalObject = globalThis as typeof globalThis & {
+    Audio?: typeof Audio & {
+      [AUDIO_PATCH_MARK]?: boolean;
+    };
+  };
+  if (typeof document === "undefined") return;
+  if (globalObject.Audio?.[AUDIO_PATCH_MARK]) return;
+
+  const MockAudio = vi.fn((src?: string) => {
+    const audio = document.createElement("audio");
+    if (typeof src === "string") {
+      audio.src = src;
+    }
+    return audio;
+  }) as unknown as typeof Audio & {
+    [AUDIO_PATCH_MARK]?: boolean;
+  };
+  MockAudio[AUDIO_PATCH_MARK] = true;
+
+  Object.defineProperty(globalObject, "Audio", {
+    value: MockAudio,
+    writable: true,
+    configurable: true,
+  });
 }
 
 /**

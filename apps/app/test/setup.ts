@@ -11,6 +11,7 @@ import {
   createMockStorage,
   hasStorageApi,
   installCanvasMocks,
+  installMediaElementMocks,
   suppressReactTestConsoleErrors,
 } from "../../../test/helpers/browser-mocks";
 
@@ -22,6 +23,7 @@ globalThis.React = React;
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 suppressReactTestConsoleErrors();
+installMediaElementMocks();
 
 // ---------------------------------------------------------------------------
 // Mock @miladyai/app-core bridge modules — the real electrobun RPC module

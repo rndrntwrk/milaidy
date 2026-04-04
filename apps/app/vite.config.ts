@@ -826,8 +826,9 @@ export default defineConfig({
     emptyOutDir: !desktopFastDist,
     sourcemap: desktopFastDist ? false : enableAppSourceMaps,
     target: "es2022",
-    // Keep warnings focused on regressions after splitting the heavy 3D vendor surface.
-    chunkSizeWarningLimit: 2300,
+    // The desktop/web shell intentionally ships a large eagerly-loaded main
+    // chunk; warn only when it grows beyond the current known baseline.
+    chunkSizeWarningLimit: 3800,
     minify: desktopFastDist ? false : undefined,
     cssMinify: desktopFastDist ? false : undefined,
     reportCompressedSize: !desktopFastDist,
