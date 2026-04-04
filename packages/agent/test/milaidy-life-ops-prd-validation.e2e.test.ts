@@ -991,6 +991,125 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
         continue;
       }
 
+      if (scenario.id === "P1-03") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          await withGoogleOAuthApiServer(
+            {
+              MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID: "desktop-client-id",
+            },
+            async ({ port, fetchMock }) => {
+              fetchMock.mockResolvedValueOnce(
+                new Response(
+                  JSON.stringify({
+                    access_token: "calendar-access-token",
+                    refresh_token: "calendar-refresh-token",
+                    expires_in: 3600,
+                    scope: [
+                      "openid",
+                      "email",
+                      "profile",
+                      "https://www.googleapis.com/auth/calendar.readonly",
+                    ].join(" "),
+                    token_type: "Bearer",
+                    id_token: buildIdToken({
+                      sub: "google-user-3",
+                      email: "calendar@example.com",
+                      name: "Calendar Example",
+                      email_verified: true,
+                    }),
+                  }),
+                  {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                  },
+                ),
+              );
+
+              const startRes = await req(
+                port,
+                "POST",
+                "/api/lifeops/connectors/google/start",
+                { capabilities: ["google.calendar.read"] },
+              );
+              expect(startRes.status).toBe(200);
+
+              const authUrl = new URL(String(startRes.data.authUrl));
+              await req(
+                port,
+                "GET",
+                `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(authUrl.searchParams.get("state") ?? "")}&code=calendar-code`,
+              );
+
+              fetchMock.mockResolvedValueOnce(
+                new Response(
+                  JSON.stringify({
+                    items: [
+                      {
+                        id: "event-later",
+                        status: "confirmed",
+                        summary: "Design review",
+                        location: "Studio",
+                        htmlLink: "https://calendar.google.com/event?eid=design",
+                        start: {
+                          dateTime: "2026-04-04T15:00:00-07:00",
+                          timeZone: "America/Los_Angeles",
+                        },
+                        end: {
+                          dateTime: "2026-04-04T16:00:00-07:00",
+                          timeZone: "America/Los_Angeles",
+                        },
+                        attendees: [
+                          {
+                            email: "friend@example.com",
+                            displayName: "Friend",
+                            responseStatus: "accepted",
+                          },
+                        ],
+                      },
+                      {
+                        id: "event-earlier",
+                        status: "confirmed",
+                        summary: "Morning standup",
+                        htmlLink: "https://calendar.google.com/event?eid=standup",
+                        start: {
+                          dateTime: "2026-04-04T09:00:00-07:00",
+                          timeZone: "America/Los_Angeles",
+                        },
+                        end: {
+                          dateTime: "2026-04-04T09:30:00-07:00",
+                          timeZone: "America/Los_Angeles",
+                        },
+                      },
+                    ],
+                  }),
+                  {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                  },
+                ),
+              );
+
+              const feedRes = await req(
+                port,
+                "GET",
+                "/api/lifeops/calendar/feed?timeZone=America%2FLos_Angeles",
+              );
+              expect(feedRes.status).toBe(200);
+              expect(feedRes.data.source).toBe("synced");
+              expect(feedRes.data.events.map((event: { title: string }) => event.title)).toEqual([
+                "Morning standup",
+                "Design review",
+              ]);
+              expect(feedRes.data.events[1]).toMatchObject({
+                title: "Design review",
+                htmlLink: "https://calendar.google.com/event?eid=design",
+              });
+            },
+          );
+        });
+        continue;
+      }
+
       it.todo(`[${scenario.id}] ${scenario.title}`);
     }
   });

@@ -9,6 +9,7 @@ const { mockUseApp, mockClient } = vi.hoisted(() => ({
   mockClient: {
     completeLifeOpsOccurrence: vi.fn(),
     disconnectGoogleLifeOpsConnector: vi.fn(),
+    getLifeOpsCalendarFeed: vi.fn(),
     getGoogleLifeOpsConnectorStatus: vi.fn(),
     getLifeOpsOverview: vi.fn(),
     listWorkbenchTodos: vi.fn(),
@@ -63,6 +64,7 @@ describe("TasksEventsPanel", () => {
     mockUseApp.mockReset();
     mockClient.completeLifeOpsOccurrence.mockReset();
     mockClient.disconnectGoogleLifeOpsConnector.mockReset();
+    mockClient.getLifeOpsCalendarFeed.mockReset();
     mockClient.getGoogleLifeOpsConnectorStatus.mockReset();
     mockClient.getLifeOpsOverview.mockReset();
     mockClient.listWorkbenchTodos.mockReset();
@@ -192,6 +194,48 @@ describe("TasksEventsPanel", () => {
       ],
     });
     mockClient.getLifeOpsOverview.mockResolvedValue(workbench.lifeops);
+    mockClient.getLifeOpsCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [
+        {
+          id: "event-1",
+          externalId: "google-event-1",
+          agentId: "agent-1",
+          provider: "google",
+          calendarId: "primary",
+          title: "Design review",
+          description: "Discuss the next milestone.",
+          location: "Studio",
+          status: "confirmed",
+          startAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+          endAt: new Date(Date.now() + 90 * 60_000).toISOString(),
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: "https://calendar.google.com/event?eid=1",
+          conferenceLink: "https://meet.google.com/example",
+          organizer: {
+            email: "agent@example.com",
+          },
+          attendees: [
+            {
+              email: "friend@example.com",
+              displayName: "Friend",
+              responseStatus: "accepted",
+              self: false,
+              organizer: false,
+              optional: false,
+            },
+          ],
+          metadata: {},
+          syncedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+      source: "synced",
+      timeMin: new Date().toISOString(),
+      timeMax: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+      syncedAt: new Date().toISOString(),
+    });
     mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue({
       provider: "google",
       mode: "local",
@@ -301,10 +345,12 @@ describe("TasksEventsPanel", () => {
 
     const text = flattenText(tree.root).toLowerCase();
     expect(mockClient.listWorkbenchTodos.mock.calls.length).toBeGreaterThan(0);
+    expect(mockClient.getLifeOpsCalendarFeed.mock.calls.length).toBeGreaterThan(0);
     expect(mockClient.getLifeOpsOverview.mock.calls.length).toBeGreaterThan(0);
     expect(mockClient.getGoogleLifeOpsConnectorStatus.mock.calls.length).toBeGreaterThan(0);
     expect(text).toContain("google calendar");
     expect(text).toContain("connected as agent@example.com");
+    expect(text).toContain("design review");
     expect(text).toContain("current slot check-in");
     expect(text).toContain("in-app reminder");
     expect(text).toContain("write release notes");
@@ -347,6 +393,30 @@ describe("TasksEventsPanel", () => {
   });
 
   it("starts Google OAuth from the life-ops card", async () => {
+    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue({
+      provider: "google",
+      mode: "local",
+      defaultMode: "local",
+      availableModes: ["local"],
+      configured: true,
+      connected: false,
+      reason: "disconnected",
+      identity: null,
+      grantedCapabilities: [],
+      grantedScopes: [],
+      expiresAt: null,
+      hasRefreshToken: false,
+      grant: null,
+    });
+    mockClient.getLifeOpsCalendarFeed.mockResolvedValueOnce({
+      calendarId: "primary",
+      events: [],
+      source: "cache",
+      timeMin: new Date().toISOString(),
+      timeMax: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+      syncedAt: null,
+    });
+
     let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
@@ -362,18 +432,6 @@ describe("TasksEventsPanel", () => {
       await Promise.resolve();
     });
 
-    const disconnectButton = tree.root
-      .findAllByType("button")
-      .find((button) => flattenText(button).includes("Disconnect"));
-    expect(disconnectButton).toBeDefined();
-
-    await act(async () => {
-      disconnectButton?.props.onClick();
-      await Promise.resolve();
-    });
-
-    expect(mockClient.disconnectGoogleLifeOpsConnector).toHaveBeenCalledWith();
-
     const connectButton = tree.root
       .findAllByType("button")
       .find((button) => flattenText(button).includes("Connect"));
@@ -387,6 +445,37 @@ describe("TasksEventsPanel", () => {
     expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith();
     expect(mockOpenExternalUrl).toHaveBeenCalledWith(
       "https://accounts.google.com/o/oauth2/v2/auth?state=test",
+    );
+  });
+
+  it("opens calendar events from the life-ops panel", async () => {
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(TasksEventsPanel, {
+          open: true,
+          clearEvents: vi.fn(),
+          events: [],
+        }),
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const openButton = tree.root
+      .findAllByType("button")
+      .find((button) => flattenText(button).includes("Open"));
+    expect(openButton).toBeDefined();
+
+    await act(async () => {
+      openButton?.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(mockOpenExternalUrl).toHaveBeenCalledWith(
+      "https://calendar.google.com/event?eid=1",
     );
   });
 });

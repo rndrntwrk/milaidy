@@ -416,6 +416,56 @@ export interface LifeOpsOverview {
   summary: LifeOpsOverviewSummary;
 }
 
+export interface LifeOpsCalendarEventAttendee {
+  email: string | null;
+  displayName: string | null;
+  responseStatus: string | null;
+  self: boolean;
+  organizer: boolean;
+  optional: boolean;
+}
+
+export interface LifeOpsCalendarEvent {
+  id: string;
+  externalId: string;
+  agentId: string;
+  provider: "google";
+  calendarId: string;
+  title: string;
+  description: string;
+  location: string;
+  status: string;
+  startAt: string;
+  endAt: string;
+  isAllDay: boolean;
+  timezone: string | null;
+  htmlLink: string | null;
+  conferenceLink: string | null;
+  organizer: Record<string, unknown> | null;
+  attendees: LifeOpsCalendarEventAttendee[];
+  metadata: Record<string, unknown>;
+  syncedAt: string;
+  updatedAt: string;
+}
+
+export interface LifeOpsCalendarFeed {
+  calendarId: string;
+  events: LifeOpsCalendarEvent[];
+  source: "cache" | "synced";
+  timeMin: string;
+  timeMax: string;
+  syncedAt: string | null;
+}
+
+export interface GetLifeOpsCalendarFeedRequest {
+  mode?: LifeOpsConnectorMode;
+  calendarId?: string;
+  timeMin?: string;
+  timeMax?: string;
+  timeZone?: string;
+  forceSync?: boolean;
+}
+
 export const LIFEOPS_GOOGLE_CONNECTOR_REASONS = [
   "connected",
   "disconnected",

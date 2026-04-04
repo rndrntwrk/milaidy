@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { IAgentRuntime } from "@elizaos/core";
 import type {
   LifeOpsAuditEvent,
+  LifeOpsCalendarEvent,
   LifeOpsChannelPolicy,
   LifeOpsConnectorGrant,
   LifeOpsGoalDefinition,
@@ -199,6 +200,59 @@ function parseAuditEvent(row: Record<string, unknown>): LifeOpsAuditEvent {
   };
 }
 
+function parseCalendarEvent(row: Record<string, unknown>): LifeOpsCalendarEvent {
+  return {
+    id: toText(row.id),
+    externalId: toText(row.external_event_id),
+    agentId: toText(row.agent_id),
+    provider: "google",
+    calendarId: toText(row.calendar_id),
+    title: toText(row.title),
+    description: toText(row.description),
+    location: toText(row.location),
+    status: toText(row.status),
+    startAt: toText(row.start_at),
+    endAt: toText(row.end_at),
+    isAllDay: toBoolean(row.is_all_day),
+    timezone: row.timezone ? toText(row.timezone) : null,
+    htmlLink: row.html_link ? toText(row.html_link) : null,
+    conferenceLink: row.conference_link ? toText(row.conference_link) : null,
+    organizer: row.organizer_json ? parseJsonRecord(row.organizer_json) : null,
+    attendees: parseJsonArray(
+      row.attendees_json,
+    ) as unknown as LifeOpsCalendarEvent["attendees"],
+    metadata: parseJsonRecord(row.metadata_json),
+    syncedAt: toText(row.synced_at),
+    updatedAt: toText(row.updated_at),
+  };
+}
+
+interface LifeOpsCalendarSyncState {
+  id: string;
+  agentId: string;
+  provider: LifeOpsConnectorGrant["provider"];
+  calendarId: string;
+  windowStartAt: string;
+  windowEndAt: string;
+  syncedAt: string;
+  updatedAt: string;
+}
+
+function parseCalendarSyncState(
+  row: Record<string, unknown>,
+): LifeOpsCalendarSyncState {
+  return {
+    id: toText(row.id),
+    agentId: toText(row.agent_id),
+    provider: toText(row.provider) as LifeOpsConnectorGrant["provider"],
+    calendarId: toText(row.calendar_id),
+    windowStartAt: toText(row.window_start_at),
+    windowEndAt: toText(row.window_end_at),
+    syncedAt: toText(row.synced_at),
+    updatedAt: toText(row.updated_at),
+  };
+}
+
 export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void> {
   const key = runtime as unknown as object;
   if (schemaReady.has(key)) return;
@@ -331,6 +385,40 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
       updated_at TEXT NOT NULL,
       UNIQUE(agent_id, provider, mode)
     )`,
+    `CREATE TABLE IF NOT EXISTS life_calendar_events (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      calendar_id TEXT NOT NULL,
+      external_event_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      location TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL,
+      start_at TEXT NOT NULL,
+      end_at TEXT NOT NULL,
+      is_all_day BOOLEAN NOT NULL,
+      timezone TEXT,
+      html_link TEXT,
+      conference_link TEXT,
+      organizer_json TEXT,
+      attendees_json TEXT NOT NULL DEFAULT '[]',
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      synced_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(agent_id, provider, calendar_id, external_event_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS life_calendar_sync_states (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      calendar_id TEXT NOT NULL,
+      window_start_at TEXT NOT NULL,
+      window_end_at TEXT NOT NULL,
+      synced_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(agent_id, provider, calendar_id)
+    )`,
     `CREATE TABLE IF NOT EXISTS life_channel_policies (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
@@ -370,6 +458,10 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
       ON life_reminder_plans(agent_id, owner_type, owner_id)`,
     `CREATE INDEX IF NOT EXISTS idx_life_audit_events_owner
       ON life_audit_events(agent_id, owner_type, owner_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_calendar_events_window
+      ON life_calendar_events(agent_id, provider, start_at, end_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_calendar_sync_states_agent
+      ON life_calendar_sync_states(agent_id, provider, calendar_id)`,
   ];
 
   for (const statement of statements) {
@@ -1031,6 +1123,189 @@ export class LifeOpsRepository {
     );
   }
 
+  async upsertCalendarEvent(event: LifeOpsCalendarEvent): Promise<void> {
+    await this.ensureReady();
+    await executeRawSql(
+      this.runtime,
+      `INSERT INTO life_calendar_events (
+        id, agent_id, provider, calendar_id, external_event_id, title,
+        description, location, status, start_at, end_at, is_all_day,
+        timezone, html_link, conference_link, organizer_json,
+        attendees_json, metadata_json, synced_at, updated_at
+      ) VALUES (
+        ${sqlQuote(event.id)},
+        ${sqlQuote(event.agentId)},
+        ${sqlQuote(event.provider)},
+        ${sqlQuote(event.calendarId)},
+        ${sqlQuote(event.externalId)},
+        ${sqlQuote(event.title)},
+        ${sqlQuote(event.description)},
+        ${sqlQuote(event.location)},
+        ${sqlQuote(event.status)},
+        ${sqlQuote(event.startAt)},
+        ${sqlQuote(event.endAt)},
+        ${sqlBoolean(event.isAllDay)},
+        ${sqlText(event.timezone)},
+        ${sqlText(event.htmlLink)},
+        ${sqlText(event.conferenceLink)},
+        ${sqlText(event.organizer ? JSON.stringify(event.organizer) : null)},
+        ${sqlJson(event.attendees)},
+        ${sqlJson(event.metadata)},
+        ${sqlQuote(event.syncedAt)},
+        ${sqlQuote(event.updatedAt)}
+      )
+      ON CONFLICT(agent_id, provider, calendar_id, external_event_id) DO UPDATE SET
+        title = excluded.title,
+        description = excluded.description,
+        location = excluded.location,
+        status = excluded.status,
+        start_at = excluded.start_at,
+        end_at = excluded.end_at,
+        is_all_day = excluded.is_all_day,
+        timezone = excluded.timezone,
+        html_link = excluded.html_link,
+        conference_link = excluded.conference_link,
+        organizer_json = excluded.organizer_json,
+        attendees_json = excluded.attendees_json,
+        metadata_json = excluded.metadata_json,
+        synced_at = excluded.synced_at,
+        updated_at = excluded.updated_at`,
+    );
+  }
+
+  async deleteCalendarEventsForProvider(
+    agentId: string,
+    provider: LifeOpsConnectorGrant["provider"],
+    calendarId?: string,
+  ): Promise<void> {
+    await this.ensureReady();
+    const calendarClause = calendarId
+      ? `AND calendar_id = ${sqlQuote(calendarId)}`
+      : "";
+    await executeRawSql(
+      this.runtime,
+      `DELETE FROM life_calendar_events
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND provider = ${sqlQuote(provider)}
+          ${calendarClause}`,
+    );
+  }
+
+  async pruneCalendarEventsInWindow(
+    agentId: string,
+    provider: LifeOpsConnectorGrant["provider"],
+    calendarId: string,
+    timeMin: string,
+    timeMax: string,
+    keepExternalIds: readonly string[],
+  ): Promise<void> {
+    await this.ensureReady();
+    const keepClause =
+      keepExternalIds.length > 0
+        ? `AND external_event_id NOT IN (${keepExternalIds
+            .map((externalId) => sqlQuote(externalId))
+            .join(", ")})`
+        : "";
+    await executeRawSql(
+      this.runtime,
+      `DELETE FROM life_calendar_events
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND provider = ${sqlQuote(provider)}
+          AND calendar_id = ${sqlQuote(calendarId)}
+          AND end_at >= ${sqlQuote(timeMin)}
+          AND start_at < ${sqlQuote(timeMax)}
+          ${keepClause}`,
+    );
+  }
+
+  async listCalendarEvents(
+    agentId: string,
+    provider: LifeOpsConnectorGrant["provider"],
+    timeMin?: string,
+    timeMax?: string,
+  ): Promise<LifeOpsCalendarEvent[]> {
+    await this.ensureReady();
+    const timeMinClause = timeMin
+      ? `AND end_at >= ${sqlQuote(timeMin)}`
+      : "";
+    const timeMaxClause = timeMax
+      ? `AND start_at < ${sqlQuote(timeMax)}`
+      : "";
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_calendar_events
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND provider = ${sqlQuote(provider)}
+          ${timeMinClause}
+          ${timeMaxClause}
+        ORDER BY start_at ASC`,
+    );
+    return rows.map(parseCalendarEvent);
+  }
+
+  async upsertCalendarSyncState(state: LifeOpsCalendarSyncState): Promise<void> {
+    await this.ensureReady();
+    await executeRawSql(
+      this.runtime,
+      `INSERT INTO life_calendar_sync_states (
+        id, agent_id, provider, calendar_id, window_start_at,
+        window_end_at, synced_at, updated_at
+      ) VALUES (
+        ${sqlQuote(state.id)},
+        ${sqlQuote(state.agentId)},
+        ${sqlQuote(state.provider)},
+        ${sqlQuote(state.calendarId)},
+        ${sqlQuote(state.windowStartAt)},
+        ${sqlQuote(state.windowEndAt)},
+        ${sqlQuote(state.syncedAt)},
+        ${sqlQuote(state.updatedAt)}
+      )
+      ON CONFLICT(agent_id, provider, calendar_id) DO UPDATE SET
+        window_start_at = excluded.window_start_at,
+        window_end_at = excluded.window_end_at,
+        synced_at = excluded.synced_at,
+        updated_at = excluded.updated_at`,
+    );
+  }
+
+  async getCalendarSyncState(
+    agentId: string,
+    provider: LifeOpsConnectorGrant["provider"],
+    calendarId: string,
+  ): Promise<LifeOpsCalendarSyncState | null> {
+    await this.ensureReady();
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_calendar_sync_states
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND provider = ${sqlQuote(provider)}
+          AND calendar_id = ${sqlQuote(calendarId)}
+        LIMIT 1`,
+    );
+    const row = rows[0];
+    return row ? parseCalendarSyncState(row) : null;
+  }
+
+  async deleteCalendarSyncState(
+    agentId: string,
+    provider: LifeOpsConnectorGrant["provider"],
+    calendarId?: string,
+  ): Promise<void> {
+    await this.ensureReady();
+    const calendarClause = calendarId
+      ? `AND calendar_id = ${sqlQuote(calendarId)}`
+      : "";
+    await executeRawSql(
+      this.runtime,
+      `DELETE FROM life_calendar_sync_states
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND provider = ${sqlQuote(provider)}
+          ${calendarClause}`,
+    );
+  }
+
   async createWorkflow(definition: LifeOpsWorkflowDefinition): Promise<void> {
     await this.ensureReady();
     await executeRawSql(
@@ -1150,5 +1425,15 @@ export function createLifeOpsConnectorGrant(
     id: crypto.randomUUID(),
     createdAt: timestamp,
     updatedAt: timestamp,
+  };
+}
+
+export function createLifeOpsCalendarSyncState(
+  params: Omit<LifeOpsCalendarSyncState, "id" | "updatedAt">,
+): LifeOpsCalendarSyncState {
+  return {
+    ...params,
+    id: crypto.randomUUID(),
+    updatedAt: isoNow(),
   };
 }

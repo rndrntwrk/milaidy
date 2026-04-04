@@ -6,6 +6,8 @@ import type {
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,
   LifeOpsAuditEventType,
+  LifeOpsCalendarEvent,
+  LifeOpsCalendarFeed,
   LifeOpsCadence,
   LifeOpsConnectorGrant,
   LifeOpsConnectorMode,
@@ -21,6 +23,7 @@ import type {
   LifeOpsReminderStep,
   LifeOpsTaskDefinition,
   LifeOpsTimeWindowDefinition,
+  GetLifeOpsCalendarFeedRequest,
   LifeOpsWindowPolicy,
   SnoozeLifeOpsOccurrenceRequest,
   StartLifeOpsGoogleConnectorRequest,
@@ -46,16 +49,19 @@ import { materializeDefinitionOccurrences } from "./engine.js";
 import {
   completeGoogleConnectorOAuth,
   deleteStoredGoogleToken,
+  ensureFreshGoogleAccessToken,
   GoogleOAuthError,
   readStoredGoogleToken,
   resolveGoogleOAuthConfig,
   startGoogleConnectorOAuth,
 } from "./google-oauth.js";
+import { fetchGoogleCalendarEvents } from "./google-calendar.js";
 import {
   normalizeGoogleCapabilities,
 } from "./google-scopes.js";
 import {
   createLifeOpsAuditEvent,
+  createLifeOpsCalendarSyncState,
   createLifeOpsConnectorGrant,
   createLifeOpsGoalDefinition,
   createLifeOpsReminderPlan,
@@ -74,6 +80,8 @@ const MAX_OVERVIEW_OCCURRENCES = 8;
 const MAX_OVERVIEW_REMINDERS = 6;
 const OVERVIEW_HORIZON_MINUTES = 18 * 60;
 const DAY_MINUTES = 24 * 60;
+const GOOGLE_CALENDAR_CACHE_TTL_MS = 5 * 60 * 1000;
+const GOOGLE_PRIMARY_CALENDAR_ID = "primary";
 
 type LifeOpsDefinitionRecord = {
   definition: LifeOpsTaskDefinition;
@@ -171,6 +179,25 @@ function normalizeOptionalString(value: unknown): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
+function normalizeOptionalBoolean(value: unknown, field: string): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1") {
+      return true;
+    }
+    if (normalized === "false" || normalized === "0") {
+      return false;
+    }
+  }
+  fail(400, `${field} must be a boolean`);
+}
+
 function normalizeIsoString(value: unknown, field: string): string {
   const text = requireNonEmptyString(value, field);
   const parsed = Date.parse(text);
@@ -178,6 +205,16 @@ function normalizeIsoString(value: unknown, field: string): string {
     fail(400, `${field} must be a valid ISO datetime`);
   }
   return new Date(parsed).toISOString();
+}
+
+function normalizeOptionalIsoString(
+  value: unknown,
+  field: string,
+): string | undefined {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  return normalizeIsoString(value, field);
 }
 
 function normalizeFiniteNumber(value: unknown, field: string): number {
@@ -200,6 +237,119 @@ function normalizeOptionalMinutes(value: unknown, field: string): number | undef
     fail(400, `${field} must be zero or greater`);
   }
   return minutes;
+}
+
+function normalizeCalendarId(value: unknown): string {
+  return normalizeOptionalString(value) ?? GOOGLE_PRIMARY_CALENDAR_ID;
+}
+
+function normalizeCalendarTimeZone(value: unknown): string {
+  return normalizeTimeZone(normalizeOptionalString(value) ?? "UTC");
+}
+
+function resolveCalendarWindow(args: {
+  now: Date;
+  timeZone: string;
+  requestedTimeMin?: string;
+  requestedTimeMax?: string;
+}): { timeMin: string; timeMax: string } {
+  const explicitTimeMin = normalizeOptionalIsoString(
+    args.requestedTimeMin,
+    "timeMin",
+  );
+  const explicitTimeMax = normalizeOptionalIsoString(
+    args.requestedTimeMax,
+    "timeMax",
+  );
+
+  if (explicitTimeMin && explicitTimeMax) {
+    if (Date.parse(explicitTimeMax) <= Date.parse(explicitTimeMin)) {
+      fail(400, "timeMax must be later than timeMin");
+    }
+    return {
+      timeMin: explicitTimeMin,
+      timeMax: explicitTimeMax,
+    };
+  }
+
+  if (explicitTimeMin || explicitTimeMax) {
+    fail(400, "timeMin and timeMax must be provided together");
+  }
+
+  const zonedNow = getZonedDateParts(args.now, args.timeZone);
+  const dayStart = buildUtcDateFromLocalParts(args.timeZone, {
+    year: zonedNow.year,
+    month: zonedNow.month,
+    day: zonedNow.day,
+    hour: 0,
+    minute: 0,
+    second: 0,
+  });
+  const nextDay = addDaysToLocalDate(
+    {
+      year: zonedNow.year,
+      month: zonedNow.month,
+      day: zonedNow.day,
+    },
+    1,
+  );
+  const dayEnd = buildUtcDateFromLocalParts(args.timeZone, {
+    year: nextDay.year,
+    month: nextDay.month,
+    day: nextDay.day,
+    hour: 0,
+    minute: 0,
+    second: 0,
+  });
+
+  return {
+    timeMin: dayStart.toISOString(),
+    timeMax: dayEnd.toISOString(),
+  };
+}
+
+function hasGoogleCalendarReadCapability(
+  grant: LifeOpsConnectorGrant,
+): boolean {
+  const capabilities = new Set(normalizeGrantCapabilities(grant.capabilities));
+  return (
+    capabilities.has("google.calendar.read") ||
+    capabilities.has("google.calendar.write")
+  );
+}
+
+function createCalendarEventId(
+  agentId: string,
+  provider: LifeOpsConnectorGrant["provider"],
+  calendarId: string,
+  externalId: string,
+): string {
+  const digest = crypto
+    .createHash("sha256")
+    .update(`${agentId}:${provider}:${calendarId}:${externalId}`)
+    .digest("hex");
+  return `life-calendar-${digest.slice(0, 32)}`;
+}
+
+function isCalendarSyncStateFresh(args: {
+  syncedAt: string;
+  timeMin: string;
+  timeMax: string;
+  windowStartAt: string;
+  windowEndAt: string;
+  now: Date;
+}): boolean {
+  const syncedAtMs = Date.parse(args.syncedAt);
+  if (!Number.isFinite(syncedAtMs)) {
+    return false;
+  }
+  if (args.now.getTime() - syncedAtMs > GOOGLE_CALENDAR_CACHE_TTL_MS) {
+    return false;
+  }
+  return (
+    Date.parse(args.windowStartAt) <= Date.parse(args.timeMin) &&
+    Date.parse(args.windowEndAt) >= Date.parse(args.timeMax)
+  );
 }
 
 function normalizePriority(value: unknown, current = 3): number {
@@ -230,7 +380,7 @@ function normalizeOptionalConnectorMode(
   if (value === undefined || value === null || value === "") {
     return undefined;
   }
-  return normalizeEnumValue(value, field, ["local", "remote"]);
+  return normalizeEnumValue(value, field, ["local", "remote"] as const);
 }
 
 function normalizeGoogleCapabilityRequest(
@@ -708,6 +858,97 @@ export class LifeOpsService {
         actor: "user",
       }),
     );
+  }
+
+  private async requireGoogleCalendarGrant(
+    requestUrl: URL,
+    requestedMode?: LifeOpsConnectorMode,
+  ): Promise<LifeOpsConnectorGrant> {
+    const status = await this.getGoogleConnectorStatus(requestUrl, requestedMode);
+    const grant = status.grant;
+    if (!status.connected || !grant || !grant.tokenRef) {
+      fail(409, "Google Calendar is not connected.");
+    }
+    if (!hasGoogleCalendarReadCapability(grant)) {
+      fail(403, "Google Calendar read access has not been granted.");
+    }
+    return grant;
+  }
+
+  private async syncGoogleCalendarFeed(args: {
+    requestUrl: URL;
+    requestedMode?: LifeOpsConnectorMode;
+    calendarId: string;
+    timeMin: string;
+    timeMax: string;
+    timeZone: string;
+  }): Promise<LifeOpsCalendarFeed> {
+    const grant = await this.requireGoogleCalendarGrant(
+      args.requestUrl,
+      args.requestedMode,
+    );
+    if (!grant.tokenRef) {
+      fail(409, "Google Calendar token reference is missing.");
+    }
+    const token = await ensureFreshGoogleAccessToken(grant.tokenRef);
+    const syncedAt = new Date().toISOString();
+    const events = await fetchGoogleCalendarEvents({
+      accessToken: token.accessToken,
+      calendarId: args.calendarId,
+      timeMin: args.timeMin,
+      timeMax: args.timeMax,
+      timeZone: args.timeZone,
+    });
+
+    await this.repository.pruneCalendarEventsInWindow(
+      this.agentId(),
+      "google",
+      args.calendarId,
+      args.timeMin,
+      args.timeMax,
+      events.map((event) => event.externalId),
+    );
+
+    for (const event of events) {
+      await this.repository.upsertCalendarEvent({
+        id: createCalendarEventId(
+          this.agentId(),
+          "google",
+          event.calendarId,
+          event.externalId,
+        ),
+        agentId: this.agentId(),
+        provider: "google",
+        ...event,
+        syncedAt,
+        updatedAt: syncedAt,
+      });
+    }
+
+    await this.repository.upsertCalendarSyncState(
+      createLifeOpsCalendarSyncState({
+        agentId: this.agentId(),
+        provider: "google",
+        calendarId: args.calendarId,
+        windowStartAt: args.timeMin,
+        windowEndAt: args.timeMax,
+        syncedAt,
+      }),
+    );
+
+    return {
+      calendarId: args.calendarId,
+      events: await this.repository.listCalendarEvents(
+        this.agentId(),
+        "google",
+        args.timeMin,
+        args.timeMax,
+      ),
+      source: "synced",
+      timeMin: args.timeMin,
+      timeMax: args.timeMax,
+      syncedAt,
+    };
   }
 
   private async getDefinitionRecord(
@@ -1205,6 +1446,65 @@ export class LifeOpsService {
     };
   }
 
+  async getCalendarFeed(
+    requestUrl: URL,
+    request: GetLifeOpsCalendarFeedRequest = {},
+    now = new Date(),
+  ): Promise<LifeOpsCalendarFeed> {
+    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const calendarId = normalizeCalendarId(request.calendarId);
+    const timeZone = normalizeCalendarTimeZone(request.timeZone);
+    const { timeMin, timeMax } = resolveCalendarWindow({
+      now,
+      timeZone,
+      requestedTimeMin: request.timeMin,
+      requestedTimeMax: request.timeMax,
+    });
+    const forceSync = normalizeOptionalBoolean(request.forceSync, "forceSync") ?? false;
+    await this.requireGoogleCalendarGrant(requestUrl, mode);
+
+    const syncState = await this.repository.getCalendarSyncState(
+      this.agentId(),
+      "google",
+      calendarId,
+    );
+    if (
+      !forceSync &&
+      syncState &&
+      isCalendarSyncStateFresh({
+        syncedAt: syncState.syncedAt,
+        timeMin,
+        timeMax,
+        windowStartAt: syncState.windowStartAt,
+        windowEndAt: syncState.windowEndAt,
+        now,
+      })
+    ) {
+      return {
+        calendarId,
+        events: await this.repository.listCalendarEvents(
+          this.agentId(),
+          "google",
+          timeMin,
+          timeMax,
+        ),
+        source: "cache",
+        timeMin,
+        timeMax,
+        syncedAt: syncState.syncedAt,
+      };
+    }
+
+    return this.syncGoogleCalendarFeed({
+      requestUrl,
+      requestedMode: mode,
+      calendarId,
+      timeMin,
+      timeMax,
+      timeZone,
+    });
+  }
+
   async completeOccurrence(
     occurrenceId: string,
     request: CompleteLifeOpsOccurrenceRequest,
@@ -1553,6 +1853,8 @@ export class LifeOpsService {
     if (grant.tokenRef) {
       deleteStoredGoogleToken(grant.tokenRef);
     }
+    await this.repository.deleteCalendarEventsForProvider(this.agentId(), "google");
+    await this.repository.deleteCalendarSyncState(this.agentId(), "google");
     await this.repository.deleteConnectorGrant(
       this.agentId(),
       "google",

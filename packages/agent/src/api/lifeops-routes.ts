@@ -6,6 +6,7 @@ import type {
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,
   DisconnectLifeOpsGoogleConnectorRequest,
+  GetLifeOpsCalendarFeedRequest,
   SnoozeLifeOpsOccurrenceRequest,
   StartLifeOpsGoogleConnectorRequest,
   UpdateLifeOpsDefinitionRequest,
@@ -149,6 +150,37 @@ export async function handleLifeOpsRoutes(
           (rawMode ?? undefined) as "local" | "remote" | undefined,
         ),
       );
+    });
+  }
+
+  if (method === "GET" && pathname === "/api/lifeops/calendar/feed") {
+    return runRoute(ctx, async (service) => {
+      const rawMode = url.searchParams.get("mode");
+      const rawForceSync = url.searchParams.get("forceSync");
+      if (rawMode !== null && rawMode !== "local" && rawMode !== "remote") {
+        throw new LifeOpsServiceError(400, "mode must be one of: local, remote");
+      }
+      if (
+        rawForceSync !== null &&
+        rawForceSync !== "true" &&
+        rawForceSync !== "false" &&
+        rawForceSync !== "1" &&
+        rawForceSync !== "0"
+      ) {
+        throw new LifeOpsServiceError(400, "forceSync must be a boolean");
+      }
+      const request: GetLifeOpsCalendarFeedRequest = {
+        mode: (rawMode ?? undefined) as "local" | "remote" | undefined,
+        calendarId: url.searchParams.get("calendarId") ?? undefined,
+        timeMin: url.searchParams.get("timeMin") ?? undefined,
+        timeMax: url.searchParams.get("timeMax") ?? undefined,
+        timeZone: url.searchParams.get("timeZone") ?? undefined,
+        forceSync:
+          rawForceSync === null
+            ? undefined
+            : rawForceSync === "true" || rawForceSync === "1",
+      };
+      json(res, await service.getCalendarFeed(url, request));
     });
   }
 

@@ -8,6 +8,7 @@ import type {
   ChatTokenUsage,
   ConnectionTestResult,
   ContentBlock,
+  GetLifeOpsCalendarFeedRequest,
   DisconnectLifeOpsGoogleConnectorRequest,
   Conversation,
   ConversationChannelType,
@@ -27,6 +28,7 @@ import type {
   KnowledgeStats,
   KnowledgeUploadResult,
   LifeOpsDefinitionRecord,
+  LifeOpsCalendarFeed,
   LifeOpsGoalRecord,
   LifeOpsOccurrenceActionResult,
   LifeOpsOverview,
@@ -212,6 +214,9 @@ declare module "./client-base" {
       }
     >;
     getLifeOpsOverview(): Promise<LifeOpsOverview>;
+    getLifeOpsCalendarFeed(
+      options?: GetLifeOpsCalendarFeedRequest,
+    ): Promise<LifeOpsCalendarFeed>;
     listLifeOpsDefinitions(): Promise<{ definitions: LifeOpsDefinitionRecord[] }>;
     getLifeOpsDefinition(definitionId: string): Promise<LifeOpsDefinitionRecord>;
     createLifeOpsDefinition(
@@ -754,6 +759,33 @@ MiladyClient.prototype.getLifeOpsOverview = async function (
   this: MiladyClient,
 ) {
   return this.fetch("/api/lifeops/overview");
+};
+
+MiladyClient.prototype.getLifeOpsCalendarFeed = async function (
+  this: MiladyClient,
+  options = {},
+) {
+  const params = new URLSearchParams();
+  if (options.mode) {
+    params.set("mode", options.mode);
+  }
+  if (options.calendarId) {
+    params.set("calendarId", options.calendarId);
+  }
+  if (options.timeMin) {
+    params.set("timeMin", options.timeMin);
+  }
+  if (options.timeMax) {
+    params.set("timeMax", options.timeMax);
+  }
+  if (options.timeZone) {
+    params.set("timeZone", options.timeZone);
+  }
+  if (options.forceSync !== undefined) {
+    params.set("forceSync", String(options.forceSync));
+  }
+  const query = params.toString();
+  return this.fetch(`/api/lifeops/calendar/feed${query ? `?${query}` : ""}`);
 };
 
 MiladyClient.prototype.listLifeOpsDefinitions = async function (

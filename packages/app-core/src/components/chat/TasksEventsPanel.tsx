@@ -9,13 +9,24 @@
 
 import type {
   CodingAgentSession,
+  LifeOpsCalendarFeed,
+  LifeOpsCalendarEvent,
   LifeOpsGoogleConnectorStatus,
   LifeOpsOccurrenceView,
   LifeOpsOverview,
   WorkbenchTodo,
 } from "@miladyai/app-core/api";
 import { Badge, Button } from "@miladyai/ui";
-import { Activity, BellRing, Check, ListTodo, SkipForward, Target } from "lucide-react";
+import {
+  Activity,
+  BellRing,
+  CalendarDays,
+  Check,
+  ExternalLink,
+  ListTodo,
+  SkipForward,
+  Target,
+} from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { client } from "../../api";
 import { TERMINAL_STATUSES } from "../../coding";
@@ -75,6 +86,34 @@ function formatIsoTime(value: string | null | undefined): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatCalendarEventTime(event: LifeOpsCalendarEvent): string {
+  if (event.isAllDay) {
+    return "All day";
+  }
+  const start = new Date(event.startAt);
+  const end = new Date(event.endAt);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
+    return "—";
+  }
+  return `${start.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  })} - ${end.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
+}
+
+function describeCalendarEventMeta(event: LifeOpsCalendarEvent): string {
+  const details = [
+    event.location.trim(),
+    event.attendees.length > 0
+      ? `${event.attendees.length} attendee${event.attendees.length === 1 ? "" : "s"}`
+      : "",
+  ].filter((value) => value.length > 0);
+  return details.join(" · ");
 }
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
@@ -454,6 +493,62 @@ function GoogleConnectorCard({
   );
 }
 
+function CalendarEventRow({
+  event,
+  onOpen,
+}: {
+  event: LifeOpsCalendarEvent;
+  onOpen: (event: LifeOpsCalendarEvent) => Promise<void>;
+}) {
+  const metadata = describeCalendarEventMeta(event);
+
+  return (
+    <div className="rounded-lg border border-border/50 bg-bg/70 p-3">
+      <div className="flex items-start gap-2">
+        <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="truncate text-xs font-semibold text-txt">
+              {event.title}
+            </span>
+            {event.status.trim().length > 0 && event.status !== "confirmed" ? (
+              <Badge variant="secondary" className="text-[9px]">
+                {event.status}
+              </Badge>
+            ) : null}
+          </div>
+          <p className="mt-1 text-[11px] text-muted">
+            {formatCalendarEventTime(event)}
+          </p>
+          {metadata ? (
+            <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-muted">
+              {metadata}
+            </p>
+          ) : null}
+          {event.description.trim().length > 0 ? (
+            <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-muted">
+              {event.description}
+            </p>
+          ) : null}
+          {event.htmlLink || event.conferenceLink ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void onOpen(event)}
+                className="h-6 px-2 text-[10px]"
+              >
+                <ExternalLink className="mr-1 h-3 w-3" />
+                Open
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LifeOpsOccurrenceRow({
   occurrence,
   acting,
@@ -539,6 +634,8 @@ function LifeOpsOccurrenceRow({
 function LifeOpsSection({
   lifeops,
   loading,
+  calendarFeed,
+  calendarLoading,
   googleConnector,
   googleConnectorLoading,
   googleConnectorBusy,
@@ -546,6 +643,7 @@ function LifeOpsSection({
   onConnectGoogle,
   onDisconnectGoogle,
   onOpenPendingGoogle,
+  onOpenCalendarEvent,
   actingOccurrenceId,
   onComplete,
   onSnooze,
@@ -553,6 +651,8 @@ function LifeOpsSection({
 }: {
   lifeops: LifeOpsOverview | null;
   loading: boolean;
+  calendarFeed: LifeOpsCalendarFeed | null;
+  calendarLoading: boolean;
   googleConnector: LifeOpsGoogleConnectorStatus | null;
   googleConnectorLoading: boolean;
   googleConnectorBusy: boolean;
@@ -560,6 +660,7 @@ function LifeOpsSection({
   onConnectGoogle: () => Promise<void>;
   onDisconnectGoogle: () => Promise<void>;
   onOpenPendingGoogle: () => Promise<void>;
+  onOpenCalendarEvent: (event: LifeOpsCalendarEvent) => Promise<void>;
   actingOccurrenceId: string | null;
   onComplete: (occurrenceId: string) => Promise<void>;
   onSnooze: (occurrenceId: string) => Promise<void>;
@@ -567,22 +668,13 @@ function LifeOpsSection({
 }) {
   const occurrences = lifeops?.occurrences ?? [];
   const reminders = lifeops?.reminders ?? [];
-
-  if (loading && occurrences.length === 0 && reminders.length === 0) {
-    return <div className="py-3 text-xs text-muted">Refreshing life ops…</div>;
-  }
-
-  if (occurrences.length === 0 && reminders.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-        <Target className="h-8 w-8 text-muted/50" />
-        <p className="text-sm text-muted">No active life ops</p>
-        <p className="text-xs text-muted/70">
-          Recurring routines and reminders will surface here.
-        </p>
-      </div>
-    );
-  }
+  const calendarEvents = useMemo(() => {
+    const now = Date.now();
+    return (calendarFeed?.events ?? []).filter((event) => {
+      const endAt = Date.parse(event.endAt);
+      return Number.isFinite(endAt) && endAt > now;
+    });
+  }, [calendarFeed?.events]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -602,6 +694,52 @@ function LifeOpsSection({
           {lifeops.summary.activeReminderCount} reminder
           {lifeops.summary.activeReminderCount === 1 ? "" : "s"} firing
         </p>
+      ) : null}
+      {googleConnector?.connected ? (
+        calendarEvents.length > 0 ? (
+          <>
+            <p className="px-1 text-[11px] text-muted">
+              {calendarEvents.length} upcoming calendar event
+              {calendarEvents.length === 1 ? "" : "s"}
+              {calendarFeed?.syncedAt
+                ? ` · synced ${relativeIsoTime(calendarFeed.syncedAt)}`
+                : ""}
+            </p>
+            {calendarEvents.map((event) => (
+              <CalendarEventRow
+                key={event.id}
+                event={event}
+                onOpen={onOpenCalendarEvent}
+              />
+            ))}
+          </>
+        ) : (
+          <p className="px-1 text-[11px] text-muted">
+            {calendarLoading
+              ? "Refreshing today’s calendar…"
+              : "No more calendar events for this window."}
+          </p>
+        )
+      ) : null}
+      {loading &&
+      calendarLoading &&
+      occurrences.length === 0 &&
+      reminders.length === 0 &&
+      calendarEvents.length === 0 ? (
+        <div className="py-3 text-xs text-muted">Refreshing life ops…</div>
+      ) : null}
+      {!loading &&
+      !calendarLoading &&
+      occurrences.length === 0 &&
+      reminders.length === 0 &&
+      calendarEvents.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+          <Target className="h-8 w-8 text-muted/50" />
+          <p className="text-sm text-muted">No active life ops</p>
+          <p className="text-xs text-muted/70">
+            Recurring routines and reminders will surface here.
+          </p>
+        </div>
       ) : null}
       {reminders.map((reminder) => (
         <ReminderRow
@@ -700,6 +838,8 @@ export function TasksEventsPanel({
     workbench?.lifeops ?? null,
   );
   const [lifeopsLoading, setLifeopsLoading] = useState(false);
+  const [calendarFeed, setCalendarFeed] = useState<LifeOpsCalendarFeed | null>(null);
+  const [calendarLoading, setCalendarLoading] = useState(false);
   const [googleConnector, setGoogleConnector] =
     useState<LifeOpsGoogleConnectorStatus | null>(null);
   const [googleConnectorLoading, setGoogleConnectorLoading] = useState(false);
@@ -801,6 +941,34 @@ export function TasksEventsPanel({
     [],
   );
 
+  const loadCalendarFeed = useCallback(
+    async (
+      connectorStatus: LifeOpsGoogleConnectorStatus | null,
+      silent = false,
+    ) => {
+      if (!connectorStatus?.connected) {
+        setCalendarFeed(null);
+        setCalendarLoading(false);
+        return null;
+      }
+      if (!silent) {
+        setCalendarLoading(true);
+      }
+
+      try {
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+        const result = await client.getLifeOpsCalendarFeed({ timeZone });
+        setCalendarFeed(result);
+        return result;
+      } catch {
+        return null;
+      } finally {
+        setCalendarLoading(false);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!open) {
       return;
@@ -836,21 +1004,35 @@ export function TasksEventsPanel({
     })();
 
     void (async () => {
-      await loadGoogleConnector(googleConnector !== null);
+      const connectorStatus = await loadGoogleConnector(googleConnector !== null);
+      if (!active) return;
+      await loadCalendarFeed(connectorStatus, calendarFeed !== null);
       if (!active) return;
     })();
 
     const intervalId = window.setInterval(() => {
       if (!active) return;
       void loadLifeOps(true);
-      void loadGoogleConnector(true);
+      void (async () => {
+        const connectorStatus = await loadGoogleConnector(true);
+        if (!active) return;
+        await loadCalendarFeed(connectorStatus, true);
+      })();
     }, LIFEOPS_REFRESH_INTERVAL_MS);
 
     return () => {
       active = false;
       window.clearInterval(intervalId);
     };
-  }, [googleConnector !== null, lifeops?.occurrences.length, loadGoogleConnector, loadLifeOps, open]);
+  }, [
+    calendarFeed !== null,
+    googleConnector !== null,
+    lifeops?.occurrences.length,
+    loadCalendarFeed,
+    loadGoogleConnector,
+    loadLifeOps,
+    open,
+  ]);
 
   const runOccurrenceAction = useCallback(
     async (
@@ -876,6 +1058,7 @@ export function TasksEventsPanel({
         });
         const status = await loadGoogleConnector(true);
         if (status?.connected) {
+          await loadCalendarFeed(status, true);
           setActionNotice(
             "Google connected for calendar access.",
             "success",
@@ -885,7 +1068,7 @@ export function TasksEventsPanel({
         }
       }
     },
-    [loadGoogleConnector, setActionNotice],
+    [loadCalendarFeed, loadGoogleConnector, setActionNotice],
   );
 
   const handleOpenPendingGoogle = useCallback(async () => {
@@ -924,6 +1107,7 @@ export function TasksEventsPanel({
       const result = await client.disconnectGoogleLifeOpsConnector();
       setGoogleConnector(result);
       setPendingGoogleAuthUrl(null);
+      setCalendarFeed(null);
       setActionNotice("Google disconnected.", "info", 3200);
     } catch (error) {
       setActionNotice(
@@ -935,6 +1119,17 @@ export function TasksEventsPanel({
       setGoogleConnectorBusy(false);
     }
   }, [setActionNotice]);
+
+  const handleOpenCalendarEvent = useCallback(
+    async (event: LifeOpsCalendarEvent) => {
+      const target = event.htmlLink ?? event.conferenceLink;
+      if (!target) {
+        return;
+      }
+      await openExternalUrl(target);
+    },
+    [],
+  );
 
   if (!open) return null;
 
@@ -954,6 +1149,8 @@ export function TasksEventsPanel({
           <LifeOpsSection
             lifeops={lifeops}
             loading={lifeopsLoading}
+            calendarFeed={calendarFeed}
+            calendarLoading={calendarLoading}
             googleConnector={googleConnector}
             googleConnectorLoading={googleConnectorLoading}
             googleConnectorBusy={googleConnectorBusy}
@@ -961,6 +1158,7 @@ export function TasksEventsPanel({
             onConnectGoogle={handleConnectGoogle}
             onDisconnectGoogle={handleDisconnectGoogle}
             onOpenPendingGoogle={handleOpenPendingGoogle}
+            onOpenCalendarEvent={handleOpenCalendarEvent}
             actingOccurrenceId={actingOccurrenceId}
             onComplete={(occurrenceId) =>
               runOccurrenceAction(occurrenceId, async () => {
