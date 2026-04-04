@@ -845,7 +845,7 @@ export function InventoryView() {
               <SidebarContent.SectionLabel>
                 {t("wallet.chain", { defaultValue: "Chain" })}
               </SidebarContent.SectionLabel>
-              <div className="mt-3 grid grid-cols-5 gap-2">
+              <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
                 {chainItemMeta.map((item) => {
                   const isOn = inventoryChainFilters[item.key];
                   const label = item.label;
@@ -869,7 +869,7 @@ export function InventoryView() {
                         data-testid={`inventory-chain-toggle-${item.key}`}
                         onClick={
                           disabled
-                            ? undefined
+                            ? () => setWalletRpcOpen(true)
                             : () => handleInventoryChainToggle(item.key)
                         }
                         aria-pressed={disabled ? undefined : isOn}
@@ -883,7 +883,7 @@ export function InventoryView() {
                         aria-disabled={disabled}
                         className={`flex aspect-square items-center justify-center rounded-2xl border transition-colors ${
                           disabled
-                            ? "cursor-not-allowed border-border/20 bg-bg/10 text-muted opacity-25"
+                            ? "cursor-pointer border-border/20 bg-bg/10 text-muted opacity-40 hover:opacity-60 hover:border-accent/30"
                             : isOn
                               ? "border-accent/30 bg-accent/14 text-txt-strong"
                               : "border-border/40 bg-bg/20 text-muted opacity-45 hover:border-border/60 hover:text-txt hover:opacity-70"
@@ -903,6 +903,16 @@ export function InventoryView() {
   );
 
   const stewardConnected = stewardStatus?.connected === true;
+  const stewardEvmAddrPresent = Boolean(
+    stewardConnected &&
+      (stewardStatus?.walletAddresses?.evm || stewardStatus?.evmAddress),
+  );
+  const stewardSolAddrPresent = Boolean(
+    stewardConnected && stewardStatus?.walletAddresses?.solana,
+  );
+  const hasAnyAddress = Boolean(
+    evmAddr || solAddr || stewardEvmAddrPresent || stewardSolAddrPresent,
+  );
   const walletSubTabItems = [
     { value: "balances" as const, label: "Balances" },
     { value: "transactions" as const, label: "Transactions" },
@@ -999,9 +1009,79 @@ export function InventoryView() {
             </PagePanel.Notice>
           ) : null}
 
-          {singleChainFocus === "bsc" && evmAddr ? (
+          {/* Wallet setup card — shown when no wallet is connected */}
+          {!hasAnyAddress && (
+            <PagePanel variant="workspace">
+              <div className="flex flex-col items-center gap-4 py-8">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-accent/25 bg-accent/10 text-accent">
+                  <Wallet className="h-6 w-6" />
+                </div>
+                <div className="text-center">
+                  <h3 className="text-sm font-semibold text-txt">
+                    {t("wallet.setup.title", {
+                      defaultValue: "Connect your wallet",
+                    })}
+                  </h3>
+                  <p className="mt-1 max-w-sm text-xs text-muted">
+                    {t("wallet.setup.description", {
+                      defaultValue:
+                        "Connect via Eliza Cloud, Vincent, or configure wallet keys directly to start trading.",
+                    })}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {elizaCloudConnected ? (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="rounded-full px-5"
+                      onClick={goToRpcSettings}
+                    >
+                      {t("wallet.setup.importFromCloud", {
+                        defaultValue: "Import from Eliza Cloud",
+                      })}
+                    </Button>
+                  ) : null}
+                  {!vincentConnected ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full px-5"
+                      onClick={() => void handleVincentLogin()}
+                      disabled={vincentLoginBusy}
+                    >
+                      {vincentLoginBusy ? (
+                        <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Link className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      {t("vincent.connect", {
+                        defaultValue: "Connect Vincent",
+                      })}
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full px-5"
+                    onClick={goToRpcSettings}
+                  >
+                    <Settings className="mr-1.5 h-3.5 w-3.5" />
+                    {t("wallet.setup.configureRpc", {
+                      defaultValue: "Configure RPC",
+                    })}
+                  </Button>
+                </div>
+                {vincentLoginError ? (
+                  <p className="text-[10px] text-danger">{vincentLoginError}</p>
+                ) : null}
+              </div>
+            </PagePanel>
+          )}
+
+          {singleChainFocus === "bsc" ? (
             <TradePanel
-              tradeReady={tradeReady}
+              tradeReady={evmAddr ? tradeReady : false}
               bnbBalance={bnbBalance}
               onAddToken={handleAddToken}
               getBscTradePreflight={getBscTradePreflight}
