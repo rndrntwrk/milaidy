@@ -885,20 +885,64 @@ export function InventoryView() {
         <PagePanel.Empty
           variant="surface"
           title={t("wallet.noOnchainWallet")}
-          description={t("wallet.noOnchainWalletHint")}
-          action={
-            <Button
-              variant="default"
-              size="sm"
-              className="rounded-full px-5"
-              onClick={() => setTab("settings")}
-            >
-              {t("nav.settings")}
-            </Button>
-          }
+          description={t("wallet.setupFromHere", {
+            defaultValue:
+              "Connect a wallet provider to get started with on-chain features.",
+          })}
         >
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-accent/25 bg-accent/10 text-accent">
             <Wallet className="h-6 w-6" />
+          </div>
+
+          <div className="mx-auto flex w-full max-w-sm flex-col gap-2 mt-2">
+            {/* Vincent OAuth */}
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="wallet-empty-vincent-connect"
+              className="h-11 w-full justify-start rounded-xl px-4 text-xs font-semibold shadow-sm"
+              onClick={() => void handleVincentLogin()}
+              disabled={vincentLoginBusy}
+            >
+              {vincentLoginBusy ? (
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Link className="mr-2 h-4 w-4" />
+              )}
+              {vincentLoginBusy
+                ? t("vincent.connecting", { defaultValue: "Connecting..." })
+                : t("vincent.connect", { defaultValue: "Connect Vincent" })}
+            </Button>
+            {vincentLoginError ? (
+              <p className="px-1 text-[10px] text-danger">
+                {vincentLoginError}
+              </p>
+            ) : null}
+
+            {/* Steward info */}
+            {stewardStatus?.connected && (
+              <div className="flex items-center gap-2 rounded-xl border border-accent/25 bg-accent/8 px-4 py-2.5">
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                <span className="text-xs font-semibold text-txt">
+                  {t("settings.stewardWalletManaged", {
+                    defaultValue: "Steward Connected",
+                  })}
+                </span>
+              </div>
+            )}
+
+            {/* Settings fallback */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-1 text-[10px] text-muted hover:text-txt"
+              onClick={() => setTab("settings")}
+            >
+              <Settings className="mr-1 h-3 w-3" />
+              {t("wallet.advancedSetup", {
+                defaultValue: "Advanced wallet setup",
+              })}
+            </Button>
           </div>
         </PagePanel.Empty>
       </div>
