@@ -2,11 +2,16 @@ import crypto from "node:crypto";
 import type { IAgentRuntime } from "@elizaos/core";
 import type {
   CompleteLifeOpsOccurrenceRequest,
+  DisconnectLifeOpsGoogleConnectorRequest,
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,
   LifeOpsAuditEventType,
   LifeOpsCadence,
+  LifeOpsConnectorGrant,
+  LifeOpsConnectorMode,
   LifeOpsGoalDefinition,
+  LifeOpsGoogleCapability,
+  LifeOpsGoogleConnectorStatus,
   LifeOpsGoalLink,
   LifeOpsOccurrence,
   LifeOpsOverview,
@@ -18,6 +23,8 @@ import type {
   LifeOpsTimeWindowDefinition,
   LifeOpsWindowPolicy,
   SnoozeLifeOpsOccurrenceRequest,
+  StartLifeOpsGoogleConnectorRequest,
+  StartLifeOpsGoogleConnectorResponse,
   UpdateLifeOpsDefinitionRequest,
   UpdateLifeOpsGoalRequest,
   LifeOpsActiveReminderView,
@@ -26,6 +33,7 @@ import {
   LIFEOPS_DEFINITION_KINDS,
   LIFEOPS_DEFINITION_STATUSES,
   LIFEOPS_GOAL_STATUSES,
+  LIFEOPS_GOOGLE_CAPABILITIES,
   LIFEOPS_REMINDER_CHANNELS,
   LIFEOPS_REVIEW_STATES,
 } from "@miladyai/shared/contracts/lifeops";
@@ -36,7 +44,19 @@ import {
 } from "./defaults.js";
 import { materializeDefinitionOccurrences } from "./engine.js";
 import {
+  completeGoogleConnectorOAuth,
+  deleteStoredGoogleToken,
+  GoogleOAuthError,
+  readStoredGoogleToken,
+  resolveGoogleOAuthConfig,
+  startGoogleConnectorOAuth,
+} from "./google-oauth.js";
+import {
+  normalizeGoogleCapabilities,
+} from "./google-scopes.js";
+import {
   createLifeOpsAuditEvent,
+  createLifeOpsConnectorGrant,
   createLifeOpsGoalDefinition,
   createLifeOpsReminderPlan,
   createLifeOpsTaskDefinition,
@@ -201,6 +221,48 @@ function normalizeEnumValue<T extends string>(
     fail(400, `${field} must be one of: ${allowed.join(", ")}`);
   }
   return text;
+}
+
+function normalizeOptionalConnectorMode(
+  value: unknown,
+  field: string,
+): LifeOpsConnectorMode | undefined {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  return normalizeEnumValue(value, field, ["local", "remote"]);
+}
+
+function normalizeGoogleCapabilityRequest(
+  value: unknown,
+): LifeOpsGoogleCapability[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    fail(400, "capabilities must be an array");
+  }
+  const normalized: LifeOpsGoogleCapability[] = [];
+  const seen = new Set<LifeOpsGoogleCapability>();
+  for (const candidate of value) {
+    const capability = normalizeEnumValue(
+      candidate,
+      "capabilities[]",
+      LIFEOPS_GOOGLE_CAPABILITIES,
+    );
+    if (seen.has(capability)) {
+      continue;
+    }
+    seen.add(capability);
+    normalized.push(capability);
+  }
+  return normalizeGoogleCapabilities(normalized);
+}
+
+function normalizeGrantCapabilities(
+  capabilities: readonly string[],
+): LifeOpsGoogleCapability[] {
+  return normalizeGoogleCapabilities(capabilities);
 }
 
 function normalizeWindowNames(
@@ -619,6 +681,26 @@ export class LifeOpsService {
         agentId: this.agentId(),
         eventType,
         ownerType,
+        ownerId,
+        reason,
+        inputs,
+        decision,
+        actor: "user",
+      }),
+    );
+  }
+
+  private async recordConnectorAudit(
+    ownerId: string,
+    reason: string,
+    inputs: Record<string, unknown>,
+    decision: Record<string, unknown>,
+  ): Promise<void> {
+    await this.repository.createAuditEvent(
+      createLifeOpsAuditEvent({
+        agentId: this.agentId(),
+        eventType: "connector_grant_updated",
+        ownerType: "connector",
         ownerId,
         reason,
         inputs,
@@ -1260,5 +1342,232 @@ export class LifeOpsService {
       fail(404, "life-ops occurrence not found after snooze");
     }
     return view;
+  }
+
+  async getGoogleConnectorStatus(
+    requestUrl: URL,
+    requestedMode?: LifeOpsConnectorMode,
+  ): Promise<LifeOpsGoogleConnectorStatus> {
+    const explicitMode = normalizeOptionalConnectorMode(requestedMode, "mode");
+    let config = resolveGoogleOAuthConfig(requestUrl, explicitMode);
+    let grant = await this.repository.getConnectorGrant(
+      this.agentId(),
+      "google",
+      config.mode,
+    );
+
+    if (!explicitMode && !grant) {
+      const grants = await this.repository.listConnectorGrants(this.agentId());
+      const googleGrant = grants.find((candidate) => candidate.provider === "google");
+      if (googleGrant) {
+        config = resolveGoogleOAuthConfig(requestUrl, googleGrant.mode);
+        grant = googleGrant;
+      }
+    }
+
+    if (!grant) {
+      return {
+        provider: "google",
+        mode: config.mode,
+        defaultMode: config.defaultMode,
+        availableModes: config.availableModes,
+        configured: config.configured,
+        connected: false,
+        reason: config.configured ? "disconnected" : "config_missing",
+        identity: null,
+        grantedCapabilities: [],
+        grantedScopes: [],
+        expiresAt: null,
+        hasRefreshToken: false,
+        grant: null,
+      };
+    }
+
+    const token = grant.tokenRef ? readStoredGoogleToken(grant.tokenRef) : null;
+    if (!token) {
+      return {
+        provider: "google",
+        mode: grant.mode,
+        defaultMode: config.defaultMode,
+        availableModes: config.availableModes,
+        configured: config.configured,
+        connected: false,
+        reason: "token_missing",
+        identity:
+          Object.keys(grant.identity).length > 0 ? { ...grant.identity } : null,
+        grantedCapabilities: normalizeGrantCapabilities(grant.capabilities),
+        grantedScopes: [...grant.grantedScopes],
+        expiresAt: null,
+        hasRefreshToken: false,
+        grant,
+      };
+    }
+
+    const refreshTokenValid =
+      Boolean(token.refreshToken) &&
+      (token.refreshTokenExpiresAt === null ||
+        token.refreshTokenExpiresAt > Date.now());
+    const accessTokenExpired = token.expiresAt <= Date.now();
+    const connected = !accessTokenExpired || refreshTokenValid;
+
+    return {
+      provider: "google",
+      mode: grant.mode,
+      defaultMode: config.defaultMode,
+      availableModes: config.availableModes,
+      configured: config.configured,
+      connected,
+      reason: connected ? "connected" : "needs_reauth",
+      identity:
+        Object.keys(grant.identity).length > 0 ? { ...grant.identity } : null,
+      grantedCapabilities: normalizeGrantCapabilities(grant.capabilities),
+      grantedScopes: [...grant.grantedScopes],
+      expiresAt: Number.isFinite(token.expiresAt)
+        ? new Date(token.expiresAt).toISOString()
+        : null,
+      hasRefreshToken: refreshTokenValid,
+      grant,
+    };
+  }
+
+  async startGoogleConnector(
+    request: StartLifeOpsGoogleConnectorRequest,
+    requestUrl: URL,
+  ): Promise<StartLifeOpsGoogleConnectorResponse> {
+    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const requestedCapabilities = normalizeGoogleCapabilityRequest(
+      request.capabilities,
+    );
+    const resolvedConfig = resolveGoogleOAuthConfig(requestUrl, mode);
+    const existingGrant = await this.repository.getConnectorGrant(
+      this.agentId(),
+      "google",
+      resolvedConfig.mode,
+    );
+
+    try {
+      return startGoogleConnectorOAuth({
+        agentId: this.agentId(),
+        requestUrl,
+        mode: resolvedConfig.mode,
+        requestedCapabilities,
+        existingCapabilities: existingGrant
+          ? normalizeGrantCapabilities(existingGrant.capabilities)
+          : undefined,
+      });
+    } catch (error) {
+      if (error instanceof GoogleOAuthError) {
+        fail(error.status, error.message);
+      }
+      throw error;
+    }
+  }
+
+  async completeGoogleConnectorCallback(
+    callbackUrl: URL,
+  ): Promise<LifeOpsGoogleConnectorStatus> {
+    let result;
+    try {
+      result = await completeGoogleConnectorOAuth({
+        callbackUrl,
+      });
+    } catch (error) {
+      if (error instanceof GoogleOAuthError) {
+        fail(error.status, error.message);
+      }
+      throw error;
+    }
+
+    if (result.agentId !== this.agentId()) {
+      fail(409, "Google callback does not belong to the active agent.");
+    }
+
+    const existingGrant = await this.repository.getConnectorGrant(
+      this.agentId(),
+      "google",
+      result.mode,
+    );
+    const nowIso = new Date().toISOString();
+    const grant: LifeOpsConnectorGrant = existingGrant
+      ? {
+          ...existingGrant,
+          identity: { ...result.identity },
+          grantedScopes: [...result.grantedScopes],
+          capabilities: [...result.grantedCapabilities],
+          tokenRef: result.tokenRef,
+          metadata: {
+            ...existingGrant.metadata,
+            expiresAt: result.expiresAt,
+            hasRefreshToken: result.hasRefreshToken,
+          },
+          lastRefreshAt: nowIso,
+          updatedAt: nowIso,
+        }
+      : createLifeOpsConnectorGrant({
+          agentId: this.agentId(),
+          provider: "google",
+          identity: { ...result.identity },
+          grantedScopes: [...result.grantedScopes],
+          capabilities: [...result.grantedCapabilities],
+          tokenRef: result.tokenRef,
+          mode: result.mode,
+          metadata: {
+            expiresAt: result.expiresAt,
+            hasRefreshToken: result.hasRefreshToken,
+          },
+          lastRefreshAt: nowIso,
+        });
+
+    await this.repository.upsertConnectorGrant(grant);
+    await this.recordConnectorAudit(
+      `google:${result.mode}`,
+      "google connector granted",
+      {
+        mode: result.mode,
+        capabilities: result.grantedCapabilities,
+      },
+      {
+        tokenRef: result.tokenRef,
+        expiresAt: result.expiresAt,
+      },
+    );
+    return this.getGoogleConnectorStatus(callbackUrl, result.mode);
+  }
+
+  async disconnectGoogleConnector(
+    request: DisconnectLifeOpsGoogleConnectorRequest,
+    requestUrl: URL,
+  ): Promise<LifeOpsGoogleConnectorStatus> {
+    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const config = resolveGoogleOAuthConfig(requestUrl, mode);
+    const grant = await this.repository.getConnectorGrant(
+      this.agentId(),
+      "google",
+      config.mode,
+    );
+
+    if (!grant) {
+      return this.getGoogleConnectorStatus(requestUrl, config.mode);
+    }
+
+    if (grant.tokenRef) {
+      deleteStoredGoogleToken(grant.tokenRef);
+    }
+    await this.repository.deleteConnectorGrant(
+      this.agentId(),
+      "google",
+      config.mode,
+    );
+    await this.recordConnectorAudit(
+      `google:${config.mode}`,
+      "google connector disconnected",
+      {
+        mode: config.mode,
+      },
+      {
+        disconnected: true,
+      },
+    );
+    return this.getGoogleConnectorStatus(requestUrl, config.mode);
   }
 }

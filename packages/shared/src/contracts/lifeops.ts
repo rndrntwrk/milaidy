@@ -80,6 +80,16 @@ export type LifeOpsConnectorProvider =
 export const LIFEOPS_CONNECTOR_MODES = ["local", "remote"] as const;
 export type LifeOpsConnectorMode = (typeof LIFEOPS_CONNECTOR_MODES)[number];
 
+export const LIFEOPS_GOOGLE_CAPABILITIES = [
+  "google.basic_identity",
+  "google.calendar.read",
+  "google.calendar.write",
+  "google.gmail.triage",
+  "google.gmail.send",
+] as const;
+export type LifeOpsGoogleCapability =
+  (typeof LIFEOPS_GOOGLE_CAPABILITIES)[number];
+
 export const LIFEOPS_REMINDER_CHANNELS = [
   "in_app",
   "sms",
@@ -116,6 +126,8 @@ export const LIFEOPS_OWNER_TYPES = [
   "goal",
   "workflow",
   "calendar_event",
+  "connector",
+  "channel_policy",
 ] as const;
 export type LifeOpsOwnerType = (typeof LIFEOPS_OWNER_TYPES)[number];
 
@@ -402,6 +414,49 @@ export interface LifeOpsOverview {
   goals: LifeOpsGoalDefinition[];
   reminders: LifeOpsActiveReminderView[];
   summary: LifeOpsOverviewSummary;
+}
+
+export const LIFEOPS_GOOGLE_CONNECTOR_REASONS = [
+  "connected",
+  "disconnected",
+  "config_missing",
+  "token_missing",
+  "needs_reauth",
+] as const;
+export type LifeOpsGoogleConnectorReason =
+  (typeof LIFEOPS_GOOGLE_CONNECTOR_REASONS)[number];
+
+export interface LifeOpsGoogleConnectorStatus {
+  provider: "google";
+  mode: LifeOpsConnectorMode;
+  defaultMode: LifeOpsConnectorMode;
+  availableModes: LifeOpsConnectorMode[];
+  configured: boolean;
+  connected: boolean;
+  reason: LifeOpsGoogleConnectorReason;
+  identity: Record<string, unknown> | null;
+  grantedCapabilities: LifeOpsGoogleCapability[];
+  grantedScopes: string[];
+  expiresAt: string | null;
+  hasRefreshToken: boolean;
+  grant: LifeOpsConnectorGrant | null;
+}
+
+export interface StartLifeOpsGoogleConnectorRequest {
+  mode?: LifeOpsConnectorMode;
+  capabilities?: LifeOpsGoogleCapability[];
+}
+
+export interface StartLifeOpsGoogleConnectorResponse {
+  provider: "google";
+  mode: LifeOpsConnectorMode;
+  requestedCapabilities: LifeOpsGoogleCapability[];
+  redirectUri: string;
+  authUrl: string;
+}
+
+export interface DisconnectLifeOpsGoogleConnectorRequest {
+  mode?: LifeOpsConnectorMode;
 }
 
 export interface CreateLifeOpsDefinitionRequest {

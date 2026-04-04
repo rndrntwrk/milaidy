@@ -996,6 +996,41 @@ export class LifeOpsRepository {
     return rows.map(parseConnectorGrant);
   }
 
+  async getConnectorGrant(
+    agentId: string,
+    provider: LifeOpsConnectorGrant["provider"],
+    mode: LifeOpsConnectorGrant["mode"],
+  ): Promise<LifeOpsConnectorGrant | null> {
+    await this.ensureReady();
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_connector_grants
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND provider = ${sqlQuote(provider)}
+          AND mode = ${sqlQuote(mode)}
+        LIMIT 1`,
+    );
+    const row = rows[0];
+    return row ? parseConnectorGrant(row) : null;
+  }
+
+  async deleteConnectorGrant(
+    agentId: string,
+    provider: LifeOpsConnectorGrant["provider"],
+    mode?: LifeOpsConnectorGrant["mode"],
+  ): Promise<void> {
+    await this.ensureReady();
+    const modeClause = mode ? `AND mode = ${sqlQuote(mode)}` : "";
+    await executeRawSql(
+      this.runtime,
+      `DELETE FROM life_connector_grants
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND provider = ${sqlQuote(provider)}
+          ${modeClause}`,
+    );
+  }
+
   async createWorkflow(definition: LifeOpsWorkflowDefinition): Promise<void> {
     await this.ensureReady();
     await executeRawSql(
@@ -1103,5 +1138,17 @@ export function createLifeOpsAuditEvent(params: Omit<LifeOpsAuditEvent, "id" | "
     ...params,
     id: crypto.randomUUID(),
     createdAt: isoNow(),
+  };
+}
+
+export function createLifeOpsConnectorGrant(
+  params: Omit<LifeOpsConnectorGrant, "id" | "createdAt" | "updatedAt">,
+): LifeOpsConnectorGrant {
+  const timestamp = isoNow();
+  return {
+    ...params,
+    id: crypto.randomUUID(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
   };
 }

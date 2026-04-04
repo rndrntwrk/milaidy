@@ -8,6 +8,7 @@ import type {
   ChatTokenUsage,
   ConnectionTestResult,
   ContentBlock,
+  DisconnectLifeOpsGoogleConnectorRequest,
   Conversation,
   ConversationChannelType,
   ConversationGreeting,
@@ -17,6 +18,7 @@ import type {
   DatabaseConfigResponse,
   DatabaseStatus,
   ImageAttachment,
+  LifeOpsGoogleConnectorStatus,
   KnowledgeBulkUploadResult,
   KnowledgeDocumentDetail,
   KnowledgeDocumentsResponse,
@@ -38,6 +40,8 @@ import type {
   QuickContextResponse,
   ShareIngestItem,
   ShareIngestPayload,
+  StartLifeOpsGoogleConnectorRequest,
+  StartLifeOpsGoogleConnectorResponse,
   TableInfo,
   TableRowsResponse,
   TrajectoryConfig,
@@ -235,6 +239,13 @@ declare module "./client-base" {
       occurrenceId: string,
       data: SnoozeLifeOpsOccurrenceRequest,
     ): Promise<LifeOpsOccurrenceActionResult>;
+    getGoogleLifeOpsConnectorStatus(mode?: "local" | "remote"): Promise<LifeOpsGoogleConnectorStatus>;
+    startGoogleLifeOpsConnector(
+      data?: StartLifeOpsGoogleConnectorRequest,
+    ): Promise<StartLifeOpsGoogleConnectorResponse>;
+    disconnectGoogleLifeOpsConnector(
+      data?: DisconnectLifeOpsGoogleConnectorRequest,
+    ): Promise<LifeOpsGoogleConnectorStatus>;
     listWorkbenchTasks(): Promise<{ tasks: WorkbenchTask[] }>;
     getWorkbenchTask(taskId: string): Promise<{ task: WorkbenchTask }>;
     createWorkbenchTask(data: {
@@ -840,6 +851,34 @@ MiladyClient.prototype.snoozeLifeOpsOccurrence = async function (
   data,
 ) {
   return this.fetch(`/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/snooze`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.getGoogleLifeOpsConnectorStatus = async function (
+  this: MiladyClient,
+  mode,
+) {
+  const query = mode ? `?mode=${encodeURIComponent(mode)}` : "";
+  return this.fetch(`/api/lifeops/connectors/google/status${query}`);
+};
+
+MiladyClient.prototype.startGoogleLifeOpsConnector = async function (
+  this: MiladyClient,
+  data = {},
+) {
+  return this.fetch("/api/lifeops/connectors/google/start", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.disconnectGoogleLifeOpsConnector = async function (
+  this: MiladyClient,
+  data = {},
+) {
+  return this.fetch("/api/lifeops/connectors/google/disconnect", {
     method: "POST",
     body: JSON.stringify(data),
   });

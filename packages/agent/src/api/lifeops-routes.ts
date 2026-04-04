@@ -5,7 +5,9 @@ import type {
   CompleteLifeOpsOccurrenceRequest,
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,
+  DisconnectLifeOpsGoogleConnectorRequest,
   SnoozeLifeOpsOccurrenceRequest,
+  StartLifeOpsGoogleConnectorRequest,
   UpdateLifeOpsDefinitionRequest,
   UpdateLifeOpsGoalRequest,
 } from "../contracts/lifeops.js";
@@ -16,6 +18,7 @@ export interface LifeOpsRouteContext {
   res: http.ServerResponse;
   method: string;
   pathname: string;
+  url: URL;
   state: {
     runtime: AgentRuntime | null;
     adminEntityId: UUID | null;
@@ -60,10 +63,131 @@ async function runRoute(
   }
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function writeHtml(
+  res: http.ServerResponse,
+  status: number,
+  title: string,
+  message: string,
+): void {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.end(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #f5f1e8;
+        color: #18120d;
+        font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+      }
+      main {
+        width: min(32rem, calc(100vw - 2rem));
+        padding: 2rem;
+        border: 1px solid rgba(24, 18, 13, 0.12);
+        border-radius: 1.25rem;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 24px 80px rgba(24, 18, 13, 0.08);
+      }
+      h1 {
+        margin: 0 0 0.75rem;
+        font-size: 1.25rem;
+      }
+      p {
+        margin: 0;
+        line-height: 1.5;
+        color: rgba(24, 18, 13, 0.78);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>${escapeHtml(title)}</h1>
+      <p>${escapeHtml(message)}</p>
+    </main>
+    <script>
+      window.setTimeout(() => {
+        try {
+          window.close();
+        } catch {}
+      }, 250);
+    </script>
+  </body>
+</html>`);
+}
+
 export async function handleLifeOpsRoutes(
   ctx: LifeOpsRouteContext,
 ): Promise<boolean> {
-  const { req, res, method, pathname, json, readJsonBody, decodePathComponent } = ctx;
+  const { req, res, method, pathname, url, json, readJsonBody, decodePathComponent } = ctx;
+
+  if (method === "GET" && pathname === "/api/lifeops/connectors/google/status") {
+    return runRoute(ctx, async (service) => {
+      const rawMode = url.searchParams.get("mode");
+      if (rawMode !== null && rawMode !== "local" && rawMode !== "remote") {
+        throw new LifeOpsServiceError(400, "mode must be one of: local, remote");
+      }
+      json(
+        res,
+        await service.getGoogleConnectorStatus(
+          url,
+          (rawMode ?? undefined) as "local" | "remote" | undefined,
+        ),
+      );
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/connectors/google/start") {
+    const body = await readJsonBody<StartLifeOpsGoogleConnectorRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.startGoogleConnector(body, url));
+    });
+  }
+
+  if (method === "GET" && pathname === "/api/lifeops/connectors/google/callback") {
+    const service = getService(ctx);
+    if (!service) return true;
+    try {
+      await service.completeGoogleConnectorCallback(url);
+      writeHtml(
+        res,
+        200,
+        "Google Connected",
+        "Google access is now available in Milady. You can close this window.",
+      );
+      return true;
+    } catch (error) {
+      if (error instanceof LifeOpsServiceError) {
+        writeHtml(res, error.status, "Google Connection Failed", error.message);
+        return true;
+      }
+      throw error;
+    }
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/connectors/google/disconnect") {
+    const body = await readJsonBody<DisconnectLifeOpsGoogleConnectorRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.disconnectGoogleConnector(body, url));
+    });
+  }
 
   if (method === "GET" && pathname === "/api/lifeops/overview") {
     return runRoute(ctx, async (service) => {

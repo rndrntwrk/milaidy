@@ -11,8 +11,12 @@ import type {
 import type { ReleaseChannel } from "@miladyai/agent/contracts/config";
 import type {
   CompleteLifeOpsOccurrenceRequest,
+  DisconnectLifeOpsGoogleConnectorRequest,
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,
+  LifeOpsGoogleConnectorStatus,
+  StartLifeOpsGoogleConnectorRequest,
+  StartLifeOpsGoogleConnectorResponse,
   LifeOpsGoalDefinition,
   LifeOpsGoalLink,
   LifeOpsOccurrenceView,
@@ -28,8 +32,12 @@ import type { MessageExampleContent } from "@miladyai/shared/contracts/onboardin
 
 export type {
   CompleteLifeOpsOccurrenceRequest,
+  DisconnectLifeOpsGoogleConnectorRequest,
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,
+  LifeOpsGoogleConnectorStatus,
+  StartLifeOpsGoogleConnectorRequest,
+  StartLifeOpsGoogleConnectorResponse,
   LifeOpsGoalDefinition,
   LifeOpsGoalLink,
   LifeOpsOccurrenceView,

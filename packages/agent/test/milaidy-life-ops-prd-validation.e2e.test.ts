@@ -6,11 +6,18 @@
  * surface inside the repo so the delivery scope does not drift.
  */
 
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { AgentRuntime } from "@elizaos/core";
-import { describe, expect, it } from "vitest";
+import crypto from "node:crypto";
+import type { AgentRuntime, Task, UUID } from "@elizaos/core";
+import { describe, expect, it, vi } from "vitest";
+import { startApiServer } from "../src/api/server";
 import { LifeOpsRepository } from "../src/lifeops/repository";
 import { LifeOpsService } from "../src/lifeops/service";
+import { req } from "../../../test/helpers/http";
+import { saveEnv } from "../../../test/helpers/test-utils";
 
 type Phase = "P0" | "P1" | "P2" | "P3";
 type Domain =
@@ -342,6 +349,122 @@ function createSqliteRuntime(agentId = "milaidy-lifeops-prd-agent"): AgentRuntim
   return runtimeSubset as unknown as AgentRuntime;
 }
 
+function createApiRuntime(agentId = "milaidy-lifeops-prd-api-agent"): AgentRuntime {
+  const sqlite = new DatabaseSync(":memory:");
+  let tasks: Task[] = [];
+  const runtimeSubset = {
+    agentId,
+    character: { name: "MilaidyLifeOpsValidation" } as AgentRuntime["character"],
+    getSetting: () => undefined,
+    getService: () => null,
+    getRoomsByWorld: async () => [],
+    getTasks: async (query?: { tags?: string[] }) => {
+      if (!query?.tags || query.tags.length === 0) return tasks;
+      return tasks.filter((task) =>
+        query.tags?.every((tag) => task.tags?.includes(tag)),
+      );
+    },
+    getTask: async (taskId: UUID) =>
+      tasks.find((task) => task.id === taskId) ?? null,
+    createTask: async (task: Task) => {
+      const id = (task.id as UUID | undefined) ?? (crypto.randomUUID() as UUID);
+      tasks.push({ ...task, id });
+      return id;
+    },
+    updateTask: async (taskId: UUID, update: Partial<Task>) => {
+      tasks = tasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              ...update,
+              metadata: {
+                ...((task.metadata as Record<string, unknown> | undefined) ?? {}),
+                ...((update.metadata as Record<string, unknown> | undefined) ?? {}),
+              } as Task["metadata"],
+            }
+          : task,
+      );
+    },
+    deleteTask: async (taskId: UUID) => {
+      tasks = tasks.filter((task) => task.id !== taskId);
+    },
+    adapter: {
+      db: {
+        execute: async (query: SqlQuery) => {
+          const sql = extractSqlText(query).trim();
+          if (sql.length === 0) return [];
+          if (/^(select|pragma)\b/i.test(sql)) {
+            return sqlite.prepare(sql).all() as Array<Record<string, unknown>>;
+          }
+          sqlite.exec(sql);
+          return [];
+        },
+      },
+    },
+  };
+  return runtimeSubset as unknown as AgentRuntime;
+}
+
+function buildIdToken(claims: Record<string, unknown>): string {
+  const encode = (value: object) =>
+    Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${encode({ alg: "none", typ: "JWT" })}.${encode(claims)}.signature`;
+}
+
+async function withGoogleOAuthApiServer<T>(
+  env: Record<string, string>,
+  fn: (args: {
+    port: number;
+    stateDir: string;
+    fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
+  }) => Promise<T>,
+): Promise<T> {
+  const envBackup = saveEnv(
+    "ELIZA_STATE_DIR",
+    "MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID",
+    "ELIZA_GOOGLE_OAUTH_DESKTOP_CLIENT_ID",
+    "MILADY_GOOGLE_OAUTH_WEB_CLIENT_ID",
+    "ELIZA_GOOGLE_OAUTH_WEB_CLIENT_ID",
+    "MILADY_GOOGLE_OAUTH_WEB_CLIENT_SECRET",
+    "ELIZA_GOOGLE_OAUTH_WEB_CLIENT_SECRET",
+    "MILADY_GOOGLE_OAUTH_PUBLIC_BASE_URL",
+    "ELIZA_GOOGLE_OAUTH_PUBLIC_BASE_URL",
+  );
+  const stateDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), "milaidy-prd-google-oauth-"),
+  );
+  const fetchMock = vi.fn<typeof fetch>();
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+  process.env.ELIZA_STATE_DIR = stateDir;
+  for (const [key, value] of Object.entries(env)) {
+    process.env[key] = value;
+  }
+
+  const server = await startApiServer({
+    port: 0,
+    runtime: createApiRuntime(),
+  });
+
+  try {
+    return await fn({
+      port: server.port,
+      stateDir,
+      fetchMock,
+    });
+  } finally {
+    await server.close();
+    vi.unstubAllGlobals();
+    await fs.rm(stateDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
+    envBackup.restore();
+  }
+}
+
 async function createMorningNightHabit(runtime: AgentRuntime) {
   const service = new LifeOpsService(runtime);
   const created = await service.createDefinition({
@@ -667,6 +790,203 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
           expect(
             overview.reminders.every((reminder) => reminder.channel === "in_app"),
           ).toBe(true);
+        });
+        continue;
+      }
+
+      if (scenario.id === "P1-01") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          await withGoogleOAuthApiServer(
+            {
+              MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID: "desktop-client-id",
+            },
+            async ({ port, stateDir, fetchMock }) => {
+              fetchMock.mockResolvedValueOnce(
+                new Response(
+                  JSON.stringify({
+                    access_token: "desktop-access-token",
+                    refresh_token: "desktop-refresh-token",
+                    expires_in: 3600,
+                    scope: [
+                      "openid",
+                      "email",
+                      "profile",
+                      "https://www.googleapis.com/auth/calendar.readonly",
+                    ].join(" "),
+                    token_type: "Bearer",
+                    id_token: buildIdToken({
+                      sub: "google-user-1",
+                      email: "agent@example.com",
+                      name: "Agent Example",
+                      email_verified: true,
+                    }),
+                  }),
+                  {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                  },
+                ),
+              );
+
+              const startRes = await req(
+                port,
+                "POST",
+                "/api/lifeops/connectors/google/start",
+                { capabilities: ["google.calendar.read"] },
+              );
+              expect(startRes.status).toBe(200);
+              expect(startRes.data.mode).toBe("local");
+              expect(startRes.data.requestedCapabilities).toEqual([
+                "google.basic_identity",
+                "google.calendar.read",
+              ]);
+
+              const authUrl = new URL(String(startRes.data.authUrl));
+              expect(authUrl.searchParams.get("redirect_uri")).toBe(
+                `http://127.0.0.1:${port}/api/lifeops/connectors/google/callback`,
+              );
+              expect(authUrl.searchParams.get("code_challenge_method")).toBe(
+                "S256",
+              );
+              expect(authUrl.searchParams.get("scope")?.split(" ")).toEqual(
+                expect.arrayContaining([
+                  "openid",
+                  "email",
+                  "profile",
+                  "https://www.googleapis.com/auth/calendar.readonly",
+                ]),
+              );
+
+              const callbackRes = await req(
+                port,
+                "GET",
+                `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(authUrl.searchParams.get("state") ?? "")}&code=desktop-code`,
+              );
+              expect(callbackRes.status).toBe(200);
+              expect(String(callbackRes.data._raw)).toContain("Google Connected");
+
+              const statusRes = await req(
+                port,
+                "GET",
+                "/api/lifeops/connectors/google/status",
+              );
+              expect(statusRes.status).toBe(200);
+              expect(statusRes.data.connected).toBe(true);
+              expect(statusRes.data.mode).toBe("local");
+              expect(statusRes.data.reason).toBe("connected");
+              expect(statusRes.data.grantedCapabilities).toEqual([
+                "google.basic_identity",
+                "google.calendar.read",
+              ]);
+
+              const grant = statusRes.data.grant as Record<string, unknown>;
+              const tokenPath = path.join(
+                stateDir,
+                "credentials",
+                "lifeops",
+                "google",
+                String(grant.tokenRef),
+              );
+              const raw = JSON.parse(await fs.readFile(tokenPath, "utf-8")) as {
+                refreshToken: string;
+              };
+              expect(raw.refreshToken).toBe("desktop-refresh-token");
+            },
+          );
+        });
+        continue;
+      }
+
+      if (scenario.id === "P1-02") {
+        it(`[${scenario.id}] ${scenario.title}`, async () => {
+          await withGoogleOAuthApiServer(
+            {
+              MILADY_GOOGLE_OAUTH_WEB_CLIENT_ID: "web-client-id",
+              MILADY_GOOGLE_OAUTH_WEB_CLIENT_SECRET: "web-client-secret",
+              MILADY_GOOGLE_OAUTH_PUBLIC_BASE_URL: "https://milady.example.com",
+            },
+            async ({ port, fetchMock }) => {
+              fetchMock.mockResolvedValueOnce(
+                new Response(
+                  JSON.stringify({
+                    access_token: "remote-access-token",
+                    refresh_token: "remote-refresh-token",
+                    expires_in: 7200,
+                    scope: [
+                      "openid",
+                      "email",
+                      "profile",
+                      "https://www.googleapis.com/auth/calendar.readonly",
+                      "https://www.googleapis.com/auth/calendar.events",
+                    ].join(" "),
+                    token_type: "Bearer",
+                    id_token: buildIdToken({
+                      sub: "google-user-2",
+                      email: "remote@example.com",
+                      name: "Remote Example",
+                      email_verified: true,
+                    }),
+                  }),
+                  {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                  },
+                ),
+              );
+
+              const startRes = await req(
+                port,
+                "POST",
+                "/api/lifeops/connectors/google/start",
+                {
+                  mode: "remote",
+                  capabilities: ["google.calendar.write"],
+                },
+              );
+              expect(startRes.status).toBe(200);
+              expect(startRes.data.mode).toBe("remote");
+              expect(startRes.data.redirectUri).toBe(
+                "https://milady.example.com/api/lifeops/connectors/google/callback",
+              );
+
+              const authUrl = new URL(String(startRes.data.authUrl));
+              expect(authUrl.searchParams.get("redirect_uri")).toBe(
+                "https://milady.example.com/api/lifeops/connectors/google/callback",
+              );
+              expect(authUrl.searchParams.get("scope")?.split(" ")).toEqual(
+                expect.arrayContaining([
+                  "openid",
+                  "email",
+                  "profile",
+                  "https://www.googleapis.com/auth/calendar.events",
+                ]),
+              );
+
+              await req(
+                port,
+                "GET",
+                `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(authUrl.searchParams.get("state") ?? "")}&code=remote-code`,
+              );
+
+              const statusRes = await req(
+                port,
+                "GET",
+                "/api/lifeops/connectors/google/status?mode=remote",
+              );
+              expect(statusRes.status).toBe(200);
+              expect(statusRes.data.connected).toBe(true);
+              expect(statusRes.data.mode).toBe("remote");
+              expect(statusRes.data.reason).toBe("connected");
+              expect(statusRes.data.grantedCapabilities).toEqual([
+                "google.basic_identity",
+                "google.calendar.read",
+                "google.calendar.write",
+              ]);
+              expect((statusRes.data.identity as Record<string, unknown>).email).toBe(
+                "remote@example.com",
+              );
+            },
+          );
         });
         continue;
       }

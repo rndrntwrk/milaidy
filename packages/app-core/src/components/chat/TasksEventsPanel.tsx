@@ -9,6 +9,7 @@
 
 import type {
   CodingAgentSession,
+  LifeOpsGoogleConnectorStatus,
   LifeOpsOccurrenceView,
   LifeOpsOverview,
   WorkbenchTodo,
@@ -20,6 +21,7 @@ import { client } from "../../api";
 import { TERMINAL_STATUSES } from "../../coding";
 import type { ActivityEvent } from "../../hooks/useActivityEvents";
 import { useApp } from "../../state";
+import { openExternalUrl } from "../../utils";
 import { PULSE_STATUSES, STATUS_DOT } from "../coding/pty-status-dots";
 
 interface TasksEventsPanelProps {
@@ -34,6 +36,8 @@ interface TasksEventsPanelProps {
 const TODO_REFRESH_INTERVAL_MS = 15_000;
 const LIFEOPS_REFRESH_INTERVAL_MS = 15_000;
 const MAX_VISIBLE_TODOS = 8;
+const GOOGLE_CONNECTOR_POLL_ATTEMPTS = 20;
+const GOOGLE_CONNECTOR_POLL_MS = 1_500;
 
 /** Derive activity text for a coding agent session. */
 function deriveSessionActivity(s: CodingAgentSession): string {
@@ -332,6 +336,124 @@ function ReminderRow({
   );
 }
 
+function describeGoogleConnectorStatus(
+  status: LifeOpsGoogleConnectorStatus | null,
+): string {
+  if (!status) return "Checking Google connector…";
+  if (status.connected) {
+    const email =
+      typeof status.identity?.email === "string" ? status.identity.email : null;
+    return email
+      ? `Connected as ${email}`
+      : `Google ${status.mode} access is connected`;
+  }
+  if (status.reason === "config_missing") {
+    return "Google OAuth is not configured on this runtime.";
+  }
+  if (status.reason === "token_missing" || status.reason === "needs_reauth") {
+    return "Google access needs to be reconnected.";
+  }
+  return "Calendar and Gmail actions stay disconnected until you approve Google access.";
+}
+
+function GoogleConnectorCard({
+  status,
+  loading,
+  busy,
+  pendingAuthUrl,
+  onConnect,
+  onDisconnect,
+  onOpenPending,
+}: {
+  status: LifeOpsGoogleConnectorStatus | null;
+  loading: boolean;
+  busy: boolean;
+  pendingAuthUrl: string | null;
+  onConnect: () => Promise<void>;
+  onDisconnect: () => Promise<void>;
+  onOpenPending: () => Promise<void>;
+}) {
+  const connected = status?.connected ?? false;
+  const capabilities = status?.grantedCapabilities ?? [];
+
+  return (
+    <div className="rounded-lg border border-border/50 bg-bg/70 p-3">
+      <div className="flex items-start gap-2">
+        <Target className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="truncate text-xs font-semibold text-txt">
+              Google Calendar
+            </span>
+            {status ? (
+              <Badge variant="secondary" className="text-[9px]">
+                {status.mode}
+              </Badge>
+            ) : null}
+            {connected ? (
+              <Badge variant="secondary" className="text-[9px] text-ok">
+                connected
+              </Badge>
+            ) : null}
+          </div>
+          <p className="mt-1 text-[11px] leading-5 text-muted">
+            {loading && !status
+              ? "Checking Google connector…"
+              : describeGoogleConnectorStatus(status)}
+          </p>
+          {capabilities.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {capabilities.map((capability) => (
+                <Badge
+                  key={capability}
+                  variant="secondary"
+                  className="text-[9px]"
+                >
+                  {capability.replace("google.", "")}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {connected ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => void onDisconnect()}
+                className="h-6 px-2 text-[10px]"
+              >
+                Disconnect
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy || status?.reason === "config_missing"}
+                onClick={() => void onConnect()}
+                className="h-6 px-2 text-[10px]"
+              >
+                Connect
+              </Button>
+            )}
+            {pendingAuthUrl ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => void onOpenPending()}
+                className="h-6 px-2 text-[10px]"
+              >
+                Open Consent
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LifeOpsOccurrenceRow({
   occurrence,
   acting,
@@ -417,6 +539,13 @@ function LifeOpsOccurrenceRow({
 function LifeOpsSection({
   lifeops,
   loading,
+  googleConnector,
+  googleConnectorLoading,
+  googleConnectorBusy,
+  pendingGoogleAuthUrl,
+  onConnectGoogle,
+  onDisconnectGoogle,
+  onOpenPendingGoogle,
   actingOccurrenceId,
   onComplete,
   onSnooze,
@@ -424,6 +553,13 @@ function LifeOpsSection({
 }: {
   lifeops: LifeOpsOverview | null;
   loading: boolean;
+  googleConnector: LifeOpsGoogleConnectorStatus | null;
+  googleConnectorLoading: boolean;
+  googleConnectorBusy: boolean;
+  pendingGoogleAuthUrl: string | null;
+  onConnectGoogle: () => Promise<void>;
+  onDisconnectGoogle: () => Promise<void>;
+  onOpenPendingGoogle: () => Promise<void>;
   actingOccurrenceId: string | null;
   onComplete: (occurrenceId: string) => Promise<void>;
   onSnooze: (occurrenceId: string) => Promise<void>;
@@ -450,6 +586,15 @@ function LifeOpsSection({
 
   return (
     <div className="flex flex-col gap-2">
+      <GoogleConnectorCard
+        status={googleConnector}
+        loading={googleConnectorLoading}
+        busy={googleConnectorBusy}
+        pendingAuthUrl={pendingGoogleAuthUrl}
+        onConnect={onConnectGoogle}
+        onDisconnect={onDisconnectGoogle}
+        onOpenPending={onOpenPendingGoogle}
+      />
       {lifeops ? (
         <p className="px-1 text-[11px] text-muted">
           {lifeops.summary.activeGoalCount} goal
@@ -546,7 +691,7 @@ export function TasksEventsPanel({
   clearEvents,
   mobile = false,
 }: TasksEventsPanelProps) {
-  const { ptySessions, t, workbench } = useApp();
+  const { ptySessions, setActionNotice, t, workbench } = useApp();
   const [todos, setTodos] = useState<WorkbenchTodo[]>(() =>
     dedupeTodos(workbench?.todos ?? []),
   );
@@ -555,6 +700,13 @@ export function TasksEventsPanel({
     workbench?.lifeops ?? null,
   );
   const [lifeopsLoading, setLifeopsLoading] = useState(false);
+  const [googleConnector, setGoogleConnector] =
+    useState<LifeOpsGoogleConnectorStatus | null>(null);
+  const [googleConnectorLoading, setGoogleConnectorLoading] = useState(false);
+  const [googleConnectorBusy, setGoogleConnectorBusy] = useState(false);
+  const [pendingGoogleAuthUrl, setPendingGoogleAuthUrl] = useState<string | null>(
+    null,
+  );
   const [actingOccurrenceId, setActingOccurrenceId] = useState<string | null>(
     null,
   );
@@ -627,6 +779,28 @@ export function TasksEventsPanel({
     [workbench?.lifeops],
   );
 
+  const loadGoogleConnector = useCallback(
+    async (silent = false) => {
+      if (!silent) {
+        setGoogleConnectorLoading(true);
+      }
+
+      try {
+        const result = await client.getGoogleLifeOpsConnectorStatus();
+        setGoogleConnector(result);
+        if (result.connected) {
+          setPendingGoogleAuthUrl(null);
+        }
+        return result;
+      } catch {
+        return null;
+      } finally {
+        setGoogleConnectorLoading(false);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!open) {
       return;
@@ -661,16 +835,22 @@ export function TasksEventsPanel({
       if (!active) return;
     })();
 
+    void (async () => {
+      await loadGoogleConnector(googleConnector !== null);
+      if (!active) return;
+    })();
+
     const intervalId = window.setInterval(() => {
       if (!active) return;
       void loadLifeOps(true);
+      void loadGoogleConnector(true);
     }, LIFEOPS_REFRESH_INTERVAL_MS);
 
     return () => {
       active = false;
       window.clearInterval(intervalId);
     };
-  }, [lifeops?.occurrences.length, loadLifeOps, open]);
+  }, [googleConnector !== null, lifeops?.occurrences.length, loadGoogleConnector, loadLifeOps, open]);
 
   const runOccurrenceAction = useCallback(
     async (
@@ -687,6 +867,74 @@ export function TasksEventsPanel({
     },
     [loadLifeOps],
   );
+
+  const pollForGoogleConnection = useCallback(
+    async () => {
+      for (let attempt = 0; attempt < GOOGLE_CONNECTOR_POLL_ATTEMPTS; attempt += 1) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, GOOGLE_CONNECTOR_POLL_MS);
+        });
+        const status = await loadGoogleConnector(true);
+        if (status?.connected) {
+          setActionNotice(
+            "Google connected for calendar access.",
+            "success",
+            3600,
+          );
+          return;
+        }
+      }
+    },
+    [loadGoogleConnector, setActionNotice],
+  );
+
+  const handleOpenPendingGoogle = useCallback(async () => {
+    if (!pendingGoogleAuthUrl) {
+      return;
+    }
+    await openExternalUrl(pendingGoogleAuthUrl);
+  }, [pendingGoogleAuthUrl]);
+
+  const handleConnectGoogle = useCallback(async () => {
+    setGoogleConnectorBusy(true);
+    try {
+      const result = await client.startGoogleLifeOpsConnector();
+      setPendingGoogleAuthUrl(result.authUrl);
+      await openExternalUrl(result.authUrl);
+      setActionNotice(
+        "Continue Google consent in your browser.",
+        "info",
+        3600,
+      );
+      await pollForGoogleConnection();
+    } catch (error) {
+      setActionNotice(
+        error instanceof Error ? error.message : "Google connection failed.",
+        "error",
+        4800,
+      );
+    } finally {
+      setGoogleConnectorBusy(false);
+    }
+  }, [pollForGoogleConnection, setActionNotice]);
+
+  const handleDisconnectGoogle = useCallback(async () => {
+    setGoogleConnectorBusy(true);
+    try {
+      const result = await client.disconnectGoogleLifeOpsConnector();
+      setGoogleConnector(result);
+      setPendingGoogleAuthUrl(null);
+      setActionNotice("Google disconnected.", "info", 3200);
+    } catch (error) {
+      setActionNotice(
+        error instanceof Error ? error.message : "Google disconnect failed.",
+        "error",
+        4800,
+      );
+    } finally {
+      setGoogleConnectorBusy(false);
+    }
+  }, [setActionNotice]);
 
   if (!open) return null;
 
@@ -706,6 +954,13 @@ export function TasksEventsPanel({
           <LifeOpsSection
             lifeops={lifeops}
             loading={lifeopsLoading}
+            googleConnector={googleConnector}
+            googleConnectorLoading={googleConnectorLoading}
+            googleConnectorBusy={googleConnectorBusy}
+            pendingGoogleAuthUrl={pendingGoogleAuthUrl}
+            onConnectGoogle={handleConnectGoogle}
+            onDisconnectGoogle={handleDisconnectGoogle}
+            onOpenPendingGoogle={handleOpenPendingGoogle}
             actingOccurrenceId={actingOccurrenceId}
             onComplete={(occurrenceId) =>
               runOccurrenceAction(occurrenceId, async () => {

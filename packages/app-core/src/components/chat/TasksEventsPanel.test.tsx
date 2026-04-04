@@ -8,10 +8,13 @@ const { mockUseApp, mockClient } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
   mockClient: {
     completeLifeOpsOccurrence: vi.fn(),
+    disconnectGoogleLifeOpsConnector: vi.fn(),
+    getGoogleLifeOpsConnectorStatus: vi.fn(),
     getLifeOpsOverview: vi.fn(),
     listWorkbenchTodos: vi.fn(),
     skipLifeOpsOccurrence: vi.fn(),
     snoozeLifeOpsOccurrence: vi.fn(),
+    startGoogleLifeOpsConnector: vi.fn(),
   },
 }));
 
@@ -36,6 +39,12 @@ vi.mock("../../api", () => ({
   client: mockClient,
 }));
 
+const mockOpenExternalUrl = vi.fn();
+
+vi.mock("../../utils", () => ({
+  openExternalUrl: (...args: unknown[]) => mockOpenExternalUrl(...args),
+}));
+
 import { TasksEventsPanel } from "./TasksEventsPanel";
 
 function flattenText(node: TestRenderer.ReactTestInstance): string {
@@ -53,10 +62,14 @@ describe("TasksEventsPanel", () => {
   beforeEach(() => {
     mockUseApp.mockReset();
     mockClient.completeLifeOpsOccurrence.mockReset();
+    mockClient.disconnectGoogleLifeOpsConnector.mockReset();
+    mockClient.getGoogleLifeOpsConnectorStatus.mockReset();
     mockClient.getLifeOpsOverview.mockReset();
     mockClient.listWorkbenchTodos.mockReset();
     mockClient.skipLifeOpsOccurrence.mockReset();
     mockClient.snoozeLifeOpsOccurrence.mockReset();
+    mockClient.startGoogleLifeOpsConnector.mockReset();
+    mockOpenExternalUrl.mockReset();
     const workbench = {
       todos: [],
       lifeops: {
@@ -151,6 +164,7 @@ describe("TasksEventsPanel", () => {
           autoResolvedCount: 0,
         },
       ],
+      setActionNotice: vi.fn(),
       t: (key: string, options?: { defaultValue?: string }) =>
         options?.defaultValue ?? key,
       workbench,
@@ -178,6 +192,46 @@ describe("TasksEventsPanel", () => {
       ],
     });
     mockClient.getLifeOpsOverview.mockResolvedValue(workbench.lifeops);
+    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue({
+      provider: "google",
+      mode: "local",
+      defaultMode: "local",
+      availableModes: ["local"],
+      configured: true,
+      connected: true,
+      reason: "connected",
+      identity: {
+        email: "agent@example.com",
+      },
+      grantedCapabilities: ["google.basic_identity", "google.calendar.read"],
+      grantedScopes: [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/calendar.readonly",
+      ],
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      hasRefreshToken: true,
+      grant: {
+        id: "grant-1",
+        agentId: "agent-1",
+        provider: "google",
+        identity: { email: "agent@example.com" },
+        grantedScopes: [
+          "openid",
+          "email",
+          "profile",
+          "https://www.googleapis.com/auth/calendar.readonly",
+        ],
+        capabilities: ["google.basic_identity", "google.calendar.read"],
+        tokenRef: "agent-1/local.json",
+        mode: "local",
+        metadata: {},
+        lastRefreshAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    });
     mockClient.completeLifeOpsOccurrence.mockResolvedValue({
       occurrence: {
         id: "occ-visible",
@@ -195,6 +249,28 @@ describe("TasksEventsPanel", () => {
         id: "occ-visible",
         state: "snoozed",
       },
+    });
+    mockClient.startGoogleLifeOpsConnector.mockResolvedValue({
+      provider: "google",
+      mode: "local",
+      requestedCapabilities: ["google.basic_identity", "google.calendar.read"],
+      redirectUri: "http://127.0.0.1:2138/api/lifeops/connectors/google/callback",
+      authUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=test",
+    });
+    mockClient.disconnectGoogleLifeOpsConnector.mockResolvedValue({
+      provider: "google",
+      mode: "local",
+      defaultMode: "local",
+      availableModes: ["local"],
+      configured: true,
+      connected: false,
+      reason: "disconnected",
+      identity: null,
+      grantedCapabilities: [],
+      grantedScopes: [],
+      expiresAt: null,
+      hasRefreshToken: false,
+      grant: null,
     });
   });
 
@@ -226,6 +302,9 @@ describe("TasksEventsPanel", () => {
     const text = flattenText(tree.root).toLowerCase();
     expect(mockClient.listWorkbenchTodos.mock.calls.length).toBeGreaterThan(0);
     expect(mockClient.getLifeOpsOverview.mock.calls.length).toBeGreaterThan(0);
+    expect(mockClient.getGoogleLifeOpsConnectorStatus.mock.calls.length).toBeGreaterThan(0);
+    expect(text).toContain("google calendar");
+    expect(text).toContain("connected as agent@example.com");
     expect(text).toContain("current slot check-in");
     expect(text).toContain("in-app reminder");
     expect(text).toContain("write release notes");
@@ -264,6 +343,50 @@ describe("TasksEventsPanel", () => {
     expect(mockClient.completeLifeOpsOccurrence).toHaveBeenCalledWith(
       "occ-visible",
       {},
+    );
+  });
+
+  it("starts Google OAuth from the life-ops card", async () => {
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(TasksEventsPanel, {
+          open: true,
+          clearEvents: vi.fn(),
+          events: [],
+        }),
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const disconnectButton = tree.root
+      .findAllByType("button")
+      .find((button) => flattenText(button).includes("Disconnect"));
+    expect(disconnectButton).toBeDefined();
+
+    await act(async () => {
+      disconnectButton?.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(mockClient.disconnectGoogleLifeOpsConnector).toHaveBeenCalledWith();
+
+    const connectButton = tree.root
+      .findAllByType("button")
+      .find((button) => flattenText(button).includes("Connect"));
+    expect(connectButton).toBeDefined();
+
+    await act(async () => {
+      connectButton?.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith();
+    expect(mockOpenExternalUrl).toHaveBeenCalledWith(
+      "https://accounts.google.com/o/oauth2/v2/auth?state=test",
     );
   });
 });
