@@ -763,7 +763,7 @@ describe("Electrobun release workflow drift", () => {
 
     expect(workflow).toContain("name: Collect Windows smoke diagnostics");
     expect(workflow).toContain("name: Upload Windows smoke diagnostics");
-    expect(workflow).toContain('$startupLog = Join-Path $env:APPDATA');
+    expect(workflow).toContain("$startupLog = Join-Path $env:APPDATA");
     expect(workflow).toContain(
       '$wrapperRoot = Join-Path $env:LOCALAPPDATA "com.miladyai.milady"',
     );
