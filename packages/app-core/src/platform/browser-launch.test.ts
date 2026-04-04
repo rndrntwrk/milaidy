@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { loadPersistedActiveServer } from "../state/persistence";
 
 const { fetchMock, mockClient } = vi.hoisted(() => ({
   fetchMock: vi.fn(),
@@ -66,6 +67,13 @@ describe("applyLaunchConnectionFromUrl", () => {
       "https://agent-123.containers.elizacloud.ai",
     );
     expect(mockClient.setToken).toHaveBeenCalledWith("managed-backend-token");
+    expect(loadPersistedActiveServer()).toEqual({
+      id: "cloud:https://agent-123.containers.elizacloud.ai",
+      kind: "cloud",
+      label: "Eliza Cloud",
+      apiBase: "https://agent-123.containers.elizacloud.ai",
+      accessToken: "managed-backend-token",
+    });
     expect(window.location.search).toBe("");
   });
 
@@ -115,6 +123,13 @@ describe("applyLaunchConnectionFromUrl", () => {
       "https://agent-legacy.containers.elizacloud.ai",
     );
     expect(mockClient.setToken).toHaveBeenCalledWith("legacy-token");
+    expect(loadPersistedActiveServer()).toEqual({
+      id: "cloud:https://agent-legacy.containers.elizacloud.ai",
+      kind: "cloud",
+      label: "Eliza Cloud",
+      apiBase: "https://agent-legacy.containers.elizacloud.ai",
+      accessToken: "legacy-token",
+    });
   });
 
   it("falls back to direct launch params and strips them after applying", async () => {
@@ -129,6 +144,13 @@ describe("applyLaunchConnectionFromUrl", () => {
       "https://agent-456.containers.elizacloud.ai",
     );
     expect(mockClient.setToken).toHaveBeenCalledWith("backend-token");
+    expect(loadPersistedActiveServer()).toEqual({
+      id: "remote:https://agent-456.containers.elizacloud.ai",
+      kind: "remote",
+      label: "agent-456.containers.elizacloud.ai",
+      apiBase: "https://agent-456.containers.elizacloud.ai",
+      accessToken: "backend-token",
+    });
     expect(window.location.search).toBe("");
   });
 

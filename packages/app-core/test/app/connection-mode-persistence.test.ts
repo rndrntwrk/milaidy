@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
 /**
- * Tests for the PersistedConnectionMode persistence layer and
+ * Tests for the persisted active-server layer and
  * startup fresh-install detection added in the onboarding/connection rework.
  *
  * Covers:
  * - Persistence save/load/clear round-trips
- * - Fresh install detection (no persisted mode + no API base → skip backend polling)
- * - Returning user restoration (persisted mode restores client connection)
+ * - Fresh install detection (no persisted server + no API base → skip backend polling)
+ * - Returning user restoration (persisted server restores client connection)
  * - Mobile sandbox-only enforcement
  * - Cloud provisioning client method
  * - Connection key auto-generation (milady-side)
@@ -26,7 +26,6 @@ const { mockClient } = vi.hoisted(() => ({
       expiresAt: null,
     })),
     getOnboardingStatus: vi.fn(async () => ({ complete: false })),
-    getConfig: vi.fn(async () => null),
     disconnectWs: vi.fn(),
     getCodingAgentStatus: vi.fn(async () => null),
     getConfig: vi.fn(async () => ({})),
@@ -41,103 +40,126 @@ vi.mock("@miladyai/app-core/api", () => ({
 
 // ── Persistence layer tests ────────────────────────────────────────────
 
-describe("PersistedConnectionMode persistence", () => {
+describe("PersistedActiveServer persistence", () => {
   beforeEach(() => {
     localStorage.clear();
   });
 
-  it("returns null when no connection mode is persisted", async () => {
-    const { loadPersistedConnectionMode } = await import(
+  it("returns null when no active server is persisted", async () => {
+    const { loadPersistedActiveServer } = await import(
       "@miladyai/app-core/state/persistence"
     );
-    expect(loadPersistedConnectionMode()).toBeNull();
+    expect(loadPersistedActiveServer()).toBeNull();
   });
 
-  it("round-trips a local connection mode", async () => {
-    const { loadPersistedConnectionMode, savePersistedConnectionMode } =
+  it("round-trips a local active server", async () => {
+    const { createPersistedActiveServer, loadPersistedActiveServer, savePersistedActiveServer } =
       await import("@miladyai/app-core/state/persistence");
 
-    savePersistedConnectionMode({ runMode: "local" });
-    const loaded = loadPersistedConnectionMode();
-    expect(loaded).toEqual({ runMode: "local" });
-  });
-
-  it("round-trips a cloud connection mode with auth", async () => {
-    const { loadPersistedConnectionMode, savePersistedConnectionMode } =
-      await import("@miladyai/app-core/state/persistence");
-
-    savePersistedConnectionMode({
-      runMode: "cloud",
-      cloudApiBase: "https://api.eliza.ai",
-      cloudAuthToken: "token-123",
-    });
-    const loaded = loadPersistedConnectionMode();
+    savePersistedActiveServer(createPersistedActiveServer({ kind: "local" }));
+    const loaded = loadPersistedActiveServer();
     expect(loaded).toEqual({
-      runMode: "cloud",
-      cloudApiBase: "https://api.eliza.ai",
-      cloudAuthToken: "token-123",
+      id: "local:embedded",
+      kind: "local",
+      label: "This device",
     });
+    expect(localStorage.getItem("milady:active-server")).toBe(
+      JSON.stringify({
+        id: "local:embedded",
+        kind: "local",
+        label: "This device",
+      }),
+    );
   });
 
-  it("round-trips a remote connection mode", async () => {
-    const { loadPersistedConnectionMode, savePersistedConnectionMode } =
+  it("round-trips a cloud active server with auth", async () => {
+    const { createPersistedActiveServer, loadPersistedActiveServer, savePersistedActiveServer } =
       await import("@miladyai/app-core/state/persistence");
 
-    savePersistedConnectionMode({
-      runMode: "remote",
-      remoteApiBase: "https://my-agent.example.com",
-      remoteAccessToken: "key-abc",
-    });
-    const loaded = loadPersistedConnectionMode();
+    savePersistedActiveServer(
+      createPersistedActiveServer({
+        kind: "cloud",
+        apiBase: "https://api.eliza.ai",
+        accessToken: "token-123",
+      }),
+    );
+    const loaded = loadPersistedActiveServer();
     expect(loaded).toEqual({
-      runMode: "remote",
-      remoteApiBase: "https://my-agent.example.com",
-      remoteAccessToken: "key-abc",
+      id: "cloud:https://api.eliza.ai",
+      kind: "cloud",
+      label: "Eliza Cloud",
+      apiBase: "https://api.eliza.ai",
+      accessToken: "token-123",
     });
   });
 
-  it("clears persisted connection mode", async () => {
+  it("round-trips a remote active server", async () => {
+    const { createPersistedActiveServer, loadPersistedActiveServer, savePersistedActiveServer } =
+      await import("@miladyai/app-core/state/persistence");
+
+    savePersistedActiveServer(
+      createPersistedActiveServer({
+        kind: "remote",
+        apiBase: "https://my-agent.example.com",
+        accessToken: "key-abc",
+      }),
+    );
+    const loaded = loadPersistedActiveServer();
+    expect(loaded).toEqual({
+      id: "remote:https://my-agent.example.com",
+      kind: "remote",
+      label: "my-agent.example.com",
+      apiBase: "https://my-agent.example.com",
+      accessToken: "key-abc",
+    });
+  });
+
+  it("clears the persisted active server", async () => {
     const {
-      clearPersistedConnectionMode,
-      loadPersistedConnectionMode,
-      savePersistedConnectionMode,
+      clearPersistedActiveServer,
+      loadPersistedActiveServer,
+      savePersistedActiveServer,
     } = await import("@miladyai/app-core/state/persistence");
 
-    savePersistedConnectionMode({ runMode: "local" });
-    expect(loadPersistedConnectionMode()).not.toBeNull();
+    savePersistedActiveServer({
+      id: "local:embedded",
+      kind: "local",
+      label: "This device",
+    });
+    expect(loadPersistedActiveServer()).not.toBeNull();
 
-    clearPersistedConnectionMode();
-    expect(loadPersistedConnectionMode()).toBeNull();
+    clearPersistedActiveServer();
+    expect(loadPersistedActiveServer()).toBeNull();
   });
 
   it("returns null for corrupted JSON", async () => {
-    const { loadPersistedConnectionMode } = await import(
+    const { loadPersistedActiveServer } = await import(
       "@miladyai/app-core/state/persistence"
     );
 
-    localStorage.setItem("eliza:connection-mode", "not-json{{{");
-    expect(loadPersistedConnectionMode()).toBeNull();
+    localStorage.setItem("milady:active-server", "not-json{{{");
+    expect(loadPersistedActiveServer()).toBeNull();
   });
 
-  it("returns null for invalid runMode value", async () => {
-    const { loadPersistedConnectionMode } = await import(
+  it("returns null for invalid kind value", async () => {
+    const { loadPersistedActiveServer } = await import(
       "@miladyai/app-core/state/persistence"
     );
 
     localStorage.setItem(
-      "eliza:connection-mode",
-      JSON.stringify({ runMode: "invalid" }),
+      "milady:active-server",
+      JSON.stringify({ id: "bad", kind: "invalid", label: "Broken" }),
     );
-    expect(loadPersistedConnectionMode()).toBeNull();
+    expect(loadPersistedActiveServer()).toBeNull();
   });
 
   it("returns null for non-object stored value", async () => {
-    const { loadPersistedConnectionMode } = await import(
+    const { loadPersistedActiveServer } = await import(
       "@miladyai/app-core/state/persistence"
     );
 
-    localStorage.setItem("eliza:connection-mode", JSON.stringify([1, 2, 3]));
-    expect(loadPersistedConnectionMode()).toBeNull();
+    localStorage.setItem("milady:active-server", JSON.stringify([1, 2, 3]));
+    expect(loadPersistedActiveServer()).toBeNull();
   });
 });
 

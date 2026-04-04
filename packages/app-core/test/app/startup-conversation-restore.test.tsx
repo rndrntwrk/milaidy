@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { mockClient } = vi.hoisted(() => ({
   mockClient: {
     hasToken: vi.fn(() => false),
+    setBaseUrl: vi.fn(),
+    setToken: vi.fn(),
     getAuthStatus: vi.fn(async () => ({
       required: false,
       pairingEnabled: false,
@@ -166,11 +168,15 @@ describe("startup conversation restore", () => {
       clearInterval: globalThis.clearInterval,
     });
     Object.assign(document.documentElement, { setAttribute: vi.fn() });
-    // Provide a persisted connection so the startup flow doesn't short-circuit
+    // Provide a persisted active server so the startup flow doesn't short-circuit
     // to onboarding before polling getStatus and hydrating conversations.
     localStorage.setItem(
-      "eliza:connection-mode",
-      JSON.stringify({ runMode: "local" }),
+      "milady:active-server",
+      JSON.stringify({
+        id: "local:embedded",
+        kind: "local",
+        label: "This device",
+      }),
     );
     localStorage.setItem("eliza:onboarding-complete", "1");
 
@@ -311,10 +317,10 @@ describe("startup conversation restore", () => {
 
     await waitFor(() => {
       expect(mockClient.getStatus).toHaveBeenCalled();
-      expect(latest?.startupPhase).toBe("initializing-agent");
-      expect(latest?.onboardingLoading).toBe(true);
     });
 
+    // While listConversations is still pending, no conversation should be active
+    // and no new conversation should have been created.
     expect(latest?.activeConversationId).toBeNull();
     expect(mockClient.createConversation).not.toHaveBeenCalled();
     // The StartupCoordinator calls connectWs during its own hydration phase

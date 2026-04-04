@@ -72,6 +72,10 @@ const WINDOWS_PACKAGED_BOOTSTRAP_HELPER_PATH = path.join(
   ROOT,
   "apps/app/test/electrobun-packaged/windows-bootstrap.ts",
 );
+const WINDOWS_PACKAGED_ENV_HELPER_PATH = path.join(
+  ROOT,
+  "apps/app/test/electrobun-packaged/windows-test-env.ts",
+);
 const INNO_BUILD_SCRIPT_PATH = path.join(ROOT, "packaging/inno/build-inno.ps1");
 const INNO_TEMPLATE_PATH = path.join(ROOT, "packaging/inno/Milady.iss");
 const MSIX_BUILD_SCRIPT_PATH = path.join(ROOT, "packaging/msix/build-msix.ps1");
@@ -648,9 +652,8 @@ describe("Electrobun release workflow drift", () => {
     expect(smokeScript).toContain(
       '$startupSessionId = "milady-windows-smoke-"',
     );
-    expect(smokeScript).toContain(
-      "$startupStateFile = Join-Path $env:RUNNER_TEMP",
-    );
+    expect(smokeScript).toContain("$tempRoot = if ($env:RUNNER_TEMP)");
+    expect(smokeScript).toContain("$startupStateFile = Join-Path $tempRoot");
     expect(smokeScript).toContain(
       '$startupBootstrapFile = Join-Path $startupBundleRoot "startup-session.json"',
     );
@@ -760,13 +763,9 @@ describe("Electrobun release workflow drift", () => {
 
     expect(workflow).toContain("name: Collect Windows smoke diagnostics");
     expect(workflow).toContain("name: Upload Windows smoke diagnostics");
-    expect(workflow).toContain("$env:MILADY_TEST_WINDOWS_APPDATA_PATH");
-    expect(workflow).toContain("$env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH");
+    expect(workflow).toContain("$startupLog = Join-Path $env:APPDATA");
     expect(workflow).toContain(
-      'Join-Path $appDataRoot "Milady\\\\milady-startup.log"',
-    );
-    expect(workflow).toContain(
-      'Join-Path $localAppDataRoot "com.miladyai.milady"',
+      '$wrapperRoot = Join-Path $env:LOCALAPPDATA "com.miladyai.milady"',
     );
     expect(workflow).toContain(
       "path: apps/app/electrobun/artifacts/windows-smoke-diagnostics/**",
@@ -779,6 +778,9 @@ describe("Electrobun release workflow drift", () => {
 
     expect(smokeScript).toContain("MILADY_TEST_WINDOWS_APPDATA_PATH");
     expect(smokeScript).toContain("MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH");
+    expect(smokeScript).toContain(
+      '$env:MILADY_DESKTOP_TEST_PARTITION = "persist:bootstrap-isolated"',
+    );
     expect(smokeScript).toContain("$env:APPDATA = $testAppDataRoot");
     expect(smokeScript).toContain("$env:LOCALAPPDATA = $testLocalAppDataRoot");
     expect(smokeScript).toContain(
@@ -893,6 +895,9 @@ describe("Electrobun release workflow drift", () => {
     );
     expect(workflow).toContain("bun run test:desktop:playwright");
     expect(workflow).toContain('MILADY_DISABLE_LOCAL_EMBEDDINGS: "1"');
+    expect(workflow).toContain(
+      "ANTHROPIC_API_KEY: $" + "{{ secrets.ANTHROPIC_API_KEY }}",
+    );
     expect(workflow).not.toContain(
       "name: Install Playwright Chromium (Windows)",
     );
@@ -910,14 +915,33 @@ describe("Electrobun release workflow drift", () => {
       WINDOWS_PACKAGED_BOOTSTRAP_HELPER_PATH,
       "utf8",
     );
-
-    expect(windowsPackagedTest).toContain(
-      "MILADY_DESKTOP_TEST_API_BASE: api.baseUrl",
+    const windowsEnvHelper = fs.readFileSync(
+      WINDOWS_PACKAGED_ENV_HELPER_PATH,
+      "utf8",
     );
+
+    expect(windowsPackagedTest).toContain('from "./windows-test-env"');
+    expect(windowsPackagedTest).toContain("createPackagedWindowsAppEnv({");
+    expect(windowsPackagedTest).toContain("apiBase: api.baseUrl");
+    expect(windowsPackagedTest).toContain("appData: userDataDir");
+    expect(windowsPackagedTest).toContain("localAppData: localUserDataDir");
     expect(windowsPackagedTest).toContain('from "./windows-bootstrap"');
     expect(windowsPackagedTest).toContain(
       "hasPackagedRendererBootstrapRequests(api.requests)",
     );
+    expect(windowsEnvHelper).toContain(
+      "MILADY_DESKTOP_TEST_API_BASE: args.apiBase",
+    );
+    expect(windowsEnvHelper).toContain(
+      'MILADY_DESKTOP_TEST_PARTITION: "persist:bootstrap-isolated"',
+    );
+    expect(windowsEnvHelper).toContain('MILADY_DISABLE_LOCAL_EMBEDDINGS: "1"');
+    expect(windowsEnvHelper).toContain('ELECTROBUN_CONSOLE: "1"');
+    expect(windowsEnvHelper).toContain('"MILADY_RENDERER_URL"');
+    expect(windowsEnvHelper).toContain('"VITE_DEV_SERVER_URL"');
+    expect(windowsEnvHelper).toContain("for (const key of STRIPPED_ENV_KEYS)");
+    expect(windowsEnvHelper).toContain("APPDATA: args.appData");
+    expect(windowsEnvHelper).toContain("LOCALAPPDATA: args.localAppData");
     expect(windowsBootstrapHelper).toContain('"/api/status"');
     expect(windowsBootstrapHelper).toContain('"/api/config"');
     expect(windowsBootstrapHelper).toContain('"/api/drop/status"');

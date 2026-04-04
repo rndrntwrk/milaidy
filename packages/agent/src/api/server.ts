@@ -70,12 +70,9 @@ import type {
   CustomActionDef,
 } from "../config/types.eliza.js";
 import {
-  isOnboardingConnectionComplete,
   normalizeOnboardingProviderId,
-  normalizePersistedOnboardingConnection,
   ONBOARDING_CLOUD_PROVIDER_OPTIONS,
   ONBOARDING_PROVIDER_CATALOG,
-  stripOnboardingConnectionSecrets,
 } from "../contracts/onboarding.js";
 import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
 import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
@@ -240,6 +237,7 @@ import {
   sendJsonError,
 } from "./http-helpers.js";
 import { handleKnowledgeRoutes } from "./knowledge-routes.js";
+import { handleLifeOpsRoutes } from "./lifeops-routes.js";
 import { getKnowledgeService } from "./knowledge-service-loader.js";
 import {
   evictOldestConversation,
@@ -264,8 +262,6 @@ import {
 import {
   applyOnboardingConnectionConfig,
   createProviderSwitchConnection,
-  reconcilePersistedOnboardingConnection,
-  resolveExistingOnboardingConnection,
 } from "./provider-switch-config.js";
 import { handleRegistryRoutes } from "./registry-routes.js";
 import { RegistryService } from "./registry-service.js";
@@ -274,6 +270,7 @@ import { applySignalQrOverride, handleSignalRoute } from "./signal-routes.js";
 import { resolveStreamingUpdate } from "./streaming-text.js";
 import { handleSubscriptionRoutes } from "./subscription-routes.js";
 import { resolveTerminalRunLimits } from "./terminal-run-limits.js";
+import { hasPersistedOnboardingState } from "./server-helpers.js";
 // isFatalTodoDbError, TodoDbCircuitBreaker moved to workbench-helpers.ts
 import { handleTrainingRoutes } from "./training-routes.js";
 import type { TrainingServiceWithRuntime } from "./training-service-like.js";
@@ -375,12 +372,12 @@ export {
   AGENT_EVENT_ALLOWED_STREAMS,
 } from "./plugin-discovery-helpers.js";
 
-// @ts-expect-error
+// @ts-expect-error plugin package does not ship declarations
 type PiAiPluginModule = typeof import("@elizaos/plugin-pi-ai");
 let _piAiPluginModule: PiAiPluginModule | null = null;
 async function loadPiAiPluginModule(): Promise<PiAiPluginModule> {
   if (!_piAiPluginModule) {
-    // @ts-expect-error
+    // @ts-expect-error plugin package does not ship declarations
     _piAiPluginModule = await import("@elizaos/plugin-pi-ai");
   }
   return _piAiPluginModule;
@@ -525,33 +522,6 @@ export interface ConversationMeta {
   updatedAt: string;
 }
 
-function hasPersistedOnboardingState(config: ElizaConfig): boolean {
-  if (config.meta?.onboardingComplete === true) {
-    return true;
-  }
-
-  const existingConnection = resolveExistingOnboardingConnection(
-    config as Record<string, unknown>,
-  );
-  if (isOnboardingConnectionComplete(existingConnection)) {
-    return true;
-  }
-
-  const agents = config.agents;
-  if (!agents) {
-    return false;
-  }
-
-  if (Array.isArray(agents.list) && agents.list.length > 0) {
-    return true;
-  }
-
-  return Boolean(
-    agents.defaults?.workspace?.trim() ||
-      agents.defaults?.adminEntityId?.trim(),
-  );
-}
-
 const APP_OWNER_NAME_MAX_LENGTH = 60;
 
 /** Resolve the app owner's display name from config, or fall back to "User". */
@@ -566,6 +536,9 @@ function patchTouchesProviderSelection(
   patch: Record<string, unknown>,
 ): boolean {
   if (
+    Object.hasOwn(patch, "deploymentTarget") ||
+    Object.hasOwn(patch, "linkedAccounts") ||
+    Object.hasOwn(patch, "serviceRouting") ||
     Object.hasOwn(patch, "cloud") ||
     Object.hasOwn(patch, "env") ||
     Object.hasOwn(patch, "models")
@@ -5852,6 +5825,27 @@ async function handleRequest(
         decodePathComponent,
         taskToTriggerSummary: taskToTriggerSummary as any,
         listTriggerTasks: listTriggerTasks as any,
+      })
+    ) {
+      return;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Life-ops routes
+  // ═══════════════════════════════════════════════════════════════════════
+  if (pathname.startsWith("/api/lifeops")) {
+    if (
+      await handleLifeOpsRoutes({
+        req,
+        res,
+        method,
+        pathname,
+        state: state as any,
+        json,
+        error,
+        readJsonBody,
+        decodePathComponent,
       })
     ) {
       return;

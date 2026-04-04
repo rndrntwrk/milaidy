@@ -22,9 +22,6 @@ import {
   clearPersistedOnboardingConfig,
   clearSubscriptionProviderConfig,
   createProviderSwitchConnection,
-  mergeOnboardingConnectionWithExisting,
-  reconcilePersistedOnboardingConnection,
-  resolveExistingOnboardingConnection,
 } from "./provider-switch-config";
 
 function emptyConfig(): Partial<ElizaConfig> {
@@ -124,10 +121,7 @@ describe("applyOnboardingConnectionConfig", () => {
       provider: "anthropic-subscription",
     });
 
-    expect(config.connection).toEqual({
-      kind: "local-provider",
-      provider: "anthropic-subscription",
-    });
+    expect(config.connection).toBeUndefined();
     expect(config.agents?.defaults?.subscriptionProvider).toBe(
       "anthropic-subscription",
     );
@@ -148,10 +142,7 @@ describe("applyOnboardingConnectionConfig", () => {
       apiKey: "sk-ant-oat01-test-token",
     });
 
-    expect(config.connection).toEqual({
-      kind: "local-provider",
-      provider: "anthropic-subscription",
-    });
+    expect(config.connection).toBeUndefined();
     expect(config.agents?.defaults?.subscriptionProvider).toBe(
       "anthropic-subscription",
     );
@@ -175,10 +166,7 @@ describe("applyOnboardingConnectionConfig", () => {
       provider: "openai",
     });
 
-    expect(config.connection).toEqual({
-      kind: "local-provider",
-      provider: "openai",
-    });
+    expect(config.connection).toBeUndefined();
     expect((config.env as Record<string, unknown>).OPENAI_API_KEY).toBe(
       "sk-saved-openai",
     );
@@ -210,17 +198,22 @@ describe("applyOnboardingConnectionConfig", () => {
       primaryModel: "openai/gpt-5-mini",
     });
 
-    expect(config.connection).toEqual({
-      kind: "local-provider",
-      provider: "openrouter",
-      primaryModel: "openai/gpt-5-mini",
-    });
-    expect(config.cloud).toMatchObject({
-      enabled: false,
-      provider: "elizacloud",
+    expect(config.connection).toBeUndefined();
+    expect(config.cloud).toEqual({
       apiKey: "ck-cloud-existing",
-      inferenceMode: "byok",
-      runtime: "local",
+    });
+    expect(config.linkedAccounts).toMatchObject({
+      elizacloud: {
+        status: "linked",
+        source: "api-key",
+      },
+    });
+    expect(config.serviceRouting).toMatchObject({
+      llmText: {
+        backend: "openrouter",
+        transport: "direct",
+        primaryModel: "openai/gpt-5-mini",
+      },
     });
     expect(config.models).toBeUndefined();
     expect((config.env as Record<string, string>).OPENROUTER_API_KEY).toBe(
@@ -240,18 +233,44 @@ describe("applyOnboardingConnectionConfig", () => {
       largeModel: "anthropic/claude-sonnet-4.6",
     });
 
-    expect(config.connection).toEqual({
-      kind: "cloud-managed",
-      cloudProvider: "elizacloud",
-      smallModel: "minimax/minimax-m2.7",
-      largeModel: "anthropic/claude-sonnet-4.6",
-    });
-    expect(config.cloud).toMatchObject({
-      enabled: true,
-      provider: "elizacloud",
+    expect(config.connection).toBeUndefined();
+    expect(config.cloud).toEqual({
       apiKey: "ck-cloud-key",
-      inferenceMode: "cloud",
-      runtime: "cloud",
+    });
+    expect(config.linkedAccounts).toMatchObject({
+      elizacloud: {
+        status: "linked",
+        source: "api-key",
+      },
+    });
+    expect(config.serviceRouting).toMatchObject({
+      llmText: {
+        backend: "elizacloud",
+        transport: "cloud-proxy",
+        accountId: "elizacloud",
+        smallModel: "openai/gpt-5-mini",
+        largeModel: "moonshotai/kimi-k2-0905",
+      },
+      tts: {
+        backend: "elizacloud",
+        transport: "cloud-proxy",
+        accountId: "elizacloud",
+      },
+      media: {
+        backend: "elizacloud",
+        transport: "cloud-proxy",
+        accountId: "elizacloud",
+      },
+      embeddings: {
+        backend: "elizacloud",
+        transport: "cloud-proxy",
+        accountId: "elizacloud",
+      },
+      rpc: {
+        backend: "elizacloud",
+        transport: "cloud-proxy",
+        accountId: "elizacloud",
+      },
     });
     expect(config.models).toEqual({
       small: "minimax/minimax-m2.7",
@@ -274,103 +293,6 @@ describe("createProviderSwitchConnection", () => {
     expect(createProviderSwitchConnection({ provider: input })).toMatchObject({
       kind: "local-provider",
       provider: expected,
-    });
-  });
-});
-
-describe("resolveExistingOnboardingConnection", () => {
-  it("prefers explicit config.connection over compatibility inference", () => {
-    expect(
-      resolveExistingOnboardingConnection({
-        connection: {
-          kind: "local-provider",
-          provider: "openrouter",
-          primaryModel: "openai/gpt-5-mini",
-        },
-        env: {
-          OPENAI_API_KEY: "sk-openai",
-        },
-        cloud: {
-          enabled: true,
-          inferenceMode: "cloud",
-          apiKey: "ck-cloud",
-        },
-      }),
-    ).toEqual({
-      kind: "local-provider",
-      provider: "openrouter",
-      primaryModel: "openai/gpt-5-mini",
-    });
-  });
-});
-
-describe("reconcilePersistedOnboardingConnection", () => {
-  it("backfills ollama from OLLAMA_BASE_URL compatibility signals", () => {
-    const config = {
-      env: {
-        vars: {
-          OLLAMA_BASE_URL: "http://localhost:11434",
-        },
-      },
-    } as Partial<ElizaConfig>;
-
-    expect(reconcilePersistedOnboardingConnection(config)).toEqual({
-      kind: "local-provider",
-      provider: "ollama",
-    });
-    expect(config.connection).toEqual({
-      kind: "local-provider",
-      provider: "ollama",
-    });
-  });
-});
-
-describe("mergeOnboardingConnectionWithExisting", () => {
-  it("preserves a saved local provider secret when the resumed submit omits it", () => {
-    expect(
-      mergeOnboardingConnectionWithExisting(
-        {
-          kind: "local-provider",
-          provider: "openrouter",
-          primaryModel: "openai/gpt-5-mini",
-        },
-        {
-          kind: "local-provider",
-          provider: "openrouter",
-          apiKey: "sk-or-saved",
-          primaryModel: "openai/gpt-5-mini",
-        },
-      ),
-    ).toEqual({
-      kind: "local-provider",
-      provider: "openrouter",
-      apiKey: "sk-or-saved",
-      primaryModel: "openai/gpt-5-mini",
-    });
-  });
-
-  it("preserves a saved cloud api key when the resumed submit sends a redacted placeholder", () => {
-    expect(
-      mergeOnboardingConnectionWithExisting(
-        {
-          kind: "cloud-managed",
-          cloudProvider: "elizacloud",
-          apiKey: "[REDACTED]",
-        },
-        {
-          kind: "cloud-managed",
-          cloudProvider: "elizacloud",
-          apiKey: "sk-cloud-saved",
-          smallModel: "minimax/minimax-m2.7",
-          largeModel: "anthropic/claude-sonnet-4.6",
-        },
-      ),
-    ).toEqual({
-      kind: "cloud-managed",
-      cloudProvider: "elizacloud",
-      apiKey: "sk-cloud-saved",
-      smallModel: "minimax/minimax-m2.7",
-      largeModel: "anthropic/claude-sonnet-4.6",
     });
   });
 });

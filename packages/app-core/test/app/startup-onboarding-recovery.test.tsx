@@ -19,6 +19,8 @@ const { connectionStateListeners, mockClient } = vi.hoisted(() => {
     mockClient: {
       apiAvailable: true,
       hasToken: vi.fn(() => false),
+      setBaseUrl: vi.fn(),
+      setToken: vi.fn(),
       getAuthStatus: vi.fn(async () => ({
         required: false,
         pairingEnabled: false,
@@ -270,6 +272,10 @@ describe("startup onboarding recovery", () => {
 
     let latest: StartupSnapshot | null = null;
     let tree: TestRenderer.ReactTestRenderer | null = null;
+    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+      // Expected in this recovery path; assert it explicitly instead of
+      // printing to stderr during test runs.
+    });
 
     try {
       await act(async () => {
@@ -297,20 +303,32 @@ describe("startup onboarding recovery", () => {
       expect(mockClient.getStatus).toHaveBeenCalled();
       expect(mockClient.connectWs).toHaveBeenCalled();
       expect(localStorage.getItem("eliza:onboarding-complete")).toBe("1");
-      expect(localStorage.getItem("eliza:connection-mode")).toBe(
-        JSON.stringify({ runMode: "local" }),
+      expect(localStorage.getItem("milady:active-server")).toBe(
+        JSON.stringify({
+          id: "local:embedded",
+          kind: "local",
+          label: "This device",
+        }),
+      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        "[milady][startup:init] Preserving completed onboarding despite incomplete backend onboarding status.",
       );
     } finally {
       await act(async () => {
         tree?.unmount();
       });
+      consoleWarnSpy.mockRestore();
     }
   });
 
   it("tracks backend connection state changes from the client", async () => {
     localStorage.setItem(
-      "eliza:connection-mode",
-      JSON.stringify({ runMode: "local" }),
+      "milady:active-server",
+      JSON.stringify({
+        id: "local:embedded",
+        kind: "local",
+        label: "This device",
+      }),
     );
 
     let latest: StartupSnapshot | null = null;

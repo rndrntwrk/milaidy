@@ -79,6 +79,8 @@ import {
   normalizeOpenAiCompatibleProviderConfig,
   repairBrokenInstallRecord,
   resolvePackageEntry,
+  resolvePreferredProviderId,
+  resolvePreferredProviderPluginName,
   resolvePrimaryModel,
   resolveVisionModeSetting,
   scanDropInPlugins,
@@ -229,8 +231,8 @@ describe("collectPluginNames", () => {
   });
 
   it("includes all core plugins for an empty config", () => {
-    // Guard against accidental removal from CORE_PLUGINS array
-    expect(CORE_PLUGINS).toHaveLength(11);
+    // Guard against accidental drift in the default runtime contract.
+    expect(CORE_PLUGINS).toHaveLength(13);
 
     const expectedCorePlugins = [
       "@elizaos/plugin-sql",
@@ -243,7 +245,9 @@ describe("collectPluginNames", () => {
       "@elizaos/plugin-shell",
       "@elizaos/plugin-agent-skills",
       "@elizaos/plugin-commands",
+      "@elizaos/plugin-plugin-manager",
       "@miladyai/plugin-roles",
+      "@elizaos/plugin-todo",
     ];
     const names = collectPluginNames({} as ElizaConfig);
     for (const plugin of expectedCorePlugins) {
@@ -255,6 +259,13 @@ describe("collectPluginNames", () => {
     const names = collectPluginNames({} as ElizaConfig);
     expect(names.has("@elizaos/plugin-agent-orchestrator")).toBe(true);
     expect(names.has("@elizaos/plugin-edge-tts")).toBe(true);
+  });
+
+  it("maps selfcontrol short ids to the built-in SelfControl plugin", () => {
+    const names = collectPluginNames({
+      plugins: { allow: ["selfcontrol", "website-blocker"] },
+    } as Partial<ElizaConfig> as ElizaConfig);
+    expect(names.has("@miladyai/plugin-selfcontrol")).toBe(true);
   });
 
   it("omits @elizaos/plugin-edge-tts when plugins.entries.edge-tts.enabled is false", () => {
@@ -711,6 +722,71 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-vision")).toBe(false);
   });
 
+  it("keeps a direct provider active when cloud runtime is selected but llmText is direct", () => {
+    process.env.OPENAI_API_KEY = "sk-openai";
+    const config = {
+      deploymentTarget: {
+        runtime: "cloud",
+        provider: "elizacloud",
+      },
+      linkedAccounts: {
+        elizacloud: {
+          status: "linked",
+          source: "api-key",
+        },
+      },
+      serviceRouting: {
+        llmText: {
+          backend: "openai",
+          transport: "direct",
+        },
+        rpc: {
+          backend: "elizacloud",
+          transport: "cloud-proxy",
+          accountId: "elizacloud",
+        },
+      },
+      cloud: {
+        enabled: true,
+        apiKey: "ck-runtime",
+      },
+    } as Partial<ElizaConfig> as ElizaConfig;
+
+    const names = collectPluginNames(config);
+    expect(names.has("@elizaos/plugin-openai")).toBe(true);
+    expect(names.has("@elizaos/plugin-elizacloud")).toBe(true);
+  });
+
+  it("ignores stale cloud env when canonical routing pins inference to a direct provider", () => {
+    process.env.OPENAI_API_KEY = "sk-openai";
+    process.env.ELIZAOS_CLOUD_ENABLED = "true";
+
+    const config = {
+      deploymentTarget: { runtime: "local" },
+      linkedAccounts: {
+        elizacloud: {
+          status: "linked",
+          source: "api-key",
+        },
+      },
+      serviceRouting: {
+        llmText: {
+          backend: "openai",
+          transport: "direct",
+        },
+      },
+      cloud: {
+        enabled: true,
+        apiKey: "ck-stale",
+        inferenceMode: "cloud",
+      },
+    } as Partial<ElizaConfig> as ElizaConfig;
+
+    const names = collectPluginNames(config);
+    expect(names.has("@elizaos/plugin-openai")).toBe(true);
+    expect(names.has("@elizaos/plugin-elizacloud")).toBe(false);
+  });
+
   it("adds @elizaos/plugin-obsidian when features.obsidian = true", () => {
     const config = {
       features: { obsidian: true },
@@ -1066,6 +1142,8 @@ describe("applyCloudConfigToEnv", () => {
     "ELIZAOS_CLOUD_ENABLED",
     "ELIZAOS_CLOUD_API_KEY",
     "ELIZAOS_CLOUD_BASE_URL",
+    "ELIZAOS_CLOUD_USE_INFERENCE",
+    "ELIZAOS_CLOUD_USE_RPC",
   ];
   const snap = envSnapshot(envKeys);
   beforeEach(() => {
@@ -1096,6 +1174,94 @@ describe("applyCloudConfigToEnv", () => {
     applyCloudConfigToEnv(config);
     expect(process.env.ELIZAOS_CLOUD_ENABLED).toBeUndefined();
     expect(process.env.ELIZAOS_CLOUD_API_KEY).toBeUndefined();
+  });
+
+  it("does NOT expose cloud credentials when a local provider is explicitly selected", () => {
+    process.env.ELIZAOS_CLOUD_ENABLED = "true";
+    process.env.ELIZAOS_CLOUD_API_KEY = "old-key";
+
+    const config = {
+      serviceRouting: {
+        llmText: {
+          backend: "openai",
+          transport: "direct",
+        },
+      },
+      cloud: {
+        enabled: true,
+        apiKey: "ck-123",
+        inferenceMode: "cloud",
+      },
+    } as ElizaConfig;
+
+    applyCloudConfigToEnv(config);
+
+    expect(process.env.ELIZAOS_CLOUD_ENABLED).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBeUndefined();
+  });
+
+  it("uses the canonical cloud-managed connection even without raw enabled=true", () => {
+    const config = {
+      serviceRouting: {
+        llmText: {
+          backend: "elizacloud",
+          transport: "cloud-proxy",
+          accountId: "elizacloud",
+          smallModel: "openai/gpt-5-mini",
+          largeModel: "anthropic/claude-sonnet-4.5",
+        },
+      },
+      cloud: {
+        apiKey: "ck-123",
+      },
+      models: {
+        small: "openai/gpt-5-mini",
+        large: "anthropic/claude-sonnet-4.5",
+      },
+    } as ElizaConfig;
+
+    applyCloudConfigToEnv(config);
+
+    expect(process.env.ELIZAOS_CLOUD_ENABLED).toBe("true");
+    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("ck-123");
+  });
+
+  it("keeps cloud services active without forcing cloud inference on cloud runtime", () => {
+    const config = {
+      deploymentTarget: {
+        runtime: "cloud",
+        provider: "elizacloud",
+      },
+      linkedAccounts: {
+        elizacloud: {
+          status: "linked",
+          source: "api-key",
+        },
+      },
+      serviceRouting: {
+        llmText: {
+          backend: "ollama",
+          transport: "direct",
+        },
+        rpc: {
+          backend: "elizacloud",
+          transport: "cloud-proxy",
+          accountId: "elizacloud",
+        },
+      },
+      cloud: {
+        enabled: true,
+        apiKey: "ck-123",
+        baseUrl: "https://cloud.test",
+      },
+    } as ElizaConfig;
+
+    applyCloudConfigToEnv(config);
+
+    expect(process.env.ELIZAOS_CLOUD_ENABLED).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("ck-123");
+    expect(process.env.ELIZAOS_CLOUD_USE_INFERENCE).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_USE_RPC).toBe("true");
   });
 
   it("clears ELIZAOS_CLOUD_ENABLED when enabled is explicitly false", () => {
@@ -1722,6 +1888,82 @@ describe("resolvePrimaryModel", () => {
       agents: { defaults: { model: { fallbacks: ["gpt-5-mini"] } } },
     } as Partial<ElizaConfig> as ElizaConfig;
     expect(resolvePrimaryModel(config)).toBeUndefined();
+  });
+});
+
+describe("resolvePreferredProviderId", () => {
+  it("prefers canonical provider routing over model prefixes", () => {
+    const config = {
+      serviceRouting: {
+        llmText: {
+          backend: "openrouter",
+          transport: "direct",
+          primaryModel: "openai/gpt-5.2",
+        },
+      },
+      agents: {
+        defaults: { model: { primary: "anthropic/claude-sonnet-4.5" } },
+      },
+    } as Partial<ElizaConfig> as ElizaConfig;
+
+    expect(resolvePreferredProviderId(config)).toBe("openrouter");
+    expect(resolvePreferredProviderPluginName(config)).toBe(
+      "@elizaos/plugin-openrouter",
+    );
+  });
+
+  it("derives the provider from explicit model selections when no canonical route is stored", () => {
+    const config = {
+      agents: { defaults: { model: { primary: "openai/gpt-5.2" } } },
+    } as Partial<ElizaConfig> as ElizaConfig;
+
+    expect(resolvePreferredProviderId(config)).toBe("openai");
+    expect(resolvePreferredProviderPluginName(config)).toBe(
+      "@elizaos/plugin-openai",
+    );
+  });
+
+  it("uses canonical direct routing even when deployment stays on Eliza Cloud", () => {
+    const config = {
+      deploymentTarget: {
+        runtime: "cloud",
+        provider: "elizacloud",
+      },
+      serviceRouting: {
+        llmText: {
+          backend: "ollama",
+          transport: "direct",
+        },
+      },
+    } as Partial<ElizaConfig> as ElizaConfig;
+
+    expect(resolvePreferredProviderId(config)).toBe("ollama");
+    expect(resolvePreferredProviderPluginName(config)).toBe(
+      "@elizaos/plugin-ollama",
+    );
+  });
+
+  it("derives the provider from canonical remote routing without falling back to defaults", () => {
+    const config = {
+      deploymentTarget: {
+        runtime: "remote",
+        provider: "remote",
+        remoteApiBase: "https://remote.example/api",
+      },
+      serviceRouting: {
+        llmText: {
+          backend: "openrouter",
+          transport: "remote",
+          remoteApiBase: "https://remote.example/api",
+          primaryModel: "openai/gpt-5.2",
+        },
+      },
+    } as Partial<ElizaConfig> as ElizaConfig;
+
+    expect(resolvePreferredProviderId(config)).toBe("openrouter");
+    expect(resolvePreferredProviderPluginName(config)).toBe(
+      "@elizaos/plugin-openrouter",
+    );
   });
 });
 

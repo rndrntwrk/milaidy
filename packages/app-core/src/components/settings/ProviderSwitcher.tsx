@@ -5,6 +5,7 @@
  * Composes SubscriptionStatus and ApiKeyConfig sub-components.
  */
 
+import { resolveServiceRoutingInConfig } from "@miladyai/shared/contracts/onboarding";
 import {
   Button,
   Input,
@@ -23,7 +24,6 @@ import {
 } from "../../config";
 import { useBranding } from "../../config/branding";
 import { useTimeout } from "../../hooks";
-import { inferOnboardingConnectionFromConfig } from "@miladyai/shared/contracts/onboarding";
 import {
   getOnboardingProviderOption,
   isSubscriptionProviderSelectionId,
@@ -179,24 +179,24 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
 
   const syncSelectionFromConfig = useCallback(
     (cfg: Record<string, unknown>) => {
-      const connection = inferOnboardingConnectionFromConfig(cfg);
+      const llmText = resolveServiceRoutingInConfig(cfg)?.llmText;
+      const providerId = getOnboardingProviderOption(llmText?.backend)?.id;
       const nextSelectedId =
-        connection?.kind === "cloud-managed"
+        llmText?.transport === "cloud-proxy" && providerId === "elizacloud"
           ? "__cloud__"
-          : connection?.kind === "local-provider"
-            ? connection.provider
-            : connection?.kind === "remote-provider"
-              ? (connection.provider ?? null)
+          : llmText?.transport === "direct"
+            ? (providerId ?? null)
+            : llmText?.transport === "remote" && providerId
+              ? providerId
               : null;
 
       if (!hasManualSelection.current) {
         setSelectedProviderId(nextSelectedId);
       }
       const piAiSelected =
-        connection?.kind === "local-provider" &&
-        connection.provider === "pi-ai";
+        llmText?.transport === "direct" && providerId === "pi-ai";
       if (piAiSelected) {
-        setPiAiModelSpec(connection.primaryModel ?? "");
+        setPiAiModelSpec(llmText.primaryModel ?? "");
       }
     },
     [],
@@ -229,12 +229,14 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
       try {
         const cfg = await client.getConfig();
         const models = cfg.models as Record<string, string> | undefined;
-        const connection = inferOnboardingConnectionFromConfig(
+        const llmText = resolveServiceRoutingInConfig(
           cfg as Record<string, unknown>,
-        );
-        const elizaCloudEnabledCfg = connection?.kind === "cloud-managed";
-        const defaultSmall = "minimax/minimax-m2.7";
-        const defaultLarge = "anthropic/claude-sonnet-4.6";
+        )?.llmText;
+        const providerId = getOnboardingProviderOption(llmText?.backend)?.id;
+        const elizaCloudEnabledCfg =
+          llmText?.transport === "cloud-proxy" && providerId === "elizacloud";
+        const defaultSmall = "moonshotai/kimi-k2-turbo";
+        const defaultLarge = "moonshotai/kimi-k2-0905";
 
         // Environment variables — needed both for model fallback and pi-ai
         const env = cfg.env as Record<string, unknown> | undefined;
@@ -258,19 +260,8 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
             (elizaCloudEnabledCfg ? defaultLarge : ""),
         );
         syncSelectionFromConfig(cfg as Record<string, unknown>);
-
-        const agents = cfg.agents as Record<string, unknown> | undefined;
-        const defaults = agents?.defaults as
-          | Record<string, unknown>
-          | undefined;
-        const model = defaults?.model as Record<string, unknown> | undefined;
-        if (
-          connection?.kind !== "local-provider" ||
-          connection.provider !== "pi-ai"
-        ) {
-          setPiAiModelSpec(
-            typeof model?.primary === "string" ? model.primary : "",
-          );
+        if (!(llmText?.transport === "direct" && providerId === "pi-ai")) {
+          setPiAiModelSpec("");
         }
       } catch (err) {
         console.warn("[eliza] Failed to load config", err);
@@ -408,28 +399,19 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
     setSelectedProviderId("__cloud__");
     try {
       await client.switchProvider("elizacloud");
-      setState("elizaCloudEnabled", true);
     } catch (err) {
       console.warn("[eliza] Failed to select cloud provider", err);
     }
-  }, [setState]);
+  }, []);
 
   const handlePiAiSave = useCallback(async () => {
     setPiAiSaving(true);
     setPiAiSaveSuccess(false);
     try {
-      await client.updateConfig({
-        connection: {
-          kind: "local-provider",
-          provider: "pi-ai",
-          ...(piAiModelSpec.trim()
-            ? { primaryModel: piAiModelSpec.trim() }
-            : {}),
-        },
-      });
+      const primaryModel = piAiModelSpec.trim() || undefined;
+      await client.switchProvider("pi-ai", undefined, primaryModel);
       setPiAiSaveSuccess(true);
       setTimeout(() => setPiAiSaveSuccess(false), 2000);
-      await client.restartAgent();
     } catch (err) {
       console.warn("[eliza] Failed to enable pi-ai", err);
     } finally {
@@ -449,7 +431,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
   );
   const piAiModelSelectValue =
     normalizedPiAiModelSpec.length === 0
-      ? ""
+      ? "__default__"
       : hasKnownPiAiModel
         ? normalizedPiAiModelSpec
         : "__custom__";
@@ -807,6 +789,10 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
               <Select
                 value={piAiModelSelectValue}
                 onValueChange={(next) => {
+                  if (next === "__default__") {
+                    setPiAiModelSpec("");
+                    return;
+                  }
                   if (next === "__custom__") {
                     if (piAiModelSelectValue !== "__custom__") {
                       setPiAiModelSpec("");

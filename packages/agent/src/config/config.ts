@@ -3,12 +3,13 @@ import path from "node:path";
 import JSON5 from "json5";
 import {
   isMiladySettingsDebugEnabled,
+  migrateLegacyRuntimeConfig,
   sanitizeForSettingsDebug,
   settingsDebugCloudSummary,
 } from "@miladyai/shared";
 import { collectConfigEnvVars } from "./env-vars";
 import { resolveConfigIncludes } from "./includes";
-import { resolveConfigPath, resolveUserPath } from "./paths";
+import { resolveConfigPath, resolveStateDir, resolveUserPath } from "./paths";
 import type { ElizaConfig } from "./types";
 
 export * from "./types";
@@ -37,8 +38,9 @@ export function loadElizaConfig(): ElizaConfig {
 
   const parsed = JSON5.parse(raw) as Record<string, unknown>;
   const resolved = resolveConfigIncludes(parsed, configPath) as ElizaConfig;
+  migrateLegacyRuntimeConfig(resolved as Record<string, unknown>);
 
-  const skillsJsonPath = resolveUserPath("~/.eliza/skills.json");
+  const skillsJsonPath = path.join(resolveStateDir(), "skills.json");
 
   if (!fs.existsSync(skillsJsonPath)) {
     try {
@@ -142,6 +144,7 @@ export function saveElizaConfig(config: ElizaConfig): void {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
 
+  migrateLegacyRuntimeConfig(config as Record<string, unknown>);
   const sanitized = stripIncludeDirectives(config);
   if (!sanitized || typeof sanitized !== "object") {
     throw new Error(
@@ -149,12 +152,35 @@ export function saveElizaConfig(config: ElizaConfig): void {
     );
   }
 
+  migrateLegacyRuntimeConfig(sanitized as Record<string, unknown>);
+
   const content = `${JSON.stringify(sanitized, null, 2)}\n`;
 
-  fs.writeFileSync(configPath, content, {
+  // Atomic write: write to a temp file then rename. If the process crashes
+  // during writeFileSync, only the temp file is corrupted — the original
+  // config remains intact. rename() is atomic on POSIX filesystems when
+  // source and destination are on the same filesystem.
+  //
+  // Resolve symlinks so dotfile-managed setups (symlinked config) update
+  // the target file instead of replacing the symlink with a regular file.
+  const realConfigPath = fs.existsSync(configPath)
+    ? fs.realpathSync(configPath)
+    : configPath;
+  const tmpPath = `${realConfigPath}.tmp.${process.pid}`;
+  fs.writeFileSync(tmpPath, content, {
     encoding: "utf-8",
     mode: 0o600,
   });
+  fs.renameSync(tmpPath, realConfigPath);
+
+  // Enforce 600 on every write — writeFileSync's mode only applies on
+  // creation, so files created by older versions retain their original
+  // (potentially world-readable) permissions.
+  try {
+    fs.chmodSync(configPath, 0o600);
+  } catch {
+    // chmodSync may fail on some platforms (e.g. Windows). Non-fatal.
+  }
 
   if (!fs.existsSync(configPath)) {
     throw new Error(

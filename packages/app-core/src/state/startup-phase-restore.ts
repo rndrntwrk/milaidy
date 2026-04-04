@@ -15,27 +15,76 @@ import {
 } from "../bridge";
 import { ONBOARDING_PROVIDER_CATALOG } from "@miladyai/shared/contracts/onboarding";
 import { getStylePresets } from "@miladyai/shared/onboarding-presets";
-import {
-  deriveOnboardingResumeConnection,
-  type StartupErrorState,
-} from "./internal";
 import { detectExistingOnboardingConnection } from "./onboarding-bootstrap";
 import {
-  loadPersistedConnectionMode,
+  createPersistedActiveServer,
+  loadPersistedActiveServer,
   loadPersistedOnboardingComplete,
+  type PersistedActiveServer,
 } from "./persistence";
-import {
-  connectionModeToTarget,
-  type StartupEvent,
-} from "./startup-coordinator";
-import type { StartupCoordinatorDeps } from "./useStartupCoordinator";
+import { type StartupEvent } from "./startup-coordinator";
+import type { UiLanguage } from "../i18n";
+
+export interface RestoringSessionDeps {
+  setStartupError: (v: null) => void;
+  setAuthRequired: (v: boolean) => void;
+  setConnected: (v: boolean) => void;
+  setOnboardingExistingInstallDetected: (v: boolean) => void;
+  setOnboardingOptions: (v: OnboardingOptions) => void;
+  setOnboardingComplete: (v: boolean) => void;
+  setOnboardingLoading: (v: boolean) => void;
+  applyDetectedProviders: (
+    detected: Awaited<ReturnType<typeof scanProviderCredentials>>,
+  ) => void;
+  forceLocalBootstrapRef: React.MutableRefObject<boolean>;
+  onboardingCompletionCommittedRef: React.MutableRefObject<boolean>;
+  uiLanguage: UiLanguage;
+}
 
 export interface RestoringSessionCtx {
-  persistedConnection: ReturnType<typeof loadPersistedConnectionMode>;
-  // biome-ignore lint/suspicious/noExplicitAny: mixed connection types from legacy code
-  restoredConnection: any;
+  persistedActiveServer: ReturnType<typeof loadPersistedActiveServer>;
+  restoredActiveServer: PersistedActiveServer;
   shouldPreserveCompletedOnboarding: boolean;
   hadPriorOnboarding: boolean;
+}
+
+export async function applyRestoredConnection(args: {
+  restoredActiveServer: PersistedActiveServer;
+  clientRef: Pick<typeof client, "setBaseUrl" | "setToken">;
+  startLocalRuntime?: () => Promise<void>;
+}) {
+  const { restoredActiveServer, clientRef, startLocalRuntime } = args;
+
+  if (restoredActiveServer.kind === "local") {
+    clientRef.setToken(null);
+    clientRef.setBaseUrl(null);
+    if (startLocalRuntime) {
+      await startLocalRuntime();
+    }
+    return;
+  }
+
+  if (restoredActiveServer.kind === "cloud") {
+    clientRef.setBaseUrl(restoredActiveServer.apiBase ?? null);
+    clientRef.setToken(restoredActiveServer.accessToken ?? null);
+    return;
+  }
+
+  clientRef.setBaseUrl(restoredActiveServer.apiBase ?? null);
+  clientRef.setToken(restoredActiveServer.accessToken ?? null);
+}
+
+function activeServerToTarget(
+  kind: PersistedActiveServer["kind"],
+): "embedded-local" | "cloud-managed" | "remote-backend" {
+  switch (kind) {
+    case "local":
+      return "embedded-local";
+    case "cloud":
+      return "cloud-managed";
+    case "remote":
+      return "remote-backend";
+  }
 }
 
 /**
@@ -49,25 +98,24 @@ export interface RestoringSessionCtx {
  * @param cancelled - Ref-flag set true by the cleanup function
  */
 export async function runRestoringSession(
-  deps: StartupCoordinatorDeps,
+  deps: RestoringSessionDeps,
   dispatch: (event: StartupEvent) => void,
   ctxRef: React.MutableRefObject<RestoringSessionCtx | null>,
   cancelled: { current: boolean },
 ): Promise<void> {
   deps.setStartupError(null);
-  deps.setStartupPhase("starting-backend");
   deps.setAuthRequired(false);
   deps.setConnected(false);
   deps.setOnboardingExistingInstallDetected(false);
 
   const forceLocal = deps.forceLocalBootstrapRef.current;
   deps.forceLocalBootstrapRef.current = false;
-  const persisted = loadPersistedConnectionMode();
+  const persistedActiveServer = loadPersistedActiveServer();
   const hadPrior = loadPersistedOnboardingComplete();
   if (cancelled.current) return;
 
   const desktopInstall =
-    !persisted && isElectrobunRuntime()
+    !persistedActiveServer && isElectrobunRuntime()
       ? await inspectExistingElizaInstall().catch(() => null)
       : null;
   if (cancelled.current) return;
@@ -77,7 +125,7 @@ export async function runRestoringSession(
 
   // Only probe the API when there is evidence of a prior install.
   const probed =
-    !persisted && hasExistingEvidence
+    !persistedActiveServer && hasExistingEvidence
       ? await detectExistingOnboardingConnection({
           client,
           timeoutMs: isDesktop
@@ -87,7 +135,8 @@ export async function runRestoringSession(
       : null;
   if (cancelled.current) return;
 
-  const restored = persisted ?? probed?.connection ?? null;
+  const restoredActiveServer =
+    persistedActiveServer ?? (probed ? probed.activeServer : null);
   const preserveCompleted =
     hadPrior && !deps.onboardingCompletionCommittedRef.current;
 
@@ -97,21 +146,8 @@ export async function runRestoringSession(
     ),
   );
 
-  if (!restored) {
-    // No evidence of a prior connection — show onboarding.
-    const { resolveStartupWithoutRestoredConnection } = await import(
-      "./onboarding-bootstrap"
-    );
-    const result = resolveStartupWithoutRestoredConnection({
-      hadPersistedOnboardingCompletion: hadPrior,
-    });
-    if (result.kind === "startup-error") {
-      deps.setOnboardingComplete(true);
-      deps.setStartupError(result.error as StartupErrorState);
-      deps.setOnboardingLoading(false);
-      dispatch({ type: "NO_SESSION", hadPriorOnboarding: true });
-      return;
-    }
+  if (!restoredActiveServer) {
+    // No saved backend found — let the user (re-)onboard.
     deps.setOnboardingOptions({
       names: [],
       styles: getStylePresets(deps.uiLanguage),
@@ -138,37 +174,33 @@ export async function runRestoringSession(
         scanErr,
       );
     }
-    deps.setStartupPhase("ready");
     deps.setOnboardingComplete(false);
     deps.setOnboardingLoading(false);
-    dispatch({ type: "NO_SESSION", hadPriorOnboarding: false });
+    dispatch({ type: "NO_SESSION", hadPriorOnboarding: hadPrior });
     return;
   }
 
-  // Configure client for restored connection
-  if (restored.runMode === "cloud" && restored.cloudApiBase) {
-    client.setBaseUrl(restored.cloudApiBase);
-    if (restored.cloudAuthToken) client.setToken(restored.cloudAuthToken);
-  } else if (restored.runMode === "remote" && restored.remoteApiBase) {
-    client.setBaseUrl(restored.remoteApiBase);
-    if (restored.remoteAccessToken) client.setToken(restored.remoteAccessToken);
-  } else if (restored.runMode === "local") {
-    try {
-      await invokeDesktopBridgeRequest({
-        rpcMethod: "agentStart",
-        ipcChannel: "agent:start",
-      });
-    } catch {}
-  }
+  await applyRestoredConnection({
+    restoredActiveServer,
+    clientRef: client,
+    startLocalRuntime: async () => {
+      try {
+        await invokeDesktopBridgeRequest({
+          rpcMethod: "agentStart",
+          ipcChannel: "agent:start",
+        });
+      } catch {}
+    },
+  });
 
   ctxRef.current = {
-    persistedConnection: persisted,
-    restoredConnection: restored,
+    persistedActiveServer,
+    restoredActiveServer,
     shouldPreserveCompletedOnboarding: preserveCompleted,
     hadPriorOnboarding: hadPrior,
   };
   dispatch({
     type: "SESSION_RESTORED",
-    target: connectionModeToTarget(restored.runMode),
+    target: activeServerToTarget(restoredActiveServer.kind),
   });
 }

@@ -8,8 +8,7 @@ export {
   resolveOnboardingPreviousStep,
 } from "../onboarding/flow";
 export {
-  deriveOnboardingResumeConnection,
-  deriveOnboardingResumeFields,
+  deriveOnboardingResumeFieldsFromConfig,
   hasPartialOnboardingConnectionConfig,
   inferOnboardingResumeStep,
 } from "./onboarding-resume";
@@ -34,7 +33,8 @@ export {
 export {
   applyUiTheme,
   clearAvatarIndex,
-  clearPersistedConnectionMode,
+  clearPersistedActiveServer,
+  createPersistedActiveServer,
   clearPersistedOnboardingStep,
   loadActiveConversationId,
   loadAvatarIndex,
@@ -46,7 +46,7 @@ export {
   loadCompanionMessageCutoffTs,
   loadCompanionVrmPowerMode,
   loadLastNativeTab,
-  loadPersistedConnectionMode,
+  loadPersistedActiveServer,
   loadPersistedOnboardingComplete,
   loadPersistedOnboardingStep,
   loadUiLanguage,
@@ -56,7 +56,7 @@ export {
   normalizeCompanionVrmPowerMode,
   normalizeUiShellMode,
   normalizeUiTheme,
-  type PersistedConnectionMode,
+  type PersistedActiveServer,
   saveActiveConversationId,
   saveAvatarIndex,
   saveChatAvatarVisible,
@@ -68,7 +68,7 @@ export {
   saveCompanionVrmPowerMode,
   saveLastNativeTab,
   saveOnboardingStep,
-  savePersistedConnectionMode,
+  savePersistedActiveServer,
   savePersistedOnboardingComplete,
   saveUiLanguage,
   saveUiShellMode,

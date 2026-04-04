@@ -256,26 +256,30 @@ const ONBOARDING_STEP_STORAGE_KEY = "eliza:onboarding:step";
 function normalizeOnboardingStep(value: unknown): OnboardingStep | null {
   switch (value) {
     case "identity":
-    case "hosting":
     case "providers":
-    case "voice":
+      return value;
     case "permissions":
     case "launch":
-      return value;
+      // permissions/launch removed — resume at providers
+      return "providers";
     // Legacy step ID migration — map old persisted values to new equivalents
     case "cloud_login":
     case "welcome":
       // cloud_login is now handled by the splash page; resume at identity
       return "identity";
+    case "hosting":
     case "connection":
-      return "hosting";
+      // hosting is now handled by the splash page; resume at providers
+      return "providers";
     case "cloudLogin":
     case "rpc":
       return "providers";
+    case "voice":
     case "senses":
-      return "permissions";
+      // voice/permissions removed from onboarding; resume at providers
+      return "providers";
     case "activate":
-      return "launch";
+      return "providers";
     default:
       return null;
   }
@@ -325,6 +329,45 @@ export function savePersistedOnboardingComplete(complete: boolean): void {
   } catch {
     /* ignore */
   }
+}
+
+/* ── Content pack persistence ───────────────────────────────────────── */
+
+const ACTIVE_PACK_STORAGE_KEY = "milady:active-pack-id";
+const ACTIVE_PACK_URL_STORAGE_KEY = "milady:active-pack-url";
+
+export function loadPersistedActivePackId(): string | null {
+  return tryLocalStorage(
+    () => localStorage.getItem(ACTIVE_PACK_STORAGE_KEY),
+    null,
+  );
+}
+
+export function savePersistedActivePackId(packId: string | null): void {
+  tryLocalStorage(() => {
+    if (packId) {
+      localStorage.setItem(ACTIVE_PACK_STORAGE_KEY, packId);
+    } else {
+      localStorage.removeItem(ACTIVE_PACK_STORAGE_KEY);
+    }
+  }, undefined);
+}
+
+export function loadPersistedActivePackUrl(): string | null {
+  return tryLocalStorage(
+    () => localStorage.getItem(ACTIVE_PACK_URL_STORAGE_KEY),
+    null,
+  );
+}
+
+export function savePersistedActivePackUrl(packUrl: string | null): void {
+  tryLocalStorage(() => {
+    if (packUrl) {
+      localStorage.setItem(ACTIVE_PACK_URL_STORAGE_KEY, packUrl);
+    } else {
+      localStorage.removeItem(ACTIVE_PACK_URL_STORAGE_KEY);
+    }
+  }, undefined);
 }
 
 export function loadUiLanguage(): UiLanguage {
@@ -510,55 +553,130 @@ export function saveCompanionMessageCutoffTs(value: number): void {
   }, undefined);
 }
 
-/* ── Connection mode persistence ──────────────────────────────────────── */
-
-/**
- * Persisted connection state so the app knows how to connect on restart
- * without waiting for a backend that may not exist yet.
- */
-export interface PersistedConnectionMode {
-  /** "local" = embedded agent, "cloud" = eliza cloud sandbox, "remote" = custom URL */
-  runMode: "local" | "cloud" | "remote";
-  /** For cloud: the eliza cloud API base URL */
-  cloudApiBase?: string;
-  /** For cloud: the auth token */
-  cloudAuthToken?: string;
-  /** For remote: the remote API base URL */
-  remoteApiBase?: string;
-  /** For remote: the access token/connection key */
-  remoteAccessToken?: string;
+export interface PersistedActiveServer {
+  /** Stable identifier for the selected server target. */
+  id: string;
+  /** Server category as seen by the client startup flow. */
+  kind: "local" | "cloud" | "remote";
+  /** Human-readable label for future chooser/history UI. */
+  label: string;
+  /** Reachable API base for remote/cloud servers. */
+  apiBase?: string;
+  /** Optional auth/access token for the selected server. */
+  accessToken?: string;
 }
 
-const CONNECTION_MODE_STORAGE_KEY = "eliza:connection-mode";
+const ACTIVE_SERVER_STORAGE_KEY = "milady:active-server";
 
-export function loadPersistedConnectionMode(): PersistedConnectionMode | null {
-  return tryLocalStorage(() => {
-    const stored = localStorage.getItem(CONNECTION_MODE_STORAGE_KEY);
-    if (!stored) return null;
-    const parsed = JSON.parse(stored);
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      (parsed.runMode === "local" ||
-        parsed.runMode === "cloud" ||
-        parsed.runMode === "remote")
-    ) {
-      return parsed as PersistedConnectionMode;
+function trimPersistedValue(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeApiBase(value: unknown): string | undefined {
+  const trimmed = trimPersistedValue(value);
+  return trimmed?.replace(/\/+$/, "");
+}
+
+export function createPersistedActiveServer(args: {
+  kind: PersistedActiveServer["kind"];
+  apiBase?: string;
+  accessToken?: string;
+  label?: string;
+}): PersistedActiveServer {
+  const apiBase = normalizeApiBase(args.apiBase);
+  const accessToken = trimPersistedValue(args.accessToken);
+  const explicitLabel = trimPersistedValue(args.label);
+
+  switch (args.kind) {
+    case "local":
+      return {
+        id: "local:embedded",
+        kind: "local",
+        label: explicitLabel ?? "This device",
+      };
+    case "cloud":
+      return {
+        id: `cloud:${apiBase ?? "managed"}`,
+        kind: "cloud",
+        label: explicitLabel ?? "Eliza Cloud",
+        ...(apiBase ? { apiBase } : {}),
+        ...(accessToken ? { accessToken } : {}),
+      };
+    case "remote": {
+      let label = explicitLabel ?? "Remote server";
+      if (!explicitLabel && apiBase) {
+        try {
+          label = new URL(apiBase).host || label;
+        } catch {
+          label = apiBase;
+        }
+      }
+      return {
+        id: `remote:${apiBase ?? "manual"}`,
+        kind: "remote",
+        label,
+        ...(apiBase ? { apiBase } : {}),
+        ...(accessToken ? { accessToken } : {}),
+      };
     }
+  }
+}
+
+function normalizePersistedActiveServer(
+  value: unknown,
+): PersistedActiveServer | null {
+  if (typeof value !== "object" || value === null) {
     return null;
+  }
+
+  const parsed = value as Record<string, unknown>;
+  const kind =
+    parsed.kind === "local" ||
+    parsed.kind === "cloud" ||
+    parsed.kind === "remote"
+      ? parsed.kind
+      : null;
+  const id = trimPersistedValue(parsed.id);
+  const label = trimPersistedValue(parsed.label);
+  if (!kind || !id || !label) {
+    return null;
+  }
+
+  return {
+    id,
+    kind,
+    label,
+    ...(normalizeApiBase(parsed.apiBase)
+      ? { apiBase: normalizeApiBase(parsed.apiBase) }
+      : {}),
+    ...(trimPersistedValue(parsed.accessToken)
+      ? { accessToken: trimPersistedValue(parsed.accessToken) }
+      : {}),
+  };
+}
+
+export function loadPersistedActiveServer(): PersistedActiveServer | null {
+  return tryLocalStorage(() => {
+    const stored = localStorage.getItem(ACTIVE_SERVER_STORAGE_KEY);
+    if (!stored) {
+      return null;
+    }
+    return normalizePersistedActiveServer(JSON.parse(stored));
   }, null);
 }
 
-export function savePersistedConnectionMode(
-  mode: PersistedConnectionMode,
-): void {
+export function savePersistedActiveServer(server: PersistedActiveServer): void {
   tryLocalStorage(() => {
-    localStorage.setItem(CONNECTION_MODE_STORAGE_KEY, JSON.stringify(mode));
+    localStorage.setItem(ACTIVE_SERVER_STORAGE_KEY, JSON.stringify(server));
   }, undefined);
 }
 
-export function clearPersistedConnectionMode(): void {
+export function clearPersistedActiveServer(): void {
   tryLocalStorage(() => {
-    localStorage.removeItem(CONNECTION_MODE_STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_SERVER_STORAGE_KEY);
   }, undefined);
 }

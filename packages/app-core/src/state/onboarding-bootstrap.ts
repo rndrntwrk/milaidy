@@ -1,8 +1,9 @@
 import { asRecord, readString } from "./config-readers";
-import { deriveOnboardingResumeConnection } from "./onboarding-resume";
-import type { PersistedConnectionMode } from "./persistence";
-import type { StartupErrorState } from "./types";
-
+import { hasPartialOnboardingConnectionConfig } from "./onboarding-resume";
+import {
+  createPersistedActiveServer,
+  type PersistedActiveServer,
+} from "./persistence";
 export interface ExistingOnboardingProbeClient {
   apiAvailable: boolean;
   getOnboardingStatus: () => Promise<{ complete: boolean }>;
@@ -10,7 +11,7 @@ export interface ExistingOnboardingProbeClient {
 }
 
 export interface ExistingOnboardingProbeResult {
-  connection: PersistedConnectionMode;
+  activeServer: PersistedActiveServer;
   detectedExistingInstall: boolean;
 }
 
@@ -21,11 +22,7 @@ export interface DetectedProviderCandidate {
   status?: string;
 }
 
-export type StartupWithoutConnectionResolution =
-  | { kind: "onboarding" }
-  | { kind: "startup-error"; error: StartupErrorState };
-
-const LOCAL_CONNECTION: PersistedConnectionMode = { runMode: "local" };
+const LOCAL_ACTIVE_SERVER = createPersistedActiveServer({ kind: "local" });
 
 function hasPersistedExistingInstallConfig(
   config: Record<string, unknown> | null | undefined,
@@ -34,7 +31,7 @@ function hasPersistedExistingInstallConfig(
     return false;
   }
 
-  if (deriveOnboardingResumeConnection(config)) {
+  if (hasPartialOnboardingConnectionConfig(config)) {
     return true;
   }
 
@@ -78,7 +75,7 @@ export async function detectExistingOnboardingConnection(args: {
 
       if (status.complete) {
         return {
-          connection: LOCAL_CONNECTION,
+          activeServer: LOCAL_ACTIVE_SERVER,
           detectedExistingInstall: true,
         } satisfies ExistingOnboardingProbeResult;
       }
@@ -89,7 +86,7 @@ export async function detectExistingOnboardingConnection(args: {
       }
 
       return {
-        connection: LOCAL_CONNECTION,
+        activeServer: LOCAL_ACTIVE_SERVER,
         detectedExistingInstall: true,
       } satisfies ExistingOnboardingProbeResult;
     })(),
@@ -104,30 +101,10 @@ export async function detectExistingOnboardingConnection(args: {
   return result === timeoutToken ? null : result;
 }
 
-export function resolveStartupWithoutRestoredConnection(args: {
-  hadPersistedOnboardingCompletion: boolean;
-}): StartupWithoutConnectionResolution {
-  if (!args.hadPersistedOnboardingCompletion) {
-    return { kind: "onboarding" };
-  }
-
-  return {
-    kind: "startup-error",
-    error: {
-      reason: "backend-unreachable",
-      phase: "starting-backend",
-      message:
-        "No reusable backend connection was found for this previously onboarded app.",
-      detail:
-        "Local onboarding state is preserved so setup does not restart unexpectedly. Retry after the backend is reachable again.",
-    },
-  };
-}
-
 export function deriveDetectedProviderPrefill(
   detected: readonly DetectedProviderCandidate[],
 ): {
-  runMode: "local";
+  serverTarget: "local";
   providerId: string;
   apiKey: string;
 } | null {
@@ -136,7 +113,7 @@ export function deriveDetectedProviderPrefill(
     const apiKey = candidate.apiKey?.trim() ?? "";
     if (providerId && apiKey) {
       return {
-        runMode: "local",
+        serverTarget: "local",
         providerId,
         apiKey,
       };

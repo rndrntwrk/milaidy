@@ -5,25 +5,37 @@ import {
 import { SUBSCRIPTION_PROVIDER_MAP } from "../auth/types";
 import type { ElizaConfig } from "../config/types.eliza";
 import {
+  deriveOnboardingCredentialPersistencePlan,
   getOnboardingProviderOption,
   getOnboardingProviderSignalEnvKeys,
   getStoredOnboardingProviderId,
-  inferCompatibilityOnboardingConnection,
-  inferOnboardingConnectionFromConfig,
-  isCloudManagedConnection,
-  isLocalProviderConnection,
-  isRemoteProviderConnection,
+  migrateLegacyRuntimeConfig,
   normalizeOnboardingProviderId,
-  normalizePersistedOnboardingConnection,
+  normalizeOnboardingCredentialInputs,
+  type OnboardingCredentialInputs,
   type OnboardingConnection,
+  type OnboardingLlmPersistenceSelection,
   type OnboardingLocalProviderId,
-  stripOnboardingConnectionSecrets,
 } from "../contracts/onboarding";
+import type {
+  DeploymentTargetConfig,
+  LinkedAccountsConfig,
+  ServiceCapability,
+  ServiceRoutingConfig,
+} from "../contracts/service-routing";
+import {
+  buildDefaultElizaCloudServiceRouting,
+  buildElizaCloudServiceRoute,
+  normalizeDeploymentTargetConfig,
+} from "../contracts/service-routing";
 
 type MutableElizaConfig = Partial<ElizaConfig> & {
   cloud?: Record<string, unknown>;
   models?: Record<string, unknown>;
   wallet?: { rpcProviders?: Record<string, string> };
+  deploymentTarget?: DeploymentTargetConfig;
+  linkedAccounts?: LinkedAccountsConfig;
+  serviceRouting?: ServiceRoutingConfig;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -72,6 +84,107 @@ function ensureCloud(config: MutableElizaConfig): Record<string, unknown> {
 function ensureModels(config: MutableElizaConfig): Record<string, unknown> {
   config.models ??= {};
   return config.models;
+}
+
+function ensureLinkedAccounts(
+  config: MutableElizaConfig,
+): LinkedAccountsConfig {
+  config.linkedAccounts ??= {};
+  return config.linkedAccounts;
+}
+
+function ensureServiceRouting(
+  config: MutableElizaConfig,
+): ServiceRoutingConfig {
+  config.serviceRouting ??= {};
+  return config.serviceRouting;
+}
+
+function persistDeploymentTarget(
+  config: MutableElizaConfig,
+  deploymentTarget: DeploymentTargetConfig | null | undefined,
+): void {
+  if (!deploymentTarget) {
+    delete config.deploymentTarget;
+    return;
+  }
+  config.deploymentTarget = { ...deploymentTarget };
+}
+
+function persistLinkedAccounts(
+  config: MutableElizaConfig,
+  linkedAccounts: LinkedAccountsConfig | null | undefined,
+): void {
+  if (!linkedAccounts) {
+    return;
+  }
+
+  const existing = ensureLinkedAccounts(config);
+  for (const [accountId, account] of Object.entries(linkedAccounts)) {
+    if (!account || Object.keys(account).length === 0) {
+      delete existing[accountId];
+      continue;
+    }
+
+    const nextAccount = account as NonNullable<typeof account>;
+    existing[accountId] = {
+      ...(existing[accountId] ?? {}),
+      ...nextAccount,
+    };
+  }
+
+  if (Object.keys(existing).length === 0) {
+    delete config.linkedAccounts;
+  }
+}
+
+function persistServiceRouting(
+  config: MutableElizaConfig,
+  serviceRouting: ServiceRoutingConfig | null | undefined,
+  clearRoutes: readonly ServiceCapability[] = [],
+): void {
+  const existing = ensureServiceRouting(config);
+
+  for (const capability of clearRoutes) {
+    delete existing[capability];
+  }
+
+  if (serviceRouting) {
+    for (const [capability, route] of Object.entries(serviceRouting)) {
+      const serviceKey = capability as ServiceCapability;
+      if (!route || Object.keys(route).length === 0) {
+        delete existing[serviceKey];
+        continue;
+      }
+
+      const nextRoute = route as NonNullable<typeof route>;
+      existing[serviceKey] = { ...nextRoute };
+    }
+  }
+
+  if (Object.keys(existing).length === 0) {
+    delete config.serviceRouting;
+  }
+}
+
+export function applyCanonicalOnboardingConfig(
+  config: MutableElizaConfig,
+  args: {
+    deploymentTarget?: DeploymentTargetConfig | null;
+    linkedAccounts?: LinkedAccountsConfig | null;
+    serviceRouting?: ServiceRoutingConfig | null;
+    clearRoutes?: readonly ServiceCapability[];
+  },
+): void {
+  if (args.deploymentTarget !== undefined) {
+    persistDeploymentTarget(config, args.deploymentTarget);
+  }
+  if (args.linkedAccounts !== undefined) {
+    persistLinkedAccounts(config, args.linkedAccounts);
+  }
+  if (args.serviceRouting !== undefined || args.clearRoutes?.length) {
+    persistServiceRouting(config, args.serviceRouting, args.clearRoutes);
+  }
 }
 
 function pruneEnv(config: MutableElizaConfig): void {
@@ -174,43 +287,6 @@ function clearRemoteProviderConfig(config: MutableElizaConfig): void {
   }
 }
 
-// Config-only; does not touch process.env OPENAI_/ANTHROPIC_ (see clearElizaCloudCliProxyEnv).
-function disableCloudInference(config: MutableElizaConfig): void {
-  const cloud = ensureCloud(config);
-  cloud.enabled = false;
-  cloud.inferenceMode = "byok";
-  cloud.runtime = "local";
-
-  const services = asRecord(cloud.services) ?? {};
-  services.inference = false;
-  cloud.services = services;
-}
-
-// Updates persisted config + ELIZAOS_* for Milady runtime. Does not set OPENAI_/ANTHROPIC_
-// proxy env; POST /api/provider/switch does that in server.ts when elizacloud + apiKey.
-function enableCloudInference(config: MutableElizaConfig): void {
-  const cloud = ensureCloud(config);
-  cloud.enabled = true;
-  cloud.provider = "elizacloud";
-  cloud.inferenceMode = "cloud";
-  cloud.runtime = "cloud";
-
-  const services = asRecord(cloud.services) ?? {};
-  services.inference = true;
-  cloud.services = services;
-}
-
-function persistConnectionSelection(
-  config: MutableElizaConfig,
-  connection: OnboardingConnection | null,
-): void {
-  if (!connection) {
-    delete config.connection;
-    return;
-  }
-  config.connection = stripOnboardingConnectionSecrets(connection);
-}
-
 // Remove ElizaCloud CLI proxy endpoints from process.env and the API keys that server.ts
 // pairs with them (same cloud key for both SDKs). Only clears a key when its matching
 // base URL pointed at ElizaCloud—so local-provider switches that never set those URLs
@@ -228,16 +304,43 @@ function clearElizaCloudCliProxyEnv(): void {
     }
   }
 }
+
+function persistLinkedCloudApiKey(
+  config: MutableElizaConfig,
+  apiKey: string | undefined,
+): void {
+  const normalizedApiKey = trimToUndefined(apiKey);
+  if (!normalizedApiKey) {
+    return;
+  }
+
+  const cloud = ensureCloud(config);
+  cloud.apiKey = normalizedApiKey;
+  process.env.ELIZAOS_CLOUD_API_KEY = normalizedApiKey;
+
+  applyCanonicalOnboardingConfig(config, {
+    linkedAccounts: {
+      elizacloud: {
+        status: "linked",
+        source: "api-key",
+      },
+    },
+  });
+}
+
 function applyLocalProviderCapabilities(
   config: MutableElizaConfig,
-  connection: Extract<OnboardingConnection, { kind: "local-provider" }>,
+  selection: {
+    backend: OnboardingLocalProviderId;
+    apiKey?: string;
+    primaryModel?: string;
+  },
 ): Promise<void> {
-  const normalizedProvider = normalizeOnboardingProviderId(connection.provider);
+  const normalizedProvider = normalizeOnboardingProviderId(selection.backend);
   if (!normalizedProvider || normalizedProvider === "elizacloud") {
     return Promise.resolve();
   }
 
-  disableCloudInference(config);
   clearElizaCloudCliProxyEnv();
   clearRemoteProviderConfig(config);
   clearCloudModelSelections(config);
@@ -256,7 +359,7 @@ function applyLocalProviderCapabilities(
 
     const setupToken =
       storedProviderId === "anthropic-subscription"
-        ? trimToUndefined(connection.apiKey)
+        ? trimToUndefined(selection.apiKey)
         : undefined;
 
     if (setupToken?.startsWith("sk-ant-")) {
@@ -273,7 +376,7 @@ function applyLocalProviderCapabilities(
 
   const providerOption = getOnboardingProviderOption(normalizedProvider);
   if (providerOption?.envKey) {
-    const apiKey = trimToUndefined(connection.apiKey);
+    const apiKey = trimToUndefined(selection.apiKey);
     if (apiKey) {
       setEnvValue(config, providerOption.envKey, apiKey);
     }
@@ -281,7 +384,7 @@ function applyLocalProviderCapabilities(
     for (const envKey of getOnboardingProviderSignalEnvKeys(
       normalizedProvider,
     )) {
-      const value = trimToUndefined(connection.apiKey);
+      const value = trimToUndefined(selection.apiKey);
       if (value) {
         setEnvValue(config, envKey, value);
       }
@@ -292,7 +395,7 @@ function applyLocalProviderCapabilities(
   // If the user didn't pick a specific model, resolve from the provider's
   // plugin name so the correct provider wins the TEXT_SMALL/TEXT_LARGE
   // handler registration.
-  const explicitPrimary = trimToUndefined(connection.primaryModel);
+  const explicitPrimary = trimToUndefined(selection.primaryModel);
   const resolvedPrimary =
     explicitPrimary ?? providerOption?.pluginName ?? undefined;
   setPrimaryModel(config, resolvedPrimary);
@@ -342,6 +445,64 @@ function applyDefaultModelNames(
   if (!process.env[defaults.largeKey]) {
     setEnvValue(config, defaults.largeKey, defaults.largeVal);
   }
+}
+
+function toOnboardingConnectionFromSelection(
+  selection: OnboardingLlmPersistenceSelection,
+): OnboardingConnection | null {
+  if (selection.transport === "cloud-proxy") {
+    return {
+      kind: "cloud-managed",
+      cloudProvider: "elizacloud",
+      ...(trimToUndefined(selection.apiKey)
+        ? { apiKey: trimToUndefined(selection.apiKey) }
+        : {}),
+      ...(trimToUndefined(selection.smallModel)
+        ? { smallModel: trimToUndefined(selection.smallModel) }
+        : {}),
+      ...(trimToUndefined(selection.largeModel)
+        ? { largeModel: trimToUndefined(selection.largeModel) }
+        : {}),
+    };
+  }
+
+  const normalizedProvider = normalizeOnboardingProviderId(selection.backend);
+  if (!normalizedProvider || normalizedProvider === "elizacloud") {
+    return null;
+  }
+
+  if (selection.transport === "remote") {
+    const remoteApiBase = trimToUndefined(selection.remoteApiBase);
+    if (!remoteApiBase) {
+      return null;
+    }
+
+    return {
+      kind: "remote-provider",
+      remoteApiBase,
+      provider: normalizedProvider,
+      ...(trimToUndefined(selection.remoteAccessToken)
+        ? { remoteAccessToken: trimToUndefined(selection.remoteAccessToken) }
+        : {}),
+      ...(trimToUndefined(selection.apiKey)
+        ? { apiKey: trimToUndefined(selection.apiKey) }
+        : {}),
+      ...(trimToUndefined(selection.primaryModel)
+        ? { primaryModel: trimToUndefined(selection.primaryModel) }
+        : {}),
+    };
+  }
+
+  return {
+    kind: "local-provider",
+    provider: normalizedProvider as OnboardingLocalProviderId,
+    ...(trimToUndefined(selection.apiKey)
+      ? { apiKey: trimToUndefined(selection.apiKey) }
+      : {}),
+    ...(trimToUndefined(selection.primaryModel)
+      ? { primaryModel: trimToUndefined(selection.primaryModel) }
+      : {}),
+  };
 }
 
 /**
@@ -429,7 +590,10 @@ export function clearPersistedOnboardingConfig(
   // causing mismatched character state (e.g. male preset with female voice).
   delete config.ui;
 
-  delete config.connection;
+  delete (config as Record<string, unknown>).connection;
+  delete config.deploymentTarget;
+  delete config.linkedAccounts;
+  delete config.serviceRouting;
 
   const signalProviders = [
     "anthropic",
@@ -487,94 +651,18 @@ export function createProviderSwitchConnection(args: {
   };
 }
 
-export function resolveExistingOnboardingConnection(
-  config: Record<string, unknown> | null | undefined,
-): OnboardingConnection | null {
-  return inferOnboardingConnectionFromConfig(config);
-}
-
-export function mergeOnboardingConnectionWithExisting(
-  nextConnection: OnboardingConnection,
-  existingConnection: OnboardingConnection | null | undefined,
-): OnboardingConnection {
-  const normalizedNext = normalizePersistedOnboardingConnection(nextConnection);
-  if (!normalizedNext) {
-    return nextConnection;
-  }
-
-  if (!existingConnection || existingConnection.kind !== normalizedNext.kind) {
-    return normalizedNext;
-  }
-
-  if (normalizedNext.kind === "cloud-managed") {
-    if (
-      !isCloudManagedConnection(existingConnection) ||
-      existingConnection.cloudProvider !== normalizedNext.cloudProvider
-    ) {
-      return normalizedNext;
-    }
-    return {
-      ...existingConnection,
-      ...normalizedNext,
-      apiKey: normalizedNext.apiKey ?? existingConnection.apiKey,
-      smallModel: normalizedNext.smallModel ?? existingConnection.smallModel,
-      largeModel: normalizedNext.largeModel ?? existingConnection.largeModel,
-    };
-  }
-
-  if (normalizedNext.kind === "local-provider") {
-    if (
-      !isLocalProviderConnection(existingConnection) ||
-      existingConnection.provider !== normalizedNext.provider
-    ) {
-      return normalizedNext;
-    }
-    return {
-      ...existingConnection,
-      ...normalizedNext,
-      apiKey: normalizedNext.apiKey ?? existingConnection.apiKey,
-      primaryModel:
-        normalizedNext.primaryModel ?? existingConnection.primaryModel,
-    };
-  }
-
-  if (!isRemoteProviderConnection(existingConnection)) {
-    return normalizedNext;
-  }
-
-  return {
-    ...existingConnection,
-    ...normalizedNext,
-    remoteAccessToken:
-      normalizedNext.remoteAccessToken ?? existingConnection.remoteAccessToken,
-    apiKey: normalizedNext.apiKey ?? existingConnection.apiKey,
-    primaryModel:
-      normalizedNext.primaryModel ?? existingConnection.primaryModel,
-  };
-}
-
-export function reconcilePersistedOnboardingConnection(
-  config: MutableElizaConfig,
-): OnboardingConnection | null {
-  const resolved = inferCompatibilityOnboardingConnection(config);
-  persistConnectionSelection(config, resolved);
-  return resolved;
-}
-
 export async function applyOnboardingConnectionConfig(
   config: MutableElizaConfig,
   connection: OnboardingConnection,
 ): Promise<void> {
-  const normalizedConnection =
-    normalizePersistedOnboardingConnection(connection);
-  if (!normalizedConnection) {
-    throw new Error("Invalid onboarding connection");
-  }
+  const normalizedConnection = connection;
 
-  persistConnectionSelection(config, normalizedConnection);
+  delete (config as Record<string, unknown>).connection;
+  const existingDeploymentTarget = normalizeDeploymentTargetConfig(
+    config.deploymentTarget,
+  );
 
   if (normalizedConnection.kind === "cloud-managed") {
-    enableCloudInference(config);
     clearRemoteProviderConfig(config);
 
     const cloud = ensureCloud(config);
@@ -591,9 +679,33 @@ export async function applyOnboardingConnectionConfig(
       models.large = normalizedConnection.largeModel;
     }
 
+    const serviceRouting = buildDefaultElizaCloudServiceRouting({
+      base: {
+        ...(config.serviceRouting ?? {}),
+        llmText: buildElizaCloudServiceRoute({
+          smallModel: normalizedConnection.smallModel,
+          largeModel: normalizedConnection.largeModel,
+        }),
+      },
+    });
+
+    applyCanonicalOnboardingConfig(config, {
+      deploymentTarget: existingDeploymentTarget,
+      linkedAccounts: apiKey
+        ? {
+            elizacloud: {
+              status: "linked",
+              source: "api-key",
+            },
+          }
+        : undefined,
+      serviceRouting,
+    });
+
     process.env.ELIZAOS_CLOUD_ENABLED = "true";
     clearSubscriptionProviderConfig(config);
     clearPiAiFlag(config);
+    migrateLegacyRuntimeConfig(config as Record<string, unknown>);
     return;
   }
 
@@ -607,18 +719,125 @@ export async function applyOnboardingConnectionConfig(
     clearSubscriptionProviderConfig(config);
     clearPiAiFlag(config);
     clearCloudModelSelections(config);
+    clearRemoteProviderConfig(config);
 
-    const cloud = ensureCloud(config);
-    cloud.enabled = true;
-    cloud.provider = "remote";
-    cloud.runtime = "cloud";
-    cloud.remoteApiBase = normalizedConnection.remoteApiBase;
-    if (normalizedConnection.remoteAccessToken) {
-      cloud.remoteAccessToken = normalizedConnection.remoteAccessToken;
-    }
+    applyCanonicalOnboardingConfig(config, {
+      deploymentTarget: {
+        runtime: "remote",
+        provider: "remote",
+        remoteApiBase: normalizedConnection.remoteApiBase,
+        ...(normalizedConnection.remoteAccessToken
+          ? { remoteAccessToken: normalizedConnection.remoteAccessToken }
+          : {}),
+      },
+      serviceRouting: normalizedConnection.provider
+        ? {
+            llmText: {
+              backend: normalizedConnection.provider,
+              transport: "remote",
+              remoteApiBase: normalizedConnection.remoteApiBase,
+              ...(normalizedConnection.primaryModel
+                ? { primaryModel: normalizedConnection.primaryModel }
+                : {}),
+            },
+          }
+        : undefined,
+      clearRoutes: normalizedConnection.provider ? [] : ["llmText"],
+    });
 
+    migrateLegacyRuntimeConfig(config as Record<string, unknown>);
     return;
   }
 
-  await applyLocalProviderCapabilities(config, normalizedConnection);
+  await applyLocalProviderCapabilities(config, {
+    backend: normalizedConnection.provider,
+    ...(normalizedConnection.apiKey
+      ? { apiKey: normalizedConnection.apiKey }
+      : {}),
+    ...(normalizedConnection.primaryModel
+      ? { primaryModel: normalizedConnection.primaryModel }
+      : {}),
+  });
+  const linkedAccounts: LinkedAccountsConfig | undefined =
+    normalizedConnection.provider === "anthropic-subscription" ||
+    normalizedConnection.provider === "openai-subscription"
+      ? {
+          [normalizedConnection.provider]: {
+            status: "linked",
+            source: "subscription",
+          },
+        }
+      : normalizedConnection.provider === "pi-ai"
+        ? {
+            "pi-ai": {
+              status: "linked",
+              source: "credentials",
+            },
+          }
+        : undefined;
+  const shouldDefaultCloudServices =
+    existingDeploymentTarget?.runtime === "cloud" &&
+    existingDeploymentTarget.provider === "elizacloud";
+  const directLlmRoute = {
+    backend: normalizedConnection.provider,
+    transport: "direct",
+    ...(normalizedConnection.primaryModel
+      ? { primaryModel: normalizedConnection.primaryModel }
+      : {}),
+  } satisfies NonNullable<ServiceRoutingConfig["llmText"]>;
+  const serviceRouting = shouldDefaultCloudServices
+    ? buildDefaultElizaCloudServiceRouting({
+        base: {
+          ...(config.serviceRouting ?? {}),
+          llmText: directLlmRoute,
+        },
+      })
+    : {
+        llmText: directLlmRoute,
+      };
+  applyCanonicalOnboardingConfig(config, {
+    deploymentTarget: existingDeploymentTarget,
+    linkedAccounts,
+    serviceRouting,
+  });
+  migrateLegacyRuntimeConfig(config as Record<string, unknown>);
+}
+
+export async function applyOnboardingCredentialPersistence(
+  config: MutableElizaConfig,
+  args: {
+    credentialInputs?: OnboardingCredentialInputs | null;
+    deploymentTarget?: DeploymentTargetConfig | null;
+    serviceRouting?: ServiceRoutingConfig | null;
+  },
+): Promise<string | null> {
+  const plan = deriveOnboardingCredentialPersistencePlan({
+    credentialInputs: normalizeOnboardingCredentialInputs(args.credentialInputs),
+    deploymentTarget: args.deploymentTarget,
+    serviceRouting: args.serviceRouting,
+  });
+
+  if (plan.llmSelection) {
+    const llmConnection = toOnboardingConnectionFromSelection(plan.llmSelection);
+    if (llmConnection) {
+      await applyOnboardingConnectionConfig(config, llmConnection);
+    }
+  }
+
+  if (plan.cloudApiKey) {
+    persistLinkedCloudApiKey(config, plan.cloudApiKey);
+  }
+
+  migrateLegacyRuntimeConfig(config as Record<string, unknown>);
+
+  if (plan.llmSelection?.transport !== "direct") {
+    return null;
+  }
+
+  const provider = normalizeOnboardingProviderId(plan.llmSelection.backend);
+  if (!provider || provider === "elizacloud") {
+    return null;
+  }
+
+  return getOnboardingProviderOption(provider)?.envKey ?? null;
 }

@@ -1,3 +1,7 @@
+import {
+  isElizaCloudServiceSelectedInConfig,
+  migrateLegacyRuntimeConfig,
+} from "@miladyai/shared/contracts";
 import type { ElizaConfig } from "../config/config";
 import {
   DEFAULT_WALLET_RPC_SELECTIONS,
@@ -194,6 +198,12 @@ function inferSelectedRpcProviders(): WalletRpcSelections {
   };
 }
 
+function walletSelectionsUseElizaCloud(
+  selections: WalletRpcSelections,
+): boolean {
+  return Object.values(selections).some((provider) => provider === "eliza-cloud");
+}
+
 function hasLegacyCustomChainUrl(chain: WalletRpcChain): boolean {
   return LEGACY_CUSTOM_CHAIN_KEYS[chain].some((key) =>
     Boolean(normalizeSecret(process.env[key])),
@@ -294,9 +304,19 @@ export function buildCloudSolanaRpcUrl(
 }
 
 export function hasElizaCloudRpcAccess(
-  config?: Pick<ElizaConfig, "cloud"> | null,
+  config?: WalletCapableConfig | null,
 ): boolean {
-  return Boolean(resolveCloudApiKey(config));
+  const selectedRpcProviders = hasStoredSelections(config)
+    ? getStoredWalletRpcSelections(config)
+    : inferSelectedRpcProviders();
+  return Boolean(
+    resolveCloudApiKey(config) &&
+      (walletSelectionsUseElizaCloud(selectedRpcProviders) ||
+        isElizaCloudServiceSelectedInConfig(
+          (config ?? {}) as Record<string, unknown>,
+          "rpc",
+        )),
+  );
 }
 
 export function getStoredWalletRpcSelections(
@@ -543,10 +563,24 @@ export function applyWalletRpcConfigUpdate(
 export function resolveWalletRpcReadiness(
   config?: WalletCapableConfig | null,
 ): WalletRpcReadiness {
+  if (config && typeof config === "object" && !Array.isArray(config)) {
+    migrateLegacyRuntimeConfig(config as Record<string, unknown>);
+  }
   const walletNetwork = resolveWalletNetworkMode(config);
   const cloudApiKey = resolveCloudApiKey(config);
   const cloudBaseUrl = resolveCloudApiBaseUrl(config?.cloud?.baseUrl);
-  const cloudManagedAccess = Boolean(cloudApiKey);
+  const selectedRpcProviders = hasStoredSelections(config)
+    ? getStoredWalletRpcSelections(config)
+    : inferSelectedRpcProviders();
+  const cloudRpcSelected =
+    walletSelectionsUseElizaCloud(selectedRpcProviders) ||
+    isElizaCloudServiceSelectedInConfig(
+      (config ?? {}) as Record<string, unknown>,
+      "rpc",
+    );
+  const cloudManagedAccess = Boolean(
+    cloudApiKey && cloudRpcSelected,
+  );
   const cloudOptions = {
     cloudManagedAccess,
     cloudApiKey,
@@ -558,9 +592,6 @@ export function resolveWalletRpcReadiness(
   const baseRpcUrls = resolveBaseRpcUrls(cloudOptions);
   const avalancheRpcUrls = resolveAvalancheRpcUrls(cloudOptions);
   const solanaRpcUrls = resolveSolanaRpcUrls(cloudOptions);
-  const selectedRpcProviders = hasStoredSelections(config)
-    ? getStoredWalletRpcSelections(config)
-    : inferSelectedRpcProviders();
   const legacyCustomChains = buildLegacyCustomChains(selectedRpcProviders);
 
   return {

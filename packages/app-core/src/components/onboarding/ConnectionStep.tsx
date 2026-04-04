@@ -3,7 +3,7 @@
  *
  * Why this file stays thin: `connection-flow.ts` cannot call `setState` or `useApp`. This component builds a
  * {@link ConnectionFlowSnapshot}, runs `applyConnectionTransition`, applies patches, and mounts `ConnectionUiRoot`.
- * Why `useEffect` for `forceCloudBootstrap`: same patch as tests — one implementation for native/cloud-only auto-advance.
+ * Why `useEffect` for `forceCloudBootstrap`: same patch as tests — one implementation for cloud-only auto-advance.
  *
  * @see ../../onboarding/connection-flow.ts
  * @see ./connection/README.md
@@ -122,11 +122,11 @@ function applyOnboardingPatch(
   patch: ConnectionStatePatch,
   setState: <K extends keyof AppState>(key: K, value: AppState[K]) => void,
 ): void {
-  if (patch.onboardingRunMode !== undefined) {
-    setState("onboardingRunMode", patch.onboardingRunMode);
+  if (patch.onboardingServerTarget !== undefined) {
+    setState("onboardingServerTarget", patch.onboardingServerTarget);
   }
-  if (patch.onboardingCloudProvider !== undefined) {
-    setState("onboardingCloudProvider", patch.onboardingCloudProvider);
+  if (patch.onboardingCloudApiKey !== undefined) {
+    setState("onboardingCloudApiKey", patch.onboardingCloudApiKey);
   }
   if (patch.onboardingProvider !== undefined) {
     setState("onboardingProvider", patch.onboardingProvider);
@@ -155,8 +155,7 @@ export function ConnectionStep() {
   const {
     onboardingStep,
     onboardingOptions,
-    onboardingRunMode,
-    onboardingCloudProvider,
+    onboardingServerTarget,
     onboardingProvider,
     onboardingSubscriptionTab,
     onboardingElizaCloudTab,
@@ -166,10 +165,11 @@ export function ConnectionStep() {
     setState,
     t,
   } = useApp();
+  const resolvedOnboardingServerTarget = onboardingServerTarget ?? "";
 
   const branding = useBranding();
   const cloudOnly = Boolean(branding.cloudOnly);
-  const forceCloud = isNative || cloudOnly;
+  const forceCloud = cloudOnly;
 
   const catalogProviders: ProviderOption[] = (
     onboardingOptions?.providers as ProviderOption[] | undefined
@@ -246,8 +246,7 @@ export function ConnectionStep() {
 
   const connectionSnapshot: ConnectionFlowSnapshot = useMemo(
     () => ({
-      onboardingRunMode,
-      onboardingCloudProvider,
+      onboardingServerTarget: resolvedOnboardingServerTarget,
       onboardingProvider,
       onboardingRemoteConnected,
       onboardingElizaCloudTab,
@@ -258,8 +257,7 @@ export function ConnectionStep() {
       onboardingDetectedProviders: onboardingDetectedProviders ?? [],
     }),
     [
-      onboardingRunMode,
-      onboardingCloudProvider,
+      resolvedOnboardingServerTarget,
       onboardingProvider,
       onboardingRemoteConnected,
       onboardingElizaCloudTab,
@@ -291,10 +289,9 @@ export function ConnectionStep() {
   );
 
   useEffect(() => {
-    if (!forceCloud || onboardingRunMode) return;
+    if (!forceCloud || resolvedOnboardingServerTarget) return;
     const snap: ConnectionFlowSnapshot = {
-      onboardingRunMode,
-      onboardingCloudProvider,
+      onboardingServerTarget: resolvedOnboardingServerTarget,
       onboardingProvider,
       onboardingRemoteConnected,
       onboardingElizaCloudTab,
@@ -312,8 +309,7 @@ export function ConnectionStep() {
     }
   }, [
     forceCloud,
-    onboardingRunMode,
-    onboardingCloudProvider,
+    resolvedOnboardingServerTarget,
     onboardingProvider,
     onboardingRemoteConnected,
     onboardingElizaCloudTab,
@@ -324,13 +320,10 @@ export function ConnectionStep() {
   ]);
 
   useEffect(() => {
-    const isProviderScreen =
-      spec.screen === "providerGrid" || spec.screen === "providerDetail";
-    const desiredStep = isProviderScreen ? "providers" : "hosting";
-    if (onboardingStep !== desiredStep) {
-      setState("onboardingStep", desiredStep);
+    if (onboardingStep !== "providers") {
+      setState("onboardingStep", "providers");
     }
-  }, [onboardingStep, setState, spec.screen]);
+  }, [onboardingStep, setState]);
 
   const shared: ConnectionUiSharedProps = {
     dispatch: dispatchConnection,

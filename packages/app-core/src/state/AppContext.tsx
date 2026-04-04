@@ -85,8 +85,6 @@ import {
   type CompanionHalfFramerateMode,
   type CompanionVrmPowerMode,
   clearAvatarIndex,
-  clearPersistedConnectionMode,
-  deriveOnboardingResumeFields,
   formatSearchBullet,
   formatStartupErrorDetail,
   type GamePostMessageAuthPayload,
@@ -98,7 +96,6 @@ import {
   loadCompanionAnimateWhenHidden,
   loadCompanionHalfFramerateMode,
   loadCompanionVrmPowerMode,
-  loadPersistedConnectionMode,
   loadPersistedOnboardingComplete,
   loadPersistedOnboardingStep,
   loadUiTheme,
@@ -130,10 +127,7 @@ import {
   type UiShellMode,
   type UiTheme,
 } from "./internal";
-import {
-  detectExistingOnboardingConnection,
-  resolveStartupWithoutRestoredConnection,
-} from "./onboarding-bootstrap";
+import { detectExistingOnboardingConnection } from "./onboarding-bootstrap";
 import { deriveUiShellModeForTab } from "./shell-routing";
 import { TranslationProvider, useTranslation } from "./TranslationContext";
 import type { InventoryChainFilters } from "./types";
@@ -421,10 +415,15 @@ function AppProviderInner({
   // The coordinator's phase effects will re-run from restoring-session.
   // We store a ref to the coordinator's retry since it's created after this line.
   const coordinatorRetryRef = useRef<(() => void) | null>(null);
+  const coordinatorResetRef = useRef<(() => void) | null>(null);
   const coordinatorOnboardingCompleteRef = useRef<(() => void) | null>(null);
   const retryStartup = useCallback(() => {
     lifecycle.retryStartup();
     coordinatorRetryRef.current?.();
+  }, [lifecycle.retryStartup]);
+  const resetToSplash = useCallback(() => {
+    lifecycle.retryStartup();
+    coordinatorResetRef.current?.();
   }, [lifecycle.retryStartup]);
 
   const uiShellMode = deriveUiShellModeForTab(tab);
@@ -683,6 +682,8 @@ function AppProviderInner({
       selectedVrmIndex,
       customVrmUrl,
       customBackgroundUrl,
+      activePackId,
+      customWorldUrl,
     },
     setCharacterData,
     setCharacterDraft,
@@ -691,6 +692,8 @@ function AppProviderInner({
     setSelectedVrmIndex,
     setCustomVrmUrl,
     setCustomBackgroundUrl,
+    setActivePackId,
+    setCustomWorldUrl,
     loadCharacter,
     handleSaveCharacter,
     handleCharacterFieldInput,
@@ -749,8 +752,8 @@ function AppProviderInner({
       ownerName: onboardingOwnerName,
       style: onboardingStyle,
       avatar: onboardingAvatar,
-      runMode: onboardingRunMode,
-      cloudProvider: onboardingCloudProvider,
+      serverTarget: onboardingServerTarget,
+      cloudApiKey: onboardingCloudApiKey,
       provider: onboardingProvider,
       apiKey: onboardingApiKey,
       voiceProvider: onboardingVoiceProvider,
@@ -775,7 +778,6 @@ function AppProviderInner({
     addDeferredTask: addDeferredOnboardingTask,
     setOptions: setOnboardingOptions,
     setDetectedProviders: setOnboardingDetectedProviders,
-    resumeConnectionRef: onboardingResumeConnectionRefFromHook,
     completionCommittedRef: onboardingCompletionCommittedRefFromHook,
     forceLocalBootstrapRef: forceLocalBootstrapRefFromHook,
   } = onboarding;
@@ -796,8 +798,8 @@ function AppProviderInner({
     setOnboardingName,
     setOnboardingOwnerName,
     setOnboardingStyle,
-    setOnboardingRunMode,
-    setOnboardingCloudProvider,
+    setOnboardingServerTarget,
+    setOnboardingCloudApiKey,
     setOnboardingSmallModel,
     setOnboardingLargeModel,
     setOnboardingProvider,
@@ -917,7 +919,6 @@ function AppProviderInner({
   const restartNotificationSignatureRef = useRef<string | null>(null);
   const heartbeatNotificationKeyRef = useRef<string | null>(null);
   // Onboarding refs now come from useOnboardingState
-  const onboardingResumeConnectionRef = onboardingResumeConnectionRefFromHook;
   const onboardingCompletionCommittedRef =
     onboardingCompletionCommittedRefFromHook;
   const forceLocalBootstrapRef = forceLocalBootstrapRefFromHook;
@@ -1000,6 +1001,8 @@ function AppProviderInner({
   const {
     elizaCloudEnabled,
     setElizaCloudEnabled,
+    elizaCloudVoiceProxyAvailable,
+    setElizaCloudVoiceProxyAvailable,
     elizaCloudConnected,
     setElizaCloudConnected,
     elizaCloudHasPersistedKey,
@@ -1185,6 +1188,7 @@ function AppProviderInner({
     elizaCloudPreferDisconnectedUntilLoginRef,
     setElizaCloudEnabled,
     setElizaCloudConnected,
+    setElizaCloudVoiceProxyAvailable,
     setElizaCloudHasPersistedKey,
     setElizaCloudCredits,
     setElizaCloudCreditsLow,
@@ -1196,7 +1200,6 @@ function AppProviderInner({
     setElizaCloudStatusReason,
     setElizaCloudLoginError,
     onboardingCompletionCommittedRef,
-    onboardingResumeConnectionRef,
     setOnboardingUiRevealNonce,
     setOnboardingLoading,
     setOnboardingComplete,
@@ -1207,8 +1210,7 @@ function AppProviderInner({
     setPostOnboardingChecklistDismissed,
     setOnboardingName,
     setOnboardingStyle,
-    setOnboardingRunMode,
-    setOnboardingCloudProvider,
+    setOnboardingServerTarget,
     setOnboardingProvider,
     setOnboardingApiKey,
     setOnboardingVoiceProvider: setOnboardingVoiceProvider as (
@@ -1229,6 +1231,7 @@ function AppProviderInner({
     setPlugins: setPlugins as (v: never[]) => void,
     setSkills: setSkills as (v: never[]) => void,
     setLogs: setLogs as (v: never[]) => void,
+    coordinatorResetRef,
   });
   const {
     fetchGreeting,
@@ -1274,8 +1277,8 @@ function AppProviderInner({
     setOnboardingActiveGuide,
     addDeferredOnboardingTask: addDeferredOnboardingTask,
     setOnboardingDetectedProviders,
-    setOnboardingRunMode,
-    setOnboardingCloudProvider,
+    setOnboardingServerTarget,
+    setOnboardingCloudApiKey,
     setOnboardingProvider,
     setOnboardingApiKey,
     setOnboardingPrimaryModel,
@@ -1365,8 +1368,8 @@ function AppProviderInner({
         onboardingName: setOnboardingName,
         onboardingOwnerName: setOnboardingOwnerName,
         onboardingStyle: setOnboardingStyle,
-        onboardingRunMode: setOnboardingRunMode,
-        onboardingCloudProvider: setOnboardingCloudProvider,
+        onboardingServerTarget: setOnboardingServerTarget,
+        onboardingCloudApiKey: setOnboardingCloudApiKey,
         onboardingSmallModel: setOnboardingSmallModel,
         onboardingLargeModel: setOnboardingLargeModel,
         onboardingProvider: setOnboardingProvider,
@@ -1398,10 +1401,13 @@ function AppProviderInner({
         onboardingRpcKeys: setOnboardingRpcKeys,
         onboardingAvatar: setOnboardingAvatar,
         elizaCloudEnabled: setElizaCloudEnabled,
+        elizaCloudVoiceProxyAvailable: setElizaCloudVoiceProxyAvailable,
         cloudDashboardView: setCloudDashboardView,
         selectedVrmIndex: setSelectedVrmIndex,
         customVrmUrl: setCustomVrmUrl,
         customBackgroundUrl: setCustomBackgroundUrl,
+        activePackId: setActivePackId,
+        customWorldUrl: setCustomWorldUrl,
         commandQuery: setCommandQuery,
         commandActiveIndex: setCommandActiveIndex,
         emotePickerOpen: setEmotePickerOpen,
@@ -1473,7 +1479,7 @@ function AppProviderInner({
       setOnboardingAvatar,
       setOnboardingBlooioApiKey,
       setOnboardingBlooioPhoneNumber,
-      setOnboardingCloudProvider,
+      setOnboardingServerTarget,
       setOnboardingDetectedProviders,
       setOnboardingDiscordToken,
       setOnboardingElizaCloudTab,
@@ -1492,7 +1498,6 @@ function AppProviderInner({
       setOnboardingRemoteToken,
       setOnboardingRpcKeys,
       setOnboardingRpcSelections,
-      setOnboardingRunMode,
       setOnboardingSelectedChains,
       setOnboardingSmallModel,
       setOnboardingStyle,
@@ -1559,8 +1564,8 @@ function AppProviderInner({
     setOnboardingOptions,
     setOnboardingExistingInstallDetected,
     setOnboardingStep,
-    setOnboardingRunMode,
-    setOnboardingCloudProvider,
+    setOnboardingServerTarget,
+    setOnboardingCloudApiKey,
     setOnboardingProvider,
     setOnboardingVoiceProvider,
     setOnboardingApiKey,
@@ -1597,7 +1602,6 @@ function AppProviderInner({
     setUnreadConversations,
     setConversations,
     requestGreetingWhenRunningRef,
-    onboardingResumeConnectionRef,
     onboardingCompletionCommittedRef,
     forceLocalBootstrapRef,
     initialTabSetRef,
@@ -1610,6 +1614,7 @@ function AppProviderInner({
 
   // Wire coordinator refs so callbacks defined before the coordinator can reach it
   coordinatorRetryRef.current = startupCoordinator.retry;
+  coordinatorResetRef.current = startupCoordinator.reset;
   coordinatorOnboardingCompleteRef.current =
     startupCoordinator.onboardingComplete;
 
@@ -1692,6 +1697,7 @@ function AppProviderInner({
     () => ({
       selectedVrmIndex,
       customVrmUrl,
+      customWorldUrl,
       uiTheme,
       tab,
       companionVrmPowerMode,
@@ -1701,6 +1707,7 @@ function AppProviderInner({
     [
       selectedVrmIndex,
       customVrmUrl,
+      customWorldUrl,
       uiTheme,
       tab,
       companionVrmPowerMode,
@@ -1833,7 +1840,10 @@ function AppProviderInner({
     selectedVrmIndex,
     customVrmUrl,
     customBackgroundUrl,
+    activePackId,
+    customWorldUrl,
     elizaCloudEnabled,
+    elizaCloudVoiceProxyAvailable,
     elizaCloudConnected,
     elizaCloudHasPersistedKey,
     elizaCloudCredits,
@@ -1898,8 +1908,8 @@ function AppProviderInner({
     onboardingName,
     onboardingOwnerName,
     onboardingStyle,
-    onboardingRunMode,
-    onboardingCloudProvider,
+    onboardingServerTarget,
+    onboardingCloudApiKey,
     onboardingSmallModel,
     onboardingLargeModel,
     onboardingProvider,

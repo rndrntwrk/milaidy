@@ -182,14 +182,17 @@ export class DesktopManager {
   private openExternalHandler:
     | ((url: string) => boolean | Promise<boolean>)
     | null = null;
+  private requestQuitCallback: (() => void | Promise<void>) | null = null;
+  private restoreMainWindowCallback: (() => void | Promise<void>) | null = null;
 
   // Track menu items for context-menu-clicked matching
   private trayMenuItems: Map<string, TrayMenuItem> = new Map();
   private trayClickHandler: (() => void) | null = null;
-  private contextMenuHandler: ((action: string) => void) | null = null;
+  private contextMenuHandler: ElectrobunEventHandler | null = null;
   private windowEventHandlers: Partial<
     Record<"focus" | "blur" | "close" | "resize" | "move", () => void>
   > = {};
+  private appExitStarted = false;
 
   constructor() {
     activeDesktopManager = this;
@@ -251,6 +254,21 @@ export class DesktopManager {
     cb: ((url: string) => boolean | Promise<boolean>) | null,
   ): void {
     this.openExternalHandler = cb;
+  }
+
+  setRequestQuitCallback(cb: (() => void | Promise<void>) | null): void {
+    this.requestQuitCallback = cb;
+  }
+
+  setRestoreMainWindowCallback(cb: (() => void | Promise<void>) | null): void {
+    this.restoreMainWindowCallback = cb;
+  }
+
+  clearMainWindow(window?: BrowserWindow | null): void {
+    if (!window || this.mainWindow === window) {
+      this.teardownWindowEvents(this.mainWindow);
+      this.mainWindow = null;
+    }
   }
 
   /**
@@ -485,7 +503,9 @@ export class DesktopManager {
     // Tray menu item clicks fire "tray-clicked" on the global event bus
     // (NOT "context-menu-clicked" — that's for right-click context menus).
     // The event data shape is { data: { id, action, data? } }.
-    this.contextMenuHandler = (e: { data?: { action?: string } }) => {
+    // Electrobun emits ElectrobunEvent<TrayClickedData> for tray-clicked;
+    // the shape carries { data: { action, id, data? } }.
+    this.contextMenuHandler = (e: { data?: { action?: string } }): void => {
       const action = e?.data?.action;
       if (!action) return;
 
@@ -517,7 +537,10 @@ export class DesktopManager {
         });
       }
     };
-    Electrobun.events.on("tray-clicked", this.contextMenuHandler);
+    Electrobun.events.on(
+      "tray-clicked",
+      this.contextMenuHandler as ElectrobunEventHandler,
+    );
   }
 
   private teardownTrayEvents(): void {
@@ -874,16 +897,21 @@ X-GNOME-Autostart-enabled=true
   }
 
   async showWindow(): Promise<void> {
-    const win = this.mainWindow;
-    if (!win) return;
-    const ptr = (win as { ptr?: unknown }).ptr;
-    if (ptr && process.platform === "darwin") {
-      makeKeyAndOrderFront(ptr as Parameters<typeof makeKeyAndOrderFront>[0]);
-    } else {
-      win.show();
-      win.focus();
+    let win = this.mainWindow;
+    if (!win) {
+      await this.restoreMainWindowCallback?.();
+      win = this.mainWindow;
     }
-    this._windowHidden = false;
+    if (!win) return;
+    try {
+      this.showMainWindow(win);
+    } catch {
+      this.clearMainWindow(win);
+      await this.restoreMainWindowCallback?.();
+      win = this.mainWindow;
+      if (!win) return;
+      this.showMainWindow(win);
+    }
   }
 
   async hideWindow(): Promise<void> {
@@ -936,6 +964,17 @@ X-GNOME-Autostart-enabled=true
 
   async setOpacity(_options: SetOpacityOptions): Promise<void> {
     // No-op: Electrobun BrowserWindow does not support setOpacity
+  }
+
+  private showMainWindow(win: BrowserWindow): void {
+    const ptr = (win as { ptr?: unknown }).ptr;
+    if (ptr && process.platform === "darwin") {
+      makeKeyAndOrderFront(ptr as Parameters<typeof makeKeyAndOrderFront>[0]);
+    } else {
+      win.show();
+      win.focus();
+    }
+    this._windowHidden = false;
   }
 
   private setupWindowEvents(): void {
@@ -1108,11 +1147,27 @@ X-GNOME-Autostart-enabled=true
 
   // MARK: - App
 
+  private async beginAppExit(reason: string): Promise<void> {
+    if (this.appExitStarted) {
+      return;
+    }
+    this.appExitStarted = true;
+    await this.showWindow().catch(() => {});
+    this.send("desktopShutdownStarted", { reason });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+
   async quit(): Promise<void> {
+    await this.beginAppExit("desktop-quit");
+    if (this.requestQuitCallback) {
+      await this.requestQuitCallback();
+      return;
+    }
     Utils.quit();
   }
 
   async relaunch(): Promise<void> {
+    await this.beginAppExit("desktop-relaunch");
     try {
       const child = Bun.spawn([process.execPath, ...process.argv.slice(1)], {
         detached: true,
@@ -1702,7 +1757,9 @@ X-GNOME-Autostart-enabled=true
       path: cookie.path,
       secure: cookie.secure,
       httpOnly: cookie.httpOnly,
-      session: cookie.session,
+      session: (cookie as unknown as Record<string, unknown>).session as
+        | boolean
+        | undefined,
       expirationDate: cookie.expirationDate,
     }));
 

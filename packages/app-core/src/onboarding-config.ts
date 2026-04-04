@@ -1,13 +1,23 @@
 import {
-  isCloudManagedConnection,
   normalizeOnboardingProviderId,
-  type OnboardingConnection,
+  type OnboardingCredentialInputs,
   type OnboardingLocalProviderId,
 } from "@miladyai/shared/contracts/onboarding";
+import type {
+  DeploymentTargetConfig,
+  ServiceRouteConfig,
+  LinkedAccountsConfig,
+  ServiceRoutingConfig,
+} from "@miladyai/shared/contracts/service-routing";
+import {
+  buildDefaultElizaCloudServiceRouting,
+  buildElizaCloudServiceRoute,
+} from "@miladyai/shared/contracts/service-routing";
+import { type OnboardingServerTarget } from "./onboarding/server-target";
 
 export interface BuildOnboardingConnectionArgs {
-  onboardingRunMode: "local" | "cloud" | "";
-  onboardingCloudProvider: string;
+  onboardingServerTarget?: OnboardingServerTarget;
+  onboardingCloudApiKey: string;
   onboardingProvider: string;
   onboardingApiKey: string;
   onboardingVoiceProvider: string;
@@ -19,6 +29,14 @@ export interface BuildOnboardingConnectionArgs {
   onboardingRemoteToken: string;
   onboardingSmallModel: string;
   onboardingLargeModel: string;
+}
+
+export interface BuildOnboardingRuntimeConfigResult {
+  deploymentTarget: DeploymentTargetConfig;
+  linkedAccounts: LinkedAccountsConfig | undefined;
+  serviceRouting: ServiceRoutingConfig | undefined;
+  credentialInputs: OnboardingCredentialInputs | undefined;
+  needsProviderSetup: boolean;
 }
 
 function trimToUndefined(value: string): string | undefined {
@@ -33,6 +51,12 @@ function resolveLocalProviderId(
   return normalized && normalized !== "elizacloud" ? normalized : null;
 }
 
+function resolveArgsServerTarget(
+  args: Pick<BuildOnboardingConnectionArgs, "onboardingServerTarget">,
+): OnboardingServerTarget {
+  return args.onboardingServerTarget ?? "";
+}
+
 export function resolveOnboardingPrimaryModel(args: {
   providerId: string;
   onboardingPrimaryModel: string;
@@ -44,81 +68,114 @@ export function resolveOnboardingPrimaryModel(args: {
   return trimToUndefined(args.onboardingPrimaryModel);
 }
 
-export function buildOnboardingConnectionConfig(
+export function buildOnboardingRuntimeConfig(
   args: BuildOnboardingConnectionArgs,
-): OnboardingConnection | null {
-  if (
-    args.onboardingRunMode === "cloud" &&
-    args.onboardingCloudProvider === "elizacloud" &&
-    !args.onboardingRemoteConnected
-  ) {
-    return {
-      kind: "cloud-managed",
-      cloudProvider: "elizacloud",
-      apiKey: trimToUndefined(args.onboardingApiKey),
-      smallModel: trimToUndefined(args.onboardingSmallModel),
-      largeModel: trimToUndefined(args.onboardingLargeModel),
+): BuildOnboardingRuntimeConfigResult {
+  const serverTarget = resolveArgsServerTarget(args);
+  const smallModel = trimToUndefined(args.onboardingSmallModel);
+  const largeModel = trimToUndefined(args.onboardingLargeModel);
+  const linkedAccounts: LinkedAccountsConfig = {};
+  const cloudApiKey = trimToUndefined(args.onboardingCloudApiKey);
+  if (cloudApiKey) {
+    linkedAccounts.elizacloud = {
+      status: "linked",
+      source: "api-key",
     };
   }
+
+  const deploymentTarget: DeploymentTargetConfig =
+    serverTarget === "remote"
+      ? {
+          runtime: "remote",
+          provider: "remote",
+          remoteApiBase: args.onboardingRemoteApiBase.trim(),
+          ...(trimToUndefined(args.onboardingRemoteToken)
+            ? { remoteAccessToken: trimToUndefined(args.onboardingRemoteToken) }
+            : {}),
+        }
+      : serverTarget === "elizacloud" && !args.onboardingRemoteConnected
+        ? {
+            runtime: "cloud",
+            provider: "elizacloud",
+          }
+        : { runtime: "local" };
+
+  const serviceRouting: ServiceRoutingConfig = {};
+  let llmTextRoute: ServiceRouteConfig | undefined;
 
   if (args.onboardingProvider === "elizacloud") {
-    return {
-      kind: "cloud-managed",
-      cloudProvider: "elizacloud",
-      apiKey: trimToUndefined(args.onboardingApiKey),
-    };
-  }
-
-  const providerId = resolveLocalProviderId(args.onboardingProvider);
-  if (!providerId) {
-    if (args.onboardingCloudProvider === "remote") {
-      return {
-        kind: "remote-provider",
-        remoteApiBase: args.onboardingRemoteApiBase.trim(),
-        remoteAccessToken: trimToUndefined(args.onboardingRemoteToken),
-      };
+    llmTextRoute = buildElizaCloudServiceRoute({
+      smallModel,
+      largeModel,
+    });
+  } else {
+    const providerId = resolveLocalProviderId(args.onboardingProvider);
+    if (providerId) {
+      const primaryModel = resolveOnboardingPrimaryModel({
+        providerId,
+        onboardingPrimaryModel: args.onboardingPrimaryModel,
+        onboardingOpenRouterModel: args.onboardingOpenRouterModel,
+      });
+      llmTextRoute =
+        serverTarget === "remote"
+          ? {
+              backend: providerId,
+              transport: "remote",
+              remoteApiBase: args.onboardingRemoteApiBase.trim(),
+              ...(primaryModel ? { primaryModel } : {}),
+            }
+          : {
+              backend: providerId,
+              transport: "direct",
+              ...(primaryModel ? { primaryModel } : {}),
+            };
     }
-    return null;
   }
 
-  const primaryModel = resolveOnboardingPrimaryModel({
-    providerId,
-    onboardingPrimaryModel: args.onboardingPrimaryModel,
-    onboardingOpenRouterModel: args.onboardingOpenRouterModel,
-  });
+  if (llmTextRoute) {
+    serviceRouting.llmText = llmTextRoute;
+  }
 
+  const cloudDefaultsSelected =
+    args.onboardingProvider === "elizacloud" ||
+    (deploymentTarget.runtime === "cloud" &&
+      deploymentTarget.provider === "elizacloud");
+  if (cloudDefaultsSelected) {
+    Object.assign(
+      serviceRouting,
+      buildDefaultElizaCloudServiceRouting({
+        base: serviceRouting,
+        includeInference: args.onboardingProvider === "elizacloud",
+        smallModel,
+        largeModel,
+      }),
+    );
+  }
+
+  const hasLinkedAccounts = Object.keys(linkedAccounts).length > 0;
+  const hasServiceRouting = Object.keys(serviceRouting).length > 0;
+  const credentialInputs: OnboardingCredentialInputs = {};
+
+  if (cloudApiKey) {
+    credentialInputs.cloudApiKey = cloudApiKey;
+  }
+
+  const llmApiKey = trimToUndefined(args.onboardingApiKey);
   if (
-    args.onboardingRunMode === "cloud" &&
-    args.onboardingCloudProvider === "remote"
+    llmApiKey &&
+    llmTextRoute?.backend &&
+    llmTextRoute.backend !== "elizacloud"
   ) {
-    return {
-      kind: "remote-provider",
-      remoteApiBase: args.onboardingRemoteApiBase.trim(),
-      remoteAccessToken: trimToUndefined(args.onboardingRemoteToken),
-      provider: providerId,
-      apiKey: trimToUndefined(args.onboardingApiKey),
-      primaryModel,
-    };
+    credentialInputs.llmApiKey = llmApiKey;
   }
+
+  const hasCredentialInputs = Object.keys(credentialInputs).length > 0;
 
   return {
-    kind: "local-provider",
-    provider: providerId,
-    apiKey: trimToUndefined(args.onboardingApiKey),
-    primaryModel,
+    deploymentTarget,
+    linkedAccounts: hasLinkedAccounts ? linkedAccounts : undefined,
+    serviceRouting: hasServiceRouting ? serviceRouting : undefined,
+    credentialInputs: hasCredentialInputs ? credentialInputs : undefined,
+    needsProviderSetup: !serviceRouting.llmText,
   };
-}
-
-export function isElizaCloudConnectionReady(args: {
-  connection: OnboardingConnection | null | undefined;
-  elizaCloudConnected: boolean;
-}): boolean {
-  if (args.elizaCloudConnected) {
-    return true;
-  }
-  return Boolean(
-    isCloudManagedConnection(args.connection) &&
-      args.connection.cloudProvider === "elizacloud" &&
-      args.connection.apiKey?.trim(),
-  );
 }

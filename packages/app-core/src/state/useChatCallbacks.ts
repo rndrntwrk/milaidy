@@ -223,6 +223,7 @@ export interface UseChatCallbacksDeps {
   elizaCloudPreferDisconnectedUntilLoginRef: MutableRefObject<boolean>;
   setElizaCloudEnabled: (v: boolean) => void;
   setElizaCloudConnected: (v: boolean) => void;
+  setElizaCloudVoiceProxyAvailable: (v: boolean) => void;
   setElizaCloudHasPersistedKey: (v: boolean) => void;
   setElizaCloudCredits: (v: number | null) => void;
   setElizaCloudCreditsLow: (v: boolean) => void;
@@ -236,7 +237,6 @@ export interface UseChatCallbacksDeps {
 
   // Onboarding setters (used by completeResetLocalStateAfterServerWipe)
   onboardingCompletionCommittedRef: MutableRefObject<boolean>;
-  onboardingResumeConnectionRef: MutableRefObject<unknown>;
   setOnboardingUiRevealNonce: (fn: (n: number) => number) => void;
   setOnboardingLoading: (v: boolean) => void;
   setOnboardingComplete: (v: boolean) => void;
@@ -247,8 +247,7 @@ export interface UseChatCallbacksDeps {
   setPostOnboardingChecklistDismissed: (v: boolean) => void;
   setOnboardingName: (v: string) => void;
   setOnboardingStyle: (v: string) => void;
-  setOnboardingRunMode: (v: "local" | "cloud" | "") => void;
-  setOnboardingCloudProvider: (v: string) => void;
+  setOnboardingServerTarget: (v: AppState["onboardingServerTarget"]) => void;
   setOnboardingProvider: (v: string) => void;
   setOnboardingApiKey: (v: string) => void;
   setOnboardingVoiceProvider: (v: string) => void;
@@ -271,6 +270,9 @@ export interface UseChatCallbacksDeps {
   setPlugins: (v: never[]) => void;
   setSkills: (v: never[]) => void;
   setLogs: (v: never[]) => void;
+
+  // Startup coordinator
+  coordinatorResetRef: MutableRefObject<(() => void) | null>;
 }
 
 // ── Hook ────────────────────────────────────────────────────────────
@@ -332,6 +334,7 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
     elizaCloudPreferDisconnectedUntilLoginRef,
     setElizaCloudEnabled,
     setElizaCloudConnected,
+    setElizaCloudVoiceProxyAvailable,
     setElizaCloudHasPersistedKey,
     setElizaCloudCredits,
     setElizaCloudCreditsLow,
@@ -343,7 +346,6 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
     setElizaCloudStatusReason,
     setElizaCloudLoginError,
     onboardingCompletionCommittedRef,
-    onboardingResumeConnectionRef,
     setOnboardingUiRevealNonce,
     setOnboardingLoading,
     setOnboardingComplete,
@@ -354,8 +356,7 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
     setPostOnboardingChecklistDismissed,
     setOnboardingName,
     setOnboardingStyle,
-    setOnboardingRunMode,
-    setOnboardingCloudProvider,
+    setOnboardingServerTarget,
     setOnboardingProvider,
     setOnboardingApiKey,
     setOnboardingVoiceProvider,
@@ -374,6 +375,7 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
     setPlugins,
     setSkills,
     setLogs,
+    coordinatorResetRef,
   } = deps;
 
   // ── Greeting / hydration (defined here; passed into lifecycle) ──────
@@ -622,6 +624,7 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
     elizaCloudPreferDisconnectedUntilLoginRef,
     setElizaCloudEnabled,
     setElizaCloudConnected,
+    setElizaCloudVoiceProxyAvailable,
     setElizaCloudHasPersistedKey,
     setElizaCloudCredits,
     setElizaCloudCreditsLow,
@@ -633,7 +636,6 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
     setElizaCloudStatusReason,
     setElizaCloudLoginError,
     onboardingCompletionCommittedRef,
-    onboardingResumeConnectionRef,
     setOnboardingUiRevealNonce,
     setOnboardingLoading,
     setOnboardingComplete,
@@ -644,8 +646,7 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
     setPostOnboardingChecklistDismissed,
     setOnboardingName,
     setOnboardingStyle,
-    setOnboardingRunMode,
-    setOnboardingCloudProvider,
+    setOnboardingServerTarget,
     setOnboardingProvider,
     setOnboardingApiKey,
     setOnboardingVoiceProvider,
@@ -664,6 +665,7 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
     setPlugins,
     setSkills,
     setLogs,
+    coordinatorResetRef,
   });
 
   // ── Conversation management ─────────────────────────────────────────

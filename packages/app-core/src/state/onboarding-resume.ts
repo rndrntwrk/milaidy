@@ -1,34 +1,42 @@
 import {
-  inferOnboardingConnectionFromConfig,
-  type OnboardingConnection,
-} from "@miladyai/shared/contracts/onboarding";
+  getOnboardingProviderOption,
+  isElizaCloudLinkedInConfig,
+  normalizeOnboardingProviderId,
+  readOnboardingEnvSecret,
+  resolveDeploymentTargetInConfig,
+  resolveLinkedAccountsInConfig,
+  resolveServiceRoutingInConfig,
+} from "@miladyai/shared/contracts";
 import type { BuildOnboardingConnectionArgs } from "../onboarding-config";
 import { asRecord } from "./config-readers";
 import type { OnboardingStep } from "./types";
 
-function hasConfigValue(value: unknown): boolean {
-  return typeof value === "string" ? value.trim().length > 0 : value === true;
-}
-
 export function hasPartialOnboardingConnectionConfig(
   config: Record<string, unknown> | null | undefined,
 ): boolean {
-  if (inferOnboardingConnectionFromConfig(config)) {
+  if (resolveServiceRoutingInConfig(config)) {
     return true;
   }
 
-  const cloud = asRecord(config?.cloud);
-  if (!cloud) {
-    return false;
+  const deploymentTarget = resolveDeploymentTargetInConfig(config);
+  if (deploymentTarget.runtime !== "local") {
+    return true;
   }
 
-  return [
-    cloud.enabled,
-    cloud.provider,
-    cloud.inferenceMode,
-    cloud.remoteApiBase,
-    cloud.remoteAccessToken,
-  ].some(hasConfigValue);
+  const root =
+    config && typeof config === "object" && !Array.isArray(config)
+      ? (config as Record<string, unknown>)
+      : null;
+  if (
+    root &&
+    (Object.hasOwn(root, "deploymentTarget") ||
+      Object.hasOwn(root, "linkedAccounts") ||
+      Object.hasOwn(root, "serviceRouting"))
+  ) {
+    return true;
+  }
+
+  return isElizaCloudLinkedInConfig(config);
 }
 
 export function inferOnboardingResumeStep(args: {
@@ -39,78 +47,86 @@ export function inferOnboardingResumeStep(args: {
     return args.persistedStep;
   }
 
+  if (hasPartialOnboardingConnectionConfig(args.config)) {
+    return "providers";
+  }
+
   return "identity";
 }
 
-export function deriveOnboardingResumeConnection(
+export function deriveOnboardingResumeFieldsFromConfig(
   config: Record<string, unknown> | null | undefined,
-): OnboardingConnection | null {
-  return inferOnboardingConnectionFromConfig(config);
-}
-
-export function deriveOnboardingResumeFields(
-  connection: OnboardingConnection | null | undefined,
 ): Partial<BuildOnboardingConnectionArgs> {
-  if (!connection) {
-    return {};
+  const deploymentTarget = resolveDeploymentTargetInConfig(config);
+  const linkedAccounts = resolveLinkedAccountsInConfig(config);
+  const serviceRouting = resolveServiceRoutingInConfig(config);
+  const llmText = serviceRouting?.llmText ?? null;
+  const llmBackend = normalizeOnboardingProviderId(llmText?.backend);
+  const llmProvider = llmBackend
+    ? getOnboardingProviderOption(llmBackend)
+    : null;
+  const root = asRecord(config);
+  const cloud = asRecord(root?.cloud);
+  const cloudApiKey =
+    linkedAccounts?.elizacloud?.status === "linked" &&
+    typeof cloud?.apiKey === "string"
+      ? cloud.apiKey.trim()
+      : "";
+
+  const onboardingServerTarget =
+    deploymentTarget.runtime === "remote"
+      ? "remote"
+      : deploymentTarget.runtime === "cloud"
+        ? "elizacloud"
+        : "local";
+
+  const fields: Partial<BuildOnboardingConnectionArgs> = {
+    onboardingServerTarget,
+    onboardingCloudApiKey: cloudApiKey,
+    onboardingProvider: "",
+    onboardingApiKey: "",
+    onboardingVoiceProvider: "",
+    onboardingVoiceApiKey: "",
+    onboardingPrimaryModel: "",
+    onboardingOpenRouterModel: "",
+    onboardingRemoteConnected:
+      deploymentTarget.runtime === "remote" &&
+      Boolean(deploymentTarget.remoteApiBase),
+    onboardingRemoteApiBase: deploymentTarget.remoteApiBase ?? "",
+    onboardingRemoteToken: deploymentTarget.remoteAccessToken ?? "",
+    onboardingSmallModel: "",
+    onboardingLargeModel: "",
+  };
+
+  if (!llmText) {
+    return fields;
   }
 
-  switch (connection.kind) {
-    case "cloud-managed":
-      return {
-        onboardingRunMode: "cloud",
-        onboardingCloudProvider: "elizacloud",
-        onboardingApiKey: connection.apiKey ?? "",
-        onboardingVoiceProvider: "",
-        onboardingVoiceApiKey: "",
-        onboardingSmallModel: connection.smallModel ?? "",
-        onboardingLargeModel: connection.largeModel ?? "",
-        onboardingRemoteConnected: false,
-        onboardingRemoteApiBase: "",
-        onboardingRemoteToken: "",
-        onboardingProvider: "",
-        onboardingPrimaryModel: "",
-        onboardingOpenRouterModel: "",
-      };
-    case "local-provider":
-      return {
-        onboardingRunMode: "local",
-        onboardingCloudProvider: "",
-        onboardingProvider: connection.provider,
-        onboardingApiKey: connection.apiKey ?? "",
-        onboardingVoiceProvider: "",
-        onboardingVoiceApiKey: "",
-        onboardingPrimaryModel:
-          connection.provider === "openrouter"
-            ? ""
-            : (connection.primaryModel ?? ""),
-        onboardingOpenRouterModel:
-          connection.provider === "openrouter"
-            ? (connection.primaryModel ?? "")
-            : "",
-        onboardingRemoteConnected: false,
-        onboardingRemoteApiBase: "",
-        onboardingRemoteToken: "",
-      };
-    case "remote-provider":
-      return {
-        onboardingRunMode: "cloud",
-        onboardingCloudProvider: "remote",
-        onboardingProvider: connection.provider ?? "",
-        onboardingApiKey: connection.apiKey ?? "",
-        onboardingVoiceProvider: "",
-        onboardingVoiceApiKey: "",
-        onboardingPrimaryModel:
-          connection.provider === "openrouter"
-            ? ""
-            : (connection.primaryModel ?? ""),
-        onboardingOpenRouterModel:
-          connection.provider === "openrouter"
-            ? (connection.primaryModel ?? "")
-            : "",
-        onboardingRemoteConnected: true,
-        onboardingRemoteApiBase: connection.remoteApiBase,
-        onboardingRemoteToken: connection.remoteAccessToken ?? "",
-      };
+  if (llmText.transport === "cloud-proxy" && llmBackend === "elizacloud") {
+    return {
+      ...fields,
+      onboardingProvider: "elizacloud",
+      onboardingSmallModel: llmText.smallModel ?? "",
+      onboardingLargeModel: llmText.largeModel ?? "",
+    };
   }
+
+  if (llmBackend && llmBackend !== "elizacloud") {
+    const apiKey =
+      llmProvider?.envKey != null
+        ? (readOnboardingEnvSecret(config, llmProvider.envKey) ?? "")
+        : "";
+
+    return {
+      ...fields,
+      onboardingProvider: llmBackend,
+      onboardingApiKey: apiKey,
+      onboardingPrimaryModel:
+        llmBackend === "openrouter" ? "" : (llmText.primaryModel ?? ""),
+      onboardingOpenRouterModel:
+        llmBackend === "openrouter" ? (llmText.primaryModel ?? "") : "",
+    };
+  }
+
+  return fields;
 }

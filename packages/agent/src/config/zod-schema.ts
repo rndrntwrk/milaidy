@@ -276,41 +276,62 @@ const CharacterStyleSchema = z
   .strict()
   .optional();
 
-const OnboardingCloudManagedConnectionSchema = z
+const LinkedAccountSchema = z
   .object({
-    kind: z.literal("cloud-managed"),
-    cloudProvider: z.literal("elizacloud"),
-    apiKey: z.string().optional(),
+    status: z.union([z.literal("linked"), z.literal("unlinked")]).optional(),
+    source: z
+      .union([
+        z.literal("api-key"),
+        z.literal("oauth"),
+        z.literal("credentials"),
+        z.literal("subscription"),
+      ])
+      .optional(),
+    userId: z.string().optional(),
+    organizationId: z.string().optional(),
+  })
+  .strict();
+
+const ServiceRouteSchema = z
+  .object({
+    backend: z.string().optional(),
+    transport: z
+      .union([
+        z.literal("direct"),
+        z.literal("cloud-proxy"),
+        z.literal("remote"),
+      ])
+      .optional(),
+    accountId: z.string().optional(),
+    primaryModel: z.string().optional(),
     smallModel: z.string().optional(),
     largeModel: z.string().optional(),
+    remoteApiBase: z.string().optional(),
   })
   .strict();
 
-const OnboardingLocalProviderConnectionSchema = z
+const ServiceRoutingSchema = z
   .object({
-    kind: z.literal("local-provider"),
-    provider: z.string(),
-    apiKey: z.string().optional(),
-    primaryModel: z.string().optional(),
+    llmText: ServiceRouteSchema.optional(),
+    tts: ServiceRouteSchema.optional(),
+    media: ServiceRouteSchema.optional(),
+    embeddings: ServiceRouteSchema.optional(),
+    rpc: ServiceRouteSchema.optional(),
   })
   .strict();
 
-const OnboardingRemoteProviderConnectionSchema = z
+const DeploymentTargetSchema = z
   .object({
-    kind: z.literal("remote-provider"),
-    remoteApiBase: z.string().min(1),
+    runtime: z.union([
+      z.literal("local"),
+      z.literal("cloud"),
+      z.literal("remote"),
+    ]),
+    provider: z.union([z.literal("elizacloud"), z.literal("remote")]).optional(),
+    remoteApiBase: z.string().optional(),
     remoteAccessToken: z.string().optional(),
-    provider: z.string().optional(),
-    apiKey: z.string().optional(),
-    primaryModel: z.string().optional(),
   })
   .strict();
-
-const OnboardingConnectionSchema = z.union([
-  OnboardingCloudManagedConnectionSchema,
-  OnboardingLocalProviderConnectionSchema,
-  OnboardingRemoteProviderConnectionSchema,
-]);
 
 export const CharacterSchema = z
   .object({
@@ -351,7 +372,9 @@ export const ElizaSchema = z
       })
       .catchall(z.string())
       .optional(),
-    connection: OnboardingConnectionSchema.optional(),
+    deploymentTarget: DeploymentTargetSchema.optional(),
+    linkedAccounts: z.record(z.string(), LinkedAccountSchema).optional(),
+    serviceRouting: ServiceRoutingSchema.optional(),
     wizard: z
       .object({
         lastRunAt: z.string().optional(),

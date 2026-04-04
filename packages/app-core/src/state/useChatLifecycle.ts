@@ -12,7 +12,7 @@ import { alertDesktopMessage, confirmDesktopAction } from "../utils";
 import type { AppState } from "./internal";
 import {
   clearAvatarIndex,
-  clearPersistedConnectionMode,
+  clearPersistedActiveServer,
   LIFECYCLE_MESSAGES,
   type LoadConversationMessagesResult,
   parseAgentStatusFromMainMenuResetPayload,
@@ -54,20 +54,22 @@ function logResetWarn(message: string, detail?: unknown): void {
 
 /** Publish server cloud snapshot for chat TTS (`useVoiceChat` + `loadVoiceConfig`). */
 function publishElizaCloudVoiceSnapshot(
+  setCloudVoiceProxyAvailable: (value: boolean) => void,
   setHasPersistedKey: (value: boolean) => void,
   snapshot: {
     apiConnected: boolean;
     enabled: boolean;
+    cloudVoiceProxyAvailable: boolean;
     hasPersistedApiKey: boolean;
   },
 ): void {
+  setCloudVoiceProxyAvailable(snapshot.cloudVoiceProxyAvailable);
   setHasPersistedKey(snapshot.hasPersistedApiKey);
   dispatchElizaCloudStatusUpdated({
     connected: snapshot.apiConnected,
     enabled: snapshot.enabled,
     hasPersistedApiKey: snapshot.hasPersistedApiKey,
-    cloudVoiceProxyAvailable:
-      snapshot.hasPersistedApiKey || snapshot.enabled || snapshot.apiConnected,
+    cloudVoiceProxyAvailable: snapshot.cloudVoiceProxyAvailable,
   });
 }
 
@@ -130,6 +132,7 @@ export interface UseChatLifecycleDeps {
   elizaCloudPreferDisconnectedUntilLoginRef: MutableRefObject<boolean>;
   setElizaCloudEnabled: (v: boolean) => void;
   setElizaCloudConnected: (v: boolean) => void;
+  setElizaCloudVoiceProxyAvailable: (v: boolean) => void;
   setElizaCloudHasPersistedKey: (v: boolean) => void;
   setElizaCloudCredits: (v: number | null) => void;
   setElizaCloudCreditsLow: (v: boolean) => void;
@@ -143,7 +146,6 @@ export interface UseChatLifecycleDeps {
 
   // Onboarding setters
   onboardingCompletionCommittedRef: MutableRefObject<boolean>;
-  onboardingResumeConnectionRef: MutableRefObject<unknown>;
   setOnboardingUiRevealNonce: (fn: (n: number) => number) => void;
   setOnboardingLoading: (v: boolean) => void;
   setOnboardingComplete: (v: boolean) => void;
@@ -154,8 +156,7 @@ export interface UseChatLifecycleDeps {
   setPostOnboardingChecklistDismissed: (v: boolean) => void;
   setOnboardingName: (v: string) => void;
   setOnboardingStyle: (v: string) => void;
-  setOnboardingRunMode: (v: "local" | "cloud" | "") => void;
-  setOnboardingCloudProvider: (v: string) => void;
+  setOnboardingServerTarget: (v: AppState["onboardingServerTarget"]) => void;
   setOnboardingProvider: (v: string) => void;
   setOnboardingApiKey: (v: string) => void;
   setOnboardingVoiceProvider: (v: string) => void;
@@ -178,6 +179,9 @@ export interface UseChatLifecycleDeps {
   setPlugins: (v: never[]) => void;
   setSkills: (v: never[]) => void;
   setLogs: (v: never[]) => void;
+
+  // Startup coordinator
+  coordinatorResetRef: MutableRefObject<(() => void) | null>;
 }
 
 // ── Hook ────────────────────────────────────────────────────────────
@@ -211,6 +215,7 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
     elizaCloudPreferDisconnectedUntilLoginRef,
     setElizaCloudEnabled,
     setElizaCloudConnected,
+    setElizaCloudVoiceProxyAvailable,
     setElizaCloudHasPersistedKey,
     setElizaCloudCredits,
     setElizaCloudCreditsLow,
@@ -222,7 +227,6 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
     setElizaCloudStatusReason,
     setElizaCloudLoginError,
     onboardingCompletionCommittedRef,
-    onboardingResumeConnectionRef,
     setOnboardingUiRevealNonce,
     setOnboardingLoading,
     setOnboardingComplete,
@@ -233,8 +237,7 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
     setPostOnboardingChecklistDismissed,
     setOnboardingName,
     setOnboardingStyle,
-    setOnboardingRunMode,
-    setOnboardingCloudProvider,
+    setOnboardingServerTarget,
     setOnboardingProvider,
     setOnboardingApiKey,
     setOnboardingVoiceProvider,
@@ -253,6 +256,7 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
     setPlugins,
     setSkills,
     setLogs,
+    coordinatorResetRef,
   } = deps;
 
   const heartbeatNotificationKeyRef = useRef<string | null>(null);
@@ -348,7 +352,7 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
       setActiveConversationId(null);
       setConversationMessages([]);
       setConversations([]);
-      const s = await client.restartAgent();
+      const s = await client.restartAndWait(120_000);
       setAgentStatus(s);
       const greetConvId = await hydrateInitialConversationState();
       await requestGreetingWhenRunning(greetConvId);
@@ -536,7 +540,7 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
       await runCompleteResetLocalStateAfterServerWipe(postResetAgentStatus, {
         setAgentStatus,
         resetClientConnection: () => client.resetConnection(),
-        clearPersistedConnectionMode,
+        clearPersistedActiveServer,
         clearPersistedAvatarIndex: clearAvatarIndex,
         setClientBaseUrl: (url) => client.setBaseUrl(url),
         setClientToken: (token) => client.setToken(token),
@@ -544,11 +548,16 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
           elizaCloudPreferDisconnectedUntilLoginRef.current = false;
           setElizaCloudEnabled(false);
           setElizaCloudConnected(false);
-          publishElizaCloudVoiceSnapshot(setElizaCloudHasPersistedKey, {
-            apiConnected: false,
-            enabled: false,
-            hasPersistedApiKey: false,
-          });
+          publishElizaCloudVoiceSnapshot(
+            setElizaCloudVoiceProxyAvailable,
+            setElizaCloudHasPersistedKey,
+            {
+              apiConnected: false,
+              enabled: false,
+              cloudVoiceProxyAvailable: false,
+              hasPersistedApiKey: false,
+            },
+          );
           setElizaCloudCredits(null);
           setElizaCloudCreditsLow(false);
           setElizaCloudCreditsCritical(false);
@@ -564,7 +573,6 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
           setOnboardingUiRevealNonce((n) => n + 1);
           setOnboardingLoading(false);
           setOnboardingComplete(false);
-          onboardingResumeConnectionRef.current = null;
           setOnboardingStep("identity");
           setOnboardingMode("basic");
           setOnboardingActiveGuide(null);
@@ -572,8 +580,7 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
           setPostOnboardingChecklistDismissed(false);
           setOnboardingName("Chen");
           setOnboardingStyle("chen");
-          setOnboardingRunMode("");
-          setOnboardingCloudProvider("");
+          setOnboardingServerTarget("");
           setOnboardingProvider("");
           setOnboardingApiKey("");
           setOnboardingVoiceProvider("");
@@ -585,6 +592,8 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
           setOnboardingRemoteToken("");
           setOnboardingSmallModel("");
           setOnboardingLargeModel("");
+          // Return to splash so user can re-onboard from scratch
+          coordinatorResetRef.current?.();
         },
         resetAvatarSelection: () => {
           setSelectedVrmIndex(1);
@@ -618,10 +627,11 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
       setPostOnboardingChecklistDismissed,
       setOnboardingName,
       setOnboardingStyle,
-      setOnboardingRunMode,
-      setOnboardingCloudProvider,
+      setOnboardingServerTarget,
       setOnboardingProvider,
       setOnboardingApiKey,
+      setOnboardingVoiceProvider,
+      setOnboardingVoiceApiKey,
       setOnboardingPrimaryModel,
       setOnboardingOpenRouterModel,
       setOnboardingRemoteConnected,
@@ -633,10 +643,28 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
       setConversationMessages,
       setActiveConversationId,
       setConversations,
+      setPlugins,
+      setSkills,
+      setLogs,
       activeConversationIdRef,
       onboardingCompletionCommittedRef,
-      onboardingResumeConnectionRef,
+      elizaCloudPreferDisconnectedUntilLoginRef,
+      setElizaCloudEnabled,
+      setElizaCloudConnected,
+      setElizaCloudVoiceProxyAvailable,
+      setElizaCloudHasPersistedKey,
+      setElizaCloudCredits,
+      setElizaCloudCreditsLow,
+      setElizaCloudCreditsCritical,
+      setElizaCloudAuthRejected,
+      setElizaCloudCreditsError,
+      setElizaCloudTopUpUrl,
+      setElizaCloudUserId,
+      setElizaCloudStatusReason,
+      setElizaCloudLoginError,
       setSelectedVrmIndex,
+      setCustomVrmUrl,
+      setCustomBackgroundUrl,
     ],
   );
 

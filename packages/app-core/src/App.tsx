@@ -3,6 +3,7 @@
  */
 
 import { Keyboard } from "@capacitor/keyboard";
+import { subscribeDesktopBridgeEvent } from "@miladyai/app-core/bridge";
 import { isIOS, isNative } from "@miladyai/app-core/platform";
 import {
   Button,
@@ -11,15 +12,8 @@ import {
   DrawerSheetHeader,
   DrawerSheetTitle,
   ErrorBoundary,
-  Z_MODAL,
 } from "@miladyai/ui";
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   AdvancedPageView,
   AppsPageView,
@@ -39,7 +33,6 @@ import {
   HeartbeatsView,
   InventoryView,
   KnowledgeView,
-  OnboardingWizard,
   SaveCommandModal,
   SettingsView,
   SharedCompanionScene,
@@ -48,9 +41,9 @@ import {
   StreamView,
   SystemWarningBanner,
 } from "./app-shell-components";
-import { CompanionHeader } from "./components/companion/CompanionHeader";
-import { DeferredSetupChecklist } from "./components/cloud/FlaminaGuide";
 import { TasksEventsPanel } from "./components/chat/TasksEventsPanel";
+import { DeferredSetupChecklist } from "./components/cloud/FlaminaGuide";
+import { CompanionHeader } from "./components/companion/CompanionHeader";
 import {
   BugReportProvider,
   useBugReportState,
@@ -197,10 +190,8 @@ function ViewRouter({
 
 export function App() {
   const {
-    onboardingLoading,
     startupError,
     startupCoordinator,
-    onboardingComplete,
     tab,
     setTab,
     setState,
@@ -212,10 +203,6 @@ export function App() {
     uiTheme,
     setUiTheme,
     chatAgentVoiceMuted,
-    handleSaveCharacter,
-    characterSaving,
-    characterSaveSuccess,
-    agentStatus,
     unreadConversations,
     activeGameViewerUrl,
     gameOverlayEnabled,
@@ -262,6 +249,7 @@ export function App() {
       : false,
   );
   const [mobileConversationsOpen, setMobileConversationsOpen] = useState(false);
+  const [desktopShuttingDown, setDesktopShuttingDown] = useState(false);
 
   const isChat = tab === "chat";
   const isWallets = tab === "wallets";
@@ -358,12 +346,14 @@ export function App() {
   useEffect(() => {
     if (!isChatMobileLayout) {
       setMobileConversationsOpen(false);
+      setTasksEventsPanelOpen(false);
     }
   }, [isChatMobileLayout]);
 
   useEffect(() => {
     if (!isChat) {
       setMobileConversationsOpen(false);
+      setTasksEventsPanelOpen(false);
     }
   }, [isChat]);
 
@@ -390,6 +380,16 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    return subscribeDesktopBridgeEvent({
+      rpcMessage: "desktopShutdownStarted",
+      ipcChannel: "desktop:shutdownStarted",
+      listener: () => {
+        setDesktopShuttingDown(true);
+      },
+    });
+  }, []);
+
   const bugReport = useBugReportState();
   // Loading is handled entirely by StartupShell — no separate loader needed.
 
@@ -410,10 +410,6 @@ export function App() {
       return () => clearTimeout(timer);
     }
   }, [startupCoordinator.phase, startupError, startupCoordinator.retry]);
-
-  // Agent startup must not hide onboarding: after reset the runtime often goes
-  // to "starting" while we need to show the wizard immediately.
-  const blockOnboardingForShell = onboardingLoading;
 
   // Pop-out mode — render only StreamView, skip startup gates.
   // Platform init is skipped in main.tsx; AppProvider hydrates WS in background.
@@ -459,8 +455,12 @@ export function App() {
     >
       <Header
         mobileLeft={mobileChatControls}
-        tasksEventsPanelOpen={tasksEventsPanelOpen}
-        onToggleTasksPanel={() => setTasksEventsPanelOpen((o) => !o)}
+        tasksEventsPanelOpen={isChatMobileLayout ? tasksEventsPanelOpen : true}
+        onToggleTasksPanel={
+          isChatMobileLayout
+            ? () => setTasksEventsPanelOpen((o) => !o)
+            : undefined
+        }
       />
       <div className="flex flex-1 min-h-0 relative">
         {!isChatMobileLayout ? (
@@ -487,7 +487,7 @@ export function App() {
                 <DrawerSheetContent
                   aria-describedby={undefined}
                   className="h-[min(calc(100dvh-1rem-var(--safe-area-top,0px)-var(--safe-area-bottom,0px)),46rem)] p-0"
-                  showCloseButton={false}
+                  showCloseButton
                 >
                   <DrawerSheetHeader className="sr-only">
                     <DrawerSheetTitle>
@@ -522,7 +522,6 @@ export function App() {
                   </DrawerSheetHeader>
                   <TasksEventsPanel
                     open
-                    onClose={() => setTasksEventsPanelOpen(false)}
                     events={activityEvents}
                     clearEvents={clearActivityEvents}
                     mobile
@@ -542,8 +541,7 @@ export function App() {
               <ChatView key="chat-view-desktop" />
             </main>
             <TasksEventsPanel
-              open={tasksEventsPanelOpen}
-              onClose={() => setTasksEventsPanelOpen(false)}
+              open
               events={activityEvents}
               clearEvents={clearActivityEvents}
             />
@@ -697,6 +695,22 @@ export function App() {
       />
       <ConnectionFailedBanner />
       <SystemWarningBanner />
+      {desktopShuttingDown ? (
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center bg-bg/80 backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="rounded-2xl border border-border/60 bg-card/95 px-6 py-5 text-center shadow-2xl">
+            <div className="text-base font-semibold text-txt">
+              Shutting down…
+            </div>
+            <div className="mt-1 text-sm text-muted">
+              Closing services and saving state.
+            </div>
+          </div>
+        </div>
+      ) : null}
     </BugReportProvider>
   );
 }

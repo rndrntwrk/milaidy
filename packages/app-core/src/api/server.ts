@@ -28,6 +28,7 @@ import {
   startApiServer as upstreamStartApiServer,
   validateMcpServerConfig,
 } from "@miladyai/agent/api/server";
+import { resolveLinkedAccountsInConfig } from "@miladyai/shared/contracts/onboarding";
 import type { PolicyResult } from "@stwd/sdk";
 import {
   ensureCompatApiAuthorized,
@@ -58,6 +59,11 @@ export {
   SENSITIVE_ENV_RESPONSE_KEYS,
 } from "./server-config-filter";
 export { injectApiBaseIntoHtml } from "./server-html";
+export {
+  buildCorsAllowedPorts,
+  invalidateCorsAllowedPorts,
+  isAllowedLocalOrigin,
+} from "./server-cors";
 // Re-export helpers from split-out modules so tests can import from "./server"
 export {
   ensureApiTokenForBindHost,
@@ -124,6 +130,11 @@ import {
 } from "../utils/sql-compat";
 import { handleCloudRoute } from "./cloud-routes";
 import { handleCloudStatusRoutes } from "./cloud-status-routes";
+import {
+  buildCorsAllowedPorts,
+  getCorsAllowedPorts,
+  isAllowedLocalOrigin,
+} from "./server-cors";
 import { handleVincentRoute } from "./vincent-routes";
 import {
   isAllowedDevConsoleLogPath,
@@ -143,21 +154,7 @@ import { resolveDevStackFromEnv } from "./dev-stack";
 
 const require = createRequire(import.meta.url);
 
-import {
-  getBootConfig,
-  syncBrandEnvToEliza,
-  syncElizaEnvToBrand,
-} from "../config/boot-config.js";
-
-function syncMiladyEnvToEliza(): void {
-  const aliases = getBootConfig().envAliases;
-  if (aliases) syncBrandEnvToEliza(aliases);
-}
-
-function syncElizaEnvToMilady(): void {
-  const aliases = getBootConfig().envAliases;
-  if (aliases) syncElizaEnvToBrand(aliases);
-}
+import { syncMiladyEnvToEliza, syncElizaEnvToMilady } from "../utils/env.js";
 
 // Lazy-imported to avoid circular dependency with runtime/eliza.ts
 const lazyEnsureTTS = () =>
@@ -167,11 +164,7 @@ import { getMiladyStartupEmbeddingAugmentation } from "../runtime/milady-startup
 import { hydrateWalletKeysFromNodePlatformSecureStore } from "../security/hydrate-wallet-keys-from-platform-store";
 import { deleteWalletSecretsFromOsStore } from "../security/wallet-os-store-actions";
 import { clearCloudSecrets, getCloudSecret } from "./cloud-secrets";
-import {
-  clearPersistedOnboardingConfig,
-  resolveExistingOnboardingConnection,
-} from "./provider-switch-config";
-import { isOnboardingConnectionComplete } from "../contracts/onboarding";
+import { clearPersistedOnboardingConfig } from "./provider-switch-config";
 
 // ---------------------------------------------------------------------------
 // Import from extracted modules for use within this file
@@ -257,11 +250,38 @@ function resolveCompatPgliteDataDir(config: ElizaConfig): string {
   return path.join(resolveUserPath(workspaceDir), ".eliza", ".elizadb");
 }
 
+/**
+ * Actual port the API server is listening on, set after server.listen()
+ * resolves. Used by loopback calls to target the correct endpoint even
+ * when the server binds to a dynamic port (port: 0 or EADDRINUSE fallback).
+ */
+let _resolvedLoopbackPort: number | null = null;
+
+/** Called from startApiServer after the upstream server resolves. */
+export function setResolvedLoopbackPort(port: number): void {
+  _resolvedLoopbackPort = port;
+}
+
+/**
+ * Build the loopback base URL for internal server-to-self API calls.
+ * Always targets 127.0.0.1 — never trusts the incoming Host header,
+ * which would allow an attacker to redirect loopback fetches (and the
+ * attached API token) to an external server.
+ *
+ * Priority: actual listener port > env vars > default 31337.
+ */
 function resolveCompatLoopbackApiBase(
-  req: Pick<http.IncomingMessage, "headers">,
+  _req: Pick<http.IncomingMessage, "headers">,
 ): string {
-  const host = req.headers.host?.trim() || "127.0.0.1:31337";
-  return `http://${host}`;
+  const port =
+    _resolvedLoopbackPort ??
+    (Number(
+      process.env.MILADY_API_PORT?.trim() ||
+        process.env.ELIZA_PORT?.trim() ||
+        "31337",
+    ) ||
+      31337);
+  return `http://127.0.0.1:${port}`;
 }
 
 function buildCompatLoopbackHeaders(
@@ -568,57 +588,8 @@ async function _getTableColumnNames(
 // — extracted to ./plugins-compat-routes
 
 /**
- * Build the set of localhost ports allowed for CORS.
- * Reads from env vars at call time so tests can override.
- */
-export function buildCorsAllowedPorts(): Set<string> {
-  const ports = new Set([
-    String(process.env.MILADY_API_PORT ?? process.env.ELIZA_PORT ?? "31337"),
-    String(process.env.MILADY_PORT ?? "2138"),
-    String(process.env.MILADY_GATEWAY_PORT ?? "18789"),
-    String(process.env.MILADY_HOME_PORT ?? "2142"),
-  ]);
-  // Electrobun renderer static server picks a free port in the 5174–5200
-  // range. Allow the full range so cross-origin fetches from WKWebView
-  // to the local API succeed.
-  for (let p = 5174; p <= 5200; p++) ports.add(String(p));
-  return ports;
-}
-
-/** Lazily cached port set — computed once on first request. */
-let _cachedCorsAllowedPorts: Set<string> | undefined;
-function getCorsAllowedPorts(): Set<string> {
-  if (!_cachedCorsAllowedPorts)
-    _cachedCorsAllowedPorts = buildCorsAllowedPorts();
-  return _cachedCorsAllowedPorts;
-}
-
-/**
- * Check whether a URL string is an allowed localhost origin for CORS.
- */
-export function isAllowedLocalOrigin(
-  urlStr: string,
-  allowedPorts?: Set<string>,
-): boolean {
-  const ports = allowedPorts ?? buildCorsAllowedPorts();
-  try {
-    const u = new URL(urlStr);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
-    const h = u.hostname.toLowerCase();
-    const isLocal =
-      h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1";
-    const port = u.port || (u.protocol === "https:" ? "443" : "80");
-    return isLocal && ports.has(port);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Load config from disk and backfill cloud.apiKey from sealed secrets
- * if it's missing. This handles the case where the API key was persisted
- * to the sealed secret store (via login) but a subsequent config save
- * (e.g. onboarding) overwrote the file without the key.
+ * Load config from disk and backfill `cloud.apiKey` from sealed secrets when the
+ * user is still linked to Eliza Cloud but a stale write dropped the key.
  */
 function resolveCloudConfig(runtime?: unknown): ElizaConfig {
   const config = loadElizaConfig();
@@ -635,13 +606,15 @@ function resolveCloudConfig(runtime?: unknown): ElizaConfig {
         .join(",")}`,
     );
   }
-  if (cloudRec?.enabled === false) {
-    // Respect explicit disconnect / BYOK: never backfill cloud.apiKey from env
-    // or agent secrets into the file with enabled=true. WHY: that undoes
-    // Settings → disconnect + OpenRouter and breaks the next cold start.
+  const linkedAccounts = resolveLinkedAccountsInConfig(
+    config as Record<string, unknown>,
+  );
+  if (linkedAccounts?.elizacloud?.status === "unlinked") {
+    // Respect explicit disconnect: never backfill a cloud key into config once
+    // the canonical linked-account state says the account is disconnected.
     if (isMiladySettingsDebugEnabled()) {
       logger.debug(
-        "[milady][settings][compat] resolveCloudConfig skip backfill (cloud.enabled===false)",
+        "[milady][settings][compat] resolveCloudConfig skip backfill (linkedAccounts.elizacloud.status===unlinked)",
       );
     }
     return config;
@@ -663,7 +636,6 @@ function resolveCloudConfig(runtime?: unknown): ElizaConfig {
         (config as Record<string, unknown>).cloud = {};
       }
       (config.cloud as Record<string, unknown>).apiKey = backfillKey;
-      (config.cloud as Record<string, unknown>).enabled = true;
       // Persist the backfilled key so future reads find it on disk
       try {
         saveElizaConfig(config);
@@ -1100,6 +1072,14 @@ export async function startApiServer(
     }
 
     const server = await upstreamStartApiServer(...args);
+
+    // Record the actual listener port so loopback calls target the right
+    // endpoint even when the server bound to a dynamic port (port: 0 or
+    // EADDRINUSE fallback).
+    if (typeof server.port === "number" && server.port > 0) {
+      setResolvedLoopbackPort(server.port);
+    }
+
     const originalUpdateRuntime = server.updateRuntime as (
       runtime: AgentRuntime,
     ) => void;

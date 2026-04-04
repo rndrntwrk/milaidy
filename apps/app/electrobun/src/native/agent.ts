@@ -372,7 +372,7 @@ export function getStartupStatusPath(): string {
   return startupStatusPath;
 }
 
-function diagnosticLog(message: string): void {
+export function diagnosticLog(message: string): void {
   const timestamp = new Date().toISOString();
   const line = `[${timestamp}] ${message}\n`;
   console.log(message);
@@ -1242,6 +1242,15 @@ export class AgentManager {
       diagnosticLog(
         `[Agent] Bun exists on disk: ${fs.existsSync(bunExecutable)}`,
       );
+
+      // Ensure bun's directory is on PATH so child_process.exec calls
+      // (e.g. plugin-manager running `bun add ...`) can find it.
+      const bunDir = path.dirname(bunExecutable);
+      const existingPath = childEnv.PATH ?? "";
+      if (!existingPath.split(path.delimiter).includes(bunDir)) {
+        childEnv.PATH = bunDir + path.delimiter + existingPath;
+        diagnosticLog(`[Agent] Prepended bun dir to child PATH: ${bunDir}`);
+      }
 
       // Spawn the child process
       const spawnTime = Date.now();

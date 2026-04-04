@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
+import {
+  isElizaCloudServiceSelectedInConfig,
+  resolveElizaCloudTopology,
+} from "@miladyai/shared/contracts";
 
 import {
   inferOnboardingConnectionFromConfig,
+  isCloudInferenceSelectedInConfig,
   getStoredOnboardingProviderId,
   isOnboardingConnectionComplete,
   getSubscriptionProviderFamily,
+  migrateLegacyRuntimeConfig,
   normalizeOnboardingProviderId,
   normalizePersistedOnboardingConnection,
   normalizeSubscriptionProviderSelectionId,
@@ -42,6 +48,12 @@ describe("onboarding provider catalog", () => {
     expect(normalizeOnboardingProviderId("openai-codex")).toBe(
       "openai-subscription",
     );
+    expect(normalizeOnboardingProviderId("@elizaos/plugin-openai")).toBe(
+      "openai",
+    );
+    expect(normalizeOnboardingProviderId("@elizaos/plugin-anthropic")).toBe(
+      "anthropic",
+    );
     expect(normalizeOnboardingProviderId("google")).toBe("gemini");
     expect(normalizeOnboardingProviderId("xai")).toBe("grok");
     expect(normalizeOnboardingProviderId("z.ai")).toBe("zai");
@@ -78,13 +90,15 @@ describe("onboarding provider catalog", () => {
     ]);
   });
 
-  it("prefers explicit connection over capability signals", () => {
+  it("prefers canonical direct routing over inactive cloud capability signals", () => {
     expect(
       inferOnboardingConnectionFromConfig({
-        connection: {
-          kind: "local-provider",
-          provider: "openrouter",
-          primaryModel: "openai/gpt-5-mini",
+        serviceRouting: {
+          llmText: {
+            backend: "openrouter",
+            transport: "direct",
+            primaryModel: "openai/gpt-5-mini",
+          },
         },
         cloud: {
           enabled: true,
@@ -105,15 +119,190 @@ describe("onboarding provider catalog", () => {
     });
   });
 
+  it("prefers canonical runtime routing over a conflicting explicit connection", () => {
+    expect(
+      inferOnboardingConnectionFromConfig({
+        connection: {
+          kind: "cloud-managed",
+          cloudProvider: "elizacloud",
+          smallModel: "openai/gpt-5-mini",
+          largeModel: "anthropic/claude-sonnet-4.5",
+        },
+        deploymentTarget: {
+          runtime: "cloud",
+          provider: "elizacloud",
+        },
+        serviceRouting: {
+          llmText: {
+            backend: "openai",
+            transport: "direct",
+            primaryModel: "openai/gpt-5.2",
+          },
+        },
+      }),
+    ).toEqual({
+      kind: "local-provider",
+      provider: "openai",
+      primaryModel: "openai/gpt-5.2",
+    });
+  });
+
+  it("treats explicit local-provider selections as not using cloud inference", () => {
+    expect(
+      isCloudInferenceSelectedInConfig({
+        serviceRouting: {
+          llmText: {
+            backend: "openrouter",
+            transport: "direct",
+          },
+        },
+        cloud: {
+          enabled: true,
+          provider: "elizacloud",
+          apiKey: "ck-cloud-test",
+          inferenceMode: "cloud",
+        },
+        models: {
+          small: "openai/gpt-5-mini",
+          large: "anthropic/claude-sonnet-4.5",
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it("migrates legacy cloud-only configs into canonical cloud inference routing", () => {
+    const migrated = migrateLegacyRuntimeConfig({
+      cloud: {
+        provider: "elizacloud",
+        inferenceMode: "cloud",
+      },
+      models: {
+        small: "openai/gpt-5-mini",
+        large: "anthropic/claude-sonnet-4.5",
+      },
+    });
+
+    expect(migrated.serviceRouting).toMatchObject({
+      llmText: {
+        backend: "elizacloud",
+        transport: "cloud-proxy",
+        smallModel: "openai/gpt-5-mini",
+        largeModel: "anthropic/claude-sonnet-4.5",
+      },
+    });
+    expect(migrated.cloud).not.toMatchObject({
+      provider: "elizacloud",
+      inferenceMode: "cloud",
+    });
+    expect(isCloudInferenceSelectedInConfig(migrated)).toBe(true);
+  });
+
+  it("drops legacy byok cloud routing during migration", () => {
+    const migrated = migrateLegacyRuntimeConfig({
+      cloud: {
+        enabled: true,
+        provider: "elizacloud",
+        inferenceMode: "byok",
+        services: {
+          inference: false,
+        },
+      },
+    });
+
+    expect(migrated.serviceRouting).toBeUndefined();
+    expect(isCloudInferenceSelectedInConfig(migrated)).toBe(false);
+  });
+
+  it("keeps linked cloud auth separate from service routing", () => {
+    const topology = resolveElizaCloudTopology({
+      linkedAccounts: {
+        elizacloud: {
+          status: "linked",
+          source: "api-key",
+        },
+      },
+      serviceRouting: {
+        llmText: {
+          backend: "openai",
+          transport: "direct",
+        },
+        tts: {
+          backend: "elizacloud",
+          transport: "cloud-proxy",
+          accountId: "elizacloud",
+        },
+      },
+    });
+
+    expect(topology.linked).toBe(true);
+    expect(topology.services.inference).toBe(false);
+    expect(topology.services.tts).toBe(true);
+    expect(topology.services.rpc).toBe(false);
+    expect(topology.shouldLoadPlugin).toBe(true);
+    expect(
+      isElizaCloudServiceSelectedInConfig(
+        {
+          linkedAccounts: {
+            elizacloud: {
+              status: "linked",
+              source: "api-key",
+            },
+          },
+          serviceRouting: {
+            llmText: {
+              backend: "openai",
+              transport: "direct",
+            },
+            tts: {
+              backend: "elizacloud",
+              transport: "cloud-proxy",
+              accountId: "elizacloud",
+            },
+          },
+        },
+        "tts",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not auto-route non-text cloud services from cloud hosting or cloud inference alone", () => {
+    const config = {
+      deploymentTarget: {
+        runtime: "cloud",
+        provider: "elizacloud",
+      },
+      serviceRouting: {
+        llmText: {
+          backend: "elizacloud",
+          transport: "cloud-proxy",
+          accountId: "elizacloud",
+          smallModel: "openai/gpt-5-mini",
+          largeModel: "anthropic/claude-sonnet-4.5",
+        },
+      },
+    };
+
+    expect(config.serviceRouting).toEqual({
+      llmText: {
+        backend: "elizacloud",
+        transport: "cloud-proxy",
+        accountId: "elizacloud",
+        smallModel: "openai/gpt-5-mini",
+        largeModel: "anthropic/claude-sonnet-4.5",
+      },
+    });
+    expect(isElizaCloudServiceSelectedInConfig(config, "media")).toBe(false);
+    expect(isElizaCloudServiceSelectedInConfig(config, "rpc")).toBe(false);
+  });
+
   it("keeps remote selection ahead of local env-backed providers", () => {
     expect(
       inferOnboardingConnectionFromConfig({
-        cloud: {
+        deploymentTarget: {
+          runtime: "remote",
+          provider: "remote",
           remoteApiBase: "https://remote.example/api",
           remoteAccessToken: "remote-token",
-          enabled: true,
-          provider: "elizacloud",
-          inferenceMode: "cloud",
         },
         env: {
           vars: {
@@ -131,9 +320,7 @@ describe("onboarding provider catalog", () => {
   it("does not infer remote selection from an access token without an API base", () => {
     expect(
       inferOnboardingConnectionFromConfig({
-        cloud: {
-          remoteAccessToken: "remote-token",
-        },
+        deploymentTarget: { runtime: "remote", provider: "remote" },
       }),
     ).toBeNull();
   });

@@ -112,10 +112,17 @@ describe("SearchableSelectInner portal contract", () => {
         small: "small-1",
         large: "large-1",
       },
-      cloud: {
-        enabled: true,
-        inferenceMode: "cloud",
-        services: { inference: true },
+      linkedAccounts: {
+        elizacloud: {
+          status: "linked",
+          source: "api-key",
+        },
+      },
+      serviceRouting: {
+        llmText: {
+          backend: "elizacloud",
+          transport: "cloud-proxy",
+        },
       },
       agents: {},
       env: { vars: {} },

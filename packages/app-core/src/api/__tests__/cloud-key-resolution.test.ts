@@ -41,18 +41,30 @@ import { normalizeEnvValue } from "../../utils/env";
  * updated to match — the E2E fallback test below will catch any drift.
  */
 function resolveCloudApiKey(
-  config: { cloud?: { apiKey?: string; enabled?: boolean } },
+  config: {
+    cloud?: { apiKey?: string; enabled?: boolean; inferenceMode?: string };
+    serviceRouting?: {
+      llmText?: {
+        backend?: string;
+        transport?: string;
+      };
+    };
+  },
   runtime?: { character?: { secrets?: Record<string, unknown> } } | null,
 ): string | undefined {
-  if (config.cloud && typeof config.cloud === "object") {
-    if (config.cloud.enabled === false) {
-      return undefined;
-    }
-  }
-
   // 1. Config file (disk)
   const configApiKey = normalizeEnvValue(config.cloud?.apiKey);
   if (configApiKey) return configApiKey;
+
+  const cloudInferenceSelected =
+    (config.serviceRouting?.llmText?.transport === "cloud-proxy" &&
+      config.serviceRouting?.llmText?.backend === "elizacloud") ||
+    (config.serviceRouting?.llmText == null &&
+      (config.cloud?.enabled === true ||
+        config.cloud?.inferenceMode === "cloud"));
+  if (!cloudInferenceSelected) {
+    return undefined;
+  }
 
   // 2. Sealed in-process secret store
   const sealedKey = normalizeEnvValue(getCloudSecret("ELIZAOS_CLOUD_API_KEY"));
@@ -74,7 +86,9 @@ function resolveCloudApiKey(
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function makeConfig(apiKey?: string) {
-  return apiKey !== undefined ? { cloud: { apiKey } } : { cloud: {} };
+  return apiKey !== undefined
+    ? { cloud: { apiKey, inferenceMode: "cloud" } }
+    : { cloud: { inferenceMode: "cloud" } };
 }
 
 function makeRuntime(apiKey?: string) {
@@ -153,15 +167,55 @@ describe("cloud API key resolution fallback chain", () => {
       expect(result).toBeUndefined();
     });
 
-    it("returns undefined when cloud.enabled is false even if env has a key", () => {
+    it("returns persisted linked cloud keys even when cloud inference is disabled", () => {
+      process.env.ELIZAOS_CLOUD_API_KEY = "env-key";
+      scrubCloudSecretsFromEnv();
+      process.env.ELIZAOS_CLOUD_API_KEY = "env-key-2";
+
+      const result = resolveCloudApiKey(
+        {
+          serviceRouting: {
+            llmText: {
+              backend: "openai",
+              transport: "direct",
+            },
+          },
+          cloud: { enabled: false, apiKey: "config-linked-key" },
+        },
+        makeRuntime("runtime-key"),
+      );
+
+      expect(result).toBe("config-linked-key");
+    });
+
+    it("returns undefined when cloud inference is not selected even if env has a key", () => {
       process.env.ELIZAOS_CLOUD_API_KEY = "env-key";
 
       const result = resolveCloudApiKey(
-        { cloud: { enabled: false } },
+        {
+          serviceRouting: {
+            llmText: {
+              backend: "openai",
+              transport: "direct",
+            },
+          },
+          cloud: { enabled: false },
+        },
         makeRuntime("runtime-key"),
       );
 
       expect(result).toBeUndefined();
+    });
+
+    it("still resolves env fallback for legacy cloud-selected configs", () => {
+      process.env.ELIZAOS_CLOUD_API_KEY = "env-key";
+
+      const result = resolveCloudApiKey(
+        { cloud: { inferenceMode: "cloud" } },
+        makeRuntime("runtime-key"),
+      );
+
+      expect(result).toBe("env-key");
     });
   });
 

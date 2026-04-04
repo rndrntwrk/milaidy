@@ -105,7 +105,11 @@ describe("wallet-rpc network mode", () => {
 
     const readiness = resolveWalletRpcReadiness({
       env: {},
-      cloud: { apiKey: "cloud-key", baseUrl: "https://cloud.example" },
+      cloud: {
+        apiKey: "cloud-key",
+        baseUrl: "https://cloud.example",
+        services: { rpc: true },
+      },
     } as ElizaConfig);
 
     expect(readiness.bscRpcUrls).toEqual(
@@ -117,5 +121,39 @@ describe("wallet-rpc network mode", () => {
     expect(readiness.bscRpcUrls.join(" ")).not.toContain("/proxy/evm-rpc/bsc");
     expect(readiness.solanaRpcUrls.join(" ")).not.toContain("/proxy/solana-rpc");
   });
-});
 
+  it("defaults cloud RPC URLs on when Eliza Cloud is linked and wallet providers use cloud defaults", () => {
+    const readiness = resolveWalletRpcReadiness({
+      env: {},
+      cloud: {
+        apiKey: "cloud-key",
+        baseUrl: "https://cloud.example",
+      },
+    } as ElizaConfig);
+
+    expect(readiness.cloudManagedAccess).toBe(true);
+    expect(readiness.bscRpcUrls.join(" ")).toContain("/proxy/evm-rpc/");
+    expect(readiness.solanaRpcUrls.join(" ")).toContain("/proxy/solana-rpc");
+  });
+
+  it("does not expose cloud RPC URLs when wallet providers are explicitly custom", () => {
+    const readiness = resolveWalletRpcReadiness({
+      env: {},
+      cloud: {
+        apiKey: "cloud-key",
+        baseUrl: "https://cloud.example",
+      },
+      wallet: {
+        rpcProviders: {
+          evm: "alchemy",
+          bsc: "ankr",
+          solana: "helius-birdeye",
+        },
+      },
+    } as ElizaConfig);
+
+    expect(readiness.cloudManagedAccess).toBe(false);
+    expect(readiness.bscRpcUrls.join(" ")).not.toContain("/proxy/evm-rpc/");
+    expect(readiness.solanaRpcUrls.join(" ")).not.toContain("/proxy/solana-rpc");
+  });
+});

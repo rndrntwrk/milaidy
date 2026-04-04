@@ -8,7 +8,15 @@
 
 import { useCallback, useReducer, useRef } from "react";
 import type { OnboardingOptions } from "../api";
-import { loadPersistedOnboardingStep, saveOnboardingStep } from "./persistence";
+import {
+  activeServerKindToOnboardingServerTarget,
+  type OnboardingServerTarget,
+} from "../onboarding/server-target";
+import {
+  loadPersistedActiveServer,
+  loadPersistedOnboardingStep,
+  saveOnboardingStep,
+} from "./persistence";
 import type { AppState, OnboardingStep } from "./types";
 
 // ── Connector token keys ───────────────────────────────────────────────
@@ -48,8 +56,8 @@ export interface OnboardingState {
   avatar: number;
 
   // Hosting
-  runMode: "local" | "cloud" | "";
-  cloudProvider: string;
+  serverTarget: OnboardingServerTarget;
+  cloudApiKey: string;
 
   // Provider
   provider: string;
@@ -85,11 +93,6 @@ export interface OnboardingState {
   cloudProvisionedContainer: boolean;
 }
 
-function loadSessionApiBase(): string {
-  if (typeof window === "undefined") return "";
-  return window.sessionStorage.getItem("milady_api_base")?.trim() ?? "";
-}
-
 function isRemoteApiBase(baseUrl: string): boolean {
   if (!baseUrl || typeof window === "undefined") return false;
   try {
@@ -117,8 +120,64 @@ const EMPTY_TOKENS: Record<ConnectorTokenKey, string> = {
   githubToken: "",
 };
 
+function loadInitialServerSelection(): Pick<
+  OnboardingState,
+  "serverTarget" | "remote" | "remoteApiBase" | "remoteToken"
+> {
+  const activeServer = loadPersistedActiveServer();
+  if (!activeServer) {
+    return {
+      serverTarget: "",
+      remote: {
+        status: "idle",
+        error: null,
+      },
+      remoteApiBase: "",
+      remoteToken: "",
+    };
+  }
+
+  if (activeServer.kind === "local") {
+    return {
+      serverTarget: activeServerKindToOnboardingServerTarget(activeServer.kind),
+      remote: {
+        status: "idle",
+        error: null,
+      },
+      remoteApiBase: "",
+      remoteToken: "",
+    };
+  }
+
+  if (activeServer.kind === "cloud") {
+    return {
+      serverTarget: activeServerKindToOnboardingServerTarget(activeServer.kind),
+      remote: {
+        status: "idle",
+        error: null,
+      },
+      remoteApiBase: "",
+      remoteToken: activeServer.accessToken?.trim() ?? "",
+    };
+  }
+
+  const apiBase = activeServer.apiBase?.trim() ?? "";
+  return {
+    serverTarget: activeServerKindToOnboardingServerTarget(activeServer.kind),
+    remote: {
+      status: isRemoteApiBase(apiBase) ? "connected" : "idle",
+      error: null,
+    },
+    remoteApiBase: apiBase,
+    remoteToken: activeServer.accessToken?.trim() ?? "",
+  };
+}
+
 function createInitialState(cloudOnly?: boolean): OnboardingState {
-  const savedApiBase = loadSessionApiBase();
+  const initialServer = loadInitialServerSelection();
+  const initialServerTarget = cloudOnly
+    ? "elizacloud"
+    : initialServer.serverTarget;
   return {
     step: loadPersistedOnboardingStep() ?? "identity",
     mode: "basic",
@@ -130,8 +189,8 @@ function createInitialState(cloudOnly?: boolean): OnboardingState {
     ownerName: "anon",
     style: "chen",
     avatar: 1,
-    runMode: cloudOnly ? "cloud" : "",
-    cloudProvider: cloudOnly ? "elizacloud" : "",
+    serverTarget: initialServerTarget,
+    cloudApiKey: "",
     provider: "",
     apiKey: "",
     voiceProvider: "",
@@ -143,12 +202,9 @@ function createInitialState(cloudOnly?: boolean): OnboardingState {
     existingInstallDetected: false,
     detectedProviders: [],
     connectorTokens: { ...EMPTY_TOKENS },
-    remote: {
-      status: isRemoteApiBase(savedApiBase) ? "connected" : "idle",
-      error: null,
-    },
-    remoteApiBase: savedApiBase,
-    remoteToken: "",
+    remote: initialServer.remote,
+    remoteApiBase: initialServer.remoteApiBase,
+    remoteToken: initialServer.remoteToken,
     subscriptionTab: "token",
     elizaCloudTab: "login",
     selectedChains: new Set(["evm", "solana"]),
@@ -211,8 +267,16 @@ function onboardingReducer(
       return { ...state, postChecklistDismissed: action.value };
     case "SET_OPTIONS":
       return { ...state, options: action.options };
-    case "SET_FIELD":
+    case "SET_FIELD": {
+      if (action.field === "serverTarget") {
+        return {
+          ...state,
+          serverTarget: action.value as OnboardingServerTarget,
+        };
+      }
+
       return { ...state, [action.field]: action.value };
+    }
     case "SET_CONNECTOR_TOKEN":
       return {
         ...state,
@@ -261,10 +325,6 @@ export interface OnboardingStateHook {
     value: AppState["onboardingDetectedProviders"],
   ) => void;
 
-  /** Ref for onboarding resume connection. */
-  resumeConnectionRef: React.RefObject<
-    import("@miladyai/shared/contracts/onboarding").OnboardingConnection | null
-  >;
   /** Tracks whether onboarding completion has been committed this session. */
   completionCommittedRef: React.RefObject<boolean>;
   /** Force local bootstrap ref. */
@@ -276,9 +336,6 @@ export function useOnboardingState(cloudOnly?: boolean): OnboardingStateHook {
     createInitialState(co),
   );
 
-  const resumeConnectionRef = useRef<
-    import("@miladyai/shared/contracts/onboarding").OnboardingConnection | null
-  >(null);
   const completionCommittedRef = useRef(false);
   const forceLocalBootstrapRef = useRef(false);
 
@@ -345,7 +402,6 @@ export function useOnboardingState(cloudOnly?: boolean): OnboardingStateHook {
     setConnectorToken,
     setRemoteStatus,
     setDetectedProviders,
-    resumeConnectionRef,
     completionCommittedRef,
     forceLocalBootstrapRef,
   };

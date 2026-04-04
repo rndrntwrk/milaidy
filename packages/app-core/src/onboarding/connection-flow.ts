@@ -10,19 +10,17 @@
  * ## Branch order (keep in sync with `ConnectionUiRoot` + screen components)
  * Mirrors the old outer `if` ladder: `if (!showProviderSelection)` then grid vs detail.
  *
- * 1. **showProviderSelection** = `onboardingRemoteConnected || effectiveRunMode === "local"`.
- *    **effectiveRunMode:** if `forceCloud && onboardingRunMode === ""`, use `"local"`. **Why:** matches UI after the
- *    bootstrap `useEffect` in `ConnectionStep` so tests and `deriveConnectionScreen` describe steady state, not a one-frame
- *    hosting flash on native/cloud-only builds.
+ * 1. **showProviderSelection** = a hosting target is already chosen and either:
+ *    - it is `local`
+ *    - it is Eliza Cloud-hosted
+ *    - or the user already connected to a remote backend
+ *    **effectiveServerTarget:** if `forceCloud && onboardingServerTarget === ""`, use `"local"`. **Why:** cloud-only
+ *    builds skip the hosting chooser and land directly on the provider grid.
  * 2. If `!showProviderSelection`:
- *    - `!effectiveRunMode` → **hosting**
- *    - `onboardingCloudProvider === "remote"` → **remoteBackend**
- *    - else → **elizaCloud_preProvider**
+ *    - `!effectiveServerTarget` → **hosting**
+ *    - else → **remoteBackend**
  * 3. If `showProviderSelection && !onboardingProvider` → **providerGrid**
  * 4. Else → **providerDetail**
- *
- * **Why two Eliza screens:** pre-provider Eliza (hosting path) and Eliza chosen from the neural link are different shells
- * (back button, confirm, copy). Collapsing them breaks navigation.
  *
  * Tests: `tests/connection-flow.test.ts`
  */
@@ -36,6 +34,7 @@ import type {
   ConnectionTransitionResult,
   ConnectionUiSpec,
 } from "./types";
+import { type OnboardingServerTarget } from "./server-target";
 
 export type {
   ConnectionEffect,
@@ -78,24 +77,7 @@ export const CONNECTION_TRANSITIONS: ReadonlyArray<ConnectionTransitionDocRow> =
     {
       from: "hosting",
       event: "selectElizaCloudHosting",
-      to: "elizaCloud_preProvider",
-    },
-    {
-      from: "remoteBackend",
-      event: "backRemoteOrGrid",
-      to: "hosting",
-      note: "When remoteConnected → effect useLocalBackend; else patch reset hosting",
-    },
-    {
-      from: "providerGrid",
-      event: "backRemoteOrGrid",
-      to: "hosting",
-      note: "When remoteConnected → effect useLocalBackend; else patch reset hosting",
-    },
-    {
-      from: "elizaCloud_preProvider",
-      event: "backElizaCloudPreProvider",
-      to: "hosting",
+      to: "providerGrid",
     },
     {
       from: "providerGrid",
@@ -121,28 +103,41 @@ export const CONNECTION_TRANSITIONS: ReadonlyArray<ConnectionTransitionDocRow> =
       from: "hosting",
       event: "forceCloudBootstrap",
       to: "providerGrid",
-      note: "When forceCloud && runMode empty (steady UI)",
+      note: "When forceCloud && server target empty (steady UI)",
     },
   ];
 
-/** **Why exported:** tests and docs; also shared by `derive` and `resolveConnectionUiSpec` so policy lives once. */
-export function getEffectiveRunMode(
+function toOnboardingTargetPatch(
+  target: OnboardingServerTarget,
+): ConnectionStatePatch {
+  return {
+    onboardingServerTarget: target,
+  };
+}
+
+export function getEffectiveServerTarget(
   snapshot: ConnectionFlowSnapshot,
-): "local" | "cloud" | "" {
-  if (snapshot.forceCloud && snapshot.onboardingRunMode === "") {
+): OnboardingServerTarget {
+  if (snapshot.forceCloud && snapshot.onboardingServerTarget === "") {
     return "local";
   }
-  return snapshot.onboardingRunMode;
+  return snapshot.onboardingServerTarget;
 }
 
 /** True when the neural link grid path is active (local run mode or already connected to remote). */
 export function computeShowProviderSelection(
   snapshot: ConnectionFlowSnapshot,
 ): boolean {
-  return (
-    snapshot.onboardingRemoteConnected ||
-    getEffectiveRunMode(snapshot) === "local"
-  );
+  if (snapshot.onboardingRemoteConnected) {
+    return true;
+  }
+
+  const target = getEffectiveServerTarget(snapshot);
+  if (!target) {
+    return false;
+  }
+
+  return target !== "remote";
 }
 
 /**
@@ -153,11 +148,10 @@ export function deriveConnectionScreen(
   snapshot: ConnectionFlowSnapshot,
 ): ConnectionScreen {
   const show = computeShowProviderSelection(snapshot);
-  const run = getEffectiveRunMode(snapshot);
+  const target = getEffectiveServerTarget(snapshot);
   if (!show) {
-    if (!run) return "hosting";
-    if (snapshot.onboardingCloudProvider === "remote") return "remoteBackend";
-    return "elizaCloud_preProvider";
+    if (!target) return "hosting";
+    return "remoteBackend";
   }
   if (!snapshot.onboardingProvider) return "providerGrid";
   return "providerDetail";
@@ -168,13 +162,11 @@ export function resolveConnectionUiSpec(
   snapshot: ConnectionFlowSnapshot,
 ): ConnectionUiSpec {
   const screen = deriveConnectionScreen(snapshot);
-  const effectiveRunMode = getEffectiveRunMode(snapshot);
   const showProviderSelection = computeShowProviderSelection(snapshot);
   return {
     screen,
-    effectiveRunMode,
     showProviderSelection,
-    showHostingLocalCard: !snapshot.isNative && !snapshot.cloudOnly,
+    showHostingLocalCard: !snapshot.cloudOnly && !snapshot.isNative,
     forceCloud: snapshot.forceCloud,
     providerId: snapshot.onboardingProvider,
     elizaCloudTab: snapshot.onboardingElizaCloudTab,
@@ -183,7 +175,7 @@ export function resolveConnectionUiSpec(
 }
 
 const resetCloudSelectionPatch = (): ConnectionStatePatch => ({
-  onboardingCloudProvider: "",
+  ...toOnboardingTargetPatch(""),
   onboardingApiKey: "",
   onboardingRemoteError: null,
   onboardingRemoteConnecting: false,
@@ -191,13 +183,11 @@ const resetCloudSelectionPatch = (): ConnectionStatePatch => ({
 
 const resetHostingSelectionPatch = (): ConnectionStatePatch => ({
   ...resetCloudSelectionPatch(),
-  onboardingRunMode: "",
 });
 
 /**
  * Clears connection subflow state so the outer wizard **`hosting`** step shows the hosting *choice*
- * (`ConnectionHostingScreen`) instead of an inner screen (e.g. `elizaCloud_preProvider`) left over from
- * a prior selection.
+ * (`ConnectionHostingScreen`) instead of a stale remote/provider screen from a prior selection.
  *
  * **When:** `revertOnboarding` / sidebar jump from `providers` (or later) back to `hosting` — previously
  * only `onboardingStep` changed, so `deriveConnectionScreen` still returned the Eliza Cloud pre-provider UI.
@@ -220,13 +210,13 @@ export function applyConnectionTransition(
 ): ConnectionTransitionResult | null {
   switch (event.type) {
     case "forceCloudBootstrap": {
-      if (!snapshot.forceCloud || snapshot.onboardingRunMode !== "") {
+      if (!snapshot.forceCloud || snapshot.onboardingServerTarget !== "") {
         return null;
       }
       return {
         kind: "patch",
         patch: {
-          onboardingRunMode: "local",
+          ...toOnboardingTargetPatch("local"),
           onboardingProvider: "",
           onboardingApiKey: "",
           onboardingPrimaryModel: "",
@@ -237,8 +227,7 @@ export function applyConnectionTransition(
       return {
         kind: "patch",
         patch: {
-          onboardingRunMode: "local",
-          onboardingCloudProvider: "",
+          ...toOnboardingTargetPatch("local"),
           onboardingRemoteError: null,
           onboardingRemoteConnecting: false,
         },
@@ -247,8 +236,7 @@ export function applyConnectionTransition(
       return {
         kind: "patch",
         patch: {
-          onboardingRunMode: "cloud",
-          onboardingCloudProvider: "remote",
+          ...toOnboardingTargetPatch("remote"),
           onboardingProvider: "",
           onboardingApiKey: "",
           onboardingPrimaryModel: "",
@@ -258,8 +246,7 @@ export function applyConnectionTransition(
       return {
         kind: "patch",
         patch: {
-          onboardingRunMode: "cloud",
-          onboardingCloudProvider: "elizacloud",
+          ...toOnboardingTargetPatch("elizacloud"),
           onboardingProvider: "",
           onboardingApiKey: "",
           onboardingPrimaryModel: "",
@@ -278,11 +265,21 @@ export function applyConnectionTransition(
       const detected = snapshot.onboardingDetectedProviders?.find(
         (d) => d.id === event.providerId,
       );
-      const patch: ConnectionStatePatch = {
-        onboardingProvider: event.providerId,
-        onboardingApiKey: detected?.apiKey ?? "",
-        onboardingPrimaryModel: "",
-      };
+      const patch: ConnectionStatePatch =
+        event.providerId === "elizacloud"
+          ? {
+              onboardingProvider: event.providerId,
+              onboardingApiKey: "",
+              onboardingPrimaryModel: "",
+              ...(detected?.apiKey
+                ? { onboardingCloudApiKey: detected.apiKey }
+                : {}),
+            }
+          : {
+              onboardingProvider: event.providerId,
+              onboardingApiKey: detected?.apiKey ?? "",
+              onboardingPrimaryModel: "",
+            };
       if (event.providerId === "anthropic-subscription") {
         patch.onboardingSubscriptionTab = "token";
       }
@@ -363,11 +360,8 @@ export function mergeConnectionSnapshot(
   patch: ConnectionStatePatch,
 ): ConnectionFlowSnapshot {
   const next: ConnectionFlowSnapshot = { ...base };
-  if (patch.onboardingRunMode !== undefined) {
-    next.onboardingRunMode = patch.onboardingRunMode;
-  }
-  if (patch.onboardingCloudProvider !== undefined) {
-    next.onboardingCloudProvider = patch.onboardingCloudProvider;
+  if (patch.onboardingServerTarget !== undefined) {
+    next.onboardingServerTarget = patch.onboardingServerTarget;
   }
   if (patch.onboardingProvider !== undefined) {
     next.onboardingProvider = patch.onboardingProvider;

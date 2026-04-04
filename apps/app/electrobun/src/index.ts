@@ -8,7 +8,9 @@ import {
 } from "@miladyai/shared/runtime-env";
 import Electrobun, {
   ApplicationMenu,
+  BrowserView,
   BrowserWindow,
+  BuildConfig,
   Updater,
   Utils,
   WGPU,
@@ -28,6 +30,11 @@ import {
 } from "./application-menu";
 import { showBackgroundNoticeOnce } from "./background-notice";
 import { readNavigationEventUrl } from "./cloud-auth-window";
+import {
+  resolveBootstrapShellRenderer,
+  resolveBootstrapViewRenderer,
+  resolveMainWindowPartition,
+} from "./main-window-session";
 import {
   buildMainMenuResetApiCandidates,
   pickReachableMenuResetApiBase,
@@ -51,9 +58,12 @@ import {
 } from "./native/mac-window-effects";
 import { getPermissionManager } from "./native/permissions";
 import { checkWebGpuSupport } from "./native/webgpu-browser-support";
-import { readBuiltPreloadScript } from "./preload-validation";
 import { resolveRendererAsset } from "./renderer-static";
 import { registerRpcHandlers } from "./rpc-handlers";
+import {
+  readResolvedPreloadScript,
+  resolveRendererAssetDir,
+} from "./runtime-layout";
 import { startScreenshotDevServer } from "./screenshot-dev-server";
 import { recordStartupPhase, resolveStartupBundlePath } from "./startup-trace";
 import {
@@ -62,6 +72,11 @@ import {
   SurfaceWindowManager,
 } from "./surface-windows";
 import type { SendToWebview } from "./types.js";
+import {
+  resolveDesktopBundleVersion,
+  shouldResetWindowsCefProfile,
+  shouldWriteWindowsCefProfileMarker,
+} from "./windows-cef-profile";
 
 type HeartbeatMenuTriggerSummary = {
   enabled: boolean;
@@ -269,14 +284,15 @@ async function resetMiladyFromApplicationMenu(): Promise<void> {
       },
       pushEmbeddedApiBaseToRenderer: (port, apiToken) => {
         if (currentWindow) {
-          pushApiBaseToRenderer(
-            currentWindow,
-            resolveRendererFacingApiBase(
-              process.env as Record<string, string | undefined>,
-              port,
-            ),
-            apiToken,
-          );
+          const base = port
+            ? resolveRendererFacingApiBase(
+                process.env as Record<string, string | undefined>,
+                port,
+              )
+            : initialApiBase;
+          if (base) {
+            pushApiBaseToRenderer(currentWindow, base, apiToken);
+          }
         }
       },
       getLocalApiAuthToken: () => configureDesktopLocalApiAuth(),
@@ -547,6 +563,12 @@ let surfaceWindowManager: SurfaceWindowManager | null = null;
 let rendererUrlPromise: Promise<string> | null = null;
 let backgroundWindowPromise: Promise<void> | null = null;
 let isQuitting = false;
+
+function requestAppQuit(): void {
+  isQuitting = true;
+  Utils.quit();
+}
+
 const cleanupFns: Array<() => void | Promise<void>> = [];
 let lastFocusedWindow: ManagedWindowLike | null = null;
 
@@ -569,7 +591,7 @@ function sendToActiveRenderer(message: string, payload?: unknown): void {
  * Returns the base URL e.g. "http://localhost:5174".
  */
 async function startRendererServer(): Promise<string> {
-  const rendererDir = path.resolve(import.meta.dir, "../renderer");
+  const rendererDir = resolveRendererAssetDir(import.meta.dir);
   if (!fs.existsSync(rendererDir)) {
     console.warn("[Renderer] renderer dir not found:", rendererDir);
     return "";
@@ -733,7 +755,7 @@ async function resolveRendererUrl(): Promise<string> {
 
   if (!rendererUrl) {
     // Last resort: file:// (may have CORS issues with crossorigin module scripts)
-    rendererUrl = `file://${path.resolve(import.meta.dir, "../renderer/index.html")}`;
+    rendererUrl = `file://${path.join(resolveRendererAssetDir(import.meta.dir), "index.html")}`;
     console.warn(
       "[Main] Falling back to file:// renderer URL — CORS issues possible",
     );
@@ -744,46 +766,78 @@ async function resolveRendererUrl(): Promise<string> {
 
 async function createMainWindow(): Promise<BrowserWindow> {
   const rendererUrl = await resolveRendererUrl();
+  const mainWindowPartition = resolveMainWindowPartition(process.env);
+  if (mainWindowPartition) {
+    console.log(
+      `[Main] Using isolated main window partition ${mainWindowPartition}`,
+    );
+  }
 
-  // Load persisted window state
   const statePath = path.join(Utils.paths.userData, "window-state.json");
   const state = loadWindowState(statePath);
 
-  // Read the pre-built webview bridge preload (built by `bun run build:preload`).
-  // The preload runs in the webview context after Electrobun's built-in preload,
-  // setting up Milady's direct Electrobun RPC bridge on the window.
   let preload: string;
   try {
-    preload = readBuiltPreloadScript(import.meta.dir);
+    preload = readResolvedPreloadScript(import.meta.dir);
   } catch (err) {
     console.error("[Main] Failed to read preload script:", err);
     preload = "// preload unavailable";
   }
 
-  const win = new BrowserWindow({
-    title: "Milady",
-    // @ts-expect-error: Electrobun doesn't expose icon in JS typings yet
-    icon: resolveDesktopAppIconPath(),
-    url: rendererUrl,
-    preload,
-    frame: {
-      width: state.width,
-      height: state.height,
-      x: state.x,
-      y: state.y,
-    },
-    // hiddenInset hides the title bar and insets traffic lights — macOS only.
-    // On Windows/Linux use the default title bar so the window remains draggable.
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    // Transparent background for vibrancy — macOS only.
-    // On Windows/Linux a solid background prevents rendering artifacts.
-    transparent: process.platform === "darwin",
-  });
+  const windowFrame = {
+    width: state.width,
+    height: state.height,
+    x: state.x,
+    y: state.y,
+  };
+  const titleBarStyle =
+    process.platform === "darwin" ? "hiddenInset" : "default";
+  const transparent = process.platform === "darwin";
 
-  // Apply native macOS vibrancy, shadow, and traffic light positioning
+  let win: BrowserWindow;
+  if (process.platform === "win32" && mainWindowPartition) {
+    const buildInfo = await BuildConfig.get();
+    win = new BrowserWindow({
+      title: "Milady",
+      // @ts-expect-error: Electrobun doesn't expose icon in JS typings yet
+      icon: resolveDesktopAppIconPath(),
+      url: null,
+      preload: null,
+      frame: windowFrame,
+      renderer: resolveBootstrapShellRenderer(buildInfo),
+      titleBarStyle,
+      transparent,
+    });
+    win.webview.remove();
+    const mainView = new BrowserView({
+      url: rendererUrl,
+      // @ts-expect-error: BrowserView preload exists at runtime but is not typed yet.
+      preload,
+      renderer: resolveBootstrapViewRenderer(buildInfo),
+      partition: mainWindowPartition,
+      frame: {
+        x: 0,
+        y: 0,
+        width: state.width,
+        height: state.height,
+      },
+      windowId: win.id,
+    });
+    win.webviewId = mainView.id;
+  } else {
+    win = new BrowserWindow({
+      title: "Milady",
+      // @ts-expect-error: Electrobun doesn't expose icon in JS typings yet
+      icon: resolveDesktopAppIconPath(),
+      url: rendererUrl,
+      preload,
+      frame: windowFrame,
+      titleBarStyle,
+      transparent,
+    });
+  }
+
   applyMacOSWindowEffects(win);
-
-  // Persist window state on resize and move
   win.on("resize", () => scheduleStateSave(statePath, win));
   win.on("move", () => scheduleStateSave(statePath, win));
 
@@ -840,6 +894,7 @@ function attachMainWindow(win: BrowserWindow): BrowserWindow {
       currentWindow = null;
       currentSendToWebview = null;
     }
+    getDesktopManager().clearMainWindow(win);
 
     if (!isQuitting) {
       void ensureBackgroundWindow();
@@ -1385,7 +1440,7 @@ async function setupUpdater(): Promise<void> {
               console.error("[Main] Agent restart failed:", err);
             });
         } else if (action === "quit") {
-          Utils.quit();
+          void getDesktopManager().quit();
         } else if (action === "show") {
           void getDesktopManager().showWindow();
         } else if (action?.startsWith("navigate-")) {
@@ -1427,6 +1482,7 @@ function setupDockReopen(): void {
 async function runShutdownCleanup(reason: string): Promise<void> {
   console.log(`[Main] App quitting (${reason}), disposing native modules...`);
   isQuitting = true;
+  sendToActiveRenderer("desktopShutdownStarted", { reason });
   for (const cleanupFn of cleanupFns) {
     await Promise.resolve(cleanupFn());
   }
@@ -1557,21 +1613,21 @@ async function main(): Promise<void> {
     try {
       const cefDir = path.join(Utils.paths.userData, "CEF");
       const cefVersionMarker = path.join(cefDir, ".milady-version");
-      let currentVersion = "unknown";
-      try {
-        const pkgPath = path.join(import.meta.dir, "..", "package.json");
-        currentVersion =
-          JSON.parse(fs.readFileSync(pkgPath, "utf-8")).version ?? "unknown";
-      } catch {
-        // Fallback — version marker will still trigger cleanup on next real version.
-      }
+      const currentVersion =
+        resolveDesktopBundleVersion(import.meta.dir) ?? "unknown";
       let previousVersion: string | null = null;
       try {
         previousVersion = fs.readFileSync(cefVersionMarker, "utf-8").trim();
       } catch {
         // No marker — first run or pre-fix install.
       }
-      if (previousVersion !== currentVersion && fs.existsSync(cefDir)) {
+      if (
+        shouldResetWindowsCefProfile({
+          currentVersion,
+          previousVersion,
+          cefDirExists: fs.existsSync(cefDir),
+        })
+      ) {
         console.log(
           `[Main] CEF version mismatch (${previousVersion ?? "none"} → ${currentVersion}), clearing stale CEF profile`,
         );
@@ -1587,8 +1643,10 @@ async function main(): Promise<void> {
         }
       }
       // Write/update version marker so we don't clear again on next launch.
-      fs.mkdirSync(cefDir, { recursive: true });
-      fs.writeFileSync(cefVersionMarker, currentVersion);
+      if (shouldWriteWindowsCefProfileMarker(currentVersion)) {
+        fs.mkdirSync(cefDir, { recursive: true });
+        fs.writeFileSync(cefVersionMarker, currentVersion);
+      }
     } catch (err) {
       console.warn("[Main] CEF profile cleanup failed (non-fatal):", err);
     }
@@ -1628,7 +1686,7 @@ async function main(): Promise<void> {
     createWindow: (options) =>
       new BrowserWindow(options) as unknown as ManagedWindowLike,
     resolveRendererUrl,
-    readPreload: () => readBuiltPreloadScript(import.meta.dir),
+    readPreload: () => readResolvedPreloadScript(import.meta.dir),
     wireRpc: (window) => wireSettingsRpc(window as unknown as BrowserWindow),
     injectApiBase: (window) =>
       injectApiBase(window as unknown as BrowserWindow),
@@ -1654,6 +1712,10 @@ async function main(): Promise<void> {
   // Wire detached window callbacks so menus and RPC can open them.
   getDesktopManager().setOpenSettingsCallback((tabHint) => {
     void createSettingsWindow(tabHint);
+  });
+  getDesktopManager().setRestoreMainWindowCallback(() => restoreWindow());
+  getDesktopManager().setRequestQuitCallback(() => {
+    requestAppQuit();
   });
   getDesktopManager().setOpenSurfaceWindowCallback((surface, browse) => {
     if (!surfaceWindowManager) {

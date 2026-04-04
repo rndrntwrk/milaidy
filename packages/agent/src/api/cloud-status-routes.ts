@@ -1,4 +1,9 @@
 import type { AgentRuntime, Service } from "@elizaos/core";
+import {
+  isElizaCloudServiceSelectedInConfig,
+  migrateLegacyRuntimeConfig,
+} from "@miladyai/shared/contracts";
+import { isCloudInferenceSelectedInConfig } from "@miladyai/shared/contracts/onboarding";
 import { resolveCloudApiBaseUrl as resolveCanonicalCloudApiBaseUrl } from "../cloud/base-url";
 import { validateCloudBaseUrl } from "../cloud/validate-url";
 import { resolveCloudApiKey } from "./wallet-rpc.js";
@@ -88,11 +93,16 @@ export async function handleCloudStatusRoutes(
   const { res, method, pathname, config, runtime, json } = ctx;
 
   if (method === "GET" && pathname === "/api/cloud/status") {
-    const cloudMode = config.cloud?.enabled;
-    const cloudEnabled = cloudMode === true;
+    migrateLegacyRuntimeConfig(config as Record<string, unknown>);
+    const cloudEnabled = isCloudInferenceSelectedInConfig(
+      config as Record<string, unknown>,
+    );
+    const cloudVoiceProxyAvailable = isElizaCloudServiceSelectedInConfig(
+      config as Record<string, unknown>,
+      "tts",
+    );
     const configApiKey = resolveCloudApiKey(config);
     const hasApiKey = Boolean(configApiKey);
-    const effectivelyEnabled = cloudEnabled;
     const cloudAuth = runtime
       ? runtime.getService<Service & CloudAuthIdentityService>("CLOUD_AUTH")
       : null;
@@ -101,7 +111,8 @@ export async function handleCloudStatusRoutes(
     if (authConnected || hasApiKey) {
       json(res, {
         connected: true,
-        enabled: effectivelyEnabled,
+        enabled: cloudEnabled,
+        cloudVoiceProxyAvailable,
         hasApiKey,
         userId: authConnected ? cloudAuth?.getUserId?.() : undefined,
         organizationId: authConnected
@@ -120,7 +131,8 @@ export async function handleCloudStatusRoutes(
     if (!runtime) {
       json(res, {
         connected: false,
-        enabled: effectivelyEnabled,
+        enabled: cloudEnabled,
+        cloudVoiceProxyAvailable,
         hasApiKey,
         reason: "runtime_not_started",
       });
@@ -129,7 +141,8 @@ export async function handleCloudStatusRoutes(
 
     json(res, {
       connected: false,
-      enabled: effectivelyEnabled,
+      enabled: cloudEnabled,
+      cloudVoiceProxyAvailable,
       hasApiKey,
       reason: "not_authenticated",
     });
@@ -180,13 +193,14 @@ export async function handleCloudStatusRoutes(
     const rawBalance =
       typeof creditResponse?.balance === "number"
         ? creditResponse.balance
-        : typeof (creditResponse?.data as Record<string, unknown>)
-              ?.balance === "number"
-          ? ((creditResponse.data as Record<string, unknown>)
-              .balance as number)
+        : typeof (creditResponse?.data as Record<string, unknown>)?.balance ===
+            "number"
+          ? ((creditResponse.data as Record<string, unknown>).balance as number)
           : undefined;
     if (typeof rawBalance !== "number") {
-      throw new Error(`Unexpected response shape: ${JSON.stringify(creditResponse)}`);
+      throw new Error(
+        `Unexpected response shape: ${JSON.stringify(creditResponse)}`,
+      );
     }
     const balance = rawBalance;
 

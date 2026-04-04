@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  deriveOnboardingResumeConnection,
-  deriveOnboardingResumeFields,
+  deriveOnboardingResumeFieldsFromConfig,
   hasPartialOnboardingConnectionConfig,
   inferOnboardingResumeStep,
 } from "./onboarding-resume";
@@ -19,24 +18,33 @@ describe("hasPartialOnboardingConnectionConfig", () => {
       name: "returns false when no provider selection signals exist",
     },
     {
-      config: { cloud: { enabled: true } },
+      config: {
+        serviceRouting: {
+          llmText: {
+            backend: "elizacloud",
+            transport: "cloud-proxy",
+          },
+        },
+      },
       expected: true,
       name: "returns true when cloud inference is enabled",
     },
     {
       config: {
-        connection: {
-          kind: "local-provider",
-          provider: "openai",
+        serviceRouting: {
+          llmText: {
+            backend: "openai",
+            transport: "direct",
+          },
         },
       },
       expected: true,
-      name: "returns true when config.connection is present",
+      name: "returns true when canonical provider routing is present",
     },
     {
       config: { cloud: { apiKey: "sk-test" } },
-      expected: false,
-      name: "does not treat cloud api key capability alone as active selection",
+      expected: true,
+      name: "treats a linked cloud account as partial onboarding progress",
     },
   ])("$name", ({ config, expected }) => {
     expect(
@@ -63,138 +71,107 @@ describe("inferOnboardingResumeStep", () => {
       inferOnboardingResumeStep({
         persistedStep: "providers",
         config: {
-          connection: { kind: "cloud-managed", cloudProvider: "elizacloud" },
+          serviceRouting: {
+            llmText: {
+              backend: "elizacloud",
+              transport: "cloud-proxy",
+              accountId: "elizacloud",
+            },
+          },
+        },
+      }),
+    ).toBe("providers");
+  });
+
+  it("resumes at providers when partial routing config already exists", () => {
+    expect(
+      inferOnboardingResumeStep({
+        config: {
+          linkedAccounts: {
+            elizacloud: { status: "linked", source: "api-key" },
+          },
         },
       }),
     ).toBe("providers");
   });
 });
 
-describe("deriveOnboardingResumeConnection", () => {
-  it("prefers explicit config.connection over compatibility inference", () => {
+describe("deriveOnboardingResumeFieldsFromConfig", () => {
+  it("keeps local hosting separate from elizacloud inference routing", () => {
     expect(
-      deriveOnboardingResumeConnection({
-        connection: {
-          kind: "local-provider",
-          provider: "openrouter",
-          primaryModel: "openai/gpt-5-mini",
+      deriveOnboardingResumeFieldsFromConfig({
+        deploymentTarget: {
+          runtime: "local",
         },
-        env: {
-          vars: {
-            OPENAI_API_KEY: "sk-openai-test",
+        linkedAccounts: {
+          elizacloud: {
+            status: "linked",
+            source: "api-key",
+          },
+        },
+        serviceRouting: {
+          llmText: {
+            backend: "elizacloud",
+            transport: "cloud-proxy",
+            smallModel: "openai/gpt-5-mini",
+            largeModel: "anthropic/claude-sonnet-4.5",
           },
         },
         cloud: {
-          enabled: true,
           apiKey: "ck-cloud-test",
-          inferenceMode: "cloud",
         },
       }),
     ).toEqual({
-      kind: "local-provider",
-      provider: "openrouter",
-      primaryModel: "openai/gpt-5-mini",
+      onboardingServerTarget: "local",
+      onboardingCloudApiKey: "ck-cloud-test",
+      onboardingProvider: "elizacloud",
+      onboardingApiKey: "",
+      onboardingVoiceProvider: "",
+      onboardingVoiceApiKey: "",
+      onboardingPrimaryModel: "",
+      onboardingOpenRouterModel: "",
+      onboardingRemoteConnected: false,
+      onboardingRemoteApiBase: "",
+      onboardingRemoteToken: "",
+      onboardingSmallModel: "openai/gpt-5-mini",
+      onboardingLargeModel: "anthropic/claude-sonnet-4.5",
     });
   });
 
-  it("reconstructs an eliza cloud connection from compatibility config", () => {
+  it("keeps cloud hosting separate from a direct provider selection", () => {
     expect(
-      deriveOnboardingResumeConnection({
-        cloud: { enabled: true, apiKey: "[REDACTED]" },
-        models: {
-          small: "minimax/minimax-m2.7",
-          large: "anthropic/claude-sonnet-4.6",
+      deriveOnboardingResumeFieldsFromConfig({
+        deploymentTarget: {
+          runtime: "cloud",
+          provider: "elizacloud",
         },
-      }),
-    ).toEqual({
-      kind: "cloud-managed",
-      cloudProvider: "elizacloud",
-      apiKey: undefined,
-      smallModel: "minimax/minimax-m2.7",
-      largeModel: "anthropic/claude-sonnet-4.6",
-    });
-  });
-
-  it("reconstructs ollama from OLLAMA_BASE_URL", () => {
-    expect(
-      deriveOnboardingResumeConnection({
-        env: {
-          vars: {
-            OLLAMA_BASE_URL: "http://localhost:11434",
+        serviceRouting: {
+          llmText: {
+            backend: "openrouter",
+            transport: "direct",
+            primaryModel: "openai/gpt-5-mini",
           },
         },
-      }),
-    ).toEqual({
-      kind: "local-provider",
-      provider: "ollama",
-    });
-  });
-
-  it("treats MILADY_USE_PI_AI as the same selection as ELIZA_USE_PI_AI", () => {
-    expect(
-      deriveOnboardingResumeConnection({
-        env: {
-          vars: {
-            MILADY_USE_PI_AI: "1",
-          },
-        },
-        agents: {
-          defaults: {
-            model: { primary: "pi/default" },
-          },
-        },
-      }),
-    ).toEqual({
-      kind: "local-provider",
-      provider: "pi-ai",
-      primaryModel: "pi/default",
-    });
-  });
-
-  it("reconstructs a local provider connection from saved env config", () => {
-    expect(
-      deriveOnboardingResumeConnection({
         env: {
           vars: {
             OPENROUTER_API_KEY: "sk-or-test",
           },
         },
-        agents: {
-          defaults: {
-            model: { primary: "openai/gpt-5-mini" },
-          },
-        },
       }),
     ).toEqual({
-      kind: "local-provider",
-      provider: "openrouter",
-      apiKey: "sk-or-test",
-      primaryModel: "openai/gpt-5-mini",
-    });
-  });
-});
-
-describe("deriveOnboardingResumeFields", () => {
-  it("maps an openrouter connection back into onboarding state", () => {
-    expect(
-      deriveOnboardingResumeFields({
-        kind: "local-provider",
-        provider: "openrouter",
-        apiKey: "sk-or-test",
-        primaryModel: "openai/gpt-5-mini",
-      }),
-    ).toEqual({
-      onboardingRunMode: "local",
-      onboardingCloudProvider: "",
+      onboardingServerTarget: "elizacloud",
+      onboardingCloudApiKey: "",
       onboardingProvider: "openrouter",
       onboardingApiKey: "sk-or-test",
+      onboardingVoiceProvider: "",
+      onboardingVoiceApiKey: "",
       onboardingPrimaryModel: "",
       onboardingOpenRouterModel: "openai/gpt-5-mini",
       onboardingRemoteConnected: false,
       onboardingRemoteApiBase: "",
       onboardingRemoteToken: "",
-      onboardingVoiceProvider: "",
-      onboardingVoiceApiKey: "",
+      onboardingSmallModel: "",
+      onboardingLargeModel: "",
     });
   });
 });

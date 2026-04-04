@@ -3,6 +3,12 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const INDEX_PATH = path.resolve(import.meta.dirname, "..", "index.ts");
+const CONFIG_PATH = path.resolve(
+  import.meta.dirname,
+  "..",
+  "..",
+  "electrobun.config.ts",
+);
 const BACKGROUND_NOTICE_PATH = path.resolve(
   import.meta.dirname,
   "..",
@@ -34,9 +40,12 @@ describe("Electrobun startup bootstrap", () => {
   it("validates the built preload before creating the BrowserWindow", () => {
     const source = fs.readFileSync(INDEX_PATH, "utf8");
     const validateIndex = source.indexOf(
-      "preload = readBuiltPreloadScript(import.meta.dir);",
+      "readResolvedPreloadScript(import.meta.dir)",
     );
-    const browserWindowIndex = source.indexOf("const win = new BrowserWindow(");
+    const browserWindowIndex = source.indexOf(
+      "new BrowserWindow(",
+      validateIndex,
+    );
 
     expect(validateIndex).toBeGreaterThan(-1);
     expect(browserWindowIndex).toBeGreaterThan(validateIndex);
@@ -45,13 +54,42 @@ describe("Electrobun startup bootstrap", () => {
     );
   });
 
+  it("uses an isolated BrowserView for packaged Windows bootstrap overrides", () => {
+    const source = fs.readFileSync(INDEX_PATH, "utf8");
+
+    expect(source).toContain("resolveMainWindowPartition");
+    expect(source).toContain(
+      'process.platform === "win32" && mainWindowPartition',
+    );
+    expect(source).toContain("win.webview.remove();");
+    expect(source).toContain("const mainView = new BrowserView({");
+    expect(source).toContain("partition: mainWindowPartition");
+    expect(source).toContain("win.webviewId = mainView.id");
+  });
+
+  it("does not persist an unknown Windows CEF profile marker", () => {
+    const source = fs.readFileSync(INDEX_PATH, "utf8");
+
+    expect(source).toContain("shouldResetWindowsCefProfile({");
+    expect(source).toContain(
+      "shouldWriteWindowsCefProfileMarker(currentVersion)",
+    );
+    expect(source).toContain(
+      "fs.writeFileSync(cefVersionMarker, currentVersion)",
+    );
+  });
+
   it("uses the packaged app icon for the main window and tray", () => {
     const source = fs.readFileSync(INDEX_PATH, "utf8");
+    const configSource = fs.readFileSync(CONFIG_PATH, "utf8");
 
     expect(source).toContain("function resolveDesktopAppIconPath()");
     expect(source).toContain("icon: resolveDesktopAppIconPath(),");
     expect(source).toContain('process.platform === "win32"');
     expect(source).toContain('"../assets/appIcon.ico"');
+    expect(configSource).toContain(
+      '"assets/appIcon.ico": "assets/appIcon.ico"',
+    );
   });
 
   it("resolves the initial renderer API base from desktop runtime mode", () => {
@@ -59,6 +97,24 @@ describe("Electrobun startup bootstrap", () => {
 
     expect(source).toContain("resolveDesktopRuntimeMode");
     expect(source).toContain("resolveInitialApiBase");
+  });
+
+  it("resolves packaged renderer and preload assets from the app resource root", () => {
+    const source = fs.readFileSync(INDEX_PATH, "utf8");
+
+    expect(source).toContain("resolveRendererAssetDir(import.meta.dir)");
+    expect(source).toContain("readResolvedPreloadScript(import.meta.dir)");
+  });
+
+  it("allows the packaged Windows bootstrap harness to override the main window partition", () => {
+    const source = fs.readFileSync(INDEX_PATH, "utf8");
+
+    expect(source).toContain("resolveMainWindowPartition(process.env)");
+    expect(source).toContain("resolveBootstrapShellRenderer(buildInfo)");
+    expect(source).toContain("resolveBootstrapViewRenderer(buildInfo)");
+    expect(source).toContain("const mainView = new BrowserView({");
+    expect(source).toContain("partition: mainWindowPartition");
+    expect(source).toContain("win.webviewId = mainView.id");
   });
 
   it("guards embedded agent startup behind local runtime mode", () => {
@@ -86,15 +142,6 @@ describe("Electrobun startup bootstrap", () => {
     expect(source).toContain("Startup Log Tail:");
     expect(source).toContain("Copy Report");
     expect(source).toContain("startup-crash-report-latest.md");
-  });
-
-  it("records machine-readable startup phases for packaged smoke", () => {
-    const source = fs.readFileSync(INDEX_PATH, "utf8");
-
-    expect(source).toContain('recordStartupPhase("main_start"');
-    expect(source).toContain('recordStartupPhase("window_ready"');
-    expect(source).toContain('recordStartupPhase("autostart_requested"');
-    expect(source).toContain("resolveStartupBundlePath");
   });
 
   it("does not load repo or ~/.eliza env files in packaged desktop builds", () => {
