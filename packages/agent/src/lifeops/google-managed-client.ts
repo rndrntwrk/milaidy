@@ -1,5 +1,6 @@
 import type {
   CreateLifeOpsCalendarEventRequest,
+  LifeOpsConnectorSide,
   LifeOpsGoogleCapability,
   LifeOpsGoogleConnectorReason,
   StartLifeOpsGoogleConnectorResponse,
@@ -32,6 +33,7 @@ export interface ResolvedManagedGoogleCloudConfig {
 
 export interface ManagedGoogleConnectorStatusResponse {
   provider: "google";
+  side: LifeOpsConnectorSide;
   mode: "cloud_managed";
   configured: boolean;
   connected: boolean;
@@ -62,6 +64,7 @@ export interface ManagedGoogleGmailTriageResponse {
 }
 
 export interface ManagedGoogleReplySendRequest {
+  side?: LifeOpsConnectorSide;
   to: string[];
   cc?: string[];
   subject: string;
@@ -163,9 +166,12 @@ export class GoogleManagedClient {
     return readJsonResponse<T>(response);
   }
 
-  async getStatus(): Promise<ManagedGoogleConnectorStatusResponse> {
+  async getStatus(
+    side: LifeOpsConnectorSide,
+  ): Promise<ManagedGoogleConnectorStatusResponse> {
+    const query = new URLSearchParams({ side });
     return this.request<ManagedGoogleConnectorStatusResponse>(
-      "milady/google/status",
+      `milady/google/status?${query.toString()}`,
       {
         method: "GET",
       },
@@ -173,6 +179,7 @@ export class GoogleManagedClient {
   }
 
   async startConnector(args: {
+    side: LifeOpsConnectorSide;
     capabilities?: LifeOpsGoogleCapability[];
   }): Promise<StartLifeOpsGoogleConnectorResponse> {
     const redirectUri = new URL(
@@ -184,6 +191,7 @@ export class GoogleManagedClient {
       {
         method: "POST",
         body: JSON.stringify({
+          side: args.side,
           capabilities: args.capabilities,
           redirectUrl: redirectUri,
         }),
@@ -191,22 +199,28 @@ export class GoogleManagedClient {
     );
   }
 
-  async disconnectConnector(connectionId?: string | null): Promise<void> {
+  async disconnectConnector(
+    connectionId?: string | null,
+    side?: LifeOpsConnectorSide,
+  ): Promise<void> {
     await this.request<{ ok: true }>("milady/google/disconnect", {
       method: "POST",
       body: JSON.stringify({
         connectionId: connectionId ?? null,
+        side: side ?? "owner",
       }),
     });
   }
 
   async getCalendarFeed(args: {
+    side: LifeOpsConnectorSide;
     calendarId: string;
     timeMin: string;
     timeMax: string;
     timeZone: string;
   }): Promise<ManagedGoogleCalendarFeedResponse> {
     const query = new URLSearchParams({
+      side: args.side,
       calendarId: args.calendarId,
       timeMin: args.timeMin,
       timeMax: args.timeMax,
@@ -221,7 +235,9 @@ export class GoogleManagedClient {
   }
 
   async createCalendarEvent(
-    request: Omit<CreateLifeOpsCalendarEventRequest, "mode">,
+    request: Omit<CreateLifeOpsCalendarEventRequest, "mode"> & {
+      side: LifeOpsConnectorSide;
+    },
   ): Promise<ManagedGoogleCalendarEventResponse> {
     return this.request<ManagedGoogleCalendarEventResponse>(
       "milady/google/calendar/events",
@@ -233,9 +249,11 @@ export class GoogleManagedClient {
   }
 
   async getGmailTriage(args: {
+    side: LifeOpsConnectorSide;
     maxResults: number;
   }): Promise<ManagedGoogleGmailTriageResponse> {
     const query = new URLSearchParams({
+      side: args.side,
       maxResults: String(args.maxResults),
     });
     return this.request<ManagedGoogleGmailTriageResponse>(

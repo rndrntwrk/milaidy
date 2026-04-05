@@ -62,10 +62,12 @@ async function seedGoogleGrants(
   repository: LifeOpsRepository,
   agentId: string,
   preferredMode: "local" | "cloud_managed",
+  side: "owner" | "agent" = "owner",
 ): Promise<void> {
   await repository.upsertConnectorGrant(
     createLifeOpsConnectorGrant({
       agentId,
+      side,
       provider: "google",
       identity: {},
       grantedScopes: [],
@@ -80,6 +82,7 @@ async function seedGoogleGrants(
   await repository.upsertConnectorGrant(
     createLifeOpsConnectorGrant({
       agentId,
+      side,
       provider: "google",
       identity: {},
       grantedScopes: [],
@@ -255,5 +258,144 @@ describe("life-ops Google mode preference", () => {
 
     delete process.env.ELIZAOS_CLOUD_API_KEY;
     delete process.env.ELIZAOS_CLOUD_BASE_URL;
+  });
+
+  it("keeps owner and agent Google grants separate while allowing one active default per agent", async () => {
+    const agentId = "lifeops-google-side-agent";
+    const runtime = createRuntime(agentId, databasePath);
+    const repository = new LifeOpsRepository(runtime);
+    const service = new LifeOpsService(runtime);
+    const requestUrl = new URL(
+      "http://127.0.0.1:3000/api/lifeops/connectors/google/status",
+    );
+
+    await repository.upsertConnectorGrant(
+      createLifeOpsConnectorGrant({
+        agentId,
+        side: "owner",
+        provider: "google",
+        identity: {},
+        grantedScopes: [],
+        capabilities: [],
+        tokenRef: null,
+        mode: "local",
+        preferredByAgent: true,
+        metadata: {},
+        lastRefreshAt: null,
+      }),
+    );
+    await repository.upsertConnectorGrant(
+      createLifeOpsConnectorGrant({
+        agentId,
+        side: "owner",
+        provider: "google",
+        identity: {},
+        grantedScopes: [],
+        capabilities: [],
+        tokenRef: null,
+        mode: "cloud_managed",
+        executionTarget: "cloud",
+        sourceOfTruth: "cloud_connection",
+        preferredByAgent: false,
+        cloudConnectionId: `cloud-owner-${agentId}`,
+        metadata: {},
+        lastRefreshAt: null,
+      }),
+    );
+    await repository.upsertConnectorGrant(
+      createLifeOpsConnectorGrant({
+        agentId,
+        side: "agent",
+        provider: "google",
+        identity: {},
+        grantedScopes: [],
+        capabilities: [],
+        tokenRef: null,
+        mode: "local",
+        preferredByAgent: false,
+        metadata: {},
+        lastRefreshAt: null,
+      }),
+    );
+    await repository.upsertConnectorGrant(
+      createLifeOpsConnectorGrant({
+        agentId,
+        side: "agent",
+        provider: "google",
+        identity: {},
+        grantedScopes: [],
+        capabilities: [],
+        tokenRef: null,
+        mode: "cloud_managed",
+        executionTarget: "cloud",
+        sourceOfTruth: "cloud_connection",
+        preferredByAgent: false,
+        cloudConnectionId: `cloud-agent-${agentId}`,
+        metadata: {},
+        lastRefreshAt: null,
+      }),
+    );
+
+    const ownerStatusBefore = await service.getGoogleConnectorStatus(
+      requestUrl,
+      undefined,
+      "owner",
+    );
+    const agentStatusBefore = await service.getGoogleConnectorStatus(
+      requestUrl,
+      "cloud_managed",
+      "agent",
+    );
+
+    expect(ownerStatusBefore.side).toBe("owner");
+    expect(ownerStatusBefore.mode).toBe("local");
+    expect(ownerStatusBefore.preferredByAgent).toBe(true);
+    expect(agentStatusBefore.side).toBe("agent");
+    expect(agentStatusBefore.mode).toBe("cloud_managed");
+    expect(agentStatusBefore.preferredByAgent).toBe(false);
+
+    const switchedAgentStatus = await service.selectGoogleConnectorMode(
+      requestUrl,
+      "cloud_managed",
+      "agent",
+    );
+    const grantsAfterAgentSwitch =
+      await repository.listConnectorGrants(agentId);
+
+    expect(switchedAgentStatus.side).toBe("agent");
+    expect(switchedAgentStatus.mode).toBe("cloud_managed");
+    expect(switchedAgentStatus.preferredByAgent).toBe(true);
+    expect(
+      grantsAfterAgentSwitch.find(
+        (grant) => grant.side === "owner" && grant.mode === "local",
+      )?.preferredByAgent,
+    ).toBe(false);
+    expect(
+      grantsAfterAgentSwitch.find(
+        (grant) => grant.side === "agent" && grant.mode === "cloud_managed",
+      )?.preferredByAgent,
+    ).toBe(true);
+
+    const switchedOwnerStatus = await service.selectGoogleConnectorMode(
+      requestUrl,
+      "local",
+      "owner",
+    );
+    const grantsAfterOwnerSwitch =
+      await repository.listConnectorGrants(agentId);
+
+    expect(switchedOwnerStatus.side).toBe("owner");
+    expect(switchedOwnerStatus.mode).toBe("local");
+    expect(switchedOwnerStatus.preferredByAgent).toBe(true);
+    expect(
+      grantsAfterOwnerSwitch.find(
+        (grant) => grant.side === "owner" && grant.mode === "local",
+      )?.preferredByAgent,
+    ).toBe(true);
+    expect(
+      grantsAfterOwnerSwitch.find(
+        (grant) => grant.side === "agent" && grant.mode === "cloud_managed",
+      )?.preferredByAgent,
+    ).toBe(false);
   });
 });

@@ -21,9 +21,9 @@ import type {
   DisconnectLifeOpsGoogleConnectorRequest,
   GetLifeOpsCalendarFeedRequest,
   GetLifeOpsGmailTriageRequest,
-  LifeOpsConnectorMode,
   ProcessLifeOpsRemindersRequest,
   RunLifeOpsWorkflowRequest,
+  SelectLifeOpsGoogleConnectorPreferenceRequest,
   SendLifeOpsGmailReplyRequest,
   SnoozeLifeOpsOccurrenceRequest,
   StartLifeOpsGoogleConnectorRequest,
@@ -233,6 +233,7 @@ export async function handleLifeOpsRoutes(
   ) {
     return runRoute(ctx, async (service) => {
       const rawMode = url.searchParams.get("mode");
+      const rawSide = url.searchParams.get("side");
       if (
         rawMode !== null &&
         rawMode !== "local" &&
@@ -244,6 +245,9 @@ export async function handleLifeOpsRoutes(
           "mode must be one of: local, remote, cloud_managed",
         );
       }
+      if (rawSide !== null && rawSide !== "owner" && rawSide !== "agent") {
+        throw new LifeOpsServiceError(400, "side must be one of: owner, agent");
+      }
       json(
         res,
         await service.getGoogleConnectorStatus(
@@ -253,6 +257,7 @@ export async function handleLifeOpsRoutes(
             | "remote"
             | "cloud_managed"
             | undefined,
+          (rawSide ?? undefined) as "owner" | "agent" | undefined,
         ),
       );
     });
@@ -421,10 +426,17 @@ export async function handleLifeOpsRoutes(
     method === "POST" &&
     pathname === "/api/lifeops/connectors/google/preference"
   ) {
-    const body = await readJsonBody<{ mode?: LifeOpsConnectorMode }>(req, res);
+    const body =
+      await readJsonBody<SelectLifeOpsGoogleConnectorPreferenceRequest>(
+        req,
+        res,
+      );
     if (!body) return true;
     return runRoute(ctx, async (service) => {
-      json(res, await service.selectGoogleConnectorMode(url, body.mode));
+      json(
+        res,
+        await service.selectGoogleConnectorMode(url, body.mode, body.side),
+      );
     });
   }
 

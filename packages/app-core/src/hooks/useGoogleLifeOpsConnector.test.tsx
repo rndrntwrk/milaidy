@@ -23,15 +23,18 @@ vi.mock("../utils", () => ({
 
 import type {
   LifeOpsConnectorMode,
+  LifeOpsConnectorSide,
   LifeOpsGoogleConnectorStatus,
 } from "@miladyai/shared/contracts/lifeops";
 import { useGoogleLifeOpsConnector } from "./useGoogleLifeOpsConnector";
 
 function buildStatus(
+  side: LifeOpsConnectorSide,
   overrides: Partial<LifeOpsGoogleConnectorStatus> = {},
 ): LifeOpsGoogleConnectorStatus {
   return {
     provider: "google",
+    side,
     mode: "cloud_managed",
     defaultMode: "cloud_managed",
     availableModes: ["cloud_managed"],
@@ -63,7 +66,7 @@ describe("useGoogleLifeOpsConnector", () => {
 
   it("keeps managed and local modes visible for setup", async () => {
     mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue(
-      buildStatus({
+      buildStatus("owner", {
         availableModes: ["cloud_managed"],
       }),
     );
@@ -74,19 +77,23 @@ describe("useGoogleLifeOpsConnector", () => {
 
     await waitFor(() => expect(result.current.status).not.toBeNull());
 
+    expect(mockClient.getGoogleLifeOpsConnectorStatus).toHaveBeenCalledWith(
+      undefined,
+      "owner",
+    );
     expect(result.current.modeOptions).toEqual(["cloud_managed", "local"]);
   });
 
   it("previews local mode when it is not yet available to persist", async () => {
     mockClient.getGoogleLifeOpsConnectorStatus
       .mockResolvedValueOnce(
-        buildStatus({
+        buildStatus("agent", {
           mode: "cloud_managed",
           availableModes: ["cloud_managed"],
         }),
       )
       .mockResolvedValueOnce(
-        buildStatus({
+        buildStatus("agent", {
           mode: "local",
           availableModes: ["cloud_managed"],
           executionTarget: "local",
@@ -98,7 +105,7 @@ describe("useGoogleLifeOpsConnector", () => {
       );
 
     const { result } = renderHook(() =>
-      useGoogleLifeOpsConnector({ pollIntervalMs: 60_000 }),
+      useGoogleLifeOpsConnector({ pollIntervalMs: 60_000, side: "agent" }),
     );
 
     await waitFor(() =>
@@ -113,6 +120,7 @@ describe("useGoogleLifeOpsConnector", () => {
     expect(mockClient.getGoogleLifeOpsConnectorStatus).toHaveBeenNthCalledWith(
       2,
       "local",
+      "agent",
     );
     expect(result.current.activeMode).toBe("local");
     expect(result.current.status?.reason).toBe("config_missing");
@@ -120,12 +128,12 @@ describe("useGoogleLifeOpsConnector", () => {
 
   it("persists an available mode change and starts auth for the selected mode", async () => {
     mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue(
-      buildStatus({
+      buildStatus("owner", {
         availableModes: ["cloud_managed", "local"],
       }),
     );
     mockClient.selectGoogleLifeOpsConnectorMode.mockResolvedValue(
-      buildStatus({
+      buildStatus("owner", {
         mode: "local",
         availableModes: ["cloud_managed", "local"],
         executionTarget: "local",
@@ -155,6 +163,7 @@ describe("useGoogleLifeOpsConnector", () => {
 
     expect(mockClient.selectGoogleLifeOpsConnectorMode).toHaveBeenCalledWith({
       mode: "local",
+      side: "owner",
     });
 
     await act(async () => {
@@ -163,6 +172,7 @@ describe("useGoogleLifeOpsConnector", () => {
 
     expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith({
       mode: "local",
+      side: "owner",
     });
     expect(mockOpenExternalUrl).toHaveBeenCalledWith(
       "https://accounts.google.com/o/oauth2/v2/auth?client_id=desktop-client",

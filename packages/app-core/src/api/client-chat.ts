@@ -4,7 +4,10 @@
  */
 
 import type { DatabaseProviderType } from "@miladyai/agent/contracts/config";
-import type { LifeOpsConnectorMode } from "@miladyai/shared/contracts/lifeops";
+import type {
+  LifeOpsConnectorMode,
+  LifeOpsConnectorSide,
+} from "@miladyai/shared/contracts/lifeops";
 import { MiladyClient } from "./client-base";
 import type {
   ChatTokenUsage,
@@ -54,6 +57,7 @@ import type {
   MemorySearchResponse,
   QueryResult,
   QuickContextResponse,
+  SelectLifeOpsGoogleConnectorPreferenceRequest,
   SendLifeOpsGmailReplyRequest,
   ShareIngestItem,
   ShareIngestPayload,
@@ -286,10 +290,11 @@ declare module "./client-base" {
     ): Promise<LifeOpsReminderInspection>;
     getGoogleLifeOpsConnectorStatus(
       mode?: LifeOpsConnectorMode,
+      side?: LifeOpsConnectorSide,
     ): Promise<LifeOpsGoogleConnectorStatus>;
-    selectGoogleLifeOpsConnectorMode(data: {
-      mode: LifeOpsConnectorMode;
-    }): Promise<LifeOpsGoogleConnectorStatus>;
+    selectGoogleLifeOpsConnectorMode(
+      data: SelectLifeOpsGoogleConnectorPreferenceRequest,
+    ): Promise<LifeOpsGoogleConnectorStatus>;
     startGoogleLifeOpsConnector(
       data?: StartLifeOpsGoogleConnectorRequest,
     ): Promise<StartLifeOpsGoogleConnectorResponse>;
@@ -1050,8 +1055,16 @@ MiladyClient.prototype.inspectLifeOpsReminder = async function (
 MiladyClient.prototype.getGoogleLifeOpsConnectorStatus = async function (
   this: MiladyClient,
   mode,
+  side,
 ) {
-  const query = mode ? `?mode=${encodeURIComponent(mode)}` : "";
+  const params = new URLSearchParams();
+  if (mode) {
+    params.set("mode", mode);
+  }
+  if (side) {
+    params.set("side", side);
+  }
+  const query = params.size > 0 ? `?${params.toString()}` : "";
   return this.fetch(`/api/lifeops/connectors/google/status${query}`);
 };
 

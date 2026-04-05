@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
 
+import type {
+  LifeOpsConnectorSide,
+  LifeOpsGoogleConnectorStatus,
+} from "@miladyai/shared/contracts/lifeops";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -30,10 +34,59 @@ vi.mock("../../../../api", () => ({
 }));
 
 vi.mock("../../../../hooks", () => ({
-  useGoogleLifeOpsConnector: () => mockUseGoogleLifeOpsConnector(),
+  useGoogleLifeOpsConnector: (options?: { side?: LifeOpsConnectorSide }) =>
+    mockUseGoogleLifeOpsConnector(options),
 }));
 
 import { GoogleSidebarWidget } from "./lifeops";
+
+function buildStatus(
+  side: LifeOpsConnectorSide,
+  overrides: Partial<LifeOpsGoogleConnectorStatus> = {},
+): LifeOpsGoogleConnectorStatus {
+  return {
+    provider: "google",
+    side,
+    mode: "cloud_managed",
+    defaultMode: "cloud_managed",
+    availableModes: ["cloud_managed", "local"],
+    executionTarget: "cloud",
+    sourceOfTruth: "cloud_connection",
+    configured: true,
+    connected: false,
+    reason: "disconnected",
+    preferredByAgent: false,
+    cloudConnectionId: null,
+    identity: null,
+    grantedCapabilities: [],
+    grantedScopes: [],
+    expiresAt: null,
+    hasRefreshToken: false,
+    grant: null,
+    ...overrides,
+  };
+}
+
+function buildController(
+  side: LifeOpsConnectorSide,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    activeMode: "cloud_managed",
+    actionPending: false,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    error: null,
+    loading: false,
+    modeOptions: ["cloud_managed", "local"],
+    refresh: vi.fn(),
+    selectMode: vi.fn(),
+    selectedMode: "cloud_managed",
+    side,
+    status: buildStatus(side),
+    ...overrides,
+  };
+}
 
 function flattenText(node: TestRenderer.ReactTestInstance): string {
   return node.children
@@ -53,26 +106,9 @@ describe("GoogleSidebarWidget", () => {
     mockUseGoogleLifeOpsConnector.mockReset();
   });
 
-  it("renders connected managed Google status, calendar, and inbox data", async () => {
-    mockUseGoogleLifeOpsConnector.mockReturnValue({
-      activeMode: "cloud_managed",
-      actionPending: false,
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-      error: null,
-      loading: false,
-      modeOptions: ["cloud_managed", "local"],
-      refresh: vi.fn(),
-      selectMode: vi.fn(),
-      selectedMode: "cloud_managed",
-      status: {
-        provider: "google",
-        mode: "cloud_managed",
-        defaultMode: "cloud_managed",
-        availableModes: ["cloud_managed"],
-        executionTarget: "cloud",
-        sourceOfTruth: "cloud_connection",
-        configured: true,
+  it("renders owner and agent connectors and uses the preferred side for data", async () => {
+    const ownerConnector = buildController("owner", {
+      status: buildStatus("owner", {
         connected: true,
         reason: "connected",
         preferredByAgent: true,
@@ -86,12 +122,25 @@ describe("GoogleSidebarWidget", () => {
           "google.calendar.read",
           "google.gmail.triage",
         ],
-        grantedScopes: [],
         expiresAt: "2026-04-05T00:00:00.000Z",
         hasRefreshToken: true,
-        grant: null,
-      },
+      }),
     });
+    const agentConnector = buildController("agent", {
+      status: buildStatus("agent", {
+        connected: true,
+        reason: "connected",
+        identity: {
+          name: "Milady Agent",
+          email: "agent@example.com",
+        },
+        grantedCapabilities: ["google.basic_identity"],
+      }),
+    });
+    mockUseGoogleLifeOpsConnector.mockImplementation(
+      (options?: { side?: LifeOpsConnectorSide }) =>
+        options?.side === "agent" ? agentConnector : ownerConnector,
+    );
     mockClient.getLifeOpsCalendarFeed.mockResolvedValue({
       calendarId: "primary",
       events: [
@@ -170,14 +219,25 @@ describe("GoogleSidebarWidget", () => {
       );
     });
 
-    expect(renderer).toBeDefined();
-    const root = renderer.root;
-    const text = flattenText(root);
+    const text = flattenText(renderer.root);
+    expect(mockUseGoogleLifeOpsConnector).toHaveBeenCalledWith({
+      side: "owner",
+      pollIntervalMs: 15000,
+    });
+    expect(mockUseGoogleLifeOpsConnector).toHaveBeenCalledWith({
+      side: "agent",
+      pollIntervalMs: 15000,
+    });
+    expect(text).toContain("Owner");
+    expect(text).toContain("Agent");
     expect(text).toContain("Founder Example");
     expect(text).toContain("founder@example.com");
+    expect(text).toContain("Milady Agent");
     expect(text).toContain("Founder sync");
     expect(text).toContain("Project sync");
     expect(text).toContain("Reply");
+    expect(text).toContain("Calendar (Owner)");
+    expect(text).toContain("Inbox (Owner)");
 
     expect(mockClient.getLifeOpsCalendarFeed).toHaveBeenCalledWith({
       mode: "cloud_managed",
@@ -189,102 +249,66 @@ describe("GoogleSidebarWidget", () => {
     });
   });
 
-  it("wires refresh and connect through the shared connector hook", async () => {
-    const refresh = vi.fn();
-    const connect = vi.fn();
-    const selectMode = vi.fn();
-
-    mockUseGoogleLifeOpsConnector.mockReturnValue({
-      activeMode: "cloud_managed",
-      actionPending: false,
-      connect,
-      disconnect: vi.fn(),
-      error: null,
-      loading: false,
-      modeOptions: ["cloud_managed", "local"],
-      refresh,
-      selectMode,
-      selectedMode: "cloud_managed",
-      status: {
-        provider: "google",
-        mode: "cloud_managed",
-        defaultMode: "cloud_managed",
-        availableModes: ["cloud_managed", "local"],
-        executionTarget: "cloud",
-        sourceOfTruth: "cloud_connection",
-        configured: true,
-        connected: false,
-        reason: "disconnected",
-        preferredByAgent: false,
-        cloudConnectionId: null,
-        identity: null,
-        grantedCapabilities: [],
-        grantedScopes: [],
-        expiresAt: null,
-        hasRefreshToken: false,
-        grant: null,
-      },
+  it("wires owner-side refresh and connect through the shared connector hook", async () => {
+    const ownerRefresh = vi.fn();
+    const ownerConnect = vi.fn();
+    const ownerSelectMode = vi.fn();
+    const ownerConnector = buildController("owner", {
+      refresh: ownerRefresh,
+      connect: ownerConnect,
+      selectMode: ownerSelectMode,
     });
-
-    let renderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      renderer = TestRenderer.create(
-        React.createElement(GoogleSidebarWidget, {
-          events: [],
-          clearEvents: () => {},
-        }),
-      );
-    });
-
-    const buttons = renderer.root.findAllByType("button");
-    const refreshButton = buttons[0];
-    const connectButton = buttons.find(
-      (button) => flattenText(button) === "Connect",
+    const agentConnector = buildController("agent");
+    mockUseGoogleLifeOpsConnector.mockImplementation(
+      (options?: { side?: LifeOpsConnectorSide }) =>
+        options?.side === "agent" ? agentConnector : ownerConnector,
     );
 
+    let renderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      refreshButton?.props.onClick();
-      connectButton?.props.onClick();
+      renderer = TestRenderer.create(
+        React.createElement(GoogleSidebarWidget, {
+          events: [],
+          clearEvents: () => {},
+        }),
+      );
     });
 
-    expect(refresh).toHaveBeenCalledTimes(1);
-    expect(connect).toHaveBeenCalledTimes(1);
-    expect(selectMode).not.toHaveBeenCalled();
+    await act(async () => {
+      renderer.root
+        .findAllByType("button")
+        .find(
+          (button) =>
+            button.props["aria-label"] === "Refresh Owner Google connector",
+        )
+        ?.props.onClick();
+      renderer.root
+        .findAllByType("button")
+        .find(
+          (button) =>
+            button.props["aria-label"] === "Connect Owner Google connector",
+        )
+        ?.props.onClick();
+    });
+
+    expect(ownerRefresh).toHaveBeenCalledTimes(1);
+    expect(ownerConnect).toHaveBeenCalledTimes(1);
+    expect(ownerSelectMode).not.toHaveBeenCalled();
   });
 
-  it("wires mode selection through the shared connector hook", async () => {
-    const selectMode = vi.fn();
-    mockUseGoogleLifeOpsConnector.mockReturnValue({
-      activeMode: "cloud_managed",
-      actionPending: false,
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-      error: null,
-      loading: false,
-      modeOptions: ["cloud_managed", "local"],
-      refresh: vi.fn(),
-      selectMode,
-      selectedMode: "cloud_managed",
-      status: {
-        provider: "google",
-        mode: "cloud_managed",
-        defaultMode: "cloud_managed",
-        availableModes: ["cloud_managed", "local"],
-        executionTarget: "cloud",
-        sourceOfTruth: "cloud_connection",
-        configured: true,
-        connected: false,
-        reason: "disconnected",
-        preferredByAgent: false,
-        cloudConnectionId: null,
-        identity: null,
-        grantedCapabilities: [],
-        grantedScopes: [],
-        expiresAt: null,
-        hasRefreshToken: false,
-        grant: null,
-      },
+  it("wires mode selection through the shared connector hook for the requested side", async () => {
+    const ownerSelectMode = vi.fn();
+    const agentSelectMode = vi.fn();
+    const ownerConnector = buildController("owner", {
+      selectMode: ownerSelectMode,
     });
+    const agentConnector = buildController("agent", {
+      selectMode: agentSelectMode,
+    });
+    mockUseGoogleLifeOpsConnector.mockImplementation(
+      (options?: { side?: LifeOpsConnectorSide }) =>
+        options?.side === "agent" ? agentConnector : ownerConnector,
+    );
 
     let renderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -296,15 +320,14 @@ describe("GoogleSidebarWidget", () => {
       );
     });
 
-    const localButton = renderer.root
-      .findAllByType("button")
-      .find((button) => flattenText(button) === "Local");
-    expect(localButton).toBeDefined();
-
     await act(async () => {
-      localButton?.props.onClick();
+      renderer.root
+        .findAllByType("button")
+        .find((button) => button.props["aria-label"] === "Agent Local mode")
+        ?.props.onClick();
     });
 
-    expect(selectMode).toHaveBeenCalledWith("local");
+    expect(ownerSelectMode).not.toHaveBeenCalled();
+    expect(agentSelectMode).toHaveBeenCalledWith("local");
   });
 });

@@ -2,6 +2,7 @@ import type {
   LifeOpsConnectorExecutionTarget,
   LifeOpsConnectorGrant,
   LifeOpsConnectorMode,
+  LifeOpsConnectorSide,
   LifeOpsConnectorSourceOfTruth,
 } from "@miladyai/shared/contracts/lifeops";
 import {
@@ -67,7 +68,7 @@ export function resolveGoogleAvailableModes(args: {
     .map((grant) => grant.mode);
   const availableModes = uniqueModes([
     ...localModes,
-    ...(args.cloudConfigured ? ["cloud_managed"] : []),
+    ...(args.cloudConfigured ? (["cloud_managed"] as const) : []),
     ...grantedModes,
   ]);
 
@@ -84,35 +85,39 @@ export function resolveGoogleAvailableModes(args: {
 export function resolvePreferredGoogleGrant(args: {
   grants: readonly LifeOpsConnectorGrant[];
   requestedMode?: LifeOpsConnectorMode;
+  requestedSide?: LifeOpsConnectorSide;
   defaultMode: LifeOpsConnectorMode;
 }): LifeOpsConnectorGrant | null {
   const googleGrants = args.grants.filter(
     (grant) => grant.provider === "google",
   );
-  if (googleGrants.length === 0) {
+  const scopedGrants = args.requestedSide
+    ? googleGrants.filter((grant) => grant.side === args.requestedSide)
+    : googleGrants;
+  if (scopedGrants.length === 0) {
     return null;
   }
 
   if (args.requestedMode) {
     return (
-      googleGrants.find((grant) => grant.mode === args.requestedMode) ?? null
+      scopedGrants.find((grant) => grant.mode === args.requestedMode) ?? null
     );
   }
 
   const preferredGrant =
-    googleGrants.find((grant) => grant.preferredByAgent) ?? null;
+    scopedGrants.find((grant) => grant.preferredByAgent) ?? null;
   if (preferredGrant) {
     return preferredGrant;
   }
 
   const defaultGrant =
-    googleGrants.find((grant) => grant.mode === args.defaultMode) ?? null;
+    scopedGrants.find((grant) => grant.mode === args.defaultMode) ?? null;
   if (defaultGrant) {
     return defaultGrant;
   }
 
   return (
-    [...googleGrants].sort((left, right) =>
+    [...scopedGrants].sort((left, right) =>
       right.updatedAt.localeCompare(left.updatedAt),
     )[0] ?? null
   );

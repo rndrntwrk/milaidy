@@ -6,6 +6,7 @@ import type {
   LifeOpsCalendarEvent,
   LifeOpsChannelPolicy,
   LifeOpsConnectorGrant,
+  LifeOpsConnectorSide,
   LifeOpsGmailMessageSummary,
   LifeOpsGoalDefinition,
   LifeOpsGoalLink,
@@ -241,6 +242,7 @@ function parseConnectorGrant(
     id: toText(row.id),
     agentId: toText(row.agent_id),
     provider: toText(row.provider) as LifeOpsConnectorGrant["provider"],
+    side: toText(row.side, "owner") as LifeOpsConnectorGrant["side"],
     identity: parseJsonRecord(row.identity_json),
     grantedScopes: parseJsonArray(row.granted_scopes_json),
     capabilities: parseJsonArray(row.capabilities_json),
@@ -636,6 +638,7 @@ export async function ensureLifeOpsTables(
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
       provider TEXT NOT NULL,
+      side TEXT NOT NULL DEFAULT 'owner',
       identity_json TEXT NOT NULL DEFAULT '{}',
       granted_scopes_json TEXT NOT NULL DEFAULT '[]',
       capabilities_json TEXT NOT NULL DEFAULT '[]',
@@ -649,7 +652,7 @@ export async function ensureLifeOpsTables(
       last_refresh_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      UNIQUE(agent_id, provider, mode)
+      UNIQUE(agent_id, provider, side, mode)
     )`,
     `CREATE TABLE IF NOT EXISTS life_calendar_events (
       id TEXT PRIMARY KEY,
@@ -837,7 +840,77 @@ export async function ensureLifeOpsTables(
     );
   }
 
+  const existingConnectorGrantColumns = new Set(
+    await listTableColumns(runtime, "life_connector_grants"),
+  );
+  if (
+    existingConnectorGrantColumns.size > 0 &&
+    !existingConnectorGrantColumns.has("side")
+  ) {
+    await executeRawSql(runtime, `DROP TABLE IF EXISTS life_connector_grants_next`);
+    await executeRawSql(
+      runtime,
+      `CREATE TABLE life_connector_grants_next (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        side TEXT NOT NULL DEFAULT 'owner',
+        identity_json TEXT NOT NULL DEFAULT '{}',
+        granted_scopes_json TEXT NOT NULL DEFAULT '[]',
+        capabilities_json TEXT NOT NULL DEFAULT '[]',
+        token_ref TEXT,
+        mode TEXT NOT NULL,
+        execution_target TEXT NOT NULL DEFAULT 'local',
+        source_of_truth TEXT NOT NULL DEFAULT 'local_storage',
+        preferred_by_agent BOOLEAN NOT NULL DEFAULT FALSE,
+        cloud_connection_id TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        last_refresh_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(agent_id, provider, side, mode)
+      )`,
+    );
+    await executeRawSql(
+      runtime,
+      `INSERT INTO life_connector_grants_next (
+        id, agent_id, provider, side, identity_json, granted_scopes_json,
+        capabilities_json, token_ref, mode, execution_target, source_of_truth,
+        preferred_by_agent, cloud_connection_id, metadata_json,
+        last_refresh_at, created_at, updated_at
+      )
+      SELECT
+        id,
+        agent_id,
+        provider,
+        'owner',
+        identity_json,
+        granted_scopes_json,
+        capabilities_json,
+        token_ref,
+        mode,
+        COALESCE(execution_target, 'local'),
+        COALESCE(source_of_truth, 'local_storage'),
+        COALESCE(preferred_by_agent, FALSE),
+        cloud_connection_id,
+        COALESCE(metadata_json, '{}'),
+        last_refresh_at,
+        created_at,
+        updated_at
+      FROM life_connector_grants`,
+    );
+    await executeRawSql(runtime, `DROP TABLE life_connector_grants`);
+    await executeRawSql(
+      runtime,
+      `ALTER TABLE life_connector_grants_next RENAME TO life_connector_grants`,
+    );
+  }
+
   const connectorGrantColumns = [
+    {
+      name: "side",
+      definition: "TEXT NOT NULL DEFAULT 'owner'",
+    },
     {
       name: "execution_target",
       definition: "TEXT NOT NULL DEFAULT 'local'",
@@ -856,11 +929,11 @@ export async function ensureLifeOpsTables(
     },
   ] as const;
 
-  const existingConnectorGrantColumns = new Set(
+  const refreshedConnectorGrantColumns = new Set(
     await listTableColumns(runtime, "life_connector_grants"),
   );
   for (const column of connectorGrantColumns) {
-    if (existingConnectorGrantColumns.has(column.name)) continue;
+    if (refreshedConnectorGrantColumns.has(column.name)) continue;
     await executeRawSql(
       runtime,
       `ALTER TABLE life_connector_grants ADD COLUMN ${column.name} ${column.definition}`,
@@ -1525,7 +1598,7 @@ export class LifeOpsRepository {
     await executeRawSql(
       this.runtime,
       `INSERT INTO life_connector_grants (
-        id, agent_id, provider, identity_json, granted_scopes_json,
+        id, agent_id, provider, side, identity_json, granted_scopes_json,
         capabilities_json, token_ref, mode, execution_target, source_of_truth,
         preferred_by_agent, cloud_connection_id, metadata_json,
         last_refresh_at, created_at, updated_at
@@ -1533,6 +1606,7 @@ export class LifeOpsRepository {
         ${sqlQuote(grant.id)},
         ${sqlQuote(grant.agentId)},
         ${sqlQuote(grant.provider)},
+        ${sqlQuote(grant.side)},
         ${sqlJson(grant.identity)},
         ${sqlJson(grant.grantedScopes)},
         ${sqlJson(grant.capabilities)},
@@ -1547,7 +1621,7 @@ export class LifeOpsRepository {
         ${sqlQuote(grant.createdAt)},
         ${sqlQuote(grant.updatedAt)}
       )
-      ON CONFLICT(agent_id, provider, mode) DO UPDATE SET
+      ON CONFLICT(agent_id, provider, side, mode) DO UPDATE SET
         identity_json = excluded.identity_json,
         granted_scopes_json = excluded.granted_scopes_json,
         capabilities_json = excluded.capabilities_json,
@@ -1578,14 +1652,16 @@ export class LifeOpsRepository {
     agentId: string,
     provider: LifeOpsConnectorGrant["provider"],
     mode: LifeOpsConnectorGrant["mode"],
+    side: LifeOpsConnectorSide = "owner",
   ): Promise<LifeOpsConnectorGrant | null> {
     await this.ensureReady();
     const rows = await executeRawSql(
       this.runtime,
       `SELECT *
-         FROM life_connector_grants
+        FROM life_connector_grants
         WHERE agent_id = ${sqlQuote(agentId)}
           AND provider = ${sqlQuote(provider)}
+          AND side = ${sqlQuote(side)}
           AND mode = ${sqlQuote(mode)}
         LIMIT 1`,
     );
@@ -1597,15 +1673,18 @@ export class LifeOpsRepository {
     agentId: string,
     provider: LifeOpsConnectorGrant["provider"],
     mode?: LifeOpsConnectorGrant["mode"],
+    side?: LifeOpsConnectorSide,
   ): Promise<void> {
     await this.ensureReady();
     const modeClause = mode ? `AND mode = ${sqlQuote(mode)}` : "";
+    const sideClause = side ? `AND side = ${sqlQuote(side)}` : "";
     await executeRawSql(
       this.runtime,
       `DELETE FROM life_connector_grants
         WHERE agent_id = ${sqlQuote(agentId)}
           AND provider = ${sqlQuote(provider)}
-          ${modeClause}`,
+          ${modeClause}
+          ${sideClause}`,
     );
   }
 
@@ -2319,6 +2398,7 @@ export function createLifeOpsConnectorGrant(
     | "id"
     | "createdAt"
     | "updatedAt"
+    | "side"
     | "executionTarget"
     | "sourceOfTruth"
     | "preferredByAgent"
@@ -2327,6 +2407,7 @@ export function createLifeOpsConnectorGrant(
     Partial<
       Pick<
         LifeOpsConnectorGrant,
+        | "side"
         | "executionTarget"
         | "sourceOfTruth"
         | "preferredByAgent"
@@ -2337,6 +2418,7 @@ export function createLifeOpsConnectorGrant(
   const timestamp = isoNow();
   return {
     ...params,
+    side: params.side ?? "owner",
     executionTarget: params.executionTarget ?? "local",
     sourceOfTruth: params.sourceOfTruth ?? "local_storage",
     preferredByAgent: params.preferredByAgent ?? false,

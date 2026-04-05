@@ -87,6 +87,9 @@ export const LIFEOPS_CONNECTOR_MODES = [
 ] as const;
 export type LifeOpsConnectorMode = (typeof LIFEOPS_CONNECTOR_MODES)[number];
 
+export const LIFEOPS_CONNECTOR_SIDES = ["owner", "agent"] as const;
+export type LifeOpsConnectorSide = (typeof LIFEOPS_CONNECTOR_SIDES)[number];
+
 export const LIFEOPS_CONNECTOR_EXECUTION_TARGETS = ["local", "cloud"] as const;
 export type LifeOpsConnectorExecutionTarget =
   (typeof LIFEOPS_CONNECTOR_EXECUTION_TARGETS)[number];
@@ -554,6 +557,7 @@ export interface LifeOpsConnectorGrant {
   id: string;
   agentId: string;
   provider: LifeOpsConnectorProvider;
+  side: LifeOpsConnectorSide;
   identity: Record<string, unknown>;
   grantedScopes: string[];
   capabilities: string[];
@@ -683,6 +687,7 @@ export interface LifeOpsCalendarFeed {
 }
 
 export interface GetLifeOpsCalendarFeedRequest {
+  side?: LifeOpsConnectorSide;
   mode?: LifeOpsConnectorMode;
   calendarId?: string;
   timeMin?: string;
@@ -731,6 +736,7 @@ export interface LifeOpsGmailTriageFeed {
 }
 
 export interface GetLifeOpsGmailTriageRequest {
+  side?: LifeOpsConnectorSide;
   mode?: LifeOpsConnectorMode;
   forceSync?: boolean;
   maxResults?: number;
@@ -740,6 +746,7 @@ export const LIFEOPS_GMAIL_DRAFT_TONES = ["brief", "neutral", "warm"] as const;
 export type LifeOpsGmailDraftTone = (typeof LIFEOPS_GMAIL_DRAFT_TONES)[number];
 
 export interface CreateLifeOpsGmailReplyDraftRequest {
+  side?: LifeOpsConnectorSide;
   mode?: LifeOpsConnectorMode;
   messageId: string;
   tone?: LifeOpsGmailDraftTone;
@@ -760,6 +767,7 @@ export interface LifeOpsGmailReplyDraft {
 }
 
 export interface SendLifeOpsGmailReplyRequest {
+  side?: LifeOpsConnectorSide;
   mode?: LifeOpsConnectorMode;
   messageId: string;
   bodyText: string;
@@ -784,6 +792,7 @@ export interface CreateLifeOpsCalendarEventAttendee {
 }
 
 export interface CreateLifeOpsCalendarEventRequest {
+  side?: LifeOpsConnectorSide;
   mode?: LifeOpsConnectorMode;
   calendarId?: string;
   title: string;
@@ -828,6 +837,7 @@ export type LifeOpsGoogleConnectorReason =
 
 export interface LifeOpsGoogleConnectorStatus {
   provider: "google";
+  side: LifeOpsConnectorSide;
   mode: LifeOpsConnectorMode;
   defaultMode: LifeOpsConnectorMode;
   availableModes: LifeOpsConnectorMode[];
@@ -858,19 +868,27 @@ export interface LifeOpsXConnectorStatus {
 }
 
 export interface StartLifeOpsGoogleConnectorRequest {
+  side?: LifeOpsConnectorSide;
   mode?: LifeOpsConnectorMode;
   capabilities?: LifeOpsGoogleCapability[];
 }
 
 export interface StartLifeOpsGoogleConnectorResponse {
   provider: "google";
+  side: LifeOpsConnectorSide;
   mode: LifeOpsConnectorMode;
   requestedCapabilities: LifeOpsGoogleCapability[];
   redirectUri: string;
   authUrl: string;
 }
 
+export interface SelectLifeOpsGoogleConnectorPreferenceRequest {
+  side?: LifeOpsConnectorSide;
+  mode?: LifeOpsConnectorMode;
+}
+
 export interface DisconnectLifeOpsGoogleConnectorRequest {
+  side?: LifeOpsConnectorSide;
   mode?: LifeOpsConnectorMode;
 }
 

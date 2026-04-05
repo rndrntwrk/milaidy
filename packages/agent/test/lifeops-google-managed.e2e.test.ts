@@ -211,9 +211,12 @@ describe("life-ops managed Google connector", () => {
       const headers = new Headers(init?.headers);
       expect(headers.get("x-api-key")).toBe("ck-managed-google-test");
 
-      if (url === "https://cloud.example/api/v1/milady/google/status") {
+      if (
+        url === "https://cloud.example/api/v1/milady/google/status?side=owner"
+      ) {
         return jsonResponse({
           provider: "google",
+          side: "owner",
           mode: "cloud_managed",
           configured: true,
           connected: true,
@@ -317,11 +320,14 @@ describe("life-ops managed Google connector", () => {
         });
       }
 
-      if (url === "https://cloud.example/api/v1/milady/google/status") {
+      if (
+        url === "https://cloud.example/api/v1/milady/google/status?side=owner"
+      ) {
         const headers = new Headers(init?.headers);
         expect(headers.get("x-api-key")).toBe("ck-managed-google-test");
         return jsonResponse({
           provider: "google",
+          side: "owner",
           mode: "cloud_managed",
           configured: true,
           connected: true,
@@ -495,6 +501,7 @@ describe("life-ops managed Google connector", () => {
           string,
           unknown
         >;
+        expect(body.side).toBe("owner");
         expect(body.capabilities).toEqual([
           "google.basic_identity",
           "google.calendar.read",
@@ -507,6 +514,7 @@ describe("life-ops managed Google connector", () => {
         connected = true;
         return jsonResponse({
           provider: "google",
+          side: "owner",
           mode: "cloud_managed",
           requestedCapabilities: [
             "google.basic_identity",
@@ -520,11 +528,14 @@ describe("life-ops managed Google connector", () => {
         });
       }
 
-      if (url === "https://cloud.example/api/v1/milady/google/status") {
+      if (
+        url === "https://cloud.example/api/v1/milady/google/status?side=owner"
+      ) {
         return jsonResponse(
           connected
             ? {
                 provider: "google",
+                side: "owner",
                 mode: "cloud_managed",
                 configured: true,
                 connected: true,
@@ -558,6 +569,7 @@ describe("life-ops managed Google connector", () => {
               }
             : {
                 provider: "google",
+                side: "owner",
                 mode: "cloud_managed",
                 configured: true,
                 connected: false,
@@ -631,6 +643,7 @@ describe("life-ops managed Google connector", () => {
           string,
           unknown
         >;
+        expect(body.side).toBe("owner");
         createdEventIds.push(String(body.title));
         return jsonResponse({
           event: {
@@ -708,6 +721,7 @@ describe("life-ops managed Google connector", () => {
           string,
           unknown
         >;
+        expect(body.side).toBe("owner");
         sentSubjects.push(String(body.subject));
         expect(body.to).toEqual(["founder@example.com"]);
         expect(body.inReplyTo).toBe("<managed-message-1@example.com>");
@@ -718,6 +732,11 @@ describe("life-ops managed Google connector", () => {
         url === "https://cloud.example/api/v1/milady/google/disconnect" &&
         method === "POST"
       ) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as Record<
+          string,
+          unknown
+        >;
+        expect(body.side).toBe("owner");
         connected = false;
         return jsonResponse({ ok: true });
       }

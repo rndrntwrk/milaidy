@@ -27,6 +27,7 @@ import type {
   LifeOpsChannelPolicy,
   LifeOpsConnectorGrant,
   LifeOpsConnectorMode,
+  LifeOpsConnectorSide,
   LifeOpsContextPolicy,
   LifeOpsDefinitionRecord,
   LifeOpsDomain,
@@ -87,6 +88,7 @@ import {
   LIFEOPS_CALENDAR_WINDOW_PRESETS,
   LIFEOPS_CHANNEL_TYPES,
   LIFEOPS_CONNECTOR_MODES,
+  LIFEOPS_CONNECTOR_SIDES,
   LIFEOPS_CONTEXT_POLICIES,
   LIFEOPS_DEFINITION_KINDS,
   LIFEOPS_DEFINITION_STATUSES,
@@ -1290,6 +1292,16 @@ function normalizeOptionalConnectorMode(
     return undefined;
   }
   return normalizeEnumValue(value, field, LIFEOPS_CONNECTOR_MODES);
+}
+
+function normalizeOptionalConnectorSide(
+  value: unknown,
+  field: string,
+): LifeOpsConnectorSide | undefined {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  return normalizeEnumValue(value, field, LIFEOPS_CONNECTOR_SIDES);
 }
 
 function normalizeGoogleCapabilityRequest(
@@ -2664,23 +2676,64 @@ export class LifeOpsService {
     throw error;
   }
 
+  private async clearGoogleConnectorData(): Promise<void> {
+    const calendarEvents = await this.repository.listCalendarEvents(
+      this.agentId(),
+      "google",
+    );
+    await this.deleteCalendarReminderPlansForEvents(
+      calendarEvents.map((event) => event.id),
+    );
+    await this.repository.deleteCalendarEventsForProvider(
+      this.agentId(),
+      "google",
+    );
+    await this.repository.deleteCalendarSyncState(this.agentId(), "google");
+    await this.repository.deleteGmailMessagesForProvider(
+      this.agentId(),
+      "google",
+    );
+    await this.repository.deleteGmailSyncState(this.agentId(), "google");
+  }
+
   private async setPreferredGoogleConnectorMode(
     preferredMode: LifeOpsConnectorMode | null,
-  ): Promise<void> {
+    preferredSide?: LifeOpsConnectorSide | null,
+  ): Promise<LifeOpsConnectorGrant | null> {
     const googleGrants = (
       await this.repository.listConnectorGrants(this.agentId())
     ).filter((grant) => grant.provider === "google");
 
-    const resolvedPreferredMode =
-      preferredMode ??
+    const resolvedPreferredGrant =
+      (preferredMode && preferredSide
+        ? (googleGrants.find(
+            (grant) =>
+              grant.mode === preferredMode && grant.side === preferredSide,
+          ) ?? null)
+        : null) ??
+      (preferredMode
+        ? ([...googleGrants]
+            .filter((grant) => grant.mode === preferredMode)
+            .sort((left, right) =>
+              right.updatedAt.localeCompare(left.updatedAt),
+            )[0] ?? null)
+        : null) ??
+      (preferredSide
+        ? ([...googleGrants]
+            .filter((grant) => grant.side === preferredSide)
+            .sort((left, right) =>
+              right.updatedAt.localeCompare(left.updatedAt),
+            )[0] ?? null)
+        : null) ??
       [...googleGrants].sort((left, right) =>
         right.updatedAt.localeCompare(left.updatedAt),
-      )[0]?.mode ??
+      )[0] ??
       null;
 
     for (const grant of googleGrants) {
       const shouldPrefer =
-        resolvedPreferredMode !== null && grant.mode === resolvedPreferredMode;
+        resolvedPreferredGrant !== null &&
+        grant.id === resolvedPreferredGrant.id;
       if (grant.preferredByAgent === shouldPrefer) {
         continue;
       }
@@ -2690,17 +2743,20 @@ export class LifeOpsService {
         updatedAt: new Date().toISOString(),
       });
     }
+    return resolvedPreferredGrant;
   }
 
   private async upsertManagedGoogleGrant(
     status: ManagedGoogleConnectorStatusResponse,
+    side: LifeOpsConnectorSide,
   ): Promise<LifeOpsConnectorGrant | null> {
     const currentGoogleGrants = (
       await this.repository.listConnectorGrants(this.agentId())
     ).filter((grant) => grant.provider === "google");
     const existingGrant =
-      currentGoogleGrants.find((grant) => grant.mode === "cloud_managed") ??
-      null;
+      currentGoogleGrants.find(
+        (grant) => grant.mode === "cloud_managed" && grant.side === side,
+      ) ?? null;
     if (!existingGrant && !status.connected) {
       return null;
     }
@@ -2748,6 +2804,7 @@ export class LifeOpsService {
       : createLifeOpsConnectorGrant({
           agentId: this.agentId(),
           provider: "google",
+          side,
           identity: status.identity ? { ...status.identity } : {},
           grantedScopes: [...status.grantedScopes],
           capabilities: [...status.grantedCapabilities],
@@ -3169,6 +3226,7 @@ export class LifeOpsService {
         resolveGoogleExecutionTarget(grant) === "cloud"
           ? (
               await this.googleManagedClient.getGmailTriage({
+                side: grant.side,
                 maxResults: args.maxResults,
               })
             ).messages
@@ -3339,6 +3397,7 @@ export class LifeOpsService {
         resolveGoogleExecutionTarget(grant) === "cloud"
           ? (
               await this.googleManagedClient.getCalendarFeed({
+                side: grant.side,
                 calendarId: args.calendarId,
                 timeMin: args.timeMin,
                 timeMax: args.timeMax,
@@ -5967,6 +6026,7 @@ export class LifeOpsService {
         resolveGoogleExecutionTarget(grant) === "cloud"
           ? (
               await this.googleManagedClient.createCalendarEvent({
+                side: grant.side,
                 calendarId,
                 title,
                 description,
@@ -6226,6 +6286,7 @@ export class LifeOpsService {
     const sendReply = async () => {
       if (resolveGoogleExecutionTarget(grant) === "cloud") {
         await this.googleManagedClient.sendGmailReply({
+          side: grant.side,
           to,
           cc,
           subject,
@@ -6442,8 +6503,10 @@ export class LifeOpsService {
   async getGoogleConnectorStatus(
     requestUrl: URL,
     requestedMode?: LifeOpsConnectorMode,
+    requestedSide?: LifeOpsConnectorSide,
   ): Promise<LifeOpsGoogleConnectorStatus> {
     const explicitMode = normalizeOptionalConnectorMode(requestedMode, "mode");
+    const explicitSide = normalizeOptionalConnectorSide(requestedSide, "side");
     const grants = (
       await this.repository.listConnectorGrants(this.agentId())
     ).filter((candidate) => candidate.provider === "google");
@@ -6456,15 +6519,18 @@ export class LifeOpsService {
     const resolvedGrant = resolvePreferredGoogleGrant({
       grants,
       requestedMode: explicitMode,
+      requestedSide: explicitSide,
       defaultMode: modeAvailability.defaultMode,
     });
     const mode =
       explicitMode ?? resolvedGrant?.mode ?? modeAvailability.defaultMode;
+    const side = explicitSide ?? resolvedGrant?.side ?? "owner";
 
     if (mode === "cloud_managed") {
       if (!cloudConfig.configured && !resolvedGrant) {
         return {
           provider: "google",
+          side,
           mode,
           defaultMode: modeAvailability.defaultMode,
           availableModes: modeAvailability.availableModes,
@@ -6487,6 +6553,7 @@ export class LifeOpsService {
       if (!cloudConfig.configured && resolvedGrant) {
         return {
           provider: "google",
+          side,
           mode,
           defaultMode: modeAvailability.defaultMode,
           availableModes: modeAvailability.availableModes,
@@ -6516,7 +6583,7 @@ export class LifeOpsService {
 
       let managedStatus: ManagedGoogleConnectorStatusResponse;
       try {
-        managedStatus = await this.googleManagedClient.getStatus();
+        managedStatus = await this.googleManagedClient.getStatus(side);
       } catch (error) {
         if (error instanceof ManagedGoogleClientError) {
           if (error.status === 404) {
@@ -6529,10 +6596,15 @@ export class LifeOpsService {
                 Boolean(candidate) && candidate !== "cloud_managed",
             );
             if (fallbackMode) {
-              return this.getGoogleConnectorStatus(requestUrl, fallbackMode);
+              return this.getGoogleConnectorStatus(
+                requestUrl,
+                fallbackMode,
+                side,
+              );
             }
             return {
               provider: "google",
+              side,
               mode: "local",
               defaultMode: "local",
               availableModes: [],
@@ -6568,10 +6640,14 @@ export class LifeOpsService {
         throw error;
       }
 
-      const mirroredGrant = await this.upsertManagedGoogleGrant(managedStatus);
+      const mirroredGrant = await this.upsertManagedGoogleGrant(
+        managedStatus,
+        side,
+      );
       const grant = mirroredGrant ?? resolvedGrant ?? null;
       return {
         provider: "google",
+        side,
         mode,
         defaultMode: modeAvailability.defaultMode,
         availableModes: modeAvailability.availableModes,
@@ -6599,11 +6675,13 @@ export class LifeOpsService {
             this.agentId(),
             "google",
             mode,
+            side,
           );
 
     if (!grant) {
       return {
         provider: "google",
+        side,
         mode,
         defaultMode: modeAvailability.defaultMode,
         availableModes: modeAvailability.availableModes,
@@ -6627,6 +6705,7 @@ export class LifeOpsService {
     if (!token) {
       return {
         provider: "google",
+        side: grant.side,
         mode: grant.mode,
         defaultMode: modeAvailability.defaultMode,
         availableModes: modeAvailability.availableModes,
@@ -6658,6 +6737,7 @@ export class LifeOpsService {
 
     return {
       provider: "google",
+      side: grant.side,
       mode: grant.mode,
       defaultMode: modeAvailability.defaultMode,
       availableModes: modeAvailability.availableModes,
@@ -6683,11 +6763,13 @@ export class LifeOpsService {
   async selectGoogleConnectorMode(
     requestUrl: URL,
     preferredModeInput: LifeOpsConnectorMode | undefined,
+    requestedSide?: LifeOpsConnectorSide,
   ): Promise<LifeOpsGoogleConnectorStatus> {
     const preferredMode = normalizeOptionalConnectorMode(
       preferredModeInput,
       "mode",
     );
+    const preferredSide = normalizeOptionalConnectorSide(requestedSide, "side");
     if (!preferredMode) {
       fail(400, "mode is required");
     }
@@ -6707,26 +6789,37 @@ export class LifeOpsService {
       );
     }
 
-    const previousPreferredMode =
-      resolvePreferredGoogleGrant({
-        grants,
-        defaultMode: modeAvailability.defaultMode,
-      })?.mode ?? null;
+    const previousPreferredGrant = resolvePreferredGoogleGrant({
+      grants,
+      defaultMode: modeAvailability.defaultMode,
+    });
     const targetGrant =
-      grants.find((grant) => grant.mode === preferredMode) ?? null;
+      grants.find(
+        (grant) =>
+          grant.mode === preferredMode &&
+          (preferredSide === undefined || grant.side === preferredSide),
+      ) ?? null;
 
     if (targetGrant) {
-      await this.setPreferredGoogleConnectorMode(preferredMode);
+      const nextPreferredGrant = await this.setPreferredGoogleConnectorMode(
+        preferredMode,
+        preferredSide,
+      );
+      if (previousPreferredGrant?.id !== nextPreferredGrant?.id) {
+        await this.clearGoogleConnectorData();
+      }
       if (
-        previousPreferredMode !== preferredMode ||
+        previousPreferredGrant?.id !== targetGrant.id ||
         !targetGrant.preferredByAgent
       ) {
         await this.recordConnectorAudit(
           "google:preferred-mode",
           "google connector preferred mode updated",
           {
-            previousMode: previousPreferredMode,
+            previousMode: previousPreferredGrant?.mode ?? null,
+            previousSide: previousPreferredGrant?.side ?? null,
             nextMode: preferredMode,
+            nextSide: targetGrant.side,
           },
           {
             persisted: true,
@@ -6736,7 +6829,11 @@ export class LifeOpsService {
       }
     }
 
-    return this.getGoogleConnectorStatus(requestUrl, preferredMode);
+    return this.getGoogleConnectorStatus(
+      requestUrl,
+      preferredMode,
+      preferredSide,
+    );
   }
 
   async startGoogleConnector(
@@ -6744,6 +6841,8 @@ export class LifeOpsService {
     requestUrl: URL,
   ): Promise<StartLifeOpsGoogleConnectorResponse> {
     const requestedMode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const requestedSide =
+      normalizeOptionalConnectorSide(request.side, "side") ?? "owner";
     const requestedCapabilities = normalizeGoogleCapabilityRequest(
       request.capabilities,
     );
@@ -6756,6 +6855,7 @@ export class LifeOpsService {
     if (mode === "cloud_managed") {
       try {
         return await this.googleManagedClient.startConnector({
+          side: requestedSide,
           capabilities: requestedCapabilities,
         });
       } catch (error) {
@@ -6776,11 +6876,13 @@ export class LifeOpsService {
       this.agentId(),
       "google",
       resolvedConfig.mode,
+      requestedSide,
     );
 
     try {
       return startGoogleConnectorOAuth({
         agentId: this.agentId(),
+        side: requestedSide,
         requestUrl,
         mode: resolvedConfig.mode,
         requestedCapabilities,
@@ -6830,6 +6932,7 @@ export class LifeOpsService {
       this.agentId(),
       "google",
       result.mode,
+      result.side,
     );
     const nowIso = new Date().toISOString();
     const clearedMetadata = clearGoogleGrantAuthFailureMetadata(
@@ -6856,6 +6959,7 @@ export class LifeOpsService {
       : createLifeOpsConnectorGrant({
           agentId: this.agentId(),
           provider: "google",
+          side: result.side,
           identity: { ...result.identity },
           grantedScopes: [...result.grantedScopes],
           capabilities: [...result.grantedCapabilities],
@@ -6873,11 +6977,24 @@ export class LifeOpsService {
         });
 
     await this.repository.upsertConnectorGrant(grant);
-    await this.setPreferredGoogleConnectorMode(result.mode);
+    const previousPreferredGrant = resolvePreferredGoogleGrant({
+      grants: (
+        await this.repository.listConnectorGrants(this.agentId())
+      ).filter((candidate) => candidate.provider === "google"),
+      defaultMode: result.mode,
+    });
+    const nextPreferredGrant = await this.setPreferredGoogleConnectorMode(
+      result.mode,
+      result.side,
+    );
+    if (previousPreferredGrant?.id !== nextPreferredGrant?.id) {
+      await this.clearGoogleConnectorData();
+    }
     await this.recordConnectorAudit(
       `google:${result.mode}`,
       "google connector granted",
       {
+        side: result.side,
         mode: result.mode,
         capabilities: result.grantedCapabilities,
       },
@@ -6886,7 +7003,7 @@ export class LifeOpsService {
         expiresAt: result.expiresAt,
       },
     );
-    return this.getGoogleConnectorStatus(callbackUrl, result.mode);
+    return this.getGoogleConnectorStatus(callbackUrl, result.mode, result.side);
   }
 
   async disconnectGoogleConnector(
@@ -6894,6 +7011,7 @@ export class LifeOpsService {
     requestUrl: URL,
   ): Promise<LifeOpsGoogleConnectorStatus> {
     const requestedMode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const requestedSide = normalizeOptionalConnectorSide(request.side, "side");
     const grants = (
       await this.repository.listConnectorGrants(this.agentId())
     ).filter((grant) => grant.provider === "google");
@@ -6907,23 +7025,35 @@ export class LifeOpsService {
       resolvePreferredGoogleGrant({
         grants,
         requestedMode,
+        requestedSide,
         defaultMode: modeAvailability.defaultMode,
       })?.mode ??
       modeAvailability.defaultMode;
+    const side =
+      requestedSide ??
+      resolvePreferredGoogleGrant({
+        grants,
+        requestedMode,
+        requestedSide,
+        defaultMode: modeAvailability.defaultMode,
+      })?.side ??
+      "owner";
     const grant = await this.repository.getConnectorGrant(
       this.agentId(),
       "google",
       mode,
+      side,
     );
 
     if (!grant) {
-      return this.getGoogleConnectorStatus(requestUrl, mode);
+      return this.getGoogleConnectorStatus(requestUrl, mode, side);
     }
 
     if (mode === "cloud_managed" && grant.cloudConnectionId) {
       try {
         await this.googleManagedClient.disconnectConnector(
           grant.cloudConnectionId,
+          grant.side,
         );
       } catch (error) {
         if (error instanceof ManagedGoogleClientError) {
@@ -6939,35 +7069,31 @@ export class LifeOpsService {
     } else if (grant.tokenRef) {
       deleteStoredGoogleToken(grant.tokenRef);
     }
-    const calendarEvents = await this.repository.listCalendarEvents(
+    const previousPreferredGrant = resolvePreferredGoogleGrant({
+      grants,
+      defaultMode: modeAvailability.defaultMode,
+    });
+    await this.repository.deleteConnectorGrant(
       this.agentId(),
       "google",
+      mode,
+      side,
     );
-    await this.deleteCalendarReminderPlansForEvents(
-      calendarEvents.map((event) => event.id),
-    );
-    await this.repository.deleteCalendarEventsForProvider(
-      this.agentId(),
-      "google",
-    );
-    await this.repository.deleteCalendarSyncState(this.agentId(), "google");
-    await this.repository.deleteGmailMessagesForProvider(
-      this.agentId(),
-      "google",
-    );
-    await this.repository.deleteGmailSyncState(this.agentId(), "google");
-    await this.repository.deleteConnectorGrant(this.agentId(), "google", mode);
-    await this.setPreferredGoogleConnectorMode(null);
+    const nextPreferredGrant = await this.setPreferredGoogleConnectorMode(null);
+    if (previousPreferredGrant?.id === grant.id || !nextPreferredGrant) {
+      await this.clearGoogleConnectorData();
+    }
     await this.recordConnectorAudit(
       `google:${mode}`,
       "google connector disconnected",
       {
+        side: grant.side,
         mode,
       },
       {
         disconnected: true,
       },
     );
-    return this.getGoogleConnectorStatus(requestUrl, mode);
+    return this.getGoogleConnectorStatus(requestUrl, mode, side);
   }
 }

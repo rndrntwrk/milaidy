@@ -1,5 +1,6 @@
 import type {
   LifeOpsConnectorMode,
+  LifeOpsConnectorSide,
   LifeOpsGoogleConnectorStatus,
 } from "@miladyai/shared/contracts/lifeops";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -47,6 +48,7 @@ function resolveVisibleModes(
 
 export interface UseGoogleLifeOpsConnectorOptions {
   pollIntervalMs?: number;
+  side?: LifeOpsConnectorSide;
 }
 
 export function useGoogleLifeOpsConnector(
@@ -54,6 +56,7 @@ export function useGoogleLifeOpsConnector(
 ) {
   const pollIntervalMs =
     options.pollIntervalMs ?? DEFAULT_GOOGLE_CONNECTOR_POLL_INTERVAL_MS;
+  const side = options.side ?? "owner";
   const selectedModeRef = useRef<LifeOpsConnectorMode | null>(null);
   const [selectedMode, setSelectedMode] = useState<LifeOpsConnectorMode | null>(
     null,
@@ -81,6 +84,7 @@ export function useGoogleLifeOpsConnector(
           mode === undefined ? selectedModeRef.current : mode;
         const nextStatus = await client.getGoogleLifeOpsConnectorStatus(
           requestedMode ?? undefined,
+          side,
         );
         const nextSelectedMode = requestedMode ?? nextStatus.mode;
         selectedModeRef.current = nextSelectedMode;
@@ -98,7 +102,7 @@ export function useGoogleLifeOpsConnector(
         setLoading(false);
       }
     },
-    [],
+    [side],
   );
 
   useEffect(() => {
@@ -122,8 +126,8 @@ export function useGoogleLifeOpsConnector(
       try {
         setActionPending(true);
         const nextStatus = (status?.availableModes ?? []).includes(mode)
-          ? await client.selectGoogleLifeOpsConnectorMode({ mode })
-          : await client.getGoogleLifeOpsConnectorStatus(mode);
+          ? await client.selectGoogleLifeOpsConnectorMode({ mode, side })
+          : await client.getGoogleLifeOpsConnectorStatus(mode, side);
         selectedModeRef.current = mode;
         setSelectedMode(mode);
         setStatus(nextStatus);
@@ -136,13 +140,14 @@ export function useGoogleLifeOpsConnector(
         setActionPending(false);
       }
     },
-    [status],
+    [side, status],
   );
 
   const connect = useCallback(async () => {
     try {
       setActionPending(true);
       const result = await client.startGoogleLifeOpsConnector({
+        side,
         mode: selectedModeRef.current ?? status?.mode ?? status?.defaultMode,
       });
       await openExternalUrl(result.authUrl);
@@ -154,7 +159,7 @@ export function useGoogleLifeOpsConnector(
     } finally {
       setActionPending(false);
     }
-  }, [status?.defaultMode, status?.mode]);
+  }, [side, status?.defaultMode, status?.mode]);
 
   const disconnect = useCallback(async () => {
     if (!status) {
@@ -163,6 +168,7 @@ export function useGoogleLifeOpsConnector(
     try {
       setActionPending(true);
       await client.disconnectGoogleLifeOpsConnector({
+        side,
         mode: selectedModeRef.current ?? status.mode,
       });
       selectedModeRef.current = null;
@@ -174,7 +180,7 @@ export function useGoogleLifeOpsConnector(
     } finally {
       setActionPending(false);
     }
-  }, [refresh, status]);
+  }, [refresh, side, status]);
 
   const modeOptions = useMemo(() => resolveVisibleModes(status), [status]);
   const activeMode =
@@ -191,6 +197,7 @@ export function useGoogleLifeOpsConnector(
     refresh,
     selectMode,
     selectedMode,
+    side,
     status,
   } as const;
 }

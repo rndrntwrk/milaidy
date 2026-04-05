@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type {
   LifeOpsConnectorMode,
+  LifeOpsConnectorSide,
   LifeOpsGoogleCapability,
   StartLifeOpsGoogleConnectorResponse,
 } from "@miladyai/shared/contracts/lifeops";
@@ -64,6 +65,7 @@ export interface ResolvedGoogleOAuthConfig {
 interface PendingGoogleOAuthSession {
   state: string;
   agentId: string;
+  side: LifeOpsConnectorSide;
   mode: LifeOpsConnectorMode;
   clientId: string;
   clientSecret: string | null;
@@ -76,6 +78,7 @@ interface PendingGoogleOAuthSession {
 export interface StoredGoogleConnectorToken {
   provider: "google";
   agentId: string;
+  side: LifeOpsConnectorSide;
   mode: LifeOpsConnectorMode;
   clientId: string;
   redirectUri: string;
@@ -101,6 +104,7 @@ interface GoogleTokenResponse {
 
 export interface GoogleConnectorCallbackResult {
   agentId: string;
+  side: LifeOpsConnectorSide;
   mode: LifeOpsConnectorMode;
   tokenRef: string;
   identity: Record<string, unknown>;
@@ -262,10 +266,15 @@ function cleanupExpiredGoogleOAuthSessions(now = Date.now()): void {
 
 function clearPendingSessionsForAgent(
   agentId: string,
+  side: LifeOpsConnectorSide,
   mode: LifeOpsConnectorMode,
 ): void {
   for (const [state, session] of pendingGoogleOAuthSessions.entries()) {
-    if (session.agentId === agentId && session.mode === mode) {
+    if (
+      session.agentId === agentId &&
+      session.side === side &&
+      session.mode === mode
+    ) {
       pendingGoogleOAuthSessions.delete(state);
     }
   }
@@ -318,9 +327,14 @@ function ensureTokenStorageDir(dir: string): void {
 
 function buildGoogleTokenRef(
   agentId: string,
+  side: LifeOpsConnectorSide,
   mode: LifeOpsConnectorMode,
 ): string {
-  return path.join(sanitizePathSegment(agentId), `${mode}.json`);
+  return path.join(
+    sanitizePathSegment(agentId),
+    sanitizePathSegment(side),
+    `${mode}.json`,
+  );
 }
 
 function resolveTokenPath(
@@ -337,7 +351,14 @@ function readStoredGoogleTokenFile(
   const filePath = resolveTokenPath(tokenRef, env);
   try {
     const raw = fs.readFileSync(filePath, "utf-8");
-    return JSON.parse(raw) as StoredGoogleConnectorToken;
+    const parsed = JSON.parse(raw) as Partial<StoredGoogleConnectorToken>;
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+    return {
+      ...(parsed as StoredGoogleConnectorToken),
+      side: parsed.side === "agent" ? "agent" : "owner",
+    };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return null;
@@ -464,6 +485,7 @@ function buildStoredGoogleToken(
   return {
     provider: "google",
     agentId: session.agentId,
+    side: session.side,
     mode: session.mode,
     clientId: session.clientId,
     redirectUri: session.redirectUri,
@@ -480,6 +502,7 @@ function buildStoredGoogleToken(
 
 export function startGoogleConnectorOAuth(args: {
   agentId: string;
+  side?: LifeOpsConnectorSide;
   requestUrl: URL;
   mode?: LifeOpsConnectorMode;
   requestedCapabilities?: readonly LifeOpsGoogleCapability[];
@@ -490,7 +513,8 @@ export function startGoogleConnectorOAuth(args: {
 
   const config = resolveGoogleOAuthConfig(args.requestUrl, args.mode, args.env);
   requireGoogleOAuthConfig(config, args.requestUrl);
-  clearPendingSessionsForAgent(args.agentId, config.mode);
+  const side = args.side ?? "owner";
+  clearPendingSessionsForAgent(args.agentId, side, config.mode);
 
   const requestedCapabilities = unionGoogleCapabilities(
     args.existingCapabilities,
@@ -506,6 +530,7 @@ export function startGoogleConnectorOAuth(args: {
   pendingGoogleOAuthSessions.set(state, {
     state,
     agentId: args.agentId,
+    side,
     mode: config.mode,
     clientId: config.clientId,
     clientSecret: config.clientSecret,
@@ -530,6 +555,7 @@ export function startGoogleConnectorOAuth(args: {
 
   return {
     provider: "google",
+    side,
     mode: config.mode,
     requestedCapabilities,
     redirectUri: config.redirectUri,
@@ -607,7 +633,11 @@ export async function completeGoogleConnectorOAuth(args: {
     identity = await fetchGoogleUserInfo(token.access_token);
   }
 
-  const tokenRef = buildGoogleTokenRef(session.agentId, session.mode);
+  const tokenRef = buildGoogleTokenRef(
+    session.agentId,
+    session.side,
+    session.mode,
+  );
   const existing = readStoredGoogleTokenFile(tokenRef, args.env);
   const storedToken = buildStoredGoogleToken(
     session,
@@ -619,6 +649,7 @@ export async function completeGoogleConnectorOAuth(args: {
 
   return {
     agentId: session.agentId,
+    side: session.side,
     mode: session.mode,
     tokenRef,
     identity,
@@ -669,6 +700,7 @@ export async function ensureFreshGoogleAccessToken(
     {
       state: "refresh",
       agentId: stored.agentId,
+      side: stored.side,
       mode: stored.mode,
       clientId: stored.clientId,
       clientSecret:
