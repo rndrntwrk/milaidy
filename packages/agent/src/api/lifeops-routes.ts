@@ -659,6 +659,17 @@ export async function handleLifeOpsRoutes(
     }
   }
 
+  const goalReviewMatch = pathname.match(
+    /^\/api\/lifeops\/goals\/([^/]+)\/review$/,
+  );
+  if (goalReviewMatch && method === "GET") {
+    const goalId = decodePathComponent(goalReviewMatch[1], res, "goal id");
+    if (!goalId) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.reviewGoal(goalId));
+    });
+  }
+
   const workflowMatch = pathname.match(/^\/api\/lifeops\/workflows\/([^/]+)$/);
   if (workflowMatch) {
     const workflowId = decodePathComponent(
@@ -756,6 +767,21 @@ export async function handleLifeOpsRoutes(
       json(res, {
         session: await service.completeBrowserSession(sessionId, body),
       });
+    });
+  }
+
+  const occurrenceExplanationMatch = pathname.match(
+    /^\/api\/lifeops\/occurrences\/([^/]+)\/explanation$/,
+  );
+  if (occurrenceExplanationMatch && method === "GET") {
+    const occurrenceId = decodePathComponent(
+      occurrenceExplanationMatch[1],
+      res,
+      "occurrence id",
+    );
+    if (!occurrenceId) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.explainOccurrence(occurrenceId));
     });
   }
 

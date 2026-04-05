@@ -420,6 +420,46 @@ describe("Life-ops API E2E", () => {
         "completed",
       );
 
+      const occurrenceExplanation = await req(
+        port,
+        "GET",
+        `/api/lifeops/occurrences/${encodeURIComponent(currentOccurrence!.id as string)}/explanation`,
+      );
+      expect(occurrenceExplanation.status).toBe(200);
+      expect(
+        (occurrenceExplanation.data.definition as Record<string, unknown>).id,
+      ).toBe(definitionId);
+      expect(
+        (
+          occurrenceExplanation.data.summary as Record<string, unknown>
+        ).originalIntent,
+      ).toBe("Current slot check-in");
+      expect(
+        String(
+          (occurrenceExplanation.data.summary as Record<string, unknown>)
+            .lastActionSummary,
+        ),
+      ).toContain("occurrence completed");
+
+      const goalReview = await req(
+        port,
+        "GET",
+        `/api/lifeops/goals/${encodeURIComponent(goalId)}/review`,
+      );
+      expect(goalReview.status).toBe(200);
+      expect(
+        (goalReview.data.summary as Record<string, unknown>).linkedDefinitionCount,
+      ).toBe(1);
+      expect(
+        (goalReview.data.summary as Record<string, unknown>).completedLast7Days,
+      ).toBeGreaterThanOrEqual(1);
+      expect(
+        (goalReview.data.goal as Record<string, unknown>).reviewState,
+      ).toBe("on_track");
+      expect(
+        Array.isArray(goalReview.data.suggestions as unknown[]),
+      ).toBe(true);
+
       const goalRead = await req(
         port,
         "GET",

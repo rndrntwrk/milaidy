@@ -11,6 +11,8 @@ const { mockUseApp, mockClient } = vi.hoisted(() => ({
     completeLifeOpsOccurrence: vi.fn(),
     snoozeLifeOpsOccurrence: vi.fn(),
     skipLifeOpsOccurrence: vi.fn(),
+    getLifeOpsOccurrenceExplanation: vi.fn(),
+    reviewLifeOpsGoal: vi.fn(),
   },
 }));
 
@@ -253,6 +255,8 @@ describe("LifeOpsOverviewSidebarWidget", () => {
     mockClient.completeLifeOpsOccurrence.mockReset();
     mockClient.snoozeLifeOpsOccurrence.mockReset();
     mockClient.skipLifeOpsOccurrence.mockReset();
+    mockClient.getLifeOpsOccurrenceExplanation.mockReset();
+    mockClient.reviewLifeOpsGoal.mockReset();
 
     mockUseApp.mockReturnValue({
       workbench: {
@@ -260,9 +264,71 @@ describe("LifeOpsOverviewSidebarWidget", () => {
       },
     });
     mockClient.getLifeOpsOverview.mockResolvedValue(overview);
+    mockClient.getLifeOpsOccurrenceExplanation.mockResolvedValue({
+      occurrence: overview.owner.occurrences[0],
+      definition: {
+        id: "definition-1",
+        originalIntent: "remind me to take medication morning and evening",
+        source: "chat",
+      },
+      reminderPlan: {
+        id: "plan-1",
+        steps: [{ channel: "in_app", label: "Check in now", offsetMinutes: 5 }],
+      },
+      linkedGoal: null,
+      reminderInspection: {
+        ownerType: "occurrence",
+        ownerId: "owner-occurrence",
+        reminderPlan: null,
+        attempts: [],
+        audits: [],
+      },
+      definitionAudits: [],
+      summary: {
+        originalIntent: "remind me to take medication morning and evening",
+        source: "chat",
+        whyVisible:
+          "This item is visible because it is due at 2026-04-04T16:00:00.000Z and its current relevance window started at 2026-04-04T15:30:00.000Z.",
+        lastReminderAt: null,
+        lastReminderChannel: null,
+        lastReminderOutcome: null,
+        lastActionSummary: null,
+      },
+    });
+    mockClient.reviewLifeOpsGoal.mockResolvedValue({
+      goal: {
+        ...overview.agentOps.goals[0],
+        reviewState: "on_track",
+      },
+      links: [],
+      linkedDefinitions: [],
+      activeOccurrences: [],
+      overdueOccurrences: [],
+      recentCompletions: [],
+      suggestions: [
+        {
+          kind: "review_progress",
+          title: "Check bridge status",
+          detail: "Review progress.",
+          definitionId: null,
+          occurrenceId: null,
+        },
+      ],
+      audits: [],
+      summary: {
+        linkedDefinitionCount: 0,
+        activeOccurrenceCount: 0,
+        overdueOccurrenceCount: 0,
+        completedLast7Days: 0,
+        lastActivityAt: null,
+        reviewState: "on_track",
+        explanation:
+          "This goal is on track because 2 linked support items were completed in the last 7 days.",
+      },
+    });
   });
 
-  it("renders owner and agent lifeops sections", async () => {
+  it("renders now, goals, and agent ops sections", async () => {
     let renderer!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       renderer = TestRenderer.create(
@@ -279,9 +345,10 @@ describe("LifeOpsOverviewSidebarWidget", () => {
 
     const text = flattenText(renderer.root).toLowerCase();
     expect(text).toContain("life ops");
-    expect(text).toContain("my life ops");
+    expect(text).toContain("now");
     expect(text).toContain("take medication");
     expect(text).toContain("twice daily");
+    expect(text).toContain("goals");
     expect(text).toContain("agent ops");
     expect(text).toContain("keep plugin mirrors healthy");
     expect(text).toContain("reminders are driven from lifeops");
@@ -335,5 +402,49 @@ describe("LifeOpsOverviewSidebarWidget", () => {
     expect(mockClient.getLifeOpsOverview.mock.calls.length).toBeGreaterThanOrEqual(
       2,
     );
+  });
+
+  it("loads occurrence explanations and goal reviews on demand", async () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        React.createElement(LifeOpsOverviewSidebarWidget, {
+          events: [],
+          clearEvents: () => {},
+        }),
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const explainButton = renderer.root
+      .findAllByType("button")
+      .find((button) => flattenText(button).includes("Why this?"));
+    expect(explainButton).toBeDefined();
+
+    await act(async () => {
+      explainButton?.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(mockClient.getLifeOpsOccurrenceExplanation).toHaveBeenCalledWith(
+      "owner-occurrence",
+    );
+    expect(flattenText(renderer.root).toLowerCase()).toContain("original intent");
+
+    const reviewButton = renderer.root
+      .findAllByType("button")
+      .find((button) => flattenText(button).includes("Review"));
+    expect(reviewButton).toBeDefined();
+
+    await act(async () => {
+      reviewButton?.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(mockClient.reviewLifeOpsGoal).toHaveBeenCalledWith("agent-goal");
+    expect(flattenText(renderer.root).toLowerCase()).toContain("goal review");
   });
 });

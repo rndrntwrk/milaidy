@@ -39,10 +39,13 @@ import type {
   LifeOpsGmailReplyDraft,
   LifeOpsGmailTriageFeed,
   LifeOpsGoalRecord,
+  LifeOpsGoalReview,
   LifeOpsGoogleConnectorStatus,
   LifeOpsNextCalendarEventContext,
   LifeOpsOccurrenceActionResult,
+  LifeOpsOccurrenceExplanation,
   LifeOpsOverview,
+  LifeOpsReminderInspection,
   McpMarketplaceResult,
   McpRegistryServerDetail,
   McpServerConfig,
@@ -255,6 +258,7 @@ declare module "./client-base" {
     ): Promise<LifeOpsDefinitionRecord>;
     listLifeOpsGoals(): Promise<{ goals: LifeOpsGoalRecord[] }>;
     getLifeOpsGoal(goalId: string): Promise<LifeOpsGoalRecord>;
+    reviewLifeOpsGoal(goalId: string): Promise<LifeOpsGoalReview>;
     createLifeOpsGoal(
       data: CreateLifeOpsGoalRequest,
     ): Promise<LifeOpsGoalRecord>;
@@ -273,6 +277,13 @@ declare module "./client-base" {
       occurrenceId: string,
       data: SnoozeLifeOpsOccurrenceRequest,
     ): Promise<LifeOpsOccurrenceActionResult>;
+    getLifeOpsOccurrenceExplanation(
+      occurrenceId: string,
+    ): Promise<LifeOpsOccurrenceExplanation>;
+    inspectLifeOpsReminder(
+      ownerType: "occurrence" | "calendar_event",
+      ownerId: string,
+    ): Promise<LifeOpsReminderInspection>;
     getGoogleLifeOpsConnectorStatus(
       mode?: LifeOpsConnectorMode,
     ): Promise<LifeOpsGoogleConnectorStatus>;
@@ -943,6 +954,13 @@ MiladyClient.prototype.getLifeOpsGoal = async function (
   return this.fetch(`/api/lifeops/goals/${encodeURIComponent(goalId)}`);
 };
 
+MiladyClient.prototype.reviewLifeOpsGoal = async function (
+  this: MiladyClient,
+  goalId,
+) {
+  return this.fetch(`/api/lifeops/goals/${encodeURIComponent(goalId)}/review`);
+};
+
 MiladyClient.prototype.createLifeOpsGoal = async function (
   this: MiladyClient,
   data,
@@ -1003,6 +1021,27 @@ MiladyClient.prototype.snoozeLifeOpsOccurrence = async function (
       body: JSON.stringify(data),
     },
   );
+};
+
+MiladyClient.prototype.getLifeOpsOccurrenceExplanation = async function (
+  this: MiladyClient,
+  occurrenceId,
+) {
+  return this.fetch(
+    `/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/explanation`,
+  );
+};
+
+MiladyClient.prototype.inspectLifeOpsReminder = async function (
+  this: MiladyClient,
+  ownerType,
+  ownerId,
+) {
+  const params = new URLSearchParams({
+    ownerType,
+    ownerId,
+  });
+  return this.fetch(`/api/lifeops/reminders/inspection?${params.toString()}`);
 };
 
 MiladyClient.prototype.getGoogleLifeOpsConnectorStatus = async function (

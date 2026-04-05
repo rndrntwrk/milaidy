@@ -2,12 +2,23 @@ import type {
   LifeOpsActiveReminderView,
   LifeOpsCadence,
   LifeOpsGoalDefinition,
+  LifeOpsGoalReview,
+  LifeOpsOccurrenceExplanation,
   LifeOpsOccurrenceView,
   LifeOpsOverview,
   LifeOpsOverviewSection,
 } from "@miladyai/shared/contracts/lifeops";
 import { Badge, Button } from "@miladyai/ui";
-import { BellRing, Bot, CheckCircle2, ListTodo, RefreshCw } from "lucide-react";
+import {
+  BellRing,
+  Bot,
+  CheckCircle2,
+  Clock3,
+  ListTodo,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react";
+import type { PropsWithChildren } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { client } from "../../../../api";
 import { useApp } from "../../../../state";
@@ -21,8 +32,10 @@ const LIFEOPS_REFRESH_INTERVAL_MS = 15_000;
 const MAX_SECTION_OCCURRENCES = 4;
 const MAX_SECTION_GOALS = 3;
 const MAX_SECTION_REMINDERS = 2;
+const NEXT_WINDOW_MS = 6 * 60 * 60 * 1000;
 
 type OccurrenceAction = "complete" | "snooze" | "skip";
+type OccurrenceBucket = "now" | "next" | "upcoming";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -97,14 +110,6 @@ function hasSectionContent(section: LifeOpsOverviewSection): boolean {
   );
 }
 
-function sectionItemCount(section: LifeOpsOverviewSection): number {
-  return (
-    section.summary.activeOccurrenceCount +
-    section.summary.activeGoalCount +
-    section.summary.activeReminderCount
-  );
-}
-
 function descriptionForOccurrence(occurrence: LifeOpsOccurrenceView): string | null {
   const description = occurrence.description.trim();
   return description.length > 0 ? description : null;
@@ -137,14 +142,163 @@ function reminderChannelLabel(channel: LifeOpsActiveReminderView["channel"]): st
   return channel.replace(/_/g, " ");
 }
 
+function occurrenceSortKey(occurrence: LifeOpsOccurrenceView): number {
+  const candidates = [
+    occurrence.dueAt,
+    occurrence.snoozedUntil,
+    occurrence.scheduledAt,
+    occurrence.relevanceStartAt,
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+    const parsed = Date.parse(candidate);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function bucketOccurrences(
+  occurrences: LifeOpsOccurrenceView[],
+  now: Date,
+): Record<OccurrenceBucket, LifeOpsOccurrenceView[]> {
+  const buckets: Record<OccurrenceBucket, LifeOpsOccurrenceView[]> = {
+    now: [],
+    next: [],
+    upcoming: [],
+  };
+  for (const occurrence of [...occurrences].sort(
+    (left, right) => occurrenceSortKey(left) - occurrenceSortKey(right),
+  )) {
+    if (occurrence.state === "visible" || occurrence.state === "snoozed") {
+      buckets.now.push(occurrence);
+      continue;
+    }
+    const anchor = occurrenceSortKey(occurrence);
+    if (anchor <= now.getTime() + NEXT_WINDOW_MS) {
+      buckets.next.push(occurrence);
+      continue;
+    }
+    buckets.upcoming.push(occurrence);
+  }
+  return buckets;
+}
+
+function DetailPanel({
+  title,
+  children,
+}: PropsWithChildren<{ title: string }>) {
+  return (
+    <div className="mt-3 rounded-lg border border-border/50 bg-bg-accent/20 p-3">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+        {title}
+      </div>
+      <div className="mt-2 flex flex-col gap-2 text-[11px] leading-5 text-muted">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function OccurrenceExplanationPanel({
+  explanation,
+}: {
+  explanation: LifeOpsOccurrenceExplanation;
+}) {
+  const lastReminder = explanation.summary.lastReminderAt
+    ? `${formatDateTime(explanation.summary.lastReminderAt) ?? explanation.summary.lastReminderAt} via ${
+        explanation.summary.lastReminderChannel ?? "unknown"
+      } (${explanation.summary.lastReminderOutcome ?? "unknown"})`
+    : "No reminder attempts yet";
+
+  return (
+    <DetailPanel title="Why this is showing up">
+      <div>{explanation.summary.whyVisible}</div>
+      <div>
+        <span className="font-semibold text-txt">Original intent:</span>{" "}
+        {explanation.summary.originalIntent}
+      </div>
+      <div>
+        <span className="font-semibold text-txt">Source:</span>{" "}
+        {explanation.summary.source}
+      </div>
+      <div>
+        <span className="font-semibold text-txt">Last reminder:</span>{" "}
+        {lastReminder}
+      </div>
+      {explanation.summary.lastActionSummary ? (
+        <div>
+          <span className="font-semibold text-txt">Last action:</span>{" "}
+          {explanation.summary.lastActionSummary}
+        </div>
+      ) : null}
+      {explanation.linkedGoal ? (
+        <div>
+          <span className="font-semibold text-txt">Linked goal:</span>{" "}
+          {explanation.linkedGoal.goal.title}
+        </div>
+      ) : null}
+      {explanation.reminderPlan && explanation.reminderPlan.steps.length > 0 ? (
+        <div>
+          <span className="font-semibold text-txt">Reminder ladder:</span>{" "}
+          {explanation.reminderPlan.steps
+            .map((step) => `${step.label} (${step.channel})`)
+            .join(", ")}
+        </div>
+      ) : null}
+    </DetailPanel>
+  );
+}
+
+function GoalReviewPanel({ review }: { review: LifeOpsGoalReview }) {
+  return (
+    <DetailPanel title="Goal review">
+      <div>{review.summary.explanation}</div>
+      <div>
+        <span className="font-semibold text-txt">Support structure:</span>{" "}
+        {review.summary.linkedDefinitionCount} linked{" "}
+        {review.summary.linkedDefinitionCount === 1 ? "definition" : "definitions"},{" "}
+        {review.summary.activeOccurrenceCount} active{" "}
+        {review.summary.activeOccurrenceCount === 1 ? "occurrence" : "occurrences"},{" "}
+        and {review.summary.completedLast7Days} completion
+        {review.summary.completedLast7Days === 1 ? "" : "s"} in the last 7 days.
+      </div>
+      {review.suggestions.length > 0 ? (
+        <div>
+          <span className="font-semibold text-txt">Suggested next steps:</span>{" "}
+          {review.suggestions.map((suggestion) => suggestion.title).join(" • ")}
+        </div>
+      ) : null}
+      {review.summary.lastActivityAt ? (
+        <div>
+          <span className="font-semibold text-txt">Last activity:</span>{" "}
+          {formatDateTime(review.summary.lastActivityAt) ??
+            review.summary.lastActivityAt}
+        </div>
+      ) : null}
+    </DetailPanel>
+  );
+}
+
 function OccurrenceRow({
   occurrence,
   actionPending,
+  detailPending,
+  explanation,
+  isExpanded,
   onAction,
+  onExplain,
 }: {
   occurrence: LifeOpsOccurrenceView;
   actionPending: boolean;
+  detailPending: boolean;
+  explanation: LifeOpsOccurrenceExplanation | null;
+  isExpanded: boolean;
   onAction: (occurrenceId: string, action: OccurrenceAction) => Promise<void>;
+  onExplain: (occurrenceId: string) => Promise<void>;
 }) {
   const cadence = cadenceLabel(occurrence.cadence);
   const cadenceSecondary = cadenceDetail(occurrence.cadence);
@@ -193,36 +347,50 @@ function OccurrenceRow({
             {dueLabel ? <span>{dueLabel}</span> : null}
             {cadenceSecondary ? <span>{cadenceSecondary}</span> : null}
           </div>
-          {!isClosed ? (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={actionPending}
-                onClick={() => void onAction(occurrence.id, "complete")}
-                className="h-7 px-2 text-[11px]"
-              >
-                Done
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={actionPending}
-                onClick={() => void onAction(occurrence.id, "snooze")}
-                className="h-7 px-2 text-[11px]"
-              >
-                Snooze 15m
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={actionPending}
-                onClick={() => void onAction(occurrence.id, "skip")}
-                className="h-7 px-2 text-[11px]"
-              >
-                Skip
-              </Button>
-            </div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {!isClosed ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={actionPending}
+                  onClick={() => void onAction(occurrence.id, "complete")}
+                  className="h-7 px-2 text-[11px]"
+                >
+                  Done
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={actionPending}
+                  onClick={() => void onAction(occurrence.id, "snooze")}
+                  className="h-7 px-2 text-[11px]"
+                >
+                  Snooze 15m
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={actionPending}
+                  onClick={() => void onAction(occurrence.id, "skip")}
+                  className="h-7 px-2 text-[11px]"
+                >
+                  Skip
+                </Button>
+              </>
+            ) : null}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={detailPending}
+              onClick={() => void onExplain(occurrence.id)}
+              className="h-7 px-2 text-[11px]"
+            >
+              {isExpanded ? "Hide why" : "Why this?"}
+            </Button>
+          </div>
+          {isExpanded && explanation ? (
+            <OccurrenceExplanationPanel explanation={explanation} />
           ) : null}
         </div>
       </div>
@@ -230,7 +398,19 @@ function OccurrenceRow({
   );
 }
 
-function GoalRow({ goal }: { goal: LifeOpsGoalDefinition }) {
+function GoalRow({
+  goal,
+  review,
+  detailPending,
+  isExpanded,
+  onReview,
+}: {
+  goal: LifeOpsGoalDefinition;
+  review: LifeOpsGoalReview | null;
+  detailPending: boolean;
+  isExpanded: boolean;
+  onReview: (goalId: string) => Promise<void>;
+}) {
   const cadence = isRecord(goal.cadence) ? goal.cadence : null;
   const cadenceText =
     cadence && typeof cadence.kind === "string" ? cadence.kind : null;
@@ -256,6 +436,18 @@ function GoalRow({ goal }: { goal: LifeOpsGoalDefinition }) {
           {cadenceText}
         </div>
       ) : null}
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={detailPending}
+          onClick={() => void onReview(goal.id)}
+          className="h-7 px-2 text-[11px]"
+        >
+          {isExpanded ? "Hide review" : "Review"}
+        </Button>
+      </div>
+      {isExpanded && review ? <GoalReviewPanel review={review} /> : null}
     </div>
   );
 }
@@ -283,20 +475,28 @@ function ReminderRow({ reminder }: { reminder: LifeOpsActiveReminderView }) {
   );
 }
 
-function SectionBlock({
+function OccurrenceBucketBlock({
   title,
   icon,
-  section,
+  occurrences,
   actionState,
+  detailState,
+  occurrenceExplanations,
+  expandedOccurrenceId,
   onOccurrenceAction,
+  onExplainOccurrence,
 }: {
   title: string;
   icon: JSX.Element;
-  section: LifeOpsOverviewSection;
+  occurrences: LifeOpsOccurrenceView[];
   actionState: string | null;
+  detailState: string | null;
+  occurrenceExplanations: Record<string, LifeOpsOccurrenceExplanation>;
+  expandedOccurrenceId: string | null;
   onOccurrenceAction: (occurrenceId: string, action: OccurrenceAction) => Promise<void>;
+  onExplainOccurrence: (occurrenceId: string) => Promise<void>;
 }) {
-  if (!hasSectionContent(section)) {
+  if (occurrences.length === 0) {
     return null;
   }
 
@@ -308,7 +508,141 @@ function SectionBlock({
           {title}
         </span>
         <Badge variant="secondary" className="text-[9px]">
-          {sectionItemCount(section)}
+          {occurrences.length}
+        </Badge>
+      </div>
+      {occurrences.slice(0, MAX_SECTION_OCCURRENCES).map((occurrence) => (
+        <OccurrenceRow
+          key={occurrence.id}
+          occurrence={occurrence}
+          actionPending={actionState?.endsWith(`:${occurrence.id}`) === true}
+          detailPending={detailState === `occurrence:${occurrence.id}`}
+          explanation={occurrenceExplanations[occurrence.id] ?? null}
+          isExpanded={expandedOccurrenceId === occurrence.id}
+          onAction={onOccurrenceAction}
+          onExplain={onExplainOccurrence}
+        />
+      ))}
+    </div>
+  );
+}
+
+function GoalSection({
+  goals,
+  goalReviews,
+  detailState,
+  expandedGoalId,
+  onReviewGoal,
+}: {
+  goals: LifeOpsGoalDefinition[];
+  goalReviews: Record<string, LifeOpsGoalReview>;
+  detailState: string | null;
+  expandedGoalId: string | null;
+  onReviewGoal: (goalId: string) => Promise<void>;
+}) {
+  if (goals.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2 px-0.5">
+        <span className="text-muted">
+          <Sparkles className="h-3.5 w-3.5" />
+        </span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+          Goals
+        </span>
+        <Badge variant="secondary" className="text-[9px]">
+          {goals.length}
+        </Badge>
+      </div>
+      {goals.slice(0, MAX_SECTION_GOALS).map((goal) => (
+        <GoalRow
+          key={goal.id}
+          goal={goal}
+          review={goalReviews[goal.id] ?? null}
+          detailPending={detailState === `goal:${goal.id}`}
+          isExpanded={expandedGoalId === goal.id}
+          onReview={onReviewGoal}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ReminderSection({
+  reminders,
+}: {
+  reminders: LifeOpsActiveReminderView[];
+}) {
+  if (reminders.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2 px-0.5">
+        <span className="text-muted">
+          <BellRing className="h-3.5 w-3.5" />
+        </span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+          Reminder ladder
+        </span>
+        <Badge variant="secondary" className="text-[9px]">
+          {reminders.length}
+        </Badge>
+      </div>
+      {reminders.slice(0, MAX_SECTION_REMINDERS).map((reminder) => (
+        <ReminderRow
+          key={`${reminder.ownerId}:${reminder.stepIndex}:${reminder.scheduledFor}`}
+          reminder={reminder}
+        />
+      ))}
+    </div>
+  );
+}
+
+function AgentOpsSection({
+  section,
+  actionState,
+  detailState,
+  occurrenceExplanations,
+  goalReviews,
+  expandedOccurrenceId,
+  expandedGoalId,
+  onOccurrenceAction,
+  onExplainOccurrence,
+  onReviewGoal,
+}: {
+  section: LifeOpsOverviewSection;
+  actionState: string | null;
+  detailState: string | null;
+  occurrenceExplanations: Record<string, LifeOpsOccurrenceExplanation>;
+  goalReviews: Record<string, LifeOpsGoalReview>;
+  expandedOccurrenceId: string | null;
+  expandedGoalId: string | null;
+  onOccurrenceAction: (occurrenceId: string, action: OccurrenceAction) => Promise<void>;
+  onExplainOccurrence: (occurrenceId: string) => Promise<void>;
+  onReviewGoal: (goalId: string) => Promise<void>;
+}) {
+  if (!hasSectionContent(section)) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2 px-0.5">
+        <span className="text-muted">
+          <Bot className="h-3.5 w-3.5" />
+        </span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+          Agent ops
+        </span>
+        <Badge variant="secondary" className="text-[9px]">
+          {section.summary.activeOccurrenceCount +
+            section.summary.activeGoalCount +
+            section.summary.activeReminderCount}
         </Badge>
       </div>
       <p className="px-0.5 text-[11px] text-muted">{sectionSummary(section)}</p>
@@ -317,11 +651,22 @@ function SectionBlock({
           key={occurrence.id}
           occurrence={occurrence}
           actionPending={actionState?.endsWith(`:${occurrence.id}`) === true}
+          detailPending={detailState === `occurrence:${occurrence.id}`}
+          explanation={occurrenceExplanations[occurrence.id] ?? null}
+          isExpanded={expandedOccurrenceId === occurrence.id}
           onAction={onOccurrenceAction}
+          onExplain={onExplainOccurrence}
         />
       ))}
       {section.goals.slice(0, MAX_SECTION_GOALS).map((goal) => (
-        <GoalRow key={goal.id} goal={goal} />
+        <GoalRow
+          key={goal.id}
+          goal={goal}
+          review={goalReviews[goal.id] ?? null}
+          detailPending={detailState === `goal:${goal.id}`}
+          isExpanded={expandedGoalId === goal.id}
+          onReview={onReviewGoal}
+        />
       ))}
       {section.reminders.slice(0, MAX_SECTION_REMINDERS).map((reminder) => (
         <ReminderRow
@@ -341,6 +686,17 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionState, setActionState] = useState<string | null>(null);
+  const [detailState, setDetailState] = useState<string | null>(null);
+  const [expandedOccurrenceId, setExpandedOccurrenceId] = useState<string | null>(
+    null,
+  );
+  const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
+  const [occurrenceExplanations, setOccurrenceExplanations] = useState<
+    Record<string, LifeOpsOccurrenceExplanation>
+  >({});
+  const [goalReviews, setGoalReviews] = useState<
+    Record<string, LifeOpsGoalReview>
+  >({});
 
   useEffect(() => {
     if (workbench?.lifeops) {
@@ -353,38 +709,48 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
       if (!silent) {
         setLoading(true);
       }
-      try {
-        const nextOverview = await client.getLifeOpsOverview();
-        setOverview(nextOverview);
-        setError(null);
-      } catch (cause) {
-        const message =
-          cause instanceof Error && cause.message.trim().length > 0
-            ? cause.message.trim()
-            : "Life ops failed to refresh.";
-        if (!workbench?.lifeops && !overview) {
-          setOverview(null);
-        }
-        setError(message);
-      } finally {
-        setLoading(false);
-      }
+      const nextOverview = await client.getLifeOpsOverview();
+      setOverview(nextOverview);
+      setError(null);
+      setLoading(false);
     },
-    [overview, workbench?.lifeops],
+    [],
   );
 
   useEffect(() => {
     let active = true;
 
     void (async () => {
-      await loadOverview(Boolean(workbench?.lifeops));
+      try {
+        await loadOverview(Boolean(workbench?.lifeops));
+      } catch (cause) {
+        const message =
+          cause instanceof Error && cause.message.trim().length > 0
+            ? cause.message.trim()
+            : "Life ops failed to refresh.";
+        if (!workbench?.lifeops) {
+          setOverview(null);
+        }
+        setError(message);
+        setLoading(false);
+      }
     })();
 
     const intervalId = window.setInterval(() => {
       if (!active) {
         return;
       }
-      void loadOverview(true);
+      void (async () => {
+        try {
+          await loadOverview(true);
+        } catch (cause) {
+          const message =
+            cause instanceof Error && cause.message.trim().length > 0
+              ? cause.message.trim()
+              : "Life ops failed to refresh.";
+          setError(message);
+        }
+      })();
     }, LIFEOPS_REFRESH_INTERVAL_MS);
 
     return () => {
@@ -396,8 +762,8 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
   const onOccurrenceAction = useCallback(
     async (occurrenceId: string, action: OccurrenceAction) => {
       const token = `${action}:${occurrenceId}`;
+      setActionState(token);
       try {
-        setActionState(token);
         if (action === "complete") {
           await client.completeLifeOpsOccurrence(occurrenceId, {});
         } else if (action === "snooze") {
@@ -421,6 +787,82 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
     [loadOverview],
   );
 
+  const onExplainOccurrence = useCallback(async (occurrenceId: string) => {
+    if (expandedOccurrenceId === occurrenceId) {
+      setExpandedOccurrenceId(null);
+      return;
+    }
+    setExpandedGoalId(null);
+    setDetailState(`occurrence:${occurrenceId}`);
+    try {
+      const explanation =
+        occurrenceExplanations[occurrenceId] ??
+        (await client.getLifeOpsOccurrenceExplanation(occurrenceId));
+      setOccurrenceExplanations((current) => ({
+        ...current,
+        [occurrenceId]: explanation,
+      }));
+      setExpandedOccurrenceId(occurrenceId);
+      setError(null);
+    } catch (cause) {
+      setError(
+        cause instanceof Error && cause.message.trim().length > 0
+          ? cause.message.trim()
+          : "Life ops explanation failed.",
+      );
+    } finally {
+      setDetailState((current) =>
+        current === `occurrence:${occurrenceId}` ? null : current,
+      );
+    }
+  }, [expandedOccurrenceId, occurrenceExplanations]);
+
+  const onReviewGoal = useCallback(async (goalId: string) => {
+    if (expandedGoalId === goalId) {
+      setExpandedGoalId(null);
+      return;
+    }
+    setExpandedOccurrenceId(null);
+    setDetailState(`goal:${goalId}`);
+    try {
+      const review =
+        goalReviews[goalId] ?? (await client.reviewLifeOpsGoal(goalId));
+      setGoalReviews((current) => ({
+        ...current,
+        [goalId]: review,
+      }));
+      setExpandedGoalId(goalId);
+      setError(null);
+      setOverview((current) => {
+        if (!current) {
+          return current;
+        }
+        const replaceGoal = (goals: LifeOpsGoalDefinition[]) =>
+          goals.map((goal) => (goal.id === review.goal.id ? review.goal : goal));
+        return {
+          ...current,
+          goals: replaceGoal(current.goals),
+          owner: {
+            ...current.owner,
+            goals: replaceGoal(current.owner.goals),
+          },
+          agentOps: {
+            ...current.agentOps,
+            goals: replaceGoal(current.agentOps.goals),
+          },
+        };
+      });
+    } catch (cause) {
+      setError(
+        cause instanceof Error && cause.message.trim().length > 0
+          ? cause.message.trim()
+          : "Goal review failed.",
+      );
+    } finally {
+      setDetailState((current) => (current === `goal:${goalId}` ? null : current));
+    }
+  }, [expandedGoalId, goalReviews]);
+
   const count = useMemo(() => {
     if (!overview) {
       return 0;
@@ -435,6 +877,10 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
   const hasAnyContent = overview
     ? hasSectionContent(overview.owner) || hasSectionContent(overview.agentOps)
     : false;
+  const ownerBuckets = useMemo(
+    () => bucketOccurrences(overview?.owner.occurrences ?? [], new Date()),
+    [overview?.owner.occurrences],
+  );
 
   return (
     <WidgetSection
@@ -445,8 +891,21 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
         <Button
           size="sm"
           variant="outline"
-          disabled={loading || actionState !== null}
-          onClick={() => void loadOverview()}
+          disabled={loading || actionState !== null || detailState !== null}
+          onClick={() =>
+            void (async () => {
+              try {
+                await loadOverview();
+              } catch (cause) {
+                setError(
+                  cause instanceof Error && cause.message.trim().length > 0
+                    ? cause.message.trim()
+                    : "Life ops failed to refresh.",
+                );
+                setLoading(false);
+              }
+            })()
+          }
           className="h-7 px-2"
         >
           <RefreshCw className="h-3.5 w-3.5" />
@@ -462,24 +921,65 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
         />
       ) : (
         <div className="flex flex-col gap-4">
-          <SectionBlock
-            title="My life ops"
+          <OccurrenceBucketBlock
+            title="Now"
             icon={<ListTodo className="h-3.5 w-3.5" />}
-            section={overview!.owner}
+            occurrences={ownerBuckets.now}
             actionState={actionState}
+            detailState={detailState}
+            occurrenceExplanations={occurrenceExplanations}
+            expandedOccurrenceId={expandedOccurrenceId}
             onOccurrenceAction={onOccurrenceAction}
+            onExplainOccurrence={onExplainOccurrence}
           />
-          <SectionBlock
-            title="Agent ops"
-            icon={<Bot className="h-3.5 w-3.5" />}
+          <OccurrenceBucketBlock
+            title="Next"
+            icon={<Clock3 className="h-3.5 w-3.5" />}
+            occurrences={ownerBuckets.next}
+            actionState={actionState}
+            detailState={detailState}
+            occurrenceExplanations={occurrenceExplanations}
+            expandedOccurrenceId={expandedOccurrenceId}
+            onOccurrenceAction={onOccurrenceAction}
+            onExplainOccurrence={onExplainOccurrence}
+          />
+          <OccurrenceBucketBlock
+            title="Upcoming"
+            icon={<Clock3 className="h-3.5 w-3.5" />}
+            occurrences={ownerBuckets.upcoming}
+            actionState={actionState}
+            detailState={detailState}
+            occurrenceExplanations={occurrenceExplanations}
+            expandedOccurrenceId={expandedOccurrenceId}
+            onOccurrenceAction={onOccurrenceAction}
+            onExplainOccurrence={onExplainOccurrence}
+          />
+          <GoalSection
+            goals={overview!.owner.goals}
+            goalReviews={goalReviews}
+            detailState={detailState}
+            expandedGoalId={expandedGoalId}
+            onReviewGoal={onReviewGoal}
+          />
+          <ReminderSection reminders={overview!.owner.reminders} />
+          <AgentOpsSection
             section={overview!.agentOps}
             actionState={actionState}
+            detailState={detailState}
+            occurrenceExplanations={occurrenceExplanations}
+            goalReviews={goalReviews}
+            expandedOccurrenceId={expandedOccurrenceId}
+            expandedGoalId={expandedGoalId}
             onOccurrenceAction={onOccurrenceAction}
+            onExplainOccurrence={onExplainOccurrence}
+            onReviewGoal={onReviewGoal}
           />
           <div className="rounded-lg border border-border/50 bg-bg-accent/30 px-3 py-2 text-[11px] text-muted">
             <div className="flex items-center gap-2">
               <BellRing className="h-3.5 w-3.5" />
-              <span>Reminders are driven from LifeOps and scheduled by the queue worker.</span>
+              <span>
+                Reminders are driven from LifeOps and scheduled by the queue worker.
+              </span>
             </div>
           </div>
         </div>

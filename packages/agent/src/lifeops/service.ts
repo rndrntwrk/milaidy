@@ -29,14 +29,19 @@ import type {
   LifeOpsConnectorMode,
   LifeOpsContextPolicy,
   LifeOpsDomain,
+  LifeOpsDefinitionRecord,
   LifeOpsGmailMessageSummary,
   LifeOpsGmailReplyDraft,
   LifeOpsGmailTriageFeed,
+  LifeOpsGoalRecord,
+  LifeOpsGoalReview,
+  LifeOpsGoalSupportSuggestion,
   LifeOpsGoalDefinition,
   LifeOpsGoalLink,
   LifeOpsGoogleCapability,
   LifeOpsGoogleConnectorStatus,
   LifeOpsNextCalendarEventContext,
+  LifeOpsOccurrenceExplanation,
   LifeOpsOccurrence,
   LifeOpsOccurrenceView,
   LifeOpsOverview,
@@ -88,6 +93,7 @@ import {
   LIFEOPS_DEFINITION_STATUSES,
   LIFEOPS_DOMAINS,
   LIFEOPS_GMAIL_DRAFT_TONES,
+  LIFEOPS_GOAL_SUGGESTION_KINDS,
   LIFEOPS_GOAL_STATUSES,
   LIFEOPS_GOOGLE_CAPABILITIES,
   LIFEOPS_PRIVACY_CLASSES,
@@ -193,6 +199,7 @@ const GOOGLE_GMAIL_MAILBOX = "me";
 const DEFAULT_GMAIL_TRIAGE_MAX_RESULTS = 12;
 const DEFAULT_REMINDER_PROCESS_LIMIT = 24;
 const DEFAULT_WORKFLOW_PROCESS_LIMIT = 12;
+const GOAL_REVIEW_LOOKBACK_DAYS = 7;
 const reminderProcessingQueues = new Map<string, Promise<void>>();
 const DEFAULT_CALENDAR_REMINDER_STEPS: LifeOpsReminderStep[] = [
   {
@@ -208,16 +215,6 @@ const DEFAULT_WORKFLOW_PERMISSION_POLICY: LifeOpsWorkflowPermissionPolicy = {
   trustedXPosting: false,
   requireConfirmationForBrowserActions: true,
   requireConfirmationForXPosts: true,
-};
-
-type LifeOpsDefinitionRecord = {
-  definition: LifeOpsTaskDefinition;
-  reminderPlan: LifeOpsReminderPlan | null;
-};
-
-type LifeOpsGoalRecord = {
-  goal: LifeOpsGoalDefinition;
-  links: LifeOpsGoalLink[];
 };
 
 type LifeOpsWorkflowSchedulerState = {
@@ -4238,6 +4235,405 @@ export class LifeOpsService {
     };
   }
 
+  private async collectLinkedDefinitionsForGoal(
+    goalRecord: LifeOpsGoalRecord,
+  ): Promise<LifeOpsTaskDefinition[]> {
+    const linkedDefinitionIds = new Set(
+      goalRecord.links
+        .filter((link) => link.linkedType === "definition")
+        .map((link) => link.linkedId),
+    );
+    const definitions = await this.repository.listDefinitions(this.agentId());
+    return definitions
+      .filter(
+        (definition) =>
+          definition.status !== "archived" &&
+          (definition.goalId === goalRecord.goal.id ||
+            linkedDefinitionIds.has(definition.id)),
+      )
+      .sort((left, right) => left.title.localeCompare(right.title));
+  }
+
+  private async collectOccurrenceViewsForDefinitions(
+    definitions: LifeOpsTaskDefinition[],
+  ): Promise<LifeOpsOccurrenceView[]> {
+    const views: LifeOpsOccurrenceView[] = [];
+    for (const definition of definitions) {
+      const occurrences = await this.repository.listOccurrencesForDefinition(
+        this.agentId(),
+        definition.id,
+      );
+      for (const occurrence of occurrences) {
+        const view = await this.repository.getOccurrenceView(
+          this.agentId(),
+          occurrence.id,
+        );
+        if (view) {
+          views.push(view);
+        }
+      }
+    }
+    views.sort(
+      (left, right) =>
+        new Date(left.updatedAt).getTime() - new Date(right.updatedAt).getTime(),
+    );
+    return views;
+  }
+
+  private deriveGoalReviewState(
+    goal: LifeOpsGoalDefinition,
+    definitions: LifeOpsTaskDefinition[],
+    activeOccurrences: LifeOpsOccurrenceView[],
+    overdueOccurrences: LifeOpsOccurrenceView[],
+    recentCompletions: LifeOpsOccurrenceView[],
+    lastActivityAt: string | null,
+    now: Date,
+  ): LifeOpsGoalDefinition["reviewState"] {
+    if (goal.status === "satisfied") {
+      return "on_track";
+    }
+    if (goal.status !== "active") {
+      return goal.reviewState;
+    }
+    if (definitions.length === 0) {
+      return "needs_attention";
+    }
+    if (overdueOccurrences.length > 0) {
+      return "at_risk";
+    }
+    if (!lastActivityAt) {
+      return "needs_attention";
+    }
+    const cadenceKind =
+      isRecord(goal.cadence) && typeof goal.cadence.kind === "string"
+        ? goal.cadence.kind
+        : null;
+    const staleMs =
+      cadenceKind === "daily" || cadenceKind === "times_per_day"
+        ? 2 * 24 * 60 * 60 * 1000
+        : cadenceKind === "weekly"
+          ? 10 * 24 * 60 * 60 * 1000
+          : 7 * 24 * 60 * 60 * 1000;
+    const lastActivityTime = new Date(lastActivityAt).getTime();
+    if (!Number.isFinite(lastActivityTime)) {
+      return "needs_attention";
+    }
+    if (now.getTime() - lastActivityTime > staleMs) {
+      return activeOccurrences.length > 0 ? "needs_attention" : "at_risk";
+    }
+    if (recentCompletions.length === 0 && activeOccurrences.length === 0) {
+      return "needs_attention";
+    }
+    return "on_track";
+  }
+
+  private buildGoalReviewExplanation(args: {
+    goal: LifeOpsGoalDefinition;
+    linkedDefinitionCount: number;
+    activeOccurrenceCount: number;
+    overdueOccurrenceCount: number;
+    completedLast7Days: number;
+    reviewState: LifeOpsGoalDefinition["reviewState"];
+    lastActivityAt: string | null;
+  }): string {
+    if (args.goal.status === "satisfied") {
+      return "This goal is marked satisfied and currently does not need more support work.";
+    }
+    if (args.linkedDefinitionCount === 0) {
+      return "This goal has no linked support tasks or routines yet, so there is nothing concrete to keep it moving.";
+    }
+    if (args.overdueOccurrenceCount > 0) {
+      return `This goal is at risk because ${args.overdueOccurrenceCount} linked support ${args.overdueOccurrenceCount === 1 ? "item is" : "items are"} overdue.`;
+    }
+    if (args.completedLast7Days > 0) {
+      return `This goal is on track because ${args.completedLast7Days} linked support ${args.completedLast7Days === 1 ? "item was" : "items were"} completed in the last 7 days.`;
+    }
+    if (args.activeOccurrenceCount > 0) {
+      return `This goal has ${args.activeOccurrenceCount} active support ${args.activeOccurrenceCount === 1 ? "item" : "items"} in flight right now.`;
+    }
+    if (args.lastActivityAt) {
+      return `This goal has support structure, but it has been quiet since ${args.lastActivityAt}.`;
+    }
+    if (args.reviewState === "needs_attention") {
+      return "This goal needs a clearer support structure or a new check-in.";
+    }
+    return "This goal has support structure and does not currently have overdue work.";
+  }
+
+  private buildGoalSupportSuggestions(args: {
+    goal: LifeOpsGoalDefinition;
+    linkedDefinitions: LifeOpsTaskDefinition[];
+    activeOccurrences: LifeOpsOccurrenceView[];
+    overdueOccurrences: LifeOpsOccurrenceView[];
+    recentCompletions: LifeOpsOccurrenceView[];
+  }): LifeOpsGoalSupportSuggestion[] {
+    const suggestions: LifeOpsGoalSupportSuggestion[] = [];
+    if (args.linkedDefinitions.length === 0) {
+      suggestions.push({
+        kind: LIFEOPS_GOAL_SUGGESTION_KINDS[0],
+        title: "Create the first support routine",
+        detail:
+          "Break this goal into a recurring task, habit, or routine so the agent can track and remind against something concrete.",
+        definitionId: null,
+        occurrenceId: null,
+      });
+      return suggestions;
+    }
+    for (const overdue of args.overdueOccurrences.slice(0, 2)) {
+      suggestions.push({
+        kind: LIFEOPS_GOAL_SUGGESTION_KINDS[2],
+        title: overdue.title,
+        detail:
+          "Resolve or reschedule this overdue support item so the goal is no longer drifting.",
+        definitionId: overdue.definitionId,
+        occurrenceId: overdue.id,
+      });
+    }
+    if (suggestions.length === 0 && args.activeOccurrences.length > 0) {
+      const next = args.activeOccurrences[0];
+      suggestions.push({
+        kind: LIFEOPS_GOAL_SUGGESTION_KINDS[1],
+        title: next.title,
+        detail:
+          "This is the clearest current action that advances the goal right now.",
+        definitionId: next.definitionId,
+        occurrenceId: next.id,
+      });
+    }
+    if (args.recentCompletions.length === 0) {
+      suggestions.push({
+        kind: LIFEOPS_GOAL_SUGGESTION_KINDS[3],
+        title: "Review progress",
+        detail:
+          "Check whether the current cadence still fits the goal, or whether the goal needs a stronger routine.",
+        definitionId: null,
+        occurrenceId: null,
+      });
+    }
+    if (
+      suggestions.length < 3 &&
+      args.linkedDefinitions.every((definition) => definition.kind === "task")
+    ) {
+      suggestions.push({
+        kind: LIFEOPS_GOAL_SUGGESTION_KINDS[4],
+        title: "Tighten the support cadence",
+        detail:
+          "This goal only has one-off tasks linked to it. Consider adding a recurring habit or routine if progress should stay continuous.",
+        definitionId: null,
+        occurrenceId: null,
+      });
+    }
+    return suggestions.slice(0, 3);
+  }
+
+  private async syncComputedGoalReviewState(
+    goal: LifeOpsGoalDefinition,
+    reviewState: LifeOpsGoalDefinition["reviewState"],
+    summary: LifeOpsGoalReview["summary"],
+    now: Date,
+  ): Promise<LifeOpsGoalDefinition> {
+    if (goal.reviewState === reviewState) {
+      return goal;
+    }
+    const nextGoal: LifeOpsGoalDefinition = {
+      ...goal,
+      reviewState,
+      metadata: mergeMetadata(goal.metadata, {
+        computedGoalReview: {
+          reviewedAt: now.toISOString(),
+          reviewState,
+          summary,
+        },
+      }),
+      updatedAt: now.toISOString(),
+    };
+    await this.repository.updateGoal(nextGoal);
+    await this.repository.createAuditEvent(
+      createLifeOpsAuditEvent({
+        agentId: this.agentId(),
+        eventType: "goal_reviewed",
+        ownerType: "goal",
+        ownerId: goal.id,
+        reason: "goal review recomputed",
+        inputs: {
+          previousReviewState: goal.reviewState,
+        },
+        decision: {
+          reviewState,
+          summary,
+        },
+        actor: "agent",
+      }),
+    );
+    return nextGoal;
+  }
+
+  private async buildGoalReview(
+    goalRecord: LifeOpsGoalRecord,
+    now: Date,
+  ): Promise<LifeOpsGoalReview> {
+    const linkedDefinitions = await this.collectLinkedDefinitionsForGoal(goalRecord);
+    const allOccurrenceViews =
+      await this.collectOccurrenceViewsForDefinitions(linkedDefinitions);
+    const lookbackStart = new Date(
+      now.getTime() - GOAL_REVIEW_LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const activeOccurrences = allOccurrenceViews.filter(
+      (occurrence) =>
+        occurrence.state === "visible" || occurrence.state === "snoozed",
+    );
+    const overdueOccurrences = activeOccurrences.filter((occurrence) => {
+      if (!occurrence.dueAt) {
+        return false;
+      }
+      return new Date(occurrence.dueAt).getTime() < now.getTime();
+    });
+    const recentCompletions = allOccurrenceViews.filter(
+      (occurrence) =>
+        occurrence.state === "completed" &&
+        new Date(occurrence.updatedAt).getTime() >= lookbackStart.getTime(),
+    );
+    const lastActivityAt = allOccurrenceViews.reduce<string | null>(
+      (latest, occurrence) => {
+        const currentTime = new Date(occurrence.updatedAt).getTime();
+        if (!Number.isFinite(currentTime)) {
+          return latest;
+        }
+        if (!latest) {
+          return occurrence.updatedAt;
+        }
+        return currentTime > new Date(latest).getTime()
+          ? occurrence.updatedAt
+          : latest;
+      },
+      null,
+    );
+    const derivedReviewState = this.deriveGoalReviewState(
+      goalRecord.goal,
+      linkedDefinitions,
+      activeOccurrences,
+      overdueOccurrences,
+      recentCompletions,
+      lastActivityAt,
+      now,
+    );
+    const summary: LifeOpsGoalReview["summary"] = {
+      linkedDefinitionCount: linkedDefinitions.length,
+      activeOccurrenceCount: activeOccurrences.length,
+      overdueOccurrenceCount: overdueOccurrences.length,
+      completedLast7Days: recentCompletions.length,
+      lastActivityAt,
+      reviewState: derivedReviewState,
+      explanation: this.buildGoalReviewExplanation({
+        goal: goalRecord.goal,
+        linkedDefinitionCount: linkedDefinitions.length,
+        activeOccurrenceCount: activeOccurrences.length,
+        overdueOccurrenceCount: overdueOccurrences.length,
+        completedLast7Days: recentCompletions.length,
+        reviewState: derivedReviewState,
+        lastActivityAt,
+      }),
+    };
+    const goal = await this.syncComputedGoalReviewState(
+      goalRecord.goal,
+      derivedReviewState,
+      summary,
+      now,
+    );
+    return {
+      goal,
+      links: goalRecord.links,
+      linkedDefinitions,
+      activeOccurrences,
+      overdueOccurrences,
+      recentCompletions,
+      suggestions: this.buildGoalSupportSuggestions({
+        goal,
+        linkedDefinitions,
+        activeOccurrences,
+        overdueOccurrences,
+        recentCompletions,
+      }),
+      audits: await this.repository.listAuditEvents(this.agentId(), "goal", goal.id),
+      summary: {
+        ...summary,
+        reviewState: goal.reviewState,
+      },
+    };
+  }
+
+  async reviewGoal(goalId: string, now = new Date()): Promise<LifeOpsGoalReview> {
+    const goalRecord = await this.getGoalRecord(goalId);
+    return this.buildGoalReview(goalRecord, now);
+  }
+
+  async explainOccurrence(
+    occurrenceId: string,
+  ): Promise<LifeOpsOccurrenceExplanation> {
+    const occurrence = await this.repository.getOccurrenceView(
+      this.agentId(),
+      occurrenceId,
+    );
+    if (!occurrence) {
+      fail(404, "life-ops occurrence not found");
+    }
+    const definitionRecord = await this.getDefinitionRecord(occurrence.definitionId);
+    const linkedGoal = definitionRecord.definition.goalId
+      ? await this.getGoalRecord(definitionRecord.definition.goalId)
+      : null;
+    const reminderInspection = await this.inspectReminder("occurrence", occurrence.id);
+    const definitionAudits = await this.repository.listAuditEvents(
+      this.agentId(),
+      "definition",
+      definitionRecord.definition.id,
+    );
+    const lastReminderAttempt = reminderInspection.attempts[0] ?? null;
+    const lastOccurrenceAudit = reminderInspection.audits[0] ?? null;
+    const whyVisible =
+      occurrence.state === "snoozed" && occurrence.snoozedUntil
+        ? `This item is still visible because it was snoozed until ${occurrence.snoozedUntil}.`
+        : occurrence.dueAt
+          ? `This item is visible because it is due at ${occurrence.dueAt} and its current relevance window started at ${occurrence.relevanceStartAt}.`
+          : `This item is visible because its current relevance window started at ${occurrence.relevanceStartAt}.`;
+    return {
+      occurrence,
+      definition: definitionRecord.definition,
+      reminderPlan: definitionRecord.reminderPlan,
+      linkedGoal,
+      reminderInspection,
+      definitionAudits,
+      summary: {
+        originalIntent: definitionRecord.definition.originalIntent,
+        source: definitionRecord.definition.source,
+        whyVisible,
+        lastReminderAt: lastReminderAttempt?.attemptedAt ?? null,
+        lastReminderChannel: lastReminderAttempt?.channel ?? null,
+        lastReminderOutcome: lastReminderAttempt?.outcome ?? null,
+        lastActionSummary: lastOccurrenceAudit
+          ? `${lastOccurrenceAudit.reason} at ${lastOccurrenceAudit.createdAt}`
+          : null,
+      },
+    };
+  }
+
+  private async refreshGoalReviewStates(now: Date): Promise<LifeOpsGoalDefinition[]> {
+    const goals = (await this.repository.listGoals(this.agentId())).filter(
+      (goal) => goal.status === "active",
+    );
+    const refreshed: LifeOpsGoalDefinition[] = [];
+    for (const goal of goals) {
+      const review = await this.buildGoalReview(
+        {
+          goal,
+          links: await this.repository.listGoalLinksForGoal(this.agentId(), goal.id),
+        },
+        now,
+      );
+      refreshed.push(review.goal);
+    }
+    return refreshed;
+  }
+
   async getOverview(now = new Date()): Promise<LifeOpsOverview> {
     const definitions = await this.repository.listActiveDefinitions(
       this.agentId(),
@@ -4274,9 +4670,7 @@ export class LifeOpsService {
     const plansByEventId = new Map(
       calendarReminderPlans.map((plan) => [plan.ownerId, plan]),
     );
-    const goals = (await this.repository.listGoals(this.agentId())).filter(
-      (goal) => goal.status === "active",
-    );
+    const goals = await this.refreshGoalReviewStates(now);
     const allReminders = [
       ...buildActiveReminders(overviewOccurrences, plansByDefinitionId, now),
       ...buildActiveCalendarEventReminders(

@@ -192,6 +192,7 @@ export const LIFEOPS_AUDIT_EVENT_TYPES = [
   "occurrence_snoozed",
   "goal_created",
   "goal_updated",
+  "goal_reviewed",
   "calendar_event_created",
   "gmail_triage_synced",
   "gmail_reply_drafted",
@@ -960,6 +961,54 @@ export interface UpdateLifeOpsGoalRequest {
   metadata?: Record<string, unknown>;
 }
 
+export interface LifeOpsDefinitionRecord {
+  definition: LifeOpsTaskDefinition;
+  reminderPlan: LifeOpsReminderPlan | null;
+}
+
+export interface LifeOpsGoalRecord {
+  goal: LifeOpsGoalDefinition;
+  links: LifeOpsGoalLink[];
+}
+
+export const LIFEOPS_GOAL_SUGGESTION_KINDS = [
+  "create_support",
+  "focus_now",
+  "resolve_overdue",
+  "review_progress",
+  "tighten_cadence",
+] as const;
+export type LifeOpsGoalSuggestionKind =
+  (typeof LIFEOPS_GOAL_SUGGESTION_KINDS)[number];
+
+export interface LifeOpsGoalSupportSuggestion {
+  kind: LifeOpsGoalSuggestionKind;
+  title: string;
+  detail: string;
+  definitionId: string | null;
+  occurrenceId: string | null;
+}
+
+export interface LifeOpsGoalReview {
+  goal: LifeOpsGoalDefinition;
+  links: LifeOpsGoalLink[];
+  linkedDefinitions: LifeOpsTaskDefinition[];
+  activeOccurrences: LifeOpsOccurrenceView[];
+  overdueOccurrences: LifeOpsOccurrenceView[];
+  recentCompletions: LifeOpsOccurrenceView[];
+  suggestions: LifeOpsGoalSupportSuggestion[];
+  audits: LifeOpsAuditEvent[];
+  summary: {
+    linkedDefinitionCount: number;
+    activeOccurrenceCount: number;
+    overdueOccurrenceCount: number;
+    completedLast7Days: number;
+    lastActivityAt: string | null;
+    reviewState: LifeOpsGoalReviewState;
+    explanation: string;
+  };
+}
+
 export interface SnoozeLifeOpsOccurrenceRequest {
   minutes?: number;
   preset?: "15m" | "30m" | "1h" | "tonight" | "tomorrow_morning";
@@ -968,6 +1017,24 @@ export interface SnoozeLifeOpsOccurrenceRequest {
 export interface CompleteLifeOpsOccurrenceRequest {
   note?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface LifeOpsOccurrenceExplanation {
+  occurrence: LifeOpsOccurrenceView;
+  definition: LifeOpsTaskDefinition;
+  reminderPlan: LifeOpsReminderPlan | null;
+  linkedGoal: LifeOpsGoalRecord | null;
+  reminderInspection: LifeOpsReminderInspection;
+  definitionAudits: LifeOpsAuditEvent[];
+  summary: {
+    originalIntent: string;
+    source: string;
+    whyVisible: string;
+    lastReminderAt: string | null;
+    lastReminderChannel: LifeOpsReminderChannel | null;
+    lastReminderOutcome: LifeOpsReminderAttemptOutcome | null;
+    lastActionSummary: string | null;
+  };
 }
 
 export interface UpsertLifeOpsChannelPolicyRequest {

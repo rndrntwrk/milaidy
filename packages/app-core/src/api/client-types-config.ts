@@ -20,20 +20,23 @@ import type {
   GetLifeOpsGmailTriageRequest,
   LifeOpsCalendarEvent,
   LifeOpsCalendarFeed,
+  LifeOpsDefinitionRecord,
   LifeOpsGmailMessageSummary,
   LifeOpsGmailReplyDraft,
   LifeOpsGmailTriageFeed,
+  LifeOpsGoalRecord,
+  LifeOpsGoalReview,
   LifeOpsNextCalendarEventContext,
   LifeOpsGoogleConnectorStatus,
+  LifeOpsOccurrenceExplanation,
   SendLifeOpsGmailReplyRequest,
   StartLifeOpsGoogleConnectorRequest,
   StartLifeOpsGoogleConnectorResponse,
-  LifeOpsGoalDefinition,
-  LifeOpsGoalLink,
   LifeOpsOccurrenceView,
   LifeOpsOverview,
   LifeOpsReminderPlan,
   LifeOpsTaskDefinition,
+  LifeOpsReminderInspection,
   SnoozeLifeOpsOccurrenceRequest,
   UpdateLifeOpsDefinitionRequest,
   UpdateLifeOpsGoalRequest,
@@ -52,20 +55,23 @@ export type {
   GetLifeOpsGmailTriageRequest,
   LifeOpsCalendarEvent,
   LifeOpsCalendarFeed,
+  LifeOpsDefinitionRecord,
   LifeOpsGmailMessageSummary,
   LifeOpsGmailReplyDraft,
   LifeOpsGmailTriageFeed,
+  LifeOpsGoalRecord,
+  LifeOpsGoalReview,
   LifeOpsNextCalendarEventContext,
   LifeOpsGoogleConnectorStatus,
+  LifeOpsOccurrenceExplanation,
   SendLifeOpsGmailReplyRequest,
   StartLifeOpsGoogleConnectorRequest,
   StartLifeOpsGoogleConnectorResponse,
-  LifeOpsGoalDefinition,
-  LifeOpsGoalLink,
   LifeOpsOccurrenceView,
   LifeOpsOverview,
   LifeOpsReminderPlan,
   LifeOpsTaskDefinition,
+  LifeOpsReminderInspection,
   SnoozeLifeOpsOccurrenceRequest,
   UpdateLifeOpsDefinitionRequest,
   UpdateLifeOpsGoalRequest,
@@ -116,6 +122,10 @@ export interface PluginInfo {
   validationWarnings: Array<{ field: string; message: string }>;
   npmName?: string;
   version?: string;
+  releaseStream?: "latest" | "alpha";
+  requestedVersion?: string;
+  latestVersion?: string | null;
+  alphaVersion?: string | null;
   pluginDeps?: string[];
   /** Whether this plugin is actually loaded and running in the runtime. */
   isActive?: boolean;
@@ -414,12 +424,46 @@ export interface InstalledPlugin {
   version: string;
   installPath: string;
   installedAt: string;
+  releaseStream?: "latest" | "alpha";
+  requestedVersion?: string;
+  latestVersion?: string | null;
+  alphaVersion?: string | null;
+}
+
+export type PluginMutationApplyMode =
+  | "none"
+  | "config_apply"
+  | "plugin_reload"
+  | "runtime_reload"
+  | "restart_required";
+
+export interface PluginMutationResult {
+  ok: boolean;
+  pluginName?: string;
+  applied?: PluginMutationApplyMode;
+  requiresRestart?: boolean;
+  restartedRuntime?: boolean;
+  loadedPackages?: string[];
+  unloadedPackages?: string[];
+  reloadedPackages?: string[];
+  message?: string;
+  error?: string;
 }
 
 export interface PluginInstallResult {
   ok: boolean;
+  pluginName?: string;
   plugin?: { name: string; version: string; installPath: string };
+  applied?: PluginMutationApplyMode;
   requiresRestart?: boolean;
+  restartedRuntime?: boolean;
+  loadedPackages?: string[];
+  unloadedPackages?: string[];
+  reloadedPackages?: string[];
+  releaseStream?: "latest" | "alpha";
+  requestedVersion?: string;
+  latestVersion?: string | null;
+  alphaVersion?: string | null;
   message?: string;
   error?: string;
 }
@@ -471,16 +515,6 @@ export interface WorkbenchOverview {
     thinking: boolean;
     lastEventAt?: number | null;
   };
-}
-
-export interface LifeOpsDefinitionRecord {
-  definition: LifeOpsTaskDefinition;
-  reminderPlan: LifeOpsReminderPlan | null;
-}
-
-export interface LifeOpsGoalRecord {
-  goal: LifeOpsGoalDefinition;
-  links: LifeOpsGoalLink[];
 }
 
 export interface LifeOpsOccurrenceActionResult {
