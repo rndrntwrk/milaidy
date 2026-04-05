@@ -98,8 +98,12 @@ const VIEWS: ViewSpec[] = [
   {
     id: "apps",
     path: "/apps",
-    label: "Apps (APPS_ENABLED=false — chat shell)",
-    appsDisabledExpectChatShell: true,
+    label: "Apps",
+    readyChecks: [
+      { selector: '[data-testid="apps-catalog-grid"]' },
+      { selector: '[data-testid="apps-detail-panel"]' },
+    ],
+    readyCheckMode: "all",
   },
   {
     id: "character",

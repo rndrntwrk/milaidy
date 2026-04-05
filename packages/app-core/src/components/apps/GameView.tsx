@@ -903,6 +903,7 @@ export function GameView() {
       <div className="flex items-center gap-2 px-2 py-2 border-b border-border">
         <Input
           type="text"
+          data-testid="game-command-input"
           value={chatInput}
           onChange={(e) => setChatInput(e.target.value)}
           onKeyDown={(e) => {
@@ -918,6 +919,7 @@ export function GameView() {
         <Button
           variant="default"
           size="sm"
+          data-testid="game-command-send"
           onClick={handleSendChat}
           disabled={sendingChat || !chatInput.trim()}
           className="h-8 shadow-sm font-bold tracking-wide"
@@ -1007,6 +1009,7 @@ export function GameView() {
         <span className="flex-1" />
         {activeSessionState?.status ? (
           <span
+            data-testid="game-session-status"
             className="max-w-48 truncate text-[10px] px-1.5 py-0.5 border border-border text-muted"
             title={activeSessionState.summary ?? activeSessionState.status}
           >
@@ -1017,6 +1020,7 @@ export function GameView() {
           <Button
             variant="outline"
             size="sm"
+            data-testid="game-session-control"
             className="h-7 text-xs shadow-sm hover:border-accent"
             onClick={() => void handleSessionControl()}
             disabled={sessionBusyAction === sessionControlAction}
@@ -1034,6 +1038,7 @@ export function GameView() {
         <Button
           variant={showLogsPanel ? "default" : "outline"}
           size="sm"
+          data-testid="game-toggle-logs"
           className="h-7 text-xs shadow-sm hover:border-accent"
           onClick={() => setShowLogsPanel(!showLogsPanel)}
         >
@@ -1113,6 +1118,7 @@ export function GameView() {
               sandbox={activeGameSandbox}
               allow="fullscreen *"
               allowFullScreen
+              data-testid="game-view-iframe"
               className="w-full h-full border-none"
               title={
                 activeGameDisplayName ||

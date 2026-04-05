@@ -230,16 +230,47 @@ export function AppsView() {
 
   return (
     <div className="device-layout mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-4 lg:px-6">
-      <div className="phone-frame overflow-hidden rounded-[2rem] border border-border/40 bg-card/86 shadow-[0_20px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
-        <div className="phone-status-bar flex items-center justify-between border-b border-border/40 px-5 py-3 text-[12px] text-muted-strong">
-          <span className="font-semibold">9:41</span>
-          <span className="opacity-50">📶 🔋</span>
+      <section className="overflow-hidden rounded-[2rem] border border-border/40 bg-card/88 shadow-[0_20px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
+        <div className="relative overflow-hidden border-b border-border/40 px-5 py-5">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,205,96,0.18),transparent_45%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent)]" />
+          <div className="relative grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-end">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent">
+                Agent App Library
+              </div>
+              <h1 className="mt-3 max-w-3xl text-[1.8rem] font-semibold tracking-[-0.02em] text-txt">
+                Watch your agent live and steer it in real time.
+              </h1>
+              <p className="mt-3 max-w-2xl text-[13px] leading-6 text-muted-strong">
+                Launch an app, lock onto the running agent immediately, and
+                keep commands, pause, and telemetry docked beside the world
+                instead of buried in another tool.
+              </p>
+            </div>
+
+            <div
+              className="rounded-[1.5rem] border border-border/35 bg-bg/65 px-4 py-4 shadow-sm"
+              data-testid="apps-session-status-card"
+            >
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                {hasCurrentGame ? "Current live session" : "Session status"}
+              </div>
+              <div className="mt-2 text-sm font-semibold text-txt">
+                {hasCurrentGame
+                  ? activeGameDisplayName || "Active app session"
+                  : "No app session running"}
+              </div>
+              <p className="mt-2 text-[12px] leading-6 text-muted-strong">
+                {hasCurrentGame
+                  ? "Jump back into the running app or keep browsing for another world to connect."
+                  : "Pick an app to inspect launch details and start a live agent session."}
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div className="phone-content grid gap-5 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(19rem,23rem)] lg:p-5">
-          <div
-            className={`phone-grid-when-detail ${selectedApp ? "order-2 lg:order-1" : "order-1"}`}
-          >
+        <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)] lg:p-5">
+          <PagePanel variant="inset" className="p-4 lg:p-5">
             <AppsCatalogGrid
               activeAppNames={activeAppNames}
               activeGameDisplayName={activeGameDisplayName}
@@ -258,13 +289,16 @@ export function AppsView() {
                 setShowActiveOnly((current) => !current)
               }
             />
-          </div>
+          </PagePanel>
 
-          <PagePanel variant="inset" className="order-1 p-4 lg:order-2">
+          <PagePanel
+            variant="inset"
+            className="p-4 lg:p-5"
+            data-testid="apps-detail-panel"
+          >
             {selectedApp ? (
               <AppDetailPane
                 app={selectedApp}
-                compact
                 busy={busyApp === selectedApp.name}
                 hasActiveViewer={selectedAppHasActiveViewer}
                 isActive={selectedAppIsActive}
@@ -280,37 +314,7 @@ export function AppsView() {
             )}
           </PagePanel>
         </div>
-
-        <div className="phone-home-indicator h-1.5 w-28 rounded-full bg-border/60 mx-auto mb-3" />
-      </div>
-
-      <div className="pad-frame overflow-hidden rounded-[2rem] border border-border/40 bg-card/86 shadow-[0_20px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
-        <div className="phone-status-bar flex items-center justify-between border-b border-border/40 px-5 py-3 text-[12px] text-muted-strong">
-          <span className="font-semibold">9:41</span>
-          <span className="opacity-50">📶 🔋</span>
-        </div>
-
-        <div className="phone-content p-5">
-          {selectedApp ? (
-            <AppDetailPane
-              app={selectedApp}
-              busy={busyApp === selectedApp.name}
-              hasActiveViewer={selectedAppHasActiveViewer}
-              isActive={selectedAppIsActive}
-              onBack={() => setSelectedAppName(null)}
-              onLaunch={() => void handleLaunch(selectedApp)}
-              onOpenCurrentGame={handleOpenCurrentGame}
-              onOpenCurrentGameInNewTab={() =>
-                void handleOpenCurrentGameInNewTab()
-              }
-            />
-          ) : (
-            <AppsEmptyState />
-          )}
-        </div>
-
-        <div className="phone-home-indicator h-1.5 w-28 rounded-full bg-border/60 mx-auto mb-3" />
-      </div>
+      </section>
     </div>
   );
 }

@@ -3,7 +3,12 @@ import type React from "react";
 import type { RegistryAppInfo } from "../../api";
 import { useApp } from "../../state";
 import { getAppDetailExtension } from "./extensions/registry";
-import { CATEGORY_LABELS, getAppEmoji } from "./helpers";
+import {
+  CATEGORY_LABELS,
+  getAppEmoji,
+  getAppSessionFeatureLabels,
+  getAppSessionModeLabel,
+} from "./helpers";
 
 interface AppDetailPaneProps {
   app: RegistryAppInfo;
@@ -75,10 +80,22 @@ export function AppDetailPane({
     t("appsview.NoDescriptionAvailable", {
       defaultValue: "No description available.",
     });
+  const sessionModeLabel = getAppSessionModeLabel(app);
+  const sessionFeatures = getAppSessionFeatureLabels(app);
+  const isLiveControlApp = app.session?.mode === "spectate-and-steer";
   const launchLabel = busy
     ? t("appsview.Launching", { defaultValue: "Launching..." })
-    : t("appsview.Launch", { defaultValue: "Launch app" });
+    : isLiveControlApp
+      ? t("appsview.Launch", { defaultValue: "Launch app" })
+      : t("appsview.Launch", { defaultValue: "Launch app" });
   const backLabel = t("appsview.Back", { defaultValue: "Back to catalog" });
+  const resumeLabel = isLiveControlApp
+    ? t("appsview.ResumeSession", {
+        defaultValue: "Resume live session",
+      })
+    : t("appsview.ResumeSession", {
+        defaultValue: "Resume session",
+      });
 
   if (compact) {
     return (
@@ -203,6 +220,9 @@ export function AppDetailPane({
                   {CATEGORY_LABELS[app.category] ?? app.category}
                 </DetailBadge>
               ) : null}
+              {sessionModeLabel ? (
+                <DetailBadge tone="accent">{sessionModeLabel}</DetailBadge>
+              ) : null}
               {app.latestVersion ? (
                 <DetailBadge tone="accent">v{app.latestVersion}</DetailBadge>
               ) : null}
@@ -216,12 +236,28 @@ export function AppDetailPane({
         </div>
       </section>
 
+      {isLiveControlApp ? (
+        <section className="rounded-[1.5rem] border border-accent/20 bg-[linear-gradient(135deg,rgba(255,205,96,0.14),rgba(255,205,96,0.04))] px-4 py-4 shadow-sm">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
+            Live Session
+          </div>
+          <div className="mt-2 text-sm font-semibold text-txt">
+            Seamless spectate-and-steer control.
+          </div>
+          <p className="mt-2 text-[12px] leading-6 text-muted-strong">
+            Milady opens the world, follows your running agent, and keeps
+            command chat, pause, and telemetry one click away.
+          </p>
+        </section>
+      ) : null}
+
       <div
         className={`grid gap-2 ${hasActiveViewer ? "md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]" : "md:grid-cols-2"}`}
       >
         <Button
           variant="default"
           size="sm"
+          data-testid="apps-detail-launch"
           className="min-h-11 rounded-xl px-5 shadow-sm"
           disabled={busy}
           onClick={onLaunch}
@@ -233,16 +269,16 @@ export function AppDetailPane({
             <Button
               variant="outline"
               size="sm"
+              data-testid="apps-detail-resume"
               className="min-h-11 rounded-xl px-5 shadow-sm"
               onClick={onOpenCurrentGame}
             >
-              {t("appsview.ResumeSession", {
-                defaultValue: "Resume session",
-              })}
+              {resumeLabel}
             </Button>
             <Button
               variant="outline"
               size="sm"
+              data-testid="apps-detail-open-tab"
               className="min-h-11 rounded-xl px-5 shadow-sm"
               onClick={onOpenCurrentGameInNewTab}
             >
@@ -257,6 +293,12 @@ export function AppDetailPane({
           label={t("appsview.LaunchType", { defaultValue: "Launch type" })}
           value={<span className="break-words">{app.launchType || "—"}</span>}
         />
+        {sessionModeLabel ? (
+          <MetadataRow
+            label={"Session mode"}
+            value={<span className="break-words">{sessionModeLabel}</span>}
+          />
+        ) : null}
         {app.launchUrl ? (
           <MetadataRow
             label={t("appsview.URL", { defaultValue: "URL" })}
@@ -283,6 +325,21 @@ export function AppDetailPane({
           />
         ) : null}
       </section>
+
+      {sessionFeatures.length > 0 ? (
+        <section className="space-y-2.5">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+            Session features
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {sessionFeatures.map((feature) => (
+              <DetailBadge key={feature} tone="accent">
+                {feature}
+              </DetailBadge>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {app.capabilities?.length ? (
         <section className="space-y-2.5">

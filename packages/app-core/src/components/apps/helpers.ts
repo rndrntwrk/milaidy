@@ -10,6 +10,19 @@ export const CATEGORY_LABELS: Record<string, string> = {
   social: "Social",
   platform: "Platform",
   world: "World",
+  utility: "Utility",
+};
+
+const SESSION_MODE_LABELS: Record<string, string> = {
+  "spectate-and-steer": "Spectate + steer",
+};
+
+const SESSION_FEATURE_LABELS: Record<string, string> = {
+  commands: "Commands",
+  telemetry: "Telemetry",
+  pause: "Pause",
+  resume: "Resume",
+  suggestions: "Suggestions",
 };
 
 export function shouldShowAppInAppsView(
@@ -30,6 +43,7 @@ export function getAppShortName(app: RegistryAppInfo): string {
 
 export function getAppEmoji(app: RegistryAppInfo): string {
   const name = (app.name ?? "").toLowerCase();
+  if (name.includes("hyperscape")) return "🌌";
   if (name.includes("2004") || name.includes("runescape")) return "⚔️";
   if (name.includes("town")) return "🏘️";
   if (name.includes("babylon")) return "🏛️";
@@ -42,4 +56,20 @@ export function getAppEmoji(app: RegistryAppInfo): string {
   if (app.category === "social") return "💬";
   if (app.category === "world") return "🌍";
   return "📦";
+}
+
+export function getAppSessionModeLabel(
+  app: Pick<RegistryAppInfo, "session">,
+): string | null {
+  const mode = app.session?.mode;
+  if (!mode) return null;
+  return SESSION_MODE_LABELS[mode] ?? mode;
+}
+
+export function getAppSessionFeatureLabels(
+  app: Pick<RegistryAppInfo, "session">,
+): string[] {
+  return (app.session?.features ?? []).map(
+    (feature) => SESSION_FEATURE_LABELS[feature] ?? feature,
+  );
 }
