@@ -112,6 +112,8 @@ function ChevronDown() {
 function DownloadDropdown() {
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // stableRelease is always set by the build script; fall back to release for
+  // backward compatibility with older generated data.
   const stableDownloads = releaseData.stableRelease?.downloads ?? releaseData.release.downloads;
   const canaryRelease = releaseData.canaryRelease;
   const canaryDownloads = canaryRelease?.downloads ?? [];
@@ -223,8 +225,9 @@ function DownloadDropdown() {
               </span>
             </a>
 
+            {/* All releases listing on GitHub */}
             <a
-              href={releaseData.release.url}
+              href={`${GITHUB_URL}/releases`}
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-3 border-t border-text-subtle/10 px-4 py-3 text-text-muted transition-colors hover:bg-brand/5 hover:text-brand"
