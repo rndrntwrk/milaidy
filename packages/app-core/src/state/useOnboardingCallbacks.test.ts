@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-import { act, renderHook } from "@testing-library/react";
 import { getDefaultStylePreset } from "@miladyai/shared/onboarding-presets";
-import { MiladyClient } from "../api";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MiladyClient } from "../api";
 import {
   buildOnboardingStyleVoiceConfig,
   useOnboardingCallbacks,
@@ -51,6 +51,8 @@ describe("useOnboardingCallbacks", () => {
   afterEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    delete (window as unknown as Record<string, unknown>)
+      .__ELIZA_CLOUD_AUTH_TOKEN__;
     vi.restoreAllMocks();
   });
 
@@ -366,6 +368,110 @@ describe("useOnboardingCallbacks", () => {
         },
       }),
     );
+    expect(setOnboardingComplete).toHaveBeenCalledWith(true);
+    expect(setTab).toHaveBeenCalledWith("chat");
+  });
+
+  it("adds a deferred Google task after Eliza Cloud onboarding when Google is not connected", async () => {
+    const submitOnboarding = vi.fn().mockResolvedValue(undefined);
+    const provisionCloudSandbox = vi.fn().mockResolvedValue(undefined);
+    const getGoogleLifeOpsConnectorStatus = vi.fn().mockResolvedValue({
+      provider: "google",
+      mode: "cloud_managed",
+      defaultMode: "cloud_managed",
+      availableModes: ["cloud_managed", "local"],
+      executionTarget: "cloud",
+      sourceOfTruth: "cloud",
+      configured: true,
+      connected: false,
+      reason: "disconnected",
+      preferredByAgent: false,
+      cloudConnectionId: null,
+      identity: null,
+      grantedCapabilities: [],
+      grantedScopes: [],
+      expiresAt: null,
+      hasRefreshToken: false,
+      grant: null,
+    });
+    const addDeferredOnboardingTask = vi.fn();
+    const setOnboardingComplete = vi.fn();
+    const setTab = vi.fn();
+
+    (window as unknown as Record<string, unknown>).__ELIZA_CLOUD_AUTH_TOKEN__ =
+      "cloud-auth-token";
+
+    const { result } = renderHook(() => {
+      const onboarding = useOnboardingState();
+      return {
+        onboarding,
+        callbacks: useOnboardingCallbacks({
+          onboarding,
+          setOnboardingStep: vi.fn(),
+          setOnboardingMode: vi.fn(),
+          setOnboardingActiveGuide: vi.fn(),
+          addDeferredOnboardingTask,
+          setOnboardingDetectedProviders: vi.fn(),
+          setOnboardingServerTarget: vi.fn(),
+          setOnboardingCloudApiKey: vi.fn(),
+          setOnboardingProvider: vi.fn(),
+          setOnboardingApiKey: vi.fn(),
+          setOnboardingPrimaryModel: vi.fn(),
+          setOnboardingRemoteApiBase: vi.fn(),
+          setOnboardingRemoteToken: vi.fn(),
+          setOnboardingRemoteConnecting: vi.fn(),
+          setOnboardingRemoteError: vi.fn(),
+          setOnboardingRemoteConnected: vi.fn(),
+          setPostOnboardingChecklistDismissed: vi.fn(),
+          setOnboardingComplete,
+          coordinatorOnboardingCompleteRef: { current: null },
+          initialTabSetRef: { current: false },
+          setTab,
+          defaultLandingTab: "chat",
+          loadCharacter: async () => {},
+          uiLanguage: "en",
+          selectedVrmIndex: 1,
+          walletConfig: {},
+          elizaCloudConnected: true,
+          setActionNotice: vi.fn(),
+          retryStartup: vi.fn(),
+          forceLocalBootstrapRef: { current: false },
+          client: {
+            provisionCloudSandbox,
+            submitOnboarding,
+            updateConfig: vi.fn().mockResolvedValue({}),
+            setBaseUrl: vi.fn(),
+            setToken: vi.fn(),
+            getGoogleLifeOpsConnectorStatus,
+          } as unknown as MiladyClient,
+        }),
+      };
+    });
+
+    act(() => {
+      result.current.onboarding.setOptions({
+        names: [],
+        styles: [getDefaultStylePreset("en")],
+        providers: [],
+        cloudProviders: [],
+        models: { small: [], large: [] },
+        inventoryProviders: [],
+        sharedStyleRules: "Keep responses brief.",
+      });
+      result.current.onboarding.setField("name", "Chen");
+      result.current.onboarding.setField("serverTarget", "elizacloud");
+      result.current.onboarding.setField("provider", "elizacloud");
+    });
+
+    await act(async () => {
+      await result.current.callbacks.handleOnboardingFinish();
+    });
+
+    expect(provisionCloudSandbox).toHaveBeenCalledTimes(1);
+    expect(getGoogleLifeOpsConnectorStatus).toHaveBeenCalledWith(
+      "cloud_managed",
+    );
+    expect(addDeferredOnboardingTask).toHaveBeenCalledWith("google");
     expect(setOnboardingComplete).toHaveBeenCalledWith(true);
     expect(setTab).toHaveBeenCalledWith("chat");
   });

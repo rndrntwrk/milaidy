@@ -9,6 +9,12 @@ type GuideContent = {
   skipEffectKey: string;
   characterImpactKey: string;
   recommendedKey: string;
+  titleDefault?: string;
+  descriptionDefault?: string;
+  whenToUseDefault?: string;
+  skipEffectDefault?: string;
+  characterImpactDefault?: string;
+  recommendedDefault?: string;
 };
 
 const GUIDE_CONTENT: Record<FlaminaGuideTopic, GuideContent> = {
@@ -44,20 +50,52 @@ const GUIDE_CONTENT: Record<FlaminaGuideTopic, GuideContent> = {
     characterImpactKey: "flaminaguide.voice.characterImpact",
     recommendedKey: "flaminaguide.voice.recommended",
   },
+  google: {
+    titleKey: "flaminaguide.google.title",
+    descriptionKey: "flaminaguide.google.description",
+    whenToUseKey: "flaminaguide.google.whenToUse",
+    skipEffectKey: "flaminaguide.google.skipEffect",
+    characterImpactKey: "flaminaguide.google.characterImpact",
+    recommendedKey: "flaminaguide.google.recommended",
+    titleDefault: "Connect Google",
+    descriptionDefault:
+      "Link Google Calendar and Gmail so this agent can see upcoming events, triage inbox activity, and take action with your approval.",
+    whenToUseDefault:
+      "Use this after Eliza Cloud onboarding when you want the agent to work with your calendar or inbox.",
+    skipEffectDefault:
+      "Chat still works, but Life Ops will not have Google Calendar or Gmail context for this agent.",
+    characterImpactDefault:
+      "The active agent can ground planning, reminders, and follow-up work in your upcoming events and Gmail triage feed.",
+    recommendedDefault:
+      "Recommended for Eliza Cloud setups. Use Cloud in Settings for managed tokens, or switch to Local there if you want tokens kept on this machine.",
+  },
 };
 
-const TASK_LABEL_KEYS: Record<FlaminaGuideTopic, string> = {
-  provider: "flaminaguide.tasks.provider.label",
-  rpc: "flaminaguide.tasks.rpc.label",
-  permissions: "flaminaguide.tasks.permissions.label",
-  voice: "flaminaguide.tasks.voice.label",
+type GuideLabel = {
+  key: string;
+  defaultValue?: string;
 };
 
-const TASK_DESCRIPTION_KEYS: Record<FlaminaGuideTopic, string> = {
-  provider: "flaminaguide.tasks.provider.description",
-  rpc: "flaminaguide.tasks.rpc.description",
-  permissions: "flaminaguide.tasks.permissions.description",
-  voice: "flaminaguide.tasks.voice.description",
+const TASK_LABELS: Record<FlaminaGuideTopic, GuideLabel> = {
+  provider: { key: "flaminaguide.tasks.provider.label" },
+  rpc: { key: "flaminaguide.tasks.rpc.label" },
+  permissions: { key: "flaminaguide.tasks.permissions.label" },
+  voice: { key: "flaminaguide.tasks.voice.label" },
+  google: {
+    key: "flaminaguide.tasks.google.label",
+    defaultValue: "Google connection",
+  },
+};
+
+const TASK_DESCRIPTIONS: Record<FlaminaGuideTopic, GuideLabel> = {
+  provider: { key: "flaminaguide.tasks.provider.description" },
+  rpc: { key: "flaminaguide.tasks.rpc.description" },
+  permissions: { key: "flaminaguide.tasks.permissions.description" },
+  voice: { key: "flaminaguide.tasks.voice.description" },
+  google: {
+    key: "flaminaguide.tasks.google.description",
+    defaultValue: "Connect Google Calendar and Gmail for this agent.",
+  },
 };
 
 export function FlaminaGuideCard({
@@ -79,31 +117,35 @@ export function FlaminaGuideCard({
           Flamina
         </span>
         <h3 className="text-sm font-semibold text-txt-strong">
-          {t(guide.titleKey)}
+          {t(guide.titleKey, { defaultValue: guide.titleDefault })}
         </h3>
       </div>
-      <p className="mb-3 text-sm text-muted">{t(guide.descriptionKey)}</p>
+      <p className="mb-3 text-sm text-muted">
+        {t(guide.descriptionKey, { defaultValue: guide.descriptionDefault })}
+      </p>
       <div className="space-y-2 text-xs leading-5 text-txt">
         <p>
           <span className="font-semibold text-txt-strong">
             {t("flaminaguide.WhenToUseLabel")}
           </span>{" "}
-          {t(guide.whenToUseKey)}
+          {t(guide.whenToUseKey, { defaultValue: guide.whenToUseDefault })}
         </p>
         <p>
           <span className="font-semibold text-txt-strong">
             {t("flaminaguide.IfYouSkipLabel")}
           </span>{" "}
-          {t(guide.skipEffectKey)}
+          {t(guide.skipEffectKey, { defaultValue: guide.skipEffectDefault })}
         </p>
         <p>
           <span className="font-semibold text-txt-strong">
             {t("flaminaguide.CharacterImpactLabel")}
           </span>{" "}
-          {t(guide.characterImpactKey)}
+          {t(guide.characterImpactKey, {
+            defaultValue: guide.characterImpactDefault,
+          })}
         </p>
         <p className="rounded-xl border border-accent/20 bg-accent/5 px-3 py-2 text-[11px] text-txt">
-          {t(guide.recommendedKey)}
+          {t(guide.recommendedKey, { defaultValue: guide.recommendedDefault })}
         </p>
       </div>
     </section>
@@ -173,10 +215,14 @@ export function DeferredSetupChecklist({
           >
             <div>
               <div className="text-sm font-medium text-txt-strong">
-                {t(TASK_LABEL_KEYS[task])}
+                {t(TASK_LABELS[task].key, {
+                  defaultValue: TASK_LABELS[task].defaultValue,
+                })}
               </div>
               <p className="text-xs text-muted">
-                {t(TASK_DESCRIPTION_KEYS[task])}
+                {t(TASK_DESCRIPTIONS[task].key, {
+                  defaultValue: TASK_DESCRIPTIONS[task].defaultValue,
+                })}
               </p>
             </div>
             <div className="flex items-center gap-2">

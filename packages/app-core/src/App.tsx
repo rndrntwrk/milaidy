@@ -54,6 +54,7 @@ import { useActivityEvents } from "./hooks/useActivityEvents";
 import type { Tab } from "./navigation";
 import { APPS_ENABLED, COMPANION_ENABLED } from "./navigation";
 import { useApp } from "./state";
+import type { FlaminaGuideTopic } from "./state/types";
 
 const CHAT_MOBILE_BREAKPOINT_PX = 820;
 const CHAT_DESKTOP_COMPOSER_UNDERLAY_CLASS =
@@ -323,7 +324,7 @@ export function App() {
   }, []);
 
   const handleDeferredTaskOpen = useCallback(
-    (task: "provider" | "rpc" | "permissions" | "voice") => {
+    (task: FlaminaGuideTopic) => {
       if (task === "voice") {
         setTab("voice");
         return;

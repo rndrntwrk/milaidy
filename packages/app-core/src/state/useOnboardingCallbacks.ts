@@ -12,8 +12,12 @@
 
 import { getDefaultStylePreset } from "@miladyai/shared/onboarding-presets";
 import { type RefObject, useCallback } from "react";
+import type { StylePreset } from "../api";
 import { MiladyClient, type VoiceConfig } from "../api";
-import { invokeDesktopBridgeRequest, scanProviderCredentials } from "../bridge";
+import {
+  invokeDesktopBridgeRequest,
+  type scanProviderCredentials,
+} from "../bridge";
 import { getBootConfig } from "../config/boot-config";
 import type { UiLanguage } from "../i18n";
 import type { Tab } from "../navigation";
@@ -25,6 +29,8 @@ import {
   resolveOnboardingPreviousStep,
 } from "../onboarding/flow";
 import { buildOnboardingRuntimeConfig } from "../onboarding-config";
+import { PREMADE_VOICES } from "../voice/types";
+import { buildWalletRpcUpdateRequest } from "../wallet-rpc";
 import {
   clearPersistedActiveServer,
   clearPersistedOnboardingStep,
@@ -32,11 +38,10 @@ import {
   type OnboardingNextOptions,
   savePersistedActiveServer,
 } from "./internal";
-import type { OnboardingStateHook } from "./useOnboardingState";
 import type { AppState, OnboardingStep } from "./types";
-import { buildWalletRpcUpdateRequest } from "../wallet-rpc";
-import { PREMADE_VOICES } from "../voice/types";
-import type { StylePreset } from "../api";
+import type { OnboardingStateHook } from "./useOnboardingState";
+
+const GOOGLE_DEFERRED_TASK = "google";
 
 // ── Helpers copied from AppContext (module-level, no React deps) ──────────
 
@@ -156,6 +161,27 @@ async function persistOnboardingStyleVoice(args: {
       tts: voiceConfig,
     },
   });
+}
+
+async function shouldDeferGoogleConnectorSetup(args: {
+  client: MiladyClient;
+  onboardingServerTarget: "" | "local" | "remote" | "elizacloud";
+}): Promise<boolean> {
+  if (args.onboardingServerTarget !== "elizacloud") {
+    return false;
+  }
+
+  try {
+    const status =
+      await args.client.getGoogleLifeOpsConnectorStatus("cloud_managed");
+    return !status.connected;
+  } catch (error) {
+    console.warn(
+      "[onboarding] Failed to verify Google connector status after cloud onboarding",
+      error,
+    );
+    return true;
+  }
 }
 
 // ── Hook deps ─────────────────────────────────────────────────────────────
@@ -478,6 +504,15 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
         );
       }
 
+      if (
+        await shouldDeferGoogleConnectorSetup({
+          client,
+          onboardingServerTarget,
+        })
+      ) {
+        addDeferredOnboardingTask(GOOGLE_DEFERRED_TASK);
+      }
+
       if (runtimeConfig.needsProviderSetup) {
         setActionNotice(
           "Choose a chat provider in Settings to start chatting.",
@@ -514,6 +549,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     onboardingRpcSelections,
     onboardingRpcKeys,
     walletConfig,
+    addDeferredOnboardingTask,
     completeOnboarding,
     client,
     setActionNotice,
@@ -577,7 +613,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
   // ── advanceOnboarding / handleOnboardingNext ─────────────────────
 
   const advanceOnboarding = useCallback(
-    async (options?: OnboardingNextOptions) => {
+    async (_options?: OnboardingNextOptions) => {
       const nextStep = resolveOnboardingNextStep(onboardingStep);
 
       if (!nextStep) {
@@ -596,11 +632,8 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       }
     },
     [
-      addDeferredOnboardingTask,
       handleOnboardingFinish,
-      onboardingDetectedProviders,
       onboardingMode,
-      onboardingServerTarget,
       onboardingStep,
       setOnboardingStep,
       setOnboardingActiveGuide,
@@ -627,7 +660,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
   }, [
     onboardingMode,
     onboardingStep,
-    onboardingServerTarget,
     setOnboardingActiveGuide,
     setOnboardingStep,
   ]);
@@ -684,7 +716,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     setOnboardingRemoteToken,
     setOnboardingServerTarget,
     client,
-    clearPersistedActiveServer,
   ]);
 
   // ── handleOnboardingRemoteConnect ────────────────────────────────
@@ -747,7 +778,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     setOnboardingRemoteError,
     setOnboardingRemoteToken,
     setOnboardingServerTarget,
-    savePersistedActiveServer,
   ]);
 
   // ── handleCloudOnboardingFinish ──────────────────────────────────

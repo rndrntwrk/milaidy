@@ -118,7 +118,12 @@ export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
 
 export type OnboardingMode = "basic" | "advanced" | "elizacloudonly";
 
-export type FlaminaGuideTopic = "provider" | "rpc" | "permissions" | "voice";
+export type FlaminaGuideTopic =
+  | "provider"
+  | "rpc"
+  | "permissions"
+  | "voice"
+  | "google";
 
 export interface OnboardingNextOptions {
   allowPermissionBypass?: boolean;
