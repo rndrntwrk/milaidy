@@ -202,11 +202,18 @@ export function DownloadIcons() {
         (
           releases: Array<{
             draft: boolean;
+            prerelease: boolean;
             html_url: string;
             assets: Array<{ name: string; browser_download_url: string }>;
           }>,
         ) => {
-          const release = releases.find((r) => !r.draft && r.assets.length > 0);
+          // Prefer stable (non-prerelease) releases for default downloads
+          const stableRelease = releases.find(
+            (r) => !r.draft && !r.prerelease && r.assets.length > 0,
+          );
+          const release =
+            stableRelease ??
+            releases.find((r) => !r.draft && r.assets.length > 0);
           if (!release) return;
 
           setReleasePageUrl(release.html_url);

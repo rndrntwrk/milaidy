@@ -112,7 +112,9 @@ function ChevronDown() {
 function DownloadDropdown() {
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const downloads = releaseData.release.downloads;
+  const stableDownloads = releaseData.stableRelease?.downloads ?? releaseData.release.downloads;
+  const canaryRelease = releaseData.canaryRelease;
+  const canaryDownloads = canaryRelease?.downloads ?? [];
 
   const cancelClose = () => {
     if (closeTimer.current) {
@@ -156,7 +158,13 @@ function DownloadDropdown() {
       {open && (
         <div className={`absolute bottom-full left-0 pb-2 w-72 z-[${Z_MODAL}]`}>
           <div className="border border-text-subtle/20 bg-dark/95 backdrop-blur-md">
-            {downloads.map((d) => (
+            {/* Stable downloads */}
+            <div className="px-4 pt-2 pb-1">
+              <span className="font-mono text-[9px] tracking-widest uppercase text-text-subtle">
+                Stable
+              </span>
+            </div>
+            {stableDownloads.map((d) => (
               <a
                 key={d.id}
                 href={d.url}
@@ -173,11 +181,53 @@ function DownloadDropdown() {
                 </span>
               </a>
             ))}
+
+            {/* Canary downloads (if available) */}
+            {canaryDownloads.length > 0 && (
+              <>
+                <div className="px-4 pt-3 pb-1 border-t border-text-subtle/20">
+                  <span className="font-mono text-[9px] tracking-widest uppercase text-brand/70">
+                    Canary
+                  </span>
+                </div>
+                {canaryDownloads.map((d) => (
+                  <a
+                    key={`canary-${d.id}`}
+                    href={d.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-3 border-b border-text-subtle/10 px-4 py-3 transition-colors hover:bg-brand/5 last:border-b-0"
+                  >
+                    {platformIcon(d.id)}
+                    <span className="flex-1 font-mono text-[11px] tracking-wider uppercase text-text-light">
+                      {d.label}
+                    </span>
+                    <span className="font-mono text-[10px] text-text-subtle">
+                      {d.sizeLabel}
+                    </span>
+                  </a>
+                ))}
+              </>
+            )}
+
+            {/* Dev — link to GitHub */}
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-3 border-t border-text-subtle/20 px-4 py-3 text-text-muted transition-colors hover:bg-brand/5 hover:text-brand"
+            >
+              <GithubIcon />
+              <span className="font-mono text-[11px] tracking-wider uppercase">
+                Dev — Source on GitHub
+              </span>
+            </a>
+
             <a
               href={releaseData.release.url}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-3 border-t border-text-subtle/20 px-4 py-3 text-text-muted transition-colors hover:bg-brand/5 hover:text-brand"
+              className="flex items-center gap-3 border-t border-text-subtle/10 px-4 py-3 text-text-muted transition-colors hover:bg-brand/5 hover:text-brand"
             >
               <GithubIcon />
               <span className="font-mono text-[11px] tracking-wider uppercase">
