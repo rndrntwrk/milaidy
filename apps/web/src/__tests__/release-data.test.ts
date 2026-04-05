@@ -63,4 +63,19 @@ describe("releaseData structure", () => {
     const diffDays = diffMs / (1000 * 60 * 60 * 24);
     expect(diffDays).toBeLessThan(30);
   });
+
+  it("stableRelease mirrors release and is non-prerelease", () => {
+    expect(releaseData.stableRelease).toBeTruthy();
+    expect(releaseData.stableRelease.tagName).toBeTruthy();
+    expect(releaseData.stableRelease.prerelease).toBe(false);
+  });
+
+  it("canaryRelease is null or a valid release object", () => {
+    const canary = releaseData.canaryRelease;
+    if (canary !== null) {
+      expect(canary.tagName).toBeTruthy();
+      expect(canary.prerelease).toBe(true);
+      expect(Array.isArray(canary.downloads)).toBe(true);
+    }
+  });
 });

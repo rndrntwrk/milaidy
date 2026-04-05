@@ -98,6 +98,28 @@ function pickRelease(releases) {
   );
 }
 
+function pickStableRelease(releases) {
+  const stable = sortReleasesByRecency(releases).filter(
+    (r) => !r.prerelease,
+  );
+  return (
+    stable.find((r) => Array.isArray(r.assets) && r.assets.length > 0) ??
+    stable[0] ??
+    null
+  );
+}
+
+function pickCanaryRelease(releases) {
+  const canary = sortReleasesByRecency(releases).filter(
+    (r) => r.prerelease,
+  );
+  return (
+    canary.find((r) => Array.isArray(r.assets) && r.assets.length > 0) ??
+    canary[0] ??
+    null
+  );
+}
+
 function pickAsset(assets, matchers) {
   for (const matcher of matchers) {
     const asset = assets.find(matcher);
@@ -219,7 +241,7 @@ function buildRelease(release, allReleases = []) {
   };
 }
 
-function buildPayload(release, allReleases = []) {
+function buildPayload(release, allReleases = [], canaryRelease = null) {
   const tagName = release?.tag_name ?? "unavailable";
   return {
     generatedAt: new Date().toISOString(),
@@ -242,6 +264,8 @@ function buildPayload(release, allReleases = []) {
             }),
     },
     release: buildRelease(release, allReleases),
+    stableRelease: buildRelease(release, allReleases),
+    canaryRelease: canaryRelease ? buildRelease(canaryRelease, allReleases) : null,
   };
 }
 
@@ -293,10 +317,16 @@ async function writePayload(payload) {
 async function main() {
   try {
     const releases = await fetchReleases();
-    const release = pickRelease(releases);
-    await writePayload(buildPayload(release, releases));
-    const tag = release?.tag_name ?? "no published release";
-    console.log(`homepage release data: ${tag}`);
+    const stableRelease = pickStableRelease(releases);
+    const canaryRelease = pickCanaryRelease(releases);
+    // Use stable release as primary; fall back to any release if no stable exists
+    const primaryRelease = stableRelease ?? pickRelease(releases);
+    await writePayload(buildPayload(primaryRelease, releases, canaryRelease));
+    const tag = primaryRelease?.tag_name ?? "no published release";
+    const canaryTag = canaryRelease?.tag_name;
+    console.log(
+      `homepage release data: stable=${tag}${canaryTag ? `, canary=${canaryTag}` : ""}`,
+    );
   } catch (error) {
     if (existsSync(OUTPUT_PATH)) {
       console.warn(
