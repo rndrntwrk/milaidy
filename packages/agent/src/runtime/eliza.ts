@@ -29,6 +29,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // ---------------------------------------------------------------------------
 import { runFirstTimeSetup } from "./first-time-setup";
 import { resolvePlugins } from "./plugin-resolver";
+import { ensureRequiredPluginSchemas } from "./schema-backfill";
 
 export {
   CHANNEL_PLUGIN_MAP,
@@ -3415,6 +3416,7 @@ export async function startEliza(
     await runtime.initialize();
     await prepareRuntimeForTrajectoryCapture(runtime, "runtime.initialize()");
 
+    await ensureRequiredPluginSchemas(runtime, resolvedPlugins);
     try {
       await seedBundledKnowledge(runtime);
     } catch (err) {
