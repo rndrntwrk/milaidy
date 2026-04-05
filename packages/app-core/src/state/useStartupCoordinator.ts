@@ -129,8 +129,8 @@ export function useStartupCoordinator(
     // Probe the backend for cloud provisioning status. On cloud containers
     // the backend is always on the same origin, so this works even before any
     // connection is configured. If the probe succeeds and reports cloud
-    // provisioned, skip the splash screen entirely so the user never sees
-    // the "Create local agent" chooser.
+    // provisioned, skip splash + restoring-session entirely via SPLASH_CLOUD_SKIP
+    // so the user never sees either the server chooser or the onboarding wizard.
     let cancelled = false;
     client
       .getOnboardingStatus()
@@ -138,9 +138,9 @@ export function useStartupCoordinator(
         if (cancelled) return;
         if (status.cloudProvisioned) {
           console.log(
-            "[milady][startup] Cloud-provisioned container detected at splash — skipping server chooser",
+            "[milady][startup] Cloud-provisioned container detected at splash — fast-tracking to polling-backend",
           );
-          dispatch({ type: "SPLASH_CONTINUE" });
+          dispatch({ type: "SPLASH_CLOUD_SKIP" });
         } else {
           dispatch({ type: "SPLASH_LOADED" });
         }

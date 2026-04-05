@@ -252,16 +252,26 @@ export function StartupShell() {
   }, [cloudApiKey, elizaCloudConnected]);
 
   // ── Cloud onboarding skip ──────────────────────────────────────
-  // Hidden startup path: a first-visit cloud container can land directly in
-  // onboarding-required before the normal backend-poll phase ever runs.
-  // Re-check the server here and fast-forward cloud-provisioned containers.
+  // Fallback: if a cloud-provisioned container still reaches onboarding-required
+  // (e.g. splash probe didn't fire SPLASH_CLOUD_SKIP), re-check the server here
+  // and fast-forward past onboarding.
+  //
+  // IMPORTANT: deps must NOT include the unstable `startupCoordinator` object
+  // reference. Including it caused the probe to be cancelled on every re-render
+  // (OnboardingWizard triggers many state updates), killing the in-flight fetch.
+  // We use a ref to access the coordinator's dispatch function instead.
+  const coordinatorDispatchRef = useRef(startupCoordinator.dispatch);
+  coordinatorDispatchRef.current = startupCoordinator.dispatch;
+  const coordinatorStateRef = useRef(startupCoordinator.state);
+  coordinatorStateRef.current = startupCoordinator.state;
+
   useEffect(() => {
     if (phase !== "onboarding-required") {
       cloudSkipProbeStartedRef.current = false;
       return;
     }
 
-    const coordState = startupCoordinator.state;
+    const coordState = coordinatorStateRef.current;
     if (
       coordState.phase !== "onboarding-required" ||
       coordState.serverReachable ||
@@ -279,8 +289,11 @@ export function StartupShell() {
         if (cancelled || !status.cloudProvisioned) {
           return;
         }
+        console.log(
+          "[milady][startup] Cloud-provisioned container detected at onboarding — skipping wizard",
+        );
         setState("onboardingComplete", true);
-        startupCoordinator.dispatch({ type: "ONBOARDING_COMPLETE" });
+        coordinatorDispatchRef.current({ type: "ONBOARDING_COMPLETE" });
       })
       .catch(() => {
         cloudSkipProbeStartedRef.current = false;
@@ -289,7 +302,7 @@ export function StartupShell() {
     return () => {
       cancelled = true;
     };
-  }, [phase, setState, startupCoordinator]);
+  }, [phase, setState]);
 
   // ── Gateway discovery ──────────────────────────────────────────
   useEffect(() => {

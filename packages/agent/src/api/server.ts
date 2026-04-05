@@ -4450,10 +4450,11 @@ async function handleRequest(
   const pathname = url.pathname;
   const isAuthEndpoint = pathname.startsWith("/api/auth/");
   const isHealthEndpoint = method === "GET" && pathname === "/api/health";
+  const isCloudProvisioned = isCloudProvisionedContainer();
   const isCloudOnboardingStatusEndpoint =
     method === "GET" &&
     pathname === "/api/onboarding/status" &&
-    isCloudProvisionedContainer();
+    isCloudProvisioned;
   const isAuthProtectedPath = isAuthProtectedRoute(pathname);
   const registryService = state.registryService;
   const dropService = state.dropService;
@@ -4598,7 +4599,7 @@ async function handleRequest(
   }
 
   if (
-    isCloudProvisionedContainer() &&
+    isCloudProvisioned &&
     method !== "OPTIONS" &&
     isAuthProtectedPath &&
     !isAuthEndpoint &&

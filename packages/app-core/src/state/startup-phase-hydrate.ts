@@ -185,21 +185,36 @@ export async function runHydrating(
   }
 
   // ── Prefetch companion assets (VRM + gaussian splat world) ─────────
-  // Fire-and-forget: warm the in-memory VRM buffer cache and the browser
-  // HTTP cache for the splat world so that when the companion scene goes
-  // active after HYDRATION_COMPLETE, assets are already downloaded. This
-  // avoids a cold ~3-10 s blank screen on first companion render,
-  // especially noticeable in cloud containers where the CDN round-trip
-  // is the bottleneck.
+  // Warm the in-memory VRM buffer cache and the browser HTTP cache for
+  // the splat world so that when the companion scene goes active after
+  // HYDRATION_COMPLETE, assets are already downloaded. This avoids a
+  // cold ~3-10 s blank screen on first companion render, especially
+  // noticeable in cloud containers where the CDN round-trip is the
+  // bottleneck.
+  //
+  // We await the VRM prefetch (with a 15s timeout) rather than firing
+  // and forgetting. This ensures the in-memory buffer cache is populated
+  // *before* HYDRATION_COMPLETE, so the companion scene gets an instant
+  // cache hit instead of starting a duplicate network download.
   if (COMPANION_ENABLED) {
     const vrmIdx = resolvedIdx > 0 ? resolvedIdx : 1;
-    void prefetchVrmToCache(getVrmUrl(vrmIdx));
+    const vrmPrefetch = prefetchVrmToCache(getVrmUrl(vrmIdx));
     const theme = loadUiTheme();
     const worldUrl =
       theme === "dark"
         ? resolveAppAssetUrl("worlds/companion-night.spz")
         : resolveAppAssetUrl("worlds/companion-day.spz");
-    void fetch(worldUrl, { cache: "force-cache" }).catch(() => {});
+    const worldPrefetch = fetch(worldUrl, { cache: "force-cache" }).catch(
+      () => {},
+    );
+    // Wait for both but cap at 15s so hydration isn't blocked forever on
+    // slow networks. Even if the timeout fires, the in-flight prefetch
+    // continues in the background and loadGltfAsset will join it via the
+    // inflight dedup map.
+    await Promise.race([
+      Promise.all([vrmPrefetch, worldPrefetch]),
+      new Promise((resolve) => setTimeout(resolve, 15_000)),
+    ]);
   }
 
   void deps.pollCloudCredits();

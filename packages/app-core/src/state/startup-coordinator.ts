@@ -107,7 +107,10 @@ export type StartupEvent =
   | { type: "RESET" }
   | { type: "PAIRING_SUCCESS" }
   | { type: "SPLASH_CONTINUE" }
-  | { type: "SPLASH_LOADED" };
+  | { type: "SPLASH_LOADED" }
+
+  // Cloud fast-path: skip splash + restoring-session entirely
+  | { type: "SPLASH_CLOUD_SKIP" };
 
 // ── Reducer ──────────────────────────────────────────────────────────
 
@@ -122,6 +125,15 @@ export function startupReducer(
           return { phase: "splash", loaded: true };
         case "SPLASH_CONTINUE":
           return { phase: "restoring-session" };
+        case "SPLASH_CLOUD_SKIP":
+          // Cloud-provisioned containers skip splash + restoring-session
+          // entirely. Jump straight to polling-backend so the existing
+          // cloud-aware logic there handles onboarding bypass.
+          return {
+            phase: "polling-backend",
+            target: "cloud-managed",
+            attempts: 0,
+          };
         case "RETRY":
           return { phase: "splash", loaded: false };
         default:

@@ -282,7 +282,29 @@ export const VrmStage = memo(function VrmStage({
         />
       )}
 
-      {/* VRM loads silently — no loading overlay */}
+      {/* Subtle loading indicator while VRM downloads on first load */}
+      {!vrmLoaded && !showVrmFallback && !loaderHidden && (
+        <div className="absolute inset-x-0 bottom-[18%] z-20 flex flex-col items-center gap-2 pointer-events-none">
+          <div className="h-1 w-32 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-cyan-400/60 transition-all duration-300 ease-out"
+              style={{
+                width:
+                  loadingProgress !== undefined
+                    ? `${Math.max(loadingProgress, 5)}%`
+                    : "15%",
+                ...(loadingProgress === undefined
+                  ? {
+                      animation:
+                        "vrm-loader-pulse 1.8s ease-in-out infinite alternate",
+                    }
+                  : {}),
+              }}
+            />
+          </div>
+          <style>{`@keyframes vrm-loader-pulse { from { width: 15%; opacity: 0.5; } to { width: 60%; opacity: 1; } }`}</style>
+        </div>
+      )}
     </div>
   );
 });

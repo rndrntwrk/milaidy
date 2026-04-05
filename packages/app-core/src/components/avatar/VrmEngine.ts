@@ -497,6 +497,13 @@ interface VrmBufferCacheEntry {
 const vrmBufferCache = new Map<string, VrmBufferCacheEntry>();
 const VRM_BUFFER_CACHE_MAX = 8;
 
+/**
+ * In-flight prefetch promises keyed by URL. Prevents duplicate concurrent
+ * downloads when `loadGltfAsset` runs while a prefetch for the same URL is
+ * still in progress.
+ */
+const vrmPrefetchInflight = new Map<string, Promise<void>>();
+
 function touchVrmCacheEntry(url: string, buffer: ArrayBuffer): void {
   vrmBufferCache.set(url, { buffer, lastUsed: performance.now() });
 
@@ -524,15 +531,28 @@ function touchVrmCacheEntry(url: string, buffer: ArrayBuffer): void {
  */
 export async function prefetchVrmToCache(url: string): Promise<void> {
   if (vrmBufferCache.has(url)) return; // already warm
-  try {
-    const response = await fetch(url, { cache: "force-cache" });
-    if (!response.ok) return;
-    let buffer = await response.arrayBuffer();
-    if (isGzipBuffer(buffer)) buffer = await decompressGzipBuffer(buffer);
-    touchVrmCacheEntry(url, buffer);
-  } catch {
-    // Prefetch is best-effort — network errors are silently ignored.
-  }
+
+  // If a prefetch for this URL is already in flight, join it instead of
+  // starting a duplicate download.
+  const existing = vrmPrefetchInflight.get(url);
+  if (existing) return existing;
+
+  const work = (async () => {
+    try {
+      const response = await fetch(url, { cache: "force-cache" });
+      if (!response.ok) return;
+      let buffer = await response.arrayBuffer();
+      if (isGzipBuffer(buffer)) buffer = await decompressGzipBuffer(buffer);
+      touchVrmCacheEntry(url, buffer);
+    } catch {
+      // Prefetch is best-effort — network errors are silently ignored.
+    } finally {
+      vrmPrefetchInflight.delete(url);
+    }
+  })();
+
+  vrmPrefetchInflight.set(url, work);
+  return work;
 }
 
 async function loadGltfAsset(
@@ -541,6 +561,13 @@ async function loadGltfAsset(
   onProgress?: (progress: number) => void,
 ): Promise<Awaited<ReturnType<GLTFLoader["loadAsync"]>>> {
   let buffer: ArrayBuffer;
+
+  // If a prefetch for this URL is in flight, await it so we hit the
+  // in-memory cache instead of starting a duplicate network request.
+  const inflight = vrmPrefetchInflight.get(url);
+  if (inflight) {
+    await inflight;
+  }
 
   const cached = vrmBufferCache.get(url);
   if (cached) {
