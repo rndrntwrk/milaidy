@@ -10,6 +10,7 @@ import {
 import type {
   AppUiExtensionConfig,
   RegistryAppMeta,
+  RegistryAppSessionMeta,
   RegistryAppViewerMeta,
   RegistryPluginInfo,
 } from "./registry-client-types.js";
@@ -23,13 +24,17 @@ interface LocalPackageAppMeta {
   capabilities?: string[];
   minPlayers?: number | null;
   maxPlayers?: number | null;
+  runtimePlugin?: string;
   uiExtension?: AppUiExtensionConfig;
   viewer?: RegistryAppViewerMeta;
+  session?: RegistryAppSessionMeta;
 }
 
 interface LocalPackageElizaConfig {
   kind?: string;
   app?: LocalPackageAppMeta;
+  viewer?: RegistryAppViewerMeta;
+  session?: RegistryAppSessionMeta;
 }
 
 interface LocalPackageJson {
@@ -52,6 +57,8 @@ interface LocalPluginManifest {
   repository?: string | { type?: string; url?: string };
   kind?: string;
   app?: LocalPackageAppMeta;
+  viewer?: RegistryAppViewerMeta;
+  session?: RegistryAppSessionMeta;
 }
 
 const LOCAL_PLUGIN_TAG_STOPWORDS = new Set([
@@ -151,20 +158,27 @@ function normalizeLocalTags(values: unknown): string[] {
 function toLocalAppMeta(
   app: LocalPackageAppMeta | undefined,
   fallbackDisplayName: string,
+  legacy?: {
+    viewer?: RegistryAppViewerMeta;
+    session?: RegistryAppSessionMeta;
+  },
 ): RegistryAppMeta | undefined {
-  if (!app) return undefined;
-  const launchType = app.launchType ?? "url";
+  if (!app && !legacy?.viewer && !legacy?.session) return undefined;
+  const launchType =
+    app?.launchType ?? (legacy?.viewer || legacy?.session ? "connect" : "url");
   return {
-    displayName: app.displayName ?? fallbackDisplayName,
-    category: app.category ?? "game",
+    displayName: app?.displayName ?? fallbackDisplayName,
+    category: app?.category ?? "game",
     launchType,
-    launchUrl: app.launchUrl ?? null,
-    icon: app.icon ?? null,
-    capabilities: app.capabilities ?? [],
-    minPlayers: app.minPlayers ?? null,
-    maxPlayers: app.maxPlayers ?? null,
-    uiExtension: app.uiExtension,
-    viewer: app.viewer,
+    launchUrl: app?.launchUrl ?? null,
+    icon: app?.icon ?? null,
+    capabilities: app?.capabilities ?? [],
+    minPlayers: app?.minPlayers ?? null,
+    maxPlayers: app?.maxPlayers ?? null,
+    runtimePlugin: app?.runtimePlugin,
+    uiExtension: app?.uiExtension,
+    viewer: app?.viewer ?? legacy?.viewer,
+    session: app?.session ?? legacy?.session,
   };
 }
 
@@ -202,10 +216,18 @@ function buildDiscoveredEntry(
   const packageAppMeta = toLocalAppMeta(
     packageJson.elizaos?.app,
     toDisplayNameFromDirName(dirName),
+    {
+      viewer: packageJson.elizaos?.viewer,
+      session: packageJson.elizaos?.session,
+    },
   );
   const manifestAppMeta = toLocalAppMeta(
     manifest?.app,
     toDisplayNameFromDirName(dirName),
+    {
+      viewer: manifest?.viewer,
+      session: manifest?.session,
+    },
   );
   const mergedMeta = mergeAppMeta(manifestAppMeta, packageAppMeta);
   const overriddenMeta = resolveAppOverride(packageJson.name, mergedMeta);

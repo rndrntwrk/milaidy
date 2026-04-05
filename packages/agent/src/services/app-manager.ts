@@ -15,6 +15,7 @@ import { logger } from "@elizaos/core";
 import type { IAgentRuntime } from "@elizaos/core";
 import type {
   AppLaunchResult,
+  AppSessionState,
   AppStopResult,
   AppViewerAuthMessage,
   InstalledAppInfo,
@@ -38,12 +39,16 @@ export type {
 } from "../contracts/apps";
 
 const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
+const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
+const HYPERSCAPE_AUTH_MESSAGE_TYPE = "HYPERSCAPE_AUTH";
 const RS_2004SCAPE_APP_NAME = "@elizaos/app-2004scape";
 const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
 const SAFE_APP_URL_PROTOCOLS = new Set(["http:", "https:"]);
 const ALLOWED_APP_URL_TEMPLATE_KEYS = new Set([
   // Public display identity only.
   "BOT_NAME",
+  "HYPERSCAPE_CHARACTER_ID",
+  "HYPERSCAPE_CLIENT_URL",
   "RS_SDK_BOT_NAME",
 ]);
 
@@ -59,6 +64,13 @@ interface RegistryAppPlugin extends RegistryPluginInfo {
   launchType?: "connect" | "local";
   launchUrl?: string;
   displayName?: string;
+  runtimePlugin?: string;
+  session?: {
+    mode: AppSessionState["mode"];
+    features?: Array<
+      "commands" | "telemetry" | "pause" | "resume" | "suggestions"
+    >;
+  };
 }
 
 interface ActiveAppSession {
@@ -87,6 +99,8 @@ function mergeAppMeta(
   appInfo.category = meta.category ?? appInfo.category;
   appInfo.capabilities = meta.capabilities ?? appInfo.capabilities;
   appInfo.icon = meta.icon ?? appInfo.icon;
+  appInfo.runtimePlugin = meta.runtimePlugin ?? appInfo.runtimePlugin;
+  appInfo.session = meta.session ?? appInfo.session;
 }
 
 function isAutoInstallable(appInfo: RegistryPluginInfo): boolean {
@@ -125,12 +139,34 @@ function isLocalPlugin(appInfo: RegistryPluginInfo): boolean {
 }
 
 function getTemplateFallbackValue(key: string): string | undefined {
+  if (key === "HYPERSCAPE_CLIENT_URL") {
+    const runtimeClientUrl = process.env.HYPERSCAPE_CLIENT_URL?.trim();
+    if (runtimeClientUrl && runtimeClientUrl.length > 0) {
+      return runtimeClientUrl;
+    }
+    return "http://localhost:3333";
+  }
   if (key === "RS_SDK_BOT_NAME") {
     const runtimeBotName = process.env.BOT_NAME?.trim();
     if (runtimeBotName && runtimeBotName.length > 0) {
       return runtimeBotName;
     }
     return "testbot";
+  }
+  return undefined;
+}
+
+function resolveSettingLike(
+  runtime: IAgentRuntime | null | undefined,
+  key: string,
+): string | undefined {
+  const fromRuntime = runtime?.getSetting?.(key);
+  if (typeof fromRuntime === "string" && fromRuntime.trim().length > 0) {
+    return fromRuntime.trim();
+  }
+  const fromEnv = process.env[key];
+  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
+    return fromEnv.trim();
   }
   return undefined;
 }
@@ -191,8 +227,29 @@ function normalizeSafeAppUrl(url: string): string | null {
 function buildViewerAuthMessage(
   appName: string,
   postMessageAuth: boolean | undefined,
+  runtime?: IAgentRuntime | null,
 ): AppViewerAuthMessage | undefined {
   if (!postMessageAuth) return undefined;
+
+  if (appName === HYPERSCAPE_APP_NAME) {
+    const authToken = resolveSettingLike(runtime, "HYPERSCAPE_AUTH_TOKEN");
+    if (!authToken) {
+      return undefined;
+    }
+    const characterId = resolveSettingLike(runtime, "HYPERSCAPE_CHARACTER_ID");
+    const agentId =
+      typeof runtime?.agentId === "string" && runtime.agentId.trim().length > 0
+        ? runtime.agentId
+        : undefined;
+
+    return {
+      type: HYPERSCAPE_AUTH_MESSAGE_TYPE,
+      authToken,
+      agentId,
+      characterId,
+      followEntity: characterId,
+    };
+  }
 
   // 2004scape auth - uses bot name and password from environment
   if (appName === RS_2004SCAPE_APP_NAME) {
@@ -220,6 +277,7 @@ function buildViewerAuthMessage(
 function buildViewerConfig(
   appInfo: RegistryAppPlugin,
   launchUrl: string | null,
+  runtime?: IAgentRuntime | null,
 ): AppViewerConfig | null {
   const viewerInfo = appInfo.viewer;
   if (viewerInfo) {
@@ -227,6 +285,7 @@ function buildViewerConfig(
     const authMessage = buildViewerAuthMessage(
       appInfo.name,
       requestedPostMessageAuth,
+      runtime,
     );
     const postMessageAuth = requestedPostMessageAuth && Boolean(authMessage);
     if (requestedPostMessageAuth && !authMessage) {
@@ -234,8 +293,16 @@ function buildViewerConfig(
         `[app-manager] ${appInfo.name} requires postMessage auth but no auth payload was generated.`,
       );
     }
+    const resolvedEmbedParams = { ...(viewerInfo.embedParams ?? {}) };
+    if (
+      appInfo.name === HYPERSCAPE_APP_NAME &&
+      authMessage?.followEntity &&
+      !resolvedEmbedParams.followEntity
+    ) {
+      resolvedEmbedParams.followEntity = authMessage.followEntity;
+    }
     const viewerUrl = normalizeSafeAppUrl(
-      buildViewerUrl(viewerInfo.url, viewerInfo.embedParams),
+      buildViewerUrl(viewerInfo.url, resolvedEmbedParams),
     );
     if (!viewerUrl) {
       throw new Error(
@@ -245,7 +312,7 @@ function buildViewerConfig(
 
     return {
       url: viewerUrl,
-      embedParams: viewerInfo.embedParams,
+      embedParams: resolvedEmbedParams,
       postMessageAuth,
       sandbox: viewerInfo.sandbox ?? DEFAULT_VIEWER_SANDBOX,
       authMessage,
@@ -267,6 +334,46 @@ function buildViewerConfig(
     };
   }
   return null;
+}
+
+function buildAppSession(
+  appInfo: RegistryAppPlugin,
+  authMessage: AppViewerAuthMessage | undefined,
+  runtime?: IAgentRuntime | null,
+): AppSessionState | null {
+  if (!appInfo.session) return null;
+
+  const runtimeAgentId =
+    typeof runtime?.agentId === "string" && runtime.agentId.trim().length > 0
+      ? runtime.agentId
+      : undefined;
+  const sessionId =
+    authMessage?.agentId ||
+    runtimeAgentId ||
+    authMessage?.characterId ||
+    resolveSettingLike(runtime, "HYPERSCAPE_CHARACTER_ID");
+  if (!sessionId) return null;
+
+  return {
+    sessionId,
+    appName: appInfo.name,
+    mode: appInfo.session.mode,
+    status: "connecting",
+    displayName: appInfo.displayName ?? appInfo.name,
+    agentId: authMessage?.agentId ?? runtimeAgentId,
+    characterId:
+      authMessage?.characterId ?? resolveSettingLike(runtime, "HYPERSCAPE_CHARACTER_ID"),
+    followEntity:
+      authMessage?.followEntity ?? authMessage?.characterId ?? undefined,
+    canSendCommands: appInfo.session.features?.includes("commands") ?? false,
+    controls: [
+      ...(appInfo.session.features?.includes("pause") ? (["pause"] as const) : []),
+      ...(appInfo.session.features?.includes("resume")
+        ? (["resume"] as const)
+        : []),
+    ],
+    summary: "Connecting session...",
+  };
 }
 
 export class AppManager {
@@ -310,6 +417,7 @@ export class AppManager {
         capabilities: meta.capabilities,
         uiExtension: meta.uiExtension,
         viewer: meta.viewer,
+        session: meta.session,
       };
     });
   }
@@ -377,7 +485,7 @@ export class AppManager {
 
     // The app's plugin is what the agent needs to play the game.
     // It's the same npm package name as the app, or a separate plugin ref.
-    const pluginName = resolvePluginPackageName(appInfo);
+    const pluginName = appInfo.runtimePlugin ?? resolvePluginPackageName(appInfo);
 
     // Check if this is a local plugin (already present in plugins/ directory)
     const isLocal = isLocalPlugin(appInfo);
@@ -432,7 +540,8 @@ export class AppManager {
         `Refusing to launch app "${appInfo.name}": unsafe launch URL`,
       );
     }
-    const viewer = buildViewerConfig(appInfo, launchUrl);
+    const viewer = buildViewerConfig(appInfo, launchUrl, _runtime);
+    const session = buildAppSession(appInfo, viewer?.authMessage, _runtime);
     this.activeSessions.set(name, {
       appName: name,
       pluginName,
@@ -449,6 +558,7 @@ export class AppManager {
       launchType: appInfo.launchType ?? "connect",
       launchUrl,
       viewer,
+      session,
     };
   }
 
@@ -464,7 +574,7 @@ export class AppManager {
     }
 
     const hadSession = this.activeSessions.delete(name);
-    const pluginName = resolvePluginPackageName(appInfo);
+    const pluginName = appInfo.runtimePlugin ?? resolvePluginPackageName(appInfo);
     const installed = await pluginManager.listInstalledPlugins();
     const isPluginInstalled = installed.some(
       (plugin) => plugin.name === pluginName,

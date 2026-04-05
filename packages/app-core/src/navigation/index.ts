@@ -16,8 +16,9 @@ import {
 } from "lucide-react";
 import { DEFAULT_BRANDING } from "../config/branding";
 
-/** Apps are only enabled in dev mode; production builds hide this feature. */
-export const APPS_ENABLED = false; // import.meta.env.DEV;
+/** Apps are enabled by default; opt-out via VITE_ENABLE_APPS=false. */
+export const APPS_ENABLED =
+  String(import.meta.env.VITE_ENABLE_APPS ?? "true").toLowerCase() !== "false";
 
 /** Stream routes stay addressable; the nav hides the tab unless streaming is enabled. */
 export const STREAM_ENABLED = true;

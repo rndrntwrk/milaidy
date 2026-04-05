@@ -11,6 +11,7 @@
 
 import { useCallback, useState } from "react";
 import type {
+  AppSessionState,
   McpMarketplaceResult,
   McpRegistryServerDetail,
   McpServerConfig,
@@ -64,6 +65,8 @@ export function useMiscUiState() {
     useState(false);
   const [activeGamePostMessagePayload, setActiveGamePostMessagePayload] =
     useState<GamePostMessageAuthPayload | null>(null);
+  const [activeGameSession, setActiveGameSession] =
+    useState<AppSessionState | null>(null);
   const [gameOverlayEnabled, setGameOverlayEnabled] = useState(false);
 
   // ── Callbacks ──────────────────────────────────────────────────────
@@ -106,6 +109,7 @@ export function useMiscUiState() {
       activeGameSandbox,
       activeGamePostMessageAuth,
       activeGamePostMessagePayload,
+      activeGameSession,
       gameOverlayEnabled,
     },
     setCommandQuery,
@@ -129,6 +133,7 @@ export function useMiscUiState() {
     setActiveGameSandbox,
     setActiveGamePostMessageAuth,
     setActiveGamePostMessagePayload,
+    setActiveGameSession,
     setGameOverlayEnabled,
     closeCommandPalette,
     openEmotePicker,

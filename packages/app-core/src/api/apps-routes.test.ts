@@ -101,6 +101,7 @@ function createAppManagerMock(): AppManagerLike {
       launchType: "connect",
       launchUrl: null,
       viewer: null,
+      session: null,
     })),
     stop: vi.fn(async () => ({
       success: true,

@@ -10,7 +10,12 @@
 
 import { Button, Input } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { client, type LogEntry } from "../../api";
+import {
+  client,
+  type AppSessionControlAction,
+  type AppSessionState,
+  type LogEntry,
+} from "../../api";
 import { invokeDesktopBridgeRequest, isElectrobunRuntime } from "../../bridge";
 import { useBranding } from "../../config/branding";
 import {
@@ -447,6 +452,7 @@ export function GameView() {
     activeGameSandbox,
     activeGamePostMessageAuth,
     activeGamePostMessagePayload,
+    activeGameSession,
     gameOverlayEnabled,
     logs,
     loadLogs,
@@ -463,43 +469,107 @@ export function GameView() {
   >("connecting");
   const [chatInput, setChatInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
+  const [sessionBusyAction, setSessionBusyAction] =
+    useState<AppSessionControlAction | null>(null);
+  const [sessionState, setSessionState] = useState<AppSessionState | null>(
+    activeGameSession,
+  );
   const [gameWindowId, setGameWindowId] = useState<string | null>(null);
   const gameWindowIdRef = useRef<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const authSentRef = useRef(false);
   const viewerSessionRef = useRef<string>("");
 
-  // Send command to the agent - routes through elizaOS which processes
-  // the message and decides what game actions to take
-  const handleSendChat = useCallback(async () => {
-    const content = chatInput.trim();
+  const applySessionState = useCallback(
+    (nextSession: AppSessionState | null) => {
+      setSessionState(nextSession);
+      setState("activeGameSession", nextSession);
+    },
+    [setState],
+  );
+
+  const refreshSessionState = useCallback(async () => {
+    if (!activeGameApp || !activeGameSession?.sessionId) return null;
+    try {
+      const nextSession = await client.getAppSessionState(
+        activeGameApp,
+        activeGameSession.sessionId,
+      );
+      applySessionState(nextSession);
+      setConnectionStatus("connected");
+      return nextSession;
+    } catch (err) {
+      console.warn("[GameView] Failed to refresh app session state:", err);
+      setConnectionStatus("disconnected");
+      return null;
+    }
+  }, [activeGameApp, activeGameSession?.sessionId, applySessionState]);
+
+  useEffect(() => {
+    applySessionState(activeGameSession);
+  }, [activeGameSession, applySessionState]);
+
+  useEffect(() => {
+    if (!activeGameSession?.sessionId) return;
+    void refreshSessionState();
+  }, [activeGameSession?.sessionId, refreshSessionState]);
+
+  useIntervalWhenDocumentVisible(
+    () => {
+      void refreshSessionState();
+    },
+    3000,
+    Boolean(activeGameSession?.sessionId),
+  );
+
+  const sendChatCommand = useCallback(async (rawContent: string) => {
+    const content = rawContent.trim();
     if (!content) return;
+    const currentSession = sessionState ?? activeGameSession;
     setSendingChat(true);
     try {
-      // Send message to elizaOS agent - it will process and execute game actions
-      // Examples: "go chop some wood", "attack the goblin", "go to the bank"
-      const response = await client.sendChatRest(content, "DM");
-      setChatInput("");
-      // Show agent's response
-      if (response.text) {
+      if (currentSession?.sessionId && currentSession.canSendCommands) {
+        const response = await client.sendAppSessionMessage(
+          activeGameApp,
+          currentSession.sessionId,
+          content,
+        );
+        if (response.session) {
+          applySessionState(response.session);
+        } else {
+          await refreshSessionState();
+        }
         setActionNotice(
-          t("gameview.AgentResponseNotice", {
-            defaultValue: "Agent: {{response}}",
-            response: `${response.text.slice(0, 100)}${response.text.length > 100 ? "..." : ""}`,
-          }),
+          response.message ||
+            t("gameview.CommandSentToAppSession", {
+              defaultValue: "Command sent to app session.",
+            }),
           "success",
-          4000,
+          2400,
         );
       } else {
-        setActionNotice(
-          t("gameview.CommandSentToAgent", {
-            defaultValue: "Command sent to agent.",
-          }),
-          "success",
-          2000,
-        );
+        // Fallback to the generic DM path for apps without a session command channel.
+        const response = await client.sendChatRest(content, "DM");
+        if (response.text) {
+          setActionNotice(
+            t("gameview.AgentResponseNotice", {
+              defaultValue: "Agent: {{response}}",
+              response: `${response.text.slice(0, 100)}${response.text.length > 100 ? "..." : ""}`,
+            }),
+            "success",
+            4000,
+          );
+        } else {
+          setActionNotice(
+            t("gameview.CommandSentToAgent", {
+              defaultValue: "Command sent to agent.",
+            }),
+            "success",
+            2000,
+          );
+        }
       }
-      // Refresh logs to show activity
+      setChatInput("");
       setTimeout(() => void loadLogs(), 1500);
     } catch (err) {
       setActionNotice(
@@ -514,10 +584,64 @@ export function GameView() {
       setSendingChat(false);
     }
   }, [
-    chatInput,
+    activeGameApp,
+    activeGameSession?.sessionId,
+    applySessionState,
+    loadLogs,
+    refreshSessionState,
     setActionNotice,
-    loadLogs, // Refresh logs to show activity
     setTimeout,
+    sessionState?.canSendCommands,
+    t,
+  ]);
+
+  const handleSendChat = useCallback(() => {
+    void sendChatCommand(chatInput);
+  }, [chatInput, sendChatCommand]);
+
+  const activeSessionState = sessionState ?? activeGameSession;
+  const sessionControlAction = useMemo<AppSessionControlAction | null>(() => {
+    if (activeSessionState?.controls?.includes("pause")) return "pause";
+    if (activeSessionState?.controls?.includes("resume")) return "resume";
+    return null;
+  }, [activeSessionState]);
+
+  const handleSessionControl = useCallback(async () => {
+    if (!activeGameApp || !activeGameSession?.sessionId || !sessionControlAction)
+      return;
+    setSessionBusyAction(sessionControlAction);
+    try {
+      const response = await client.controlAppSession(
+        activeGameApp,
+        activeGameSession.sessionId,
+        sessionControlAction,
+      );
+      applySessionState(response.session ?? activeSessionState ?? null);
+      setActionNotice(response.message, "success", 2600);
+      if (!response.session) {
+        await refreshSessionState();
+      }
+    } catch (err) {
+      setActionNotice(
+        t("gameview.SessionControlFailed", {
+          defaultValue: "Failed to update session: {{message}}",
+          message: err instanceof Error ? err.message : "error",
+        }),
+        "error",
+        3200,
+      );
+    } finally {
+      setSessionBusyAction(null);
+    }
+  }, [
+    activeGameApp,
+    activeGameSession?.sessionId,
+    activeSessionState,
+    applySessionState,
+    refreshSessionState,
+    sessionControlAction,
+    setActionNotice,
+    t,
   ]);
   const postMessageTargetOrigin = useMemo(
     () => resolvePostMessageTargetOrigin(activeGameViewerUrl),
@@ -629,6 +753,7 @@ export function GameView() {
     setState("activeGameSandbox", DEFAULT_VIEWER_SANDBOX);
     setState("activeGamePostMessageAuth", false);
     setState("activeGamePostMessagePayload", null);
+    setState("activeGameSession", null);
   }, [setState]);
 
   useEffect(() => {
@@ -753,6 +878,27 @@ export function GameView() {
           {t("common.hide")}
         </Button>
       </div>
+      {activeSessionState?.goalLabel ? (
+        <div className="border-b border-border px-2 py-1.5 text-[10px] text-muted">
+          {activeSessionState.goalLabel}
+        </div>
+      ) : null}
+      {activeSessionState?.suggestedPrompts?.length ? (
+        <div className="flex flex-wrap gap-1 border-b border-border px-2 py-2">
+          {activeSessionState.suggestedPrompts.slice(0, 4).map((prompt) => (
+            <Button
+              key={prompt}
+              variant="outline"
+              size="sm"
+              className="h-6 max-w-full text-[10px] shadow-sm"
+              onClick={() => void sendChatCommand(prompt)}
+              disabled={sendingChat}
+            >
+              <span className="truncate">{prompt}</span>
+            </Button>
+          ))}
+        </div>
+      ) : null}
       {/* Chat input for sending commands to agent */}
       <div className="flex items-center gap-2 px-2 py-2 border-b border-border">
         <Input
@@ -859,6 +1005,31 @@ export function GameView() {
           </span>
         ) : null}
         <span className="flex-1" />
+        {activeSessionState?.status ? (
+          <span
+            className="max-w-48 truncate text-[10px] px-1.5 py-0.5 border border-border text-muted"
+            title={activeSessionState.summary ?? activeSessionState.status}
+          >
+            {activeSessionState.summary ?? activeSessionState.status}
+          </span>
+        ) : null}
+        {sessionControlAction ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs shadow-sm hover:border-accent"
+            onClick={() => void handleSessionControl()}
+            disabled={sessionBusyAction === sessionControlAction}
+          >
+            {sessionBusyAction === sessionControlAction
+              ? t("gameview.UpdatingSession", {
+                  defaultValue: "Updating…",
+                })
+              : sessionControlAction === "pause"
+                ? t("gameview.Pause", { defaultValue: "Pause" })
+                : t("gameview.Resume", { defaultValue: "Resume" })}
+          </Button>
+        ) : null}
         {/* Toggle logs panel */}
         <Button
           variant={showLogsPanel ? "default" : "outline"}
@@ -940,6 +1111,8 @@ export function GameView() {
               ref={iframeRef}
               src={activeGameViewerUrl}
               sandbox={activeGameSandbox}
+              allow="fullscreen *"
+              allowFullScreen
               className="w-full h-full border-none"
               title={
                 activeGameDisplayName ||

@@ -770,3 +770,175 @@ describe("App URL template security", () => {
     expect(viewerUrl.searchParams.get("bot")).toBe("test-agent");
   });
 });
+
+describe("App session launch metadata", () => {
+  function createRegistryApp(
+    overrides: Partial<RegistryPluginInfo> = {},
+  ): RegistryPluginInfo {
+    return {
+      name: "@elizaos/app-hyperscape",
+      gitRepo: "elizaos/app-hyperscape",
+      gitUrl: "https://github.com/elizaos/app-hyperscape",
+      description: "Hyperscape app",
+      topics: ["app"],
+      stars: 0,
+      language: "TypeScript",
+      launchType: "connect",
+      launchUrl: "http://localhost:3333",
+      kind: "app",
+      npm: {
+        package: "@elizaos/app-hyperscape",
+        v0Version: null,
+        v1Version: null,
+        v2Version: "1.0.0",
+      },
+      supports: { v0: false, v1: false, v2: true },
+      ...overrides,
+    };
+  }
+
+  function createPluginManagerStub(
+    appInfo: RegistryPluginInfo,
+  ): PluginManagerLike {
+    const pluginName = appInfo.npm.package;
+    return {
+      refreshRegistry: vi
+        .fn()
+        .mockResolvedValue(new Map<string, RegistryPluginInfo>()),
+      listInstalledPlugins: vi
+        .fn()
+        .mockResolvedValue([{ name: pluginName, version: "1.0.0" }]),
+      getRegistryPlugin: vi.fn().mockResolvedValue(appInfo),
+      searchRegistry: vi.fn().mockResolvedValue([]),
+      installPlugin: vi.fn().mockResolvedValue({
+        success: true,
+        pluginName,
+        version: "1.0.0",
+        installPath: "/tmp",
+        requiresRestart: false,
+      }),
+      uninstallPlugin: vi.fn().mockResolvedValue({
+        success: true,
+        pluginName,
+        requiresRestart: false,
+      }),
+      listEjectedPlugins: vi.fn().mockResolvedValue([]),
+      ejectPlugin: vi.fn().mockResolvedValue({
+        success: true,
+        pluginName,
+        ejectedPath: "/tmp",
+        requiresRestart: false,
+      }),
+      syncPlugin: vi.fn().mockResolvedValue({
+        success: true,
+        pluginName,
+        ejectedPath: "/tmp",
+        requiresRestart: false,
+      }),
+      reinjectPlugin: vi.fn().mockResolvedValue({
+        success: true,
+        pluginName,
+        removedPath: "/tmp",
+        requiresRestart: false,
+      }),
+    };
+  }
+
+  afterEach(() => {
+    delete process.env.HYPERSCAPE_CLIENT_URL;
+    delete process.env.HYPERSCAPE_AUTH_TOKEN;
+    delete process.env.HYPERSCAPE_CHARACTER_ID;
+    vi.restoreAllMocks();
+  });
+
+  it("builds Hyperscape viewer auth and spectate session state", async () => {
+    process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
+    const appInfo = createRegistryApp({
+      viewer: {
+        url: "{HYPERSCAPE_CLIENT_URL}",
+        postMessageAuth: true,
+      },
+      session: {
+        mode: "spectate-and-steer",
+        features: ["commands", "pause", "resume", "telemetry"],
+      },
+    });
+
+    const runtime = new FakeAgentRuntime();
+    runtime.agentId =
+      "11111111-1111-1111-1111-111111111111" as FakeAgentRuntime["agentId"];
+    runtime.getSetting = (key: string) => {
+      if (key === "HYPERSCAPE_AUTH_TOKEN") return "token-123";
+      if (key === "HYPERSCAPE_CHARACTER_ID") return "character-456";
+      return null;
+    };
+
+    const appManager = new AppManager();
+    const result = await appManager.launch(
+      createPluginManagerStub(appInfo),
+      appInfo.name,
+      undefined,
+      runtime,
+    );
+
+    expect(result.viewer?.url).toContain("http://localhost:3333");
+    expect(result.viewer?.postMessageAuth).toBe(true);
+    expect(result.viewer?.authMessage).toEqual({
+      type: "HYPERSCAPE_AUTH",
+      authToken: "token-123",
+      agentId: "11111111-1111-1111-1111-111111111111",
+      characterId: "character-456",
+      followEntity: "character-456",
+    });
+    expect(result.session).toEqual(
+      expect.objectContaining({
+        sessionId: "11111111-1111-1111-1111-111111111111",
+        appName: "@elizaos/app-hyperscape",
+        mode: "spectate-and-steer",
+        agentId: "11111111-1111-1111-1111-111111111111",
+        characterId: "character-456",
+        followEntity: "character-456",
+        canSendCommands: true,
+      }),
+    );
+  });
+
+  it("disables Hyperscape iframe auth when no auth token exists", async () => {
+    process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
+    const appInfo = createRegistryApp({
+      viewer: {
+        url: "{HYPERSCAPE_CLIENT_URL}",
+        postMessageAuth: true,
+      },
+      session: {
+        mode: "spectate-and-steer",
+        features: ["commands"],
+      },
+    });
+
+    const runtime = new FakeAgentRuntime();
+    runtime.agentId =
+      "22222222-2222-2222-2222-222222222222" as FakeAgentRuntime["agentId"];
+    runtime.getSetting = (key: string) => {
+      if (key === "HYPERSCAPE_CHARACTER_ID") return "character-789";
+      return null;
+    };
+
+    const appManager = new AppManager();
+    const result = await appManager.launch(
+      createPluginManagerStub(appInfo),
+      appInfo.name,
+      undefined,
+      runtime,
+    );
+
+    expect(result.viewer?.postMessageAuth).toBe(false);
+    expect(result.viewer?.authMessage).toBeUndefined();
+    expect(result.session).toEqual(
+      expect.objectContaining({
+        sessionId: "22222222-2222-2222-2222-222222222222",
+        characterId: "character-789",
+      }),
+    );
+  });
+});

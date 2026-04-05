@@ -2,6 +2,7 @@
 
 import type {
   AppLaunchResult,
+  AppSessionState,
   AppViewerAuthMessage,
   RegistryAppInfo,
 } from "@miladyai/app-core/api";
@@ -18,7 +19,12 @@ import * as electrobunRpc from "@miladyai/app-core/bridge/electrobun-rpc";
 interface AppsContextStub {
   setState: (
     key: string,
-    value: string | boolean | AppViewerAuthMessage | null,
+    value:
+      | string
+      | boolean
+      | AppViewerAuthMessage
+      | AppSessionState
+      | null,
   ) => void;
   setActionNotice: (
     text: string,
@@ -99,6 +105,7 @@ function createLaunchResult(
       postMessageAuth: false,
       sandbox: "allow-scripts",
     },
+    session: null,
     ...overrides,
   };
 }
@@ -338,6 +345,15 @@ describe("AppsView", () => {
           postMessageAuth: true,
           authMessage: { type: "HYPERSCAPE_AUTH", authToken: "token-1" },
         },
+        session: {
+          sessionId: "agent-123",
+          appName: app.name,
+          mode: "spectate-and-steer",
+          status: "connecting",
+          canSendCommands: true,
+          controls: ["pause"],
+          summary: "Connecting session...",
+        },
       }),
     );
 
@@ -363,6 +379,14 @@ describe("AppsView", () => {
       "http://localhost:5175",
     );
     expect(setState).toHaveBeenCalledWith("activeGamePostMessageAuth", true);
+    expect(setState).toHaveBeenCalledWith(
+      "activeGameSession",
+      expect.objectContaining({
+        sessionId: "agent-123",
+        appName: app.name,
+        mode: "spectate-and-steer",
+      }),
+    );
     expect(setState).toHaveBeenCalledWith("tab", "apps");
     expect(setState).toHaveBeenCalledWith("appsSubTab", "games");
     expect(
@@ -453,6 +477,7 @@ describe("AppsView", () => {
     );
     expect(setState).toHaveBeenCalledWith("activeGameApp", "");
     expect(setState).toHaveBeenCalledWith("activeGameViewerUrl", "");
+    expect(setState).toHaveBeenCalledWith("activeGameSession", null);
     expect(setActionNotice).toHaveBeenCalledWith(
       "Babylon opened in a new tab.",
       "success",

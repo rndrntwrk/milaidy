@@ -186,6 +186,7 @@ import { handleUpdateRoutes } from "./update-routes.js";
 import { handleWorkbenchRoutes } from "./workbench-routes.js";
 import { detectRuntimeModel, resolveProviderFromModel } from "./agent-model.js";
 import { handleAgentTransferRoutes } from "./agent-transfer-routes.js";
+import { handleAppPackageRoutes } from "./app-package-routes.js";
 import { handleAppsRoutes } from "./apps-routes.js";
 import { handleAuthRoutes } from "./auth-routes.js";
 import {
@@ -365,12 +366,10 @@ export {
   AGENT_EVENT_ALLOWED_STREAMS,
 } from "./plugin-discovery-helpers.js";
 
-// @ts-expect-error plugin package does not ship declarations
 type PiAiPluginModule = typeof import("@elizaos/plugin-pi-ai");
 let _piAiPluginModule: PiAiPluginModule | null = null;
 async function loadPiAiPluginModule(): Promise<PiAiPluginModule> {
   if (!_piAiPluginModule) {
-    // @ts-expect-error plugin package does not ship declarations
     _piAiPluginModule = await import("@elizaos/plugin-pi-ai");
   }
   return _piAiPluginModule;
@@ -4553,94 +4552,6 @@ async function handleRequest(
     });
   };
 
-  const resolveHyperscapeApiBaseUrl = async (): Promise<string> => {
-    const fromEnv = process.env.HYPERSCAPE_API_URL?.trim();
-    if (fromEnv) {
-      return fromEnv.replace(/\/+$/, "");
-    }
-    // Default to the local Hyperscape API server. Viewer URLs can point at a
-    // client dev server (for example :3333) which does not expose API routes.
-    return "http://localhost:5555";
-  };
-
-  const relayHyperscapeApi = async (
-    outboundMethod: "GET" | "POST",
-    outboundPath: string,
-    options?: {
-      rawBodyOverride?: string;
-      contentTypeOverride?: string | null;
-    },
-  ): Promise<void> => {
-    const baseUrl = await resolveHyperscapeApiBaseUrl();
-
-    let upstreamUrl: URL;
-    try {
-      upstreamUrl = new URL(outboundPath, baseUrl);
-      upstreamUrl.search = url.search;
-    } catch {
-      error(res, `Invalid Hyperscape API URL: ${baseUrl}`, 500);
-      return;
-    }
-
-    let rawBody: string | undefined;
-    if (options?.rawBodyOverride !== undefined) {
-      rawBody = options.rawBodyOverride;
-    } else if (outboundMethod === "POST") {
-      try {
-        rawBody = await readBody(req);
-        if (rawBody.trim().length === 0) {
-          rawBody = undefined;
-        }
-      } catch (err) {
-        error(
-          res,
-          `Failed to read request body: ${err instanceof Error ? err.message : String(err)}`,
-          400,
-        );
-        return;
-      }
-    }
-
-    const outboundHeaders: Record<string, string> = {};
-    const contentType =
-      options?.contentTypeOverride !== undefined
-        ? options.contentTypeOverride
-        : typeof req.headers["content-type"] === "string"
-          ? req.headers["content-type"]
-          : null;
-    if (contentType && rawBody !== undefined) {
-      outboundHeaders["Content-Type"] = contentType;
-    }
-    const authorization = resolveHyperscapeAuthorizationHeader(req);
-    if (authorization) {
-      outboundHeaders.Authorization = authorization;
-    }
-
-    let upstreamResponse: Response;
-    try {
-      upstreamResponse = await fetch(upstreamUrl.toString(), {
-        method: outboundMethod,
-        headers: outboundHeaders,
-        body: rawBody !== undefined ? rawBody : undefined,
-      });
-    } catch (err) {
-      error(
-        res,
-        `Failed to reach Hyperscape API: ${err instanceof Error ? err.message : String(err)}`,
-        502,
-      );
-      return;
-    }
-
-    const responseText = await upstreamResponse.text();
-    const responseType = upstreamResponse.headers.get("content-type");
-    if (responseType) {
-      res.setHeader("Content-Type", responseType);
-    }
-    res.statusCode = upstreamResponse.status;
-    res.end(responseText);
-  };
-
   // ── DNS rebinding protection ──────────────────────────────────────────
   // Reject requests whose Host header doesn't match a known loopback
   // hostname.  Without this check an attacker can rebind their domain's
@@ -5847,27 +5758,20 @@ async function handleRequest(
     return;
   }
 
-  // ── Hyperscape control proxy routes (optional — package may not be installed) ──
-  try {
-    const hyperscapePkg = "@elizaos/app-hyperscape/routes";
-    const { handleAppsHyperscapeRoutes } = await import(
-      /* webpackIgnore: true */ hyperscapePkg
-    );
-    if (
-      await handleAppsHyperscapeRoutes({
-        req,
-        res,
-        method,
-        pathname,
-        relayHyperscapeApi,
-        readJsonBody,
-        error,
-      })
-    ) {
-      return;
-    }
-  } catch {
-    // @elizaos/app-hyperscape not available — skip hyperscape routes
+  if (
+    await handleAppPackageRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      url,
+      readJsonBody,
+      json,
+      error,
+      runtime: state.runtime,
+    })
+  ) {
+    return;
   }
 
   // ═══════════════════════════════════════════════════════════════════════

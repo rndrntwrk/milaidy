@@ -51,8 +51,15 @@ const HYPERSCAPE_LOCAL_PLUGIN: RegistryPluginInfo = {
   launchUrl: "http://localhost:3333",
   viewer: {
     url: "http://localhost:3333",
+    embedParams: {
+      followEntity: "{HYPERSCAPE_CHARACTER_ID}",
+    },
     postMessageAuth: true,
     sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+  },
+  session: {
+    mode: "spectate-and-steer",
+    features: ["commands", "telemetry", "pause", "resume", "suggestions"],
   },
 };
 
@@ -230,7 +237,25 @@ describe("Hyperscape E2E Integration", () => {
       );
 
       expect(result.viewer).toBeDefined();
-      expect(result.viewer?.url).toBe("http://localhost:3333");
+      expect(result.viewer?.url).toBe(
+        "http://localhost:3333?followEntity=test-character-id",
+      );
+      expect(result.viewer?.authMessage).toEqual(
+        expect.objectContaining({
+          type: "HYPERSCAPE_AUTH",
+          authToken: "test-auth-token",
+          characterId: "test-character-id",
+          followEntity: "test-character-id",
+        }),
+      );
+      expect(result.session).toEqual(
+        expect.objectContaining({
+          mode: "spectate-and-steer",
+          status: "connecting",
+          characterId: "test-character-id",
+          followEntity: "test-character-id",
+        }),
+      );
     });
 
     test("returns viewer sandbox policy", async () => {
@@ -295,7 +320,10 @@ describe("Hyperscape E2E Integration", () => {
         pluginManager,
         "@elizaos/app-hyperscape",
       );
-      expect(launchResult.viewer?.url).toBe("http://localhost:3333");
+      expect(launchResult.viewer?.url).toBe(
+        "http://localhost:3333?followEntity=test-character-id",
+      );
+      expect(launchResult.session?.mode).toBe("spectate-and-steer");
 
       // Step 4: Verify can stop
       const stopResult = await appManager.stop(

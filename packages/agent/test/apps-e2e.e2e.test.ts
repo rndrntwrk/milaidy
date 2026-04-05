@@ -975,7 +975,18 @@ describe("Apps E2E", () => {
             const authMsg = viewer.authMessage;
             expect(authMsg.type).toBe("HYPERSCAPE_AUTH");
             expect(authMsg.authToken).toBe("test-auth-token-e2e");
+            if (typeof authMsg.agentId === "string") {
+              expect(authMsg.agentId.length).toBeGreaterThan(0);
+            }
           }
+        }
+        if (
+          body.session &&
+          typeof body.session === "object" &&
+          !Array.isArray(body.session)
+        ) {
+          expect(body.session.mode).toBe("spectate-and-steer");
+          expect(typeof body.session.sessionId).toBe("string");
         }
       } finally {
         // Restore original env
@@ -1013,6 +1024,14 @@ describe("Apps E2E", () => {
           expect(viewer.postMessageAuth).toBe(false);
           // authMessage should not be present
           expect(viewer.authMessage).toBeUndefined();
+        }
+        if (
+          body.session &&
+          typeof body.session === "object" &&
+          !Array.isArray(body.session)
+        ) {
+          expect(body.session.mode).toBe("spectate-and-steer");
+          expect(typeof body.session.sessionId).toBe("string");
         }
       } finally {
         // Restore original env

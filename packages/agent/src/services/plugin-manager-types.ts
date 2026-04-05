@@ -18,6 +18,23 @@ export interface RegistryPluginViewerInfo {
   sandbox?: string;
 }
 
+export type RegistryPluginAppSessionMode =
+  | "viewer"
+  | "spectate-and-steer"
+  | "external";
+
+export type RegistryPluginAppSessionFeature =
+  | "commands"
+  | "telemetry"
+  | "pause"
+  | "resume"
+  | "suggestions";
+
+export interface RegistryPluginAppSessionInfo {
+  mode: RegistryPluginAppSessionMode;
+  features?: RegistryPluginAppSessionFeature[];
+}
+
 export interface AppUiExtensionConfig {
   detailPanelId: string;
 }
@@ -29,8 +46,10 @@ export interface RegistryPluginAppMeta {
   launchUrl?: string | null;
   icon?: string | null;
   capabilities?: string[];
+  runtimePlugin?: string;
   uiExtension?: AppUiExtensionConfig;
   viewer?: RegistryPluginViewerInfo;
+  session?: RegistryPluginAppSessionInfo;
 }
 
 export interface RegistryPluginInfo {
@@ -55,6 +74,8 @@ export interface RegistryPluginInfo {
   category?: string;
   capabilities?: string[];
   icon?: string | null;
+  runtimePlugin?: string;
+  session?: RegistryPluginAppSessionInfo;
 }
 
 export interface RegistrySearchResult {

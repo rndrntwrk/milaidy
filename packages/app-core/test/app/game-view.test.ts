@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 
-import type { AppViewerAuthMessage } from "@miladyai/app-core/api";
+import type {
+  AppSessionState,
+  AppViewerAuthMessage,
+} from "@miladyai/app-core/api";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,13 +18,19 @@ interface GameContextStub {
   activeGameSandbox: string;
   activeGamePostMessageAuth: boolean;
   activeGamePostMessagePayload: AppViewerAuthMessage | null;
+  activeGameSession: AppSessionState | null;
   gameOverlayEnabled: boolean;
   plugins: { id: string; enabled: boolean }[];
   logs: unknown[];
   loadLogs: () => Promise<void>;
   setState: (
     key: string,
-    value: string | boolean | AppViewerAuthMessage | null,
+    value:
+      | string
+      | boolean
+      | AppViewerAuthMessage
+      | AppSessionState
+      | null,
   ) => void;
   setActionNotice: (
     text: string,
@@ -37,6 +46,10 @@ type TestWindow = Window & {
 const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
   mockClientFns: {
     getCodingAgentStatus: vi.fn(async () => null),
+    getAppSessionState: vi.fn(async () => null),
+    sendAppSessionMessage: vi.fn(),
+    controlAppSession: vi.fn(),
+    sendChatRest: vi.fn(),
     stopApp: vi.fn(),
   },
   mockUseApp: vi.fn(),
@@ -69,6 +82,7 @@ function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
     activeGameSandbox: "allow-scripts allow-same-origin",
     activeGamePostMessageAuth: false,
     activeGamePostMessagePayload: null,
+    activeGameSession: null,
     gameOverlayEnabled: false,
     plugins: [],
     logs: [],
@@ -86,6 +100,10 @@ describe("GameView", () => {
       undefined,
     );
     mockClientFns.stopApp.mockReset();
+    mockClientFns.getAppSessionState.mockReset();
+    mockClientFns.sendAppSessionMessage.mockReset();
+    mockClientFns.controlAppSession.mockReset();
+    mockClientFns.sendChatRest.mockReset();
     mockUseApp.mockReset();
   });
 
@@ -229,6 +247,7 @@ describe("GameView", () => {
       "activeGamePostMessagePayload",
       null,
     );
+    expect(ctx.setState).toHaveBeenCalledWith("activeGameSession", null);
     expect(ctx.setState).toHaveBeenCalledWith("tab", "apps");
     expect(ctx.setActionNotice).toHaveBeenCalledWith(
       "App disconnected and plugin uninstalled. Agent restart required.",
@@ -431,5 +450,90 @@ describe("GameView", () => {
       findButtonByText(tree?.root, "game.backToApps").props.onClick();
     });
     expect(ctx.setState).toHaveBeenCalledWith("tab", "apps");
+  });
+
+  it("uses app session messaging when a live session is active", async () => {
+    const ctx = createContext({
+      activeGameApp: "@elizaos/app-hyperscape",
+      activeGameSession: {
+        sessionId: "agent-1",
+        appName: "@elizaos/app-hyperscape",
+        mode: "spectate-and-steer",
+        status: "running",
+        canSendCommands: true,
+        controls: ["pause"],
+        summary: "running: Chop wood",
+      },
+    });
+    mockUseApp.mockReturnValue(ctx);
+    mockClientFns.getAppSessionState.mockResolvedValue(ctx.activeGameSession);
+    mockClientFns.sendAppSessionMessage.mockResolvedValue({
+      success: true,
+      message: "Message sent to Hyperscape session.",
+    });
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GameView));
+    });
+    await flush();
+
+    const input = tree.root.findByType("input");
+    await act(async () => {
+      input.props.onChange({ target: { value: "go chop some wood" } });
+    });
+
+    await act(async () => {
+      await findButtonByText(tree.root, "common.send").props.onClick();
+    });
+
+    expect(mockClientFns.sendAppSessionMessage).toHaveBeenCalledWith(
+      "@elizaos/app-hyperscape",
+      "agent-1",
+      "go chop some wood",
+    );
+    expect(mockClientFns.sendChatRest).not.toHaveBeenCalled();
+  });
+
+  it("shows pause or resume controls for session-backed apps", async () => {
+    const ctx = createContext({
+      activeGameApp: "@elizaos/app-hyperscape",
+      activeGameSession: {
+        sessionId: "agent-2",
+        appName: "@elizaos/app-hyperscape",
+        mode: "spectate-and-steer",
+        status: "running",
+        canSendCommands: true,
+        controls: ["pause"],
+        summary: "running: Patrolling",
+      },
+    });
+    mockUseApp.mockReturnValue(ctx);
+    mockClientFns.getAppSessionState.mockResolvedValue(ctx.activeGameSession);
+    mockClientFns.controlAppSession.mockResolvedValue({
+      success: true,
+      message: "Hyperscape session paused.",
+      session: {
+        ...ctx.activeGameSession,
+        status: "paused",
+        controls: ["resume"],
+      },
+    });
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GameView));
+    });
+    await flush();
+
+    await act(async () => {
+      await findButtonByText(tree.root, "Pause").props.onClick();
+    });
+
+    expect(mockClientFns.controlAppSession).toHaveBeenCalledWith(
+      "@elizaos/app-hyperscape",
+      "agent-2",
+      "pause",
+    );
   });
 });

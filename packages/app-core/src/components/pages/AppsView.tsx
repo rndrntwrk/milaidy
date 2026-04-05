@@ -98,6 +98,7 @@ export function AppsView() {
     setState("activeGameSandbox", DEFAULT_VIEWER_SANDBOX);
     setState("activeGamePostMessageAuth", false);
     setState("activeGamePostMessagePayload", null);
+    setState("activeGameSession", null);
   }, [setState]);
 
   useEffect(() => {
@@ -130,6 +131,7 @@ export function AppsView() {
             "activeGamePostMessagePayload",
             result.viewer.authMessage ?? null,
           );
+          setState("activeGameSession", result.session ?? null);
           if (result.viewer.postMessageAuth && !result.viewer.authMessage) {
             setActionNotice(
               t("appsview.IframeAuthMissing", {

@@ -133,6 +133,7 @@ export function toAppInfo(
     npm: p.npm,
     uiExtension: meta?.uiExtension,
     viewer,
+    session: meta?.session,
   };
 }
 

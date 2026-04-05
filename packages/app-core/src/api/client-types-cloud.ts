@@ -227,11 +227,32 @@ export interface CloudCompatLaunchResult {
 }
 
 // App types
+export type AppSessionMode = "viewer" | "spectate-and-steer" | "external";
+
+export type AppSessionFeature =
+  | "commands"
+  | "telemetry"
+  | "pause"
+  | "resume"
+  | "suggestions";
+
+export type AppSessionControlAction = "pause" | "resume";
+
+export type AppSessionJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | AppSessionJsonValue[]
+  | { [key: string]: AppSessionJsonValue };
+
 export interface AppViewerAuthMessage {
   type: string;
   authToken?: string;
   sessionToken?: string;
   agentId?: string;
+  characterId?: string;
+  followEntity?: string;
 }
 
 export interface AppViewerConfig {
@@ -244,6 +265,34 @@ export interface AppViewerConfig {
 
 export interface AppUiExtensionConfig {
   detailPanelId: string;
+}
+
+export interface AppSessionConfig {
+  mode: AppSessionMode;
+  features?: AppSessionFeature[];
+}
+
+export interface AppSessionState {
+  sessionId: string;
+  appName: string;
+  mode: AppSessionMode;
+  status: string;
+  displayName?: string;
+  agentId?: string;
+  characterId?: string;
+  followEntity?: string;
+  canSendCommands?: boolean;
+  controls?: AppSessionControlAction[];
+  summary?: string | null;
+  goalLabel?: string | null;
+  suggestedPrompts?: string[];
+  telemetry?: Record<string, AppSessionJsonValue> | null;
+}
+
+export interface AppSessionActionResult {
+  success: boolean;
+  message: string;
+  session?: AppSessionState | null;
 }
 
 export interface RegistryAppInfo {
@@ -267,6 +316,7 @@ export interface RegistryAppInfo {
   };
   uiExtension?: AppUiExtensionConfig;
   viewer?: AppViewerConfig;
+  session?: AppSessionConfig;
 }
 
 export interface InstalledAppInfo {
@@ -285,6 +335,7 @@ export interface AppLaunchResult {
   launchType: string;
   launchUrl: string | null;
   viewer: AppViewerConfig | null;
+  session: AppSessionState | null;
 }
 
 export interface AppStopResult {

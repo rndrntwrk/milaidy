@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 
-import type { AppViewerAuthMessage, LogEntry } from "@miladyai/app-core/api";
+import type {
+  AppSessionState,
+  AppViewerAuthMessage,
+  LogEntry,
+} from "@miladyai/app-core/api";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,13 +16,19 @@ interface GameContextStub {
   activeGameSandbox: string;
   activeGamePostMessageAuth: boolean;
   activeGamePostMessagePayload: AppViewerAuthMessage | null;
+  activeGameSession: AppSessionState | null;
   gameOverlayEnabled: boolean;
   plugins: { id: string; enabled: boolean }[];
   logs: LogEntry[];
   loadLogs: () => Promise<void>;
   setState: (
     key: string,
-    value: string | boolean | AppViewerAuthMessage | null,
+    value:
+      | string
+      | boolean
+      | AppViewerAuthMessage
+      | AppSessionState
+      | null,
   ) => void;
   setActionNotice: (
     text: string,
@@ -59,6 +69,7 @@ function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
       authToken: "testbot",
       sessionToken: "password",
     },
+    activeGameSession: null,
     gameOverlayEnabled: false,
     plugins: [],
     logs: [],

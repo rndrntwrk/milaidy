@@ -7,6 +7,9 @@ import type { CustomActionDef } from "@miladyai/agent/contracts/config";
 import { MiladyClient } from "./client-base";
 import type {
   AppLaunchResult,
+  AppSessionActionResult,
+  AppSessionControlAction,
+  AppSessionState,
   AppStopResult,
   CatalogSearchResult,
   CatalogSkill,
@@ -162,6 +165,20 @@ declare module "./client-base" {
     stopApp(name: string): Promise<AppStopResult>;
     getAppInfo(name: string): Promise<RegistryAppInfo>;
     launchApp(name: string): Promise<AppLaunchResult>;
+    getAppSessionState(
+      appName: string,
+      sessionId: string,
+    ): Promise<AppSessionState>;
+    sendAppSessionMessage(
+      appName: string,
+      sessionId: string,
+      content: string,
+    ): Promise<AppSessionActionResult>;
+    controlAppSession(
+      appName: string,
+      sessionId: string,
+      action: AppSessionControlAction,
+    ): Promise<AppSessionActionResult>;
     listRegistryPlugins(): Promise<RegistryPluginItem[]>;
     searchRegistryPlugins(query: string): Promise<RegistryPluginItem[]>;
     listHyperscapeEmbeddedAgents(): Promise<HyperscapeEmbeddedAgentsResponse>;
@@ -497,6 +514,46 @@ MiladyClient.prototype.launchApp = async function (this: MiladyClient, name) {
     method: "POST",
     body: JSON.stringify({ name }),
   });
+};
+
+MiladyClient.prototype.getAppSessionState = async function (
+  this: MiladyClient,
+  appName,
+  sessionId,
+) {
+  return this.fetch(
+    `/api/apps/${encodeURIComponent(appName.replace(/^@[^/]+\/app-/, ""))}/session/${encodeURIComponent(sessionId)}`,
+  );
+};
+
+MiladyClient.prototype.sendAppSessionMessage = async function (
+  this: MiladyClient,
+  appName,
+  sessionId,
+  content,
+) {
+  return this.fetch(
+    `/api/apps/${encodeURIComponent(appName.replace(/^@[^/]+\/app-/, ""))}/session/${encodeURIComponent(sessionId)}/message`,
+    {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    },
+  );
+};
+
+MiladyClient.prototype.controlAppSession = async function (
+  this: MiladyClient,
+  appName,
+  sessionId,
+  action,
+) {
+  return this.fetch(
+    `/api/apps/${encodeURIComponent(appName.replace(/^@[^/]+\/app-/, ""))}/session/${encodeURIComponent(sessionId)}/control`,
+    {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    },
+  );
 };
 
 MiladyClient.prototype.listRegistryPlugins = async function (

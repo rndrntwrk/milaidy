@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import type {
   AgentStatus,
+  AppSessionState,
   AppViewerAuthMessage,
   BscTradeExecuteRequest,
   BscTradeExecuteResponse,
@@ -568,6 +569,7 @@ export interface AppState {
   activeGameSandbox: string;
   activeGamePostMessageAuth: boolean;
   activeGamePostMessagePayload: GamePostMessageAuthPayload | null;
+  activeGameSession: AppSessionState | null;
 
   /** When true, the game iframe persists as a floating overlay across all tabs. */
   gameOverlayEnabled: boolean;

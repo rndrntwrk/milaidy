@@ -2,6 +2,7 @@ import { logger } from "@elizaos/core";
 import type {
   AppUiExtensionConfig,
   RegistryAppMeta,
+  RegistryAppSessionMeta,
   RegistryAppViewerMeta,
 } from "./registry-client-types.js";
 
@@ -29,8 +30,10 @@ interface LocalAppOverride {
   launchType?: string;
   launchUrl?: string | null;
   capabilities?: string[];
+  runtimePlugin?: string;
   uiExtension?: AppUiExtensionConfig;
   viewer?: RegistryAppViewerMeta;
+  session?: RegistryAppSessionMeta;
 }
 
 const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
@@ -39,23 +42,6 @@ const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
     launchUrl: "http://localhost:3000",
     viewer: {
       url: "http://localhost:3000",
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-    },
-  },
-  "@elizaos/app-hyperscape": {
-    launchType: "connect",
-    launchUrl: "http://localhost:3333",
-    uiExtension: {
-      detailPanelId: "hyperscape-embedded-agents",
-    },
-    viewer: {
-      url: "http://localhost:3333",
-      embedParams: {
-        embedded: "true",
-        mode: "spectator",
-        quality: "medium",
-      },
-      postMessageAuth: true,
       sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
     },
   },
@@ -148,6 +134,23 @@ function mergeViewer(
   });
 }
 
+function mergeSession(
+  base: RegistryAppSessionMeta | undefined,
+  patch: RegistryAppSessionMeta | undefined,
+): RegistryAppSessionMeta | undefined {
+  if (!base && !patch) return undefined;
+  if (!base) return patch;
+  if (!patch) return base;
+  return {
+    ...base,
+    ...patch,
+    features:
+      patch.features && patch.features.length > 0
+        ? patch.features
+        : base.features,
+  };
+}
+
 export function mergeAppMeta(
   base: RegistryAppMeta | undefined,
   patch: RegistryAppMeta | undefined,
@@ -160,8 +163,10 @@ export function mergeAppMeta(
     ...patch,
     capabilities:
       patch.capabilities.length > 0 ? patch.capabilities : base.capabilities,
+    runtimePlugin: patch.runtimePlugin ?? base.runtimePlugin,
     uiExtension: patch.uiExtension ?? base.uiExtension,
     viewer: mergeViewer(base.viewer, patch.viewer),
+    session: mergeSession(base.session, patch.session),
   };
 }
 
@@ -181,8 +186,10 @@ export function resolveAppOverride(
     capabilities: override.capabilities ?? [],
     minPlayers: null,
     maxPlayers: null,
+    runtimePlugin: override.runtimePlugin,
     uiExtension: override.uiExtension,
     viewer: override.viewer,
+    session: override.session,
   };
   return {
     ...base,
@@ -195,7 +202,9 @@ export function resolveAppOverride(
       override.capabilities !== undefined
         ? override.capabilities
         : base.capabilities,
+    runtimePlugin: override.runtimePlugin ?? base.runtimePlugin,
     uiExtension: override.uiExtension ?? base.uiExtension,
     viewer: mergeViewer(base.viewer, override.viewer),
+    session: mergeSession(base.session, override.session),
   };
 }
