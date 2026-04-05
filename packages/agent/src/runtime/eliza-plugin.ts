@@ -17,6 +17,7 @@ import { AgentEventService } from "@elizaos/core";
 import { emoteAction } from "../actions/emote";
 import { restartAction } from "../actions/restart";
 import { sendMessageAction } from "../actions/send-message";
+import { webSearchAction } from "../actions/web-search";
 import {
   goLiveAction,
   goOfflineAction,
@@ -225,6 +226,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       emoteAction,
       setUserNameAction,
       skillCommandAction,
+      webSearchAction,
     ],
   };
 

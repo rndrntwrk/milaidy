@@ -3463,6 +3463,18 @@ export async function startEliza(
       );
     }
 
+    // 8a2. Install Anthropic server-side web search (zero-cost, no key needed)
+    try {
+      const { installAnthropicWebSearch } = await import(
+        "./web-search-tools.js"
+      );
+      installAnthropicWebSearch(runtime);
+    } catch (err) {
+      logger.debug(
+        `[eliza] Anthropic web search setup skipped: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
     try {
       await seedBundledKnowledge(runtime);
     } catch (err) {

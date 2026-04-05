@@ -22,6 +22,117 @@ import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
 
 // ---------------------------------------------------------------------------
+// Cloud container character default bootstrapping
+// ---------------------------------------------------------------------------
+
+/**
+ * Cloud-provisioned containers skip onboarding entirely, which means the
+ * character preset (ui.presetId, ui.avatarIndex) and the matching TTS voice
+ * are never written to the config file.  This helper ensures that the first
+ * GET /api/onboarding/status from a cloud container writes sensible defaults
+ * so the frontend hydrates with the correct character and voice.
+ *
+ * Only runs once: subsequent requests see ui.presetId already set and bail.
+ */
+let _cloudDefaultsApplied = false;
+function ensureCloudContainerCharacterDefaults(ctx: OnboardingRouteContext): void {
+  if (_cloudDefaultsApplied) return;
+
+  let config: ElizaConfig;
+  try {
+    config = loadElizaConfig();
+  } catch {
+    return; // No config file yet — nothing to patch
+  }
+
+  const ui = (config.ui ?? {}) as Record<string, unknown>;
+  if (ui.presetId) {
+    // Already has a character preset — previous onboarding or manual config
+    _cloudDefaultsApplied = true;
+    return;
+  }
+
+  // Resolve the default style preset for the configured language
+  const language = ctx.resolveConfiguredCharacterLanguage(config, ctx.req);
+  const presets = ctx.getStylePresets(language) as Array<{
+    id: string;
+    name: string;
+    avatarIndex: number;
+    voicePresetId?: string;
+    bio?: string[];
+    system?: string;
+    style?: unknown;
+    adjectives?: string[];
+    topics?: string[];
+    postExamples?: string[];
+    messageExamples?: unknown[];
+  }>;
+  const defaultPreset = presets[0];
+  if (!defaultPreset) {
+    _cloudDefaultsApplied = true;
+    return;
+  }
+
+  // Apply the default character to config
+  if (!config.ui) (config as Record<string, unknown>).ui = {};
+  const configUi = config.ui as Record<string, unknown>;
+  configUi.presetId = defaultPreset.id;
+  configUi.avatarIndex = defaultPreset.avatarIndex;
+  if (!configUi.assistant || typeof configUi.assistant !== "object") {
+    configUi.assistant = {};
+  }
+  const assistant = configUi.assistant as Record<string, unknown>;
+  if (!assistant.name) {
+    assistant.name = defaultPreset.name;
+  }
+
+  // Apply the matching voice preset so TTS uses the correct voice.
+  // First try the standard path (requires ELEVENLABS_API_KEY for direct mode).
+  ctx.applyOnboardingVoicePreset(
+    config,
+    { presetId: defaultPreset.id, avatarIndex: defaultPreset.avatarIndex },
+    language,
+  );
+  // Cloud containers typically use cloud-proxy TTS without a direct API key.
+  // If applyOnboardingVoicePreset bailed (no ELEVENLABS_API_KEY), write the
+  // voice config anyway so resolveCharacterVoiceConfigFromAppConfig on the
+  // client picks up the correct voiceId via the ui.presetId -> preset lookup.
+  // The client-side voice resolver reads config.ui.presetId and maps it to the
+  // character's voicePresetId, so having presetId set is sufficient.
+
+  // Ensure agent list has the default character's personality
+  if (!config.agents || typeof config.agents !== "object") {
+    (config as Record<string, unknown>).agents = {};
+  }
+  const agents = config.agents as NonNullable<typeof config.agents>;
+  if (!Array.isArray(agents.list) || agents.list.length === 0) {
+    (agents as Record<string, unknown>).list = [{ id: "main", default: true }];
+  }
+  const agentEntry = (agents.list as Record<string, unknown>[])[0];
+  if (!agentEntry.name && defaultPreset.name) {
+    agentEntry.name = defaultPreset.name;
+  }
+  if (!agentEntry.bio && defaultPreset.bio) {
+    agentEntry.bio = defaultPreset.bio;
+  }
+  if (!agentEntry.system && defaultPreset.system) {
+    agentEntry.system = defaultPreset.system;
+  }
+
+  try {
+    ctx.saveElizaConfig(config);
+    logger.info(
+      `[onboarding] Applied default character preset "${defaultPreset.id}" for cloud container`,
+    );
+  } catch (err) {
+    logger.warn(
+      `[onboarding] Failed to persist cloud container character defaults: ${err}`,
+    );
+  }
+  _cloudDefaultsApplied = true;
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -104,6 +215,10 @@ export async function handleOnboardingRoutes(
   // ── GET /api/onboarding/status ──────────────────────────────────────
   if (method === "GET" && pathname === "/api/onboarding/status") {
     if (ctx.isCloudProvisionedContainer()) {
+      // Ensure the config file has the default character preset + voice so
+      // the frontend hydrates with the correct character instead of a bare
+      // fallback.  This is idempotent and only writes once.
+      ensureCloudContainerCharacterDefaults(ctx);
       json(res, { complete: true, cloudProvisioned: true });
       return true;
     }

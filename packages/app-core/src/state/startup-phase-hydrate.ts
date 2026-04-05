@@ -32,7 +32,7 @@ import { resolveApiUrl, resolveAppAssetUrl } from "../utils";
 import type { StartupEvent } from "./startup-coordinator";
 import type { AgentStatus, WalletAddresses } from "../api";
 import type { OnboardingMode } from "./types";
-import { getVrmUrl } from "./vrm";
+import { getVrmUrl, getVrmCount, VRM_COUNT } from "./vrm";
 import { loadUiTheme } from "./persistence";
 import { prefetchVrmToCache } from "../components/avatar/VrmEngine";
 
@@ -160,8 +160,25 @@ export async function runHydrating(
     warn("wallet addresses", e);
   }
 
-  // Avatar / VRM selection
+  // Avatar / VRM selection — resolve from server config, then stream
+  // settings, then localStorage.  Cloud containers that skip onboarding
+  // have their character defaults written server-side, so we must read
+  // the config to pick up the correct avatarIndex.
   let resolvedIdx = loadAvatarIndex();
+  try {
+    const cfg = await client.getConfig();
+    const cfgUi = cfg?.ui as Record<string, unknown> | undefined;
+    const cfgAvatarIdx = cfgUi?.avatarIndex;
+    if (typeof cfgAvatarIdx === "number" && Number.isFinite(cfgAvatarIdx)) {
+      const normalized = normalizeAvatarIndex(cfgAvatarIdx);
+      if (normalized > 0) {
+        resolvedIdx = normalized;
+        deps.setSelectedVrmIndex(resolvedIdx);
+      }
+    }
+  } catch (e) {
+    warn("config avatar index", e);
+  }
   try {
     if (typeof client.getStreamSettings === "function") {
       const stream = await client.getStreamSettings();
@@ -192,10 +209,14 @@ export async function runHydrating(
   // noticeable in cloud containers where the CDN round-trip is the
   // bottleneck.
   //
-  // We await the VRM prefetch (with a 15s timeout) rather than firing
-  // and forgetting. This ensures the in-memory buffer cache is populated
-  // *before* HYDRATION_COMPLETE, so the companion scene gets an instant
-  // cache hit instead of starting a duplicate network download.
+  // We await the active VRM prefetch (with a 15s timeout) rather than
+  // firing and forgetting. This ensures the in-memory buffer cache is
+  // populated *before* HYDRATION_COMPLETE, so the companion scene gets
+  // an instant cache hit instead of starting a duplicate network download.
+  //
+  // Additionally, fire-and-forget prefetches for ALL other VRM assets so
+  // navigating to the customize/character page doesn't trigger a full
+  // re-download of every character model.
   if (COMPANION_ENABLED) {
     const vrmIdx = resolvedIdx > 0 ? resolvedIdx : 1;
     const vrmPrefetch = prefetchVrmToCache(getVrmUrl(vrmIdx));
@@ -215,6 +236,15 @@ export async function runHydrating(
       Promise.all([vrmPrefetch, worldPrefetch]),
       new Promise((resolve) => setTimeout(resolve, 15_000)),
     ]);
+
+    // Fire-and-forget: warm the cache for all other VRM assets so the
+    // customize page does not need to re-download them on first visit.
+    // Use getVrmCount() (dynamic roster) with VRM_COUNT as fallback when
+    // the boot config hasn't been populated yet.
+    const totalVrm = getVrmCount() || VRM_COUNT;
+    for (let i = 1; i <= totalVrm; i++) {
+      if (i !== vrmIdx) void prefetchVrmToCache(getVrmUrl(i));
+    }
   }
 
   void deps.pollCloudCredits();
