@@ -2678,10 +2678,15 @@ export class LifeOpsService {
     throw error;
   }
 
-  private async clearGoogleConnectorData(): Promise<void> {
+  private async clearGoogleConnectorData(
+    side?: LifeOpsConnectorSide,
+  ): Promise<void> {
     const calendarEvents = await this.repository.listCalendarEvents(
       this.agentId(),
       "google",
+      undefined,
+      undefined,
+      side,
     );
     await this.deleteCalendarReminderPlansForEvents(
       calendarEvents.map((event) => event.id),
@@ -2689,13 +2694,26 @@ export class LifeOpsService {
     await this.repository.deleteCalendarEventsForProvider(
       this.agentId(),
       "google",
+      undefined,
+      side,
     );
-    await this.repository.deleteCalendarSyncState(this.agentId(), "google");
+    await this.repository.deleteCalendarSyncState(
+      this.agentId(),
+      "google",
+      undefined,
+      side,
+    );
     await this.repository.deleteGmailMessagesForProvider(
       this.agentId(),
       "google",
+      side,
     );
-    await this.repository.deleteGmailSyncState(this.agentId(), "google");
+    await this.repository.deleteGmailSyncState(
+      this.agentId(),
+      "google",
+      undefined,
+      side,
+    );
   }
 
   private async setPreferredGoogleConnectorMode(
@@ -6659,32 +6677,36 @@ export class LifeOpsService {
       } catch (error) {
         if (error instanceof ManagedGoogleClientError) {
           if (error.status === 404) {
-            const fallbackMode = [
-              explicitMode,
-              resolvedGrant?.mode,
-              ...modeAvailability.availableModes,
-            ].find(
-              (candidate): candidate is LifeOpsConnectorMode =>
-                Boolean(candidate) && candidate !== "cloud_managed",
-            );
-            if (fallbackMode) {
-              return this.getGoogleConnectorStatus(
-                requestUrl,
-                fallbackMode,
+            if (resolvedGrant?.mode === "cloud_managed") {
+              await this.repository.deleteConnectorGrant(
+                this.agentId(),
+                "google",
+                "cloud_managed",
                 side,
               );
+              if (
+                !grants.some(
+                  (candidate) =>
+                    candidate.provider === "google" &&
+                    candidate.side === side &&
+                    candidate.mode !== "cloud_managed",
+                )
+              ) {
+                await this.clearGoogleConnectorData(side);
+              }
+              await this.setPreferredGoogleConnectorMode(null);
             }
             return {
               provider: "google",
               side,
-              mode: "local",
-              defaultMode: "local",
-              availableModes: [],
-              executionTarget: "local",
-              sourceOfTruth: "local_storage",
-              configured: false,
+              mode: "cloud_managed",
+              defaultMode: modeAvailability.defaultMode,
+              availableModes: modeAvailability.availableModes,
+              executionTarget: "cloud",
+              sourceOfTruth: "cloud_connection",
+              configured: true,
               connected: false,
-              reason: "config_missing",
+              reason: "disconnected",
               preferredByAgent: false,
               cloudConnectionId: null,
               identity: null,

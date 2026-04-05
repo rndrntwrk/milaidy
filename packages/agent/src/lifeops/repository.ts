@@ -785,14 +785,6 @@ export async function ensureLifeOpsTables(
       ON life_workflow_definitions(agent_id, domain, subject_type, subject_id, status, updated_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_workflow_runs_workflow
       ON life_workflow_runs(agent_id, workflow_id, started_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_calendar_events_window
-      ON life_calendar_events(agent_id, provider, side, start_at, end_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_calendar_sync_states_agent
-      ON life_calendar_sync_states(agent_id, provider, side, calendar_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_gmail_messages_priority
-      ON life_gmail_messages(agent_id, provider, side, triage_score, received_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_gmail_sync_states_agent
-      ON life_gmail_sync_states(agent_id, provider, side, mailbox)`,
     `CREATE INDEX IF NOT EXISTS idx_life_browser_sessions_agent
       ON life_browser_sessions(agent_id, status, updated_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_browser_sessions_subject

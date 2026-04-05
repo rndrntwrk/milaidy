@@ -255,12 +255,20 @@ describe("life-ops Google mode preference", () => {
     ).toBe(true);
   });
 
-  it("treats missing managed Google status endpoints as unavailable instead of crashing", async () => {
+  it("treats missing managed Google status endpoints as disconnected cloud state without falling back to local", async () => {
     process.env.ELIZAOS_CLOUD_API_KEY = "test-cloud-key";
     process.env.ELIZAOS_CLOUD_BASE_URL = "https://www.elizacloud.ai";
 
-    const runtime = createRuntime("lifeops-google-status-agent", databasePath);
+    const agentId = "lifeops-google-status-agent";
+    const runtime = createRuntime(agentId, databasePath);
+    const repository = new LifeOpsRepository(runtime);
     const service = new LifeOpsService(runtime);
+    await seedManagedGoogleGrant({
+      repository,
+      agentId,
+      side: "owner",
+      preferredByAgent: true,
+    });
 
     (
       service as unknown as {
@@ -283,13 +291,27 @@ describe("life-ops Google mode preference", () => {
 
     const status = await service.getGoogleConnectorStatus(
       new URL("http://127.0.0.1:3000/api/lifeops/connectors/google/status"),
+      "cloud_managed",
+      "owner",
+    );
+    const staleGrant = await repository.getConnectorGrant(
+      agentId,
+      "google",
+      "cloud_managed",
+      "owner",
     );
 
     expect(status.connected).toBe(false);
-    expect(status.configured).toBe(false);
-    expect(status.reason).toBe("config_missing");
-    expect(status.availableModes).toEqual([]);
-    expect(status.mode).toBe("local");
+    expect(status.configured).toBe(true);
+    expect(status.reason).toBe("disconnected");
+    expect(status.availableModes).toEqual(["cloud_managed"]);
+    expect(status.mode).toBe("cloud_managed");
+    expect(status.side).toBe("owner");
+    expect(status.executionTarget).toBe("cloud");
+    expect(status.sourceOfTruth).toBe("cloud_connection");
+    expect(status.grant).toBeNull();
+    expect(status.identity).toBeNull();
+    expect(staleGrant).toBeNull();
 
     delete process.env.ELIZAOS_CLOUD_API_KEY;
     delete process.env.ELIZAOS_CLOUD_BASE_URL;
