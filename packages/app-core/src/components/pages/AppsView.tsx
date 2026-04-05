@@ -110,6 +110,9 @@ export function AppsView() {
       setBusyApp(app.name);
       try {
         const result = await client.launchApp(app.name);
+        const primaryLaunchDiagnostic =
+          result.diagnostics?.find((diagnostic) => diagnostic.severity === "error") ??
+          result.diagnostics?.[0];
         setActiveAppNames((previous) => {
           const next = new Set(previous);
           next.add(app.name);
@@ -141,11 +144,25 @@ export function AppsView() {
               4800,
             );
           }
+          if (primaryLaunchDiagnostic) {
+            setActionNotice(
+              primaryLaunchDiagnostic.message,
+              primaryLaunchDiagnostic.severity === "error" ? "error" : "info",
+              6500,
+            );
+          }
           setState("tab", "apps");
           setState("appsSubTab", "games");
           return;
         }
         clearActiveGameState();
+        if (primaryLaunchDiagnostic) {
+          setActionNotice(
+            primaryLaunchDiagnostic.message,
+            primaryLaunchDiagnostic.severity === "error" ? "error" : "info",
+            6500,
+          );
+        }
         const targetUrl = result.launchUrl ?? app.launchUrl;
         if (targetUrl) {
           try {

@@ -86,6 +86,7 @@ import {
   CORE_PLUGINS,
   OPTIONAL_CORE_PLUGINS,
 } from "../runtime/core-plugins.js";
+import * as agentOrchestratorCompat from "../runtime/agent-orchestrator-compat.js";
 import {
   buildTestHandler,
   registerCustomActionLive,
@@ -113,6 +114,7 @@ import {
   importAgent,
 } from "../services/agent-export.js";
 import { AppManager } from "../services/app-manager.js";
+import { createConfigPluginManager } from "../services/config-plugin-manager.js";
 import {
   getMcpServerDetails,
   searchMcpMarketplace,
@@ -183,6 +185,7 @@ import { handlePermissionsExtraRoutes } from "./permissions-routes-extra.js";
 import { handleProviderSwitchRoutes } from "./provider-switch-routes.js";
 import { handleTtsRoutes } from "./tts-routes.js";
 import { handleUpdateRoutes } from "./update-routes.js";
+import { handleWebsiteBlockerRoutes } from "./website-blocker-routes.js";
 import { handleWorkbenchRoutes } from "./workbench-routes.js";
 import { detectRuntimeModel, resolveProviderFromModel } from "./agent-model.js";
 import { handleAgentTransferRoutes } from "./agent-transfer-routes.js";
@@ -391,6 +394,7 @@ type OrchestratorFallbackRouteHandler = (
   req: http.IncomingMessage,
   res: http.ServerResponse,
   pathname: string,
+  method?: string,
 ) => Promise<boolean>;
 
 interface OrchestratorPluginFallbackModule {
@@ -413,6 +417,14 @@ function requirePluginManager(runtime: AgentRuntime | null): PluginManagerLike {
     throw new Error("Plugin manager service not found");
   }
   return service;
+}
+
+function getPluginManagerForState(state: ServerState): PluginManagerLike {
+  const service = state.runtime?.getService("plugin_manager");
+  if (isPluginManagerLike(service)) {
+    return service;
+  }
+  return createConfigPluginManager(() => state.config);
 }
 
 function requireCoreManager(runtime: AgentRuntime | null): CoreManagerLike {
@@ -3876,7 +3888,7 @@ export async function handleSwarmSynthesis(
     .join("\n\n");
 
   const prompt =
-    `You are summarizing the results of a coding agent swarm for the user. ` +
+    `You are summarizing the results of a task-agent swarm for the user. ` +
     `${payload.total} agents were dispatched. ${payload.completed} completed, ` +
     `${payload.stopped} stopped, ${payload.errored} errored.\n\n` +
     `Here are the individual task results:\n\n${taskLines}\n\n` +
@@ -3905,7 +3917,7 @@ export async function handleSwarmSynthesis(
     if (payload.stopped > 0) parts.push(`${payload.stopped} stopped`);
     if (payload.errored > 0) parts.push(`${payload.errored} errored`);
     await routeMessage(
-      `All ${payload.total} coding agents finished (${parts.join(", ")}). Review their work when you're ready.`,
+      `All ${payload.total} task agents finished (${parts.join(", ")}). Review their work when you're ready.`,
       "coding-agent",
     );
   }
@@ -4552,6 +4564,50 @@ async function handleRequest(
     });
   };
 
+  const restartRuntime = async (reason: string): Promise<boolean> => {
+    if (!ctx?.onRestart) {
+      return false;
+    }
+    if (state.agentState === "restarting") {
+      return false;
+    }
+
+    const previousState = state.agentState;
+    logger.info(`[eliza-api] Applying runtime reload: ${reason}`);
+    state.agentState = "restarting";
+    state.startup = { ...state.startup, phase: "restarting" };
+    state.broadcastStatus?.();
+
+    try {
+      const newRuntime = await ctx.onRestart();
+      if (!newRuntime) {
+        state.agentState = previousState;
+        state.broadcastStatus?.();
+        return false;
+      }
+
+      state.runtime = newRuntime;
+      state.chatConnectionReady = null;
+      state.chatConnectionPromise = null;
+      state.agentState = "running";
+      state.agentName =
+        newRuntime.character.name ?? resolveDefaultAgentName(state.config);
+      state.model = detectRuntimeModel(newRuntime, state.config);
+      state.startedAt = Date.now();
+      state.pendingRestartReasons = [];
+      ctx.onRuntimeSwapped?.();
+      state.broadcastStatus?.();
+      return true;
+    } catch (err) {
+      logger.warn(
+        `[eliza-api] Runtime reload failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      state.agentState = previousState;
+      state.broadcastStatus?.();
+      return false;
+    }
+  };
+
   // ── DNS rebinding protection ──────────────────────────────────────────
   // Reject requests whose Host header doesn't match a known loopback
   // hostname.  Without this check an attacker can rebind their domain's
@@ -4949,7 +5005,7 @@ async function handleRequest(
       url,
       json,
       error,
-      getPluginManager: () => requirePluginManager(state.runtime) as never,
+      getPluginManager: () => getPluginManagerForState(state) as never,
       getLoadedPluginNames: () =>
         state.runtime?.plugins.map((plugin) => plugin.name) ?? [],
       getBundledPluginIds: () => getReleaseBundledPluginIds(),
@@ -4980,6 +5036,7 @@ async function handleRequest(
         error,
         readJsonBody,
         scheduleRuntimeRestart,
+        restartRuntime,
         BLOCKED_ENV_KEYS,
         discoverInstalledPlugins,
         maskValue,
@@ -5391,6 +5448,20 @@ async function handleRequest(
     return;
   }
 
+  if (
+    await handleWebsiteBlockerRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      readJsonBody,
+      json,
+      error,
+    })
+  ) {
+    return;
+  }
+
   // Agent self-status, Privy, and ERC-8004 registry routes are now handled
   // by handleAgentStatusRoutes above.
 
@@ -5692,9 +5763,7 @@ async function handleRequest(
     if (!handled) {
       try {
         const orchestratorPlugin =
-          (await import(
-            "@elizaos/plugin-agent-orchestrator"
-          )) as OrchestratorPluginFallbackModule;
+          agentOrchestratorCompat as OrchestratorPluginFallbackModule;
         if (orchestratorPlugin.createCodingAgentRouteHandler) {
           const coordinator = orchestratorPlugin.getCoordinator?.(
             state.runtime,
@@ -5747,7 +5816,7 @@ async function handleRequest(
       pathname,
       url,
       appManager: state.appManager as never,
-      getPluginManager: () => requirePluginManager(state.runtime) as never,
+      getPluginManager: () => getPluginManagerForState(state) as never,
       parseBoundedLimit,
       readJsonBody,
       json,
@@ -5958,6 +6027,7 @@ export async function startApiServer(opts?: {
   // Hydrate persisted config.env values so addresses remain visible after restarts.
   const persistedEnv = config.env as Record<string, string> | undefined;
   const envKeysToHydrate = [
+    "MILADY_WALLET_OS_STORE",
     "EVM_PRIVATE_KEY",
     "SOLANA_PRIVATE_KEY",
     "ALCHEMY_API_KEY",
@@ -6084,7 +6154,6 @@ export async function startApiServer(opts?: {
     connectorRouteHandlers: [],
     connectorHealthMonitor: null,
   };
-
   const trainingServiceCtor = await resolveTrainingServiceCtor();
   const trainingServiceOptions = {
     getRuntime: () => state.runtime,
@@ -6097,7 +6166,7 @@ export async function startApiServer(opts?: {
   if (trainingServiceCtor) {
     state.trainingService = new trainingServiceCtor(trainingServiceOptions);
   } else {
-    logger.warn(
+    logger.info(
       "[eliza-api] Training service package unavailable; training routes will be disabled",
     );
   }

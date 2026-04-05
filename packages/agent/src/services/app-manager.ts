@@ -14,6 +14,7 @@ import * as path from "node:path";
 import { logger } from "@elizaos/core";
 import type { IAgentRuntime } from "@elizaos/core";
 import type {
+  AppLaunchDiagnostic,
   AppLaunchResult,
   AppSessionState,
   AppStopResult,
@@ -27,6 +28,11 @@ import type {
   RegistryPluginInfo,
   RegistrySearchResult,
 } from "./plugin-manager-types";
+import {
+  importAppPlugin,
+  importAppRouteModule,
+  packageNameToAppSlug,
+} from "./app-package-modules";
 import { getPluginInfo, getRegistryPlugins } from "./registry-client";
 
 const LOCAL_PLUGINS_DIR = "plugins";
@@ -80,6 +86,45 @@ interface ActiveAppSession {
   launchUrl: string | null;
   viewerUrl: string | null;
   startedAt: string;
+}
+
+function resolveDisplayViewerInfo(
+  viewer: RegistryPluginInfo["viewer"],
+): RegistryPluginInfo["viewer"] {
+  if (!viewer) return viewer;
+
+  const embedParams = viewer.embedParams
+    ? Object.fromEntries(
+        Object.entries(viewer.embedParams)
+          .map(([key, value]) => [key, substituteTemplateVars(value).trim()])
+          .filter(([, value]) => value.length > 0),
+      )
+    : undefined;
+
+  return {
+    ...viewer,
+    url: substituteTemplateVars(viewer.url),
+    embedParams,
+  };
+}
+
+function flattenAppInfo<T extends RegistryPluginInfo>(appInfo: T): T {
+  const meta = appInfo.appMeta;
+  if (!meta) return appInfo;
+  return {
+    ...appInfo,
+    displayName: meta.displayName ?? appInfo.displayName,
+    launchType: meta.launchType ?? appInfo.launchType,
+    launchUrl: substituteTemplateVars(
+      meta.launchUrl ?? appInfo.launchUrl ?? "",
+    ) || null,
+    icon: meta.icon ?? appInfo.icon,
+    category: meta.category ?? appInfo.category,
+    capabilities: meta.capabilities ?? appInfo.capabilities,
+    uiExtension: meta.uiExtension ?? appInfo.uiExtension,
+    viewer: resolveDisplayViewerInfo(meta.viewer ?? appInfo.viewer),
+    session: meta.session ?? appInfo.session,
+  };
 }
 
 function resolvePluginPackageName(appInfo: RegistryPluginInfo): string {
@@ -197,11 +242,28 @@ function buildViewerUrl(
   const [pathPart, queryPartRaw] = beforeHash.split("?", 2);
   const queryParams = new URLSearchParams(queryPartRaw ?? "");
   for (const [key, rawValue] of Object.entries(embedParams)) {
-    queryParams.set(key, substituteTemplateVars(rawValue));
+    const nextValue = substituteTemplateVars(rawValue).trim();
+    if (!nextValue) {
+      queryParams.delete(key);
+      continue;
+    }
+    queryParams.set(key, nextValue);
   }
   const query = queryParams.toString();
   const hash = hashPartRaw ? `#${hashPartRaw}` : "";
   return `${pathPart}${query.length > 0 ? `?${query}` : ""}${hash}`;
+}
+
+function resolveViewerEmbedParams(
+  embedParams?: Record<string, string>,
+): Record<string, string> | undefined {
+  if (!embedParams) return undefined;
+  const resolved = Object.fromEntries(
+    Object.entries(embedParams)
+      .map(([key, value]) => [key, substituteTemplateVars(value).trim()])
+      .filter(([, value]) => value.length > 0),
+  );
+  return Object.keys(resolved).length > 0 ? resolved : undefined;
 }
 
 function normalizeSafeAppUrl(url: string): string | null {
@@ -293,7 +355,9 @@ function buildViewerConfig(
         `[app-manager] ${appInfo.name} requires postMessage auth but no auth payload was generated.`,
       );
     }
-    const resolvedEmbedParams = { ...(viewerInfo.embedParams ?? {}) };
+    const resolvedEmbedParams = {
+      ...(resolveViewerEmbedParams(viewerInfo.embedParams) ?? {}),
+    };
     if (
       appInfo.name === HYPERSCAPE_APP_NAME &&
       authMessage?.followEntity &&
@@ -301,8 +365,12 @@ function buildViewerConfig(
     ) {
       resolvedEmbedParams.followEntity = authMessage.followEntity;
     }
+    const finalEmbedParams =
+      Object.keys(resolvedEmbedParams).length > 0
+        ? resolvedEmbedParams
+        : undefined;
     const viewerUrl = normalizeSafeAppUrl(
-      buildViewerUrl(viewerInfo.url, resolvedEmbedParams),
+      buildViewerUrl(viewerInfo.url, finalEmbedParams),
     );
     if (!viewerUrl) {
       throw new Error(
@@ -312,7 +380,7 @@ function buildViewerConfig(
 
     return {
       url: viewerUrl,
-      embedParams: resolvedEmbedParams,
+      embedParams: finalEmbedParams,
       postMessageAuth,
       sandbox: viewerInfo.sandbox ?? DEFAULT_VIEWER_SANDBOX,
       authMessage,
@@ -365,15 +433,151 @@ function buildAppSession(
       authMessage?.characterId ?? resolveSettingLike(runtime, "HYPERSCAPE_CHARACTER_ID"),
     followEntity:
       authMessage?.followEntity ?? authMessage?.characterId ?? undefined,
-    canSendCommands: appInfo.session.features?.includes("commands") ?? false,
-    controls: [
-      ...(appInfo.session.features?.includes("pause") ? (["pause"] as const) : []),
-      ...(appInfo.session.features?.includes("resume")
-        ? (["resume"] as const)
-        : []),
-    ],
+    canSendCommands: false,
+    controls: [],
     summary: "Connecting session...",
   };
+}
+
+async function resolveLaunchSession(
+  appInfo: RegistryAppPlugin,
+  viewer: AppLaunchResult["viewer"] | null,
+  launchUrl: string | null,
+  runtime: IAgentRuntime | null,
+): Promise<AppSessionState | null> {
+  const slug = packageNameToAppSlug(appInfo.name);
+  if (!slug) {
+    return buildAppSession(appInfo, viewer?.authMessage, runtime);
+  }
+
+  const routeModule = await importAppRouteModule(slug);
+  if (typeof routeModule?.resolveLaunchSession === "function") {
+    return routeModule.resolveLaunchSession({
+      appName: appInfo.name,
+      launchUrl,
+      runtime,
+      viewer,
+    });
+  }
+
+  return buildAppSession(appInfo, viewer?.authMessage, runtime);
+}
+
+function isRuntimePluginActive(
+  appInfo: RegistryAppPlugin,
+  runtime: IAgentRuntime | null,
+): boolean {
+  if (!runtime || !Array.isArray(runtime.plugins)) {
+    return false;
+  }
+
+  const pluginNames = new Set<string>([
+    appInfo.name,
+    appInfo.runtimePlugin ?? resolvePluginPackageName(appInfo),
+  ]);
+  return runtime.plugins.some(
+    (plugin) =>
+      typeof plugin?.name === "string" && pluginNames.has(plugin.name),
+  );
+}
+
+function collectHyperscapeLaunchDiagnostics(
+  appInfo: RegistryAppPlugin,
+  viewer: AppViewerConfig | null,
+  session: AppSessionState | null,
+  runtime: IAgentRuntime | null,
+): AppLaunchDiagnostic[] {
+  if (appInfo.name !== HYPERSCAPE_APP_NAME) {
+    return [];
+  }
+
+  const diagnostics: AppLaunchDiagnostic[] = [];
+  const authToken = resolveSettingLike(runtime, "HYPERSCAPE_AUTH_TOKEN");
+  const characterId = resolveSettingLike(runtime, "HYPERSCAPE_CHARACTER_ID");
+  const requestedIframeAuth = Boolean(appInfo.viewer?.postMessageAuth);
+
+  if (requestedIframeAuth && !viewer?.authMessage) {
+    const missing: string[] = [];
+    if (!authToken) missing.push("HYPERSCAPE_AUTH_TOKEN");
+    if (!characterId) missing.push("HYPERSCAPE_CHARACTER_ID");
+    diagnostics.push({
+      code: "hyperscape-auth-unavailable",
+      severity: "error",
+      message:
+        missing.length > 0
+          ? `Hyperscape auto-sign-in is unavailable because ${missing.join(" and ")} ${missing.length === 1 ? "is" : "are"} not configured for this agent.`
+          : "Hyperscape auto-sign-in is unavailable for this agent.",
+    });
+  }
+
+  if (runtime && !session && !isRuntimePluginActive(appInfo, runtime)) {
+    diagnostics.push({
+      code: "hyperscape-runtime-bridge-inactive",
+      severity: "warning",
+      message:
+        "The Hyperscape runtime bridge is not active in this agent, so Milady cannot attach to a live in-world session yet.",
+    });
+  }
+
+  if (runtime && !session && characterId) {
+    diagnostics.push({
+      code: "hyperscape-session-not-found",
+      severity: "warning",
+      message:
+        "No live Hyperscape session matched this agent. Start or reconnect the Hyperscape agent in-world, then launch again.",
+    });
+  }
+
+  return diagnostics;
+}
+
+function collectLaunchDiagnostics(
+  appInfo: RegistryAppPlugin,
+  viewer: AppViewerConfig | null,
+  session: AppSessionState | null,
+  runtime: IAgentRuntime | null,
+): AppLaunchDiagnostic[] {
+  if (appInfo.name === HYPERSCAPE_APP_NAME) {
+    return collectHyperscapeLaunchDiagnostics(appInfo, viewer, session, runtime);
+  }
+  return [];
+}
+
+async function ensureRuntimePluginRegistered(
+  appInfo: RegistryAppPlugin,
+  runtime: IAgentRuntime | null,
+  isLocal: boolean,
+): Promise<boolean> {
+  if (!runtime) {
+    return false;
+  }
+
+  const pluginNames = new Set<string>([
+    appInfo.name,
+    appInfo.runtimePlugin ?? resolvePluginPackageName(appInfo),
+  ]);
+
+  if (
+    Array.isArray(runtime.plugins) &&
+    runtime.plugins.some(
+      (plugin) =>
+        typeof plugin?.name === "string" && pluginNames.has(plugin.name),
+    )
+  ) {
+    return true;
+  }
+
+  if (!isLocal) {
+    return false;
+  }
+
+  const plugin = await importAppPlugin(appInfo.name);
+  if (!plugin) {
+    throw new Error(`Local app plugin "${appInfo.name}" could not be loaded.`);
+  }
+
+  await runtime.registerPlugin(plugin);
+  return true;
 }
 
 export class AppManager {
@@ -403,23 +607,7 @@ export class AppManager {
       const npmPackage = plugin.npm.package.toLowerCase();
       return name.includes("/app-") || npmPackage.includes("/app-");
     });
-    // Flatten appMeta into top-level fields for the frontend
-    return apps.map((p) => {
-      const meta = p.appMeta;
-      if (!meta) return p;
-      return {
-        ...p,
-        displayName: meta.displayName,
-        launchType: meta.launchType,
-        launchUrl: meta.launchUrl,
-        icon: meta.icon,
-        category: meta.category,
-        capabilities: meta.capabilities,
-        uiExtension: meta.uiExtension,
-        viewer: meta.viewer,
-        session: meta.session,
-      };
-    });
+    return apps.map(flattenAppInfo);
   }
 
   async search(
@@ -440,7 +628,22 @@ export class AppManager {
     pluginManager: PluginManagerLike,
     name: string,
   ): Promise<RegistryPluginInfo | null> {
-    return pluginManager.getRegistryPlugin(name);
+    let appInfo = await pluginManager.getRegistryPlugin(name);
+    const localPluginInfo = await getPluginInfo(name);
+
+    if (localPluginInfo) {
+      const meta = localPluginInfo.appMeta;
+      if (!appInfo) {
+        appInfo = { ...localPluginInfo };
+        appInfo.appMeta = meta;
+        mergeAppMeta(appInfo, meta);
+      } else {
+        appInfo.appMeta = meta ?? appInfo.appMeta;
+        mergeAppMeta(appInfo, meta);
+      }
+    }
+
+    return appInfo ? flattenAppInfo(appInfo) : null;
   }
 
   /**
@@ -461,19 +664,22 @@ export class AppManager {
     let appInfo = (await pluginManager.getRegistryPlugin(
       name,
     )) as RegistryAppPlugin | null;
+    let localPluginInfo: Awaited<ReturnType<typeof getPluginInfo>> | null = null;
     // Supplement with local registry metadata since the elizaos plugin-manager
     // service doesn't include our local workspace app discovery.
     try {
-      const localInfo = await getPluginInfo(name);
-      if (localInfo) {
-        const meta = localInfo.appMeta;
+      localPluginInfo = await getPluginInfo(name);
+      if (localPluginInfo) {
+        const meta = localPluginInfo.appMeta;
         if (!appInfo) {
-          appInfo = { ...localInfo } as RegistryAppPlugin;
+          appInfo = { ...localPluginInfo } as RegistryAppPlugin;
+          appInfo.appMeta = meta;
           mergeAppMeta(appInfo, meta);
         } else if (meta && !appInfo.viewer) {
           // Merge local metadata into existing registry entry
+          appInfo.appMeta = meta;
           mergeAppMeta(appInfo, meta);
-          appInfo.kind = localInfo.kind ?? appInfo.kind;
+          appInfo.kind = localPluginInfo.kind ?? appInfo.kind;
         }
       }
     } catch {
@@ -488,7 +694,7 @@ export class AppManager {
     const pluginName = appInfo.runtimePlugin ?? resolvePluginPackageName(appInfo);
 
     // Check if this is a local plugin (already present in plugins/ directory)
-    const isLocal = isLocalPlugin(appInfo);
+    const isLocal = Boolean(localPluginInfo?.localPath) || isLocalPlugin(appInfo);
 
     // Check if the plugin is already installed
     const installed = await pluginManager.listInstalledPlugins();
@@ -504,6 +710,11 @@ export class AppManager {
       );
     } else if (!alreadyInstalled) {
       if (isAutoInstallable(appInfo)) {
+        if (!_runtime) {
+          throw new Error(
+            `Launching "${name}" requires a running agent runtime because plugin "${pluginName}" is not installed.`,
+          );
+        }
         logger.info(`[app-manager] Installing plugin for app: ${pluginName}`);
         const result = await pluginManager.installPlugin(
           pluginName,
@@ -528,6 +739,15 @@ export class AppManager {
       logger.info(`[app-manager] Plugin already installed: ${pluginName}`);
     }
 
+    const runtimePluginRegistered = await ensureRuntimePluginRegistered(
+      appInfo,
+      _runtime ?? null,
+      isLocal,
+    );
+    if (runtimePluginRegistered) {
+      pluginInstalled = true;
+    }
+
     // Build viewer config from registry app metadata
     const resolvedLaunchUrl = appInfo.launchUrl
       ? substituteTemplateVars(appInfo.launchUrl)
@@ -541,7 +761,15 @@ export class AppManager {
       );
     }
     const viewer = buildViewerConfig(appInfo, launchUrl, _runtime);
-    const session = buildAppSession(appInfo, viewer?.authMessage, _runtime);
+    const session = _runtime
+      ? await resolveLaunchSession(appInfo, viewer, launchUrl, _runtime)
+      : buildAppSession(appInfo, viewer?.authMessage, _runtime);
+    const diagnostics = collectLaunchDiagnostics(
+      appInfo,
+      viewer,
+      session,
+      _runtime ?? null,
+    );
     this.activeSessions.set(name, {
       appName: name,
       pluginName,
@@ -559,6 +787,7 @@ export class AppManager {
       launchUrl,
       viewer,
       session,
+      diagnostics,
     };
   }
 

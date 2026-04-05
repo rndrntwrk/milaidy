@@ -52,6 +52,8 @@ const HYPERSCAPE_LOCAL_PLUGIN: RegistryPluginInfo = {
   viewer: {
     url: "http://localhost:3333",
     embedParams: {
+      embedded: "true",
+      mode: "spectator",
       followEntity: "{HYPERSCAPE_CHARACTER_ID}",
     },
     postMessageAuth: true,
@@ -238,7 +240,7 @@ describe("Hyperscape E2E Integration", () => {
 
       expect(result.viewer).toBeDefined();
       expect(result.viewer?.url).toBe(
-        "http://localhost:3333?followEntity=test-character-id",
+        "http://localhost:3333?embedded=true&mode=spectator&followEntity=test-character-id",
       );
       expect(result.viewer?.authMessage).toEqual(
         expect.objectContaining({
@@ -321,7 +323,7 @@ describe("Hyperscape E2E Integration", () => {
         "@elizaos/app-hyperscape",
       );
       expect(launchResult.viewer?.url).toBe(
-        "http://localhost:3333?followEntity=test-character-id",
+        "http://localhost:3333?embedded=true&mode=spectator&followEntity=test-character-id",
       );
       expect(launchResult.session?.mode).toBe("spectate-and-steer");
 

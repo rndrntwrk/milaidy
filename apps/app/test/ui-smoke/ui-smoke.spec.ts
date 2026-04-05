@@ -28,7 +28,10 @@ const VIEWS: ViewSpec[] = [
     path: "/chat",
     label: "Chat",
     allowRedirectTo: "/companion",
-    readyChecks: [{ selector: '[aria-label="Chat workspace"]' }],
+    readyChecks: [
+      { selector: '[aria-label="Chat workspace"]' },
+      { selector: '[data-testid="companion-root"]' },
+    ],
     readyCheckMode: "any",
   },
   {

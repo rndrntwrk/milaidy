@@ -301,6 +301,16 @@ class FakeAgentRuntime implements IAgentRuntime {
   getParticipantsForEntity = async () => [];
 }
 
+function jsonResponse(payload: unknown, init?: ResponseInit): Response {
+  return new Response(JSON.stringify(payload), {
+    status: init?.status ?? 200,
+    headers: {
+      "content-type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+}
+
 describe("AppManager Integration", () => {
   let appManager: AppManager;
   let pluginManager: PluginManagerService;
@@ -384,7 +394,12 @@ describe("AppManager Integration", () => {
       installPath: "/tmp",
     });
 
-    const result = await appManager.launch(pluginManager, APP_NAME);
+    const result = await appManager.launch(
+      pluginManager,
+      APP_NAME,
+      undefined,
+      runtime,
+    );
 
     expect(installSpy).toHaveBeenCalled();
     expect(result.pluginInstalled).toBe(true);
@@ -743,11 +758,12 @@ describe("App URL template security", () => {
     );
     expect(result.viewer?.url).toBeDefined();
     expect(result.viewer?.url).not.toContain("super-secret-token");
+    expect(result.viewer?.embedParams).toBeUndefined();
 
     const viewerUrl = new URL(result.viewer?.url ?? "https://viewer.example");
     expect(viewerUrl.searchParams.get("bot")).toBe("allowlisted-bot");
     expect(viewerUrl.searchParams.get("token")).toBe("");
-    expect(viewerUrl.searchParams.get("session")).toBe("");
+    expect(viewerUrl.searchParams.get("session")).toBeNull();
   });
 
   it("still interpolates allowlisted env vars", async () => {
@@ -853,6 +869,55 @@ describe("App session launch metadata", () => {
 
   it("builds Hyperscape viewer auth and spectate session state", async () => {
     process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
+    global.fetch = vi.fn().mockImplementation((input: string | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/embedded-agents")) {
+        return Promise.resolve(
+          jsonResponse({
+            success: true,
+            agents: [
+              {
+                agentId: "11111111-1111-1111-1111-111111111111",
+                characterId: "character-456",
+                entityId: "character-456",
+                name: "Chen",
+                state: "running",
+                lastActivity: 1_710_000_000_000,
+                startedAt: 1_709_999_000_000,
+              },
+            ],
+          }),
+        );
+      }
+      if (url.includes("/api/agents/11111111-1111-1111-1111-111111111111/goal")) {
+        return Promise.resolve(
+          jsonResponse({
+            success: true,
+            goal: { description: "Scout the moon gate", type: "scout" },
+            availableGoals: [{ description: "Hold position", type: "idle" }],
+            goalsPaused: false,
+          }),
+        );
+      }
+      if (
+        url.includes(
+          "/api/agents/11111111-1111-1111-1111-111111111111/quick-actions",
+        )
+      ) {
+        return Promise.resolve(
+          jsonResponse({
+            success: true,
+            quickCommands: [
+              { label: "Check the gate", command: "Check the moon gate" },
+            ],
+            nearbyLocations: [{ name: "Moon Gate" }],
+            availableGoals: [{ description: "Scout the moon gate", type: "scout" }],
+          }),
+        );
+      }
+      return Promise.reject(new Error(`Unexpected Hyperscape fetch: ${url}`));
+    });
+
     const appInfo = createRegistryApp({
       viewer: {
         url: "{HYPERSCAPE_CLIENT_URL}",
@@ -890,6 +955,7 @@ describe("App session launch metadata", () => {
       characterId: "character-456",
       followEntity: "character-456",
     });
+    expect(result.diagnostics ?? []).toEqual([]);
     expect(result.session).toEqual(
       expect.objectContaining({
         sessionId: "11111111-1111-1111-1111-111111111111",
@@ -905,6 +971,51 @@ describe("App session launch metadata", () => {
 
   it("disables Hyperscape iframe auth when no auth token exists", async () => {
     process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
+    global.fetch = vi.fn().mockImplementation((input: string | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/embedded-agents")) {
+        return Promise.resolve(
+          jsonResponse({
+            success: true,
+            agents: [
+              {
+                agentId: "22222222-2222-2222-2222-222222222222",
+                characterId: "character-789",
+                entityId: "character-789",
+                name: "Chen",
+                state: "running",
+              },
+            ],
+          }),
+        );
+      }
+      if (url.includes("/api/agents/22222222-2222-2222-2222-222222222222/goal")) {
+        return Promise.resolve(
+          jsonResponse({
+            success: true,
+            goal: { description: "Roam freely", type: "wander" },
+            availableGoals: [],
+            goalsPaused: false,
+          }),
+        );
+      }
+      if (
+        url.includes(
+          "/api/agents/22222222-2222-2222-2222-222222222222/quick-actions",
+        )
+      ) {
+        return Promise.resolve(
+          jsonResponse({
+            success: true,
+            quickCommands: [{ label: "Report status", command: "Report status" }],
+            nearbyLocations: [],
+            availableGoals: [],
+          }),
+        );
+      }
+      return Promise.reject(new Error(`Unexpected Hyperscape fetch: ${url}`));
+    });
+
     const appInfo = createRegistryApp({
       viewer: {
         url: "{HYPERSCAPE_CLIENT_URL}",
@@ -934,11 +1045,76 @@ describe("App session launch metadata", () => {
 
     expect(result.viewer?.postMessageAuth).toBe(false);
     expect(result.viewer?.authMessage).toBeUndefined();
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "hyperscape-auth-unavailable",
+          severity: "error",
+        }),
+      ]),
+    );
     expect(result.session).toEqual(
       expect.objectContaining({
         sessionId: "22222222-2222-2222-2222-222222222222",
         characterId: "character-789",
       }),
+    );
+  });
+
+  it("reports Hyperscape launch diagnostics when no live agent session can be attached", async () => {
+    process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
+    global.fetch = vi.fn().mockResolvedValue(
+      jsonResponse({
+        success: true,
+        agents: [],
+      }),
+    );
+
+    const appInfo = createRegistryApp({
+      viewer: {
+        url: "{HYPERSCAPE_CLIENT_URL}",
+        embedParams: {
+          embedded: "true",
+          mode: "spectator",
+          followEntity: "{HYPERSCAPE_CHARACTER_ID}",
+        },
+        postMessageAuth: true,
+      },
+      session: {
+        mode: "spectate-and-steer",
+        features: ["commands"],
+      },
+    });
+
+    const runtime = new FakeAgentRuntime();
+    runtime.agentId =
+      "33333333-3333-3333-3333-333333333333" as FakeAgentRuntime["agentId"];
+
+    const appManager = new AppManager();
+    const result = await appManager.launch(
+      createPluginManagerStub(appInfo),
+      appInfo.name,
+      undefined,
+      runtime,
+    );
+
+    expect(result.viewer?.postMessageAuth).toBe(false);
+    expect(result.viewer?.embedParams).toEqual({
+      embedded: "true",
+      mode: "spectator",
+    });
+    expect(result.session).toBeNull();
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "hyperscape-auth-unavailable",
+          severity: "error",
+        }),
+        expect.objectContaining({
+          code: "hyperscape-runtime-bridge-inactive",
+          severity: "warning",
+        }),
+      ]),
     );
   });
 });

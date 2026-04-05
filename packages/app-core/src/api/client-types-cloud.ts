@@ -295,6 +295,14 @@ export interface AppSessionActionResult {
   session?: AppSessionState | null;
 }
 
+export type AppLaunchDiagnosticSeverity = "info" | "warning" | "error";
+
+export interface AppLaunchDiagnostic {
+  code: string;
+  severity: AppLaunchDiagnosticSeverity;
+  message: string;
+}
+
 export interface RegistryAppInfo {
   name: string;
   displayName: string;
@@ -336,6 +344,7 @@ export interface AppLaunchResult {
   launchUrl: string | null;
   viewer: AppViewerConfig | null;
   session: AppSessionState | null;
+  diagnostics?: AppLaunchDiagnostic[];
 }
 
 export interface AppStopResult {
