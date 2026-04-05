@@ -29,7 +29,6 @@ vi.mock("@elizaos/plugin-elevenlabs", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-elizacloud", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-experience", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-form", () => ({ default: {} }));
-vi.mock("@elizaos/plugin-goals", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-google-genai", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-groq", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-knowledge", () => ({ default: {} }));
@@ -231,7 +230,7 @@ describe("collectPluginNames", () => {
 
   it("includes all core plugins for an empty config", () => {
     // Guard against accidental drift in the default runtime contract.
-    expect(CORE_PLUGINS).toHaveLength(14);
+    expect(CORE_PLUGINS).toHaveLength(12);
 
     const expectedCorePlugins = [
       "@elizaos/plugin-sql",
@@ -246,8 +245,6 @@ describe("collectPluginNames", () => {
       "@elizaos/plugin-commands",
       "@elizaos/plugin-plugin-manager",
       "@miladyai/plugin-roles",
-      "@elizaos/plugin-todo",
-      "@elizaos/plugin-goals",
     ];
     const names = collectPluginNames({} as ElizaConfig);
     for (const plugin of expectedCorePlugins) {

@@ -29,7 +29,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // ---------------------------------------------------------------------------
 import { runFirstTimeSetup } from "./first-time-setup";
 import { resolvePlugins } from "./plugin-resolver";
-import { ensureRequiredPluginSchemas } from "./schema-backfill";
 
 export {
   CHANNEL_PLUGIN_MAP,
@@ -67,7 +66,6 @@ import * as pluginCron from "@elizaos/plugin-cron";
 import * as pluginElizacloud from "@elizaos/plugin-elizacloud";
 import * as pluginExperience from "@elizaos/plugin-experience";
 import * as pluginForm from "@elizaos/plugin-form";
-import * as rawPluginGoals from "@elizaos/plugin-goals";
 import * as pluginKnowledge from "@elizaos/plugin-knowledge";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
 import * as pluginOllama from "@elizaos/plugin-ollama";
@@ -79,7 +77,6 @@ import * as pluginRolodex from "@elizaos/plugin-rolodex";
 import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
 import * as pluginShell from "@elizaos/plugin-shell";
 import * as pluginSql from "@elizaos/plugin-sql";
-import * as rawPluginTodo from "@elizaos/plugin-todo";
 import * as pluginTrajectoryLogger from "@elizaos/plugin-trajectory-logger";
 import * as pluginTrust from "@elizaos/plugin-trust";
 import * as pluginRoles from "@miladyai/plugin-roles";
@@ -134,7 +131,6 @@ import { createElizaPlugin } from "./eliza-plugin";
 import { detectEmbeddingPreset } from "./embedding-presets";
 import * as pluginAgentOrchestrator from "./agent-orchestrator-compat";
 import { installRuntimePluginLifecycle } from "./plugin-lifecycle";
-import { patchPluginModuleForAdminOnly } from "./plugin-access-control";
 import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence";
 
 type SignalShutdownContext = {
@@ -146,18 +142,6 @@ type SignalShutdownContext = {
 let activeSignalShutdownContext: SignalShutdownContext | null = null;
 let signalHandlersRegistered = false;
 let signalShutdownPromise: Promise<void> | null = null;
-
-const pluginTodo = patchPluginModuleForAdminOnly(
-  rawPluginTodo,
-  "@elizaos/plugin-todo",
-  {
-    stripServiceTypes: ["TODO_REMINDER", "TodoReminderService"],
-  },
-);
-const pluginGoals = patchPluginModuleForAdminOnly(
-  rawPluginGoals,
-  "@elizaos/plugin-goals",
-);
 
 function registerSignalShutdownHandlers(context: SignalShutdownContext): void {
   activeSignalShutdownContext = context;
@@ -249,8 +233,6 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-trust": pluginTrust,
   "@miladyai/plugin-selfcontrol": pluginSelfControl,
   "@miladyai/plugin-roles": pluginRoles,
-  "@elizaos/plugin-todo": pluginTodo,
-  "@elizaos/plugin-goals": pluginGoals,
   "@elizaos/plugin-personality": pluginPersonality,
   "@elizaos/plugin-experience": pluginExperience,
 };
@@ -3416,7 +3398,6 @@ export async function startEliza(
     await runtime.initialize();
     await prepareRuntimeForTrajectoryCapture(runtime, "runtime.initialize()");
 
-    await ensureRequiredPluginSchemas(runtime, resolvedPlugins);
     try {
       await seedBundledKnowledge(runtime);
     } catch (err) {

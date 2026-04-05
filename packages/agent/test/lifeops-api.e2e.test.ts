@@ -1,171 +1,8 @@
 import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import type { AgentRuntime, Task, UUID } from "@elizaos/core";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { req } from "../../../test/helpers/http";
-
-const {
-  mockCreateTodoDataService,
-  mockCreateGoalDataService,
-  todoStore,
-  goalStore,
-} = vi.hoisted(() => {
-  type TodoRecord = {
-    id: UUID;
-    agentId: UUID;
-    worldId: UUID;
-    roomId: UUID;
-    entityId: UUID;
-    name: string;
-    description: string;
-    type: string;
-    priority: number | null;
-    isUrgent: boolean;
-    isCompleted: boolean;
-    dueDate: Date | undefined;
-    completedAt?: Date;
-    metadata: Record<string, unknown>;
-    tags: string[];
-  };
-  type GoalRecord = {
-    id: UUID;
-    agentId: UUID;
-    ownerType: "agent" | "entity";
-    ownerId: UUID;
-    name: string;
-    description: string;
-    isCompleted: boolean;
-    completedAt?: Date;
-    metadata: Record<string, unknown>;
-    tags: string[];
-  };
-
-  const todoStore = new Map<UUID, TodoRecord>();
-  const goalStore = new Map<UUID, GoalRecord>();
-
-  const todoDataService = {
-    async createTodo(params: Omit<TodoRecord, "id" | "isCompleted" | "tags"> & { tags?: string[] }): Promise<UUID> {
-      const id = crypto.randomUUID() as UUID;
-      todoStore.set(id, {
-        id,
-        agentId: params.agentId,
-        worldId: params.worldId,
-        roomId: params.roomId,
-        entityId: params.entityId,
-        name: params.name,
-        description: params.description ?? "",
-        type: params.type,
-        priority: params.priority ?? null,
-        isUrgent: params.isUrgent === true,
-        isCompleted: false,
-        dueDate: params.dueDate,
-        metadata: params.metadata ?? {},
-        tags: [...(params.tags ?? [])],
-      });
-      return id;
-    },
-    async getTodo(todoId: UUID): Promise<TodoRecord | null> {
-      return todoStore.get(todoId) ?? null;
-    },
-    async getTodos(filters?: { agentId?: UUID }): Promise<TodoRecord[]> {
-      return [...todoStore.values()].filter((todo) =>
-        filters?.agentId ? todo.agentId === filters.agentId : true,
-      );
-    },
-    async updateTodo(
-      todoId: UUID,
-      updates: Partial<Omit<TodoRecord, "id" | "agentId" | "worldId" | "roomId" | "entityId" | "tags">>,
-    ): Promise<boolean> {
-      const current = todoStore.get(todoId);
-      if (!current) {
-        return false;
-      }
-      todoStore.set(todoId, {
-        ...current,
-        ...updates,
-        metadata:
-          updates.metadata !== undefined ? updates.metadata : current.metadata,
-      });
-      return true;
-    },
-    async deleteTodo(todoId: UUID): Promise<boolean> {
-      return todoStore.delete(todoId);
-    },
-    async addTags(todoId: UUID, tags: string[]): Promise<void> {
-      const current = todoStore.get(todoId);
-      if (!current) {
-        return;
-      }
-      current.tags = [...new Set([...current.tags, ...tags])];
-      todoStore.set(todoId, current);
-    },
-    async removeTags(todoId: UUID, tags: string[]): Promise<void> {
-      const current = todoStore.get(todoId);
-      if (!current) {
-        return;
-      }
-      const blocked = new Set(tags);
-      current.tags = current.tags.filter((tag) => !blocked.has(tag));
-      todoStore.set(todoId, current);
-    },
-  };
-
-  const goalDataService = {
-    async createGoal(params: Omit<GoalRecord, "id" | "isCompleted" | "tags"> & { tags?: string[] }): Promise<UUID> {
-      const id = crypto.randomUUID() as UUID;
-      goalStore.set(id, {
-        id,
-        agentId: params.agentId,
-        ownerType: params.ownerType,
-        ownerId: params.ownerId,
-        name: params.name,
-        description: params.description ?? "",
-        isCompleted: false,
-        metadata: params.metadata ?? {},
-        tags: [...(params.tags ?? [])],
-      });
-      return id;
-    },
-    async getGoal(goalId: UUID): Promise<GoalRecord | null> {
-      return goalStore.get(goalId) ?? null;
-    },
-    async updateGoal(
-      goalId: UUID,
-      updates: Partial<Omit<GoalRecord, "id" | "agentId" | "ownerType" | "ownerId" | "tags"> & { tags?: string[] }>,
-    ): Promise<boolean> {
-      const current = goalStore.get(goalId);
-      if (!current) {
-        return false;
-      }
-      goalStore.set(goalId, {
-        ...current,
-        ...updates,
-        metadata:
-          updates.metadata !== undefined ? updates.metadata : current.metadata,
-        tags: updates.tags !== undefined ? [...updates.tags] : current.tags,
-      });
-      return true;
-    },
-    async deleteGoal(goalId: UUID): Promise<boolean> {
-      return goalStore.delete(goalId);
-    },
-  };
-
-  return {
-    mockCreateTodoDataService: vi.fn(() => todoDataService),
-    mockCreateGoalDataService: vi.fn(() => goalDataService),
-    todoStore,
-    goalStore,
-  };
-});
-
-vi.mock("@elizaos/plugin-todo", () => ({
-  createTodoDataService: mockCreateTodoDataService,
-}));
-
-vi.mock("@elizaos/plugin-goals", () => ({
-  createGoalDataService: mockCreateGoalDataService,
-}));
 
 import { startApiServer } from "../src/api/server";
 
@@ -244,13 +81,6 @@ function createRuntimeForLifeOpsApiTests(): AgentRuntime {
 }
 
 describe("Life-ops API E2E", () => {
-  beforeEach(() => {
-    todoStore.clear();
-    goalStore.clear();
-    mockCreateTodoDataService.mockClear();
-    mockCreateGoalDataService.mockClear();
-  });
-
   describe("without runtime", () => {
     let port: number;
     let close: () => Promise<void>;
@@ -475,7 +305,7 @@ describe("Life-ops API E2E", () => {
       ).toBe(definitionId);
     });
 
-    it("separates owner lifeops from agent ops and mirrors agent records into plugins", async () => {
+    it("separates owner lifeops from agent ops", async () => {
       const now = new Date();
       const minuteOfDay = now.getUTCHours() * 60 + now.getUTCMinutes();
 
@@ -493,12 +323,6 @@ describe("Life-ops API E2E", () => {
       expect(agentGoal.subjectType).toBe("agent");
       expect(agentGoal.visibilityScope).toBe("agent_and_admin");
       expect(agentGoal.contextPolicy).toBe("never");
-      expect(
-        (agentGoal.metadata as Record<string, unknown>).pluginGoalMirror,
-      ).toMatchObject({
-        externalId: expect.any(String),
-        hiddenFromWorkbench: true,
-      });
 
       const agentDefinitionCreate = await req(
         port,
@@ -536,12 +360,6 @@ describe("Life-ops API E2E", () => {
       expect(agentDefinition.subjectType).toBe("agent");
       expect(agentDefinition.visibilityScope).toBe("agent_and_admin");
       expect(agentDefinition.contextPolicy).toBe("never");
-      expect(
-        (agentDefinition.metadata as Record<string, unknown>).pluginTodoMirror,
-      ).toMatchObject({
-        externalId: expect.any(String),
-        hiddenFromWorkbench: true,
-      });
 
       const overview = await req(port, "GET", "/api/lifeops/overview");
       expect(overview.status).toBe(200);

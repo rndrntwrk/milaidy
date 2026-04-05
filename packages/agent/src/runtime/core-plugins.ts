@@ -22,8 +22,6 @@ export const CORE_PLUGINS: readonly string[] = [
   // "@elizaos/plugin-rolodex", // contact graph and relationship/social memory
   // "@elizaos/plugin-trust", // trust scoring and policy signals
   "@miladyai/plugin-roles", // role-based access control (OWNER/ADMIN/NONE)
-  "@elizaos/plugin-todo", // todo/task management
-  "@elizaos/plugin-goals", // goal management
   // "@elizaos/plugin-personality", // personality coherence
   // "@elizaos/plugin-experience", // learning from interactions
 ];

@@ -157,10 +157,6 @@ import {
 } from "./google-oauth.js";
 import { normalizeGoogleCapabilities } from "./google-scopes.js";
 import {
-  syncAgentDefinitionTodoMirror,
-  syncAgentGoalMirror,
-} from "./plugin-bridge.js";
-import {
   createLifeOpsAuditEvent,
   createLifeOpsBrowserSession,
   createLifeOpsCalendarSyncState,
@@ -4047,17 +4043,7 @@ export class LifeOpsService {
       await this.repository.updateDefinition(definition);
     }
     await this.syncGoalLink(definition);
-    const occurrences = await this.refreshDefinitionOccurrences(definition);
-    const mirroredDefinition = await syncAgentDefinitionTodoMirror({
-      runtime: this.runtime,
-      previous: null,
-      definition,
-      occurrences,
-    });
-    if (mirroredDefinition !== definition) {
-      definition = mirroredDefinition;
-      await this.repository.updateDefinition(definition);
-    }
+    await this.refreshDefinitionOccurrences(definition);
     await this.recordAudit(
       "definition_created",
       "definition",
@@ -4162,19 +4148,9 @@ export class LifeOpsService {
     );
     await this.repository.updateDefinition(nextDefinition);
     await this.syncGoalLink(nextDefinition);
-    const occurrences =
-      nextDefinition.status === "active"
-        ? await this.refreshDefinitionOccurrences(nextDefinition)
-        : await this.repository.listOccurrencesForDefinition(
-            nextDefinition.agentId,
-            nextDefinition.id,
-          );
-    nextDefinition = await syncAgentDefinitionTodoMirror({
-      runtime: this.runtime,
-      previous: current.definition,
-      definition: nextDefinition,
-      occurrences,
-    });
+    if (nextDefinition.status === "active") {
+      await this.refreshDefinitionOccurrences(nextDefinition);
+    }
     await this.repository.updateDefinition(nextDefinition);
     await this.recordAudit(
       "definition_updated",
@@ -4218,7 +4194,7 @@ export class LifeOpsService {
     request: CreateLifeOpsGoalRequest,
   ): Promise<LifeOpsGoalRecord> {
     const ownership = this.normalizeOwnership(request.ownership);
-    let goal = createLifeOpsGoalDefinition({
+    const goal = createLifeOpsGoalDefinition({
       agentId: this.agentId(),
       ...ownership,
       title: requireNonEmptyString(request.title, "title"),
@@ -4248,12 +4224,6 @@ export class LifeOpsService {
       ),
     });
     await this.repository.createGoal(goal);
-    goal = await syncAgentGoalMirror({
-      runtime: this.runtime,
-      previous: null,
-      goal,
-    });
-    await this.repository.updateGoal(goal);
     await this.recordAudit(
       "goal_created",
       "goal",
@@ -4279,7 +4249,7 @@ export class LifeOpsService {
   ): Promise<LifeOpsGoalRecord> {
     const current = await this.getGoalRecord(goalId);
     const ownership = this.normalizeOwnership(request.ownership, current.goal);
-    let nextGoal: LifeOpsGoalDefinition = {
+    const nextGoal: LifeOpsGoalDefinition = {
       ...current.goal,
       ...ownership,
       title:
@@ -4323,11 +4293,6 @@ export class LifeOpsService {
           : current.goal.metadata,
       updatedAt: new Date().toISOString(),
     };
-    nextGoal = await syncAgentGoalMirror({
-      runtime: this.runtime,
-      previous: current.goal,
-      goal: nextGoal,
-    });
     await this.repository.updateGoal(nextGoal);
     await this.recordAudit(
       "goal_updated",
