@@ -24,8 +24,6 @@ export const CONNECTOR_PLUGINS: Record<string, string> = {
   farcaster: "@elizaos/plugin-farcaster",
   lens: "@elizaos/plugin-lens",
   msteams: "@elizaos/plugin-msteams",
-  mattermost: "@elizaos/plugin-mattermost",
-  googlechat: "@elizaos/plugin-google-chat",
   feishu: "@elizaos/plugin-feishu",
   matrix: "@elizaos/plugin-matrix",
   nostr: "@elizaos/plugin-nostr",
@@ -235,7 +233,16 @@ function addToAllowlist(
   reason: string,
 ): void {
   if (!allow.includes(pluginName) && !allow.includes(shortId)) {
-    allow.push(shortId);
+    // Push the FULL package name (not the short id). `collectPluginNames`
+    // in plugin-collector.ts resolves allow-list entries through
+    // `CHANNEL_PLUGIN_MAP[item] ?? OPTIONAL_PLUGIN_MAP[item] ?? item` —
+    // when a short id isn't in either map (e.g. "anthropic",
+    // "elizacloud", wallet plugins before the OPTIONAL_PLUGIN_MAP fix)
+    // it falls through to `item` as-is and `import("anthropic")` fails.
+    // Storing the package name makes the fall-through a no-op and also
+    // lets `collectPluginNames` treat it as a direct package reference
+    // regardless of whether a short-id mapping exists.
+    allow.push(pluginName);
     changes.push(`Auto-enabled plugin: ${pluginName} (${reason})`);
   }
 }

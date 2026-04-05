@@ -255,13 +255,25 @@ export async function resolvePlugins(
   const repairedInstallRecords = new Set<string>();
 
   // NOTE: Auto-enable runs before dependency validation intentionally.
-  // It mutates config.plugins.allow based on env vars and connector config
-  // so that collectPluginNames() includes auto-enabled plugins. Dependency
-  // validation happens later during plugin init when the runtime is available.
-  applyPluginAutoEnable({
+  // It returns a new config object (structuredClone under the hood) with
+  // `plugins.allow` populated based on env vars and connector configuration.
+  // We have to USE the returned config for collectPluginNames — the previous
+  // code discarded the return value and kept using the original `config`,
+  // which meant every env-gated plugin (plugin-evm, plugin-solana, etc.) was
+  // silently dropped. Capture the result and assign back so both the allow
+  // list and any downstream config reads see the mutation.
+  const autoEnableResult = applyPluginAutoEnable({
     config,
     env: process.env,
   } satisfies ApplyPluginAutoEnableParams);
+  if (autoEnableResult.changes.length > 0) {
+    logger.info(
+      `[eliza] Plugin auto-enable: ${autoEnableResult.changes.join("; ")}`,
+    );
+  }
+  // Merge the cloned plugins.allow back into the caller's config so both
+  // this function and subsequent consumers see the updated allow list.
+  config.plugins = autoEnableResult.config.plugins;
 
   const pluginsToLoad = collectPluginNames(config);
   const corePluginSet = new Set<string>(CORE_PLUGINS);
