@@ -23,7 +23,13 @@
  * symlink on POSIX, junction on Windows, idempotent replace) apply.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  symlinkSync,
+  unlinkSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createPackageLink } from "./setup-eliza-workspace.mjs";
@@ -115,6 +121,40 @@ export function linkExternalPlugins(
     )) {
       if (createPackageLink(linkPath, sourceDir)) {
         linked += 1;
+      }
+    }
+
+    // Bun's ESM resolver traverses the **real** path of a symlinked
+    // package, not the symlink location, when walking up to find
+    // dependencies. Workspace-linked plugins live outside Milady's
+    // tree, so `import "@elizaos/core"` from their dist/ walks up
+    // through ~/src/…/typescript/node_modules and finds nothing.
+    // `patch-deps.mjs` earlier removed the nested @elizaos/core from
+    // workspace-linked plugins to avoid version skew; we re-create it
+    // here as a symlink back to the repo root core. This way the
+    // plugin's resolver finds a single canonical core regardless of
+    // which path traversal strategy Bun uses.
+    const pluginCoreLink = path.join(
+      sourceDir,
+      "node_modules",
+      "@elizaos",
+      "core",
+    );
+    const rootCore = path.join(repoRoot, "node_modules", "@elizaos", "core");
+    if (existsSync(rootCore)) {
+      try {
+        mkdirSync(path.dirname(pluginCoreLink), { recursive: true });
+        // Replace whatever is there (dir, broken link, stale file).
+        try {
+          unlinkSync(pluginCoreLink);
+        } catch {
+          // ignore missing
+        }
+        symlinkSync(rootCore, pluginCoreLink, "dir");
+      } catch (err) {
+        console.warn(
+          `[link-external-plugins] failed to link @elizaos/core into ${sourceDir}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
   }

@@ -124,6 +124,187 @@ patchElectrobunWindowsTar(root);
  * defines `default3`. We replace it with a harmless empty default export.
  * Remove once a fixed @elizaos/plugin-pdf is published.
  */
+/**
+ * Patch @elizaos/plugin-evm alpha.7 action spec name mismatches.
+ *
+ * The published bundle declares its action specs by canonical name:
+ *   - "CROSS_CHAIN_TRANSFER" (similes: ["BRIDGE", "BRIDGE_TOKENS"])
+ *   - "SWAP" (similes: ["SWAP_TOKENS", "SWAP_TOKEN"])
+ *   - "GOV_QUEUE"
+ *   - "GOV_VOTE"
+ *
+ * ...but then looks up the same specs by the WRONG key a few thousand lines
+ * later:
+ *   requireActionSpec("BRIDGE")         // should be "CROSS_CHAIN_TRANSFER"
+ *   requireActionSpec("SWAP_TOKENS")    // should be "SWAP"
+ *   requireActionSpec("QUEUE_PROPOSAL") // should be "GOV_QUEUE"
+ *   requireActionSpec("VOTE_PROPOSAL")  // should be "GOV_VOTE"
+ *
+ * `requireActionSpec` throws when the lookup misses, so the plugin fails to
+ * initialize with "Action spec not found: BRIDGE" — preventing all EVM wallet
+ * actions (transfer, swap, bridge, governance) from loading. Patch the four
+ * requireActionSpec calls to use the canonical names so the plugin loads.
+ *
+ * Remove once a fixed @elizaos/plugin-evm is published.
+ */
+function patchPluginEvmActionSpecNames() {
+  const relPaths = ["dist/index.js", "dist/node/index.node.js"];
+  const searchDirs = [resolve(root, "node_modules/@elizaos/plugin-evm")];
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith("@elizaos+plugin-evm@")) {
+          searchDirs.push(
+            resolve(bunCacheDir, entry, "node_modules/@elizaos/plugin-evm"),
+          );
+        }
+      }
+    } catch {}
+  }
+
+  // canonical-name → buggy-lookup-name pairs shipped in alpha.7
+  const REPLACEMENTS = [
+    [
+      'requireActionSpec("BRIDGE")',
+      'requireActionSpec("CROSS_CHAIN_TRANSFER")',
+    ],
+    ['requireActionSpec("SWAP_TOKENS")', 'requireActionSpec("SWAP")'],
+    ['requireActionSpec("QUEUE_PROPOSAL")', 'requireActionSpec("GOV_QUEUE")'],
+    ['requireActionSpec("VOTE_PROPOSAL")', 'requireActionSpec("GOV_VOTE")'],
+  ];
+
+  let patchedFiles = 0;
+  for (const dir of searchDirs) {
+    for (const relPath of relPaths) {
+      const target = resolve(dir, relPath);
+      if (!existsSync(target)) continue;
+      let src = readFileSync(target, "utf8");
+      let fileChanged = false;
+      for (const [bad, good] of REPLACEMENTS) {
+        if (src.includes(bad)) {
+          src = src.split(bad).join(good);
+          fileChanged = true;
+        }
+      }
+      if (fileChanged) {
+        writeFileSync(target, src, "utf8");
+        patchedFiles++;
+        console.log(
+          `[patch-deps] Applied plugin-evm action spec name fix: ${target}`,
+        );
+      }
+    }
+  }
+  if (patchedFiles > 0) {
+    console.log(
+      `[patch-deps] plugin-evm: fixed action spec lookups in ${patchedFiles} file(s).`,
+    );
+  }
+}
+patchPluginEvmActionSpecNames();
+
+/**
+ * Patch @elizaos/plugin-solana alpha.6 action spec name mismatches.
+ *
+ * Twin of the plugin-evm bug. The published bundle:
+ *   - Declares only ONE action: {name: "SWAP_SOLANA", similes: [...]}
+ *   - Calls `requireActionSpec("SWAP")` — wrong name, throws
+ *   - Calls `requireActionSpec("TRANSFER")` — no TRANSFER in the spec at all,
+ *     it was dropped from the exported list but the implementation code still
+ *     references it, so the plugin fails before it can register either action
+ *
+ * Patch strategy:
+ *   1. Inject a synthetic TRANSFER action spec into both `coreActionsSpec`
+ *      and `allActionsSpec` action arrays. The plugin's own transfer
+ *      handler code (line ~484 of the bundle) provides the handler; only
+ *      the name/description/similes metadata was missing.
+ *   2. Rewrite `requireActionSpec("SWAP")` → `requireActionSpec("SWAP_SOLANA")`
+ *      so the swap handler binds to the real spec name.
+ *
+ * Remove once a fixed @elizaos/plugin-solana is published.
+ */
+function patchPluginSolanaActionSpecNames() {
+  const relPaths = ["dist/index.js", "dist/node/index.node.js"];
+  const searchDirs = [resolve(root, "node_modules/@elizaos/plugin-solana")];
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith("@elizaos+plugin-solana@")) {
+          searchDirs.push(
+            resolve(bunCacheDir, entry, "node_modules/@elizaos/plugin-solana"),
+          );
+        }
+      }
+    } catch {}
+  }
+
+  const TRANSFER_SPEC_JSON = `{
+      name: "TRANSFER",
+      description: "Transfer SOL or SPL tokens from the agent's Solana wallet to another address",
+      similes: ["SEND_SOL", "SEND_TOKEN", "SEND_TOKENS", "TRANSFER_SOL", "TRANSFER_TOKEN", "TRANSFER_TOKENS", "PAY"],
+      parameters: []
+    },`;
+
+  let patchedFiles = 0;
+  for (const dir of searchDirs) {
+    for (const relPath of relPaths) {
+      const target = resolve(dir, relPath);
+      if (!existsSync(target)) continue;
+      let src = readFileSync(target, "utf8");
+      let fileChanged = false;
+
+      // Each step guards itself with a marker check so the patch is
+      // incrementally idempotent — rerunning after adding a new fix
+      // applies only the missing steps.
+
+      // 1) Inject TRANSFER spec into BOTH coreActionsSpec.actions AND
+      //    allActionsSpec.actions. Only inject if the TRANSFER name
+      //    isn't already present (previous run would have added it).
+      if (!src.includes('name: "TRANSFER"')) {
+        const swapOpenPattern = /(\{\s*name:\s*"SWAP_SOLANA",)/g;
+        const matches = [...src.matchAll(swapOpenPattern)];
+        if (matches.length >= 2) {
+          src = src.replace(swapOpenPattern, `${TRANSFER_SPEC_JSON}\n    $1`);
+          fileChanged = true;
+        }
+      }
+
+      // 2) Fix the SWAP lookup to use the canonical SWAP_SOLANA name.
+      if (src.includes('requireActionSpec("SWAP")')) {
+        src = src
+          .split('requireActionSpec("SWAP")')
+          .join('requireActionSpec("SWAP_SOLANA")');
+        fileChanged = true;
+      }
+
+      // 3) Fix the provider lookup the same way: providers spec
+      //    declares {name: "solana-wallet"} but code looks up "wallet".
+      if (src.includes('requireProviderSpec("wallet")')) {
+        src = src
+          .split('requireProviderSpec("wallet")')
+          .join('requireProviderSpec("solana-wallet")');
+        fileChanged = true;
+      }
+
+      if (fileChanged) {
+        writeFileSync(target, src, "utf8");
+        patchedFiles++;
+        console.log(
+          `[patch-deps] Applied plugin-solana action spec fix: ${target}`,
+        );
+      }
+    }
+  }
+  if (patchedFiles > 0) {
+    console.log(
+      `[patch-deps] plugin-solana: fixed action spec lookups in ${patchedFiles} file(s).`,
+    );
+  }
+}
+patchPluginSolanaActionSpecNames();
+
 function patchPluginPdfBrokenDefault() {
   const relPaths = ["dist/node/index.node.js", "dist/index.js"];
   const searchDirs = [resolve(root, "node_modules/@elizaos/plugin-pdf")];
