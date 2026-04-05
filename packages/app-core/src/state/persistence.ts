@@ -405,6 +405,7 @@ export function saveUiShellMode(mode: UiShellMode): void {
 function normalizeLastNativeTab(tab: unknown): Tab {
   switch (tab) {
     case "chat":
+    case "inbox":
     case "stream":
     case "apps":
     case "wallets":
