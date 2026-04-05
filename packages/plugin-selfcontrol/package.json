@@ -1,0 +1,23 @@
+{
+  "name": "@miladyai/plugin-selfcontrol",
+  "version": "2.0.0-alpha.83",
+  "description": "Website blocking through the local SelfControl macOS app.",
+  "type": "module",
+  "main": "src/index.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/milady-ai/milady.git",
+    "directory": "packages/plugin-selfcontrol"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "access": "public",
+    "directory": "dist"
+  },
+  "dependencies": {
+    "@elizaos/core": "alpha"
+  }
+}

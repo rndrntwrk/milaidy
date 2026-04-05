@@ -39,6 +39,7 @@
     "packages/vrm-utils",
     "packages/shared",
     "packages/agent",
+    "packages/plugin-selfcontrol",
     "deploy/cloud-agent-template"
   ],
   "type": "module",
