@@ -508,14 +508,34 @@ interface WindowState {
   height: number;
 }
 
+/**
+ * Fresh-install default: a generous 1440x900 window centered-ish
+ * near the top-left of the primary display. Maximize-on-launch (see
+ * createMainWindow) then expands this to fill the screen on every
+ * boot, so this default only matters for brand-new installs on
+ * systems where maximize() hasn't registered yet.
+ */
 const DEFAULT_WINDOW_STATE: WindowState = {
-  x: 100,
-  y: 100,
-  width: 1200,
-  height: 800,
+  x: 60,
+  y: 60,
+  width: 1440,
+  height: 900,
 };
 
-function loadWindowState(statePath: string): WindowState {
+/**
+ * Marker value we stamp into the saved state when we'd like the next
+ * launch to open maximized. Kept as a synthetic "pending-maximize" flag
+ * rather than a real bool so it piggybacks on the existing
+ * width/height/x/y schema without a migration.
+ */
+const MAXIMIZE_ON_LAUNCH_SENTINEL = 1;
+
+interface PersistedWindowState extends WindowState {
+  /** When truthy, call win.maximize() right after creation. */
+  shouldMaximize?: number;
+}
+
+function loadWindowState(statePath: string): PersistedWindowState {
   try {
     if (fs.existsSync(statePath)) {
       const data = JSON.parse(fs.readFileSync(statePath, "utf8"));
@@ -525,13 +545,22 @@ function loadWindowState(statePath: string): WindowState {
         // minimized windows report position (-32000, -32000) and a tiny
         // size, which makes the window invisible on next launch.
         if (state.width < 200 || state.height < 200 || state.x < -16000) {
-          return DEFAULT_WINDOW_STATE;
+          return {
+            ...DEFAULT_WINDOW_STATE,
+            shouldMaximize: MAXIMIZE_ON_LAUNCH_SENTINEL,
+          };
         }
         return state;
       }
     }
   } catch {}
-  return DEFAULT_WINDOW_STATE;
+  // No saved state → first launch. Open maximized so the user gets a
+  // usable workspace immediately instead of a small window in the
+  // corner they have to resize themselves.
+  return {
+    ...DEFAULT_WINDOW_STATE,
+    shouldMaximize: MAXIMIZE_ON_LAUNCH_SENTINEL,
+  };
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -800,6 +829,24 @@ async function createMainWindow(): Promise<BrowserWindow> {
   applyMacOSWindowEffects(win);
   win.on("resize", () => scheduleStateSave(statePath, win));
   win.on("move", () => scheduleStateSave(statePath, win));
+
+  // First-launch ergonomics: when there's no saved state (or the
+  // saved state was garbage and we're falling back to defaults), open
+  // the window maximized so the user gets a full workspace instead of
+  // a 1440x900 rectangle in the corner they have to resize by hand.
+  // Subsequent launches skip this because loadWindowState returns the
+  // real persisted dimensions without the shouldMaximize sentinel.
+  if (state.shouldMaximize === MAXIMIZE_ON_LAUNCH_SENTINEL) {
+    try {
+      (win as unknown as { maximize?: () => void }).maximize?.();
+    } catch (err) {
+      // Non-fatal — if maximize() isn't available on this electrobun
+      // build, the window still opens at the default dimensions.
+      console.warn(
+        `[main-window] maximize() failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 
   return win;
 }
