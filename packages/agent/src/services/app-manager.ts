@@ -13,7 +13,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { logger } from "@elizaos/core";
 import type { IAgentRuntime } from "@elizaos/core";
-import type {
+import {
+  hasAppInterface,
+  packageNameToAppDisplayName,
+  packageNameToAppRouteSlug,
   AppLaunchDiagnostic,
   AppLaunchResult,
   AppSessionState,
@@ -31,10 +34,10 @@ import type {
 import {
   importAppPlugin,
   importAppRouteModule,
-  packageNameToAppSlug,
 } from "./app-package-modules";
 import { generateWalletKeys, getWalletAddressesWithSteward } from "../api/wallet";
 import { getPluginInfo, getRegistryPlugins } from "./registry-client";
+import { scoreEntries, toSearchResults } from "./registry-client-queries.js";
 
 const LOCAL_PLUGINS_DIR = "plugins";
 
@@ -46,9 +49,9 @@ export type {
 } from "../contracts/apps";
 
 const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
-const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
+const HYPERSCAPE_APP_ROUTE_SLUG = "hyperscape";
 const HYPERSCAPE_AUTH_MESSAGE_TYPE = "HYPERSCAPE_AUTH";
-const RS_2004SCAPE_APP_NAME = "@elizaos/app-2004scape";
+const RS_2004SCAPE_APP_ROUTE_SLUG = "2004scape";
 const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
 const SAFE_APP_URL_PROTOCOLS = new Set(["http:", "https:"]);
 const ALLOWED_APP_URL_TEMPLATE_KEYS = new Set([
@@ -101,6 +104,18 @@ interface HyperscapeWalletAuthResponse {
   characterId?: string;
   accountId?: string;
   error?: string;
+}
+
+function isAppRegistryPlugin(plugin: RegistryPluginInfo): boolean {
+  return hasAppInterface(plugin);
+}
+
+function isHyperscapeAppName(appName: string): boolean {
+  return packageNameToAppRouteSlug(appName) === HYPERSCAPE_APP_ROUTE_SLUG;
+}
+
+function is2004scapeAppName(appName: string): boolean {
+  return packageNameToAppRouteSlug(appName) === RS_2004SCAPE_APP_ROUTE_SLUG;
 }
 
 function resolveDisplayViewerInfo(
@@ -651,7 +666,7 @@ function buildViewerAuthMessage(
 ): AppViewerAuthMessage | undefined {
   if (!postMessageAuth) return undefined;
 
-  if (appName === HYPERSCAPE_APP_NAME) {
+  if (isHyperscapeAppName(appName)) {
     const authToken = resolveSettingLike(runtime, "HYPERSCAPE_AUTH_TOKEN");
     if (!authToken) {
       return undefined;
@@ -672,7 +687,7 @@ function buildViewerAuthMessage(
   }
 
   // 2004scape auth - uses bot name and password from environment
-  if (appName === RS_2004SCAPE_APP_NAME) {
+  if (is2004scapeAppName(appName)) {
     // Get username from RS_SDK_BOT_NAME or BOT_NAME, fallback to testbot
     const username =
       process.env.RS_SDK_BOT_NAME?.trim() ||
@@ -717,7 +732,7 @@ function buildViewerConfig(
       ...(resolveViewerEmbedParams(viewerInfo.embedParams) ?? {}),
     };
     if (
-      appInfo.name === HYPERSCAPE_APP_NAME &&
+      isHyperscapeAppName(appInfo.name) &&
       authMessage?.followEntity &&
       !resolvedEmbedParams.followEntity
     ) {
@@ -803,12 +818,7 @@ async function resolveLaunchSession(
   launchUrl: string | null,
   runtime: IAgentRuntime | null,
 ): Promise<AppSessionState | null> {
-  const slug = packageNameToAppSlug(appInfo.name);
-  if (!slug) {
-    return buildAppSession(appInfo, viewer?.authMessage, runtime);
-  }
-
-  const routeModule = await importAppRouteModule(slug);
+  const routeModule = await importAppRouteModule(appInfo.name);
   if (typeof routeModule?.resolveLaunchSession === "function") {
     return routeModule.resolveLaunchSession({
       appName: appInfo.name,
@@ -884,7 +894,7 @@ function collectHyperscapeLaunchDiagnostics(
   session: AppSessionState | null,
   runtime: IAgentRuntime | null,
 ): AppLaunchDiagnostic[] {
-  if (appInfo.name !== HYPERSCAPE_APP_NAME) {
+  if (!isHyperscapeAppName(appInfo.name)) {
     return [];
   }
 
@@ -934,7 +944,7 @@ function collectLaunchDiagnostics(
   session: AppSessionState | null,
   runtime: IAgentRuntime | null,
 ): AppLaunchDiagnostic[] {
-  if (appInfo.name === HYPERSCAPE_APP_NAME) {
+  if (isHyperscapeAppName(appInfo.name)) {
     return collectHyperscapeLaunchDiagnostics(appInfo, viewer, session, runtime);
   }
   return [];
@@ -979,7 +989,7 @@ async function ensureHyperscapeServiceLoaded(
   appInfo: RegistryAppPlugin,
   runtime: IAgentRuntime | null,
 ): Promise<void> {
-  if (!runtime || appInfo.name !== HYPERSCAPE_APP_NAME) {
+  if (!runtime || !isHyperscapeAppName(appInfo.name)) {
     return;
   }
 
@@ -1031,13 +1041,7 @@ export class AppManager {
     } catch {
       // local discovery is best-effort
     }
-    // Include app packages: those with "/app-" in the name OR kind === "app"
-    const apps = Array.from(registry.values()).filter((plugin) => {
-      if (plugin.kind === "app") return true;
-      const name = plugin.name.toLowerCase();
-      const npmPackage = plugin.npm.package.toLowerCase();
-      return name.includes("/app-") || npmPackage.includes("/app-");
-    });
+    const apps = Array.from(registry.values()).filter(isAppRegistryPlugin);
     return apps.map(flattenAppInfo);
   }
 
@@ -1046,13 +1050,18 @@ export class AppManager {
     query: string,
     limit = 15,
   ): Promise<RegistrySearchResult[]> {
-    const results = await pluginManager.searchRegistry(query, limit);
-    // Filter to only include app packages
-    return results.filter((result) => {
-      const name = result.name.toLowerCase();
-      const npmPackage = result.npmPackage.toLowerCase();
-      return name.includes("/app-") || npmPackage.includes("/app-");
-    });
+    const registry = await pluginManager.refreshRegistry();
+    const appEntries = Array.from(registry.values())
+      .filter(isAppRegistryPlugin)
+      .map(flattenAppInfo);
+    const results = scoreEntries(
+      appEntries,
+      query,
+      limit,
+      (p) => [p.appMeta?.displayName?.toLowerCase() ?? p.displayName?.toLowerCase() ?? ""],
+      (p) => p.appMeta?.capabilities ?? p.capabilities ?? [],
+    );
+    return toSearchResults(results);
   }
 
   async getInfo(
@@ -1167,7 +1176,7 @@ export class AppManager {
     }
 
     const launchPreparationDiagnostics =
-      appInfo.name === HYPERSCAPE_APP_NAME
+      isHyperscapeAppName(appInfo.name)
         ? await prepareHyperscapeLaunch(_runtime ?? null)
         : [];
 
@@ -1287,20 +1296,32 @@ export class AppManager {
     pluginManager: PluginManagerLike,
   ): Promise<InstalledAppInfo[]> {
     const installed = await pluginManager.listInstalledPlugins();
-    // Filter to only include app plugins (by name convention or known game plugins)
-    const appPlugins = installed.filter((p: InstalledPluginInfo) => {
-      const name = p.name.toLowerCase();
-      return name.includes("/app-");
-    });
-    return appPlugins.map((p: InstalledPluginInfo) => ({
-      name: p.name,
-      displayName: p.name
-        .replace(/^@elizaos\/(app-|plugin-)/, "")
-        .replace(/-/g, " ")
-        .replace(/\b\w/g, (c: string) => c.toUpperCase()),
-      pluginName: p.name,
-      version: p.version ?? "unknown",
-      installedAt: p.installedAt ?? "",
-    }));
+    const registry = await pluginManager.refreshRegistry();
+    const installedByName = new Map(
+      installed.map((plugin) => [plugin.name, plugin] as const),
+    );
+
+    const appEntries = Array.from(registry.values())
+      .filter(isAppRegistryPlugin)
+      .map(flattenAppInfo);
+
+    return appEntries
+      .map((appInfo): InstalledAppInfo | null => {
+        const pluginName = appInfo.runtimePlugin ?? resolvePluginPackageName(appInfo);
+        const installedPlugin =
+          installedByName.get(pluginName) ?? installedByName.get(appInfo.name);
+        if (!installedPlugin) return null;
+
+        return {
+          name: appInfo.name,
+          displayName:
+            appInfo.displayName ??
+            packageNameToAppDisplayName(appInfo.name),
+          pluginName,
+          version: installedPlugin.version ?? "unknown",
+          installedAt: installedPlugin.installedAt ?? "",
+        };
+      })
+      .filter((app): app is InstalledAppInfo => app !== null);
   }
 }
