@@ -131,6 +131,21 @@ function matchesServiceClass(
   );
 }
 
+function looksLikePluginExport(value: unknown): value is Plugin {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const plugin = value as Plugin;
+  return (
+    typeof plugin.name === "string" &&
+    typeof plugin.description === "string" &&
+    (Array.isArray(plugin.actions) ||
+      Array.isArray(plugin.providers) ||
+      Array.isArray(plugin.services) ||
+      typeof plugin.init === "function")
+  );
+}
+
 export function stripPluginServiceTypes(
   plugin: Plugin,
   serviceTypes: readonly string[],
@@ -168,7 +183,7 @@ export function patchPluginModuleForAdminOnly<T extends PluginModuleLike>(
 
   const hasDefault = Object.prototype.hasOwnProperty.call(module, "default");
   const hasPlugin = Object.prototype.hasOwnProperty.call(module, "plugin");
-  return {
+  const patchedModule = {
     ...module,
     ...(hasDefault
       ? { default: patchPlugin((module as { default?: Plugin }).default) }
@@ -177,4 +192,16 @@ export function patchPluginModuleForAdminOnly<T extends PluginModuleLike>(
       ? { plugin: patchPlugin((module as { plugin?: Plugin }).plugin) }
       : {}),
   };
+
+  for (const [key, value] of Object.entries(module)) {
+    if (key === "default" || key === "plugin") {
+      continue;
+    }
+    if (!looksLikePluginExport(value)) {
+      continue;
+    }
+    patchedModule[key as keyof T] = patchPlugin(value) as T[keyof T];
+  }
+
+  return patchedModule;
 }

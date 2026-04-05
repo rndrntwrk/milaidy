@@ -173,4 +173,41 @@ describe("plugin access control", () => {
       "TODO_INTEGRATION_BRIDGE",
     );
   });
+
+  it("patches named plugin exports in addition to default exports", () => {
+    const module = patchPluginModuleForAdminOnly(
+      {
+        TodoPlugin: {
+          name: "todo",
+          description: "todo",
+          providers: [],
+          services: [
+            {
+              name: "TodoReminderService",
+              serviceType: "TODO_REMINDER",
+            },
+            {
+              name: "TodoIntegrationBridge",
+              serviceType: "TODO_INTEGRATION_BRIDGE",
+            },
+          ] as never,
+        },
+      },
+      "@elizaos/plugin-todo",
+      {
+        stripServiceTypes: ["TODO_REMINDER"],
+      },
+    ) as {
+      TodoPlugin?: {
+        services?: Array<{ serviceType?: string }>;
+      };
+    };
+
+    expect(module.TodoPlugin?.services).toEqual([
+      {
+        name: "TodoIntegrationBridge",
+        serviceType: "TODO_INTEGRATION_BRIDGE",
+      },
+    ]);
+  });
 });

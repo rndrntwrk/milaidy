@@ -2,10 +2,14 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { findRuntimePluginExport } from "./eliza";
-import { importPluginModuleFromPath } from "./plugin-resolver";
+import { findRuntimePluginExport, STATIC_ELIZA_PLUGINS } from "./eliza";
+import { importPluginModuleFromPath, resolvePlugins } from "./plugin-resolver";
 
-const ENV_KEYS = ["MILADY_STATE_DIR", "ELIZA_STATE_DIR"] as const;
+const ENV_KEYS = [
+  "MILADY_STATE_DIR",
+  "ELIZA_STATE_DIR",
+  "ELIZA_WORKSPACE_ROOT",
+] as const;
 const envBackup = new Map<string, string | undefined>();
 
 let tempRoot = "";
@@ -244,6 +248,63 @@ describe("importPluginModuleFromPath", () => {
 
     await expect(loadPluginDescription(installPath, packageName)).resolves.toBe(
       "shared-dep:v1",
+    );
+  });
+});
+
+describe("resolvePlugins", () => {
+  beforeEach(async () => {
+    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "milady-plugin-import-"));
+    for (const key of ENV_KEYS) {
+      envBackup.set(key, process.env[key]);
+    }
+    process.env.MILADY_STATE_DIR = path.join(tempRoot, "state");
+    delete process.env.ELIZA_STATE_DIR;
+    process.env.ELIZA_WORKSPACE_ROOT = tempRoot;
+  });
+
+  afterEach(async () => {
+    delete STATIC_ELIZA_PLUGINS["@elizaos/plugin-hot-reload"];
+    for (const key of ENV_KEYS) {
+      const previousValue = envBackup.get(key);
+      if (previousValue === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previousValue;
+      }
+    }
+    envBackup.clear();
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  });
+
+  it("prefers static official plugin modules over workspace overrides", async () => {
+    const pluginName = "@elizaos/plugin-hot-reload";
+    const workspacePluginRoot = path.join(tempRoot, "plugins", "plugin-hot-reload");
+    STATIC_ELIZA_PLUGINS[pluginName] = {
+      default: {
+        name: "static-hot-reload",
+        description: "static",
+        actions: [],
+      },
+    };
+
+    await writePackageJson(workspacePluginRoot, pluginName);
+    await writeFile(
+      path.join(workspacePluginRoot, "index.js"),
+      'throw new Error("workspace override should not load");\n',
+    );
+
+    const resolved = await resolvePlugins(
+      {
+        plugins: {
+          allow: [pluginName],
+        },
+      } as never,
+      { quiet: true },
+    );
+
+    expect(resolved.find((plugin) => plugin.name === pluginName)?.plugin.name).toBe(
+      "static-hot-reload",
     );
   });
 });

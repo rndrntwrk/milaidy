@@ -587,6 +587,10 @@ export async function resolvePlugins(
     const ejectedRecord = ejectedRecords[pluginName];
     const installRecord = installRecords[pluginName];
     const workspaceOverridePath = getWorkspacePluginOverridePath(pluginName);
+    const staticElizaPlugin =
+      pluginName.startsWith("@elizaos/plugin-")
+        ? await resolveStaticElizaPlugin(pluginName)
+        : null;
 
     // Pre-flight: ensure native dependencies are available for special plugins.
     if (pluginName === "@elizaos/plugin-browser") {
@@ -615,6 +619,11 @@ export async function resolvePlugins(
           ejectedRecord.installPath,
           pluginName,
         );
+      } else if (staticElizaPlugin) {
+        // Prefer statically imported official plugins over workspace staging.
+        // This keeps local node_modules links working while avoiding staging
+        // bugs in workspace packages with nested symlinked dependencies.
+        mod = staticElizaPlugin as PluginModuleShape;
       } else if (workspaceOverridePath) {
         logger.debug(
           `[eliza] Loading workspace plugin override: ${pluginName} from ${workspaceOverridePath}`,
@@ -629,9 +638,8 @@ export async function resolvePlugins(
 
         if (isOfficialElizaPlugin) {
           try {
-            const staticMod = await resolveStaticElizaPlugin(pluginName);
-            mod = staticMod
-              ? (staticMod as PluginModuleShape)
+            mod = staticElizaPlugin
+              ? (staticElizaPlugin as PluginModuleShape)
               : ((await import(pluginName)) as PluginModuleShape);
             if (repairBrokenInstallRecord(config, pluginName)) {
               repairedInstallRecords.add(pluginName);
