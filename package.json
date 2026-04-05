@@ -194,7 +194,6 @@
     "@elizaos/plugin-shell": "^2.0.0-alpha.9",
     "@elizaos/plugin-sql": "^2.0.0-alpha.17",
     "@elizaos/plugin-telegram": "2.0.0-alpha.11",
-    "@elizaos/plugin-todo": "2.0.0-alpha.13-milady.0",
     "@elizaos/plugin-trajectory-logger": "^2.0.0-alpha.20",
     "@elizaos/plugin-trust": "^1.2.2",
     "@elizaos/plugin-whatsapp": "^2.0.0-alpha.9",

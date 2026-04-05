@@ -232,7 +232,7 @@ describe("collectPluginNames", () => {
 
   it("includes all core plugins for an empty config", () => {
     // Guard against accidental drift in the default runtime contract.
-    expect(CORE_PLUGINS).toHaveLength(13);
+    expect(CORE_PLUGINS).toHaveLength(12);
 
     const expectedCorePlugins = [
       "@elizaos/plugin-sql",
@@ -247,7 +247,6 @@ describe("collectPluginNames", () => {
       "@elizaos/plugin-commands",
       "@elizaos/plugin-plugin-manager",
       "@miladyai/plugin-roles",
-      "@elizaos/plugin-todo",
     ];
     const names = collectPluginNames({} as ElizaConfig);
     for (const plugin of expectedCorePlugins) {

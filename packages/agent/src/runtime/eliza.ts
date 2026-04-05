@@ -78,7 +78,6 @@ import * as pluginRolodex from "@elizaos/plugin-rolodex";
 import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
 import * as pluginShell from "@elizaos/plugin-shell";
 import * as pluginSql from "@elizaos/plugin-sql";
-import * as pluginTodo from "@elizaos/plugin-todo";
 import * as pluginTrajectoryLogger from "@elizaos/plugin-trajectory-logger";
 import * as pluginTrust from "@elizaos/plugin-trust";
 import * as pluginRoles from "@miladyai/plugin-roles";
@@ -233,7 +232,6 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-trust": pluginTrust,
   "@miladyai/plugin-selfcontrol": pluginSelfControl,
   "@miladyai/plugin-roles": pluginRoles,
-  "@elizaos/plugin-todo": pluginTodo,
   "@elizaos/plugin-personality": pluginPersonality,
   "@elizaos/plugin-experience": pluginExperience,
 };
