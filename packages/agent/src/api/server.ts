@@ -307,6 +307,7 @@ import {
   applyWhatsAppQrOverride,
   handleWhatsAppRoute,
 } from "./whatsapp-routes.js";
+import { handleIMessageRoute } from "./imessage-routes.js";
 import {
   generateChatResponse as generateChatResponseFromChatRoutes,
   initSse as initSseFromChatRoutes,
@@ -5313,6 +5314,28 @@ async function handleRequest(
         createWhatsAppPairingSession: (options) =>
           new WhatsAppPairingSession(options as never),
       },
+    );
+    if (handled) return;
+  }
+
+  // ── iMessage routes (/api/imessage/*) ─────────────────────────────────
+  // Read + CRUD endpoints exposed by @elizaos/plugin-imessage's
+  // IMessageService. See api/imessage-routes.ts for the handler.
+  if (pathname.startsWith("/api/imessage")) {
+    const handled = await handleIMessageRoute(
+      req,
+      res,
+      pathname,
+      method,
+      {
+        runtime: state.runtime
+          ? {
+              getService: (type: string) =>
+                (state.runtime as { getService: (t: string) => unknown }).getService(type),
+            }
+          : undefined,
+      },
+      { json, error, readJsonBody },
     );
     if (handled) return;
   }
