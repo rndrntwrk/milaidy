@@ -480,7 +480,6 @@ describe("Plugin Stress Test", () => {
     "@elizaos/plugin-whatsapp",
     "@elizaos/plugin-signal",
     "@elizaos/plugin-imessage",
-    "@elizaos/plugin-bluebubbles",
     "@elizaos/plugin-msteams",
     "@elizaos/plugin-mattermost",
   ];

@@ -1,0 +1,96 @@
+# Connect to Slack
+
+Drop your Milady agent into a Slack workspace so it can respond to messages and mentions in channels and DMs. This uses Slack's Socket Mode, which means you don't need a public URL — Milady talks to Slack through an outbound WebSocket. Expect about ten minutes to go from "nothing" to "my agent is replying in #general."
+
+**What you'll learn:** create a Slack app, grab two tokens, paste them into Milady, invite the bot to a channel. No webhooks, no ngrok.
+
+## What you need before you start
+
+- **A Slack workspace** where you can install custom apps. Your own workspace is easiest; other workspaces usually require an admin to approve.
+- **Milady running** with a working provider.
+
+## Step 1 — Create the Slack app
+
+<Steps>
+  <li>Open <a href="https://api.slack.com/apps">api.slack.com/apps</a> and click <strong>Create New App</strong>.</li>
+  <li>Pick <strong>From scratch</strong>. Give it a name (this is what shows up as the bot's display name) and pick the workspace to install it into.</li>
+  <li>Once created, you land on the app's Settings page. Keep this tab open — you'll bounce around it a few times.</li>
+</Steps>
+
+## Step 2 — Enable Socket Mode
+
+Socket Mode lets your Milady agent talk to Slack without exposing a public webhook URL — crucial for running Milady on your laptop behind a home router.
+
+<Steps>
+  <li>In the left sidebar, click <strong>Socket Mode</strong> and toggle <strong>Enable Socket Mode</strong> on.</li>
+  <li>Slack asks you to create an <strong>App-Level Token</strong>. Give it a name and grant the <code>connections:write</code> scope.</li>
+  <li>Copy the token Slack shows you — it starts with <code>xapp-</code>. Save it somewhere safe; you'll paste it into Milady in Step 5.</li>
+</Steps>
+
+## Step 3 — Grant bot scopes
+
+<Steps>
+  <li>Click <strong>OAuth &amp; Permissions</strong> in the sidebar.</li>
+  <li>Scroll down to <strong>Bot Token Scopes</strong> and add these: <code>chat:write</code>, <code>channels:read</code>, <code>channels:history</code>, <code>groups:history</code>, <code>im:history</code>, <code>app_mentions:read</code>.</li>
+  <li>Scroll back to the top and click <strong>Install to Workspace</strong>. Slack asks you to authorize — confirm.</li>
+  <li>Back on the OAuth &amp; Permissions page, copy the <strong>Bot User OAuth Token</strong>. It starts with <code>xoxb-</code>. Save it.</li>
+</Steps>
+
+## Step 4 — Subscribe to events
+
+<Steps>
+  <li>Click <strong>Event Subscriptions</strong> in the sidebar and toggle it on.</li>
+  <li>Under <strong>Subscribe to bot events</strong>, add: <code>message.channels</code>, <code>message.im</code>, <code>app_mention</code>.</li>
+  <li>Save changes. Slack will re-prompt you to reinstall the app — do it.</li>
+</Steps>
+
+## Step 5 — Hand the tokens to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Slack → Configure</strong>.</li>
+  <li>Paste the <strong>Bot Token</strong> (<code>xoxb-</code>) into the bot token field.</li>
+  <li>Paste the <strong>App-Level Token</strong> (<code>xapp-</code>) into the app token field.</li>
+  <li>(Optional) Under <strong>Channel IDs</strong>, list specific channels the bot should listen in. Leave blank for all channels the bot has access to.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 6 — Invite the bot to a channel and test
+
+<Steps>
+  <li>In Slack, open any channel and type <code>/invite @yourbotname</code>. Slack adds the bot to the channel.</li>
+  <li>Send a message that mentions the bot: <code>@yourbotname hey</code>.</li>
+  <li>Within a second or two, you should see the bot start typing, then reply.</li>
+</Steps>
+
+## Getting channel IDs
+
+If you want to restrict the bot to specific channels:
+
+<Steps>
+  <li>In Slack, right-click any channel name in the sidebar → <strong>Copy link</strong>.</li>
+  <li>The link looks like <code>https://yourworkspace.slack.com/archives/C01ABCDEF</code>. The <code>C01ABCDEF</code> part is the channel ID.</li>
+  <li>Paste it into Milady's <strong>Channel IDs</strong> field, comma-separated for multiple.</li>
+</Steps>
+
+## Troubleshooting
+
+**Bot is installed but never replies.**
+Most common cause: you didn't reinstall the app after adding Event Subscriptions. Go back to the Slack app page, you'll usually see a yellow banner saying "reinstall required." Click it.
+
+**Bot replies to mentions but not regular messages.**
+Expected — add `channels:history` to the bot scopes (step 3) and reinstall. Slack requires explicit permission to read message content.
+
+**Bot shows as offline in the member list.**
+Milady's Slack connection isn't running. Check Settings → Plugins → Slack for a status indicator.
+
+## Useful options
+
+| Option | What it does |
+| --- | --- |
+| **Channel IDs** | Comma-separated list. Empty = all channels the bot has access to. |
+| **Only respond to mentions** | Bot ignores messages that don't `@mention` it. Turn on in noisy channels. |
+| **Ignore bot messages** | Default on — prevents bot-to-bot loops. |
+
+## What's next
+
+[Running multiple connectors](/docs/advanced/multi-connector-setup) — Slack plus Discord or Telegram gives you coverage across work and personal conversations with one agent.

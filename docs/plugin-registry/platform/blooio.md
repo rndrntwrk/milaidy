@@ -62,5 +62,4 @@ The plugin auto-enables when `apiKey`, `token`, or `botToken` is present in the 
 ## Related
 
 - [iMessage Plugin](/plugin-registry/platform/imessage) — Native macOS iMessage (no bridge needed)
-- [BlueBubbles Plugin](/plugin-registry/platform/bluebubbles) — Alternative iMessage bridge
 - [Connectors Guide](/guides/connectors#blooio) — Full configuration reference

@@ -11,10 +11,6 @@
     "description": "Integrates Blooio iMessage/SMS messaging into elizaOS with signed webhooks and outbound message sending.",
     "tags": ["connector", "social", "social-chat", "messaging", "blooio"]
   },
-  "bluebubbles": {
-    "description": "BlueBubbles connector for sending and receiving iMessage chats through the BlueBubbles bridge.",
-    "tags": ["connector", "messaging", "imessage", "bluebubbles"]
-  },
   "commands": {
     "description": "Chat command system for Eliza agents (/help, /status, /reset, etc.)",
     "tags": ["commands"]

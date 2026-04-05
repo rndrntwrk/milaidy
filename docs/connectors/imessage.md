@@ -189,6 +189,5 @@ The iMessage connector requires macOS. It will not function on Linux or Windows.
 ## Related
 
 - [iMessage plugin reference](/plugin-registry/platform/imessage)
-- [BlueBubbles plugin reference](/plugin-registry/platform/bluebubbles) — iMessage bridge via BlueBubbles
 - [Connectors overview](/guides/connectors)
 - [Configuration reference](/configuration)
