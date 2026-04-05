@@ -101,7 +101,11 @@ import {
   LIFEOPS_WORKFLOW_TRIGGER_TYPES,
   LIFEOPS_X_CAPABILITIES,
 } from "@miladyai/shared/contracts/lifeops";
-import { parseCronExpression } from "../triggers/scheduling.js";
+import { getAgentEventService } from "../runtime/agent-event-service.js";
+import {
+  computeNextCronRunAtMs,
+  parseCronExpression,
+} from "../triggers/scheduling.js";
 import {
   DEFAULT_REMINDER_STEPS,
   isValidTimeZone,
@@ -188,6 +192,7 @@ const GOOGLE_PRIMARY_CALENDAR_ID = "primary";
 const GOOGLE_GMAIL_MAILBOX = "me";
 const DEFAULT_GMAIL_TRIAGE_MAX_RESULTS = 12;
 const DEFAULT_REMINDER_PROCESS_LIMIT = 24;
+const DEFAULT_WORKFLOW_PROCESS_LIMIT = 12;
 const reminderProcessingQueues = new Map<string, Promise<void>>();
 const DEFAULT_CALENDAR_REMINDER_STEPS: LifeOpsReminderStep[] = [
   {
@@ -213,6 +218,20 @@ type LifeOpsDefinitionRecord = {
 type LifeOpsGoalRecord = {
   goal: LifeOpsGoalDefinition;
   links: LifeOpsGoalLink[];
+};
+
+type LifeOpsWorkflowSchedulerState = {
+  managedBy: "task_worker";
+  nextDueAt: string | null;
+  lastDueAt: string | null;
+  lastRunId: string | null;
+  lastRunStatus: LifeOpsWorkflowRun["status"] | null;
+  updatedAt: string;
+};
+
+type ExecuteWorkflowResult = {
+  run: LifeOpsWorkflowRun;
+  error: unknown | null;
 };
 
 type LifeOpsServiceOptions = {
@@ -2201,6 +2220,37 @@ function summarizeWorkflowValue(value: unknown, prompt?: string): string {
   return `${prefix}${JSON.stringify(value)}`;
 }
 
+function parseWorkflowSchedulerState(
+  value: unknown,
+): LifeOpsWorkflowSchedulerState | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  return {
+    managedBy: "task_worker",
+    nextDueAt:
+      typeof value.nextDueAt === "string" && value.nextDueAt.trim().length > 0
+        ? value.nextDueAt
+        : null,
+    lastDueAt:
+      typeof value.lastDueAt === "string" && value.lastDueAt.trim().length > 0
+        ? value.lastDueAt
+        : null,
+    lastRunId:
+      typeof value.lastRunId === "string" && value.lastRunId.trim().length > 0
+        ? value.lastRunId
+        : null,
+    lastRunStatus:
+      typeof value.lastRunStatus === "string" && value.lastRunStatus.length > 0
+        ? (value.lastRunStatus as LifeOpsWorkflowRun["status"])
+        : null,
+    updatedAt:
+      typeof value.updatedAt === "string" && value.updatedAt.trim().length > 0
+        ? value.updatedAt
+        : new Date().toISOString(),
+  };
+}
+
 export class LifeOpsService {
   private readonly repository: LifeOpsRepository;
   private readonly ownerEntityIdValue: string;
@@ -2835,6 +2885,248 @@ export class LifeOpsService {
     return workflow;
   }
 
+  private emitAssistantEvent(
+    text: string,
+    source: string,
+    data: Record<string, unknown> = {},
+  ): void {
+    const eventService = getAgentEventService(this.runtime) as {
+      emit?: (event: {
+        runId: string;
+        stream: string;
+        data: Record<string, unknown>;
+        agentId?: string;
+      }) => void;
+    } | null;
+    if (!eventService?.emit) {
+      return;
+    }
+    eventService.emit({
+      runId: crypto.randomUUID(),
+      stream: "assistant",
+      agentId: this.agentId(),
+      data: {
+        text,
+        source,
+        ...data,
+      },
+    });
+  }
+
+  private emitInAppReminderNudge(args: {
+    title: string;
+    ownerType: "occurrence" | "calendar_event";
+    ownerId: string;
+    subjectType: LifeOpsSubjectType;
+    scheduledFor: string;
+    dueAt: string | null;
+  }): void {
+    const timeLabel = args.dueAt
+      ? ` Due ${new Date(args.dueAt).toLocaleString()}.`
+      : "";
+    const prefix =
+      args.subjectType === "agent" ? "Agent reminder:" : "Reminder:";
+    this.emitAssistantEvent(
+      `${prefix} ${args.title}.${timeLabel}`,
+      "lifeops-reminder",
+      {
+        ownerType: args.ownerType,
+        ownerId: args.ownerId,
+        subjectType: args.subjectType,
+        scheduledFor: args.scheduledFor,
+        dueAt: args.dueAt,
+      },
+    );
+  }
+
+  private emitWorkflowRunNudge(
+    workflow: LifeOpsWorkflowDefinition,
+    run: LifeOpsWorkflowRun,
+  ): void {
+    if (workflow.subjectType !== "owner") {
+      return;
+    }
+    const message =
+      run.status === "success"
+        ? `Scheduled workflow "${workflow.title}" ran successfully.`
+        : `Scheduled workflow "${workflow.title}" ran and failed.`;
+    this.emitAssistantEvent(message, "lifeops-workflow", {
+      workflowId: workflow.id,
+      workflowTitle: workflow.title,
+      workflowRunId: run.id,
+      status: run.status,
+      subjectType: workflow.subjectType,
+    });
+  }
+
+  private readWorkflowSchedulerState(
+    workflow: LifeOpsWorkflowDefinition,
+  ): LifeOpsWorkflowSchedulerState | null {
+    return parseWorkflowSchedulerState(
+      isRecord(workflow.metadata) ? workflow.metadata.lifeopsScheduler : null,
+    );
+  }
+
+  private computeWorkflowNextDueAt(
+    workflow: LifeOpsWorkflowDefinition,
+    cursorIso?: string | null,
+  ): string | null {
+    if (workflow.triggerType !== "schedule") {
+      return null;
+    }
+    const schedule = workflow.schedule;
+    if (schedule.kind === "manual") {
+      return null;
+    }
+    if (schedule.kind === "once") {
+      return cursorIso ? null : schedule.runAt;
+    }
+    if (schedule.kind === "interval") {
+      const baseIso = cursorIso ?? workflow.createdAt;
+      return addMinutes(new Date(baseIso), schedule.everyMinutes).toISOString();
+    }
+    const baseMs = cursorIso
+      ? Date.parse(cursorIso)
+      : Date.parse(workflow.createdAt) - 60_000;
+    const nextRunMs = computeNextCronRunAtMs(
+      schedule.cronExpression,
+      baseMs,
+      schedule.timezone,
+    );
+    return nextRunMs === null ? null : new Date(nextRunMs).toISOString();
+  }
+
+  private withWorkflowSchedulerState(
+    workflow: LifeOpsWorkflowDefinition,
+    state: LifeOpsWorkflowSchedulerState | null,
+  ): LifeOpsWorkflowDefinition {
+    const metadata = { ...workflow.metadata };
+    if (state) {
+      metadata.lifeopsScheduler = state;
+    } else {
+      delete metadata.lifeopsScheduler;
+    }
+    return {
+      ...workflow,
+      metadata,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  private initializeWorkflowSchedulerState(
+    workflow: LifeOpsWorkflowDefinition,
+  ): LifeOpsWorkflowDefinition {
+    const nextDueAt = this.computeWorkflowNextDueAt(workflow);
+    const currentState = this.readWorkflowSchedulerState(workflow);
+    const targetState: LifeOpsWorkflowSchedulerState | null =
+      workflow.triggerType !== "schedule" || workflow.schedule.kind === "manual"
+        ? null
+        : {
+            managedBy: "task_worker",
+            nextDueAt,
+            lastDueAt: null,
+            lastRunId: null,
+            lastRunStatus: null,
+            updatedAt: new Date().toISOString(),
+          };
+    if (
+      (currentState === null && targetState === null) ||
+      (currentState &&
+        targetState &&
+        currentState.nextDueAt === targetState.nextDueAt &&
+        currentState.lastDueAt === targetState.lastDueAt &&
+        currentState.lastRunId === targetState.lastRunId &&
+        currentState.lastRunStatus === targetState.lastRunStatus)
+    ) {
+      return workflow;
+    }
+    return this.withWorkflowSchedulerState(workflow, targetState);
+  }
+
+  private async runDueWorkflows(args: {
+    now: string;
+    limit: number;
+  }): Promise<LifeOpsWorkflowRun[]> {
+    const nowMs = Date.parse(args.now);
+    const workflows = await this.repository.listWorkflows(this.agentId());
+    const runs: LifeOpsWorkflowRun[] = [];
+
+    for (const workflow of workflows) {
+      if (runs.length >= args.limit) {
+        break;
+      }
+      if (
+        workflow.status !== "active" ||
+        workflow.triggerType !== "schedule" ||
+        workflow.schedule.kind === "manual"
+      ) {
+        continue;
+      }
+
+      let nextWorkflow = workflow;
+      const existingSchedulerState =
+        this.readWorkflowSchedulerState(nextWorkflow);
+      let schedulerState =
+        existingSchedulerState ??
+        ({
+          managedBy: "task_worker",
+          nextDueAt: this.computeWorkflowNextDueAt(nextWorkflow),
+          lastDueAt: null,
+          lastRunId: null,
+          lastRunStatus: null,
+          updatedAt: new Date().toISOString(),
+        } satisfies LifeOpsWorkflowSchedulerState);
+      let stateChanged = existingSchedulerState === null;
+
+      while (
+        runs.length < args.limit &&
+        schedulerState.nextDueAt &&
+        Date.parse(schedulerState.nextDueAt) <= nowMs
+      ) {
+        const dueAt = schedulerState.nextDueAt;
+        const { run, error } = await this.executeWorkflowDefinition(
+          nextWorkflow,
+          {
+            startedAt: dueAt,
+            confirmBrowserActions: false,
+            request: {
+              scheduledExecution: true,
+            },
+          },
+        );
+        runs.push(run);
+        this.emitWorkflowRunNudge(nextWorkflow, run);
+        schedulerState = {
+          managedBy: "task_worker",
+          nextDueAt: this.computeWorkflowNextDueAt(nextWorkflow, dueAt),
+          lastDueAt: dueAt,
+          lastRunId: run.id,
+          lastRunStatus: run.status,
+          updatedAt: new Date().toISOString(),
+        };
+        stateChanged = true;
+
+        if (error) {
+          this.logLifeOpsError("workflow_scheduled_execution", error, {
+            workflowId: nextWorkflow.id,
+            workflowRunId: run.id,
+            dueAt,
+          });
+        }
+      }
+
+      if (stateChanged) {
+        nextWorkflow = this.withWorkflowSchedulerState(
+          nextWorkflow,
+          schedulerState,
+        );
+        await this.repository.updateWorkflow(nextWorkflow);
+      }
+    }
+
+    return runs;
+  }
+
   private async recordGmailAudit(
     eventType:
       | "gmail_triage_synced"
@@ -3339,10 +3631,12 @@ export class LifeOpsService {
     ownerType: "occurrence" | "calendar_event";
     ownerId: string;
     occurrenceId: string | null;
+    subjectType: LifeOpsSubjectType;
     title: string;
     channel: LifeOpsReminderStep["channel"];
     stepIndex: number;
     scheduledFor: string;
+    dueAt: string | null;
     urgency: LifeOpsReminderUrgency;
     quietHours: LifeOpsReminderPlan["quietHours"];
     acknowledged: boolean;
@@ -3505,6 +3799,16 @@ export class LifeOpsService {
               : null,
         },
       );
+    }
+    if (outcome === "delivered" && args.channel === "in_app") {
+      this.emitInAppReminderNudge({
+        title: args.title,
+        ownerType: args.ownerType,
+        ownerId: args.ownerId,
+        subjectType: args.subjectType,
+        scheduledFor: args.scheduledFor,
+        dueAt: args.dueAt,
+      });
     }
     return attempt;
   }
@@ -4294,10 +4598,12 @@ export class LifeOpsService {
           ownerType: "occurrence",
           ownerId: reminder.ownerId,
           occurrenceId: reminder.occurrenceId,
+          subjectType: occurrence.subjectType,
           title: reminder.title,
           channel: reminder.channel,
           stepIndex: reminder.stepIndex,
           scheduledFor: reminder.scheduledFor,
+          dueAt: occurrence.dueAt,
           urgency:
             typeof occurrence.metadata.urgency === "string"
               ? normalizeReminderUrgency(occurrence.metadata.urgency)
@@ -4344,10 +4650,12 @@ export class LifeOpsService {
           ownerType: "calendar_event",
           ownerId: reminder.ownerId,
           occurrenceId: null,
+          subjectType: reminder.subjectType,
           title: reminder.title,
           channel: reminder.channel,
           stepIndex: reminder.stepIndex,
           scheduledFor: reminder.scheduledFor,
+          dueAt: reminder.dueAt,
           urgency:
             typeof event.metadata.urgency === "string"
               ? normalizeReminderUrgency(event.metadata.urgency)
@@ -4367,6 +4675,44 @@ export class LifeOpsService {
         attempts: dueAttempts,
       };
     });
+  }
+
+  async processScheduledWork(
+    request: {
+      now?: string;
+      reminderLimit?: number;
+      workflowLimit?: number;
+    } = {},
+  ): Promise<{
+    now: string;
+    reminderAttempts: LifeOpsReminderAttempt[];
+    workflowRuns: LifeOpsWorkflowRun[];
+  }> {
+    const now =
+      request.now === undefined
+        ? new Date()
+        : new Date(normalizeIsoString(request.now, "now"));
+    const reminderLimit =
+      request.reminderLimit === undefined
+        ? DEFAULT_REMINDER_PROCESS_LIMIT
+        : normalizePositiveInteger(request.reminderLimit, "reminderLimit");
+    const workflowLimit =
+      request.workflowLimit === undefined
+        ? DEFAULT_WORKFLOW_PROCESS_LIMIT
+        : normalizePositiveInteger(request.workflowLimit, "workflowLimit");
+    const reminderResult = await this.processReminders({
+      now: now.toISOString(),
+      limit: reminderLimit,
+    });
+    const workflowRuns = await this.runDueWorkflows({
+      now: now.toISOString(),
+      limit: workflowLimit,
+    });
+    return {
+      now: now.toISOString(),
+      reminderAttempts: reminderResult.attempts,
+      workflowRuns,
+    };
   }
 
   async inspectReminder(
@@ -4495,7 +4841,7 @@ export class LifeOpsService {
   ): Promise<LifeOpsWorkflowRecord> {
     const triggerType = normalizeWorkflowTriggerType(request.triggerType);
     const ownership = this.normalizeOwnership(request.ownership);
-    const definition = createLifeOpsWorkflowDefinition({
+    let definition = createLifeOpsWorkflowDefinition({
       agentId: this.agentId(),
       ...ownership,
       title: requireNonEmptyString(request.title, "title"),
@@ -4524,6 +4870,7 @@ export class LifeOpsService {
             ] as const),
       metadata: normalizeOptionalRecord(request.metadata, "metadata") ?? {},
     });
+    definition = this.initializeWorkflowSchedulerState(definition);
     await this.repository.createWorkflow(definition);
     await this.recordWorkflowAudit(
       "workflow_created",
@@ -4552,7 +4899,7 @@ export class LifeOpsService {
       request.triggerType === undefined
         ? current.triggerType
         : normalizeWorkflowTriggerType(request.triggerType);
-    const nextDefinition: LifeOpsWorkflowDefinition = {
+    let nextDefinition: LifeOpsWorkflowDefinition = {
       ...current,
       ...ownership,
       title:
@@ -4589,6 +4936,13 @@ export class LifeOpsService {
             },
       updatedAt: new Date().toISOString(),
     };
+    if (
+      request.triggerType !== undefined ||
+      request.schedule !== undefined ||
+      this.readWorkflowSchedulerState(nextDefinition) === null
+    ) {
+      nextDefinition = this.initializeWorkflowSchedulerState(nextDefinition);
+    }
     await this.repository.updateWorkflow(nextDefinition);
     await this.recordWorkflowAudit(
       "workflow_updated",
@@ -4604,23 +4958,14 @@ export class LifeOpsService {
     return this.getWorkflow(nextDefinition.id);
   }
 
-  async runWorkflow(
-    workflowId: string,
-    request: { now?: string; confirmBrowserActions?: boolean } = {},
-  ): Promise<LifeOpsWorkflowRun> {
-    const definition = await this.getWorkflowDefinition(workflowId);
-    if (definition.status !== "active") {
-      fail(409, `workflow cannot run from status ${definition.status}`);
-    }
-    const startedAt =
-      request.now === undefined
-        ? new Date().toISOString()
-        : normalizeIsoString(request.now, "now");
-    const confirmBrowserActions =
-      normalizeOptionalBoolean(
-        request.confirmBrowserActions,
-        "confirmBrowserActions",
-      ) ?? false;
+  private async executeWorkflowDefinition(
+    definition: LifeOpsWorkflowDefinition,
+    args: {
+      startedAt: string;
+      confirmBrowserActions: boolean;
+      request: Record<string, unknown>;
+    },
+  ): Promise<ExecuteWorkflowResult> {
     const internalUrl = new URL("http://127.0.0.1/");
     const outputs: Record<string, unknown> = {};
     const steps: Array<Record<string, unknown>> = [];
@@ -4649,13 +4994,13 @@ export class LifeOpsService {
           value = await this.getCalendarFeed(
             internalUrl,
             step.request ?? {},
-            new Date(startedAt),
+            new Date(args.startedAt),
           );
         } else if (step.kind === "get_gmail_triage") {
           value = await this.getGmailTriage(
             internalUrl,
             step.request ?? {},
-            new Date(startedAt),
+            new Date(args.startedAt),
           );
         } else if (step.kind === "summarize") {
           const sourceValue =
@@ -4686,7 +5031,7 @@ export class LifeOpsService {
             if (
               session.awaitingConfirmationForActionId &&
               !definition.permissionPolicy.trustedBrowserActions &&
-              !confirmBrowserActions
+              !args.confirmBrowserActions
             ) {
               value = {
                 sessionId: session.id,
@@ -4742,7 +5087,7 @@ export class LifeOpsService {
         "workflow",
         "workflow run failed",
         {
-          request,
+          request: args.request,
         },
         {
           status,
@@ -4752,17 +5097,17 @@ export class LifeOpsService {
       const run = createLifeOpsWorkflowRun({
         agentId: this.agentId(),
         workflowId: definition.id,
-        startedAt,
+        startedAt: args.startedAt,
         finishedAt: new Date().toISOString(),
         status,
         result: { steps, outputs },
         auditRef: audit.id,
       });
       await this.repository.createWorkflowRun(run);
-      if (error instanceof LifeOpsServiceError) {
-        throw error;
-      }
-      throw error;
+      return {
+        run,
+        error,
+      };
     }
 
     const audit = await this.recordWorkflowAudit(
@@ -4771,7 +5116,7 @@ export class LifeOpsService {
       "workflow",
       "workflow run succeeded",
       {
-        request,
+        request: args.request,
       },
       {
         status,
@@ -4781,14 +5126,48 @@ export class LifeOpsService {
     const run = createLifeOpsWorkflowRun({
       agentId: this.agentId(),
       workflowId: definition.id,
-      startedAt,
+      startedAt: args.startedAt,
       finishedAt: new Date().toISOString(),
       status,
       result: { steps, outputs },
       auditRef: audit.id,
     });
     await this.repository.createWorkflowRun(run);
-    return run;
+    return {
+      run,
+      error: null,
+    };
+  }
+
+  async runWorkflow(
+    workflowId: string,
+    request: { now?: string; confirmBrowserActions?: boolean } = {},
+  ): Promise<LifeOpsWorkflowRun> {
+    const definition = await this.getWorkflowDefinition(workflowId);
+    if (definition.status !== "active") {
+      fail(409, `workflow cannot run from status ${definition.status}`);
+    }
+    const startedAt =
+      request.now === undefined
+        ? new Date().toISOString()
+        : normalizeIsoString(request.now, "now");
+    const confirmBrowserActions =
+      normalizeOptionalBoolean(
+        request.confirmBrowserActions,
+        "confirmBrowserActions",
+      ) ?? false;
+    const result = await this.executeWorkflowDefinition(definition, {
+      startedAt,
+      confirmBrowserActions,
+      request: request as Record<string, unknown>,
+    });
+    if (result.error instanceof LifeOpsServiceError) {
+      throw result.error;
+    }
+    if (result.error) {
+      throw result.error;
+    }
+    return result.run;
   }
 
   async listBrowserSessions(): Promise<LifeOpsBrowserSession[]> {

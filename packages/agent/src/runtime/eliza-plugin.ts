@@ -43,6 +43,10 @@ import { DEFAULT_AGENT_WORKSPACE_DIR } from "../providers/workspace";
 import { createWorkspaceProvider } from "../providers/workspace-provider";
 import { createTriggerTaskAction } from "../triggers/action";
 import { registerTriggerTaskWorker } from "../triggers/runtime";
+import {
+  ensureLifeOpsSchedulerTask,
+  registerLifeOpsTaskWorker,
+} from "../lifeops/runtime";
 import { loadCustomActions, setCustomActionsRuntime } from "./custom-actions";
 
 export type ElizaPluginConfig = {
@@ -119,7 +123,13 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
 
     init: async (_pluginConfig, runtime: IAgentRuntime) => {
       registerTriggerTaskWorker(runtime);
+      registerLifeOpsTaskWorker(runtime);
       setCustomActionsRuntime(runtime);
+      void ensureLifeOpsSchedulerTask(runtime).catch((error) => {
+        runtime.logger?.warn?.(
+          `[lifeops] Failed to ensure scheduler task: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
 
       // Honour DISABLE_EMOTES: remove PLAY_EMOTE so it never appears in prompts.
       if (runtime.character?.settings?.DISABLE_EMOTES) {
