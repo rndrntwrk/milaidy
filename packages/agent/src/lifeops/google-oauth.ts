@@ -14,9 +14,11 @@ import {
   unionGoogleCapabilities,
 } from "./google-scopes.js";
 
-const GOOGLE_AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_AUTHORIZATION_ENDPOINT =
+  "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
-const GOOGLE_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo";
+const GOOGLE_USERINFO_ENDPOINT =
+  "https://openidconnect.googleapis.com/v1/userinfo";
 const GOOGLE_OAUTH_SESSION_TTL_MS = 10 * 60 * 1000;
 const GOOGLE_ACCESS_TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
@@ -135,7 +137,7 @@ function normalizeBaseUrl(value: string): string {
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
-function resolveConfiguredGoogleModes(
+export function resolveConfiguredGoogleModes(
   env: NodeJS.ProcessEnv = process.env,
 ): LifeOpsConnectorMode[] {
   const modes: LifeOpsConnectorMode[] = [];
@@ -182,7 +184,8 @@ export function resolveGoogleOAuthConfig(
 
   if (mode === "local") {
     const clientId = readEnvOverride(env, DESKTOP_CLIENT_ID_KEYS) ?? null;
-    const port = requestUrl.port || (requestUrl.protocol === "https:" ? "443" : "80");
+    const port =
+      requestUrl.port || (requestUrl.protocol === "https:" ? "443" : "80");
     return {
       mode,
       defaultMode,
@@ -320,7 +323,10 @@ function buildGoogleTokenRef(
   return path.join(sanitizePathSegment(agentId), `${mode}.json`);
 }
 
-function resolveTokenPath(tokenRef: string, env: NodeJS.ProcessEnv = process.env): string {
+function resolveTokenPath(
+  tokenRef: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
   return path.join(tokenStorageRoot(env), tokenRef);
 }
 
@@ -379,7 +385,9 @@ export function readStoredGoogleToken(
   return readStoredGoogleTokenFile(tokenRef, env);
 }
 
-function parseIdTokenClaims(idToken: string | undefined): Record<string, unknown> {
+function parseIdTokenClaims(
+  idToken: string | undefined,
+): Record<string, unknown> {
   if (!idToken) {
     return {};
   }
@@ -398,7 +406,9 @@ function parseIdTokenClaims(idToken: string | undefined): Record<string, unknown
   }
 }
 
-async function fetchGoogleUserInfo(accessToken: string): Promise<Record<string, unknown>> {
+async function fetchGoogleUserInfo(
+  accessToken: string,
+): Promise<Record<string, unknown>> {
   const response = await fetch(GOOGLE_USERINFO_ENDPOINT, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -430,7 +440,10 @@ async function exchangeGoogleToken(
 
   const parsed = (await response.json()) as GoogleTokenResponse;
   if (!parsed.access_token || !Number.isFinite(parsed.expires_in)) {
-    throw new GoogleOAuthError(502, "Google token exchange returned an invalid payload.");
+    throw new GoogleOAuthError(
+      502,
+      "Google token exchange returned an invalid payload.",
+    );
   }
   return parsed;
 }
@@ -446,7 +459,7 @@ function buildStoredGoogleToken(
     typeof token.refresh_token_expires_in === "number" &&
     Number.isFinite(token.refresh_token_expires_in)
       ? Date.now() + token.refresh_token_expires_in * 1000
-      : existing?.refreshTokenExpiresAt ?? null;
+      : (existing?.refreshTokenExpiresAt ?? null);
 
   return {
     provider: "google",
@@ -537,24 +550,34 @@ export async function completeGoogleConnectorOAuth(args: {
 
   const session = pendingGoogleOAuthSessions.get(state);
   if (!session) {
-    throw new GoogleOAuthError(400, "Google callback does not match an active login session.");
+    throw new GoogleOAuthError(
+      400,
+      "Google callback does not match an active login session.",
+    );
   }
   pendingGoogleOAuthSessions.delete(state);
 
   if (Date.now() - session.createdAt > GOOGLE_OAUTH_SESSION_TTL_MS) {
-    throw new GoogleOAuthError(410, "Google login session expired. Start the connection flow again.");
+    throw new GoogleOAuthError(
+      410,
+      "Google login session expired. Start the connection flow again.",
+    );
   }
 
   const upstreamError = args.callbackUrl.searchParams.get("error")?.trim();
   if (upstreamError) {
     const description =
-      args.callbackUrl.searchParams.get("error_description")?.trim() || upstreamError;
+      args.callbackUrl.searchParams.get("error_description")?.trim() ||
+      upstreamError;
     throw new GoogleOAuthError(400, description);
   }
 
   const code = args.callbackUrl.searchParams.get("code")?.trim();
   if (!code) {
-    throw new GoogleOAuthError(400, "Google callback is missing an authorization code.");
+    throw new GoogleOAuthError(
+      400,
+      "Google callback is missing an authorization code.",
+    );
   }
 
   const params = new URLSearchParams({
@@ -586,7 +609,12 @@ export async function completeGoogleConnectorOAuth(args: {
 
   const tokenRef = buildGoogleTokenRef(session.agentId, session.mode);
   const existing = readStoredGoogleTokenFile(tokenRef, args.env);
-  const storedToken = buildStoredGoogleToken(session, token, normalizedScopes, existing);
+  const storedToken = buildStoredGoogleToken(
+    session,
+    token,
+    normalizedScopes,
+    existing,
+  );
   writeStoredGoogleTokenFile(tokenRef, storedToken, args.env);
 
   return {
@@ -613,7 +641,10 @@ export async function ensureFreshGoogleAccessToken(
     return stored;
   }
   if (!stored.refreshToken) {
-    throw new GoogleOAuthError(401, "Google connector needs re-authentication.");
+    throw new GoogleOAuthError(
+      401,
+      "Google connector needs re-authentication.",
+    );
   }
 
   const params = new URLSearchParams({
@@ -640,7 +671,10 @@ export async function ensureFreshGoogleAccessToken(
       agentId: stored.agentId,
       mode: stored.mode,
       clientId: stored.clientId,
-      clientSecret: stored.mode === "remote" ? readEnvOverride(env, WEB_CLIENT_SECRET_KEYS) ?? null : null,
+      clientSecret:
+        stored.mode === "remote"
+          ? (readEnvOverride(env, WEB_CLIENT_SECRET_KEYS) ?? null)
+          : null,
       redirectUri: stored.redirectUri,
       requestedCapabilities: googleScopesToCapabilities(stored.grantedScopes),
       codeVerifier: "",

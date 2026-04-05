@@ -5808,12 +5808,12 @@ export class LifeOpsService {
     const sendReply = async () => {
       if (resolveGoogleExecutionTarget(grant) === "cloud") {
         await this.googleManagedClient.sendGmailReply({
-          messageId,
-          bodyText,
-          subject,
           to,
           cc,
-          confirmSend,
+          subject,
+          bodyText,
+          inReplyTo: messageIdHeader,
+          references: references.length > 0 ? references : null,
         });
         return;
       }

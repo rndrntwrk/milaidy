@@ -4,27 +4,29 @@
  */
 
 import type { DatabaseProviderType } from "@miladyai/agent/contracts/config";
+import type { LifeOpsConnectorMode } from "@miladyai/shared/contracts/lifeops";
+import { MiladyClient } from "./client-base";
 import type {
   ChatTokenUsage,
+  CompleteLifeOpsOccurrenceRequest,
   ConnectionTestResult,
   ContentBlock,
-  CreateLifeOpsCalendarEventRequest,
-  CreateLifeOpsGmailReplyDraftRequest,
-  GetLifeOpsCalendarFeedRequest,
-  GetLifeOpsGmailTriageRequest,
-  DisconnectLifeOpsGoogleConnectorRequest,
   Conversation,
   ConversationChannelType,
   ConversationGreeting,
   ConversationMessage,
   ConversationMode,
   CreateConversationOptions,
+  CreateLifeOpsCalendarEventRequest,
+  CreateLifeOpsDefinitionRequest,
+  CreateLifeOpsGmailReplyDraftRequest,
+  CreateLifeOpsGoalRequest,
   DatabaseConfigResponse,
   DatabaseStatus,
+  DisconnectLifeOpsGoogleConnectorRequest,
+  GetLifeOpsCalendarFeedRequest,
+  GetLifeOpsGmailTriageRequest,
   ImageAttachment,
-  LifeOpsGoogleConnectorStatus,
-  LifeOpsGmailReplyDraft,
-  LifeOpsGmailTriageFeed,
   KnowledgeBulkUploadResult,
   KnowledgeDocumentDetail,
   KnowledgeDocumentsResponse,
@@ -32,10 +34,13 @@ import type {
   KnowledgeSearchResponse,
   KnowledgeStats,
   KnowledgeUploadResult,
-  LifeOpsDefinitionRecord,
   LifeOpsCalendarFeed,
-  LifeOpsNextCalendarEventContext,
+  LifeOpsDefinitionRecord,
+  LifeOpsGmailReplyDraft,
+  LifeOpsGmailTriageFeed,
   LifeOpsGoalRecord,
+  LifeOpsGoogleConnectorStatus,
+  LifeOpsNextCalendarEventContext,
   LifeOpsOccurrenceActionResult,
   LifeOpsOverview,
   McpMarketplaceResult,
@@ -49,6 +54,7 @@ import type {
   SendLifeOpsGmailReplyRequest,
   ShareIngestItem,
   ShareIngestPayload,
+  SnoozeLifeOpsOccurrenceRequest,
   StartLifeOpsGoogleConnectorRequest,
   StartLifeOpsGoogleConnectorResponse,
   TableInfo,
@@ -59,17 +65,12 @@ import type {
   TrajectoryListOptions,
   TrajectoryListResult,
   TrajectoryStats,
+  UpdateLifeOpsDefinitionRequest,
+  UpdateLifeOpsGoalRequest,
   WorkbenchOverview,
   WorkbenchTask,
   WorkbenchTodo,
-  CompleteLifeOpsOccurrenceRequest,
-  CreateLifeOpsDefinitionRequest,
-  CreateLifeOpsGoalRequest,
-  SnoozeLifeOpsOccurrenceRequest,
-  UpdateLifeOpsDefinitionRequest,
-  UpdateLifeOpsGoalRequest,
 } from "./client-types";
-import { MiladyClient } from "./client-base";
 
 // ---------------------------------------------------------------------------
 // Declaration merging
@@ -239,8 +240,12 @@ declare module "./client-base" {
     sendLifeOpsGmailReply(
       data: SendLifeOpsGmailReplyRequest,
     ): Promise<{ ok: true }>;
-    listLifeOpsDefinitions(): Promise<{ definitions: LifeOpsDefinitionRecord[] }>;
-    getLifeOpsDefinition(definitionId: string): Promise<LifeOpsDefinitionRecord>;
+    listLifeOpsDefinitions(): Promise<{
+      definitions: LifeOpsDefinitionRecord[];
+    }>;
+    getLifeOpsDefinition(
+      definitionId: string,
+    ): Promise<LifeOpsDefinitionRecord>;
     createLifeOpsDefinition(
       data: CreateLifeOpsDefinitionRequest,
     ): Promise<LifeOpsDefinitionRecord>;
@@ -250,7 +255,9 @@ declare module "./client-base" {
     ): Promise<LifeOpsDefinitionRecord>;
     listLifeOpsGoals(): Promise<{ goals: LifeOpsGoalRecord[] }>;
     getLifeOpsGoal(goalId: string): Promise<LifeOpsGoalRecord>;
-    createLifeOpsGoal(data: CreateLifeOpsGoalRequest): Promise<LifeOpsGoalRecord>;
+    createLifeOpsGoal(
+      data: CreateLifeOpsGoalRequest,
+    ): Promise<LifeOpsGoalRecord>;
     updateLifeOpsGoal(
       goalId: string,
       data: UpdateLifeOpsGoalRequest,
@@ -266,7 +273,9 @@ declare module "./client-base" {
       occurrenceId: string,
       data: SnoozeLifeOpsOccurrenceRequest,
     ): Promise<LifeOpsOccurrenceActionResult>;
-    getGoogleLifeOpsConnectorStatus(mode?: "local" | "remote"): Promise<LifeOpsGoogleConnectorStatus>;
+    getGoogleLifeOpsConnectorStatus(
+      mode?: LifeOpsConnectorMode,
+    ): Promise<LifeOpsGoogleConnectorStatus>;
     startGoogleLifeOpsConnector(
       data?: StartLifeOpsGoogleConnectorRequest,
     ): Promise<StartLifeOpsGoogleConnectorResponse>;
@@ -894,7 +903,9 @@ MiladyClient.prototype.getLifeOpsDefinition = async function (
   this: MiladyClient,
   definitionId,
 ) {
-  return this.fetch(`/api/lifeops/definitions/${encodeURIComponent(definitionId)}`);
+  return this.fetch(
+    `/api/lifeops/definitions/${encodeURIComponent(definitionId)}`,
+  );
 };
 
 MiladyClient.prototype.createLifeOpsDefinition = async function (
@@ -912,15 +923,16 @@ MiladyClient.prototype.updateLifeOpsDefinition = async function (
   definitionId,
   data,
 ) {
-  return this.fetch(`/api/lifeops/definitions/${encodeURIComponent(definitionId)}`, {
-    method: "PUT",
-    body: JSON.stringify(data),
-  });
+  return this.fetch(
+    `/api/lifeops/definitions/${encodeURIComponent(definitionId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(data),
+    },
+  );
 };
 
-MiladyClient.prototype.listLifeOpsGoals = async function (
-  this: MiladyClient,
-) {
+MiladyClient.prototype.listLifeOpsGoals = async function (this: MiladyClient) {
   return this.fetch("/api/lifeops/goals");
 };
 
@@ -957,20 +969,26 @@ MiladyClient.prototype.completeLifeOpsOccurrence = async function (
   occurrenceId,
   data = {},
 ) {
-  return this.fetch(`/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/complete`, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
+  return this.fetch(
+    `/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/complete`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  );
 };
 
 MiladyClient.prototype.skipLifeOpsOccurrence = async function (
   this: MiladyClient,
   occurrenceId,
 ) {
-  return this.fetch(`/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/skip`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
+  return this.fetch(
+    `/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/skip`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  );
 };
 
 MiladyClient.prototype.snoozeLifeOpsOccurrence = async function (
@@ -978,10 +996,13 @@ MiladyClient.prototype.snoozeLifeOpsOccurrence = async function (
   occurrenceId,
   data,
 ) {
-  return this.fetch(`/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/snooze`, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
+  return this.fetch(
+    `/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/snooze`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  );
 };
 
 MiladyClient.prototype.getGoogleLifeOpsConnectorStatus = async function (
