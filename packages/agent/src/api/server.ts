@@ -308,6 +308,7 @@ import {
   handleWhatsAppRoute,
 } from "./whatsapp-routes.js";
 import { handleIMessageRoute } from "./imessage-routes.js";
+import { handleInboxRoute } from "./inbox-routes.js";
 import {
   generateChatResponse as generateChatResponseFromChatRoutes,
   initSse as initSseFromChatRoutes,
@@ -5314,6 +5315,22 @@ async function handleRequest(
         createWhatsAppPairingSession: (options) =>
           new WhatsAppPairingSession(options as never),
       },
+    );
+    if (handled) return;
+  }
+
+  // ── Unified inbox routes (/api/inbox/*) ───────────────────────────────
+  // Cross-channel read-only feed that merges connector messages
+  // (imessage, telegram, discord, whatsapp, etc.) into a single
+  // time-ordered view. See api/inbox-routes.ts for details.
+  if (pathname.startsWith("/api/inbox")) {
+    const handled = await handleInboxRoute(
+      req,
+      res,
+      pathname,
+      method,
+      { runtime: state.runtime ?? null },
+      { json, error, readJsonBody },
     );
     if (handled) return;
   }

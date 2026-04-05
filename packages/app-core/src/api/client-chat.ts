@@ -82,6 +82,27 @@ declare module "./client-base" {
     getConversationMessages(
       id: string,
     ): Promise<{ messages: ConversationMessage[] }>;
+    /**
+     * Fetch the unified cross-channel inbox. Returns the most recent
+     * messages across every connector room the agent participates in,
+     * time-ordered newest first. Each message carries its `source`
+     * tag (imessage / telegram / discord / etc.) so the UI can render
+     * per-source styling without a second lookup.
+     */
+    getInboxMessages(
+      options?: { limit?: number; sources?: string[] },
+    ): Promise<{
+      messages: Array<
+        ConversationMessage & { roomId: string; source: string }
+      >;
+      count: number;
+    }>;
+    /**
+     * List the distinct connector source tags the agent currently has
+     * inbox messages for. Used by the unified inbox UI to build the
+     * source filter chip list dynamically.
+     */
+    getInboxSources(): Promise<{ sources: string[] }>;
     truncateConversationMessages(
       id: string,
       messageId: string,
@@ -405,6 +426,31 @@ MiladyClient.prototype.getConversationMessages = async function (
       return text === message.text ? message : { ...message, text };
     }),
   };
+};
+
+MiladyClient.prototype.getInboxMessages = async function (
+  this: MiladyClient,
+  options,
+) {
+  const params = new URLSearchParams();
+  if (typeof options?.limit === "number" && options.limit > 0) {
+    params.set("limit", String(options.limit));
+  }
+  if (options?.sources && options.sources.length > 0) {
+    params.set("sources", options.sources.join(","));
+  }
+  const query = params.toString();
+  const path = query ? `/api/inbox/messages?${query}` : "/api/inbox/messages";
+  return this.fetch<{
+    messages: Array<
+      ConversationMessage & { roomId: string; source: string }
+    >;
+    count: number;
+  }>(path);
+};
+
+MiladyClient.prototype.getInboxSources = async function (this: MiladyClient) {
+  return this.fetch<{ sources: string[] }>("/api/inbox/sources");
 };
 
 MiladyClient.prototype.truncateConversationMessages = async function (
