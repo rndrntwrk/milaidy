@@ -4,24 +4,11 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockUseApp, mockClient, mockSetActionNotice } = vi.hoisted(() => ({
+const { mockUseApp, mockClient } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
   mockClient: {
-    completeLifeOpsOccurrence: vi.fn(),
-    createLifeOpsGmailReplyDraft: vi.fn(),
-    disconnectGoogleLifeOpsConnector: vi.fn(),
-    getLifeOpsCalendarFeed: vi.fn(),
-    getLifeOpsGmailTriage: vi.fn(),
-    getGoogleLifeOpsConnectorStatus: vi.fn(),
     getLifeOpsOverview: vi.fn(),
-    getLifeOpsNextCalendarEventContext: vi.fn(),
-    listWorkbenchTodos: vi.fn(),
-    sendLifeOpsGmailReply: vi.fn(),
-    skipLifeOpsOccurrence: vi.fn(),
-    snoozeLifeOpsOccurrence: vi.fn(),
-    startGoogleLifeOpsConnector: vi.fn(),
   },
-  mockSetActionNotice: vi.fn(),
 }));
 
 vi.mock("@miladyai/ui", () => ({
@@ -45,12 +32,6 @@ vi.mock("../../api", () => ({
   client: mockClient,
 }));
 
-const mockOpenExternalUrl = vi.fn();
-
-vi.mock("../../utils", () => ({
-  openExternalUrl: (...args: unknown[]) => mockOpenExternalUrl(...args),
-}));
-
 import { TasksEventsPanel } from "./TasksEventsPanel";
 
 function flattenText(node: TestRenderer.ReactTestInstance): string {
@@ -67,81 +48,176 @@ function flattenText(node: TestRenderer.ReactTestInstance): string {
 describe("TasksEventsPanel", () => {
   beforeEach(() => {
     mockUseApp.mockReset();
-    mockClient.completeLifeOpsOccurrence.mockReset();
-    mockClient.createLifeOpsGmailReplyDraft.mockReset();
-    mockClient.disconnectGoogleLifeOpsConnector.mockReset();
-    mockClient.getLifeOpsCalendarFeed.mockReset();
-    mockClient.getLifeOpsGmailTriage.mockReset();
-    mockClient.getGoogleLifeOpsConnectorStatus.mockReset();
     mockClient.getLifeOpsOverview.mockReset();
-    mockClient.getLifeOpsNextCalendarEventContext.mockReset();
-    mockClient.listWorkbenchTodos.mockReset();
-    mockClient.sendLifeOpsGmailReply.mockReset();
-    mockClient.skipLifeOpsOccurrence.mockReset();
-    mockClient.snoozeLifeOpsOccurrence.mockReset();
-    mockClient.startGoogleLifeOpsConnector.mockReset();
-    mockSetActionNotice.mockReset();
-    mockOpenExternalUrl.mockReset();
-    const workbench = {
-      todos: [],
-      lifeops: {
+
+    const overview = {
+      occurrences: [
+        {
+          id: "owner-occurrence",
+          agentId: "agent-1",
+          domain: "user_lifeops",
+          subjectType: "owner",
+          subjectId: "owner-1",
+          visibilityScope: "owner_agent_admin",
+          contextPolicy: "explicit_only",
+          definitionId: "definition-1",
+          occurrenceKey: "definition-1:today",
+          scheduledAt: "2026-04-04T16:00:00.000Z",
+          dueAt: "2026-04-04T16:00:00.000Z",
+          relevanceStartAt: "2026-04-04T15:30:00.000Z",
+          relevanceEndAt: "2026-04-04T18:00:00.000Z",
+          windowName: "afternoon",
+          state: "visible",
+          snoozedUntil: null,
+          completionPayload: null,
+          derivedTarget: null,
+          metadata: {},
+          createdAt: "2026-04-04T14:00:00.000Z",
+          updatedAt: "2026-04-04T14:00:00.000Z",
+          definitionKind: "habit",
+          definitionStatus: "active",
+          cadence: {
+            kind: "times_per_day",
+            slots: [
+              { key: "morning", label: "Morning", minuteOfDay: 480, durationMinutes: 30 },
+              { key: "evening", label: "Evening", minuteOfDay: 1080, durationMinutes: 30 },
+            ],
+          },
+          title: "Take medication",
+          description: "Morning and evening support task",
+          priority: 1,
+          timezone: "America/Los_Angeles",
+          source: "manual",
+          goalId: null,
+        },
+      ],
+      goals: [
+        {
+          id: "owner-goal",
+          agentId: "agent-1",
+          domain: "user_lifeops",
+          subjectType: "owner",
+          subjectId: "owner-1",
+          visibilityScope: "owner_agent_admin",
+          contextPolicy: "explicit_only",
+          title: "Sleep regularly",
+          description: "Keep a consistent wind-down routine",
+          cadence: null,
+          supportStrategy: {},
+          successCriteria: {},
+          status: "active",
+          reviewState: "on_track",
+          metadata: {},
+          createdAt: "2026-04-04T14:00:00.000Z",
+          updatedAt: "2026-04-04T14:00:00.000Z",
+        },
+      ],
+      reminders: [
+        {
+          domain: "user_lifeops",
+          subjectType: "owner",
+          subjectId: "owner-1",
+          ownerType: "occurrence",
+          ownerId: "owner-occurrence",
+          occurrenceId: "owner-occurrence",
+          definitionId: "definition-1",
+          eventId: null,
+          title: "Take medication",
+          channel: "in_app",
+          stepIndex: 0,
+          stepLabel: "Check in now",
+          scheduledFor: "2026-04-04T15:55:00.000Z",
+          dueAt: "2026-04-04T16:00:00.000Z",
+          state: "visible",
+          htmlLink: null,
+          eventStartAt: null,
+        },
+      ],
+      summary: {
+        activeOccurrenceCount: 1,
+        overdueOccurrenceCount: 0,
+        snoozedOccurrenceCount: 0,
+        activeReminderCount: 1,
+        activeGoalCount: 1,
+      },
+      owner: {
         occurrences: [
           {
-            id: "occ-visible",
+            id: "owner-occurrence",
             agentId: "agent-1",
-            definitionId: "def-1",
-            occurrenceKey: "slot:today:current",
-            scheduledAt: new Date(Date.now() - 5 * 60_000).toISOString(),
-            dueAt: new Date(Date.now() + 15 * 60_000).toISOString(),
-            relevanceStartAt: new Date(Date.now() - 15 * 60_000).toISOString(),
-            relevanceEndAt: new Date(Date.now() + 60 * 60_000).toISOString(),
-            windowName: "Current",
+            domain: "user_lifeops",
+            subjectType: "owner",
+            subjectId: "owner-1",
+            visibilityScope: "owner_agent_admin",
+            contextPolicy: "explicit_only",
+            definitionId: "definition-1",
+            occurrenceKey: "definition-1:today",
+            scheduledAt: "2026-04-04T16:00:00.000Z",
+            dueAt: "2026-04-04T16:00:00.000Z",
+            relevanceStartAt: "2026-04-04T15:30:00.000Z",
+            relevanceEndAt: "2026-04-04T18:00:00.000Z",
+            windowName: "afternoon",
             state: "visible",
             snoozedUntil: null,
             completionPayload: null,
             derivedTarget: null,
             metadata: {},
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            definitionKind: "routine",
+            createdAt: "2026-04-04T14:00:00.000Z",
+            updatedAt: "2026-04-04T14:00:00.000Z",
+            definitionKind: "habit",
             definitionStatus: "active",
-            title: "Current slot check-in",
-            description: "Keep the day moving.",
-            priority: 2,
-            timezone: "UTC",
+            cadence: {
+              kind: "times_per_day",
+              slots: [
+                { key: "morning", label: "Morning", minuteOfDay: 480, durationMinutes: 30 },
+                { key: "evening", label: "Evening", minuteOfDay: 1080, durationMinutes: 30 },
+              ],
+            },
+            title: "Take medication",
+            description: "Morning and evening support task",
+            priority: 1,
+            timezone: "America/Los_Angeles",
             source: "manual",
-            goalId: "goal-1",
+            goalId: null,
           },
         ],
         goals: [
           {
-            id: "goal-1",
+            id: "owner-goal",
             agentId: "agent-1",
-            title: "Stay on top of life ops",
-            description: "",
+            domain: "user_lifeops",
+            subjectType: "owner",
+            subjectId: "owner-1",
+            visibilityScope: "owner_agent_admin",
+            contextPolicy: "explicit_only",
+            title: "Sleep regularly",
+            description: "Keep a consistent wind-down routine",
             cadence: null,
             supportStrategy: {},
             successCriteria: {},
             status: "active",
-            reviewState: "idle",
+            reviewState: "on_track",
             metadata: {},
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            createdAt: "2026-04-04T14:00:00.000Z",
+            updatedAt: "2026-04-04T14:00:00.000Z",
           },
         ],
         reminders: [
           {
+            domain: "user_lifeops",
+            subjectType: "owner",
+            subjectId: "owner-1",
             ownerType: "occurrence",
-            ownerId: "occ-visible",
-            occurrenceId: "occ-visible",
-            definitionId: "def-1",
+            ownerId: "owner-occurrence",
+            occurrenceId: "owner-occurrence",
+            definitionId: "definition-1",
             eventId: null,
-            title: "Current slot check-in",
+            title: "Take medication",
             channel: "in_app",
             stepIndex: 0,
-            stepLabel: "In-app reminder",
-            scheduledFor: new Date(Date.now() - 60_000).toISOString(),
-            dueAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+            stepLabel: "Check in now",
+            scheduledFor: "2026-04-04T15:55:00.000Z",
+            dueAt: "2026-04-04T16:00:00.000Z",
             state: "visible",
             htmlLink: null,
             eventStartAt: null,
@@ -155,7 +231,40 @@ describe("TasksEventsPanel", () => {
           activeGoalCount: 1,
         },
       },
+      agentOps: {
+        occurrences: [],
+        goals: [
+          {
+            id: "agent-goal",
+            agentId: "agent-1",
+            domain: "agent_ops",
+            subjectType: "agent",
+            subjectId: "agent-1",
+            visibilityScope: "agent_and_admin",
+            contextPolicy: "never",
+            title: "Keep the plugin bridge healthy",
+            description: "Track agent-private operational goals",
+            cadence: null,
+            supportStrategy: {},
+            successCriteria: {},
+            status: "active",
+            reviewState: "needs_attention",
+            metadata: {},
+            createdAt: "2026-04-04T14:00:00.000Z",
+            updatedAt: "2026-04-04T14:00:00.000Z",
+          },
+        ],
+        reminders: [],
+        summary: {
+          activeOccurrenceCount: 0,
+          overdueOccurrenceCount: 0,
+          snoozedOccurrenceCount: 0,
+          activeReminderCount: 0,
+          activeGoalCount: 1,
+        },
+      },
     };
+
     mockUseApp.mockReturnValue({
       ptySessions: [
         {
@@ -181,261 +290,18 @@ describe("TasksEventsPanel", () => {
           autoResolvedCount: 0,
         },
       ],
-      setActionNotice: mockSetActionNotice,
       t: (key: string, options?: { defaultValue?: string }) =>
         options?.defaultValue ?? key,
-      workbench,
-    });
-    mockClient.listWorkbenchTodos.mockResolvedValue({
-      todos: [
-        {
-          id: "todo-open",
-          name: "Write release notes",
-          description: "Summarize the widget bar change",
-          priority: 1,
-          isUrgent: true,
-          isCompleted: false,
-          type: "task",
-        },
-        {
-          id: "todo-done",
-          name: "Ship patch",
-          description: "Already done",
-          priority: null,
-          isUrgent: false,
-          isCompleted: true,
-          type: "task",
-        },
-      ],
-    });
-    mockClient.getLifeOpsOverview.mockResolvedValue(workbench.lifeops);
-    mockClient.getLifeOpsCalendarFeed.mockResolvedValue({
-      calendarId: "primary",
-      events: [
-        {
-          id: "event-1",
-          externalId: "google-event-1",
-          agentId: "agent-1",
-          provider: "google",
-          calendarId: "primary",
-          title: "Design review",
-          description: "Discuss the next milestone.",
-          location: "Studio",
-          status: "confirmed",
-          startAt: new Date(Date.now() + 30 * 60_000).toISOString(),
-          endAt: new Date(Date.now() + 90 * 60_000).toISOString(),
-          isAllDay: false,
-          timezone: "UTC",
-          htmlLink: "https://calendar.google.com/event?eid=1",
-          conferenceLink: "https://meet.google.com/example",
-          organizer: {
-            email: "agent@example.com",
-          },
-          attendees: [
-            {
-              email: "friend@example.com",
-              displayName: "Friend",
-              responseStatus: "accepted",
-              self: false,
-              organizer: false,
-              optional: false,
-            },
-          ],
-          metadata: {},
-          syncedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ],
-      source: "synced",
-      timeMin: new Date().toISOString(),
-      timeMax: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
-      syncedAt: new Date().toISOString(),
-    });
-    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue({
-      provider: "google",
-      mode: "local",
-      defaultMode: "local",
-      availableModes: ["local"],
-      configured: true,
-      connected: true,
-      reason: "connected",
-      identity: {
-        email: "agent@example.com",
-      },
-      grantedCapabilities: [
-        "google.basic_identity",
-        "google.calendar.read",
-        "google.gmail.triage",
-      ],
-      grantedScopes: [
-        "openid",
-        "email",
-        "profile",
-        "https://www.googleapis.com/auth/calendar.readonly",
-        "https://www.googleapis.com/auth/gmail.metadata",
-      ],
-      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
-      hasRefreshToken: true,
-      grant: {
-        id: "grant-1",
-        agentId: "agent-1",
-        provider: "google",
-        identity: { email: "agent@example.com" },
-        grantedScopes: [
-          "openid",
-          "email",
-          "profile",
-          "https://www.googleapis.com/auth/calendar.readonly",
-          "https://www.googleapis.com/auth/gmail.metadata",
-        ],
-        capabilities: [
-          "google.basic_identity",
-          "google.calendar.read",
-          "google.gmail.triage",
-        ],
-        tokenRef: "agent-1/local.json",
-        mode: "local",
-        metadata: {},
-        lastRefreshAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+      workbench: {
+        todos: [],
+        lifeops: overview,
       },
     });
-    mockClient.getLifeOpsNextCalendarEventContext.mockResolvedValue({
-      event: {
-        id: "event-1",
-        externalId: "google-event-1",
-        agentId: "agent-1",
-        provider: "google",
-        calendarId: "primary",
-        title: "Design review",
-        description: "Discuss the next milestone.",
-        location: "Studio",
-        status: "confirmed",
-        startAt: new Date(Date.now() + 30 * 60_000).toISOString(),
-        endAt: new Date(Date.now() + 90 * 60_000).toISOString(),
-        isAllDay: false,
-        timezone: "UTC",
-        htmlLink: "https://calendar.google.com/event?eid=1",
-        conferenceLink: "https://meet.google.com/example",
-        organizer: { email: "agent@example.com" },
-        attendees: [
-          {
-            email: "friend@example.com",
-            displayName: "Friend",
-            responseStatus: "accepted",
-            self: false,
-            organizer: false,
-            optional: false,
-          },
-        ],
-        metadata: {},
-        syncedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      startsAt: new Date(Date.now() + 30 * 60_000).toISOString(),
-      startsInMinutes: 30,
-      attendeeCount: 1,
-      attendeeNames: ["Friend"],
-      location: "Studio",
-      conferenceLink: "https://meet.google.com/example",
-      preparationChecklist: [
-        "Confirm route or access for Studio",
-        "Read the event description and agenda notes",
-      ],
-      linkedMailState: "cache",
-      linkedMailError: null,
-      linkedMail: [
-        {
-          id: "mail-1",
-          subject: "Design review agenda",
-          from: "Friend",
-          receivedAt: new Date(Date.now() - 15 * 60_000).toISOString(),
-          snippet: "Here is the latest agenda.",
-          htmlLink: "https://mail.google.com/mail/u/0/#all/thread-1",
-        },
-      ],
-    });
-    mockClient.getLifeOpsGmailTriage.mockResolvedValue({
-      messages: [
-        {
-          id: "mail-1",
-          externalId: "gmail-message-1",
-          agentId: "agent-1",
-          provider: "google",
-          threadId: "thread-1",
-          subject: "Design review agenda",
-          from: "Friend",
-          fromEmail: "friend@example.com",
-          replyTo: "friend@example.com",
-          to: ["agent@example.com"],
-          cc: [],
-          snippet: "Here is the latest agenda.",
-          receivedAt: new Date(Date.now() - 15 * 60_000).toISOString(),
-          isUnread: true,
-          isImportant: true,
-          likelyReplyNeeded: true,
-          triageScore: 90,
-          triageReason: "important label, likely needs reply",
-          labels: ["INBOX", "UNREAD", "IMPORTANT"],
-          htmlLink: "https://mail.google.com/mail/u/0/#all/thread-1",
-          metadata: {},
-          syncedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ],
-      source: "synced",
-      syncedAt: new Date().toISOString(),
-      summary: {
-        unreadCount: 1,
-        importantNewCount: 1,
-        likelyReplyNeededCount: 1,
-      },
-    });
-    mockClient.completeLifeOpsOccurrence.mockResolvedValue({
-      occurrence: {
-        id: "occ-visible",
-        state: "completed",
-      },
-    });
-    mockClient.skipLifeOpsOccurrence.mockResolvedValue({
-      occurrence: {
-        id: "occ-visible",
-        state: "skipped",
-      },
-    });
-    mockClient.snoozeLifeOpsOccurrence.mockResolvedValue({
-      occurrence: {
-        id: "occ-visible",
-        state: "snoozed",
-      },
-    });
-    mockClient.startGoogleLifeOpsConnector.mockResolvedValue({
-      provider: "google",
-      mode: "local",
-      requestedCapabilities: ["google.basic_identity", "google.calendar.read"],
-      redirectUri:
-        "http://127.0.0.1:2138/api/lifeops/connectors/google/callback",
-      authUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=test",
-    });
-    mockClient.disconnectGoogleLifeOpsConnector.mockResolvedValue({
-      provider: "google",
-      mode: "local",
-      defaultMode: "local",
-      availableModes: ["local"],
-      configured: true,
-      connected: false,
-      reason: "disconnected",
-      identity: null,
-      grantedCapabilities: [],
-      grantedScopes: [],
-      expiresAt: null,
-      hasRefreshToken: false,
-      grant: null,
-    });
+
+    mockClient.getLifeOpsOverview.mockResolvedValue(overview);
   });
 
-  it("shows open todos, ongoing orchestrator sessions, and recent events", async () => {
+  it("shows owner life ops, agent ops, and live activity", async () => {
     const clearEvents = vi.fn();
 
     let tree!: TestRenderer.ReactTestRenderer;
@@ -460,72 +326,69 @@ describe("TasksEventsPanel", () => {
       await Promise.resolve();
     });
 
-    const text = flattenText(tree.root).toLowerCase();
-    const normalizedText = text.replace(/\s+/g, " ").trim();
-    expect(mockClient.listWorkbenchTodos.mock.calls.length).toBeGreaterThan(0);
-    expect(mockClient.getLifeOpsCalendarFeed.mock.calls.length).toBeGreaterThan(
-      0,
-    );
-    expect(mockClient.getLifeOpsGmailTriage.mock.calls.length).toBeGreaterThan(
-      0,
-    );
+    const text = flattenText(tree.root)
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
     expect(mockClient.getLifeOpsOverview.mock.calls.length).toBeGreaterThan(0);
-    expect(
-      mockClient.getLifeOpsNextCalendarEventContext.mock.calls.length,
-    ).toBeGreaterThan(0);
-    expect(
-      mockClient.getGoogleLifeOpsConnectorStatus.mock.calls.length,
-    ).toBeGreaterThan(0);
-    expect(normalizedText).toContain("google");
-    expect(normalizedText).toContain("connected as agent@example.com");
-    expect(normalizedText).toContain("next up: design review");
-    expect(normalizedText).toContain("design review");
-    expect(normalizedText).toContain("mail: design review agenda");
-    expect(normalizedText).toContain("important new mail");
-    expect(normalizedText).toContain("current slot check-in");
-    expect(normalizedText).toContain("in-app reminder");
-    expect(normalizedText).toContain("write release notes");
-    expect(normalizedText).not.toContain("ship patch");
-    expect(normalizedText).toContain("worker 1");
-    expect(normalizedText).not.toContain("finished worker");
-    expect(normalizedText).toContain("task started: worker 1");
+    expect(text).toContain("life ops");
+    expect(text).toContain("take medication");
+    expect(text).toContain("twice daily");
+    expect(text).toContain("sleep regularly");
+    expect(text).toContain("agent ops");
+    expect(text).toContain("keep the plugin bridge healthy");
+    expect(text).toContain("worker 1");
+    expect(text).not.toContain("finished worker");
+    expect(text).toContain("task started: worker 1");
+    expect(text).toContain("activity");
+    expect(text).toContain("reminders are driven from lifeops");
   });
 
-  it("shows next-event mail linking errors when Gmail context sync fails", async () => {
-    mockClient.getLifeOpsNextCalendarEventContext.mockResolvedValue({
-      event: {
-        id: "event-error",
-        externalId: "google-event-error",
-        agentId: "agent-1",
-        provider: "google",
-        calendarId: "primary",
-        title: "Inbox zero sync",
-        description: "",
-        location: "",
-        status: "confirmed",
-        startAt: new Date(Date.now() + 45 * 60_000).toISOString(),
-        endAt: new Date(Date.now() + 75 * 60_000).toISOString(),
-        isAllDay: false,
-        timezone: "UTC",
-        htmlLink: null,
-        conferenceLink: null,
-        organizer: null,
-        attendees: [],
-        metadata: {},
-        syncedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+  it("shows empty life ops/task states without inventing fake defaults", async () => {
+    mockUseApp.mockReturnValue({
+      ptySessions: [],
+      t: (key: string, options?: { defaultValue?: string }) =>
+        options?.defaultValue ?? key,
+      workbench: {
+        todos: [],
+        lifeops: null,
       },
-      startsAt: new Date(Date.now() + 45 * 60_000).toISOString(),
-      startsInMinutes: 45,
-      attendeeCount: 0,
-      attendeeNames: [],
-      location: null,
-      conferenceLink: null,
-      preparationChecklist: [],
-      linkedMailState: "error",
-      linkedMailError:
-        "Google Workspace policy blocked the request: Access blocked by admin policy.",
-      linkedMail: [],
+    });
+    mockClient.getLifeOpsOverview.mockResolvedValue({
+      occurrences: [],
+      goals: [],
+      reminders: [],
+      summary: {
+        activeOccurrenceCount: 0,
+        overdueOccurrenceCount: 0,
+        snoozedOccurrenceCount: 0,
+        activeReminderCount: 0,
+        activeGoalCount: 0,
+      },
+      owner: {
+        occurrences: [],
+        goals: [],
+        reminders: [],
+        summary: {
+          activeOccurrenceCount: 0,
+          overdueOccurrenceCount: 0,
+          snoozedOccurrenceCount: 0,
+          activeReminderCount: 0,
+          activeGoalCount: 0,
+        },
+      },
+      agentOps: {
+        occurrences: [],
+        goals: [],
+        reminders: [],
+        summary: {
+          activeOccurrenceCount: 0,
+          overdueOccurrenceCount: 0,
+          snoozedOccurrenceCount: 0,
+          activeReminderCount: 0,
+          activeGoalCount: 0,
+        },
+      },
     });
 
     let tree!: TestRenderer.ReactTestRenderer;
@@ -547,64 +410,126 @@ describe("TasksEventsPanel", () => {
       .toLowerCase()
       .replace(/\s+/g, " ")
       .trim();
-    expect(text).toContain("next up: inbox zero sync");
-    expect(text).toContain("mail linking unavailable:");
-    expect(text).toContain("admin policy");
+    expect(text).toContain("no life ops yet");
+    expect(text).toContain("no orchestrator work running");
+    expect(text).toContain("no recent activity");
+    expect(text).not.toContain("default todo");
+    expect(text).not.toContain("plugin-todo");
   });
 
-  it("surfaces Google connector load failures instead of hiding them", async () => {
-    mockClient.getGoogleLifeOpsConnectorStatus.mockRejectedValueOnce(
-      new Error("Connector status unavailable"),
-    );
-
-    await act(async () => {
-      TestRenderer.create(
-        React.createElement(TasksEventsPanel, {
-          open: true,
-          clearEvents: vi.fn(),
-          events: [],
-        }),
-      );
+  it("falls back to hydrated workbench life ops if the refresh fails", async () => {
+    mockUseApp.mockReturnValue({
+      ptySessions: [],
+      t: (key: string, options?: { defaultValue?: string }) =>
+        options?.defaultValue ?? key,
+      workbench: {
+        todos: [],
+        lifeops: {
+          occurrences: [
+            {
+              id: "fallback-occurrence",
+              agentId: "agent-1",
+              domain: "user_lifeops",
+              subjectType: "owner",
+              subjectId: "owner-1",
+              visibilityScope: "owner_agent_admin",
+              contextPolicy: "explicit_only",
+              definitionId: "definition-fallback",
+              occurrenceKey: "definition-fallback:today",
+              scheduledAt: "2026-04-04T16:00:00.000Z",
+              dueAt: "2026-04-04T16:00:00.000Z",
+              relevanceStartAt: "2026-04-04T15:30:00.000Z",
+              relevanceEndAt: "2026-04-04T18:00:00.000Z",
+              windowName: "afternoon",
+              state: "visible",
+              snoozedUntil: null,
+              completionPayload: null,
+              derivedTarget: null,
+              metadata: {},
+              createdAt: "2026-04-04T14:00:00.000Z",
+              updatedAt: "2026-04-04T14:00:00.000Z",
+              definitionKind: "task",
+              definitionStatus: "active",
+              cadence: { kind: "once", dueAt: "2026-04-04T16:00:00.000Z" },
+              title: "Follow up on plugin wiring",
+              description: "Hydrated from the workbench snapshot",
+              priority: 2,
+              timezone: "America/Los_Angeles",
+              source: "manual",
+              goalId: null,
+            },
+          ],
+          goals: [],
+          reminders: [],
+          summary: {
+            activeOccurrenceCount: 1,
+            overdueOccurrenceCount: 0,
+            snoozedOccurrenceCount: 0,
+            activeReminderCount: 0,
+            activeGoalCount: 0,
+          },
+          owner: {
+            occurrences: [
+              {
+                id: "fallback-occurrence",
+                agentId: "agent-1",
+                domain: "user_lifeops",
+                subjectType: "owner",
+                subjectId: "owner-1",
+                visibilityScope: "owner_agent_admin",
+                contextPolicy: "explicit_only",
+                definitionId: "definition-fallback",
+                occurrenceKey: "definition-fallback:today",
+                scheduledAt: "2026-04-04T16:00:00.000Z",
+                dueAt: "2026-04-04T16:00:00.000Z",
+                relevanceStartAt: "2026-04-04T15:30:00.000Z",
+                relevanceEndAt: "2026-04-04T18:00:00.000Z",
+                windowName: "afternoon",
+                state: "visible",
+                snoozedUntil: null,
+                completionPayload: null,
+                derivedTarget: null,
+                metadata: {},
+                createdAt: "2026-04-04T14:00:00.000Z",
+                updatedAt: "2026-04-04T14:00:00.000Z",
+                definitionKind: "task",
+                definitionStatus: "active",
+                cadence: { kind: "once", dueAt: "2026-04-04T16:00:00.000Z" },
+                title: "Follow up on plugin wiring",
+                description: "Hydrated from the workbench snapshot",
+                priority: 2,
+                timezone: "America/Los_Angeles",
+                source: "manual",
+                goalId: null,
+              },
+            ],
+            goals: [],
+            reminders: [],
+            summary: {
+              activeOccurrenceCount: 1,
+              overdueOccurrenceCount: 0,
+              snoozedOccurrenceCount: 0,
+              activeReminderCount: 0,
+              activeGoalCount: 0,
+            },
+          },
+          agentOps: {
+            occurrences: [],
+            goals: [],
+            reminders: [],
+            summary: {
+              activeOccurrenceCount: 0,
+              overdueOccurrenceCount: 0,
+              snoozedOccurrenceCount: 0,
+              activeReminderCount: 0,
+              activeGoalCount: 0,
+            },
+          },
+        },
+      },
     });
+    mockClient.getLifeOpsOverview.mockRejectedValue(new Error("network"));
 
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(mockSetActionNotice).toHaveBeenCalledWith(
-      "Connector status unavailable",
-      "error",
-      4800,
-    );
-  });
-
-  it("surfaces calendar load failures instead of quietly clearing the feed", async () => {
-    mockClient.getLifeOpsCalendarFeed.mockRejectedValueOnce(
-      new Error("Calendar sync failed"),
-    );
-
-    await act(async () => {
-      TestRenderer.create(
-        React.createElement(TasksEventsPanel, {
-          open: true,
-          clearEvents: vi.fn(),
-          events: [],
-        }),
-      );
-    });
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(mockSetActionNotice).toHaveBeenCalledWith(
-      "Calendar sync failed",
-      "error",
-      4800,
-    );
-  });
-
-  it("runs life-ops occurrence actions from the panel", async () => {
     let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
@@ -620,54 +545,31 @@ describe("TasksEventsPanel", () => {
       await Promise.resolve();
     });
 
-    const doneButton = tree.root
-      .findAllByType("button")
-      .find((button) => flattenText(button).includes("Done"));
-    expect(doneButton).toBeDefined();
-
-    await act(async () => {
-      doneButton?.props.onClick();
-      await Promise.resolve();
-    });
-
-    expect(mockClient.completeLifeOpsOccurrence).toHaveBeenCalledWith(
-      "occ-visible",
-      {},
-    );
+    const text = flattenText(tree.root)
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    expect(text).toContain("follow up on plugin wiring");
+    expect(text).toContain("one-off");
   });
 
-  it("starts Google OAuth from the life-ops card", async () => {
-    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue({
-      provider: "google",
-      mode: "local",
-      defaultMode: "local",
-      availableModes: ["local"],
-      configured: true,
-      connected: false,
-      reason: "disconnected",
-      identity: null,
-      grantedCapabilities: [],
-      grantedScopes: [],
-      expiresAt: null,
-      hasRefreshToken: false,
-      grant: null,
-    });
-    mockClient.getLifeOpsCalendarFeed.mockResolvedValueOnce({
-      calendarId: "primary",
-      events: [],
-      source: "cache",
-      timeMin: new Date().toISOString(),
-      timeMax: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
-      syncedAt: null,
-    });
+  it("clears activity entries from the panel", async () => {
+    const clearEvents = vi.fn();
 
     let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
         React.createElement(TasksEventsPanel, {
           open: true,
-          clearEvents: vi.fn(),
-          events: [],
+          clearEvents,
+          events: [
+            {
+              id: "evt-1",
+              timestamp: Date.now(),
+              eventType: "tool_running",
+              summary: "Running bun test",
+            },
+          ],
         }),
       );
     });
@@ -676,83 +578,15 @@ describe("TasksEventsPanel", () => {
       await Promise.resolve();
     });
 
-    const connectButton = tree.root
+    const clearButton = tree.root
       .findAllByType("button")
-      .find((button) => flattenText(button).includes("Connect"));
-    expect(connectButton).toBeDefined();
+      .find((button) => flattenText(button).includes("Clear"));
+    expect(clearButton).toBeDefined();
 
     await act(async () => {
-      connectButton?.props.onClick();
-      await Promise.resolve();
+      clearButton?.props.onClick();
     });
 
-    expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith({
-      capabilities: ["google.calendar.read"],
-    });
-    expect(mockOpenExternalUrl).toHaveBeenCalledWith(
-      "https://accounts.google.com/o/oauth2/v2/auth?state=test",
-    );
-  });
-
-  it("opens calendar events from the life-ops panel", async () => {
-    let tree!: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      tree = TestRenderer.create(
-        React.createElement(TasksEventsPanel, {
-          open: true,
-          clearEvents: vi.fn(),
-          events: [],
-        }),
-      );
-    });
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    const openButton = tree.root
-      .findAllByType("button")
-      .find((button) => flattenText(button).includes("Open"));
-    expect(openButton).toBeDefined();
-
-    await act(async () => {
-      openButton?.props.onClick();
-      await Promise.resolve();
-    });
-
-    expect(mockOpenExternalUrl).toHaveBeenCalledWith(
-      "https://calendar.google.com/event?eid=1",
-    );
-  });
-
-  it("requests Gmail send re-consent from the Google card", async () => {
-    let tree!: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      tree = TestRenderer.create(
-        React.createElement(TasksEventsPanel, {
-          open: true,
-          clearEvents: vi.fn(),
-          events: [],
-        }),
-      );
-    });
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    const enableSendButton = tree.root
-      .findAllByType("button")
-      .find((button) => flattenText(button).includes("Enable Send"));
-    expect(enableSendButton).toBeDefined();
-
-    await act(async () => {
-      enableSendButton?.props.onClick();
-      await Promise.resolve();
-    });
-
-    expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith({
-      capabilities: ["google.gmail.send"],
-    });
+    expect(clearEvents).toHaveBeenCalledTimes(1);
   });
 });
