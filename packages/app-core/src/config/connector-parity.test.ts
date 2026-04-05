@@ -113,7 +113,6 @@ const CONNECTOR_CREDS: Record<string, Record<string, unknown>> = {
   twitter: { apiKey: "tw-key" },
   whatsapp: { authDir: "./auth/whatsapp" },
   signal: { account: "+15551234567" },
-  bluebubbles: { serverUrl: "http://localhost:1234", password: "pw" },
   imessage: { cliPath: "/usr/local/bin/imessage" },
   farcaster: { apiKey: "fc-key" },
   lens: { apiKey: "lens-key" },

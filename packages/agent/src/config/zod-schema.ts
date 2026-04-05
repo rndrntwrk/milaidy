@@ -18,7 +18,6 @@ import {
   InternalHooksSchema,
 } from "./zod-schema.hooks";
 import {
-  BlueBubblesConfigSchema,
   CustomRtmpConfigSchema,
   DiscordConfigSchema,
   GoogleChatConfigSchema,
@@ -147,7 +146,6 @@ const ConnectorsSchema = z
     slack: SlackConfigSchema.optional(),
     signal: SignalConfigSchema.optional(),
     imessage: IMessageConfigSchema.optional(),
-    bluebubbles: BlueBubblesConfigSchema.optional(),
     msteams: MSTeamsConfigSchema.optional(),
     twitch: TwitchConnectorConfigSchema.optional(),
   })

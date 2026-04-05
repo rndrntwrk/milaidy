@@ -8,7 +8,6 @@ export const CONNECTOR_IDS = [
   "twitter",
   "whatsapp",
   "signal",
-  "bluebubbles",
   "imessage",
   "farcaster",
   "lens",
@@ -436,7 +435,6 @@ const FIELD_LABELS: Record<string, string> = {
   "connectors.mattermost": "Mattermost",
   "connectors.signal": "Signal",
   "connectors.imessage": "iMessage",
-  "connectors.bluebubbles": "BlueBubbles",
   "connectors.msteams": "MS Teams",
   "connectors.telegram.botToken": "Telegram Bot Token",
   "connectors.telegram.dmPolicy": "Telegram DM Policy",
@@ -457,7 +455,6 @@ const FIELD_LABELS: Record<string, string> = {
   "connectors.whatsapp.debounceMs": "WhatsApp Message Debounce (ms)",
   "connectors.signal.dmPolicy": "Signal DM Policy",
   "connectors.imessage.dmPolicy": "iMessage DM Policy",
-  "connectors.bluebubbles.dmPolicy": "BlueBubbles DM Policy",
   "connectors.discord.dm.policy": "Discord DM Policy",
   "connectors.discord.retry.attempts": "Discord Retry Attempts",
   "connectors.discord.retry.minDelayMs": "Discord Retry Min Delay (ms)",
@@ -920,8 +917,6 @@ const FIELD_HELP: Record<string, string> = {
     'Direct message access control ("pairing" recommended). "open" requires connectors.signal.allowFrom=["*"].',
   "connectors.imessage.dmPolicy":
     'Direct message access control ("pairing" recommended). "open" requires connectors.imessage.allowFrom=["*"].',
-  "connectors.bluebubbles.dmPolicy":
-    'Direct message access control ("pairing" recommended). "open" requires connectors.bluebubbles.allowFrom=["*"].',
   "connectors.discord.dm.policy":
     'Direct message access control ("pairing" recommended). "open" requires connectors.discord.dm.allowFrom=["*"].',
   "connectors.discord.retry.attempts":

@@ -1,0 +1,86 @@
+# Connect to Matrix
+
+Matrix is a federated chat network — think IRC for the modern era, with end-to-end encryption and a huge open-source ecosystem. Your Milady agent can join rooms on any Matrix homeserver (matrix.org, your company's self-hosted server, or anything else) using a standard access token.
+
+**What you'll learn:** grab your Matrix access token from Element, point Milady at your homeserver, join a room.
+
+## What you need before you start
+
+- **A Matrix account.** If you don't have one, sign up at <a href="https://app.element.io">app.element.io</a> — it's free and uses the default matrix.org homeserver. You can move to a self-hosted server later without losing anything.
+- **Milady running** with a working provider.
+
+<Callout kind="tip" title="Use a dedicated bot account">
+You can technically use your personal Matrix account's access token, but that means the bot posts under your name and shares your typing indicator. Create a second account for the bot.
+</Callout>
+
+## Step 1 — Get an access token
+
+<Steps>
+  <li>Open <a href="https://app.element.io">app.element.io</a> and sign in with the account you want the bot to use.</li>
+  <li>Click your avatar → <strong>All settings</strong>.</li>
+  <li>Go to <strong>Help &amp; About</strong> in the sidebar.</li>
+  <li>Scroll to the bottom. Under <strong>Advanced</strong>, click to reveal your <strong>Access Token</strong>.</li>
+  <li>Copy it. Treat it like a password.</li>
+</Steps>
+
+<Callout kind="warning">
+An access token can send messages, join rooms, and read your entire message history. Never paste it anywhere public, and revoke it from Element → Settings → Sessions if you suspect it leaked.
+</Callout>
+
+## Step 2 — Note your homeserver and user ID
+
+- **Homeserver:** the URL of the server your account lives on. For matrix.org accounts, this is `https://matrix.org`. For self-hosted, it's whatever you set up (e.g. `https://matrix.yourdomain.com`).
+- **User ID:** your full Matrix handle with the server attached, e.g. `@yourbot:matrix.org` or `@yourbot:yourdomain.com`.
+
+## Step 3 — Hand the details to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Matrix → Configure</strong>.</li>
+  <li>Paste the <strong>Homeserver URL</strong> — include the <code>https://</code>.</li>
+  <li>Paste the <strong>User ID</strong> (the <code>@bot:server</code> form).</li>
+  <li>Paste the <strong>Access Token</strong> from Step 1.</li>
+  <li>(Optional) Add comma-separated <strong>Room IDs</strong> if you want the bot scoped to specific rooms.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 4 — Invite the bot to a room and test
+
+<Steps>
+  <li>In Element, open a room and invite the bot by its User ID, e.g. <code>@yourbot:matrix.org</code>. Accept the invite on the bot side by enabling <strong>Auto-join invites</strong> in Milady's Matrix settings, or by logging in to the bot account once and accepting manually.</li>
+  <li>Send a message mentioning the bot (some rooms require mentions; others don't).</li>
+  <li>The bot should reply within a second or two.</li>
+</Steps>
+
+## Getting room IDs
+
+If you want to scope the bot to specific rooms:
+
+<Steps>
+  <li>In Element, open the room.</li>
+  <li>Click the room name → <strong>Settings → Advanced</strong>.</li>
+  <li>Copy the <strong>Internal room ID</strong>. It looks like <code>!abc123xyz:matrix.org</code>.</li>
+  <li>Paste into Milady's <strong>Rooms</strong> field, comma-separated for multiple.</li>
+</Steps>
+
+## Useful options
+
+| Option | What it does |
+| --- | --- |
+| **Auto-join invites** | When on, the bot automatically accepts any room invitation. Convenient for testing, risky for busy accounts. |
+| **Require mention** | Only responds when `@bot` is explicitly mentioned. Turn on for busy rooms. |
+| **Encryption** | Enables end-to-end encryption. Requires extra Matrix setup — leave off for your first try. |
+
+## Troubleshooting
+
+**"Invalid access token" when saving.**
+Token is wrong, expired (if you logged out of Element), or the homeserver URL doesn't match the account. Confirm all three.
+
+**Bot joins the room but never replies.**
+Check the **Require mention** setting. If on, the bot only speaks when mentioned. Also check that Milady's Matrix connection shows green in Settings.
+
+**Encrypted rooms show undecryptable messages.**
+End-to-end encryption in Matrix needs extra key setup that's beyond "paste a token." For your first run, use unencrypted rooms or turn off encryption for the bot.
+
+## What's next
+
+[Running multiple connectors](/docs/advanced/multi-connector-setup) — Matrix is a great addition to any open-source-friendly setup.

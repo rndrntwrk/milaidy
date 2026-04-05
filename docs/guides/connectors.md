@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 28 messaging platforms — 19 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 27 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -16,18 +16,17 @@ Connectors are platform bridges that allow your agent to communicate across mess
 6. [WhatsApp](#whatsapp)
 7. [Signal](#signal)
 8. [iMessage](#imessage)
-9. [BlueBubbles](#bluebubbles)
-10. [Blooio](#blooio)
-11. [Microsoft Teams](#microsoft-teams)
-12. [Google Chat](#google-chat)
-13. [Twitter](#twitter)
-14. [Farcaster](#farcaster)
-15. [Twitch](#twitch)
-16. [Mattermost](#mattermost)
-17. [WeChat](#wechat)
-18. [Matrix](#matrix)
-19. [Feishu / Lark](#feishu--lark)
-20. [Nostr](#nostr)
+9. [Blooio](#blooio)
+10. [Microsoft Teams](#microsoft-teams)
+11. [Google Chat](#google-chat)
+12. [Twitter](#twitter)
+13. [Farcaster](#farcaster)
+14. [Twitch](#twitch)
+15. [Mattermost](#mattermost)
+16. [WeChat](#wechat)
+17. [Matrix](#matrix)
+18. [Feishu / Lark](#feishu--lark)
+19. [Nostr](#nostr)
 21. [Lens](#lens)
 22. [Bluesky](#bluesky)
 23. [Instagram](#instagram)
@@ -56,7 +55,6 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | WhatsApp | QR code (Baileys) or Cloud API | Yes | Yes | Yes | Auto |
 | Signal | signal-cli HTTP API | Yes | Yes | Yes | Auto |
 | iMessage | Native CLI (macOS) | Yes | Yes | Yes | Auto |
-| BlueBubbles | Server URL + password | Yes | Yes | Yes | Auto |
 | Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
@@ -349,37 +347,6 @@ See the [WhatsApp Integration Guide](/guides/whatsapp) for detailed setup instru
 - Region configuration
 - Attachment inclusion toggle
 - Per-group mention and tool configuration
-
----
-
-## BlueBubbles
-
-### Setup Requirements
-
-- BlueBubbles server running
-- Server URL and password
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "bluebubbles": {
-      "enabled": true,
-      "serverUrl": "http://localhost:1234",
-      "password": "your-password",
-      "dmPolicy": "pairing"
-    }
-  }
-}
-```
-
-### Features
-
-- iMessage bridge via BlueBubbles server
-- Webhook path configuration
-- Read receipt support
-- Actions: reactions, edit, unsend, reply, send with effect, group management (rename, set icon, add/remove participants, leave), send attachment
 
 ---
 
@@ -1223,13 +1190,6 @@ The `dmPolicy` options are:
   Confirm `connectors.twitter.apiKey` is a valid Twitter/X API key. Free-tier keys have strict rate limits.
 - Tweet fetch failures:
   The FxTwitter API (`api.fxtwitter.com`) is used for tweet verification. If rate-limited, verification requests fail silently.
-
-**BlueBubbles:**
-
-- Connection refused:
-  Requires `serverUrl` pointing to a running BlueBubbles server AND the server `password`. Confirm both are set under `connectors.bluebubbles`.
-- macOS-only:
-  BlueBubbles is a macOS iMessage bridge. It will not work on Linux or Windows.
 
 **iMessage (direct):**
 

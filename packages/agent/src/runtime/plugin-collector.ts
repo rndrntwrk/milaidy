@@ -49,7 +49,6 @@ export const CHANNEL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   // Internal connector built from src/plugins/signal (not an npm package).
   signal: "@elizaos/plugin-signal",
   imessage: "@elizaos/plugin-imessage",
-  bluebubbles: "@elizaos/plugin-bluebubbles",
   farcaster: "@elizaos/plugin-farcaster",
   lens: "@elizaos/plugin-lens",
   msteams: "@elizaos/plugin-msteams",

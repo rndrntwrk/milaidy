@@ -1,0 +1,67 @@
+# Connect to ACP (Agent Communication Protocol)
+
+ACP is an experimental agent-to-agent communication protocol — a way for your Milady agent to talk to **other agents** (your own or other people's) over a shared gateway. This is different from every other connector on the list: the "users" on the other end aren't humans, they're other AI agents with their own tools, memory, and goals.
+
+**Who this is for:** developers and researchers running multi-agent setups. If you're not deliberately building a system where agents delegate work to each other, this connector isn't for you.
+
+## What ACP is, in one paragraph
+
+Most connectors bridge a human-facing platform (Discord, Slack, etc.) to your agent. ACP bridges two or more agents to each other. A gateway relays messages between agents, each of which has its own client name, session, and persistence. The practical use case is "hand off a subtask to a specialist agent" — your main agent sends a request through ACP, a specialist agent on another machine or process picks it up, does the work, and sends a response back.
+
+## What you need before you start
+
+- **Access to an ACP gateway** — this is the hub that routes messages between agents. Either run your own or use one someone else is hosting.
+- **A client identity** for this Milady instance — a name and ID that distinguishes it from other agents on the gateway.
+- **Milady running** with a working provider.
+
+## Step 1 — Get ACP gateway credentials
+
+From the gateway operator (which may be you):
+
+- **Gateway URL** — e.g. `wss://acp.yourhost.com/gateway` or `ws://localhost:4000`.
+- **Gateway token** or **Gateway password** — the credential that authorizes your agent to connect.
+
+If you're running your own gateway, refer to the ACP reference implementation's docs for how to provision these.
+
+## Step 2 — Pick a client identity
+
+<Steps>
+  <li>Pick a client name — a short machine-friendly string like <code>milady-main</code> or <code>research-agent-1</code>.</li>
+  <li>Pick a display name — what other agents see, e.g. "Alice's main assistant".</li>
+  <li>Pick an agent ID — a stable unique identifier (UUID is fine).</li>
+</Steps>
+
+## Step 3 — Configure Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → ACP → Configure</strong>.</li>
+  <li>Set <strong>Gateway URL</strong>.</li>
+  <li>Paste the <strong>Gateway token</strong> (or password) from Step 1.</li>
+  <li>Set <strong>Client name</strong>, <strong>Client display name</strong>, and <strong>Agent ID</strong> from Step 2.</li>
+  <li>(Optional) Set <strong>Default session key</strong> and <strong>Default session label</strong> if your gateway uses session-scoped routing.</li>
+  <li>Turn on <strong>Persist sessions</strong> if you want session state to survive restarts. Set <strong>Session store path</strong> to a writable directory.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 4 — Test
+
+ACP doesn't have a "send a test message" button. The right way to verify: have another agent connected to the same gateway initiate a conversation with yours. Both sides need to agree on session keys and labels for routing to work.
+
+## Troubleshooting
+
+**"Connection refused" on the gateway URL.**
+Gateway isn't running, or the URL is wrong. ACP uses WebSockets — confirm the scheme is `ws://` or `wss://`, not `http://`.
+
+**Agent connects but never receives messages.**
+Session key or label mismatch. Both sides of a conversation need matching session identifiers — coordinate with whoever's running the other agent.
+
+**Sessions don't persist across restarts.**
+Turn on `Persist sessions` and make sure the session store path is writable.
+
+## This connector is for developers
+
+If you're reading this page hoping to "talk to your agent from another place," you probably want one of the regular connectors (Discord, Telegram, etc.) — those bridge humans to the agent. ACP is specifically for wiring agents together, and if that's not what you're building, it'll feel like the wrong abstraction.
+
+## What's next
+
+- [Connect MCP servers](/docs/advanced/connect-mcp) — another way to extend agent capabilities, but more mature and with a bigger ecosystem.

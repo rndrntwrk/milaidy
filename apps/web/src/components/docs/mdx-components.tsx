@@ -1,5 +1,6 @@
 import type { MDXComponents } from "mdx/types";
 import { Callout } from "./Callout";
+import { Diagram } from "./Diagram";
 import { Screenshot } from "./Screenshot";
 import { Steps } from "./Steps";
 
@@ -13,8 +14,8 @@ import { Steps } from "./Steps";
  *      styles those selectors. We don't override them in JSX unless we need
  *      extra behavior (e.g. external link detection on <a>).
  *
- *   2. **Custom MDX shortcodes** (Callout, Steps, Screenshot) — these are
- *      authored directly as JSX tags inside .mdx files and must be exposed
+ *   2. **Custom MDX shortcodes** (Callout, Steps, Screenshot, Diagram) — these
+ *      are authored directly as JSX tags inside .mdx files and must be exposed
  *      via MDXProvider so they resolve without an explicit import.
  *
  * Pass this object to <MDXProvider components={mdxComponents}> inside
@@ -38,8 +39,10 @@ function ExternalAwareLink(
 
 export const mdxComponents: MDXComponents = {
   a: ExternalAwareLink,
-  // Shortcodes — authored as <Callout>, <Steps>, <Screenshot> in .mdx files.
+  // Shortcodes — authored as <Callout>, <Steps>, <Screenshot>, <Diagram>
+  // in .mdx files.
   Callout,
   Steps,
   Screenshot,
+  Diagram,
 };

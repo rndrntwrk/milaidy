@@ -142,19 +142,6 @@ describe("applyPluginAutoEnable — connectors", () => {
     expect(config.plugins?.allow ?? []).not.toContain("slack");
   });
 
-  it("enables bluebubbles when serverUrl and password are set", () => {
-    const params = makeParams({
-      config: {
-        connectors: {
-          bluebubbles: { serverUrl: "http://localhost:1234", password: "pass" },
-        },
-      },
-    });
-    const { config } = applyPluginAutoEnable(params);
-
-    expect(config.plugins?.allow).toContain("bluebubbles");
-  });
-
   it("enables imessage when cliPath is set", () => {
     const params = makeParams({
       config: {
@@ -667,8 +654,8 @@ describe("CONNECTOR_PLUGINS", () => {
     expect(CONNECTOR_PLUGINS.discord).toBe("@elizaos/plugin-discord");
   });
 
-  it("contains 19 connector mappings", () => {
-    expect(Object.keys(CONNECTOR_PLUGINS)).toHaveLength(19);
+  it("contains 18 connector mappings", () => {
+    expect(Object.keys(CONNECTOR_PLUGINS)).toHaveLength(18);
   });
 
   it("has keys matching CONNECTOR_IDS from schema", () => {

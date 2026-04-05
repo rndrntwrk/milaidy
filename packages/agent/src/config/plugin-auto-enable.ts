@@ -20,7 +20,6 @@ export const CONNECTOR_PLUGINS: Record<string, string> = {
   whatsapp: "@elizaos/plugin-whatsapp",
   // Internal connector built from src/plugins/signal (not an npm package).
   signal: "@elizaos/plugin-signal",
-  bluebubbles: "@elizaos/plugin-bluebubbles",
   imessage: "@elizaos/plugin-imessage",
   farcaster: "@elizaos/plugin-farcaster",
   lens: "@elizaos/plugin-lens",
@@ -165,8 +164,6 @@ export function isConnectorConfigured(
   }
 
   switch (connectorName) {
-    case "bluebubbles":
-      return Boolean(config.serverUrl && config.password);
     case "imessage":
       return Boolean(config.cliPath);
     case "signal":
