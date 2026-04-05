@@ -18,11 +18,7 @@ import {
   type GatewayDiscoveryEndpoint,
   gatewayEndpointToApiBase,
 } from "../../bridge/gateway-discovery";
-import {
-  applyColorScheme,
-  applyContentPack,
-  getBundledContentPacks,
-} from "../../content-packs";
+import { applyColorScheme, applyContentPack } from "../../content-packs";
 import {
   clearPersistedActiveServer,
   loadPersistedActivePackUrl,
@@ -115,7 +111,9 @@ export function StartupShell() {
   const progress = PHASE_PROGRESS[phase] ?? 50;
 
   // ── Content packs ───────────────────────────────────────────────
-  const bundledPacks = useMemo(() => getBundledContentPacks(), []);
+  // The 8 built-in characters are the default content — not packs.
+  // The pack browser only shows user-loaded external packs.
+  const [loadedPacks, setLoadedPacks] = useState<ResolvedContentPack[]>([]);
   const colorSchemeCleanupRef = useRef<(() => void) | null>(null);
   const packBaselineRef = useRef<PackBaselineState | null>(null);
   const initialActivePackIdRef = useRef(activePackId);
@@ -218,6 +216,10 @@ export function StartupShell() {
     try {
       const { loadContentPackFromUrl } = await import("../../content-packs");
       const pack = await loadContentPackFromUrl(url.trim());
+      setLoadedPacks((prev) => {
+        if (prev.some((p) => p.manifest.id === pack.manifest.id)) return prev;
+        return [...prev, pack];
+      });
       activatePack(pack, { captureBaseline: activePackId == null });
     } catch (err) {
       console.error("[milady][content-packs] Failed to load custom pack:", err);
@@ -283,11 +285,11 @@ export function StartupShell() {
       return;
     }
 
-    const bundledPack = bundledPacks.find(
+    const loadedPack = loadedPacks.find(
       (pack) => pack.manifest.id === persistedPackId,
     );
-    if (bundledPack) {
-      activatePack(bundledPack);
+    if (loadedPack) {
+      activatePack(loadedPack);
       return;
     }
 
@@ -328,7 +330,7 @@ export function StartupShell() {
     return () => {
       cancelled = true;
     };
-  }, [activatePack, bundledPacks, setState, t]);
+  }, [activatePack, loadedPacks, setState, t]);
 
   const continueToOnboarding = useCallback(() => {
     startupCoordinator.dispatch({ type: "SPLASH_CONTINUE" });
@@ -421,9 +423,9 @@ export function StartupShell() {
   }
 
   return (
-    <div className="flex items-center justify-center h-full w-full bg-white text-black overflow-hidden">
+    <div className="flex items-center justify-center h-full w-full bg-[#ffe600] text-black overflow-hidden">
       <img
-        src="/splash-bg.png"
+        src="/splash-bg.jpg"
         alt=""
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 h-full w-full object-cover"
@@ -432,12 +434,15 @@ export function StartupShell() {
         className="relative z-10 flex flex-col items-center gap-5 px-6 text-center w-full"
         style={{ maxWidth: 360 }}
       >
-        <h1 style={{ fontFamily: FONT }} className="text-2xl text-black">
+        <h1
+          style={{ fontFamily: FONT }}
+          className="text-2xl text-white font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]"
+        >
           MILADY
         </h1>
         <p
           style={{ fontFamily: FONT }}
-          className="text-[7px] text-black/40 uppercase leading-relaxed"
+          className="text-[7px] text-white/80 uppercase leading-relaxed drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)]"
         >
           {t("startupshell.SplashTagline", {
             defaultValue: "Your local-first AI assistant",
@@ -484,7 +489,7 @@ export function StartupShell() {
           ) : (
             <>
               <SplashContentPacks
-                packs={bundledPacks}
+                packs={loadedPacks}
                 activePackId={activePackId}
                 t={t}
                 onSelectPack={handleSelectPack}
@@ -507,6 +512,7 @@ export function StartupShell() {
                 onManualConnect={handleManualConnect}
                 onUseElizaCloud={handleUseElizaCloud}
                 onConnectGateway={handleConnectGateway}
+                onLoadContentPack={handleLoadCustomPack}
               />
             </>
           ))}
