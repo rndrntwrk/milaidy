@@ -33,6 +33,7 @@ import {
   importAppRouteModule,
   packageNameToAppSlug,
 } from "./app-package-modules";
+import { generateWalletKeys, getWalletAddressesWithSteward } from "../api/wallet";
 import { getPluginInfo, getRegistryPlugins } from "./registry-client";
 
 const LOCAL_PLUGINS_DIR = "plugins";
@@ -86,6 +87,20 @@ interface ActiveAppSession {
   launchUrl: string | null;
   viewerUrl: string | null;
   startedAt: string;
+}
+
+interface HyperscapeWalletCandidate {
+  address: string;
+  walletType: "evm" | "solana";
+  source: string;
+}
+
+interface HyperscapeWalletAuthResponse {
+  success?: boolean;
+  authToken?: string;
+  characterId?: string;
+  accountId?: string;
+  error?: string;
 }
 
 function resolveDisplayViewerInfo(
@@ -214,6 +229,332 @@ function resolveSettingLike(
     return fromEnv.trim();
   }
   return undefined;
+}
+
+function isEvmAddress(value: string | null | undefined): value is string {
+  return typeof value === "string" && /^0x[0-9a-fA-F]{40}$/.test(value.trim());
+}
+
+function isLikelySolanaAddress(
+  value: string | null | undefined,
+): value is string {
+  return (
+    typeof value === "string" &&
+    /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(value.trim())
+  );
+}
+
+function readObject(
+  value: unknown,
+): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function resolveHyperscapeApiBaseUrl(runtime?: IAgentRuntime | null): string {
+  const runtimeUrl = resolveSettingLike(runtime, "HYPERSCAPE_API_URL");
+  if (runtimeUrl) {
+    return runtimeUrl.replace(/\/+$/, "");
+  }
+  return "http://localhost:5555";
+}
+
+function extractWalletCandidateFromRecord(
+  record: unknown,
+): HyperscapeWalletCandidate | null {
+  const objectRecord = readObject(record);
+  if (!objectRecord) return null;
+
+  const directWalletAddresses = readObject(objectRecord.walletAddresses);
+  const characterRecord = readObject(objectRecord.character);
+  const characterSettings = readObject(characterRecord?.settings);
+  const characterWalletAddresses = readObject(characterRecord?.walletAddresses);
+  const characterSecrets = readObject(characterSettings?.secrets);
+
+  const evmAddressCandidates = [
+    directWalletAddresses?.evm,
+    objectRecord.walletAddress,
+    characterWalletAddresses?.evm,
+    characterRecord?.walletAddress,
+    characterSettings?.evmAddress,
+    characterSecrets?.EVM_PUBLIC_KEY,
+  ];
+  for (const candidate of evmAddressCandidates) {
+    if (typeof candidate === "string" && isEvmAddress(candidate)) {
+      return {
+        address: candidate.trim(),
+        walletType: "evm",
+        source: "runtime-agent-record",
+      };
+    }
+  }
+
+  const solanaAddressCandidates = [
+    directWalletAddresses?.solana,
+    characterWalletAddresses?.solana,
+    characterSettings?.solanaAddress,
+    characterSecrets?.SOLANA_PUBLIC_KEY,
+  ];
+  for (const candidate of solanaAddressCandidates) {
+    if (typeof candidate === "string" && isLikelySolanaAddress(candidate)) {
+      return {
+        address: candidate.trim(),
+        walletType: "solana",
+        source: "runtime-agent-record",
+      };
+    }
+  }
+
+  return null;
+}
+
+async function resolveRuntimeWalletCandidate(
+  runtime: IAgentRuntime | null,
+): Promise<HyperscapeWalletCandidate | null> {
+  if (!runtime) return null;
+
+  const runtimeLike = runtime as IAgentRuntime & {
+    getAgent?: (agentId: IAgentRuntime["agentId"]) => Promise<unknown>;
+  };
+  if (typeof runtimeLike.getAgent === "function") {
+    const agentRecord = await runtimeLike.getAgent(runtime.agentId);
+    const candidate = extractWalletCandidateFromRecord(agentRecord);
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  const characterRecord = runtime.character as unknown;
+  const characterCandidate = extractWalletCandidateFromRecord({
+    character: characterRecord,
+  });
+  if (characterCandidate) {
+    return {
+      ...characterCandidate,
+      source: "runtime-character",
+    };
+  }
+
+  const managedEvmAddress = resolveSettingLike(runtime, "ELIZA_MANAGED_EVM_ADDRESS");
+  if (isEvmAddress(managedEvmAddress)) {
+    return {
+      address: managedEvmAddress.trim(),
+      walletType: "evm",
+      source: "runtime-setting",
+    };
+  }
+
+  const managedSolanaAddress = resolveSettingLike(
+    runtime,
+    "ELIZA_MANAGED_SOLANA_ADDRESS",
+  );
+  if (isLikelySolanaAddress(managedSolanaAddress)) {
+    return {
+      address: managedSolanaAddress.trim(),
+      walletType: "solana",
+      source: "runtime-setting",
+    };
+  }
+
+  return null;
+}
+
+async function resolveHyperscapeWalletCandidate(
+  runtime: IAgentRuntime | null,
+): Promise<HyperscapeWalletCandidate | null> {
+  const runtimeWallet = await resolveRuntimeWalletCandidate(runtime);
+  if (runtimeWallet) {
+    return runtimeWallet;
+  }
+
+  const walletAddresses = await getWalletAddressesWithSteward();
+  if (isEvmAddress(walletAddresses.evmAddress)) {
+    return {
+      address: walletAddresses.evmAddress.trim(),
+      walletType: "evm",
+      source: "wallet-env",
+    };
+  }
+  if (isLikelySolanaAddress(walletAddresses.solanaAddress)) {
+    return {
+      address: walletAddresses.solanaAddress.trim(),
+      walletType: "solana",
+      source: "wallet-env",
+    };
+  }
+
+  return null;
+}
+
+function persistRuntimeSecret(
+  runtime: IAgentRuntime | null,
+  key: string,
+  value: string,
+): void {
+  process.env[key] = value;
+  if (!runtime) return;
+
+  runtime.setSetting(key, value, true);
+
+  const character = runtime.character as {
+    settings?: { secrets?: Record<string, string> };
+    secrets?: Record<string, string>;
+  };
+  if (!character.settings) {
+    character.settings = {};
+  }
+  if (!character.settings.secrets) {
+    character.settings.secrets = {};
+  }
+  character.settings.secrets[key] = value;
+  if (!character.secrets) {
+    character.secrets = {};
+  }
+  character.secrets[key] = value;
+}
+
+function provisionRuntimeWalletCandidate(
+  runtime: IAgentRuntime | null,
+): HyperscapeWalletCandidate | null {
+  if (!runtime) {
+    return null;
+  }
+
+  const keys = generateWalletKeys();
+  persistRuntimeSecret(runtime, "EVM_PRIVATE_KEY", keys.evmPrivateKey);
+  persistRuntimeSecret(runtime, "SOLANA_PRIVATE_KEY", keys.solanaPrivateKey);
+
+  return {
+    address: keys.evmAddress,
+    walletType: "evm",
+    source: "runtime-generated",
+  };
+}
+
+function persistHyperscapeCredential(
+  runtime: IAgentRuntime | null,
+  key: "HYPERSCAPE_AUTH_TOKEN" | "HYPERSCAPE_CHARACTER_ID" | "HYPERSCAPE_ACCOUNT_ID",
+  value: string,
+  secret = false,
+): void {
+  process.env[key] = value;
+  if (!runtime) return;
+
+  runtime.setSetting(key, value, secret);
+
+  const character = runtime.character as {
+    settings?: { secrets?: Record<string, string> };
+    secrets?: Record<string, string>;
+  };
+  if (!character.settings) {
+    character.settings = {};
+  }
+  if (!character.settings.secrets) {
+    character.settings.secrets = {};
+  }
+  character.settings.secrets[key] = value;
+  if (!character.secrets) {
+    character.secrets = {};
+  }
+  character.secrets[key] = value;
+}
+
+async function authenticateHyperscapeWallet(
+  runtime: IAgentRuntime,
+  wallet: HyperscapeWalletCandidate,
+): Promise<HyperscapeWalletAuthResponse> {
+  const url = new URL("/api/agents/wallet-auth", resolveHyperscapeApiBaseUrl(runtime));
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      walletAddress: wallet.address,
+      walletType: wallet.walletType,
+      agentName: runtime.character?.name || "Agent",
+      agentId: runtime.agentId,
+    }),
+    signal: AbortSignal.timeout(1_500),
+  });
+
+  const text = await response.text();
+  const data =
+    text.trim().length > 0
+      ? (JSON.parse(text) as HyperscapeWalletAuthResponse)
+      : null;
+
+  if (!response.ok) {
+    const detail =
+      data && typeof data.error === "string" && data.error.trim().length > 0
+        ? data.error.trim()
+        : text.trim();
+    throw new Error(
+      detail.length > 0
+        ? `Hyperscape wallet auth failed (${response.status}): ${detail}`
+        : `Hyperscape wallet auth failed with status ${response.status}`,
+    );
+  }
+
+  if (!data?.success || !data.authToken || !data.characterId) {
+    throw new Error("Hyperscape wallet auth returned an invalid response.");
+  }
+
+  return data;
+}
+
+async function prepareHyperscapeLaunch(
+  runtime: IAgentRuntime | null,
+): Promise<AppLaunchDiagnostic[]> {
+  if (!runtime) return [];
+
+  const authToken = resolveSettingLike(runtime, "HYPERSCAPE_AUTH_TOKEN");
+  const characterId = resolveSettingLike(runtime, "HYPERSCAPE_CHARACTER_ID");
+  if (authToken && characterId) {
+    return [];
+  }
+
+  const wallet =
+    (await resolveHyperscapeWalletCandidate(runtime)) ??
+    provisionRuntimeWalletCandidate(runtime);
+  if (!wallet) {
+    return [];
+  }
+
+  try {
+    const result = await authenticateHyperscapeWallet(runtime, wallet);
+    persistHyperscapeCredential(
+      runtime,
+      "HYPERSCAPE_AUTH_TOKEN",
+      result.authToken,
+      true,
+    );
+    persistHyperscapeCredential(
+      runtime,
+      "HYPERSCAPE_CHARACTER_ID",
+      result.characterId,
+    );
+    if (result.accountId) {
+      persistHyperscapeCredential(
+        runtime,
+        "HYPERSCAPE_ACCOUNT_ID",
+        result.accountId,
+      );
+    }
+    return [];
+  } catch (error) {
+    return [
+      {
+        code: "hyperscape-auth-provisioning-failed",
+        severity: "warning",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Hyperscape wallet auth failed.",
+      },
+    ];
+  }
 }
 
 function substituteTemplateVars(raw: string): string {
@@ -567,17 +908,50 @@ async function ensureRuntimePluginRegistered(
     return true;
   }
 
+  for (const pluginPackageName of pluginNames) {
+    const plugin = await importAppPlugin(pluginPackageName);
+    if (!plugin) {
+      continue;
+    }
+
+    await runtime.registerPlugin(plugin);
+    return true;
+  }
+
   if (!isLocal) {
     return false;
   }
 
-  const plugin = await importAppPlugin(appInfo.name);
-  if (!plugin) {
-    throw new Error(`Local app plugin "${appInfo.name}" could not be loaded.`);
+  throw new Error(
+    `Local runtime plugin for "${appInfo.name}" could not be loaded.`,
+  );
+}
+
+async function ensureHyperscapeServiceLoaded(
+  appInfo: RegistryAppPlugin,
+  runtime: IAgentRuntime | null,
+): Promise<void> {
+  if (!runtime || appInfo.name !== HYPERSCAPE_APP_NAME) {
+    return;
   }
 
-  await runtime.registerPlugin(plugin);
-  return true;
+  const runtimeLike = runtime as IAgentRuntime & {
+    hasService?: (serviceType: string) => boolean;
+    getServiceLoadPromise?: (serviceType: string) => Promise<unknown>;
+  };
+
+  if (
+    typeof runtimeLike.hasService !== "function" ||
+    !runtimeLike.hasService("hyperscapeService")
+  ) {
+    throw new Error(
+      "Hyperscape service was not registered on the agent runtime.",
+    );
+  }
+
+  if (typeof runtimeLike.getServiceLoadPromise === "function") {
+    await runtimeLike.getServiceLoadPromise("hyperscapeService");
+  }
 }
 
 export class AppManager {
@@ -675,9 +1049,8 @@ export class AppManager {
           appInfo = { ...localPluginInfo } as RegistryAppPlugin;
           appInfo.appMeta = meta;
           mergeAppMeta(appInfo, meta);
-        } else if (meta && !appInfo.viewer) {
-          // Merge local metadata into existing registry entry
-          appInfo.appMeta = meta;
+        } else {
+          appInfo.appMeta = meta ?? appInfo.appMeta;
           mergeAppMeta(appInfo, meta);
           appInfo.kind = localPluginInfo.kind ?? appInfo.kind;
         }
@@ -739,6 +1112,11 @@ export class AppManager {
       logger.info(`[app-manager] Plugin already installed: ${pluginName}`);
     }
 
+    const launchPreparationDiagnostics =
+      appInfo.name === HYPERSCAPE_APP_NAME
+        ? await prepareHyperscapeLaunch(_runtime ?? null)
+        : [];
+
     const runtimePluginRegistered = await ensureRuntimePluginRegistered(
       appInfo,
       _runtime ?? null,
@@ -747,6 +1125,7 @@ export class AppManager {
     if (runtimePluginRegistered) {
       pluginInstalled = true;
     }
+    await ensureHyperscapeServiceLoaded(appInfo, _runtime ?? null);
 
     // Build viewer config from registry app metadata
     const resolvedLaunchUrl = appInfo.launchUrl
@@ -764,12 +1143,10 @@ export class AppManager {
     const session = _runtime
       ? await resolveLaunchSession(appInfo, viewer, launchUrl, _runtime)
       : buildAppSession(appInfo, viewer?.authMessage, _runtime);
-    const diagnostics = collectLaunchDiagnostics(
-      appInfo,
-      viewer,
-      session,
-      _runtime ?? null,
-    );
+    const diagnostics = [
+      ...launchPreparationDiagnostics,
+      ...collectLaunchDiagnostics(appInfo, viewer, session, _runtime ?? null),
+    ];
     this.activeSessions.set(name, {
       appName: name,
       pluginName,

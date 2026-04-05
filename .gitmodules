@@ -1,3 +1,11 @@
 [submodule "test/contracts/lib/openzeppelin-contracts"]
 	path = test/contracts/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "plugins/plugin-agent-orchestrator"]
+	path = plugins/plugin-agent-orchestrator
+	url = https://github.com/elizaos-plugins/plugin-agent-orchestrator.git
+	branch = alpha
+[submodule "eliza"]
+	path = eliza
+	url = https://github.com/elizaos/eliza.git
+	branch = develop

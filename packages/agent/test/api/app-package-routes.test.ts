@@ -94,6 +94,53 @@ async function startHyperscapeFixtureServer(): Promise<HyperscapeFixtureServer> 
       return;
     }
 
+    if (
+      req.method === "GET" &&
+      url.pathname === "/api/agents/mapping/runtime-agent-id"
+    ) {
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          success: true,
+          agentId: "runtime-agent-id",
+          characterId: "char-runtime",
+          accountId: "wallet:evm:0x1234567890123456789012345678901234567890",
+          agentName: "Chen",
+        }),
+      );
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      url.pathname === "/api/agents/runtime-agent-id/message"
+    ) {
+      receivedCommands.push({ path: url.pathname, body });
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, message: "Message sent to agent" }));
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      url.pathname === "/api/agents/runtime-agent-id/goal/stop"
+    ) {
+      goalsPaused = true;
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, message: "Goal stopped" }));
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      url.pathname === "/api/agents/runtime-agent-id/goal/resume"
+    ) {
+      goalsPaused = false;
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, message: "Goal resumed" }));
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/agents/agent-1/goal") {
       res.statusCode = 200;
       res.end(
@@ -104,6 +151,25 @@ async function startHyperscapeFixtureServer(): Promise<HyperscapeFixtureServer> 
           availableGoals: [
             { description: "Scout the ruins", type: "explore" },
             { description: "Chop nearby tree", type: "gather" },
+          ],
+        }),
+      );
+      return;
+    }
+
+    if (
+      req.method === "GET" &&
+      url.pathname === "/api/agents/runtime-agent-id/goal"
+    ) {
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          success: true,
+          goal: goalsPaused ? null : { description: "Investigate the ruins" },
+          goalsPaused,
+          availableGoals: [
+            { description: "Investigate the ruins", type: "explore" },
+            { description: "Gather wood", type: "gather" },
           ],
         }),
       );
@@ -128,6 +194,28 @@ async function startHyperscapeFixtureServer(): Promise<HyperscapeFixtureServer> 
             },
           ],
           nearbyLocations: [{ name: "Ruins" }, { name: "Forest" }],
+        }),
+      );
+      return;
+    }
+
+    if (
+      req.method === "GET" &&
+      url.pathname === "/api/agents/runtime-agent-id/quick-actions"
+    ) {
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          success: true,
+          quickCommands: [
+            {
+              label: "Explore",
+              command: goalsPaused ? "resume exploring" : "check the ruins",
+              available: true,
+            },
+          ],
+          nearbyLocations: [{ name: "Ruins" }, { name: "Town" }],
+          playerPosition: [12, 0, 18],
         }),
       );
       return;
@@ -324,6 +412,127 @@ describe("handleAppPackageRoutes", () => {
             availableGoalCount: 2,
           }),
         }),
+      }),
+    );
+  });
+
+  test("mapped external agents resolve to live session state and use agent routes for controls", async () => {
+    const { res, getJson, getStatus } = createMockHttpResponse();
+    const handled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "GET",
+        url: "/api/apps/hyperscape/session/runtime-agent-id",
+      }),
+      res,
+      method: "GET",
+      pathname: "/api/apps/hyperscape/session/runtime-agent-id",
+      url: new URL(
+        "http://localhost:2138/api/apps/hyperscape/session/runtime-agent-id",
+      ),
+      runtime: null,
+      readJsonBody: vi.fn(async () => null),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual(
+      expect.objectContaining({
+        sessionId: "runtime-agent-id",
+        status: "running",
+        agentId: "runtime-agent-id",
+        characterId: "char-runtime",
+        followEntity: "char-runtime",
+        suggestedPrompts: ["check the ruins"],
+      }),
+    );
+
+    const controlResponse = createMockHttpResponse();
+    const controlHandled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "POST",
+        url: "/api/apps/hyperscape/session/runtime-agent-id/control",
+      }),
+      res: controlResponse.res,
+      method: "POST",
+      pathname: "/api/apps/hyperscape/session/runtime-agent-id/control",
+      url: new URL(
+        "http://localhost:2138/api/apps/hyperscape/session/runtime-agent-id/control",
+      ),
+      runtime: null,
+      readJsonBody: vi.fn(async () => ({ action: "pause" })),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(controlHandled).toBe(true);
+    expect(controlResponse.getStatus()).toBe(200);
+    expect(controlResponse.getJson()).toEqual(
+      expect.objectContaining({
+        success: true,
+        message: "Goal stopped",
+        session: expect.objectContaining({
+          sessionId: "runtime-agent-id",
+          status: "paused",
+          controls: ["resume"],
+          suggestedPrompts: ["resume exploring"],
+        }),
+      }),
+    );
+
+    const messageResponse = createMockHttpResponse();
+    const messageHandled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "POST",
+        url: "/api/apps/hyperscape/session/runtime-agent-id/message",
+      }),
+      res: messageResponse.res,
+      method: "POST",
+      pathname: "/api/apps/hyperscape/session/runtime-agent-id/message",
+      url: new URL(
+        "http://localhost:2138/api/apps/hyperscape/session/runtime-agent-id/message",
+      ),
+      runtime: null,
+      readJsonBody: vi.fn(async () => ({ content: "head to the ruins" })),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(messageHandled).toBe(true);
+    expect(messageResponse.getStatus()).toBe(200);
+    expect(fixtureServer?.receivedCommands).toEqual(
+      expect.arrayContaining([
+        {
+          path: "/api/agents/runtime-agent-id/message",
+          body: {
+            content: "head to the ruins",
+          },
+        },
+      ]),
+    );
+    expect(messageResponse.getJson()).toEqual(
+      expect.objectContaining({
+        success: true,
+        message: "Message sent to agent",
       }),
     );
   });

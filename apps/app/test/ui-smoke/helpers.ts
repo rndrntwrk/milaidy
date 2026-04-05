@@ -39,6 +39,31 @@ export async function installDefaultAppMocks(
   page: Page,
   options: AppMockOptions = {},
 ): Promise<void> {
+  await page.route("**/auth/status", async (route) => {
+    await fulfillJson(route, {
+      required: false,
+      pairingEnabled: false,
+      expiresAt: null,
+    });
+  });
+
+  await page.route("**/api/auth/status", async (route) => {
+    await fulfillJson(route, {
+      required: false,
+      pairingEnabled: false,
+      expiresAt: null,
+    });
+  });
+
+  await page.route("**/api/status", async (route) => {
+    await fulfillJson(route, {
+      state: "running",
+      startup: { phase: "running", attempt: 0 },
+      pendingRestart: false,
+      pendingRestartReasons: [],
+    });
+  });
+
   await page.route("**/api/onboarding/status", async (route) => {
     await fulfillJson(route, { complete: true });
   });

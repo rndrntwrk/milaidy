@@ -24,6 +24,7 @@ import {
   pluginRegistry,
 } from "@elizaos/plugin-plugin-manager";
 import { AppManager } from "@miladyai/agent/services/app-manager";
+import { importAppPlugin } from "@miladyai/agent/services/app-package-modules";
 import * as registryClient from "@miladyai/agent/services/registry-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -54,6 +55,8 @@ class FakeAgentRuntime implements IAgentRuntime {
   logLevelOverrides = new Map<string, string>();
   logger = elizaLogger;
   events: RuntimeEventStorage = {};
+  private settings = new Map<string, string>();
+  private registeredServiceTypes = new Set<string>();
 
   // IDatabaseAdapter methods (stubbed)
   db = {};
@@ -191,11 +194,17 @@ class FakeAgentRuntime implements IAgentRuntime {
   redactSecrets = (t: string) => t;
   getConnection = async () => ({});
   getServiceLoadPromise = async () => ({}) as Service;
-  getRegisteredServiceTypes = () => [];
-  hasService = () => false;
+  getRegisteredServiceTypes = () =>
+    Array.from(this.registeredServiceTypes) as ServiceTypeName[];
+  hasService = (serviceType: ServiceTypeName | string) =>
+    this.registeredServiceTypes.has(String(serviceType));
   registerDatabaseAdapter = () => {};
-  setSetting = () => {};
-  getSetting = () => null;
+  setSetting = (key: string, value: string | boolean | null) => {
+    if (typeof value === "string") {
+      this.settings.set(key, value);
+    }
+  };
+  getSetting = (key: string) => this.settings.get(key) ?? null;
   getConversationLength = () => 0;
   isActionPlanningEnabled = () => true;
   getLLMMode = () => "DEFAULT" as never;
@@ -204,7 +213,14 @@ class FakeAgentRuntime implements IAgentRuntime {
   getAllActions = () => [];
   getFilteredActions = () => [];
   isActionAllowed = () => ({ allowed: true, reason: "" });
-  registerPlugin = async () => {};
+  registerPlugin = async (plugin: Plugin) => {
+    this.plugins.push(plugin);
+    for (const service of plugin.services ?? []) {
+      if (typeof service?.serviceType === "string") {
+        this.registeredServiceTypes.add(service.serviceType);
+      }
+    }
+  };
 
   // Synchronous registration methods to match interface
   registerProvider(provider: Provider): void {
@@ -309,6 +325,17 @@ function jsonResponse(payload: unknown, init?: ResponseInit): Response {
       ...(init?.headers ?? {}),
     },
   });
+}
+
+async function registerRuntimePlugin(
+  runtime: FakeAgentRuntime,
+  packageName: string,
+): Promise<void> {
+  const plugin = await importAppPlugin(packageName);
+  if (!plugin) {
+    throw new Error(`Failed to import runtime plugin ${packageName}`);
+  }
+  await runtime.registerPlugin(plugin);
 }
 
 describe("AppManager Integration", () => {
@@ -672,7 +699,7 @@ describe("App URL template security", () => {
   function createPluginManagerStub(
     appInfo: RegistryPluginInfo,
   ): PluginManagerLike {
-    const pluginName = appInfo.npm.package;
+    const pluginName = appInfo.runtimePlugin ?? appInfo.npm.package;
     return {
       refreshRegistry: vi
         .fn()
@@ -802,6 +829,7 @@ describe("App session launch metadata", () => {
       launchType: "connect",
       launchUrl: "http://localhost:3333",
       kind: "app",
+      runtimePlugin: "@hyperscape/plugin-hyperscape",
       npm: {
         package: "@elizaos/app-hyperscape",
         v0Version: null,
@@ -816,7 +844,7 @@ describe("App session launch metadata", () => {
   function createPluginManagerStub(
     appInfo: RegistryPluginInfo,
   ): PluginManagerLike {
-    const pluginName = appInfo.npm.package;
+    const pluginName = appInfo.runtimePlugin ?? appInfo.npm.package;
     return {
       refreshRegistry: vi
         .fn()
@@ -858,6 +886,24 @@ describe("App session launch metadata", () => {
         requiresRestart: false,
       }),
     };
+  }
+
+  async function registerHyperscapeRuntimeStub(
+    runtime: FakeAgentRuntime,
+    pluginName: string,
+  ): Promise<void> {
+    class HyperscapeServiceStub {
+      static serviceType = "hyperscapeService";
+
+      constructor(_runtime: IAgentRuntime) {}
+
+      async initialize(_runtime: IAgentRuntime): Promise<void> {}
+    }
+
+    await runtime.registerPlugin({
+      name: pluginName,
+      services: [HyperscapeServiceStub as unknown as ServiceClass],
+    } as Plugin);
   }
 
   afterEach(() => {
@@ -937,6 +983,10 @@ describe("App session launch metadata", () => {
       if (key === "HYPERSCAPE_CHARACTER_ID") return "character-456";
       return null;
     };
+    await registerHyperscapeRuntimeStub(
+      runtime,
+      appInfo.runtimePlugin ?? appInfo.name,
+    );
 
     const appManager = new AppManager();
     const result = await appManager.launch(
@@ -1034,6 +1084,10 @@ describe("App session launch metadata", () => {
       if (key === "HYPERSCAPE_CHARACTER_ID") return "character-789";
       return null;
     };
+    await registerHyperscapeRuntimeStub(
+      runtime,
+      appInfo.runtimePlugin ?? appInfo.name,
+    );
 
     const appManager = new AppManager();
     const result = await appManager.launch(
@@ -1063,12 +1117,29 @@ describe("App session launch metadata", () => {
 
   it("reports Hyperscape launch diagnostics when no live agent session can be attached", async () => {
     process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
-    global.fetch = vi.fn().mockResolvedValue(
-      jsonResponse({
-        success: true,
-        agents: [],
-      }),
-    );
+    global.fetch = vi.fn().mockImplementation((input: string | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/embedded-agents")) {
+        return Promise.resolve(
+          jsonResponse({
+            success: true,
+            agents: [],
+          }),
+        );
+      }
+      if (url.includes("/api/agents/mapping/")) {
+        return Promise.resolve(
+          jsonResponse(
+            {
+              success: false,
+              error: "mapping not found",
+            },
+            { status: 404 },
+          ),
+        );
+      }
+      return Promise.reject(new Error(`Unexpected Hyperscape fetch: ${url}`));
+    });
 
     const appInfo = createRegistryApp({
       viewer: {
@@ -1089,6 +1160,10 @@ describe("App session launch metadata", () => {
     const runtime = new FakeAgentRuntime();
     runtime.agentId =
       "33333333-3333-3333-3333-333333333333" as FakeAgentRuntime["agentId"];
+    await registerHyperscapeRuntimeStub(
+      runtime,
+      appInfo.runtimePlugin ?? appInfo.name,
+    );
 
     const appManager = new AppManager();
     const result = await appManager.launch(
@@ -1109,10 +1184,6 @@ describe("App session launch metadata", () => {
         expect.objectContaining({
           code: "hyperscape-auth-unavailable",
           severity: "error",
-        }),
-        expect.objectContaining({
-          code: "hyperscape-runtime-bridge-inactive",
-          severity: "warning",
         }),
       ]),
     );
