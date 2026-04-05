@@ -29,6 +29,7 @@ import {
   parseSettingsWindowAction,
 } from "./application-menu";
 import { showBackgroundNoticeOnce } from "./background-notice";
+import { startBrowserWorkspaceBridgeServer } from "./browser-workspace-bridge-server";
 import { readNavigationEventUrl } from "./cloud-auth-window";
 import {
   resolveBootstrapShellRenderer,
@@ -1619,6 +1620,7 @@ async function main(): Promise<void> {
   initializeBundledWebGPU();
   checkWebGpuBrowserSupport();
   cleanupFns.length = 0;
+  cleanupFns.push(await startBrowserWorkspaceBridgeServer());
 
   // WHY push API base on every status tick with a port: embedded startup can
   // settle on a different loopback port than env/static HTML (allocation + stdout).

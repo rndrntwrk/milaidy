@@ -107,13 +107,13 @@ describe("CI workflow audit regressions", () => {
     expect(content).toContain("name: Run Life Ops smoke checks");
     expect(content).toContain("run: bun run smoke:lifeops");
     expect(content).toContain(
-      "MILADY_LIFEOPS_BASE_URLS: ${{ env.APP_ORIGIN }}",
+      `MILADY_LIFEOPS_BASE_URLS: \${{ env.APP_ORIGIN }}`,
     );
     expect(content).toContain(
-      "MILADY_SMOKE_API_TOKEN: ${{ secrets.MILADY_API_TOKEN }}",
+      `MILADY_SMOKE_API_TOKEN: \${{ secrets.MILADY_API_TOKEN }}`,
     );
     expect(content).toContain(
-      "ELIZA_SMOKE_API_TOKEN: ${{ secrets.ELIZA_API_TOKEN }}",
+      `ELIZA_SMOKE_API_TOKEN: \${{ secrets.ELIZA_API_TOKEN }}`,
     );
   });
 });

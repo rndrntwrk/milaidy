@@ -82,7 +82,7 @@ export interface WebsiteBlockerStatusResult {
   websites: string[];
   canUnblockEarly: boolean;
   requiresElevation: boolean;
-  engine: "hosts-file" | "vpn-dns" | "network-extension";
+  engine: "hosts-file" | "vpn-dns" | "network-extension" | "content-blocker";
   platform: string;
   supportsElevationPrompt: boolean;
   elevationPromptMethod:

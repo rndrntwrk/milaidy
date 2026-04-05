@@ -87,4 +87,30 @@ describe("app-package-modules", () => {
     expect(routeModule).not.toBeNull();
     await expect(routeModule?.handleAppRoutes?.({})).resolves.toBe(true);
   });
+
+  it("resolves bare slugs to plugin-backed app route modules", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-app-route-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      path.join(tempDir, "dist", "routes.js"),
+      [
+        "export async function handleAppRoutes() {",
+        "  return true;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    registryClientMocks.getPluginInfo.mockResolvedValue({
+      name: "@hyperscape/plugin-hyperscape",
+      kind: "app",
+      localPath: tempDir,
+    });
+
+    const routeModule = await importAppRouteModule("hyperscape");
+
+    expect(routeModule).not.toBeNull();
+    await expect(routeModule?.handleAppRoutes?.({})).resolves.toBe(true);
+  });
 });

@@ -97,7 +97,7 @@ function getMessageText(message: Memory): string {
 }
 
 function getMemoryTimestamp(memory: Memory): number | null {
-  const rawCreatedAt = (
+  const rawCreatedAt: unknown = (
     memory as Memory & { createdAt?: number | string | Date }
   ).createdAt;
 

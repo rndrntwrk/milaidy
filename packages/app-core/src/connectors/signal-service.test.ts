@@ -1,57 +1,64 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { tryOptionalDynamicImport } from "../test-support/test-helpers";
 
-type SignalPluginLike = {
-  name?: string;
-  description?: string;
-  actions?: Array<{ name: string }>;
-  services?: unknown[];
-  init?: unknown;
+const signalPluginModule = (await import(
+  new URL(
+    "../../../../../plugins/plugin-signal/typescript/src/index.ts",
+    import.meta.url,
+  ).href
+)) as {
+  default: {
+    name?: string;
+    description?: string;
+    actions?: Array<{ name: string }>;
+    services?: unknown[];
+    init?: unknown;
+  };
+  SignalService: {
+    new (runtime?: unknown): {
+      stop: () => Promise<void>;
+      sendMessage: (
+        recipient: string,
+        text: string,
+      ) => Promise<{ timestamp: number }>;
+      sendGroupMessage: (
+        groupId: string,
+        text: string,
+      ) => Promise<{ timestamp: number }>;
+      isServiceConnected: () => boolean;
+    };
+    start: (runtime: unknown) => Promise<SignalServiceInstance>;
+  };
 };
 
-type SignalNativeServiceInstance = {
-  connected?: boolean;
-  initialize: () => Promise<void>;
-  handleSendMessage: (
-    runtime: unknown,
-    target: unknown,
-    content: unknown,
-  ) => Promise<void>;
+const signalTypesModule = (await import(
+  new URL(
+    "../../../../../plugins/plugin-signal/typescript/src/types.ts",
+    import.meta.url,
+  ).href
+)) as {
+  SIGNAL_SERVICE_NAME: string;
+  SignalEventTypes: {
+    MESSAGE_RECEIVED: string;
+    MESSAGE_SENT: string;
+  };
 };
 
-type SignalNativeServiceClass = {
-  new (runtime: unknown): SignalNativeServiceInstance;
-  registerSendHandlers: (
-    runtime: unknown,
-    service: SignalNativeServiceInstance,
-  ) => void;
-  stopRuntime: (runtime: unknown) => Promise<void>;
-};
+const signalPlugin = signalPluginModule.default;
+const { SignalService } = signalPluginModule;
+const { SIGNAL_SERVICE_NAME, SignalEventTypes } = signalTypesModule;
 
-const signalPluginModule = await tryOptionalDynamicImport<{
-  default?: SignalPluginLike;
-  signalPlugin?: SignalPluginLike;
-}>("@elizaos/plugin-signal");
-const signalServiceModule = await tryOptionalDynamicImport<{
-  SignalNativeService?: SignalNativeServiceClass;
-}>("@elizaos/plugin-signal/service");
-
-const signalPlugin = signalPluginModule?.default ?? null;
-const namedSignalPlugin = signalPluginModule?.signalPlugin ?? null;
-const SignalNativeService = signalServiceModule?.SignalNativeService ?? null;
+type SignalServiceInstance = InstanceType<typeof SignalService>;
 
 function createRuntime(overrides: Record<string, unknown> = {}) {
   return {
     agentId: "00000000-0000-0000-0000-000000000001",
+    character: { name: "Signal Test Agent" },
     getSetting: vi.fn().mockReturnValue(undefined),
-    getService: vi.fn().mockReturnValue(null),
-    registerSendHandler: vi.fn(),
     ensureConnection: vi.fn().mockResolvedValue(undefined),
     createMemory: vi.fn().mockResolvedValue(undefined),
     emitEvent: vi.fn().mockResolvedValue(undefined),
+    getRoom: vi.fn().mockResolvedValue(null),
+    createRoom: vi.fn().mockResolvedValue(undefined),
     logger: {
       warn: vi.fn(),
       info: vi.fn(),
@@ -62,234 +69,303 @@ function createRuntime(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe.skipIf(!signalPlugin || !namedSignalPlugin || !SignalNativeService)(
-  "signalPlugin",
-  () => {
-    it("exports the expected plugin shape", () => {
-      expect(signalPlugin).toBe(namedSignalPlugin);
-      expect(signalPlugin.name).toBe("signal");
-      expect(signalPlugin.description).toContain("Signal");
-      expect(signalPlugin.actions?.map((action) => action.name)).toEqual([
-        "SEND_SIGNAL_MESSAGE",
-      ]);
-      expect(signalPlugin.services).toHaveLength(1);
-      expect(signalPlugin.services?.[0]).toBe(SignalNativeService);
-      expect(typeof signalPlugin.init).toBe("function");
-    });
-  },
-);
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
-describe.skipIf(!SignalNativeService)("SignalNativeService", () => {
-  let tmpDir: string;
-
+describe("signalPlugin", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    tmpDir = mkdtempSync(path.join(os.tmpdir(), "signal-native-test-"));
   });
 
   afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
+    vi.restoreAllMocks();
   });
 
-  it("registers the signal send handler", () => {
+  it("exports the expected plugin shape", () => {
+    expect(signalPlugin.name).toBe("signal");
+    expect(signalPlugin.description).toContain("Signal");
+    expect(signalPlugin.actions?.map((action) => action.name)).toEqual([
+      "SIGNAL_SEND_MESSAGE",
+      "SIGNAL_SEND_REACTION",
+      "SIGNAL_LIST_CONTACTS",
+      "SIGNAL_LIST_GROUPS",
+    ]);
+    expect(signalPlugin.services).toHaveLength(1);
+    expect(signalPlugin.services?.[0]).toBe(SignalService);
+    expect(typeof signalPlugin.init).toBe("function");
+  });
+
+  it("does not start when SIGNAL_ACCOUNT_NUMBER is missing", async () => {
     const runtime = createRuntime();
-    const service = new SignalNativeService(runtime as never);
 
-    SignalNativeService.registerSendHandlers(runtime as never, service);
+    const service = await SignalService.start(runtime);
 
-    expect(runtime.registerSendHandler).toHaveBeenCalledTimes(1);
-    expect(runtime.registerSendHandler.mock.calls[0][0]).toBe("signal");
-    expect(typeof runtime.registerSendHandler.mock.calls[0][1]).toBe(
-      "function",
-    );
-    expect(runtime.logger.info).toHaveBeenCalledWith(
-      "[signal] Registered send handler",
-    );
-  });
-
-  it("stops the registered runtime service", async () => {
-    const stop = vi.fn().mockResolvedValue(undefined);
-    const runtime = createRuntime({
-      getService: vi.fn().mockReturnValue({ stop }),
-    });
-
-    await SignalNativeService.stopRuntime(runtime as never);
-
-    expect(stop).toHaveBeenCalledTimes(1);
-  });
-
-  it("warns when no auth directory exists", async () => {
-    const authDir = path.join(tmpDir, "missing-auth");
-    const runtime = createRuntime({
-      getSetting: vi.fn().mockReturnValue(authDir),
-    });
-    const service = new SignalNativeService(runtime as never);
-
-    await service.initialize();
-
+    expect(service.isServiceConnected()).toBe(false);
     expect(runtime.logger.warn).toHaveBeenCalledWith(
-      `[signal] No auth data at ${authDir}. Pair via QR code first.`,
+      { src: "plugin:signal", agentId: runtime.agentId },
+      "SIGNAL_ACCOUNT_NUMBER not provided, Signal service will not start",
     );
-    expect(service.connected).toBe(false);
   });
 
-  it("throws when sending while disconnected", async () => {
+  it("connects through the Signal HTTP API when account and URL are configured", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ contacts: [] }))
+      .mockResolvedValueOnce(jsonResponse([]));
+    const runtime = createRuntime({
+      getSetting: vi.fn((key: string) => {
+        if (key === "SIGNAL_ACCOUNT_NUMBER") return "+14155551234";
+        if (key === "SIGNAL_HTTP_URL") return "http://localhost:8080";
+        return undefined;
+      }),
+    });
+
+    const service = await SignalService.start(runtime);
+
+    expect(service.isServiceConnected()).toBe(true);
+    expect((service as SignalServiceInstance & { getAccountNumber: () => string | null }).getAccountNumber()).toBe(
+      "+14155551234",
+    );
+    expect(fetchSpy).toHaveBeenNthCalledWith(
+      1,
+      "http://localhost:8080/v1/contacts/+14155551234",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchSpy).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:8080/v1/groups/+14155551234",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    await service.stop();
+  });
+
+  it("throws when sending a direct message before the client is initialized", async () => {
     const runtime = createRuntime();
-    const service = new SignalNativeService(runtime as never);
+    const service = new SignalService(runtime);
 
     await expect(
-      service.handleSendMessage(
-        runtime as never,
-        { channelId: "+14155551234" },
-        { text: "hello" },
-      ),
-    ).rejects.toThrow(
-      "Signal is not connected. Link as secondary device via QR code first.",
-    );
+      service.sendMessage("+14155551234", "hello"),
+    ).rejects.toThrow("Signal client not initialized");
   });
 
-  it("sends text through the native client when connected", async () => {
+  it("normalizes recipients and forwards direct messages through the API client", async () => {
     const runtime = createRuntime();
-    const service = new SignalNativeService(runtime as never);
-    const native = {
-      sendMessage: vi.fn().mockResolvedValue(undefined),
+    const service = new SignalService(runtime);
+    const client = {
+      sendMessage: vi.fn().mockResolvedValue({ timestamp: 123 }),
     };
 
-    (service as { native: typeof native }).native = native;
-    (service as { connected: boolean }).connected = true;
-    (service as { authDir: string }).authDir = path.join(tmpDir, "signal-auth");
+    (service as SignalServiceInstance & { client: typeof client }).client =
+      client;
 
-    await service.handleSendMessage(
-      runtime as never,
-      { entityId: "uuid-123" },
-      { text: "hello" },
-    );
+    const result = await service.sendMessage("(415) 555-1234", "hello");
 
-    expect(native.sendMessage).toHaveBeenCalledWith(
-      path.join(tmpDir, "signal-auth"),
-      "uuid-123",
+    expect(result).toEqual({ timestamp: 123 });
+    expect(client.sendMessage).toHaveBeenCalledWith(
+      "+14155551234",
       "hello",
-    );
-    expect(runtime.logger.debug).toHaveBeenCalledWith(
-      "[signal] Sent message to uuid-123",
+      undefined,
     );
   });
 
-  it("routes inbound messages through the elizaOS messaging API and reply callback", async () => {
-    const sendMessage = vi.fn().mockResolvedValue(undefined);
-    const runtime = createRuntime({
-      elizaOS: { sendMessage },
-    });
-    const service = new SignalNativeService(runtime as never);
-    const native = {
-      sendMessage: vi.fn().mockResolvedValue(undefined),
+  it("forwards group messages through the API client", async () => {
+    const runtime = createRuntime();
+    const service = new SignalService(runtime);
+    const client = {
+      sendGroupMessage: vi.fn().mockResolvedValue({ timestamp: 456 }),
     };
 
-    (service as { native: typeof native }).native = native;
-    (service as { authDir: string }).authDir = path.join(tmpDir, "signal-auth");
+    (service as SignalServiceInstance & { client: typeof client }).client =
+      client;
+
+    const result = await service.sendGroupMessage("group-123", "hello group");
+
+    expect(result).toEqual({ timestamp: 456 });
+    expect(client.sendGroupMessage).toHaveBeenCalledWith(
+      "group-123",
+      "hello group",
+      undefined,
+    );
+  });
+
+  it("stores inbound messages and routes replies through the message service callback", async () => {
+    const runtime = createRuntime();
+    const service = new SignalService(runtime);
+    const client = {
+      sendMessage: vi.fn().mockResolvedValue({ timestamp: 789 }),
+    };
+    const messageService = {
+      handleMessage: vi.fn(
+        async (
+          _runtime: unknown,
+          _memory: unknown,
+          callback: (response: { text: string }) => Promise<unknown>,
+        ) => {
+          await callback({ text: "reply from agent" });
+        },
+      ),
+    };
+
+    (service as SignalServiceInstance & { client: typeof client }).client =
+      client;
+    (
+      service as SignalServiceInstance & {
+        contactCache: Map<string, { number: string; name?: string }>;
+      }
+    ).contactCache.set("+14155551234", {
+      number: "+14155551234",
+      name: "Alice",
+    });
+    Object.assign(runtime, { messageService });
 
     await (
-      service as {
+      service as SignalServiceInstance & {
         handleIncomingMessage: (msg: {
-          senderUuid: string;
-          text: string;
+          sender: string;
+          senderUuid?: string;
+          groupId?: string;
+          message: string;
+          attachments: unknown[];
           timestamp: number;
+          reaction?: unknown;
+          quote?: unknown;
+          expiresInSeconds?: number;
+          viewOnce?: boolean;
         }) => Promise<void>;
       }
     ).handleIncomingMessage({
-      senderUuid: "uuid-abc",
-      text: "hello agent",
+      sender: "+14155551234",
+      senderUuid: undefined,
+      groupId: undefined,
+      message: "hello agent",
+      attachments: [],
       timestamp: 123,
+      reaction: undefined,
+      quote: undefined,
+      expiresInSeconds: undefined,
+      viewOnce: false,
     });
 
     expect(runtime.ensureConnection).toHaveBeenCalledWith(
       expect.objectContaining({
-        userName: "uuid-abc",
+        userName: "Alice",
         source: "signal",
-        channelId: "uuid-abc",
+        channelId: "+14155551234",
         worldName: "Signal",
       }),
     );
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-
-    const [, memory, opts] = sendMessage.mock.calls[0];
-    expect(memory.content).toEqual(
-      expect.objectContaining({
-        text: "hello agent",
+    expect(runtime.createMemory).toHaveBeenCalledTimes(2);
+    expect(runtime.emitEvent).toHaveBeenCalledWith(
+      SignalEventTypes.MESSAGE_RECEIVED,
+      {
+        runtime,
         source: "signal",
-        channelType: "DM",
-      }),
+      },
     );
-
-    const replies = await opts.onResponse({ text: "reply from agent" });
-    expect(native.sendMessage).toHaveBeenCalledWith(
-      path.join(tmpDir, "signal-auth"),
-      "uuid-abc",
+    expect(runtime.emitEvent).toHaveBeenCalledWith(
+      SignalEventTypes.MESSAGE_SENT,
+      {
+        runtime,
+        source: "signal",
+      },
+    );
+    expect(messageService.handleMessage).toHaveBeenCalledTimes(1);
+    expect(client.sendMessage).toHaveBeenCalledWith(
+      "+14155551234",
       "reply from agent",
+      undefined,
     );
-    expect(runtime.createMemory).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: expect.objectContaining({
-          text: "reply from agent",
-          source: "signal",
-          channelType: "DM",
-        }),
-      }),
-      "messages",
-    );
-    expect(replies).toHaveLength(1);
   });
 
-  it("falls back to MESSAGE_RECEIVED events when no message pipeline is available", async () => {
-    const runtime = createRuntime();
-    const service = new SignalNativeService(runtime as never);
+  it("ignores group messages when the runtime is configured to ignore them", async () => {
+    const runtime = createRuntime({
+      getSetting: vi.fn((key: string) => {
+        if (key === "SIGNAL_SHOULD_IGNORE_GROUP_MESSAGES") return "true";
+        return undefined;
+      }),
+    });
+    const service = new SignalService(runtime);
 
     await (
-      service as {
+      service as SignalServiceInstance & {
         handleIncomingMessage: (msg: {
-          senderUuid: string;
-          text: string;
+          sender: string;
+          groupId?: string;
+          message: string;
+          attachments: unknown[];
           timestamp: number;
+          reaction?: unknown;
+          quote?: unknown;
+          expiresInSeconds?: number;
+          viewOnce?: boolean;
         }) => Promise<void>;
       }
     ).handleIncomingMessage({
-      senderUuid: "uuid-fallback",
-      text: "hello fallback",
+      sender: "+14155551234",
+      groupId: "group-123",
+      message: "group hello",
+      attachments: [],
       timestamp: 456,
+      reaction: undefined,
+      quote: undefined,
+      expiresInSeconds: undefined,
+      viewOnce: false,
     });
 
-    expect(runtime.emitEvent).toHaveBeenCalledWith(["MESSAGE_RECEIVED"], {
-      runtime,
-      message: expect.objectContaining({
-        content: expect.objectContaining({
-          text: "hello fallback",
-          source: "signal",
-        }),
-      }),
-      callback: expect.any(Function),
-      source: "signal",
-    });
+    expect(runtime.ensureConnection).not.toHaveBeenCalled();
+    expect(runtime.createMemory).not.toHaveBeenCalled();
+    expect(runtime.emitEvent).not.toHaveBeenCalled();
   });
 
-  it("stops the native receive loop when shutting down", async () => {
+  it("stops polling and clears connection state on shutdown", async () => {
     const runtime = createRuntime();
-    const service = new SignalNativeService(runtime as never);
-    const authDir = path.join(tmpDir, "signal-auth");
-    mkdirSync(authDir, { recursive: true });
-    const native = {
-      stopReceiving: vi.fn().mockResolvedValue(undefined),
-    };
+    const service = new SignalService(runtime);
+    const pollInterval = setInterval(() => {}, 1_000);
 
-    (service as { native: typeof native }).native = native;
-    (service as { authDir: string }).authDir = authDir;
-    (service as { connected: boolean }).connected = true;
+    (
+      service as SignalServiceInstance & {
+        client: Record<string, never> | null;
+        isConnected: boolean;
+        pollInterval: NodeJS.Timeout | null;
+      }
+    ).client = {};
+    (
+      service as SignalServiceInstance & {
+        client: Record<string, never> | null;
+        isConnected: boolean;
+        pollInterval: NodeJS.Timeout | null;
+      }
+    ).isConnected = true;
+    (
+      service as SignalServiceInstance & {
+        client: Record<string, never> | null;
+        isConnected: boolean;
+        pollInterval: NodeJS.Timeout | null;
+      }
+    ).pollInterval = pollInterval;
 
     await service.stop();
 
-    expect(native.stopReceiving).toHaveBeenCalledWith(authDir);
-    expect(service.connected).toBe(false);
+    expect(service.isServiceConnected()).toBe(false);
+    expect(
+      (
+        service as SignalServiceInstance & {
+          pollInterval: NodeJS.Timeout | null;
+        }
+      ).pollInterval,
+    ).toBeNull();
     expect(runtime.logger.info).toHaveBeenCalledWith(
-      "[signal] Service stopped",
+      { src: "plugin:signal", agentId: runtime.agentId },
+      "Signal service stopped",
     );
+  });
+
+  it("exports the canonical signal service name", () => {
+    expect(SIGNAL_SERVICE_NAME).toBe("signal");
   });
 });

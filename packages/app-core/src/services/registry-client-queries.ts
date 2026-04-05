@@ -65,16 +65,16 @@ export function getPluginInfoFromRegistry(
   return null;
 }
 
-export function scoreEntries(
-  entries: Iterable<RegistryPluginInfo>,
+export function scoreEntries<T extends RegistryPluginInfo>(
+  entries: Iterable<T>,
   query: string,
   limit: number,
-  extraNames?: (p: RegistryPluginInfo) => string[],
-  extraTerms?: (p: RegistryPluginInfo) => string[],
-): Array<{ p: RegistryPluginInfo; s: number }> {
+  extraNames?: (p: T) => string[],
+  extraTerms?: (p: T) => string[],
+): Array<{ p: T; s: number }> {
   const lq = query.toLowerCase();
   const terms = lq.split(/\s+/).filter((t) => t.length > 1);
-  const scored: Array<{ p: RegistryPluginInfo; s: number }> = [];
+  const scored: Array<{ p: T; s: number }> = [];
 
   for (const p of entries) {
     const ln = p.name.toLowerCase();
@@ -106,8 +106,8 @@ export function scoreEntries(
   return scored.slice(0, limit);
 }
 
-export function toSearchResults(
-  results: Array<{ p: RegistryPluginInfo; s: number }>,
+export function toSearchResults<T extends RegistryPluginInfo>(
+  results: Array<{ p: T; s: number }>,
 ): RegistrySearchResult[] {
   const max = results[0]?.s || 1;
   return results.map(({ p, s }) => ({

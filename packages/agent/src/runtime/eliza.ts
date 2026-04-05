@@ -859,6 +859,31 @@ function ensureTrajectoryLoggerEnabled(
   }
 }
 
+async function installPromptOptimizationLayer(
+  runtime: AgentRuntime,
+  context: string,
+): Promise<void> {
+  try {
+    const { installPromptOptimizations } = await import(
+      "./prompt-optimization.js"
+    );
+    installPromptOptimizations(runtime);
+  } catch (err) {
+    logger.warn(
+      `[eliza] Failed to install prompt optimizations (${context}): ${err instanceof Error ? err.message : err}`,
+    );
+  }
+}
+
+async function prepareRuntimeForTrajectoryCapture(
+  runtime: AgentRuntime,
+  context: string,
+): Promise<void> {
+  await waitForTrajectoryLoggerService(runtime, context);
+  ensureTrajectoryLoggerEnabled(runtime, context);
+  await installPromptOptimizationLayer(runtime, context);
+}
+
 // ---------------------------------------------------------------------------
 // Channel secret mapping
 // ---------------------------------------------------------------------------
@@ -3388,20 +3413,7 @@ export async function startEliza(
   const initializeRuntimeServices = async (): Promise<void> => {
     // 8. Initialize the runtime (registers remaining plugins, starts services)
     await runtime.initialize();
-    await waitForTrajectoryLoggerService(runtime, "runtime.initialize()");
-    ensureTrajectoryLoggerEnabled(runtime, "runtime.initialize()");
-
-    // 8a. Install prompt optimization / capture layer (wraps runtime.useModel)
-    try {
-      const { installPromptOptimizations } = await import(
-        "./prompt-optimization.js"
-      );
-      installPromptOptimizations(runtime);
-    } catch (err) {
-      logger.warn(
-        `[eliza] Failed to install prompt optimizations: ${err instanceof Error ? err.message : err}`,
-      );
-    }
+    await prepareRuntimeForTrajectoryCapture(runtime, "runtime.initialize()");
 
     try {
       await seedBundledKnowledge(runtime);
@@ -3702,11 +3714,7 @@ export async function startEliza(
           }
 
           await newRuntime.initialize();
-          await waitForTrajectoryLoggerService(
-            newRuntime,
-            "hot-reload runtime.initialize()",
-          );
-          ensureTrajectoryLoggerEnabled(
+          await prepareRuntimeForTrajectoryCapture(
             newRuntime,
             "hot-reload runtime.initialize()",
           );

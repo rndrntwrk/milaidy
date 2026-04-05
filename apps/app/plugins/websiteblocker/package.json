@@ -1,7 +1,7 @@
 {
   "name": "@miladyai/capacitor-websiteblocker",
   "version": "1.0.0",
-  "description": "Blocks websites on mobile devices using native OS networking controls.",
+  "description": "Blocks websites through the Milady runtime on desktop/web, uses native Android VPN DNS enforcement, and manages a native Safari content blocker on iPhone and iPad.",
   "keywords": [
     "website-blocker",
     "vpn",
@@ -62,13 +62,14 @@
   },
   "milady": {
     "platforms": [
-      "browser"
+      "browser",
+      "android",
+      "ios"
     ],
     "runtime": "both",
     "platformDetails": {
-      "browser": "Delegates to the connected Milady runtime HTTP API when available",
-      "node": "Not used",
-      "ios": "Permission/status plugin with native system-settings handoff; full Network Extension enforcement requires entitlements",
+      "browser": "Delegates website blocking to the connected Milady runtime HTTP API when available",
+      "ios": "Native Safari content blocker managed by the Milady app with shared block state and Settings-based enablement",
       "android": "Native split-tunnel VPN DNS blocker with system-wide hostname blocking"
     }
   }

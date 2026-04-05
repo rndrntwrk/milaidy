@@ -22,7 +22,10 @@ import {
 
 describe("getElizaWorkspaceSkipReason", () => {
   it("respects the local eliza skip env flag", () => {
-    const skipEnvKey = ["MILADY_SKIP_LOCAL_UPSTREAMS", "ELIZA_SKIP_LOCAL_UPSTREAMS"];
+    const skipEnvKey = [
+      "MILADY_SKIP_LOCAL_UPSTREAMS",
+      "ELIZA_SKIP_LOCAL_UPSTREAMS",
+    ];
     const results = skipEnvKey.map((key) =>
       getElizaWorkspaceSkipReason("/repo/milady", {
         env: { [key]: "1" },

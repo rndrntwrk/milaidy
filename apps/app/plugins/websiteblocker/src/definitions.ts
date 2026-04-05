@@ -7,7 +7,8 @@ export type WebsiteBlockerPermissionStatus =
 export type WebsiteBlockerEngine =
   | "hosts-file"
   | "vpn-dns"
-  | "network-extension";
+  | "network-extension"
+  | "content-blocker";
 
 export type WebsiteBlockerElevationMethod =
   | "osascript"

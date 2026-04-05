@@ -3,6 +3,7 @@
  * custom actions, WhatsApp, agent events.
  */
 
+import { packageNameToAppRouteSlug } from "@miladyai/shared/contracts/apps";
 import type { CustomActionDef } from "@miladyai/agent/contracts/config";
 import { MiladyClient } from "./client-base";
 import type {
@@ -540,8 +541,9 @@ MiladyClient.prototype.getAppSessionState = async function (
   appName,
   sessionId,
 ) {
+  const routeSlug = packageNameToAppRouteSlug(appName) ?? appName;
   return this.fetch(
-    `/api/apps/${encodeURIComponent(appName.replace(/^@[^/]+\/app-/, ""))}/session/${encodeURIComponent(sessionId)}`,
+    `/api/apps/${encodeURIComponent(routeSlug)}/session/${encodeURIComponent(sessionId)}`,
   );
 };
 
@@ -551,8 +553,9 @@ MiladyClient.prototype.sendAppSessionMessage = async function (
   sessionId,
   content,
 ) {
+  const routeSlug = packageNameToAppRouteSlug(appName) ?? appName;
   return this.fetch(
-    `/api/apps/${encodeURIComponent(appName.replace(/^@[^/]+\/app-/, ""))}/session/${encodeURIComponent(sessionId)}/message`,
+    `/api/apps/${encodeURIComponent(routeSlug)}/session/${encodeURIComponent(sessionId)}/message`,
     {
       method: "POST",
       body: JSON.stringify({ content }),
@@ -566,8 +569,9 @@ MiladyClient.prototype.controlAppSession = async function (
   sessionId,
   action,
 ) {
+  const routeSlug = packageNameToAppRouteSlug(appName) ?? appName;
   return this.fetch(
-    `/api/apps/${encodeURIComponent(appName.replace(/^@[^/]+\/app-/, ""))}/session/${encodeURIComponent(sessionId)}/control`,
+    `/api/apps/${encodeURIComponent(routeSlug)}/session/${encodeURIComponent(sessionId)}/control`,
     {
       method: "POST",
       body: JSON.stringify({ action }),

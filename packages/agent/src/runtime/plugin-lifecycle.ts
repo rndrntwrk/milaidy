@@ -645,7 +645,7 @@ export function installRuntimePluginLifecycle(runtime: AgentRuntime): void {
     }
   }) as typeof runtime.registerModel;
 
-  runtime.registerEvent = ((event, handler) => {
+  runtime.registerEvent = ((event: string, handler: unknown) => {
     const capture = pluginRegistrationContext.getStore();
     const handlersBefore = runtime.events[event]?.length ?? 0;
     originalRegisterEvent(event as never, handler as never);

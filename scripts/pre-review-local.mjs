@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const ANY_TYPE_PATTERN = /:\s*any\b|<\s*any\s*>|\bas\s+any\b/;
 
 // TypeScript / JavaScript source file extensions. TS-specific patterns like
-// ANY_TYPE_PATTERN and @ts-ignore should only be scanned against these — not
+// ANY_TYPE_PATTERN and @ts-expect-error should only be scanned against these — not
 // against Markdown, YAML, JSON, shell scripts, or other non-source files where
 // the literal strings may legitimately appear in prose or configuration.
 const SOURCE_CODE_EXTENSIONS = /\.(?:m|c)?[jt]sx?$/i;

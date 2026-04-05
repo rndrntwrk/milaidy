@@ -139,6 +139,11 @@ const WEBSITE_BLOCK_PERMISSION_RE =
   /\b(permission|permissions|approval|approve|access|admin|administrator|root|sudo|allow|grant|enable)\b/i;
 const WEBSITE_BLOCK_PERMISSION_MODEL_RE =
   /\b(permission|approval|approve|access|admin|administrator|root|sudo)\b/i;
+const NON_EXECUTABLE_FALLBACK_ACTIONS = new Set(["REPLY", "NONE", "IGNORE"]);
+
+function isExecutableFallbackAction(action: { name: string }): boolean {
+  return !NON_EXECUTABLE_FALLBACK_ACTIONS.has(action.name);
+}
 
 function hasWebsiteBlockingPermissionIntent(text: string): boolean {
   return (
@@ -235,7 +240,10 @@ function inferWebsiteBlockFallback(
   if (parsed.request && userHasBlockIntent) {
     return {
       name: "BLOCK_WEBSITES",
-      parameters: parsed.request,
+      parameters: {
+        websites: [...parsed.request.websites],
+        durationMinutes: parsed.request.durationMinutes,
+      },
     };
   }
 
@@ -901,7 +909,7 @@ export async function generateChatResponse(
           }
 
           const actionTag = (content as Record<string, unknown>)?.action;
-          if (actionTag) {
+          if (typeof actionTag === "string" && actionTag.length > 0) {
             recordActionCallback(
               actionTag,
               Boolean(extractCompatTextContent(content)),
@@ -1100,6 +1108,7 @@ export async function generateChatResponse(
           existingIndex >= 0 ? fallbackActionsToRun[existingIndex] : undefined;
         if (
           existingIndex === -1 ||
+          !existingAction ||
           !hasUsableWalletFallbackParams(existingAction)
         ) {
           if (existingIndex >= 0) {
@@ -1127,15 +1136,18 @@ export async function generateChatResponse(
 
     // Only run fallback execution when the core did NOT dispatch actions itself.
     const coreHandledActions = resultRecord.mode === "actions";
+    const executableFallbackActions = fallbackActionsToRun.filter(
+      isExecutableFallbackAction,
+    );
     if (
       actionCallbacksSeen === 0 &&
       !coreHandledActions &&
-      fallbackActionsToRun.length > 0
+      executableFallbackActions.length > 0
     ) {
       runtime.logger?.warn(
         {
           src: "eliza-api",
-          parsedActions: fallbackActionsToRun.map((a) => a.name),
+          parsedActions: executableFallbackActions.map((a) => a.name),
         },
         "[eliza-api] Recovering from unexecuted action payload",
       );
@@ -1143,7 +1155,7 @@ export async function generateChatResponse(
       await executeFallbackParsedActions(
         runtime,
         message,
-        fallbackActionsToRun,
+        executableFallbackActions,
         appendIncomingText,
         recordActionCallback,
       );

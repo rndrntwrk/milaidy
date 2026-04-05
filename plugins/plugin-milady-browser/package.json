@@ -1,0 +1,32 @@
+{
+  "name": "@miladyai/plugin-milady-browser",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@elizaos/core": "workspace:*",
+    "@miladyai/agent": "workspace:*"
+  },
+  "agentConfig": {
+    "pluginType": "elizaos:plugin:1.0.0",
+    "pluginParameters": {
+      "MILADY_BROWSER_WORKSPACE_URL": {
+        "type": "string",
+        "description": "Loopback bridge URL for the Milady desktop browser workspace.",
+        "required": false,
+        "sensitive": false
+      },
+      "MILADY_BROWSER_WORKSPACE_TOKEN": {
+        "type": "string",
+        "description": "Bearer token for the Milady desktop browser workspace bridge.",
+        "required": false,
+        "sensitive": true
+      }
+    }
+  }
+}

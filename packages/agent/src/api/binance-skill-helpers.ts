@@ -31,7 +31,7 @@ function shouldExposeBinanceSkillId(skillId: string): boolean {
 
 export type FallbackParsedAction = {
   name: string;
-  parameters: Record<string, string>;
+  parameters?: Record<string, unknown>;
 };
 
 export function inferBalanceChainFromText(
@@ -195,7 +195,7 @@ export async function executeFallbackParsedActions(
         runtime,
         message,
         undefined,
-        { parameters: parsed.parameters },
+        { parameters: parsed.parameters ?? {} },
         async (content: unknown) => {
           const contentRecord =
             content && typeof content === "object"

@@ -2,6 +2,7 @@ import type {
   Action,
   HandlerOptions,
   Memory,
+  ProviderDataRecord,
 } from "@elizaos/core";
 import { checkSenderRole } from "@miladyai/plugin-roles";
 import type {
@@ -52,6 +53,10 @@ type ManageLifeOpsParams = {
   snoozePreset?: SnoozeLifeOpsOccurrenceRequest["preset"];
   snoozeMinutes?: number;
 };
+
+function toActionData<T extends object>(data: T): ProviderDataRecord {
+  return data as unknown as ProviderDataRecord;
+}
 
 function messageSource(message: Memory): string | null {
   const source = (message.content as Record<string, unknown> | undefined)?.source;
@@ -259,7 +264,7 @@ export const manageLifeOpsAction: Action = {
       return {
         success: true,
         text: `Saved "${created.definition.title}" as ${summarizeCadence(created.definition.cadence)}.`,
-        data: created,
+        data: toActionData(created),
       };
     }
 
@@ -298,7 +303,7 @@ export const manageLifeOpsAction: Action = {
       return {
         success: true,
         text: `Updated "${updated.definition.title}".`,
-        data: updated,
+        data: toActionData(updated),
       };
     }
 
@@ -324,7 +329,7 @@ export const manageLifeOpsAction: Action = {
       return {
         success: true,
         text: `Saved goal "${created.goal.title}".`,
-        data: created,
+        data: toActionData(created),
       };
     }
 
@@ -353,7 +358,7 @@ export const manageLifeOpsAction: Action = {
       return {
         success: true,
         text: `Updated goal "${updated.goal.title}".`,
-        data: updated,
+        data: toActionData(updated),
       };
     }
 
@@ -376,7 +381,7 @@ export const manageLifeOpsAction: Action = {
       return {
         success: true,
         text: `Marked "${completed.title}" done.`,
-        data: completed,
+        data: toActionData(completed),
       };
     }
 
@@ -397,7 +402,7 @@ export const manageLifeOpsAction: Action = {
       return {
         success: true,
         text: `Skipped "${skipped.title}".`,
-        data: skipped,
+        data: toActionData(skipped),
       };
     }
 
@@ -421,7 +426,7 @@ export const manageLifeOpsAction: Action = {
       return {
         success: true,
         text: `Snoozed "${snoozed.title}".`,
-        data: snoozed,
+        data: toActionData(snoozed),
       };
     }
 
@@ -442,7 +447,7 @@ export const manageLifeOpsAction: Action = {
       return {
         success: true,
         text: review.summary.explanation,
-        data: review,
+        data: toActionData(review),
       };
     }
 

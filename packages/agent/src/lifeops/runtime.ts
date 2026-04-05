@@ -1,4 +1,4 @@
-import type { IAgentRuntime, Task, UUID } from "@elizaos/core";
+import type { IAgentRuntime, Task, TaskMetadata, UUID } from "@elizaos/core";
 import { stringToUuid } from "@elizaos/core";
 import { LifeOpsService } from "./service.js";
 
@@ -26,7 +26,7 @@ function isLifeOpsSchedulerTask(task: Task): boolean {
 
 function buildSchedulerMetadata(
   current: Record<string, unknown> | null = null,
-): Record<string, unknown> {
+): TaskMetadata {
   return {
     ...(current ?? {}),
     updateInterval: LIFEOPS_TASK_INTERVAL_MS,

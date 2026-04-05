@@ -963,10 +963,7 @@ describe("chat send locking", () => {
     });
   });
 
-  // TODO: init flow race condition — handleNewConversation from startup
-  // overrides explicit handleSelectConversation calls, causing the
-  // activeConversationId to be conv-created instead of conv-1.
-  it.skip("edits a user message by truncating later history and resending it", async () => {
+  it("edits a user message by truncating later history and resending it", async () => {
     mockClient.getConversationMessages.mockResolvedValue({
       messages: [
         {
@@ -1022,6 +1019,34 @@ describe("chat send locking", () => {
         onToken: (token: string) => void,
       ) => {
         onToken("replacement");
+        mockClient.getConversationMessages.mockResolvedValue({
+          messages: [
+            {
+              id: "user-1",
+              role: "user",
+              text: "hello",
+              timestamp: 1,
+            },
+            {
+              id: "assistant-1",
+              role: "assistant",
+              text: "hi",
+              timestamp: 2,
+            },
+            {
+              id: "user-2b",
+              role: "user",
+              text: "edited question",
+              timestamp: 5,
+            },
+            {
+              id: "assistant-2b",
+              role: "assistant",
+              text: "replacement done",
+              timestamp: 6,
+            },
+          ],
+        });
         return {
           text: "replacement done",
           agentName: "Eliza",
@@ -1053,6 +1078,10 @@ describe("chat send locking", () => {
       await api?.handleSelectConversation("conv-1");
     });
 
+    await vi.waitFor(() => {
+      expect(api?.snapshot().activeConversationId).toBe("conv-1");
+    });
+
     let edited = false;
     await act(async () => {
       edited =
@@ -1076,30 +1105,38 @@ describe("chat send locking", () => {
       undefined,
     );
 
-    expect(api?.snapshot().conversationMessages).toEqual([
-      {
-        id: "user-1",
-        role: "user",
-        text: "hello",
-        timestamp: 1,
-        source: undefined,
-      },
-      {
-        id: "assistant-1",
-        role: "assistant",
-        text: "hi",
-        timestamp: 2,
-        source: undefined,
-      },
-      expect.objectContaining({
-        role: "user",
-        text: "edited question",
-      }),
-      expect.objectContaining({
-        role: "assistant",
-        text: "replacement done",
-      }),
-    ]);
+    await vi.waitFor(() => {
+      expect(api?.snapshot().conversationMessages).toEqual([
+        {
+          id: "user-1",
+          role: "user",
+          text: "hello",
+          timestamp: 1,
+          source: undefined,
+        },
+        {
+          id: "assistant-1",
+          role: "assistant",
+          text: "hi",
+          timestamp: 2,
+          source: undefined,
+        },
+        {
+          id: "user-2b",
+          role: "user",
+          text: "edited question",
+          timestamp: 5,
+          source: undefined,
+        },
+        {
+          id: "assistant-2b",
+          role: "assistant",
+          text: "replacement done",
+          timestamp: 6,
+          source: undefined,
+        },
+      ]);
+    });
 
     await act(async () => {
       tree?.unmount();

@@ -1,4 +1,5 @@
 import { logger } from "@elizaos/core";
+import { packageNameToAppDisplayName } from "@miladyai/shared/contracts/apps";
 import type {
   AppUiExtensionConfig,
   RegistryAppMeta,
@@ -177,8 +178,7 @@ export function resolveAppOverride(
   const override = LOCAL_APP_OVERRIDES[packageName];
   if (!override) return appMeta;
   const base: RegistryAppMeta = appMeta ?? {
-    displayName:
-      override.displayName ?? packageName.replace(/^@elizaos\/app-/, ""),
+    displayName: override.displayName ?? packageNameToAppDisplayName(packageName),
     category: override.category ?? "game",
     launchType: override.launchType ?? "url",
     launchUrl: override.launchUrl ?? null,

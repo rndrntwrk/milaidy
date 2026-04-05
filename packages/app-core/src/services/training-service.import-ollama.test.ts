@@ -1,8 +1,25 @@
 import { describe, expect, test, vi } from "vitest";
 import type { ElizaConfig } from "../config/config";
 
-// Skip this test when the plugin-training submodule isn't available (CI)
-let TrainingService: new (
+const trainingServiceModule = (await import(
+  new URL(
+    "../../../../../plugins/plugin-training/dist/index.js",
+    import.meta.url,
+  ).href
+)) as {
+  TrainingService: new (
+    ctx: unknown,
+  ) => {
+    importModelToOllama: (id: string, opts: unknown) => Promise<void>;
+    models: Map<string, TrainingModelRecord>;
+  };
+};
+
+const { TrainingService } = trainingServiceModule;
+
+type TrainingServiceInstance = InstanceType<typeof TrainingService>;
+
+type TrainingServiceLike = new (
   ctx: unknown,
 ) => {
   importModelToOllama: (id: string, opts: unknown) => Promise<void>;
@@ -22,32 +39,21 @@ type TrainingModelRecord = {
   benchmark: { status: string; lastRunAt: null; output: null };
 };
 
-let hasModule = false;
-try {
-  const mod = await import(
-    "../../plugins/plugin-training/src/services/trainingService"
-  );
-  TrainingService = mod.TrainingService;
-  hasModule = true;
-} catch {
-  hasModule = false;
-}
-
-describe.skipIf(!hasModule)("training service importModelToOllama", () => {
+describe("training service importModelToOllama", () => {
   test("uses manual redirect mode to prevent redirect-based SSRF escapes", async () => {
     const config = {} as ElizaConfig;
-    const service = new TrainingService({
+    const service = new (TrainingService as TrainingServiceLike)({
       getRuntime: () => null,
       getConfig: () => config,
       setConfig: () => undefined,
     });
 
     vi.spyOn(
-      service as object as { initialize: () => Promise<void> },
+      service as TrainingServiceInstance & { initialize: () => Promise<void> },
       "initialize",
     ).mockResolvedValue(undefined);
     vi.spyOn(
-      service as object as { saveState: () => Promise<void> },
+      service as TrainingServiceInstance & { saveState: () => Promise<void> },
       "saveState",
     ).mockResolvedValue(undefined);
 

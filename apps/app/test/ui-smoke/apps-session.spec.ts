@@ -455,12 +455,17 @@ async function startAppsSessionFixture(): Promise<FixtureServer> {
           viewer: {
             url: buildViewerUrl(req),
             postMessageAuth: true,
-            sandbox:
-              "allow-scripts allow-same-origin allow-popups allow-forms",
+            sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
           },
           session: {
             mode: "spectate-and-steer",
-            features: ["commands", "telemetry", "pause", "resume", "suggestions"],
+            features: [
+              "commands",
+              "telemetry",
+              "pause",
+              "resume",
+              "suggestions",
+            ],
           },
         },
       ]);
@@ -499,8 +504,7 @@ async function startAppsSessionFixture(): Promise<FixtureServer> {
         viewer: {
           url: buildViewerUrl(req),
           postMessageAuth: true,
-          sandbox:
-            "allow-scripts allow-same-origin allow-popups allow-forms",
+          sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
         },
         session: {
           mode: "spectate-and-steer",
@@ -579,8 +583,7 @@ async function startAppsSessionFixture(): Promise<FixtureServer> {
       url.pathname === `/api/apps/hyperscape/session/${SESSION_ID}/control`
     ) {
       const body = await readJsonBody(req);
-      const action =
-        typeof body?.action === "string" ? body.action.trim() : "";
+      const action = typeof body?.action === "string" ? body.action.trim() : "";
       state.lastControlAction = action;
       const paused = action === "pause";
       state.sessionState = {
@@ -610,7 +613,9 @@ async function startAppsSessionFixture(): Promise<FixtureServer> {
     }
 
     state.unexpectedRequests.push(`${req.method ?? "GET"} ${url.pathname}`);
-    sendJson(req, res, 404, { error: `Unhandled ${req.method} ${url.pathname}` });
+    sendJson(req, res, 404, {
+      error: `Unhandled ${req.method} ${url.pathname}`,
+    });
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -727,10 +732,10 @@ test("apps page launches a Hyperscape session with iframe auth and bidirectional
     const frame = page.frameLocator('[data-testid="game-view-iframe"]');
     await expect(frame.locator("#viewer-state")).toHaveText("auth-received");
     await expect(frame.locator("#auth-payload")).toContainText(
-      "\"type\": \"HYPERSCAPE_AUTH\"",
+      '"type": "HYPERSCAPE_AUTH"',
     );
     await expect(frame.locator("#auth-payload")).toContainText(
-      "\"followEntity\": \"entity-scout-1\"",
+      '"followEntity": "entity-scout-1"',
     );
 
     await expect

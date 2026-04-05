@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 import {
   assertReadyChecks,
+  installDefaultAppMocks,
   openAppPath,
   seedAppStorage,
-  installDefaultAppMocks,
 } from "./helpers";
 
 type ViewSpec = {

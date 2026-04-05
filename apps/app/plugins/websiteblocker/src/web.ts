@@ -137,13 +137,11 @@ export class WebsiteBlockerWeb extends WebPlugin {
     if (!this.canReachApi()) {
       return { opened: false };
     }
-    await fetch(
-      `${this.apiBase()}/api/permissions/website-blocking/open-settings`,
+    return await this.requestJson<{ opened: boolean }>(
+      "/api/permissions/website-blocking/open-settings",
       {
         method: "POST",
-        headers: this.authHeaders(),
       },
     );
-    return { opened: true };
   }
 }

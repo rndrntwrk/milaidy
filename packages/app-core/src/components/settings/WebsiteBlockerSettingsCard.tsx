@@ -59,10 +59,17 @@ function getModeDescription(
           "Manage website blocking on this Android device. Milady uses a local VPN DNS profile to block the selected hostnames across apps.",
         );
       }
+      if (status?.platform === "ios") {
+        return translateWithFallback(
+          t,
+          "permissionssection.WebsiteBlockingMobileIOSDescription",
+          "Manage website blocking in Safari on this iPhone or iPad. Milady uses a native Safari content blocker extension and can keep the block list in sync from the app once the extension is enabled in Settings > Safari > Extensions.",
+        );
+      }
       return translateWithFallback(
         t,
         "permissionssection.WebsiteBlockingMobileDescription",
-        "Manage website blocking from mobile. System-wide iPhone enforcement requires the Network Extension entitlement that is not enabled in this build yet.",
+        "Manage website blocking from mobile with the native platform-specific blocker integration.",
       );
     default:
       return translateWithFallback(
@@ -188,6 +195,7 @@ export function WebsiteBlockerSettingsCard({
   }, [refreshStatus]);
 
   const effectivePermission = permission ?? resolvedPermission;
+  const permissionPlatform = platform ?? status?.platform;
 
   const permissionAction = effectivePermission
     ? getPermissionAction(
@@ -195,7 +203,7 @@ export function WebsiteBlockerSettingsCard({
         "website-blocking",
         effectivePermission.status,
         effectivePermission.canRequest,
-        platform,
+        permissionPlatform,
       )
     : null;
 
@@ -215,7 +223,12 @@ export function WebsiteBlockerSettingsCard({
     }
 
     const nextDuration = indefinite ? null : Number(durationMinutes);
-    if (!indefinite && (!Number.isFinite(nextDuration) || nextDuration <= 0)) {
+    const parsedDuration =
+      typeof nextDuration === "number" ? nextDuration : Number.NaN;
+    if (
+      !indefinite &&
+      (!Number.isFinite(parsedDuration) || parsedDuration <= 0)
+    ) {
       setError(
         translateWithFallback(
           t,

@@ -1,76 +1,30 @@
-export interface RegistryVersionSupport {
-  v0: boolean;
-  v1: boolean;
-  v2: boolean;
-}
+import type {
+  AppUiExtensionConfig,
+  RegistryAppMeta,
+  RegistryAppSessionFeature,
+  RegistryAppSessionMeta,
+  RegistryAppSessionMode,
+  RegistryAppViewerMeta,
+  RegistryPluginInfo as RegistryClientPluginInfo,
+  RegistrySearchResult as RegistryClientSearchResult,
+} from "./registry-client-types.js";
 
-export interface RegistryPluginNpmInfo {
-  package: string;
-  v0Version?: string | null;
-  v1Version?: string | null;
-  v2Version?: string | null;
-}
+export type { AppUiExtensionConfig };
 
-export interface RegistryPluginViewerInfo {
-  url: string;
-  embedParams?: Record<string, string>;
-  postMessageAuth?: boolean;
-  sandbox?: string;
-}
+export type RegistryVersionSupport = RegistryClientPluginInfo["supports"];
+export type RegistryPluginNpmInfo = RegistryClientPluginInfo["npm"];
+export type RegistryPluginViewerInfo = RegistryAppViewerMeta;
+export type RegistryPluginAppSessionMode = RegistryAppSessionMode;
+export type RegistryPluginAppSessionFeature = RegistryAppSessionFeature;
+export type RegistryPluginAppSessionInfo = RegistryAppSessionMeta;
+export type RegistryPluginAppMeta = RegistryAppMeta;
 
-export type RegistryPluginAppSessionMode =
-  | "viewer"
-  | "spectate-and-steer"
-  | "external";
-
-export type RegistryPluginAppSessionFeature =
-  | "commands"
-  | "telemetry"
-  | "pause"
-  | "resume"
-  | "suggestions";
-
-export interface RegistryPluginAppSessionInfo {
-  mode: RegistryPluginAppSessionMode;
-  features?: RegistryPluginAppSessionFeature[];
-}
-
-export interface AppUiExtensionConfig {
-  detailPanelId: string;
-}
-
-export interface RegistryPluginAppMeta {
+export interface RegistryPluginInfo extends RegistryClientPluginInfo {
   displayName?: string;
-  category?: string;
-  launchType?: string;
-  launchUrl?: string | null;
-  icon?: string | null;
-  capabilities?: string[];
-  runtimePlugin?: string;
-  uiExtension?: AppUiExtensionConfig;
-  viewer?: RegistryPluginViewerInfo;
-  session?: RegistryPluginAppSessionInfo;
-}
-
-export interface RegistryPluginInfo {
-  name: string;
-  gitRepo: string;
-  gitUrl: string;
-  displayName?: string;
-  description: string;
-  homepage?: string | null;
-  topics: string[];
-  stars: number;
-  language: string;
   launchType?: string;
   launchUrl?: string | null;
   viewer?: RegistryPluginViewerInfo;
   uiExtension?: AppUiExtensionConfig;
-  kind?: string;
-  appMeta?: RegistryPluginAppMeta;
-  npm: RegistryPluginNpmInfo;
-  supports: RegistryVersionSupport;
-  // App-specific metadata
   category?: string;
   capabilities?: string[];
   icon?: string | null;
@@ -78,17 +32,9 @@ export interface RegistryPluginInfo {
   session?: RegistryPluginAppSessionInfo;
 }
 
-export interface RegistrySearchResult {
-  name: string;
-  description: string;
-  score: number;
-  tags: string[];
-  version: string | null;
-  latestVersion?: string | null;
-  npmPackage: string;
-  repository: string;
-  stars: number;
-  supports: RegistryVersionSupport;
+export interface RegistrySearchResult extends RegistryClientSearchResult {
+  version?: string | null;
+  npmPackage?: string;
 }
 
 export interface InstalledPluginInfo {

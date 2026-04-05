@@ -9,6 +9,7 @@
  */
 
 import { Button, Input } from "@miladyai/ui";
+import { packageNameToAppRouteSlug } from "@miladyai/shared/contracts/apps";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   client,
@@ -684,7 +685,9 @@ export function GameView() {
   // Filter logs relevant to the current game
   const gameLogs = useMemo(() => {
     if (!activeGameApp) return [];
-    const appKeyword = activeGameApp.toLowerCase().replace("@elizaos/app-", "");
+    const appKeyword = (
+      packageNameToAppRouteSlug(activeGameApp) ?? activeGameApp
+    ).toLowerCase();
     return logs.filter((entry) => {
       const message = (entry.message ?? "").toLowerCase();
       const source = (entry.source ?? "").toLowerCase();

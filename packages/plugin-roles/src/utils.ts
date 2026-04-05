@@ -78,12 +78,8 @@ export function matchEntityToConnectorAdminWhitelist(
 
   const normalizedWhitelist = normalizeConnectorAdminWhitelist(whitelist);
   for (const [connector, platformIds] of Object.entries(normalizedWhitelist)) {
-    const connectorMeta = entityMetadata[connector];
-    if (
-      !connectorMeta ||
-      typeof connectorMeta !== "object" ||
-      Array.isArray(connectorMeta)
-    ) {
+    const connectorMeta = asRecord(entityMetadata[connector]);
+    if (!connectorMeta) {
       continue;
     }
 

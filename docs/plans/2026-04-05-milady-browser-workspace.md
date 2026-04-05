@@ -1,0 +1,38 @@
+# Milady Browser Workspace
+
+## Decision
+
+Do not model this as "Milady web app embeds a webpage in an iframe and the agent talks to it over postMessage."
+
+Use a desktop-owned browser workspace instead:
+
+- Electrobun owns real browser tabs as isolated `BrowserWindow`s
+- Tabs can be shown or hidden without being destroyed
+- The embedded agent runtime controls those tabs through a loopback bridge
+- Milady app UI can later consume the same agent/API surface
+
+## Why iframe is the wrong primitive
+
+- Cross-origin iframe control is intentionally limited
+- External wallet injection needs a privileged shell/webview boundary
+- Background tab persistence and shared session partitions belong in the desktop host
+- Agent control needs a stable automation surface even when the Milady view is closed
+
+## Current slice
+
+- `apps/app/electrobun/src/native/browser-workspace.ts`
+  Manages hidden/showable browser tabs.
+- `apps/app/electrobun/src/browser-workspace-bridge-server.ts`
+  Exposes loopback-only control endpoints for the embedded agent runtime.
+- `packages/agent/src/services/browser-workspace.ts`
+  Shared agent-side client for the bridge.
+- `packages/agent/src/api/browser-workspace-routes.ts`
+  Exposes the feature on Milady's API surface.
+- `plugins/plugin-milady-browser`
+  Local elizaOS plugin for agent actions/providers.
+
+## Follow-up work
+
+- Add a dedicated Milady browser workspace page and tab strip
+- Add wallet-provider injection and signing approval UX
+- Add richer page introspection beyond raw JS eval/screenshot

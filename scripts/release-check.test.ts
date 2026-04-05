@@ -10,9 +10,9 @@ import {
   hasLifecycleScriptReferencingMissingFile,
   isExactVersion,
   isExactVersionSpecifier,
-  isWorkspaceSpecifier,
   isNpmOverrideConflictError,
   isPackPathCoveredByFilesList,
+  isWorkspaceSpecifier,
   parseBunPackDryRunOutput,
   shouldSkipExactPackDryRun,
 } from "./release-check";

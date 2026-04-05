@@ -1,33 +1,62 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { tryOptionalDynamicImport } from "../test-support/test-helpers";
 
-type SignalAction = {
-  name: string;
-  similes?: string[];
-  parameters?: unknown[];
-  examples?: unknown[];
-  validate?: (runtime: unknown, message: unknown) => Promise<boolean>;
-  handler?: (
-    runtime: unknown,
-    message: unknown,
-    state: unknown,
-    options: unknown,
-    callback: (response: unknown) => Promise<unknown>,
-  ) => Promise<{ success: boolean }>;
+const signalActionsModule = (await import(
+  new URL(
+    "../../../../../plugins/plugin-signal/typescript/src/actions/sendMessage.ts",
+    import.meta.url,
+  ).href
+)) as {
+  sendMessage: {
+    name: string;
+    similes?: string[];
+    examples?: unknown[];
+    validate: (
+      runtime: unknown,
+      message: unknown,
+      state?: unknown,
+      options?: unknown,
+    ) => Promise<boolean>;
+    handler: (
+      runtime: unknown,
+      message: unknown,
+      state: unknown,
+      options: unknown,
+      callback: (response: unknown) => Promise<unknown>,
+    ) => Promise<{ success: boolean; error?: string } | undefined>;
+  };
 };
 
-const signalActionsModule = await tryOptionalDynamicImport<{
-  sendSignalMessage?: SignalAction;
-}>("@elizaos/plugin-signal/actions");
-const sendSignalMessage = signalActionsModule?.sendSignalMessage ?? null;
+const { sendMessage } = signalActionsModule;
+
+type SignalServiceLike = {
+  isServiceConnected: () => boolean;
+  sendMessage: (recipient: string, text: string) => Promise<unknown>;
+  sendGroupMessage: (groupId: string, text: string) => Promise<unknown>;
+};
 
 function createRuntime(overrides: Record<string, unknown> = {}) {
+  const signalService: SignalServiceLike = {
+    isServiceConnected: () => true,
+    sendMessage: vi.fn().mockResolvedValue({ timestamp: 123 }),
+    sendGroupMessage: vi.fn().mockResolvedValue({ timestamp: 456 }),
+  };
+
   return {
-    hasService: vi.fn().mockReturnValue(true),
-    sendMessageToTarget: vi.fn().mockResolvedValue(undefined),
+    getService: vi.fn().mockReturnValue(signalService),
+    useModel: vi
+      .fn()
+      .mockResolvedValue(
+        '{"text":"hello from signal","recipient":"current"}',
+      ),
+    getRoom: vi.fn().mockResolvedValue({
+      id: "room-1",
+      channelId: "+14155551234",
+      metadata: { isGroup: false },
+    }),
     logger: {
-      warn: vi.fn(),
+      debug: vi.fn(),
       info: vi.fn(),
+      warn: vi.fn(),
       error: vi.fn(),
     },
     ...overrides,
@@ -37,127 +66,161 @@ function createRuntime(overrides: Record<string, unknown> = {}) {
 function createMessage(overrides: Record<string, unknown> = {}) {
   return {
     roomId: "00000000-0000-0000-0000-000000000010",
+    content: {
+      text: "send a signal message saying hello",
+      source: "signal",
+    },
     ...overrides,
   };
 }
 
-describe.skipIf(sendSignalMessage === null)("sendSignalMessage", () => {
+describe("signal sendMessage action", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("validates against the signal service", async () => {
+  it("validates only signal-sourced send-message intents", async () => {
     const runtime = createRuntime();
 
     await expect(
-      sendSignalMessage.validate?.(runtime as never, createMessage() as never),
+      sendMessage.validate(runtime, createMessage()),
     ).resolves.toBe(true);
 
-    runtime.hasService = vi.fn().mockReturnValue(false);
-
     await expect(
-      sendSignalMessage.validate?.(runtime as never, createMessage() as never),
+      sendMessage.validate(
+        runtime,
+        createMessage({
+          content: {
+            text: "hello there",
+            source: "discord",
+          },
+        }),
+      ),
     ).resolves.toBe(false);
   });
 
-  it("returns an error when params are missing", async () => {
-    const runtime = createRuntime();
-    const callback = vi.fn().mockResolvedValue([]);
-
-    const result = await sendSignalMessage.handler?.(
-      runtime as never,
-      createMessage() as never,
-      undefined,
-      { parameters: { phoneNumber: "+14155551234" } },
-      callback,
-    );
-
-    expect(result).toEqual({ success: false });
-    expect(runtime.logger.warn).toHaveBeenCalledWith(
-      "[signal] SEND_SIGNAL_MESSAGE missing phoneNumber or message params",
-    );
-    expect(callback).toHaveBeenCalledWith({
-      text: "I need both a phone number (or UUID) and a message to send on Signal.",
-      actions: [],
-    });
-  });
-
-  it("sends a message via sendMessageToTarget", async () => {
-    const runtime = createRuntime();
-    const callback = vi.fn().mockResolvedValue([]);
-    const message = createMessage();
-
-    const result = await sendSignalMessage.handler?.(
-      runtime as never,
-      message as never,
-      undefined,
-      {
-        parameters: {
-          phoneNumber: "+14155551234",
-          message: "hello from signal",
-        },
-      },
-      callback,
-    );
-
-    expect(result).toEqual({ success: true });
-    expect(runtime.sendMessageToTarget).toHaveBeenCalledWith(
-      {
-        source: "signal",
-        channelId: "+14155551234",
-        roomId: message.roomId,
-      },
-      {
-        text: "hello from signal",
-      },
-    );
-    expect(runtime.logger.info).toHaveBeenCalledWith(
-      "[signal] Sent message to +14155551234 via SEND_SIGNAL_MESSAGE action",
-    );
-    expect(callback).toHaveBeenCalledWith({
-      text: "Message sent to +14155551234 on Signal.",
-      actions: [],
-    });
-  });
-
-  it("surfaces send failures", async () => {
+  it("returns an error when the signal service is unavailable", async () => {
     const runtime = createRuntime({
-      sendMessageToTarget: vi.fn().mockRejectedValue(new Error("send failed")),
+      getService: vi.fn().mockReturnValue(null),
     });
     const callback = vi.fn().mockResolvedValue([]);
 
-    const result = await sendSignalMessage.handler?.(
-      runtime as never,
-      createMessage() as never,
+    const result = await sendMessage.handler(
+      runtime,
+      createMessage(),
       undefined,
-      {
-        parameters: {
-          phoneNumber: "+14155551234",
-          message: "hello from signal",
-        },
-      },
+      undefined,
       callback,
     );
 
-    expect(result).toEqual({ success: false });
-    expect(runtime.logger.error).toHaveBeenCalledWith(
-      "[signal] Failed to send Signal message: send failed",
-    );
+    expect(result).toEqual({
+      success: false,
+      error: "Signal service not available",
+    });
     expect(callback).toHaveBeenCalledWith({
-      text: "Failed to send Signal message: send failed",
-      actions: [],
+      text: "Signal service is not available.",
+      source: "signal",
     });
   });
 
-  it("exposes the expected metadata", () => {
-    expect(sendSignalMessage.name).toBe("SEND_SIGNAL_MESSAGE");
-    expect(sendSignalMessage.similes).toEqual([
-      "SIGNAL_MESSAGE",
-      "TEXT_ON_SIGNAL",
-      "MESSAGE_ON_SIGNAL",
-      "SEND_SIGNAL",
-    ]);
-    expect(sendSignalMessage.parameters).toHaveLength(2);
-    expect(sendSignalMessage.examples).toHaveLength(1);
+  it("returns an error when the model cannot extract message parameters", async () => {
+    const runtime = createRuntime({
+      useModel: vi.fn().mockResolvedValue("{}"),
+    });
+    const callback = vi.fn().mockResolvedValue([]);
+
+    const result = await sendMessage.handler(
+      runtime,
+      createMessage(),
+      undefined,
+      undefined,
+      callback,
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "Could not extract message parameters",
+    });
+    expect(callback).toHaveBeenCalledWith({
+      text: "I couldn't understand what message you want me to send. Please try again with a clearer request.",
+      source: "signal",
+    });
+  });
+
+  it("sends a direct message via the signal service", async () => {
+    const runtime = createRuntime();
+    const callback = vi.fn().mockResolvedValue([]);
+
+    const result = await sendMessage.handler(
+      runtime,
+      createMessage(),
+      {
+        data: {
+          room: {
+            id: "room-1",
+            channelId: "+14155551234",
+            metadata: { isGroup: false },
+          },
+        },
+      },
+      undefined,
+      callback,
+    );
+
+    const signalService = runtime.getService("signal") as SignalServiceLike;
+
+    expect(result).toEqual({
+      success: true,
+      data: {
+        timestamp: 123,
+        recipient: "+14155551234",
+      },
+    });
+    expect(signalService.sendMessage).toHaveBeenCalledWith(
+      "+14155551234",
+      "hello from signal",
+    );
+    expect(callback).toHaveBeenCalledWith({
+      text: "Message sent successfully.",
+      source: "signal",
+    });
+  });
+
+  it("sends a group message when the current room is a Signal group", async () => {
+    const runtime = createRuntime();
+    const callback = vi.fn().mockResolvedValue([]);
+
+    const result = await sendMessage.handler(
+      runtime,
+      createMessage(),
+      {
+        data: {
+          room: {
+            id: "room-group",
+            channelId: "group-123",
+            metadata: { isGroup: true },
+          },
+        },
+      },
+      undefined,
+      callback,
+    );
+
+    const signalService = runtime.getService("signal") as SignalServiceLike;
+
+    expect(result).toEqual({
+      success: true,
+      data: {
+        timestamp: 456,
+        recipient: "group-123",
+      },
+    });
+    expect(signalService.sendGroupMessage).toHaveBeenCalledWith(
+      "group-123",
+      "hello from signal",
+    );
+    expect(sendMessage.name).toBe("SIGNAL_SEND_MESSAGE");
+    expect(sendMessage.similes).toContain("SEND_SIGNAL_MESSAGE");
+    expect(sendMessage.examples).toHaveLength(1);
   });
 });

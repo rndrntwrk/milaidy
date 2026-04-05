@@ -424,8 +424,6 @@ describe("CLI Entry Point (npx elizaos equivalent)", () => {
     // Should contain a semver-like version
     expect(output).toMatch(/\d+\.\d+\.\d+/);
   }, 120_000);
-
-  it.skip("startEliza() boots, shows chat prompt, exits on 'exit' (covered by test/agent-runtime.e2e.test.ts)", () => { });
 });
 
 // ===================================================================

@@ -20,7 +20,10 @@ const requiredPaths = [
 const forbiddenPrefixes = ["dist/Milady.app/"];
 const orchestratorPackageName = "@elizaos/plugin-agent-orchestrator";
 const orchestratorBrokenLifecycleTarget = "./scripts/ensure-node-pty.mjs";
-const orchestratorWorkspaceDir = resolve("plugins", "plugin-agent-orchestrator");
+const orchestratorWorkspaceDir = resolve(
+  "plugins",
+  "plugin-agent-orchestrator",
+);
 const orchestratorWorkspacePackageJsonPath = resolve(
   orchestratorWorkspaceDir,
   "package.json",

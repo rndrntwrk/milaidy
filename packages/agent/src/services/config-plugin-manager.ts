@@ -57,7 +57,11 @@ export function createConfigPluginManager(
       query: string,
       limit?: number,
     ): Promise<RegistrySearchResult[]> {
-      return searchPlugins(query, limit);
+      return (await searchPlugins(query, limit)).map((result) => ({
+        ...result,
+        version: null,
+        npmPackage: result.name,
+      }));
     },
 
     async installPlugin(): Promise<PluginInstallResult> {

@@ -414,6 +414,47 @@ describe("PermissionsSection", () => {
     expect(text).toContain("local VPN DNS profile");
   });
 
+  it("renders iPhone website blocker copy for the Safari content blocker path", async () => {
+    mockIsWeb.mockReturnValue(false);
+    mockIsDesktop.mockReturnValue(false);
+    mockIsNative.value = true;
+    mockGetWebsiteBlockerStatus.mockResolvedValue({
+      available: true,
+      active: false,
+      hostsFilePath: null,
+      endsAt: null,
+      websites: [],
+      canUnblockEarly: true,
+      requiresElevation: true,
+      engine: "content-blocker",
+      platform: "ios",
+      supportsElevationPrompt: false,
+      elevationPromptMethod: "system-settings",
+      reason:
+        "Enable the Milady Website Blocker extension in iPhone Settings > Safari > Extensions before starting a block.",
+    });
+    mockGetPermission.mockResolvedValue({
+      id: "website-blocking",
+      status: "not-determined",
+      canRequest: true,
+      lastChecked: Date.now(),
+      reason:
+        "Enable the Milady Website Blocker extension in iPhone Settings > Safari > Extensions before starting a block.",
+    });
+    mockUseApp.mockReturnValue(baseContext());
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(PermissionsSection));
+    });
+
+    const root = tree?.root;
+    const text = collectText(root);
+    expect(text).toContain("Website Blocker");
+    expect(text).toContain("Safari content blocker");
+    expect(text).toContain("Settings > Safari > Extensions");
+  });
+
   it("renders desktop permission rows in the desktop app", async () => {
     mockIsWeb.mockReturnValue(false);
     mockIsDesktop.mockReturnValue(true);

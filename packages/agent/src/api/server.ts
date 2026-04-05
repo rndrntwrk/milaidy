@@ -202,6 +202,7 @@ import {
   resolvePrimaryBscRpcUrl,
 } from "./bsc-trade.js";
 import { handleBugReportRoutes } from "./bug-report-routes.js";
+import { handleBrowserWorkspaceRoutes } from "./browser-workspace-routes.js";
 import { handleCharacterRoutes } from "./character-routes.js";
 import { handleCloudBillingRoute } from "./cloud-billing-routes.js";
 import { handleCloudCompatRoute } from "./cloud-compat-routes.js";
@@ -2655,24 +2656,25 @@ export function inferWalletExecutionFallback(
 }
 
 export function hasUsableWalletFallbackParams(action: FallbackParsedAction): boolean {
+  const parameters = action.parameters ?? {};
   if (action.name === "TRANSFER_TOKEN") {
     return (
-      typeof action.parameters.toAddress === "string" &&
-      /^0x[a-fA-F0-9]{40}$/.test(action.parameters.toAddress) &&
-      typeof action.parameters.amount === "string" &&
-      action.parameters.amount.trim().length > 0 &&
-      typeof action.parameters.assetSymbol === "string" &&
-      action.parameters.assetSymbol.trim().length > 0
+      typeof parameters.toAddress === "string" &&
+      /^0x[a-fA-F0-9]{40}$/.test(parameters.toAddress) &&
+      typeof parameters.amount === "string" &&
+      parameters.amount.trim().length > 0 &&
+      typeof parameters.assetSymbol === "string" &&
+      parameters.assetSymbol.trim().length > 0
     );
   }
 
   if (action.name === "EXECUTE_TRADE") {
     return (
-      (action.parameters.side === "buy" || action.parameters.side === "sell") &&
-      typeof action.parameters.amount === "string" &&
-      action.parameters.amount.trim().length > 0 &&
-      typeof action.parameters.tokenAddress === "string" &&
-      /^0x[a-fA-F0-9]{40}$/.test(action.parameters.tokenAddress)
+      (parameters.side === "buy" || parameters.side === "sell") &&
+      typeof parameters.amount === "string" &&
+      parameters.amount.trim().length > 0 &&
+      typeof parameters.tokenAddress === "string" &&
+      /^0x[a-fA-F0-9]{40}$/.test(parameters.tokenAddress)
     );
   }
 
@@ -5454,6 +5456,20 @@ async function handleRequest(
 
   if (
     await handleWebsiteBlockerRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      readJsonBody,
+      json,
+      error,
+    })
+  ) {
+    return;
+  }
+
+  if (
+    await handleBrowserWorkspaceRoutes({
       req,
       res,
       method,

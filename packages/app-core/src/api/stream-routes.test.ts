@@ -20,6 +20,50 @@ import {
   type StreamRouteState,
 } from "./stream-routes";
 
+vi.mock("@elizaos/plugin-streaming-base", () => ({
+  buildPresetLayout: (platform: string, widgets: string[]) => ({
+    platform,
+    widgets,
+  }),
+  createStreamingPlugin: (config: {
+    platformId: string;
+    platformName: string;
+    streamKeyEnvVar: string;
+    defaultRtmpUrl: string;
+    rtmpUrlEnvVar?: string;
+  }) => ({
+    plugin: {
+      name: config.platformId,
+      description: `${config.platformName} streaming destination`,
+    },
+    createDestination: (destinationConfig?: {
+      streamKey?: string;
+      rtmpUrl?: string;
+    }) => ({
+      id: config.platformId,
+      name: config.platformName,
+      async getCredentials() {
+        const rtmpKey = (
+          destinationConfig?.streamKey ??
+          process.env[config.streamKeyEnvVar] ??
+          ""
+        ).trim();
+        if (!rtmpKey) {
+          throw new Error(`${config.platformName} streaming is not configured`);
+        }
+
+        const rtmpUrl = (
+          destinationConfig?.rtmpUrl ??
+          (config.rtmpUrlEnvVar ? process.env[config.rtmpUrlEnvVar] : "") ??
+          config.defaultRtmpUrl
+        ).trim();
+
+        return { rtmpUrl, rtmpKey };
+      },
+    }),
+  }),
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -901,44 +945,66 @@ describe("handleStreamRoute", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Streaming destination plugin availability checks — these plugins may not
-// be resolvable in all CI environments (e.g. when @elizaos/core dist misses
-// symbols the plugin dist depends on).
+// Streaming destination factories loaded from workspace plugin sources.
 // ---------------------------------------------------------------------------
 
-let hasTwitchPlugin = false;
-try {
-  const mod = await import("@elizaos/plugin-twitch-streaming");
-  hasTwitchPlugin = typeof mod.createTwitchDestination === "function";
-} catch {
-  /* not available */
+async function loadTwitchDestinationModule(): Promise<{
+  createTwitchDestination: (config?: {
+    streamKey?: string;
+  }) => {
+    id: string;
+    name: string;
+    getCredentials: () => Promise<{ rtmpUrl: string; rtmpKey: string }>;
+  };
+}> {
+  return import(
+    new URL(
+      "../../../../../plugins/plugin-twitch-streaming/src/index.ts",
+      import.meta.url,
+    ).href
+  );
 }
 
-let hasYoutubePlugin = false;
-try {
-  const mod = await import("@elizaos/plugin-youtube-streaming");
-  hasYoutubePlugin = typeof mod.createYoutubeDestination === "function";
-} catch {
-  /* not available */
+async function loadYoutubeDestinationModule(): Promise<{
+  createYoutubeDestination: (config?: {
+    streamKey?: string;
+    rtmpUrl?: string;
+  }) => {
+    id: string;
+    name: string;
+    getCredentials: () => Promise<{ rtmpUrl: string; rtmpKey: string }>;
+  };
+}> {
+  return import(
+    new URL(
+      "../../../../../plugins/plugin-youtube-streaming/src/index.ts",
+      import.meta.url,
+    ).href
+  );
 }
 
-let hasCustomRtmpPlugin = false;
-try {
-  const mod = await import("@elizaos/plugin-custom-rtmp");
-  hasCustomRtmpPlugin = typeof mod.createCustomRtmpDestination === "function";
-} catch {
-  /* not available */
+async function loadCustomRtmpPlugin(): Promise<{
+  createCustomRtmpDestination: (config?: {
+    rtmpUrl?: string;
+    rtmpKey?: string;
+  }) => {
+    id: string;
+    name: string;
+    getCredentials: () => Promise<{ rtmpUrl: string; rtmpKey: string }>;
+    onStreamStart?: unknown;
+    onStreamStop?: unknown;
+  };
+}> {
+  return import("@miladyai/agent/plugins/custom-rtmp");
 }
 
 // ---------------------------------------------------------------------------
 // createTwitchDestination() — destination adapter unit tests
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!hasTwitchPlugin)("createTwitchDestination()", () => {
+describe("createTwitchDestination()", () => {
   it("returns a StreamingDestination with id and name", async () => {
-    const { createTwitchDestination } = await import(
-      "@elizaos/plugin-twitch-streaming"
-    );
+    const { createTwitchDestination } = await loadTwitchDestinationModule();
     const dest = createTwitchDestination({ streamKey: "test-key" });
     expect(dest.id).toBe("twitch");
     expect(dest.name).toBe("Twitch");
@@ -949,9 +1015,7 @@ describe.skipIf(!hasTwitchPlugin)("createTwitchDestination()", () => {
     delete process.env.TWITCH_STREAM_KEY;
 
     try {
-      const { createTwitchDestination } = await import(
-        "@elizaos/plugin-twitch-streaming"
-      );
+      const { createTwitchDestination } = await loadTwitchDestinationModule();
       const dest = createTwitchDestination();
       await expect(dest.getCredentials()).rejects.toThrow("not configured");
     } finally {
@@ -960,9 +1024,7 @@ describe.skipIf(!hasTwitchPlugin)("createTwitchDestination()", () => {
   });
 
   it("getCredentials returns Twitch RTMP URL with config stream key", async () => {
-    const { createTwitchDestination } = await import(
-      "@elizaos/plugin-twitch-streaming"
-    );
+    const { createTwitchDestination } = await loadTwitchDestinationModule();
     const dest = createTwitchDestination({ streamKey: "my-stream-key" });
     const creds = await dest.getCredentials();
 
@@ -975,9 +1037,7 @@ describe.skipIf(!hasTwitchPlugin)("createTwitchDestination()", () => {
     process.env.TWITCH_STREAM_KEY = "env-key";
 
     try {
-      const { createTwitchDestination } = await import(
-        "@elizaos/plugin-twitch-streaming"
-      );
+      const { createTwitchDestination } = await loadTwitchDestinationModule();
       const dest = createTwitchDestination({ streamKey: "config-key" });
       const creds = await dest.getCredentials();
       expect(creds.rtmpKey).toBe("config-key");
@@ -995,9 +1055,7 @@ describe.skipIf(!hasTwitchPlugin)("createTwitchDestination()", () => {
     process.env.TWITCH_STREAM_KEY = "env-key";
 
     try {
-      const { createTwitchDestination } = await import(
-        "@elizaos/plugin-twitch-streaming"
-      );
+      const { createTwitchDestination } = await loadTwitchDestinationModule();
       const dest = createTwitchDestination();
       const creds = await dest.getCredentials();
       expect(creds.rtmpKey).toBe("env-key");
@@ -1015,11 +1073,9 @@ describe.skipIf(!hasTwitchPlugin)("createTwitchDestination()", () => {
 // createYoutubeDestination() — destination adapter unit tests
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!hasYoutubePlugin)("createYoutubeDestination()", () => {
+describe("createYoutubeDestination()", () => {
   it("returns a StreamingDestination with id and name", async () => {
-    const { createYoutubeDestination } = await import(
-      "@elizaos/plugin-youtube-streaming"
-    );
+    const { createYoutubeDestination } = await loadYoutubeDestinationModule();
     const dest = createYoutubeDestination({ streamKey: "test-key" });
     expect(dest.id).toBe("youtube");
     expect(dest.name).toBe("YouTube");
@@ -1030,9 +1086,7 @@ describe.skipIf(!hasYoutubePlugin)("createYoutubeDestination()", () => {
     delete process.env.YOUTUBE_STREAM_KEY;
 
     try {
-      const { createYoutubeDestination } = await import(
-        "@elizaos/plugin-youtube-streaming"
-      );
+      const { createYoutubeDestination } = await loadYoutubeDestinationModule();
       const dest = createYoutubeDestination();
       await expect(dest.getCredentials()).rejects.toThrow("not configured");
     } finally {
@@ -1041,9 +1095,7 @@ describe.skipIf(!hasYoutubePlugin)("createYoutubeDestination()", () => {
   });
 
   it("getCredentials returns default YouTube RTMP URL with config stream key", async () => {
-    const { createYoutubeDestination } = await import(
-      "@elizaos/plugin-youtube-streaming"
-    );
+    const { createYoutubeDestination } = await loadYoutubeDestinationModule();
     const dest = createYoutubeDestination({ streamKey: "yt-key" });
     const creds = await dest.getCredentials();
 
@@ -1052,9 +1104,7 @@ describe.skipIf(!hasYoutubePlugin)("createYoutubeDestination()", () => {
   });
 
   it("uses custom RTMP URL when provided in config", async () => {
-    const { createYoutubeDestination } = await import(
-      "@elizaos/plugin-youtube-streaming"
-    );
+    const { createYoutubeDestination } = await loadYoutubeDestinationModule();
     const dest = createYoutubeDestination({
       streamKey: "yt-key",
       rtmpUrl: "rtmp://custom.youtube.com/live",
@@ -1070,9 +1120,7 @@ describe.skipIf(!hasYoutubePlugin)("createYoutubeDestination()", () => {
     process.env.YOUTUBE_STREAM_KEY = "env-key";
 
     try {
-      const { createYoutubeDestination } = await import(
-        "@elizaos/plugin-youtube-streaming"
-      );
+      const { createYoutubeDestination } = await loadYoutubeDestinationModule();
       const dest = createYoutubeDestination({ streamKey: "config-key" });
       const creds = await dest.getCredentials();
       expect(creds.rtmpKey).toBe("config-key");
@@ -1090,9 +1138,7 @@ describe.skipIf(!hasYoutubePlugin)("createYoutubeDestination()", () => {
     process.env.YOUTUBE_STREAM_KEY = "env-key";
 
     try {
-      const { createYoutubeDestination } = await import(
-        "@elizaos/plugin-youtube-streaming"
-      );
+      const { createYoutubeDestination } = await loadYoutubeDestinationModule();
       const dest = createYoutubeDestination();
       const creds = await dest.getCredentials();
       expect(creds.rtmpKey).toBe("env-key");
@@ -1110,30 +1156,9 @@ describe.skipIf(!hasYoutubePlugin)("createYoutubeDestination()", () => {
 // createCustomRtmpDestination() — destination adapter unit tests
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!hasCustomRtmpPlugin)("createCustomRtmpDestination()", () => {
-  async function loadCustomRtmpPlugin(): Promise<{
-    createCustomRtmpDestination: (config?: {
-      rtmpUrl?: string;
-      rtmpKey?: string;
-    }) => {
-      id: string;
-      name: string;
-      getCredentials: () => Promise<{ rtmpUrl: string; rtmpKey: string }>;
-      onStreamStart?: unknown;
-      onStreamStop?: unknown;
-    };
-  } | null> {
-    try {
-      return await import("@elizaos/plugin-custom-rtmp");
-    } catch {
-      return null;
-    }
-  }
-
+describe("createCustomRtmpDestination()", () => {
   it("returns a StreamingDestination with id and name", async () => {
-    const plugin = await loadCustomRtmpPlugin();
-    if (!plugin) return;
-    const { createCustomRtmpDestination } = plugin;
+    const { createCustomRtmpDestination } = await loadCustomRtmpPlugin();
     const dest = createCustomRtmpDestination({
       rtmpUrl: "rtmp://custom.example.com/live",
       rtmpKey: "my-key",
@@ -1149,9 +1174,7 @@ describe.skipIf(!hasCustomRtmpPlugin)("createCustomRtmpDestination()", () => {
     delete process.env.CUSTOM_RTMP_KEY;
 
     try {
-      const plugin = await loadCustomRtmpPlugin();
-      if (!plugin) return;
-      const { createCustomRtmpDestination } = plugin;
+      const { createCustomRtmpDestination } = await loadCustomRtmpPlugin();
       const dest = createCustomRtmpDestination();
       await expect(dest.getCredentials()).rejects.toThrow(
         "rtmpUrl and rtmpKey",
@@ -1169,9 +1192,7 @@ describe.skipIf(!hasCustomRtmpPlugin)("createCustomRtmpDestination()", () => {
     delete process.env.CUSTOM_RTMP_KEY;
 
     try {
-      const plugin = await loadCustomRtmpPlugin();
-      if (!plugin) return;
-      const { createCustomRtmpDestination } = plugin;
+      const { createCustomRtmpDestination } = await loadCustomRtmpPlugin();
       const dest = createCustomRtmpDestination({
         rtmpUrl: "rtmp://example.com/live",
       });
@@ -1185,9 +1206,7 @@ describe.skipIf(!hasCustomRtmpPlugin)("createCustomRtmpDestination()", () => {
   });
 
   it("getCredentials returns configured RTMP URL and key", async () => {
-    const plugin = await loadCustomRtmpPlugin();
-    if (!plugin) return;
-    const { createCustomRtmpDestination } = plugin;
+    const { createCustomRtmpDestination } = await loadCustomRtmpPlugin();
     const dest = createCustomRtmpDestination({
       rtmpUrl: "rtmp://ingest.example.com/live",
       rtmpKey: "stream-key-123",
@@ -1205,9 +1224,7 @@ describe.skipIf(!hasCustomRtmpPlugin)("createCustomRtmpDestination()", () => {
     process.env.CUSTOM_RTMP_KEY = "env-key";
 
     try {
-      const plugin = await loadCustomRtmpPlugin();
-      if (!plugin) return;
-      const { createCustomRtmpDestination } = plugin;
+      const { createCustomRtmpDestination } = await loadCustomRtmpPlugin();
       const dest = createCustomRtmpDestination({
         rtmpUrl: "rtmp://config.example.com/live",
         rtmpKey: "config-key",
@@ -1236,9 +1253,7 @@ describe.skipIf(!hasCustomRtmpPlugin)("createCustomRtmpDestination()", () => {
     process.env.CUSTOM_RTMP_KEY = "env-key";
 
     try {
-      const plugin = await loadCustomRtmpPlugin();
-      if (!plugin) return;
-      const { createCustomRtmpDestination } = plugin;
+      const { createCustomRtmpDestination } = await loadCustomRtmpPlugin();
       const dest = createCustomRtmpDestination();
       const creds = await dest.getCredentials();
       expect(creds.rtmpUrl).toBe("rtmp://env.example.com/live");
@@ -1258,9 +1273,7 @@ describe.skipIf(!hasCustomRtmpPlugin)("createCustomRtmpDestination()", () => {
   });
 
   it("has no onStreamStart or onStreamStop hooks", async () => {
-    const plugin = await loadCustomRtmpPlugin();
-    if (!plugin) return;
-    const { createCustomRtmpDestination } = plugin;
+    const { createCustomRtmpDestination } = await loadCustomRtmpPlugin();
     const dest = createCustomRtmpDestination({
       rtmpUrl: "rtmp://example.com/live",
       rtmpKey: "key",

@@ -1484,10 +1484,4 @@ describe("Agent Runtime E2E", () => {
   //  11. startEliza() — real subprocess test
   // ===================================================================
 
-  describe("startEliza subprocess", () => {
-    it.skip(
-      "startEliza() boots, prints chat prompt, and exits cleanly (interactive subprocess currently hangs under Vitest; headless startup is covered above)",
-      () => {},
-    );
-  });
 });

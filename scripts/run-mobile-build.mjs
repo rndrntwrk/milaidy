@@ -116,10 +116,17 @@ async function buildAndroid() {
     path.join(androidSdkRoot, "platform-tools"),
   ]);
 
-  await run("./gradlew", [":app:assembleDebug"], {
-    cwd: androidDir,
-    env,
-  });
+  await run(
+    "./gradlew",
+    [
+      ":miladyai-capacitor-websiteblocker:testDebugUnitTest",
+      ":app:assembleDebug",
+    ],
+    {
+      cwd: androidDir,
+      env,
+    },
+  );
 }
 
 async function buildIos() {

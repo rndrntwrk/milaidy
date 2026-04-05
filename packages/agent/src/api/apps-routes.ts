@@ -1,3 +1,8 @@
+import { hasAppInterface } from "../contracts/apps.js";
+import {
+  scoreEntries,
+  toSearchResults,
+} from "../services/registry-client-queries.js";
 import type {
   InstallProgressLike,
   PluginManagerLike,
@@ -35,16 +40,7 @@ export interface AppsRouteContext
 }
 
 function isNonAppRegistryPlugin(plugin: RegistryPluginInfo): boolean {
-  if (plugin.kind === "app") return false;
-  const name = plugin.name.toLowerCase();
-  const npmPackage = plugin.npm.package.toLowerCase();
-  return !name.includes("/app-") && !npmPackage.includes("/app-");
-}
-
-function isNonAppSearchResult(plugin: RegistrySearchResult): boolean {
-  const name = plugin.name.toLowerCase();
-  const npmPackage = plugin.npmPackage.toLowerCase();
-  return !name.includes("/app-") && !npmPackage.includes("/app-");
+  return !hasAppInterface(plugin);
 }
 
 export async function handleAppsRoutes(
@@ -173,8 +169,13 @@ export async function handleAppsRoutes(
     try {
       const limit = parseBoundedLimit(url.searchParams.get("limit"));
       const pluginManager = getPluginManager();
-      const results = await pluginManager.searchRegistry(query, limit);
-      json(res, results.filter(isNonAppSearchResult));
+      const registry = await pluginManager.refreshRegistry();
+      const results = scoreEntries(
+        Array.from(registry.values()).filter(isNonAppRegistryPlugin),
+        query,
+        limit,
+      );
+      json(res, toSearchResults(results) as RegistrySearchResult[]);
     } catch (err) {
       error(
         res,

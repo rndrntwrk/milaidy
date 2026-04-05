@@ -492,11 +492,7 @@ function patchPluginDiscordIgnoreOtherMentions() {
       for (const entry of readdirSync(bunCacheDir)) {
         if (entry.startsWith("@elizaos+plugin-discord@")) {
           searchDirs.push(
-            resolve(
-              bunCacheDir,
-              entry,
-              "node_modules/@elizaos/plugin-discord",
-            ),
+            resolve(bunCacheDir, entry, "node_modules/@elizaos/plugin-discord"),
           );
         }
       }
@@ -566,7 +562,9 @@ function patchPluginDiscordIgnoreOtherMentions() {
       seenTargets.add(target);
 
       let src = readFileSync(target, "utf8");
-      if (src.includes("Ignoring message that targets another mentioned user")) {
+      if (
+        src.includes("Ignoring message that targets another mentioned user")
+      ) {
         continue;
       }
       if (!src.includes(oldSnippet)) continue;

@@ -194,11 +194,18 @@ export function getPermissionAction(
 
   if (status === "not-determined" && canRequest) {
     if (id === "website-blocking") {
-      const label = translateWithFallback(
-        t,
-        "permissionssection.RequestApproval",
-        "Request Approval",
-      );
+      const label =
+        platform === "ios"
+          ? translateWithFallback(
+              t,
+              "permissionssection.OpenSettings",
+              "Open Settings",
+            )
+          : translateWithFallback(
+              t,
+              "permissionssection.RequestApproval",
+              "Request Approval",
+            );
       return {
         ariaLabelPrefix: label,
         label,
@@ -227,11 +234,18 @@ export function getPermissionAction(
   }
 
   if (id === "website-blocking") {
-    const label = translateWithFallback(
-      t,
-      "permissionssection.OpenHostsFile",
-      "Open Hosts File",
-    );
+    const label =
+      platform === "ios"
+        ? translateWithFallback(
+            t,
+            "permissionssection.OpenSettings",
+            "Open Settings",
+          )
+        : translateWithFallback(
+            t,
+            "permissionssection.OpenHostsFile",
+            "Open Hosts File",
+          );
     return {
       ariaLabelPrefix: label,
       label,

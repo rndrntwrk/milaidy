@@ -30,12 +30,21 @@ function toSyntheticMessage(text: string | undefined): Memory | undefined {
 function buildBlockRequest(
   body: WebsiteBlockerRequestBody,
 ): ReturnType<typeof parseSelfControlBlockRequest> {
+  const parameters: {
+    websites?: string[] | string;
+    durationMinutes?: number | string | null;
+  } = {};
+
+  if (body.websites !== undefined) {
+    parameters.websites = body.websites;
+  }
+  if (body.durationMinutes !== undefined) {
+    parameters.durationMinutes = body.durationMinutes;
+  }
+
   return parseSelfControlBlockRequest(
     {
-      parameters: {
-        websites: body.websites,
-        durationMinutes: body.durationMinutes,
-      },
+      parameters,
     },
     toSyntheticMessage(body.text),
   );

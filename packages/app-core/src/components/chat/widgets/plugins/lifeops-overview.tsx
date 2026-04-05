@@ -18,7 +18,7 @@ import {
   RefreshCw,
   Sparkles,
 } from "lucide-react";
-import type { PropsWithChildren } from "react";
+import type { PropsWithChildren, ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { client } from "../../../../api";
 import { useApp } from "../../../../state";
@@ -487,7 +487,7 @@ function OccurrenceBucketBlock({
   onExplainOccurrence,
 }: {
   title: string;
-  icon: JSX.Element;
+  icon: ReactElement;
   occurrences: LifeOpsOccurrenceView[];
   actionState: string | null;
   detailState: string | null;
