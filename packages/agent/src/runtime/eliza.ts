@@ -104,7 +104,7 @@ import {
   type ElizaConfig,
   loadElizaConfig,
 } from "../config/config";
-import { collectConfigEnvVars } from "../config/env-vars";
+import { CONNECTOR_ENV_MAP, collectConfigEnvVars } from "../config/env-vars";
 import { resolveStateDir, resolveUserPath } from "../config/paths";
 import { resolveServerOnlyPort } from "../config/runtime-env";
 import type { PluginInstallRecord } from "../config/types.eliza";
@@ -854,47 +854,7 @@ function ensureTrajectoryLoggerEnabled(
  * Eliza stores channel credentials under `config.channels.<name>.<field>`,
  * while elizaOS plugins read them from process.env.
  */
-const CHANNEL_ENV_MAP: Readonly<
-  Record<string, Readonly<Record<string, string>>>
-> = {
-  discord: {
-    token: "DISCORD_API_TOKEN",
-    botToken: "DISCORD_API_TOKEN",
-    applicationId: "DISCORD_APPLICATION_ID",
-  },
-  telegram: {
-    botToken: "TELEGRAM_BOT_TOKEN",
-  },
-  slack: {
-    botToken: "SLACK_BOT_TOKEN",
-    appToken: "SLACK_APP_TOKEN",
-    userToken: "SLACK_USER_TOKEN",
-  },
-  signal: {
-    authDir: "SIGNAL_AUTH_DIR",
-    account: "SIGNAL_ACCOUNT_NUMBER",
-    httpUrl: "SIGNAL_HTTP_URL",
-    cliPath: "SIGNAL_CLI_PATH",
-  },
-  msteams: {
-    appId: "MSTEAMS_APP_ID",
-    appPassword: "MSTEAMS_APP_PASSWORD",
-  },
-  mattermost: {
-    botToken: "MATTERMOST_BOT_TOKEN",
-    baseUrl: "MATTERMOST_BASE_URL",
-  },
-  googlechat: {
-    serviceAccountKey: "GOOGLE_CHAT_SERVICE_ACCOUNT_KEY",
-  },
-  blooio: {
-    apiKey: "BLOOIO_API_KEY",
-    fromNumber: "BLOOIO_PHONE_NUMBER",
-    webhookSecret: "BLOOIO_WEBHOOK_SECRET",
-    webhookUrl: "BLOOIO_WEBHOOK_URL",
-    webhookPort: "BLOOIO_WEBHOOK_PORT",
-  },
-};
+const CHANNEL_ENV_MAP = CONNECTOR_ENV_MAP;
 
 // ---------------------------------------------------------------------------
 // Plugin resolution
@@ -1351,12 +1311,8 @@ export function applyConnectorSecretsToEnv(config: ElizaConfig): void {
         (typeof configObj.botToken === "string" && configObj.botToken.trim()) ||
         "";
       if (tokenValue) {
-        if (!process.env.DISCORD_API_TOKEN) {
-          process.env.DISCORD_API_TOKEN = tokenValue;
-        }
-        if (!process.env.DISCORD_BOT_TOKEN) {
-          process.env.DISCORD_BOT_TOKEN = tokenValue;
-        }
+        process.env.DISCORD_API_TOKEN = tokenValue;
+        process.env.DISCORD_BOT_TOKEN = tokenValue;
       }
     }
 
@@ -1366,11 +1322,7 @@ export function applyConnectorSecretsToEnv(config: ElizaConfig): void {
     for (const [configField, envKey] of Object.entries(envMap)) {
       const value = configObj[configField];
       if (typeof value === "string" && value.trim()) {
-        // Set if unset, or overwrite stale [REDACTED] placeholders
-        const existing = process.env[envKey];
-        if (!existing || existing.startsWith("[REDACT")) {
-          process.env[envKey] = value;
-        }
+        process.env[envKey] = value;
       }
     }
   }
@@ -1649,7 +1601,7 @@ function reconcilePglitePidFile(dataDir: string): PglitePidFileStatus {
     if (Number.isNaN(pid) || pid <= 0) {
       // Malformed pid file — remove it
       unlinkSync(pidPath);
-      logger.warn(`[eliza] Removed malformed PGlite postmaster.pid`);
+      logger.info(`[eliza] Removed malformed PGlite postmaster.pid`);
       return "cleared-malformed";
     }
 
@@ -1666,7 +1618,7 @@ function reconcilePglitePidFile(dataDir: string): PglitePidFileStatus {
       if (code === "ESRCH") {
         // Process doesn't exist — stale pid file, safe to remove
         unlinkSync(pidPath);
-        logger.warn(
+        logger.info(
           `[eliza] Removed stale PGlite postmaster.pid (process ${pid} not running)`,
         );
         return "cleared-stale";

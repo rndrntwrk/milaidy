@@ -1,43 +1,92 @@
 import fs from "node:fs";
 import path from "node:path";
-import JSON5 from "json5";
 import {
   isMiladySettingsDebugEnabled,
   migrateLegacyRuntimeConfig,
   sanitizeForSettingsDebug,
   settingsDebugCloudSummary,
 } from "@miladyai/shared";
-import { collectConfigEnvVars } from "./env-vars";
+import JSON5 from "json5";
+import { collectConfigEnvVars, collectConnectorEnvVars } from "./env-vars";
 import { resolveConfigIncludes } from "./includes";
 import { resolveConfigPath, resolveStateDir, resolveUserPath } from "./paths";
 import type { ElizaConfig } from "./types";
 
 export * from "./types";
 
-function resolveConfigWritePath(
-  env: NodeJS.ProcessEnv = process.env,
-): string {
+function resolveConfigWritePath(env: NodeJS.ProcessEnv = process.env): string {
   const persistPath =
     env.MILADY_PERSIST_CONFIG_PATH?.trim() ??
     env.ELIZA_PERSIST_CONFIG_PATH?.trim();
   return persistPath ? resolveUserPath(persistPath) : resolveConfigPath();
 }
 
-export function loadElizaConfig(): ElizaConfig {
-  const configPath = resolveConfigPath();
+function applyConfigEnvToProcessEnv(entries: Record<string, string>): void {
+  for (const [key, value] of Object.entries(entries)) {
+    process.env[key] = value;
+  }
+}
 
+function isPlainObject(
+  value: unknown,
+): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+function mergeConfigRecords(
+  base: unknown,
+  overlay: unknown,
+): unknown {
+  if (overlay === undefined) {
+    return base;
+  }
+
+  if (Array.isArray(overlay)) {
+    return overlay.slice();
+  }
+
+  if (isPlainObject(base) && isPlainObject(overlay)) {
+    const merged: Record<string, unknown> = { ...base };
+    for (const [key, value] of Object.entries(overlay)) {
+      merged[key] = mergeConfigRecords(base[key], value);
+    }
+    return merged;
+  }
+
+  return overlay;
+}
+
+function readConfigFile(configPath: string): ElizaConfig | null {
   let raw: string;
   try {
     raw = fs.readFileSync(configPath, "utf-8");
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      return { logging: { level: "error" } } as ElizaConfig;
+      return null;
     }
     throw err;
   }
 
   const parsed = JSON5.parse(raw) as Record<string, unknown>;
-  const resolved = resolveConfigIncludes(parsed, configPath) as ElizaConfig;
+  return resolveConfigIncludes(parsed, configPath) as ElizaConfig;
+}
+
+export function loadElizaConfig(): ElizaConfig {
+  const configPath = resolveConfigPath();
+  const persistPath = resolveConfigWritePath();
+
+  const baseConfig = readConfigFile(configPath);
+  const persistedConfig =
+    persistPath !== configPath ? readConfigFile(persistPath) : null;
+  const resolved = (
+    baseConfig || persistedConfig
+      ? mergeConfigRecords(baseConfig ?? {}, persistedConfig ?? {})
+      : { logging: { level: "error" } }
+  ) as ElizaConfig;
   migrateLegacyRuntimeConfig(resolved as Record<string, unknown>);
 
   const skillsJsonPath = path.join(resolveStateDir(), "skills.json");
@@ -55,9 +104,7 @@ export function loadElizaConfig(): ElizaConfig {
       );
     } catch (err) {
       console.warn(
-        `[eliza] Failed to auto-create ~/.eliza/skills.json: ${
-          String(err)
-        }`,
+        `[eliza] Failed to auto-create ~/.eliza/skills.json: ${String(err)}`,
       );
     }
   }
@@ -89,9 +136,7 @@ export function loadElizaConfig(): ElizaConfig {
       }
     } catch (err) {
       console.warn(
-        `[eliza] Failed to load ~/.eliza/skills.json: ${
-          String(err)
-        }`,
+        `[eliza] Failed to load ~/.eliza/skills.json: ${String(err)}`,
       );
     }
   }
@@ -103,19 +148,32 @@ export function loadElizaConfig(): ElizaConfig {
   }
 
   const envVars = collectConfigEnvVars(resolved);
-  for (const [key, value] of Object.entries(envVars)) {
-    if (process.env[key] === undefined) {
-      process.env[key] = value;
-    }
+  const connectorEnvVars = collectConnectorEnvVars(resolved);
+  // Saved config is the source of truth for settings edited in the app.
+  // If a key is persisted here, it should override any stale value that
+  // arrived from .env or the parent shell.
+  applyConfigEnvToProcessEnv(envVars);
+  applyConfigEnvToProcessEnv(connectorEnvVars);
+
+  const discordToken =
+    process.env.DISCORD_API_TOKEN?.trim() ||
+    process.env.DISCORD_BOT_TOKEN?.trim();
+  if (discordToken) {
+    process.env.DISCORD_API_TOKEN = discordToken;
+    process.env.DISCORD_BOT_TOKEN = discordToken;
   }
 
   if (isMiladySettingsDebugEnabled()) {
     const cloud = resolved.cloud as Record<string, unknown> | undefined;
     console.debug("[milady][settings][loadElizaConfig]", {
       path: configPath,
+      persistPath: persistPath !== configPath ? persistPath : undefined,
       topLevelKeys: Object.keys(resolved as object).sort(),
       cloud: settingsDebugCloudSummary(cloud),
-      envVarKeysHydrated: Object.keys(envVars).sort(),
+      envVarKeysHydrated: Object.keys({
+        ...envVars,
+        ...connectorEnvVars,
+      }).sort(),
       snapshot: sanitizeForSettingsDebug(resolved),
     });
   }
@@ -208,7 +266,13 @@ export function saveElizaConfig(config: ElizaConfig): void {
 }
 
 export function configFileExists(): boolean {
-  return fs.existsSync(resolveConfigPath());
+  const configPath = resolveConfigPath();
+  if (fs.existsSync(configPath)) {
+    return true;
+  }
+
+  const persistPath = resolveConfigWritePath();
+  return persistPath !== configPath && fs.existsSync(persistPath);
 }
 
 // Backward-compat aliases for downstream forks using the old name

@@ -411,6 +411,10 @@ function AppProviderInner({
     },
     [lifecycle.state.systemWarnings, lifecycle.setSystemWarnings],
   );
+  const triggerRestartRef = useRef<() => Promise<void>>(async () => {});
+  const triggerRestartProxy = useCallback(async () => {
+    await triggerRestartRef.current();
+  }, []);
   // retryStartup resets lifecycle state AND dispatches RETRY to the coordinator.
   // The coordinator's phase effects will re-run from restoring-session.
   // We store a ref to the coordinator's retry since it's created after this line.
@@ -543,7 +547,13 @@ function AppProviderInner({
   } = triggersHook;
 
   // --- Plugins / Skills / Store / Catalog (extracted to usePluginsSkillsState) ---
-  const pluginsSkillsHook = usePluginsSkillsState({ setActionNotice });
+  const pluginsSkillsHook = usePluginsSkillsState({
+    setActionNotice,
+    setPendingRestart,
+    setPendingRestartReasons,
+    showRestartBanner,
+    triggerRestart: triggerRestartProxy,
+  });
   const {
     plugins,
     setPlugins,
@@ -1261,6 +1271,10 @@ function AppProviderInner({
     handleRenameConversation,
     suggestConversationTitle,
   } = chatCallbacks;
+
+  useEffect(() => {
+    triggerRestartRef.current = triggerRestart;
+  }, [triggerRestart]);
 
   // ── Pairing ────────────────────────────────────────────────────────
 

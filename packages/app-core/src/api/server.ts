@@ -41,6 +41,7 @@ import {
 } from "./response";
 import {
   DATABASE_UNAVAILABLE_MESSAGE,
+  clearCompatRuntimeRestart,
   getConfiguredCompatAgentName,
   hasCompatPersistedOnboardingState,
   isLoopbackRemoteAddress,
@@ -468,6 +469,27 @@ function rewriteCompatStatusBody(
 
     const payload = parsed as Record<string, unknown>;
     mergeMiladyEmbeddingIntoStatusPayload(payload);
+
+    const upstreamPendingRestartReasons = Array.isArray(
+      payload.pendingRestartReasons,
+    )
+      ? payload.pendingRestartReasons.filter(
+          (value): value is string => typeof value === "string",
+        )
+      : [];
+    const pendingRestartReasons = Array.from(
+      new Set([
+        ...upstreamPendingRestartReasons,
+        ...state.pendingRestartReasons,
+      ]),
+    );
+    if (
+      pendingRestartReasons.length > 0 ||
+      typeof payload.pendingRestart === "boolean"
+    ) {
+      payload.pendingRestart = pendingRestartReasons.length > 0;
+      payload.pendingRestartReasons = pendingRestartReasons;
+    }
 
     if (!agentName) {
       return JSON.stringify(payload);
@@ -1054,6 +1076,7 @@ export async function startApiServer(
   const compatState: CompatRuntimeState = {
     current: (args[0]?.runtime as AgentRuntime | null) ?? null,
     pendingAgentName: null,
+    pendingRestartReasons: [],
   };
   const restoreCreateServer = patchHttpCreateServerForMiladyCompat(compatState);
 
@@ -1078,6 +1101,7 @@ export async function startApiServer(
 
     server.updateRuntime = (runtime: AgentRuntime) => {
       compatState.current = runtime;
+      clearCompatRuntimeRestart(compatState);
       // Make the runtime immediately visible to upstream routes so hot swaps do
       // not briefly return 503s while compat setup finishes in the background.
       originalUpdateRuntime(runtime);

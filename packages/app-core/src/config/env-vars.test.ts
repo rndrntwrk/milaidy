@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectConfigEnvVars } from "./env-vars";
+import { collectConfigEnvVars, collectConnectorEnvVars } from "./env-vars";
 import type { ElizaConfig } from "./types";
 
 /** Helper to build a partial config with only the env property. */
@@ -186,5 +186,38 @@ describe("collectConfigEnvVars", () => {
       cfg({ DATABASE_URL: "postgres://evil", SAFE: "ok" }),
     );
     expect(result).toEqual({ SAFE: "ok" });
+  });
+});
+
+describe("collectConnectorEnvVars", () => {
+  it("maps Discord connector credentials to plugin env keys", () => {
+    const result = collectConnectorEnvVars({
+      connectors: {
+        discord: {
+          token: "discord-token-123",
+          applicationId: "1234567890",
+        },
+      },
+    } as ElizaConfig);
+
+    expect(result).toEqual({
+      DISCORD_API_TOKEN: "discord-token-123",
+      DISCORD_BOT_TOKEN: "discord-token-123",
+      DISCORD_APPLICATION_ID: "1234567890",
+    });
+  });
+
+  it("supports legacy channels config aliases", () => {
+    const result = collectConnectorEnvVars({
+      channels: {
+        telegram: {
+          botToken: "123:ABC",
+        },
+      },
+    } as ElizaConfig);
+
+    expect(result).toEqual({
+      TELEGRAM_BOT_TOKEN: "123:ABC",
+    });
   });
 });

@@ -870,6 +870,9 @@ export function categorizePlugin(
 }
 
 const PLUGIN_SETUP_GUIDE_ROOT = "https://docs.eliza.ai/plugin-setup-guide";
+const PLUGIN_SETUP_GUIDE_URL_OVERRIDES: Record<string, string> = {
+  discord: "https://docs.elizaos.ai/plugin-registry/platform/discord",
+};
 const ELIZA_REPO_ROOT = "https://github.com/elizaos/eliza";
 const PLUGIN_METADATA_TAG_STOPWORDS = new Set([
   "plugin",
@@ -981,6 +984,10 @@ const PLUGIN_SETUP_GUIDE_ANCHORS: Record<string, string> = {
 };
 
 export function resolvePluginSetupGuideUrl(id: string): string | undefined {
+  const override = PLUGIN_SETUP_GUIDE_URL_OVERRIDES[id];
+  if (override) {
+    return override;
+  }
   const anchor = PLUGIN_SETUP_GUIDE_ANCHORS[id];
   return anchor ? `${PLUGIN_SETUP_GUIDE_ROOT}${anchor}` : undefined;
 }

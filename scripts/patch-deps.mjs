@@ -486,6 +486,120 @@ function patchPluginElizaCloudResponsesCompat() {
 patchPluginElizaCloudResponsesCompat();
 
 /**
+ * Patch @elizaos/plugin-discord mention routing.
+ *
+ * In busy channels the Discord agent should not jump into conversations that
+ * clearly target another user. Ignore messages that mention or reply to a
+ * different user unless the message is a DM.
+ *
+ * Remove once upstream exposes a setting or ships the same behavior.
+ */
+function patchPluginDiscordIgnoreOtherMentions() {
+  const relPaths = ["dist/index.js"];
+  const searchDirs = [resolve(root, "node_modules/@elizaos/plugin-discord")];
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith("@elizaos+plugin-discord@")) {
+          searchDirs.push(
+            resolve(
+              bunCacheDir,
+              entry,
+              "node_modules/@elizaos/plugin-discord",
+            ),
+          );
+        }
+      }
+    } catch {}
+  }
+
+  const oldSnippet = `    const isBotMentioned = !!(clientUser?.id && message.mentions.users && message.mentions.users.has(clientUser.id));
+    const isReplyToBot = !!message.reference?.messageId && message.mentions.repliedUser?.id === clientUser?.id;
+    const isInThread = message.channel.isThread();
+    const isDM = message.channel.type === DiscordChannelType3.DM;
+    if (this.discordSettings.shouldRespondOnlyToMentions) {
+      const shouldProcess = isDM || isBotMentioned || isReplyToBot;
+      if (!shouldProcess) {
+        this.runtime.logger.debug({
+          src: "plugin:discord",
+          agentId: this.runtime.agentId,
+          channelId: message.channel.id
+        }, "Strict mode: ignoring message (no mention or reply)");
+        return;
+      }
+      this.runtime.logger.debug({
+        src: "plugin:discord",
+        agentId: this.runtime.agentId,
+        channelId: message.channel.id
+      }, "Strict mode: processing message");
+    }
+`;
+  const newSnippet = `    const isBotMentioned = !!(clientUser?.id && message.mentions.users && message.mentions.users.has(clientUser.id));
+    const isReplyToBot = !!message.reference?.messageId && message.mentions.repliedUser?.id === clientUser?.id;
+    const mentionedOtherUsers = message.mentions.users ? Array.from(message.mentions.users.values()).some((user) => user.id !== clientUser?.id && user.id !== message.author.id) : false;
+    const isReplyToOtherUser = !!message.reference?.messageId && !!message.mentions.repliedUser?.id && message.mentions.repliedUser.id !== clientUser?.id && message.mentions.repliedUser.id !== message.author.id;
+    const isInThread = message.channel.isThread();
+    const isDM = message.channel.type === DiscordChannelType3.DM;
+    if (!isDM && (mentionedOtherUsers || isReplyToOtherUser)) {
+      this.runtime.logger.debug({
+        src: "plugin:discord",
+        agentId: this.runtime.agentId,
+        channelId: message.channel.id
+      }, "Ignoring message that targets another mentioned user");
+      return;
+    }
+    if (this.discordSettings.shouldRespondOnlyToMentions) {
+      const shouldProcess = isDM || isBotMentioned || isReplyToBot;
+      if (!shouldProcess) {
+        this.runtime.logger.debug({
+          src: "plugin:discord",
+          agentId: this.runtime.agentId,
+          channelId: message.channel.id
+        }, "Strict mode: ignoring message (no mention or reply)");
+        return;
+      }
+      this.runtime.logger.debug({
+        src: "plugin:discord",
+        agentId: this.runtime.agentId,
+        channelId: message.channel.id
+      }, "Strict mode: processing message");
+    }
+`;
+
+  let patched = 0;
+  const seenTargets = new Set();
+  for (const dir of searchDirs) {
+    const packageDir = existsSync(dir) ? realpathSync(dir) : dir;
+    for (const relPath of relPaths) {
+      const target = resolve(packageDir, relPath);
+      if (!existsSync(target) || seenTargets.has(target)) continue;
+      seenTargets.add(target);
+
+      let src = readFileSync(target, "utf8");
+      if (src.includes("Ignoring message that targets another mentioned user")) {
+        continue;
+      }
+      if (!src.includes(oldSnippet)) continue;
+
+      src = src.replace(oldSnippet, newSnippet);
+      writeFileSync(target, src, "utf8");
+      patched++;
+      console.log(
+        `[patch-deps] Applied plugin-discord mention routing fix: ${target}`,
+      );
+    }
+  }
+
+  if (patched > 0) {
+    console.log(
+      `[patch-deps] plugin-discord: patched ${patched} mention routing bundle(s).`,
+    );
+  }
+}
+patchPluginDiscordIgnoreOtherMentions();
+
+/**
  * Patch @elizaos/plugin-sql UUID validation regex.
  *
  * The upstream plugin strictly checks for UUID versions 1-5, but elizaOS

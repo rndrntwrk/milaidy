@@ -265,7 +265,7 @@ describe("config env propagation parity", () => {
     expect(process.env.ELIZAOS_CLOUD_BASE_URL).toBe("https://cloud.example");
   });
 
-  it("connector env values are never overwritten and disabled cloud clears stale keys", () => {
+  it("connector env values override stale process env and disabled cloud clears stale keys", () => {
     process.env.TELEGRAM_BOT_TOKEN = "already-set";
     process.env.ELIZAOS_CLOUD_API_KEY = "old-key";
 
@@ -274,8 +274,8 @@ describe("config env propagation parity", () => {
     } as ElizaConfig);
     applyCloudConfigToEnv({ cloud: { apiKey: "new-key" } } as ElizaConfig);
 
-    // Connectors respect existing env (set via .env files)
-    expect(process.env.TELEGRAM_BOT_TOKEN).toBe("already-set");
+    // Saved connector config is the source of truth for the runtime.
+    expect(process.env.TELEGRAM_BOT_TOKEN).toBe("new");
     // Cloud config must not leave a usable key behind unless enabled=true.
     expect(process.env.ELIZAOS_CLOUD_API_KEY).toBeUndefined();
   });

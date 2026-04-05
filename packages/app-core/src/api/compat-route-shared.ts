@@ -16,6 +16,26 @@ const MAX_BODY_BYTES = 1_048_576;
 export interface CompatRuntimeState {
   current: AgentRuntime | null;
   pendingAgentName: string | null;
+  pendingRestartReasons: string[];
+}
+
+export function clearCompatRuntimeRestart(state: CompatRuntimeState): void {
+  state.pendingRestartReasons = [];
+}
+
+export function scheduleCompatRuntimeRestart(
+  state: CompatRuntimeState,
+  reason: string,
+): void {
+  if (state.pendingRestartReasons.includes(reason)) {
+    return;
+  }
+
+  if (state.pendingRestartReasons.length >= 50) {
+    state.pendingRestartReasons.splice(1, state.pendingRestartReasons.length - 1);
+  }
+
+  state.pendingRestartReasons.push(reason);
 }
 
 export const DATABASE_UNAVAILABLE_MESSAGE =

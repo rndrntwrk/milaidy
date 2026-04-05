@@ -52,9 +52,7 @@ import { updateMiladyStartupEmbeddingProgress } from "./milady-startup-overlay.j
 
 const AUTONOMY_WORLD_ID = stringToUuid("00000000-0000-0000-0000-000000000001");
 const AUTONOMY_ENTITY_ID = stringToUuid("00000000-0000-0000-0000-000000000002");
-const AUTONOMY_MESSAGE_SERVER_ID = stringToUuid(
-  "00000000-0000-0000-0000-000000000000",
-);
+const AUTONOMY_MESSAGE_SERVER_ID = stringToUuid("autonomy-message-server");
 const INTERNAL_CHANNEL_PLUGIN_OVERRIDES = {
   signal: "@elizaos/plugin-signal",
   whatsapp: "@elizaos/plugin-whatsapp",

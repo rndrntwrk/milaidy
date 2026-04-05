@@ -30,12 +30,22 @@ interface PluginsSkillsStateParams {
     once?: boolean,
     busy?: boolean,
   ) => void;
+  setPendingRestart: (value: boolean | ((prev: boolean) => boolean)) => void;
+  setPendingRestartReasons: (
+    value: string[] | ((prev: string[]) => string[]),
+  ) => void;
+  showRestartBanner: () => void;
+  triggerRestart: () => Promise<void>;
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────
 
 export function usePluginsSkillsState({
   setActionNotice,
+  setPendingRestart,
+  setPendingRestartReasons,
+  showRestartBanner,
+  triggerRestart,
 }: PluginsSkillsStateParams) {
   // --- Plugins ---
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
@@ -166,9 +176,25 @@ export function usePluginsSkillsState({
           4200,
         );
         await client.updatePlugin(pluginId, { enabled });
+        const restartReason = `Plugin toggle: ${pluginId}`;
+        setPendingRestart(true);
+        setPendingRestartReasons((prev) =>
+          prev.includes(restartReason) ? prev : [...prev, restartReason],
+        );
+        showRestartBanner();
+        const hasBlockingValidationErrors =
+          enabled &&
+          Boolean(
+            plugin?.validationErrors && plugin.validationErrors.length > 0,
+          );
+        if (!hasBlockingValidationErrors) {
+          await triggerRestart();
+        }
         await loadPlugins();
         setActionNotice(
-          `${pluginName} ${enabled ? "enabled" : "disabled"}. Restart required to apply.`,
+          hasBlockingValidationErrors
+            ? `${pluginName} ${enabled ? "enabled" : "disabled"}. Restart required to apply.`
+            : `${pluginName} ${enabled ? "enabled" : "disabled"}.`,
           "success",
           2800,
         );
@@ -185,7 +211,15 @@ export function usePluginsSkillsState({
         );
       }
     },
-    [plugins, loadPlugins, setActionNotice],
+    [
+      plugins,
+      loadPlugins,
+      setActionNotice,
+      setPendingRestart,
+      setPendingRestartReasons,
+      showRestartBanner,
+      triggerRestart,
+    ],
   );
 
   const handlePluginConfigSave = useCallback(

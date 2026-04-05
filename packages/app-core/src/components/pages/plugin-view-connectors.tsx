@@ -181,87 +181,93 @@ function ConnectorPluginCard({
     </span>
   );
   const connectorHeaderHeading = (
-    <span
-      data-testid={`connector-header-${plugin.id}`}
-      className="flex min-w-0 flex-wrap items-center gap-2"
-    >
-      <StatusBadge
-        label={allParamsSet ? readyLabel : needsSetupLabel}
-        tone={allParamsSet ? "success" : "warning"}
-      />
-      <span className="whitespace-normal break-words [overflow-wrap:anywhere] text-sm font-semibold leading-snug text-txt">
-        {plugin.name}
-      </span>
-      {plugin.version ? (
-        <PagePanel.Meta compact tone="strong" className="font-mono">
-          v{plugin.version}
-        </PagePanel.Meta>
-      ) : null}
-      {hasParams ? (
-        <span className="text-[11px] font-medium text-muted">
-          {setCount}/{totalCount} {t("pluginsview.configured")}
-        </span>
-      ) : (
-        <span className="text-[11px] font-medium text-muted">
-          {noConfigurationNeededLabel}
-        </span>
-      )}
-    </span>
-  );
-  const connectorHeaderDescription = (
-    <>
-      <p className="text-sm text-muted">
-        {plugin.description || pluginDescriptionFallback}
-      </p>
-      {plugin.enabled && !plugin.isActive && (
-        <span className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-muted">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2">
+      <div className="min-w-0">
+        <span
+          data-testid={`connector-header-${plugin.id}`}
+          className="flex min-w-0 flex-wrap items-center gap-2"
+        >
           <StatusBadge
-            label={plugin.loadError ? loadFailedLabel : notInstalledLabel}
-            tone={plugin.loadError ? "danger" : "warning"}
+            label={allParamsSet ? readyLabel : needsSetupLabel}
+            tone={allParamsSet ? "success" : "warning"}
           />
+          <span className="whitespace-normal break-words [overflow-wrap:anywhere] text-sm font-semibold leading-snug text-txt">
+            {plugin.name}
+          </span>
+          {plugin.version ? (
+            <PagePanel.Meta compact tone="strong" className="font-mono">
+              v{plugin.version}
+            </PagePanel.Meta>
+          ) : null}
+          {hasParams ? (
+            <span className="text-[11px] font-medium text-muted">
+              {setCount}/{totalCount} {t("pluginsview.configured")}
+            </span>
+          ) : (
+            <span className="text-[11px] font-medium text-muted">
+              {noConfigurationNeededLabel}
+            </span>
+          )}
         </span>
-      )}
-    </>
-  );
-  const connectorHeaderActions = (
-    <>
-      <Button
-        variant="outline"
-        size="sm"
-        className={`flex h-auto min-w-[6.5rem] items-center justify-center gap-1 rounded-full border px-3.5 py-1.5 text-[11px] font-semibold transition-colors ${
-          isExpanded
-            ? "border-border/50 bg-bg/25 text-txt"
-            : "border-border/50 text-muted hover:border-accent/40 hover:text-txt"
-        }`}
-        onClick={() => handleConnectorSectionToggle(plugin.id)}
-        aria-expanded={isExpanded}
-        aria-label={`${isExpanded ? collapseLabel : expandLabel} ${plugin.name}`}
-      >
-        <span>{isExpanded ? collapseLabel : expandLabel}</span>
-        <ChevronRight
-          className={`h-4 w-4 transition-transform ${
-            isExpanded ? "rotate-90" : ""
+        <div className="mt-2">
+          <p className="text-sm text-muted">
+            {plugin.description || pluginDescriptionFallback}
+          </p>
+          {plugin.enabled && !plugin.isActive && (
+            <span className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-muted">
+              <StatusBadge
+                label={plugin.loadError ? loadFailedLabel : notInstalledLabel}
+                tone={plugin.loadError ? "danger" : "warning"}
+              />
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="inline-flex shrink-0 items-start justify-end gap-2 self-start">
+        <Button
+          variant="outline"
+          size="sm"
+          className={`h-auto min-w-[3.75rem] rounded-full border px-3 py-1.5 text-[10px] font-bold tracking-[0.16em] transition-colors ${
+            plugin.enabled
+              ? "border-accent bg-accent text-accent-fg"
+              : "border-border bg-transparent text-muted hover:border-accent/40 hover:text-txt"
+          } ${toggleDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            void handleTogglePlugin(plugin.id, !plugin.enabled);
+          }}
+          disabled={toggleDisabled}
+        >
+          {isToggleBusy
+            ? "..."
+            : plugin.enabled
+              ? t("common.on")
+              : t("common.off")}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`h-8 w-8 shrink-0 rounded-full border border-border/40 transition-colors ${
+            isExpanded
+              ? "bg-bg/25 text-txt"
+              : "text-muted hover:border-accent/40 hover:text-txt"
           }`}
-        />
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        className={`h-auto min-w-[3.75rem] rounded-full border px-3 py-1.5 text-[10px] font-bold tracking-[0.16em] transition-colors ${
-          plugin.enabled
-            ? "border-accent bg-accent text-accent-fg"
-            : "border-border bg-transparent text-muted hover:border-accent/40 hover:text-txt"
-        } ${toggleDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
-        onClick={() => void handleTogglePlugin(plugin.id, !plugin.enabled)}
-        disabled={toggleDisabled}
-      >
-        {isToggleBusy
-          ? "..."
-          : plugin.enabled
-            ? t("common.on")
-            : t("common.off")}
-      </Button>
-    </>
+          onClick={(event) => {
+            event.stopPropagation();
+            handleConnectorSectionToggle(plugin.id);
+          }}
+          aria-expanded={isExpanded}
+          aria-label={`${isExpanded ? collapseLabel : expandLabel} ${plugin.name}`}
+          title={isExpanded ? collapseLabel : expandLabel}
+        >
+          <ChevronRight
+            className={`h-4 w-4 transition-transform ${
+              isExpanded ? "rotate-90" : ""
+            }`}
+          />
+        </Button>
+      </div>
+    </div>
   );
 
   return (
@@ -282,10 +288,7 @@ function ConnectorPluginCard({
         }
         media={connectorHeaderMedia}
         heading={connectorHeaderHeading}
-        headingClassName="text-inherit"
-        description={connectorHeaderDescription}
-        descriptionClassName="space-y-0 text-sm leading-relaxed text-muted"
-        actions={connectorHeaderActions}
+        headingClassName="w-full text-inherit"
       >
         {pluginLinks.length > 0 && (
           <div className="mb-4 flex flex-wrap gap-2">

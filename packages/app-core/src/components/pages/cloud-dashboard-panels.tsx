@@ -1,9 +1,23 @@
-import { Button, SectionCard } from "@miladyai/ui";
-import { ExternalLink, Loader2, Terminal, Trash2, X } from "lucide-react";
+import { Button, Input, SectionCard } from "@miladyai/ui";
+import {
+  ExternalLink,
+  Loader2,
+  MessageCircle,
+  ShieldAlert,
+  Terminal,
+  Trash2,
+  Unplug,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type CloudCompatAgent, client } from "../../api";
+import {
+  type CloudCompatAgent,
+  type CloudCompatManagedDiscordStatus,
+  client,
+} from "../../api";
 import { useIntervalWhenDocumentVisible } from "../../hooks/useDocumentVisibility";
 import { getVrmPreviewUrl, useApp } from "../../state";
+import { openExternalUrl } from "../../utils";
 import { STATUS_BADGE } from "./cloud-dashboard-utils";
 
 export function AgentStatusBadge({ status }: { status: string }) {
@@ -151,11 +165,16 @@ export function AgentDetailSidebar({
   agent: CloudCompatAgent | undefined;
   onClose: () => void;
 }) {
-  const { t } = useApp();
+  const { t, setActionNotice } = useApp();
   const [logs, setLogs] = useState<string>("");
   const [statusDetail, setStatusDetail] = useState<StatusDetail | null>(null);
+  const [managedDiscord, setManagedDiscord] =
+    useState<CloudCompatManagedDiscordStatus | null>(null);
+  const [discordBusy, setDiscordBusy] = useState(false);
+  const [botNickname, setBotNickname] = useState("");
   const logsEndRef = useRef<HTMLDivElement>(null);
   const aliveRef = useRef(true);
+  const lastAgentIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -167,14 +186,20 @@ export function AgentDetailSidebar({
   const fetchDetails = useCallback(async () => {
     if (!agent) return;
     try {
-      const [statusRes, logsRes] = await Promise.all([
+      const [statusRes, logsRes, discordRes] = await Promise.all([
         client.getCloudCompatAgentStatus(agent.agent_id),
         client.getCloudCompatAgentLogs(agent.agent_id, 100),
+        client.getCloudCompatAgentManagedDiscord(agent.agent_id).catch(() => null),
       ]);
 
       if (!aliveRef.current) return;
       setStatusDetail(statusRes.data);
       setLogs(typeof logsRes.data === "string" ? logsRes.data : "");
+      setManagedDiscord(discordRes?.data ?? null);
+      if (!lastAgentIdRef.current || lastAgentIdRef.current !== agent.agent_id) {
+        lastAgentIdRef.current = agent.agent_id;
+        setBotNickname(discordRes?.data?.botNickname ?? agent.agent_name ?? "");
+      }
     } catch {
       // Silently retry next tick
     }
@@ -200,6 +225,77 @@ export function AgentDetailSidebar({
   }, [logs]);
 
   if (!agent) return null;
+
+  const discordAdminLabel =
+    managedDiscord?.adminDiscordDisplayName ||
+    managedDiscord?.adminDiscordUsername ||
+    managedDiscord?.adminDiscordUserId;
+
+  const handleConnectDiscord = async () => {
+    if (!agent) return;
+    setDiscordBusy(true);
+    try {
+      const response = await client.createCloudCompatAgentManagedDiscordOauth(agent.agent_id, {
+        returnUrl: typeof window !== "undefined" ? window.location.href : undefined,
+        botNickname: botNickname.trim() || undefined,
+      });
+
+      await openExternalUrl(response.data.authorizeUrl);
+      setActionNotice(
+        t("elizaclouddashboard.DiscordSetupContinuesInBrowser", {
+          defaultValue: "Finish Discord setup in your browser, then return here.",
+        }),
+        "info",
+        5000,
+      );
+    } catch (error) {
+      setActionNotice(
+        error instanceof Error
+          ? error.message
+          : t("elizaclouddashboard.DiscordSetupFailed", {
+              defaultValue: "Failed to start Discord setup.",
+            }),
+        "error",
+        4200,
+      );
+    } finally {
+      if (aliveRef.current) {
+        setDiscordBusy(false);
+      }
+    }
+  };
+
+  const handleDisconnectDiscord = async () => {
+    if (!agent) return;
+    setDiscordBusy(true);
+    try {
+      const response = await client.disconnectCloudCompatAgentManagedDiscord(agent.agent_id);
+      if (!aliveRef.current) return;
+      setManagedDiscord(response.data);
+      setActionNotice(
+        t("elizaclouddashboard.DiscordDisconnected", {
+          defaultValue: "Managed Discord disconnected from this agent.",
+        }),
+        "success",
+        4200,
+      );
+      void fetchDetails();
+    } catch (error) {
+      setActionNotice(
+        error instanceof Error
+          ? error.message
+          : t("elizaclouddashboard.DiscordDisconnectFailed", {
+              defaultValue: "Failed to disconnect managed Discord.",
+            }),
+        "error",
+        4200,
+      );
+    } finally {
+      if (aliveRef.current) {
+        setDiscordBusy(false);
+      }
+    }
+  };
 
   return (
     <div className="space-y-4 animate-in slide-in-from-right-8 duration-300">
@@ -251,6 +347,147 @@ export function AgentDetailSidebar({
                         defaultValue: "No heartbeat yet",
                       })}
               </span>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border/40 bg-bg/80 p-3">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="text-[10px] text-muted uppercase font-bold tracking-wider flex items-center gap-2">
+                <MessageCircle className="w-3 h-3" />
+                {t("elizaclouddashboard.Discord", {
+                  defaultValue: "Discord",
+                })}
+              </span>
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                  managedDiscord?.connected
+                    ? "border-ok/30 bg-ok/10 text-ok"
+                    : "border-border/50 bg-bg/50 text-muted"
+                }`}
+              >
+                {managedDiscord?.connected
+                  ? t("common.connected", {
+                      defaultValue: "Connected",
+                    })
+                  : t("common.notConnected", {
+                      defaultValue: "Not connected",
+                    })}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                    {t("elizaclouddashboard.Server", {
+                      defaultValue: "Server",
+                    })}
+                  </span>
+                  <span className="text-xs text-txt-strong">
+                    {managedDiscord?.guildName ||
+                      t("elizaclouddashboard.NoServerLinkedYet", {
+                        defaultValue: "No server linked yet",
+                      })}
+                  </span>
+                </div>
+                <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                    {t("elizaclouddashboard.AdminLock", {
+                      defaultValue: "Admin lock",
+                    })}
+                  </span>
+                  <span className="text-xs text-txt-strong">
+                    {discordAdminLabel
+                      ? `@${discordAdminLabel}`
+                      : t("elizaclouddashboard.WhoeverLinksBecomesAdmin", {
+                          defaultValue: "Whoever completes setup becomes admin",
+                        })}
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                  {t("elizaclouddashboard.BotNickname", {
+                    defaultValue: "Bot nickname",
+                  })}
+                </span>
+                <Input
+                  value={botNickname}
+                  maxLength={32}
+                  onChange={(event) => setBotNickname(event.target.value)}
+                  className="h-9 rounded-lg bg-bg/80 text-sm"
+                  placeholder={agent.agent_name || "Milady"}
+                />
+                <p className="mt-2 text-[11px] leading-relaxed text-muted">
+                  {managedDiscord?.configured
+                    ? t("elizaclouddashboard.DiscordAdminLockCopy", {
+                        defaultValue:
+                          "The Discord account that finishes setup must own the server. That account becomes the only Discord connector admin for role-gated actions on this agent.",
+                      })
+                    : t("elizaclouddashboard.DiscordManagedAppUnavailable", {
+                        defaultValue:
+                          "The shared Discord app is not configured on Eliza Cloud yet.",
+                      })}
+                </p>
+                {managedDiscord?.applicationId ? (
+                  <p className="mt-1 text-[11px] text-muted">
+                    {t("elizaclouddashboard.SharedAppId", {
+                      defaultValue: "Shared app ID: {{id}}",
+                      id: managedDiscord.applicationId,
+                    })}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="h-9 rounded-xl px-4 text-xs font-semibold"
+                  disabled={discordBusy || !managedDiscord?.configured}
+                  onClick={() => void handleConnectDiscord()}
+                >
+                  {discordBusy ? (
+                    <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                  ) : (
+                    <ExternalLink className="mr-1.5 h-3 w-3" />
+                  )}
+                  {managedDiscord?.connected
+                    ? t("elizaclouddashboard.ReconnectDiscord", {
+                        defaultValue: "Reconnect / change server",
+                      })
+                    : t("elizaclouddashboard.ConnectDiscord", {
+                        defaultValue: "Connect Discord",
+                      })}
+                </Button>
+                {managedDiscord?.connected ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 rounded-xl border-danger/30 px-4 text-xs text-danger hover:bg-danger/10"
+                    disabled={discordBusy}
+                    onClick={() => void handleDisconnectDiscord()}
+                  >
+                    <Unplug className="mr-1.5 h-3 w-3" />
+                    {t("elizaclouddashboard.DisconnectDiscord", {
+                      defaultValue: "Disconnect",
+                    })}
+                  </Button>
+                ) : null}
+              </div>
+
+              {managedDiscord?.connectedAt ? (
+                <div className="flex items-start gap-2 rounded-lg border border-border/25 bg-bg/40 px-3 py-2 text-[11px] text-muted">
+                  <ShieldAlert className="mt-0.5 h-3 w-3 shrink-0" />
+                  <span>
+                    {t("elizaclouddashboard.DiscordConnectedAt", {
+                      defaultValue: "Linked {{time}}",
+                      time: new Date(managedDiscord.connectedAt).toLocaleString(),
+                    })}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
 

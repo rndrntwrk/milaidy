@@ -37,7 +37,7 @@
         "ACP_SESSION_STORE_PATH",
         "ACP_AGENT_ID"
       ],
-      "version": "2.0.0-alpha.4",
+      "version": "2.0.0-alpha.10",
       "pluginDeps": ["cli"],
       "pluginParameters": {
         "ACP_GATEWAY_URL": {
@@ -1460,7 +1460,7 @@
           "sensitive": false
         }
       },
-      "setupGuideUrl": "https://docs.eliza.ai/plugin-setup-guide#discord"
+      "setupGuideUrl": "https://docs.elizaos.ai/plugin-registry/platform/discord"
     },
     {
       "id": "edge-tts",

@@ -174,7 +174,7 @@ export function ConnectorSidebar({
                   key={plugin.id}
                   as="div"
                   active={isSelected}
-                  className="gap-2 scroll-mt-3"
+                  className="items-center gap-1.5 px-2.5 py-2 scroll-mt-3"
                   ref={registerConnectorSidebarItem(plugin.id)}
                 >
                   <SidebarContent.ItemButton
@@ -182,29 +182,28 @@ export function ConnectorSidebar({
                     aria-selected={isSelected}
                     onClick={() => onConnectorSelect(plugin.id)}
                     aria-current={isSelected ? "page" : undefined}
+                    className="items-center gap-2"
                   >
-                    <SidebarContent.ItemIcon active={isSelected}>
+                    <SidebarContent.ItemIcon
+                      active={isSelected}
+                      className="mt-0 h-8 w-8 shrink-0 p-1.5"
+                    >
                       {renderResolvedIcon(plugin, {
                         className: "h-4 w-4 shrink-0 rounded-sm object-contain",
                         emojiClassName: "text-sm",
                       })}
                     </SidebarContent.ItemIcon>
                     <SidebarContent.ItemBody>
-                      <span className="block overflow-hidden text-[13px] leading-6 text-muted [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
-                        <span className="mr-2 inline font-semibold text-txt">
-                          {plugin.name}
-                        </span>
-                        <span className="inline whitespace-normal break-words [overflow-wrap:anywhere]">
-                          {plugin.description || pluginDescriptionFallback}
-                        </span>
+                      <span className="block truncate text-[13px] font-semibold leading-5 text-txt">
+                        {plugin.name}
                       </span>
                     </SidebarContent.ItemBody>
                   </SidebarContent.ItemButton>
-                  <div className="flex shrink-0 flex-col items-end gap-2 self-stretch">
+                  <div className="flex shrink-0 flex-row items-center gap-1">
                     <Button
                       variant="outline"
                       size="sm"
-                      className={`h-auto min-w-[3.5rem] rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-[0.16em] transition-colors ${
+                      className={`h-7 min-h-0 min-w-[3.5rem] shrink-0 rounded-full border px-2.5 py-0 text-[10px] font-bold leading-none tracking-[0.16em] transition-colors ${
                         plugin.enabled
                           ? "border-accent bg-accent text-accent-fg"
                           : "border-border bg-transparent text-muted hover:border-accent/40 hover:text-txt"
@@ -228,7 +227,7 @@ export function ConnectorSidebar({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 rounded-full text-muted hover:text-txt"
+                      className="h-8 w-8 shrink-0 rounded-full text-muted hover:text-txt"
                       aria-label={`${isExpanded ? collapseLabel : expandLabel} ${plugin.name} in sidebar`}
                       onClick={(event) => {
                         event.stopPropagation();

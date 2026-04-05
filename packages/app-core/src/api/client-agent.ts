@@ -3,7 +3,6 @@
  * training, plugins, streaming/PTY, logs, character, permissions, updates.
  */
 
-import type { ReleaseChannel } from "@miladyai/agent/contracts/config";
 import type {
   AllPermissionsState,
   PermissionState,
@@ -34,18 +33,14 @@ import type {
   CorePluginsResponse,
   CreateTriggerRequest,
   ExtensionStatus,
-  LogEntry,
   LogsFilter,
   LogsResponse,
   PluginInfo,
   RawPtySession,
   RuntimeDebugSnapshot,
   SecretInfo,
-  SecurityAuditEntry,
-  SecurityAuditEventType,
   SecurityAuditFilter,
   SecurityAuditResponse,
-  SecurityAuditSeverity,
   SecurityAuditStreamEvent,
   StartTrainingOptions,
   TradePermissionMode,
@@ -63,7 +58,7 @@ import type {
   UpdateStatus,
   UpdateTriggerRequest,
 } from "./client-types";
-import { ApiError, mapPtySessionsToCodingAgentSessions } from "./client-types";
+import { mapPtySessionsToCodingAgentSessions } from "./client-types";
 
 // ---------------------------------------------------------------------------
 // Module-level helpers
@@ -92,6 +87,8 @@ function logSettingsClient(
     sanitizeForSettingsDebug(detail),
   );
 }
+
+const SETTINGS_MUTATION_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
 // Declaration merging
@@ -801,11 +798,17 @@ MiladyClient.prototype.updateConfig = async function (
     baseUrl: this.getBaseUrl(),
     patch,
   });
-  const out = (await this.fetch("/api/config", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(patch),
-  })) as Record<string, unknown>;
+  const out = (await this.fetch(
+    "/api/config",
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    },
+    {
+      timeoutMs: SETTINGS_MUTATION_TIMEOUT_MS,
+    },
+  )) as Record<string, unknown>;
   const cloud = out.cloud as Record<string, unknown> | undefined;
   logSettingsClient("PUT /api/config ← ok", {
     baseUrl: this.getBaseUrl(),
@@ -1096,10 +1099,16 @@ MiladyClient.prototype.updatePlugin = async function (
     baseUrl: this.getBaseUrl(),
     body: config,
   });
-  const result = (await this.fetch(`/api/plugins/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(config),
-  })) as { ok: boolean; restarting?: boolean };
+  const result = (await this.fetch(
+    `/api/plugins/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(config),
+    },
+    {
+      timeoutMs: SETTINGS_MUTATION_TIMEOUT_MS,
+    },
+  )) as { ok: boolean; restarting?: boolean };
   logSettingsClient(`PUT /api/plugins/${id} ← ok`, {
     baseUrl: this.getBaseUrl(),
     result,
