@@ -47,18 +47,18 @@ const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
   gitUrl: "https://github.com/elizaos/app-hyperscape",
   displayName: "Hyperscape",
   description: "Hyperscape live session bridge",
-  homepage: "https://hyperscape.ai",
+  homepage: "https://hyperscape.gg",
   topics: ["game"],
   stars: 0,
   language: "TypeScript",
   kind: "app",
   category: "game",
   launchType: "connect",
-  launchUrl: "http://localhost:3333",
+  launchUrl: "{HYPERSCAPE_CLIENT_URL}",
   runtimePlugin: "@hyperscape/plugin-hyperscape",
   capabilities: ["combat"],
   viewer: {
-    url: "http://localhost:3333",
+    url: "{HYPERSCAPE_CLIENT_URL}",
     embedParams: {
       embedded: "true",
       mode: "spectator",
@@ -75,14 +75,14 @@ const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
     displayName: "Hyperscape",
     category: "game",
     launchType: "connect",
-    launchUrl: "http://localhost:3333",
+    launchUrl: "{HYPERSCAPE_CLIENT_URL}",
     icon: null,
     capabilities: ["combat"],
     minPlayers: null,
     maxPlayers: null,
     runtimePlugin: "@hyperscape/plugin-hyperscape",
     viewer: {
-      url: "http://localhost:3333",
+      url: "{HYPERSCAPE_CLIENT_URL}",
       embedParams: {
         embedded: "true",
         mode: "spectator",
@@ -114,7 +114,11 @@ function buildPluginManager(
   registryPlugin: RegistryPluginInfo | null = HYPERSCAPE_APP_INFO,
 ): PluginManagerLike {
   return {
-    refreshRegistry: vi.fn(async () => new Map()),
+    refreshRegistry: vi.fn(async () =>
+      registryPlugin
+        ? new Map([[registryPlugin.name, registryPlugin]])
+        : new Map(),
+    ),
     listInstalledPlugins: vi.fn(async () => installedPlugins),
     getRegistryPlugin: vi.fn(async () => registryPlugin),
     searchRegistry: vi.fn(async () => []),
@@ -357,6 +361,7 @@ describe("AppManager", () => {
   const originalApiUrl = process.env.HYPERSCAPE_API_URL;
   const originalHyperscapeAuthToken = process.env.HYPERSCAPE_AUTH_TOKEN;
   const originalHyperscapeCharacterId = process.env.HYPERSCAPE_CHARACTER_ID;
+  const originalNodeEnv = process.env.NODE_ENV;
   const originalEvmPrivateKey = process.env.EVM_PRIVATE_KEY;
   const originalSolanaPrivateKey = process.env.SOLANA_PRIVATE_KEY;
 
@@ -375,6 +380,11 @@ describe("AppManager", () => {
       process.env.HYPERSCAPE_CHARACTER_ID = originalHyperscapeCharacterId;
     } else {
       delete process.env.HYPERSCAPE_CHARACTER_ID;
+    }
+    if (originalNodeEnv !== undefined) {
+      process.env.NODE_ENV = originalNodeEnv;
+    } else {
+      delete process.env.NODE_ENV;
     }
     if (originalEvmPrivateKey !== undefined) {
       process.env.EVM_PRIVATE_KEY = originalEvmPrivateKey;
@@ -432,6 +442,46 @@ describe("AppManager", () => {
     );
 
     expect(installed[0]?.installedAt).toBe("");
+  });
+
+  it("treats plugin-backed app packages as installed apps", async () => {
+    const pluginBackedApp: RegistryPluginInfo = {
+      ...HYPERSCAPE_APP_INFO,
+      name: "@hyperscape/plugin-hyperscape",
+      gitRepo: "hyperscape/plugin-hyperscape",
+      gitUrl: "https://github.com/hyperscape/plugin-hyperscape",
+      runtimePlugin: "@hyperscape/plugin-hyperscape",
+      npm: {
+        package: "@hyperscape/plugin-hyperscape",
+        v0Version: null,
+        v1Version: "1.2.3",
+        v2Version: "1.2.3",
+      },
+    };
+
+    const manager = new AppManager();
+    const installed = await manager.listInstalled(
+      buildPluginManager(
+        [
+          {
+            name: "@hyperscape/plugin-hyperscape",
+            version: "1.2.3",
+            installedAt: "2026-04-05T01:30:00.000Z",
+          },
+        ],
+        pluginBackedApp,
+      ),
+    );
+
+    expect(installed).toEqual([
+      expect.objectContaining({
+        name: "@hyperscape/plugin-hyperscape",
+        displayName: "Hyperscape",
+        pluginName: "@hyperscape/plugin-hyperscape",
+        version: "1.2.3",
+        installedAt: "2026-04-05T01:30:00.000Z",
+      }),
+    ]);
   });
 
   it("merges local app metadata into existing registry entries for the apps catalog", async () => {
@@ -563,6 +613,36 @@ describe("AppManager", () => {
           characterId: "char-runtime",
         }),
       );
+    } finally {
+      await fixtureServer.close();
+    }
+  });
+
+  it("uses hyperscape.gg as the production viewer default", async () => {
+    const fixtureServer = await startHyperscapeFixtureServer();
+    process.env.HYPERSCAPE_API_URL = fixtureServer.url;
+    delete process.env.HYPERSCAPE_CLIENT_URL;
+    process.env.NODE_ENV = "production";
+
+    try {
+      const manager = new AppManager();
+      const runtime = createRuntimeStub({
+        characterName: "Scout",
+        agentRecord: {
+          walletAddresses: {
+            evm: "0x1234567890123456789012345678901234567890",
+          },
+        },
+      });
+      const result = await manager.launch(
+        buildPluginManager([]),
+        "@elizaos/app-hyperscape",
+        undefined,
+        runtime,
+      );
+
+      expect(result.launchUrl).toBe("https://hyperscape.gg");
+      expect(result.viewer?.url).toContain("https://hyperscape.gg");
     } finally {
       await fixtureServer.close();
     }

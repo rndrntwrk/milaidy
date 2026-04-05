@@ -51,6 +51,10 @@ export type {
 const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
 const HYPERSCAPE_APP_ROUTE_SLUG = "hyperscape";
 const HYPERSCAPE_AUTH_MESSAGE_TYPE = "HYPERSCAPE_AUTH";
+const LOCAL_DEV_HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
+const PRODUCTION_HYPERSCAPE_CLIENT_URL = "https://hyperscape.gg";
+const LOCAL_DEV_HYPERSCAPE_API_BASE_URL = "http://localhost:5555";
+const PRODUCTION_HYPERSCAPE_API_BASE_URL = "https://hyperscape.gg";
 const RS_2004SCAPE_APP_ROUTE_SLUG = "2004scape";
 const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
 const SAFE_APP_URL_PROTOCOLS = new Set(["http:", "https:"]);
@@ -61,6 +65,10 @@ const ALLOWED_APP_URL_TEMPLATE_KEYS = new Set([
   "HYPERSCAPE_CLIENT_URL",
   "RS_SDK_BOT_NAME",
 ]);
+
+function isProductionRuntime(): boolean {
+  return process.env.NODE_ENV === "production";
+}
 
 type AppViewerConfig = NonNullable<AppLaunchResult["viewer"]>;
 
@@ -106,7 +114,7 @@ interface HyperscapeWalletAuthResponse {
   error?: string;
 }
 
-function isAppRegistryPlugin(plugin: RegistryPluginInfo): boolean {
+function isAppRegistryPlugin(plugin: RegistryPluginInfo): plugin is RegistryAppPlugin {
   return hasAppInterface(plugin);
 }
 
@@ -236,7 +244,9 @@ function getTemplateFallbackValue(key: string): string | undefined {
     if (runtimeClientUrl && runtimeClientUrl.length > 0) {
       return runtimeClientUrl;
     }
-    return "http://localhost:3333";
+    return isProductionRuntime()
+      ? PRODUCTION_HYPERSCAPE_CLIENT_URL
+      : LOCAL_DEV_HYPERSCAPE_CLIENT_URL;
   }
   if (key === "RS_SDK_BOT_NAME") {
     const runtimeBotName = process.env.BOT_NAME?.trim();
@@ -289,7 +299,9 @@ function resolveHyperscapeApiBaseUrl(runtime?: IAgentRuntime | null): string {
   if (runtimeUrl) {
     return runtimeUrl.replace(/\/+$/, "");
   }
-  return "http://localhost:5555";
+  return isProductionRuntime()
+    ? PRODUCTION_HYPERSCAPE_API_BASE_URL
+    : LOCAL_DEV_HYPERSCAPE_API_BASE_URL;
 }
 
 function extractWalletCandidateFromRecord(
@@ -495,7 +507,11 @@ function persistHyperscapeCredential(
 async function authenticateHyperscapeWallet(
   runtime: IAgentRuntime,
   wallet: HyperscapeWalletCandidate,
-): Promise<HyperscapeWalletAuthResponse> {
+): Promise<{
+  authToken: string;
+  characterId: string;
+  accountId?: string;
+}> {
   const url = new URL("/api/agents/wallet-auth", resolveHyperscapeApiBaseUrl(runtime));
   const response = await fetch(url, {
     method: "POST",
@@ -533,7 +549,11 @@ async function authenticateHyperscapeWallet(
     throw new Error("Hyperscape wallet auth returned an invalid response.");
   }
 
-  return data;
+  return {
+    authToken: data.authToken,
+    characterId: data.characterId,
+    ...(data.accountId ? { accountId: data.accountId } : {}),
+  };
 }
 
 async function prepareHyperscapeLaunch(
@@ -866,7 +886,7 @@ function isRuntimePluginReady(
   appInfo: RegistryAppPlugin,
   runtime: IAgentRuntime | null,
 ): boolean {
-  if (appInfo.name === HYPERSCAPE_APP_NAME) {
+  if (isHyperscapeAppName(appInfo.name)) {
     return hasRuntimeService(runtime, "hyperscapeService");
   }
   return isRuntimePluginActive(appInfo, runtime);

@@ -930,7 +930,7 @@ describe("registry-client", () => {
         packageName: "@elizaos/app-hyperscape",
         displayName: "Hyperscape",
         launchType: "connect",
-        launchUrl: "https://hyperscape.ai",
+        launchUrl: "https://hyperscape.gg",
       });
       process.env.ELIZA_WORKSPACE_ROOT = workspaceRoot;
 

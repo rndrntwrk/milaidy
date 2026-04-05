@@ -23,7 +23,7 @@ const HYPERSCAPE_LOCAL_PLUGIN: RegistryPluginInfo = {
   displayName: "Hyperscape",
   description:
     "AI-powered 3D multiplayer RPG — explore, fight, gather, craft, and socialize with AI agents",
-  homepage: "https://hyperscape.ai",
+  homepage: "https://hyperscape.gg",
   topics: ["rpg", "3d", "multiplayer", "mmo", "game"],
   stars: 0,
   language: "TypeScript",
