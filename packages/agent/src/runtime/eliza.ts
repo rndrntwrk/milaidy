@@ -59,7 +59,6 @@ import {
   type TargetInfo,
   type UUID,
 } from "@elizaos/core";
-import * as pluginAgentOrchestrator from "@elizaos/plugin-agent-orchestrator";
 import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
 import * as pluginAnthropic from "@elizaos/plugin-anthropic";
 import * as pluginCommands from "@elizaos/plugin-commands";
@@ -67,6 +66,7 @@ import * as pluginCron from "@elizaos/plugin-cron";
 import * as pluginElizacloud from "@elizaos/plugin-elizacloud";
 import * as pluginExperience from "@elizaos/plugin-experience";
 import * as pluginForm from "@elizaos/plugin-form";
+import * as rawPluginGoals from "@elizaos/plugin-goals";
 import * as pluginKnowledge from "@elizaos/plugin-knowledge";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
 import * as pluginOllama from "@elizaos/plugin-ollama";
@@ -78,7 +78,7 @@ import * as pluginRolodex from "@elizaos/plugin-rolodex";
 import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
 import * as pluginShell from "@elizaos/plugin-shell";
 import * as pluginSql from "@elizaos/plugin-sql";
-import * as pluginTodo from "@elizaos/plugin-todo";
+import * as rawPluginTodo from "@elizaos/plugin-todo";
 import * as pluginTrajectoryLogger from "@elizaos/plugin-trajectory-logger";
 import * as pluginTrust from "@elizaos/plugin-trust";
 import * as pluginRoles from "@miladyai/plugin-roles";
@@ -131,6 +131,9 @@ import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins";
 import { seedBundledKnowledge } from "./default-knowledge";
 import { createElizaPlugin } from "./eliza-plugin";
 import { detectEmbeddingPreset } from "./embedding-presets";
+import * as pluginAgentOrchestrator from "./agent-orchestrator-compat";
+import { installRuntimePluginLifecycle } from "./plugin-lifecycle";
+import { patchPluginModuleForAdminOnly } from "./plugin-access-control";
 import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence";
 
 type SignalShutdownContext = {
@@ -142,6 +145,18 @@ type SignalShutdownContext = {
 let activeSignalShutdownContext: SignalShutdownContext | null = null;
 let signalHandlersRegistered = false;
 let signalShutdownPromise: Promise<void> | null = null;
+
+const pluginTodo = patchPluginModuleForAdminOnly(
+  rawPluginTodo,
+  "@elizaos/plugin-todo",
+  {
+    stripServiceTypes: ["TODO_REMINDER", "TodoReminderService"],
+  },
+);
+const pluginGoals = patchPluginModuleForAdminOnly(
+  rawPluginGoals,
+  "@elizaos/plugin-goals",
+);
 
 function registerSignalShutdownHandlers(context: SignalShutdownContext): void {
   activeSignalShutdownContext = context;
@@ -234,6 +249,7 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@miladyai/plugin-selfcontrol": pluginSelfControl,
   "@miladyai/plugin-roles": pluginRoles,
   "@elizaos/plugin-todo": pluginTodo,
+  "@elizaos/plugin-goals": pluginGoals,
   "@elizaos/plugin-personality": pluginPersonality,
   "@elizaos/plugin-experience": pluginExperience,
 };
@@ -2001,6 +2017,8 @@ export function installRuntimeMethodBindings(runtime: AgentRuntime): void {
   if (runtimeWithBindings.__elizaMethodBindingsInstalled) {
     return;
   }
+
+  installRuntimePluginLifecycle(runtime);
 
   // Some plugin builds store this method and invoke it later without the
   // runtime receiver, which breaks private-field access in AgentRuntime.

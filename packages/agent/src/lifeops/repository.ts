@@ -18,14 +18,13 @@ import type {
   LifeOpsWorkflowRun,
 } from "@miladyai/shared/contracts/lifeops";
 import {
-  asObject,
   executeRawSql,
+  listTableColumns,
   parseJsonArray,
   parseJsonRecord,
   sqlBoolean,
   sqlInteger,
   sqlJson,
-  sqlNumber,
   sqlQuote,
   sqlText,
   toBoolean,
@@ -39,10 +38,58 @@ function isoNow(): string {
   return new Date().toISOString();
 }
 
-function parseTaskDefinition(row: Record<string, unknown>): LifeOpsTaskDefinition {
+function parseOwnershipFields(row: Record<string, unknown>) {
+  const subjectType =
+    toText(row.subject_type, "owner") === "agent" ? "agent" : "owner";
+  return {
+    domain:
+      toText(
+        row.domain,
+        subjectType === "agent" ? "agent_ops" : "user_lifeops",
+      ) === "agent_ops"
+        ? "agent_ops"
+        : "user_lifeops",
+    subjectType,
+    subjectId: toText(row.subject_id, toText(row.agent_id)),
+    visibilityScope:
+      toText(
+        row.visibility_scope,
+        subjectType === "agent" ? "agent_and_admin" : "owner_agent_admin",
+      ) === "owner_only"
+        ? "owner_only"
+        : toText(
+              row.visibility_scope,
+              subjectType === "agent" ? "agent_and_admin" : "owner_agent_admin",
+            ) === "agent_and_admin"
+          ? "agent_and_admin"
+          : "owner_agent_admin",
+    contextPolicy:
+      toText(
+        row.context_policy,
+        subjectType === "agent" ? "never" : "explicit_only",
+      ) === "never"
+        ? "never"
+        : toText(
+              row.context_policy,
+              subjectType === "agent" ? "never" : "explicit_only",
+            ) === "sidebar_only"
+          ? "sidebar_only"
+          : toText(
+                row.context_policy,
+                subjectType === "agent" ? "never" : "explicit_only",
+              ) === "allowed_in_private_chat"
+            ? "allowed_in_private_chat"
+            : "explicit_only",
+  } as const;
+}
+
+function parseTaskDefinition(
+  row: Record<string, unknown>,
+): LifeOpsTaskDefinition {
   return {
     id: toText(row.id),
     agentId: toText(row.agent_id),
+    ...parseOwnershipFields(row),
     kind: toText(row.kind) as LifeOpsTaskDefinition["kind"],
     title: toText(row.title),
     description: toText(row.description),
@@ -72,6 +119,7 @@ function parseOccurrence(row: Record<string, unknown>): LifeOpsOccurrence {
   return {
     id: toText(row.id),
     agentId: toText(row.agent_id),
+    ...parseOwnershipFields(row),
     definitionId: toText(row.definition_id),
     occurrenceKey: toText(row.occurrence_key),
     scheduledAt: row.scheduled_at ? toText(row.scheduled_at) : null,
@@ -93,13 +141,20 @@ function parseOccurrence(row: Record<string, unknown>): LifeOpsOccurrence {
   };
 }
 
-function parseOccurrenceView(row: Record<string, unknown>): LifeOpsOccurrenceView {
+function parseOccurrenceView(
+  row: Record<string, unknown>,
+): LifeOpsOccurrenceView {
   return {
     ...parseOccurrence(row),
-    definitionKind: toText(row.definition_kind) as LifeOpsOccurrenceView["definitionKind"],
+    definitionKind: toText(
+      row.definition_kind,
+    ) as LifeOpsOccurrenceView["definitionKind"],
     definitionStatus: toText(
       row.definition_status,
     ) as LifeOpsOccurrenceView["definitionStatus"],
+    cadence: parseJsonRecord(
+      row.definition_cadence_json,
+    ) as unknown as LifeOpsOccurrenceView["cadence"],
     title: toText(row.definition_title),
     description: toText(row.definition_description),
     priority: toNumber(row.definition_priority, 3),
@@ -113,13 +168,16 @@ function parseGoal(row: Record<string, unknown>): LifeOpsGoalDefinition {
   return {
     id: toText(row.id),
     agentId: toText(row.agent_id),
+    ...parseOwnershipFields(row),
     title: toText(row.title),
     description: toText(row.description),
     cadence: row.cadence_json ? parseJsonRecord(row.cadence_json) : null,
     supportStrategy: parseJsonRecord(row.support_strategy_json),
     successCriteria: parseJsonRecord(row.success_criteria_json),
     status: toText(row.status) as LifeOpsGoalDefinition["status"],
-    reviewState: toText(row.review_state) as LifeOpsGoalDefinition["reviewState"],
+    reviewState: toText(
+      row.review_state,
+    ) as LifeOpsGoalDefinition["reviewState"],
     metadata: parseJsonRecord(row.metadata_json),
     createdAt: toText(row.created_at),
     updatedAt: toText(row.updated_at),
@@ -151,13 +209,19 @@ function parseReminderPlan(row: Record<string, unknown>): LifeOpsReminderPlan {
   };
 }
 
-function parseChannelPolicy(row: Record<string, unknown>): LifeOpsChannelPolicy {
+function parseChannelPolicy(
+  row: Record<string, unknown>,
+): LifeOpsChannelPolicy {
   return {
     id: toText(row.id),
     agentId: toText(row.agent_id),
-    channelType: toText(row.channel_type) as LifeOpsChannelPolicy["channelType"],
+    channelType: toText(
+      row.channel_type,
+    ) as LifeOpsChannelPolicy["channelType"],
     channelRef: toText(row.channel_ref),
-    privacyClass: toText(row.privacy_class) as LifeOpsChannelPolicy["privacyClass"],
+    privacyClass: toText(
+      row.privacy_class,
+    ) as LifeOpsChannelPolicy["privacyClass"],
     allowReminders: toBoolean(row.allow_reminders),
     allowEscalation: toBoolean(row.allow_escalation),
     allowPosts: toBoolean(row.allow_posts),
@@ -170,7 +234,9 @@ function parseChannelPolicy(row: Record<string, unknown>): LifeOpsChannelPolicy 
   };
 }
 
-function parseConnectorGrant(row: Record<string, unknown>): LifeOpsConnectorGrant {
+function parseConnectorGrant(
+  row: Record<string, unknown>,
+): LifeOpsConnectorGrant {
   return {
     id: toText(row.id),
     agentId: toText(row.agent_id),
@@ -180,6 +246,16 @@ function parseConnectorGrant(row: Record<string, unknown>): LifeOpsConnectorGran
     capabilities: parseJsonArray(row.capabilities_json),
     tokenRef: row.token_ref ? toText(row.token_ref) : null,
     mode: toText(row.mode) as LifeOpsConnectorGrant["mode"],
+    executionTarget: toText(
+      row.execution_target ?? "local",
+    ) as LifeOpsConnectorGrant["executionTarget"],
+    sourceOfTruth: toText(
+      row.source_of_truth ?? "local_storage",
+    ) as LifeOpsConnectorGrant["sourceOfTruth"],
+    preferredByAgent: toBoolean(row.preferred_by_agent ?? false),
+    cloudConnectionId: row.cloud_connection_id
+      ? toText(row.cloud_connection_id)
+      : null,
     metadata: parseJsonRecord(row.metadata_json),
     lastRefreshAt: row.last_refresh_at ? toText(row.last_refresh_at) : null,
     createdAt: toText(row.created_at),
@@ -202,7 +278,9 @@ function parseAuditEvent(row: Record<string, unknown>): LifeOpsAuditEvent {
   };
 }
 
-function parseCalendarEvent(row: Record<string, unknown>): LifeOpsCalendarEvent {
+function parseCalendarEvent(
+  row: Record<string, unknown>,
+): LifeOpsCalendarEvent {
   return {
     id: toText(row.id),
     externalId: toText(row.external_event_id),
@@ -265,8 +343,11 @@ function parseWorkflowDefinition(
   return {
     id: toText(row.id),
     agentId: toText(row.agent_id),
+    ...parseOwnershipFields(row),
     title: toText(row.title),
-    triggerType: toText(row.trigger_type) as LifeOpsWorkflowDefinition["triggerType"],
+    triggerType: toText(
+      row.trigger_type,
+    ) as LifeOpsWorkflowDefinition["triggerType"],
     schedule: parseJsonRecord(
       row.schedule_json,
     ) as unknown as LifeOpsWorkflowDefinition["schedule"],
@@ -297,7 +378,9 @@ function parseWorkflowRun(row: Record<string, unknown>): LifeOpsWorkflowRun {
   };
 }
 
-function parseReminderAttempt(row: Record<string, unknown>): LifeOpsReminderAttempt {
+function parseReminderAttempt(
+  row: Record<string, unknown>,
+): LifeOpsReminderAttempt {
   return {
     id: toText(row.id),
     agentId: toText(row.agent_id),
@@ -315,10 +398,13 @@ function parseReminderAttempt(row: Record<string, unknown>): LifeOpsReminderAtte
   };
 }
 
-function parseBrowserSession(row: Record<string, unknown>): LifeOpsBrowserSession {
+function parseBrowserSession(
+  row: Record<string, unknown>,
+): LifeOpsBrowserSession {
   return {
     id: toText(row.id),
     agentId: toText(row.agent_id),
+    ...parseOwnershipFields(row),
     workflowId: row.workflow_id ? toText(row.workflow_id) : null,
     title: toText(row.title),
     status: toText(row.status) as LifeOpsBrowserSession["status"],
@@ -387,7 +473,9 @@ function parseGmailSyncState(
   };
 }
 
-export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void> {
+export async function ensureLifeOpsTables(
+  runtime: IAgentRuntime,
+): Promise<void> {
   const key = runtime as unknown as object;
   if (schemaReady.has(key)) return;
 
@@ -395,6 +483,11 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
     `CREATE TABLE IF NOT EXISTS life_task_definitions (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
+      domain TEXT NOT NULL,
+      subject_type TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      visibility_scope TEXT NOT NULL,
+      context_policy TEXT NOT NULL,
       kind TEXT NOT NULL,
       title TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
@@ -415,6 +508,11 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
     `CREATE TABLE IF NOT EXISTS life_task_occurrences (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
+      domain TEXT NOT NULL,
+      subject_type TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      visibility_scope TEXT NOT NULL,
+      context_policy TEXT NOT NULL,
       definition_id TEXT NOT NULL,
       occurrence_key TEXT NOT NULL,
       scheduled_at TEXT,
@@ -434,6 +532,11 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
     `CREATE TABLE IF NOT EXISTS life_goal_definitions (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
+      domain TEXT NOT NULL,
+      subject_type TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      visibility_scope TEXT NOT NULL,
+      context_policy TEXT NOT NULL,
       title TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       cadence_json TEXT,
@@ -457,6 +560,11 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
     `CREATE TABLE IF NOT EXISTS life_workflow_definitions (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
+      domain TEXT NOT NULL,
+      subject_type TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      visibility_scope TEXT NOT NULL,
+      context_policy TEXT NOT NULL,
       title TEXT NOT NULL,
       trigger_type TEXT NOT NULL,
       schedule_json TEXT NOT NULL,
@@ -481,6 +589,11 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
     `CREATE TABLE IF NOT EXISTS life_browser_sessions (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
+      domain TEXT NOT NULL,
+      subject_type TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      visibility_scope TEXT NOT NULL,
+      context_policy TEXT NOT NULL,
       workflow_id TEXT,
       title TEXT NOT NULL,
       status TEXT NOT NULL,
@@ -528,6 +641,10 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
       capabilities_json TEXT NOT NULL DEFAULT '[]',
       token_ref TEXT,
       mode TEXT NOT NULL,
+      execution_target TEXT NOT NULL DEFAULT 'local',
+      source_of_truth TEXT NOT NULL DEFAULT 'local_storage',
+      preferred_by_agent BOOLEAN NOT NULL DEFAULT 0,
+      cloud_connection_id TEXT,
       metadata_json TEXT NOT NULL DEFAULT '{}',
       last_refresh_at TEXT,
       created_at TEXT NOT NULL,
@@ -633,18 +750,26 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
     )`,
     `CREATE INDEX IF NOT EXISTS idx_life_task_definitions_agent_status
       ON life_task_definitions(agent_id, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_task_definitions_subject
+      ON life_task_definitions(agent_id, domain, subject_type, subject_id, status)`,
     `CREATE INDEX IF NOT EXISTS idx_life_task_occurrences_agent_state_start
       ON life_task_occurrences(agent_id, state, relevance_start_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_task_occurrences_subject
+      ON life_task_occurrences(agent_id, domain, subject_type, subject_id, state, relevance_start_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_task_occurrences_definition
       ON life_task_occurrences(definition_id, relevance_start_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_goal_definitions_agent_status
       ON life_goal_definitions(agent_id, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_goal_definitions_subject
+      ON life_goal_definitions(agent_id, domain, subject_type, subject_id, status)`,
     `CREATE INDEX IF NOT EXISTS idx_life_reminder_plans_owner
       ON life_reminder_plans(agent_id, owner_type, owner_id)`,
     `CREATE INDEX IF NOT EXISTS idx_life_audit_events_owner
       ON life_audit_events(agent_id, owner_type, owner_id, created_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_workflow_definitions_agent
       ON life_workflow_definitions(agent_id, status, updated_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_workflow_definitions_subject
+      ON life_workflow_definitions(agent_id, domain, subject_type, subject_id, status, updated_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_workflow_runs_workflow
       ON life_workflow_runs(agent_id, workflow_id, started_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_calendar_events_window
@@ -657,10 +782,89 @@ export async function ensureLifeOpsTables(runtime: IAgentRuntime): Promise<void>
       ON life_gmail_sync_states(agent_id, provider, mailbox)`,
     `CREATE INDEX IF NOT EXISTS idx_life_browser_sessions_agent
       ON life_browser_sessions(agent_id, status, updated_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_browser_sessions_subject
+      ON life_browser_sessions(agent_id, domain, subject_type, subject_id, status, updated_at)`,
   ];
 
   for (const statement of statements) {
     await executeRawSql(runtime, statement);
+  }
+
+  const ownershipTables = [
+    "life_task_definitions",
+    "life_task_occurrences",
+    "life_goal_definitions",
+    "life_workflow_definitions",
+    "life_browser_sessions",
+  ] as const;
+  const ownershipColumns = [
+    {
+      name: "domain",
+      definition: "TEXT NOT NULL DEFAULT 'user_lifeops'",
+    },
+    {
+      name: "subject_type",
+      definition: "TEXT NOT NULL DEFAULT 'owner'",
+    },
+    {
+      name: "subject_id",
+      definition: "TEXT NOT NULL DEFAULT ''",
+    },
+    {
+      name: "visibility_scope",
+      definition: "TEXT NOT NULL DEFAULT 'owner_agent_admin'",
+    },
+    {
+      name: "context_policy",
+      definition: "TEXT NOT NULL DEFAULT 'explicit_only'",
+    },
+  ] as const;
+
+  for (const tableName of ownershipTables) {
+    const existingColumns = new Set(await listTableColumns(runtime, tableName));
+    for (const column of ownershipColumns) {
+      if (existingColumns.has(column.name)) continue;
+      await executeRawSql(
+        runtime,
+        `ALTER TABLE ${tableName} ADD COLUMN ${column.name} ${column.definition}`,
+      );
+    }
+    await executeRawSql(
+      runtime,
+      `UPDATE ${tableName}
+          SET subject_id = agent_id
+        WHERE subject_id = '' OR subject_id IS NULL`,
+    );
+  }
+
+  const connectorGrantColumns = [
+    {
+      name: "execution_target",
+      definition: "TEXT NOT NULL DEFAULT 'local'",
+    },
+    {
+      name: "source_of_truth",
+      definition: "TEXT NOT NULL DEFAULT 'local_storage'",
+    },
+    {
+      name: "preferred_by_agent",
+      definition: "BOOLEAN NOT NULL DEFAULT 0",
+    },
+    {
+      name: "cloud_connection_id",
+      definition: "TEXT",
+    },
+  ] as const;
+
+  const existingConnectorGrantColumns = new Set(
+    await listTableColumns(runtime, "life_connector_grants"),
+  );
+  for (const column of connectorGrantColumns) {
+    if (existingConnectorGrantColumns.has(column.name)) continue;
+    await executeRawSql(
+      runtime,
+      `ALTER TABLE life_connector_grants ADD COLUMN ${column.name} ${column.definition}`,
+    );
   }
 
   schemaReady.add(key);
@@ -678,13 +882,19 @@ export class LifeOpsRepository {
     await executeRawSql(
       this.runtime,
       `INSERT INTO life_task_definitions (
-        id, agent_id, kind, title, description, original_intent, timezone,
+        id, agent_id, domain, subject_type, subject_id, visibility_scope,
+        context_policy, kind, title, description, original_intent, timezone,
         status, priority, cadence_json, window_policy_json,
         progression_rule_json, reminder_plan_id, goal_id, source,
         metadata_json, created_at, updated_at
       ) VALUES (
         ${sqlQuote(definition.id)},
         ${sqlQuote(definition.agentId)},
+        ${sqlQuote(definition.domain)},
+        ${sqlQuote(definition.subjectType)},
+        ${sqlQuote(definition.subjectId)},
+        ${sqlQuote(definition.visibilityScope)},
+        ${sqlQuote(definition.contextPolicy)},
         ${sqlQuote(definition.kind)},
         ${sqlQuote(definition.title)},
         ${sqlQuote(definition.description)},
@@ -710,7 +920,12 @@ export class LifeOpsRepository {
     await executeRawSql(
       this.runtime,
       `UPDATE life_task_definitions
-         SET title = ${sqlQuote(definition.title)},
+         SET domain = ${sqlQuote(definition.domain)},
+             subject_type = ${sqlQuote(definition.subjectType)},
+             subject_id = ${sqlQuote(definition.subjectId)},
+             visibility_scope = ${sqlQuote(definition.visibilityScope)},
+             context_policy = ${sqlQuote(definition.contextPolicy)},
+             title = ${sqlQuote(definition.title)},
              description = ${sqlQuote(definition.description)},
              original_intent = ${sqlQuote(definition.originalIntent)},
              timezone = ${sqlQuote(definition.timezone)},
@@ -729,7 +944,10 @@ export class LifeOpsRepository {
     );
   }
 
-  async getDefinition(agentId: string, definitionId: string): Promise<LifeOpsTaskDefinition | null> {
+  async getDefinition(
+    agentId: string,
+    definitionId: string,
+  ): Promise<LifeOpsTaskDefinition | null> {
     await this.ensureReady();
     const rows = await executeRawSql(
       this.runtime,
@@ -755,7 +973,9 @@ export class LifeOpsRepository {
     return rows.map(parseTaskDefinition);
   }
 
-  async listActiveDefinitions(agentId: string): Promise<LifeOpsTaskDefinition[]> {
+  async listActiveDefinitions(
+    agentId: string,
+  ): Promise<LifeOpsTaskDefinition[]> {
     await this.ensureReady();
     const rows = await executeRawSql(
       this.runtime,
@@ -773,13 +993,19 @@ export class LifeOpsRepository {
     await executeRawSql(
       this.runtime,
       `INSERT INTO life_task_occurrences (
-        id, agent_id, definition_id, occurrence_key, scheduled_at, due_at,
+        id, agent_id, domain, subject_type, subject_id, visibility_scope,
+        context_policy, definition_id, occurrence_key, scheduled_at, due_at,
         relevance_start_at, relevance_end_at, window_name, state,
         snoozed_until, completion_payload_json, derived_target_json,
         metadata_json, created_at, updated_at
       ) VALUES (
         ${sqlQuote(occurrence.id)},
         ${sqlQuote(occurrence.agentId)},
+        ${sqlQuote(occurrence.domain)},
+        ${sqlQuote(occurrence.subjectType)},
+        ${sqlQuote(occurrence.subjectId)},
+        ${sqlQuote(occurrence.visibilityScope)},
+        ${sqlQuote(occurrence.contextPolicy)},
         ${sqlQuote(occurrence.definitionId)},
         ${sqlQuote(occurrence.occurrenceKey)},
         ${sqlText(occurrence.scheduledAt)},
@@ -795,13 +1021,20 @@ export class LifeOpsRepository {
             : null,
         )},
         ${sqlText(
-          occurrence.derivedTarget ? JSON.stringify(occurrence.derivedTarget) : null,
+          occurrence.derivedTarget
+            ? JSON.stringify(occurrence.derivedTarget)
+            : null,
         )},
         ${sqlJson(occurrence.metadata)},
         ${sqlQuote(occurrence.createdAt)},
         ${sqlQuote(occurrence.updatedAt)}
       )
       ON CONFLICT(agent_id, definition_id, occurrence_key) DO UPDATE SET
+        domain = excluded.domain,
+        subject_type = excluded.subject_type,
+        subject_id = excluded.subject_id,
+        visibility_scope = excluded.visibility_scope,
+        context_policy = excluded.context_policy,
         scheduled_at = excluded.scheduled_at,
         due_at = excluded.due_at,
         relevance_start_at = excluded.relevance_start_at,
@@ -859,6 +1092,7 @@ export class LifeOpsRepository {
       `SELECT occurrence.*,
               definition.kind AS definition_kind,
               definition.status AS definition_status,
+              definition.cadence_json AS definition_cadence_json,
               definition.title AS definition_title,
               definition.description AS definition_description,
               definition.priority AS definition_priority,
@@ -887,6 +1121,7 @@ export class LifeOpsRepository {
       `SELECT occurrence.*,
               definition.kind AS definition_kind,
               definition.status AS definition_status,
+              definition.cadence_json AS definition_cadence_json,
               definition.title AS definition_title,
               definition.description AS definition_description,
               definition.priority AS definition_priority,
@@ -916,7 +1151,12 @@ export class LifeOpsRepository {
     await executeRawSql(
       this.runtime,
       `UPDATE life_task_occurrences
-          SET scheduled_at = ${sqlText(occurrence.scheduledAt)},
+          SET domain = ${sqlQuote(occurrence.domain)},
+              subject_type = ${sqlQuote(occurrence.subjectType)},
+              subject_id = ${sqlQuote(occurrence.subjectId)},
+              visibility_scope = ${sqlQuote(occurrence.visibilityScope)},
+              context_policy = ${sqlQuote(occurrence.contextPolicy)},
+              scheduled_at = ${sqlText(occurrence.scheduledAt)},
               due_at = ${sqlText(occurrence.dueAt)},
               relevance_start_at = ${sqlQuote(occurrence.relevanceStartAt)},
               relevance_end_at = ${sqlQuote(occurrence.relevanceEndAt)},
@@ -929,7 +1169,9 @@ export class LifeOpsRepository {
                   : null,
               )},
               derived_target_json = ${sqlText(
-                occurrence.derivedTarget ? JSON.stringify(occurrence.derivedTarget) : null,
+                occurrence.derivedTarget
+                  ? JSON.stringify(occurrence.derivedTarget)
+                  : null,
               )},
               metadata_json = ${sqlJson(occurrence.metadata)},
               updated_at = ${sqlQuote(occurrence.updatedAt)}
@@ -965,12 +1207,18 @@ export class LifeOpsRepository {
     await executeRawSql(
       this.runtime,
       `INSERT INTO life_goal_definitions (
-        id, agent_id, title, description, cadence_json, support_strategy_json,
+        id, agent_id, domain, subject_type, subject_id, visibility_scope,
+        context_policy, title, description, cadence_json, support_strategy_json,
         success_criteria_json, status, review_state, metadata_json,
         created_at, updated_at
       ) VALUES (
         ${sqlQuote(goal.id)},
         ${sqlQuote(goal.agentId)},
+        ${sqlQuote(goal.domain)},
+        ${sqlQuote(goal.subjectType)},
+        ${sqlQuote(goal.subjectId)},
+        ${sqlQuote(goal.visibilityScope)},
+        ${sqlQuote(goal.contextPolicy)},
         ${sqlQuote(goal.title)},
         ${sqlQuote(goal.description)},
         ${sqlText(goal.cadence ? JSON.stringify(goal.cadence) : null)},
@@ -990,7 +1238,12 @@ export class LifeOpsRepository {
     await executeRawSql(
       this.runtime,
       `UPDATE life_goal_definitions
-          SET title = ${sqlQuote(goal.title)},
+          SET domain = ${sqlQuote(goal.domain)},
+              subject_type = ${sqlQuote(goal.subjectType)},
+              subject_id = ${sqlQuote(goal.subjectId)},
+              visibility_scope = ${sqlQuote(goal.visibilityScope)},
+              context_policy = ${sqlQuote(goal.contextPolicy)},
+              title = ${sqlQuote(goal.title)},
               description = ${sqlQuote(goal.description)},
               cadence_json = ${sqlText(goal.cadence ? JSON.stringify(goal.cadence) : null)},
               support_strategy_json = ${sqlJson(goal.supportStrategy)},
@@ -1004,7 +1257,10 @@ export class LifeOpsRepository {
     );
   }
 
-  async getGoal(agentId: string, goalId: string): Promise<LifeOpsGoalDefinition | null> {
+  async getGoal(
+    agentId: string,
+    goalId: string,
+  ): Promise<LifeOpsGoalDefinition | null> {
     await this.ensureReady();
     const rows = await executeRawSql(
       this.runtime,
@@ -1124,7 +1380,10 @@ export class LifeOpsRepository {
     );
   }
 
-  async getReminderPlan(agentId: string, planId: string): Promise<LifeOpsReminderPlan | null> {
+  async getReminderPlan(
+    agentId: string,
+    planId: string,
+  ): Promise<LifeOpsReminderPlan | null> {
     await this.ensureReady();
     const rows = await executeRawSql(
       this.runtime,
@@ -1179,7 +1438,11 @@ export class LifeOpsRepository {
     );
   }
 
-  async listAuditEvents(agentId: string, ownerType: string, ownerId: string): Promise<LifeOpsAuditEvent[]> {
+  async listAuditEvents(
+    agentId: string,
+    ownerType: string,
+    ownerId: string,
+  ): Promise<LifeOpsAuditEvent[]> {
     await this.ensureReady();
     const rows = await executeRawSql(
       this.runtime,
@@ -1263,7 +1526,8 @@ export class LifeOpsRepository {
       this.runtime,
       `INSERT INTO life_connector_grants (
         id, agent_id, provider, identity_json, granted_scopes_json,
-        capabilities_json, token_ref, mode, metadata_json,
+        capabilities_json, token_ref, mode, execution_target, source_of_truth,
+        preferred_by_agent, cloud_connection_id, metadata_json,
         last_refresh_at, created_at, updated_at
       ) VALUES (
         ${sqlQuote(grant.id)},
@@ -1274,6 +1538,10 @@ export class LifeOpsRepository {
         ${sqlJson(grant.capabilities)},
         ${sqlText(grant.tokenRef)},
         ${sqlQuote(grant.mode)},
+        ${sqlQuote(grant.executionTarget)},
+        ${sqlQuote(grant.sourceOfTruth)},
+        ${sqlBoolean(grant.preferredByAgent)},
+        ${sqlText(grant.cloudConnectionId)},
         ${sqlJson(grant.metadata)},
         ${sqlText(grant.lastRefreshAt)},
         ${sqlQuote(grant.createdAt)},
@@ -1284,6 +1552,10 @@ export class LifeOpsRepository {
         granted_scopes_json = excluded.granted_scopes_json,
         capabilities_json = excluded.capabilities_json,
         token_ref = excluded.token_ref,
+        execution_target = excluded.execution_target,
+        source_of_truth = excluded.source_of_truth,
+        preferred_by_agent = excluded.preferred_by_agent,
+        cloud_connection_id = excluded.cloud_connection_id,
         metadata_json = excluded.metadata_json,
         last_refresh_at = excluded.last_refresh_at,
         updated_at = excluded.updated_at`,
@@ -1439,12 +1711,8 @@ export class LifeOpsRepository {
     timeMax?: string,
   ): Promise<LifeOpsCalendarEvent[]> {
     await this.ensureReady();
-    const timeMinClause = timeMin
-      ? `AND end_at >= ${sqlQuote(timeMin)}`
-      : "";
-    const timeMaxClause = timeMax
-      ? `AND start_at < ${sqlQuote(timeMax)}`
-      : "";
+    const timeMinClause = timeMin ? `AND end_at >= ${sqlQuote(timeMin)}` : "";
+    const timeMaxClause = timeMax ? `AND start_at < ${sqlQuote(timeMax)}` : "";
     const rows = await executeRawSql(
       this.runtime,
       `SELECT *
@@ -1458,7 +1726,9 @@ export class LifeOpsRepository {
     return rows.map(parseCalendarEvent);
   }
 
-  async upsertCalendarSyncState(state: LifeOpsCalendarSyncState): Promise<void> {
+  async upsertCalendarSyncState(
+    state: LifeOpsCalendarSyncState,
+  ): Promise<void> {
     await this.ensureReady();
     await executeRawSql(
       this.runtime,
@@ -1727,12 +1997,18 @@ export class LifeOpsRepository {
     await executeRawSql(
       this.runtime,
       `INSERT INTO life_workflow_definitions (
-        id, agent_id, title, trigger_type, schedule_json, action_plan_json,
+        id, agent_id, domain, subject_type, subject_id, visibility_scope,
+        context_policy, title, trigger_type, schedule_json, action_plan_json,
         permission_policy_json, status, created_by, metadata_json,
         created_at, updated_at
       ) VALUES (
         ${sqlQuote(definition.id)},
         ${sqlQuote(definition.agentId)},
+        ${sqlQuote(definition.domain)},
+        ${sqlQuote(definition.subjectType)},
+        ${sqlQuote(definition.subjectId)},
+        ${sqlQuote(definition.visibilityScope)},
+        ${sqlQuote(definition.contextPolicy)},
         ${sqlQuote(definition.title)},
         ${sqlQuote(definition.triggerType)},
         ${sqlJson(definition.schedule)},
@@ -1752,7 +2028,12 @@ export class LifeOpsRepository {
     await executeRawSql(
       this.runtime,
       `UPDATE life_workflow_definitions
-          SET title = ${sqlQuote(definition.title)},
+          SET domain = ${sqlQuote(definition.domain)},
+              subject_type = ${sqlQuote(definition.subjectType)},
+              subject_id = ${sqlQuote(definition.subjectId)},
+              visibility_scope = ${sqlQuote(definition.visibilityScope)},
+              context_policy = ${sqlQuote(definition.contextPolicy)},
+              title = ${sqlQuote(definition.title)},
               trigger_type = ${sqlQuote(definition.triggerType)},
               schedule_json = ${sqlJson(definition.schedule)},
               action_plan_json = ${sqlJson(definition.actionPlan)},
@@ -1892,12 +2173,18 @@ export class LifeOpsRepository {
     await executeRawSql(
       this.runtime,
       `INSERT INTO life_browser_sessions (
-        id, agent_id, workflow_id, title, status, actions_json,
+        id, agent_id, domain, subject_type, subject_id, visibility_scope,
+        context_policy, workflow_id, title, status, actions_json,
         current_action_index, awaiting_confirmation_for_action_id,
         result_json, metadata_json, created_at, updated_at, finished_at
       ) VALUES (
         ${sqlQuote(session.id)},
         ${sqlQuote(session.agentId)},
+        ${sqlQuote(session.domain)},
+        ${sqlQuote(session.subjectType)},
+        ${sqlQuote(session.subjectId)},
+        ${sqlQuote(session.visibilityScope)},
+        ${sqlQuote(session.contextPolicy)},
         ${sqlText(session.workflowId)},
         ${sqlQuote(session.title)},
         ${sqlQuote(session.status)},
@@ -1918,7 +2205,12 @@ export class LifeOpsRepository {
     await executeRawSql(
       this.runtime,
       `UPDATE life_browser_sessions
-          SET workflow_id = ${sqlText(session.workflowId)},
+          SET domain = ${sqlQuote(session.domain)},
+              subject_type = ${sqlQuote(session.subjectType)},
+              subject_id = ${sqlQuote(session.subjectId)},
+              visibility_scope = ${sqlQuote(session.visibilityScope)},
+              context_policy = ${sqlQuote(session.contextPolicy)},
+              workflow_id = ${sqlText(session.workflowId)},
               title = ${sqlQuote(session.title)},
               status = ${sqlQuote(session.status)},
               actions_json = ${sqlJson(session.actions)},
@@ -1963,7 +2255,9 @@ export class LifeOpsRepository {
   }
 }
 
-export function createLifeOpsTaskDefinition(params: Omit<LifeOpsTaskDefinition, "id" | "createdAt" | "updatedAt">): LifeOpsTaskDefinition {
+export function createLifeOpsTaskDefinition(
+  params: Omit<LifeOpsTaskDefinition, "id" | "createdAt" | "updatedAt">,
+): LifeOpsTaskDefinition {
   const timestamp = isoNow();
   return {
     ...params,
@@ -1973,7 +2267,9 @@ export function createLifeOpsTaskDefinition(params: Omit<LifeOpsTaskDefinition, 
   };
 }
 
-export function createLifeOpsGoalDefinition(params: Omit<LifeOpsGoalDefinition, "id" | "createdAt" | "updatedAt">): LifeOpsGoalDefinition {
+export function createLifeOpsGoalDefinition(
+  params: Omit<LifeOpsGoalDefinition, "id" | "createdAt" | "updatedAt">,
+): LifeOpsGoalDefinition {
   const timestamp = isoNow();
   return {
     ...params,
@@ -1983,7 +2279,9 @@ export function createLifeOpsGoalDefinition(params: Omit<LifeOpsGoalDefinition, 
   };
 }
 
-export function createLifeOpsReminderPlan(params: Omit<LifeOpsReminderPlan, "id" | "createdAt" | "updatedAt">): LifeOpsReminderPlan {
+export function createLifeOpsReminderPlan(
+  params: Omit<LifeOpsReminderPlan, "id" | "createdAt" | "updatedAt">,
+): LifeOpsReminderPlan {
   const timestamp = isoNow();
   return {
     ...params,
@@ -2005,7 +2303,9 @@ export function createLifeOpsChannelPolicy(
   };
 }
 
-export function createLifeOpsAuditEvent(params: Omit<LifeOpsAuditEvent, "id" | "createdAt">): LifeOpsAuditEvent {
+export function createLifeOpsAuditEvent(
+  params: Omit<LifeOpsAuditEvent, "id" | "createdAt">,
+): LifeOpsAuditEvent {
   return {
     ...params,
     id: crypto.randomUUID(),
@@ -2014,11 +2314,33 @@ export function createLifeOpsAuditEvent(params: Omit<LifeOpsAuditEvent, "id" | "
 }
 
 export function createLifeOpsConnectorGrant(
-  params: Omit<LifeOpsConnectorGrant, "id" | "createdAt" | "updatedAt">,
+  params: Omit<
+    LifeOpsConnectorGrant,
+    | "id"
+    | "createdAt"
+    | "updatedAt"
+    | "executionTarget"
+    | "sourceOfTruth"
+    | "preferredByAgent"
+    | "cloudConnectionId"
+  > &
+    Partial<
+      Pick<
+        LifeOpsConnectorGrant,
+        | "executionTarget"
+        | "sourceOfTruth"
+        | "preferredByAgent"
+        | "cloudConnectionId"
+      >
+    >,
 ): LifeOpsConnectorGrant {
   const timestamp = isoNow();
   return {
     ...params,
+    executionTarget: params.executionTarget ?? "local",
+    sourceOfTruth: params.sourceOfTruth ?? "local_storage",
+    preferredByAgent: params.preferredByAgent ?? false,
+    cloudConnectionId: params.cloudConnectionId ?? null,
     id: crypto.randomUUID(),
     createdAt: timestamp,
     updatedAt: timestamp,

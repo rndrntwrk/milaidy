@@ -29,6 +29,7 @@ vi.mock("@elizaos/plugin-elevenlabs", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-elizacloud", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-experience", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-form", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-goals", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-google-genai", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-groq", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-knowledge", () => ({ default: {} }));
@@ -185,10 +186,6 @@ describe("collectPluginNames", () => {
 
   it("uses the hardware-adaptive embedding preset defaults when no embedding config is set", () => {
     const detectedPreset = detectEmbeddingPreset();
-    const expectedDimensions =
-      detectedPreset.dimensions === 4096
-        ? "384"
-        : String(detectedPreset.dimensions);
 
     delete process.env.LOCAL_EMBEDDING_MODEL;
     delete process.env.LOCAL_EMBEDDING_MODEL_REPO;
@@ -203,7 +200,9 @@ describe("collectPluginNames", () => {
     expect(process.env.LOCAL_EMBEDDING_MODEL_REPO).toBe(
       detectedPreset.modelRepo,
     );
-    expect(process.env.LOCAL_EMBEDDING_DIMENSIONS).toBe(expectedDimensions);
+    expect(process.env.LOCAL_EMBEDDING_DIMENSIONS).toBe(
+      String(detectedPreset.dimensions),
+    );
     expect(process.env.LOCAL_EMBEDDING_CONTEXT_SIZE).toBe(
       String(detectedPreset.contextSize),
     );
@@ -232,7 +231,7 @@ describe("collectPluginNames", () => {
 
   it("includes all core plugins for an empty config", () => {
     // Guard against accidental drift in the default runtime contract.
-    expect(CORE_PLUGINS).toHaveLength(13);
+    expect(CORE_PLUGINS).toHaveLength(14);
 
     const expectedCorePlugins = [
       "@elizaos/plugin-sql",
@@ -248,6 +247,7 @@ describe("collectPluginNames", () => {
       "@elizaos/plugin-plugin-manager",
       "@miladyai/plugin-roles",
       "@elizaos/plugin-todo",
+      "@elizaos/plugin-goals",
     ];
     const names = collectPluginNames({} as ElizaConfig);
     for (const plugin of expectedCorePlugins) {

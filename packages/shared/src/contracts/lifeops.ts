@@ -80,8 +80,23 @@ export const LIFEOPS_CONNECTOR_PROVIDERS = [
 export type LifeOpsConnectorProvider =
   (typeof LIFEOPS_CONNECTOR_PROVIDERS)[number];
 
-export const LIFEOPS_CONNECTOR_MODES = ["local", "remote"] as const;
+export const LIFEOPS_CONNECTOR_MODES = [
+  "local",
+  "remote",
+  "cloud_managed",
+] as const;
 export type LifeOpsConnectorMode = (typeof LIFEOPS_CONNECTOR_MODES)[number];
+
+export const LIFEOPS_CONNECTOR_EXECUTION_TARGETS = ["local", "cloud"] as const;
+export type LifeOpsConnectorExecutionTarget =
+  (typeof LIFEOPS_CONNECTOR_EXECUTION_TARGETS)[number];
+
+export const LIFEOPS_CONNECTOR_SOURCES_OF_TRUTH = [
+  "local_storage",
+  "cloud_connection",
+] as const;
+export type LifeOpsConnectorSourceOfTruth =
+  (typeof LIFEOPS_CONNECTOR_SOURCES_OF_TRUTH)[number];
 
 export const LIFEOPS_GOOGLE_CAPABILITIES = [
   "google.basic_identity",
@@ -124,6 +139,27 @@ export type LifeOpsChannelType = (typeof LIFEOPS_CHANNEL_TYPES)[number];
 
 export const LIFEOPS_PRIVACY_CLASSES = ["private", "shared", "public"] as const;
 export type LifeOpsPrivacyClass = (typeof LIFEOPS_PRIVACY_CLASSES)[number];
+
+export const LIFEOPS_DOMAINS = ["user_lifeops", "agent_ops"] as const;
+export type LifeOpsDomain = (typeof LIFEOPS_DOMAINS)[number];
+
+export const LIFEOPS_SUBJECT_TYPES = ["owner", "agent"] as const;
+export type LifeOpsSubjectType = (typeof LIFEOPS_SUBJECT_TYPES)[number];
+
+export const LIFEOPS_VISIBILITY_SCOPES = [
+  "owner_only",
+  "agent_and_admin",
+  "owner_agent_admin",
+] as const;
+export type LifeOpsVisibilityScope = (typeof LIFEOPS_VISIBILITY_SCOPES)[number];
+
+export const LIFEOPS_CONTEXT_POLICIES = [
+  "never",
+  "explicit_only",
+  "sidebar_only",
+  "allowed_in_private_chat",
+] as const;
+export type LifeOpsContextPolicy = (typeof LIFEOPS_CONTEXT_POLICIES)[number];
 
 export const LIFEOPS_REMINDER_URGENCY_LEVELS = [
   "low",
@@ -181,6 +217,22 @@ export const LIFEOPS_ACTORS = [
   "connector",
 ] as const;
 export type LifeOpsActor = (typeof LIFEOPS_ACTORS)[number];
+
+export interface LifeOpsOwnership {
+  domain: LifeOpsDomain;
+  subjectType: LifeOpsSubjectType;
+  subjectId: string;
+  visibilityScope: LifeOpsVisibilityScope;
+  contextPolicy: LifeOpsContextPolicy;
+}
+
+export interface LifeOpsOwnershipInput {
+  domain?: LifeOpsDomain;
+  subjectType?: LifeOpsSubjectType;
+  subjectId?: string;
+  visibilityScope?: LifeOpsVisibilityScope;
+  contextPolicy?: LifeOpsContextPolicy;
+}
 
 export interface LifeOpsTimeWindowDefinition {
   name: LifeOpsTimeWindowName;
@@ -268,6 +320,11 @@ export interface LifeOpsReminderPlan {
 export interface LifeOpsTaskDefinition {
   id: string;
   agentId: string;
+  domain: LifeOpsDomain;
+  subjectType: LifeOpsSubjectType;
+  subjectId: string;
+  visibilityScope: LifeOpsVisibilityScope;
+  contextPolicy: LifeOpsContextPolicy;
   kind: LifeOpsDefinitionKind;
   title: string;
   description: string;
@@ -289,6 +346,11 @@ export interface LifeOpsTaskDefinition {
 export interface LifeOpsOccurrence {
   id: string;
   agentId: string;
+  domain: LifeOpsDomain;
+  subjectType: LifeOpsSubjectType;
+  subjectId: string;
+  visibilityScope: LifeOpsVisibilityScope;
+  contextPolicy: LifeOpsContextPolicy;
   definitionId: string;
   occurrenceKey: string;
   scheduledAt: string | null;
@@ -308,6 +370,7 @@ export interface LifeOpsOccurrence {
 export interface LifeOpsOccurrenceView extends LifeOpsOccurrence {
   definitionKind: LifeOpsDefinitionKind;
   definitionStatus: LifeOpsDefinitionStatus;
+  cadence: LifeOpsCadence;
   title: string;
   description: string;
   priority: number;
@@ -319,6 +382,11 @@ export interface LifeOpsOccurrenceView extends LifeOpsOccurrence {
 export interface LifeOpsGoalDefinition {
   id: string;
   agentId: string;
+  domain: LifeOpsDomain;
+  subjectType: LifeOpsSubjectType;
+  subjectId: string;
+  visibilityScope: LifeOpsVisibilityScope;
+  contextPolicy: LifeOpsContextPolicy;
   title: string;
   description: string;
   cadence: Record<string, unknown> | null;
@@ -343,6 +411,11 @@ export interface LifeOpsGoalLink {
 export interface LifeOpsWorkflowDefinition {
   id: string;
   agentId: string;
+  domain: LifeOpsDomain;
+  subjectType: LifeOpsSubjectType;
+  subjectId: string;
+  visibilityScope: LifeOpsVisibilityScope;
+  contextPolicy: LifeOpsContextPolicy;
   title: string;
   triggerType: LifeOpsWorkflowTriggerType;
   schedule: LifeOpsWorkflowSchedule;
@@ -485,6 +558,10 @@ export interface LifeOpsConnectorGrant {
   capabilities: string[];
   tokenRef: string | null;
   mode: LifeOpsConnectorMode;
+  executionTarget: LifeOpsConnectorExecutionTarget;
+  sourceOfTruth: LifeOpsConnectorSourceOfTruth;
+  preferredByAgent: boolean;
+  cloudConnectionId: string | null;
   metadata: Record<string, unknown>;
   lastRefreshAt: string | null;
   createdAt: string;
@@ -520,6 +597,9 @@ export interface LifeOpsAuditEvent {
 }
 
 export interface LifeOpsActiveReminderView {
+  domain: LifeOpsDomain;
+  subjectType: LifeOpsSubjectType;
+  subjectId: string;
   ownerType: "occurrence" | "calendar_event";
   ownerId: string;
   occurrenceId: string | null;
@@ -544,11 +624,20 @@ export interface LifeOpsOverviewSummary {
   activeGoalCount: number;
 }
 
+export interface LifeOpsOverviewSection {
+  occurrences: LifeOpsOccurrenceView[];
+  goals: LifeOpsGoalDefinition[];
+  reminders: LifeOpsActiveReminderView[];
+  summary: LifeOpsOverviewSummary;
+}
+
 export interface LifeOpsOverview {
   occurrences: LifeOpsOccurrenceView[];
   goals: LifeOpsGoalDefinition[];
   reminders: LifeOpsActiveReminderView[];
   summary: LifeOpsOverviewSummary;
+  owner: LifeOpsOverviewSection;
+  agentOps: LifeOpsOverviewSection;
 }
 
 export interface LifeOpsCalendarEventAttendee {
@@ -741,9 +830,13 @@ export interface LifeOpsGoogleConnectorStatus {
   mode: LifeOpsConnectorMode;
   defaultMode: LifeOpsConnectorMode;
   availableModes: LifeOpsConnectorMode[];
+  executionTarget: LifeOpsConnectorExecutionTarget;
+  sourceOfTruth: LifeOpsConnectorSourceOfTruth;
   configured: boolean;
   connected: boolean;
   reason: LifeOpsGoogleConnectorReason;
+  preferredByAgent: boolean;
+  cloudConnectionId: string | null;
   identity: Record<string, unknown> | null;
   grantedCapabilities: LifeOpsGoogleCapability[];
   grantedScopes: string[];
@@ -803,6 +896,7 @@ export interface LifeOpsXPostResponse {
 }
 
 export interface CreateLifeOpsDefinitionRequest {
+  ownership?: LifeOpsOwnershipInput;
   kind: LifeOpsDefinitionKind;
   title: string;
   description?: string;
@@ -823,6 +917,7 @@ export interface CreateLifeOpsDefinitionRequest {
 }
 
 export interface UpdateLifeOpsDefinitionRequest {
+  ownership?: LifeOpsOwnershipInput;
   title?: string;
   description?: string;
   originalIntent?: string;
@@ -842,6 +937,7 @@ export interface UpdateLifeOpsDefinitionRequest {
 }
 
 export interface CreateLifeOpsGoalRequest {
+  ownership?: LifeOpsOwnershipInput;
   title: string;
   description?: string;
   cadence?: Record<string, unknown> | null;
@@ -853,6 +949,7 @@ export interface CreateLifeOpsGoalRequest {
 }
 
 export interface UpdateLifeOpsGoalRequest {
+  ownership?: LifeOpsOwnershipInput;
   title?: string;
   description?: string;
   cadence?: Record<string, unknown> | null;
@@ -919,6 +1016,7 @@ export interface AcknowledgeLifeOpsReminderRequest {
 }
 
 export interface CreateLifeOpsWorkflowRequest {
+  ownership?: LifeOpsOwnershipInput;
   title: string;
   triggerType: LifeOpsWorkflowTriggerType;
   schedule?: LifeOpsWorkflowSchedule;
@@ -930,6 +1028,7 @@ export interface CreateLifeOpsWorkflowRequest {
 }
 
 export interface UpdateLifeOpsWorkflowRequest {
+  ownership?: LifeOpsOwnershipInput;
   title?: string;
   triggerType?: LifeOpsWorkflowTriggerType;
   schedule?: LifeOpsWorkflowSchedule;
@@ -961,6 +1060,11 @@ export type LifeOpsBrowserSessionStatus =
 export interface LifeOpsBrowserSession {
   id: string;
   agentId: string;
+  domain: LifeOpsDomain;
+  subjectType: LifeOpsSubjectType;
+  subjectId: string;
+  visibilityScope: LifeOpsVisibilityScope;
+  contextPolicy: LifeOpsContextPolicy;
   workflowId: string | null;
   title: string;
   status: LifeOpsBrowserSessionStatus;
@@ -975,6 +1079,7 @@ export interface LifeOpsBrowserSession {
 }
 
 export interface CreateLifeOpsBrowserSessionRequest {
+  ownership?: LifeOpsOwnershipInput;
   workflowId?: string | null;
   title: string;
   actions: Array<Omit<LifeOpsBrowserAction, "id">>;

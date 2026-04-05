@@ -1,9 +1,15 @@
 import type http from "node:http";
-import { logger, type AgentRuntime, stringToUuid, type Task, type UUID } from "@elizaos/core";
+import {
+  type AgentRuntime,
+  stringToUuid,
+  type Task,
+  type UUID,
+} from "@elizaos/core";
 import type { LifeOpsOverview } from "../contracts/lifeops.js";
+import { LifeOpsService } from "../lifeops/service.js";
+import type { TriggerSummary } from "../triggers/types.js";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
 import { WORKBENCH_TASK_TAG, WORKBENCH_TODO_TAG } from "./workbench-helpers.js";
-import { LifeOpsService } from "../lifeops/service.js";
 
 interface WorkbenchTaskView {
   id: string;
@@ -39,6 +45,13 @@ interface TodoDataServiceLike {
   deleteTodo: (id: string) => Promise<unknown | false>;
 }
 
+export const WORKBENCH_BOOTSTRAP_TODO_NAME =
+  "Get the user's name and understand what they need help with";
+
+const WORKBENCH_BOOTSTRAP_TODO_KEY = "user-name-and-help";
+const WORKBENCH_BOOTSTRAP_TODO_SOURCE = "workbench-bootstrap";
+const WORKBENCH_BOOTSTRAP_TODO_TAG = "bootstrap";
+
 export interface WorkbenchRouteContext {
   req: http.IncomingMessage;
   res: http.ServerResponse;
@@ -60,8 +73,14 @@ export interface WorkbenchRouteContext {
   toWorkbenchTask: (task: Task) => WorkbenchTaskView | null;
   toWorkbenchTodo: (task: Task) => WorkbenchTodoView | null;
   toWorkbenchTodoFromRecord: (record: unknown) => WorkbenchTodoView | null;
-  getTodoDataService: (runtime: AgentRuntime) => Promise<TodoDataServiceLike | null>;
-  recordTodoDbFailure: (runtime: AgentRuntime, operation: string, err: unknown) => void;
+  getTodoDataService: (
+    runtime: AgentRuntime,
+  ) => Promise<TodoDataServiceLike | null>;
+  recordTodoDbFailure: (
+    runtime: AgentRuntime,
+    operation: string,
+    err: unknown,
+  ) => void;
   normalizeTags: (value: unknown, required?: string[]) => string[];
   readTaskMetadata: (task: Task) => Record<string, unknown>;
   readTaskCompleted: (task: Task) => boolean;
@@ -72,8 +91,114 @@ export interface WorkbenchRouteContext {
     res: http.ServerResponse,
     label: string,
   ) => string | null;
-  taskToTriggerSummary: (task: Task) => unknown;
+  taskToTriggerSummary: (task: Task) => TriggerSummary | null;
   listTriggerTasks: (runtime: AgentRuntime) => Promise<Task[]>;
+}
+
+interface EnsureWorkbenchBootstrapTodoOptions {
+  ctx: Pick<
+    WorkbenchRouteContext,
+    | "normalizeTags"
+    | "recordTodoDbFailure"
+    | "toWorkbenchTodo"
+    | "toWorkbenchTodoFromRecord"
+  >;
+  runtime: AgentRuntime;
+  adminEntityId: UUID | null;
+  todos: WorkbenchTodoView[];
+  todoData: TodoDataServiceLike | null;
+}
+
+export async function ensureWorkbenchBootstrapTodo({
+  ctx,
+  runtime,
+  adminEntityId,
+  todos,
+  todoData,
+}: EnsureWorkbenchBootstrapTodoOptions): Promise<WorkbenchTodoView | null> {
+  if (todos.length > 0) {
+    return null;
+  }
+
+  const name = WORKBENCH_BOOTSTRAP_TODO_NAME;
+  const description = WORKBENCH_BOOTSTRAP_TODO_NAME;
+
+  if (todoData) {
+    try {
+      const now = Date.now();
+      const roomId =
+        (
+          runtime.getService("AUTONOMY") as {
+            getAutonomousRoomId?: () => UUID;
+          } | null
+        )?.getAutonomousRoomId?.() ??
+        stringToUuid(`workbench-todo-room-${runtime.agentId}`);
+      const worldId = stringToUuid(`workbench-todo-world-${runtime.agentId}`);
+      const entityId =
+        adminEntityId ??
+        stringToUuid(`workbench-todo-bootstrap-entity-${runtime.agentId}`);
+      const createdTodoId = await todoData.createTodo({
+        agentId: runtime.agentId,
+        worldId,
+        roomId,
+        entityId,
+        name,
+        description,
+        type: "task",
+        metadata: {
+          bootstrapKey: WORKBENCH_BOOTSTRAP_TODO_KEY,
+          createdAt: new Date(now).toISOString(),
+          source: WORKBENCH_BOOTSTRAP_TODO_SOURCE,
+        },
+        tags: ctx.normalizeTags([WORKBENCH_BOOTSTRAP_TODO_TAG], ["TODO"]),
+      });
+      const createdTodo = await todoData.getTodo(createdTodoId);
+      const mapped = createdTodo
+        ? ctx.toWorkbenchTodoFromRecord(createdTodo)
+        : null;
+      if (mapped) {
+        return mapped;
+      }
+    } catch (err) {
+      ctx.recordTodoDbFailure(runtime, "todos.bootstrap.create", err);
+    }
+  }
+
+  try {
+    const taskId = await runtime.createTask({
+      name,
+      description,
+      tags: ctx.normalizeTags(
+        [WORKBENCH_BOOTSTRAP_TODO_TAG],
+        [WORKBENCH_TODO_TAG, "todo"],
+      ),
+      metadata: {
+        isCompleted: false,
+        workbenchTodo: {
+          bootstrapKey: WORKBENCH_BOOTSTRAP_TODO_KEY,
+          description,
+          isCompleted: false,
+          isUrgent: false,
+          priority: null,
+          source: WORKBENCH_BOOTSTRAP_TODO_SOURCE,
+          type: "task",
+        },
+      },
+    });
+    const createdTask = await runtime.getTask(taskId);
+    return createdTask ? ctx.toWorkbenchTodo(createdTask) : null;
+  } catch (err) {
+    runtime.logger?.warn(
+      {
+        src: "eliza-api",
+        err,
+        agentId: runtime.agentId,
+        operation: "todos.bootstrap.create",
+      },
+      "[eliza-api] Failed to create bootstrap todo",
+    );
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -83,21 +208,12 @@ export interface WorkbenchRouteContext {
 export async function handleWorkbenchRoutes(
   ctx: WorkbenchRouteContext,
 ): Promise<boolean> {
-  const {
-    req,
-    res,
-    method,
-    pathname,
-    state,
-    json,
-    error,
-    readJsonBody,
-  } = ctx;
+  const { req, res, method, pathname, state, json, error, readJsonBody } = ctx;
 
   // ── GET /api/workbench/overview ──────────────────────────────────────
   if (method === "GET" && pathname === "/api/workbench/overview") {
     const tasks: WorkbenchTaskView[] = [];
-    const triggers: Array<NonNullable<ReturnType<typeof ctx.taskToTriggerSummary>>> = [];
+    const triggers: TriggerSummary[] = [];
     const todos: WorkbenchTodoView[] = [];
     const summary = {
       totalTasks: 0,
@@ -158,8 +274,26 @@ export async function handleWorkbenchRoutes(
         }
       }
 
+      const bootstrapTodo = await ensureWorkbenchBootstrapTodo({
+        ctx,
+        runtime: state.runtime,
+        adminEntityId: state.adminEntityId,
+        todos,
+        todoData,
+      });
+      if (bootstrapTodo) {
+        todos.push(bootstrapTodo);
+        todosAvailable = true;
+      }
+
       try {
-        lifeops = await new LifeOpsService(state.runtime).getOverview();
+        const ownerEntityId =
+          state.adminEntityId ??
+          (stringToUuid(`${state.runtime.agentId}-admin-entity`) as UUID);
+        state.adminEntityId = ownerEntityId;
+        lifeops = await new LifeOpsService(state.runtime, {
+          ownerEntityId,
+        }).getOverview();
         lifeopsAvailable = true;
       } catch {
         lifeopsAvailable = false;
@@ -198,11 +332,15 @@ export async function handleWorkbenchRoutes(
 
     tasks.sort((a, b) => a.name.localeCompare(b.name));
     todos.sort((a, b) => a.name.localeCompare(b.name));
-    triggers.sort((a: any, b: any) => (a.displayName ?? "").localeCompare(b.displayName ?? ""));
+    triggers.sort((a, b) =>
+      (a.displayName ?? "").localeCompare(b.displayName ?? ""),
+    );
     summary.totalTasks = tasks.length;
     summary.completedTasks = tasks.filter((task) => task.isCompleted).length;
     summary.totalTriggers = triggers.length;
-    summary.activeTriggers = triggers.filter((trigger: any) => trigger.enabled).length;
+    summary.activeTriggers = triggers.filter(
+      (trigger) => trigger.enabled,
+    ).length;
     summary.totalTodos = todos.length;
     summary.completedTodos = todos.filter((todo) => todo.isCompleted).length;
 
@@ -283,7 +421,11 @@ export async function handleWorkbenchRoutes(
       error(res, "Agent runtime is not available", 503);
       return true;
     }
-    const decodedTaskId = ctx.decodePathComponent(taskItemMatch[1], res, "task id");
+    const decodedTaskId = ctx.decodePathComponent(
+      taskItemMatch[1],
+      res,
+      "task id",
+    );
     if (!decodedTaskId) return true;
     const task = await state.runtime.getTask(decodedTaskId as UUID);
     const taskView = task ? ctx.toWorkbenchTask(task) : null;
@@ -377,6 +519,17 @@ export async function handleWorkbenchRoutes(
       } catch (err) {
         ctx.recordTodoDbFailure(state.runtime, "todos.list", err);
       }
+    }
+    const bootstrapTodo = await ensureWorkbenchBootstrapTodo({
+      ctx,
+      runtime: state.runtime,
+      adminEntityId: state.adminEntityId,
+      todos,
+      todoData,
+    });
+    if (bootstrapTodo) {
+      todos.push(bootstrapTodo);
+      todos.sort((a, b) => a.name.localeCompare(b.name));
     }
     json(res, { todos });
     return true;
@@ -518,7 +671,7 @@ export async function handleWorkbenchRoutes(
       }
     }
     const todoTask = await state.runtime.getTask(decodedTodoId as UUID);
-    if (!todoTask || !todoTask.id || !ctx.toWorkbenchTodo(todoTask)) {
+    if (!todoTask?.id || !ctx.toWorkbenchTodo(todoTask)) {
       error(res, "Todo not found", 404);
       return true;
     }
@@ -546,7 +699,11 @@ export async function handleWorkbenchRoutes(
       error(res, "Agent runtime is not available", 503);
       return true;
     }
-    const decodedTodoId = ctx.decodePathComponent(todoItemMatch[1], res, "todo id");
+    const decodedTodoId = ctx.decodePathComponent(
+      todoItemMatch[1],
+      res,
+      "todo id",
+    );
     if (!decodedTodoId) return true;
     const todoData = await ctx.getTodoDataService(state.runtime);
 
@@ -566,7 +723,7 @@ export async function handleWorkbenchRoutes(
     if (method === "GET") {
       const todoTask = await state.runtime.getTask(decodedTodoId as UUID);
       const todoView = todoTask ? ctx.toWorkbenchTodo(todoTask) : null;
-      if (!todoTask || !todoTask.id || !todoView) {
+      if (!todoTask?.id || !todoView) {
         error(res, "Todo not found", 404);
         return true;
       }
@@ -653,7 +810,7 @@ export async function handleWorkbenchRoutes(
 
     const todoTask = await state.runtime.getTask(decodedTodoId as UUID);
     const todoView = todoTask ? ctx.toWorkbenchTodo(todoTask) : null;
-    if (!todoTask || !todoTask.id || !todoView) {
+    if (!todoTask?.id || !todoView) {
       error(res, "Todo not found", 404);
       return true;
     }

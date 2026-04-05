@@ -236,6 +236,11 @@ export function recordTodoDbFailure(
 export function toWorkbenchTodoFromRecord(
   todo: Record<string, unknown>,
 ): WorkbenchTodoView | null {
+  const metadata = asObject(todo.metadata);
+  const lifeopsMirror = asObject(metadata?.lifeopsMirror);
+  if (lifeopsMirror?.hiddenFromWorkbench === true) {
+    return null;
+  }
   const id =
     typeof todo.id === "string" && todo.id.trim().length > 0 ? todo.id : null;
   const name =

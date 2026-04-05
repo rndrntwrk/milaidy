@@ -1,20 +1,23 @@
 import type http from "node:http";
-import { logger, type AgentRuntime, type UUID } from "@elizaos/core";
-import type { ReadJsonBodyOptions } from "./http-helpers.js";
-import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
+import {
+  type AgentRuntime,
+  logger,
+  stringToUuid,
+  type UUID,
+} from "@elizaos/core";
 import type {
   AcknowledgeLifeOpsReminderRequest,
   CaptureLifeOpsPhoneConsentRequest,
-  CompleteLifeOpsOccurrenceRequest,
   CompleteLifeOpsBrowserSessionRequest,
+  CompleteLifeOpsOccurrenceRequest,
   ConfirmLifeOpsBrowserSessionRequest,
   CreateLifeOpsBrowserSessionRequest,
   CreateLifeOpsCalendarEventRequest,
+  CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGmailReplyDraftRequest,
+  CreateLifeOpsGoalRequest,
   CreateLifeOpsWorkflowRequest,
   CreateLifeOpsXPostRequest,
-  CreateLifeOpsDefinitionRequest,
-  CreateLifeOpsGoalRequest,
   DisconnectLifeOpsGoogleConnectorRequest,
   GetLifeOpsCalendarFeedRequest,
   GetLifeOpsGmailTriageRequest,
@@ -23,13 +26,15 @@ import type {
   SendLifeOpsGmailReplyRequest,
   SnoozeLifeOpsOccurrenceRequest,
   StartLifeOpsGoogleConnectorRequest,
-  UpsertLifeOpsChannelPolicyRequest,
-  UpsertLifeOpsXConnectorRequest,
   UpdateLifeOpsDefinitionRequest,
   UpdateLifeOpsGoalRequest,
   UpdateLifeOpsWorkflowRequest,
+  UpsertLifeOpsChannelPolicyRequest,
+  UpsertLifeOpsXConnectorRequest,
 } from "../contracts/lifeops.js";
+import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
 import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
+import type { ReadJsonBodyOptions } from "./http-helpers.js";
 
 export interface LifeOpsRouteContext {
   req: http.IncomingMessage;
@@ -60,7 +65,11 @@ function getService(ctx: LifeOpsRouteContext): LifeOpsService | null {
     ctx.error(ctx.res, "Agent runtime is not available", 503);
     return null;
   }
-  return new LifeOpsService(ctx.state.runtime);
+  const ownerEntityId =
+    ctx.state.adminEntityId ??
+    (stringToUuid(`${ctx.state.runtime.agentId}-admin-entity`) as UUID);
+  ctx.state.adminEntityId = ownerEntityId;
+  return new LifeOpsService(ctx.state.runtime, { ownerEntityId });
 }
 
 function routeOperation(ctx: LifeOpsRouteContext): string {
@@ -223,17 +232,26 @@ export async function handleLifeOpsRoutes(
   ) {
     return runRoute(ctx, async (service) => {
       const rawMode = url.searchParams.get("mode");
-      if (rawMode !== null && rawMode !== "local" && rawMode !== "remote") {
+      if (
+        rawMode !== null &&
+        rawMode !== "local" &&
+        rawMode !== "remote" &&
+        rawMode !== "cloud_managed"
+      ) {
         throw new LifeOpsServiceError(
           400,
-          "mode must be one of: local, remote",
+          "mode must be one of: local, remote, cloud_managed",
         );
       }
       json(
         res,
         await service.getGoogleConnectorStatus(
           url,
-          (rawMode ?? undefined) as "local" | "remote" | undefined,
+          (rawMode ?? undefined) as
+            | "local"
+            | "remote"
+            | "cloud_managed"
+            | undefined,
         ),
       );
     });
@@ -243,10 +261,15 @@ export async function handleLifeOpsRoutes(
     return runRoute(ctx, async (service) => {
       const rawMode = url.searchParams.get("mode");
       const rawForceSync = url.searchParams.get("forceSync");
-      if (rawMode !== null && rawMode !== "local" && rawMode !== "remote") {
+      if (
+        rawMode !== null &&
+        rawMode !== "local" &&
+        rawMode !== "remote" &&
+        rawMode !== "cloud_managed"
+      ) {
         throw new LifeOpsServiceError(
           400,
-          "mode must be one of: local, remote",
+          "mode must be one of: local, remote, cloud_managed",
         );
       }
       if (
@@ -259,7 +282,11 @@ export async function handleLifeOpsRoutes(
         throw new LifeOpsServiceError(400, "forceSync must be a boolean");
       }
       const request: GetLifeOpsCalendarFeedRequest = {
-        mode: (rawMode ?? undefined) as "local" | "remote" | undefined,
+        mode: (rawMode ?? undefined) as
+          | "local"
+          | "remote"
+          | "cloud_managed"
+          | undefined,
         calendarId: url.searchParams.get("calendarId") ?? undefined,
         timeMin: url.searchParams.get("timeMin") ?? undefined,
         timeMax: url.searchParams.get("timeMax") ?? undefined,
@@ -276,14 +303,23 @@ export async function handleLifeOpsRoutes(
   if (method === "GET" && pathname === "/api/lifeops/calendar/next-context") {
     return runRoute(ctx, async (service) => {
       const rawMode = url.searchParams.get("mode");
-      if (rawMode !== null && rawMode !== "local" && rawMode !== "remote") {
+      if (
+        rawMode !== null &&
+        rawMode !== "local" &&
+        rawMode !== "remote" &&
+        rawMode !== "cloud_managed"
+      ) {
         throw new LifeOpsServiceError(
           400,
-          "mode must be one of: local, remote",
+          "mode must be one of: local, remote, cloud_managed",
         );
       }
       const request: GetLifeOpsCalendarFeedRequest = {
-        mode: (rawMode ?? undefined) as "local" | "remote" | undefined,
+        mode: (rawMode ?? undefined) as
+          | "local"
+          | "remote"
+          | "cloud_managed"
+          | undefined,
         calendarId: url.searchParams.get("calendarId") ?? undefined,
         timeMin: url.searchParams.get("timeMin") ?? undefined,
         timeMax: url.searchParams.get("timeMax") ?? undefined,
@@ -297,10 +333,15 @@ export async function handleLifeOpsRoutes(
     return runRoute(ctx, async (service) => {
       const rawMode = url.searchParams.get("mode");
       const rawForceSync = url.searchParams.get("forceSync");
-      if (rawMode !== null && rawMode !== "local" && rawMode !== "remote") {
+      if (
+        rawMode !== null &&
+        rawMode !== "local" &&
+        rawMode !== "remote" &&
+        rawMode !== "cloud_managed"
+      ) {
         throw new LifeOpsServiceError(
           400,
-          "mode must be one of: local, remote",
+          "mode must be one of: local, remote, cloud_managed",
         );
       }
       if (
@@ -313,7 +354,11 @@ export async function handleLifeOpsRoutes(
         throw new LifeOpsServiceError(400, "forceSync must be a boolean");
       }
       const request: GetLifeOpsGmailTriageRequest = {
-        mode: (rawMode ?? undefined) as "local" | "remote" | undefined,
+        mode: (rawMode ?? undefined) as
+          | "local"
+          | "remote"
+          | "cloud_managed"
+          | undefined,
         forceSync:
           rawForceSync === null
             ? undefined

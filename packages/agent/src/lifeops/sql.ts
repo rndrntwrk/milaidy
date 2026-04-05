@@ -103,6 +103,14 @@ export async function executeRawSql(
   return extractRows(result);
 }
 
+export async function listTableColumns(
+  runtime: IAgentRuntime,
+  tableName: string,
+): Promise<string[]> {
+  const rows = await executeRawSql(runtime, `PRAGMA table_info(${tableName})`);
+  return rows.map((row) => toText(row.name)).filter((name) => name.length > 0);
+}
+
 export function sqlQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }

@@ -1,52 +1,63 @@
 import crypto from "node:crypto";
-import { logger, type IAgentRuntime } from "@elizaos/core";
+import { type IAgentRuntime, logger, stringToUuid } from "@elizaos/core";
 import type {
   AcknowledgeLifeOpsReminderRequest,
   CaptureLifeOpsPhoneConsentRequest,
-  CompleteLifeOpsOccurrenceRequest,
   CompleteLifeOpsBrowserSessionRequest,
+  CompleteLifeOpsOccurrenceRequest,
   ConfirmLifeOpsBrowserSessionRequest,
   CreateLifeOpsBrowserSessionRequest,
   CreateLifeOpsCalendarEventRequest,
+  CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGmailReplyDraftRequest,
+  CreateLifeOpsGoalRequest,
   CreateLifeOpsWorkflowRequest,
   CreateLifeOpsXPostRequest,
   DisconnectLifeOpsGoogleConnectorRequest,
-  CreateLifeOpsDefinitionRequest,
-  CreateLifeOpsGoalRequest,
-  LifeOpsAuditEventType,
+  GetLifeOpsCalendarFeedRequest,
+  GetLifeOpsGmailTriageRequest,
+  LifeOpsActiveReminderView,
   LifeOpsAuditEvent,
+  LifeOpsAuditEventType,
   LifeOpsBrowserAction,
   LifeOpsBrowserSession,
+  LifeOpsCadence,
   LifeOpsCalendarEvent,
   LifeOpsCalendarFeed,
-  LifeOpsCadence,
   LifeOpsChannelPolicy,
   LifeOpsConnectorGrant,
   LifeOpsConnectorMode,
-  GetLifeOpsGmailTriageRequest,
+  LifeOpsContextPolicy,
+  LifeOpsDomain,
   LifeOpsGmailMessageSummary,
   LifeOpsGmailReplyDraft,
   LifeOpsGmailTriageFeed,
   LifeOpsGoalDefinition,
+  LifeOpsGoalLink,
   LifeOpsGoogleCapability,
   LifeOpsGoogleConnectorStatus,
-  LifeOpsGoalLink,
   LifeOpsNextCalendarEventContext,
   LifeOpsOccurrence,
-  LifeOpsOverview,
   LifeOpsOccurrenceView,
+  LifeOpsOverview,
+  LifeOpsOverviewSection,
+  LifeOpsOverviewSummary,
+  LifeOpsOwnership,
+  LifeOpsOwnershipInput,
   LifeOpsPrivacyClass,
   LifeOpsProgressionRule,
   LifeOpsReminderAttempt,
   LifeOpsReminderAttemptOutcome,
   LifeOpsReminderInspection,
-  LifeOpsReminderProcessingResult,
   LifeOpsReminderPlan,
-  LifeOpsReminderUrgency,
+  LifeOpsReminderProcessingResult,
   LifeOpsReminderStep,
+  LifeOpsReminderUrgency,
+  LifeOpsSubjectType,
   LifeOpsTaskDefinition,
   LifeOpsTimeWindowDefinition,
+  LifeOpsVisibilityScope,
+  LifeOpsWindowPolicy,
   LifeOpsWorkflowAction,
   LifeOpsWorkflowActionPlan,
   LifeOpsWorkflowDefinition,
@@ -55,8 +66,8 @@ import type {
   LifeOpsWorkflowRun,
   LifeOpsWorkflowSchedule,
   LifeOpsWorkflowTriggerType,
-  GetLifeOpsCalendarFeedRequest,
-  LifeOpsWindowPolicy,
+  LifeOpsXConnectorStatus,
+  LifeOpsXPostResponse,
   SendLifeOpsGmailReplyRequest,
   SnoozeLifeOpsOccurrenceRequest,
   StartLifeOpsGoogleConnectorRequest,
@@ -64,32 +75,33 @@ import type {
   UpdateLifeOpsDefinitionRequest,
   UpdateLifeOpsGoalRequest,
   UpdateLifeOpsWorkflowRequest,
-  LifeOpsActiveReminderView,
   UpsertLifeOpsChannelPolicyRequest,
   UpsertLifeOpsXConnectorRequest,
-  LifeOpsXConnectorStatus,
-  LifeOpsXPostResponse,
 } from "@miladyai/shared/contracts/lifeops";
 import {
-  LIFEOPS_BROWSER_SESSION_STATUSES,
   LIFEOPS_BROWSER_ACTION_KINDS,
+  LIFEOPS_CALENDAR_WINDOW_PRESETS,
   LIFEOPS_CHANNEL_TYPES,
+  LIFEOPS_CONNECTOR_MODES,
+  LIFEOPS_CONTEXT_POLICIES,
   LIFEOPS_DEFINITION_KINDS,
   LIFEOPS_DEFINITION_STATUSES,
-  LIFEOPS_GOAL_STATUSES,
-  LIFEOPS_CALENDAR_WINDOW_PRESETS,
+  LIFEOPS_DOMAINS,
   LIFEOPS_GMAIL_DRAFT_TONES,
+  LIFEOPS_GOAL_STATUSES,
   LIFEOPS_GOOGLE_CAPABILITIES,
   LIFEOPS_PRIVACY_CLASSES,
   LIFEOPS_REMINDER_CHANNELS,
-  LIFEOPS_REMINDER_ATTEMPT_OUTCOMES,
   LIFEOPS_REMINDER_URGENCY_LEVELS,
   LIFEOPS_REVIEW_STATES,
+  LIFEOPS_SUBJECT_TYPES,
   LIFEOPS_TIME_WINDOW_NAMES,
+  LIFEOPS_VISIBILITY_SCOPES,
   LIFEOPS_WORKFLOW_STATUSES,
   LIFEOPS_WORKFLOW_TRIGGER_TYPES,
   LIFEOPS_X_CAPABILITIES,
 } from "@miladyai/shared/contracts/lifeops";
+import { parseCronExpression } from "../triggers/scheduling.js";
 import {
   DEFAULT_REMINDER_STEPS,
   isValidTimeZone,
@@ -98,26 +110,45 @@ import {
 } from "./defaults.js";
 import { materializeDefinitionOccurrences } from "./engine.js";
 import {
-  completeGoogleConnectorOAuth,
-  deleteStoredGoogleToken,
-  ensureFreshGoogleAccessToken,
-  GoogleOAuthError,
-  readStoredGoogleToken,
-  resolveGoogleOAuthConfig,
-  startGoogleConnectorOAuth,
-} from "./google-oauth.js";
-import { fetchGoogleCalendarEvents } from "./google-calendar.js";
-import { createGoogleCalendarEvent } from "./google-calendar.js";
-import {
   GoogleApiError,
   googleErrorLooksLikeAdminPolicyBlock,
   googleErrorRequiresReauth,
 } from "./google-api-error.js";
 import {
+  createGoogleCalendarEvent,
+  fetchGoogleCalendarEvents,
+} from "./google-calendar.js";
+import {
+  resolveGoogleAvailableModes,
+  resolveGoogleExecutionTarget,
+  resolveGoogleSourceOfTruth,
+  resolvePreferredGoogleGrant,
+} from "./google-connector-gateway.js";
+import {
   fetchGoogleGmailTriageMessages,
   sendGoogleGmailReply,
 } from "./google-gmail.js";
+import {
+  GoogleManagedClient,
+  ManagedGoogleClientError,
+  type ManagedGoogleConnectorStatusResponse,
+  resolveManagedGoogleCloudConfig,
+} from "./google-managed-client.js";
+import {
+  completeGoogleConnectorOAuth,
+  deleteStoredGoogleToken,
+  ensureFreshGoogleAccessToken,
+  type GoogleConnectorCallbackResult,
+  GoogleOAuthError,
+  readStoredGoogleToken,
+  resolveGoogleOAuthConfig,
+  startGoogleConnectorOAuth,
+} from "./google-oauth.js";
 import { normalizeGoogleCapabilities } from "./google-scopes.js";
+import {
+  syncAgentDefinitionTodoMirror,
+  syncAgentGoalMirror,
+} from "./plugin-bridge.js";
 import {
   createLifeOpsAuditEvent,
   createLifeOpsBrowserSession,
@@ -140,13 +171,12 @@ import {
   getZonedDateParts,
   type ZonedDateParts,
 } from "./time.js";
-import { parseCronExpression } from "../triggers/scheduling.js";
-import { postToX, readXPosterCredentialsFromEnv } from "./x-poster.js";
 import {
   readTwilioCredentialsFromEnv,
   sendTwilioSms,
   sendTwilioVoiceCall,
 } from "./twilio.js";
+import { postToX, readXPosterCredentialsFromEnv } from "./x-poster.js";
 
 const MAX_OVERVIEW_OCCURRENCES = 8;
 const MAX_OVERVIEW_REMINDERS = 6;
@@ -185,6 +215,10 @@ type LifeOpsGoalRecord = {
   links: LifeOpsGoalLink[];
 };
 
+type LifeOpsServiceOptions = {
+  ownerEntityId?: string | null;
+};
+
 export class LifeOpsServiceError extends Error {
   constructor(
     public readonly status: number,
@@ -201,6 +235,95 @@ function lifeOpsErrorMessage(error: unknown): string {
 
 function fail(status: number, message: string): never {
   throw new LifeOpsServiceError(status, message);
+}
+
+function defaultOwnerEntityId(runtime: IAgentRuntime): string {
+  return stringToUuid(`${requireAgentId(runtime)}-admin-entity`);
+}
+
+function normalizeLifeOpsDomain(
+  value: unknown,
+  fallback: LifeOpsDomain,
+): LifeOpsDomain {
+  return normalizeEnumValue(
+    value,
+    "ownership.domain",
+    LIFEOPS_DOMAINS,
+    fallback,
+  );
+}
+
+function normalizeLifeOpsSubjectType(
+  value: unknown,
+  fallback: LifeOpsSubjectType,
+): LifeOpsSubjectType {
+  return normalizeEnumValue(
+    value,
+    "ownership.subjectType",
+    LIFEOPS_SUBJECT_TYPES,
+    fallback,
+  );
+}
+
+function normalizeLifeOpsVisibilityScope(
+  value: unknown,
+  fallback: LifeOpsVisibilityScope,
+): LifeOpsVisibilityScope {
+  return normalizeEnumValue(
+    value,
+    "ownership.visibilityScope",
+    LIFEOPS_VISIBILITY_SCOPES,
+    fallback,
+  );
+}
+
+function normalizeLifeOpsContextPolicy(
+  value: unknown,
+  fallback: LifeOpsContextPolicy,
+): LifeOpsContextPolicy {
+  return normalizeEnumValue(
+    value,
+    "ownership.contextPolicy",
+    LIFEOPS_CONTEXT_POLICIES,
+    fallback,
+  );
+}
+
+function _createEmptyOverviewSection(): LifeOpsOverviewSection {
+  return {
+    occurrences: [],
+    goals: [],
+    reminders: [],
+    summary: {
+      activeOccurrenceCount: 0,
+      overdueOccurrenceCount: 0,
+      snoozedOccurrenceCount: 0,
+      activeReminderCount: 0,
+      activeGoalCount: 0,
+    },
+  };
+}
+
+function summarizeOverviewSection(
+  section: Pick<LifeOpsOverviewSection, "occurrences" | "goals" | "reminders">,
+  now: Date,
+): LifeOpsOverviewSummary {
+  return {
+    activeOccurrenceCount: section.occurrences.filter(
+      (occurrence) =>
+        occurrence.state === "visible" || occurrence.state === "snoozed",
+    ).length,
+    overdueOccurrenceCount: section.occurrences.filter((occurrence) => {
+      if (!occurrence.dueAt) return false;
+      const dueAt = new Date(occurrence.dueAt).getTime();
+      return dueAt < now.getTime() && occurrence.state !== "completed";
+    }).length,
+    snoozedOccurrenceCount: section.occurrences.filter(
+      (occurrence) => occurrence.state === "snoozed",
+    ).length,
+    activeReminderCount: section.reminders.length,
+    activeGoalCount: section.goals.length,
+  };
 }
 
 function clearGoogleGrantAuthFailureMetadata(
@@ -982,7 +1105,14 @@ function normalizeEnumValue<T extends string>(
   value: unknown,
   field: string,
   allowed: readonly T[],
+  fallback?: T,
 ): T {
+  if (
+    fallback !== undefined &&
+    (value === undefined || value === null || value === "")
+  ) {
+    return fallback;
+  }
   const text = requireNonEmptyString(value, field) as T;
   if (!allowed.includes(text)) {
     fail(400, `${field} must be one of: ${allowed.join(", ")}`);
@@ -1144,7 +1274,7 @@ function normalizeOptionalConnectorMode(
   if (value === undefined || value === null || value === "") {
     return undefined;
   }
-  return normalizeEnumValue(value, field, ["local", "remote"] as const);
+  return normalizeEnumValue(value, field, LIFEOPS_CONNECTOR_MODES);
 }
 
 function normalizeGoogleCapabilityRequest(
@@ -1430,7 +1560,7 @@ function normalizeWindowNames(
       field,
     ) as LifeOpsTimeWindowDefinition["name"];
     if (!allowedNames.has(name)) {
-      fail(400, `${field} contains unknown window \"${name}\"`);
+      fail(400, `${field} contains unknown window "${name}"`);
     }
     if (!seen.has(name)) {
       seen.add(name);
@@ -1522,7 +1652,7 @@ function normalizeCadence(
           `cadence.slots[${index}].key`,
         );
         if (seen.has(key)) {
-          fail(400, `cadence.slots contains duplicate key \"${key}\"`);
+          fail(400, `cadence.slots contains duplicate key "${key}"`);
         }
         seen.add(key);
         const label = requireNonEmptyString(
@@ -1837,6 +1967,9 @@ function buildActiveReminders(
         continue;
       }
       reminders.push({
+        domain: occurrence.domain,
+        subjectType: occurrence.subjectType,
+        subjectId: occurrence.subjectId,
         ownerType: "occurrence",
         ownerId: occurrence.id,
         occurrenceId: occurrence.id,
@@ -1865,6 +1998,7 @@ function buildActiveReminders(
 function buildActiveCalendarEventReminders(
   events: LifeOpsCalendarEvent[],
   plansByEventId: Map<string, LifeOpsReminderPlan>,
+  ownerEntityId: string,
   now: Date,
 ): LifeOpsActiveReminderView[] {
   const reminders: LifeOpsActiveReminderView[] = [];
@@ -1885,6 +2019,9 @@ function buildActiveCalendarEventReminders(
         continue;
       }
       reminders.push({
+        domain: "user_lifeops",
+        subjectType: "owner",
+        subjectId: ownerEntityId,
         ownerType: "calendar_event",
         ownerId: event.id,
         occurrenceId: null,
@@ -2066,13 +2203,109 @@ function summarizeWorkflowValue(value: unknown, prompt?: string): string {
 
 export class LifeOpsService {
   private readonly repository: LifeOpsRepository;
+  private readonly ownerEntityIdValue: string;
+  private readonly googleManagedClient: GoogleManagedClient;
 
-  constructor(private readonly runtime: IAgentRuntime) {
+  constructor(
+    private readonly runtime: IAgentRuntime,
+    options: LifeOpsServiceOptions = {},
+  ) {
     this.repository = new LifeOpsRepository(runtime);
+    this.googleManagedClient = new GoogleManagedClient();
+    this.ownerEntityIdValue =
+      normalizeOptionalString(options.ownerEntityId) ??
+      defaultOwnerEntityId(runtime);
   }
 
   private agentId(): string {
     return requireAgentId(this.runtime);
+  }
+
+  private ownerEntityId(): string {
+    return this.ownerEntityIdValue;
+  }
+
+  private normalizeOwnership(
+    input: LifeOpsOwnershipInput | undefined,
+    current?: LifeOpsOwnership,
+  ): LifeOpsOwnership {
+    const requestedDomain =
+      input?.domain !== undefined ? input.domain : current?.domain;
+    const domain = normalizeLifeOpsDomain(
+      requestedDomain,
+      current?.domain ?? "user_lifeops",
+    );
+    const requestedSubjectType =
+      input?.subjectType !== undefined
+        ? input.subjectType
+        : current?.subjectType;
+    const subjectType = normalizeLifeOpsSubjectType(
+      requestedSubjectType,
+      current?.subjectType ?? (domain === "agent_ops" ? "agent" : "owner"),
+    );
+
+    if (domain === "agent_ops" && subjectType !== "agent") {
+      fail(
+        400,
+        "ownership.subjectType must be agent when ownership.domain is agent_ops",
+      );
+    }
+    if (domain === "user_lifeops" && subjectType !== "owner") {
+      fail(
+        400,
+        "ownership.subjectType must be owner when ownership.domain is user_lifeops",
+      );
+    }
+
+    const expectedSubjectId =
+      subjectType === "agent" ? this.agentId() : this.ownerEntityId();
+    const requestedSubjectId =
+      input?.subjectId !== undefined
+        ? normalizeOptionalString(input.subjectId)
+        : current?.subjectId;
+    if (
+      requestedSubjectId !== undefined &&
+      requestedSubjectId !== null &&
+      requestedSubjectId !== expectedSubjectId
+    ) {
+      fail(
+        400,
+        `ownership.subjectId must be ${expectedSubjectId} for ${subjectType} scope in v1`,
+      );
+    }
+
+    const fallbackVisibility =
+      subjectType === "agent" ? "agent_and_admin" : "owner_agent_admin";
+    const fallbackContext = subjectType === "agent" ? "never" : "explicit_only";
+    return {
+      domain,
+      subjectType,
+      subjectId: expectedSubjectId,
+      visibilityScope: normalizeLifeOpsVisibilityScope(
+        input?.visibilityScope ?? current?.visibilityScope,
+        current?.visibilityScope ?? fallbackVisibility,
+      ),
+      contextPolicy: normalizeLifeOpsContextPolicy(
+        input?.contextPolicy ?? current?.contextPolicy,
+        current?.contextPolicy ?? fallbackContext,
+      ),
+    };
+  }
+
+  private normalizeChildOwnership(
+    parent: LifeOpsOwnership,
+    input: LifeOpsOwnershipInput | undefined,
+    field = "ownership",
+  ): LifeOpsOwnership {
+    const normalized = this.normalizeOwnership(input, parent);
+    if (
+      normalized.domain !== parent.domain ||
+      normalized.subjectType !== parent.subjectType ||
+      normalized.subjectId !== parent.subjectId
+    ) {
+      fail(400, `${field} must match the parent workflow scope in v1`);
+    }
+    return normalized;
   }
 
   private logLifeOpsWarn(
@@ -2385,6 +2618,133 @@ export class LifeOpsService {
     throw error;
   }
 
+  private async setPreferredGoogleConnectorMode(
+    preferredMode: LifeOpsConnectorMode | null,
+  ): Promise<void> {
+    const googleGrants = (
+      await this.repository.listConnectorGrants(this.agentId())
+    ).filter((grant) => grant.provider === "google");
+
+    const resolvedPreferredMode =
+      preferredMode ??
+      [...googleGrants].sort((left, right) =>
+        right.updatedAt.localeCompare(left.updatedAt),
+      )[0]?.mode ??
+      null;
+
+    for (const grant of googleGrants) {
+      const shouldPrefer =
+        resolvedPreferredMode !== null && grant.mode === resolvedPreferredMode;
+      if (grant.preferredByAgent === shouldPrefer) {
+        continue;
+      }
+      await this.repository.upsertConnectorGrant({
+        ...grant,
+        preferredByAgent: shouldPrefer,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  private async upsertManagedGoogleGrant(
+    status: ManagedGoogleConnectorStatusResponse,
+  ): Promise<LifeOpsConnectorGrant | null> {
+    const existingGrant = await this.repository.getConnectorGrant(
+      this.agentId(),
+      "google",
+      "cloud_managed",
+    );
+    if (!existingGrant && !status.connected) {
+      return null;
+    }
+
+    const nowIso = new Date().toISOString();
+    const clearedMetadata = clearGoogleGrantAuthFailureMetadata(
+      existingGrant?.metadata ?? {},
+    );
+    const baseMetadata = {
+      ...clearedMetadata,
+      expiresAt: status.expiresAt,
+      hasRefreshToken: status.hasRefreshToken,
+      linkedAt: status.linkedAt,
+      lastUsedAt: status.lastUsedAt,
+    };
+    const nextGrant = existingGrant
+      ? {
+          ...existingGrant,
+          identity: status.identity ? { ...status.identity } : {},
+          grantedScopes: [...status.grantedScopes],
+          capabilities: [...status.grantedCapabilities],
+          tokenRef: null,
+          mode: "cloud_managed" as const,
+          executionTarget: "cloud" as const,
+          sourceOfTruth: "cloud_connection" as const,
+          cloudConnectionId: status.connectionId,
+          metadata:
+            status.reason === "needs_reauth"
+              ? {
+                  ...baseMetadata,
+                  authState: "needs_reauth",
+                  lastAuthError:
+                    "Managed Google connection needs re-authentication.",
+                  lastAuthErrorAt: nowIso,
+                }
+              : baseMetadata,
+          lastRefreshAt: nowIso,
+          updatedAt: nowIso,
+        }
+      : createLifeOpsConnectorGrant({
+          agentId: this.agentId(),
+          provider: "google",
+          identity: status.identity ? { ...status.identity } : {},
+          grantedScopes: [...status.grantedScopes],
+          capabilities: [...status.grantedCapabilities],
+          tokenRef: null,
+          mode: "cloud_managed",
+          executionTarget: "cloud",
+          sourceOfTruth: "cloud_connection",
+          preferredByAgent: true,
+          cloudConnectionId: status.connectionId,
+          metadata: baseMetadata,
+          lastRefreshAt: nowIso,
+        });
+
+    await this.repository.upsertConnectorGrant(nextGrant);
+    return nextGrant;
+  }
+
+  private async runManagedGoogleOperation<T>(
+    grant: LifeOpsConnectorGrant,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      if (error instanceof ManagedGoogleClientError) {
+        this.logLifeOpsWarn("google_connector_request", error.message, {
+          provider: "google",
+          mode: grant.mode,
+          statusCode: error.status,
+          authState: grant.metadata.authState ?? null,
+        });
+        if (error.status === 401) {
+          await this.markGoogleGrantNeedsReauth(grant, error.message);
+          fail(
+            401,
+            `Google connector needs re-authentication: ${error.message}`,
+          );
+        }
+        fail(error.status, error.message);
+      }
+      this.logLifeOpsError("google_connector_request", error, {
+        provider: "google",
+        mode: grant.mode,
+        authState: grant.metadata.authState ?? null,
+      });
+      throw error;
+    }
+  }
+
   private async requireGoogleCalendarGrant(
     requestUrl: URL,
     requestedMode?: LifeOpsConnectorMode,
@@ -2394,7 +2754,7 @@ export class LifeOpsService {
       requestedMode,
     );
     const grant = status.grant;
-    if (!status.connected || !grant || !grant.tokenRef) {
+    if (!status.connected || !grant) {
       fail(409, "Google Calendar is not connected.");
     }
     if (!hasGoogleCalendarReadCapability(grant)) {
@@ -2426,7 +2786,7 @@ export class LifeOpsService {
       requestedMode,
     );
     const grant = status.grant;
-    if (!status.connected || !grant || !grant.tokenRef) {
+    if (!status.connected || !grant) {
       fail(409, "Google Gmail is not connected.");
     }
     if (!hasGoogleGmailTriageCapability(grant)) {
@@ -2509,21 +2869,28 @@ export class LifeOpsService {
       args.requestUrl,
       args.requestedMode,
     );
-    if (!grant.tokenRef) {
-      fail(409, "Google Gmail token reference is missing.");
-    }
-    return this.withGoogleGrantOperation(grant, async () => {
-      const token = await ensureFreshGoogleAccessToken(grant.tokenRef);
-      const selfEmail =
-        typeof grant.identity.email === "string"
-          ? grant.identity.email.trim().toLowerCase()
-          : null;
+    const syncTriage = async (): Promise<LifeOpsGmailTriageFeed> => {
       const syncedAt = new Date().toISOString();
-      const messages = await fetchGoogleGmailTriageMessages({
-        accessToken: token.accessToken,
-        selfEmail,
-        maxResults: args.maxResults,
-      });
+      const messages =
+        resolveGoogleExecutionTarget(grant) === "cloud"
+          ? (
+              await this.googleManagedClient.getGmailTriage({
+                maxResults: args.maxResults,
+              })
+            ).messages
+          : await fetchGoogleGmailTriageMessages({
+              accessToken: (
+                await ensureFreshGoogleAccessToken(
+                  grant.tokenRef ??
+                    fail(409, "Google Gmail token reference is missing."),
+                )
+              ).accessToken,
+              selfEmail:
+                typeof grant.identity.email === "string"
+                  ? grant.identity.email.trim().toLowerCase()
+                  : null,
+              maxResults: args.maxResults,
+            });
       const persistedMessages = messages.map((message) => ({
         id: createGmailMessageId(this.agentId(), "google", message.externalId),
         agentId: this.agentId(),
@@ -2569,7 +2936,11 @@ export class LifeOpsService {
         syncedAt,
         summary: summarizeGmailTriage(persistedMessages),
       };
-    });
+    };
+
+    return resolveGoogleExecutionTarget(grant) === "cloud"
+      ? this.runManagedGoogleOperation(grant, syncTriage)
+      : this.withGoogleGrantOperation(grant, syncTriage);
   }
 
   private async recordCalendarEventAudit(
@@ -2662,11 +3033,7 @@ export class LifeOpsService {
       args.requestUrl,
       args.requestedMode,
     );
-    if (!grant.tokenRef) {
-      fail(409, "Google Calendar token reference is missing.");
-    }
-    return this.withGoogleGrantOperation(grant, async () => {
-      const token = await ensureFreshGoogleAccessToken(grant.tokenRef);
+    const syncCalendar = async (): Promise<LifeOpsCalendarFeed> => {
       const syncedAt = new Date().toISOString();
       const existingEvents = await this.repository.listCalendarEvents(
         this.agentId(),
@@ -2674,13 +3041,28 @@ export class LifeOpsService {
         args.timeMin,
         args.timeMax,
       );
-      const events = await fetchGoogleCalendarEvents({
-        accessToken: token.accessToken,
-        calendarId: args.calendarId,
-        timeMin: args.timeMin,
-        timeMax: args.timeMax,
-        timeZone: args.timeZone,
-      });
+      const events =
+        resolveGoogleExecutionTarget(grant) === "cloud"
+          ? (
+              await this.googleManagedClient.getCalendarFeed({
+                calendarId: args.calendarId,
+                timeMin: args.timeMin,
+                timeMax: args.timeMax,
+                timeZone: args.timeZone,
+              })
+            ).events
+          : await fetchGoogleCalendarEvents({
+              accessToken: (
+                await ensureFreshGoogleAccessToken(
+                  grant.tokenRef ??
+                    fail(409, "Google Calendar token reference is missing."),
+                )
+              ).accessToken,
+              calendarId: args.calendarId,
+              timeMin: args.timeMin,
+              timeMax: args.timeMax,
+              timeZone: args.timeZone,
+            });
       const nextEvents = events.map((event) => ({
         id: createCalendarEventId(
           this.agentId(),
@@ -2739,7 +3121,11 @@ export class LifeOpsService {
         timeMax: args.timeMax,
         syncedAt,
       };
-    });
+    };
+
+    return resolveGoogleExecutionTarget(grant) === "cloud"
+      ? this.runManagedGoogleOperation(grant, syncCalendar)
+      : this.withGoogleGrantOperation(grant, syncCalendar);
   }
 
   private async getDefinitionRecord(
@@ -2775,11 +3161,23 @@ export class LifeOpsService {
 
   private async ensureGoalExists(
     goalId: string | null,
+    ownership?: Pick<LifeOpsOwnership, "domain" | "subjectType" | "subjectId">,
   ): Promise<string | null> {
     if (!goalId) return null;
     const goal = await this.repository.getGoal(this.agentId(), goalId);
     if (!goal) {
       fail(404, `goal ${goalId} does not exist`);
+    }
+    if (
+      ownership &&
+      (goal.domain !== ownership.domain ||
+        goal.subjectType !== ownership.subjectType ||
+        goal.subjectId !== ownership.subjectId)
+    ) {
+      fail(
+        400,
+        "goalId must reference a goal in the same owner or agent scope",
+      );
     }
     return goal.id;
   }
@@ -3003,7 +3401,7 @@ export class LifeOpsService {
       deliveryMetadata.message = reminderBody;
     } else {
       const policy = await this.resolvePrimaryChannelPolicy(args.channel);
-      if (!policy || !policy.allowReminders || !policy.allowEscalation) {
+      if (!policy?.allowReminders || !policy.allowEscalation) {
         outcome = "blocked_policy";
         deliveryMetadata.reason = "channel_policy";
       } else if (args.channel === "sms" || args.channel === "voice") {
@@ -3114,6 +3512,13 @@ export class LifeOpsService {
   private async createBrowserSessionInternal(
     request: CreateLifeOpsBrowserSessionRequest,
   ): Promise<LifeOpsBrowserSession> {
+    const workflowId = normalizeOptionalString(request.workflowId) ?? null;
+    const workflow = workflowId
+      ? await this.getWorkflowDefinition(workflowId)
+      : null;
+    const ownership = workflow
+      ? this.normalizeChildOwnership(workflow, request.ownership)
+      : this.normalizeOwnership(request.ownership);
     const actions = createBrowserSessionActions(
       request.actions.map((action, index) =>
         normalizeBrowserActionInput(action, `actions[${index}]`),
@@ -3122,7 +3527,8 @@ export class LifeOpsService {
     const awaitingActionId = resolveAwaitingBrowserActionId(actions);
     const session = createLifeOpsBrowserSession({
       agentId: this.agentId(),
-      workflowId: normalizeOptionalString(request.workflowId) ?? null,
+      ...ownership,
+      workflowId,
       title: requireNonEmptyString(request.title, "title"),
       status: awaitingActionId ? "awaiting_confirmation" : "navigating",
       actions,
@@ -3171,6 +3577,7 @@ export class LifeOpsService {
     request: CreateLifeOpsDefinitionRequest,
   ): Promise<LifeOpsDefinitionRecord> {
     const agentId = this.agentId();
+    const ownership = this.normalizeOwnership(request.ownership);
     const kind = normalizeEnumValue(
       request.kind,
       "kind",
@@ -3192,9 +3599,13 @@ export class LifeOpsService {
       request.reminderPlan,
       "create",
     );
-    const goalId = await this.ensureGoalExists(request.goalId ?? null);
-    const definition = createLifeOpsTaskDefinition({
+    const goalId = await this.ensureGoalExists(
+      request.goalId ?? null,
+      ownership,
+    );
+    let definition = createLifeOpsTaskDefinition({
       agentId,
+      ...ownership,
       kind,
       title,
       description,
@@ -3222,7 +3633,17 @@ export class LifeOpsService {
       await this.repository.updateDefinition(definition);
     }
     await this.syncGoalLink(definition);
-    await this.refreshDefinitionOccurrences(definition);
+    const occurrences = await this.refreshDefinitionOccurrences(definition);
+    const mirroredDefinition = await syncAgentDefinitionTodoMirror({
+      runtime: this.runtime,
+      previous: null,
+      definition,
+      occurrences,
+    });
+    if (mirroredDefinition !== definition) {
+      definition = mirroredDefinition;
+      await this.repository.updateDefinition(definition);
+    }
     await this.recordAudit(
       "definition_created",
       "definition",
@@ -3249,6 +3670,10 @@ export class LifeOpsService {
     request: UpdateLifeOpsDefinitionRequest,
   ): Promise<LifeOpsDefinitionRecord> {
     const current = await this.getDefinitionRecord(definitionId);
+    const ownership = this.normalizeOwnership(
+      request.ownership,
+      current.definition,
+    );
     const nextTimezone = normalizeValidTimeZone(
       request.timezone ?? current.definition.timezone,
       "timezone",
@@ -3271,8 +3696,9 @@ export class LifeOpsService {
             "status",
             LIFEOPS_DEFINITION_STATUSES,
           );
-    const nextDefinition: LifeOpsTaskDefinition = {
+    let nextDefinition: LifeOpsTaskDefinition = {
       ...current.definition,
+      ...ownership,
       title:
         request.title !== undefined
           ? requireNonEmptyString(request.title, "title")
@@ -3300,7 +3726,7 @@ export class LifeOpsService {
           : current.definition.progressionRule,
       goalId:
         request.goalId !== undefined
-          ? await this.ensureGoalExists(request.goalId ?? null)
+          ? await this.ensureGoalExists(request.goalId ?? null, ownership)
           : current.definition.goalId,
       metadata:
         request.metadata !== undefined
@@ -3322,9 +3748,20 @@ export class LifeOpsService {
     );
     await this.repository.updateDefinition(nextDefinition);
     await this.syncGoalLink(nextDefinition);
-    if (nextDefinition.status === "active") {
-      await this.refreshDefinitionOccurrences(nextDefinition);
-    }
+    const occurrences =
+      nextDefinition.status === "active"
+        ? await this.refreshDefinitionOccurrences(nextDefinition)
+        : await this.repository.listOccurrencesForDefinition(
+            nextDefinition.agentId,
+            nextDefinition.id,
+          );
+    nextDefinition = await syncAgentDefinitionTodoMirror({
+      runtime: this.runtime,
+      previous: current.definition,
+      definition: nextDefinition,
+      occurrences,
+    });
+    await this.repository.updateDefinition(nextDefinition);
     await this.recordAudit(
       "definition_updated",
       "definition",
@@ -3366,8 +3803,10 @@ export class LifeOpsService {
   async createGoal(
     request: CreateLifeOpsGoalRequest,
   ): Promise<LifeOpsGoalRecord> {
-    const goal = createLifeOpsGoalDefinition({
+    const ownership = this.normalizeOwnership(request.ownership);
+    let goal = createLifeOpsGoalDefinition({
       agentId: this.agentId(),
+      ...ownership,
       title: requireNonEmptyString(request.title, "title"),
       description: normalizeOptionalString(request.description) ?? "",
       cadence: normalizeNullableRecord(request.cadence, "cadence") ?? null,
@@ -3395,6 +3834,12 @@ export class LifeOpsService {
       ),
     });
     await this.repository.createGoal(goal);
+    goal = await syncAgentGoalMirror({
+      runtime: this.runtime,
+      previous: null,
+      goal,
+    });
+    await this.repository.updateGoal(goal);
     await this.recordAudit(
       "goal_created",
       "goal",
@@ -3419,8 +3864,10 @@ export class LifeOpsService {
     request: UpdateLifeOpsGoalRequest,
   ): Promise<LifeOpsGoalRecord> {
     const current = await this.getGoalRecord(goalId);
-    const nextGoal: LifeOpsGoalDefinition = {
+    const ownership = this.normalizeOwnership(request.ownership, current.goal);
+    let nextGoal: LifeOpsGoalDefinition = {
       ...current.goal,
+      ...ownership,
       title:
         request.title !== undefined
           ? requireNonEmptyString(request.title, "title")
@@ -3462,6 +3909,11 @@ export class LifeOpsService {
           : current.goal.metadata,
       updatedAt: new Date().toISOString(),
     };
+    nextGoal = await syncAgentGoalMirror({
+      runtime: this.runtime,
+      previous: current.goal,
+      goal: nextGoal,
+    });
     await this.repository.updateGoal(nextGoal);
     await this.recordAudit(
       "goal_updated",
@@ -3495,7 +3947,6 @@ export class LifeOpsService {
         this.agentId(),
         horizon,
       );
-    const selectedOccurrences = selectOverviewOccurrences(overviewOccurrences);
     const reminderPlans = await this.repository.listReminderPlansForOwners(
       this.agentId(),
       "definition",
@@ -3522,36 +3973,56 @@ export class LifeOpsService {
     const goals = (await this.repository.listGoals(this.agentId())).filter(
       (goal) => goal.status === "active",
     );
-    const reminders = [
+    const allReminders = [
       ...buildActiveReminders(overviewOccurrences, plansByDefinitionId, now),
-      ...buildActiveCalendarEventReminders(calendarEvents, plansByEventId, now),
-    ]
-      .sort(
-        (left, right) =>
-          new Date(left.scheduledFor).getTime() -
-          new Date(right.scheduledFor).getTime(),
-      )
-      .slice(0, MAX_OVERVIEW_REMINDERS);
+      ...buildActiveCalendarEventReminders(
+        calendarEvents,
+        plansByEventId,
+        this.ownerEntityId(),
+        now,
+      ),
+    ].sort(
+      (left, right) =>
+        new Date(left.scheduledFor).getTime() -
+        new Date(right.scheduledFor).getTime(),
+    );
+    const ownerSectionBase = {
+      occurrences: selectOverviewOccurrences(
+        overviewOccurrences.filter(
+          (occurrence) => occurrence.subjectType === "owner",
+        ),
+      ),
+      goals: goals.filter((goal) => goal.subjectType === "owner"),
+      reminders: allReminders
+        .filter((reminder) => reminder.subjectType === "owner")
+        .slice(0, MAX_OVERVIEW_REMINDERS),
+    };
+    const agentSectionBase = {
+      occurrences: selectOverviewOccurrences(
+        overviewOccurrences.filter(
+          (occurrence) => occurrence.subjectType === "agent",
+        ),
+      ),
+      goals: goals.filter((goal) => goal.subjectType === "agent"),
+      reminders: allReminders
+        .filter((reminder) => reminder.subjectType === "agent")
+        .slice(0, MAX_OVERVIEW_REMINDERS),
+    };
+    const owner: LifeOpsOverviewSection = {
+      ...ownerSectionBase,
+      summary: summarizeOverviewSection(ownerSectionBase, now),
+    };
+    const agentOps: LifeOpsOverviewSection = {
+      ...agentSectionBase,
+      summary: summarizeOverviewSection(agentSectionBase, now),
+    };
     return {
-      occurrences: selectedOccurrences,
-      goals,
-      reminders,
-      summary: {
-        activeOccurrenceCount: overviewOccurrences.filter(
-          (occurrence) =>
-            occurrence.state === "visible" || occurrence.state === "snoozed",
-        ).length,
-        overdueOccurrenceCount: overviewOccurrences.filter((occurrence) => {
-          if (!occurrence.dueAt) return false;
-          const dueAt = new Date(occurrence.dueAt).getTime();
-          return dueAt < now.getTime() && occurrence.state !== "completed";
-        }).length,
-        snoozedOccurrenceCount: overviewOccurrences.filter(
-          (occurrence) => occurrence.state === "snoozed",
-        ).length,
-        activeReminderCount: reminders.length,
-        activeGoalCount: goals.length,
-      },
+      occurrences: owner.occurrences,
+      goals: owner.goals,
+      reminders: owner.reminders,
+      summary: owner.summary,
+      owner,
+      agentOps,
     };
   }
 
@@ -3844,6 +4315,7 @@ export class LifeOpsService {
       for (const reminder of buildActiveCalendarEventReminders(
         calendarEvents,
         plansByEventId,
+        this.ownerEntityId(),
         now,
       )) {
         if (dueAttempts.length >= limit) break;
@@ -4022,8 +4494,10 @@ export class LifeOpsService {
     request: CreateLifeOpsWorkflowRequest,
   ): Promise<LifeOpsWorkflowRecord> {
     const triggerType = normalizeWorkflowTriggerType(request.triggerType);
+    const ownership = this.normalizeOwnership(request.ownership);
     const definition = createLifeOpsWorkflowDefinition({
       agentId: this.agentId(),
+      ...ownership,
       title: requireNonEmptyString(request.title, "title"),
       triggerType,
       schedule: normalizeWorkflowSchedule(request.schedule, triggerType),
@@ -4073,12 +4547,14 @@ export class LifeOpsService {
     request: UpdateLifeOpsWorkflowRequest,
   ): Promise<LifeOpsWorkflowRecord> {
     const current = await this.getWorkflowDefinition(workflowId);
+    const ownership = this.normalizeOwnership(request.ownership, current);
     const nextTriggerType =
       request.triggerType === undefined
         ? current.triggerType
         : normalizeWorkflowTriggerType(request.triggerType);
     const nextDefinition: LifeOpsWorkflowDefinition = {
       ...current,
+      ...ownership,
       title:
         request.title === undefined
           ? current.title
@@ -4154,7 +4630,16 @@ export class LifeOpsService {
       for (const [index, step] of definition.actionPlan.steps.entries()) {
         let value: unknown;
         if (step.kind === "create_task") {
-          const created = await this.createDefinition(step.request);
+          const created = await this.createDefinition({
+            ...step.request,
+            ownership: step.request.ownership ?? {
+              domain: definition.domain,
+              subjectType: definition.subjectType,
+              subjectId: definition.subjectId,
+              visibilityScope: definition.visibilityScope,
+              contextPolicy: definition.contextPolicy,
+            },
+          });
           value = {
             definitionId: created.definition.id,
             title: created.definition.title,
@@ -4190,6 +4675,13 @@ export class LifeOpsService {
               workflowId: definition.id,
               title: step.sessionTitle,
               actions: step.actions,
+              ownership: {
+                domain: definition.domain,
+                subjectType: definition.subjectType,
+                subjectId: definition.subjectId,
+                visibilityScope: definition.visibilityScope,
+                contextPolicy: definition.contextPolicy,
+              },
             });
             if (
               session.awaitingConfirmationForActionId &&
@@ -4673,22 +5165,37 @@ export class LifeOpsService {
     );
 
     const grant = await this.requireGoogleCalendarWriteGrant(requestUrl, mode);
-    if (!grant.tokenRef) {
-      fail(409, "Google Calendar token reference is missing.");
-    }
-    return this.withGoogleGrantOperation(grant, async () => {
-      const token = await ensureFreshGoogleAccessToken(grant.tokenRef);
-      const created = await createGoogleCalendarEvent({
-        accessToken: token.accessToken,
-        calendarId,
-        title,
-        description,
-        location,
-        startAt,
-        endAt,
-        timeZone,
-        attendees,
-      });
+    const createEvent = async () => {
+      const created =
+        resolveGoogleExecutionTarget(grant) === "cloud"
+          ? (
+              await this.googleManagedClient.createCalendarEvent({
+                calendarId,
+                title,
+                description,
+                location,
+                startAt,
+                endAt,
+                timeZone,
+                attendees,
+              })
+            ).event
+          : await createGoogleCalendarEvent({
+              accessToken: (
+                await ensureFreshGoogleAccessToken(
+                  grant.tokenRef ??
+                    fail(409, "Google Calendar token reference is missing."),
+                )
+              ).accessToken,
+              calendarId,
+              title,
+              description,
+              location,
+              startAt,
+              endAt,
+              timeZone,
+              attendees,
+            });
       const syncedAt = new Date().toISOString();
       const event: LifeOpsCalendarEvent = {
         id: createCalendarEventId(
@@ -4722,7 +5229,11 @@ export class LifeOpsService {
         },
       );
       return event;
-    });
+    };
+
+    return resolveGoogleExecutionTarget(grant) === "cloud"
+      ? this.runManagedGoogleOperation(grant, createEvent)
+      : this.withGoogleGrantOperation(grant, createEvent);
   }
 
   async getNextCalendarEventContext(
@@ -4890,9 +5401,6 @@ export class LifeOpsService {
     if (!message) {
       fail(404, "life-ops Gmail message not found");
     }
-    if (!grant.tokenRef) {
-      fail(409, "Google Gmail token reference is missing.");
-    }
 
     const to =
       normalizeOptionalStringArray(request.to, "to") ??
@@ -4918,10 +5426,25 @@ export class LifeOpsService {
       .join(" ")
       .trim();
 
-    await this.withGoogleGrantOperation(grant, async () => {
-      const token = await ensureFreshGoogleAccessToken(grant.tokenRef);
+    const sendReply = async () => {
+      if (resolveGoogleExecutionTarget(grant) === "cloud") {
+        await this.googleManagedClient.sendGmailReply({
+          messageId,
+          bodyText,
+          subject,
+          to,
+          cc,
+          confirmSend,
+        });
+        return;
+      }
       await sendGoogleGmailReply({
-        accessToken: token.accessToken,
+        accessToken: (
+          await ensureFreshGoogleAccessToken(
+            grant.tokenRef ??
+              fail(409, "Google Gmail token reference is missing."),
+          )
+        ).accessToken,
         to,
         cc,
         subject,
@@ -4929,7 +5452,10 @@ export class LifeOpsService {
         inReplyTo: messageIdHeader,
         references: references.length > 0 ? references : null,
       });
-    });
+    };
+    await (resolveGoogleExecutionTarget(grant) === "cloud"
+      ? this.runManagedGoogleOperation(grant, sendReply)
+      : this.withGoogleGrantOperation(grant, sendReply));
     await this.recordGmailAudit(
       "gmail_reply_sent",
       message.id,
@@ -5121,33 +5647,144 @@ export class LifeOpsService {
     requestedMode?: LifeOpsConnectorMode,
   ): Promise<LifeOpsGoogleConnectorStatus> {
     const explicitMode = normalizeOptionalConnectorMode(requestedMode, "mode");
-    let config = resolveGoogleOAuthConfig(requestUrl, explicitMode);
-    let grant = await this.repository.getConnectorGrant(
-      this.agentId(),
-      "google",
-      config.mode,
-    );
+    const grants = (
+      await this.repository.listConnectorGrants(this.agentId())
+    ).filter((candidate) => candidate.provider === "google");
+    const cloudConfig = resolveManagedGoogleCloudConfig();
+    const modeAvailability = resolveGoogleAvailableModes({
+      requestUrl,
+      cloudConfigured: cloudConfig.configured,
+      grants,
+    });
+    const resolvedGrant = resolvePreferredGoogleGrant({
+      grants,
+      requestedMode: explicitMode,
+      defaultMode: modeAvailability.defaultMode,
+    });
+    const mode =
+      explicitMode ?? resolvedGrant?.mode ?? modeAvailability.defaultMode;
 
-    if (!explicitMode && !grant) {
-      const grants = await this.repository.listConnectorGrants(this.agentId());
-      const googleGrant = grants.find(
-        (candidate) => candidate.provider === "google",
-      );
-      if (googleGrant) {
-        config = resolveGoogleOAuthConfig(requestUrl, googleGrant.mode);
-        grant = googleGrant;
+    if (mode === "cloud_managed") {
+      if (!cloudConfig.configured && !resolvedGrant) {
+        return {
+          provider: "google",
+          mode,
+          defaultMode: modeAvailability.defaultMode,
+          availableModes: modeAvailability.availableModes,
+          executionTarget: "cloud",
+          sourceOfTruth: "cloud_connection",
+          configured: false,
+          connected: false,
+          reason: "config_missing",
+          preferredByAgent: false,
+          cloudConnectionId: null,
+          identity: null,
+          grantedCapabilities: [],
+          grantedScopes: [],
+          expiresAt: null,
+          hasRefreshToken: false,
+          grant: null,
+        };
       }
+
+      if (!cloudConfig.configured && resolvedGrant) {
+        return {
+          provider: "google",
+          mode,
+          defaultMode: modeAvailability.defaultMode,
+          availableModes: modeAvailability.availableModes,
+          executionTarget: "cloud",
+          sourceOfTruth: "cloud_connection",
+          configured: false,
+          connected: false,
+          reason: "config_missing",
+          preferredByAgent: resolvedGrant.preferredByAgent,
+          cloudConnectionId: resolvedGrant.cloudConnectionId,
+          identity:
+            Object.keys(resolvedGrant.identity).length > 0
+              ? { ...resolvedGrant.identity }
+              : null,
+          grantedCapabilities: normalizeGrantCapabilities(
+            resolvedGrant.capabilities,
+          ),
+          grantedScopes: [...resolvedGrant.grantedScopes],
+          expiresAt:
+            typeof resolvedGrant.metadata.expiresAt === "string"
+              ? resolvedGrant.metadata.expiresAt
+              : null,
+          hasRefreshToken: Boolean(resolvedGrant.metadata.hasRefreshToken),
+          grant: resolvedGrant,
+        };
+      }
+
+      let managedStatus: ManagedGoogleConnectorStatusResponse;
+      try {
+        managedStatus = await this.googleManagedClient.getStatus();
+      } catch (error) {
+        if (error instanceof ManagedGoogleClientError) {
+          this.logLifeOpsWarn("google_connector_status", error.message, {
+            provider: "google",
+            mode: "cloud_managed",
+            statusCode: error.status,
+          });
+          fail(
+            error.status,
+            `Failed to resolve managed Google connection: ${error.message}`,
+          );
+        }
+        this.logLifeOpsError("google_connector_status", error, {
+          provider: "google",
+          mode: "cloud_managed",
+        });
+        throw error;
+      }
+
+      const mirroredGrant = await this.upsertManagedGoogleGrant(managedStatus);
+      const grant = mirroredGrant ?? resolvedGrant ?? null;
+      return {
+        provider: "google",
+        mode,
+        defaultMode: modeAvailability.defaultMode,
+        availableModes: modeAvailability.availableModes,
+        executionTarget: "cloud",
+        sourceOfTruth: "cloud_connection",
+        configured: managedStatus.configured,
+        connected: managedStatus.connected,
+        reason: managedStatus.reason,
+        preferredByAgent: grant?.preferredByAgent ?? false,
+        cloudConnectionId: managedStatus.connectionId,
+        identity: managedStatus.identity,
+        grantedCapabilities: [...managedStatus.grantedCapabilities],
+        grantedScopes: [...managedStatus.grantedScopes],
+        expiresAt: managedStatus.expiresAt,
+        hasRefreshToken: managedStatus.hasRefreshToken,
+        grant,
+      };
     }
+
+    const config = resolveGoogleOAuthConfig(requestUrl, mode);
+    const grant =
+      resolvedGrant && resolvedGrant.mode === mode
+        ? resolvedGrant
+        : await this.repository.getConnectorGrant(
+            this.agentId(),
+            "google",
+            mode,
+          );
 
     if (!grant) {
       return {
         provider: "google",
-        mode: config.mode,
-        defaultMode: config.defaultMode,
-        availableModes: config.availableModes,
+        mode,
+        defaultMode: modeAvailability.defaultMode,
+        availableModes: modeAvailability.availableModes,
+        executionTarget: "local",
+        sourceOfTruth: "local_storage",
         configured: config.configured,
         connected: false,
         reason: config.configured ? "disconnected" : "config_missing",
+        preferredByAgent: false,
+        cloudConnectionId: null,
         identity: null,
         grantedCapabilities: [],
         grantedScopes: [],
@@ -5162,11 +5799,15 @@ export class LifeOpsService {
       return {
         provider: "google",
         mode: grant.mode,
-        defaultMode: config.defaultMode,
-        availableModes: config.availableModes,
+        defaultMode: modeAvailability.defaultMode,
+        availableModes: modeAvailability.availableModes,
+        executionTarget: resolveGoogleExecutionTarget(grant),
+        sourceOfTruth: resolveGoogleSourceOfTruth(grant),
         configured: config.configured,
         connected: false,
         reason: "token_missing",
+        preferredByAgent: grant.preferredByAgent,
+        cloudConnectionId: grant.cloudConnectionId,
         identity:
           Object.keys(grant.identity).length > 0 ? { ...grant.identity } : null,
         grantedCapabilities: normalizeGrantCapabilities(grant.capabilities),
@@ -5189,11 +5830,15 @@ export class LifeOpsService {
     return {
       provider: "google",
       mode: grant.mode,
-      defaultMode: config.defaultMode,
-      availableModes: config.availableModes,
+      defaultMode: modeAvailability.defaultMode,
+      availableModes: modeAvailability.availableModes,
+      executionTarget: resolveGoogleExecutionTarget(grant),
+      sourceOfTruth: resolveGoogleSourceOfTruth(grant),
       configured: config.configured,
       connected,
       reason: connected ? "connected" : "needs_reauth",
+      preferredByAgent: grant.preferredByAgent,
+      cloudConnectionId: grant.cloudConnectionId,
       identity:
         Object.keys(grant.identity).length > 0 ? { ...grant.identity } : null,
       grantedCapabilities: normalizeGrantCapabilities(grant.capabilities),
@@ -5210,10 +5855,34 @@ export class LifeOpsService {
     request: StartLifeOpsGoogleConnectorRequest,
     requestUrl: URL,
   ): Promise<StartLifeOpsGoogleConnectorResponse> {
-    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const requestedMode = normalizeOptionalConnectorMode(request.mode, "mode");
     const requestedCapabilities = normalizeGoogleCapabilityRequest(
       request.capabilities,
     );
+    const cloudConfig = resolveManagedGoogleCloudConfig();
+    const modeAvailability = resolveGoogleAvailableModes({
+      requestUrl,
+      cloudConfigured: cloudConfig.configured,
+    });
+    const mode = requestedMode ?? modeAvailability.defaultMode;
+    if (mode === "cloud_managed") {
+      try {
+        return await this.googleManagedClient.startConnector({
+          capabilities: requestedCapabilities,
+        });
+      } catch (error) {
+        if (error instanceof ManagedGoogleClientError) {
+          this.logLifeOpsWarn("google_connector_start", error.message, {
+            statusCode: error.status,
+            mode,
+          });
+          fail(error.status, error.message);
+        }
+        this.logLifeOpsError("google_connector_start", error, { mode });
+        throw error;
+      }
+    }
+
     const resolvedConfig = resolveGoogleOAuthConfig(requestUrl, mode);
     const existingGrant = await this.repository.getConnectorGrant(
       this.agentId(),
@@ -5249,7 +5918,7 @@ export class LifeOpsService {
   async completeGoogleConnectorCallback(
     callbackUrl: URL,
   ): Promise<LifeOpsGoogleConnectorStatus> {
-    let result;
+    let result: GoogleConnectorCallbackResult;
     try {
       result = await completeGoogleConnectorOAuth({
         callbackUrl,
@@ -5285,6 +5954,9 @@ export class LifeOpsService {
           grantedScopes: [...result.grantedScopes],
           capabilities: [...result.grantedCapabilities],
           tokenRef: result.tokenRef,
+          executionTarget: "local",
+          sourceOfTruth: "local_storage",
+          cloudConnectionId: null,
           metadata: {
             ...clearedMetadata,
             expiresAt: result.expiresAt,
@@ -5301,6 +5973,10 @@ export class LifeOpsService {
           capabilities: [...result.grantedCapabilities],
           tokenRef: result.tokenRef,
           mode: result.mode,
+          executionTarget: "local",
+          sourceOfTruth: "local_storage",
+          preferredByAgent: true,
+          cloudConnectionId: null,
           metadata: {
             expiresAt: result.expiresAt,
             hasRefreshToken: result.hasRefreshToken,
@@ -5309,6 +5985,7 @@ export class LifeOpsService {
         });
 
     await this.repository.upsertConnectorGrant(grant);
+    await this.setPreferredGoogleConnectorMode(result.mode);
     await this.recordConnectorAudit(
       `google:${result.mode}`,
       "google connector granted",
@@ -5328,19 +6005,50 @@ export class LifeOpsService {
     request: DisconnectLifeOpsGoogleConnectorRequest,
     requestUrl: URL,
   ): Promise<LifeOpsGoogleConnectorStatus> {
-    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
-    const config = resolveGoogleOAuthConfig(requestUrl, mode);
+    const requestedMode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const grants = (
+      await this.repository.listConnectorGrants(this.agentId())
+    ).filter((grant) => grant.provider === "google");
+    const modeAvailability = resolveGoogleAvailableModes({
+      requestUrl,
+      cloudConfigured: resolveManagedGoogleCloudConfig().configured,
+      grants,
+    });
+    const mode =
+      requestedMode ??
+      resolvePreferredGoogleGrant({
+        grants,
+        requestedMode,
+        defaultMode: modeAvailability.defaultMode,
+      })?.mode ??
+      modeAvailability.defaultMode;
     const grant = await this.repository.getConnectorGrant(
       this.agentId(),
       "google",
-      config.mode,
+      mode,
     );
 
     if (!grant) {
-      return this.getGoogleConnectorStatus(requestUrl, config.mode);
+      return this.getGoogleConnectorStatus(requestUrl, mode);
     }
 
-    if (grant.tokenRef) {
+    if (mode === "cloud_managed" && grant.cloudConnectionId) {
+      try {
+        await this.googleManagedClient.disconnectConnector(
+          grant.cloudConnectionId,
+        );
+      } catch (error) {
+        if (error instanceof ManagedGoogleClientError) {
+          this.logLifeOpsWarn("google_connector_disconnect", error.message, {
+            statusCode: error.status,
+            mode,
+          });
+          fail(error.status, error.message);
+        }
+        this.logLifeOpsError("google_connector_disconnect", error, { mode });
+        throw error;
+      }
+    } else if (grant.tokenRef) {
       deleteStoredGoogleToken(grant.tokenRef);
     }
     const calendarEvents = await this.repository.listCalendarEvents(
@@ -5360,21 +6068,18 @@ export class LifeOpsService {
       "google",
     );
     await this.repository.deleteGmailSyncState(this.agentId(), "google");
-    await this.repository.deleteConnectorGrant(
-      this.agentId(),
-      "google",
-      config.mode,
-    );
+    await this.repository.deleteConnectorGrant(this.agentId(), "google", mode);
+    await this.setPreferredGoogleConnectorMode(null);
     await this.recordConnectorAudit(
-      `google:${config.mode}`,
+      `google:${mode}`,
       "google connector disconnected",
       {
-        mode: config.mode,
+        mode,
       },
       {
         disconnected: true,
       },
     );
-    return this.getGoogleConnectorStatus(requestUrl, config.mode);
+    return this.getGoogleConnectorStatus(requestUrl, mode);
   }
 }

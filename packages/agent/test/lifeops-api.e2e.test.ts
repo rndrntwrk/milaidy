@@ -135,6 +135,8 @@ describe("Life-ops API E2E", () => {
       expect(goalCreate.status).toBe(201);
       const goal = goalCreate.data.goal as Record<string, unknown>;
       const goalId = goal.id as string;
+      expect(goal.domain).toBe("user_lifeops");
+      expect(goal.subjectType).toBe("owner");
 
       const definitionCreate = await req(
         port,
@@ -170,6 +172,8 @@ describe("Life-ops API E2E", () => {
         unknown
       >;
       const definitionId = definition.id as string;
+      expect(definition.domain).toBe("user_lifeops");
+      expect(definition.subjectType).toBe("owner");
       expect(
         (definitionCreate.data.reminderPlan as Record<string, unknown>).id,
       ).toBeTruthy();
@@ -194,6 +198,11 @@ describe("Life-ops API E2E", () => {
       expect(Array.isArray(overview.data.occurrences)).toBe(true);
       expect(Array.isArray(overview.data.goals)).toBe(true);
       expect(Array.isArray(overview.data.reminders)).toBe(true);
+      expect(Array.isArray(overview.data.owner?.occurrences)).toBe(true);
+      expect(Array.isArray(overview.data.agentOps?.occurrences)).toBe(true);
+      expect((overview.data.agentOps?.occurrences as unknown[]) ?? []).toHaveLength(
+        0,
+      );
       const currentOccurrence = (
         overview.data.occurrences as Array<Record<string, unknown>>
       ).find(
@@ -211,6 +220,12 @@ describe("Life-ops API E2E", () => {
       expect(workbenchOverview.status).toBe(200);
       expect(workbenchOverview.data.lifeopsAvailable).toBe(true);
       expect(typeof workbenchOverview.data.lifeops).toBe("object");
+      expect(Array.isArray(workbenchOverview.data.lifeops.owner?.occurrences)).toBe(
+        true,
+      );
+      expect(Array.isArray(workbenchOverview.data.lifeops.agentOps?.occurrences)).toBe(
+        true,
+      );
 
       const snooze = await req(
         port,
